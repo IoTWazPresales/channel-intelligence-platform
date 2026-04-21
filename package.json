@@ -7,7 +7,7 @@
     "dev:web": "pnpm --filter @cip/web dev",
     "dev:api": "node scripts/dev-api.js",
     "dev:worker": "node scripts/dev-worker.js",
-    "dev:api-web": "pnpm exec npm-run-all --parallel dev:api dev:web",
+    "dev:api-web": "node scripts/dev-api-web-stable.cjs",
     "dev:all": "node scripts/dev-all-with-notice.cjs",
     "dev:ports": "node scripts/check-dev-ports.cjs",
     "local:db:migrate": "node scripts/run-api-python.cjs -m alembic upgrade head",
@@ -46,3 +46,4 @@
     "prettier": "^3.4.2"
   }
 }
+
