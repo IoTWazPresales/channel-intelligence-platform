@@ -1,0 +1,24 @@
+import type { NavItem } from '@cip/types';
+
+export const navItems: NavItem[] = [
+  { section: 'Start here', label: 'Getting started', href: '/getting-started' },
+  { section: 'Start here', label: 'Settings', href: '/settings' },
+  { section: 'Control', label: 'Overview', href: '/dashboard' },
+  { section: 'Control', label: 'Exceptions', href: '/exceptions' },
+  { section: 'Planning', label: 'Inventory', href: '/inventory' },
+  { section: 'Planning', label: 'Forecast', href: '/forecasts' },
+  { section: 'Planning', label: 'Buy plans', href: '/buy-plans' },
+  { section: 'Planning', label: 'Line-up planning', href: '/lineup' },
+  { section: 'Commercial', label: 'Pricing', href: '/pricing' },
+  { section: 'Commercial', label: 'Promotions', href: '/promotions' },
+  { section: 'Market', label: 'Market', href: '/market' },
+  { section: 'Market', label: 'Competition', href: '/competition' },
+  { section: 'Strategy', label: 'Roadmap', href: '/roadmap' },
+  { section: 'Finance', label: 'Budgets', href: '/budgets' },
+  { section: 'Finance', label: 'Budget requests', href: '/budget-requests' },
+  { section: 'Admin', label: 'Data & imports', href: '/admin/imports' },
+  { section: 'Admin', label: 'Customers', href: '/admin/customers' },
+  { section: 'Admin', label: 'Products', href: '/admin/products' },
+  { section: 'Admin', label: 'Distributors & routing', href: '/admin/distributors' },
+  { section: 'Admin', label: 'Mapping queue', href: '/admin/mappings' },
+];

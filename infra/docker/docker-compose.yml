@@ -1,0 +1,108 @@
+# Full stack: Postgres, Redis, API, Celery worker, Next.js web.
+# From repo root:
+#   pnpm docker:up              # up --build (foreground logs)
+#   pnpm docker:up:detached     # up --build -d
+#   pnpm docker:rebuild:web     # fastest UI refresh: rebuild + recreate web only
+#   pnpm docker:down
+#   docker compose -f infra/docker/docker-compose.yml up --build
+#
+# First-time demo data (optional, repeatable):
+#   docker compose -f infra/docker/docker-compose.yml run --rm api python scripts/seed.py
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cip
+      POSTGRES_PASSWORD: cip
+      POSTGRES_DB: cip
+    ports:
+      - "5432:5432"
+    volumes:
+      - cip_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cip -d cip"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cip:cip@postgres:5432/cip
+      DATABASE_URL_SYNC: postgresql://cip:cip@postgres:5432/cip
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      # Include 8010 so the browser can reach the API when host port 8000 is taken by a stale/non-Docker listener.
+      API_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:8010,http://127.0.0.1:8010
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_PATH: /app/storage/uploads
+      RUN_DB_MIGRATIONS: "1"
+      # Dev only: set to "true" to allow Settings → “Wipe all application data” (POST /api/v1/dev/database-wipe).
+      # ALLOW_DB_WIPE: "true"
+    ports:
+      # Host :8000 is often hijacked on Windows dev machines (stale uvicorn / phantom LISTEN rows).
+      # Publish the API on :8010 by default so `curl http://127.0.0.1:8010/health` and the web bundle always hit this container.
+      - "8010:8000"
+    volumes:
+      - api_uploads:/app/storage/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "-l", "info"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cip:cip@postgres:5432/cip
+      DATABASE_URL_SYNC: postgresql://cip:cip@postgres:5432/cip
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_PATH: /app/storage/uploads
+      RUN_DB_MIGRATIONS: "0"
+    volumes:
+      - api_uploads:/app/storage/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      # Do not set NEXT_PUBLIC_API_URL: browser uses same-origin `/api/v1/*`; Next proxies to `api:8000` (no CORS).
+    environment:
+      # Allow server-side same-origin /api/v1/* (browser and curl to :3000/api/... → FastAPI in `api` service).
+      CIP_ENABLE_NEXT_API_PROXY: "true"
+      CIP_API_INTERNAL_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  cip_pgdata:
+  api_uploads:

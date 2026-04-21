@@ -1,0 +1,1551 @@
+'use client';
+
+import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
+import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import Autocomplete from '@mui/material/Autocomplete';
+import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardActionArea,
+  CardContent,
+  Checkbox,
+  Chip,
+  FormControl,
+  FormControlLabel,
+  InputAdornment,
+  InputLabel,
+  LinearProgress,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Step,
+  StepLabel,
+  Stepper,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Typography,
+} from '@mui/material';
+import Link from '@mui/material/Link';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ColDef } from 'ag-grid-community';
+import NextLink from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import { PageHeader } from '@/components/PageHeader';
+import { apiGet, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
+import { toQueryError } from '@/lib/queryError';
+
+import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
+import {
+  initPmColumnDrafts,
+  PM_GROUP_LABEL,
+  pmDraftsToApiColumns,
+  sortPmFieldDefinitions,
+  type PmColumnDraft,
+  type PmDisposition,
+  type PmFieldDefinition,
+} from './pmMappingHelpers';
+import {
+  buildTargetUsageMap,
+  enrichPmMappingTargets,
+  filterAndSortPmTargets,
+  type EnrichedPmTargetOption,
+} from './pmMappingTargetOptions';
+
+type ImportTemplate = {
+  id: number;
+  slug: string;
+  display_name: string;
+  description: string | null;
+  requires_provider: boolean;
+  accepted_file_types: string[];
+  required_fields: string[];
+  optional_fields: string[];
+  pipeline_ready: boolean;
+  destructive_apply_requires_confirm: boolean;
+};
+
+type Source = {
+  id: number;
+  code: string;
+  name: string;
+  import_template_slug: string | null;
+};
+
+type Job = {
+  id: number;
+  status: string;
+  stage: string;
+  file_name: string;
+  error_summary: string | null;
+  template_slug?: string | null;
+  import_mode?: string | null;
+};
+
+type RowResult = {
+  id: number;
+  row_number: number;
+  severity: string;
+  code: string;
+  message: string;
+};
+
+type InferredColumn = { name: string; dtype: string; sample: unknown[] };
+
+type PmSuggestionDetail = {
+  target?: string;
+  suggested_target?: string;
+  mapper_action?: string;
+  recommended_disposition?: 'stage_raw' | 'ignore';
+  from_source_memory?: boolean;
+  disposition?: string;
+  confidence?: number;
+  reasons?: string[];
+  runner_up?: { target?: string; confidence?: number; reasons?: string[] } | null;
+  hint_target?: string;
+};
+
+type PmJobState = {
+  id: number;
+  stage: string;
+  status: string;
+  file_name: string;
+  file_headers: string[];
+  suggested_mapping: Record<string, PmSuggestionDetail> | null;
+  mapping_decisions: Record<string, { target?: string; disposition?: string }> | null;
+  canonical_fields: string[];
+  required_fields: string[];
+  identity_targets?: string[];
+  identity_rule?: string;
+  field_definitions?: PmFieldDefinition[];
+  validation_passed: boolean | null;
+  error_summary: string | null;
+  staged_metadata_preview: Record<string, Record<string, unknown>> | null;
+  /** Present after infer; includes dtype + first-row samples per column (JSON-safe). */
+  inferred_schema?: { row_count: number; columns: InferredColumn[] } | null;
+  /** Server-derived progress (counts, rail, phase); refreshed while validate/commit run. */
+  progress?: PmProgressSnapshot | null;
+};
+
+const stepsDefault = ['Import type', 'Data provider', 'Template details', 'Import mode', 'Upload & preview'];
+
+const stepsPm = [
+  'Import type',
+  'Data provider',
+  'Template details',
+  'Upload file',
+  'Column mapping',
+  'Validate results',
+  'Commit to catalog',
+];
+
+const defaultHeaders = { 'X-User-Role': 'admin', 'X-User-Id': 'demo-user' };
+
+function formatPmSamples(samples: unknown[] | undefined): string {
+  if (!samples?.length) return '—';
+  const parts = samples
+    .map((s) => {
+      if (s === null || s === undefined) return '';
+      const str = String(s);
+      return str.length > 48 ? `${str.slice(0, 45)}…` : str;
+    })
+    .filter((x) => x.length > 0);
+  return parts.length ? parts.join(' · ') : '—';
+}
+
+const PM_SUGGEST_REASON_LABELS: Record<string, string> = {
+  deterministic_alias_header: 'Universal column match (industry terms)',
+  deterministic_value_evidence: 'Sample values match this field type',
+  exact_header_match: 'Exact field key match',
+  normalized_header_match: 'Normalized header matches field',
+  legacy_alias_header: 'Known legacy column alias',
+  alias_catalog_match: 'Alias catalog match',
+  import_template_mapping: 'Import template mapping',
+  template_mapping: 'Import template default',
+  header_keyword_signal: 'Header keyword signal',
+  sample_values_resemble_form_factor: 'Samples look like form factor',
+  sample_values_resemble_platform_cpu_family: 'Samples look like platform / CPU family',
+  sample_values_resemble_series_or_segment_name: 'Samples look like series / segment',
+  sample_values_resemble_barcode: 'Samples look like a barcode (legacy signal)',
+  sample_values_resemble_technical_id: 'Samples look like a technical id (legacy signal)',
+  sample_values_resemble_long_title: 'Samples look like a long title',
+  barcode_like_value: 'Values look like a strict GTIN/UPC',
+  technical_id_like_value: 'Values look like a technical / part code',
+  date_like_value: 'Date-like values and date role',
+  dtype_numeric_capacity_like: 'Numeric / capacity-like values',
+  semantic_group_aligned_with_header: 'Semantic group matches header',
+  semantic_group_mismatch_penalty: 'Semantic group mismatch (down-ranked)',
+  low_confidence: 'Low confidence',
+  ambiguous_close_runner_up: 'Ambiguous — close alternative',
+  target_already_used: 'Target already mapped by another column',
+  identity_target_already_mapped: 'Identity field already mapped',
+  alias_match: 'Generic industry alias',
+  source_memory: 'Learned from previous imports for this source',
+  no_suitable_canonical_target: 'No suitable core field in this model',
+  recommend_stage_metadata: 'Recommended: keep as staged metadata',
+  recommend_ignore: 'Recommended: ignore for Product Master',
+  identifier_resolution_available: 'Optional identifier resolution (if configured)',
+};
+
+function formatPmSuggestReason(code: string): string {
+  return PM_SUGGEST_REASON_LABELS[code] ?? code.replace(/_/g, ' ');
+}
+
+export default function AdminImportsPage() {
+  const qc = useQueryClient();
+  const [activeStep, setActiveStep] = useState(0);
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [sourceId, setSourceId] = useState<number | ''>('');
+  const [importMode, setImportMode] = useState<'validate' | 'apply'>('validate');
+  const [confirmDestructive, setConfirmDestructive] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [lastJobId, setLastJobId] = useState<number | null>(null);
+  const [pmColumns, setPmColumns] = useState<PmColumnDraft[]>([]);
+  const [pmRowFilter, setPmRowFilter] = useState<'all' | 'unmapped' | 'mapped' | 'core'>('all');
+  const [pmBulkSelected, setPmBulkSelected] = useState<Record<string, boolean>>({});
+
+  const isPm = selectedSlug === 'product_master';
+  const steps = isPm ? stepsPm : stepsDefault;
+  const { data: templates } = useQuery({
+    queryKey: ['import-templates'],
+    queryFn: ({ signal }) => apiGet<ImportTemplate[]>('/api/v1/imports/templates', { signal }),
+  });
+
+  const selectedTemplate = useMemo(
+    () => (templates ?? []).find((t) => t.slug === selectedSlug) ?? null,
+    [templates, selectedSlug]
+  );
+
+  const { data: sources } = useQuery({
+    queryKey: ['import-sources', selectedSlug],
+    queryFn: ({ signal }) =>
+      apiGet<Source[]>(`/api/v1/imports/sources?template_slug=${encodeURIComponent(selectedSlug!)}`, { signal }),
+    enabled: !!selectedSlug,
+  });
+
+  const {
+    data: jobs,
+    isLoading: jobsLoading,
+    isError: jobsIsError,
+    error: jobsErr,
+    refetch: refetchJobs,
+  } = useQuery({
+    queryKey: ['import-jobs'],
+    queryFn: ({ signal }) => apiGet<Job[]>('/api/v1/imports/jobs', { signal }),
+  });
+
+  const { data: previewRows, refetch: refetchPreview } = useQuery({
+    queryKey: ['import-job-rows', lastJobId],
+    queryFn: ({ signal }) => apiGet<RowResult[]>(`/api/v1/imports/jobs/${lastJobId}/rows`, { signal }),
+    enabled: lastJobId != null,
+  });
+
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      if (sourceId === '') throw new Error('Select a data provider before uploading.');
+      const fd = new FormData();
+      fd.append('source_id', String(sourceId));
+      fd.append('file', file);
+      fd.append('run_sync', 'true');
+      fd.append('import_mode', importMode);
+      if (selectedTemplate?.destructive_apply_requires_confirm && importMode === 'apply') {
+        fd.append('confirm_destructive', confirmDestructive ? 'true' : 'false');
+      }
+      const res = await fetch(apiUrl('/api/v1/imports/jobs'), {
+        method: 'POST',
+        body: fd,
+        headers: defaultHeaders,
+      });
+      if (!res.ok) throw new Error(await readFetchError(res));
+      return res.json() as Promise<{ id: number; status: string; stage: string }>;
+    },
+    onSuccess: (data) => {
+      setLastJobId(data.id);
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', data.id] });
+    },
+  });
+
+  const pmUpload = useMutation({
+    mutationFn: async (file: File) => {
+      if (sourceId === '') throw new Error('Select a data provider before uploading.');
+      const fd = new FormData();
+      fd.append('source_id', String(sourceId));
+      fd.append('file', file);
+      const res = await fetch(apiUrl('/api/v1/imports/product-master/jobs'), {
+        method: 'POST',
+        body: fd,
+        headers: defaultHeaders,
+      });
+      if (!res.ok) throw new Error(await readFetchError(res));
+      return res.json() as Promise<{ id: number; stage: string; file_headers: string[] }>;
+    },
+    onSuccess: (data) => {
+      setLastJobId(data.id);
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      void qc.invalidateQueries({ queryKey: ['pm-import-state', data.id] });
+    },
+  });
+
+  const savePmMapping = useMutation({
+    mutationFn: async () => {
+      if (lastJobId == null) throw new Error('No job');
+      const res = await fetch(apiUrl(`/api/v1/imports/product-master/jobs/${lastJobId}/mapping`), {
+        method: 'PUT',
+        headers: { ...defaultHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ columns: pmDraftsToApiColumns(pmColumns) }),
+      });
+      if (!res.ok) throw new Error(await readFetchError(res));
+      return res.json() as Promise<{ id: number; stage: string }>;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['pm-import-state', lastJobId] });
+    },
+  });
+
+  const validatePm = useMutation({
+    mutationFn: async () => {
+      if (lastJobId == null) throw new Error('No job');
+      const res = await fetch(apiUrl(`/api/v1/imports/product-master/jobs/${lastJobId}/validate`), {
+        method: 'POST',
+        headers: defaultHeaders,
+      });
+      if (!res.ok) throw new Error(await readFetchError(res));
+      return res.json() as Promise<{ validation_passed: boolean | null }>;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['pm-import-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+    },
+  });
+
+  const commitPm = useMutation({
+    mutationFn: async () => {
+      if (lastJobId == null) throw new Error('No job');
+      const fd = new FormData();
+      const cd =
+        !selectedTemplate?.destructive_apply_requires_confirm ||
+        (selectedTemplate.destructive_apply_requires_confirm && confirmDestructive);
+      fd.append('confirm_destructive', cd ? 'true' : 'false');
+      const res = await fetch(apiUrl(`/api/v1/imports/product-master/jobs/${lastJobId}/commit`), {
+        method: 'POST',
+        body: fd,
+        headers: defaultHeaders,
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(await readFetchError(new Response(text, { status: res.status })));
+      }
+      return (text ? JSON.parse(text) : {}) as {
+        pm_commit?: { outcome?: string; message?: string };
+        status?: string;
+        stage?: string;
+      };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      void qc.invalidateQueries({ queryKey: ['pm-import-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+    },
+  });
+
+  const { data: pmJobState, refetch: refetchPmState } = useQuery({
+    queryKey: ['pm-import-state', lastJobId],
+    queryFn: ({ signal }) => apiGet<PmJobState>(`/api/v1/imports/product-master/jobs/${lastJobId}/state`, { signal }),
+    enabled: Boolean(isPm && lastJobId != null),
+    refetchInterval: (query) => {
+      const externalBusy =
+        savePmMapping.isPending || validatePm.isPending || commitPm.isPending;
+      const data = query.state.data as PmJobState | undefined;
+      const commitBusy =
+        data?.status === 'commit_queued' || data?.status === 'commit_running';
+      return externalBusy || commitBusy ? 2000 : false;
+    },
+  });
+
+  const hdrKey = pmJobState?.file_headers?.join('|') ?? '';
+  useEffect(() => {
+    if (!isPm || activeStep !== 4 || !pmJobState?.file_headers?.length) return;
+    setPmColumns(
+      initPmColumnDrafts(pmJobState.file_headers, pmJobState.suggested_mapping, pmJobState.mapping_decisions)
+    );
+  }, [isPm, activeStep, lastJobId, hdrKey, pmJobState?.suggested_mapping, pmJobState?.mapping_decisions]);
+
+  const downloadSample = useCallback(async () => {
+    if (!selectedSlug) return;
+    const res = await fetch(apiUrl(`/api/v1/imports/templates/${selectedSlug}/sample`), {
+      headers: defaultHeaders,
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${selectedSlug}_sample.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [selectedSlug]);
+
+  const activeUpload = isPm ? pmUpload : upload;
+
+  const onFile = useCallback(
+    (file: File | undefined) => {
+      if (!file) return;
+      const lower = file.name.toLowerCase();
+      if (!lower.endsWith('.csv') && !lower.endsWith('.xlsx')) {
+        activeUpload.reset();
+        return;
+      }
+      activeUpload.mutate(file);
+    },
+    [activeUpload]
+  );
+
+  const colDefs: ColDef<Job>[] = [
+    { field: 'id', headerName: 'ID', width: 90 },
+    { field: 'template_slug', headerName: 'Template', minWidth: 140 },
+    { field: 'import_mode', headerName: 'Mode', width: 100 },
+    { field: 'file_name', headerName: 'File', flex: 1, minWidth: 160 },
+    { field: 'status', headerName: 'Status' },
+    { field: 'stage', headerName: 'Stage' },
+    { field: 'error_summary', headerName: 'Notes', flex: 1, minWidth: 200 },
+  ];
+
+  const jobsList = jobs ?? [];
+
+  const canGoUploadGeneric =
+    selectedSlug &&
+    (!selectedTemplate?.requires_provider || sourceId !== '') &&
+    (!selectedTemplate?.destructive_apply_requires_confirm || importMode === 'validate' || confirmDestructive);
+
+  const canPmUpload =
+    Boolean(selectedSlug) &&
+    Boolean(selectedTemplate?.requires_provider ? sourceId !== '' : true) &&
+    sourceId !== '';
+
+  const canGoUpload = isPm ? canPmUpload : canGoUploadGeneric;
+
+  const identityTargetSet = useMemo(
+    () => new Set(pmJobState?.identity_targets ?? ['technical_product_id']),
+    [pmJobState?.identity_targets]
+  );
+
+  const coreTargetKeys = useMemo(
+    () =>
+      new Set([
+        'technical_product_id',
+        'display_name',
+        'market_sku',
+        'model_family',
+        'source_product_code',
+        'barcode_ean',
+        'barcode_upc',
+        'category',
+        'product_line',
+        'series',
+        'business_unit',
+        'form_factor',
+        'channel_code',
+        'price_band',
+        'country_code',
+        'lifecycle_status',
+        'launch_date',
+        'end_of_life_date',
+      ]),
+    []
+  );
+
+  const visiblePmColumns = useMemo(() => {
+    return pmColumns.filter((row) => {
+      const t = row.target.trim();
+      if (pmRowFilter === 'unmapped') return !t;
+      if (pmRowFilter === 'mapped') return Boolean(t);
+      if (pmRowFilter === 'core') return !t || coreTargetKeys.has(t);
+      return true;
+    });
+  }, [pmColumns, pmRowFilter, coreTargetKeys]);
+
+  const pmTargetOptions = useMemo((): PmFieldDefinition[] => {
+    const raw = pmJobState?.field_definitions;
+    if (raw && raw.length > 0) {
+      return sortPmFieldDefinitions(raw);
+    }
+    const keys = pmJobState?.canonical_fields ?? [];
+    return sortPmFieldDefinitions(
+      keys.map((k) => ({
+        key: k,
+        group: 'optional',
+        label: k,
+        importance: 'medium',
+        dim_persistence: 'canonical',
+        description: '',
+      }))
+    );
+  }, [pmJobState?.field_definitions, pmJobState?.canonical_fields]);
+
+  /** Per-row mapping picker options (ordering + duplicate awareness). */
+  const pmEnrichedTargetsByHeader = useMemo(() => {
+    const req = pmJobState?.required_fields ?? ['display_name'];
+    const idt = pmJobState?.identity_targets ?? ['technical_product_id'];
+    const usage = buildTargetUsageMap(pmColumns);
+    const sentinel: EnrichedPmTargetOption = {
+      key: '',
+      label: '(Unmapped)',
+      group: 'optional',
+      importance: 'low',
+      dim_persistence: '',
+      description:
+        'Not mapped to a system field; choose a disposition below for extra columns.',
+      sortTier: 62,
+      sectionKey: 'unmapped',
+      sectionLabel: 'Leave unmapped',
+      badgeTexts: [],
+      duplicateFromHeaders: [],
+    };
+    const out: Record<string, EnrichedPmTargetOption[]> = {};
+    for (const col of pmColumns) {
+      const enriched = enrichPmMappingTargets({
+        defs: pmTargetOptions,
+        requiredFields: req,
+        identityTargets: idt,
+        usage,
+        currentHeader: col.header,
+      });
+      out[col.header] = [sentinel, ...enriched];
+    }
+    return out;
+  }, [
+    pmColumns,
+    pmTargetOptions,
+    pmJobState?.required_fields,
+    pmJobState?.identity_targets,
+  ]);
+
+  const inferredByHeader = useMemo(() => {
+    const cols = pmJobState?.inferred_schema?.columns;
+    if (!cols?.length) return {} as Record<string, InferredColumn>;
+    return Object.fromEntries(cols.map((c) => [c.name, c]));
+  }, [pmJobState?.inferred_schema?.columns]);
+
+  const mappedTargets = useMemo(
+    () =>
+      pmColumns
+        .map((c) => c.target.trim())
+        .filter((t) => t.length > 0),
+    [pmColumns]
+  );
+
+  const requiredOk = useMemo(() => {
+    const req = pmJobState?.required_fields ?? ['display_name'];
+    const coreOk = req.every((f) => mappedTargets.filter((t) => t === f).length === 1);
+    const idHits = mappedTargets.filter((t) => identityTargetSet.has(t));
+    const identityOk = idHits.length === 1;
+    return coreOk && identityOk;
+  }, [pmJobState?.required_fields, mappedTargets, identityTargetSet]);
+
+  const pmMappingSummary = useMemo(() => {
+    const idHits = mappedTargets.filter((t) => identityTargetSet.has(t));
+    const commercial = new Set(['market_sku', 'model_family', 'source_product_code']);
+    const classification = new Set([
+      'category',
+      'form_factor',
+      'price_band',
+      'series',
+      'product_line',
+      'business_unit',
+      'country_code',
+    ]);
+    return {
+      requiredCoreOk: (pmJobState?.required_fields ?? ['display_name']).every(
+        (f) => mappedTargets.filter((t) => t === f).length === 1
+      ),
+      identityOk: idHits.length === 1,
+      identityTarget: idHits[0] ?? null,
+      commercialMapped: mappedTargets.filter((t) => commercial.has(t)).length,
+      classificationMapped: mappedTargets.filter((t) => classification.has(t)).length,
+      unmappedColumns: pmColumns.filter((c) => !c.target.trim()).length,
+      stagedDisposition: pmColumns.filter((c) => !c.target.trim() && c.disposition === 'stage_raw').length,
+    };
+  }, [mappedTargets, pmColumns, pmJobState?.required_fields, identityTargetSet]);
+
+  const selectedBulkCount = useMemo(
+    () => Object.values(pmBulkSelected).filter(Boolean).length,
+    [pmBulkSelected]
+  );
+
+  const applySuggestedMappingsOnly = useCallback(() => {
+    if (!pmJobState?.file_headers?.length) return;
+    setPmColumns(
+      initPmColumnDrafts(pmJobState.file_headers, pmJobState.suggested_mapping, null)
+    );
+    setPmBulkSelected({});
+  }, [pmJobState?.file_headers, pmJobState?.suggested_mapping]);
+
+  const clearAllMappings = useCallback(() => {
+    setPmColumns((prev) =>
+      prev.map((c) => ({ ...c, target: '', disposition: 'ignore' as PmDisposition }))
+    );
+    setPmBulkSelected({});
+  }, []);
+
+  const bulkUnmappedSetIgnore = useCallback(() => {
+    setPmColumns((prev) =>
+      prev.map((c) => (!c.target.trim() ? { ...c, disposition: 'ignore' as PmDisposition } : c))
+    );
+  }, []);
+
+  const bulkUnmappedSetStage = useCallback(() => {
+    setPmColumns((prev) =>
+      prev.map((c) => (!c.target.trim() ? { ...c, disposition: 'stage_raw' as PmDisposition } : c))
+    );
+  }, []);
+
+  const bulkDispositionForSelection = useCallback(
+    (d: PmDisposition) => {
+      setPmColumns((prev) =>
+        prev.map((c) => (pmBulkSelected[c.header] ? { ...c, disposition: d } : c))
+      );
+    },
+    [pmBulkSelected]
+  );
+
+  const visibleHeaderList = useMemo(() => visiblePmColumns.map((r) => r.header), [visiblePmColumns]);
+  const allVisibleSelected =
+    visibleHeaderList.length > 0 && visibleHeaderList.every((h) => pmBulkSelected[h]);
+
+  return (
+    <>
+      <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Imports' }]} title="Data & imports" />
+      <Alert severity="info" sx={{ mb: 2 }}>
+        <strong>Guided import:</strong> pick an <strong>import type</strong> first (what the file means), then a{' '}
+        <strong>data provider</strong> (which feed or instance). Product Master uses a{' '}
+        <strong>governed mapping</strong>: only approved catalog fields, explicit handling for extra columns, then{' '}
+        <strong>validate</strong> before <strong>commit</strong>.
+      </Alert>
+
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+          New import
+        </Typography>
+        <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 3 }}>
+          {steps.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+
+        {isPm && lastJobId != null ? (
+          <PmImportProgressPanel
+            progress={pmJobState?.progress ?? undefined}
+            jobStatus={pmJobState?.status ?? null}
+            isValidating={validatePm.isPending}
+            isCommitting={commitPm.isPending}
+            isSavingMapping={savePmMapping.isPending}
+          />
+        ) : null}
+
+        {activeStep === 0 ? (
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              Choose the import <strong>type</strong> that matches your file (not the low-level parser id).
+            </Typography>
+            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+              {(templates ?? []).map((t) => (
+                <Card key={t.slug} variant="outlined" sx={{ width: 280 }}>
+                  <CardActionArea
+                    onClick={() => {
+                      setSelectedSlug(t.slug);
+                      setSourceId('');
+                      setImportMode(t.slug === 'product_master' ? 'validate' : 'apply');
+                      setConfirmDestructive(false);
+                      setActiveStep(1);
+                    }}
+                  >
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600}>
+                        {t.display_name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                        {t.slug}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {t.description ?? '—'}
+                      </Typography>
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                        {!t.pipeline_ready ? <Chip size="small" label="Pipeline scaffold" color="warning" /> : null}
+                        {t.destructive_apply_requires_confirm ? (
+                          <Chip size="small" label="Apply needs confirm" variant="outlined" />
+                        ) : null}
+                      </Stack>
+                    </CardContent>
+                  </CardActionArea>
+                </Card>
+              ))}
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {activeStep === 1 ? (
+          <Stack spacing={2}>
+            <Typography variant="body2">
+              Selected type: <strong>{selectedTemplate?.display_name}</strong> ({selectedSlug})
+            </Typography>
+            {selectedTemplate?.requires_provider ? (
+              <FormControl size="small" sx={{ maxWidth: 420 }}>
+                <InputLabel id="prov-label">Data provider / feed</InputLabel>
+                <Select
+                  labelId="prov-label"
+                  label="Data provider / feed"
+                  value={sourceId}
+                  onChange={(e) => setSourceId(e.target.value === '' ? '' : Number(e.target.value))}
+                >
+                  {(sources ?? []).map((s) => (
+                    <MenuItem key={s.id} value={s.id}>
+                      {s.name} ({s.code})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+              <Alert severity="info">This import type does not require a separate provider instance.</Alert>
+            )}
+            <Stack direction="row" spacing={1}>
+              <Button onClick={() => setActiveStep(0)}>Back</Button>
+              <Button
+                variant="contained"
+                disabled={Boolean(selectedTemplate?.requires_provider && sourceId === '')}
+                onClick={() => setActiveStep(2)}
+              >
+                Next
+              </Button>
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {activeStep === 2 && selectedTemplate ? (
+          <Stack spacing={2}>
+            <Typography variant="subtitle2">Expected columns</Typography>
+            <Typography variant="body2">
+              <strong>Required:</strong> {selectedTemplate.required_fields.join(', ') || '—'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Optional:</strong> {selectedTemplate.optional_fields.join(', ') || '—'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Accepted files:</strong> {selectedTemplate.accepted_file_types.join(', ')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              <strong>What happens:</strong>{' '}
+              {isPm
+                ? 'You upload a file, map columns only to approved Product Master fields, validate rows, then commit. Extra columns can be ignored or retained as staged metadata (no new schema from this UI).'
+                : selectedTemplate.pipeline_ready
+                  ? 'Validate SKUs against the product catalog; unmatched SKUs go to the mapping queue.'
+                  : 'File is stored and schema inferred; full loader for this type is not enabled yet.'}
+            </Typography>
+            {isPm ? (
+              <Button startIcon={<DownloadOutlinedIcon />} variant="outlined" size="small" onClick={() => void downloadSample()}>
+                Download sample CSV
+              </Button>
+            ) : null}
+            <Stack direction="row" spacing={1}>
+              <Button onClick={() => setActiveStep(1)}>Back</Button>
+              <Button variant="contained" onClick={() => setActiveStep(3)}>
+                Next
+              </Button>
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {activeStep === 3 && selectedTemplate && !isPm ? (
+          <Stack spacing={2}>
+            <FormControl size="small" sx={{ maxWidth: 360 }}>
+              <InputLabel id="mode-label">Import mode</InputLabel>
+              <Select
+                labelId="mode-label"
+                label="Import mode"
+                value={importMode}
+                onChange={(e) => setImportMode(e.target.value as 'validate' | 'apply')}
+              >
+                <MenuItem value="validate">Validate only (no catalog writes)</MenuItem>
+                <MenuItem value="apply">Apply / upsert (when supported)</MenuItem>
+              </Select>
+            </FormControl>
+            {selectedTemplate.destructive_apply_requires_confirm && importMode === 'apply' ? (
+              <FormControlLabel
+                control={<Checkbox checked={confirmDestructive} onChange={(_, c) => setConfirmDestructive(c)} />}
+                label="I understand this can overwrite existing product fields for matching SKUs."
+              />
+            ) : null}
+            <Stack direction="row" spacing={1}>
+              <Button onClick={() => setActiveStep(2)}>Back</Button>
+              <Button
+                variant="contained"
+                disabled={
+                  selectedTemplate.destructive_apply_requires_confirm && importMode === 'apply' && !confirmDestructive
+                }
+                onClick={() => setActiveStep(4)}
+              >
+                Next
+              </Button>
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {activeStep === 3 && selectedTemplate && isPm ? (
+          <Stack spacing={2}>
+            <Typography variant="body2">
+              Upload for <strong>{selectedTemplate.display_name}</strong> using provider{' '}
+              <strong>{(sources ?? []).find((s) => s.id === sourceId)?.name ?? '—'}</strong>. Headers are inferred
+              immediately; mapping and validate/commit follow in the next steps.
+            </Typography>
+            {!canGoUpload ? <Alert severity="warning">Select a data provider before uploading.</Alert> : null}
+            <Box
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setDragActive(true);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+              }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragActive(false);
+                const f = e.dataTransfer.files?.[0];
+                onFile(f);
+              }}
+              sx={{
+                border: '2px dashed',
+                borderColor: dragActive ? 'primary.main' : 'divider',
+                borderRadius: 2,
+                px: 3,
+                py: 4,
+                textAlign: 'center',
+                bgcolor: dragActive ? 'action.selected' : 'action.hover',
+              }}
+            >
+              <CloudUploadOutlinedIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+              <Typography variant="subtitle1" fontWeight={600}>
+                Drop CSV or XLSX here
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Or choose a file. No catalog writes until you pass validation and commit on the last step.
+              </Typography>
+              <Button variant="contained" component="label" disabled={!canGoUpload || pmUpload.isPending}>
+                Choose file
+                <input
+                  hidden
+                  type="file"
+                  accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                  onChange={(e) => {
+                    onFile(e.target.files?.[0]);
+                    e.target.value = '';
+                  }}
+                />
+              </Button>
+            </Box>
+            {pmUpload.isPending ? <LinearProgress /> : null}
+            {pmUpload.isError ? (
+              <Alert severity="error">{safeDisplayError(pmUpload.error)}</Alert>
+            ) : null}
+            {pmUpload.isSuccess && lastJobId != null ? (
+              <Alert severity="success">
+                Job <strong>#{lastJobId}</strong> staged. File headers:{' '}
+                {Array.isArray(pmUpload.data?.file_headers) ? pmUpload.data.file_headers.join(', ') || '—' : '—'}
+              </Alert>
+            ) : null}
+            <Stack direction="row" spacing={1}>
+              <Button onClick={() => setActiveStep(2)}>Back</Button>
+              <Button variant="contained" disabled={lastJobId == null} onClick={() => setActiveStep(4)}>
+                Next: column mapping
+              </Button>
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {activeStep === 4 && isPm && selectedTemplate ? (
+          <Stack spacing={2}>
+            <Typography variant="subtitle2">Map file columns → canonical fields</Typography>
+            <Alert severity={requiredOk ? 'success' : 'warning'}>
+              <strong>Required core:</strong> map <strong>display_name</strong> once, and exactly one{' '}
+              <strong>technical_product_id</strong> (manufacturer / exact technical id). Use tooltips in the target picker
+              for semantics.
+              <br />
+              <strong>Optional:</strong> market_sku, model_family, barcodes, classification, lifecycle, and
+              source_product_code (feed-specific id) as needed.
+            </Alert>
+            <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}>
+              <Typography variant="caption" fontWeight={600} display="block" gutterBottom>
+                Mapping summary
+              </Typography>
+              <Stack direction="row" flexWrap="wrap" gap={1} useFlexGap>
+                <Chip
+                  size="small"
+                  color={pmMappingSummary.requiredCoreOk ? 'success' : 'warning'}
+                  label={`Required core: ${pmMappingSummary.requiredCoreOk ? 'OK' : 'incomplete'}`}
+                />
+                <Chip
+                  size="small"
+                  color={pmMappingSummary.identityOk ? 'success' : 'warning'}
+                  label={`Identity (${pmMappingSummary.identityTarget ?? 'missing'}): ${
+                    pmMappingSummary.identityOk ? 'OK' : 'need technical_product_id'
+                  }`}
+                />
+                <Chip size="small" variant="outlined" label={`Commercial fields: ${pmMappingSummary.commercialMapped}`} />
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={`Classification fields: ${pmMappingSummary.classificationMapped}`}
+                />
+                <Chip size="small" variant="outlined" label={`Unmapped columns: ${pmMappingSummary.unmappedColumns}`} />
+                <Chip size="small" variant="outlined" label={`Staged metadata cols: ${pmMappingSummary.stagedDisposition}`} />
+              </Stack>
+            </Paper>
+            <Paper variant="outlined" sx={{ p: 1.5 }}>
+              <Stack spacing={1.5}>
+                <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" useFlexGap>
+                  <FormControl size="small" sx={{ minWidth: 220 }}>
+                    <InputLabel id="pm-filter-label">Row filter</InputLabel>
+                    <Select
+                      labelId="pm-filter-label"
+                      label="Row filter"
+                      value={pmRowFilter}
+                      onChange={(e) =>
+                        setPmRowFilter(e.target.value as 'all' | 'unmapped' | 'mapped' | 'core')
+                      }
+                    >
+                      <MenuItem value="all">All columns ({pmColumns.length})</MenuItem>
+                      <MenuItem value="unmapped">Unmapped only</MenuItem>
+                      <MenuItem value="mapped">Mapped only</MenuItem>
+                      <MenuItem value="core">Core / important targets</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <Typography variant="caption" color="text.secondary">
+                    Showing {visiblePmColumns.length} of {pmColumns.length}
+                  </Typography>
+                </Stack>
+                <Stack direction="row" flexWrap="wrap" gap={1} useFlexGap alignItems="center">
+                  <Button size="small" variant="outlined" onClick={bulkUnmappedSetIgnore}>
+                    All unmapped → Ignore
+                  </Button>
+                  <Button size="small" variant="outlined" onClick={bulkUnmappedSetStage}>
+                    All unmapped → Stage metadata
+                  </Button>
+                  <Button size="small" variant="outlined" onClick={applySuggestedMappingsOnly}>
+                    Apply suggested mappings only
+                  </Button>
+                  <Button size="small" variant="outlined" color="warning" onClick={clearAllMappings}>
+                    Clear all mappings
+                  </Button>
+                </Stack>
+                <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" useFlexGap>
+                  <Typography variant="caption">
+                    Selected rows: {selectedBulkCount}
+                  </Typography>
+                  <Button
+                    size="small"
+                    disabled={!selectedBulkCount}
+                    onClick={() => bulkDispositionForSelection('ignore')}
+                  >
+                    Set disposition Ignore
+                  </Button>
+                  <Button
+                    size="small"
+                    disabled={!selectedBulkCount}
+                    onClick={() => bulkDispositionForSelection('stage_raw')}
+                  >
+                    Set disposition Stage
+                  </Button>
+                  <Button
+                    size="small"
+                    disabled={!selectedBulkCount}
+                    onClick={() => bulkDispositionForSelection('attribute_candidate')}
+                  >
+                    Set disposition Steward review
+                  </Button>
+                </Stack>
+              </Stack>
+            </Paper>
+            <Typography variant="caption" color="text.secondary">
+              Unmapped columns need a disposition: ignore, retain as staged metadata, or flag for steward review (no new schema
+              columns are created here).
+            </Typography>
+            {pmJobState?.inferred_schema?.row_count != null ? (
+              <Typography variant="caption" color="text.secondary" display="block">
+                Loaded <strong>{pmJobState.inferred_schema.row_count}</strong> data row(s); sample values are taken from the first
+                non-empty cells per column (up to three).
+              </Typography>
+            ) : null}
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      size="small"
+                      checked={allVisibleSelected}
+                      indeterminate={
+                        visibleHeaderList.some((h) => pmBulkSelected[h]) && !allVisibleSelected
+                      }
+                      onChange={() => {
+                        setPmBulkSelected((prev) => {
+                          const next = { ...prev };
+                          const on = !allVisibleSelected;
+                          visibleHeaderList.forEach((h) => {
+                            if (on) next[h] = true;
+                            else delete next[h];
+                          });
+                          return next;
+                        });
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>File header</TableCell>
+                  <TableCell sx={{ minWidth: 220 }}>Sample values</TableCell>
+                  <TableCell>Maps to</TableCell>
+                  <TableCell>Unmapped handling</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {visiblePmColumns.map((row) => (
+                  <TableRow key={row.header}>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        size="small"
+                        checked={Boolean(pmBulkSelected[row.header])}
+                        onChange={() =>
+                          setPmBulkSelected((prev) => ({
+                            ...prev,
+                            [row.header]: !prev[row.header],
+                          }))
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography fontWeight={600}>{row.header}</Typography>
+                      {inferredByHeader[row.header]?.dtype ? (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {inferredByHeader[row.header].dtype}
+                        </Typography>
+                      ) : null}
+                      {(() => {
+                        const sug = pmJobState?.suggested_mapping?.[row.header];
+                        if (!sug) return null;
+                        const act = sug.mapper_action;
+                        if (!sug?.reasons?.length && sug?.confidence == null && !sug?.runner_up && !act) return null;
+                        const parts: string[] = [];
+                        if (sug.from_source_memory) parts.push('Source memory');
+                        if (act === 'auto_map' && sug.target) {
+                          parts.push(`Auto-map: ${sug.target}`);
+                          if (sug.confidence != null) parts.push(`${Math.round(sug.confidence * 100)}%`);
+                        } else if (act === 'suggest' && (sug.suggested_target || sug.target)) {
+                          parts.push(`Suggested: ${sug.suggested_target ?? sug.target}`);
+                          if (sug.confidence != null) parts.push(`${Math.round(sug.confidence * 100)}%`);
+                        } else if (act === 'recommend_stage_metadata') {
+                          parts.push('Recommended: Stage as metadata');
+                        } else if (act === 'recommend_ignore') {
+                          parts.push('Recommended: Ignore');
+                        } else if (act === 'no_strong_suggestion') {
+                          parts.push('No strong suggestion');
+                          if (sug.hint_target) parts.push(`Optional hint: ${sug.hint_target}`);
+                          else if (sug.runner_up?.target) parts.push(`Alternative: ${sug.runner_up.target}`);
+                        } else if (sug.target) {
+                          parts.push(`Map: ${sug.target}`);
+                          if (sug.confidence != null) parts.push(`${Math.round(sug.confidence * 100)}%`);
+                        }
+                        const detail =
+                          (sug.reasons?.length ? sug.reasons.map(formatPmSuggestReason).join(' · ') : '') +
+                          (sug.runner_up?.target && sug.target && act !== 'no_strong_suggestion'
+                            ? ` · Alternative: ${sug.runner_up.target}`
+                            : '');
+                        const tip = [parts.join(' — '), detail].filter(Boolean).join('\n');
+                        const chipLabel =
+                          act === 'auto_map' && sug.target
+                            ? `Auto-map · ${sug.target}`
+                            : act === 'suggest' && (sug.suggested_target || sug.target)
+                              ? `Suggested · ${sug.suggested_target ?? sug.target}`
+                              : act === 'recommend_stage_metadata'
+                                ? 'Stage metadata'
+                                : act === 'recommend_ignore'
+                                  ? 'Ignore'
+                                  : act === 'no_strong_suggestion'
+                                    ? 'No strong mapping'
+                                    : parts[0] ?? '';
+                        const chipColor =
+                          act === 'auto_map'
+                            ? 'success'
+                            : act === 'suggest'
+                              ? 'info'
+                              : act === 'recommend_stage_metadata'
+                                ? 'warning'
+                                : act === 'recommend_ignore'
+                                  ? 'default'
+                                  : 'default';
+                        return (
+                          <Tooltip title={tip || 'Mapper guidance'}>
+                            <Stack spacing={0.5} sx={{ mt: 0.25 }}>
+                              {chipLabel ? (
+                                <Chip size="small" variant="outlined" color={chipColor} label={chipLabel} sx={{ width: 'fit-content' }} />
+                              ) : null}
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                {parts.join(' · ') || '—'}
+                              </Typography>
+                            </Stack>
+                          </Tooltip>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 280, wordBreak: 'break-word' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {formatPmSamples(inferredByHeader[row.header]?.sample)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 280 }}>
+                      <Autocomplete
+                        size="small"
+                        options={pmEnrichedTargetsByHeader[row.header] ?? []}
+                        filterOptions={(opts, state) =>
+                          filterAndSortPmTargets(opts as EnrichedPmTargetOption[], state)
+                        }
+                        groupBy={(opt) =>
+                          'sectionLabel' in opt && opt.sectionLabel
+                            ? opt.sectionLabel
+                            : PM_GROUP_LABEL[opt.group] ?? opt.group
+                        }
+                        getOptionLabel={(opt) => (opt.key ? `${opt.label} (${opt.key})` : opt.label)}
+                        isOptionEqualToValue={(a, b) => a.key === b.key}
+                        value={(() => {
+                          const t = row.target.trim();
+                          const base = pmEnrichedTargetsByHeader[row.header] ?? [];
+                          const f = base.find((o) => o.key === t);
+                          if (f) return f;
+                          if (t) {
+                            return {
+                              key: t,
+                              label: t,
+                              group: 'optional',
+                              importance: 'low',
+                              dim_persistence: '',
+                              description: '',
+                              sortTier: 99,
+                              sectionKey: 'legacy',
+                              sectionLabel: 'Saved / unknown key',
+                              badgeTexts: [],
+                              duplicateFromHeaders: [],
+                            } as EnrichedPmTargetOption;
+                          }
+                          return (
+                            base[0] ?? {
+                              key: '',
+                              label: '(Unmapped)',
+                              group: 'optional',
+                              importance: 'low',
+                              dim_persistence: '',
+                              description: '',
+                              sortTier: 62,
+                              sectionKey: 'unmapped',
+                              sectionLabel: 'Leave unmapped',
+                              badgeTexts: [],
+                              duplicateFromHeaders: [],
+                            }
+                          );
+                        })()}
+                        onChange={(_, opt) => {
+                          const v = opt?.key ?? '';
+                          setPmColumns((prev) =>
+                            prev.map((p) =>
+                              p.header === row.header
+                                ? { ...p, target: v, disposition: v ? 'ignore' : p.disposition }
+                                : p
+                            )
+                          );
+                        }}
+                        renderOption={(props, opt) => (
+                          <li {...props} key={opt.key || 'blank'}>
+                            <Stack direction="row" alignItems="flex-start" spacing={0.5} sx={{ width: '100%', py: 0.25 }}>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap" useFlexGap>
+                                  <Typography variant="body2">{opt.label}</Typography>
+                                  {(opt as EnrichedPmTargetOption).badgeTexts?.map((b) => (
+                                    <Chip key={b} size="small" variant="outlined" label={b} sx={{ height: 20 }} />
+                                  ))}
+                                </Stack>
+                                <Typography variant="caption" color="text.secondary">
+                                  {opt.key
+                                    ? `${opt.key} · ${opt.role ?? opt.dim_persistence}`
+                                    : opt.description}
+                                </Typography>
+                                {(opt as EnrichedPmTargetOption).duplicateFromHeaders?.length ? (
+                                  <Typography variant="caption" color="warning.main" display="block">
+                                    Also mapped from:{' '}
+                                    {(opt as EnrichedPmTargetOption).duplicateFromHeaders!.join(', ')}
+                                  </Typography>
+                                ) : null}
+                              </Box>
+                              {opt.description ? (
+                                <Tooltip title={opt.description}>
+                                  <InfoOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary', mt: 0.25 }} />
+                                </Tooltip>
+                              ) : null}
+                            </Stack>
+                          </li>
+                        )}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Maps to"
+                            placeholder="Search targets…"
+                            InputProps={{
+                              ...params.InputProps,
+                              endAdornment: (
+                                <>
+                                  {(() => {
+                                    const sel = pmTargetOptions.find((o) => o.key === row.target.trim());
+                                    const dup =
+                                      pmEnrichedTargetsByHeader[row.header]?.find(
+                                        (o) => o.key === row.target.trim()
+                                      )?.duplicateFromHeaders ?? [];
+                                    return sel?.description || dup.length ? (
+                                      <InputAdornment position="end">
+                                        <Tooltip
+                                          title={
+                                            [
+                                              dup.length
+                                                ? `Duplicate: also used by ${dup.join(', ')}`
+                                                : '',
+                                              sel?.description ?? '',
+                                            ]
+                                              .filter(Boolean)
+                                              .join(' — ') || ''
+                                          }
+                                        >
+                                          <InfoOutlinedIcon
+                                            sx={{
+                                              fontSize: 18,
+                                              cursor: 'help',
+                                              color: dup.length ? 'warning.main' : 'text.secondary',
+                                            }}
+                                          />
+                                        </Tooltip>
+                                      </InputAdornment>
+                                    ) : null;
+                                  })()}
+                                  {params.InputProps.endAdornment}
+                                </>
+                              ),
+                            }}
+                          />
+                        )}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 220 }}>
+                      <FormControl size="small" fullWidth disabled={Boolean(row.target.trim())}>
+                        <InputLabel id={`disp-${row.header}`}>Disposition</InputLabel>
+                        <Select
+                          labelId={`disp-${row.header}`}
+                          label="Disposition"
+                          value={row.target.trim() ? 'ignore' : row.disposition}
+                          onChange={(e) => {
+                            const v = e.target.value as PmDisposition;
+                            setPmColumns((prev) =>
+                              prev.map((p) => (p.header === row.header ? { ...p, disposition: v } : p))
+                            );
+                          }}
+                        >
+                          <MenuItem value="ignore">Ignore</MenuItem>
+                          <MenuItem value="stage_raw">Retain as staged metadata</MenuItem>
+                          <MenuItem value="attribute_candidate">Request new field (steward review)</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {savePmMapping.isError ? (
+              <Alert severity="error">{safeDisplayError(savePmMapping.error)}</Alert>
+            ) : null}
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Button onClick={() => setActiveStep(3)}>Back</Button>
+              <Button
+                variant="outlined"
+                disabled={!requiredOk || savePmMapping.isPending}
+                onClick={() => void savePmMapping.mutateAsync().then(() => void refetchPmState())}
+              >
+                Save mapping
+              </Button>
+              <Button
+                variant="contained"
+                disabled={!requiredOk || savePmMapping.isPending}
+                onClick={() =>
+                  void savePmMapping.mutateAsync().then(() => {
+                    void refetchPmState();
+                    setActiveStep(5);
+                  })
+                }
+              >
+                Save & continue to validate
+              </Button>
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {activeStep === 5 && isPm ? (
+          <Stack spacing={2}>
+            <Typography variant="subtitle2">Validate import (no catalog writes)</Typography>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button variant="contained" onClick={() => void validatePm.mutateAsync()} disabled={validatePm.isPending}>
+                Run validation
+              </Button>
+              {pmJobState?.validation_passed === true ? <Chip color="success" label="Passed" /> : null}
+              {pmJobState?.validation_passed === false ? <Chip color="error" label="Failed" /> : null}
+              {pmJobState?.validation_passed == null ? <Chip variant="outlined" label="Not run yet" /> : null}
+            </Stack>
+            {pmJobState?.error_summary ? <Alert severity="warning">{pmJobState.error_summary}</Alert> : null}
+            {validatePm.isError ? (
+              <Alert severity="error">{safeDisplayError(validatePm.error)}</Alert>
+            ) : null}
+            {previewRows && previewRows.length > 0 ? (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Row</TableCell>
+                    <TableCell>Severity</TableCell>
+                    <TableCell>Code</TableCell>
+                    <TableCell>Message</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {previewRows.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.row_number}</TableCell>
+                      <TableCell>{r.severity}</TableCell>
+                      <TableCell>{r.code}</TableCell>
+                      <TableCell>{r.message}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : null}
+            {pmJobState?.staged_metadata_preview && Object.keys(pmJobState.staged_metadata_preview).length > 0 ? (
+              <Alert severity="info">
+                Staged metadata rows (preview): <strong>{Object.keys(pmJobState.staged_metadata_preview).length}</strong> index
+                keys — values are merged into <code>specs_json.import_staging</code> on commit.
+              </Alert>
+            ) : null}
+            <Stack direction="row" spacing={1}>
+              <Button onClick={() => setActiveStep(4)}>Back</Button>
+              <Button variant="contained" disabled={pmJobState?.validation_passed !== true} onClick={() => setActiveStep(6)}>
+                Continue to commit
+              </Button>
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {activeStep === 6 && isPm && selectedTemplate ? (
+          <Stack spacing={2}>
+            <Typography variant="subtitle2">Commit to catalog</Typography>
+            <Alert severity="warning">
+              This step applies validated rows to the product catalog. Unmapped columns marked &quot;staged metadata&quot; are
+              merged under each SKU after upsert.
+            </Alert>
+            {selectedTemplate.destructive_apply_requires_confirm ? (
+              <FormControlLabel
+                control={<Checkbox checked={confirmDestructive} onChange={(_, c) => setConfirmDestructive(c)} />}
+                label="I confirm applying this Product Master import (required by template policy)."
+              />
+            ) : null}
+            {commitPm.isError ? (
+              <Alert severity="error">{safeDisplayError(commitPm.error)}</Alert>
+            ) : null}
+            {pmJobState?.status === 'commit_queued' || pmJobState?.status === 'commit_running' ? (
+              <Alert severity="info">
+                Background commit in progress. You can leave or refresh this page — job <strong>#{lastJobId}</strong> will
+                keep updating in the jobs grid and in the status panel above.
+              </Alert>
+            ) : null}
+            {pmJobState?.status === 'commit_failed' ? (
+              <Alert severity="error">
+                {pmJobState.error_summary ??
+                  'Commit failed. Review import row messages, fix the source or mapping, then try Commit again.'}
+              </Alert>
+            ) : null}
+            {pmJobState?.stage === 'pm_committed' ? (
+              <Alert severity="success">Commit finished successfully. This import is applied to the catalog.</Alert>
+            ) : null}
+            <Stack direction="row" spacing={1}>
+              <Button onClick={() => setActiveStep(5)}>Back</Button>
+              <Button
+                variant="contained"
+                color="primary"
+                disabled={
+                  pmJobState?.validation_passed !== true ||
+                  commitPm.isPending ||
+                  pmJobState?.status === 'commit_queued' ||
+                  pmJobState?.status === 'commit_running' ||
+                  pmJobState?.stage === 'pm_committed' ||
+                  (selectedTemplate.destructive_apply_requires_confirm && !confirmDestructive)
+                }
+                onClick={() => void commitPm.mutateAsync()}
+              >
+                {pmJobState?.status === 'commit_queued' || pmJobState?.status === 'commit_running'
+                  ? 'Commit in progress…'
+                  : pmJobState?.stage === 'pm_committed'
+                    ? 'Committed'
+                    : 'Commit / apply'}
+              </Button>
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {activeStep === 4 && !isPm ? (
+          <Stack spacing={2}>
+            <Typography variant="body2">
+              Upload for <strong>{selectedTemplate?.display_name}</strong> using provider{' '}
+              <strong>{(sources ?? []).find((s) => s.id === sourceId)?.name ?? '—'}</strong>.
+            </Typography>
+            {!canGoUpload ? (
+              <Alert severity="warning">Complete provider, mode, and confirmations before uploading.</Alert>
+            ) : null}
+            <Box
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setDragActive(true);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+              }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragActive(false);
+                const f = e.dataTransfer.files?.[0];
+                onFile(f);
+              }}
+              sx={{
+                border: '2px dashed',
+                borderColor: dragActive ? 'primary.main' : 'divider',
+                borderRadius: 2,
+                px: 3,
+                py: 4,
+                textAlign: 'center',
+                bgcolor: dragActive ? 'action.selected' : 'action.hover',
+              }}
+            >
+              <CloudUploadOutlinedIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+              <Typography variant="subtitle1" fontWeight={600}>
+                Drop CSV or XLSX here
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Or choose a file. Pipeline runs according to import mode.
+              </Typography>
+              <Button variant="contained" component="label" disabled={!canGoUpload || upload.isPending}>
+                Choose file
+                <input
+                  hidden
+                  type="file"
+                  accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                  onChange={(e) => {
+                    onFile(e.target.files?.[0]);
+                    e.target.value = '';
+                  }}
+                />
+              </Button>
+            </Box>
+            {upload.isPending ? <LinearProgress /> : null}
+            {upload.isError ? (
+              <Alert severity="error">{safeDisplayError(upload.error)}</Alert>
+            ) : null}
+            {upload.isSuccess && lastJobId != null ? (
+              <Alert severity="success">
+                Job <strong>#{lastJobId}</strong> created.{' '}
+                <Button size="small" onClick={() => void refetchPreview()}>
+                  Refresh validation preview
+                </Button>
+              </Alert>
+            ) : null}
+            {previewRows && previewRows.length > 0 ? (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Row</TableCell>
+                    <TableCell>Severity</TableCell>
+                    <TableCell>Code</TableCell>
+                    <TableCell>Message</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {previewRows.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.row_number}</TableCell>
+                      <TableCell>{r.severity}</TableCell>
+                      <TableCell>{r.code}</TableCell>
+                      <TableCell>{r.message}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : null}
+            <Stack direction="row" spacing={1}>
+              <Button onClick={() => setActiveStep(3)}>Back</Button>
+              <Button
+                onClick={() => {
+                  setActiveStep(0);
+                  setSelectedSlug(null);
+                  setSourceId('');
+                  setLastJobId(null);
+                  upload.reset();
+                  pmUpload.reset();
+                }}
+              >
+                Start over
+              </Button>
+            </Stack>
+          </Stack>
+        ) : null}
+      </Paper>
+
+      <Paper sx={{ p: 2 }}>
+        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+          Import jobs
+        </Typography>
+        <ModuleDataSection
+          intro="Jobs include template slug and import mode. Product Master mapping jobs show stages pm_headers_ready → pm_mapping_saved → pm_validated → pm_committed."
+          isLoading={jobsLoading}
+          isError={jobsIsError}
+          error={toQueryError(jobsErr)}
+          onRetry={() => void refetchJobs()}
+          isEmpty={jobsList.length === 0}
+          empty={{
+            title: 'No import jobs yet',
+            description: 'Complete the guided import above, or use the API directly.',
+            primary: { label: 'Mapping queue', href: '/admin/mappings' },
+            secondary: { label: 'Getting started', href: '/getting-started' },
+          }}
+          toolbar={<ModuleGridToolbar onRefresh={() => qc.invalidateQueries({ queryKey: ['import-jobs'] })} />}
+        >
+          <EnterpriseDataGrid rowData={jobsList} columnDefs={colDefs} height={420} />
+        </ModuleDataSection>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Line-up bulk upsert remains on the{' '}
+          <Link component={NextLink} href="/lineup">
+            Line-up planning
+          </Link>{' '}
+          screen; this wizard focuses on constrained file imports.
+        </Typography>
+      </Paper>
+    </>
+  );
+}

@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.Python
+
+# Build / IDE
+.next/
+out/
+dist/
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Storage (dev uploads)
+storage/uploads/
+apps/api/storage/
+
+# Logs / coverage
+*.log
+.coverage
+htmlcov/
+.pytest_cache/
+coverage/
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+
+# Alembic (optional local)
+# Turbo / pnpm
+.turbo/
