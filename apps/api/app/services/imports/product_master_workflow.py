@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 import pandas as pd
 from sqlalchemy import delete, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.ingestion.infer import infer_schema, read_tabular
 from app.models.dimensions import DimChannel, DimProduct
@@ -178,7 +178,8 @@ def try_enqueue_pm_commit_sync(db: Session, job_id: int, *, confirm_destructive:
     """Atomically enqueue a Product Master commit (row lock). Returns outcome for API layer."""
     job = db.execute(
         select(ImportJob)
-        .options(joinedload(ImportJob.source).joinedload(SourceDefinition.import_template))
+        # Use selectinload with FOR UPDATE to avoid Postgres outer-join lock errors.
+        .options(selectinload(ImportJob.source).selectinload(SourceDefinition.import_template))
         .where(ImportJob.id == job_id)
         .with_for_update()
     ).scalar_one_or_none()
@@ -220,7 +221,7 @@ def try_enqueue_pm_commit_sync(db: Session, job_id: int, *, confirm_destructive:
             db.commit()
             job = db.execute(
                 select(ImportJob)
-                .options(joinedload(ImportJob.source).joinedload(SourceDefinition.import_template))
+                .options(selectinload(ImportJob.source).selectinload(SourceDefinition.import_template))
                 .where(ImportJob.id == job_id)
                 .with_for_update()
             ).scalar_one_or_none()
@@ -272,7 +273,7 @@ def run_pm_commit_worker(db: Session, job_id: int, *, confirm_destructive: bool,
     """Celery entry: single-flight commit; must follow try_enqueue (status commit_queued)."""
     job = db.execute(
         select(ImportJob)
-        .options(joinedload(ImportJob.source).joinedload(SourceDefinition.import_template))
+        .options(selectinload(ImportJob.source).selectinload(SourceDefinition.import_template))
         .where(ImportJob.id == job_id)
         .with_for_update()
     ).scalar_one_or_none()
