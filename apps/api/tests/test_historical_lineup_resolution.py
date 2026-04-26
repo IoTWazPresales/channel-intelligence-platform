@@ -850,3 +850,54 @@ def test_code_field_uses_error_level_diagnostic_when_both_present() -> None:
         assert target.severity == "error", (
             f"severity must be 'error' when unknown_product present; got severity={target.severity!r}"
         )
+
+
+def test_invalid_numeric_fields_in_raw_payload() -> None:
+    """Phase 3C: rows with non-parseable optional numeric values must carry
+    _invalid_numeric_fields in raw_payload so the UI can name the affected fields.
+
+    Validates the backend change that collects field names during the numeric
+    resolution loop and embeds them into ImportRowResult.raw_payload before
+    persisting the row.
+    """
+    source_id = _seed_resolution_fixtures()
+    # 6 mapped columns → confidence 6/23 ≈ 0.26 which does NOT trigger low_mapping_confidence
+    # (threshold is < 0.25).  This ensures invalid_numeric becomes the primary_code on the row.
+    workbook = _make_simple_workbook(
+        [
+            {
+                "Customer": "Resolution Customer",   # resolves via exact name match
+                "Part Number": "PART-RES-001",        # resolves via exact part_number
+                "Model name": "MODEL-RES-A",          # maps to model_raw
+                "Qty": "5",
+                "MSRP": "TBD",    # non-parseable text (not a pandas NaN sentinel) → triggers invalid_numeric
+                "DAP": "500.00",  # 6th mapped field (valid) — conf = 6/23 ≈ 0.26 ≥ 0.25
+            }
+        ],
+        sheet_name="Historical Lineup",
+    )
+    job = _run_validate_job(source_id, workbook, filename="test_numeric_payload.xlsx")
+
+    with SessionLocal() as db:
+        results = db.scalars(
+            select(ImportRowResult).where(
+                ImportRowResult.job_id == job.id,
+                ImportRowResult.code == "invalid_numeric",
+            )
+        ).all()
+
+    assert results, (
+        "Expected at least one ImportRowResult with code='invalid_numeric'. "
+        "Ensure the workbook has >= 5 mapped columns so map_conf >= 0.25 and "
+        "low_mapping_confidence is not prepended as the primary code."
+    )
+    for r in results:
+        assert r.raw_payload is not None, "raw_payload must not be None for invalid_numeric rows"
+        inv_fields = r.raw_payload.get("_invalid_numeric_fields")
+        assert inv_fields, (
+            f"_invalid_numeric_fields must be present in raw_payload; got {r.raw_payload!r}"
+        )
+        assert "msrp_local" in inv_fields, (
+            f"Expected 'msrp_local' in _invalid_numeric_fields; got {inv_fields!r}. "
+            "Note: avoid pandas NaN sentinels (N/A, NA, NaN) as test values — use 'TBD' etc."
+        )

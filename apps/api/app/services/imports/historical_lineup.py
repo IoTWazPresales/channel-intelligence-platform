@@ -594,6 +594,7 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
                 "vat_pct",
             ]
             parsed_numeric: dict[str, Decimal | None] = {}
+            _invalid_numeric_fields: list[str] = []
             for field in numeric_fields:
                 parsed_numeric[field] = _parse_decimal(payload.get(field))
                 if parsed_numeric[field] is None and _clean_str(payload.get(field)):
@@ -603,9 +604,12 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
                             diagnostics.append("invalid_quantity")
                             errors += 1
                     else:
-                        # Optional commercial fields: flag but keep severity at warning.
-                        diagnostics.append("invalid_numeric")
+                        # Optional commercial field: collect for payload meta; severity stays
+                        # warning — one invalid_numeric diagnostic appended after the loop.
+                        _invalid_numeric_fields.append(field)
                         errors += 1
+            if _invalid_numeric_fields:
+                diagnostics.append("invalid_numeric")
 
             per = _parse_period_start(payload.get("period_start") or payload.get("period_label"))
             if payload.get("period_start") and per is None:
@@ -624,6 +628,11 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
                 next((d for d in diagnostics if d in _ERROR_LEVEL_CODES), None)
                 or (diagnostics[0] if diagnostics else "historical_lineup_row_ok")
             )
+            row_payload = (
+                {**parsed.payload, "_invalid_numeric_fields": _invalid_numeric_fields}
+                if _invalid_numeric_fields
+                else parsed.payload
+            )
             db.add(
                 ImportRowResult(
                     job_id=job.id,
@@ -631,7 +640,7 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
                     severity=severity,
                     code=primary_code,
                     message="; ".join(diagnostics) if diagnostics else "row accepted",
-                    raw_payload=parsed.payload,
+                    raw_payload=row_payload,
                 )
             )
 

@@ -101,6 +101,7 @@ type RowResult = {
   severity: string;
   code: string;
   message: string;
+  raw_payload?: Record<string, unknown> | null;
 };
 
 type GenericUploadArgs = {
@@ -175,7 +176,7 @@ const HL_MAPPING_DISPLAY_FIELDS: Array<{ canonical: string; label: string }> = [
   { canonical: 'msrp_local', label: 'MSRP / list price' },
 ];
 
-// Diagnostic codes that represent blocking errors — used for chip coloring in the summary.
+// Diagnostic codes shown as error-colored chips in the summary bar.
 const HL_DIAGNOSTIC_ERROR_CODES = new Set([
   'unknown_product',
   'unknown_customer',
@@ -184,6 +185,17 @@ const HL_DIAGNOSTIC_ERROR_CODES = new Set([
   'ambiguous_product_match',
   'ambiguous_customer_match',
   'unknown_distributor',
+]);
+
+// Codes that hard-block apply (row data is unresolvable without intervention).
+// unknown_customer is intentionally excluded: rows can still be saved with a null
+// customer FK and resolved in a later mapping step.
+const HL_APPLY_BLOCKING_CODES = new Set([
+  'unknown_product',
+  'missing_key_fields',
+  'invalid_quantity',
+  'ambiguous_product_match',
+  'ambiguous_customer_match',
 ]);
 
 const stepsDefault = ['Import type', 'Data provider', 'Template details', 'Import mode', 'Upload & preview'];
@@ -287,6 +299,7 @@ function AdminImportsPageContent() {
   const [isJobRevisitMode, setIsJobRevisitMode] = useState(false);
   const [hlMappingEdits, setHlMappingEdits] = useState<Record<string, Record<string, string>>>({});
   const [showMappingReview, setShowMappingReview] = useState(false);
+  const [hlShowApplyConfirm, setHlShowApplyConfirm] = useState(false);
   const [pmColumns, setPmColumns] = useState<PmColumnDraft[]>([]);
   const [pmRowFilter, setPmRowFilter] = useState<'all' | 'unmapped' | 'mapped' | 'core'>('all');
   const [pmBulkSelected, setPmBulkSelected] = useState<Record<string, boolean>>({});
@@ -404,6 +417,49 @@ function AdminImportsPageContent() {
       .map(([code, count]) => ({ code, count }));
   }, [previewRows]);
 
+  // Quality Review: aggregate previewRows into blocking / warning / ok counts and tokens.
+  // Active only for historical_lineup flows so the operator can assess apply readiness.
+  const qualityReview = useMemo(() => {
+    if (selectedSlug !== 'historical_lineup' || !previewRows?.length) return null;
+    let blockingCount = 0;
+    let okCount = 0;
+    let commercialWarningCount = 0;
+    const unknownCustomerTokens = new Map<string, number>();
+    const invalidNumericExamples: string[] = [];
+
+    for (const r of previewRows) {
+      if (HL_APPLY_BLOCKING_CODES.has(r.code)) {
+        blockingCount++;
+      } else if (r.code === 'historical_lineup_row_ok') {
+        okCount++;
+      } else if (r.code === 'partial_margin_stack' || r.code === 'invalid_numeric') {
+        commercialWarningCount++;
+      }
+      if (r.code === 'unknown_customer') {
+        const token = (r.raw_payload?.customer_token as string | undefined) ?? '(unknown)';
+        unknownCustomerTokens.set(token, (unknownCustomerTokens.get(token) ?? 0) + 1);
+      }
+      if (r.code === 'invalid_numeric' && invalidNumericExamples.length < 3) {
+        const fields = r.raw_payload?._invalid_numeric_fields as string[] | undefined;
+        if (fields?.length) {
+          invalidNumericExamples.push(`row ${r.row_number}: ${fields.join(', ')}`);
+        }
+      }
+    }
+
+    const unknownCustomerRowCount = Array.from(unknownCustomerTokens.values()).reduce((a, b) => a + b, 0);
+    return {
+      blockingCount,
+      okCount,
+      commercialWarningCount,
+      unknownCustomerTokens,
+      unknownCustomerRowCount,
+      unknownCustomerCount: unknownCustomerTokens.size,
+      invalidNumericExamples,
+      isApplyReady: blockingCount === 0,
+    };
+  }, [previewRows, selectedSlug]);
+
   // Derived data for the HL mapping review panel.
   const hlSheetDetail: HlSheetDetail | null =
     hlJobDetail?.inferred_schema?.selected_sheet_details?.[0] ?? null;
@@ -448,6 +504,7 @@ function AdminImportsPageContent() {
         setLastGenericFile(null);
         setHlMappingEdits({});
         setShowMappingReview(false);
+        setHlShowApplyConfirm(false);
       }
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', data.id] });
@@ -1812,26 +1869,138 @@ function AdminImportsPageContent() {
                 ) : null}
               </Box>
             ) : null}
+            {qualityReview && historicalValidatedJobId != null ? (
+              <Box
+                data-testid="quality-review-panel"
+                sx={{
+                  border: '1px solid',
+                  borderColor: qualityReview.isApplyReady ? 'success.light' : 'warning.light',
+                  borderRadius: 1,
+                  p: 1.5,
+                }}
+              >
+                <Stack spacing={1}>
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                    <Typography
+                      variant="caption"
+                      fontWeight={700}
+                      color={qualityReview.isApplyReady ? 'success.main' : 'error.main'}
+                      data-testid="quality-review-badge"
+                    >
+                      {qualityReview.isApplyReady
+                        ? '✓ Apply ready'
+                        : `✗ ${qualityReview.blockingCount} blocking error${qualityReview.blockingCount !== 1 ? 's' : ''}`}
+                    </Typography>
+                    {qualityReview.okCount > 0 && (
+                      <Chip size="small" label={`${qualityReview.okCount} accepted`} color="success" variant="outlined" />
+                    )}
+                    {qualityReview.commercialWarningCount > 0 && (
+                      <Chip
+                        size="small"
+                        label={`${qualityReview.commercialWarningCount} commercial warning${qualityReview.commercialWarningCount !== 1 ? 's' : ''}`}
+                        color="warning"
+                        variant="outlined"
+                      />
+                    )}
+                  </Stack>
+
+                  {qualityReview.unknownCustomerCount > 0 && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block' }}>
+                        Unresolved customers — {qualityReview.unknownCustomerRowCount} row
+                        {qualityReview.unknownCustomerRowCount !== 1 ? 's' : ''},{' '}
+                        {qualityReview.unknownCustomerCount} distinct token
+                        {qualityReview.unknownCustomerCount !== 1 ? 's' : ''}
+                      </Typography>
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+                        {Array.from(qualityReview.unknownCustomerTokens.entries())
+                          .slice(0, 10)
+                          .map(([token, count]) => (
+                            <Chip
+                              key={token}
+                              size="small"
+                              label={`${token} (${count})`}
+                              color="warning"
+                              variant="outlined"
+                            />
+                          ))}
+                      </Stack>
+                      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
+                        Rows will be saved with null customer FK. Map tokens to customers in a later step.
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {qualityReview.invalidNumericExamples.length > 0 && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block' }}>
+                        Invalid numeric fields — examples:
+                      </Typography>
+                      <Typography variant="caption" color="text.disabled">
+                        {qualityReview.invalidNumericExamples.join(' · ')}
+                      </Typography>
+                    </Box>
+                  )}
+                </Stack>
+              </Box>
+            ) : null}
             {selectedTemplate?.slug === 'historical_lineup' && historicalValidatedJobId != null && lastGenericFile ? (
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Typography variant="caption" color="text.secondary">
-                  Validation job #{historicalValidatedJobId} completed. Apply requires an explicit second click.
-                </Typography>
-                <Button
-                  size="small"
-                  variant="contained"
-                  disabled={upload.isPending}
-                  onClick={() =>
-                    upload.mutate({
-                      file: lastGenericFile,
-                      modeOverride: 'apply',
-                      mappingOverride: hlHasEdits ? hlMappingEdits : undefined,
-                    })
-                  }
-                >
-                  Apply validated file
-                </Button>
-              </Stack>
+              hlShowApplyConfirm ? (
+                <Alert severity="warning" data-testid="apply-confirm-alert">
+                  <Stack spacing={1}>
+                    <Typography variant="body2">
+                      {qualityReview?.unknownCustomerRowCount ?? 0} row
+                      {(qualityReview?.unknownCustomerRowCount ?? 0) !== 1 ? 's' : ''} will be saved with unknown
+                      customer (null FK). Proceed?
+                    </Typography>
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="warning"
+                        disabled={upload.isPending}
+                        onClick={() => {
+                          setHlShowApplyConfirm(false);
+                          upload.mutate({
+                            file: lastGenericFile,
+                            modeOverride: 'apply',
+                            mappingOverride: hlHasEdits ? hlMappingEdits : undefined,
+                          });
+                        }}
+                      >
+                        Apply anyway
+                      </Button>
+                      <Button size="small" variant="text" onClick={() => setHlShowApplyConfirm(false)}>
+                        Cancel
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </Alert>
+              ) : (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="caption" color="text.secondary">
+                    Validation job #{historicalValidatedJobId} completed. Apply requires an explicit second click.
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    disabled={upload.isPending || (qualityReview != null && !qualityReview.isApplyReady)}
+                    onClick={() => {
+                      if (qualityReview?.unknownCustomerCount && qualityReview.unknownCustomerCount > 0) {
+                        setHlShowApplyConfirm(true);
+                      } else {
+                        upload.mutate({
+                          file: lastGenericFile,
+                          modeOverride: 'apply',
+                          mappingOverride: hlHasEdits ? hlMappingEdits : undefined,
+                        });
+                      }
+                    }}
+                  >
+                    Apply validated file
+                  </Button>
+                </Stack>
+              )
             ) : null}
             {upload.isSuccess && lastJobId != null && upload.data?.import_mode === 'apply' ? (
               <Alert severity="success" data-testid="apply-success-alert">
@@ -1896,6 +2065,7 @@ function AdminImportsPageContent() {
                   setIsJobRevisitMode(false);
                   setHlMappingEdits({});
                   setShowMappingReview(false);
+                  setHlShowApplyConfirm(false);
                   upload.reset();
                   pmUpload.reset();
                   void router.replace('/admin/imports');

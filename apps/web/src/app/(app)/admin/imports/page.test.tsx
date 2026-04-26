@@ -72,6 +72,8 @@ const mockState = vi.hoisted(() => ({
   } as any,
   // Populated in Apply button tests' beforeEach so the ?source=100 URL param resolves
   hlSources: [] as any[],
+  // Row results for historical_lineup validate job (job 50) — override per test.
+  hlValidateJobRows: [] as any[],
   // Historical lineup validate job detail with source_columns (for mapping review tests)
   hlValidateJobDetail: {
     id: 50,
@@ -151,6 +153,7 @@ vi.mock('@/lib/api', () => ({
     if (url === '/api/v1/imports/jobs/42') return mockState.jobDetail;
     if (url === '/api/v1/imports/jobs/42/rows') return mockState.jobRows;
     if (url === '/api/v1/imports/jobs/50') return mockState.hlValidateJobDetail;
+    if (url === '/api/v1/imports/jobs/50/rows') return mockState.hlValidateJobRows;
     if (url === '/api/v1/imports/jobs/99') return mockState.pmJobDetail;
     if (url === '/api/v1/imports/jobs/99/rows') return [];
     if (url.match(/\/api\/v1\/imports\/jobs\/\d+\/rows$/)) return [];
@@ -740,5 +743,167 @@ describe('AdminImportsPage Phase 3B — diagnostic summary chips', () => {
     // At least one chip should contain the code from mockState.jobRows
     expect(summary).toHaveTextContent('unknown_product');
     expect(summary).toHaveTextContent('(1)');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 3C — Import Quality Review panel
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AdminImportsPage Phase 3C — quality review panel', () => {
+  const VALIDATE_JOB_50 = {
+    id: 50,
+    status: 'completed_with_errors',
+    stage: 'validated',
+    import_mode: 'validate',
+    template_slug: 'historical_lineup',
+  };
+  const APPLY_JOB_51 = {
+    id: 51,
+    status: 'completed',
+    stage: 'loaded',
+    import_mode: 'apply',
+    template_slug: 'historical_lineup',
+  };
+
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <AdminImportsPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    searchString = '';
+    mockRouterReplace.mockReset();
+    mockState.templates = [mockState.templates[0], mockState.historicalLineupTemplate];
+    mockState.hlSources = [];
+    mockState.hlValidateJobRows = [];
+  });
+
+  afterEach(() => {
+    mockState.templates = [
+      {
+        id: 10, slug: 'customer_master', display_name: 'Customer master',
+        description: 'Customer account master import', requires_provider: true,
+        accepted_file_types: ['.csv', '.xlsx'], required_fields: ['customer_code', 'customer_name'],
+        optional_fields: ['region_code', 'channel_code'], pipeline_ready: true,
+        destructive_apply_requires_confirm: false,
+      },
+      {
+        id: 11, slug: 'customer_channel_mapping', display_name: 'Customer/channel mapping',
+        description: 'Deferred scaffold', requires_provider: true,
+        accepted_file_types: ['.csv', '.xlsx'], required_fields: ['customer_code', 'channel_code'],
+        optional_fields: ['region_code'], pipeline_ready: false, destructive_apply_requires_confirm: false,
+      },
+    ];
+    mockState.hlSources = [];
+    mockState.hlValidateJobRows = [];
+    vi.restoreAllMocks();
+  });
+
+  async function navigateToUploadStep(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByText('Historical Lineup'));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await screen.findByRole('button', { name: /Choose file/i });
+  }
+
+  const xlsxFile = () =>
+    new File(['dummy'], 'lineup.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+  it('quality review panel shows apply-ready badge when no blocking errors exist', async () => {
+    mockState.hlValidateJobRows = [
+      { id: 1, row_number: 2, severity: 'info', code: 'historical_lineup_row_ok', message: 'row accepted', raw_payload: {} },
+      { id: 2, row_number: 3, severity: 'info', code: 'historical_lineup_row_ok', message: 'row accepted', raw_payload: {} },
+      { id: 3, row_number: 4, severity: 'warning', code: 'partial_margin_stack', message: 'partial margin', raw_payload: {} },
+    ];
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => VALIDATE_JOB_50 } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    const badge = await screen.findByTestId('quality-review-badge');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent(/Apply ready/i);
+    // Must NOT say "blocking"
+    expect(badge.textContent).not.toMatch(/blocking/i);
+  });
+
+  it('quality review panel groups unknown customer tokens with row counts', async () => {
+    mockState.hlValidateJobRows = [
+      {
+        id: 1, row_number: 2, severity: 'warning', code: 'unknown_customer',
+        message: 'unknown_customer', raw_payload: { customer_token: 'ABC Corp' },
+      },
+      {
+        id: 2, row_number: 3, severity: 'warning', code: 'unknown_customer',
+        message: 'unknown_customer', raw_payload: { customer_token: 'ABC Corp' },
+      },
+      {
+        id: 3, row_number: 4, severity: 'warning', code: 'unknown_customer',
+        message: 'unknown_customer', raw_payload: { customer_token: 'XYZ Ltd' },
+      },
+    ];
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => VALIDATE_JOB_50 } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    const panel = await screen.findByTestId('quality-review-panel');
+    expect(panel).toBeInTheDocument();
+    // Grouped tokens should appear as chips
+    expect(panel).toHaveTextContent('ABC Corp (2)');
+    expect(panel).toHaveTextContent('XYZ Ltd (1)');
+    // Distinct token count should be mentioned
+    expect(panel).toHaveTextContent(/3 rows/i);
+  });
+
+  it('apply button shows inline confirmation when unresolved customers exist, then applies on confirm', async () => {
+    mockState.hlValidateJobRows = [
+      {
+        id: 1, row_number: 2, severity: 'warning', code: 'unknown_customer',
+        message: 'unknown_customer', raw_payload: { customer_token: 'UNKNOWN CORP' },
+      },
+    ];
+
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => VALIDATE_JOB_50 } as any)
+      .mockResolvedValueOnce({ ok: true, json: async () => APPLY_JOB_51 } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    // Apply button should be enabled (unknown_customer is soft warning, not hard block)
+    const applyBtn = await screen.findByRole('button', { name: /Apply validated file/i });
+    expect(applyBtn).not.toBeDisabled();
+
+    // Click Apply — confirmation alert should appear instead of mutating immediately
+    await user.click(applyBtn);
+    const confirmAlert = await screen.findByTestId('apply-confirm-alert');
+    expect(confirmAlert).toBeInTheDocument();
+    expect(confirmAlert).toHaveTextContent(/1 row/i);
+
+    // Click "Apply anyway" — apply mutation should fire and success alert should appear
+    await user.click(screen.getByRole('button', { name: /Apply anyway/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('apply-confirm-alert')).not.toBeInTheDocument();
+    });
+    const successAlert = await screen.findByTestId('apply-success-alert');
+    expect(successAlert).toHaveTextContent(`#${APPLY_JOB_51.id}`);
   });
 });
