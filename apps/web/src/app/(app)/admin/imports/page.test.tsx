@@ -74,6 +74,8 @@ const mockState = vi.hoisted(() => ({
   hlSources: [] as any[],
   // Row results for historical_lineup validate job (job 50) — override per test.
   hlValidateJobRows: [] as any[],
+  // Lineup lines for apply jobs — override per test.
+  lineupLines: [] as any[],
   // Historical lineup validate job detail with source_columns (for mapping review tests)
   hlValidateJobDetail: {
     id: 50,
@@ -154,6 +156,7 @@ vi.mock('@/lib/api', () => ({
     if (url === '/api/v1/imports/jobs/42/rows') return mockState.jobRows;
     if (url === '/api/v1/imports/jobs/50') return mockState.hlValidateJobDetail;
     if (url === '/api/v1/imports/jobs/50/rows') return mockState.hlValidateJobRows;
+    if (url.match(/\/api\/v1\/imports\/jobs\/\d+\/lineup-lines$/)) return mockState.lineupLines;
     if (url === '/api/v1/imports/jobs/99') return mockState.pmJobDetail;
     if (url === '/api/v1/imports/jobs/99/rows') return [];
     if (url.match(/\/api\/v1\/imports\/jobs\/\d+\/rows$/)) return [];
@@ -905,5 +908,150 @@ describe('AdminImportsPage Phase 3C — quality review panel', () => {
     });
     const successAlert = await screen.findByTestId('apply-success-alert');
     expect(successAlert).toHaveTextContent(`#${APPLY_JOB_51.id}`);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-pass A — Loaded lineup records view
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AdminImportsPage Sub-pass A — loaded lineup records', () => {
+  const VALIDATE_JOB_50 = {
+    id: 50, status: 'completed_with_errors', stage: 'validated',
+    import_mode: 'validate', template_slug: 'historical_lineup',
+  };
+  const APPLY_JOB_51 = {
+    id: 51, status: 'completed', stage: 'loaded',
+    import_mode: 'apply', template_slug: 'historical_lineup',
+  };
+
+  const SAMPLE_LINES = [
+    {
+      id: 1, header_id: 10, source_row_number: 5,
+      product_id: 42, sku_raw: null, part_number_raw: 'PART-001',
+      model_raw: 'Model X', base_unit_raw: 'NB', quantity_units: 12,
+      msrp_local: 999.0, promo_price_local: 899.0, dap_local: 850.0,
+      disti_margin_pct: 8.5, period_label: '2026-Q2', header_customer_id: null, sheet_name: 'NB',
+    },
+  ];
+
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <AdminImportsPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    searchString = '';
+    mockRouterReplace.mockReset();
+    mockState.templates = [mockState.templates[0], mockState.historicalLineupTemplate];
+    mockState.hlSources = [];
+    mockState.hlValidateJobRows = [];
+    mockState.lineupLines = [];
+  });
+
+  afterEach(() => {
+    mockState.templates = [
+      {
+        id: 10, slug: 'customer_master', display_name: 'Customer master',
+        description: 'Customer account master import', requires_provider: true,
+        accepted_file_types: ['.csv', '.xlsx'], required_fields: ['customer_code', 'customer_name'],
+        optional_fields: ['region_code', 'channel_code'], pipeline_ready: true,
+        destructive_apply_requires_confirm: false,
+      },
+      {
+        id: 11, slug: 'customer_channel_mapping', display_name: 'Customer/channel mapping',
+        description: 'Deferred scaffold', requires_provider: true,
+        accepted_file_types: ['.csv', '.xlsx'], required_fields: ['customer_code', 'channel_code'],
+        optional_fields: ['region_code'], pipeline_ready: false, destructive_apply_requires_confirm: false,
+      },
+    ];
+    mockState.hlSources = [];
+    mockState.hlValidateJobRows = [];
+    mockState.lineupLines = [];
+    vi.restoreAllMocks();
+  });
+
+  async function navigateToUploadStep(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByText('Historical Lineup'));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await screen.findByRole('button', { name: /Choose file/i });
+  }
+
+  const xlsxFile = () =>
+    new File(['dummy'], 'lineup.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+  it('loaded lineup section appears after apply and shows line data', async () => {
+    mockState.lineupLines = SAMPLE_LINES;
+
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => VALIDATE_JOB_50 } as any)
+      .mockResolvedValueOnce({ ok: true, json: async () => APPLY_JOB_51 } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    // Validate first
+    await screen.findByRole('button', { name: /Apply validated file/i });
+
+    // Click Apply — confirmation not shown (no unknown customers)
+    await user.click(screen.getByRole('button', { name: /Apply validated file/i }));
+
+    // Loaded lineup section must appear
+    const section = await screen.findByTestId('loaded-lineup-section');
+    expect(section).toBeInTheDocument();
+    // Should show line data
+    expect(section).toHaveTextContent('PART-001');
+    expect(section).toHaveTextContent('Model X');
+  });
+
+  it('loaded lineup section shows empty state when no lines returned', async () => {
+    mockState.lineupLines = [];
+
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => VALIDATE_JOB_50 } as any)
+      .mockResolvedValueOnce({ ok: true, json: async () => APPLY_JOB_51 } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    await screen.findByRole('button', { name: /Apply validated file/i });
+    await user.click(screen.getByRole('button', { name: /Apply validated file/i }));
+
+    // Section still appears but shows empty state text
+    const section = await screen.findByTestId('loaded-lineup-section');
+    expect(section).toBeInTheDocument();
+    expect(section).toHaveTextContent(/No lineup lines loaded/i);
+  });
+
+  it('View apply job link appears in success alert with correct job id', async () => {
+    mockState.lineupLines = SAMPLE_LINES;
+
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => VALIDATE_JOB_50 } as any)
+      .mockResolvedValueOnce({ ok: true, json: async () => APPLY_JOB_51 } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    await screen.findByRole('button', { name: /Apply validated file/i });
+    await user.click(screen.getByRole('button', { name: /Apply validated file/i }));
+
+    const link = await screen.findByTestId('view-apply-job-link');
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', `/admin/imports?job=${APPLY_JOB_51.id}`);
   });
 });

@@ -3,9 +3,12 @@ from __future__ import annotations
 import io
 
 import pandas as pd
+import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.db.session_sync import SessionLocal
+from app.main import app
 from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
@@ -622,4 +625,106 @@ def test_sales_part_number_alias_maps_to_part_number_raw() -> None:
         mapping, _ = _build_header_map([col_name])
         assert "part_number_raw" in mapping, (
             f"'{col_name}' should map to part_number_raw; got mapping={mapping}"
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sub-pass A — GET /imports/jobs/{job_id}/lineup-lines endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _run_apply_job(source_id: int, workbook_bytes: bytes, filename: str = "apply.xlsx") -> int:
+    """Creates and runs a historical_lineup apply job; returns the job id."""
+    storage = get_storage_backend()
+    with SessionLocal() as db:
+        job = ImportJob(
+            source_id=source_id,
+            template_slug="historical_lineup",
+            import_mode="apply",
+            status="pending",
+            stage="uploaded",
+            file_name=filename,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        db.add(job)
+        db.flush()
+        key = f"imports/test/{job.id}/{filename}"
+        storage.save(key, workbook_bytes, job.content_type)
+        db.add(RawFileMetadata(job_id=job.id, storage_key=key, byte_size=len(workbook_bytes), checksum=None))
+        db.commit()
+        process_import_job_sync(db, job.id)
+        return job.id
+
+
+def _run_validate_job_for_endpoint(source_id: int, workbook_bytes: bytes) -> int:
+    """Creates and runs a validate job; returns the job id (no header/lines written)."""
+    storage = get_storage_backend()
+    with SessionLocal() as db:
+        job = ImportJob(
+            source_id=source_id,
+            template_slug="historical_lineup",
+            import_mode="validate",
+            status="pending",
+            stage="uploaded",
+            file_name="validate.xlsx",
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        db.add(job)
+        db.flush()
+        key = f"imports/test/{job.id}/validate.xlsx"
+        storage.save(key, workbook_bytes, job.content_type)
+        db.add(RawFileMetadata(job_id=job.id, storage_key=key, byte_size=len(workbook_bytes), checksum=None))
+        db.commit()
+        process_import_job_sync(db, job.id)
+        return job.id
+
+
+def test_lineup_lines_endpoint() -> None:
+    """GET /imports/jobs/{job_id}/lineup-lines: apply job, validate job, product_id resolution.
+
+    All three assertions run under a single TestClient to avoid asyncpg event-loop
+    teardown races that occur when multiple TestClient instances are created sequentially
+    within one pytest session.
+    """
+    source_id = _ensure_historical_seed()
+    apply_job_id = _run_apply_job(source_id, _build_nb_style_workbook_bytes(), "lineup_api_apply.xlsx")
+    validate_job_id = _run_validate_job_for_endpoint(source_id, _build_nb_style_workbook_bytes())
+    pid_job_id = _run_apply_job(source_id, _build_nb_style_workbook_bytes(), "lineup_api_pid.xlsx")
+
+    with TestClient(app) as client:
+        # ── 1. Apply job returns non-empty list with required fields ──────────
+        r = client.get(f"/api/v1/imports/jobs/{apply_job_id}/lineup-lines")
+        assert r.status_code == 200, f"Expected 200 for apply job; got {r.status_code}: {r.text}"
+        lines = r.json()
+        assert isinstance(lines, list), "Response must be a list"
+        assert len(lines) > 0, "Apply job must produce at least one lineup line"
+
+        line = lines[0]
+        assert "id" in line
+        assert "source_row_number" in line
+        assert "product_id" in line  # may be null for unresolved rows
+        assert "part_number_raw" in line
+        assert "model_raw" in line
+        assert "quantity_units" in line
+        assert "msrp_local" in line
+        assert "sheet_name" in line
+        assert "period_label" in line
+
+        # Numeric fields must be float or null — never a Decimal string like "12.0000"
+        qty = line["quantity_units"]
+        if qty is not None:
+            assert isinstance(qty, (int, float)), f"quantity_units must be numeric; got {type(qty)}: {qty!r}"
+
+        # ── 2. Validate-only job returns empty list ────────────────────────────
+        rv = client.get(f"/api/v1/imports/jobs/{validate_job_id}/lineup-lines")
+        assert rv.status_code == 200, f"Expected 200 for validate job; got {rv.status_code}: {rv.text}"
+        assert rv.json() == [], f"Validate job must return []; got {rv.json()}"
+
+        # ── 3. At least one line has a resolved product_id ────────────────────
+        rp = client.get(f"/api/v1/imports/jobs/{pid_job_id}/lineup-lines")
+        assert rp.status_code == 200
+        pid_lines = rp.json()
+        product_ids = [ln["product_id"] for ln in pid_lines]
+        assert any(pid is not None for pid in product_ids), (
+            f"Expected at least one line with resolved product_id; got product_ids={product_ids}"
         )

@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload
 from app.api.deps import get_db
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
+from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
 from app.storage.local import get_storage_backend
 from app.services.imports.template_definitions import product_master_sample_csv
@@ -243,6 +244,57 @@ async def list_job_rows(job_id: int, db: AsyncSession = Depends(get_db)):
         }
         for r in rows
     ]
+
+
+@router.get("/jobs/{job_id}/lineup-lines")
+async def list_lineup_lines(job_id: int, db: AsyncSession = Depends(get_db)):
+    """Return persisted HistoricalLineupImportLine records for a historical_lineup apply job.
+
+    Returns an empty list for validate-only jobs that produced no applied header/lines.
+    Multiple headers are supported (one per parsed sheet) but in practice there is
+    usually one.  Line fields are denormalized with the parent header's period_label,
+    customer_id, and sheet_name for frontend convenience.
+    """
+    headers_res = await db.execute(
+        select(HistoricalLineupImportHeader)
+        .where(HistoricalLineupImportHeader.import_job_id == job_id)
+        .order_by(HistoricalLineupImportHeader.id)
+    )
+    headers = headers_res.scalars().all()
+    if not headers:
+        return []
+
+    result: list[dict] = []
+    for header in headers:
+        lines_res = await db.execute(
+            select(HistoricalLineupImportLine)
+            .where(HistoricalLineupImportLine.header_id == header.id)
+            .order_by(HistoricalLineupImportLine.source_row_number)
+        )
+        lines = lines_res.scalars().all()
+        for ln in lines:
+            result.append(
+                {
+                    "id": ln.id,
+                    "header_id": ln.header_id,
+                    "source_row_number": ln.source_row_number,
+                    "product_id": ln.product_id,
+                    "sku_raw": ln.sku_raw,
+                    "part_number_raw": ln.part_number_raw,
+                    "model_raw": ln.model_raw,
+                    "base_unit_raw": ln.base_unit_raw,
+                    "quantity_units": float(ln.quantity_units) if ln.quantity_units is not None else None,
+                    "msrp_local": float(ln.msrp_local) if ln.msrp_local is not None else None,
+                    "promo_price_local": float(ln.promo_price_local) if ln.promo_price_local is not None else None,
+                    "dap_local": float(ln.dap_local) if ln.dap_local is not None else None,
+                    "disti_margin_pct": float(ln.disti_margin_pct) if ln.disti_margin_pct is not None else None,
+                    # Header-level fields denormalized for frontend convenience.
+                    "period_label": header.period_label,
+                    "header_customer_id": header.customer_id,
+                    "sheet_name": header.sheet_name,
+                }
+            )
+    return result
 
 
 @router.get("/jobs/{job_id}")

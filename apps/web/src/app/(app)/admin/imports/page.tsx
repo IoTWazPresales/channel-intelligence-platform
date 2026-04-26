@@ -119,6 +119,25 @@ type HlSheetDetail = {
   mapping_confidence: number;
 };
 
+type LineupLine = {
+  id: number;
+  header_id: number;
+  source_row_number: number;
+  product_id: number | null;
+  sku_raw: string | null;
+  part_number_raw: string | null;
+  model_raw: string | null;
+  base_unit_raw: string | null;
+  quantity_units: number | null;
+  msrp_local: number | null;
+  promo_price_local: number | null;
+  dap_local: number | null;
+  disti_margin_pct: number | null;
+  period_label: string | null;
+  header_customer_id: number | null;
+  sheet_name: string;
+};
+
 type HlJobDetail = {
   id: number;
   status: string;
@@ -300,6 +319,7 @@ function AdminImportsPageContent() {
   const [hlMappingEdits, setHlMappingEdits] = useState<Record<string, Record<string, string>>>({});
   const [showMappingReview, setShowMappingReview] = useState(false);
   const [hlShowApplyConfirm, setHlShowApplyConfirm] = useState(false);
+  const [lastApplyJobId, setLastApplyJobId] = useState<number | null>(null);
   const [pmColumns, setPmColumns] = useState<PmColumnDraft[]>([]);
   const [pmRowFilter, setPmRowFilter] = useState<'all' | 'unmapped' | 'mapped' | 'core'>('all');
   const [pmBulkSelected, setPmBulkSelected] = useState<Record<string, boolean>>({});
@@ -387,6 +407,21 @@ function AdminImportsPageContent() {
     queryFn: ({ signal }) =>
       apiGet<HlJobDetail>(`/api/v1/imports/jobs/${historicalValidatedJobId}`, { signal }),
     enabled: historicalValidatedJobId != null && selectedSlug === 'historical_lineup',
+  });
+
+  // Derive the apply job ID: either from a just-completed apply in this session, or from
+  // a revisited apply-mode job via ?job=.  Used to fetch and display loaded lineup lines.
+  const hlApplyJobId: number | null =
+    lastApplyJobId ??
+    (isJobRevisitMode && selectedSlug === 'historical_lineup' && jobDetail?.import_mode === 'apply'
+      ? (jobDetail.id ?? null)
+      : null);
+
+  const { data: lineupLines } = useQuery({
+    queryKey: ['lineup-lines', hlApplyJobId],
+    queryFn: ({ signal }) =>
+      apiGet<LineupLine[]>(`/api/v1/imports/jobs/${hlApplyJobId}/lineup-lines`, { signal }),
+    enabled: hlApplyJobId != null && selectedSlug === 'historical_lineup',
   });
 
   // Sync ?job=<id> URL param into wizard state so previous job diagnostics are visible after refresh.
@@ -505,6 +540,7 @@ function AdminImportsPageContent() {
         setHlMappingEdits({});
         setShowMappingReview(false);
         setHlShowApplyConfirm(false);
+        setLastApplyJobId(data.id);
       }
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', data.id] });
@@ -2004,8 +2040,74 @@ function AdminImportsPageContent() {
             ) : null}
             {upload.isSuccess && lastJobId != null && upload.data?.import_mode === 'apply' ? (
               <Alert severity="success" data-testid="apply-success-alert">
-                Apply job <strong>#{lastJobId}</strong> completed. Row diagnostics are shown below.
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                  <span>
+                    Apply job <strong>#{lastJobId}</strong> completed. Row diagnostics are shown below.
+                  </span>
+                  <Link
+                    component={NextLink}
+                    href={`/admin/imports?job=${lastJobId}`}
+                    data-testid="view-apply-job-link"
+                    sx={{ whiteSpace: 'nowrap' }}
+                  >
+                    View apply job →
+                  </Link>
+                </Stack>
               </Alert>
+            ) : null}
+            {hlApplyJobId != null && selectedSlug === 'historical_lineup' ? (
+              <Box
+                data-testid="loaded-lineup-section"
+                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}
+              >
+                <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                  Loaded lineup data — {lineupLines?.length ?? '…'} line{lineupLines?.length !== 1 ? 's' : ''}
+                </Typography>
+                {lineupLines && lineupLines.length > 0 ? (
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table size="small" sx={{ minWidth: 700 }}>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 600 }}>Row</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Product ID</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Part #</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Model</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Base Unit</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Customer ID</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Qty</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>MSRP</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Promo</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>DAP</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Disti Margin %</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {lineupLines.map((ln) => (
+                          <TableRow key={ln.id}>
+                            <TableCell>{ln.source_row_number}</TableCell>
+                            <TableCell>{ln.product_id ?? <em style={{ color: '#999' }}>—</em>}</TableCell>
+                            <TableCell>{ln.part_number_raw ?? '—'}</TableCell>
+                            <TableCell>{ln.model_raw ?? '—'}</TableCell>
+                            <TableCell>{ln.base_unit_raw ?? '—'}</TableCell>
+                            <TableCell>{ln.header_customer_id ?? <em style={{ color: '#999' }}>—</em>}</TableCell>
+                            <TableCell>{ln.quantity_units ?? '—'}</TableCell>
+                            <TableCell>{ln.msrp_local ?? '—'}</TableCell>
+                            <TableCell>{ln.promo_price_local ?? '—'}</TableCell>
+                            <TableCell>{ln.dap_local ?? '—'}</TableCell>
+                            <TableCell>
+                              {ln.disti_margin_pct != null ? `${ln.disti_margin_pct}%` : '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                ) : lineupLines ? (
+                  <Typography variant="caption" color="text.disabled">
+                    No lineup lines loaded for this job.
+                  </Typography>
+                ) : null}
+              </Box>
             ) : null}
             {diagnosticSummary.length > 0 ? (
               <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap data-testid="diagnostic-summary">
@@ -2066,6 +2168,7 @@ function AdminImportsPageContent() {
                   setHlMappingEdits({});
                   setShowMappingReview(false);
                   setHlShowApplyConfirm(false);
+                  setLastApplyJobId(null);
                   upload.reset();
                   pmUpload.reset();
                   void router.replace('/admin/imports');
