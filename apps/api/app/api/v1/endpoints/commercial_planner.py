@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.api.deps import get_db
 from app.models.commercial_planner import (
@@ -842,6 +843,14 @@ _COVERAGE_NON_WARNING_CODES: frozenset[str] = frozenset(
     {"historical_lineup_processed", "historical_lineup_sheet_summary"}
 )
 
+# Included verbatim in lineup-product-gaps responses.  DAP is NOT equivalent to landed_cost_usd.
+# Never map dap_local directly to landed_cost_usd without explicit cost-basis verification.
+_COST_SEMANTICS_NOTE = (
+    "DAP (Distributor Acquisition Price) is the source/import value from the historical lineup. "
+    "It is not equivalent to landed_cost_usd and must not be used as a cost input to the planner "
+    "without verification of the cost basis."
+)
+
 
 @router.get("/lineup-jobs")
 async def list_lineup_jobs(db: AsyncSession = Depends(get_db)):
@@ -920,6 +929,7 @@ async def get_lineup_coverage(
             detail=f"job_id={job_id} is not a historical_lineup apply job or has no persisted header.",
         )
 
+    header_customer = aliased(DimCustomer, name="header_customer")
     stmt = (
         select(
             HistoricalLineupImportLine,
@@ -928,19 +938,33 @@ async def get_lineup_coverage(
             HistoricalLineupImportHeader.currency_code,
             DimProduct.sku.label("product_sku"),
             DimProduct.name.label("product_name"),
+            HistoricalLineupImportHeader.customer_id.label("header_customer_id"),
+            header_customer.code.label("header_customer_code"),
+            header_customer.name.label("header_customer_name"),
         )
         .join(
             HistoricalLineupImportHeader,
             HistoricalLineupImportHeader.id == HistoricalLineupImportLine.header_id,
         )
         .outerjoin(DimProduct, DimProduct.id == HistoricalLineupImportLine.product_id)
+        .outerjoin(header_customer, header_customer.id == HistoricalLineupImportHeader.customer_id)
         .where(HistoricalLineupImportHeader.import_job_id == job_id)
         .order_by(HistoricalLineupImportLine.source_row_number)
     )
     rows = (await db.execute(stmt)).all()
 
     result: list[dict] = []
-    for ln, period_label, country_code, currency_code, product_sku, product_name in rows:
+    for (
+        ln,
+        period_label,
+        country_code,
+        currency_code,
+        product_sku,
+        product_name,
+        header_customer_id,
+        header_customer_code,
+        header_customer_name,
+    ) in rows:
         codes: list[str] = ln.diagnostic_codes or []
         has_warnings = any(c not in _COVERAGE_NON_WARNING_CODES for c in codes)
         has_unknown_customer = "unknown_customer" in codes
@@ -964,9 +988,115 @@ async def get_lineup_coverage(
                 "diagnostic_codes": codes,
                 "has_warnings": has_warnings,
                 "has_unknown_customer": has_unknown_customer,
+                "actual_dap_local": float(ln.actual_dap_local) if ln.actual_dap_local is not None else None,
+                "disti_cost_local": float(ln.disti_cost_local) if ln.disti_cost_local is not None else None,
+                "rebate_pct": float(ln.rebate_pct) if ln.rebate_pct is not None else None,
+                "dealer_margin_pct": float(ln.dealer_margin_pct) if ln.dealer_margin_pct is not None else None,
+                "vat_pct": float(ln.vat_pct) if ln.vat_pct is not None else None,
+                "header_customer_id": header_customer_id,
+                "header_customer_code": header_customer_code,
+                "header_customer_name": header_customer_name,
                 "period_label": period_label,
                 "country_code": country_code,
                 "currency_code": currency_code,
+            }
+        )
+    return result
+
+
+@router.get("/lineup-product-gaps")
+async def get_lineup_product_gaps(
+    job_id: int = Query(..., description="ImportJob.id for a historical_lineup apply job"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-product evidence and gap summary for a historical_lineup apply job (read-only).
+
+    Returns one record per resolved product in the job, aggregating lineup evidence fields and
+    flagging which planner defaults are missing.  The cost_semantics_note field on each record
+    makes explicit that DAP is NOT landed_cost_usd and must never be mapped directly as a cost
+    input to the commercial planner.
+
+    Returns 400 when job_id does not resolve to a historical_lineup apply job with a persisted
+    header.
+    """
+    header = await db.scalar(
+        select(HistoricalLineupImportHeader)
+        .join(ImportJob, ImportJob.id == HistoricalLineupImportHeader.import_job_id)
+        .where(
+            HistoricalLineupImportHeader.import_job_id == job_id,
+            ImportJob.template_slug == "historical_lineup",
+            ImportJob.import_mode == "apply",
+        )
+    )
+    if header is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"job_id={job_id} is not a historical_lineup apply job or has no persisted header.",
+        )
+
+    stmt = (
+        select(
+            HistoricalLineupImportLine.product_id,
+            DimProduct.sku.label("product_sku"),
+            DimProduct.name.label("product_name"),
+            func.max(HistoricalLineupImportLine.dap_local).label("dap_local"),
+            func.max(HistoricalLineupImportLine.actual_dap_local).label("actual_dap_local"),
+            func.max(HistoricalLineupImportLine.disti_cost_local).label("disti_cost_local"),
+            func.max(HistoricalLineupImportLine.vat_pct).label("vat_pct"),
+            func.max(HistoricalLineupImportLine.disti_margin_pct).label("disti_margin_pct"),
+            func.max(HistoricalLineupImportLine.rebate_pct).label("rebate_pct"),
+            func.max(HistoricalLineupImportLine.dealer_margin_pct).label("dealer_margin_pct"),
+            func.sum(HistoricalLineupImportLine.quantity_units).label("total_quantity_units"),
+            func.max(HistoricalLineupImportLine.msrp_local).label("msrp_local"),
+            func.max(HistoricalLineupImportLine.promo_price_local).label("promo_price_local"),
+            func.max(HistoricalLineupImportHeader.period_label).label("period_label"),
+            func.max(CommercialSkuAssumption.id).label("sku_assumption_id"),
+        )
+        .join(HistoricalLineupImportHeader, HistoricalLineupImportHeader.id == HistoricalLineupImportLine.header_id)
+        .join(DimProduct, DimProduct.id == HistoricalLineupImportLine.product_id)
+        .outerjoin(CommercialSkuAssumption, CommercialSkuAssumption.product_id == HistoricalLineupImportLine.product_id)
+        .where(
+            HistoricalLineupImportHeader.import_job_id == job_id,
+            HistoricalLineupImportLine.product_id.isnot(None),
+        )
+        .group_by(HistoricalLineupImportLine.product_id, DimProduct.sku, DimProduct.name)
+        .order_by(DimProduct.sku)
+    )
+    rows = (await db.execute(stmt)).all()
+
+    result: list[dict] = []
+    for r in rows:
+        gaps: list[str] = []
+        if r.sku_assumption_id is None:
+            gaps.append("missing_sku_assumption")
+        if r.dap_local is None and r.actual_dap_local is None and r.disti_cost_local is None:
+            gaps.append("no_cost_evidence_in_lineup")
+        if r.vat_pct is None:
+            gaps.append("no_vat_pct_in_lineup")
+        if r.disti_margin_pct is None:
+            gaps.append("no_disti_margin_pct_in_lineup")
+
+        result.append(
+            {
+                "product_id": r.product_id,
+                "product_sku": r.product_sku,
+                "product_name": r.product_name,
+                "has_sku_assumption": r.sku_assumption_id is not None,
+                "lineup_evidence": {
+                    "dap_local": float(r.dap_local) if r.dap_local is not None else None,
+                    "actual_dap_local": float(r.actual_dap_local) if r.actual_dap_local is not None else None,
+                    "disti_cost_local": float(r.disti_cost_local) if r.disti_cost_local is not None else None,
+                    "vat_pct": float(r.vat_pct) if r.vat_pct is not None else None,
+                    "disti_margin_pct": float(r.disti_margin_pct) if r.disti_margin_pct is not None else None,
+                    "rebate_pct": float(r.rebate_pct) if r.rebate_pct is not None else None,
+                    "dealer_margin_pct": float(r.dealer_margin_pct) if r.dealer_margin_pct is not None else None,
+                    "total_quantity_units": float(r.total_quantity_units) if r.total_quantity_units is not None else None,
+                    "msrp_local": float(r.msrp_local) if r.msrp_local is not None else None,
+                    "promo_price_local": float(r.promo_price_local) if r.promo_price_local is not None else None,
+                    "period_label": r.period_label,
+                },
+                "assumption_gaps": gaps,
+                "cost_semantics_note": _COST_SEMANTICS_NOTE,
             }
         )
     return result

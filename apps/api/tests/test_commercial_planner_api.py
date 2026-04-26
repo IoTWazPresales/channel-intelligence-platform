@@ -205,13 +205,18 @@ def test_lineup_coverage_endpoint_returns_enriched_lines():
         msrp_local=Decimal("999.0000"),
         promo_price_local=None,
         dap_local=None,
+        actual_dap_local=None,
+        disti_cost_local=None,
+        rebate_pct=None,
+        dealer_margin_pct=None,
+        vat_pct=None,
         disti_margin_pct=Decimal("0.0724"),
         diagnostic_codes=["unknown_customer"],
         raw_row_payload={"customer_token": "UNKNOWN-CUST"},
     )
     fake_coverage_result = MagicMock()
     fake_coverage_result.all = MagicMock(
-        return_value=[(fake_line, "2026-Q2", "ZA", "USD", "SKU-X1", "Notebook X1")]
+        return_value=[(fake_line, "2026-Q2", "ZA", "USD", "SKU-X1", "Notebook X1", None, None, None)]
     )
 
     async def fake_db():
@@ -251,6 +256,140 @@ def test_lineup_coverage_returns_400_when_header_not_found():
 
     app.dependency_overrides[get_db] = fake_db
     r = client.get("/api/v1/commercial-planner/lineup-coverage?job_id=999")
+    assert r.status_code == 400
+    assert "job_id=999" in r.json().get("detail", "")
+
+
+def test_lineup_coverage_includes_extended_commercial_fields():
+    """GET /commercial-planner/lineup-coverage includes new economic evidence fields."""
+    from decimal import Decimal
+    from types import SimpleNamespace
+
+    fake_header = SimpleNamespace(id=1, import_job_id=20)
+    fake_line = SimpleNamespace(
+        id=5,
+        header_id=1,
+        source_row_number=3,
+        product_id=10,
+        part_number_raw="PN-X",
+        model_raw="Model Z",
+        base_unit_raw="UNT",
+        quantity_units=Decimal("8.0"),
+        msrp_local=Decimal("1200.0"),
+        promo_price_local=Decimal("1100.0"),
+        dap_local=Decimal("900.0"),
+        actual_dap_local=Decimal("880.0"),
+        disti_cost_local=Decimal("750.0"),
+        rebate_pct=Decimal("0.03"),
+        dealer_margin_pct=Decimal("0.12"),
+        vat_pct=Decimal("0.15"),
+        disti_margin_pct=Decimal("0.08"),
+        diagnostic_codes=[],
+        raw_row_payload={"customer_token": "KNOWN-ACCT"},
+    )
+    fake_result = MagicMock()
+    # Tuple now includes (header_customer_id, header_customer_code, header_customer_name)
+    fake_result.all = MagicMock(
+        return_value=[(fake_line, "2026-Q2", "ZA", "USD", "SKU-Z1", "Widget Z", 7, "CUST-A", "Customer A")]
+    )
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.scalar = AsyncMock(return_value=fake_header)
+        sess.execute = AsyncMock(return_value=fake_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/lineup-coverage?job_id=20")
+    assert r.status_code == 200
+    ln = r.json()[0]
+    # Extended economic fields must be present and numeric (not Decimal strings).
+    assert isinstance(ln["actual_dap_local"], float)
+    assert abs(ln["actual_dap_local"] - 880.0) < 1e-6
+    assert isinstance(ln["disti_cost_local"], float)
+    assert abs(ln["disti_cost_local"] - 750.0) < 1e-6
+    assert isinstance(ln["rebate_pct"], float)
+    assert abs(ln["rebate_pct"] - 0.03) < 1e-6
+    assert isinstance(ln["dealer_margin_pct"], float)
+    assert abs(ln["dealer_margin_pct"] - 0.12) < 1e-6
+    assert isinstance(ln["vat_pct"], float)
+    assert abs(ln["vat_pct"] - 0.15) < 1e-6
+    # Header customer info from the aliased DimCustomer join.
+    assert ln["header_customer_id"] == 7
+    assert ln["header_customer_code"] == "CUST-A"
+    assert ln["header_customer_name"] == "Customer A"
+
+
+def test_lineup_product_gaps_returns_per_product_gap_status():
+    """GET /commercial-planner/lineup-product-gaps aggregates evidence and surfaces gaps."""
+    from decimal import Decimal
+    from types import SimpleNamespace
+
+    fake_header = SimpleNamespace(id=1, import_job_id=30)
+    fake_row = MagicMock()
+    fake_row.product_id = 42
+    fake_row.product_sku = "NB-X1"
+    fake_row.product_name = "Notebook X1"
+    fake_row.dap_local = Decimal("850.0")
+    fake_row.actual_dap_local = None
+    fake_row.disti_cost_local = None
+    fake_row.vat_pct = Decimal("0.15")
+    fake_row.disti_margin_pct = Decimal("0.0724")
+    fake_row.rebate_pct = None
+    fake_row.dealer_margin_pct = None
+    fake_row.total_quantity_units = Decimal("12.0")
+    fake_row.msrp_local = Decimal("999.0")
+    fake_row.promo_price_local = Decimal("899.0")
+    fake_row.period_label = "2026-Q2"
+    fake_row.sku_assumption_id = None  # no assumption exists
+
+    fake_result = MagicMock()
+    fake_result.all = MagicMock(return_value=[fake_row])
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.scalar = AsyncMock(return_value=fake_header)
+        sess.execute = AsyncMock(return_value=fake_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/lineup-product-gaps?job_id=30")
+    assert r.status_code == 200
+    items = r.json()
+    assert len(items) == 1
+    item = items[0]
+    assert item["product_id"] == 42
+    assert item["product_sku"] == "NB-X1"
+    assert item["has_sku_assumption"] is False
+    # Gap flags must be present.
+    assert "missing_sku_assumption" in item["assumption_gaps"]
+    # dap_local is present so no_cost_evidence_in_lineup should NOT appear.
+    assert "no_cost_evidence_in_lineup" not in item["assumption_gaps"]
+    # vat_pct is present so no_vat_pct_in_lineup should NOT appear.
+    assert "no_vat_pct_in_lineup" not in item["assumption_gaps"]
+    # rebate_pct is null → no dealer_margin gap flag (rebate is not part of gap rules).
+    # Lineup evidence nested dict.
+    ev = item["lineup_evidence"]
+    assert isinstance(ev["dap_local"], float)
+    assert abs(ev["dap_local"] - 850.0) < 1e-6
+    assert isinstance(ev["total_quantity_units"], float)
+    assert abs(ev["total_quantity_units"] - 12.0) < 1e-6
+    assert ev["actual_dap_local"] is None
+    # Cost semantics note must be present and mention DAP.
+    assert "DAP" in item["cost_semantics_note"]
+    assert "landed_cost_usd" in item["cost_semantics_note"]
+
+
+def test_lineup_product_gaps_returns_400_for_invalid_job():
+    """GET /commercial-planner/lineup-product-gaps returns 400 when job is not a valid apply job."""
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.scalar = AsyncMock(return_value=None)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/lineup-product-gaps?job_id=999")
     assert r.status_code == 400
     assert "job_id=999" in r.json().get("detail", "")
 

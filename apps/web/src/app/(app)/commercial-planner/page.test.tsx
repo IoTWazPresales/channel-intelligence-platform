@@ -74,6 +74,7 @@ const mockState = vi.hoisted(() => ({
     }
     if (url === '/api/v1/commercial-planner/lineup-jobs') return mockState.lineupJobs;
     if (url.startsWith('/api/v1/commercial-planner/lineup-coverage')) return mockState.coverageLines;
+    if (url.startsWith('/api/v1/commercial-planner/lineup-product-gaps')) return mockState.productGaps;
     if (url === '/api/v1/commercial-planner/plans/1/suggestions') {
       return [
         {
@@ -97,6 +98,7 @@ const mockState = vi.hoisted(() => ({
   apiDeleteMock: vi.fn(async () => ({})),
   lineupJobs: [] as any[],
   coverageLines: [] as any[],
+  productGaps: [] as any[],
 }));
 
 vi.mock('@/components/PageHeader', () => ({
@@ -243,18 +245,44 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
       id: 1, source_row_number: 5, product_id: 42, product_sku: 'NB-X1', product_name: 'Notebook X1',
       part_number_raw: 'PART-001', model_raw: 'Model X', base_unit_raw: 'NB',
       quantity_units: 12, msrp_local: 999.0, promo_price_local: 899.0, dap_local: 850.0,
-      disti_margin_pct: 0.0724,
-      customer_token: 'MATCHED-CUST', diagnostic_codes: [], has_warnings: false, has_unknown_customer: false,
+      actual_dap_local: 830.0, disti_cost_local: 700.0, rebate_pct: 0.03,
+      dealer_margin_pct: 0.12, vat_pct: 0.15, disti_margin_pct: 0.0724,
+      customer_token: 'MATCHED-CUST', header_customer_id: 7, header_customer_code: 'CUST-A',
+      header_customer_name: 'Customer A',
+      diagnostic_codes: [], has_warnings: false, has_unknown_customer: false,
       period_label: '2026-Q2', country_code: 'ZA', currency_code: 'USD',
     },
     {
       id: 2, source_row_number: 6, product_id: null, product_sku: null, product_name: null,
       part_number_raw: 'PART-002', model_raw: 'Model Y', base_unit_raw: 'NB',
       quantity_units: 5, msrp_local: 799.0, promo_price_local: null, dap_local: null,
-      disti_margin_pct: null,
-      customer_token: 'UNKNOWN-ACCT', diagnostic_codes: ['unknown_customer', 'unknown_product'],
+      actual_dap_local: null, disti_cost_local: null, rebate_pct: null,
+      dealer_margin_pct: null, vat_pct: null, disti_margin_pct: null,
+      customer_token: 'UNKNOWN-ACCT', header_customer_id: null, header_customer_code: null,
+      header_customer_name: null,
+      diagnostic_codes: ['unknown_customer', 'unknown_product'],
       has_warnings: true, has_unknown_customer: true,
       period_label: '2026-Q2', country_code: 'ZA', currency_code: 'USD',
+    },
+  ];
+
+  const PRODUCT_GAPS = [
+    {
+      product_id: 42,
+      product_sku: 'NB-X1',
+      product_name: 'Notebook X1',
+      has_sku_assumption: false,
+      lineup_evidence: {
+        dap_local: 850.0, actual_dap_local: 830.0, disti_cost_local: 700.0,
+        vat_pct: 0.15, disti_margin_pct: 0.0724, rebate_pct: 0.03,
+        dealer_margin_pct: 0.12, total_quantity_units: 12.0,
+        msrp_local: 999.0, promo_price_local: 899.0, period_label: '2026-Q2',
+      },
+      assumption_gaps: ['missing_sku_assumption'],
+      cost_semantics_note:
+        'DAP (Distributor Acquisition Price) is the source/import value from the historical lineup. ' +
+        'It is not equivalent to landed_cost_usd and must not be used as a cost input to the planner ' +
+        'without verification of the cost basis.',
     },
   ];
 
@@ -274,6 +302,7 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     mockState.apiGetMock.mockClear();
     mockState.lineupJobs = [];
     mockState.coverageLines = [];
+    mockState.productGaps = [];
   });
 
   // ── empty state ──────────────────────────────────────────────────────────────
@@ -406,5 +435,61 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
 
     expect(await screen.findByTestId('lineup-no-lines')).toBeInTheDocument();
+  });
+
+  // ── product defaults coverage ─────────────────────────────────────────────
+
+  it('product defaults coverage section renders gap status for each product', async () => {
+    mockState.lineupJobs = [LINEUP_JOB];
+    mockState.coverageLines = COVERAGE_LINES;
+    mockState.productGaps = PRODUCT_GAPS;
+    const { user } = renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
+
+    const section = await screen.findByTestId('product-defaults-coverage');
+    // Product info and chip status.
+    expect(section).toHaveTextContent('NB-X1');
+    expect(section).toHaveTextContent('Notebook X1');
+    expect(section).toHaveTextContent('Missing');
+    // Gap flag chip.
+    expect(section).toHaveTextContent('missing_sku_assumption');
+  });
+
+  it('cost semantics note renders in product defaults section', async () => {
+    mockState.lineupJobs = [LINEUP_JOB];
+    mockState.coverageLines = COVERAGE_LINES;
+    mockState.productGaps = PRODUCT_GAPS;
+    const { user } = renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
+
+    const section = await screen.findByTestId('product-defaults-coverage');
+    expect(section).toHaveTextContent('Cost semantics');
+    expect(section).toHaveTextContent('DAP');
+    expect(section).toHaveTextContent('not');
+  });
+
+  // ── text filter ───────────────────────────────────────────────────────────
+
+  it('text filter reduces visible coverage rows by matching on model_raw', async () => {
+    mockState.lineupJobs = [LINEUP_JOB];
+    mockState.coverageLines = COVERAGE_LINES;
+    mockState.productGaps = PRODUCT_GAPS;
+    const { user } = renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
+
+    // Both rows visible initially.
+    const table = await screen.findByTestId('lineup-coverage-table');
+    expect(table).toHaveTextContent('Model X');
+    expect(table).toHaveTextContent('Model Y');
+
+    // Type a filter that matches only row 1.
+    const filterInput = await screen.findByTestId('coverage-filter');
+    await user.type(filterInput, 'Model X');
+
+    // Only row 1 remains; row 2 is filtered out.
+    await waitFor(() => {
+      expect(screen.getByTestId('lineup-coverage-table')).toHaveTextContent('Model X');
+      expect(screen.getByTestId('lineup-coverage-table')).not.toHaveTextContent('Model Y');
+    });
   });
 });

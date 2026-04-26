@@ -129,14 +129,46 @@ type LineupCoverageLine = {
   msrp_local: number | null;
   promo_price_local: number | null;
   dap_local: number | null;
+  actual_dap_local: number | null;
+  disti_cost_local: number | null;
+  rebate_pct: number | null;
+  dealer_margin_pct: number | null;
+  vat_pct: number | null;
   disti_margin_pct: number | null;
   customer_token: string | null;
+  header_customer_id: number | null;
+  header_customer_code: string | null;
+  header_customer_name: string | null;
   diagnostic_codes: string[];
   has_warnings: boolean;
   has_unknown_customer: boolean;
   period_label: string | null;
   country_code: string | null;
   currency_code: string | null;
+};
+
+type LineupEvidenceFields = {
+  dap_local: number | null;
+  actual_dap_local: number | null;
+  disti_cost_local: number | null;
+  vat_pct: number | null;
+  disti_margin_pct: number | null;
+  rebate_pct: number | null;
+  dealer_margin_pct: number | null;
+  total_quantity_units: number | null;
+  msrp_local: number | null;
+  promo_price_local: number | null;
+  period_label: string | null;
+};
+
+type LineupProductGap = {
+  product_id: number;
+  product_sku: string;
+  product_name: string;
+  has_sku_assumption: boolean;
+  lineup_evidence: LineupEvidenceFields;
+  assumption_gaps: string[];
+  cost_semantics_note: string;
 };
 
 /**
@@ -218,6 +250,7 @@ export default function CommercialPlannerPage() {
   });
 
   const [lineupJobId, setLineupJobId] = useState<number | null>(null);
+  const [coverageFilter, setCoverageFilter] = useState('');
 
   const { data: plans, isLoading, isError, error } = useQuery({
     queryKey: ['commercial-plans'],
@@ -241,6 +274,16 @@ export default function CommercialPlannerPage() {
     enabled: lineupJobId != null && tab === 2,
   });
 
+  const { data: productGaps, isLoading: productGapsLoading } = useQuery({
+    queryKey: ['lineup-product-gaps', lineupJobId],
+    queryFn: ({ signal }) =>
+      apiGet<LineupProductGap[]>(
+        `/api/v1/commercial-planner/lineup-product-gaps?job_id=${lineupJobId}`,
+        { signal }
+      ),
+    enabled: lineupJobId != null && tab === 2,
+  });
+
   // Auto-select the newest job when lineup-jobs loads and no job has been chosen yet.
   // lineupJobs is ordered newest-first from the backend.
   useEffect(() => {
@@ -248,6 +291,11 @@ export default function CommercialPlannerPage() {
       setLineupJobId(lineupJobs[0].id);
     }
   }, [lineupJobs, lineupJobId]);
+
+  // Reset line filter when the selected job changes (auto-select or manual pick).
+  useEffect(() => {
+    setCoverageFilter('');
+  }, [lineupJobId]);
 
   const activePlanId = selectedPlanId ?? plans?.[0]?.id ?? null;
   const { data: lines } = useQuery({
@@ -292,6 +340,19 @@ export default function CommercialPlannerPage() {
     }
     return counts;
   }, [coverageLines]);
+
+  const filteredCoverageLines = useMemo(() => {
+    if (!coverageLines) return [];
+    if (!coverageFilter.trim()) return coverageLines;
+    const q = coverageFilter.trim().toLowerCase();
+    return coverageLines.filter(
+      (ln) =>
+        (ln.product_sku?.toLowerCase().includes(q) ?? false) ||
+        (ln.model_raw?.toLowerCase().includes(q) ?? false) ||
+        (ln.part_number_raw?.toLowerCase().includes(q) ?? false) ||
+        (ln.customer_token?.toLowerCase().includes(q) ?? false)
+    );
+  }, [coverageLines, coverageFilter]);
 
   const createPlan = useMutation({
     mutationFn: () => apiPost<{ id: number }>('/api/v1/commercial-planner/plans', planDraft),
@@ -829,6 +890,78 @@ export default function CommercialPlannerPage() {
         </Box>
       ) : null}
 
+      {/* Product defaults coverage */}
+      {lineupJobId != null && (productGapsLoading || (productGaps && productGaps.length > 0)) ? (
+        <Box data-testid="product-defaults-coverage">
+          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+            Product defaults coverage
+          </Typography>
+          <Alert severity="info" icon={false} sx={{ mb: 1, py: 0.5 }}>
+            <Typography variant="caption">
+              <strong>Cost semantics:</strong> DAP (Distributor Acquisition Price) is the source import
+              value. It is <em>not</em> the same as landed cost and must not be mapped to{' '}
+              <code>landed_cost_usd</code> without verification.
+            </Typography>
+          </Alert>
+          {productGapsLoading ? (
+            <Typography variant="body2" color="text.secondary" sx={{ pl: 1 }}>
+              Loading product coverage…
+            </Typography>
+          ) : (
+            <Box sx={{ overflowX: 'auto' }}>
+              <Table size="small" sx={{ minWidth: 700 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>SKU</TableCell>
+                    <TableCell>Product</TableCell>
+                    <TableCell>SKU assumption</TableCell>
+                    <TableCell align="right">DAP evidence (src/local)</TableCell>
+                    <TableCell align="right">Disti margin</TableCell>
+                    <TableCell align="right">VAT evidence</TableCell>
+                    <TableCell>Gaps</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(productGaps ?? []).map((pg) => (
+                    <TableRow key={pg.product_id}>
+                      <TableCell>{pg.product_sku}</TableCell>
+                      <TableCell>{pg.product_name}</TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={pg.has_sku_assumption ? 'Exists' : 'Missing'}
+                          color={pg.has_sku_assumption ? 'success' : 'warning'}
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell align="right">{fmtCurrency(pg.lineup_evidence.dap_local)}</TableCell>
+                      <TableCell align="right">{fmtMarginPct(pg.lineup_evidence.disti_margin_pct)}</TableCell>
+                      <TableCell align="right">
+                        {pg.lineup_evidence.vat_pct != null ? fmtMarginPct(pg.lineup_evidence.vat_pct) : '—'}
+                      </TableCell>
+                      <TableCell>
+                        {pg.assumption_gaps.length > 0
+                          ? pg.assumption_gaps.map((g) => (
+                              <Chip
+                                key={g}
+                                size="small"
+                                label={g}
+                                color="warning"
+                                variant="outlined"
+                                sx={{ mr: 0.25, mb: 0.25 }}
+                              />
+                            ))
+                          : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
+          )}
+        </Box>
+      ) : null}
+
       {/* Line data table */}
       {lineupJobId == null ? (
         <Typography variant="body2" color="text.disabled" data-testid="lineup-empty-state">
@@ -838,53 +971,74 @@ export default function CommercialPlannerPage() {
         <Typography variant="body2" color="text.secondary">
           Loading…
         </Typography>
-      ) : coverageLines && coverageLines.length > 0 ? (
-        <Box sx={{ overflowX: 'auto' }} data-testid="lineup-coverage-table">
-          <Table size="small" sx={{ minWidth: 900 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Row</TableCell>
-                <TableCell>Product SKU</TableCell>
-                <TableCell>Model</TableCell>
-                <TableCell>Part #</TableCell>
-                <TableCell>Base unit</TableCell>
-                <TableCell>Customer</TableCell>
-                <TableCell align="right">Qty</TableCell>
-                <TableCell align="right">MSRP</TableCell>
-                <TableCell align="right">Promo</TableCell>
-                <TableCell align="right">DAP</TableCell>
-                <TableCell align="right">Disti %</TableCell>
-                <TableCell>⚠</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {coverageLines.map((ln) => (
-                <TableRow key={ln.id}>
-                  <TableCell>{ln.source_row_number}</TableCell>
-                  <TableCell>{ln.product_sku ?? '—'}</TableCell>
-                  <TableCell>{ln.model_raw ?? '—'}</TableCell>
-                  <TableCell>{ln.part_number_raw ?? '—'}</TableCell>
-                  <TableCell>{ln.base_unit_raw ?? '—'}</TableCell>
-                  <TableCell sx={ln.has_unknown_customer ? { color: 'warning.main' } : undefined}>
-                    {ln.has_unknown_customer ? `⚠ ${ln.customer_token ?? '—'}` : (ln.customer_token ?? '—')}
-                  </TableCell>
-                  <TableCell align="right">{ln.quantity_units?.toLocaleString() ?? '—'}</TableCell>
-                  <TableCell align="right">{fmtCurrency(ln.msrp_local)}</TableCell>
-                  <TableCell align="right">{fmtCurrency(ln.promo_price_local)}</TableCell>
-                  <TableCell align="right">{fmtCurrency(ln.dap_local)}</TableCell>
-                  <TableCell align="right" data-testid={`disti-margin-${ln.id}`}>
-                    {fmtMarginPct(ln.disti_margin_pct)}
-                  </TableCell>
-                  <TableCell>{ln.has_warnings ? '⚠' : ''}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Box>
       ) : coverageLines ? (
-        <Typography variant="body2" color="text.disabled" data-testid="lineup-no-lines">
-          No lineup lines found for this job.
-        </Typography>
+        <Stack spacing={1}>
+          <TextField
+            size="small"
+            label="Filter lines"
+            placeholder="SKU, model, part #, customer token…"
+            value={coverageFilter}
+            onChange={(e) => setCoverageFilter(e.target.value)}
+            sx={{ maxWidth: 360 }}
+            inputProps={{ 'data-testid': 'coverage-filter' }}
+          />
+          {filteredCoverageLines.length > 0 ? (
+            <Box sx={{ overflowX: 'auto' }} data-testid="lineup-coverage-table">
+              <Table size="small" sx={{ minWidth: 1000 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Row</TableCell>
+                    <TableCell>Product SKU</TableCell>
+                    <TableCell>Model</TableCell>
+                    <TableCell>Part #</TableCell>
+                    <TableCell>Base unit</TableCell>
+                    <TableCell>Customer</TableCell>
+                    <TableCell align="right">Qty</TableCell>
+                    <TableCell align="right">MSRP</TableCell>
+                    <TableCell align="right">Promo</TableCell>
+                    <TableCell align="right">DAP (src/local)</TableCell>
+                    <TableCell align="right">Disti %</TableCell>
+                    <TableCell align="right">Rebate %</TableCell>
+                    <TableCell align="right">VAT %</TableCell>
+                    <TableCell>⚠</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredCoverageLines.map((ln) => (
+                    <TableRow key={ln.id}>
+                      <TableCell>{ln.source_row_number}</TableCell>
+                      <TableCell>{ln.product_sku ?? '—'}</TableCell>
+                      <TableCell>{ln.model_raw ?? '—'}</TableCell>
+                      <TableCell>{ln.part_number_raw ?? '—'}</TableCell>
+                      <TableCell>{ln.base_unit_raw ?? '—'}</TableCell>
+                      <TableCell sx={ln.has_unknown_customer ? { color: 'warning.main' } : undefined}>
+                        {ln.has_unknown_customer ? `⚠ ${ln.customer_token ?? '—'}` : (ln.customer_token ?? '—')}
+                      </TableCell>
+                      <TableCell align="right">{ln.quantity_units?.toLocaleString() ?? '—'}</TableCell>
+                      <TableCell align="right">{fmtCurrency(ln.msrp_local)}</TableCell>
+                      <TableCell align="right">{fmtCurrency(ln.promo_price_local)}</TableCell>
+                      <TableCell align="right">{fmtCurrency(ln.dap_local)}</TableCell>
+                      <TableCell align="right" data-testid={`disti-margin-${ln.id}`}>
+                        {fmtMarginPct(ln.disti_margin_pct)}
+                      </TableCell>
+                      <TableCell align="right">{fmtMarginPct(ln.rebate_pct)}</TableCell>
+                      <TableCell align="right">{fmtMarginPct(ln.vat_pct)}</TableCell>
+                      <TableCell>{ln.has_warnings ? '⚠' : ''}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
+          ) : coverageLines.length > 0 ? (
+            <Typography variant="body2" color="text.disabled" data-testid="coverage-filter-no-matches">
+              No lines match the current filter.
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.disabled" data-testid="lineup-no-lines">
+              No lineup lines found for this job.
+            </Typography>
+          )}
+        </Stack>
       ) : null}
     </Stack>
   );
