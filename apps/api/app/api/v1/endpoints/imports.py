@@ -1,3 +1,4 @@
+import json
 import uuid
 from typing import Any
 
@@ -153,6 +154,7 @@ async def create_job(
     run_sync: bool = Form(default=True),
     import_mode: str = Form(default=""),
     confirm_destructive: str = Form(default=""),
+    mapping_override: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
 ):
     source = await db.scalar(
@@ -197,6 +199,17 @@ async def create_job(
     )
     db.add(job)
     await db.flush()
+
+    # Store column mapping override for historical_lineup before sync processing.
+    # The service reads job.mapping_decisions and applies overrides during parsing.
+    if mapping_override.strip() and tpl.slug == "historical_lineup":
+        try:
+            _override = json.loads(mapping_override)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="mapping_override must be valid JSON")
+        if not isinstance(_override, dict):
+            raise HTTPException(status_code=400, detail="mapping_override must be a JSON object")
+        job.mapping_decisions = _override
 
     meta = RawFileMetadata(job_id=job.id, storage_key=key, byte_size=len(raw_bytes), checksum=None)
     db.add(meta)

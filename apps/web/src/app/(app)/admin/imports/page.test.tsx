@@ -72,6 +72,31 @@ const mockState = vi.hoisted(() => ({
   } as any,
   // Populated in Apply button tests' beforeEach so the ?source=100 URL param resolves
   hlSources: [] as any[],
+  // Historical lineup validate job detail with source_columns (for mapping review tests)
+  hlValidateJobDetail: {
+    id: 50,
+    status: 'completed_with_errors',
+    stage: 'validated',
+    file_name: 'lineup.xlsx',
+    error_summary: '5 rows require attention',
+    template_slug: 'historical_lineup',
+    import_mode: 'validate',
+    field_mapping: {
+      NB: { model_raw: 'Model Name', sku_raw: 'Part Number', quantity_units: 'Qty' },
+    },
+    inferred_schema: {
+      selected_sheet_details: [
+        {
+          sheet_name: 'NB',
+          header_row_number: 4,
+          mapped_fields: ['model_raw', 'quantity_units', 'sku_raw'],
+          source_columns: ['Product Line', 'Country', 'Customer', 'Model Name', 'Part Number', 'Qty'],
+          row_count: 10,
+          mapping_confidence: 0.35,
+        },
+      ],
+    },
+  } as any,
 }));
 
 const mockRouterReplace = vi.fn();
@@ -125,6 +150,7 @@ vi.mock('@/lib/api', () => ({
     }
     if (url === '/api/v1/imports/jobs/42') return mockState.jobDetail;
     if (url === '/api/v1/imports/jobs/42/rows') return mockState.jobRows;
+    if (url === '/api/v1/imports/jobs/50') return mockState.hlValidateJobDetail;
     if (url === '/api/v1/imports/jobs/99') return mockState.pmJobDetail;
     if (url === '/api/v1/imports/jobs/99/rows') return [];
     if (url.match(/\/api\/v1\/imports\/jobs\/\d+\/rows$/)) return [];
@@ -328,5 +354,178 @@ describe('AdminImportsPage historical_lineup Apply button post-success behavior'
     expect(await screen.findByRole('button', { name: /Refresh validation preview/i })).toBeInTheDocument();
     // Apply-specific Alert must NOT appear
     expect(screen.queryByTestId('apply-success-alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('AdminImportsPage historical_lineup mapping review panel', () => {
+  // VALIDATE_JOB id=50 matches mockState.hlValidateJobDetail, which has source_columns
+  const VALIDATE_JOB = { id: 50, status: 'completed_with_errors', stage: 'validated', import_mode: 'validate', template_slug: 'historical_lineup' };
+  const APPLY_JOB = { id: 51, status: 'completed', stage: 'loaded', import_mode: 'apply', template_slug: 'historical_lineup' };
+
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <AdminImportsPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    searchString = '';
+    mockRouterReplace.mockReset();
+    mockState.templates = [mockState.templates[0], mockState.historicalLineupTemplate];
+    mockState.hlSources = [];
+  });
+
+  afterEach(() => {
+    mockState.templates = [
+      {
+        id: 10, slug: 'customer_master', display_name: 'Customer master',
+        description: 'Customer account master import', requires_provider: true,
+        accepted_file_types: ['.csv', '.xlsx'], required_fields: ['customer_code', 'customer_name'],
+        optional_fields: ['region_code', 'channel_code'], pipeline_ready: true,
+        destructive_apply_requires_confirm: false,
+      },
+      {
+        id: 11, slug: 'customer_channel_mapping', display_name: 'Customer/channel mapping',
+        description: 'Deferred scaffold', requires_provider: true,
+        accepted_file_types: ['.csv', '.xlsx'], required_fields: ['customer_code', 'channel_code'],
+        optional_fields: ['region_code'], pipeline_ready: false, destructive_apply_requires_confirm: false,
+      },
+    ];
+    mockState.hlSources = [];
+    vi.restoreAllMocks();
+  });
+
+  async function navigateToUploadStep(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByText('Historical Lineup'));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await screen.findByRole('button', { name: /Choose file/i });
+  }
+
+  const xlsxFile = () =>
+    new File(['dummy'], 'lineup.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+  it('mapping review panel is absent before validate completes', async () => {
+    // No validate job yet — render page without uploading anything
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    // Panel toggle button should not exist yet
+    expect(screen.queryByText(/Column mapping review/i)).not.toBeInTheDocument();
+  });
+
+  it('mapping review panel appears and shows source columns after validate', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => VALIDATE_JOB } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    // Panel header should appear (job 50 has hlValidateJobDetail with source_columns)
+    expect(await screen.findByText(/Column mapping review/i)).toBeInTheDocument();
+    // Expand the panel
+    await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
+
+    // Dropdown options should include source_columns from hlValidateJobDetail
+    // Opening one Select to see its options
+    const selects = screen.getAllByRole('combobox');
+    expect(selects.length).toBeGreaterThan(0);
+  });
+
+  it('re-validate with corrections sends mapping_override in FormData', async () => {
+    const capturedBodies: FormData[] = [];
+    global.fetch = vi.fn().mockImplementation(async (_url: string, opts: RequestInit) => {
+      if (opts?.body instanceof FormData) capturedBodies.push(opts.body as FormData);
+      return { ok: true, json: async () => VALIDATE_JOB } as Response;
+    });
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    // Expand the panel
+    await screen.findByText(/Column mapping review/i);
+    await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
+
+    // Select a column override for "Customer" (customer_token) — pick "Customer" from dropdowns
+    // The combobox for customer_token is the first one (HL_MAPPING_DISPLAY_FIELDS order)
+    const selects = await screen.findAllByRole('combobox');
+    await user.click(selects[0]); // open first Select (Customer field)
+    // Pick the first non-empty option in the listbox
+    const options = await screen.findAllByRole('option');
+    const realOption = options.find((o) => o.textContent && o.textContent !== '— use detected —');
+    if (realOption) await user.click(realOption);
+
+    // Re-validate button should appear (edit was made)
+    const revalidateBtn = await screen.findByRole('button', { name: /Re-validate with corrections/i });
+    await user.click(revalidateBtn);
+
+    // The second fetch call (re-validate) should include mapping_override
+    await waitFor(() => {
+      expect(capturedBodies.length).toBeGreaterThanOrEqual(2);
+    });
+    const revalidateBody = capturedBodies[capturedBodies.length - 1];
+    expect(revalidateBody.get('mapping_override')).toBeTruthy();
+    const override = JSON.parse(revalidateBody.get('mapping_override') as string) as Record<string, unknown>;
+    expect(typeof override).toBe('object');
+  });
+
+  it('apply with edits sends mapping_override in FormData', async () => {
+    const capturedBodies: FormData[] = [];
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => VALIDATE_JOB } as any)
+      .mockImplementation(async (_url: string, opts: RequestInit) => {
+        if (opts?.body instanceof FormData) capturedBodies.push(opts.body as FormData);
+        return { ok: true, json: async () => APPLY_JOB } as Response;
+      });
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    // Expand panel and make an edit
+    await screen.findByText(/Column mapping review/i);
+    await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
+
+    const selects = await screen.findAllByRole('combobox');
+    await user.click(selects[0]);
+    const options = await screen.findAllByRole('option');
+    const realOption = options.find((o) => o.textContent && o.textContent !== '— use detected —');
+    if (realOption) await user.click(realOption);
+
+    // Click Apply — should include mapping_override
+    const applyBtn = await screen.findByRole('button', { name: /Apply validated file/i });
+    await user.click(applyBtn);
+
+    await waitFor(() => {
+      expect(capturedBodies.length).toBeGreaterThan(0);
+    });
+    const applyBody = capturedBodies[0];
+    expect(applyBody.get('mapping_override')).toBeTruthy();
+    expect(applyBody.get('import_mode')).toBe('apply');
+  });
+
+  it('start over clears the mapping review panel', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => VALIDATE_JOB } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    await screen.findByText(/Column mapping review/i);
+
+    // Click Start over
+    await user.click(screen.getByRole('button', { name: /Start over/i }));
+
+    // Panel should be gone
+    expect(screen.queryByText(/Column mapping review/i)).not.toBeInTheDocument();
   });
 });

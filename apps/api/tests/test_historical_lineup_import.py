@@ -161,6 +161,251 @@ def test_historical_lineup_validate_reports_row_diagnostics_and_partial_success(
         assert any(code in codes for code in {"unknown_customer", "unknown_product", "invalid_numeric", "invalid_quantity"})
 
 
+def _build_custom_column_workbook_bytes(customer_col_name: str = "Buyer") -> bytes:
+    """Workbook with a non-standard customer column name for mapping override tests."""
+    rows = pd.DataFrame(
+        [
+            {
+                customer_col_name: "CUST-HL-01",
+                "Distributor": "DIST-HL-01",
+                "Period": "2026-04-01",
+                "Model name": "M-NB-1",
+                "Part Number": "SKU-HL-01",
+                "Qty": "5",
+            },
+            {
+                customer_col_name: "UNKNOWN-CUST",
+                "Distributor": "DIST-HL-01",
+                "Period": "2026-04-01",
+                "Model name": "M-NB-2",
+                "Part Number": "SKU-NOPE",
+                "Qty": "3",
+            },
+        ]
+    )
+    bio = io.BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+        rows.to_excel(writer, sheet_name="Historical Lineup Apr", index=False)
+    return bio.getvalue()
+
+
+def _build_ilike_customer_workbook_bytes(customer_value: str) -> bytes:
+    """Workbook with a single data row using a given customer token."""
+    rows = pd.DataFrame(
+        [
+            {
+                "Customer": customer_value,
+                "Distributor": "DIST-HL-01",
+                "Period": "2026-04-01",
+                "SKU": "SKU-HL-01",
+                "Qty": "5",
+            }
+        ]
+    )
+    bio = io.BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+        rows.to_excel(writer, sheet_name="Historical Lineup Apr", index=False)
+    return bio.getvalue()
+
+
+def test_inferred_schema_includes_source_columns() -> None:
+    """selected_sheet_details must include source_columns (raw workbook header tokens)."""
+    sheets, schema = parse_historical_workbook("historical_lineup.xlsx", _build_workbook_bytes())
+    assert sheets, "Expected at least one selected sheet"
+    detail = schema["selected_sheet_details"][0]
+    assert "source_columns" in detail, "source_columns missing from selected_sheet_details"
+    source_cols = detail["source_columns"]
+    assert isinstance(source_cols, list) and len(source_cols) > 0
+    # The test workbook has columns: Customer, Distributor, Channel, Period, SKU, Qty, MSRP, …
+    assert "Customer" in source_cols
+    assert "SKU" in source_cols
+
+
+def test_mapping_override_fixes_undetected_column() -> None:
+    """If a workbook uses a non-standard column name, mapping_override should bind it."""
+    # "Buyer" is not in _CANONICAL_ALIASES, so auto-detection won't find customer_token.
+    sheets_auto, _ = parse_historical_workbook(
+        "lineup.xlsx", _build_custom_column_workbook_bytes("Buyer")
+    )
+    assert sheets_auto, "Expected sheet"
+    payloads_auto = [r.payload for r in sheets_auto[0].rows if r.status != "dropped"]
+    # Without override, customer_token should not be present in the payload (not mapped).
+    assert all(r.get("customer_token") is None for r in payloads_auto), (
+        "Expected customer_token to be absent without override"
+    )
+
+    # With override, customer_token should be populated from the "Buyer" column.
+    override = {"Historical Lineup Apr": {"customer_token": "Buyer"}}
+    sheets_override, _ = parse_historical_workbook(
+        "lineup.xlsx", _build_custom_column_workbook_bytes("Buyer"), mapping_override=override
+    )
+    assert sheets_override
+    payloads_override = [r.payload for r in sheets_override[0].rows if r.status != "dropped"]
+    assert any(r.get("customer_token") is not None for r in payloads_override), (
+        "Expected customer_token to be populated with override"
+    )
+    customer_values = [r.get("customer_token") for r in payloads_override if r.get("customer_token")]
+    assert "CUST-HL-01" in customer_values
+
+
+def test_mapping_override_merges_not_replaces() -> None:
+    """Override only replaces the specified field; auto-detected fields are preserved."""
+    override = {"Historical Lineup Apr": {"customer_token": "Buyer"}}
+    sheets, _ = parse_historical_workbook(
+        "lineup.xlsx", _build_custom_column_workbook_bytes("Buyer"), mapping_override=override
+    )
+    assert sheets
+    # The mapping should include auto-detected fields (e.g. distributor_token, period_label)
+    # as well as the overridden customer_token.
+    effective_mapping = sheets[0].mapping
+    assert "customer_token" in effective_mapping, "Overridden field should be in mapping"
+    assert effective_mapping["customer_token"] == "Buyer"
+    # At least one auto-detected field should still be present.
+    auto_detected_present = any(
+        k in effective_mapping for k in ("distributor_token", "period_label", "quantity_units")
+    )
+    assert auto_detected_present, "Auto-detected fields should be preserved after override"
+
+
+def test_mapping_decisions_written_after_processing() -> None:
+    """After process_import_job_sync, job.mapping_decisions holds the final effective mapping."""
+    source_id = _ensure_historical_seed()
+    workbook = _build_workbook_bytes()
+    storage = get_storage_backend()
+    with SessionLocal() as db:
+        job = ImportJob(
+            source_id=source_id,
+            template_slug="historical_lineup",
+            import_mode="validate",
+            status="pending",
+            stage="uploaded",
+            file_name="historical_lineup.xlsx",
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        db.add(job)
+        db.flush()
+        key = f"imports/test/{job.id}/historical_lineup.xlsx"
+        storage.save(key, workbook, job.content_type)
+        db.add(RawFileMetadata(job_id=job.id, storage_key=key, byte_size=len(workbook), checksum=None))
+        db.commit()
+
+        processed = process_import_job_sync(db, job.id)
+        assert processed.mapping_decisions is not None
+        assert isinstance(processed.mapping_decisions, dict)
+        # mapping_decisions should contain sheet name(s) as keys.
+        assert len(processed.mapping_decisions) > 0
+
+
+def test_customer_ilike_fallback_resolves_partial_match() -> None:
+    """Customer ILIKE fallback resolves when exactly one customer matches the partial token."""
+    with SessionLocal() as db:
+        _seed_import_core(db)
+        ch = db.scalar(select(DimChannel).where(DimChannel.code == "RET"))
+        if not ch:
+            ch = DimChannel(code="RET", name="Retail")
+            db.add(ch)
+            db.flush()
+        # Seed a customer with a distinct long name.
+        ilike_code = "ILIKE-CUST-UNQ"
+        ilike_name = "Unique ILIKE Customer Corp ZZZ"
+        if not db.scalar(select(DimCustomer).where(DimCustomer.code == ilike_code)):
+            db.add(DimCustomer(code=ilike_code, name=ilike_name, channel_id=ch.id))
+        if not db.scalar(select(DimProduct).where(DimProduct.sku == "SKU-HL-01")):
+            db.add(DimProduct(sku="SKU-HL-01", name="Hist Product", category="Audio", channel_id=ch.id))
+        if not db.scalar(select(DimDistributor).where(DimDistributor.code == "DIST-HL-01")):
+            db.add(DimDistributor(code="DIST-HL-01", name="Dist HL"))
+        db.commit()
+
+        src = db.scalar(select(SourceDefinition).where(SourceDefinition.code == "historical_lineup_default"))
+        assert src is not None
+
+        # Workbook uses partial match token "ILIKE Customer Corp" which won't exact-match.
+        workbook = _build_ilike_customer_workbook_bytes("ILIKE Customer Corp ZZZ")
+        job = ImportJob(
+            source_id=src.id,
+            template_slug="historical_lineup",
+            import_mode="validate",
+            status="pending",
+            stage="uploaded",
+            file_name="ilike_test.xlsx",
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        db.add(job)
+        db.flush()
+        storage = get_storage_backend()
+        key = f"imports/test/{job.id}/ilike_test.xlsx"
+        storage.save(key, workbook, job.content_type)
+        db.add(RawFileMetadata(job_id=job.id, storage_key=key, byte_size=len(workbook), checksum=None))
+        db.commit()
+
+        processed = process_import_job_sync(db, job.id)
+        rows = db.scalars(
+            select(ImportRowResult).where(ImportRowResult.job_id == processed.id)
+        ).all()
+        messages = " ".join(r.message for r in rows)
+        codes = {r.code for r in rows}
+        # ILIKE should resolve the customer; no unknown_customer for that row.
+        assert "unknown_customer" not in codes or "customer_matched_by_ilike" in messages, (
+            f"Expected customer_matched_by_ilike in messages. codes={codes}"
+        )
+
+
+def test_customer_ilike_ambiguous_emits_diagnostic() -> None:
+    """When ILIKE returns multiple matches, ambiguous_customer_match is emitted (no silent pick)."""
+    with SessionLocal() as db:
+        _seed_import_core(db)
+        ch = db.scalar(select(DimChannel).where(DimChannel.code == "RET"))
+        if not ch:
+            ch = DimChannel(code="RET", name="Retail")
+            db.add(ch)
+            db.flush()
+        common_token = "TechGroup"
+        # Seed two customers whose names both contain the common token.
+        for idx in range(1, 3):
+            code = f"TECHGRP-{idx}"
+            name = f"{common_token} Branch {idx}"
+            if not db.scalar(select(DimCustomer).where(DimCustomer.code == code)):
+                db.add(DimCustomer(code=code, name=name, channel_id=ch.id))
+        if not db.scalar(select(DimProduct).where(DimProduct.sku == "SKU-HL-01")):
+            db.add(DimProduct(sku="SKU-HL-01", name="Hist Product", category="Audio", channel_id=ch.id))
+        if not db.scalar(select(DimDistributor).where(DimDistributor.code == "DIST-HL-01")):
+            db.add(DimDistributor(code="DIST-HL-01", name="Dist HL"))
+        db.commit()
+
+        src = db.scalar(select(SourceDefinition).where(SourceDefinition.code == "historical_lineup_default"))
+        assert src is not None
+
+        workbook = _build_ilike_customer_workbook_bytes(common_token)
+        job = ImportJob(
+            source_id=src.id,
+            template_slug="historical_lineup",
+            import_mode="validate",
+            status="pending",
+            stage="uploaded",
+            file_name="ambig_ilike.xlsx",
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        db.add(job)
+        db.flush()
+        storage = get_storage_backend()
+        key = f"imports/test/{job.id}/ambig_ilike.xlsx"
+        storage.save(key, workbook, job.content_type)
+        db.add(RawFileMetadata(job_id=job.id, storage_key=key, byte_size=len(workbook), checksum=None))
+        db.commit()
+
+        processed = process_import_job_sync(db, job.id)
+        rows = db.scalars(
+            select(ImportRowResult).where(ImportRowResult.job_id == processed.id)
+        ).all()
+        messages = " ".join(r.message for r in rows)
+        assert "ambiguous_customer_match" in messages, (
+            f"Expected ambiguous_customer_match. messages={messages}"
+        )
+        assert "customer_matched_by_ilike" not in messages, (
+            "Should NOT resolve ambiguous ILIKE match silently"
+        )
+
+
 def test_historical_lineup_apply_writes_headers_lines_and_lineage() -> None:
     source_id = _ensure_historical_seed()
     workbook = _build_nb_style_workbook_bytes()

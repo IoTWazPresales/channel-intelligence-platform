@@ -182,7 +182,11 @@ def _detect_header_row(raw: pd.DataFrame) -> tuple[int | None, dict[str, str], f
     return best_idx, best_mapping, best_conf
 
 
-def parse_historical_workbook(filename: str, raw_bytes: bytes) -> tuple[list[ParsedSheet], dict[str, Any]]:
+def parse_historical_workbook(
+    filename: str,
+    raw_bytes: bytes,
+    mapping_override: dict[str, dict[str, str]] | None = None,
+) -> tuple[list[ParsedSheet], dict[str, Any]]:
     lower = filename.lower()
     if lower.endswith(".csv"):
         frames = {"csv": pd.read_csv(io.BytesIO(raw_bytes), header=None)}
@@ -216,6 +220,16 @@ def parse_historical_workbook(filename: str, raw_bytes: bytes) -> tuple[list[Par
             skipped_sheets.append(sheet_name)
             skipped_sheet_details.append({"sheet_name": sheet_name, "reason": "not_likely_lineup"})
             continue
+
+        # Apply user column mapping override BEFORE row extraction.
+        # User-specified fields win; unspecified auto-detected fields remain.
+        if mapping_override and sheet_name in mapping_override:
+            for canonical, source_col in mapping_override[sheet_name].items():
+                if source_col:  # ignore blank overrides
+                    mapping[canonical] = source_col
+            # Recompute confidence based on effective mapping after override.
+            map_conf = len(mapping) / max(len(_CANONICAL_ALIASES), 1)
+
         header_cells = frame.iloc[header_idx].tolist()
         header_tokens = [(_clean_str(v) or f"column_{i+1}") for i, v in enumerate(header_cells)]
         data = frame.iloc[header_idx + 1 :].copy()
@@ -298,6 +312,7 @@ def parse_historical_workbook(filename: str, raw_bytes: bytes) -> tuple[list[Par
                 "sheet_name": sheet_name,
                 "header_row_number": header_idx + 1,
                 "mapped_fields": sorted(mapping.keys()),
+                "source_columns": header_tokens,
                 "row_count": len(rows),
                 "mapping_confidence": map_conf,
             }
@@ -315,9 +330,18 @@ def parse_historical_workbook(filename: str, raw_bytes: bytes) -> tuple[list[Par
 
 
 def process_historical_lineup_import(db: Session, job: ImportJob, filename: str, raw_bytes: bytes) -> int:
-    parsed_sheets, schema = parse_historical_workbook(filename, raw_bytes)
+    # Read any user-supplied mapping override stored by the API layer before sync processing.
+    # Shape: { sheet_name: { canonical_field: actual_workbook_column } }
+    _raw_override = job.mapping_decisions
+    mapping_override: dict[str, dict[str, str]] | None = None
+    if isinstance(_raw_override, dict) and _raw_override:
+        mapping_override = {k: v for k, v in _raw_override.items() if isinstance(v, dict)}
+
+    parsed_sheets, schema = parse_historical_workbook(filename, raw_bytes, mapping_override=mapping_override)
     job.inferred_schema = schema
     job.field_mapping = {s.sheet_name: s.mapping for s in parsed_sheets}
+    # Overwrite mapping_decisions with the final effective mapping actually used (for audit trail).
+    job.mapping_decisions = {s.sheet_name: s.mapping for s in parsed_sheets}
     errors = 0
 
     customers = db.scalars(select(DimCustomer)).all()
@@ -422,8 +446,25 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
                 if customer:
                     customer_id = customer.id
                 else:
-                    diagnostics.append("unknown_customer")
-                    errors += 1
+                    # ILIKE fallback — resolves only when exactly one customer matches.
+                    # Do not silently pick when multiple records match.
+                    _ilike_customers = db.scalars(
+                        select(DimCustomer).where(
+                            or_(
+                                DimCustomer.code.ilike(f"%{customer_token}%"),
+                                DimCustomer.name.ilike(f"%{customer_token}%"),
+                            )
+                        )
+                    ).all()
+                    if len(_ilike_customers) == 1:
+                        customer_id = _ilike_customers[0].id
+                        diagnostics.append("customer_matched_by_ilike")
+                    elif len(_ilike_customers) > 1:
+                        diagnostics.append("ambiguous_customer_match")
+                        errors += 1
+                    else:
+                        diagnostics.append("unknown_customer")
+                        errors += 1
 
             distributor_token = _clean_str(payload.get("distributor_token"))
             if distributor_token:

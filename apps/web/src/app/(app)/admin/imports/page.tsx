@@ -106,6 +106,24 @@ type RowResult = {
 type GenericUploadArgs = {
   file: File;
   modeOverride?: 'validate' | 'apply';
+  mappingOverride?: Record<string, Record<string, string>>;
+};
+
+type HlSheetDetail = {
+  sheet_name: string;
+  header_row_number: number;
+  mapped_fields: string[];
+  source_columns: string[];
+  row_count: number;
+  mapping_confidence: number;
+};
+
+type HlJobDetail = {
+  id: number;
+  status: string;
+  stage: string;
+  field_mapping?: Record<string, Record<string, string>> | null;
+  inferred_schema?: { selected_sheet_details?: HlSheetDetail[] } | null;
 };
 
 type InferredColumn = { name: string; dtype: string; sample: unknown[] };
@@ -144,6 +162,17 @@ type PmJobState = {
   /** Server-derived progress (counts, rail, phase); refreshed while validate/commit run. */
   progress?: PmProgressSnapshot | null;
 };
+
+const HL_MAPPING_DISPLAY_FIELDS: Array<{ canonical: string; label: string }> = [
+  { canonical: 'customer_token', label: 'Customer' },
+  { canonical: 'distributor_token', label: 'Distributor' },
+  { canonical: 'sku_raw', label: 'SKU' },
+  { canonical: 'part_number_raw', label: 'Part number' },
+  { canonical: 'model_raw', label: 'Model name' },
+  { canonical: 'quantity_units', label: 'Quantity' },
+  { canonical: 'period_label', label: 'Period / month' },
+  { canonical: 'msrp_local', label: 'MSRP / list price' },
+];
 
 const stepsDefault = ['Import type', 'Data provider', 'Template details', 'Import mode', 'Upload & preview'];
 
@@ -244,6 +273,8 @@ function AdminImportsPageContent() {
   const [lastGenericFile, setLastGenericFile] = useState<File | null>(null);
   const [historicalValidatedJobId, setHistoricalValidatedJobId] = useState<number | null>(null);
   const [isJobRevisitMode, setIsJobRevisitMode] = useState(false);
+  const [hlMappingEdits, setHlMappingEdits] = useState<Record<string, Record<string, string>>>({});
+  const [showMappingReview, setShowMappingReview] = useState(false);
   const [pmColumns, setPmColumns] = useState<PmColumnDraft[]>([]);
   const [pmRowFilter, setPmRowFilter] = useState<'all' | 'unmapped' | 'mapped' | 'core'>('all');
   const [pmBulkSelected, setPmBulkSelected] = useState<Record<string, boolean>>({});
@@ -325,6 +356,14 @@ function AdminImportsPageContent() {
     enabled: jobIdParam != null,
   });
 
+  // Fetch job detail for historical_lineup validate job to power the mapping review panel.
+  const { data: hlJobDetail } = useQuery({
+    queryKey: ['import-job', historicalValidatedJobId],
+    queryFn: ({ signal }) =>
+      apiGet<HlJobDetail>(`/api/v1/imports/jobs/${historicalValidatedJobId}`, { signal }),
+    enabled: historicalValidatedJobId != null && selectedSlug === 'historical_lineup',
+  });
+
   // Sync ?job=<id> URL param into wizard state so previous job diagnostics are visible after refresh.
   // Guards: skip if ?template= is driving a new import flow; skip until templates have loaded.
   useEffect(() => {
@@ -340,8 +379,16 @@ function AdminImportsPageContent() {
     // attempting to reconstruct the PM mapping/validate/commit wizard.
   }, [jobDetail, visibleTemplates, searchParams]);
 
+  // Derived data for the HL mapping review panel.
+  const hlSheetDetail: HlSheetDetail | null =
+    hlJobDetail?.inferred_schema?.selected_sheet_details?.[0] ?? null;
+  const hlDetectedMapping: Record<string, string> =
+    hlSheetDetail ? (hlJobDetail?.field_mapping?.[hlSheetDetail.sheet_name] ?? {}) : {};
+  const hlSourceColumns: string[] = hlSheetDetail?.source_columns ?? [];
+  const hlHasEdits = Object.values(hlMappingEdits).some((m) => Object.keys(m).length > 0);
+
   const upload = useMutation({
-    mutationFn: async ({ file, modeOverride }: GenericUploadArgs) => {
+    mutationFn: async ({ file, modeOverride, mappingOverride }: GenericUploadArgs) => {
       if (selectedTemplate?.requires_provider && sourceId === '')
         throw new Error('Select a data provider before uploading.');
       const fd = new FormData();
@@ -352,6 +399,9 @@ function AdminImportsPageContent() {
       fd.append('import_mode', effectiveMode);
       if (selectedTemplate?.destructive_apply_requires_confirm && effectiveMode === 'apply') {
         fd.append('confirm_destructive', confirmDestructive ? 'true' : 'false');
+      }
+      if (mappingOverride && Object.keys(mappingOverride).length > 0) {
+        fd.append('mapping_override', JSON.stringify(mappingOverride));
       }
       const res = await fetch(apiUrl('/api/v1/imports/jobs'), {
         method: 'POST',
@@ -365,13 +415,18 @@ function AdminImportsPageContent() {
       setLastJobId(data.id);
       if (selectedSlug === 'historical_lineup' && data.import_mode === 'validate') {
         setHistoricalValidatedJobId(data.id);
+        setHlMappingEdits({});
+        setShowMappingReview(false);
       } else if (selectedSlug === 'historical_lineup' && data.import_mode === 'apply') {
         // Apply completed — clear button gate so Apply button disappears immediately.
         setHistoricalValidatedJobId(null);
         setLastGenericFile(null);
+        setHlMappingEdits({});
+        setShowMappingReview(false);
       }
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', data.id] });
+      void qc.invalidateQueries({ queryKey: ['import-job', data.id] });
     },
   });
 
@@ -804,6 +859,8 @@ function AdminImportsPageContent() {
                       setLastGenericFile(null);
                       setHistoricalValidatedJobId(null);
                       setIsJobRevisitMode(false);
+                      setHlMappingEdits({});
+                      setShowMappingReview(false);
                       setActiveStep(1);
                     }}
                   >
@@ -1633,6 +1690,97 @@ function AdminImportsPageContent() {
                 </Button>
               </Alert>
             ) : null}
+            {selectedTemplate?.slug === 'historical_lineup' && historicalValidatedJobId != null && hlSheetDetail ? (
+              <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: showMappingReview ? 1 : 0 }}>
+                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                    Column mapping review — Sheet: {hlSheetDetail.sheet_name}
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="text"
+                    sx={{ ml: 'auto' }}
+                    onClick={() => setShowMappingReview((v) => !v)}
+                  >
+                    {showMappingReview ? 'Hide' : 'Show / edit'}
+                  </Button>
+                </Stack>
+                {showMappingReview ? (
+                  <Stack spacing={1}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 600 }}>Field</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Detected column</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Override</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {HL_MAPPING_DISPLAY_FIELDS.map(({ canonical, label }) => (
+                          <TableRow key={canonical}>
+                            <TableCell>{label}</TableCell>
+                            <TableCell>
+                              <Typography variant="caption" color={hlDetectedMapping[canonical] ? 'text.primary' : 'text.disabled'}>
+                                {hlDetectedMapping[canonical] ?? '— not detected'}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <FormControl size="small" sx={{ minWidth: 160 }}>
+                                <Select
+                                  displayEmpty
+                                  value={hlMappingEdits[hlSheetDetail.sheet_name]?.[canonical] ?? ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value as string;
+                                    setHlMappingEdits((prev) => {
+                                      const sheetEdits = { ...prev[hlSheetDetail.sheet_name] };
+                                      if (val === '') {
+                                        delete sheetEdits[canonical];
+                                      } else {
+                                        sheetEdits[canonical] = val;
+                                      }
+                                      const next = { ...prev, [hlSheetDetail.sheet_name]: sheetEdits };
+                                      if (Object.keys(next[hlSheetDetail.sheet_name]).length === 0) {
+                                        const { [hlSheetDetail.sheet_name]: _removed, ...rest } = next;
+                                        return rest;
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                  renderValue={(v) => (v === '' ? <em style={{ color: '#999' }}>use detected</em> : v)}
+                                >
+                                  <MenuItem value=""><em>— use detected —</em></MenuItem>
+                                  {hlSourceColumns.map((col) => (
+                                    <MenuItem key={col} value={col}>{col}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {hlHasEdits && lastGenericFile ? (
+                      <Box>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={upload.isPending}
+                          onClick={() =>
+                            upload.mutate({
+                              file: lastGenericFile,
+                              modeOverride: 'validate',
+                              mappingOverride: hlMappingEdits,
+                            })
+                          }
+                        >
+                          Re-validate with corrections
+                        </Button>
+                      </Box>
+                    ) : null}
+                  </Stack>
+                ) : null}
+              </Box>
+            ) : null}
             {selectedTemplate?.slug === 'historical_lineup' && historicalValidatedJobId != null && lastGenericFile ? (
               <Stack direction="row" spacing={1} alignItems="center">
                 <Typography variant="caption" color="text.secondary">
@@ -1642,7 +1790,13 @@ function AdminImportsPageContent() {
                   size="small"
                   variant="contained"
                   disabled={upload.isPending}
-                  onClick={() => upload.mutate({ file: lastGenericFile, modeOverride: 'apply' })}
+                  onClick={() =>
+                    upload.mutate({
+                      file: lastGenericFile,
+                      modeOverride: 'apply',
+                      mappingOverride: hlHasEdits ? hlMappingEdits : undefined,
+                    })
+                  }
                 >
                   Apply validated file
                 </Button>
@@ -1686,6 +1840,8 @@ function AdminImportsPageContent() {
                   setLastGenericFile(null);
                   setHistoricalValidatedJobId(null);
                   setIsJobRevisitMode(false);
+                  setHlMappingEdits({});
+                  setShowMappingReview(false);
                   upload.reset();
                   pmUpload.reset();
                   void router.replace('/admin/imports');
