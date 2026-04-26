@@ -292,6 +292,9 @@ async def list_lineup_lines(job_id: int, db: AsyncSession = Depends(get_db)):
                     "period_label": header.period_label,
                     "header_customer_id": header.customer_id,
                     "sheet_name": header.sheet_name,
+                    # Resolution status fields — read-only audit surface.
+                    "diagnostic_codes": ln.diagnostic_codes or [],
+                    "customer_token": (ln.raw_row_payload or {}).get("customer_token"),
                 }
             )
     return result

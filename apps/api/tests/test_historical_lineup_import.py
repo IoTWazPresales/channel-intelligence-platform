@@ -715,6 +715,24 @@ def test_lineup_lines_endpoint() -> None:
         if qty is not None:
             assert isinstance(qty, (int, float)), f"quantity_units must be numeric; got {type(qty)}: {qty!r}"
 
+        # ── 1b. Resolution status fields (Sub-pass B audit surface) ───────────
+        # diagnostic_codes must be a list (possibly empty for clean rows).
+        assert "diagnostic_codes" in line, "diagnostic_codes must be present on each line"
+        assert isinstance(line["diagnostic_codes"], list), (
+            f"diagnostic_codes must be a list; got {type(line['diagnostic_codes'])}"
+        )
+        # customer_token key must always be present (value may be null for header-level customer).
+        assert "customer_token" in line, "customer_token must be present on each line"
+
+        # The NB-style workbook has 'UNKNOWN-CUST' which should produce an unknown_customer diagnostic
+        # and retain the raw token string so the operator can see which token was unresolvable.
+        unknown_lines = [ln for ln in lines if "unknown_customer" in ln["diagnostic_codes"]]
+        if unknown_lines:
+            ul = unknown_lines[0]
+            assert ul["customer_token"] is not None, (
+                f"Lines with unknown_customer diagnostic must carry the raw token; got None. line={ul}"
+            )
+
         # ── 2. Validate-only job returns empty list ────────────────────────────
         rv = client.get(f"/api/v1/imports/jobs/{validate_job_id}/lineup-lines")
         assert rv.status_code == 200, f"Expected 200 for validate job; got {rv.status_code}: {rv.text}"

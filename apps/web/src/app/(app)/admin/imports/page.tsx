@@ -136,6 +136,9 @@ type LineupLine = {
   period_label: string | null;
   header_customer_id: number | null;
   sheet_name: string;
+  // Resolution status — read-only audit surface from persisted line records.
+  diagnostic_codes: string[];
+  customer_token: string | null;
 };
 
 type HlJobDetail = {
@@ -423,6 +426,19 @@ function AdminImportsPageContent() {
       apiGet<LineupLine[]>(`/api/v1/imports/jobs/${hlApplyJobId}/lineup-lines`, { signal }),
     enabled: hlApplyJobId != null && selectedSlug === 'historical_lineup',
   });
+
+  // Group unresolved customer tokens from persisted line records — read-only audit surface.
+  // No customer_id mutation occurs here; this is purely derived from what was written on apply.
+  const unresolvedCustomerTokens = useMemo<Map<string, number>>(() => {
+    if (!lineupLines?.length) return new Map();
+    const counts = new Map<string, number>();
+    for (const ln of lineupLines) {
+      if (ln.diagnostic_codes.includes('unknown_customer') && ln.customer_token) {
+        counts.set(ln.customer_token, (counts.get(ln.customer_token) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [lineupLines]);
 
   // Sync ?job=<id> URL param into wizard state so previous job diagnostics are visible after refresh.
   // Guards: skip if ?template= is driving a new import flow; skip until templates have loaded.
@@ -2063,6 +2079,20 @@ function AdminImportsPageContent() {
                 <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                   Loaded lineup data — {lineupLines?.length ?? '…'} line{lineupLines?.length !== 1 ? 's' : ''}
                 </Typography>
+                {unresolvedCustomerTokens.size > 0 ? (
+                  <Box data-testid="lineup-unresolved-tokens" sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" fontWeight={600} color="warning.main" sx={{ display: 'block', mb: 0.5 }}>
+                      Unresolved customer tokens —{' '}
+                      {unresolvedCustomerTokens.size} distinct,{' '}
+                      {Array.from(unresolvedCustomerTokens.values()).reduce((a, b) => a + b, 0)} rows
+                    </Typography>
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                      {Array.from(unresolvedCustomerTokens.entries()).map(([token, count]) => (
+                        <Chip key={token} size="small" label={`${token} (${count})`} color="warning" variant="outlined" />
+                      ))}
+                    </Stack>
+                  </Box>
+                ) : null}
                 {lineupLines && lineupLines.length > 0 ? (
                   <Box sx={{ overflowX: 'auto' }}>
                     <Table size="small" sx={{ minWidth: 700 }}>

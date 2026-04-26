@@ -932,6 +932,35 @@ describe('AdminImportsPage Sub-pass A — loaded lineup records', () => {
       model_raw: 'Model X', base_unit_raw: 'NB', quantity_units: 12,
       msrp_local: 999.0, promo_price_local: 899.0, dap_local: 850.0,
       disti_margin_pct: 8.5, period_label: '2026-Q2', header_customer_id: null, sheet_name: 'NB',
+      diagnostic_codes: [], customer_token: 'ACME Corp',
+    },
+  ];
+
+  const LINES_WITH_UNRESOLVED = [
+    {
+      id: 1, header_id: 10, source_row_number: 5,
+      product_id: 42, sku_raw: null, part_number_raw: 'PART-001',
+      model_raw: 'Model X', base_unit_raw: 'NB', quantity_units: 12,
+      msrp_local: 999.0, promo_price_local: 899.0, dap_local: 850.0,
+      disti_margin_pct: 8.5, period_label: '2026-Q2', header_customer_id: null, sheet_name: 'NB',
+      diagnostic_codes: ['unknown_customer'], customer_token: 'UNKNOWN-CUST',
+    },
+    {
+      id: 2, header_id: 10, source_row_number: 6,
+      product_id: null, sku_raw: null, part_number_raw: 'PART-002',
+      model_raw: 'Model Y', base_unit_raw: 'NB', quantity_units: 5,
+      msrp_local: 799.0, promo_price_local: null, dap_local: null,
+      disti_margin_pct: null, period_label: '2026-Q2', header_customer_id: null, sheet_name: 'NB',
+      diagnostic_codes: ['unknown_customer', 'unknown_product'], customer_token: 'UNKNOWN-CUST',
+    },
+    {
+      id: 3, header_id: 10, source_row_number: 7,
+      product_id: 10, sku_raw: null, part_number_raw: 'PART-003',
+      model_raw: 'Model Z', base_unit_raw: 'NB', quantity_units: 3,
+      msrp_local: 599.0, promo_price_local: null, dap_local: null,
+      disti_margin_pct: null, period_label: '2026-Q2', header_customer_id: 5, sheet_name: 'NB',
+      // Token name deliberately distinct from "UNKNOWN-CUST" to avoid substring collision in assertions.
+      diagnostic_codes: [], customer_token: 'MATCHED-ACME',
     },
   ];
 
@@ -1053,5 +1082,52 @@ describe('AdminImportsPage Sub-pass A — loaded lineup records', () => {
     const link = await screen.findByTestId('view-apply-job-link');
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute('href', `/admin/imports?job=${APPLY_JOB_51.id}`);
+  });
+
+  // ── Sub-pass B — unresolved customer token audit surface (read-only) ──────
+
+  it('unresolved customer token chips appear in loaded lineup section when lines have unknown_customer', async () => {
+    mockState.lineupLines = LINES_WITH_UNRESOLVED;
+
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => VALIDATE_JOB_50 } as any)
+      .mockResolvedValueOnce({ ok: true, json: async () => APPLY_JOB_51 } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    await screen.findByRole('button', { name: /Apply validated file/i });
+    await user.click(screen.getByRole('button', { name: /Apply validated file/i }));
+
+    const tokenSection = await screen.findByTestId('lineup-unresolved-tokens');
+    expect(tokenSection).toBeInTheDocument();
+    // UNKNOWN-CUST appears on 2 rows — chip must show count
+    expect(tokenSection).toHaveTextContent('UNKNOWN-CUST (2)');
+    // MATCHED-ACME has no unknown_customer diagnostic — must NOT appear as a chip.
+    expect(tokenSection).not.toHaveTextContent('MATCHED-ACME');
+    // Summary line should mention distinct count
+    expect(tokenSection).toHaveTextContent(/1 distinct/i);
+    expect(tokenSection).toHaveTextContent(/2 rows/i);
+  });
+
+  it('unresolved customer token section is absent when all customers are resolved', async () => {
+    // SAMPLE_LINES has diagnostic_codes: [] — no unknown_customer
+    mockState.lineupLines = SAMPLE_LINES;
+
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => VALIDATE_JOB_50 } as any)
+      .mockResolvedValueOnce({ ok: true, json: async () => APPLY_JOB_51 } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    await screen.findByRole('button', { name: /Apply validated file/i });
+    await user.click(screen.getByRole('button', { name: /Apply validated file/i }));
+
+    // Loaded lineup section must be present (lines exist) but no unresolved-token sub-section
+    await screen.findByTestId('loaded-lineup-section');
+    expect(screen.queryByTestId('lineup-unresolved-tokens')).not.toBeInTheDocument();
   });
 });
