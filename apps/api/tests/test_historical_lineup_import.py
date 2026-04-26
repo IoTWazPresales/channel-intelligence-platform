@@ -507,6 +507,106 @@ def test_base_unit_not_dual_mapped_with_realistic_columns() -> None:
     )
 
 
+def _build_asus_style_workbook_bytes() -> bytes:
+    """Build an in-memory XLSX mimicking the real ASUS NB sheet layout.
+
+    Row 0 — title row (no recognised header tokens)
+    Row 1 — empty
+    Row 2 — numeric totals row (no recognised header tokens)
+    Row 3 — ACTUAL HEADER (header detection must select this row)
+    Row 4+ — data rows
+
+    This mirrors the real workbook probe output:
+      row 0: ['2026 Q2 NEW PLAN', 'Total', 'TTL Revenue']
+      row 3: ['Product Line', 'Country', 'Customer', ... 'Part Number', 'Base Unit', 'Qty', ...]
+    """
+    header_cols = [
+        "Product Line", "Country", "Customer", "Segment",
+        "Model name", "Part Number", "Base Unit",
+        "Qty", "DAP", "Disti Cost", "Disti margin", "Rebate",
+        "Dealer margin", "VAT", "Promo Price", "Customer Feedback",
+    ]
+    n = len(header_cols)
+    title_row   = ["2026 Q2 NEW PLAN", "Total", "TTL Revenue"] + [None] * (n - 3)
+    empty_row   = [None] * n
+    numbers_row = ["22427", "9857", "9945", "2625"] + [None] * (n - 4)
+    data_row    = [
+        "NB", "ZA", "Amazon", "Vivobook Go",
+        "Vivobook 15", "90NB1542-M007D0", "NB",
+        "216", "375.89", "6277.30", "0.0724", "0.06",
+        "0.08", "0.15", "7999", "upfront",
+    ]
+    frame = pd.DataFrame([title_row, empty_row, numbers_row, header_cols, data_row])
+    bio = io.BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+        frame.to_excel(writer, sheet_name="NB", index=False, header=False)
+    return bio.getvalue()
+
+
+def test_parse_historical_workbook_asus_style_base_unit_not_in_sku_raw() -> None:
+    """Full parse-path regression through parse_historical_workbook.
+
+    Tests the COMPLETE path (header detection → _build_header_map → mapping storage)
+    NOT just _build_header_map in isolation.
+
+    The workbook mimics the real ASUS NB sheet: title rows above the header, with
+    columns including 'Base Unit' and 'Part Number' but NO explicit SKU column.
+
+    Required acceptance criteria:
+    - Sheet NB is selected (header detected at the correct row)
+    - base_unit_raw  = 'Base Unit'
+    - part_number_raw = 'Part Number'
+    - model_raw       = 'Model name'
+    - customer_token  = 'Customer'
+    - sku_raw is ABSENT from the mapping (no SKU-named column present)
+    - No source column appears under two different canonical fields
+    """
+    sheets, schema = parse_historical_workbook(
+        "asus_nb_lineup.xlsx", _build_asus_style_workbook_bytes()
+    )
+
+    assert len(sheets) == 1, f"Expected 1 selected sheet; got {[s.sheet_name for s in sheets]}"
+    sheet = sheets[0]
+    assert sheet.sheet_name == "NB"
+
+    m = sheet.mapping
+    assert m.get("base_unit_raw") == "Base Unit", (
+        f"base_unit_raw must be 'Base Unit'; got {m.get('base_unit_raw')!r} — mapping={m}"
+    )
+    assert m.get("part_number_raw") == "Part Number", (
+        f"part_number_raw must be 'Part Number'; got {m.get('part_number_raw')!r}"
+    )
+    assert m.get("model_raw") == "Model name", (
+        f"model_raw must be 'Model name'; got {m.get('model_raw')!r}"
+    )
+    assert m.get("customer_token") == "Customer", (
+        f"customer_token must be 'Customer'; got {m.get('customer_token')!r}"
+    )
+    # Critical regression: sku_raw must NOT claim 'Base Unit'.
+    assert m.get("sku_raw") != "Base Unit", (
+        "sku_raw must NOT be 'Base Unit' — alias precedence regression detected in full parse path"
+    )
+    # With no explicit SKU column, sku_raw must be absent entirely.
+    assert "sku_raw" not in m, (
+        f"sku_raw should be absent when no SKU-named column exists; got mapping keys={list(m.keys())}"
+    )
+    # Invariant: no source column assigned to more than one canonical.
+    source_values = list(m.values())
+    assert len(source_values) == len(set(source_values)), (
+        f"Duplicate source column in full-parse-path mapping: {m}"
+    )
+
+    # Verify the schema records the correct sheet as selected.
+    assert schema["selected_sheets"] == ["NB"]
+    detail = schema["selected_sheet_details"][0]
+    assert "Base Unit" in detail["source_columns"]
+    assert "Part Number" in detail["source_columns"]
+    assert "sku_raw" not in detail["mapped_fields"], (
+        f"sku_raw must not appear in mapped_fields: {detail['mapped_fields']}"
+    )
+    assert "base_unit_raw" in detail["mapped_fields"]
+
+
 def test_buyer_and_sold_to_aliases_map_to_customer_token() -> None:
     """'Buyer' and 'Sold To' are common customer column names in vendor workbooks."""
     for col_name in ("Buyer", "Sold To", "Reseller"):

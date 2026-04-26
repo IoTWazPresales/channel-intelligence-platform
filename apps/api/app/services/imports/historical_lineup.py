@@ -246,6 +246,14 @@ def parse_historical_workbook(
                     mapping[canonical] = source_col
             # Recompute confidence based on effective mapping after override.
             map_conf = len(mapping) / max(len(_CANONICAL_ALIASES), 1)
+            # Enforce uniqueness after override: if an override assigns a source column
+            # that was already auto-detected for a different canonical, remove the
+            # auto-detected entry.  Override-specified canonicals take priority.
+            _override_claimed = {v for v in mapping_override[sheet_name].values() if v}
+            mapping = {
+                k: v for k, v in mapping.items()
+                if v not in _override_claimed or k in mapping_override[sheet_name]
+            }
 
         header_cells = frame.iloc[header_idx].tolist()
         header_tokens = [(_clean_str(v) or f"column_{i+1}") for i, v in enumerate(header_cells)]
