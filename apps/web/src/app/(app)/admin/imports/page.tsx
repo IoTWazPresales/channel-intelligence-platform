@@ -38,7 +38,8 @@ import Link from '@mui/material/Link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
 import NextLink from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
@@ -102,6 +103,11 @@ type RowResult = {
   message: string;
 };
 
+type GenericUploadArgs = {
+  file: File;
+  modeOverride?: 'validate' | 'apply';
+};
+
 type InferredColumn = { name: string; dtype: string; sample: unknown[] };
 
 type PmSuggestionDetail = {
@@ -152,6 +158,27 @@ const stepsPm = [
 ];
 
 const defaultHeaders = { 'X-User-Role': 'admin', 'X-User-Id': 'demo-user' };
+const DEFERRED_TEMPLATE_SLUGS = new Set(['customer_channel_mapping']);
+
+function describeTemplateBehavior(template: ImportTemplate | null, isPm: boolean): string {
+  if (!template) return 'Pipeline behavior is determined by the selected import type and provider.';
+  if (isPm) {
+    return 'You upload a file, map columns only to approved Product Master fields, validate rows, then commit. Extra columns can be ignored or retained as staged metadata (no new schema from this UI).';
+  }
+  if (!template.pipeline_ready) {
+    return 'File is stored and schema inferred; full loader for this type is not enabled yet.';
+  }
+  switch (template.slug) {
+    case 'distributor_master':
+      return 'Validates distributor_code/distributor_name, then upserts dim_distributor when mode is Apply.';
+    case 'customer_master':
+      return 'Validates customer master fields, then upserts dim_customer when mode is Apply.';
+    case 'distributor_inventory':
+      return 'Validates SKU/on-hand snapshot rows against the product catalog; unmatched SKUs require mapping.';
+    default:
+      return 'Runs the configured template pipeline for this import type.';
+  }
+}
 
 function formatPmSamples(samples: unknown[] | undefined): string {
   if (!samples?.length) return '—';
@@ -203,8 +230,10 @@ function formatPmSuggestReason(code: string): string {
   return PM_SUGGEST_REASON_LABELS[code] ?? code.replace(/_/g, ' ');
 }
 
-export default function AdminImportsPage() {
+function AdminImportsPageContent() {
   const qc = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeStep, setActiveStep] = useState(0);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [sourceId, setSourceId] = useState<number | ''>('');
@@ -212,9 +241,17 @@ export default function AdminImportsPage() {
   const [confirmDestructive, setConfirmDestructive] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [lastJobId, setLastJobId] = useState<number | null>(null);
+  const [lastGenericFile, setLastGenericFile] = useState<File | null>(null);
+  const [historicalValidatedJobId, setHistoricalValidatedJobId] = useState<number | null>(null);
+  const [isJobRevisitMode, setIsJobRevisitMode] = useState(false);
   const [pmColumns, setPmColumns] = useState<PmColumnDraft[]>([]);
   const [pmRowFilter, setPmRowFilter] = useState<'all' | 'unmapped' | 'mapped' | 'core'>('all');
   const [pmBulkSelected, setPmBulkSelected] = useState<Record<string, boolean>>({});
+
+  const jobIdParam = useMemo(() => {
+    const v = searchParams.get('job');
+    return v && !Number.isNaN(Number(v)) ? Number(v) : null;
+  }, [searchParams]);
 
   const isPm = selectedSlug === 'product_master';
   const steps = isPm ? stepsPm : stepsDefault;
@@ -222,11 +259,31 @@ export default function AdminImportsPage() {
     queryKey: ['import-templates'],
     queryFn: ({ signal }) => apiGet<ImportTemplate[]>('/api/v1/imports/templates', { signal }),
   });
+  const visibleTemplates = useMemo(
+    () => (templates ?? []).filter((t) => !DEFERRED_TEMPLATE_SLUGS.has(t.slug)),
+    [templates]
+  );
 
   const selectedTemplate = useMemo(
-    () => (templates ?? []).find((t) => t.slug === selectedSlug) ?? null,
-    [templates, selectedSlug]
+    () => visibleTemplates.find((t) => t.slug === selectedSlug) ?? null,
+    [visibleTemplates, selectedSlug]
   );
+
+  useEffect(() => {
+    if (!visibleTemplates.length) return;
+    const forcedTemplate = searchParams.get('template');
+    if (!forcedTemplate) return;
+    const exists = visibleTemplates.some((t) => t.slug === forcedTemplate);
+    if (!exists) return;
+    setSelectedSlug(forcedTemplate);
+    setSourceId('');
+    setImportMode(forcedTemplate === 'product_master' || forcedTemplate === 'historical_lineup' ? 'validate' : 'apply');
+    setConfirmDestructive(false);
+    setLastGenericFile(null);
+    setHistoricalValidatedJobId(null);
+    setIsJobRevisitMode(false);
+    setActiveStep(1);
+  }, [visibleTemplates, searchParams]);
 
   const { data: sources } = useQuery({
     queryKey: ['import-sources', selectedSlug],
@@ -234,6 +291,16 @@ export default function AdminImportsPage() {
       apiGet<Source[]>(`/api/v1/imports/sources?template_slug=${encodeURIComponent(selectedSlug!)}`, { signal }),
     enabled: !!selectedSlug,
   });
+
+  useEffect(() => {
+    if (!sources?.length) return;
+    const forcedSource = searchParams.get('source');
+    if (!forcedSource) return;
+    const id = Number(forcedSource);
+    if (!Number.isFinite(id)) return;
+    if (!sources.some((s) => s.id === id)) return;
+    setSourceId(id);
+  }, [sources, searchParams]);
 
   const {
     data: jobs,
@@ -252,15 +319,37 @@ export default function AdminImportsPage() {
     enabled: lastJobId != null,
   });
 
+  const { data: jobDetail } = useQuery({
+    queryKey: ['import-job', jobIdParam],
+    queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${jobIdParam}`, { signal }),
+    enabled: jobIdParam != null,
+  });
+
+  // Sync ?job=<id> URL param into wizard state so previous job diagnostics are visible after refresh.
+  // Guards: skip if ?template= is driving a new import flow; skip until templates have loaded.
+  useEffect(() => {
+    if (searchParams.get('template')) return;
+    if (!jobDetail || !visibleTemplates.length) return;
+    setLastJobId(jobDetail.id);
+    setSelectedSlug(jobDetail.template_slug ?? null);
+    setIsJobRevisitMode(true);
+    if (jobDetail.template_slug !== 'product_master') {
+      setActiveStep(4);
+    }
+    // PM jobs: activeStep stays at 0; a deferred alert is shown instead of
+    // attempting to reconstruct the PM mapping/validate/commit wizard.
+  }, [jobDetail, visibleTemplates, searchParams]);
+
   const upload = useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({ file, modeOverride }: GenericUploadArgs) => {
       if (sourceId === '') throw new Error('Select a data provider before uploading.');
       const fd = new FormData();
+      const effectiveMode = modeOverride ?? importMode;
       fd.append('source_id', String(sourceId));
       fd.append('file', file);
       fd.append('run_sync', 'true');
-      fd.append('import_mode', importMode);
-      if (selectedTemplate?.destructive_apply_requires_confirm && importMode === 'apply') {
+      fd.append('import_mode', effectiveMode);
+      if (selectedTemplate?.destructive_apply_requires_confirm && effectiveMode === 'apply') {
         fd.append('confirm_destructive', confirmDestructive ? 'true' : 'false');
       }
       const res = await fetch(apiUrl('/api/v1/imports/jobs'), {
@@ -269,10 +358,13 @@ export default function AdminImportsPage() {
         headers: defaultHeaders,
       });
       if (!res.ok) throw new Error(await readFetchError(res));
-      return res.json() as Promise<{ id: number; status: string; stage: string }>;
+      return res.json() as Promise<{ id: number; status: string; stage: string; import_mode: 'validate' | 'apply' }>;
     },
     onSuccess: (data) => {
       setLastJobId(data.id);
+      if (selectedSlug === 'historical_lineup' && data.import_mode === 'validate') {
+        setHistoricalValidatedJobId(data.id);
+      }
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', data.id] });
     },
@@ -398,30 +490,56 @@ export default function AdminImportsPage() {
     URL.revokeObjectURL(url);
   }, [selectedSlug]);
 
-  const activeUpload = isPm ? pmUpload : upload;
-
   const onFile = useCallback(
     (file: File | undefined) => {
       if (!file) return;
       const lower = file.name.toLowerCase();
       if (!lower.endsWith('.csv') && !lower.endsWith('.xlsx')) {
-        activeUpload.reset();
+        if (isPm) {
+          pmUpload.reset();
+        } else {
+          upload.reset();
+        }
         return;
       }
-      activeUpload.mutate(file);
+      if (isPm) {
+        pmUpload.mutate(file);
+        return;
+      }
+      setLastGenericFile(file);
+      setHistoricalValidatedJobId(null);
+      const modeOverride = selectedSlug === 'historical_lineup' ? 'validate' : undefined;
+      upload.mutate({ file, modeOverride });
     },
-    [activeUpload]
+    [isPm, pmUpload, selectedSlug, upload]
   );
 
-  const colDefs: ColDef<Job>[] = [
-    { field: 'id', headerName: 'ID', width: 90 },
-    { field: 'template_slug', headerName: 'Template', minWidth: 140 },
-    { field: 'import_mode', headerName: 'Mode', width: 100 },
-    { field: 'file_name', headerName: 'File', flex: 1, minWidth: 160 },
-    { field: 'status', headerName: 'Status' },
-    { field: 'stage', headerName: 'Stage' },
-    { field: 'error_summary', headerName: 'Notes', flex: 1, minWidth: 200 },
-  ];
+  const colDefs = useMemo<ColDef<Job>[]>(
+    () => [
+      {
+        field: 'id',
+        headerName: 'ID',
+        width: 90,
+        cellRenderer: (p: { value: number }) => (
+          <Link
+            component={NextLink}
+            href={`/admin/imports?job=${p.value}`}
+            underline="hover"
+            color="primary"
+          >
+            {p.value}
+          </Link>
+        ),
+      },
+      { field: 'template_slug', headerName: 'Template', minWidth: 140 },
+      { field: 'import_mode', headerName: 'Mode', width: 100 },
+      { field: 'file_name', headerName: 'File', flex: 1, minWidth: 160 },
+      { field: 'status', headerName: 'Status' },
+      { field: 'stage', headerName: 'Stage' },
+      { field: 'error_summary', headerName: 'Notes', flex: 1, minWidth: 200 },
+    ],
+    []
+  );
 
   const jobsList = jobs ?? [];
 
@@ -657,20 +775,30 @@ export default function AdminImportsPage() {
           />
         ) : null}
 
+        {isJobRevisitMode && isPm ? (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Viewing previous Product Master job <strong>#{lastJobId}</strong> in read-only mode. Full PM revisit is not yet
+            supported in this view. Row diagnostics are visible in the <strong>Import jobs</strong> grid below.
+          </Alert>
+        ) : null}
+
         {activeStep === 0 ? (
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
               Choose the import <strong>type</strong> that matches your file (not the low-level parser id).
             </Typography>
             <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
-              {(templates ?? []).map((t) => (
+              {visibleTemplates.map((t) => (
                 <Card key={t.slug} variant="outlined" sx={{ width: 280 }}>
                   <CardActionArea
                     onClick={() => {
                       setSelectedSlug(t.slug);
                       setSourceId('');
-                      setImportMode(t.slug === 'product_master' ? 'validate' : 'apply');
+                      setImportMode(t.slug === 'product_master' || t.slug === 'historical_lineup' ? 'validate' : 'apply');
                       setConfirmDestructive(false);
+                      setLastGenericFile(null);
+                      setHistoricalValidatedJobId(null);
+                      setIsJobRevisitMode(false);
                       setActiveStep(1);
                     }}
                   >
@@ -749,12 +877,15 @@ export default function AdminImportsPage() {
             </Typography>
             <Typography variant="body2" color="text.secondary">
               <strong>What happens:</strong>{' '}
-              {isPm
-                ? 'You upload a file, map columns only to approved Product Master fields, validate rows, then commit. Extra columns can be ignored or retained as staged metadata (no new schema from this UI).'
-                : selectedTemplate.pipeline_ready
-                  ? 'Validate SKUs against the product catalog; unmatched SKUs go to the mapping queue.'
-                  : 'File is stored and schema inferred; full loader for this type is not enabled yet.'}
+              {describeTemplateBehavior(selectedTemplate, isPm)}
             </Typography>
+            {selectedTemplate.slug === 'historical_lineup' ? (
+              <Alert severity="info">
+                Preferred workbook shape: keep the lineup data on a named sheet (for example <strong>NB</strong>) with a
+                single header row near the top. Title/blank rows before the header are tolerated. Validation reports
+                detected sheet and header row using <code>historical_lineup_sheet_summary</code>.
+              </Alert>
+            ) : null}
             {isPm ? (
               <Button startIcon={<DownloadOutlinedIcon />} variant="outlined" size="small" onClick={() => void downloadSample()}>
                 Download sample CSV
@@ -777,12 +908,19 @@ export default function AdminImportsPage() {
                 labelId="mode-label"
                 label="Import mode"
                 value={importMode}
+                disabled={selectedTemplate.slug === 'historical_lineup'}
                 onChange={(e) => setImportMode(e.target.value as 'validate' | 'apply')}
               >
                 <MenuItem value="validate">Validate only (no catalog writes)</MenuItem>
                 <MenuItem value="apply">Apply / upsert (when supported)</MenuItem>
               </Select>
             </FormControl>
+            {selectedTemplate.slug === 'historical_lineup' ? (
+              <Alert severity="info">
+                Historical lineup imports run <strong>validate preview first</strong>. After preview loads, use{' '}
+                <strong>Apply validated file</strong> in the upload step.
+              </Alert>
+            ) : null}
             {selectedTemplate.destructive_apply_requires_confirm && importMode === 'apply' ? (
               <FormControlLabel
                 control={<Checkbox checked={confirmDestructive} onChange={(_, c) => setConfirmDestructive(c)} />}
@@ -1318,26 +1456,34 @@ export default function AdminImportsPage() {
               <Alert severity="error">{safeDisplayError(validatePm.error)}</Alert>
             ) : null}
             {previewRows && previewRows.length > 0 ? (
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Row</TableCell>
-                    <TableCell>Severity</TableCell>
-                    <TableCell>Code</TableCell>
-                    <TableCell>Message</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {previewRows.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell>{r.row_number}</TableCell>
-                      <TableCell>{r.severity}</TableCell>
-                      <TableCell>{r.code}</TableCell>
-                      <TableCell>{r.message}</TableCell>
+              <>
+                {selectedTemplate?.slug === 'historical_lineup' ? (
+                  <Alert severity="info">
+                    Legacy workbook tolerance is enabled. Review rows with <code>historical_lineup_sheet_summary</code>,{' '}
+                    <code>low_mapping_confidence</code>, and unresolved entity diagnostics before apply.
+                  </Alert>
+                ) : null}
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Row</TableCell>
+                      <TableCell>Severity</TableCell>
+                      <TableCell>Code</TableCell>
+                      <TableCell>Message</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {previewRows.map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell>{r.row_number}</TableCell>
+                        <TableCell>{r.severity}</TableCell>
+                        <TableCell>{r.code}</TableCell>
+                        <TableCell>{r.message}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
             ) : null}
             {pmJobState?.staged_metadata_preview && Object.keys(pmJobState.staged_metadata_preview).length > 0 ? (
               <Alert severity="info">
@@ -1416,7 +1562,13 @@ export default function AdminImportsPage() {
               Upload for <strong>{selectedTemplate?.display_name}</strong> using provider{' '}
               <strong>{(sources ?? []).find((s) => s.id === sourceId)?.name ?? '—'}</strong>.
             </Typography>
-            {!canGoUpload ? (
+            {isJobRevisitMode && lastJobId != null ? (
+              <Alert severity="info" data-testid="revisit-banner">
+                Viewing diagnostics for job <strong>#{lastJobId}</strong> in read-only mode. Upload a new file above to
+                run a fresh import.
+              </Alert>
+            ) : null}
+            {!canGoUpload && !isJobRevisitMode ? (
               <Alert severity="warning">Complete provider, mode, and confirmations before uploading.</Alert>
             ) : null}
             <Box
@@ -1476,6 +1628,21 @@ export default function AdminImportsPage() {
                 </Button>
               </Alert>
             ) : null}
+            {selectedTemplate?.slug === 'historical_lineup' && historicalValidatedJobId != null && lastGenericFile ? (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="caption" color="text.secondary">
+                  Validation job #{historicalValidatedJobId} completed. Apply requires an explicit second click.
+                </Typography>
+                <Button
+                  size="small"
+                  variant="contained"
+                  disabled={upload.isPending}
+                  onClick={() => upload.mutate({ file: lastGenericFile, modeOverride: 'apply' })}
+                >
+                  Apply validated file
+                </Button>
+              </Stack>
+            ) : null}
             {previewRows && previewRows.length > 0 ? (
               <Table size="small">
                 <TableHead>
@@ -1506,8 +1673,12 @@ export default function AdminImportsPage() {
                   setSelectedSlug(null);
                   setSourceId('');
                   setLastJobId(null);
+                  setLastGenericFile(null);
+                  setHistoricalValidatedJobId(null);
+                  setIsJobRevisitMode(false);
                   upload.reset();
                   pmUpload.reset();
+                  void router.replace('/admin/imports');
                 }}
               >
                 Start over
@@ -1547,5 +1718,13 @@ export default function AdminImportsPage() {
         </Typography>
       </Paper>
     </>
+  );
+}
+
+export default function AdminImportsPage() {
+  return (
+    <Suspense fallback={<Typography color="text.secondary">Loading imports workspace…</Typography>}>
+      <AdminImportsPageContent />
+    </Suspense>
   );
 }
