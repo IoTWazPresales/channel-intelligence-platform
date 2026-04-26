@@ -342,7 +342,8 @@ function AdminImportsPageContent() {
 
   const upload = useMutation({
     mutationFn: async ({ file, modeOverride }: GenericUploadArgs) => {
-      if (sourceId === '') throw new Error('Select a data provider before uploading.');
+      if (selectedTemplate?.requires_provider && sourceId === '')
+        throw new Error('Select a data provider before uploading.');
       const fd = new FormData();
       const effectiveMode = modeOverride ?? importMode;
       fd.append('source_id', String(sourceId));
@@ -364,6 +365,10 @@ function AdminImportsPageContent() {
       setLastJobId(data.id);
       if (selectedSlug === 'historical_lineup' && data.import_mode === 'validate') {
         setHistoricalValidatedJobId(data.id);
+      } else if (selectedSlug === 'historical_lineup' && data.import_mode === 'apply') {
+        // Apply completed — clear button gate so Apply button disappears immediately.
+        setHistoricalValidatedJobId(null);
+        setLastGenericFile(null);
       }
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', data.id] });
@@ -1620,7 +1625,7 @@ function AdminImportsPageContent() {
             {upload.isError ? (
               <Alert severity="error">{safeDisplayError(upload.error)}</Alert>
             ) : null}
-            {upload.isSuccess && lastJobId != null ? (
+            {upload.isSuccess && lastJobId != null && upload.data?.import_mode !== 'apply' ? (
               <Alert severity="success">
                 Job <strong>#{lastJobId}</strong> created.{' '}
                 <Button size="small" onClick={() => void refetchPreview()}>
@@ -1642,6 +1647,11 @@ function AdminImportsPageContent() {
                   Apply validated file
                 </Button>
               </Stack>
+            ) : null}
+            {upload.isSuccess && lastJobId != null && upload.data?.import_mode === 'apply' ? (
+              <Alert severity="success" data-testid="apply-success-alert">
+                Apply job <strong>#{lastJobId}</strong> completed. Row diagnostics are shown below.
+              </Alert>
             ) : null}
             {previewRows && previewRows.length > 0 ? (
               <Table size="small">
