@@ -471,22 +471,37 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
                     _p = product_by_part_number.get(part_number_raw.lower())
                     if _p:
                         product_id = _p.id
-                # 4. Unique model_name / sales_model_name (ambiguous entries excluded at
-                #    dict-build time above).
+                # 4. Unique model_name / sales_model_name (within-field duplicates excluded
+                #    at dict-build time above).
+                #    Cross-field guard: if model_raw resolves to product A via model_name
+                #    AND to a *different* product B via sales_model_name, do not silently
+                #    choose — emit ambiguous_product_match and skip the ILIKE step.
+                #    If both dicts point to the *same* product, resolve it normally.
+                _step4_diagnosed = False
                 if model_raw and not product_id:
-                    _p = product_by_model_name.get(model_raw.lower()) or product_by_sales_model_name.get(
-                        model_raw.lower()
-                    )
-                    if _p:
-                        product_id = _p.id
-                # 5. ILIKE fallback — only resolves when exactly one match exists.
-                if not product_id:
+                    _by_model = product_by_model_name.get(model_raw.lower())
+                    _by_sales = product_by_sales_model_name.get(model_raw.lower())
+                    if _by_model and _by_sales and _by_model.id != _by_sales.id:
+                        # Same token uniquely identifies two different products across fields.
+                        diagnostics.append("ambiguous_product_match")
+                        errors += 1
+                        _step4_diagnosed = True
+                    elif _by_model or _by_sales:
+                        product_id = (_by_model or _by_sales).id
+                # 5. ILIKE fallback — only resolves when exactly one product matches.
+                #    Searches name, sku, part_number, model_name, and sales_model_name
+                #    (nullable fields are safe in SQL OR — NULL never matches).
+                #    Skipped when step 4 already emitted a terminal diagnostic.
+                if not product_id and not _step4_diagnosed:
                     _ilike_tok = sku_raw or part_number_raw or model_raw
                     _ambiguous = db.scalars(
                         select(DimProduct).where(
                             or_(
                                 DimProduct.name.ilike(f"%{_ilike_tok}%"),
                                 DimProduct.sku.ilike(f"%{_ilike_tok}%"),
+                                DimProduct.part_number.ilike(f"%{_ilike_tok}%"),
+                                DimProduct.model_name.ilike(f"%{_ilike_tok}%"),
+                                DimProduct.sales_model_name.ilike(f"%{_ilike_tok}%"),
                             )
                         )
                     ).all()

@@ -16,6 +16,7 @@ from sqlalchemy import select
 
 from app.db.session_sync import SessionLocal
 from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct
+from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
 from app.ingestion.pipeline import process_import_job_sync
 from app.services.imports.historical_lineup import (
@@ -88,6 +89,53 @@ def _seed_resolution_fixtures() -> int:
                 )
             )
 
+        # Product for step-2 test: sku_raw value tried as part_number fallback.
+        # The workbook will have "SKU"="PART-STEP2-LOOKUP" — exact-SKU fails (different sku),
+        # but step 2 matches via part_number.
+        if not db.scalar(select(DimProduct).where(DimProduct.sku == "SKU-STEP2-TEST")):
+            db.add(
+                DimProduct(
+                    sku="SKU-STEP2-TEST",
+                    part_number="PART-STEP2-LOOKUP",
+                    name="Step2 Part Number Fallback Product",
+                    category="NB",
+                    channel_id=ch.id,
+                )
+            )
+        # Two products for cross-field ambiguity: same token resolves to different products
+        # via model_name (SKU-RES-06) vs sales_model_name (SKU-RES-07).
+        if not db.scalar(select(DimProduct).where(DimProduct.sku == "SKU-RES-06")):
+            db.add(
+                DimProduct(
+                    sku="SKU-RES-06",
+                    name="Cross Field Model Product",
+                    model_name="CROSS-FIELD-X",
+                    category="NB",
+                    channel_id=ch.id,
+                )
+            )
+        if not db.scalar(select(DimProduct).where(DimProduct.sku == "SKU-RES-07")):
+            db.add(
+                DimProduct(
+                    sku="SKU-RES-07",
+                    name="Cross Field Sales Model Product",
+                    sales_model_name="CROSS-FIELD-X",
+                    category="NB",
+                    channel_id=ch.id,
+                )
+            )
+        # Product for single-ILIKE-match positive-path test.
+        # The sentinel string is unique across all test fixtures so only this product matches.
+        if not db.scalar(select(DimProduct).where(DimProduct.sku == "SKU-RES-ILIKE")):
+            db.add(
+                DimProduct(
+                    sku="SKU-RES-ILIKE",
+                    name="ILIKE-TESTSENTINEL-2026-PRODUCT",
+                    category="NB",
+                    channel_id=ch.id,
+                )
+            )
+
         # Known customer for resolution tests
         if not db.scalar(select(DimCustomer).where(DimCustomer.code == "CUST-RES-01")):
             db.add(DimCustomer(code="CUST-RES-01", name="Resolution Customer", channel_id=ch.id))
@@ -127,6 +175,44 @@ def _run_validate_job(source_id: int, workbook_bytes: bytes, filename: str = "te
         db.add(RawFileMetadata(job_id=job.id, storage_key=key, byte_size=len(workbook_bytes), checksum=None))
         db.commit()
         return process_import_job_sync(db, job.id)
+
+
+def _run_apply_job(source_id: int, workbook_bytes: bytes, filename: str = "test_apply.xlsx") -> ImportJob:
+    """Creates + runs an apply job; returns the processed ImportJob."""
+    storage = get_storage_backend()
+    with SessionLocal() as db:
+        job = ImportJob(
+            source_id=source_id,
+            template_slug="historical_lineup",
+            import_mode="apply",
+            status="pending",
+            stage="uploaded",
+            file_name=filename,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        db.add(job)
+        db.flush()
+        key = f"imports/test/{job.id}/{filename}"
+        storage.save(key, workbook_bytes, job.content_type)
+        db.add(RawFileMetadata(job_id=job.id, storage_key=key, byte_size=len(workbook_bytes), checksum=None))
+        db.commit()
+        return process_import_job_sync(db, job.id)
+
+
+def _all_diagnostic_tokens(rows: list) -> set[str]:
+    """Extract all diagnostic codes from ImportRowResult.code and .message fields.
+
+    ImportRowResult.code holds only the first diagnostic; message holds all joined
+    by '; '. Checking both is robust to diagnostic ordering.
+    """
+    tokens: set[str] = set()
+    for r in rows:
+        if r.code:
+            tokens.add(r.code)
+        if r.message:
+            for part in r.message.split("; "):
+                tokens.add(part.strip())
+    return tokens
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -351,13 +437,16 @@ def test_partial_margin_stack_severity_is_warning_not_error() -> None:
         ).all()
         # Find the data row (row_number > 0, not a sheet summary)
         data_rows = [r for r in rows if r.row_number > 0]
-        assert data_rows, "Expected at least one data row result"
+        assert data_rows, "Expected at least one data row result — workbook processing may have failed"
         partial_rows = [r for r in data_rows if "partial_margin_stack" in (r.message or "")]
-        if partial_rows:
-            for row in partial_rows:
-                assert row.severity != "error", (
-                    f"partial_margin_stack must not be error; got severity={row.severity!r}"
-                )
+        assert partial_rows, (
+            "Expected at least one row with partial_margin_stack diagnostic. "
+            f"Actual messages: {[r.message for r in data_rows]}"
+        )
+        for row in partial_rows:
+            assert row.severity != "error", (
+                f"partial_margin_stack must not be error; got severity={row.severity!r}, message={row.message!r}"
+            )
 
 
 def test_invalid_quantity_escalates_to_error_optional_numeric_does_not() -> None:
@@ -392,17 +481,33 @@ def test_invalid_quantity_escalates_to_error_optional_numeric_does_not() -> None
                 ImportRowResult.row_number > 0,
             )
         ).all()
-        by_row = {r.row_number: r for r in rows}
-        # Row 1 (first data row, row_number=1): must be error due to invalid_quantity
-        r1 = by_row.get(1)
-        if r1 and "invalid_quantity" in (r1.message or ""):
-            assert r1.severity == "error", f"Row 1 with invalid_quantity must be error, got {r1.severity!r}"
-        # Row 2 (row_number=2): should be warning (invalid_numeric on MSRP is optional)
-        r2 = by_row.get(2)
-        if r2 and "invalid_numeric" in (r2.message or "") and "invalid_quantity" not in (r2.message or ""):
-            assert r2.severity != "error", (
-                f"Row 2 with only invalid_numeric on optional field must not be error, got {r2.severity!r}"
-            )
+        # Sort by row_number to handle workbooks where header is at row 0 and data starts
+        # at row_number=2 (Excel 1-based: header=row1, first data=row2).
+        data_rows = sorted(rows, key=lambda r: r.row_number)
+        assert len(data_rows) == 2, (
+            f"Expected exactly 2 data rows, got {len(data_rows)}: "
+            f"{[(r.row_number, r.message) for r in data_rows]}"
+        )
+        r1, r2 = data_rows[0], data_rows[1]
+
+        # r1: qty is non-numeric → parse pass emits invalid_quantity → severity must be error
+        assert "invalid_quantity" in (r1.message or ""), (
+            f"Expected invalid_quantity in r1.message; got: {r1.message!r}"
+        )
+        assert r1.severity == "error", (
+            f"Row with invalid_quantity must be severity=error, got {r1.severity!r}"
+        )
+
+        # r2: qty is valid, MSRP is non-numeric → invalid_numeric (optional) → severity warning
+        assert "invalid_numeric" in (r2.message or ""), (
+            f"Expected invalid_numeric in r2.message; got: {r2.message!r}"
+        )
+        assert "invalid_quantity" not in (r2.message or ""), (
+            f"Row 2 should not have invalid_quantity; got: {r2.message!r}"
+        )
+        assert r2.severity != "error", (
+            f"Row with only optional invalid_numeric must not be error, got {r2.severity!r}"
+        )
 
 
 def test_previous_job_rows_stable_after_second_validate_run() -> None:
@@ -446,3 +551,218 @@ def test_previous_job_rows_stable_after_second_validate_run() -> None:
     assert codes_before == codes_after, (
         f"Job 1 row codes changed after job 2: {codes_before} → {codes_after}"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 1A additional tests — positive paths + apply mode
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_product_resolution_sku_field_fallback_to_part_number() -> None:
+    """Step 2: when sku_raw fails exact-SKU match, the same value is tried against
+    part_number. A product whose part_number equals the raw SKU token is resolved
+    without falling through to ILIKE.
+
+    Proof: neither 'unknown_product' nor 'product_matched_by_ilike' appears in
+    any row's code or message — the match was via exact lookup only.
+    """
+    source_id = _seed_resolution_fixtures()
+    # Workbook has a "SKU" column containing "PART-STEP2-LOOKUP".
+    # No product has sku="PART-STEP2-LOOKUP", but SKU-STEP2-TEST has part_number="PART-STEP2-LOOKUP".
+    workbook = _make_simple_workbook(
+        [
+            {
+                "Customer": "CUST-RES-01",
+                "SKU": "PART-STEP2-LOOKUP",
+                "Qty": "5",
+                "MSRP": "999",
+            }
+        ]
+    )
+    processed = _run_validate_job(source_id, workbook)
+    with SessionLocal() as db:
+        rows = db.scalars(
+            select(ImportRowResult).where(ImportRowResult.job_id == processed.id)
+        ).all()
+        tokens = _all_diagnostic_tokens(rows)
+        assert "unknown_product" not in tokens, (
+            f"Expected product to be resolved via step-2 part_number fallback; got: {tokens}"
+        )
+        assert "product_matched_by_ilike" not in tokens, (
+            f"Expected exact resolution (step 2), not ILIKE fallback; got: {tokens}"
+        )
+
+
+def test_product_resolution_by_sales_model_name() -> None:
+    """Step 4b: model_raw matching a unique sales_model_name resolves product_id
+    even when no product has that value as its model_name.
+    """
+    source_id = _seed_resolution_fixtures()
+    # SKU-RES-01 has sales_model_name="SALES-RES-A" (model_name is "MODEL-RES-A" — different).
+    workbook = _make_simple_workbook(
+        [
+            {
+                "Customer": "CUST-RES-01",
+                "Model name": "SALES-RES-A",
+                "Qty": "5",
+                "MSRP": "999",
+            }
+        ]
+    )
+    processed = _run_validate_job(source_id, workbook)
+    with SessionLocal() as db:
+        rows = db.scalars(
+            select(ImportRowResult).where(ImportRowResult.job_id == processed.id)
+        ).all()
+        tokens = _all_diagnostic_tokens(rows)
+        assert "unknown_product" not in tokens, (
+            f"Expected sales_model_name exact resolution; got: {tokens}"
+        )
+
+
+def test_product_resolution_cross_field_model_ambiguity_stays_unresolved() -> None:
+    """Step 4 cross-field guard: when model_raw resolves to product A via model_name
+    and to a *different* product B via sales_model_name, the code must NOT silently
+    choose. It must emit ambiguous_product_match and leave product_id unresolved.
+
+    SKU-RES-06: model_name="CROSS-FIELD-X"
+    SKU-RES-07: sales_model_name="CROSS-FIELD-X"
+    Both are unique in their respective fields, so both pass the uniqueness guard.
+    """
+    source_id = _seed_resolution_fixtures()
+    workbook = _make_simple_workbook(
+        [
+            {
+                "Customer": "CUST-RES-01",
+                "Model name": "CROSS-FIELD-X",
+                "Qty": "5",
+                "MSRP": "999",
+            }
+        ]
+    )
+    processed = _run_validate_job(source_id, workbook)
+    with SessionLocal() as db:
+        rows = db.scalars(
+            select(ImportRowResult).where(ImportRowResult.job_id == processed.id)
+        ).all()
+        tokens = _all_diagnostic_tokens(rows)
+        assert "ambiguous_product_match" in tokens, (
+            f"Expected ambiguous_product_match for cross-field model token; got: {tokens}"
+        )
+        assert "unknown_product" not in tokens, (
+            f"ambiguous should be reported as ambiguous, not unknown; got: {tokens}"
+        )
+
+
+def test_product_single_ilike_match_positive_path() -> None:
+    """Step 5 positive path: when exact lookups all fail but exactly one product
+    ILIKE-matches the token, product_id is resolved and 'product_matched_by_ilike'
+    is recorded.
+
+    SKU-RES-ILIKE has name="ILIKE-TESTSENTINEL-2026-PRODUCT". The token
+    "TESTSENTINEL-2026" does not match any product's sku/part_number/model_name/
+    sales_model_name exactly — so steps 1–4 all fail. ILIKE finds exactly one match.
+    """
+    source_id = _seed_resolution_fixtures()
+    workbook = _make_simple_workbook(
+        [
+            {
+                "Customer": "CUST-RES-01",
+                "SKU": "TESTSENTINEL-2026",
+                "Qty": "5",
+                "MSRP": "999",
+            }
+        ]
+    )
+    processed = _run_validate_job(source_id, workbook)
+    with SessionLocal() as db:
+        rows = db.scalars(
+            select(ImportRowResult).where(ImportRowResult.job_id == processed.id)
+        ).all()
+        tokens = _all_diagnostic_tokens(rows)
+        assert "product_matched_by_ilike" in tokens, (
+            f"Expected product_matched_by_ilike for single ILIKE match; got: {tokens}"
+        )
+        assert "unknown_product" not in tokens, (
+            f"ILIKE single match should resolve, not unknown; got: {tokens}"
+        )
+        assert "ambiguous_product_match" not in tokens, (
+            f"ILIKE single match should not be ambiguous; got: {tokens}"
+        )
+
+
+def test_product_matched_by_ilike_is_warning_not_error() -> None:
+    """product_matched_by_ilike must not escalate severity to error.
+    A row resolved via soft ILIKE match remains at severity='warning' so users
+    can review it, but it does not block apply or inflate error counts.
+    """
+    source_id = _seed_resolution_fixtures()
+    workbook = _make_simple_workbook(
+        [
+            {
+                "Customer": "CUST-RES-01",
+                "SKU": "TESTSENTINEL-2026",
+                "Qty": "5",
+                "MSRP": "999",
+            }
+        ]
+    )
+    processed = _run_validate_job(source_id, workbook)
+    with SessionLocal() as db:
+        rows = db.scalars(
+            select(ImportRowResult).where(
+                ImportRowResult.job_id == processed.id,
+                ImportRowResult.row_number > 0,
+            )
+        ).all()
+        ilike_rows = [r for r in rows if "product_matched_by_ilike" in (r.message or "")]
+        assert ilike_rows, (
+            f"Expected at least one row with product_matched_by_ilike; "
+            f"got messages: {[r.message for r in rows]}"
+        )
+        for row in ilike_rows:
+            assert row.severity != "error", (
+                f"product_matched_by_ilike must not be error; got severity={row.severity!r}"
+            )
+
+
+def test_apply_mode_resolved_product_id_is_persisted() -> None:
+    """In apply mode, a product resolved via exact part_number (step 3) must have
+    its product_id written to HistoricalLineupImportLine.product_id.
+    """
+    source_id = _seed_resolution_fixtures()
+    workbook = _make_simple_workbook(
+        [
+            {
+                "Customer": "CUST-RES-01",
+                "Part Number": "PART-RES-001",
+                "Qty": "5",
+                "MSRP": "999",
+            }
+        ]
+    )
+    processed = _run_apply_job(source_id, workbook)
+    with SessionLocal() as db:
+        expected_product = db.scalar(
+            select(DimProduct).where(DimProduct.sku == "SKU-RES-01")
+        )
+        assert expected_product is not None, "Seed product SKU-RES-01 must exist"
+
+        headers = db.scalars(
+            select(HistoricalLineupImportHeader).where(
+                HistoricalLineupImportHeader.import_job_id == processed.id
+            )
+        ).all()
+        assert headers, "Apply mode must create at least one HistoricalLineupImportHeader"
+
+        lines = db.scalars(
+            select(HistoricalLineupImportLine).where(
+                HistoricalLineupImportLine.header_id == headers[0].id
+            )
+        ).all()
+        assert lines, "Apply mode must create at least one HistoricalLineupImportLine"
+        for line in lines:
+            assert line.product_id == expected_product.id, (
+                f"Expected product_id={expected_product.id} on all lines; "
+                f"got product_id={line.product_id} for source_row={line.source_row_number}"
+            )
