@@ -113,14 +113,18 @@ def _parse_period_start(value: Any) -> date | None:
 def _build_header_map(columns: list[str]) -> tuple[dict[str, str], float]:
     normalized_cols = {_norm_token(c): c for c in columns}
     mapping: dict[str, str] = {}
+    # Track claimed source columns so no workbook column is assigned to more than one
+    # canonical field.  First canonical (in _CANONICAL_ALIASES insertion order) wins.
+    claimed_sources: set[str] = set()
     matched_aliases = 0
     total_aliases = 0
     for target, opts in _CANONICAL_ALIASES.items():
         total_aliases += 1
         for alias in opts:
             actual = normalized_cols.get(_norm_token(alias))
-            if actual:
+            if actual and actual not in claimed_sources:
                 mapping[target] = actual
+                claimed_sources.add(actual)
                 matched_aliases += 1
                 break
     confidence = (matched_aliases / total_aliases) if total_aliases else 0.0

@@ -466,6 +466,47 @@ def test_base_unit_maps_to_base_unit_raw_not_sku_raw() -> None:
     )
 
 
+def test_base_unit_not_dual_mapped_with_realistic_columns() -> None:
+    """Regression: realistic ASUS-style workbook headers must not assign 'Base Unit'
+    to both sku_raw AND base_unit_raw simultaneously.
+
+    Acceptance criteria (from failed manual test after commit 3d21972):
+    - base_unit_raw  == 'Base Unit'
+    - part_number_raw == 'Part Number'
+    - model_raw       == 'Model name'
+    - sku_raw is absent (no true SKU column present in this workbook subset)
+    - No source column is shared across two canonical fields.
+    """
+    columns = ["Customer", "Base Unit", "Part Number", "Model name", "Qty"]
+    mapping, _ = _build_header_map(columns)
+
+    assert mapping.get("base_unit_raw") == "Base Unit", (
+        f"base_unit_raw must be 'Base Unit'; got {mapping.get('base_unit_raw')!r}"
+    )
+    assert mapping.get("part_number_raw") == "Part Number", (
+        f"part_number_raw must be 'Part Number'; got {mapping.get('part_number_raw')!r}"
+    )
+    assert mapping.get("model_raw") == "Model name", (
+        f"model_raw must be 'Model name'; got {mapping.get('model_raw')!r}"
+    )
+    assert mapping.get("customer_token") == "Customer", (
+        f"customer_token must be 'Customer'; got {mapping.get('customer_token')!r}"
+    )
+    # sku_raw must NOT claim 'Base Unit' — this was the acceptance failure.
+    assert mapping.get("sku_raw") != "Base Unit", (
+        "sku_raw must NOT be 'Base Unit' — regression from alias precedence bug"
+    )
+    # With no explicit SKU column in the input, sku_raw should be absent entirely.
+    assert "sku_raw" not in mapping, (
+        f"sku_raw should be absent when no SKU-named column exists; got mapping={mapping}"
+    )
+    # Defense: no source column appears as the value for more than one canonical.
+    source_values = list(mapping.values())
+    assert len(source_values) == len(set(source_values)), (
+        f"Duplicate source column assigned to multiple canonicals: {mapping}"
+    )
+
+
 def test_buyer_and_sold_to_aliases_map_to_customer_token() -> None:
     """'Buyer' and 'Sold To' are common customer column names in vendor workbooks."""
     for col_name in ("Buyer", "Sold To", "Reseller"):

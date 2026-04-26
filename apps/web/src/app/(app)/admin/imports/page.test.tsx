@@ -616,6 +616,57 @@ describe('AdminImportsPage Phase 3B — mapping review label clarity', () => {
 
     expect(await screen.findByText('Base unit (descriptor)')).toBeInTheDocument();
   });
+
+  it('regression: Product identity (SKU) shows not-detected when field_mapping has no sku_raw', async () => {
+    // This test would have FAILED before the claimed_sources fix: both sku_raw and
+    // base_unit_raw would have shown 'Base Unit', replicating the manual test failure.
+    // Temporarily override hlValidateJobDetail to use a correct backend mapping
+    // (no sku_raw key — only base_unit_raw, part_number_raw, model_raw).
+    const savedMapping = mockState.hlValidateJobDetail.field_mapping;
+    mockState.hlValidateJobDetail = {
+      ...mockState.hlValidateJobDetail,
+      field_mapping: {
+        NB: {
+          customer_token: 'Customer',
+          part_number_raw: 'Part Number',
+          model_raw: 'Model name',
+          base_unit_raw: 'Base Unit',
+          quantity_units: 'Qty',
+          // sku_raw intentionally absent — no SKU column in this workbook
+        },
+      },
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => VALIDATE_JOB } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    await screen.findByText(/Column mapping review/i);
+    await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
+
+    // "Base unit (descriptor)" row must show "Base Unit"
+    expect(await screen.findByText('Base unit (descriptor)')).toBeInTheDocument();
+
+    // "Product identity (SKU)" row must show "— not detected", NOT "Base Unit"
+    // The detected-column cell for sku_raw should be the disabled placeholder text.
+    const allCells = screen.getAllByText(/— not detected/i);
+    expect(allCells.length).toBeGreaterThan(0);
+
+    // Regression guard: no cell in the mapping table should contain both
+    // "Product identity" row label AND "Base Unit" as its detected value.
+    // We check by finding the label then looking at its sibling detected-column cell.
+    const skuLabelCell = screen.getByText('Product identity (SKU)');
+    const skuRow = skuLabelCell.closest('tr');
+    expect(skuRow).not.toBeNull();
+    // The detected-column cell is the second td in the row.
+    const detectedCell = skuRow!.querySelectorAll('td')[1];
+    expect(detectedCell?.textContent).not.toBe('Base Unit');
+
+    // Restore mock for other tests
+    mockState.hlValidateJobDetail.field_mapping = savedMapping;
+  });
 });
 
 describe('AdminImportsPage Phase 3B — diagnostic summary chips', () => {
