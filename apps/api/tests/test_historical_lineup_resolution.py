@@ -766,3 +766,87 @@ def test_apply_mode_resolved_product_id_is_persisted() -> None:
                 f"Expected product_id={expected_product.id} on all lines; "
                 f"got product_id={line.product_id} for source_row={line.source_row_number}"
             )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 3B — alias fix + diagnostic code-field ordering tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_base_unit_column_does_not_block_product_resolution_when_part_number_present() -> None:
+    """After the alias fix, a workbook with 'Base Unit' + 'Part Number' columns must:
+    - Map 'Part Number' to part_number_raw (unchanged).
+    - Map 'Base Unit' to base_unit_raw (descriptor), NOT sku_raw.
+    - Resolve the product via Part Number rather than treating Base Unit as a product key.
+    """
+    source_id = _seed_resolution_fixtures()
+    # Build a workbook that mirrors real ASUS structure: both columns present.
+    workbook = _make_simple_workbook(
+        [
+            {
+                "Customer": "CUST-RES-01",
+                "Base Unit": "SomeDescriptor",  # descriptor — must NOT drive product lookup
+                "Part Number": "PART-RES-001",  # real identity key
+                "Qty": "5",
+                "MSRP": "999",
+            }
+        ]
+    )
+    processed = _run_validate_job(source_id, workbook)
+    with SessionLocal() as db:
+        rows = db.scalars(
+            select(ImportRowResult).where(ImportRowResult.job_id == processed.id)
+        ).all()
+        tokens = _all_diagnostic_tokens(rows)
+        assert "unknown_product" not in tokens, (
+            "With a valid Part Number present, unknown_product must not be emitted; "
+            f"got tokens={tokens}"
+        )
+
+
+def test_code_field_uses_error_level_diagnostic_when_both_present() -> None:
+    """When a row accumulates partial_margin_stack (added first, during parse pass) and
+    then unknown_product (added during resolution), ImportRowResult.code must be
+    'unknown_product' — not 'partial_margin_stack' — and severity must be 'error'.
+
+    This verifies the _ERROR_LEVEL_CODES priority logic in the code-field selection.
+    """
+    source_id = _seed_resolution_fixtures()
+    # Row: real qty, partial margin stack (only disti_margin present), unknown product token.
+    workbook = _make_simple_workbook(
+        [
+            {
+                "Customer": "CUST-RES-01",
+                # Unknown token → parser emits partial_margin_stack first, then unknown_product during resolution.
+                "Part Number": "DOES-NOT-EXIST-IN-DB",
+                "Qty": "5",
+                "MSRP": "999",
+                "Disti Margin": "8",  # only one margin field → partial_margin_stack
+                # Rebate, Dealer Margin, VAT absent → triggers partial_margin_stack
+            }
+        ]
+    )
+    processed = _run_validate_job(source_id, workbook)
+    with SessionLocal() as db:
+        data_rows = db.scalars(
+            select(ImportRowResult).where(
+                ImportRowResult.job_id == processed.id,
+                ImportRowResult.row_number > 0,
+            )
+        ).all()
+        assert data_rows, "Expected at least one data row result"
+        # Find the row that has both diagnostics in its message.
+        target = next(
+            (r for r in data_rows if "partial_margin_stack" in (r.message or "") and "unknown_product" in (r.message or "")),
+            None,
+        )
+        assert target is not None, (
+            "Expected a row with both partial_margin_stack and unknown_product in message; "
+            f"got messages: {[r.message for r in data_rows]}"
+        )
+        assert target.code == "unknown_product", (
+            f"code must be 'unknown_product' (error-level wins); got code={target.code!r}"
+        )
+        assert target.severity == "error", (
+            f"severity must be 'error' when unknown_product present; got severity={target.severity!r}"
+        )

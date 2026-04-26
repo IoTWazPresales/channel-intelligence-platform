@@ -529,3 +529,165 @@ describe('AdminImportsPage historical_lineup mapping review panel', () => {
     expect(screen.queryByText(/Column mapping review/i)).not.toBeInTheDocument();
   });
 });
+
+describe('AdminImportsPage Phase 3B — mapping review label clarity', () => {
+  // Use job 50 so hlValidateJobDetail is returned and the mapping review panel appears.
+  const VALIDATE_JOB = { id: 50, status: 'completed_with_errors', stage: 'validated', import_mode: 'validate', template_slug: 'historical_lineup' };
+
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <AdminImportsPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    searchString = '';
+    mockRouterReplace.mockReset();
+    mockState.templates = [mockState.templates[0], mockState.historicalLineupTemplate];
+    mockState.hlSources = [];
+  });
+
+  afterEach(() => {
+    mockState.templates = [
+      {
+        id: 10, slug: 'customer_master', display_name: 'Customer master',
+        description: 'Customer account master import', requires_provider: true,
+        accepted_file_types: ['.csv', '.xlsx'], required_fields: ['customer_code', 'customer_name'],
+        optional_fields: ['region_code', 'channel_code'], pipeline_ready: true,
+        destructive_apply_requires_confirm: false,
+      },
+      {
+        id: 11, slug: 'customer_channel_mapping', display_name: 'Customer/channel mapping',
+        description: 'Deferred scaffold', requires_provider: true,
+        accepted_file_types: ['.csv', '.xlsx'], required_fields: ['customer_code', 'channel_code'],
+        optional_fields: ['region_code'], pipeline_ready: false, destructive_apply_requires_confirm: false,
+      },
+    ];
+    mockState.hlSources = [];
+    vi.restoreAllMocks();
+  });
+
+  async function navigateToUploadStep(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByText('Historical Lineup'));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await screen.findByRole('button', { name: /Choose file/i });
+  }
+
+  const xlsxFile = () =>
+    new File(['dummy'], 'lineup.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+  it('mapping review shows "Product identity (SKU)" label not bare "SKU"', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => VALIDATE_JOB } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    // Open the mapping review panel
+    await screen.findByText(/Column mapping review/i);
+    await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
+
+    // New label must be present
+    expect(await screen.findByText('Product identity (SKU)')).toBeInTheDocument();
+    // Old bare label must NOT exist as a table cell (it was renamed)
+    const cells = screen.queryAllByText(/^SKU$/);
+    expect(cells).toHaveLength(0);
+  });
+
+  it('mapping review shows "Base unit (descriptor)" row', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => VALIDATE_JOB } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    await screen.findByText(/Column mapping review/i);
+    await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
+
+    expect(await screen.findByText('Base unit (descriptor)')).toBeInTheDocument();
+  });
+});
+
+describe('AdminImportsPage Phase 3B — diagnostic summary chips', () => {
+  // Use job 42 so previewRows returns mockState.jobRows (has unknown_product code).
+  const VALIDATE_JOB_42 = { id: 42, status: 'completed_with_errors', stage: 'validated', import_mode: 'validate', template_slug: 'historical_lineup' };
+
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <AdminImportsPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    searchString = '';
+    mockRouterReplace.mockReset();
+    mockState.templates = [mockState.templates[0], mockState.historicalLineupTemplate];
+    mockState.hlSources = [];
+  });
+
+  afterEach(() => {
+    mockState.templates = [
+      {
+        id: 10, slug: 'customer_master', display_name: 'Customer master',
+        description: 'Customer account master import', requires_provider: true,
+        accepted_file_types: ['.csv', '.xlsx'], required_fields: ['customer_code', 'customer_name'],
+        optional_fields: ['region_code', 'channel_code'], pipeline_ready: true,
+        destructive_apply_requires_confirm: false,
+      },
+      {
+        id: 11, slug: 'customer_channel_mapping', display_name: 'Customer/channel mapping',
+        description: 'Deferred scaffold', requires_provider: true,
+        accepted_file_types: ['.csv', '.xlsx'], required_fields: ['customer_code', 'channel_code'],
+        optional_fields: ['region_code'], pipeline_ready: false, destructive_apply_requires_confirm: false,
+      },
+    ];
+    mockState.hlSources = [];
+    vi.restoreAllMocks();
+  });
+
+  async function navigateToUploadStep(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByText('Historical Lineup'));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await screen.findByRole('button', { name: /Choose file/i });
+  }
+
+  const xlsxFile = () =>
+    new File(['dummy'], 'lineup.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+  it('diagnostic summary chips appear with code counts after validate returns rows', async () => {
+    // Upload returns job 42; previewRows for job 42 → mockState.jobRows (unknown_product row).
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => VALIDATE_JOB_42 } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    // Summary container should appear
+    const summary = await screen.findByTestId('diagnostic-summary');
+    expect(summary).toBeInTheDocument();
+
+    // At least one chip should contain the code from mockState.jobRows
+    expect(summary).toHaveTextContent('unknown_product');
+    expect(summary).toHaveTextContent('(1)');
+  });
+});

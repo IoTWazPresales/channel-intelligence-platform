@@ -22,15 +22,17 @@ _SUMMARY_ROW_MARKERS = ("total", "subtotal", "grand total", "summary")
 _HEADER_SCAN_MAX_ROWS = 12
 
 _CANONICAL_ALIASES: dict[str, list[str]] = {
-    "customer_token": ["customer", "customer_code", "account", "account_name", "end customer"],
+    "customer_token": ["customer", "customer_code", "account", "account_name", "end customer", "buyer", "sold to", "reseller"],
     "distributor_token": ["distributor", "disti", "distributor_code", "partner"],
     "channel_token": ["channel", "route_to_market", "rtm"],
     "period_label": ["period", "month", "quarter", "fiscal"],
     "period_start": ["period_start", "start_date", "date"],
     "country_code": ["country", "country_code"],
     "currency_code": ["currency", "currency_code"],
-    "sku_raw": ["sku", "item", "product_sku", "base_unit"],
-    "part_number_raw": ["part_number", "mpn", "part no", "part number"],
+    # base_unit is intentionally excluded from sku_raw — "Base Unit" is a product descriptor
+    # (retail/box form factor), not a product identity key. It belongs in base_unit_raw only.
+    "sku_raw": ["sku", "item", "product_sku"],
+    "part_number_raw": ["part_number", "mpn", "part no", "part number", "sales part number", "sales_part_number"],
     "model_raw": ["model", "model_name", "model name", "series"],
     "base_unit_raw": ["base_unit", "baseunit", "base unit"],
     "msrp_local": ["msrp", "list_price", "rrp"],
@@ -54,6 +56,17 @@ _HEADER_SIGNATURE_TOKENS = {
     "partnumber",
     "baseunit",
 }
+
+# Diagnostics that escalate a row to severity=error and take precedence as the primary code.
+_ERROR_LEVEL_CODES = frozenset({
+    "missing_key_fields",
+    "unknown_product",
+    "unknown_customer",
+    "invalid_quantity",
+    "unknown_distributor",
+    "ambiguous_product_match",
+    "ambiguous_customer_match",
+})
 
 
 def _norm_token(value: Any) -> str:
@@ -592,12 +605,19 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
             elif any(code in diagnostics for code in ("missing_key_fields", "unknown_product", "invalid_quantity")):
                 severity = "error"
 
+            # code: prefer the first error-level diagnostic so the UI primary code reflects
+            # the actual blocker (e.g. unknown_product beats partial_margin_stack even when
+            # partial_margin_stack was appended first during the parse pass).
+            primary_code = (
+                next((d for d in diagnostics if d in _ERROR_LEVEL_CODES), None)
+                or (diagnostics[0] if diagnostics else "historical_lineup_row_ok")
+            )
             db.add(
                 ImportRowResult(
                     job_id=job.id,
                     row_number=parsed.row_number,
                     severity=severity,
-                    code=diagnostics[0] if diagnostics else "historical_lineup_row_ok",
+                    code=primary_code,
                     message="; ".join(diagnostics) if diagnostics else "row accepted",
                     raw_payload=parsed.payload,
                 )

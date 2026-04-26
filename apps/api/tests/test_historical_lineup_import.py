@@ -10,7 +10,7 @@ from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimPr
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
 from app.ingestion.pipeline import process_import_job_sync
-from app.services.imports.historical_lineup import parse_historical_workbook
+from app.services.imports.historical_lineup import _build_header_map, parse_historical_workbook
 from app.services.seed_demo import _seed_import_core
 from app.storage.local import get_storage_backend
 
@@ -222,10 +222,14 @@ def test_inferred_schema_includes_source_columns() -> None:
 
 
 def test_mapping_override_fixes_undetected_column() -> None:
-    """If a workbook uses a non-standard column name, mapping_override should bind it."""
-    # "Buyer" is not in _CANONICAL_ALIASES, so auto-detection won't find customer_token.
+    """If a workbook uses a non-standard column name, mapping_override should bind it.
+
+    'Purchasing Contact' is not in _CANONICAL_ALIASES, so auto-detection will not
+    find customer_token. The override explicitly maps it.
+    """
+    col = "Purchasing Contact"
     sheets_auto, _ = parse_historical_workbook(
-        "lineup.xlsx", _build_custom_column_workbook_bytes("Buyer")
+        "lineup.xlsx", _build_custom_column_workbook_bytes(col)
     )
     assert sheets_auto, "Expected sheet"
     payloads_auto = [r.payload for r in sheets_auto[0].rows if r.status != "dropped"]
@@ -234,10 +238,10 @@ def test_mapping_override_fixes_undetected_column() -> None:
         "Expected customer_token to be absent without override"
     )
 
-    # With override, customer_token should be populated from the "Buyer" column.
-    override = {"Historical Lineup Apr": {"customer_token": "Buyer"}}
+    # With override, customer_token should be populated from the column.
+    override = {"Historical Lineup Apr": {"customer_token": col}}
     sheets_override, _ = parse_historical_workbook(
-        "lineup.xlsx", _build_custom_column_workbook_bytes("Buyer"), mapping_override=override
+        "lineup.xlsx", _build_custom_column_workbook_bytes(col), mapping_override=override
     )
     assert sheets_override
     payloads_override = [r.payload for r in sheets_override[0].rows if r.status != "dropped"]
@@ -442,3 +446,39 @@ def test_historical_lineup_apply_writes_headers_lines_and_lineage() -> None:
         assert lines
         assert any(line.quantity_units is not None for line in lines)
         assert any(line.diagnostic_codes for line in lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 3B — alias precedence tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_base_unit_maps_to_base_unit_raw_not_sku_raw() -> None:
+    """'Base Unit' is a product descriptor, not a product identity key.
+    It must map to base_unit_raw, never to sku_raw.
+    """
+    mapping, _ = _build_header_map(["Base Unit"])
+    assert "base_unit_raw" in mapping, (
+        f"'Base Unit' should map to base_unit_raw; got mapping={mapping}"
+    )
+    assert "sku_raw" not in mapping, (
+        f"'Base Unit' must NOT map to sku_raw; got mapping={mapping}"
+    )
+
+
+def test_buyer_and_sold_to_aliases_map_to_customer_token() -> None:
+    """'Buyer' and 'Sold To' are common customer column names in vendor workbooks."""
+    for col_name in ("Buyer", "Sold To", "Reseller"):
+        mapping, _ = _build_header_map([col_name])
+        assert "customer_token" in mapping, (
+            f"'{col_name}' should map to customer_token; got mapping={mapping}"
+        )
+
+
+def test_sales_part_number_alias_maps_to_part_number_raw() -> None:
+    """'Sales Part Number' is a common alias in vendor workbooks for the part number field."""
+    for col_name in ("Sales Part Number", "sales_part_number"):
+        mapping, _ = _build_header_map([col_name])
+        assert "part_number_raw" in mapping, (
+            f"'{col_name}' should map to part_number_raw; got mapping={mapping}"
+        )

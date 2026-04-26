@@ -166,13 +166,25 @@ type PmJobState = {
 const HL_MAPPING_DISPLAY_FIELDS: Array<{ canonical: string; label: string }> = [
   { canonical: 'customer_token', label: 'Customer' },
   { canonical: 'distributor_token', label: 'Distributor' },
-  { canonical: 'sku_raw', label: 'SKU' },
+  { canonical: 'sku_raw', label: 'Product identity (SKU)' },
   { canonical: 'part_number_raw', label: 'Part number' },
   { canonical: 'model_raw', label: 'Model name' },
+  { canonical: 'base_unit_raw', label: 'Base unit (descriptor)' },
   { canonical: 'quantity_units', label: 'Quantity' },
   { canonical: 'period_label', label: 'Period / month' },
   { canonical: 'msrp_local', label: 'MSRP / list price' },
 ];
+
+// Diagnostic codes that represent blocking errors — used for chip coloring in the summary.
+const HL_DIAGNOSTIC_ERROR_CODES = new Set([
+  'unknown_product',
+  'unknown_customer',
+  'missing_key_fields',
+  'invalid_quantity',
+  'ambiguous_product_match',
+  'ambiguous_customer_match',
+  'unknown_distributor',
+]);
 
 const stepsDefault = ['Import type', 'Data provider', 'Template details', 'Import mode', 'Upload & preview'];
 
@@ -378,6 +390,19 @@ function AdminImportsPageContent() {
     // PM jobs: activeStep stays at 0; a deferred alert is shown instead of
     // attempting to reconstruct the PM mapping/validate/commit wizard.
   }, [jobDetail, visibleTemplates, searchParams]);
+
+  // Diagnostic summary: group previewRows by code, sorted by count desc, capped at 8.
+  const diagnosticSummary = useMemo<Array<{ code: string; count: number }>>(() => {
+    if (!previewRows?.length) return [];
+    const counts: Record<string, number> = {};
+    for (const r of previewRows) {
+      if (r.code) counts[r.code] = (counts[r.code] ?? 0) + 1;
+    }
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([code, count]) => ({ code, count }));
+  }, [previewRows]);
 
   // Derived data for the HL mapping review panel.
   const hlSheetDetail: HlSheetDetail | null =
@@ -1696,6 +1721,12 @@ function AdminImportsPageContent() {
                   <Typography variant="caption" color="text.secondary" fontWeight={600}>
                     Column mapping review — Sheet: {hlSheetDetail.sheet_name}
                   </Typography>
+                  <Chip
+                    size="small"
+                    label={`Confidence: ${Math.round(hlSheetDetail.mapping_confidence * 100)}%`}
+                    color={hlSheetDetail.mapping_confidence >= 0.5 ? 'success' : 'warning'}
+                    variant="outlined"
+                  />
                   <Button
                     size="small"
                     variant="text"
@@ -1806,6 +1837,29 @@ function AdminImportsPageContent() {
               <Alert severity="success" data-testid="apply-success-alert">
                 Apply job <strong>#{lastJobId}</strong> completed. Row diagnostics are shown below.
               </Alert>
+            ) : null}
+            {diagnosticSummary.length > 0 ? (
+              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap data-testid="diagnostic-summary">
+                <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center', mr: 0.5 }}>
+                  Summary:
+                </Typography>
+                {diagnosticSummary.map(({ code, count }) => {
+                  const color = HL_DIAGNOSTIC_ERROR_CODES.has(code)
+                    ? 'error'
+                    : code.includes('ok') || code.includes('summary') || code.includes('processed')
+                      ? 'default'
+                      : 'warning';
+                  return (
+                    <Chip
+                      key={code}
+                      size="small"
+                      label={`${code} (${count})`}
+                      color={color as 'error' | 'warning' | 'default'}
+                      variant="outlined"
+                    />
+                  );
+                })}
+              </Stack>
             ) : null}
             {previewRows && previewRows.length > 0 ? (
               <Table size="small">
