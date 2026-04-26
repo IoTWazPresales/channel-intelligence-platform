@@ -28,7 +28,7 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CellValueChangedEvent, ColDef, GridOptions } from 'ag-grid-community';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
@@ -222,9 +222,10 @@ export default function CommercialPlannerPage() {
   const { data: plans, isLoading, isError, error } = useQuery({
     queryKey: ['commercial-plans'],
     queryFn: ({ signal }) => apiGet<Plan[]>('/api/v1/commercial-planner/plans', { signal }),
+    enabled: tab === 0,
   });
 
-  const { data: lineupJobs } = useQuery({
+  const { data: lineupJobs, isLoading: lineupJobsLoading } = useQuery({
     queryKey: ['lineup-jobs'],
     queryFn: ({ signal }) => apiGet<LineupJob[]>('/api/v1/commercial-planner/lineup-jobs', { signal }),
     enabled: tab === 2,
@@ -240,21 +241,29 @@ export default function CommercialPlannerPage() {
     enabled: lineupJobId != null && tab === 2,
   });
 
+  // Auto-select the newest job when lineup-jobs loads and no job has been chosen yet.
+  // lineupJobs is ordered newest-first from the backend.
+  useEffect(() => {
+    if (lineupJobs && lineupJobs.length > 0 && lineupJobId == null) {
+      setLineupJobId(lineupJobs[0].id);
+    }
+  }, [lineupJobs, lineupJobId]);
+
   const activePlanId = selectedPlanId ?? plans?.[0]?.id ?? null;
   const { data: lines } = useQuery({
     queryKey: ['commercial-plan-lines', activePlanId],
     queryFn: ({ signal }) => apiGet<PlanLine[]>(`/api/v1/commercial-planner/plans/${activePlanId}/lines`, { signal }),
-    enabled: activePlanId != null,
+    enabled: tab === 0 && activePlanId != null,
   });
   const { data: summary } = useQuery({
     queryKey: ['commercial-plan-summary', activePlanId],
     queryFn: ({ signal }) => apiGet<Summary>(`/api/v1/commercial-planner/plans/${activePlanId}/summary`, { signal }),
-    enabled: activePlanId != null,
+    enabled: tab === 0 && activePlanId != null,
   });
   const { data: suggestions } = useQuery({
     queryKey: ['commercial-plan-suggestions', activePlanId],
     queryFn: ({ signal }) => apiGet<SuggestionBundle[]>(`/api/v1/commercial-planner/plans/${activePlanId}/suggestions`, { signal }),
-    enabled: activePlanId != null,
+    enabled: tab === 0 && activePlanId != null,
   });
 
   const lineById = useMemo(() => new Map((lines ?? []).map((l) => [l.id, l])), [lines]);
@@ -759,13 +768,14 @@ export default function CommercialPlannerPage() {
     <Stack spacing={2} data-testid="lineup-coverage-panel">
       {/* Job picker */}
       <FormControl size="small" sx={{ minWidth: 320, maxWidth: 480 }}>
-        <InputLabel id="lineup-job-select-label">Select a lineup import job</InputLabel>
+        <InputLabel id="lineup-job-select-label">Lineup import job</InputLabel>
         <Select
           labelId="lineup-job-select-label"
           value={lineupJobId ?? ''}
-          label="Select a lineup import job"
+          label="Lineup import job"
           inputProps={{ 'data-testid': 'lineup-job-select' }}
           onChange={(e) => setLineupJobId((e.target.value as number) || null)}
+          disabled={lineupJobsLoading}
         >
           {(lineupJobs ?? []).map((j) => (
             <MenuItem key={j.id} value={j.id}>
@@ -773,6 +783,11 @@ export default function CommercialPlannerPage() {
             </MenuItem>
           ))}
         </Select>
+        {lineupJobsLoading ? (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }} data-testid="lineup-jobs-loading">
+            Loading import jobs…
+          </Typography>
+        ) : null}
       </FormControl>
 
       {/* Summary cards */}

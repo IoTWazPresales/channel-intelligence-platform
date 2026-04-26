@@ -276,13 +276,18 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     mockState.coverageLines = [];
   });
 
-  it('Lineup coverage tab renders with empty state when no job selected', async () => {
-    mockState.lineupJobs = [LINEUP_JOB];
+  // ── empty state ──────────────────────────────────────────────────────────────
+
+  it('Lineup coverage panel renders empty state when no jobs are available', async () => {
+    // lineupJobs is empty — auto-select cannot fire, lineupJobId stays null.
+    mockState.lineupJobs = [];
     const { user } = renderPage();
     await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
     expect(await screen.findByTestId('lineup-coverage-panel')).toBeInTheDocument();
-    expect(screen.getByTestId('lineup-empty-state')).toBeInTheDocument();
+    expect(await screen.findByTestId('lineup-empty-state')).toBeInTheDocument();
   });
+
+  // ── lineup-jobs query ────────────────────────────────────────────────────────
 
   it('lineup-jobs endpoint is queried when Lineup coverage tab is active', async () => {
     mockState.lineupJobs = [LINEUP_JOB];
@@ -294,21 +299,65 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     });
   });
 
-  async function selectLineupJob(user: ReturnType<typeof userEvent.setup>) {
-    // MUI Select requires mouseDown on the trigger to open the listbox, then a click on the option.
-    const combobox = screen.getByRole('combobox');
-    await user.click(combobox);
-    // The MenuItem label is "{period_label} — {line_count} lines"
-    const option = await screen.findByRole('option', { name: /2026-Q2/i });
-    await user.click(option);
-  }
+  // ── auto-select ──────────────────────────────────────────────────────────────
+
+  it('auto-selects the latest job and loads coverage lines without manual selection', async () => {
+    mockState.lineupJobs = [LINEUP_JOB];
+    mockState.coverageLines = COVERAGE_LINES;
+    const { user } = renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
+    // Coverage table must appear without any Select interaction — auto-select fires.
+    const table = await screen.findByTestId('lineup-coverage-table');
+    expect(table).toBeInTheDocument();
+    // The lineup-coverage endpoint must be called with the auto-selected job id.
+    await waitFor(() => {
+      const calls = mockState.apiGetMock.mock.calls.map((c) => c[0] as string);
+      expect(calls.some((u) => u.includes(`lineup-coverage?job_id=${LINEUP_JOB.id}`))).toBe(true);
+    });
+  });
+
+  // ── query gating ─────────────────────────────────────────────────────────────
+
+  it('plan queries (plans/lines/summary/suggestions) are not called after switching to Lineup Coverage', async () => {
+    mockState.lineupJobs = [];
+    const { user } = renderPage();
+
+    // Wait for ALL tab-0 queries to settle before clearing the call log.
+    // React Query fires plans first, then lines/summary/suggestions in the next tick once
+    // activePlanId resolves — we must wait for all four to avoid a race against mockClear().
+    await waitFor(() => {
+      const calls = mockState.apiGetMock.mock.calls.map((c) => String(c[0]));
+      expect(calls.some((u) => u === '/api/v1/commercial-planner/plans')).toBe(true);
+      expect(calls.some((u) => u.includes('/plans/') && u.includes('/lines'))).toBe(true);
+      expect(calls.some((u) => u.includes('/plans/') && u.includes('/summary'))).toBe(true);
+      expect(calls.some((u) => u.includes('/plans/') && u.includes('/suggestions'))).toBe(true);
+    });
+
+    // Clear and switch to Lineup Coverage.
+    mockState.apiGetMock.mockClear();
+    await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
+
+    // Wait for the lineup-jobs query (the only query expected on tab 2).
+    await waitFor(() => {
+      const calls = mockState.apiGetMock.mock.calls.map((c) => String(c[0]));
+      expect(calls.some((u) => u.includes('lineup-jobs'))).toBe(true);
+    });
+
+    // Plans-related endpoints must not have been called after the tab switch.
+    const allCalls = mockState.apiGetMock.mock.calls.map((c) => String(c[0]));
+    expect(allCalls.some((u) => u === '/api/v1/commercial-planner/plans')).toBe(false);
+    expect(allCalls.some((u) => u.includes('/plans/') && u.includes('/lines'))).toBe(false);
+    expect(allCalls.some((u) => u.includes('/plans/') && u.includes('/summary'))).toBe(false);
+    expect(allCalls.some((u) => u.includes('/plans/') && u.includes('/suggestions'))).toBe(false);
+  });
+
+  // ── display ──────────────────────────────────────────────────────────────────
 
   it('disti_margin_pct 0.0724 displays as 7.24% in coverage table', async () => {
     mockState.lineupJobs = [LINEUP_JOB];
     mockState.coverageLines = COVERAGE_LINES;
     const { user } = renderPage();
     await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
-    await selectLineupJob(user);
 
     const cell = await screen.findByTestId(`disti-margin-${COVERAGE_LINES[0].id}`);
     expect(cell).toHaveTextContent('7.24%');
@@ -319,12 +368,10 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     mockState.coverageLines = COVERAGE_LINES;
     const { user } = renderPage();
     await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
-    await selectLineupJob(user);
 
-    // Unresolved token section must appear with the specific token
     const tokenSection = await screen.findByTestId('lineup-coverage-unresolved-tokens');
     expect(tokenSection).toHaveTextContent('UNKNOWN-ACCT (1)');
-    // MATCHED-CUST is resolved — must not appear in the unresolved section
+    // MATCHED-CUST is resolved — must not appear in the unresolved section.
     expect(tokenSection).not.toHaveTextContent('MATCHED-CUST');
   });
 
@@ -333,7 +380,6 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     mockState.coverageLines = COVERAGE_LINES;
     const { user } = renderPage();
     await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
-    await selectLineupJob(user);
 
     const cards = await screen.findByTestId('lineup-summary-cards');
     expect(cards).toHaveTextContent('Total: 2 lines');
@@ -346,7 +392,6 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     mockState.coverageLines = COVERAGE_LINES;
     const { user } = renderPage();
     await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
-    await selectLineupJob(user);
 
     const table = await screen.findByTestId('lineup-coverage-table');
     expect(table).toHaveTextContent('NB-X1');
@@ -359,7 +404,6 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     mockState.coverageLines = [];
     const { user } = renderPage();
     await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
-    await selectLineupJob(user);
 
     expect(await screen.findByTestId('lineup-no-lines')).toBeInTheDocument();
   });
