@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, model_validator
@@ -10,6 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from app.api.deps import get_db
+from app.models.commercial_lineup import (
+    COMMERCIAL_LINEUP_STATUSES,
+    CommercialLineupCase,
+    CommercialLineupLine,
+)
 from app.models.commercial_planner import (
     CommercialCustomerTerm,
     CommercialDistributorTerm,
@@ -1552,3 +1557,223 @@ async def get_lineup_product_gaps(
             }
         )
     return result
+
+
+# ─── Commercial Lineup Cases ──────────────────────────────────────────────────
+
+ALLOWED_CASE_STATUS_TRANSITIONS: dict[str, list[str]] = {
+    "draft_imported": ["validated", "cancelled"],
+    "validated": ["pending_review", "cancelled"],
+    "pending_review": ["accepted", "validated", "cancelled"],
+    "accepted": ["po_pending", "cancelled"],
+    "po_pending": ["po_issued", "cancelled"],
+    "po_issued": ["in_fulfillment"],
+    "in_fulfillment": ["received_closed"],
+    "received_closed": [],
+    "cancelled": [],
+}
+
+_LINEUP_DAP_SEMANTICS_NOTE = (
+    "dap_evidence_local is sourced from the uploaded lineup file. "
+    "It is NOT equivalent to landed_cost_usd and must not be used as a cost input "
+    "to the commercial planner without explicit cost-basis verification."
+)
+
+
+class LineupCaseCreate(BaseModel):
+    commercial_plan_id: int | None = None
+    period_label: str | None = None
+    currency_code: str | None = None
+    country_code: str | None = None
+    notes: str | None = None
+
+
+class LineupCaseStatusPatch(BaseModel):
+    status: str
+    notes: str | None = None
+    accepted_by: str | None = None
+
+
+def _case_payload(case: CommercialLineupCase, line_count: int) -> dict:
+    return {
+        "id": case.id,
+        "import_job_id": case.import_job_id,
+        "commercial_plan_id": case.commercial_plan_id,
+        "file_name": case.file_name,
+        "period_label": case.period_label,
+        "country_code": case.country_code,
+        "currency_code": case.currency_code,
+        "import_intent": case.import_intent,
+        "source_context": case.source_context,
+        "commercial_status": case.commercial_status,
+        "notes": case.notes,
+        "accepted_at": case.accepted_at.isoformat() if case.accepted_at else None,
+        "accepted_by": case.accepted_by,
+        "line_count": line_count,
+        "created_at": case.created_at.isoformat() if case.created_at else None,
+    }
+
+
+@router.get("/lineup-cases")
+async def list_lineup_cases(
+    plan_id: int | None = Query(default=None, description="Filter by commercial_plan_id"),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(CommercialLineupCase).order_by(CommercialLineupCase.id.desc())
+    if plan_id is not None:
+        stmt = stmt.where(CommercialLineupCase.commercial_plan_id == plan_id)
+    cases = (await db.execute(stmt)).scalars().all()
+    out = []
+    for case in cases:
+        line_count = (
+            await db.execute(
+                select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case.id)
+            )
+        ).scalar_one()
+        out.append(_case_payload(case, int(line_count)))
+    return out
+
+
+@router.post("/lineup-cases", status_code=201)
+async def create_lineup_case(body: LineupCaseCreate, db: AsyncSession = Depends(get_db)):
+    if body.commercial_plan_id is not None and not await db.get(CommercialPlan, body.commercial_plan_id):
+        raise HTTPException(status_code=400, detail=f"Unknown commercial_plan_id={body.commercial_plan_id}")
+    case = CommercialLineupCase(
+        commercial_plan_id=body.commercial_plan_id,
+        period_label=body.period_label,
+        currency_code=body.currency_code,
+        country_code=body.country_code,
+        notes=body.notes,
+        commercial_status="draft_imported",
+        import_intent="current_working_lineup",
+        source_context="commercial_planner",
+    )
+    db.add(case)
+    await db.commit()
+    await db.refresh(case)
+    return _case_payload(case, 0)
+
+
+@router.get("/lineup-cases/{case_id}")
+async def get_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    line_count = (
+        await db.execute(
+            select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
+        )
+    ).scalar_one()
+    return _case_payload(case, int(line_count))
+
+
+@router.patch("/lineup-cases/{case_id}/status")
+async def patch_lineup_case_status(case_id: int, body: LineupCaseStatusPatch, db: AsyncSession = Depends(get_db)):
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    if body.status not in COMMERCIAL_LINEUP_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"status '{body.status}' is not a valid lineup case status",
+        )
+    allowed = ALLOWED_CASE_STATUS_TRANSITIONS.get(case.commercial_status, [])
+    if body.status not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Cannot transition from '{case.commercial_status}' to '{body.status}'. "
+                f"Allowed: {allowed or 'none (terminal state)'}"
+            ),
+        )
+    case.commercial_status = body.status
+    if body.notes is not None:
+        case.notes = body.notes
+    if body.status == "accepted":
+        case.accepted_at = datetime.now(tz=timezone.utc)
+        case.accepted_by = body.accepted_by
+    await db.commit()
+    await db.refresh(case)
+    line_count = (
+        await db.execute(
+            select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
+        )
+    ).scalar_one()
+    return _case_payload(case, int(line_count))
+
+
+@router.get("/lineup-cases/{case_id}/lines")
+async def list_lineup_case_lines(case_id: int, db: AsyncSession = Depends(get_db)):
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    stmt = (
+        select(
+            CommercialLineupLine,
+            DimProduct.sku.label("product_sku"),
+            DimProduct.name.label("product_name"),
+            DimProduct.part_number.label("product_part_number"),
+            DimProduct.sales_model_name.label("product_sales_model_name"),
+            DimCustomer.code.label("customer_code"),
+            DimDistributor.code.label("distributor_code"),
+        )
+        .outerjoin(DimProduct, DimProduct.id == CommercialLineupLine.product_id)
+        .outerjoin(DimCustomer, DimCustomer.id == CommercialLineupLine.customer_id)
+        .outerjoin(DimDistributor, DimDistributor.id == CommercialLineupLine.distributor_id)
+        .where(CommercialLineupLine.case_id == case_id)
+        .order_by(CommercialLineupLine.source_row_number, CommercialLineupLine.id)
+    )
+    rows = (await db.execute(stmt)).all()
+    result = []
+    for (ln, product_sku, product_name, product_part_number, product_sales_model_name, customer_code, distributor_code) in rows:
+        result.append(
+            {
+                "id": ln.id,
+                "case_id": ln.case_id,
+                "source_row_number": ln.source_row_number,
+                "product_id": ln.product_id,
+                "product_sku": product_sku,
+                "product_name": product_name,
+                "product_part_number": product_part_number,
+                "product_sales_model_name": product_sales_model_name,
+                "customer_id": ln.customer_id,
+                "customer_code": customer_code,
+                "distributor_id": ln.distributor_id,
+                "distributor_code": distributor_code,
+                "customer_token": ln.customer_token,
+                "sku_raw": ln.sku_raw,
+                "part_number_raw": ln.part_number_raw,
+                "model_raw": ln.model_raw,
+                "quantity_units": float(ln.quantity_units) if ln.quantity_units is not None else None,
+                "msrp_local": float(ln.msrp_local) if ln.msrp_local is not None else None,
+                "promo_price_evidence_local": float(ln.promo_price_evidence_local)
+                if ln.promo_price_evidence_local is not None
+                else None,
+                "dap_evidence_local": float(ln.dap_evidence_local) if ln.dap_evidence_local is not None else None,
+                "rebate_pct_evidence": float(ln.rebate_pct_evidence) if ln.rebate_pct_evidence is not None else None,
+                "distributor_margin_pct_evidence": float(ln.distributor_margin_pct_evidence)
+                if ln.distributor_margin_pct_evidence is not None
+                else None,
+                "vat_pct_evidence": float(ln.vat_pct_evidence) if ln.vat_pct_evidence is not None else None,
+                "diagnostic_codes": ln.diagnostic_codes or [],
+                "row_status": ln.row_status,
+                "mapping_confidence": float(ln.mapping_confidence) if ln.mapping_confidence is not None else None,
+                "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE,
+            }
+        )
+    return {"lines": result, "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE}
+
+
+@router.delete("/lineup-cases/{case_id}", status_code=204)
+async def delete_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    if case.commercial_status != "draft_imported":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Can only delete lineup cases with status 'draft_imported'. Current status: '{case.commercial_status}'",
+        )
+    await db.delete(case)
+    await db.commit()
+    return Response(status_code=204)

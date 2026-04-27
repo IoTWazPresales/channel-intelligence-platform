@@ -788,3 +788,184 @@ def test_plan_line_read_model_extensions_merges_specs_and_local_prices():
     assert ext["effective_fx_rate_to_usd"] == 2.0
     assert ext["calc_sell_in_price_local"] == 20.0
     assert ext["calc_distributor_net_local"] == 16.0
+
+
+# ─── Commercial Lineup Case tests ────────────────────────────────────────────
+
+
+def _make_case(
+    id=1,
+    commercial_plan_id=None,
+    commercial_status="draft_imported",
+    period_label="Q2 2026",
+    currency_code="USD",
+    country_code="US",
+    file_name=None,
+    notes=None,
+    accepted_at=None,
+    accepted_by=None,
+    created_at=None,
+):
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        id=id,
+        import_job_id=None,
+        commercial_plan_id=commercial_plan_id,
+        file_name=file_name,
+        period_label=period_label,
+        country_code=country_code,
+        currency_code=currency_code,
+        import_intent="current_working_lineup",
+        source_context="commercial_planner",
+        commercial_status=commercial_status,
+        notes=notes,
+        accepted_at=accepted_at,
+        accepted_by=accepted_by,
+        created_at=created_at,
+    )
+
+
+def test_commercial_lineup_case_create():
+    """POST /lineup-cases creates a case and returns id."""
+    created_case = _make_case(id=42)
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.add = MagicMock()
+        sess.commit = AsyncMock()
+        sess.refresh = AsyncMock(side_effect=lambda x: setattr(x, "id", 42))
+        sess.get = AsyncMock(return_value=None)
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=0)
+        sess.execute = AsyncMock(return_value=count_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases",
+        json={"period_label": "Q2 2026", "currency_code": "USD", "country_code": "US"},
+    )
+    assert r.status_code == 201
+    body = r.json()
+    assert "id" in body
+    assert body["commercial_status"] == "draft_imported"
+    assert body["line_count"] == 0
+
+
+def test_commercial_lineup_case_list_by_plan():
+    """GET /lineup-cases?plan_id= returns cases for a plan."""
+    case1 = _make_case(id=1, commercial_plan_id=5, period_label="Q1 2026")
+    case2 = _make_case(id=2, commercial_plan_id=5, period_label="Q2 2026")
+
+    # First call: list of cases; subsequent calls: line count queries (scalar_one=0)
+    call_count = {"n": 0}
+
+    async def fake_db():
+        sess = MagicMock()
+        cases_result = MagicMock()
+        cases_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[case1, case2])))
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=0)
+
+        async def _execute(stmt):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return cases_result
+            return count_result
+
+        sess.execute = _execute
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/lineup-cases?plan_id=5")
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body, list)
+    assert len(body) == 2
+    assert body[0]["period_label"] == "Q1 2026"
+    assert body[1]["period_label"] == "Q2 2026"
+
+
+def test_commercial_lineup_case_status_transition_valid():
+    """PATCH /lineup-cases/{id}/status from pending_review→accepted sets accepted_at."""
+    case = _make_case(id=10, commercial_status="pending_review")
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        sess.commit = AsyncMock()
+        sess.refresh = AsyncMock()
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=0)
+        sess.execute = AsyncMock(return_value=count_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.patch(
+        "/api/v1/commercial-planner/lineup-cases/10/status",
+        json={"status": "accepted", "accepted_by": "manager@example.com"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["commercial_status"] == "accepted"
+    assert body["accepted_by"] == "manager@example.com"
+    assert body["accepted_at"] is not None
+
+
+def test_commercial_lineup_case_status_transition_invalid():
+    """PATCH /lineup-cases/{id}/status returns 400 for forbidden transition."""
+    case = _make_case(id=11, commercial_status="received_closed")
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.patch(
+        "/api/v1/commercial-planner/lineup-cases/11/status",
+        json={"status": "validated"},
+    )
+    assert r.status_code == 400
+    assert "Cannot transition" in r.json()["detail"]
+
+
+def test_commercial_lineup_case_delete_draft_only():
+    """DELETE /lineup-cases/{id} works for draft_imported, 409 for accepted."""
+    draft_case = _make_case(id=20, commercial_status="draft_imported")
+
+    async def fake_db_draft():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=draft_case)
+        sess.delete = AsyncMock()
+        sess.commit = AsyncMock()
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db_draft
+    r = client.delete("/api/v1/commercial-planner/lineup-cases/20")
+    assert r.status_code == 204
+
+    accepted_case = _make_case(id=21, commercial_status="accepted")
+
+    async def fake_db_accepted():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=accepted_case)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db_accepted
+    r = client.delete("/api/v1/commercial-planner/lineup-cases/21")
+    assert r.status_code == 409
+    assert "draft_imported" in r.json()["detail"]
+
+
+def test_current_lineup_template_exists():
+    """The current_lineup template slug is present in template definitions."""
+    from app.services.imports.template_definitions import IMPORT_TEMPLATE_ROWS
+
+    slugs = [t["slug"] for t in IMPORT_TEMPLATE_ROWS]
+    assert "current_lineup" in slugs
+    template = next(t for t in IMPORT_TEMPLATE_ROWS if t["slug"] == "current_lineup")
+    assert template["enabled"] is True
+    assert template["pipeline_handler"] == "stub_noop"
+    assert "sku_raw" in template["expected_columns"]
+    assert "promo_price_evidence_local" in template["expected_columns"]

@@ -14,6 +14,8 @@ from app.models.derived import (
     WeeksOfStock,
 )
 from app.models.dimensions import (
+    CustomerContact,
+    CustomerLocation,
     DimBudgetOwner,
     DimChannel,
     DimCompetitorBrand,
@@ -21,12 +23,15 @@ from app.models.dimensions import (
     DimCustomer,
     DimDate,
     DimDistributor,
+    DistributorContact,
+    DistributorLocation,
     DimProduct,
     DimPromotion,
     DimRegion,
     DimSource,
 )
 from app.models.lineup import FactLineupPlanItem, LineupPlanItemEvent
+from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.promo_export import PromoPlanExport, PromoPlanExportEvent
 from app.models.facts import (
     FactActivation,
@@ -65,12 +70,24 @@ from app.models.product_catalog import (
     ProductAttributeValue,
     ProductCatalog,
 )
+from app.models.commercial_planner import (
+    CommercialCustomerTerm,
+    CommercialDistributorTerm,
+    CommercialPlan,
+    CommercialPlanLine,
+    CommercialSkuAssumption,
+)
+from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
 
 __all__ = [
     "DimProduct",
     "DimCustomer",
+    "CustomerLocation",
+    "CustomerContact",
     "DimChannel",
     "DimDistributor",
+    "DistributorLocation",
+    "DistributorContact",
     "DimDate",
     "DimRegion",
     "DimSource",
@@ -126,4 +143,13 @@ __all__ = [
     "FactLineupPlanItem",
     "PromoPlanExport",
     "PromoPlanExportEvent",
+    "CommercialPlan",
+    "CommercialPlanLine",
+    "CommercialCustomerTerm",
+    "CommercialDistributorTerm",
+    "CommercialSkuAssumption",
+    "HistoricalLineupImportHeader",
+    "HistoricalLineupImportLine",
+    "CommercialLineupCase",
+    "CommercialLineupLine",
 ]

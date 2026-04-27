@@ -15,7 +15,6 @@ import {
   FormControlLabel,
   InputLabel,
   MenuItem,
-  Popover,
   Paper,
   Select,
   Stack,
@@ -37,6 +36,9 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { AddProductSetDialog } from '@/features/commercial-planner/AddProductSetDialog';
+import { ColumnSelectorModal } from '@/features/commercial-planner/ColumnSelectorModal';
+import { CurrentLineupSection } from '@/features/commercial-planner/CurrentLineupSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { PlannerDefaultsMaintenance } from '@/features/commercial-planner/PlannerDefaultsMaintenance';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
@@ -110,7 +112,18 @@ type PlanLine = {
 
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 type DistributorPick = { id: number; distributor_code: string; distributor_name: string };
-type ProductPick = { id: number; sku: string; name: string };
+type ProductPick = {
+  id: number;
+  sku: string;
+  name: string;
+  part_number: string | null;
+  sales_model_name: string | null;
+  model_name: string | null;
+  category: string | null;
+  product_line: string | null;
+  series_name: string | null;
+  lifecycle_status: string | null;
+};
 
 type CustomerListResponse = { items: CustomerPick[] };
 type DistributorListResponse = { items: DistributorPick[] };
@@ -392,6 +405,7 @@ const OPTIONAL_GRID_COL_FIELDS = [
 
 type OptionalGridColField = (typeof OPTIONAL_GRID_COL_FIELDS)[number];
 
+const LS_GRID_COLS_V4 = 'cip.commercial-planner.gridColumns.v4';
 const LS_GRID_COLS_V3 = 'cip.commercial-planner.gridColumns.v3';
 const LS_GRID_COLS_V2 = 'cip.commercial-planner.gridColumns.v2';
 const LS_OPTIONAL_COLS_V1 = 'cip.commercial-planner.optionalColumns.v1';
@@ -591,12 +605,13 @@ export default function CommercialPlannerPage() {
   const [showGuide, setShowGuide] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
-  const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
   const [optionalColsHydrated, setOptionalColsHydrated] = useState(false);
   const [optionalVisible, setOptionalVisible] = useState<Record<OptionalGridColField, boolean>>(() =>
     defaultOptionalVisibility()
   );
   const [suggestionPreview, setSuggestionPreview] = useState<SuggestionPreviewState | null>(null);
+  const [addProductSetOpen, setAddProductSetOpen] = useState(false);
+  const [columnSelectorOpen, setColumnSelectorOpen] = useState(false);
   const [addFromLineupOpen, setAddFromLineupOpen] = useState(false);
   const [addLineupJobId, setAddLineupJobId] = useState<number | null>(null);
   const [lineupModalFilter, setLineupModalFilter] = useState('');
@@ -612,6 +627,16 @@ export default function CommercialPlannerPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
+      const rawV4 = localStorage.getItem(LS_GRID_COLS_V4);
+      if (rawV4) {
+        const parsed = JSON.parse(rawV4) as { visibleOptional?: Partial<Record<OptionalGridColField, boolean>> };
+        if (parsed.visibleOptional && typeof parsed.visibleOptional === 'object') {
+          setOptionalVisible((prev) => ({ ...prev, ...parsed.visibleOptional }));
+        }
+        setOptionalColsHydrated(true);
+        return;
+      }
+      // Migrate from v3
       const rawV3 = localStorage.getItem(LS_GRID_COLS_V3);
       if (rawV3) {
         const parsed = JSON.parse(rawV3) as { optional?: Partial<Record<OptionalGridColField, boolean>> };
@@ -654,7 +679,7 @@ export default function CommercialPlannerPage() {
   useEffect(() => {
     if (!optionalColsHydrated || typeof window === 'undefined') return;
     try {
-      localStorage.setItem(LS_GRID_COLS_V3, JSON.stringify({ version: 3, optional: optionalVisible }));
+      localStorage.setItem(LS_GRID_COLS_V4, JSON.stringify({ version: 4, visibleOptional: optionalVisible }));
     } catch {
       /* ignore */
     }
@@ -1718,177 +1743,25 @@ export default function CommercialPlannerPage() {
           <Button
             size="small"
             variant="outlined"
+            data-testid="add-product-set-btn"
+            onClick={() => setAddProductSetOpen(true)}
+            disabled={activePlanId == null}
+          >
+            Add product set
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
             data-testid="column-manager-btn"
-            onClick={(e) => setColumnMenuAnchor(e.currentTarget)}
+            onClick={() => setColumnSelectorOpen(true)}
             disabled={activePlanId == null}
           >
             Columns
           </Button>
-          <Popover
-            open={Boolean(columnMenuAnchor)}
-            anchorEl={columnMenuAnchor}
-            onClose={() => setColumnMenuAnchor(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-            slotProps={{ paper: { sx: { minWidth: 300, p: 1.5, maxHeight: '80vh', overflow: 'auto' } } }}
-          >
-            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-              Column visibility
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-              Identity, core specs (CPU/RAM/storage/GPU/display), planning inputs (units, SRPs), local USD-derived
-              prices, channel sell-in USD, estimated internal margin USD, and Issues stay visible. Use toggles for
-              optional catalogue, commercial terms, reserves, and distributor-net USD.
-            </Typography>
-
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
-              Identity
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              No toggles — customer, distributor, SKU, Part #, model / sales model, product name.
-            </Typography>
-
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
-              Specs
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-              CPU, RAM, storage, GPU, display always shown when present in product data.
-            </Typography>
-            <Stack spacing={0.25} sx={{ mb: 0.5 }}>
-              {SPECS_OPTIONAL_FIELDS.map((field) => (
-                <FormControlLabel
-                  key={field}
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={optionalVisible[field]}
-                      onChange={() => setOptionalVisible((prev) => ({ ...prev, [field]: !prev[field] }))}
-                      data-testid={`col-toggle-${field}`}
-                    />
-                  }
-                  label={OPTIONAL_COLUMN_LABELS[field]}
-                  sx={{ m: 0, px: 0.5 }}
-                />
-              ))}
-            </Stack>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 500 }}>
-              Product catalogue (optional)
-            </Typography>
-            <Stack spacing={0.25} sx={{ mb: 1 }}>
-              {CATALOGUE_OPTIONAL_FIELDS.map((field) => (
-                <FormControlLabel
-                  key={field}
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={optionalVisible[field]}
-                      onChange={() => setOptionalVisible((prev) => ({ ...prev, [field]: !prev[field] }))}
-                      data-testid={`col-toggle-${field}`}
-                    />
-                  }
-                  label={OPTIONAL_COLUMN_LABELS[field]}
-                  sx={{ m: 0, px: 0.5 }}
-                />
-              ))}
-            </Stack>
-
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
-              Planning inputs
-            </Typography>
-            <Stack spacing={0.25} sx={{ mb: 1 }}>
-              {PLANNING_OPTIONAL_FIELDS.map((field) => (
-                <FormControlLabel
-                  key={field}
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={optionalVisible[field]}
-                      onChange={() => setOptionalVisible((prev) => ({ ...prev, [field]: !prev[field] }))}
-                      data-testid={`col-toggle-${field}`}
-                    />
-                  }
-                  label={OPTIONAL_COLUMN_LABELS[field]}
-                  sx={{ m: 0, px: 0.5 }}
-                />
-              ))}
-            </Stack>
-
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
-              Commercial terms
-            </Typography>
-            <Stack spacing={0.25} sx={{ mb: 1 }}>
-              {COMMERCIAL_TERM_OPTIONAL_FIELDS.map((field) => (
-                <FormControlLabel
-                  key={field}
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={optionalVisible[field]}
-                      onChange={() => setOptionalVisible((prev) => ({ ...prev, [field]: !prev[field] }))}
-                      data-testid={`col-toggle-${field}`}
-                    />
-                  }
-                  label={OPTIONAL_COLUMN_LABELS[field]}
-                  sx={{ m: 0, px: 0.5 }}
-                />
-              ))}
-            </Stack>
-
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
-              Local currency values
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Sell-in and distributor-net in plan currency use effective FX × USD model outputs (no fake rates).
-            </Typography>
-
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
-              USD model outputs
-            </Typography>
-            <Stack spacing={0.25} sx={{ mb: 1 }}>
-              {USD_OUTPUT_OPTIONAL_FIELDS.map((field) => (
-                <FormControlLabel
-                  key={field}
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={optionalVisible[field]}
-                      onChange={() => setOptionalVisible((prev) => ({ ...prev, [field]: !prev[field] }))}
-                      data-testid={`col-toggle-${field}`}
-                    />
-                  }
-                  label={OPTIONAL_COLUMN_LABELS[field]}
-                  sx={{ m: 0, px: 0.5 }}
-                />
-              ))}
-            </Stack>
-
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
-              Evidence
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Lineup import evidence stays in the Lineup coverage tab and selected-line detail (not grid columns).
-            </Typography>
-
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
-              Issues / status
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Issues column is always visible.
-            </Typography>
-
-            <Divider sx={{ my: 1 }} />
-            <Button
-              size="small"
-              fullWidth
-              data-testid="col-reset-defaults"
-              onClick={() => {
-                setOptionalVisible(defaultOptionalVisibility());
-                setColumnMenuAnchor(null);
-              }}
-            >
-              Reset columns
-            </Button>
-          </Popover>
         </Stack>
+
+        {/* Current lineups section */}
+        <CurrentLineupSection activePlanId={activePlanId} />
 
         {/* Readiness chips */}
         {planReadiness && (
@@ -2157,7 +2030,9 @@ export default function CommercialPlannerPage() {
               value={lineProduct}
               onChange={setLineProduct}
               fetchOptions={fetchProducts}
-              getOptionLabel={(o) => `${o.sku || '—'} — ${o.name || ''}`}
+              getOptionLabel={(o) =>
+                `${o.sku || '—'} · ${o.sales_model_name || o.model_name || o.name || ''}${o.part_number ? ` (${o.part_number})` : ''}`.trim()
+              }
               disabled={createLine.isPending}
               helperText="Type SKU or product name to search the catalog."
             />
@@ -2488,7 +2363,9 @@ export default function CommercialPlannerPage() {
               value={editProduct}
               onChange={setEditProduct}
               fetchOptions={fetchProducts}
-              getOptionLabel={(o) => `${o.sku || '—'} — ${o.name || ''}`}
+              getOptionLabel={(o) =>
+                `${o.sku || '—'} · ${o.sales_model_name || o.model_name || o.name || ''}${o.part_number ? ` (${o.part_number})` : ''}`.trim()
+              }
               disabled={patchLineEntities.isPending}
               helperText="Search to replace the line’s product."
             />
@@ -2857,6 +2734,59 @@ export default function CommercialPlannerPage() {
       >
         {tab === 0 ? plansPanel : tab === 1 ? <PlannerDefaultsMaintenance /> : lineupCoveragePanel}
       </div>
+
+      {/* Column selector modal (replaces Popover) */}
+      <ColumnSelectorModal
+        open={columnSelectorOpen}
+        onClose={() => setColumnSelectorOpen(false)}
+        lines={lines ?? []}
+        optionalVisible={optionalVisible}
+        onChange={(key, visible) => setOptionalVisible((prev) => ({ ...prev, [key]: visible }))}
+        onReset={() => setOptionalVisible(defaultOptionalVisibility())}
+        onPreset={(preset) => {
+          if (preset === 'planning') {
+            setOptionalVisible(defaultOptionalVisibility());
+          } else if (preset === 'product_spec') {
+            setOptionalVisible((prev) => ({
+              ...prev,
+              product_spec_warranty: true,
+              product_spec_os: true,
+              product_spec_colour: true,
+            }));
+          } else if (preset === 'commercial') {
+            setOptionalVisible((prev) => ({
+              ...prev,
+              effective_customer_margin_pct: true,
+              effective_customer_rebate_pct: true,
+              effective_distributor_margin_pct: true,
+              effective_vat_rate_pct: true,
+              effective_fx_rate_to_usd: true,
+              effective_reserve_total_pct: true,
+              effective_promo_reserve_split_pct: true,
+              effective_controlled_cost_usd_per_unit: true,
+            }));
+          } else if (preset === 'economics') {
+            setOptionalVisible((prev) => ({
+              ...prev,
+              calc_buy_price_usd: true,
+              calc_promo_reserve_usd: true,
+              calc_non_promo_reserve_usd: true,
+            }));
+          }
+        }}
+      />
+
+      {/* Add product set dialog */}
+      <AddProductSetDialog
+        open={addProductSetOpen}
+        onClose={() => setAddProductSetOpen(false)}
+        onCreated={() => {
+          void qc.invalidateQueries({ queryKey: ['commercial-plan-lines', activePlanId] });
+          void qc.invalidateQueries({ queryKey: ['commercial-plan-summary', activePlanId] });
+        }}
+        activePlanId={activePlanId}
+        existingLines={lines ?? []}
+      />
     </>
   );
 }

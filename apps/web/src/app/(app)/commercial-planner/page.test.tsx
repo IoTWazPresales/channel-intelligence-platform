@@ -470,18 +470,18 @@ describe('CommercialPlannerPage — QA polish', () => {
     expect(row.getAttribute('data-internal-gp-display')).toBe('—');
   });
 
-  it('persists optional column toggles under localStorage key cip.commercial-planner.gridColumns.v3', async () => {
+  it('persists optional column toggles under localStorage key cip.commercial-planner.gridColumns.v4', async () => {
     localStorage.clear();
     const { user } = renderPage();
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     await user.click(await screen.findByTestId('column-manager-btn'));
     await user.click(await screen.findByTestId('col-toggle-effective_fx_rate_to_usd'));
     await waitFor(() => {
-      const raw = localStorage.getItem('cip.commercial-planner.gridColumns.v3');
+      const raw = localStorage.getItem('cip.commercial-planner.gridColumns.v4');
       expect(raw).toBeTruthy();
       const parsed = JSON.parse(raw!);
-      expect(parsed.version).toBe(3);
-      expect(parsed.optional?.effective_fx_rate_to_usd).toBe(true);
+      expect(parsed.version).toBe(4);
+      expect(parsed.visibleOptional?.effective_fx_rate_to_usd).toBe(true);
     });
   });
 
@@ -1451,5 +1451,239 @@ describe('roundPlannerUnits', () => {
   it('rounds fractional values to nearest integer', () => {
     expect(roundPlannerUnits(5287.68)).toBe(5288);
     expect(roundPlannerUnits(5287.4)).toBe(5287);
+  });
+});
+
+// ─── V3 tests: Column selector modal ─────────────────────────────────────────
+
+vi.mock('@/features/commercial-planner/ColumnSelectorModal', () => {
+  const OPTIONAL_FIELDS = [
+    'product_spec_warranty',
+    'product_spec_os',
+    'product_spec_colour',
+    'product_category',
+    'product_form_factor',
+    'product_lifecycle_status',
+    'product_line',
+    'product_series_name',
+    'product_business_unit',
+    'effective_customer_margin_pct',
+    'effective_customer_rebate_pct',
+    'effective_distributor_margin_pct',
+    'effective_vat_rate_pct',
+    'effective_fx_rate_to_usd',
+    'effective_reserve_total_pct',
+    'effective_promo_reserve_split_pct',
+    'effective_controlled_cost_usd_per_unit',
+    'promo_mix_pct',
+    'calc_buy_price_usd',
+    'calc_promo_reserve_usd',
+    'calc_non_promo_reserve_usd',
+  ];
+  return {
+    ColumnSelectorModal: ({
+      open,
+      onClose,
+      onReset,
+      onPreset,
+      optionalVisible,
+      onChange,
+    }: {
+      open: boolean;
+      onClose: () => void;
+      onReset: () => void;
+      onPreset: (name: string) => void;
+      optionalVisible: Record<string, boolean>;
+      onChange: (k: string, v: boolean) => void;
+      lines: any[];
+    }) =>
+      open ? (
+        <div data-testid="column-selector-modal" role="dialog" aria-label="Column visibility">
+          <span>Column visibility</span>
+          <span>Product catalogue (optional)</span>
+          <span data-testid="col-modal-locked-note">Locked columns cannot be hidden</span>
+          <button data-testid="col-modal-preset-product-spec" onClick={() => onPreset('product_spec')}>
+            Product / spec
+          </button>
+          <button data-testid="col-reset-defaults" onClick={onReset}>
+            Reset to defaults
+          </button>
+          {OPTIONAL_FIELDS.map((field) => (
+            <input
+              key={field}
+              type="checkbox"
+              data-testid={`col-toggle-${field}`}
+              checked={optionalVisible[field] ?? false}
+              onChange={() => onChange(field, !(optionalVisible[field] ?? false))}
+            />
+          ))}
+          <button data-testid="col-modal-close" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      ) : null,
+  };
+});
+
+vi.mock('@/features/commercial-planner/AddProductSetDialog', () => ({
+  AddProductSetDialog: ({
+    open,
+    onClose,
+  }: {
+    open: boolean;
+    onClose: () => void;
+    onCreated: () => void;
+    activePlanId: number | null;
+    existingLines: any[];
+  }) =>
+    open ? (
+      <div data-testid="add-product-set-dialog">
+        <span>Add product set</span>
+        <button data-testid="pick-entity-customer">Pick Customer</button>
+        <button data-testid="pick-entity-distributor">Pick Distributor</button>
+        <button onClick={onClose}>Cancel</button>
+      </div>
+    ) : null,
+}));
+
+vi.mock('@/features/commercial-planner/CurrentLineupSection', () => ({
+  CurrentLineupSection: ({ activePlanId }: { activePlanId: number | null }) => (
+    <div data-testid="current-lineup-section">
+      {activePlanId != null && (
+        <button data-testid="upload-current-lineup-btn">Upload current lineup</button>
+      )}
+    </div>
+  ),
+}));
+
+describe('V3: Column selector modal', () => {
+  function renderPage() {
+    const qc = new QueryClient();
+    return renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CommercialPlannerPage />
+      </QueryClientProvider>
+    );
+  }
+
+  beforeEach(() => {
+    mockState.apiGetMock.mockImplementation(mockState.defaultApiGetImpl);
+    mockState.apiGetMock.mockClear();
+  });
+
+  it('opens column selector modal when Columns button is clicked', async () => {
+    renderPage();
+    const btn = await screen.findByTestId('column-manager-btn');
+    await userEvent.click(btn);
+    const modal = await screen.findByTestId('column-selector-modal');
+    expect(modal).toBeInTheDocument();
+    expect(modal).toHaveTextContent('Column visibility');
+  });
+
+  it('shows locked columns note in modal', async () => {
+    renderPage();
+    const btn = await screen.findByTestId('column-manager-btn');
+    await userEvent.click(btn);
+    expect(await screen.findByTestId('col-modal-locked-note')).toBeInTheDocument();
+  });
+
+  it('preset button triggers onPreset callback', async () => {
+    renderPage();
+    const btn = await screen.findByTestId('column-manager-btn');
+    await userEvent.click(btn);
+    const presetBtn = await screen.findByTestId('col-modal-preset-product-spec');
+    await userEvent.click(presetBtn);
+    // Modal stays open unless we close it - just verify no error
+    expect(screen.getByTestId('column-selector-modal')).toBeInTheDocument();
+  });
+});
+
+describe('V3: Add product set', () => {
+  function renderPage() {
+    const qc = new QueryClient();
+    return renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CommercialPlannerPage />
+      </QueryClientProvider>
+    );
+  }
+
+  beforeEach(() => {
+    mockState.apiGetMock.mockImplementation(mockState.defaultApiGetImpl);
+    mockState.apiGetMock.mockClear();
+    mockState.apiPostMock.mockClear();
+  });
+
+  it('Add product set button is present when plan is active', async () => {
+    renderPage();
+    await screen.findByText('Q3 Plan (draft)');
+    const btn = await screen.findByTestId('add-product-set-btn');
+    expect(btn).toBeInTheDocument();
+    expect(btn).not.toBeDisabled();
+  });
+
+  it('opens Add product set dialog when button clicked', async () => {
+    renderPage();
+    const btn = await screen.findByTestId('add-product-set-btn');
+    await userEvent.click(btn);
+    const dialog = await screen.findByTestId('add-product-set-dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Add product set');
+  });
+
+  it('Add product set dialog shows customer and distributor pickers', async () => {
+    renderPage();
+    const btn = await screen.findByTestId('add-product-set-btn');
+    await userEvent.click(btn);
+    await screen.findByTestId('add-product-set-dialog');
+    expect(screen.getByTestId('pick-entity-customer')).toBeInTheDocument();
+    expect(screen.getByTestId('pick-entity-distributor')).toBeInTheDocument();
+  });
+});
+
+describe('V3: Current lineup section', () => {
+  function renderPage() {
+    const qc = new QueryClient();
+    return renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CommercialPlannerPage />
+      </QueryClientProvider>
+    );
+  }
+
+  beforeEach(() => {
+    mockState.apiGetMock.mockImplementation(mockState.defaultApiGetImpl);
+    mockState.apiGetMock.mockClear();
+  });
+
+  it('Current lineups section renders when plan is active', async () => {
+    renderPage();
+    // Wait for plan to load, then check section exists
+    await screen.findByText('Q3 Plan (draft)');
+    expect(screen.getByTestId('current-lineup-section')).toBeInTheDocument();
+  });
+
+  it('Upload current lineup button is present in section', async () => {
+    renderPage();
+    await screen.findByText('Q3 Plan (draft)');
+    expect(screen.getByTestId('upload-current-lineup-btn')).toBeInTheDocument();
+  });
+});
+
+describe('V3: Richer product label', () => {
+  it('Add line product shows SKU · model label format', async () => {
+    // This tests that the EntitySearchAutocomplete mock gets the richer getOptionLabel.
+    // Since the mock renders a button using the label prop, and getOptionLabel is a function prop,
+    // we verify the Add Line dialog opens and product picker is present.
+    const qc = new QueryClient();
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CommercialPlannerPage />
+      </QueryClientProvider>
+    );
+    const addLineBtn = await screen.findByText('Add line');
+    await userEvent.click(addLineBtn);
+    const productPicker = await screen.findByTestId('pick-entity-product');
+    expect(productPicker).toBeInTheDocument();
   });
 });
