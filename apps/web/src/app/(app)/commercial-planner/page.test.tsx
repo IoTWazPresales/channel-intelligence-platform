@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
-import CommercialPlannerPage, { fmtMarginPct, fmtCurrency } from './page';
+import CommercialPlannerPage, { fmtMarginPct, fmtCurrency, fmtFlag, sugTypeLabel } from './page';
 
 const mockState = vi.hoisted(() => ({
   lineupEvidence: null as any,
@@ -115,10 +115,16 @@ vi.mock('@/components/ModuleGridToolbar', () => ({
   ModuleGridToolbar: ({ onAdd }: any) => <button onClick={onAdd}>add-plan</button>,
 }));
 vi.mock('@/components/EnterpriseDataGrid', () => ({
-  EnterpriseDataGrid: ({ rowData }: { rowData: any[] }) => (
+  EnterpriseDataGrid: ({ rowData, gridOptions }: { rowData: any[]; gridOptions?: any }) => (
     <div>
       {rowData.map((r) => (
-        <div key={r.id}>{r.id}</div>
+        <div
+          key={r.id}
+          data-testid={`grid-row-${r.id}`}
+          onClick={() => gridOptions?.onRowClicked?.({ data: r })}
+        >
+          {r.id}
+        </div>
       ))}
     </div>
   ),
@@ -180,11 +186,16 @@ describe('CommercialPlannerPage', () => {
     expect(await screen.findByText('Units: 100')).toBeInTheDocument();
   });
 
-  it('shows workflow guidance for plans, defaults, and suggestions', async () => {
+  it('shows workflow guidance toggle collapsed by default, expands on click', async () => {
     renderPage();
     const guide = await screen.findByTestId('commercial-planner-workflow-guide');
+    // Toggle button is always visible with the title text
     expect(guide).toHaveTextContent('How this workspace fits together');
-    expect(guide).toHaveTextContent('Add line');
+    // Body content is hidden by default
+    expect(guide).not.toHaveTextContent('open the builder');
+
+    // Expand the guide
+    fireEvent.click(screen.getByRole('button', { name: /How this workspace fits together/i }));
     expect(guide).toHaveTextContent('open the builder');
     expect(guide).toHaveTextContent('Planner defaults');
     expect(guide).toHaveTextContent('Recalculate');
@@ -729,5 +740,157 @@ describe('Lineup evidence panel in Add line dialog', () => {
     // Target SRP input should now show the MSRP value
     const srpInput = screen.getByLabelText(/Target SRP local/i) as HTMLInputElement;
     expect(srpInput.value).toBe('1100');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workspace V1 — layout, line detail panel, flag translations, suggestions UX
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Shared clean line fixture for Workspace V1 tests */
+const CLEAN_LINE = {
+  id: 11, commercial_plan_id: 1, customer_id: 1, distributor_id: 1, product_id: 1,
+  customer_code: 'ACME', customer_name: 'Acme Retail',
+  distributor_code: 'DIST01', distributor_name: 'Summit Supply',
+  product_sku: 'NB-X1', product_name: 'Notebook X1',
+  target_units: 100, target_srp_local: 1000, promo_srp_local: 900, promo_mix_pct: 0.5,
+  calc_sell_in_price_usd: 40, calc_buy_price_usd: 36,
+  calc_promo_reserve_usd: 200, calc_non_promo_reserve_usd: 200, calc_internal_gp_usd: 300,
+  calc_customer_gp_pct: null, calc_distributor_gp_pct: null,
+  calc_flags: [], calc_explanation: 'ok', override_landed_cost_usd: null,
+};
+
+function makeDefaultMock(linesOverride?: any[]) {
+  return async (url: string) => {
+    if (url.startsWith('/api/v1/commercial-planner/lineup-evidence')) return mockState.lineupEvidence;
+    if (url.startsWith('/api/v1/commercial-planner/plans/1/readiness')) return mockState.planReadiness;
+    if (url === '/api/v1/commercial-planner/plans') {
+      return [{ id: 1, plan_name: 'Q3 Plan', status: 'draft', period_start: '2026-07-01', period_end: null, owner: 'planner', currency_code: 'USD', line_count: 1, notes: null }];
+    }
+    if (url === '/api/v1/commercial-planner/plans/1/lines') return linesOverride ?? [CLEAN_LINE];
+    if (url === '/api/v1/commercial-planner/plans/1/summary') {
+      return { line_count: 1, total_units: 100, total_internal_gp_usd: 300, total_promo_reserve_usd: 200, total_non_promo_reserve_usd: 200, flags: [] };
+    }
+    if (url === '/api/v1/commercial-planner/plans/1/suggestions') {
+      return [{ line_id: 11, suggestions: [{ type: 'target_units', value: 120, reason: 'Historical uplift', confidence: 'medium', factors: { avg_sellout_units: 100 } }] }];
+    }
+    return [];
+  };
+}
+
+describe('CommercialPlannerPage — Workspace V1', () => {
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <CommercialPlannerPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    mockState.planReadiness = null;
+    mockState.lineupEvidence = null;
+    // Reset to clean default implementation so tests that override mockImplementation don't bleed over
+    mockState.apiGetMock.mockImplementation(makeDefaultMock());
+  });
+
+  it('recalculate-needed banner appears when a line has null economics', async () => {
+    mockState.apiGetMock.mockImplementation(
+      makeDefaultMock([{ ...CLEAN_LINE, calc_sell_in_price_usd: null, calc_buy_price_usd: null, calc_promo_reserve_usd: null, calc_non_promo_reserve_usd: null, calc_internal_gp_usd: null }])
+    );
+    renderPage();
+    expect(await screen.findByTestId('recalc-needed-banner')).toBeInTheDocument();
+  });
+
+  it('selected-line detail panel appears when a grid row is clicked', async () => {
+    const { user } = renderPage();
+    // Wait for the plan and lines to load
+    await screen.findByText('Q3 Plan (draft)');
+    const row = await screen.findByTestId('grid-row-11');
+    await user.click(row);
+
+    const detailPanel = await screen.findByTestId('line-detail-panel');
+    expect(detailPanel).toHaveTextContent('Line detail');
+    expect(detailPanel).toHaveTextContent('NB-X1');
+    expect(detailPanel).toHaveTextContent('Notebook X1');
+    expect(detailPanel).toHaveTextContent('Cust: ACME');
+    expect(detailPanel).toHaveTextContent('Units: 100');
+  });
+
+  it('selected-line detail shows "Economics OK" chip for a clean line', async () => {
+    const { user } = renderPage();
+    await screen.findByText('Q3 Plan (draft)');
+    await user.click(await screen.findByTestId('grid-row-11'));
+
+    const detailPanel = await screen.findByTestId('line-detail-panel');
+    expect(detailPanel).toHaveTextContent('Economics OK');
+  });
+
+  it('selected-line detail shows controlled cost missing warning when flag is present', async () => {
+    mockState.apiGetMock.mockImplementation(
+      makeDefaultMock([{ ...CLEAN_LINE, calc_sell_in_price_usd: 0, calc_buy_price_usd: 0, calc_promo_reserve_usd: 0, calc_non_promo_reserve_usd: 0, calc_internal_gp_usd: 0, calc_flags: ['missing_or_invalid_landed_cost'] }])
+    );
+
+    const { user } = renderPage();
+    await screen.findByText('Q3 Plan (draft)');
+    await user.click(await screen.findByTestId('grid-row-11'));
+
+    const detailPanel = await screen.findByTestId('line-detail-panel');
+    expect(detailPanel).toHaveTextContent('Controlled cost missing');
+    expect(screen.getByTestId('line-detail-cost-missing')).toBeInTheDocument();
+  });
+
+  it('suggestions panel shows lineup-based source indicator when meta.data_sources.lineup is true', async () => {
+    const lineupBundle = {
+      line_id: 11,
+      suggestions: [{ type: 'target_units', value: 120, reason: 'Lineup-based uplift', confidence: 'medium', factors: {} }],
+      _meta: { lineup_job_id: 7, lineup_period_label: '2026-Q2', data_sources: { sellout: false, prior_planned: false, forecast: false, net_price: false, lineup: true } },
+    };
+    mockState.apiGetMock.mockImplementation(async (url: string) => {
+      if (url === '/api/v1/commercial-planner/plans/1/suggestions') return [lineupBundle];
+      return makeDefaultMock()(url);
+    });
+
+    const { user } = renderPage();
+    // Click grid row to open line detail (which shows per-line suggestions with lineup indicator)
+    await screen.findByText('Q3 Plan (draft)');
+    await user.click(await screen.findByTestId('grid-row-11'));
+
+    const detailPanel = await screen.findByTestId('line-detail-panel');
+    expect(detailPanel).toHaveTextContent('Lineup-based uplift');
+    const chip = await screen.findByTestId('suggestion-lineup-source');
+    expect(chip).toHaveTextContent('Based on lineup evidence');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility function unit tests — fmtFlag and sugTypeLabel
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('fmtFlag', () => {
+  it('translates known flag codes to human-readable messages', () => {
+    expect(fmtFlag('missing_or_invalid_landed_cost')).toContain('Controlled cost missing');
+    expect(fmtFlag('margin_floor_breach')).toContain('Below cost');
+    expect(fmtFlag('impossible_margin_stack')).toContain('unsustainable');
+  });
+
+  it('returns the raw flag code for unknown flags', () => {
+    expect(fmtFlag('some_unknown_flag')).toBe('some_unknown_flag');
+  });
+});
+
+describe('sugTypeLabel', () => {
+  it('maps suggestion type keys to human-readable labels', () => {
+    expect(sugTypeLabel('target_units')).toBe('Suggested units');
+    expect(sugTypeLabel('pricing_band')).toBe('Pricing anchor');
+    expect(sugTypeLabel('promo_mix_pct')).toBe('Promo split');
+  });
+
+  it('falls back to the raw type for unknown keys', () => {
+    expect(sugTypeLabel('custom_type')).toBe('custom_type');
   });
 });

@@ -71,8 +71,11 @@ type PlanLine = {
   calc_promo_reserve_usd: number | null;
   calc_non_promo_reserve_usd: number | null;
   calc_internal_gp_usd: number | null;
+  calc_customer_gp_pct: number | null;
+  calc_distributor_gp_pct: number | null;
   calc_flags: string[];
   calc_explanation: string | null;
+  override_landed_cost_usd: number | null;
 };
 
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
@@ -94,6 +97,17 @@ type Suggestion = {
 type SuggestionBundle = {
   line_id: number;
   suggestions: Suggestion[];
+  _meta?: {
+    lineup_job_id: number | null;
+    lineup_period_label: string | null;
+    data_sources: {
+      sellout: boolean;
+      prior_planned: boolean;
+      forecast: boolean;
+      net_price: boolean;
+      lineup: boolean;
+    };
+  };
 };
 
 type Summary = {
@@ -219,6 +233,32 @@ export function fmtCurrency(v: number | null | undefined): string {
   return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** Translate a calc_flag code to a user-facing message. */
+export function fmtFlag(flag: string): string {
+  const labels: Record<string, string> = {
+    missing_or_invalid_landed_cost: 'Controlled cost missing — add SKU assumption in Planner defaults',
+    non_positive_target_units: 'Units must be positive',
+    non_positive_target_srp: 'Target SRP must be positive',
+    invalid_fx_rate_to_usd: 'FX rate invalid',
+    impossible_margin_stack: 'Margin stack unsustainable (margins ≥ 95%)',
+    margin_floor_breach: 'Below cost — buy price is under controlled cost',
+    reserve_breach: 'Reserve exceeds 80% of revenue',
+    impossible_economics: 'Cannot compute sell-in price',
+    partial_margin_stack: 'Partial margin stack — some terms defaulted to zero',
+  };
+  return labels[flag] ?? flag;
+}
+
+/** Human-readable label for a suggestion type. */
+export function sugTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    target_units: 'Suggested units',
+    pricing_band: 'Pricing anchor',
+    promo_mix_pct: 'Promo split',
+  };
+  return labels[type] ?? type;
+}
+
 async function fetchCustomers(q: string, signal: AbortSignal): Promise<CustomerPick[]> {
   const res = await apiGet<CustomerListResponse>(
     `/api/v1/customers?page=1&page_size=25&q=${encodeURIComponent(q)}`,
@@ -282,6 +322,8 @@ export default function CommercialPlannerPage() {
   const [lineupJobId, setLineupJobId] = useState<number | null>(null);
   const [coverageFilter, setCoverageFilter] = useState('');
   const [showProductGaps, setShowProductGaps] = useState(true);
+  const [showGuide, setShowGuide] = useState(false);
+  const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
 
   const { data: plans, isLoading, isError, error } = useQuery({
     queryKey: ['commercial-plans'],
@@ -363,6 +405,18 @@ export default function CommercialPlannerPage() {
   });
 
   const lineById = useMemo(() => new Map((lines ?? []).map((l) => [l.id, l])), [lines]);
+
+  const selectedLine = selectedLineId != null ? (lineById.get(selectedLineId) ?? null) : null;
+
+  const { data: selectedLineEvidence, isLoading: selectedLineEvidenceLoading } = useQuery({
+    queryKey: ['lineup-evidence', selectedLine?.product_id],
+    queryFn: ({ signal }) =>
+      apiGet<LineupEvidence>(
+        `/api/v1/commercial-planner/lineup-evidence?product_id=${selectedLine!.product_id}`,
+        { signal }
+      ),
+    enabled: selectedLine != null && tab === 0,
+  });
 
   const lineupSummary = useMemo(() => {
     if (!coverageLines) return null;
@@ -575,10 +629,27 @@ export default function CommercialPlannerPage() {
       { field: 'promo_mix_pct', headerName: 'Promo mix', editable: true, type: 'numericColumn', minWidth: 110 },
       { field: 'calc_sell_in_price_usd', headerName: 'Sell-in USD', minWidth: 120 },
       { field: 'calc_buy_price_usd', headerName: 'Buy USD', minWidth: 120 },
-      { field: 'calc_internal_gp_usd', headerName: 'Internal GP', minWidth: 120 },
+      { field: 'calc_internal_gp_usd', headerName: 'Internal GP USD', minWidth: 130 },
+      {
+        field: 'calc_customer_gp_pct',
+        headerName: 'Cust GP%',
+        minWidth: 100,
+        valueGetter: (p) => p.data?.calc_customer_gp_pct != null ? fmtMarginPct(p.data.calc_customer_gp_pct) : '—',
+      },
+      {
+        field: 'calc_distributor_gp_pct',
+        headerName: 'Disti GP%',
+        minWidth: 100,
+        valueGetter: (p) => p.data?.calc_distributor_gp_pct != null ? fmtMarginPct(p.data.calc_distributor_gp_pct) : '—',
+      },
       { field: 'calc_promo_reserve_usd', headerName: 'Promo reserve', minWidth: 130 },
       { field: 'calc_non_promo_reserve_usd', headerName: 'Non-promo reserve', minWidth: 150 },
-      { field: 'calc_flags', headerName: 'Flags', minWidth: 240, valueGetter: (p) => (p.data?.calc_flags ?? []).join(', ') },
+      {
+        field: 'calc_flags',
+        headerName: 'Issues',
+        minWidth: 200,
+        valueGetter: (p) => (p.data?.calc_flags ?? []).map(fmtFlag).join('; ') || '—',
+      },
       {
         headerName: 'Delete',
         minWidth: 90,
@@ -597,15 +668,217 @@ export default function CommercialPlannerPage() {
     () => ({
       singleClickEdit: true,
       onCellValueChanged: (e) => void onLineCell(e),
+      onRowClicked: (e) => {
+        if (e.data) setSelectedLineId((prev) => (prev === e.data!.id ? null : e.data!.id));
+      },
     }),
     [onLineCell]
   );
+
+  // ── Line detail panel (shown in right column when a line row is clicked) ─────
+  const lineDetailPanel = selectedLine ? (
+    <Paper sx={{ p: 2 }} data-testid="line-detail-panel">
+      <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
+        <Typography variant="subtitle1" sx={{ flex: 1 }}>
+          Line detail
+        </Typography>
+        <Button size="small" sx={{ minWidth: 0, px: 0.5 }} onClick={() => setSelectedLineId(null)} title="Close">
+          ✕
+        </Button>
+      </Stack>
+
+      {/* Product / entity identity */}
+      <Typography variant="body2" fontWeight={600} sx={{ mb: 0.25 }}>
+        {selectedLine.product_sku ?? '—'}
+        {selectedLine.product_name ? ` — ${selectedLine.product_name}` : ''}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+        {[
+          selectedLine.customer_code && `Cust: ${selectedLine.customer_code}`,
+          selectedLine.distributor_code && `Dist: ${selectedLine.distributor_code}`,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      </Typography>
+
+      <Divider sx={{ mb: 1 }} />
+
+      {/* Planning values */}
+      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+        Planning
+      </Typography>
+      <Stack spacing={0.25} sx={{ mb: 1 }}>
+        <Typography variant="body2">Units: {selectedLine.target_units.toLocaleString()}</Typography>
+        <Typography variant="body2">Target SRP: {fmtCurrency(selectedLine.target_srp_local)}</Typography>
+        {selectedLine.promo_srp_local != null ? (
+          <Typography variant="body2">Promo SRP: {fmtCurrency(selectedLine.promo_srp_local)}</Typography>
+        ) : null}
+        <Typography variant="body2">Promo mix: {(selectedLine.promo_mix_pct * 100).toFixed(0)}%</Typography>
+      </Stack>
+
+      <Divider sx={{ mb: 1 }} />
+
+      {/* Economics */}
+      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+        Economics
+      </Typography>
+      {selectedLine.calc_sell_in_price_usd == null ? (
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }} data-testid="line-detail-not-calculated">
+          Not calculated yet — press <strong>Recalculate</strong>.
+        </Typography>
+      ) : (
+        <Stack spacing={0.25} sx={{ mb: 0.75 }}>
+          <Typography variant="body2">Sell-in: {fmtCurrency(selectedLine.calc_sell_in_price_usd)} USD</Typography>
+          <Typography variant="body2">Buy price: {fmtCurrency(selectedLine.calc_buy_price_usd)} USD</Typography>
+          <Typography variant="body2">Internal GP: {fmtCurrency(selectedLine.calc_internal_gp_usd)} USD</Typography>
+        </Stack>
+      )}
+      {(selectedLine.calc_flags ?? []).length > 0 ? (
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1 }} data-testid="line-detail-flags">
+          {selectedLine.calc_flags!.map((f) => (
+            <Chip key={f} size="small" label={fmtFlag(f)} color="warning" variant="outlined" />
+          ))}
+        </Stack>
+      ) : selectedLine.calc_sell_in_price_usd != null ? (
+        <Chip size="small" label="Economics OK" color="success" variant="outlined" sx={{ mb: 1 }} />
+      ) : null}
+
+      <Divider sx={{ mb: 1 }} />
+
+      {/* Controlled cost / PM bottom */}
+      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+        Controlled cost (PM bottom)
+      </Typography>
+      {selectedLine.override_landed_cost_usd != null ? (
+        <Chip
+          size="small"
+          label={`Line override: ${fmtCurrency(selectedLine.override_landed_cost_usd)} USD`}
+          color="info"
+          variant="outlined"
+          sx={{ mb: 1 }}
+          data-testid="line-detail-cost-override"
+        />
+      ) : (selectedLine.calc_flags ?? []).includes('missing_or_invalid_landed_cost') ? (
+        <Typography variant="caption" color="warning.main" display="block" sx={{ mb: 1 }} data-testid="line-detail-cost-missing">
+          ⚠ Controlled cost unavailable — add a SKU assumption in <strong>Planner defaults</strong> to enable profit calculations.
+          DAP evidence is not PM bottom.
+        </Typography>
+      ) : (
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+          From SKU assumption defaults.
+        </Typography>
+      )}
+
+      {/* Lineup evidence for this product */}
+      {selectedLineEvidenceLoading ? (
+        <Typography variant="caption" color="text.secondary">
+          Loading lineup evidence…
+        </Typography>
+      ) : selectedLineEvidence?.evidence ? (
+        <>
+          <Divider sx={{ mb: 1 }} />
+          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+            Lineup evidence{selectedLineEvidence.evidence.period_label ? ` — ${selectedLineEvidence.evidence.period_label}` : ''}
+          </Typography>
+          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mb: 0.5 }} data-testid="line-detail-evidence">
+            {selectedLineEvidence.evidence.msrp_local != null ? (
+              <Chip size="small" label={`MSRP: ${fmtCurrency(selectedLineEvidence.evidence.msrp_local)}`} variant="outlined" />
+            ) : null}
+            {selectedLineEvidence.evidence.promo_price_local != null ? (
+              <Chip
+                size="small"
+                label={`Promo: ${fmtCurrency(selectedLineEvidence.evidence.promo_price_local)}`}
+                variant="outlined"
+              />
+            ) : null}
+            {selectedLineEvidence.evidence.dap_local != null ? (
+              <Chip
+                size="small"
+                label={`DAP evidence: ${fmtCurrency(selectedLineEvidence.evidence.dap_local)}`}
+                variant="outlined"
+                color="info"
+                title="DAP is source/local evidence — not PM bottom or landed cost"
+              />
+            ) : null}
+            {selectedLineEvidence.evidence.total_quantity_units != null ? (
+              <Chip
+                size="small"
+                label={`Lineup qty: ${selectedLineEvidence.evidence.total_quantity_units}`}
+                variant="outlined"
+              />
+            ) : null}
+          </Stack>
+        </>
+      ) : null}
+
+      {/* Suggestions for this specific line */}
+      {(() => {
+        const bundle = suggestions?.find((b) => b.line_id === selectedLine.id);
+        if (!bundle) return null;
+        const activeSugs = bundle.suggestions
+          .map((s, idx) => ({ s, key: `${bundle.line_id}-${s.type}-${idx}` }))
+          .filter(({ key }) => !dismissed[key]);
+        if (!activeSugs.length) return null;
+        return (
+          <>
+            <Divider sx={{ mb: 1 }} />
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              Suggestions
+            </Typography>
+            {bundle._meta?.data_sources.lineup ? (
+              <Chip
+                size="small"
+                label="Based on lineup evidence"
+                color="info"
+                variant="outlined"
+                sx={{ mb: 0.75 }}
+                data-testid="suggestion-lineup-source"
+              />
+            ) : bundle._meta?.data_sources && !bundle._meta.data_sources.sellout && !bundle._meta.data_sources.forecast ? (
+              <Chip
+                size="small"
+                label="Limited data — suggestions may be weak"
+                color="warning"
+                variant="outlined"
+                sx={{ mb: 0.75 }}
+              />
+            ) : null}
+            <Stack spacing={0.75}>
+              {activeSugs.map(({ s, key }) => (
+                <Paper key={key} variant="outlined" sx={{ p: 1 }}>
+                  <Typography variant="caption" fontWeight={600} display="block">
+                    {sugTypeLabel(s.type)} · {s.confidence} confidence
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                    {s.reason}
+                  </Typography>
+                  <Stack direction="row" spacing={0.75}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={() =>
+                        applySuggestion.mutate({ line_id: bundle.line_id, suggestion_type: s.type, value: s.value })
+                      }
+                    >
+                      Apply
+                    </Button>
+                    <Button size="small" onClick={() => setDismissed((prev) => ({ ...prev, [key]: true }))}>
+                      Dismiss
+                    </Button>
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          </>
+        );
+      })()}
+    </Paper>
+  ) : null;
 
   const plansPanel = (
     <>
       <Paper sx={{ p: 2, mb: 2 }}>
         <ModuleDataSection
-          intro="Choose a plan below, add lines with the builder (search picks master data), recalculate for deterministic economics, then use suggestions if you want assisted tweaks."
           isLoading={isLoading}
           isError={isError}
           error={toQueryError(error)}
@@ -636,7 +909,7 @@ export default function CommercialPlannerPage() {
       </Paper>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} alignItems="stretch">
-        <Box sx={{ flex: 3 }}>
+        <Box sx={{ flex: 3, minWidth: 0 }}>
           <Paper sx={{ p: 2, mb: 2 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
               <Button variant="contained" onClick={() => setAddLineOpen(true)} disabled={activePlanId == null}>
@@ -655,7 +928,7 @@ export default function CommercialPlannerPage() {
                 {planReadiness.missing_sku_assumption > 0 && (
                   <Chip
                     size="small"
-                    label={`Missing SKU assumptions: ${planReadiness.missing_sku_assumption}`}
+                    label={`Missing SKU assumptions: ${planReadiness.missing_sku_assumption} — controlled cost unavailable`}
                     color="warning"
                     variant="outlined"
                   />
@@ -681,75 +954,93 @@ export default function CommercialPlannerPage() {
                 )}
               </Stack>
             )}
+            {lines != null && lines.some((l) => l.calc_sell_in_price_usd == null) && (
+              <Alert severity="info" sx={{ mb: 1, py: 0.5 }} data-testid="recalc-needed-banner">
+                Some lines have no calculated economics — press <strong>Recalculate</strong> to compute.
+              </Alert>
+            )}
             <EnterpriseDataGrid rowData={lines ?? []} columnDefs={lineCols} gridOptions={lineGrid} height={480} />
           </Paper>
           {(summary?.flags?.length ?? 0) > 0 ? (
-            <Alert severity="warning">Plan flags: {summary?.flags.join(', ')}</Alert>
-          ) : (
-            <Alert severity="success">No blocking economics flags detected.</Alert>
-          )}
+            <Alert severity="warning" data-testid="plan-flags-alert">
+              Economics issues: {summary!.flags.map(fmtFlag).join('; ')}
+            </Alert>
+          ) : lines != null && lines.length > 0 ? (
+            <Alert severity="success">Economics OK across all calculated plan lines.</Alert>
+          ) : null}
         </Box>
-        <Box sx={{ flex: 2 }}>
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Typography variant="subtitle1">Plan summary</Typography>
-            <Typography variant="body2">Lines: {summary?.line_count ?? 0}</Typography>
-            <Typography variant="body2">Units: {summary?.total_units ?? 0}</Typography>
-            <Typography variant="body2">Internal GP USD: {summary?.total_internal_gp_usd ?? 0}</Typography>
-            <Typography variant="body2">Promo reserve USD: {summary?.total_promo_reserve_usd ?? 0}</Typography>
-            <Typography variant="body2">Non-promo reserve USD: {summary?.total_non_promo_reserve_usd ?? 0}</Typography>
-          </Paper>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="subtitle1" sx={{ mb: 0.5 }}>
-              Assisted suggestions
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-              Heuristics from history and forecasts — optional. Applying updates the line; use Recalculate when you need refreshed
-              dollar outputs.
-            </Typography>
-            <Stack spacing={1}>
-              {(suggestions ?? []).flatMap((bundle) =>
-                bundle.suggestions
-                  .map((s, idx) => ({ bundle, s, key: `${bundle.line_id}-${s.type}-${idx}` }))
-                  .filter((x) => !dismissed[x.key])
-                  .map(({ bundle, s, key }) => {
+
+        {/* Right column: line detail when selected, otherwise plan summary + suggestions */}
+        <Box sx={{ flex: 2, minWidth: 0 }}>
+          {selectedLine ? (
+            lineDetailPanel
+          ) : (
+            <>
+              <Paper sx={{ p: 2, mb: 2 }} data-testid="plan-summary-panel">
+                <Typography variant="subtitle1">Plan summary</Typography>
+                <Typography variant="body2">Lines: {summary?.line_count ?? 0}</Typography>
+                <Typography variant="body2">Units: {summary?.total_units ?? 0}</Typography>
+                <Typography variant="body2">Internal GP USD: {summary?.total_internal_gp_usd ?? 0}</Typography>
+                <Typography variant="body2">Promo reserve USD: {summary?.total_promo_reserve_usd ?? 0}</Typography>
+                <Typography variant="body2">Non-promo reserve USD: {summary?.total_non_promo_reserve_usd ?? 0}</Typography>
+              </Paper>
+              <Paper sx={{ p: 2 }}>
+                <Typography variant="subtitle1" sx={{ mb: 0.5 }}>
+                  Assisted suggestions
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                  Heuristics from history and forecasts — optional. Applying updates the line; use Recalculate when you need refreshed
+                  dollar outputs. Click a row in the grid to see per-line suggestions with evidence context.
+                </Typography>
+                <Stack spacing={1}>
+                  {(suggestions ?? []).flatMap((bundle) => {
                     const ln = lineById.get(bundle.line_id);
                     const label = lineEntitySummary(ln) || `Line #${bundle.line_id}`;
-                    return (
-                      <Paper key={key} variant="outlined" sx={{ p: 1 }}>
-                        <Typography variant="body2">
-                          <strong>{label}</strong> · {s.type} · {s.confidence}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          {s.reason}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Factors: {Object.keys(s.factors).join(', ')}
-                        </Typography>
-                        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                          <Button
-                            size="small"
-                            variant="contained"
-                            onClick={() =>
-                              applySuggestion.mutate({
-                                line_id: bundle.line_id,
-                                suggestion_type: s.type,
-                                value: s.value,
-                              })
-                            }
-                          >
-                            Apply
-                          </Button>
-                          <Button size="small" onClick={() => setDismissed((prev) => ({ ...prev, [key]: true }))}>
-                            Dismiss
-                          </Button>
-                        </Stack>
-                      </Paper>
-                    );
-                  })
-              )}
-              {!suggestions?.length ? <Typography color="text.secondary">No suggestions available yet.</Typography> : null}
-            </Stack>
-          </Paper>
+                    const isLineupBased = bundle._meta?.data_sources.lineup === true;
+                    return bundle.suggestions
+                      .map((s, idx) => ({ bundle, s, key: `${bundle.line_id}-${s.type}-${idx}` }))
+                      .filter((x) => !dismissed[x.key])
+                      .map(({ bundle, s, key }) => (
+                        <Paper key={key} variant="outlined" sx={{ p: 1 }}>
+                          <Typography variant="body2">
+                            <strong>{label}</strong> · {sugTypeLabel(s.type)} · {s.confidence}
+                          </Typography>
+                          {isLineupBased ? (
+                            <Typography variant="caption" color="info.main" display="block">
+                              Based on lineup evidence
+                            </Typography>
+                          ) : null}
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {s.reason}
+                          </Typography>
+                          <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              onClick={() =>
+                                applySuggestion.mutate({
+                                  line_id: bundle.line_id,
+                                  suggestion_type: s.type,
+                                  value: s.value,
+                                })
+                              }
+                            >
+                              Apply
+                            </Button>
+                            <Button size="small" onClick={() => setDismissed((prev) => ({ ...prev, [key]: true }))}>
+                              Dismiss
+                            </Button>
+                          </Stack>
+                        </Paper>
+                      ));
+                  })}
+                  {!suggestions?.length ? (
+                    <Typography color="text.secondary">No suggestions available yet.</Typography>
+                  ) : null}
+                </Stack>
+              </Paper>
+            </>
+          )}
         </Box>
       </Stack>
 
@@ -1256,27 +1547,39 @@ export default function CommercialPlannerPage() {
   return (
     <>
       <PageHeader crumbs={[{ label: 'Commercial' }, { label: 'Planner' }]} title="Commercial planner" />
-      <Alert severity="info" sx={{ mb: 2 }} data-testid="commercial-planner-workflow-guide">
-        <Typography variant="body2" component="div" sx={{ '& ul': { m: 0, pl: 2.5 }, '& li': { mb: 0.5 } }}>
-          <strong>How this workspace fits together</strong>
-          <ul>
-            <li>
-              <strong>Plans & lines</strong> — Pick a plan, then use <strong>Add line</strong> to open the builder. Customer,
-              distributor, and product are <strong>searchable pick lists</strong> (not raw IDs). Use <strong>Edit</strong> on a row
-              to change those entities. Edit units and prices in the grid; then press <strong>Recalculate</strong> to persist economics.
-            </li>
-            <li>
-              <strong>Planner defaults</strong> — One row per customer, distributor, and SKU for margins, rebates, landed cost, VAT,
-              FX, and reserves. Economics read these unless a line sets an explicit override. After changing defaults, click{' '}
-              <strong>Recalculate</strong> so stored line calcs match.
-            </li>
-            <li>
-              <strong>Assisted suggestions</strong> — Optional hints from history and forecasts. <strong>Apply</strong> writes the
-              suggestion to the line; recalculate again if you need updated dollars.
-            </li>
-          </ul>
-        </Typography>
-      </Alert>
+      <Box sx={{ mb: 2 }} data-testid="commercial-planner-workflow-guide">
+        <Button
+          size="small"
+          variant="text"
+          sx={{ textTransform: 'none', fontWeight: 400 }}
+          onClick={() => setShowGuide((v) => !v)}
+        >
+          ℹ How this workspace fits together {showGuide ? '▴' : '▾'}
+        </Button>
+        {showGuide ? (
+          <Alert severity="info" sx={{ mt: 0.5 }}>
+            <Typography variant="body2" component="div" sx={{ '& ul': { m: 0, pl: 2.5 }, '& li': { mb: 0.5 } }}>
+              <ul>
+                <li>
+                  <strong>Plans & lines</strong> — Pick a plan, then use <strong>Add line</strong> to open the builder. Customer,
+                  distributor, and product are <strong>searchable pick lists</strong> (not raw IDs). Use <strong>Edit</strong> on a row
+                  to change those entities. Edit units and prices in the grid; then press <strong>Recalculate</strong> to persist
+                  economics. <em>Click any grid row to see line detail and per-line evidence in the right panel.</em>
+                </li>
+                <li>
+                  <strong>Planner defaults</strong> — One row per customer, distributor, and SKU for margins, rebates, controlled
+                  cost (PM bottom), VAT, FX, and reserves. Economics read these unless a line sets an explicit override. After
+                  changing defaults, click <strong>Recalculate</strong> so stored line calcs match.
+                </li>
+                <li>
+                  <strong>Assisted suggestions</strong> — Optional hints from history and forecasts. <strong>Apply</strong> writes the
+                  suggestion to the line; recalculate again if you need updated dollars.
+                </li>
+              </ul>
+            </Typography>
+          </Alert>
+        ) : null}
+      </Box>
       <Paper sx={{ px: 2, pt: 1, mb: 2 }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)} aria-label="Commercial planner sections">
           <Tab label="Plans & lines" id="commercial-planner-tab-plans" aria-controls="commercial-planner-panel-plans" />
