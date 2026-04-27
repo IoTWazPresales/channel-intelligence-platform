@@ -128,6 +128,7 @@ type LineupCoverageLine = {
   quantity_units: number | null;
   msrp_local: number | null;
   promo_price_local: number | null;
+  month_split_json: Record<string, number> | null;
   dap_local: number | null;
   actual_dap_local: number | null;
   disti_cost_local: number | null;
@@ -251,6 +252,7 @@ export default function CommercialPlannerPage() {
 
   const [lineupJobId, setLineupJobId] = useState<number | null>(null);
   const [coverageFilter, setCoverageFilter] = useState('');
+  const [showProductGaps, setShowProductGaps] = useState(true);
 
   const { data: plans, isLoading, isError, error } = useQuery({
     queryKey: ['commercial-plans'],
@@ -327,6 +329,11 @@ export default function CommercialPlannerPage() {
       unresolvedCustomers: unresolvedTokens.size,
       unresolvedCustomerRows: coverageLines.filter((l) => l.has_unknown_customer).length,
       warnings: coverageLines.filter((l) => l.has_warnings).length,
+      // Commercial completeness
+      msrpPresent: coverageLines.filter((l) => l.msrp_local != null).length,
+      promoPresent: coverageLines.filter((l) => l.promo_price_local != null).length,
+      dapPresent: coverageLines.filter((l) => l.dap_local != null).length,
+      monthSplitPresent: coverageLines.filter((l) => l.month_split_json != null).length,
     };
   }, [coverageLines]);
 
@@ -853,26 +860,53 @@ export default function CommercialPlannerPage() {
 
       {/* Summary cards */}
       {lineupSummary ? (
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap data-testid="lineup-summary-cards">
-          <Chip size="small" label={`Total: ${lineupSummary.total} lines`} />
-          <Chip
-            size="small"
-            label={`Resolved products: ${lineupSummary.resolvedProducts} / ${lineupSummary.total}`}
-            color="success"
-            variant="outlined"
-          />
-          <Chip
-            size="small"
-            label={`Unresolved customers: ${lineupSummary.unresolvedCustomers} tokens, ${lineupSummary.unresolvedCustomerRows} rows`}
-            color={lineupSummary.unresolvedCustomers > 0 ? 'warning' : 'default'}
-            variant="outlined"
-          />
-          <Chip
-            size="small"
-            label={`Warnings: ${lineupSummary.warnings} rows`}
-            color={lineupSummary.warnings > 0 ? 'error' : 'default'}
-            variant="outlined"
-          />
+        <Stack spacing={0.75} data-testid="lineup-summary-cards">
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Chip size="small" label={`Total: ${lineupSummary.total} lines`} />
+            <Chip
+              size="small"
+              label={`Resolved products: ${lineupSummary.resolvedProducts} / ${lineupSummary.total}`}
+              color="success"
+              variant="outlined"
+            />
+            <Chip
+              size="small"
+              label={`Unresolved customers: ${lineupSummary.unresolvedCustomers} tokens, ${lineupSummary.unresolvedCustomerRows} rows`}
+              color={lineupSummary.unresolvedCustomers > 0 ? 'warning' : 'default'}
+              variant="outlined"
+            />
+            <Chip
+              size="small"
+              label={`Warnings: ${lineupSummary.warnings} rows`}
+              color={lineupSummary.warnings > 0 ? 'error' : 'default'}
+              variant="outlined"
+            />
+          </Stack>
+          {/* Commercial completeness — price and month-split coverage */}
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap data-testid="lineup-completeness-summary">
+            <Chip
+              size="small"
+              label={`MSRP / list price: ${lineupSummary.msrpPresent} / ${lineupSummary.total}`}
+              color={lineupSummary.msrpPresent < lineupSummary.total ? 'warning' : 'success'}
+              variant="outlined"
+            />
+            <Chip
+              size="small"
+              label={`Promo price: ${lineupSummary.promoPresent} / ${lineupSummary.total}`}
+              color={lineupSummary.promoPresent < lineupSummary.total ? 'warning' : 'success'}
+              variant="outlined"
+            />
+            <Chip
+              size="small"
+              label={`DAP evidence: ${lineupSummary.dapPresent} / ${lineupSummary.total}`}
+              variant="outlined"
+            />
+            <Chip
+              size="small"
+              label={`Month split: ${lineupSummary.monthSplitPresent} / ${lineupSummary.total}`}
+              variant="outlined"
+            />
+          </Stack>
         </Stack>
       ) : null}
 
@@ -893,72 +927,89 @@ export default function CommercialPlannerPage() {
       {/* Product defaults coverage */}
       {lineupJobId != null && (productGapsLoading || (productGaps && productGaps.length > 0)) ? (
         <Box data-testid="product-defaults-coverage">
-          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-            Product defaults coverage
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+            <Typography variant="subtitle2">Product defaults coverage</Typography>
+            <Button
+              size="small"
+              variant="text"
+              sx={{ minWidth: 0, p: 0, fontSize: '0.75rem', textTransform: 'none' }}
+              onClick={() => setShowProductGaps((v) => !v)}
+            >
+              {showProductGaps ? 'Hide' : 'Show'}
+            </Button>
+          </Stack>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }} data-testid="product-gaps-caption">
+            Product defaults coverage shows one row per product in this lineup and whether the planner
+            already has SKU-level assumptions for that product. DAP is source/local evidence only, not
+            landed cost.
           </Typography>
-          <Alert severity="info" icon={false} sx={{ mb: 1, py: 0.5 }}>
-            <Typography variant="caption">
-              <strong>Cost semantics:</strong> DAP (Distributor Acquisition Price) is the source import
-              value. It is <em>not</em> the same as landed cost and must not be mapped to{' '}
-              <code>landed_cost_usd</code> without verification.
-            </Typography>
-          </Alert>
-          {productGapsLoading ? (
-            <Typography variant="body2" color="text.secondary" sx={{ pl: 1 }}>
-              Loading product coverage…
-            </Typography>
-          ) : (
-            <Box sx={{ overflowX: 'auto' }}>
-              <Table size="small" sx={{ minWidth: 700 }}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>SKU</TableCell>
-                    <TableCell>Product</TableCell>
-                    <TableCell>SKU assumption</TableCell>
-                    <TableCell align="right">DAP evidence (src/local)</TableCell>
-                    <TableCell align="right">Disti margin</TableCell>
-                    <TableCell align="right">VAT evidence</TableCell>
-                    <TableCell>Gaps</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(productGaps ?? []).map((pg) => (
-                    <TableRow key={pg.product_id}>
-                      <TableCell>{pg.product_sku}</TableCell>
-                      <TableCell>{pg.product_name}</TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={pg.has_sku_assumption ? 'Exists' : 'Missing'}
-                          color={pg.has_sku_assumption ? 'success' : 'warning'}
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell align="right">{fmtCurrency(pg.lineup_evidence.dap_local)}</TableCell>
-                      <TableCell align="right">{fmtMarginPct(pg.lineup_evidence.disti_margin_pct)}</TableCell>
-                      <TableCell align="right">
-                        {pg.lineup_evidence.vat_pct != null ? fmtMarginPct(pg.lineup_evidence.vat_pct) : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {pg.assumption_gaps.length > 0
-                          ? pg.assumption_gaps.map((g) => (
-                              <Chip
-                                key={g}
-                                size="small"
-                                label={g}
-                                color="warning"
-                                variant="outlined"
-                                sx={{ mr: 0.25, mb: 0.25 }}
-                              />
-                            ))
-                          : '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Box>
-          )}
+          {showProductGaps ? (
+            <>
+              <Alert severity="info" icon={false} sx={{ mb: 1, py: 0.5 }}>
+                <Typography variant="caption">
+                  <strong>Cost semantics:</strong> DAP (Distributor Acquisition Price) is the source import
+                  value. It is <em>not</em> the same as landed cost and must not be mapped to{' '}
+                  <code>landed_cost_usd</code> without verification.
+                </Typography>
+              </Alert>
+              {productGapsLoading ? (
+                <Typography variant="body2" color="text.secondary" sx={{ pl: 1 }}>
+                  Loading product coverage…
+                </Typography>
+              ) : (
+                <Box sx={{ overflowX: 'auto' }}>
+                  <Table size="small" sx={{ minWidth: 700 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>SKU</TableCell>
+                        <TableCell>Product</TableCell>
+                        <TableCell>SKU assumption</TableCell>
+                        <TableCell align="right">DAP evidence (src/local)</TableCell>
+                        <TableCell align="right">Disti margin</TableCell>
+                        <TableCell align="right">VAT evidence</TableCell>
+                        <TableCell>Gaps</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {(productGaps ?? []).map((pg) => (
+                        <TableRow key={pg.product_id}>
+                          <TableCell>{pg.product_sku}</TableCell>
+                          <TableCell>{pg.product_name}</TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={pg.has_sku_assumption ? 'Exists' : 'Missing'}
+                              color={pg.has_sku_assumption ? 'success' : 'warning'}
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell align="right">{fmtCurrency(pg.lineup_evidence.dap_local)}</TableCell>
+                          <TableCell align="right">{fmtMarginPct(pg.lineup_evidence.disti_margin_pct)}</TableCell>
+                          <TableCell align="right">
+                            {pg.lineup_evidence.vat_pct != null ? fmtMarginPct(pg.lineup_evidence.vat_pct) : '—'}
+                          </TableCell>
+                          <TableCell>
+                            {pg.assumption_gaps.length > 0
+                              ? pg.assumption_gaps.map((g) => (
+                                  <Chip
+                                    key={g}
+                                    size="small"
+                                    label={g}
+                                    color="warning"
+                                    variant="outlined"
+                                    sx={{ mr: 0.25, mb: 0.25 }}
+                                  />
+                                ))
+                              : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+              )}
+            </>
+          ) : null}
         </Box>
       ) : null}
 
@@ -994,12 +1045,13 @@ export default function CommercialPlannerPage() {
                     <TableCell>Base unit</TableCell>
                     <TableCell>Customer</TableCell>
                     <TableCell align="right">Qty</TableCell>
-                    <TableCell align="right">MSRP</TableCell>
-                    <TableCell align="right">Promo</TableCell>
+                    <TableCell align="right">MSRP / list</TableCell>
+                    <TableCell align="right">Promo price</TableCell>
                     <TableCell align="right">DAP (src/local)</TableCell>
                     <TableCell align="right">Disti %</TableCell>
                     <TableCell align="right">Rebate %</TableCell>
                     <TableCell align="right">VAT %</TableCell>
+                    <TableCell>Month split</TableCell>
                     <TableCell>⚠</TableCell>
                   </TableRow>
                 </TableHead>
@@ -1023,6 +1075,13 @@ export default function CommercialPlannerPage() {
                       </TableCell>
                       <TableCell align="right">{fmtMarginPct(ln.rebate_pct)}</TableCell>
                       <TableCell align="right">{fmtMarginPct(ln.vat_pct)}</TableCell>
+                      <TableCell>
+                        {ln.month_split_json
+                          ? Object.entries(ln.month_split_json)
+                              .map(([m, v]) => `${m}: ${v}`)
+                              .join(' / ')
+                          : '—'}
+                      </TableCell>
                       <TableCell>{ln.has_warnings ? '⚠' : ''}</TableCell>
                     </TableRow>
                   ))}

@@ -204,6 +204,7 @@ def test_lineup_coverage_endpoint_returns_enriched_lines():
         quantity_units=Decimal("12.0000"),
         msrp_local=Decimal("999.0000"),
         promo_price_local=None,
+        month_split_json=None,
         dap_local=None,
         actual_dap_local=None,
         disti_cost_local=None,
@@ -277,6 +278,7 @@ def test_lineup_coverage_includes_extended_commercial_fields():
         quantity_units=Decimal("8.0"),
         msrp_local=Decimal("1200.0"),
         promo_price_local=Decimal("1100.0"),
+        month_split_json={"Apr": 2.0, "May": 3.0, "Jun": 3.0},
         dap_local=Decimal("900.0"),
         actual_dap_local=Decimal("880.0"),
         disti_cost_local=Decimal("750.0"),
@@ -318,6 +320,8 @@ def test_lineup_coverage_includes_extended_commercial_fields():
     assert ln["header_customer_id"] == 7
     assert ln["header_customer_code"] == "CUST-A"
     assert ln["header_customer_name"] == "Customer A"
+    # month_split_json is passed through as-is (dict or null).
+    assert ln["month_split_json"] == {"Apr": 2.0, "May": 3.0, "Jun": 3.0}
 
 
 def test_lineup_product_gaps_returns_per_product_gap_status():

@@ -988,6 +988,7 @@ async def get_lineup_coverage(
                 "diagnostic_codes": codes,
                 "has_warnings": has_warnings,
                 "has_unknown_customer": has_unknown_customer,
+                "month_split_json": ln.month_split_json,
                 "actual_dap_local": float(ln.actual_dap_local) if ln.actual_dap_local is not None else None,
                 "disti_cost_local": float(ln.disti_cost_local) if ln.disti_cost_local is not None else None,
                 "rebate_pct": float(ln.rebate_pct) if ln.rebate_pct is not None else None,

@@ -610,6 +610,142 @@ def test_parse_historical_workbook_asus_style_base_unit_not_in_sku_raw() -> None
     assert "base_unit_raw" in detail["mapped_fields"]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Lineup Commercial Semantics — MSRP, promo, monthly phasing
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_q2_msrp_and_promo_price_map_to_separate_canonical_fields() -> None:
+    """Q2 MSRP → msrp_local (pattern fallback);  Promo Price → promo_price_local (alias).
+
+    Root-cause fix: "Q2 MSRP" normalises to "q2msrp" which doesn't match the alias "msrp"
+    exactly but does end with the root "msrp" and contains no promo disqualifier.
+    """
+    columns = [
+        "Customer", "Model name", "Part Number", "Base Unit",
+        "Qty", "Q2 MSRP", "Promo Price",
+    ]
+    mapping, _ = _build_header_map(columns)
+
+    assert mapping.get("msrp_local") == "Q2 MSRP", (
+        f"Q2 MSRP must map to msrp_local via pattern fallback; got {mapping.get('msrp_local')!r}"
+    )
+    assert mapping.get("promo_price_local") == "Promo Price", (
+        f"Promo Price must map to promo_price_local; got {mapping.get('promo_price_local')!r}"
+    )
+    # The two fields must not share a source column.
+    assert mapping["msrp_local"] != mapping["promo_price_local"], (
+        "msrp_local and promo_price_local must map to different source columns"
+    )
+
+
+def test_standard_msrp_list_price_aliases_map_to_msrp_local() -> None:
+    """SRP, RRP, List Price, Retail Price, New MSRP all map to msrp_local."""
+    cases = [
+        ("SRP", "SRP"),
+        ("RRP", "RRP"),
+        ("List Price", "List Price"),
+        ("Retail Price", "Retail Price"),
+        ("New MSRP", "New MSRP"),
+    ]
+    for col_name, expected_source in cases:
+        mapping, _ = _build_header_map([col_name])
+        assert mapping.get("msrp_local") == expected_source, (
+            f"'{col_name}' should map to msrp_local; got {mapping!r}"
+        )
+
+
+def test_promo_aliases_map_to_promo_price_local() -> None:
+    """Promo SRP, Deal Price, Special Price, Suggested Promo Price all map to promo_price_local."""
+    cases = [
+        "Promo SRP",
+        "Deal Price",
+        "Special Price",
+        "Suggested Promo Price",
+    ]
+    for col_name in cases:
+        mapping, _ = _build_header_map([col_name])
+        assert mapping.get("promo_price_local") == col_name, (
+            f"'{col_name}' should map to promo_price_local; got {mapping!r}"
+        )
+
+
+def test_promo_columns_win_over_msrp_pattern_fallback() -> None:
+    """'Promo SRP' must map to promo_price_local, NOT msrp_local.
+
+    'Promo SRP' normalises to 'promosrp' which ends with 'srp' (an MSRP pattern root).
+    The disqualifier check ('promo' in 'promosrp') must prevent it from landing in msrp_local.
+    The alias match for promo_price_local ('promo_srp') must claim it first.
+    """
+    columns = ["Q2 MSRP", "Promo SRP", "Customer", "Qty"]
+    mapping, _ = _build_header_map(columns)
+
+    assert mapping.get("promo_price_local") == "Promo SRP", (
+        f"Promo SRP must map to promo_price_local; got {mapping!r}"
+    )
+    assert mapping.get("msrp_local") == "Q2 MSRP", (
+        f"Q2 MSRP must map to msrp_local; got {mapping!r}"
+    )
+    # Invariant: no source column shared between canonicals.
+    source_values = list(mapping.values())
+    assert len(source_values) == len(set(source_values)), (
+        f"Duplicate source column in mapping: {mapping}"
+    )
+
+
+def test_month_split_columns_captured_in_payload_and_persisted() -> None:
+    """Apr / May / Jun month columns are detected and stored in month_split_json.
+
+    Month columns must not collide with the canonical mapping (e.g. they must
+    not be claimed by period_label or quantity_units).
+    """
+    def _build_month_split_workbook() -> bytes:
+        rows = pd.DataFrame([
+            {
+                "Customer": "CUST-HL-01",
+                "Model name": "M-NB-1",
+                "Part Number": "SKU-HL-01",
+                "Base Unit": "NB",
+                "Qty": "12",
+                "Q2 MSRP": "999",
+                "Promo Price": "899",
+                "Apr": "4",
+                "May": "4",
+                "Jun": "4",
+            }
+        ])
+        bio = io.BytesIO()
+        with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+            rows.to_excel(writer, sheet_name="Historical Lineup Apr", index=False)
+        return bio.getvalue()
+
+    sheets, _ = parse_historical_workbook("month_split.xlsx", _build_month_split_workbook())
+    assert sheets, "Expected one selected sheet"
+    rows_accepted = [r for r in sheets[0].rows if r.status != "dropped"]
+    assert rows_accepted, "Expected at least one accepted row"
+
+    row_payload = rows_accepted[0].payload
+    assert "_month_split" in row_payload, (
+        f"_month_split must be present when month columns exist; payload keys: {list(row_payload.keys())}"
+    )
+    ms = row_payload["_month_split"]
+    assert isinstance(ms, dict), f"_month_split must be a dict; got {type(ms)}"
+    assert "Apr" in ms, f"Apr must be in month_split; got {ms}"
+    assert "May" in ms, f"May must be in month_split; got {ms}"
+    assert "Jun" in ms, f"Jun must be in month_split; got {ms}"
+    # The values should be string representations of the numeric data.
+    assert ms["Apr"] == "4", f"Apr value must be '4'; got {ms['Apr']!r}"
+
+    # Also verify that Q2 MSRP maps correctly in this workbook (combined scenario).
+    m = sheets[0].mapping
+    assert m.get("msrp_local") == "Q2 MSRP", (
+        f"Q2 MSRP must map to msrp_local in the same workbook; got {m.get('msrp_local')!r}"
+    )
+    assert m.get("promo_price_local") == "Promo Price", (
+        f"Promo Price must map to promo_price_local; got {m.get('promo_price_local')!r}"
+    )
+
+
 def test_buyer_and_sold_to_aliases_map_to_customer_token() -> None:
     """'Buyer' and 'Sold To' are common customer column names in vendor workbooks."""
     for col_name in ("Buyer", "Sold To", "Reseller"):

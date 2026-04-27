@@ -244,8 +244,9 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     {
       id: 1, source_row_number: 5, product_id: 42, product_sku: 'NB-X1', product_name: 'Notebook X1',
       part_number_raw: 'PART-001', model_raw: 'Model X', base_unit_raw: 'NB',
-      quantity_units: 12, msrp_local: 999.0, promo_price_local: 899.0, dap_local: 850.0,
-      actual_dap_local: 830.0, disti_cost_local: 700.0, rebate_pct: 0.03,
+      quantity_units: 12, msrp_local: 999.0, promo_price_local: 899.0,
+      month_split_json: { Apr: 4, May: 4, Jun: 4 },
+      dap_local: 850.0, actual_dap_local: 830.0, disti_cost_local: 700.0, rebate_pct: 0.03,
       dealer_margin_pct: 0.12, vat_pct: 0.15, disti_margin_pct: 0.0724,
       customer_token: 'MATCHED-CUST', header_customer_id: 7, header_customer_code: 'CUST-A',
       header_customer_name: 'Customer A',
@@ -255,8 +256,8 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     {
       id: 2, source_row_number: 6, product_id: null, product_sku: null, product_name: null,
       part_number_raw: 'PART-002', model_raw: 'Model Y', base_unit_raw: 'NB',
-      quantity_units: 5, msrp_local: 799.0, promo_price_local: null, dap_local: null,
-      actual_dap_local: null, disti_cost_local: null, rebate_pct: null,
+      quantity_units: 5, msrp_local: null, promo_price_local: null, month_split_json: null,
+      dap_local: null, actual_dap_local: null, disti_cost_local: null, rebate_pct: null,
       dealer_margin_pct: null, vat_pct: null, disti_margin_pct: null,
       customer_token: 'UNKNOWN-ACCT', header_customer_id: null, header_customer_code: null,
       header_customer_name: null,
@@ -491,5 +492,67 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
       expect(screen.getByTestId('lineup-coverage-table')).toHaveTextContent('Model X');
       expect(screen.getByTestId('lineup-coverage-table')).not.toHaveTextContent('Model Y');
     });
+  });
+
+  // ── commercial semantics ──────────────────────────────────────────────────
+
+  it('coverage table column headers use MSRP / list and Promo price labels', async () => {
+    mockState.lineupJobs = [LINEUP_JOB];
+    mockState.coverageLines = COVERAGE_LINES;
+    mockState.productGaps = PRODUCT_GAPS;
+    const { user } = renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
+
+    const table = await screen.findByTestId('lineup-coverage-table');
+    expect(table).toHaveTextContent('MSRP / list');
+    expect(table).toHaveTextContent('Promo price');
+    // The old bare "MSRP" and "Promo" headers must not appear as standalone header labels.
+    // Note: MSRP appears inside "MSRP / list" so we test for the full phrase.
+    expect(table).not.toHaveTextContent(/^MSRP$/);
+  });
+
+  it('commercial completeness summary shows MSRP, Promo, DAP, and month split counts', async () => {
+    mockState.lineupJobs = [LINEUP_JOB];
+    // row1 has msrp=999, promo=899, dap=850, month_split; row2 has all null
+    mockState.coverageLines = COVERAGE_LINES;
+    mockState.productGaps = [];
+    const { user } = renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
+
+    const completeness = await screen.findByTestId('lineup-completeness-summary');
+    // Only row 1 has MSRP (999) — row 2 has null.
+    expect(completeness).toHaveTextContent('MSRP / list price: 1 / 2');
+    // Only row 1 has promo price.
+    expect(completeness).toHaveTextContent('Promo price: 1 / 2');
+    // Only row 1 has DAP.
+    expect(completeness).toHaveTextContent('DAP evidence: 1 / 2');
+    // Only row 1 has month split.
+    expect(completeness).toHaveTextContent('Month split: 1 / 2');
+  });
+
+  it('month split data renders in coverage table row', async () => {
+    mockState.lineupJobs = [LINEUP_JOB];
+    mockState.coverageLines = COVERAGE_LINES;
+    mockState.productGaps = PRODUCT_GAPS;
+    const { user } = renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
+
+    const table = await screen.findByTestId('lineup-coverage-table');
+    // Row 1 has month_split_json: {Apr: 4, May: 4, Jun: 4}
+    expect(table).toHaveTextContent('Apr: 4');
+    expect(table).toHaveTextContent('May: 4');
+  });
+
+  it('product defaults coverage explanation caption is visible', async () => {
+    mockState.lineupJobs = [LINEUP_JOB];
+    mockState.coverageLines = COVERAGE_LINES;
+    mockState.productGaps = PRODUCT_GAPS;
+    const { user } = renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
+
+    const caption = await screen.findByTestId('product-gaps-caption');
+    expect(caption).toHaveTextContent('Product defaults coverage shows one row per product');
+    expect(caption).toHaveTextContent('DAP is source/local evidence only');
+    expect(caption).toHaveTextContent('not landed cost');
   });
 });

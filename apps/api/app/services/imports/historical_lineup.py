@@ -21,6 +21,20 @@ _SHEET_ALLOW_WORDS = ("lineup", "plan", "history", "historical", "assortment")
 _SUMMARY_ROW_MARKERS = ("total", "subtotal", "grand total", "summary")
 _HEADER_SCAN_MAX_ROWS = 12
 
+# 3-letter month abbreviations used for monthly phasing column detection.
+_MONTH_ABBREVS: frozenset[str] = frozenset({
+    "jan", "feb", "mar", "apr", "may", "jun",
+    "jul", "aug", "sep", "oct", "nov", "dec",
+})
+
+# Pattern-fallback roots for period-prefixed MSRP/SRP/RRP columns not caught by exact aliases.
+# Example: "Q2 MSRP" → normalised "q2msrp" ends with "msrp" → maps to msrp_local.
+_MSRP_PATTERN_ROOTS: frozenset[str] = frozenset({"msrp", "srp", "rrp", "listprice", "retailprice"})
+
+# Tokens that disqualify a column from the MSRP pattern fallback.
+# "Promo SRP" must NOT map to msrp_local — it belongs to promo_price_local.
+_PROMO_DISQUALIFIERS: frozenset[str] = frozenset({"promo", "deal", "special"})
+
 _CANONICAL_ALIASES: dict[str, list[str]] = {
     "customer_token": ["customer", "customer_code", "account", "account_name", "end customer", "buyer", "sold to", "reseller"],
     "distributor_token": ["distributor", "disti", "distributor_code", "partner"],
@@ -35,8 +49,16 @@ _CANONICAL_ALIASES: dict[str, list[str]] = {
     "part_number_raw": ["part_number", "mpn", "part no", "part number", "sales part number", "sales_part_number"],
     "model_raw": ["model", "model_name", "model name", "series"],
     "base_unit_raw": ["base_unit", "baseunit", "base unit"],
-    "msrp_local": ["msrp", "list_price", "rrp"],
-    "promo_price_local": ["promo_price", "promo", "sell_price", "street_price"],
+    # msrp_local: standard list/retail price aliases.  Period-prefixed variants (Q2 MSRP,
+    # FY SRP, 2026 MSRP) are handled by the pattern fallback in _build_header_map below.
+    "msrp_local": ["msrp", "srp", "rrp", "list_price", "retail_price", "new_msrp"],
+    # promo_price_local: promo/deal/special price aliases.  These are checked BEFORE the
+    # MSRP pattern fallback and their source columns are claimed, so "Promo SRP" is never
+    # misrouted to msrp_local.
+    "promo_price_local": [
+        "promo_price", "promo_srp", "promo", "deal_price", "special_price",
+        "suggested_promo_price", "sell_price", "street_price",
+    ],
     "quantity_units": ["qty", "quantity", "units", "forecast_qty"],
     "dap_local": ["dap"],
     "actual_dap_local": ["actual_dap", "actual dap"],
@@ -127,6 +149,22 @@ def _build_header_map(columns: list[str]) -> tuple[dict[str, str], float]:
                 claimed_sources.add(actual)
                 matched_aliases += 1
                 break
+
+    # Pattern-based fallback for period-prefixed MSRP/SRP/RRP variants that didn't match
+    # any exact alias above.  Examples: "Q2 MSRP" → "q2msrp" ends with "msrp",
+    # "FY SRP" → "fysrp" ends with "srp", "2026 MSRP" → "2026msrp" ends with "msrp".
+    # Columns containing promo/deal/special disqualifiers are excluded so that "Promo SRP"
+    # is never routed to msrp_local (it is already claimed by promo_price_local aliases).
+    if "msrp_local" not in mapping:
+        for norm_col, actual_col in normalized_cols.items():
+            if actual_col not in claimed_sources:
+                if any(norm_col.endswith(root) for root in _MSRP_PATTERN_ROOTS):
+                    if not any(disq in norm_col for disq in _PROMO_DISQUALIFIERS):
+                        mapping["msrp_local"] = actual_col
+                        claimed_sources.add(actual_col)
+                        matched_aliases += 1
+                        break
+
     confidence = (matched_aliases / total_aliases) if total_aliases else 0.0
     return mapping, confidence
 
@@ -261,6 +299,15 @@ def parse_historical_workbook(
         data.columns = header_tokens[: data.shape[1]]
         data = data.loc[:, [c for c in data.columns if _clean_str(c) is not None]]
 
+        # Detect monthly phasing columns (Jan–Dec 3-letter abbreviations) that are not
+        # already claimed by a canonical mapping.  Values will be collected per row and
+        # stored in month_split_json on the persisted line.
+        _mapped_source_cols = set(mapping.values())
+        month_columns = [
+            tok for tok in data.columns
+            if _norm_token(tok) in _MONTH_ABBREVS and tok not in _mapped_source_cols
+        ]
+
         rows: list[ParsedRow] = []
         seen_row_keys: set[tuple[str, str, str, str]] = set()
         for idx, row in data.iterrows():
@@ -284,6 +331,16 @@ def parse_historical_workbook(
             normalized: dict[str, Any] = {}
             for canonical, source_col in mapping.items():
                 normalized[canonical] = row.get(source_col)
+
+            # Collect monthly phasing values (Apr, May, Jun, etc.) into a dict
+            # stored under the _month_split sentinel key in the normalized payload.
+            month_split: dict[str, str] = {}
+            for mc in month_columns:
+                raw_mv = _clean_str(row.get(mc))
+                if raw_mv:
+                    month_split[mc] = raw_mv
+            if month_split:
+                normalized["_month_split"] = month_split
 
             sku_token = _clean_str(normalized.get("sku_raw"))
             part_token = _clean_str(normalized.get("part_number_raw"))
@@ -317,7 +374,11 @@ def parse_historical_workbook(
             rows.append(
                 ParsedRow(
                     row_number=int(idx) + 1,
-                    payload={k: _clean_str(v) for k, v in normalized.items()},
+                    # _month_split is a dict — keep it as-is; all other values are string-cleaned.
+                    payload={
+                        k: (v if k == "_month_split" else _clean_str(v))
+                        for k, v in normalized.items()
+                    },
                     diagnostics=diagnostics,
                     status="accepted" if "missing_key_fields" not in diagnostics else "rejected",
                     confidence=map_conf,
@@ -645,6 +706,17 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
             )
 
             if job.import_mode == "apply" and header is not None and parsed.status != "dropped":
+                # Reconstruct month_split_json from the _month_split sentinel in the payload.
+                _month_split_raw = payload.get("_month_split")
+                month_split_json: dict[str, float] | None = None
+                if isinstance(_month_split_raw, dict) and _month_split_raw:
+                    _parsed_months = {
+                        month: float(dec)
+                        for month, raw_mv in _month_split_raw.items()
+                        if (dec := _parse_decimal(raw_mv)) is not None
+                    }
+                    if _parsed_months:
+                        month_split_json = _parsed_months
                 db.add(
                     HistoricalLineupImportLine(
                         header_id=header.id,
@@ -657,7 +729,7 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
                         msrp_local=parsed_numeric["msrp_local"],
                         promo_price_local=parsed_numeric["promo_price_local"],
                         quantity_units=parsed_numeric["quantity_units"],
-                        month_split_json=None,
+                        month_split_json=month_split_json,
                         dap_local=parsed_numeric["dap_local"],
                         actual_dap_local=parsed_numeric["actual_dap_local"],
                         disti_cost_local=parsed_numeric["disti_cost_local"],
