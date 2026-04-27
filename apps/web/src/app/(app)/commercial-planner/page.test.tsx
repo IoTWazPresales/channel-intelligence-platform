@@ -184,11 +184,15 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
         const gpCol = columnDefs?.find((c: any) => c.field === 'calc_internal_gp_usd');
         const gpDisplay =
           typeof gpCol?.valueGetter === 'function' ? String(gpCol.valueGetter({ data: r } as any) ?? '') : '';
+        const cpuCol = columnDefs?.find((c: any) => c.field === 'product_spec_cpu');
+        const cpuDisplay =
+          typeof cpuCol?.valueGetter === 'function' ? String(cpuCol.valueGetter({ data: r } as any) ?? '') : '';
         return (
           <div
             key={r.id}
             data-testid={`grid-row-${r.id}`}
             data-internal-gp-display={gpDisplay}
+            data-cpu-display={cpuDisplay}
             onClick={() => gridOptions?.onRowClicked?.({ data: r })}
           >
             {r.id}
@@ -201,16 +205,25 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
             (c: any) =>
               c.field &&
               [
+                'product_spec_warranty',
+                'product_spec_os',
+                'product_spec_colour',
                 'product_category',
                 'product_form_factor',
                 'product_lifecycle_status',
                 'product_line',
                 'product_series_name',
                 'product_business_unit',
+                'effective_customer_margin_pct',
+                'effective_customer_rebate_pct',
+                'effective_distributor_margin_pct',
+                'effective_vat_rate_pct',
+                'effective_fx_rate_to_usd',
+                'effective_reserve_total_pct',
+                'effective_promo_reserve_split_pct',
+                'effective_controlled_cost_usd_per_unit',
                 'promo_mix_pct',
                 'calc_buy_price_usd',
-                'calc_customer_gp_pct',
-                'calc_distributor_gp_pct',
                 'calc_promo_reserve_usd',
                 'calc_non_promo_reserve_usd',
               ].includes(c.field) &&
@@ -360,11 +373,16 @@ describe('CommercialPlannerPage — QA polish', () => {
   }
 
   beforeEach(() => {
+    localStorage.clear();
     mockState.apiGetMock.mockClear();
     mockState.apiPostMock.mockClear();
+    mockState.lineupJobs = [];
+    mockState.coverageLines = [];
     mockState.apiGetMock.mockImplementation(async (url: string) => {
       if (url.startsWith('/api/v1/commercial-planner/lineup-evidence')) return mockState.lineupEvidence;
       if (url.startsWith('/api/v1/commercial-planner/plans/1/readiness')) return mockState.planReadiness;
+      if (url === '/api/v1/commercial-planner/lineup-jobs') return mockState.lineupJobs;
+      if (url.startsWith('/api/v1/commercial-planner/lineup-coverage')) return mockState.coverageLines;
       if (url === '/api/v1/commercial-planner/plans') {
         return [{ id: 1, plan_name: 'Q3 Plan', status: 'draft', period_start: '2026-07-01', period_end: null, owner: 'planner', currency_code: 'USD', line_count: 1, notes: null }];
       }
@@ -430,7 +448,7 @@ describe('CommercialPlannerPage — QA polish', () => {
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     await user.click(await screen.findByTestId('column-manager-btn'));
     expect(await screen.findByText('Column visibility')).toBeInTheDocument();
-    expect(await screen.findByText('Catalogue')).toBeInTheDocument();
+    expect(await screen.findByText('Product catalogue (optional)')).toBeInTheDocument();
     expect(screen.getByTestId('col-toggle-promo_mix_pct')).toBeInTheDocument();
   });
 
@@ -445,11 +463,148 @@ describe('CommercialPlannerPage — QA polish', () => {
     expect(await screen.findByTestId('visible-optional-cols')).toHaveTextContent('');
   });
 
-  it('grid Internal GP shows em dash when line has blocking flag', async () => {
+  it('grid estimated internal margin shows em dash when line has blocking flag', async () => {
     renderPage();
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     const row = await screen.findByTestId('grid-row-11');
     expect(row.getAttribute('data-internal-gp-display')).toBe('—');
+  });
+
+  it('persists optional column toggles under localStorage key cip.commercial-planner.gridColumns.v3', async () => {
+    localStorage.clear();
+    const { user } = renderPage();
+    await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    await user.click(await screen.findByTestId('column-manager-btn'));
+    await user.click(await screen.findByTestId('col-toggle-effective_fx_rate_to_usd'));
+    await waitFor(() => {
+      const raw = localStorage.getItem('cip.commercial-planner.gridColumns.v3');
+      expect(raw).toBeTruthy();
+      const parsed = JSON.parse(raw!);
+      expect(parsed.version).toBe(3);
+      expect(parsed.optional?.effective_fx_rate_to_usd).toBe(true);
+    });
+  });
+
+  it('CPU spec column shows em dash when API omits product_spec_cpu (no fake values)', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    const row = await screen.findByTestId('grid-row-11');
+    expect(row.getAttribute('data-cpu-display')).toBe('—');
+  });
+
+  it('toggling effective FX shows column in grid defs', async () => {
+    const { user } = renderPage();
+    await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    await user.click(await screen.findByTestId('column-manager-btn'));
+    await user.click(await screen.findByTestId('col-toggle-effective_fx_rate_to_usd'));
+    expect(await screen.findByTestId('visible-optional-cols')).toHaveTextContent('effective_fx_rate_to_usd');
+  });
+
+  it('Add from lineup posts new lines without landed_cost_usd and skips plan duplicates', async () => {
+    mockState.lineupJobs = [
+      {
+        id: 77,
+        file_name: 'q2.xlsx',
+        status: 'completed',
+        stage: 'validated',
+        period_label: '2026-Q2',
+        country_code: 'ZA',
+        currency_code: 'USD',
+        line_count: 2,
+      },
+    ];
+    mockState.coverageLines = [
+      {
+        id: 501,
+        source_row_number: 1,
+        product_id: 1,
+        product_sku: 'NB-X1',
+        product_name: 'Notebook X1',
+        part_number_raw: 'P1',
+        model_raw: 'M1',
+        base_unit_raw: 'NB',
+        quantity_units: 5,
+        msrp_local: 800,
+        promo_price_local: 750,
+        month_split_json: null,
+        dap_local: 600,
+        actual_dap_local: null,
+        disti_cost_local: null,
+        rebate_pct: null,
+        dealer_margin_pct: null,
+        vat_pct: null,
+        disti_margin_pct: null,
+        customer_token: 'T1',
+        header_customer_id: 1,
+        header_customer_code: 'ACME',
+        header_customer_name: 'Acme',
+        header_distributor_id: 1,
+        header_distributor_code: 'DIST01',
+        header_distributor_name: 'Summit',
+        diagnostic_codes: [],
+        has_warnings: false,
+        has_unknown_customer: false,
+        period_label: '2026-Q2',
+        country_code: 'ZA',
+        currency_code: 'USD',
+      },
+      {
+        id: 502,
+        source_row_number: 2,
+        product_id: 99,
+        product_sku: 'NB-Z9',
+        product_name: 'Z9',
+        part_number_raw: 'P2',
+        model_raw: 'M2',
+        base_unit_raw: 'NB',
+        quantity_units: null,
+        msrp_local: 1200,
+        promo_price_local: null,
+        month_split_json: { Apr: 2, May: 3 },
+        dap_local: 900,
+        actual_dap_local: null,
+        disti_cost_local: null,
+        rebate_pct: null,
+        dealer_margin_pct: null,
+        vat_pct: null,
+        disti_margin_pct: null,
+        customer_token: 'T2',
+        header_customer_id: 1,
+        header_customer_code: 'ACME',
+        header_customer_name: 'Acme',
+        header_distributor_id: 1,
+        header_distributor_code: 'DIST01',
+        header_distributor_name: 'Summit',
+        diagnostic_codes: [],
+        has_warnings: false,
+        has_unknown_customer: false,
+        period_label: '2026-Q2',
+        country_code: 'ZA',
+        currency_code: 'USD',
+      },
+    ];
+    const { user } = renderPage();
+    await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    await user.click(await screen.findByTestId('add-from-lineup-btn'));
+    const dialog = await screen.findByTestId('add-from-lineup-dialog');
+    expect(dialog).toBeInTheDocument();
+    await screen.findByTestId('add-lineup-job-select');
+    await waitFor(() => expect(screen.getByTestId('lineup-modal-table')).toBeInTheDocument());
+    await user.click(await screen.findByTestId('lineup-modal-select-all'));
+    await user.click(await screen.findByTestId('lineup-modal-create'));
+    await waitFor(() => expect(screen.getByTestId('lineup-batch-summary')).toBeInTheDocument());
+    expect(screen.getByTestId('lineup-batch-summary')).toHaveTextContent('Created 1');
+    expect(screen.getByTestId('lineup-batch-summary')).toHaveTextContent('skipped duplicates 1');
+    const linePosts = mockState.apiPostMock.mock.calls.filter(
+      (c) => String(c[0]) === '/api/v1/commercial-planner/plans/1/lines'
+    );
+    expect(linePosts.length).toBe(1);
+    const body = linePosts[0][1] as Record<string, unknown>;
+    expect(body.product_id).toBe(99);
+    expect(body.target_units).toBe(5);
+    expect(body.target_srp_local).toBe(1200);
+    expect('landed_cost_usd' in body).toBe(false);
+    expect('override_landed_cost_usd' in body).toBe(false);
   });
 
   it('fractional target_units suggestion preview shows rounded value and confirm sends integer', async () => {
@@ -1185,16 +1340,16 @@ describe('CommercialPlannerPage — Workspace V1', () => {
     expect(summary).toHaveTextContent('Units:');
     expect(await screen.findByTestId('economics-incomplete-chip')).toBeInTheDocument();
     expect(summary).toHaveTextContent('Complete missing defaults, then Recalculate.');
-    expect(summary).not.toHaveTextContent('Estimated internal GP USD');
+    expect(summary).not.toHaveTextContent('Estimated internal margin USD');
   });
 
-  it('plan summary strip shows "Estimated internal GP USD" when economics are complete', async () => {
+  it('plan summary strip shows "Estimated internal margin USD" when economics are complete', async () => {
     // Default mock has clean line + flags: [] → economicsComplete = true
     renderPage();
     await screen.findByText(/Q3 Plan \(draft\)/i);
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     const summary = screen.getByTestId('plan-summary-panel');
-    expect(summary).toHaveTextContent('Estimated internal GP USD');
+    expect(summary).toHaveTextContent('Estimated internal margin USD');
     expect(summary).toHaveTextContent('Promo reserve USD');
     expect(summary).not.toHaveTextContent('Economics incomplete');
   });

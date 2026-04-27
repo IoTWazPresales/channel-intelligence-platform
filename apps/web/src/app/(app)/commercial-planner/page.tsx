@@ -74,6 +74,24 @@ type PlanLine = {
   product_line?: string | null;
   product_series_name?: string | null;
   product_business_unit?: string | null;
+  product_spec_cpu?: string | null;
+  product_spec_ram?: string | null;
+  product_spec_storage?: string | null;
+  product_spec_gpu?: string | null;
+  product_spec_display?: string | null;
+  product_spec_warranty?: string | null;
+  product_spec_os?: string | null;
+  product_spec_colour?: string | null;
+  effective_customer_margin_pct?: number | null;
+  effective_customer_rebate_pct?: number | null;
+  effective_distributor_margin_pct?: number | null;
+  effective_vat_rate_pct?: number | null;
+  effective_fx_rate_to_usd?: number | null;
+  effective_reserve_total_pct?: number | null;
+  effective_promo_reserve_split_pct?: number | null;
+  effective_controlled_cost_usd_per_unit?: number | null;
+  calc_sell_in_price_local?: number | null;
+  calc_distributor_net_local?: number | null;
   target_units: number;
   target_srp_local: number;
   promo_srp_local: number | null;
@@ -166,6 +184,9 @@ type LineupCoverageLine = {
   header_customer_id: number | null;
   header_customer_code: string | null;
   header_customer_name: string | null;
+  header_distributor_id: number | null;
+  header_distributor_code: string | null;
+  header_distributor_name: string | null;
   diagnostic_codes: string[];
   has_warnings: boolean;
   has_unknown_customer: boolean;
@@ -300,6 +321,17 @@ export function roundPlannerUnits(n: number): number {
   return Math.round(Number(n));
 }
 
+/** Sum month_split_json values for lineup-derived default units (read-only). */
+export function monthSplitTotalUnits(m: Record<string, number> | null | undefined): number | null {
+  if (!m || typeof m !== 'object') return null;
+  let t = 0;
+  for (const v of Object.values(m)) {
+    const n = Number(v);
+    if (Number.isFinite(n)) t += n;
+  }
+  return t > 0 ? t : null;
+}
+
 /** Model / sales model for grid and detail (read-only from DimProduct). */
 export function fmtModelSalesModel(line: {
   product_model_name?: string | null;
@@ -320,6 +352,8 @@ export function economicsBlockingTooltip(line: PlanLine | undefined): string | u
   return msgs.length ? msgs.join(' · ') : 'Economics blocked — see Issues column.';
 }
 
+const SPECS_OPTIONAL_FIELDS = ['product_spec_warranty', 'product_spec_os', 'product_spec_colour'] as const;
+
 const CATALOGUE_OPTIONAL_FIELDS = [
   'product_category',
   'product_form_factor',
@@ -329,55 +363,84 @@ const CATALOGUE_OPTIONAL_FIELDS = [
   'product_business_unit',
 ] as const;
 
+const COMMERCIAL_TERM_OPTIONAL_FIELDS = [
+  'effective_customer_margin_pct',
+  'effective_customer_rebate_pct',
+  'effective_distributor_margin_pct',
+  'effective_vat_rate_pct',
+  'effective_fx_rate_to_usd',
+  'effective_reserve_total_pct',
+  'effective_promo_reserve_split_pct',
+  'effective_controlled_cost_usd_per_unit',
+] as const;
+
 const PLANNING_OPTIONAL_FIELDS = ['promo_mix_pct'] as const;
 
-const ECONOMICS_OPTIONAL_FIELDS = [
+const USD_OUTPUT_OPTIONAL_FIELDS = [
   'calc_buy_price_usd',
-  'calc_customer_gp_pct',
-  'calc_distributor_gp_pct',
   'calc_promo_reserve_usd',
   'calc_non_promo_reserve_usd',
 ] as const;
 
 const OPTIONAL_GRID_COL_FIELDS = [
+  ...SPECS_OPTIONAL_FIELDS,
   ...CATALOGUE_OPTIONAL_FIELDS,
+  ...COMMERCIAL_TERM_OPTIONAL_FIELDS,
   ...PLANNING_OPTIONAL_FIELDS,
-  ...ECONOMICS_OPTIONAL_FIELDS,
+  ...USD_OUTPUT_OPTIONAL_FIELDS,
 ] as const;
 
 type OptionalGridColField = (typeof OPTIONAL_GRID_COL_FIELDS)[number];
 
+const LS_GRID_COLS_V3 = 'cip.commercial-planner.gridColumns.v3';
 const LS_GRID_COLS_V2 = 'cip.commercial-planner.gridColumns.v2';
-/** Legacy key — read once to migrate user toggles into v2. */
 const LS_OPTIONAL_COLS_V1 = 'cip.commercial-planner.optionalColumns.v1';
 
 const OPTIONAL_COLUMN_LABELS: Record<OptionalGridColField, string> = {
+  product_spec_warranty: 'Warranty',
+  product_spec_os: 'OS',
+  product_spec_colour: 'Colour',
   product_category: 'Category',
   product_form_factor: 'Form factor',
   product_lifecycle_status: 'Lifecycle',
   product_line: 'Product line',
   product_series_name: 'Series',
   product_business_unit: 'Business unit',
+  effective_customer_margin_pct: 'Customer margin % (effective)',
+  effective_customer_rebate_pct: 'Customer rebate % (effective)',
+  effective_distributor_margin_pct: 'Distributor margin % (effective)',
+  effective_vat_rate_pct: 'VAT % (effective)',
+  effective_fx_rate_to_usd: 'FX (local per USD, effective)',
+  effective_reserve_total_pct: 'Reserve total % (effective)',
+  effective_promo_reserve_split_pct: 'Promo reserve split % (effective)',
+  effective_controlled_cost_usd_per_unit: 'Controlled cost USD / unit (effective)',
   promo_mix_pct: 'Promo mix %',
-  calc_buy_price_usd: 'Net after disti margin USD / unit',
-  calc_customer_gp_pct: 'Cust GP %',
-  calc_distributor_gp_pct: 'Disti GP %',
+  calc_buy_price_usd: 'Est. net after distributor margin USD / unit',
   calc_promo_reserve_usd: 'Promo reserve USD',
   calc_non_promo_reserve_usd: 'Non-promo reserve USD',
 };
 
 function defaultOptionalVisibility(): Record<OptionalGridColField, boolean> {
   return {
+    product_spec_warranty: false,
+    product_spec_os: false,
+    product_spec_colour: false,
     product_category: false,
     product_form_factor: false,
     product_lifecycle_status: false,
     product_line: false,
     product_series_name: false,
     product_business_unit: false,
+    effective_customer_margin_pct: false,
+    effective_customer_rebate_pct: false,
+    effective_distributor_margin_pct: false,
+    effective_vat_rate_pct: false,
+    effective_fx_rate_to_usd: false,
+    effective_reserve_total_pct: false,
+    effective_promo_reserve_split_pct: false,
+    effective_controlled_cost_usd_per_unit: false,
     promo_mix_pct: false,
     calc_buy_price_usd: false,
-    calc_customer_gp_pct: false,
-    calc_distributor_gp_pct: false,
     calc_promo_reserve_usd: false,
     calc_non_promo_reserve_usd: false,
   };
@@ -534,15 +597,41 @@ export default function CommercialPlannerPage() {
     defaultOptionalVisibility()
   );
   const [suggestionPreview, setSuggestionPreview] = useState<SuggestionPreviewState | null>(null);
+  const [addFromLineupOpen, setAddFromLineupOpen] = useState(false);
+  const [addLineupJobId, setAddLineupJobId] = useState<number | null>(null);
+  const [lineupModalFilter, setLineupModalFilter] = useState('');
+  const [lineupResolvedOnly, setLineupResolvedOnly] = useState(false);
+  const [lineupUnresolvedCustOnly, setLineupUnresolvedCustOnly] = useState(false);
+  const [lineupWarningsOnly, setLineupWarningsOnly] = useState(false);
+  const [lineupSelectedIds, setLineupSelectedIds] = useState<number[]>([]);
+  const [lineupFbCustomer, setLineupFbCustomer] = useState<CustomerPick | null>(null);
+  const [lineupFbDistributor, setLineupFbDistributor] = useState<DistributorPick | null>(null);
+  const [lineupBatchSummary, setLineupBatchSummary] = useState<string | null>(null);
+  const [lineupBatchRunning, setLineupBatchRunning] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      const rawV2 = localStorage.getItem(LS_GRID_COLS_V2);
-      if (rawV2) {
-        const parsed = JSON.parse(rawV2) as { optional?: Partial<Record<OptionalGridColField, boolean>> };
+      const rawV3 = localStorage.getItem(LS_GRID_COLS_V3);
+      if (rawV3) {
+        const parsed = JSON.parse(rawV3) as { optional?: Partial<Record<OptionalGridColField, boolean>> };
         if (parsed.optional && typeof parsed.optional === 'object') {
           setOptionalVisible((prev) => ({ ...prev, ...parsed.optional }));
+        }
+        setOptionalColsHydrated(true);
+        return;
+      }
+      const rawV2 = localStorage.getItem(LS_GRID_COLS_V2);
+      if (rawV2) {
+        const parsed = JSON.parse(rawV2) as { optional?: Partial<Record<string, boolean>> };
+        if (parsed.optional && typeof parsed.optional === 'object') {
+          const migrated: Partial<Record<OptionalGridColField, boolean>> = {};
+          for (const k of OPTIONAL_GRID_COL_FIELDS) {
+            if (k in parsed.optional && typeof (parsed.optional as any)[k] === 'boolean') {
+              migrated[k] = (parsed.optional as any)[k];
+            }
+          }
+          if (Object.keys(migrated).length) setOptionalVisible((prev) => ({ ...prev, ...migrated }));
         }
         setOptionalColsHydrated(true);
         return;
@@ -565,7 +654,7 @@ export default function CommercialPlannerPage() {
   useEffect(() => {
     if (!optionalColsHydrated || typeof window === 'undefined') return;
     try {
-      localStorage.setItem(LS_GRID_COLS_V2, JSON.stringify({ version: 2, optional: optionalVisible }));
+      localStorage.setItem(LS_GRID_COLS_V3, JSON.stringify({ version: 3, optional: optionalVisible }));
     } catch {
       /* ignore */
     }
@@ -580,7 +669,7 @@ export default function CommercialPlannerPage() {
   const { data: lineupJobs, isLoading: lineupJobsLoading } = useQuery({
     queryKey: ['lineup-jobs'],
     queryFn: ({ signal }) => apiGet<LineupJob[]>('/api/v1/commercial-planner/lineup-jobs', { signal }),
-    enabled: tab === 2,
+    enabled: tab === 2 || (tab === 0 && addFromLineupOpen),
   });
 
   const { data: coverageLines, isLoading: coverageLoading } = useQuery({
@@ -591,6 +680,20 @@ export default function CommercialPlannerPage() {
         { signal }
       ),
     enabled: lineupJobId != null && tab === 2,
+  });
+
+  useEffect(() => {
+    if (!addFromLineupOpen) return;
+    if (addLineupJobId == null && lineupJobs && lineupJobs.length > 0) {
+      setAddLineupJobId(lineupJobs[0].id);
+    }
+  }, [addFromLineupOpen, addLineupJobId, lineupJobs]);
+
+  const { data: lineupModalLines, isFetching: lineupModalLoading } = useQuery({
+    queryKey: ['lineup-coverage-modal', addLineupJobId],
+    queryFn: ({ signal }) =>
+      apiGet<LineupCoverageLine[]>(`/api/v1/commercial-planner/lineup-coverage?job_id=${addLineupJobId}`, { signal }),
+    enabled: tab === 0 && addFromLineupOpen && addLineupJobId != null,
   });
 
   const { data: productGaps, isLoading: productGapsLoading } = useQuery({
@@ -617,6 +720,10 @@ export default function CommercialPlannerPage() {
   }, [lineupJobId]);
 
   const activePlanId = selectedPlanId ?? plans?.[0]?.id ?? null;
+  const planCurrencyCode = useMemo(
+    () => plans?.find((p) => p.id === activePlanId)?.currency_code ?? 'USD',
+    [plans, activePlanId]
+  );
   const { data: lines, isPending: linesPending } = useQuery({
     queryKey: ['commercial-plan-lines', activePlanId],
     queryFn: ({ signal }) => apiGet<PlanLine[]>(`/api/v1/commercial-planner/plans/${activePlanId}/lines`, { signal }),
@@ -652,6 +759,101 @@ export default function CommercialPlannerPage() {
   });
 
   const lineById = useMemo(() => new Map((lines ?? []).map((l) => [l.id, l])), [lines]);
+
+  const lineupDupKeySet = useMemo(() => {
+    const s = new Set<string>();
+    for (const l of lines ?? []) {
+      s.add(`${l.customer_id}|${l.distributor_id}|${l.product_id}`);
+    }
+    return s;
+  }, [lines]);
+
+  const lineupFilteredRows = useMemo(() => {
+    let r = lineupModalLines ?? [];
+    if (lineupResolvedOnly) r = r.filter((x) => x.product_id != null);
+    if (lineupUnresolvedCustOnly) r = r.filter((x) => x.has_unknown_customer);
+    if (lineupWarningsOnly) r = r.filter((x) => x.has_warnings);
+    const q = lineupModalFilter.trim().toLowerCase();
+    if (q) {
+      r = r.filter((x) =>
+        [x.product_sku, x.product_name, x.model_raw, x.part_number_raw, x.customer_token].some((v) =>
+          v != null && String(v).toLowerCase().includes(q)
+        )
+      );
+    }
+    return r;
+  }, [lineupModalLines, lineupResolvedOnly, lineupUnresolvedCustOnly, lineupWarningsOnly, lineupModalFilter]);
+
+  const runAddFromLineup = useCallback(async () => {
+    if (activePlanId == null) return;
+    setLineupBatchRunning(true);
+    setLineupBatchSummary(null);
+    let created = 0;
+    let skippedDup = 0;
+    let skippedIneligible = 0;
+    let failed = 0;
+    const rows = lineupFilteredRows.filter((x) => lineupSelectedIds.includes(x.id));
+    const seen = new Set<string>(lineupDupKeySet);
+    for (const row of rows) {
+      const pid = row.product_id;
+      const cid = row.header_customer_id ?? lineupFbCustomer?.id ?? null;
+      const did = row.header_distributor_id ?? lineupFbDistributor?.id ?? null;
+      if (pid == null) {
+        skippedIneligible++;
+        continue;
+      }
+      if (cid == null || did == null) {
+        skippedIneligible++;
+        continue;
+      }
+      const dupK = `${cid}|${did}|${pid}`;
+      if (seen.has(dupK)) {
+        skippedDup++;
+        continue;
+      }
+      const splitTotal = monthSplitTotalUnits(row.month_split_json);
+      const unitsRaw = row.quantity_units ?? splitTotal ?? 1;
+      const units = Math.max(1, roundPlannerUnits(Number(unitsRaw)));
+      const msrp = row.msrp_local;
+      if (msrp == null || !(Number(msrp) > 0)) {
+        skippedIneligible++;
+        continue;
+      }
+      const body: Record<string, unknown> = {
+        customer_id: cid,
+        distributor_id: did,
+        product_id: pid,
+        target_units: units,
+        target_srp_local: Number(msrp),
+        promo_mix_pct: 0.5,
+      };
+      if (row.promo_price_local != null && Number(row.promo_price_local) > 0) {
+        body.promo_srp_local = Number(row.promo_price_local);
+      }
+      try {
+        await apiPost(`/api/v1/commercial-planner/plans/${activePlanId}/lines`, body);
+        created++;
+        seen.add(dupK);
+      } catch {
+        failed++;
+      }
+    }
+    setLineupBatchSummary(
+      `Created ${created}, skipped duplicates ${skippedDup}, skipped ineligible ${skippedIneligible}, failed ${failed}`
+    );
+    setLineupBatchRunning(false);
+    await qc.invalidateQueries({ queryKey: ['commercial-plan-lines', activePlanId] });
+    await qc.invalidateQueries({ queryKey: ['commercial-plan-summary', activePlanId] });
+    await qc.invalidateQueries({ queryKey: ['commercial-plan-suggestions', activePlanId] });
+  }, [
+    activePlanId,
+    lineupDupKeySet,
+    lineupFbCustomer?.id,
+    lineupFbDistributor?.id,
+    lineupFilteredRows,
+    lineupSelectedIds,
+    qc,
+  ]);
 
   const economicsComplete = useMemo(
     () =>
@@ -897,6 +1099,57 @@ export default function CommercialPlannerPage() {
         },
       },
       {
+        field: 'product_spec_cpu',
+        headerName: 'CPU',
+        minWidth: 110,
+        valueGetter: (p) => (p.data?.product_spec_cpu?.trim() ? p.data!.product_spec_cpu : '—'),
+      },
+      {
+        field: 'product_spec_ram',
+        headerName: 'RAM',
+        minWidth: 90,
+        valueGetter: (p) => (p.data?.product_spec_ram?.trim() ? p.data!.product_spec_ram : '—'),
+      },
+      {
+        field: 'product_spec_storage',
+        headerName: 'Storage',
+        minWidth: 100,
+        valueGetter: (p) => (p.data?.product_spec_storage?.trim() ? p.data!.product_spec_storage : '—'),
+      },
+      {
+        field: 'product_spec_gpu',
+        headerName: 'GPU',
+        minWidth: 100,
+        valueGetter: (p) => (p.data?.product_spec_gpu?.trim() ? p.data!.product_spec_gpu : '—'),
+      },
+      {
+        field: 'product_spec_display',
+        headerName: 'Display',
+        minWidth: 110,
+        valueGetter: (p) => (p.data?.product_spec_display?.trim() ? p.data!.product_spec_display : '—'),
+      },
+      {
+        field: 'product_spec_warranty',
+        headerName: 'Warranty',
+        minWidth: 100,
+        hide: !optionalVisible.product_spec_warranty,
+        valueGetter: (p) => (p.data?.product_spec_warranty?.trim() ? p.data!.product_spec_warranty : '—'),
+      },
+      {
+        field: 'product_spec_os',
+        headerName: 'OS',
+        minWidth: 90,
+        hide: !optionalVisible.product_spec_os,
+        valueGetter: (p) => (p.data?.product_spec_os?.trim() ? p.data!.product_spec_os : '—'),
+      },
+      {
+        field: 'product_spec_colour',
+        headerName: 'Colour',
+        minWidth: 90,
+        hide: !optionalVisible.product_spec_colour,
+        valueGetter: (p) => (p.data?.product_spec_colour?.trim() ? p.data!.product_spec_colour : '—'),
+      },
+      {
         field: 'product_category',
         headerName: 'Category',
         minWidth: 110,
@@ -962,6 +1215,24 @@ export default function CommercialPlannerPage() {
       { field: 'target_srp_local', headerName: 'Target SRP', editable: true, type: 'numericColumn', minWidth: 95 },
       { field: 'promo_srp_local', headerName: 'Promo SRP', editable: true, type: 'numericColumn', minWidth: 95 },
       {
+        field: 'calc_sell_in_price_local',
+        headerName: `Est. channel sell-in / unit (${planCurrencyCode})`,
+        minWidth: 190,
+        valueGetter: (p) => {
+          const v = p.data?.calc_sell_in_price_local;
+          return v != null ? fmtCurrency(v) : '—';
+        },
+      },
+      {
+        field: 'calc_distributor_net_local',
+        headerName: `Est. net after distributor margin / unit (${planCurrencyCode})`,
+        minWidth: 240,
+        valueGetter: (p) => {
+          const v = p.data?.calc_distributor_net_local;
+          return v != null ? fmtCurrency(v) : '—';
+        },
+      },
+      {
         field: 'promo_mix_pct',
         headerName: 'Promo mix %',
         editable: true,
@@ -970,22 +1241,70 @@ export default function CommercialPlannerPage() {
         hide: !optionalVisible.promo_mix_pct,
       },
       {
+        field: 'effective_customer_margin_pct',
+        headerName: 'Customer margin % (eff.)',
+        hide: !optionalVisible.effective_customer_margin_pct,
+        valueGetter: (p) => fmtMarginPct(p.data?.effective_customer_margin_pct ?? null),
+      },
+      {
+        field: 'effective_customer_rebate_pct',
+        headerName: 'Customer rebate % (eff.)',
+        hide: !optionalVisible.effective_customer_rebate_pct,
+        valueGetter: (p) => fmtMarginPct(p.data?.effective_customer_rebate_pct ?? null),
+      },
+      {
+        field: 'effective_distributor_margin_pct',
+        headerName: 'Distributor margin % (eff.)',
+        hide: !optionalVisible.effective_distributor_margin_pct,
+        valueGetter: (p) => fmtMarginPct(p.data?.effective_distributor_margin_pct ?? null),
+      },
+      {
+        field: 'effective_vat_rate_pct',
+        headerName: 'VAT % (eff.)',
+        hide: !optionalVisible.effective_vat_rate_pct,
+        valueGetter: (p) => fmtMarginPct(p.data?.effective_vat_rate_pct ?? null),
+      },
+      {
+        field: 'effective_fx_rate_to_usd',
+        headerName: 'FX local/USD (eff.)',
+        hide: !optionalVisible.effective_fx_rate_to_usd,
+        valueGetter: (p) => (p.data?.effective_fx_rate_to_usd != null ? String(p.data.effective_fx_rate_to_usd) : '—'),
+      },
+      {
+        field: 'effective_reserve_total_pct',
+        headerName: 'Reserve total % (eff.)',
+        hide: !optionalVisible.effective_reserve_total_pct,
+        valueGetter: (p) => fmtMarginPct(p.data?.effective_reserve_total_pct ?? null),
+      },
+      {
+        field: 'effective_promo_reserve_split_pct',
+        headerName: 'Promo reserve split % (eff.)',
+        hide: !optionalVisible.effective_promo_reserve_split_pct,
+        valueGetter: (p) => fmtMarginPct(p.data?.effective_promo_reserve_split_pct ?? null),
+      },
+      {
+        field: 'effective_controlled_cost_usd_per_unit',
+        headerName: 'Controlled cost USD/u (eff.)',
+        hide: !optionalVisible.effective_controlled_cost_usd_per_unit,
+        valueGetter: (p) => fmtCurrency(p.data?.effective_controlled_cost_usd_per_unit ?? null),
+      },
+      {
         field: 'calc_sell_in_price_usd',
-        headerName: 'Est. sell-in USD / unit',
-        minWidth: 150,
+        headerName: 'Est. channel sell-in USD / unit',
+        minWidth: 170,
         valueFormatter: (p) => (p.value != null && p.value !== '' ? String(p.value) : '—'),
       },
       {
         field: 'calc_buy_price_usd',
-        headerName: 'Net after disti margin USD / unit',
-        minWidth: 210,
+        headerName: 'Est. net after distributor margin USD / unit',
+        minWidth: 240,
         hide: !optionalVisible.calc_buy_price_usd,
         valueFormatter: (p) => (p.value != null && p.value !== '' ? String(p.value) : '—'),
       },
       {
         field: 'calc_internal_gp_usd',
-        headerName: 'Internal GP USD',
-        minWidth: 120,
+        headerName: 'Estimated internal margin USD',
+        minWidth: 190,
         tooltipValueGetter: (p) => economicsBlockingTooltip(p.data ?? undefined),
         valueGetter: (p) => {
           const d = p.data;
@@ -993,20 +1312,6 @@ export default function CommercialPlannerPage() {
           if (lineHasBlockingEconomicsFlags(d)) return '—';
           return d.calc_internal_gp_usd != null ? String(d.calc_internal_gp_usd) : '—';
         },
-      },
-      {
-        field: 'calc_customer_gp_pct',
-        headerName: 'Cust GP%',
-        minWidth: 95,
-        hide: !optionalVisible.calc_customer_gp_pct,
-        valueGetter: (p) => (p.data?.calc_customer_gp_pct != null ? fmtMarginPct(p.data.calc_customer_gp_pct) : '—'),
-      },
-      {
-        field: 'calc_distributor_gp_pct',
-        headerName: 'Disti GP%',
-        minWidth: 95,
-        hide: !optionalVisible.calc_distributor_gp_pct,
-        valueGetter: (p) => (p.data?.calc_distributor_gp_pct != null ? fmtMarginPct(p.data.calc_distributor_gp_pct) : '—'),
       },
       {
         field: 'calc_promo_reserve_usd',
@@ -1074,7 +1379,7 @@ export default function CommercialPlannerPage() {
           ) : null,
       },
     ],
-    [deleteLine, openEditLine, optionalVisible]
+    [deleteLine, openEditLine, optionalVisible, planCurrencyCode]
   );
 
   const lineGrid: GridOptions<PlanLine> = useMemo(
@@ -1147,17 +1452,19 @@ export default function CommercialPlannerPage() {
       ) : (
         <Stack spacing={0.25} sx={{ mb: 0.75 }}>
           <Typography variant="body2">
-            Est. sell-in USD / unit: {fmtCurrency(selectedLine.calc_sell_in_price_usd)}
+            Est. channel sell-in USD / unit: {fmtCurrency(selectedLine.calc_sell_in_price_usd)}
           </Typography>
           <Typography variant="body2">
-            Net after disti margin USD / unit: {fmtCurrency(selectedLine.calc_buy_price_usd)}
+            Est. net after distributor margin USD / unit: {fmtCurrency(selectedLine.calc_buy_price_usd)}
           </Typography>
           {lineHasBlockingEconomicsFlags(selectedLine) ? (
             <Typography variant="body2" data-testid="line-detail-internal-gp-incomplete">
-              Internal GP: —
+              Estimated internal margin USD: —
             </Typography>
           ) : (
-            <Typography variant="body2">Internal GP: {fmtCurrency(selectedLine.calc_internal_gp_usd)} USD</Typography>
+            <Typography variant="body2">
+              Estimated internal margin USD: {fmtCurrency(selectedLine.calc_internal_gp_usd)}
+            </Typography>
           )}
         </Stack>
       )}
@@ -1388,6 +1695,23 @@ export default function CommercialPlannerPage() {
           <Button size="small" variant="contained" onClick={() => setAddLineOpen(true)} disabled={activePlanId == null}>
             Add line
           </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            data-testid="add-from-lineup-btn"
+            onClick={() => {
+              setLineupBatchSummary(null);
+              setLineupSelectedIds([]);
+              setLineupModalFilter('');
+              setLineupResolvedOnly(false);
+              setLineupUnresolvedCustOnly(false);
+              setLineupWarningsOnly(false);
+              setAddFromLineupOpen(true);
+            }}
+            disabled={activePlanId == null}
+          >
+            Add from lineup
+          </Button>
           <Button size="small" variant="outlined" onClick={() => recalc.mutate()} disabled={activePlanId == null || recalc.isPending}>
             Recalculate
           </Button>
@@ -1411,18 +1735,43 @@ export default function CommercialPlannerPage() {
               Column visibility
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-              Identity (SKU, Part #, model / sales model, product name, customer, distributor) stays visible.
+              Identity, core specs (CPU/RAM/storage/GPU/display), planning inputs (units, SRPs), local USD-derived
+              prices, channel sell-in USD, estimated internal margin USD, and Issues stay visible. Use toggles for
+              optional catalogue, commercial terms, reserves, and distributor-net USD.
             </Typography>
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
               Identity
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              No toggles — core columns always on.
+              No toggles — customer, distributor, SKU, Part #, model / sales model, product name.
             </Typography>
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
-              Catalogue
+              Specs
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              CPU, RAM, storage, GPU, display always shown when present in product data.
+            </Typography>
+            <Stack spacing={0.25} sx={{ mb: 0.5 }}>
+              {SPECS_OPTIONAL_FIELDS.map((field) => (
+                <FormControlLabel
+                  key={field}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={optionalVisible[field]}
+                      onChange={() => setOptionalVisible((prev) => ({ ...prev, [field]: !prev[field] }))}
+                      data-testid={`col-toggle-${field}`}
+                    />
+                  }
+                  label={OPTIONAL_COLUMN_LABELS[field]}
+                  sx={{ m: 0, px: 0.5 }}
+                />
+              ))}
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 500 }}>
+              Product catalogue (optional)
             </Typography>
             <Stack spacing={0.25} sx={{ mb: 1 }}>
               {CATALOGUE_OPTIONAL_FIELDS.map((field) => (
@@ -1443,7 +1792,7 @@ export default function CommercialPlannerPage() {
             </Stack>
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
-              Planning
+              Planning inputs
             </Typography>
             <Stack spacing={0.25} sx={{ mb: 1 }}>
               {PLANNING_OPTIONAL_FIELDS.map((field) => (
@@ -1464,10 +1813,10 @@ export default function CommercialPlannerPage() {
             </Stack>
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
-              Economics
+              Commercial terms
             </Typography>
             <Stack spacing={0.25} sx={{ mb: 1 }}>
-              {ECONOMICS_OPTIONAL_FIELDS.map((field) => (
+              {COMMERCIAL_TERM_OPTIONAL_FIELDS.map((field) => (
                 <FormControlLabel
                   key={field}
                   control={
@@ -1483,6 +1832,41 @@ export default function CommercialPlannerPage() {
                 />
               ))}
             </Stack>
+
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
+              Local currency values
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Sell-in and distributor-net in plan currency use effective FX × USD model outputs (no fake rates).
+            </Typography>
+
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
+              USD model outputs
+            </Typography>
+            <Stack spacing={0.25} sx={{ mb: 1 }}>
+              {USD_OUTPUT_OPTIONAL_FIELDS.map((field) => (
+                <FormControlLabel
+                  key={field}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={optionalVisible[field]}
+                      onChange={() => setOptionalVisible((prev) => ({ ...prev, [field]: !prev[field] }))}
+                      data-testid={`col-toggle-${field}`}
+                    />
+                  }
+                  label={OPTIONAL_COLUMN_LABELS[field]}
+                  sx={{ m: 0, px: 0.5 }}
+                />
+              ))}
+            </Stack>
+
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
+              Evidence
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Lineup import evidence stays in the Lineup coverage tab and selected-line detail (not grid columns).
+            </Typography>
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
               Issues / status
@@ -1576,7 +1960,7 @@ export default function CommercialPlannerPage() {
             {economicsComplete ? (
               <>
                 <Typography variant="body2">
-                  <strong>Estimated internal GP USD:</strong> {summary?.total_internal_gp_usd ?? 0}
+                  <strong>Estimated internal margin USD:</strong> {summary?.total_internal_gp_usd ?? 0}
                 </Typography>
                 <Typography variant="body2">
                   <strong>Promo reserve USD:</strong> {summary?.total_promo_reserve_usd ?? 0}
@@ -1886,6 +2270,189 @@ export default function CommercialPlannerPage() {
             }
           >
             Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={addFromLineupOpen}
+        onClose={() => {
+          if (!lineupBatchRunning) setAddFromLineupOpen(false);
+        }}
+        maxWidth="lg"
+        fullWidth
+        data-testid="add-from-lineup-dialog"
+      >
+        <DialogTitle>Add from lineup</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Uses read-only lineup import rows. DAP and other lineup fields are never sent as controlled cost or
+              landed_cost_usd.
+            </Typography>
+            <FormControl size="small" sx={{ minWidth: 280 }}>
+              <InputLabel id="add-lineup-job-label">Lineup job</InputLabel>
+              <Select
+                labelId="add-lineup-job-label"
+                label="Lineup job"
+                value={addLineupJobId ?? ''}
+                data-testid="add-lineup-job-select"
+                onChange={(e) => setAddLineupJobId(Number(e.target.value) || null)}
+                disabled={lineupJobsLoading || !(lineupJobs && lineupJobs.length)}
+              >
+                {(lineupJobs ?? []).map((j) => (
+                  <MenuItem key={j.id} value={j.id}>
+                    {j.period_label ?? j.file_name} — {j.line_count} lines
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              size="small"
+              label="Filter rows"
+              value={lineupModalFilter}
+              onChange={(e) => setLineupModalFilter(e.target.value)}
+              data-testid="lineup-modal-filter"
+              fullWidth
+            />
+            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={lineupResolvedOnly}
+                    onChange={(e) => setLineupResolvedOnly(e.target.checked)}
+                    data-testid="lineup-filter-resolved-only"
+                  />
+                }
+                label="Resolved product only"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={lineupUnresolvedCustOnly}
+                    onChange={(e) => setLineupUnresolvedCustOnly(e.target.checked)}
+                    data-testid="lineup-filter-unresolved-customer"
+                  />
+                }
+                label="Unresolved customer / token rows"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={lineupWarningsOnly}
+                    onChange={(e) => setLineupWarningsOnly(e.target.checked)}
+                    data-testid="lineup-filter-warnings-only"
+                  />
+                }
+                label="Warnings only"
+              />
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Fallback customer / distributor apply when a row has no header customer or distributor id.
+            </Typography>
+            <EntitySearchAutocomplete<CustomerPick>
+              label="Fallback customer"
+              value={lineupFbCustomer}
+              onChange={setLineupFbCustomer}
+              fetchOptions={fetchCustomers}
+              getOptionLabel={(o) => `${o.customer_code} — ${o.customer_name}`}
+            />
+            <EntitySearchAutocomplete<DistributorPick>
+              label="Fallback distributor"
+              value={lineupFbDistributor}
+              onChange={setLineupFbDistributor}
+              fetchOptions={fetchDistributors}
+              getOptionLabel={(o) => `${o.distributor_code} — ${o.distributor_name}`}
+            />
+            {lineupModalLoading ? (
+              <Typography variant="body2" color="text.secondary" data-testid="lineup-modal-loading">
+                Loading lineup rows…
+              </Typography>
+            ) : (
+              <Table size="small" data-testid="lineup-modal-table">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        size="small"
+                        checked={
+                          lineupFilteredRows.length > 0 &&
+                          lineupFilteredRows.every((r) => lineupSelectedIds.includes(r.id))
+                        }
+                        indeterminate={
+                          lineupSelectedIds.length > 0 &&
+                          !lineupFilteredRows.every((r) => lineupSelectedIds.includes(r.id))
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setLineupSelectedIds(lineupFilteredRows.map((r) => r.id));
+                          } else {
+                            setLineupSelectedIds([]);
+                          }
+                        }}
+                        inputProps={{ 'data-testid': 'lineup-modal-select-all' }}
+                      />
+                    </TableCell>
+                    <TableCell>Row</TableCell>
+                    <TableCell>SKU</TableCell>
+                    <TableCell>Customer</TableCell>
+                    <TableCell>Dist</TableCell>
+                    <TableCell>Qty</TableCell>
+                    <TableCell>MSRP</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {lineupFilteredRows.map((row) => (
+                    <TableRow key={row.id} hover selected={lineupSelectedIds.includes(row.id)}>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          size="small"
+                          checked={lineupSelectedIds.includes(row.id)}
+                          onChange={(e) => {
+                            setLineupSelectedIds((prev) => {
+                              if (e.target.checked) return [...prev, row.id];
+                              return prev.filter((id) => id !== row.id);
+                            });
+                          }}
+                          data-testid={`lineup-row-cb-${row.id}`}
+                        />
+                      </TableCell>
+                      <TableCell>{row.source_row_number}</TableCell>
+                      <TableCell>{row.product_sku ?? '—'}</TableCell>
+                      <TableCell>
+                        {row.header_customer_code ?? (row.has_unknown_customer ? '?' : '—')}
+                      </TableCell>
+                      <TableCell>{row.header_distributor_code ?? '—'}</TableCell>
+                      <TableCell>
+                        {row.quantity_units ?? monthSplitTotalUnits(row.month_split_json) ?? '—'}
+                      </TableCell>
+                      <TableCell>{row.msrp_local != null ? fmtCurrency(row.msrp_local) : '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            {lineupBatchSummary ? (
+              <Alert severity="info" data-testid="lineup-batch-summary">
+                {lineupBatchSummary}
+              </Alert>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddFromLineupOpen(false)} disabled={lineupBatchRunning}>
+            Close
+          </Button>
+          <Button
+            variant="contained"
+            data-testid="lineup-modal-create"
+            disabled={lineupBatchRunning || lineupSelectedIds.length === 0}
+            onClick={() => void runAddFromLineup()}
+          >
+            Create plan lines
           </Button>
         </DialogActions>
       </Dialog>

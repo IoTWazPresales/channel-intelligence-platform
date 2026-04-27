@@ -22,6 +22,7 @@ from app.models.facts import FactForecast, FactPricing, FactSalesSellout
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob
 from app.services.commercial_planner.calculator import CommercialCalcInputs, compute_line_economics
+from app.services.commercial_planner.read_model import plan_line_read_model_extensions
 from app.services.commercial_planner.suggestions import (
     SuggestionInputs,
     build_promo_mix_suggestion,
@@ -104,8 +105,9 @@ def _line_payload(
     product_line: str | None = None,
     product_series_name: str | None = None,
     product_business_unit: str | None = None,
+    read_extensions: dict | None = None,
 ) -> dict:
-    return {
+    out = {
         "id": line.id,
         "commercial_plan_id": line.commercial_plan_id,
         "customer_id": line.customer_id,
@@ -153,6 +155,9 @@ def _line_payload(
         if line.override_promo_reserve_split_pct is not None
         else None,
     }
+    if read_extensions:
+        out.update(read_extensions)
+    return out
 
 
 async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> dict:
@@ -174,11 +179,23 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
                 DimProduct.product_line,
                 DimProduct.series_name,
                 DimProduct.business_unit,
+                DimProduct.specs_json,
+                CommercialCustomerTerm.customer_margin_pct,
+                CommercialCustomerTerm.customer_rebate_pct,
+                CommercialDistributorTerm.distributor_margin_pct,
+                CommercialSkuAssumption.vat_rate_pct,
+                CommercialSkuAssumption.fx_rate_to_usd,
+                CommercialSkuAssumption.reserve_total_pct,
+                CommercialSkuAssumption.promo_reserve_split_pct,
+                CommercialSkuAssumption.landed_cost_usd,
             )
             .select_from(CommercialPlanLine)
             .join(DimCustomer, DimCustomer.id == CommercialPlanLine.customer_id)
             .join(DimDistributor, DimDistributor.id == CommercialPlanLine.distributor_id)
             .join(DimProduct, DimProduct.id == CommercialPlanLine.product_id)
+            .outerjoin(CommercialCustomerTerm, CommercialCustomerTerm.customer_id == CommercialPlanLine.customer_id)
+            .outerjoin(CommercialDistributorTerm, CommercialDistributorTerm.distributor_id == CommercialPlanLine.distributor_id)
+            .outerjoin(CommercialSkuAssumption, CommercialSkuAssumption.product_id == CommercialPlanLine.product_id)
             .where(CommercialPlanLine.id == line.id)
         )
     ).one_or_none()
@@ -200,7 +217,28 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
         pline,
         psn,
         pbu,
+        specs_json,
+        ct_margin,
+        ct_rebate,
+        dt_margin,
+        sa_vat,
+        sa_fx,
+        sa_reserve,
+        sa_pr,
+        sa_landed,
     ) = r
+    read_ext = plan_line_read_model_extensions(
+        line,
+        specs_json if isinstance(specs_json, dict) else None,
+        customer_margin_pct=float(ct_margin) if ct_margin is not None else None,
+        customer_rebate_pct=float(ct_rebate) if ct_rebate is not None else None,
+        distributor_margin_pct=float(dt_margin) if dt_margin is not None else None,
+        sku_vat_rate_pct=float(sa_vat) if sa_vat is not None else None,
+        sku_fx_rate_to_usd=float(sa_fx) if sa_fx is not None else None,
+        sku_reserve_total_pct=float(sa_reserve) if sa_reserve is not None else None,
+        sku_promo_reserve_split_pct=float(sa_pr) if sa_pr is not None else None,
+        sku_landed_cost_usd=float(sa_landed) if sa_landed is not None else None,
+    )
     return _line_payload(
         line,
         customer_code=cc,
@@ -218,6 +256,7 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
         product_line=pline,
         product_series_name=psn,
         product_business_unit=pbu,
+        read_extensions=read_ext,
     )
 
 
@@ -358,10 +397,22 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
                 DimProduct.product_line.label("product_line"),
                 DimProduct.series_name.label("product_series_name"),
                 DimProduct.business_unit.label("product_business_unit"),
+                DimProduct.specs_json.label("product_specs_json"),
+                CommercialCustomerTerm.customer_margin_pct.label("row_ct_margin"),
+                CommercialCustomerTerm.customer_rebate_pct.label("row_ct_rebate"),
+                CommercialDistributorTerm.distributor_margin_pct.label("row_dt_margin"),
+                CommercialSkuAssumption.vat_rate_pct.label("row_sa_vat"),
+                CommercialSkuAssumption.fx_rate_to_usd.label("row_sa_fx"),
+                CommercialSkuAssumption.reserve_total_pct.label("row_sa_reserve"),
+                CommercialSkuAssumption.promo_reserve_split_pct.label("row_sa_pr"),
+                CommercialSkuAssumption.landed_cost_usd.label("row_sa_landed"),
             )
             .join(DimCustomer, DimCustomer.id == CommercialPlanLine.customer_id)
             .join(DimDistributor, DimDistributor.id == CommercialPlanLine.distributor_id)
             .join(DimProduct, DimProduct.id == CommercialPlanLine.product_id)
+            .outerjoin(CommercialCustomerTerm, CommercialCustomerTerm.customer_id == CommercialPlanLine.customer_id)
+            .outerjoin(CommercialDistributorTerm, CommercialDistributorTerm.distributor_id == CommercialPlanLine.distributor_id)
+            .outerjoin(CommercialSkuAssumption, CommercialSkuAssumption.product_id == CommercialPlanLine.product_id)
             .where(CommercialPlanLine.commercial_plan_id == plan_id)
             .order_by(CommercialPlanLine.id)
         )
@@ -384,7 +435,28 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
         pline,
         psn,
         pbu,
+        specs_json,
+        ct_margin,
+        ct_rebate,
+        dt_margin,
+        sa_vat,
+        sa_fx,
+        sa_reserve,
+        sa_pr,
+        sa_landed,
     ) in rows:
+        read_ext = plan_line_read_model_extensions(
+            line,
+            specs_json if isinstance(specs_json, dict) else None,
+            customer_margin_pct=float(ct_margin) if ct_margin is not None else None,
+            customer_rebate_pct=float(ct_rebate) if ct_rebate is not None else None,
+            distributor_margin_pct=float(dt_margin) if dt_margin is not None else None,
+            sku_vat_rate_pct=float(sa_vat) if sa_vat is not None else None,
+            sku_fx_rate_to_usd=float(sa_fx) if sa_fx is not None else None,
+            sku_reserve_total_pct=float(sa_reserve) if sa_reserve is not None else None,
+            sku_promo_reserve_split_pct=float(sa_pr) if sa_pr is not None else None,
+            sku_landed_cost_usd=float(sa_landed) if sa_landed is not None else None,
+        )
         out.append(
             _line_payload(
                 line,
@@ -403,6 +475,7 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
                 product_line=pline,
                 product_series_name=psn,
                 product_business_unit=pbu,
+                read_extensions=read_ext,
             )
         )
     return out
@@ -1297,6 +1370,7 @@ async def get_lineup_coverage(
         )
 
     header_customer = aliased(DimCustomer, name="header_customer")
+    header_dist = aliased(DimDistributor, name="header_distributor")
     stmt = (
         select(
             HistoricalLineupImportLine,
@@ -1308,6 +1382,9 @@ async def get_lineup_coverage(
             HistoricalLineupImportHeader.customer_id.label("header_customer_id"),
             header_customer.code.label("header_customer_code"),
             header_customer.name.label("header_customer_name"),
+            HistoricalLineupImportHeader.distributor_id.label("header_distributor_id"),
+            header_dist.code.label("header_distributor_code"),
+            header_dist.name.label("header_distributor_name"),
         )
         .join(
             HistoricalLineupImportHeader,
@@ -1315,6 +1392,7 @@ async def get_lineup_coverage(
         )
         .outerjoin(DimProduct, DimProduct.id == HistoricalLineupImportLine.product_id)
         .outerjoin(header_customer, header_customer.id == HistoricalLineupImportHeader.customer_id)
+        .outerjoin(header_dist, header_dist.id == HistoricalLineupImportHeader.distributor_id)
         .where(HistoricalLineupImportHeader.import_job_id == job_id)
         .order_by(HistoricalLineupImportLine.source_row_number)
     )
@@ -1331,6 +1409,9 @@ async def get_lineup_coverage(
         header_customer_id,
         header_customer_code,
         header_customer_name,
+        header_distributor_id,
+        header_distributor_code,
+        header_distributor_name,
     ) in rows:
         codes: list[str] = ln.diagnostic_codes or []
         has_warnings = any(c not in _COVERAGE_NON_WARNING_CODES for c in codes)
@@ -1364,6 +1445,9 @@ async def get_lineup_coverage(
                 "header_customer_id": header_customer_id,
                 "header_customer_code": header_customer_code,
                 "header_customer_name": header_customer_name,
+                "header_distributor_id": int(header_distributor_id) if header_distributor_id is not None else None,
+                "header_distributor_code": header_distributor_code,
+                "header_distributor_name": header_distributor_name,
                 "period_label": period_label,
                 "country_code": country_code,
                 "currency_code": currency_code,

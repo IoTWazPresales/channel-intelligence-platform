@@ -104,6 +104,15 @@ def test_apply_suggestion_updates_line_units():
             "ThinkPad",
             "T14",
             "PCSD",
+            {"cpu": "i7-1360P"},
+            0.12,
+            0.03,
+            0.08,
+            0.15,
+            18.5,
+            0.10,
+            0.50,
+            420.0,
         )
     )
 
@@ -134,6 +143,10 @@ def test_apply_suggestion_updates_line_units():
     assert body["product_line"] == "ThinkPad"
     assert body["product_series_name"] == "T14"
     assert body["product_business_unit"] == "PCSD"
+    assert body["product_spec_cpu"] == "i7-1360P"
+    assert body["effective_customer_margin_pct"] == 0.12
+    assert body["effective_fx_rate_to_usd"] == 18.5
+    assert body["effective_controlled_cost_usd_per_unit"] == 420.0
 
 
 def test_customer_term_create_rejects_excessive_margin_stack():
@@ -244,7 +257,7 @@ def test_lineup_coverage_endpoint_returns_enriched_lines():
     )
     fake_coverage_result = MagicMock()
     fake_coverage_result.all = MagicMock(
-        return_value=[(fake_line, "2026-Q2", "ZA", "USD", "SKU-X1", "Notebook X1", None, None, None)]
+        return_value=[(fake_line, "2026-Q2", "ZA", "USD", "SKU-X1", "Notebook X1", None, None, None, None, None, None)]
     )
 
     async def fake_db():
@@ -319,7 +332,9 @@ def test_lineup_coverage_includes_extended_commercial_fields():
     fake_result = MagicMock()
     # Tuple now includes (header_customer_id, header_customer_code, header_customer_name)
     fake_result.all = MagicMock(
-        return_value=[(fake_line, "2026-Q2", "ZA", "USD", "SKU-Z1", "Widget Z", 7, "CUST-A", "Customer A")]
+        return_value=[
+            (fake_line, "2026-Q2", "ZA", "USD", "SKU-Z1", "Widget Z", 7, "CUST-A", "Customer A", 3, "DIST-1", "Distributor One")
+        ]
     )
 
     async def fake_db():
@@ -347,6 +362,9 @@ def test_lineup_coverage_includes_extended_commercial_fields():
     assert ln["header_customer_id"] == 7
     assert ln["header_customer_code"] == "CUST-A"
     assert ln["header_customer_name"] == "Customer A"
+    assert ln["header_distributor_id"] == 3
+    assert ln["header_distributor_code"] == "DIST-1"
+    assert ln["header_distributor_name"] == "Distributor One"
     # month_split_json is passed through as-is (dict or null).
     assert ln["month_split_json"] == {"Apr": 2.0, "May": 3.0, "Jun": 3.0}
 
@@ -641,7 +659,32 @@ def test_patch_plan_line_rejects_unknown_customer_id():
         sess.refresh = AsyncMock()
         join_res = MagicMock()
         join_res.one_or_none = MagicMock(
-            return_value=("C", "N", "D", "DN", "S", "P", None, None, None, None, None, None, None, None, None)
+            return_value=(
+                "C",
+                "N",
+                "D",
+                "DN",
+                "S",
+                "P",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
         )
         sess.execute = AsyncMock(return_value=join_res)
         yield sess
@@ -650,3 +693,98 @@ def test_patch_plan_line_rejects_unknown_customer_id():
     r = client.patch("/api/v1/commercial-planner/lines/1", json={"customer_id": 99999})
     assert r.status_code == 400
     assert "Unknown customer_id" in (r.json().get("detail") or "")
+
+
+def test_product_specs_from_json_extracts_whitelisted_keys():
+    from app.services.commercial_planner.read_model import product_specs_from_json
+
+    out = product_specs_from_json({"CPU": "i9", "RAM": "32GB", "import_staging": {"storage": "1TB"}})
+    assert out["product_spec_cpu"] == "i9"
+    assert out["product_spec_ram"] == "32GB"
+    assert out["product_spec_storage"] == "1TB"
+    assert out["product_spec_warranty"] is None
+
+
+def test_product_specs_from_json_returns_nulls_without_invention():
+    from app.services.commercial_planner.read_model import product_specs_from_json
+
+    out = product_specs_from_json({"unrelated": "x"})
+    assert all(out[k] is None for k in out)
+
+
+def test_local_prices_from_usd_requires_positive_fx():
+    from app.services.commercial_planner.read_model import local_prices_from_usd
+
+    assert local_prices_from_usd(10.0, 8.0, None) == (None, None)
+    assert local_prices_from_usd(10.0, 8.0, 0.0) == (None, None)
+    a, b = local_prices_from_usd(10.0, 8.0, 18.5)
+    assert a is not None and abs(a - 185.0) < 1e-6
+    assert b is not None and abs(b - 148.0) < 1e-6
+
+
+def test_effective_commercial_fields_flat_prefers_line_overrides():
+    from types import SimpleNamespace
+
+    from app.services.commercial_planner.read_model import effective_commercial_fields_flat
+
+    line = SimpleNamespace(
+        override_customer_margin_pct=0.2,
+        override_customer_rebate_pct=None,
+        override_distributor_margin_pct=None,
+        override_vat_rate_pct=None,
+        override_fx_rate_to_usd=None,
+        override_reserve_total_pct=None,
+        override_promo_reserve_split_pct=None,
+        override_landed_cost_usd=None,
+    )
+    out = effective_commercial_fields_flat(
+        line,
+        customer_margin_pct=0.1,
+        customer_rebate_pct=0.02,
+        distributor_margin_pct=0.08,
+        sku_vat_rate_pct=0.15,
+        sku_fx_rate_to_usd=18.0,
+        sku_reserve_total_pct=0.1,
+        sku_promo_reserve_split_pct=0.5,
+        sku_landed_cost_usd=400.0,
+    )
+    assert out["effective_customer_margin_pct"] == 0.2
+    assert out["effective_customer_rebate_pct"] == 0.02
+    assert out["effective_fx_rate_to_usd"] == 18.0
+    assert out["effective_controlled_cost_usd_per_unit"] == 400.0
+
+
+def test_plan_line_read_model_extensions_merges_specs_and_local_prices():
+    from types import SimpleNamespace
+
+    from app.services.commercial_planner.read_model import plan_line_read_model_extensions
+
+    line = SimpleNamespace(
+        calc_sell_in_price_usd=10.0,
+        calc_buy_price_usd=8.0,
+        override_customer_margin_pct=None,
+        override_customer_rebate_pct=None,
+        override_distributor_margin_pct=None,
+        override_vat_rate_pct=None,
+        override_fx_rate_to_usd=None,
+        override_reserve_total_pct=None,
+        override_promo_reserve_split_pct=None,
+        override_landed_cost_usd=None,
+    )
+    ext = plan_line_read_model_extensions(
+        line,
+        {"cpu": "i5", "RAM": "16GB"},
+        customer_margin_pct=0.1,
+        customer_rebate_pct=0.02,
+        distributor_margin_pct=0.08,
+        sku_vat_rate_pct=0.15,
+        sku_fx_rate_to_usd=2.0,
+        sku_reserve_total_pct=0.1,
+        sku_promo_reserve_split_pct=0.5,
+        sku_landed_cost_usd=100.0,
+    )
+    assert ext["product_spec_cpu"] == "i5"
+    assert ext["product_spec_ram"] == "16GB"
+    assert ext["effective_fx_rate_to_usd"] == 2.0
+    assert ext["calc_sell_in_price_local"] == 20.0
+    assert ext["calc_distributor_net_local"] == 16.0
