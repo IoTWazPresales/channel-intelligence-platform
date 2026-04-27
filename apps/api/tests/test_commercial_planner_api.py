@@ -398,6 +398,171 @@ def test_lineup_product_gaps_returns_400_for_invalid_job():
     assert "job_id=999" in r.json().get("detail", "")
 
 
+def test_lineup_evidence_endpoint_returns_aggregated_evidence():
+    """GET /commercial-planner/lineup-evidence returns evidence from the latest apply job."""
+    from decimal import Decimal
+
+    fake_row = SimpleNamespace(
+        msrp_local=Decimal("999"),
+        promo_price_local=Decimal("899"),
+        dap_local=Decimal("750"),
+        actual_dap_local=None,
+        disti_margin_pct=Decimal("0.08"),
+        vat_pct=Decimal("0.15"),
+        rebate_pct=Decimal("0.03"),
+        total_quantity_units=Decimal("216"),
+        line_count=2,
+        period_label="2026-Q2",
+    )
+    fake_execute_result = MagicMock()
+    fake_execute_result.one = MagicMock(return_value=fake_row)
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.scalar = AsyncMock(return_value=10)  # latest_job_id = 10
+        sess.execute = AsyncMock(return_value=fake_execute_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/lineup-evidence?product_id=1")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["product_id"] == 1
+    assert body["lineup_job_id"] == 10
+    assert body["evidence"] is not None
+    ev = body["evidence"]
+    assert ev["msrp_local"] == pytest.approx(999.0)
+    assert ev["promo_price_local"] == pytest.approx(899.0)
+    assert ev["dap_local"] == pytest.approx(750.0)
+    assert ev["actual_dap_local"] is None
+    assert ev["line_count"] == 2
+    assert ev["period_label"] == "2026-Q2"
+    # Cost semantics note must mention DAP and landed_cost_usd
+    assert "DAP" in body["cost_semantics_note"]
+    assert "landed_cost_usd" in body["cost_semantics_note"]
+
+
+def test_lineup_evidence_endpoint_returns_null_evidence_when_no_lineup_data():
+    """GET /commercial-planner/lineup-evidence returns evidence=null when no apply job exists for that product."""
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.scalar = AsyncMock(return_value=None)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/lineup-evidence?product_id=999")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["product_id"] == 999
+    assert body["lineup_job_id"] is None
+    assert body["evidence"] is None
+    assert "DAP" in body["cost_semantics_note"]
+
+
+def test_plan_readiness_reports_missing_defaults():
+    """GET /commercial-planner/plans/{plan_id}/readiness counts lines with missing terms and SKU assumptions."""
+    from app.models.commercial_planner import CommercialCustomerTerm, CommercialDistributorTerm, CommercialPlanLine, CommercialSkuAssumption
+
+    fake_plan = SimpleNamespace(id=1)
+    fake_line = SimpleNamespace(
+        id=11,
+        commercial_plan_id=1,
+        customer_id=7,
+        distributor_id=8,
+        product_id=9,
+        calc_flags=[],
+    )
+
+    call_count = 0
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=fake_plan)
+
+        nonlocal call_count
+        call_count = 0
+
+        async def execute_side(stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            if call_count == 1:
+                # CommercialPlanLine query
+                result.scalars.return_value.all.return_value = [fake_line]
+            else:
+                # customer_term / distributor_term / sku_assumption queries — all empty
+                result.scalars.return_value.all.return_value = []
+            return result
+
+        sess.execute = AsyncMock(side_effect=execute_side)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/plans/1/readiness")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["plan_id"] == 1
+    assert body["line_count"] == 1
+    assert body["missing_customer_term"] == 1
+    assert body["missing_distributor_term"] == 1
+    assert body["missing_sku_assumption"] == 1
+    assert body["ready"] is False
+    assert "missing" in body["readiness_summary"].lower()
+
+
+def test_suggestions_batched_endpoint_returns_meta_structure():
+    """GET /plans/{plan_id}/suggestions returns _meta.data_sources for each line (batched queries)."""
+    from decimal import Decimal
+
+    fake_line = SimpleNamespace(
+        id=11,
+        commercial_plan_id=1,
+        customer_id=1,
+        product_id=1,
+        target_srp_local=Decimal("1000"),
+        promo_mix_pct=Decimal("0.5"),
+    )
+
+    execute_count = 0
+
+    async def fake_db():
+        sess = MagicMock()
+        nonlocal execute_count
+        execute_count = 0
+
+        async def execute_side(stmt):
+            nonlocal execute_count
+            execute_count += 1
+            result = MagicMock()
+            if execute_count == 1:
+                # CommercialPlanLine batch
+                result.scalars.return_value.all.return_value = [fake_line]
+            else:
+                result.all.return_value = []
+                result.scalars.return_value.all.return_value = []
+            return result
+
+        sess.execute = AsyncMock(side_effect=execute_side)
+        sess.scalar = AsyncMock(return_value=None)  # no lineup job
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/plans/1/suggestions")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data) == 1
+    assert data[0]["line_id"] == 11
+    assert "_meta" in data[0]
+    meta = data[0]["_meta"]
+    assert "data_sources" in meta
+    assert meta["lineup_job_id"] is None
+    assert meta["data_sources"]["lineup"] is False
+    # Pricing suggestion should be low-confidence with no anchors
+    pricing = next(s for s in data[0]["suggestions"] if s["type"] == "pricing_band")
+    assert pricing["confidence"] == "low"
+
+
 def test_patch_plan_line_rejects_unknown_customer_id():
     from app.models.commercial_planner import CommercialPlanLine
     from app.models.dimensions import DimCustomer

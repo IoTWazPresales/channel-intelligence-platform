@@ -4,7 +4,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -418,51 +418,158 @@ async def get_plan_summary(plan_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/plans/{plan_id}/suggestions")
 async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db)):
+    """Return suggestions for every line in a plan.
+
+    Queries are batched: 5 SQL round-trips total regardless of line count.
+    Prior-planned uses data from *other* plans only (same product+customer pair).
+    Lineup evidence is sourced from the latest historical_lineup apply job — DAP is
+    never used as landed_cost_usd.
+    """
     rows = (
-        await db.execute(select(CommercialPlanLine).where(CommercialPlanLine.commercial_plan_id == plan_id).order_by(CommercialPlanLine.id))
+        await db.execute(
+            select(CommercialPlanLine)
+            .where(CommercialPlanLine.commercial_plan_id == plan_id)
+            .order_by(CommercialPlanLine.id)
+        )
     ).scalars().all()
+    if not rows:
+        return []
+
+    product_ids = list({r.product_id for r in rows})
+    cust_prod_pairs = list({(r.customer_id, r.product_id) for r in rows})
+
+    # ── 1. Batch avg sellout per (customer_id, product_id) ───────────────────
+    sellout_rows = (
+        await db.execute(
+            select(
+                FactSalesSellout.customer_id,
+                FactSalesSellout.product_id,
+                func.coalesce(func.avg(FactSalesSellout.units), 0).label("avg_units"),
+            )
+            .where(tuple_(FactSalesSellout.customer_id, FactSalesSellout.product_id).in_(cust_prod_pairs))
+            .group_by(FactSalesSellout.customer_id, FactSalesSellout.product_id)
+        )
+    ).all()
+    avg_sellout_map: dict[tuple[int, int], float] = {
+        (r.customer_id, r.product_id): float(r.avg_units) for r in sellout_rows
+    }
+
+    # ── 2. Batch prior planned from OTHER plans per (customer_id, product_id) ─
+    prior_rows = (
+        await db.execute(
+            select(
+                CommercialPlanLine.customer_id,
+                CommercialPlanLine.product_id,
+                func.avg(CommercialPlanLine.target_units).label("avg_units"),
+            )
+            .where(
+                CommercialPlanLine.commercial_plan_id != plan_id,
+                tuple_(CommercialPlanLine.customer_id, CommercialPlanLine.product_id).in_(cust_prod_pairs),
+            )
+            .group_by(CommercialPlanLine.customer_id, CommercialPlanLine.product_id)
+        )
+    ).all()
+    prior_planned_map: dict[tuple[int, int], float] = {
+        (r.customer_id, r.product_id): float(r.avg_units) for r in prior_rows
+    }
+
+    # ── 3. Batch latest forecast per product_id (window function) ────────────
+    forecast_sq = (
+        select(
+            FactForecast.product_id,
+            FactForecast.forecast_units,
+            func.row_number()
+            .over(partition_by=FactForecast.product_id, order_by=FactForecast.period_start.desc())
+            .label("rn"),
+        )
+        .where(FactForecast.product_id.in_(product_ids))
+        .subquery()
+    )
+    forecast_rows = (
+        await db.execute(
+            select(forecast_sq.c.product_id, forecast_sq.c.forecast_units).where(forecast_sq.c.rn == 1)
+        )
+    ).all()
+    forecast_map: dict[int, float] = {r.product_id: float(r.forecast_units) for r in forecast_rows}
+
+    # ── 4. Batch latest net price per product_id (window function) ───────────
+    pricing_sq = (
+        select(
+            FactPricing.product_id,
+            FactPricing.net_price,
+            func.row_number()
+            .over(partition_by=FactPricing.product_id, order_by=FactPricing.effective_date.desc())
+            .label("rn"),
+        )
+        .where(FactPricing.product_id.in_(product_ids))
+        .subquery()
+    )
+    pricing_rows = (
+        await db.execute(
+            select(pricing_sq.c.product_id, pricing_sq.c.net_price).where(pricing_sq.c.rn == 1)
+        )
+    ).all()
+    pricing_map: dict[int, float] = {r.product_id: float(r.net_price) for r in pricing_rows}
+
+    # ── 5. Batch lineup evidence per product_id (latest apply job) ───────────
+    latest_job_id = await db.scalar(
+        select(func.max(HistoricalLineupImportHeader.import_job_id))
+        .join(HistoricalLineupImportLine, HistoricalLineupImportLine.header_id == HistoricalLineupImportHeader.id)
+        .join(ImportJob, ImportJob.id == HistoricalLineupImportHeader.import_job_id)
+        .where(
+            HistoricalLineupImportLine.product_id.in_(product_ids),
+            ImportJob.import_mode == "apply",
+            ImportJob.template_slug == "historical_lineup",
+        )
+    )
+    lineup_map: dict[int, dict] = {}
+    if latest_job_id:
+        lineup_ev_rows = (
+            await db.execute(
+                select(
+                    HistoricalLineupImportLine.product_id,
+                    func.max(HistoricalLineupImportLine.msrp_local).label("msrp_local"),
+                    func.max(HistoricalLineupImportLine.promo_price_local).label("promo_price_local"),
+                    func.sum(HistoricalLineupImportLine.quantity_units).label("total_quantity_units"),
+                    func.max(HistoricalLineupImportHeader.period_label).label("period_label"),
+                )
+                .join(
+                    HistoricalLineupImportHeader,
+                    HistoricalLineupImportHeader.id == HistoricalLineupImportLine.header_id,
+                )
+                .where(
+                    HistoricalLineupImportHeader.import_job_id == latest_job_id,
+                    HistoricalLineupImportLine.product_id.in_(product_ids),
+                )
+                .group_by(HistoricalLineupImportLine.product_id)
+            )
+        ).all()
+        for lr in lineup_ev_rows:
+            lineup_map[lr.product_id] = {
+                "msrp_local": float(lr.msrp_local) if lr.msrp_local is not None else None,
+                "promo_price_local": float(lr.promo_price_local) if lr.promo_price_local is not None else None,
+                "total_quantity_units": float(lr.total_quantity_units) if lr.total_quantity_units is not None else None,
+                "period_label": lr.period_label,
+                "job_id": latest_job_id,
+            }
+
+    # ── Build output ─────────────────────────────────────────────────────────
     out: list[dict] = []
     for row in rows:
-        avg_sellout = (
-            await db.execute(
-                select(func.coalesce(func.avg(FactSalesSellout.units), 0)).where(
-                    FactSalesSellout.product_id == row.product_id, FactSalesSellout.customer_id == row.customer_id
-                )
-            )
-        ).scalar_one()
-        prior_planned = (
-            await db.execute(
-                select(func.avg(CommercialPlanLine.target_units)).where(
-                    CommercialPlanLine.product_id == row.product_id,
-                    CommercialPlanLine.customer_id == row.customer_id,
-                    CommercialPlanLine.id != row.id,
-                )
-            )
-        ).scalar_one()
-        latest_forecast = (
-            await db.execute(
-                select(FactForecast.forecast_units)
-                .where(FactForecast.product_id == row.product_id)
-                .order_by(FactForecast.period_start.desc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-        latest_net = (
-            await db.execute(
-                select(FactPricing.net_price)
-                .where(FactPricing.product_id == row.product_id)
-                .order_by(FactPricing.effective_date.desc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-
+        key = (row.customer_id, row.product_id)
+        le = lineup_map.get(row.product_id, {})
         inp = SuggestionInputs(
-            avg_sellout_units=float(avg_sellout or 0.0),
-            prior_planned_units=float(prior_planned) if prior_planned is not None else None,
-            forecast_units=float(latest_forecast) if latest_forecast is not None else None,
-            latest_net_price=float(latest_net) if latest_net is not None else None,
+            avg_sellout_units=avg_sellout_map.get(key, 0.0),
+            prior_planned_units=prior_planned_map.get(key),
+            forecast_units=forecast_map.get(row.product_id),
+            latest_net_price=pricing_map.get(row.product_id),
             target_srp_local=float(row.target_srp_local),
             promo_mix_pct=float(row.promo_mix_pct),
+            lineup_msrp_local=le.get("msrp_local"),
+            lineup_promo_price_local=le.get("promo_price_local"),
+            lineup_quantity_units=le.get("total_quantity_units"),
+            lineup_period_label=le.get("period_label"),
+            lineup_job_id=le.get("job_id"),
         )
         qty, qty_reason, qty_conf = build_quantity_suggestion(inp)
         srp, promo_srp, price_reason, price_conf = build_pricing_suggestion(inp)
@@ -480,6 +587,8 @@ async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db))
                             "avg_sellout_units": inp.avg_sellout_units,
                             "prior_planned_units": inp.prior_planned_units,
                             "forecast_units": inp.forecast_units,
+                            "lineup_quantity_units": inp.lineup_quantity_units,
+                            "lineup_job_id": inp.lineup_job_id,
                         },
                     },
                     {
@@ -487,19 +596,190 @@ async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db))
                         "value": {"target_srp_local": srp, "promo_srp_local": promo_srp},
                         "reason": price_reason,
                         "confidence": price_conf,
-                        "factors": {"latest_net_price": inp.latest_net_price, "target_srp_local": inp.target_srp_local},
+                        "factors": {
+                            "latest_net_price": inp.latest_net_price,
+                            "lineup_msrp_local": inp.lineup_msrp_local,
+                            "lineup_promo_price_local": inp.lineup_promo_price_local,
+                            "lineup_period_label": inp.lineup_period_label,
+                            "target_srp_local": inp.target_srp_local,
+                        },
                     },
                     {
                         "type": "promo_mix_pct",
                         "value": mix,
                         "reason": mix_reason,
                         "confidence": mix_conf,
-                        "factors": {"avg_sellout_units": inp.avg_sellout_units, "forecast_units": inp.forecast_units},
+                        "factors": {
+                            "avg_sellout_units": inp.avg_sellout_units,
+                            "forecast_units": inp.forecast_units,
+                        },
                     },
                 ],
+                "_meta": {
+                    "lineup_job_id": inp.lineup_job_id,
+                    "lineup_period_label": inp.lineup_period_label,
+                    "data_sources": {
+                        "sellout": inp.avg_sellout_units > 0,
+                        "prior_planned": inp.prior_planned_units is not None,
+                        "forecast": inp.forecast_units is not None,
+                        "net_price": inp.latest_net_price is not None,
+                        "lineup": inp.lineup_job_id is not None,
+                    },
+                },
             }
         )
     return out
+
+
+@router.get("/plans/{plan_id}/readiness")
+async def get_plan_readiness(plan_id: int, db: AsyncSession = Depends(get_db)):
+    """Return a data-readiness gate summary for a plan (read-only).
+
+    Reports how many lines are missing customer terms, distributor terms, and SKU
+    assumptions.  These gaps cause the calculator to fall back to zeroed inputs and
+    suggestions to be low-confidence or empty.  No writes are performed.
+    """
+    plan = await db.get(CommercialPlan, plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    rows = (
+        await db.execute(select(CommercialPlanLine).where(CommercialPlanLine.commercial_plan_id == plan_id))
+    ).scalars().all()
+
+    if not rows:
+        return {
+            "plan_id": plan_id,
+            "line_count": 0,
+            "missing_customer_term": 0,
+            "missing_distributor_term": 0,
+            "missing_sku_assumption": 0,
+            "lines_with_calc_flags": 0,
+            "ready": True,
+            "readiness_summary": "No lines in plan.",
+        }
+
+    product_ids = list({r.product_id for r in rows})
+    customer_ids = list({r.customer_id for r in rows})
+    distributor_ids = list({r.distributor_id for r in rows})
+
+    existing_cterms: set[int] = set(
+        (await db.execute(
+            select(CommercialCustomerTerm.customer_id).where(CommercialCustomerTerm.customer_id.in_(customer_ids))
+        )).scalars().all()
+    )
+    existing_dterms: set[int] = set(
+        (await db.execute(
+            select(CommercialDistributorTerm.distributor_id).where(
+                CommercialDistributorTerm.distributor_id.in_(distributor_ids)
+            )
+        )).scalars().all()
+    )
+    existing_skus: set[int] = set(
+        (await db.execute(
+            select(CommercialSkuAssumption.product_id).where(CommercialSkuAssumption.product_id.in_(product_ids))
+        )).scalars().all()
+    )
+
+    missing_ct = sum(1 for r in rows if r.customer_id not in existing_cterms)
+    missing_dt = sum(1 for r in rows if r.distributor_id not in existing_dterms)
+    missing_sku = sum(1 for r in rows if r.product_id not in existing_skus)
+    lines_with_flags = sum(1 for r in rows if r.calc_flags)
+
+    ready = missing_ct == 0 and missing_dt == 0 and missing_sku == 0
+    parts: list[str] = []
+    if missing_ct:
+        parts.append(f"{missing_ct} line(s) missing customer terms")
+    if missing_dt:
+        parts.append(f"{missing_dt} line(s) missing distributor terms")
+    if missing_sku:
+        parts.append(f"{missing_sku} line(s) missing SKU assumptions")
+    if lines_with_flags:
+        parts.append(f"{lines_with_flags} line(s) have economics flags")
+
+    return {
+        "plan_id": plan_id,
+        "line_count": len(rows),
+        "missing_customer_term": missing_ct,
+        "missing_distributor_term": missing_dt,
+        "missing_sku_assumption": missing_sku,
+        "lines_with_calc_flags": lines_with_flags,
+        "ready": ready,
+        "readiness_summary": "; ".join(parts) if parts else "All defaults present.",
+    }
+
+
+@router.get("/lineup-evidence")
+async def get_lineup_evidence(
+    product_id: int = Query(..., description="DimProduct.id to fetch lineup evidence for"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return aggregated lineup evidence for a single product from the latest apply job (read-only).
+
+    DAP (Distributor Acquisition Price) is the source/import value from the historical lineup.
+    It is NOT equivalent to landed_cost_usd and must never be mapped directly as a cost input.
+    Returns evidence=null when no apply job has a line for this product.
+    """
+    latest_job_id = await db.scalar(
+        select(func.max(HistoricalLineupImportHeader.import_job_id))
+        .join(HistoricalLineupImportLine, HistoricalLineupImportLine.header_id == HistoricalLineupImportHeader.id)
+        .join(ImportJob, ImportJob.id == HistoricalLineupImportHeader.import_job_id)
+        .where(
+            HistoricalLineupImportLine.product_id == product_id,
+            ImportJob.import_mode == "apply",
+            ImportJob.template_slug == "historical_lineup",
+        )
+    )
+    if latest_job_id is None:
+        return {
+            "product_id": product_id,
+            "lineup_job_id": None,
+            "evidence": None,
+            "cost_semantics_note": _COST_SEMANTICS_NOTE,
+        }
+
+    r = (
+        await db.execute(
+            select(
+                func.max(HistoricalLineupImportLine.msrp_local).label("msrp_local"),
+                func.max(HistoricalLineupImportLine.promo_price_local).label("promo_price_local"),
+                func.max(HistoricalLineupImportLine.dap_local).label("dap_local"),
+                func.max(HistoricalLineupImportLine.actual_dap_local).label("actual_dap_local"),
+                func.max(HistoricalLineupImportLine.disti_margin_pct).label("disti_margin_pct"),
+                func.max(HistoricalLineupImportLine.vat_pct).label("vat_pct"),
+                func.max(HistoricalLineupImportLine.rebate_pct).label("rebate_pct"),
+                func.sum(HistoricalLineupImportLine.quantity_units).label("total_quantity_units"),
+                func.count(HistoricalLineupImportLine.id).label("line_count"),
+                func.max(HistoricalLineupImportHeader.period_label).label("period_label"),
+            )
+            .join(
+                HistoricalLineupImportHeader,
+                HistoricalLineupImportHeader.id == HistoricalLineupImportLine.header_id,
+            )
+            .where(
+                HistoricalLineupImportHeader.import_job_id == latest_job_id,
+                HistoricalLineupImportLine.product_id == product_id,
+            )
+        )
+    ).one()
+
+    return {
+        "product_id": product_id,
+        "lineup_job_id": latest_job_id,
+        "evidence": {
+            "msrp_local": float(r.msrp_local) if r.msrp_local is not None else None,
+            "promo_price_local": float(r.promo_price_local) if r.promo_price_local is not None else None,
+            "dap_local": float(r.dap_local) if r.dap_local is not None else None,
+            "actual_dap_local": float(r.actual_dap_local) if r.actual_dap_local is not None else None,
+            "disti_margin_pct": float(r.disti_margin_pct) if r.disti_margin_pct is not None else None,
+            "vat_pct": float(r.vat_pct) if r.vat_pct is not None else None,
+            "rebate_pct": float(r.rebate_pct) if r.rebate_pct is not None else None,
+            "total_quantity_units": float(r.total_quantity_units) if r.total_quantity_units is not None else None,
+            "line_count": int(r.line_count),
+            "period_label": r.period_label,
+        },
+        "cost_semantics_note": _COST_SEMANTICS_NOTE,
+    }
 
 
 class ApplySuggestionBody(BaseModel):

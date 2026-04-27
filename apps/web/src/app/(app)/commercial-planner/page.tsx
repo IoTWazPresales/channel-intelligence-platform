@@ -172,6 +172,35 @@ type LineupProductGap = {
   cost_semantics_note: string;
 };
 
+type LineupEvidence = {
+  product_id: number;
+  lineup_job_id: number | null;
+  evidence: {
+    msrp_local: number | null;
+    promo_price_local: number | null;
+    dap_local: number | null;
+    actual_dap_local: number | null;
+    disti_margin_pct: number | null;
+    vat_pct: number | null;
+    rebate_pct: number | null;
+    total_quantity_units: number | null;
+    line_count: number;
+    period_label: string | null;
+  } | null;
+  cost_semantics_note: string;
+};
+
+type PlanReadiness = {
+  plan_id: number;
+  line_count: number;
+  missing_customer_term: number;
+  missing_distributor_term: number;
+  missing_sku_assumption: number;
+  lines_with_calc_flags: number;
+  ready: boolean;
+  readiness_summary: string;
+};
+
 /**
  * Format a stored margin/percentage value for display.
  * Convention: values < 1.0 are stored as decimal fractions (0.0724 = 7.24%);
@@ -314,6 +343,23 @@ export default function CommercialPlannerPage() {
     queryKey: ['commercial-plan-suggestions', activePlanId],
     queryFn: ({ signal }) => apiGet<SuggestionBundle[]>(`/api/v1/commercial-planner/plans/${activePlanId}/suggestions`, { signal }),
     enabled: tab === 0 && activePlanId != null,
+  });
+
+  const { data: planReadiness } = useQuery({
+    queryKey: ['plan-readiness', activePlanId],
+    queryFn: ({ signal }) =>
+      apiGet<PlanReadiness>(`/api/v1/commercial-planner/plans/${activePlanId}/readiness`, { signal }),
+    enabled: tab === 0 && activePlanId != null,
+  });
+
+  const { data: lineupEvidence, isLoading: lineupEvidenceLoading } = useQuery({
+    queryKey: ['lineup-evidence', lineProduct?.id],
+    queryFn: ({ signal }) =>
+      apiGet<LineupEvidence>(
+        `/api/v1/commercial-planner/lineup-evidence?product_id=${lineProduct!.id}`,
+        { signal }
+      ),
+    enabled: lineProduct != null && addLineOpen,
   });
 
   const lineById = useMemo(() => new Map((lines ?? []).map((l) => [l.id, l])), [lines]);
@@ -604,6 +650,37 @@ export default function CommercialPlannerPage() {
                 to search master data.
               </Typography>
             </Stack>
+            {planReadiness && (
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }} data-testid="plan-readiness-chips">
+                {planReadiness.missing_sku_assumption > 0 && (
+                  <Chip
+                    size="small"
+                    label={`Missing SKU assumptions: ${planReadiness.missing_sku_assumption}`}
+                    color="warning"
+                    variant="outlined"
+                  />
+                )}
+                {planReadiness.missing_customer_term > 0 && (
+                  <Chip
+                    size="small"
+                    label={`Missing customer terms: ${planReadiness.missing_customer_term}`}
+                    color="warning"
+                    variant="outlined"
+                  />
+                )}
+                {planReadiness.missing_distributor_term > 0 && (
+                  <Chip
+                    size="small"
+                    label={`Missing distributor terms: ${planReadiness.missing_distributor_term}`}
+                    color="warning"
+                    variant="outlined"
+                  />
+                )}
+                {planReadiness.ready && planReadiness.line_count > 0 && (
+                  <Chip size="small" label="All defaults present" color="success" variant="outlined" />
+                )}
+              </Stack>
+            )}
             <EnterpriseDataGrid rowData={lines ?? []} columnDefs={lineCols} gridOptions={lineGrid} height={480} />
           </Paper>
           {(summary?.flags?.length ?? 0) > 0 ? (
@@ -733,6 +810,80 @@ export default function CommercialPlannerPage() {
               disabled={createLine.isPending}
               helperText="Type SKU or product name to search the catalog."
             />
+            {lineProduct != null ? (
+              lineupEvidenceLoading ? (
+                <Typography variant="caption" color="text.secondary">
+                  Loading lineup evidence…
+                </Typography>
+              ) : lineupEvidence?.evidence ? (
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 1.5, bgcolor: 'action.hover' }}
+                  data-testid="lineup-evidence-panel"
+                >
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                    <strong>Lineup evidence</strong>
+                    {lineupEvidence.evidence.period_label ? ` — ${lineupEvidence.evidence.period_label}` : ''}
+                    {` · ${lineupEvidence.evidence.line_count} row${lineupEvidence.evidence.line_count !== 1 ? 's' : ''}`}
+                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    {lineupEvidence.evidence.msrp_local != null ? (
+                      <Chip
+                        size="small"
+                        label={`MSRP/list: ${fmtCurrency(lineupEvidence.evidence.msrp_local)}`}
+                        onClick={() =>
+                          setLineDraft((p) => ({
+                            ...p,
+                            target_srp_local: String(lineupEvidence.evidence!.msrp_local),
+                          }))
+                        }
+                        clickable
+                        title="Click to use as Target SRP"
+                        data-testid="use-msrp-as-srp"
+                      />
+                    ) : null}
+                    {lineupEvidence.evidence.promo_price_local != null ? (
+                      <Chip
+                        size="small"
+                        label={`Promo: ${fmtCurrency(lineupEvidence.evidence.promo_price_local)}`}
+                        onClick={() =>
+                          setLineDraft((p) => ({
+                            ...p,
+                            promo_srp_local: String(lineupEvidence.evidence!.promo_price_local),
+                          }))
+                        }
+                        clickable
+                        title="Click to use as Promo SRP"
+                        data-testid="use-promo-as-srp"
+                      />
+                    ) : null}
+                    {lineupEvidence.evidence.total_quantity_units != null ? (
+                      <Chip
+                        size="small"
+                        label={`Lineup qty: ${lineupEvidence.evidence.total_quantity_units}`}
+                        variant="outlined"
+                      />
+                    ) : null}
+                    {lineupEvidence.evidence.dap_local != null ? (
+                      <Chip
+                        size="small"
+                        label={`DAP evidence: ${fmtCurrency(lineupEvidence.evidence.dap_local)}`}
+                        variant="outlined"
+                        color="info"
+                        title="DAP is source/local evidence only — not landed cost"
+                      />
+                    ) : null}
+                  </Stack>
+                  <Typography variant="caption" color="text.disabled" display="block" sx={{ mt: 0.5 }}>
+                    Click MSRP or Promo chip to prefill. DAP is not landed cost.
+                  </Typography>
+                </Paper>
+              ) : (
+                <Typography variant="caption" color="text.secondary" data-testid="lineup-evidence-not-found">
+                  No lineup evidence found for this product.
+                </Typography>
+              )
+            ) : null}
             <Divider />
             <TextField label="Target units" value={lineDraft.target_units} onChange={(e) => setLineDraft((p) => ({ ...p, target_units: e.target.value }))} />
             <TextField

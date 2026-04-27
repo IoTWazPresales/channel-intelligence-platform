@@ -9,7 +9,11 @@ import { renderWithProviders } from '@/test-utils/renderWithProviders';
 import CommercialPlannerPage, { fmtMarginPct, fmtCurrency } from './page';
 
 const mockState = vi.hoisted(() => ({
+  lineupEvidence: null as any,
+  planReadiness: null as any,
   apiGetMock: vi.fn(async (url: string) => {
+    if (url.startsWith('/api/v1/commercial-planner/lineup-evidence')) return mockState.lineupEvidence;
+    if (url.startsWith('/api/v1/commercial-planner/plans/1/readiness')) return mockState.planReadiness;
     if (url === '/api/v1/commercial-planner/plans') {
       return [
         {
@@ -120,6 +124,31 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
   ),
 }));
 vi.mock('@/lib/queryError', () => ({ toQueryError: () => null }));
+vi.mock('@/features/commercial-planner/EntitySearchAutocomplete', () => ({
+  EntitySearchAutocomplete: ({
+    label,
+    onChange,
+  }: {
+    label: string;
+    onChange: (v: any) => void;
+    [k: string]: any;
+  }) => (
+    <button
+      data-testid={`pick-entity-${label.toLowerCase().replace(/\s+/g, '-')}`}
+      onClick={() => {
+        if (label === 'Product') {
+          onChange({ id: 42, sku: 'NB-X1', name: 'Notebook X1' });
+        } else if (label === 'Customer') {
+          onChange({ id: 1, customer_code: 'ACME', customer_name: 'Acme Retail' });
+        } else {
+          onChange({ id: 1, distributor_code: 'DIST01', distributor_name: 'Summit Supply' });
+        }
+      }}
+    >
+      {`Pick ${label}`}
+    </button>
+  ),
+}));
 vi.mock('@/lib/api', () => ({
   apiGet: (url: string) => mockState.apiGetMock(url),
   apiPost: mockState.apiPostMock,
@@ -554,5 +583,151 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     expect(caption).toHaveTextContent('Product defaults coverage shows one row per product');
     expect(caption).toHaveTextContent('DAP is source/local evidence only');
     expect(caption).toHaveTextContent('not landed cost');
+  });
+});
+
+// ── Planner readiness chips ───────────────────────────────────────────────────
+describe('Plan readiness chips', () => {
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <CommercialPlannerPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    mockState.apiGetMock.mockClear();
+    mockState.planReadiness = null;
+    mockState.lineupEvidence = null;
+  });
+
+  it('shows missing SKU assumption chip when readiness reports gaps', async () => {
+    mockState.planReadiness = {
+      plan_id: 1,
+      line_count: 1,
+      missing_customer_term: 0,
+      missing_distributor_term: 0,
+      missing_sku_assumption: 1,
+      lines_with_calc_flags: 0,
+      ready: false,
+      readiness_summary: '1 line(s) missing SKU assumptions',
+    };
+    renderPage();
+
+    const chips = await screen.findByTestId('plan-readiness-chips');
+    expect(chips).toHaveTextContent('Missing SKU assumptions: 1');
+  });
+
+  it('shows all-defaults-present chip when plan is ready', async () => {
+    mockState.planReadiness = {
+      plan_id: 1,
+      line_count: 1,
+      missing_customer_term: 0,
+      missing_distributor_term: 0,
+      missing_sku_assumption: 0,
+      lines_with_calc_flags: 0,
+      ready: true,
+      readiness_summary: 'All defaults present.',
+    };
+    renderPage();
+
+    const chips = await screen.findByTestId('plan-readiness-chips');
+    expect(chips).toHaveTextContent('All defaults present');
+  });
+});
+
+// ── Lineup evidence panel in Add line dialog ──────────────────────────────────
+describe('Lineup evidence panel in Add line dialog', () => {
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <CommercialPlannerPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    mockState.apiGetMock.mockClear();
+    mockState.lineupEvidence = null;
+    mockState.planReadiness = null;
+  });
+
+  it('shows lineup evidence panel when product is selected and evidence is available', async () => {
+    mockState.lineupEvidence = {
+      product_id: 42,
+      lineup_job_id: 10,
+      evidence: {
+        msrp_local: 999.0,
+        promo_price_local: 899.0,
+        dap_local: 750.0,
+        actual_dap_local: null,
+        disti_margin_pct: 0.08,
+        vat_pct: 0.15,
+        rebate_pct: 0.03,
+        total_quantity_units: 216,
+        line_count: 2,
+        period_label: '2026-Q2',
+      },
+      cost_semantics_note: 'DAP is not landed_cost_usd.',
+    };
+    const { user } = renderPage();
+
+    // Open the Add line dialog
+    const addBtn = await screen.findByRole('button', { name: /Add line/i });
+    await user.click(addBtn);
+
+    // Select a product via the mocked EntitySearchAutocomplete
+    const pickProduct = await screen.findByTestId('pick-entity-product');
+    await user.click(pickProduct);
+
+    // Evidence panel should appear
+    const panel = await screen.findByTestId('lineup-evidence-panel');
+    expect(panel).toHaveTextContent('2026-Q2');
+    expect(panel).toHaveTextContent('999');
+    expect(panel).toHaveTextContent('DAP is not landed cost');
+  });
+
+  it('clicking MSRP chip prefills the Target SRP field', async () => {
+    mockState.lineupEvidence = {
+      product_id: 42,
+      lineup_job_id: 10,
+      evidence: {
+        msrp_local: 1100.0,
+        promo_price_local: null,
+        dap_local: null,
+        actual_dap_local: null,
+        disti_margin_pct: null,
+        vat_pct: null,
+        rebate_pct: null,
+        total_quantity_units: null,
+        line_count: 1,
+        period_label: '2026-Q2',
+      },
+      cost_semantics_note: 'DAP is not landed_cost_usd.',
+    };
+    const { user } = renderPage();
+
+    const addBtn = await screen.findByRole('button', { name: /Add line/i });
+    await user.click(addBtn);
+
+    const pickProduct = await screen.findByTestId('pick-entity-product');
+    await user.click(pickProduct);
+
+    // Click the MSRP chip to prefill target SRP
+    const msrpChip = await screen.findByTestId('use-msrp-as-srp');
+    await user.click(msrpChip);
+
+    // Target SRP input should now show the MSRP value
+    const srpInput = screen.getByLabelText(/Target SRP local/i) as HTMLInputElement;
+    expect(srpInput.value).toBe('1100');
   });
 });
