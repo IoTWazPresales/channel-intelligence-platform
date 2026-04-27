@@ -324,6 +324,7 @@ export default function CommercialPlannerPage() {
   const [showProductGaps, setShowProductGaps] = useState(true);
   const [showGuide, setShowGuide] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(true);
 
   const { data: plans, isLoading, isError, error } = useQuery({
     queryKey: ['commercial-plans'],
@@ -405,6 +406,14 @@ export default function CommercialPlannerPage() {
   });
 
   const lineById = useMemo(() => new Map((lines ?? []).map((l) => [l.id, l])), [lines]);
+
+  const economicsComplete = useMemo(
+    () =>
+      (lines?.length ?? 0) > 0 &&
+      (lines ?? []).every((l) => l.calc_sell_in_price_usd != null) &&
+      (summary?.flags?.length ?? 0) === 0,
+    [lines, summary]
+  );
 
   const selectedLine = selectedLineId != null ? (lineById.get(selectedLineId) ?? null) : null;
 
@@ -581,7 +590,7 @@ export default function CommercialPlannerPage() {
       {
         colId: 'customer_display',
         headerName: 'Customer',
-        minWidth: 200,
+        minWidth: 150,
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
@@ -592,7 +601,7 @@ export default function CommercialPlannerPage() {
       {
         colId: 'distributor_display',
         headerName: 'Distributor',
-        minWidth: 200,
+        minWidth: 140,
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
@@ -603,7 +612,7 @@ export default function CommercialPlannerPage() {
       {
         colId: 'product_display',
         headerName: 'Product',
-        minWidth: 200,
+        minWidth: 160,
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
@@ -612,8 +621,9 @@ export default function CommercialPlannerPage() {
         },
       },
       {
-        headerName: 'Entities',
-        minWidth: 100,
+        headerName: 'Edit',
+        minWidth: 75,
+        maxWidth: 80,
         sortable: false,
         filter: false,
         cellRenderer: ({ data }: { data: PlanLine }) =>
@@ -623,36 +633,45 @@ export default function CommercialPlannerPage() {
             </Button>
           ) : null,
       },
-      { field: 'target_units', headerName: 'Units', editable: true, type: 'numericColumn', minWidth: 100 },
-      { field: 'target_srp_local', headerName: 'Target SRP', editable: true, type: 'numericColumn', minWidth: 110 },
-      { field: 'promo_srp_local', headerName: 'Promo SRP', editable: true, type: 'numericColumn', minWidth: 110 },
-      { field: 'promo_mix_pct', headerName: 'Promo mix', editable: true, type: 'numericColumn', minWidth: 110 },
-      { field: 'calc_sell_in_price_usd', headerName: 'Sell-in USD', minWidth: 120 },
-      { field: 'calc_buy_price_usd', headerName: 'Buy USD', minWidth: 120 },
-      { field: 'calc_internal_gp_usd', headerName: 'Internal GP USD', minWidth: 130 },
+      { field: 'target_units', headerName: 'Units', editable: true, type: 'numericColumn', minWidth: 85 },
+      { field: 'target_srp_local', headerName: 'Target SRP', editable: true, type: 'numericColumn', minWidth: 95 },
+      { field: 'promo_srp_local', headerName: 'Promo SRP', editable: true, type: 'numericColumn', minWidth: 95 },
+      // Promo mix — hidden by default; accessible via column chooser
+      { field: 'promo_mix_pct', headerName: 'Promo mix %', editable: true, type: 'numericColumn', minWidth: 100, hide: true },
+      { field: 'calc_sell_in_price_usd', headerName: 'Sell-in USD', minWidth: 105 },
+      // Buy price — hidden by default; secondary calc detail
+      { field: 'calc_buy_price_usd', headerName: 'Buy USD', minWidth: 105, hide: true },
+      { field: 'calc_internal_gp_usd', headerName: 'Internal GP USD', minWidth: 120 },
+      // GP% columns — hidden by default; accessible via column chooser
       {
         field: 'calc_customer_gp_pct',
         headerName: 'Cust GP%',
-        minWidth: 100,
+        minWidth: 95,
+        hide: true,
         valueGetter: (p) => p.data?.calc_customer_gp_pct != null ? fmtMarginPct(p.data.calc_customer_gp_pct) : '—',
       },
       {
         field: 'calc_distributor_gp_pct',
         headerName: 'Disti GP%',
-        minWidth: 100,
+        minWidth: 95,
+        hide: true,
         valueGetter: (p) => p.data?.calc_distributor_gp_pct != null ? fmtMarginPct(p.data.calc_distributor_gp_pct) : '—',
       },
-      { field: 'calc_promo_reserve_usd', headerName: 'Promo reserve', minWidth: 130 },
-      { field: 'calc_non_promo_reserve_usd', headerName: 'Non-promo reserve', minWidth: 150 },
+      // Reserve detail — hidden by default
+      { field: 'calc_promo_reserve_usd', headerName: 'Promo reserve', minWidth: 120, hide: true },
+      { field: 'calc_non_promo_reserve_usd', headerName: 'Non-promo reserve', minWidth: 140, hide: true },
       {
         field: 'calc_flags',
         headerName: 'Issues',
-        minWidth: 200,
+        minWidth: 155,
         valueGetter: (p) => (p.data?.calc_flags ?? []).map(fmtFlag).join('; ') || '—',
       },
       {
         headerName: 'Delete',
-        minWidth: 90,
+        minWidth: 75,
+        maxWidth: 80,
+        sortable: false,
+        filter: false,
         cellRenderer: ({ data }: { data: PlanLine }) =>
           data ? (
             <Button size="small" color="error" onClick={() => void deleteLine.mutate(data.id)}>
@@ -877,172 +896,214 @@ export default function CommercialPlannerPage() {
 
   const plansPanel = (
     <>
+      {/* ─── Single dominant grid Paper ─────────────────────────────────────── */}
       <Paper sx={{ p: 2, mb: 2 }}>
-        <ModuleDataSection
-          isLoading={isLoading}
-          isError={isError}
-          error={toQueryError(error)}
-          onRetry={() => void qc.invalidateQueries({ queryKey: ['commercial-plans'] })}
-          isEmpty={(plans ?? []).length === 0}
-          empty={{
-            title: 'No commercial plans yet',
-            description: 'Create a plan to start manual lineup and economics planning.',
-            primary: { label: 'Create first plan', href: '/commercial-planner' },
-          }}
-          toolbar={
-            <ModuleGridToolbar
-              onAdd={() => setAddPlanOpen(true)}
-              onRefresh={() => void qc.invalidateQueries({ queryKey: ['commercial-plans'] })}
-              onClearAll={undefined}
-              busy={createPlan.isPending}
-            />
-          }
-        >
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-            {(plans ?? []).map((p) => (
-              <Button key={p.id} variant={activePlanId === p.id ? 'contained' : 'outlined'} onClick={() => setSelectedPlanId(p.id)}>
-                {p.plan_name} ({p.status})
+        {/* Plan selector + action bar */}
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
+          {isLoading ? (
+            <Typography variant="body2" color="text.secondary">
+              Loading plans…
+            </Typography>
+          ) : isError ? (
+            <Typography variant="body2" color="error">
+              Failed to load plans.{' '}
+              <Button size="small" onClick={() => void qc.invalidateQueries({ queryKey: ['commercial-plans'] })}>
+                Retry
               </Button>
-            ))}
+            </Typography>
+          ) : (plans ?? []).length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              No plans yet — create one to start.
+            </Typography>
+          ) : (
+            (plans ?? []).map((p) => (
+              <Chip
+                key={p.id}
+                label={`${p.plan_name} (${p.status})`}
+                color={activePlanId === p.id ? 'primary' : 'default'}
+                variant={activePlanId === p.id ? 'filled' : 'outlined'}
+                onClick={() => setSelectedPlanId(p.id)}
+                clickable
+                size="small"
+              />
+            ))
+          )}
+          <Button size="small" variant="outlined" onClick={() => setAddPlanOpen(true)} sx={{ ml: 'auto' }}>
+            + New plan
+          </Button>
+          <Button size="small" variant="contained" onClick={() => setAddLineOpen(true)} disabled={activePlanId == null}>
+            Add line
+          </Button>
+          <Button size="small" variant="outlined" onClick={() => recalc.mutate()} disabled={activePlanId == null || recalc.isPending}>
+            Recalculate
+          </Button>
+        </Stack>
+
+        {/* Readiness chips */}
+        {planReadiness && (
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }} data-testid="plan-readiness-chips">
+            {planReadiness.missing_sku_assumption > 0 && (
+              <Chip
+                size="small"
+                label={`Missing SKU assumptions: ${planReadiness.missing_sku_assumption} — controlled cost unavailable`}
+                color="warning"
+                variant="outlined"
+              />
+            )}
+            {planReadiness.missing_customer_term > 0 && (
+              <Chip
+                size="small"
+                label={`Missing customer terms: ${planReadiness.missing_customer_term}`}
+                color="warning"
+                variant="outlined"
+              />
+            )}
+            {planReadiness.missing_distributor_term > 0 && (
+              <Chip
+                size="small"
+                label={`Missing distributor terms: ${planReadiness.missing_distributor_term}`}
+                color="warning"
+                variant="outlined"
+              />
+            )}
+            {planReadiness.ready && planReadiness.line_count > 0 && (
+              <Chip size="small" label="All defaults present" color="success" variant="outlined" />
+            )}
           </Stack>
-        </ModuleDataSection>
+        )}
+
+        {/* Recalculate-needed banner */}
+        {lines != null && lines.some((l) => l.calc_sell_in_price_usd == null) && (
+          <Alert severity="info" sx={{ mb: 1, py: 0.5 }} data-testid="recalc-needed-banner">
+            Some lines have no calculated economics — press <strong>Recalculate</strong> to compute.
+          </Alert>
+        )}
+
+        {/* Grid + conditional line-detail sidebar */}
+        <Stack direction="row" spacing={2} alignItems="stretch">
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <EnterpriseDataGrid rowData={lines ?? []} columnDefs={lineCols} gridOptions={lineGrid} height={480} />
+          </Box>
+          {selectedLine && (
+            <Box sx={{ flex: '0 0 380px', width: 380, minWidth: 320 }}>{lineDetailPanel}</Box>
+          )}
+        </Stack>
       </Paper>
 
-      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} alignItems="stretch">
-        <Box sx={{ flex: 3, minWidth: 0 }}>
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
-              <Button variant="contained" onClick={() => setAddLineOpen(true)} disabled={activePlanId == null}>
-                Add line
-              </Button>
-              <Button variant="outlined" onClick={() => recalc.mutate()} disabled={activePlanId == null || recalc.isPending}>
-                Recalculate
-              </Button>
-              <Typography variant="caption" color="text.secondary" sx={{ flex: '1 1 220px', minWidth: 0 }}>
-                Selectors for customer / distributor / product appear inside <strong>Add line</strong> and <strong>Edit</strong> — type
-                to search master data.
-              </Typography>
-            </Stack>
-            {planReadiness && (
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }} data-testid="plan-readiness-chips">
-                {planReadiness.missing_sku_assumption > 0 && (
-                  <Chip
-                    size="small"
-                    label={`Missing SKU assumptions: ${planReadiness.missing_sku_assumption} — controlled cost unavailable`}
-                    color="warning"
-                    variant="outlined"
-                  />
-                )}
-                {planReadiness.missing_customer_term > 0 && (
-                  <Chip
-                    size="small"
-                    label={`Missing customer terms: ${planReadiness.missing_customer_term}`}
-                    color="warning"
-                    variant="outlined"
-                  />
-                )}
-                {planReadiness.missing_distributor_term > 0 && (
-                  <Chip
-                    size="small"
-                    label={`Missing distributor terms: ${planReadiness.missing_distributor_term}`}
-                    color="warning"
-                    variant="outlined"
-                  />
-                )}
-                {planReadiness.ready && planReadiness.line_count > 0 && (
-                  <Chip size="small" label="All defaults present" color="success" variant="outlined" />
-                )}
-              </Stack>
+      {/* ─── Plan summary strip (below grid, trust-guarded) ─────────────────── */}
+      {activePlanId != null && (
+        <Paper sx={{ p: 1.5, mb: 1 }} data-testid="plan-summary-panel">
+          <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Typography variant="body2">
+              <strong>Lines:</strong> {summary?.line_count ?? 0}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Units:</strong> {summary?.total_units ?? 0}
+            </Typography>
+            {economicsComplete ? (
+              <>
+                <Typography variant="body2">
+                  <strong>Estimated internal GP USD:</strong> {summary?.total_internal_gp_usd ?? 0}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Promo reserve USD:</strong> {summary?.total_promo_reserve_usd ?? 0}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Non-promo reserve USD:</strong> {summary?.total_non_promo_reserve_usd ?? 0}
+                </Typography>
+              </>
+            ) : (
+              <>
+                <Chip
+                  size="small"
+                  label="Economics incomplete"
+                  color="warning"
+                  data-testid="economics-incomplete-chip"
+                />
+                {(summary?.flags ?? []).map((f) => (
+                  <Chip key={f} size="small" label={fmtFlag(f)} color="warning" variant="outlined" />
+                ))}
+                <Typography variant="caption" color="text.secondary">
+                  Complete missing defaults, then Recalculate.
+                </Typography>
+              </>
             )}
-            {lines != null && lines.some((l) => l.calc_sell_in_price_usd == null) && (
-              <Alert severity="info" sx={{ mb: 1, py: 0.5 }} data-testid="recalc-needed-banner">
-                Some lines have no calculated economics — press <strong>Recalculate</strong> to compute.
-              </Alert>
-            )}
-            <EnterpriseDataGrid rowData={lines ?? []} columnDefs={lineCols} gridOptions={lineGrid} height={480} />
-          </Paper>
-          {(summary?.flags?.length ?? 0) > 0 ? (
-            <Alert severity="warning" data-testid="plan-flags-alert">
-              Economics issues: {summary!.flags.map(fmtFlag).join('; ')}
-            </Alert>
-          ) : lines != null && lines.length > 0 ? (
-            <Alert severity="success">Economics OK across all calculated plan lines.</Alert>
-          ) : null}
-        </Box>
+          </Stack>
+        </Paper>
+      )}
 
-        {/* Right column: line detail when selected, otherwise plan summary + suggestions */}
-        <Box sx={{ flex: 2, minWidth: 0 }}>
-          {selectedLine ? (
-            lineDetailPanel
-          ) : (
+      {/* ─── Assisted suggestions (collapsible, default open) ───────────────── */}
+      {activePlanId != null && (
+        <Paper sx={{ p: 2, mb: 1 }}>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: showSuggestions ? 1 : 0 }}>
+            <Typography variant="subtitle2" sx={{ flex: 1 }}>
+              Assisted suggestions
+            </Typography>
+            <Button
+              size="small"
+              onClick={() => setShowSuggestions((v) => !v)}
+              data-testid="toggle-suggestions-btn"
+            >
+              {showSuggestions ? '▴ Hide' : '▾ Show'}
+            </Button>
+          </Stack>
+          {showSuggestions && (
             <>
-              <Paper sx={{ p: 2, mb: 2 }} data-testid="plan-summary-panel">
-                <Typography variant="subtitle1">Plan summary</Typography>
-                <Typography variant="body2">Lines: {summary?.line_count ?? 0}</Typography>
-                <Typography variant="body2">Units: {summary?.total_units ?? 0}</Typography>
-                <Typography variant="body2">Internal GP USD: {summary?.total_internal_gp_usd ?? 0}</Typography>
-                <Typography variant="body2">Promo reserve USD: {summary?.total_promo_reserve_usd ?? 0}</Typography>
-                <Typography variant="body2">Non-promo reserve USD: {summary?.total_non_promo_reserve_usd ?? 0}</Typography>
-              </Paper>
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="subtitle1" sx={{ mb: 0.5 }}>
-                  Assisted suggestions
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  Heuristics from history and forecasts — optional. Applying updates the line; use Recalculate when you need refreshed
-                  dollar outputs. Click a row in the grid to see per-line suggestions with evidence context.
-                </Typography>
-                <Stack spacing={1}>
-                  {(suggestions ?? []).flatMap((bundle) => {
-                    const ln = lineById.get(bundle.line_id);
-                    const label = lineEntitySummary(ln) || `Line #${bundle.line_id}`;
-                    const isLineupBased = bundle._meta?.data_sources.lineup === true;
-                    return bundle.suggestions
-                      .map((s, idx) => ({ bundle, s, key: `${bundle.line_id}-${s.type}-${idx}` }))
-                      .filter((x) => !dismissed[x.key])
-                      .map(({ bundle, s, key }) => (
-                        <Paper key={key} variant="outlined" sx={{ p: 1 }}>
-                          <Typography variant="body2">
-                            <strong>{label}</strong> · {sugTypeLabel(s.type)} · {s.confidence}
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                Heuristics from history and forecasts — optional. Applying updates the line; use Recalculate when you
+                need refreshed dollar outputs. Click a row in the grid to see per-line suggestions with evidence
+                context.
+              </Typography>
+              <Stack spacing={1}>
+                {(suggestions ?? []).flatMap((bundle) => {
+                  const ln = lineById.get(bundle.line_id);
+                  const label = lineEntitySummary(ln) || `Line #${bundle.line_id}`;
+                  const isLineupBased = bundle._meta?.data_sources.lineup === true;
+                  return bundle.suggestions
+                    .map((s, idx) => ({ bundle, s, key: `${bundle.line_id}-${s.type}-${idx}` }))
+                    .filter((x) => !dismissed[x.key])
+                    .map(({ bundle, s, key }) => (
+                      <Paper key={key} variant="outlined" sx={{ p: 1 }}>
+                        <Typography variant="body2">
+                          <strong>{label}</strong> · {sugTypeLabel(s.type)} · {s.confidence}
+                        </Typography>
+                        {isLineupBased ? (
+                          <Typography variant="caption" color="info.main" display="block">
+                            Based on lineup evidence
                           </Typography>
-                          {isLineupBased ? (
-                            <Typography variant="caption" color="info.main" display="block">
-                              Based on lineup evidence
-                            </Typography>
-                          ) : null}
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            {s.reason}
-                          </Typography>
-                          <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              onClick={() =>
-                                applySuggestion.mutate({
-                                  line_id: bundle.line_id,
-                                  suggestion_type: s.type,
-                                  value: s.value,
-                                })
-                              }
-                            >
-                              Apply
-                            </Button>
-                            <Button size="small" onClick={() => setDismissed((prev) => ({ ...prev, [key]: true }))}>
-                              Dismiss
-                            </Button>
-                          </Stack>
-                        </Paper>
-                      ));
-                  })}
-                  {!suggestions?.length ? (
-                    <Typography color="text.secondary">No suggestions available yet.</Typography>
-                  ) : null}
-                </Stack>
-              </Paper>
+                        ) : null}
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {s.reason}
+                        </Typography>
+                        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            onClick={() =>
+                              applySuggestion.mutate({
+                                line_id: bundle.line_id,
+                                suggestion_type: s.type,
+                                value: s.value,
+                              })
+                            }
+                          >
+                            Apply
+                          </Button>
+                          <Button size="small" onClick={() => setDismissed((prev) => ({ ...prev, [key]: true }))}>
+                            Dismiss
+                          </Button>
+                        </Stack>
+                      </Paper>
+                    ));
+                })}
+                {!suggestions?.length ? (
+                  <Typography color="text.secondary">No suggestions available yet.</Typography>
+                ) : null}
+              </Stack>
             </>
           )}
-        </Box>
-      </Stack>
+        </Paper>
+      )}
 
       <Dialog open={addPlanOpen} onClose={() => !createPlan.isPending && setAddPlanOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Create commercial plan</DialogTitle>

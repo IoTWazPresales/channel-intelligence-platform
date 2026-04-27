@@ -182,8 +182,10 @@ describe('CommercialPlannerPage', () => {
   it('loads planner workspace and summary', async () => {
     renderPage();
     expect(await screen.findByText('Commercial planner')).toBeInTheDocument();
-    expect(await screen.findByText('Lines: 1')).toBeInTheDocument();
-    expect(await screen.findByText('Units: 100')).toBeInTheDocument();
+    // Summary strip may split "Lines:" and "1" across elements — check panel text content
+    const summaryPanel = await screen.findByTestId('plan-summary-panel');
+    expect(summaryPanel).toHaveTextContent('Lines:');
+    expect(summaryPanel).toHaveTextContent('100'); // total_units = 100
   });
 
   it('shows workflow guidance toggle collapsed by default, expands on click', async () => {
@@ -201,9 +203,14 @@ describe('CommercialPlannerPage', () => {
     expect(guide).toHaveTextContent('Recalculate');
   });
 
-  it('shows inline hint that selectors live inside Add line', async () => {
+  it('renders plan selector chips and action buttons in the compact plan controls', async () => {
     renderPage();
-    expect(await screen.findByText(/Selectors for customer/i)).toBeInTheDocument();
+    // Plan chip for the loaded plan
+    expect(await screen.findByText(/Q3 Plan \(draft\)/i)).toBeInTheDocument();
+    // Action buttons present in the header
+    expect(await screen.findByRole('button', { name: /\+ New plan/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Add line/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Recalculate/i })).toBeInTheDocument();
   });
 
   it('applies assisted suggestion', async () => {
@@ -228,6 +235,7 @@ describe('CommercialPlannerPage', () => {
       expect(hits.length).toBeGreaterThan(0);
     });
   });
+
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -864,6 +872,52 @@ describe('CommercialPlannerPage — Workspace V1', () => {
     expect(detailPanel).toHaveTextContent('Lineup-based uplift');
     const chip = await screen.findByTestId('suggestion-lineup-source');
     expect(chip).toHaveTextContent('Based on lineup evidence');
+  });
+
+  // ── Plan summary trust guardrail ────────────────────────────────────────────
+
+  it('plan summary strip shows "Economics incomplete" when a line has null sell-in price', async () => {
+    mockState.apiGetMock.mockImplementation(
+      makeDefaultMock([{ ...CLEAN_LINE, calc_sell_in_price_usd: null, calc_buy_price_usd: null,
+        calc_promo_reserve_usd: null, calc_non_promo_reserve_usd: null, calc_internal_gp_usd: null,
+        calc_flags: ['missing_or_invalid_landed_cost'] }])
+    );
+    // Summary returns flags so economicsComplete stays false
+    mockState.apiGetMock.mockImplementation(async (url: string) => {
+      if (url === '/api/v1/commercial-planner/plans/1/summary') {
+        return { line_count: 1, total_units: 100, total_internal_gp_usd: null, total_promo_reserve_usd: null, total_non_promo_reserve_usd: null, flags: ['missing_or_invalid_landed_cost'] };
+      }
+      return makeDefaultMock([{ ...CLEAN_LINE, calc_sell_in_price_usd: null, calc_flags: ['missing_or_invalid_landed_cost'] }])(url);
+    });
+    renderPage();
+    const summary = await screen.findByTestId('plan-summary-panel');
+    expect(summary).toHaveTextContent('Lines:');
+    expect(summary).toHaveTextContent('Units:');
+    expect(await screen.findByTestId('economics-incomplete-chip')).toBeInTheDocument();
+    expect(summary).toHaveTextContent('Complete missing defaults, then Recalculate.');
+    expect(summary).not.toHaveTextContent('Estimated internal GP USD');
+  });
+
+  it('plan summary strip shows "Estimated internal GP USD" when economics are complete', async () => {
+    // Default mock has clean line + flags: [] → economicsComplete = true
+    renderPage();
+    const summary = await screen.findByTestId('plan-summary-panel');
+    expect(summary).toHaveTextContent('Estimated internal GP USD');
+    expect(summary).toHaveTextContent('Promo reserve USD');
+    expect(summary).not.toHaveTextContent('Economics incomplete');
+  });
+
+  it('suggestions section is collapsible and defaults to open', async () => {
+    renderPage();
+    // Suggestions visible by default (Apply button present without any toggle)
+    expect(await screen.findByRole('button', { name: 'Apply' })).toBeInTheDocument();
+    // Toggle collapses
+    const toggleBtn = await screen.findByTestId('toggle-suggestions-btn');
+    fireEvent.click(toggleBtn);
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Apply' })).not.toBeInTheDocument());
+    // Toggle expands again
+    fireEvent.click(toggleBtn);
+    expect(await screen.findByRole('button', { name: 'Apply' })).toBeInTheDocument();
   });
 });
 
