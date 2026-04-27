@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
@@ -11,8 +12,10 @@ import {
   DialogTitle,
   Divider,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
+  Popover,
   Paper,
   Select,
   Stack,
@@ -27,7 +30,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CellValueChangedEvent, ColDef, GridOptions } from 'ag-grid-community';
+import type { CellValueChangedEvent, ColDef, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
@@ -233,20 +236,161 @@ export function fmtCurrency(v: number | null | undefined): string {
   return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/** Translate a calc_flag code to a user-facing message. */
+/** Translate a calc_flag / readiness code to a user-facing message (full text, tooltips). */
 export function fmtFlag(flag: string): string {
   const labels: Record<string, string> = {
-    missing_or_invalid_landed_cost: 'Controlled cost missing — add SKU assumption in Planner defaults',
+    missing_sku_assumption: 'Controlled cost missing — add SKU assumption in Planner defaults',
+    missing_or_invalid_landed_cost: 'Controlled cost unavailable — verify SKU assumption or line override',
+    missing_distributor_term: 'Missing distributor terms — add in Planner defaults',
+    missing_customer_term: 'Missing customer terms — add in Planner defaults',
     non_positive_target_units: 'Units must be positive',
     non_positive_target_srp: 'Target SRP must be positive',
     invalid_fx_rate_to_usd: 'FX rate invalid',
     impossible_margin_stack: 'Margin stack unsustainable (margins ≥ 95%)',
-    margin_floor_breach: 'Below cost — buy price is under controlled cost',
+    margin_floor_breach: 'Margin below floor — buy price is under controlled cost',
     reserve_breach: 'Reserve exceeds 80% of revenue',
     impossible_economics: 'Cannot compute sell-in price',
     partial_margin_stack: 'Partial margin stack — some terms defaulted to zero',
   };
   return labels[flag] ?? flag;
+}
+
+/** Short label for Issues column chips (no raw snake_case in the cell). */
+export function fmtIssueChipLabel(flag: string): string {
+  const short: Record<string, string> = {
+    missing_sku_assumption: 'Controlled cost missing',
+    missing_or_invalid_landed_cost: 'Controlled cost unavailable',
+    missing_distributor_term: 'Missing distributor terms',
+    missing_customer_term: 'Missing customer terms',
+    non_positive_target_units: 'Invalid units',
+    non_positive_target_srp: 'Invalid target SRP',
+    invalid_fx_rate_to_usd: 'Invalid FX',
+    impossible_margin_stack: 'Unsustainable margin stack',
+    margin_floor_breach: 'Margin below floor',
+    reserve_breach: 'Reserve breach',
+    impossible_economics: 'Cannot compute sell-in',
+    partial_margin_stack: 'Partial margin stack',
+  };
+  return short[flag] ?? (flag.includes('_') ? flag.replace(/_/g, ' ') : flag);
+}
+
+const BLOCKING_ECONOMICS_FLAGS = new Set([
+  'missing_sku_assumption',
+  'missing_or_invalid_landed_cost',
+  'missing_distributor_term',
+  'missing_customer_term',
+]);
+
+/** True when line calc_flags indicate GP/reserve outputs must not be trusted as complete economics. */
+export function lineHasBlockingEconomicsFlags(line: { calc_flags?: string[] } | null | undefined): boolean {
+  if (!line?.calc_flags?.length) return false;
+  return line.calc_flags.some((f) => BLOCKING_ECONOMICS_FLAGS.has(f));
+}
+
+export function roundPlannerUnits(n: number): number {
+  return Math.round(Number(n));
+}
+
+const OPTIONAL_COLUMN_FIELDS = [
+  'promo_mix_pct',
+  'calc_buy_price_usd',
+  'calc_customer_gp_pct',
+  'calc_distributor_gp_pct',
+  'calc_promo_reserve_usd',
+  'calc_non_promo_reserve_usd',
+] as const;
+
+type OptionalColumnField = (typeof OPTIONAL_COLUMN_FIELDS)[number];
+
+const OPTIONAL_COLUMN_LABELS: Record<OptionalColumnField, string> = {
+  promo_mix_pct: 'Promo mix %',
+  calc_buy_price_usd: 'Buy USD',
+  calc_customer_gp_pct: 'Cust GP %',
+  calc_distributor_gp_pct: 'Disti GP %',
+  calc_promo_reserve_usd: 'Promo reserve USD',
+  calc_non_promo_reserve_usd: 'Non-promo reserve USD',
+};
+
+const LS_OPTIONAL_COLS = 'cip.commercial-planner.optionalColumns.v1';
+
+function defaultOptionalVisibility(): Record<OptionalColumnField, boolean> {
+  return {
+    promo_mix_pct: false,
+    calc_buy_price_usd: false,
+    calc_customer_gp_pct: false,
+    calc_distributor_gp_pct: false,
+    calc_promo_reserve_usd: false,
+    calc_non_promo_reserve_usd: false,
+  };
+}
+
+type SuggestionPreviewState = {
+  key: string;
+  lineId: number;
+  suggestionType: string;
+  applyValue: unknown;
+  rows: { label: string; from: string; to: string }[];
+  roundNote?: string;
+};
+
+function buildSuggestionPreview(line: PlanLine, s: Suggestion, key: string): SuggestionPreviewState | null {
+  if (s.type === 'target_units') {
+    const raw = Number(s.value);
+    const rounded = roundPlannerUnits(raw);
+    const roundNote = raw !== rounded ? 'Rounded to whole unit (planner uses integer quantities).' : undefined;
+    return {
+      key,
+      lineId: line.id,
+      suggestionType: s.type,
+      applyValue: rounded,
+      rows: [{ label: 'Units', from: String(line.target_units), to: String(rounded) }],
+      roundNote,
+    };
+  }
+  if (s.type === 'pricing_band' && s.value != null && typeof s.value === 'object' && !Array.isArray(s.value)) {
+    const v = s.value as { target_srp_local: number; promo_srp_local: number };
+    return {
+      key,
+      lineId: line.id,
+      suggestionType: s.type,
+      applyValue: s.value,
+      rows: [
+        {
+          label: 'Target SRP',
+          from: fmtCurrency(line.target_srp_local),
+          to: fmtCurrency(v.target_srp_local),
+        },
+        {
+          label: 'Promo SRP',
+          from: line.promo_srp_local != null ? fmtCurrency(line.promo_srp_local) : '—',
+          to: fmtCurrency(v.promo_srp_local),
+        },
+      ],
+    };
+  }
+  if (s.type === 'promo_mix_pct') {
+    const newMix = Number(s.value);
+    return {
+      key,
+      lineId: line.id,
+      suggestionType: s.type,
+      applyValue: newMix,
+      rows: [
+        {
+          label: 'Promo mix',
+          from: `${(line.promo_mix_pct * 100).toFixed(1)}%`,
+          to: `${(newMix * 100).toFixed(1)}%`,
+        },
+      ],
+    };
+  }
+  return {
+    key,
+    lineId: line.id,
+    suggestionType: s.type,
+    applyValue: s.value,
+    rows: [{ label: 'Value', from: '—', to: typeof s.value === 'object' ? JSON.stringify(s.value) : String(s.value) }],
+  };
 }
 
 /** Human-readable label for a suggestion type. */
@@ -325,6 +469,33 @@ export default function CommercialPlannerPage() {
   const [showGuide, setShowGuide] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
+  const [optionalColsHydrated, setOptionalColsHydrated] = useState(false);
+  const [optionalVisible, setOptionalVisible] = useState<Record<OptionalColumnField, boolean>>(() => defaultOptionalVisibility());
+  const [suggestionPreview, setSuggestionPreview] = useState<SuggestionPreviewState | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(LS_OPTIONAL_COLS);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<Record<OptionalColumnField, boolean>>;
+        setOptionalVisible((prev) => ({ ...prev, ...parsed }));
+      }
+    } catch {
+      /* ignore */
+    }
+    setOptionalColsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!optionalColsHydrated || typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(LS_OPTIONAL_COLS, JSON.stringify(optionalVisible));
+    } catch {
+      /* ignore */
+    }
+  }, [optionalVisible, optionalColsHydrated]);
 
   const { data: plans, isLoading, isError, error } = useQuery({
     queryKey: ['commercial-plans'],
@@ -372,11 +543,12 @@ export default function CommercialPlannerPage() {
   }, [lineupJobId]);
 
   const activePlanId = selectedPlanId ?? plans?.[0]?.id ?? null;
-  const { data: lines } = useQuery({
+  const { data: lines, isPending: linesPending } = useQuery({
     queryKey: ['commercial-plan-lines', activePlanId],
     queryFn: ({ signal }) => apiGet<PlanLine[]>(`/api/v1/commercial-planner/plans/${activePlanId}/lines`, { signal }),
     enabled: tab === 0 && activePlanId != null,
   });
+  const linesLoadingOverlay = tab === 0 && activePlanId != null && linesPending;
   const { data: summary } = useQuery({
     queryKey: ['commercial-plan-summary', activePlanId],
     queryFn: ({ signal }) => apiGet<Summary>(`/api/v1/commercial-planner/plans/${activePlanId}/summary`, { signal }),
@@ -530,6 +702,7 @@ export default function CommercialPlannerPage() {
     mutationFn: (payload: { line_id: number; suggestion_type: string; value: unknown }) =>
       apiPost('/api/v1/commercial-planner/apply-suggestion', payload),
     onSuccess: () => {
+      setSuggestionPreview(null);
       void qc.invalidateQueries({ queryKey: ['commercial-plan-lines', activePlanId] });
       void qc.invalidateQueries({ queryKey: ['commercial-plan-summary', activePlanId] });
       void qc.invalidateQueries({ queryKey: ['commercial-plan-suggestions', activePlanId] });
@@ -578,7 +751,11 @@ export default function CommercialPlannerPage() {
       if (!lineId || e.oldValue === e.newValue || !e.colDef.field) return;
       const f = e.colDef.field;
       if (f === 'customer_id' || f === 'distributor_id' || f === 'product_id') return;
-      await apiPatch(`/api/v1/commercial-planner/lines/${lineId}`, { [f]: e.newValue });
+      let payloadValue: unknown = e.newValue;
+      if (f === 'target_units' && e.newValue != null && e.newValue !== '') {
+        payloadValue = roundPlannerUnits(Number(e.newValue));
+      }
+      await apiPatch(`/api/v1/commercial-planner/lines/${lineId}`, { [f]: payloadValue });
       await qc.invalidateQueries({ queryKey: ['commercial-plan-lines', activePlanId] });
       await qc.invalidateQueries({ queryKey: ['commercial-plan-summary', activePlanId] });
     },
@@ -633,38 +810,105 @@ export default function CommercialPlannerPage() {
             </Button>
           ) : null,
       },
-      { field: 'target_units', headerName: 'Units', editable: true, type: 'numericColumn', minWidth: 85 },
+      {
+        field: 'target_units',
+        headerName: 'Units',
+        editable: true,
+        type: 'numericColumn',
+        minWidth: 85,
+        valueFormatter: (p) => (p.value != null && p.value !== '' ? String(roundPlannerUnits(Number(p.value))) : ''),
+      },
       { field: 'target_srp_local', headerName: 'Target SRP', editable: true, type: 'numericColumn', minWidth: 95 },
       { field: 'promo_srp_local', headerName: 'Promo SRP', editable: true, type: 'numericColumn', minWidth: 95 },
-      // Promo mix — hidden by default; accessible via column chooser
-      { field: 'promo_mix_pct', headerName: 'Promo mix %', editable: true, type: 'numericColumn', minWidth: 100, hide: true },
+      {
+        field: 'promo_mix_pct',
+        headerName: 'Promo mix %',
+        editable: true,
+        type: 'numericColumn',
+        minWidth: 100,
+        hide: !optionalVisible.promo_mix_pct,
+      },
       { field: 'calc_sell_in_price_usd', headerName: 'Sell-in USD', minWidth: 105 },
-      // Buy price — hidden by default; secondary calc detail
-      { field: 'calc_buy_price_usd', headerName: 'Buy USD', minWidth: 105, hide: true },
-      { field: 'calc_internal_gp_usd', headerName: 'Internal GP USD', minWidth: 120 },
-      // GP% columns — hidden by default; accessible via column chooser
+      {
+        field: 'calc_buy_price_usd',
+        headerName: 'Buy USD',
+        minWidth: 105,
+        hide: !optionalVisible.calc_buy_price_usd,
+      },
+      {
+        field: 'calc_internal_gp_usd',
+        headerName: 'Internal GP USD',
+        minWidth: 120,
+        valueGetter: (p) => {
+          const d = p.data;
+          if (!d) return '';
+          if (lineHasBlockingEconomicsFlags(d)) return 'Incomplete';
+          return d.calc_internal_gp_usd != null ? String(d.calc_internal_gp_usd) : '—';
+        },
+      },
       {
         field: 'calc_customer_gp_pct',
         headerName: 'Cust GP%',
         minWidth: 95,
-        hide: true,
+        hide: !optionalVisible.calc_customer_gp_pct,
         valueGetter: (p) => p.data?.calc_customer_gp_pct != null ? fmtMarginPct(p.data.calc_customer_gp_pct) : '—',
       },
       {
         field: 'calc_distributor_gp_pct',
         headerName: 'Disti GP%',
         minWidth: 95,
-        hide: true,
+        hide: !optionalVisible.calc_distributor_gp_pct,
         valueGetter: (p) => p.data?.calc_distributor_gp_pct != null ? fmtMarginPct(p.data.calc_distributor_gp_pct) : '—',
       },
-      // Reserve detail — hidden by default
-      { field: 'calc_promo_reserve_usd', headerName: 'Promo reserve', minWidth: 120, hide: true },
-      { field: 'calc_non_promo_reserve_usd', headerName: 'Non-promo reserve', minWidth: 140, hide: true },
+      {
+        field: 'calc_promo_reserve_usd',
+        headerName: 'Promo reserve',
+        minWidth: 120,
+        hide: !optionalVisible.calc_promo_reserve_usd,
+        valueGetter: (p) => {
+          const d = p.data;
+          if (!d) return '';
+          if (lineHasBlockingEconomicsFlags(d)) return 'Incomplete';
+          return d.calc_promo_reserve_usd != null ? String(d.calc_promo_reserve_usd) : '—';
+        },
+      },
+      {
+        field: 'calc_non_promo_reserve_usd',
+        headerName: 'Non-promo reserve',
+        minWidth: 140,
+        hide: !optionalVisible.calc_non_promo_reserve_usd,
+        valueGetter: (p) => {
+          const d = p.data;
+          if (!d) return '';
+          if (lineHasBlockingEconomicsFlags(d)) return 'Incomplete';
+          return d.calc_non_promo_reserve_usd != null ? String(d.calc_non_promo_reserve_usd) : '—';
+        },
+      },
       {
         field: 'calc_flags',
         headerName: 'Issues',
-        minWidth: 155,
-        valueGetter: (p) => (p.data?.calc_flags ?? []).map(fmtFlag).join('; ') || '—',
+        minWidth: 180,
+        autoHeight: true,
+        wrapText: true,
+        cellRenderer: (p: ICellRendererParams<PlanLine>) => {
+          const flags = p.data?.calc_flags ?? [];
+          if (!flags.length) return '—';
+          return (
+            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap component="span" sx={{ py: 0.25 }}>
+              {flags.map((f) => (
+                <Chip
+                  key={f}
+                  size="small"
+                  label={fmtIssueChipLabel(f)}
+                  title={`${fmtFlag(f)} (code: ${f})`}
+                  color="warning"
+                  variant="outlined"
+                  data-testid={`issue-flag-${f}`}
+                />
+              ))}
+            </Stack>
+          );
+        },
       },
       {
         headerName: 'Delete',
@@ -680,18 +924,19 @@ export default function CommercialPlannerPage() {
           ) : null,
       },
     ],
-    [deleteLine, openEditLine]
+    [deleteLine, openEditLine, optionalVisible]
   );
 
   const lineGrid: GridOptions<PlanLine> = useMemo(
     () => ({
       singleClickEdit: true,
+      loading: linesLoadingOverlay,
       onCellValueChanged: (e) => void onLineCell(e),
       onRowClicked: (e) => {
         if (e.data) setSelectedLineId((prev) => (prev === e.data!.id ? null : e.data!.id));
       },
     }),
-    [onLineCell]
+    [onLineCell, linesLoadingOverlay]
   );
 
   // ── Line detail panel (shown in right column when a line row is clicked) ─────
@@ -749,7 +994,13 @@ export default function CommercialPlannerPage() {
         <Stack spacing={0.25} sx={{ mb: 0.75 }}>
           <Typography variant="body2">Sell-in: {fmtCurrency(selectedLine.calc_sell_in_price_usd)} USD</Typography>
           <Typography variant="body2">Buy price: {fmtCurrency(selectedLine.calc_buy_price_usd)} USD</Typography>
-          <Typography variant="body2">Internal GP: {fmtCurrency(selectedLine.calc_internal_gp_usd)} USD</Typography>
+          {lineHasBlockingEconomicsFlags(selectedLine) ? (
+            <Typography variant="body2" data-testid="line-detail-internal-gp-incomplete">
+              Internal GP: Incomplete
+            </Typography>
+          ) : (
+            <Typography variant="body2">Internal GP: {fmtCurrency(selectedLine.calc_internal_gp_usd)} USD</Typography>
+          )}
         </Stack>
       )}
       {(selectedLine.calc_flags ?? []).length > 0 ? (
@@ -863,30 +1114,75 @@ export default function CommercialPlannerPage() {
               />
             ) : null}
             <Stack spacing={0.75}>
-              {activeSugs.map(({ s, key }) => (
-                <Paper key={key} variant="outlined" sx={{ p: 1 }}>
-                  <Typography variant="caption" fontWeight={600} display="block">
-                    {sugTypeLabel(s.type)} · {s.confidence} confidence
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                    {s.reason}
-                  </Typography>
-                  <Stack direction="row" spacing={0.75}>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      onClick={() =>
-                        applySuggestion.mutate({ line_id: bundle.line_id, suggestion_type: s.type, value: s.value })
-                      }
-                    >
-                      Apply
-                    </Button>
-                    <Button size="small" onClick={() => setDismissed((prev) => ({ ...prev, [key]: true }))}>
-                      Dismiss
-                    </Button>
-                  </Stack>
-                </Paper>
-              ))}
+              {activeSugs.map(({ s, key }) => {
+                const ln = lineById.get(bundle.line_id);
+                const preview = suggestionPreview?.key === key ? suggestionPreview : null;
+                return (
+                  <Paper key={key} variant="outlined" sx={{ p: 1 }} data-testid={`suggestion-card-${key}`}>
+                    <Typography variant="caption" fontWeight={600} display="block">
+                      {sugTypeLabel(s.type)} · {s.confidence} confidence
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                      {s.reason}
+                    </Typography>
+                    {preview ? (
+                      <Box sx={{ mt: 0.5 }} data-testid="suggestion-apply-preview">
+                        <Typography variant="caption" fontWeight={600} display="block" sx={{ mb: 0.5 }}>
+                          Preview changes
+                        </Typography>
+                        {preview.rows.map((row) => (
+                          <Typography key={row.label} variant="caption" display="block">
+                            {row.label}: {row.from} → {row.to}
+                          </Typography>
+                        ))}
+                        {preview.roundNote ? (
+                          <Typography variant="caption" color="info.main" display="block" sx={{ mt: 0.5 }}>
+                            {preview.roundNote}
+                          </Typography>
+                        ) : null}
+                        <Stack direction="row" spacing={0.75} sx={{ mt: 1 }}>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            data-testid="suggestion-confirm-apply"
+                            disabled={applySuggestion.isPending}
+                            onClick={() =>
+                              applySuggestion.mutate({
+                                line_id: preview.lineId,
+                                suggestion_type: preview.suggestionType,
+                                value: preview.applyValue,
+                              })
+                            }
+                          >
+                            Confirm apply
+                          </Button>
+                          <Button size="small" onClick={() => setSuggestionPreview(null)} disabled={applySuggestion.isPending}>
+                            Cancel
+                          </Button>
+                        </Stack>
+                      </Box>
+                    ) : (
+                      <Stack direction="row" spacing={0.75}>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          data-testid="suggestion-apply-open-preview"
+                          disabled={!ln || applySuggestion.isPending}
+                          onClick={() => {
+                            if (!ln) return;
+                            setSuggestionPreview(buildSuggestionPreview(ln, s, key));
+                          }}
+                        >
+                          Apply
+                        </Button>
+                        <Button size="small" onClick={() => setDismissed((prev) => ({ ...prev, [key]: true }))}>
+                          Dismiss
+                        </Button>
+                      </Stack>
+                    )}
+                  </Paper>
+                );
+              })}
             </Stack>
           </>
         );
@@ -937,6 +1233,55 @@ export default function CommercialPlannerPage() {
           <Button size="small" variant="outlined" onClick={() => recalc.mutate()} disabled={activePlanId == null || recalc.isPending}>
             Recalculate
           </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            data-testid="column-manager-btn"
+            onClick={(e) => setColumnMenuAnchor(e.currentTarget)}
+            disabled={activePlanId == null}
+          >
+            Columns
+          </Button>
+          <Popover
+            open={Boolean(columnMenuAnchor)}
+            anchorEl={columnMenuAnchor}
+            onClose={() => setColumnMenuAnchor(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            slotProps={{ paper: { sx: { minWidth: 280, p: 1 } } }}
+          >
+            <Typography variant="caption" color="text.secondary" sx={{ px: 0.5, display: 'block', mb: 0.5 }}>
+              Optional columns
+            </Typography>
+            <Stack spacing={0.25}>
+              {OPTIONAL_COLUMN_FIELDS.map((field) => (
+                <FormControlLabel
+                  key={field}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={optionalVisible[field]}
+                      onChange={() => setOptionalVisible((prev) => ({ ...prev, [field]: !prev[field] }))}
+                      data-testid={`col-toggle-${field}`}
+                    />
+                  }
+                  label={OPTIONAL_COLUMN_LABELS[field]}
+                  sx={{ m: 0, px: 0.5 }}
+                />
+              ))}
+            </Stack>
+            <Divider sx={{ my: 1 }} />
+            <Button
+              size="small"
+              fullWidth
+              data-testid="col-reset-defaults"
+              onClick={() => {
+                setOptionalVisible(defaultOptionalVisibility());
+                setColumnMenuAnchor(null);
+              }}
+            >
+              Reset columns
+            </Button>
+          </Popover>
         </Stack>
 
         {/* Readiness chips */}
@@ -993,12 +1338,18 @@ export default function CommercialPlannerPage() {
       {/* ─── Plan summary strip (below grid, trust-guarded) ─────────────────── */}
       {activePlanId != null && (
         <Paper sx={{ p: 1.5, mb: 1 }} data-testid="plan-summary-panel">
+          {lines === undefined ? (
+            <Typography variant="body2" color="text.secondary" data-testid="plan-summary-loading">
+              Loading plan…
+            </Typography>
+          ) : (
           <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap" useFlexGap>
             <Typography variant="body2">
-              <strong>Lines:</strong> {summary?.line_count ?? 0}
+              <strong>Lines:</strong> {summary?.line_count ?? lines.length}
             </Typography>
             <Typography variant="body2">
-              <strong>Units:</strong> {summary?.total_units ?? 0}
+              <strong>Units:</strong>{' '}
+              {summary?.total_units ?? lines.reduce((acc, l) => acc + (l.target_units ?? 0), 0)}
             </Typography>
             {economicsComplete ? (
               <>
@@ -1029,6 +1380,7 @@ export default function CommercialPlannerPage() {
               </>
             )}
           </Stack>
+          )}
         </Paper>
       )}
 
@@ -1062,39 +1414,80 @@ export default function CommercialPlannerPage() {
                   return bundle.suggestions
                     .map((s, idx) => ({ bundle, s, key: `${bundle.line_id}-${s.type}-${idx}` }))
                     .filter((x) => !dismissed[x.key])
-                    .map(({ bundle, s, key }) => (
-                      <Paper key={key} variant="outlined" sx={{ p: 1 }}>
-                        <Typography variant="body2">
-                          <strong>{label}</strong> · {sugTypeLabel(s.type)} · {s.confidence}
-                        </Typography>
-                        {isLineupBased ? (
-                          <Typography variant="caption" color="info.main" display="block">
-                            Based on lineup evidence
+                    .map(({ bundle, s, key }) => {
+                      const ln = lineById.get(bundle.line_id);
+                      const preview = suggestionPreview?.key === key ? suggestionPreview : null;
+                      return (
+                        <Paper key={key} variant="outlined" sx={{ p: 1 }} data-testid={`suggestion-card-main-${key}`}>
+                          <Typography variant="body2">
+                            <strong>{label}</strong> · {sugTypeLabel(s.type)} · {s.confidence}
                           </Typography>
-                        ) : null}
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          {s.reason}
-                        </Typography>
-                        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                          <Button
-                            size="small"
-                            variant="contained"
-                            onClick={() =>
-                              applySuggestion.mutate({
-                                line_id: bundle.line_id,
-                                suggestion_type: s.type,
-                                value: s.value,
-                              })
-                            }
-                          >
-                            Apply
-                          </Button>
-                          <Button size="small" onClick={() => setDismissed((prev) => ({ ...prev, [key]: true }))}>
-                            Dismiss
-                          </Button>
-                        </Stack>
-                      </Paper>
-                    ));
+                          {isLineupBased ? (
+                            <Typography variant="caption" color="info.main" display="block">
+                              Based on lineup evidence
+                            </Typography>
+                          ) : null}
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {s.reason}
+                          </Typography>
+                          {preview ? (
+                            <Box sx={{ mt: 1 }} data-testid="suggestion-apply-preview-main">
+                              <Typography variant="caption" fontWeight={600} display="block" sx={{ mb: 0.5 }}>
+                                Preview changes
+                              </Typography>
+                              {preview.rows.map((row) => (
+                                <Typography key={row.label} variant="caption" display="block">
+                                  {row.label}: {row.from} → {row.to}
+                                </Typography>
+                              ))}
+                              {preview.roundNote ? (
+                                <Typography variant="caption" color="info.main" display="block" sx={{ mt: 0.5 }}>
+                                  {preview.roundNote}
+                                </Typography>
+                              ) : null}
+                              <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  data-testid="suggestion-confirm-apply-main"
+                                  disabled={applySuggestion.isPending}
+                                  onClick={() =>
+                                    applySuggestion.mutate({
+                                      line_id: preview.lineId,
+                                      suggestion_type: preview.suggestionType,
+                                      value: preview.applyValue,
+                                    })
+                                  }
+                                >
+                                  Confirm apply
+                                </Button>
+                                <Button size="small" onClick={() => setSuggestionPreview(null)} disabled={applySuggestion.isPending}>
+                                  Cancel
+                                </Button>
+                              </Stack>
+                            </Box>
+                          ) : (
+                            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                              <Button
+                                size="small"
+                                variant="contained"
+                                data-testid="suggestion-apply-open-preview-main"
+                                disabled={!ln || applySuggestion.isPending}
+                                onClick={() => {
+                                  if (!ln) return;
+                                  setSuggestionPreview(buildSuggestionPreview(ln, s, key));
+                                }}
+                              >
+                                Apply
+                              </Button>
+                              <Button size="small" onClick={() => setDismissed((prev) => ({ ...prev, [key]: true }))}>
+                                Dismiss
+                              </Button>
+                            </Stack>
+                          )}
+                        </Paper>
+                      );
+                    });
                 })}
                 {!suggestions?.length ? (
                   <Typography color="text.secondary">No suggestions available yet.</Typography>

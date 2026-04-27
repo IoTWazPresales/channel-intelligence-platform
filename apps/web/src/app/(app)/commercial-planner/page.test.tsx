@@ -2,18 +2,36 @@ import React from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
-import CommercialPlannerPage, { fmtMarginPct, fmtCurrency, fmtFlag, sugTypeLabel } from './page';
+import CommercialPlannerPage, {
+  fmtMarginPct,
+  fmtCurrency,
+  fmtFlag,
+  fmtIssueChipLabel,
+  lineHasBlockingEconomicsFlags,
+  roundPlannerUnits,
+  sugTypeLabel,
+} from './page';
 
-const mockState = vi.hoisted(() => ({
-  lineupEvidence: null as any,
-  planReadiness: null as any,
-  apiGetMock: vi.fn(async (url: string) => {
-    if (url.startsWith('/api/v1/commercial-planner/lineup-evidence')) return mockState.lineupEvidence;
-    if (url.startsWith('/api/v1/commercial-planner/plans/1/readiness')) return mockState.planReadiness;
+const mockState = vi.hoisted(() => {
+  /** Single mutable bag so defaultApiGetImpl always reads current lineupJobs / coverageLines / etc. */
+  const st = {
+    lineupEvidence: null as any,
+    planReadiness: null as any,
+    lineupJobs: [] as any[],
+    coverageLines: [] as any[],
+    productGaps: [] as any[],
+    apiPostMock: vi.fn(async () => ({})),
+    apiPatchMock: vi.fn(async () => ({})),
+    apiDeleteMock: vi.fn(async () => ({})),
+  };
+
+  const defaultApiGetImpl = async (url: string) => {
+    if (url.startsWith('/api/v1/commercial-planner/lineup-evidence')) return st.lineupEvidence;
+    if (url.startsWith('/api/v1/commercial-planner/plans/1/readiness')) return st.planReadiness;
     if (url === '/api/v1/commercial-planner/plans') {
       return [
         {
@@ -76,9 +94,9 @@ const mockState = vi.hoisted(() => ({
         flags: [],
       };
     }
-    if (url === '/api/v1/commercial-planner/lineup-jobs') return mockState.lineupJobs;
-    if (url.startsWith('/api/v1/commercial-planner/lineup-coverage')) return mockState.coverageLines;
-    if (url.startsWith('/api/v1/commercial-planner/lineup-product-gaps')) return mockState.productGaps;
+    if (url === '/api/v1/commercial-planner/lineup-jobs') return st.lineupJobs;
+    if (url.startsWith('/api/v1/commercial-planner/lineup-coverage')) return st.coverageLines;
+    if (url.startsWith('/api/v1/commercial-planner/lineup-product-gaps')) return st.productGaps;
     if (url === '/api/v1/commercial-planner/plans/1/suggestions') {
       return [
         {
@@ -96,14 +114,53 @@ const mockState = vi.hoisted(() => ({
       ];
     }
     return [];
-  }),
-  apiPostMock: vi.fn(async () => ({})),
-  apiPatchMock: vi.fn(async () => ({})),
-  apiDeleteMock: vi.fn(async () => ({})),
-  lineupJobs: [] as any[],
-  coverageLines: [] as any[],
-  productGaps: [] as any[],
-}));
+  };
+
+  const apiGetMock = vi.fn(defaultApiGetImpl);
+  return {
+    get lineupEvidence() {
+      return st.lineupEvidence;
+    },
+    set lineupEvidence(v: any) {
+      st.lineupEvidence = v;
+    },
+    get planReadiness() {
+      return st.planReadiness;
+    },
+    set planReadiness(v: any) {
+      st.planReadiness = v;
+    },
+    get lineupJobs() {
+      return st.lineupJobs;
+    },
+    set lineupJobs(v: any[]) {
+      st.lineupJobs = v;
+    },
+    get coverageLines() {
+      return st.coverageLines;
+    },
+    set coverageLines(v: any[]) {
+      st.coverageLines = v;
+    },
+    get productGaps() {
+      return st.productGaps;
+    },
+    set productGaps(v: any[]) {
+      st.productGaps = v;
+    },
+    get apiPostMock() {
+      return st.apiPostMock;
+    },
+    get apiPatchMock() {
+      return st.apiPatchMock;
+    },
+    get apiDeleteMock() {
+      return st.apiDeleteMock;
+    },
+    apiGetMock,
+    defaultApiGetImpl,
+  };
+});
 
 vi.mock('@/components/PageHeader', () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
@@ -115,17 +172,42 @@ vi.mock('@/components/ModuleGridToolbar', () => ({
   ModuleGridToolbar: ({ onAdd }: any) => <button onClick={onAdd}>add-plan</button>,
 }));
 vi.mock('@/components/EnterpriseDataGrid', () => ({
-  EnterpriseDataGrid: ({ rowData, gridOptions }: { rowData: any[]; gridOptions?: any }) => (
-    <div>
-      {rowData.map((r) => (
-        <div
-          key={r.id}
-          data-testid={`grid-row-${r.id}`}
-          onClick={() => gridOptions?.onRowClicked?.({ data: r })}
-        >
-          {r.id}
-        </div>
-      ))}
+  EnterpriseDataGrid: ({ rowData, columnDefs, gridOptions }: { rowData: any[]; columnDefs?: any[]; gridOptions?: any }) => (
+    <div data-testid="enterprise-grid">
+      {gridOptions?.loading ? <span data-testid="grid-loading-overlay">Loading grid…</span> : null}
+      {(rowData ?? []).map((r) => {
+        const gpCol = columnDefs?.find((c: any) => c.field === 'calc_internal_gp_usd');
+        const gpDisplay =
+          typeof gpCol?.valueGetter === 'function' ? String(gpCol.valueGetter({ data: r } as any) ?? '') : '';
+        return (
+          <div
+            key={r.id}
+            data-testid={`grid-row-${r.id}`}
+            data-internal-gp-display={gpDisplay}
+            onClick={() => gridOptions?.onRowClicked?.({ data: r })}
+          >
+            {r.id}
+          </div>
+        );
+      })}
+      <span data-testid="visible-optional-cols">
+        {columnDefs
+          ?.filter(
+            (c: any) =>
+              c.field &&
+              [
+                'promo_mix_pct',
+                'calc_buy_price_usd',
+                'calc_customer_gp_pct',
+                'calc_distributor_gp_pct',
+                'calc_promo_reserve_usd',
+                'calc_non_promo_reserve_usd',
+              ].includes(c.field) &&
+              c.hide === false
+          )
+          .map((c: any) => c.field)
+          .join(',')}
+      </span>
     </div>
   ),
 }));
@@ -164,6 +246,7 @@ vi.mock('@/lib/api', () => ({
 
 describe('CommercialPlannerPage', () => {
   beforeEach(() => {
+    mockState.apiGetMock.mockImplementation(mockState.defaultApiGetImpl);
     mockState.apiGetMock.mockClear();
     mockState.apiPostMock.mockClear();
     mockState.apiPatchMock.mockClear();
@@ -182,8 +265,10 @@ describe('CommercialPlannerPage', () => {
   it('loads planner workspace and summary', async () => {
     renderPage();
     expect(await screen.findByText('Commercial planner')).toBeInTheDocument();
-    // Summary strip may split "Lines:" and "1" across elements — check panel text content
     const summaryPanel = await screen.findByTestId('plan-summary-panel');
+    await waitFor(() => {
+      expect(summaryPanel).not.toHaveTextContent('Loading plan…');
+    });
     expect(summaryPanel).toHaveTextContent('Lines:');
     expect(summaryPanel).toHaveTextContent('100'); // total_units = 100
   });
@@ -213,9 +298,13 @@ describe('CommercialPlannerPage', () => {
     expect(await screen.findByRole('button', { name: /Recalculate/i })).toBeInTheDocument();
   });
 
-  it('applies assisted suggestion', async () => {
+  it('applies assisted suggestion after preview and confirm', async () => {
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    fireEvent.click(await screen.findByTestId('suggestion-apply-open-preview-main'));
+    expect(await screen.findByTestId('suggestion-apply-preview-main')).toBeInTheDocument();
+    expect(mockState.apiPostMock).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByTestId('suggestion-confirm-apply-main'));
     await waitFor(() =>
       expect(mockState.apiPostMock).toHaveBeenCalledWith('/api/v1/commercial-planner/apply-suggestion', {
         line_id: 11,
@@ -236,6 +325,183 @@ describe('CommercialPlannerPage', () => {
     });
   });
 
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QA polish — column manager, suggestion preview, loading, trust helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CommercialPlannerPage — QA polish', () => {
+  afterEach(() => {
+    mockState.apiGetMock.mockImplementation(mockState.defaultApiGetImpl);
+  });
+
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <CommercialPlannerPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    mockState.apiGetMock.mockClear();
+    mockState.apiPostMock.mockClear();
+    mockState.apiGetMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/v1/commercial-planner/lineup-evidence')) return mockState.lineupEvidence;
+      if (url.startsWith('/api/v1/commercial-planner/plans/1/readiness')) return mockState.planReadiness;
+      if (url === '/api/v1/commercial-planner/plans') {
+        return [{ id: 1, plan_name: 'Q3 Plan', status: 'draft', period_start: '2026-07-01', period_end: null, owner: 'planner', currency_code: 'USD', line_count: 1, notes: null }];
+      }
+      if (url === '/api/v1/commercial-planner/plans/1/lines') {
+        return [
+          {
+            id: 11,
+            commercial_plan_id: 1,
+            customer_id: 1,
+            distributor_id: 1,
+            product_id: 1,
+            customer_code: 'ACME',
+            customer_name: 'Acme Retail',
+            distributor_code: 'DIST01',
+            distributor_name: 'Summit Supply',
+            product_sku: 'NB-X1',
+            product_name: 'Notebook X1',
+            target_units: 100,
+            target_srp_local: 1000,
+            promo_srp_local: 900,
+            promo_mix_pct: 0.5,
+            calc_sell_in_price_usd: 40,
+            calc_buy_price_usd: 36,
+            calc_promo_reserve_usd: 200,
+            calc_non_promo_reserve_usd: 200,
+            calc_internal_gp_usd: 300,
+            calc_customer_gp_pct: null,
+            calc_distributor_gp_pct: null,
+            calc_flags: ['missing_sku_assumption'],
+            calc_explanation: 'ok',
+            override_landed_cost_usd: null,
+          },
+        ];
+      }
+      if (url === '/api/v1/commercial-planner/plans/1/summary') {
+        return { line_count: 1, total_units: 100, total_internal_gp_usd: 300, total_promo_reserve_usd: 200, total_non_promo_reserve_usd: 200, flags: [] };
+      }
+      if (url === '/api/v1/commercial-planner/plans/1/suggestions') {
+        return [
+          {
+            line_id: 11,
+            suggestions: [
+              {
+                type: 'target_units',
+                value: 5287.68,
+                reason: 'Model output',
+                confidence: 'low',
+                factors: {},
+              },
+            ],
+          },
+        ];
+      }
+      return [];
+    });
+  });
+
+  it('Columns opens popover with optional column toggles', async () => {
+    const { user } = renderPage();
+    await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    await user.click(await screen.findByTestId('column-manager-btn'));
+    expect(await screen.findByText('Optional columns')).toBeInTheDocument();
+    expect(screen.getByTestId('col-toggle-promo_mix_pct')).toBeInTheDocument();
+  });
+
+  it('toggling Promo mix shows column in grid column defs', async () => {
+    const { user } = renderPage();
+    await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    await user.click(await screen.findByTestId('column-manager-btn'));
+    const cb = await screen.findByTestId('col-toggle-promo_mix_pct');
+    await user.click(cb);
+    expect(await screen.findByTestId('visible-optional-cols')).toHaveTextContent('promo_mix_pct');
+    await user.click(await screen.findByTestId('col-reset-defaults'));
+    expect(await screen.findByTestId('visible-optional-cols')).toHaveTextContent('');
+  });
+
+  it('grid Internal GP shows Incomplete when line has blocking flag', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    const row = await screen.findByTestId('grid-row-11');
+    expect(row.getAttribute('data-internal-gp-display')).toBe('Incomplete');
+  });
+
+  it('fractional target_units suggestion preview shows rounded value and confirm sends integer', async () => {
+    const { user } = renderPage();
+    await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    await user.click(await screen.findByTestId('suggestion-apply-open-preview-main'));
+    const preview = await screen.findByTestId('suggestion-apply-preview-main');
+    expect(preview).toHaveTextContent('100');
+    expect(preview).toHaveTextContent('5288');
+    expect(preview).toHaveTextContent('Rounded to whole unit');
+    await user.click(await screen.findByTestId('suggestion-confirm-apply-main'));
+    await waitFor(() =>
+      expect(mockState.apiPostMock).toHaveBeenCalledWith('/api/v1/commercial-planner/apply-suggestion', {
+        line_id: 11,
+        suggestion_type: 'target_units',
+        value: 5288,
+      })
+    );
+  });
+
+  it('shows grid loading overlay while lines request is pending', async () => {
+    const linesDeferred: { resolve?: (v: any[]) => void } = {};
+    const linesPromise = new Promise<any[]>((res) => {
+      linesDeferred.resolve = res;
+    });
+    mockState.apiGetMock.mockImplementation(async (url: string) => {
+      if (url === '/api/v1/commercial-planner/plans/1/lines') return linesPromise;
+      if (url === '/api/v1/commercial-planner/plans') {
+        return [{ id: 1, plan_name: 'Q3 Plan', status: 'draft', period_start: '2026-07-01', period_end: null, owner: 'planner', currency_code: 'USD', line_count: 1, notes: null }];
+      }
+      if (url === '/api/v1/commercial-planner/plans/1/summary') {
+        return { line_count: 0, total_units: 0, total_internal_gp_usd: 0, total_promo_reserve_usd: 0, total_non_promo_reserve_usd: 0, flags: [] };
+      }
+      if (url === '/api/v1/commercial-planner/plans/1/suggestions') return [];
+      return [];
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('grid-loading-overlay')).toBeInTheDocument());
+    linesDeferred.resolve!([
+      {
+        id: 11,
+        commercial_plan_id: 1,
+        customer_id: 1,
+        distributor_id: 1,
+        product_id: 1,
+        customer_code: 'ACME',
+        customer_name: 'Acme Retail',
+        distributor_code: 'DIST01',
+        distributor_name: 'Summit Supply',
+        product_sku: 'NB-X1',
+        product_name: 'Notebook X1',
+        target_units: 1,
+        target_srp_local: 1,
+        promo_srp_local: null,
+        promo_mix_pct: 0.5,
+        calc_sell_in_price_usd: null,
+        calc_buy_price_usd: null,
+        calc_promo_reserve_usd: null,
+        calc_non_promo_reserve_usd: null,
+        calc_internal_gp_usd: null,
+        calc_flags: [],
+        calc_explanation: null,
+      },
+    ]);
+    await waitFor(() => expect(screen.queryByTestId('grid-loading-overlay')).not.toBeInTheDocument());
+    expect(await screen.findByTestId('grid-row-11')).toBeInTheDocument();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -348,6 +614,7 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
   }
 
   beforeEach(() => {
+    mockState.apiGetMock.mockImplementation(mockState.defaultApiGetImpl);
     mockState.apiGetMock.mockClear();
     mockState.lineupJobs = [];
     mockState.coverageLines = [];
@@ -620,6 +887,7 @@ describe('Plan readiness chips', () => {
   }
 
   beforeEach(() => {
+    mockState.apiGetMock.mockImplementation(mockState.defaultApiGetImpl);
     mockState.apiGetMock.mockClear();
     mockState.planReadiness = null;
     mockState.lineupEvidence = null;
@@ -637,6 +905,7 @@ describe('Plan readiness chips', () => {
       readiness_summary: '1 line(s) missing SKU assumptions',
     };
     renderPage();
+    await screen.findByText(/Q3 Plan \(draft\)/i);
 
     const chips = await screen.findByTestId('plan-readiness-chips');
     expect(chips).toHaveTextContent('Missing SKU assumptions: 1');
@@ -654,6 +923,7 @@ describe('Plan readiness chips', () => {
       readiness_summary: 'All defaults present.',
     };
     renderPage();
+    await screen.findByText(/Q3 Plan \(draft\)/i);
 
     const chips = await screen.findByTestId('plan-readiness-chips');
     expect(chips).toHaveTextContent('All defaults present');
@@ -675,6 +945,7 @@ describe('Lineup evidence panel in Add line dialog', () => {
   }
 
   beforeEach(() => {
+    mockState.apiGetMock.mockImplementation(mockState.defaultApiGetImpl);
     mockState.apiGetMock.mockClear();
     mockState.lineupEvidence = null;
     mockState.planReadiness = null;
@@ -699,6 +970,7 @@ describe('Lineup evidence panel in Add line dialog', () => {
       cost_semantics_note: 'DAP is not landed_cost_usd.',
     };
     const { user } = renderPage();
+    await screen.findByText(/Q3 Plan \(draft\)/i);
 
     // Open the Add line dialog
     const addBtn = await screen.findByRole('button', { name: /Add line/i });
@@ -734,6 +1006,7 @@ describe('Lineup evidence panel in Add line dialog', () => {
       cost_semantics_note: 'DAP is not landed_cost_usd.',
     };
     const { user } = renderPage();
+    await screen.findByText(/Q3 Plan \(draft\)/i);
 
     const addBtn = await screen.findByRole('button', { name: /Add line/i });
     await user.click(addBtn);
@@ -848,7 +1121,7 @@ describe('CommercialPlannerPage — Workspace V1', () => {
     await user.click(await screen.findByTestId('grid-row-11'));
 
     const detailPanel = await screen.findByTestId('line-detail-panel');
-    expect(detailPanel).toHaveTextContent('Controlled cost missing');
+    expect(detailPanel).toHaveTextContent('Controlled cost unavailable');
     expect(screen.getByTestId('line-detail-cost-missing')).toBeInTheDocument();
   });
 
@@ -890,7 +1163,9 @@ describe('CommercialPlannerPage — Workspace V1', () => {
       return makeDefaultMock([{ ...CLEAN_LINE, calc_sell_in_price_usd: null, calc_flags: ['missing_or_invalid_landed_cost'] }])(url);
     });
     renderPage();
-    const summary = await screen.findByTestId('plan-summary-panel');
+    await screen.findByText(/Q3 Plan \(draft\)/i);
+    await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    const summary = screen.getByTestId('plan-summary-panel');
     expect(summary).toHaveTextContent('Lines:');
     expect(summary).toHaveTextContent('Units:');
     expect(await screen.findByTestId('economics-incomplete-chip')).toBeInTheDocument();
@@ -901,7 +1176,9 @@ describe('CommercialPlannerPage — Workspace V1', () => {
   it('plan summary strip shows "Estimated internal GP USD" when economics are complete', async () => {
     // Default mock has clean line + flags: [] → economicsComplete = true
     renderPage();
-    const summary = await screen.findByTestId('plan-summary-panel');
+    await screen.findByText(/Q3 Plan \(draft\)/i);
+    await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    const summary = screen.getByTestId('plan-summary-panel');
     expect(summary).toHaveTextContent('Estimated internal GP USD');
     expect(summary).toHaveTextContent('Promo reserve USD');
     expect(summary).not.toHaveTextContent('Economics incomplete');
@@ -909,7 +1186,8 @@ describe('CommercialPlannerPage — Workspace V1', () => {
 
   it('suggestions section is collapsible and defaults to open', async () => {
     renderPage();
-    // Suggestions visible by default (Apply button present without any toggle)
+    await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    // Suggestions visible by default (Apply opens preview; button label still "Apply")
     expect(await screen.findByRole('button', { name: 'Apply' })).toBeInTheDocument();
     // Toggle collapses
     const toggleBtn = await screen.findByTestId('toggle-suggestions-btn');
@@ -927,8 +1205,9 @@ describe('CommercialPlannerPage — Workspace V1', () => {
 
 describe('fmtFlag', () => {
   it('translates known flag codes to human-readable messages', () => {
-    expect(fmtFlag('missing_or_invalid_landed_cost')).toContain('Controlled cost missing');
-    expect(fmtFlag('margin_floor_breach')).toContain('Below cost');
+    expect(fmtFlag('missing_or_invalid_landed_cost')).toContain('Controlled cost unavailable');
+    expect(fmtFlag('missing_sku_assumption')).toContain('Controlled cost missing');
+    expect(fmtFlag('margin_floor_breach')).toContain('Margin below floor');
     expect(fmtFlag('impossible_margin_stack')).toContain('unsustainable');
   });
 
@@ -946,5 +1225,34 @@ describe('sugTypeLabel', () => {
 
   it('falls back to the raw type for unknown keys', () => {
     expect(sugTypeLabel('custom_type')).toBe('custom_type');
+  });
+});
+
+describe('fmtIssueChipLabel', () => {
+  it('maps readiness-style flags to short chip labels without raw snake_case', () => {
+    expect(fmtIssueChipLabel('missing_sku_assumption')).toBe('Controlled cost missing');
+    expect(fmtIssueChipLabel('missing_distributor_term')).toBe('Missing distributor terms');
+    expect(fmtIssueChipLabel('missing_customer_term')).toBe('Missing customer terms');
+    expect(fmtIssueChipLabel('missing_or_invalid_landed_cost')).toBe('Controlled cost unavailable');
+    expect(fmtIssueChipLabel('margin_floor_breach')).toBe('Margin below floor');
+  });
+});
+
+describe('lineHasBlockingEconomicsFlags', () => {
+  it('returns true for configured blocking flags', () => {
+    expect(lineHasBlockingEconomicsFlags({ calc_flags: ['missing_sku_assumption'] })).toBe(true);
+    expect(lineHasBlockingEconomicsFlags({ calc_flags: ['missing_or_invalid_landed_cost'] })).toBe(true);
+    expect(lineHasBlockingEconomicsFlags({ calc_flags: ['missing_distributor_term'] })).toBe(true);
+  });
+  it('returns false when no blocking flags', () => {
+    expect(lineHasBlockingEconomicsFlags({ calc_flags: ['margin_floor_breach'] })).toBe(false);
+    expect(lineHasBlockingEconomicsFlags({ calc_flags: [] })).toBe(false);
+  });
+});
+
+describe('roundPlannerUnits', () => {
+  it('rounds fractional values to nearest integer', () => {
+    expect(roundPlannerUnits(5287.68)).toBe(5288);
+    expect(roundPlannerUnits(5287.4)).toBe(5287);
   });
 });
