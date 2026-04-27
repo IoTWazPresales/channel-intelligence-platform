@@ -11,6 +11,8 @@ import CommercialPlannerPage, {
   fmtCurrency,
   fmtFlag,
   fmtIssueChipLabel,
+  fmtModelSalesModel,
+  economicsBlockingTooltip,
   lineHasBlockingEconomicsFlags,
   roundPlannerUnits,
   sugTypeLabel,
@@ -61,6 +63,9 @@ const mockState = vi.hoisted(() => {
           distributor_name: 'Summit Supply',
           product_sku: 'NB-X1',
           product_name: 'Notebook X1',
+          product_part_number: 'PN-001',
+          product_model_name: 'X1',
+          product_sales_model_name: 'X1 Sales',
           target_units: 100,
           target_srp_local: 1000,
           promo_srp_local: 900,
@@ -196,6 +201,12 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
             (c: any) =>
               c.field &&
               [
+                'product_category',
+                'product_form_factor',
+                'product_lifecycle_status',
+                'product_line',
+                'product_series_name',
+                'product_business_unit',
                 'promo_mix_pct',
                 'calc_buy_price_usd',
                 'calc_customer_gp_pct',
@@ -371,6 +382,9 @@ describe('CommercialPlannerPage — QA polish', () => {
             distributor_name: 'Summit Supply',
             product_sku: 'NB-X1',
             product_name: 'Notebook X1',
+            product_part_number: null,
+            product_model_name: null,
+            product_sales_model_name: null,
             target_units: 100,
             target_srp_local: 1000,
             promo_srp_local: 900,
@@ -415,7 +429,8 @@ describe('CommercialPlannerPage — QA polish', () => {
     const { user } = renderPage();
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     await user.click(await screen.findByTestId('column-manager-btn'));
-    expect(await screen.findByText('Optional columns')).toBeInTheDocument();
+    expect(await screen.findByText('Column visibility')).toBeInTheDocument();
+    expect(await screen.findByText('Catalogue')).toBeInTheDocument();
     expect(screen.getByTestId('col-toggle-promo_mix_pct')).toBeInTheDocument();
   });
 
@@ -430,11 +445,11 @@ describe('CommercialPlannerPage — QA polish', () => {
     expect(await screen.findByTestId('visible-optional-cols')).toHaveTextContent('');
   });
 
-  it('grid Internal GP shows Incomplete when line has blocking flag', async () => {
+  it('grid Internal GP shows em dash when line has blocking flag', async () => {
     renderPage();
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     const row = await screen.findByTestId('grid-row-11');
-    expect(row.getAttribute('data-internal-gp-display')).toBe('Incomplete');
+    expect(row.getAttribute('data-internal-gp-display')).toBe('—');
   });
 
   it('fractional target_units suggestion preview shows rounded value and confirm sends integer', async () => {
@@ -1235,6 +1250,33 @@ describe('fmtIssueChipLabel', () => {
     expect(fmtIssueChipLabel('missing_customer_term')).toBe('Missing customer terms');
     expect(fmtIssueChipLabel('missing_or_invalid_landed_cost')).toBe('Controlled cost unavailable');
     expect(fmtIssueChipLabel('margin_floor_breach')).toBe('Margin below floor');
+  });
+});
+
+describe('fmtModelSalesModel', () => {
+  it('joins distinct model and sales model with slash', () => {
+    expect(fmtModelSalesModel({ product_model_name: 'A', product_sales_model_name: 'B' })).toBe('A / B');
+  });
+  it('returns single name when equal or only one set', () => {
+    expect(fmtModelSalesModel({ product_model_name: 'X', product_sales_model_name: 'X' })).toBe('X');
+    expect(fmtModelSalesModel({ product_model_name: 'X', product_sales_model_name: null })).toBe('X');
+    expect(fmtModelSalesModel({ product_model_name: null, product_sales_model_name: 'Y' })).toBe('Y');
+  });
+  it('returns em dash when empty', () => {
+    expect(fmtModelSalesModel({ product_model_name: null, product_sales_model_name: null })).toBe('—');
+  });
+});
+
+describe('economicsBlockingTooltip', () => {
+  it('returns undefined when not blocking', () => {
+    expect(economicsBlockingTooltip(undefined)).toBeUndefined();
+    expect(economicsBlockingTooltip({ calc_flags: ['margin_floor_breach'] } as any)).toBeUndefined();
+  });
+  it('joins fmtFlag messages for blocking flags', () => {
+    const t = economicsBlockingTooltip({
+      calc_flags: ['missing_sku_assumption', 'margin_floor_breach'],
+    } as any);
+    expect(t).toContain('Controlled cost missing');
   });
 });
 

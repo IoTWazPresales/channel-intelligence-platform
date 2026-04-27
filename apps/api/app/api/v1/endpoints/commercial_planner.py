@@ -95,6 +95,15 @@ def _line_payload(
     distributor_name: str | None = None,
     product_sku: str | None = None,
     product_name: str | None = None,
+    product_part_number: str | None = None,
+    product_model_name: str | None = None,
+    product_sales_model_name: str | None = None,
+    product_category: str | None = None,
+    product_form_factor: str | None = None,
+    product_lifecycle_status: str | None = None,
+    product_line: str | None = None,
+    product_series_name: str | None = None,
+    product_business_unit: str | None = None,
 ) -> dict:
     return {
         "id": line.id,
@@ -108,6 +117,15 @@ def _line_payload(
         "distributor_name": distributor_name,
         "product_sku": product_sku,
         "product_name": product_name,
+        "product_part_number": product_part_number,
+        "product_model_name": product_model_name,
+        "product_sales_model_name": product_sales_model_name,
+        "product_category": product_category,
+        "product_form_factor": product_form_factor,
+        "product_lifecycle_status": product_lifecycle_status,
+        "product_line": product_line,
+        "product_series_name": product_series_name,
+        "product_business_unit": product_business_unit,
         "target_units": float(line.target_units),
         "target_srp_local": float(line.target_srp_local),
         "promo_srp_local": float(line.promo_srp_local) if line.promo_srp_local is not None else None,
@@ -147,6 +165,15 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
                 DimDistributor.name,
                 DimProduct.sku,
                 DimProduct.name,
+                DimProduct.part_number,
+                DimProduct.model_name,
+                DimProduct.sales_model_name,
+                DimProduct.category,
+                DimProduct.form_factor,
+                DimProduct.lifecycle_status,
+                DimProduct.product_line,
+                DimProduct.series_name,
+                DimProduct.business_unit,
             )
             .select_from(CommercialPlanLine)
             .join(DimCustomer, DimCustomer.id == CommercialPlanLine.customer_id)
@@ -157,7 +184,23 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
     ).one_or_none()
     if r is None:
         return _line_payload(line)
-    cc, cn, dc, dn, ps, pn = r
+    (
+        cc,
+        cn,
+        dc,
+        dn,
+        ps,
+        pn,
+        ppn,
+        pmn,
+        psmn,
+        pcat,
+        pff,
+        plcs,
+        pline,
+        psn,
+        pbu,
+    ) = r
     return _line_payload(
         line,
         customer_code=cc,
@@ -166,6 +209,15 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
         distributor_name=dn,
         product_sku=ps,
         product_name=pn,
+        product_part_number=ppn,
+        product_model_name=pmn,
+        product_sales_model_name=psmn,
+        product_category=pcat,
+        product_form_factor=pff,
+        product_lifecycle_status=plcs,
+        product_line=pline,
+        product_series_name=psn,
+        product_business_unit=pbu,
     )
 
 
@@ -297,6 +349,15 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
                 DimDistributor.name.label("distributor_name"),
                 DimProduct.sku.label("product_sku"),
                 DimProduct.name.label("product_name"),
+                DimProduct.part_number.label("product_part_number"),
+                DimProduct.model_name.label("product_model_name"),
+                DimProduct.sales_model_name.label("product_sales_model_name"),
+                DimProduct.category.label("product_category"),
+                DimProduct.form_factor.label("product_form_factor"),
+                DimProduct.lifecycle_status.label("product_lifecycle_status"),
+                DimProduct.product_line.label("product_line"),
+                DimProduct.series_name.label("product_series_name"),
+                DimProduct.business_unit.label("product_business_unit"),
             )
             .join(DimCustomer, DimCustomer.id == CommercialPlanLine.customer_id)
             .join(DimDistributor, DimDistributor.id == CommercialPlanLine.distributor_id)
@@ -306,7 +367,24 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
         )
     ).all()
     out = []
-    for line, cc, cn, dc, dn, ps, pn in rows:
+    for (
+        line,
+        cc,
+        cn,
+        dc,
+        dn,
+        ps,
+        pn,
+        ppn,
+        pmn,
+        psmn,
+        pcat,
+        pff,
+        plcs,
+        pline,
+        psn,
+        pbu,
+    ) in rows:
         out.append(
             _line_payload(
                 line,
@@ -316,6 +394,15 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
                 distributor_name=dn,
                 product_sku=ps,
                 product_name=pn,
+                product_part_number=ppn,
+                product_model_name=pmn,
+                product_sales_model_name=psmn,
+                product_category=pcat,
+                product_form_factor=pff,
+                product_lifecycle_status=plcs,
+                product_line=pline,
+                product_series_name=psn,
+                product_business_unit=pbu,
             )
         )
     return out

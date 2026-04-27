@@ -87,7 +87,25 @@ def test_apply_suggestion_updates_line_units():
     )
 
     join_res = MagicMock()
-    join_res.one_or_none = MagicMock(return_value=("C1", "Cust One", "D1", "Dist One", "SKU-1", "Widget"))
+    join_res.one_or_none = MagicMock(
+        return_value=(
+            "C1",
+            "Cust One",
+            "D1",
+            "Dist One",
+            "SKU-1",
+            "Widget",
+            "PN-1",
+            "Model A",
+            "Sales A",
+            "Laptops",
+            "Clamshell",
+            "active",
+            "ThinkPad",
+            "T14",
+            "PCSD",
+        )
+    )
 
     async def fake_db():
         sess = MagicMock()
@@ -107,6 +125,15 @@ def test_apply_suggestion_updates_line_units():
     assert body["target_units"] == 42.0
     assert body["customer_code"] == "C1"
     assert body["product_sku"] == "SKU-1"
+    assert body["product_part_number"] == "PN-1"
+    assert body["product_model_name"] == "Model A"
+    assert body["product_sales_model_name"] == "Sales A"
+    assert body["product_category"] == "Laptops"
+    assert body["product_form_factor"] == "Clamshell"
+    assert body["product_lifecycle_status"] == "active"
+    assert body["product_line"] == "ThinkPad"
+    assert body["product_series_name"] == "T14"
+    assert body["product_business_unit"] == "PCSD"
 
 
 def test_customer_term_create_rejects_excessive_margin_stack():
@@ -613,7 +640,9 @@ def test_patch_plan_line_rejects_unknown_customer_id():
         sess.commit = AsyncMock()
         sess.refresh = AsyncMock()
         join_res = MagicMock()
-        join_res.one_or_none = MagicMock(return_value=("C", "N", "D", "DN", "S", "P"))
+        join_res.one_or_none = MagicMock(
+            return_value=("C", "N", "D", "DN", "S", "P", None, None, None, None, None, None, None, None, None)
+        )
         sess.execute = AsyncMock(return_value=join_res)
         yield sess
 

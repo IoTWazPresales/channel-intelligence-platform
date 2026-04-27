@@ -65,6 +65,15 @@ type PlanLine = {
   distributor_name?: string | null;
   product_sku?: string | null;
   product_name?: string | null;
+  product_part_number?: string | null;
+  product_model_name?: string | null;
+  product_sales_model_name?: string | null;
+  product_category?: string | null;
+  product_form_factor?: string | null;
+  product_lifecycle_status?: string | null;
+  product_line?: string | null;
+  product_series_name?: string | null;
+  product_business_unit?: string | null;
   target_units: number;
   target_srp_local: number;
   promo_srp_local: number | null;
@@ -291,8 +300,38 @@ export function roundPlannerUnits(n: number): number {
   return Math.round(Number(n));
 }
 
-const OPTIONAL_COLUMN_FIELDS = [
-  'promo_mix_pct',
+/** Model / sales model for grid and detail (read-only from DimProduct). */
+export function fmtModelSalesModel(line: {
+  product_model_name?: string | null;
+  product_sales_model_name?: string | null;
+}): string {
+  const m = line.product_model_name?.trim();
+  const s = line.product_sales_model_name?.trim();
+  if (m && s && m !== s) return `${m} / ${s}`;
+  return m || s || '—';
+}
+
+/** Tooltip text when GP/reserve cells are blocked by readiness flags. */
+export function economicsBlockingTooltip(line: PlanLine | undefined): string | undefined {
+  if (!line || !lineHasBlockingEconomicsFlags(line)) return undefined;
+  const msgs = (line.calc_flags ?? [])
+    .filter((f) => BLOCKING_ECONOMICS_FLAGS.has(f))
+    .map((f) => fmtFlag(f));
+  return msgs.length ? msgs.join(' · ') : 'Economics blocked — see Issues column.';
+}
+
+const CATALOGUE_OPTIONAL_FIELDS = [
+  'product_category',
+  'product_form_factor',
+  'product_lifecycle_status',
+  'product_line',
+  'product_series_name',
+  'product_business_unit',
+] as const;
+
+const PLANNING_OPTIONAL_FIELDS = ['promo_mix_pct'] as const;
+
+const ECONOMICS_OPTIONAL_FIELDS = [
   'calc_buy_price_usd',
   'calc_customer_gp_pct',
   'calc_distributor_gp_pct',
@@ -300,21 +339,41 @@ const OPTIONAL_COLUMN_FIELDS = [
   'calc_non_promo_reserve_usd',
 ] as const;
 
-type OptionalColumnField = (typeof OPTIONAL_COLUMN_FIELDS)[number];
+const OPTIONAL_GRID_COL_FIELDS = [
+  ...CATALOGUE_OPTIONAL_FIELDS,
+  ...PLANNING_OPTIONAL_FIELDS,
+  ...ECONOMICS_OPTIONAL_FIELDS,
+] as const;
 
-const OPTIONAL_COLUMN_LABELS: Record<OptionalColumnField, string> = {
+type OptionalGridColField = (typeof OPTIONAL_GRID_COL_FIELDS)[number];
+
+const LS_GRID_COLS_V2 = 'cip.commercial-planner.gridColumns.v2';
+/** Legacy key — read once to migrate user toggles into v2. */
+const LS_OPTIONAL_COLS_V1 = 'cip.commercial-planner.optionalColumns.v1';
+
+const OPTIONAL_COLUMN_LABELS: Record<OptionalGridColField, string> = {
+  product_category: 'Category',
+  product_form_factor: 'Form factor',
+  product_lifecycle_status: 'Lifecycle',
+  product_line: 'Product line',
+  product_series_name: 'Series',
+  product_business_unit: 'Business unit',
   promo_mix_pct: 'Promo mix %',
-  calc_buy_price_usd: 'Buy USD',
+  calc_buy_price_usd: 'Net after disti margin USD / unit',
   calc_customer_gp_pct: 'Cust GP %',
   calc_distributor_gp_pct: 'Disti GP %',
   calc_promo_reserve_usd: 'Promo reserve USD',
   calc_non_promo_reserve_usd: 'Non-promo reserve USD',
 };
 
-const LS_OPTIONAL_COLS = 'cip.commercial-planner.optionalColumns.v1';
-
-function defaultOptionalVisibility(): Record<OptionalColumnField, boolean> {
+function defaultOptionalVisibility(): Record<OptionalGridColField, boolean> {
   return {
+    product_category: false,
+    product_form_factor: false,
+    product_lifecycle_status: false,
+    product_line: false,
+    product_series_name: false,
+    product_business_unit: false,
     promo_mix_pct: false,
     calc_buy_price_usd: false,
     calc_customer_gp_pct: false,
@@ -471,16 +530,31 @@ export default function CommercialPlannerPage() {
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
   const [optionalColsHydrated, setOptionalColsHydrated] = useState(false);
-  const [optionalVisible, setOptionalVisible] = useState<Record<OptionalColumnField, boolean>>(() => defaultOptionalVisibility());
+  const [optionalVisible, setOptionalVisible] = useState<Record<OptionalGridColField, boolean>>(() =>
+    defaultOptionalVisibility()
+  );
   const [suggestionPreview, setSuggestionPreview] = useState<SuggestionPreviewState | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      const raw = localStorage.getItem(LS_OPTIONAL_COLS);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<Record<OptionalColumnField, boolean>>;
-        setOptionalVisible((prev) => ({ ...prev, ...parsed }));
+      const rawV2 = localStorage.getItem(LS_GRID_COLS_V2);
+      if (rawV2) {
+        const parsed = JSON.parse(rawV2) as { optional?: Partial<Record<OptionalGridColField, boolean>> };
+        if (parsed.optional && typeof parsed.optional === 'object') {
+          setOptionalVisible((prev) => ({ ...prev, ...parsed.optional }));
+        }
+        setOptionalColsHydrated(true);
+        return;
+      }
+      const rawV1 = localStorage.getItem(LS_OPTIONAL_COLS_V1);
+      if (rawV1) {
+        const old = JSON.parse(rawV1) as Record<string, boolean>;
+        const migrated: Partial<Record<OptionalGridColField, boolean>> = {};
+        for (const k of OPTIONAL_GRID_COL_FIELDS) {
+          if (k in old && typeof old[k] === 'boolean') migrated[k] = old[k];
+        }
+        if (Object.keys(migrated).length) setOptionalVisible((prev) => ({ ...prev, ...migrated }));
       }
     } catch {
       /* ignore */
@@ -491,7 +565,7 @@ export default function CommercialPlannerPage() {
   useEffect(() => {
     if (!optionalColsHydrated || typeof window === 'undefined') return;
     try {
-      localStorage.setItem(LS_OPTIONAL_COLS, JSON.stringify(optionalVisible));
+      localStorage.setItem(LS_GRID_COLS_V2, JSON.stringify({ version: 2, optional: optionalVisible }));
     } catch {
       /* ignore */
     }
@@ -787,15 +861,82 @@ export default function CommercialPlannerPage() {
         },
       },
       {
-        colId: 'product_display',
-        headerName: 'Product',
+        colId: 'product_sku_display',
+        headerName: 'SKU',
+        minWidth: 100,
+        valueGetter: (p) => {
+          const d = p.data;
+          if (!d) return '';
+          return d.product_sku?.trim() ? d.product_sku : `#${d.product_id}`;
+        },
+      },
+      {
+        colId: 'product_part_number_display',
+        headerName: 'Part #',
+        minWidth: 95,
+        valueGetter: (p) => {
+          const d = p.data;
+          if (!d) return '';
+          return d.product_part_number?.trim() ? d.product_part_number : '—';
+        },
+      },
+      {
+        colId: 'product_model_sales_display',
+        headerName: 'Model / sales model',
+        minWidth: 140,
+        valueGetter: (p) => (p.data ? fmtModelSalesModel(p.data) : ''),
+      },
+      {
+        colId: 'product_name_display',
+        headerName: 'Product name',
         minWidth: 160,
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
-          const bits = [d.product_sku, d.product_name].filter(Boolean);
-          return bits.length ? bits.join(' — ') : `#${d.product_id}`;
+          return d.product_name?.trim() ? d.product_name : `#${d.product_id}`;
         },
+      },
+      {
+        field: 'product_category',
+        headerName: 'Category',
+        minWidth: 110,
+        hide: !optionalVisible.product_category,
+        valueGetter: (p) => p.data?.product_category?.trim() || '—',
+      },
+      {
+        field: 'product_form_factor',
+        headerName: 'Form factor',
+        minWidth: 100,
+        hide: !optionalVisible.product_form_factor,
+        valueGetter: (p) => p.data?.product_form_factor?.trim() || '—',
+      },
+      {
+        field: 'product_lifecycle_status',
+        headerName: 'Lifecycle',
+        minWidth: 95,
+        hide: !optionalVisible.product_lifecycle_status,
+        valueGetter: (p) => p.data?.product_lifecycle_status?.trim() || '—',
+      },
+      {
+        field: 'product_line',
+        headerName: 'Product line',
+        minWidth: 110,
+        hide: !optionalVisible.product_line,
+        valueGetter: (p) => p.data?.product_line?.trim() || '—',
+      },
+      {
+        field: 'product_series_name',
+        headerName: 'Series',
+        minWidth: 100,
+        hide: !optionalVisible.product_series_name,
+        valueGetter: (p) => p.data?.product_series_name?.trim() || '—',
+      },
+      {
+        field: 'product_business_unit',
+        headerName: 'Business unit',
+        minWidth: 110,
+        hide: !optionalVisible.product_business_unit,
+        valueGetter: (p) => p.data?.product_business_unit?.trim() || '—',
       },
       {
         headerName: 'Edit',
@@ -828,21 +969,28 @@ export default function CommercialPlannerPage() {
         minWidth: 100,
         hide: !optionalVisible.promo_mix_pct,
       },
-      { field: 'calc_sell_in_price_usd', headerName: 'Sell-in USD', minWidth: 105 },
+      {
+        field: 'calc_sell_in_price_usd',
+        headerName: 'Est. sell-in USD / unit',
+        minWidth: 150,
+        valueFormatter: (p) => (p.value != null && p.value !== '' ? String(p.value) : '—'),
+      },
       {
         field: 'calc_buy_price_usd',
-        headerName: 'Buy USD',
-        minWidth: 105,
+        headerName: 'Net after disti margin USD / unit',
+        minWidth: 210,
         hide: !optionalVisible.calc_buy_price_usd,
+        valueFormatter: (p) => (p.value != null && p.value !== '' ? String(p.value) : '—'),
       },
       {
         field: 'calc_internal_gp_usd',
         headerName: 'Internal GP USD',
         minWidth: 120,
+        tooltipValueGetter: (p) => economicsBlockingTooltip(p.data ?? undefined),
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
-          if (lineHasBlockingEconomicsFlags(d)) return 'Incomplete';
+          if (lineHasBlockingEconomicsFlags(d)) return '—';
           return d.calc_internal_gp_usd != null ? String(d.calc_internal_gp_usd) : '—';
         },
       },
@@ -851,24 +999,25 @@ export default function CommercialPlannerPage() {
         headerName: 'Cust GP%',
         minWidth: 95,
         hide: !optionalVisible.calc_customer_gp_pct,
-        valueGetter: (p) => p.data?.calc_customer_gp_pct != null ? fmtMarginPct(p.data.calc_customer_gp_pct) : '—',
+        valueGetter: (p) => (p.data?.calc_customer_gp_pct != null ? fmtMarginPct(p.data.calc_customer_gp_pct) : '—'),
       },
       {
         field: 'calc_distributor_gp_pct',
         headerName: 'Disti GP%',
         minWidth: 95,
         hide: !optionalVisible.calc_distributor_gp_pct,
-        valueGetter: (p) => p.data?.calc_distributor_gp_pct != null ? fmtMarginPct(p.data.calc_distributor_gp_pct) : '—',
+        valueGetter: (p) => (p.data?.calc_distributor_gp_pct != null ? fmtMarginPct(p.data.calc_distributor_gp_pct) : '—'),
       },
       {
         field: 'calc_promo_reserve_usd',
         headerName: 'Promo reserve',
         minWidth: 120,
         hide: !optionalVisible.calc_promo_reserve_usd,
+        tooltipValueGetter: (p) => economicsBlockingTooltip(p.data ?? undefined),
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
-          if (lineHasBlockingEconomicsFlags(d)) return 'Incomplete';
+          if (lineHasBlockingEconomicsFlags(d)) return '—';
           return d.calc_promo_reserve_usd != null ? String(d.calc_promo_reserve_usd) : '—';
         },
       },
@@ -877,10 +1026,11 @@ export default function CommercialPlannerPage() {
         headerName: 'Non-promo reserve',
         minWidth: 140,
         hide: !optionalVisible.calc_non_promo_reserve_usd,
+        tooltipValueGetter: (p) => economicsBlockingTooltip(p.data ?? undefined),
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
-          if (lineHasBlockingEconomicsFlags(d)) return 'Incomplete';
+          if (lineHasBlockingEconomicsFlags(d)) return '—';
           return d.calc_non_promo_reserve_usd != null ? String(d.calc_non_promo_reserve_usd) : '—';
         },
       },
@@ -931,6 +1081,7 @@ export default function CommercialPlannerPage() {
     () => ({
       singleClickEdit: true,
       loading: linesLoadingOverlay,
+      enableBrowserTooltips: true,
       onCellValueChanged: (e) => void onLineCell(e),
       onRowClicked: (e) => {
         if (e.data) setSelectedLineId((prev) => (prev === e.data!.id ? null : e.data!.id));
@@ -955,6 +1106,9 @@ export default function CommercialPlannerPage() {
       <Typography variant="body2" fontWeight={600} sx={{ mb: 0.25 }}>
         {selectedLine.product_sku ?? '—'}
         {selectedLine.product_name ? ` — ${selectedLine.product_name}` : ''}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.25 }}>
+        Part #: {selectedLine.product_part_number?.trim() || '—'} · Model / sales model: {fmtModelSalesModel(selectedLine)}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
         {[
@@ -992,11 +1146,15 @@ export default function CommercialPlannerPage() {
         </Typography>
       ) : (
         <Stack spacing={0.25} sx={{ mb: 0.75 }}>
-          <Typography variant="body2">Sell-in: {fmtCurrency(selectedLine.calc_sell_in_price_usd)} USD</Typography>
-          <Typography variant="body2">Buy price: {fmtCurrency(selectedLine.calc_buy_price_usd)} USD</Typography>
+          <Typography variant="body2">
+            Est. sell-in USD / unit: {fmtCurrency(selectedLine.calc_sell_in_price_usd)}
+          </Typography>
+          <Typography variant="body2">
+            Net after disti margin USD / unit: {fmtCurrency(selectedLine.calc_buy_price_usd)}
+          </Typography>
           {lineHasBlockingEconomicsFlags(selectedLine) ? (
             <Typography variant="body2" data-testid="line-detail-internal-gp-incomplete">
-              Internal GP: Incomplete
+              Internal GP: —
             </Typography>
           ) : (
             <Typography variant="body2">Internal GP: {fmtCurrency(selectedLine.calc_internal_gp_usd)} USD</Typography>
@@ -1247,13 +1405,27 @@ export default function CommercialPlannerPage() {
             anchorEl={columnMenuAnchor}
             onClose={() => setColumnMenuAnchor(null)}
             anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-            slotProps={{ paper: { sx: { minWidth: 280, p: 1 } } }}
+            slotProps={{ paper: { sx: { minWidth: 300, p: 1.5, maxHeight: '80vh', overflow: 'auto' } } }}
           >
-            <Typography variant="caption" color="text.secondary" sx={{ px: 0.5, display: 'block', mb: 0.5 }}>
-              Optional columns
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              Column visibility
             </Typography>
-            <Stack spacing={0.25}>
-              {OPTIONAL_COLUMN_FIELDS.map((field) => (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              Identity (SKU, Part #, model / sales model, product name, customer, distributor) stays visible.
+            </Typography>
+
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
+              Identity
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              No toggles — core columns always on.
+            </Typography>
+
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
+              Catalogue
+            </Typography>
+            <Stack spacing={0.25} sx={{ mb: 1 }}>
+              {CATALOGUE_OPTIONAL_FIELDS.map((field) => (
                 <FormControlLabel
                   key={field}
                   control={
@@ -1269,6 +1441,56 @@ export default function CommercialPlannerPage() {
                 />
               ))}
             </Stack>
+
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
+              Planning
+            </Typography>
+            <Stack spacing={0.25} sx={{ mb: 1 }}>
+              {PLANNING_OPTIONAL_FIELDS.map((field) => (
+                <FormControlLabel
+                  key={field}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={optionalVisible[field]}
+                      onChange={() => setOptionalVisible((prev) => ({ ...prev, [field]: !prev[field] }))}
+                      data-testid={`col-toggle-${field}`}
+                    />
+                  }
+                  label={OPTIONAL_COLUMN_LABELS[field]}
+                  sx={{ m: 0, px: 0.5 }}
+                />
+              ))}
+            </Stack>
+
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
+              Economics
+            </Typography>
+            <Stack spacing={0.25} sx={{ mb: 1 }}>
+              {ECONOMICS_OPTIONAL_FIELDS.map((field) => (
+                <FormControlLabel
+                  key={field}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={optionalVisible[field]}
+                      onChange={() => setOptionalVisible((prev) => ({ ...prev, [field]: !prev[field] }))}
+                      data-testid={`col-toggle-${field}`}
+                    />
+                  }
+                  label={OPTIONAL_COLUMN_LABELS[field]}
+                  sx={{ m: 0, px: 0.5 }}
+                />
+              ))}
+            </Stack>
+
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600 }}>
+              Issues / status
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Issues column is always visible.
+            </Typography>
+
             <Divider sx={{ my: 1 }} />
             <Button
               size="small"
