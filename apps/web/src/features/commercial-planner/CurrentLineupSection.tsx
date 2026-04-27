@@ -293,23 +293,48 @@ function UploadLineupDialog({
   const [currencyCode, setCurrencyCode] = useState('');
   const [countryCode, setCountryCode] = useState('');
   const [notes, setNotes] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleClose = () => {
+    setFile(null);
+    setError(null);
+    onClose();
+  };
 
   const handleCreate = async () => {
     if (!activePlanId) return;
     setCreating(true);
     setError(null);
     try {
-      await apiPost('/api/v1/commercial-planner/lineup-cases', {
+      const caseResponse = await apiPost<{ id: number }>('/api/v1/commercial-planner/lineup-cases', {
         commercial_plan_id: activePlanId,
         period_label: periodLabel.trim() || null,
         currency_code: currencyCode.trim() || null,
         country_code: countryCode.trim() || null,
         notes: notes.trim() || null,
       });
+
+      if (file) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const parseRes = await fetch(
+          `/api/v1/commercial-planner/lineup-cases/${caseResponse.id}/parse-upload`,
+          { method: 'POST', body: fd },
+        );
+        if (!parseRes.ok) {
+          const errBody = await parseRes.json().catch(() => ({}));
+          setError(
+            `Case created (id=${caseResponse.id}) but file parse failed: ${errBody.detail ?? 'unknown error'}`,
+          );
+          // Don't call onCreated — case exists but is empty; surface error instead
+          return;
+        }
+      }
+
       onCreated();
-      onClose();
+      handleClose();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to create lineup case';
       setError(msg);
@@ -319,7 +344,7 @@ function UploadLineupDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>Upload current lineup</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -358,11 +383,25 @@ function UploadLineupDialog({
             rows={2}
             fullWidth
           />
+          <Box>
+            <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+              Lineup file (optional — can be uploaded after case creation)
+            </Typography>
+            <Button variant="outlined" component="label" size="small">
+              {file ? file.name : 'Choose file…'}
+              <input
+                type="file"
+                hidden
+                accept=".csv,.xlsx,.xlsm"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </Button>
+          </Box>
           {error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button size="small" onClick={onClose}>
+        <Button size="small" onClick={handleClose}>
           Cancel
         </Button>
         <Button

@@ -37,7 +37,7 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { AddProductSetDialog } from '@/features/commercial-planner/AddProductSetDialog';
-import { ColumnSelectorModal } from '@/features/commercial-planner/ColumnSelectorModal';
+import { ColumnSelectorModal, type ColumnMetadata } from '@/features/commercial-planner/ColumnSelectorModal';
 import { CurrentLineupSection } from '@/features/commercial-planner/CurrentLineupSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { PlannerDefaultsMaintenance } from '@/features/commercial-planner/PlannerDefaultsMaintenance';
@@ -773,6 +773,17 @@ export default function CommercialPlannerPage() {
     enabled: tab === 0 && activePlanId != null,
   });
 
+  const { data: columnMetaData } = useQuery({
+    queryKey: ['commercial-column-metadata', activePlanId],
+    queryFn: ({ signal }) =>
+      apiGet<ColumnMetadata>(
+        `/api/v1/commercial-planner/plans/${activePlanId}/column-metadata`,
+        { signal },
+      ),
+    enabled: activePlanId != null,
+    staleTime: 60_000,
+  });
+
   const { data: lineupEvidence, isLoading: lineupEvidenceLoading } = useQuery({
     queryKey: ['lineup-evidence', lineProduct?.id],
     queryFn: ({ signal }) =>
@@ -1328,7 +1339,7 @@ export default function CommercialPlannerPage() {
       },
       {
         field: 'calc_internal_gp_usd',
-        headerName: 'Estimated internal margin USD',
+        headerName: 'Est. OEM net margin USD (total, all units)',
         minWidth: 190,
         tooltipValueGetter: (p) => economicsBlockingTooltip(p.data ?? undefined),
         valueGetter: (p) => {
@@ -1833,7 +1844,7 @@ export default function CommercialPlannerPage() {
             {economicsComplete ? (
               <>
                 <Typography variant="body2">
-                  <strong>Estimated internal margin USD:</strong> {summary?.total_internal_gp_usd ?? 0}
+                  <strong>Est. OEM net margin USD (total):</strong> {summary?.total_internal_gp_usd ?? 0}
                 </Typography>
                 <Typography variant="body2">
                   <strong>Promo reserve USD:</strong> {summary?.total_promo_reserve_usd ?? 0}
@@ -2743,6 +2754,7 @@ export default function CommercialPlannerPage() {
         optionalVisible={optionalVisible}
         onChange={(key, visible) => setOptionalVisible((prev) => ({ ...prev, [key]: visible }))}
         onReset={() => setOptionalVisible(defaultOptionalVisibility())}
+        columnMeta={columnMetaData ?? null}
         onPreset={(preset) => {
           if (preset === 'planning') {
             setOptionalVisible(defaultOptionalVisibility());

@@ -99,6 +99,15 @@ const mockState = vi.hoisted(() => {
         flags: [],
       };
     }
+    if (url.startsWith('/api/v1/commercial-planner/plans/1/column-metadata')) {
+      return {
+        plan_id: 1,
+        total_products: 10,
+        catalogue: { category: 8, form_factor: 5, lifecycle_status: 10, product_line: 9, series_name: 4, business_unit: 10, part_number: 10, sales_model_name: 7, model_name: 10 },
+        spec_keys: { cpu: 8, ram: 10, storage: 6 },
+        coverage_note: 'Counts are distinct products in the plan with non-null values.',
+      };
+    }
     if (url === '/api/v1/commercial-planner/lineup-jobs') return st.lineupJobs;
     if (url.startsWith('/api/v1/commercial-planner/lineup-coverage')) return st.coverageLines;
     if (url.startsWith('/api/v1/commercial-planner/lineup-product-gaps')) return st.productGaps;
@@ -1340,16 +1349,16 @@ describe('CommercialPlannerPage — Workspace V1', () => {
     expect(summary).toHaveTextContent('Units:');
     expect(await screen.findByTestId('economics-incomplete-chip')).toBeInTheDocument();
     expect(summary).toHaveTextContent('Complete missing defaults, then Recalculate.');
-    expect(summary).not.toHaveTextContent('Estimated internal margin USD');
+    expect(summary).not.toHaveTextContent('Est. OEM net margin USD');
   });
 
-  it('plan summary strip shows "Estimated internal margin USD" when economics are complete', async () => {
+  it('plan summary strip shows OEM net margin label when economics are complete', async () => {
     // Default mock has clean line + flags: [] → economicsComplete = true
     renderPage();
     await screen.findByText(/Q3 Plan \(draft\)/i);
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     const summary = screen.getByTestId('plan-summary-panel');
-    expect(summary).toHaveTextContent('Estimated internal margin USD');
+    expect(summary).toHaveTextContent('Est. OEM net margin USD (total)');
     expect(summary).toHaveTextContent('Promo reserve USD');
     expect(summary).not.toHaveTextContent('Economics incomplete');
   });
@@ -1488,6 +1497,7 @@ vi.mock('@/features/commercial-planner/ColumnSelectorModal', () => {
       onPreset,
       optionalVisible,
       onChange,
+      columnMeta,
     }: {
       open: boolean;
       onClose: () => void;
@@ -1496,9 +1506,15 @@ vi.mock('@/features/commercial-planner/ColumnSelectorModal', () => {
       optionalVisible: Record<string, boolean>;
       onChange: (k: string, v: boolean) => void;
       lines: any[];
+      columnMeta?: { total_products: number } | null;
     }) =>
       open ? (
-        <div data-testid="column-selector-modal" role="dialog" aria-label="Column visibility">
+        <div
+          data-testid="column-selector-modal"
+          role="dialog"
+          aria-label="Column visibility"
+          data-column-meta-total={columnMeta?.total_products ?? ''}
+        >
           <span>Column visibility</span>
           <span>Product catalogue (optional)</span>
           <span data-testid="col-modal-locked-note">Locked columns cannot be hidden</span>
@@ -1685,5 +1701,50 @@ describe('V3: Richer product label', () => {
     await userEvent.click(addLineBtn);
     const productPicker = await screen.findByTestId('pick-entity-product');
     expect(productPicker).toBeInTheDocument();
+  });
+});
+
+describe('V4: Column metadata and label fixes', () => {
+  function renderPage() {
+    const qc = new QueryClient();
+    return renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CommercialPlannerPage />
+      </QueryClientProvider>
+    );
+  }
+
+  beforeEach(() => {
+    mockState.apiGetMock.mockImplementation(mockState.defaultApiGetImpl);
+    mockState.apiGetMock.mockClear();
+  });
+
+  it('column modal receives columnMeta prop when active plan has column metadata', async () => {
+    renderPage();
+    await screen.findByText('Q3 Plan (draft)');
+
+    // Open the column selector modal
+    const colBtn = await screen.findByTestId('column-manager-btn');
+    await userEvent.click(colBtn);
+
+    // Modal should be open and columnMeta should be passed (total_products=10 from mock)
+    const modal = await screen.findByTestId('column-selector-modal');
+    expect(modal).toBeInTheDocument();
+    await waitFor(() => {
+      expect(modal.getAttribute('data-column-meta-total')).toBe('10');
+    });
+  });
+
+  it('plan summary strip shows OEM net margin label not per-unit', async () => {
+    renderPage();
+    const summaryPanel = await screen.findByTestId('plan-summary-panel');
+    await waitFor(() => {
+      expect(summaryPanel).not.toHaveTextContent('Loading plan…');
+    });
+    // New label should appear
+    expect(summaryPanel).toHaveTextContent('Est. OEM net margin USD (total)');
+    // Old label must not appear
+    expect(summaryPanel).not.toHaveTextContent('Estimated internal margin USD');
+    expect(summaryPanel).not.toHaveTextContent('/ unit');
   });
 });

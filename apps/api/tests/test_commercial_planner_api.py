@@ -969,3 +969,308 @@ def test_current_lineup_template_exists():
     assert template["pipeline_handler"] == "stub_noop"
     assert "sku_raw" in template["expected_columns"]
     assert "promo_price_evidence_local" in template["expected_columns"]
+
+
+# ─── parse-upload endpoint tests ─────────────────────────────────────────────
+
+
+def _make_parse_result(**kwargs):
+    from app.services.commercial_planner.lineup_case_parser import ParseResult
+
+    defaults = {
+        "case_id": 1,
+        "import_job_id": 99,
+        "total_rows": 3,
+        "resolved_products": 2,
+        "unresolved_products": 1,
+        "line_count": 3,
+        "warnings": [],
+    }
+    defaults.update(kwargs)
+    return ParseResult(**defaults)
+
+
+def test_parse_upload_creates_lineup_lines():
+    """POST multipart to parse-upload returns line_count and job audit fields."""
+    import io
+    from unittest.mock import patch
+
+    case = _make_case(id=1, commercial_status="draft_imported")
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=0)
+        sess.execute = AsyncMock(return_value=count_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+
+    with patch(
+        "app.api.v1.endpoints.commercial_planner.parse_current_lineup_file",
+        new=AsyncMock(return_value=_make_parse_result(line_count=3, resolved_products=2, unresolved_products=1)),
+    ):
+        csv_bytes = b"sku,qty,msrp\nSKU-A,10,999\nSKU-B,5,799\nSKU-C,20,1299\n"
+        r = client.post(
+            "/api/v1/commercial-planner/lineup-cases/1/parse-upload",
+            files={"file": ("lineup.csv", io.BytesIO(csv_bytes), "text/csv")},
+        )
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["line_count"] == 3
+    assert body["import_job_id"] == 99
+    assert body["case_id"] == 1
+    assert body["total_rows"] == 3
+
+
+def test_parse_upload_resolves_products():
+    """Resolved products count is reflected in the response."""
+    import io
+    from unittest.mock import patch
+
+    case = _make_case(id=2, commercial_status="draft_imported")
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=0)
+        sess.execute = AsyncMock(return_value=count_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+
+    with patch(
+        "app.api.v1.endpoints.commercial_planner.parse_current_lineup_file",
+        new=AsyncMock(return_value=_make_parse_result(case_id=2, resolved_products=5, unresolved_products=0, total_rows=5, line_count=5)),
+    ):
+        csv_bytes = b"sku,qty\nSKU-1,10\n"
+        r = client.post(
+            "/api/v1/commercial-planner/lineup-cases/2/parse-upload",
+            files={"file": ("lineup.csv", io.BytesIO(csv_bytes), "text/csv")},
+        )
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["resolved_products"] == 5
+    assert body["unresolved_products"] == 0
+
+
+def test_parse_upload_dap_stored_as_evidence_not_cost():
+    """Response contains dap field name as evidence, no landed_cost_usd in parse result."""
+    import io
+    from unittest.mock import patch
+
+    case = _make_case(id=3, commercial_status="draft_imported")
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=0)
+        sess.execute = AsyncMock(return_value=count_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+
+    result = _make_parse_result(case_id=3)
+    with patch(
+        "app.api.v1.endpoints.commercial_planner.parse_current_lineup_file",
+        new=AsyncMock(return_value=result),
+    ):
+        csv_bytes = b"sku,dap,qty\nSKU-A,50.0,10\n"
+        r = client.post(
+            "/api/v1/commercial-planner/lineup-cases/3/parse-upload",
+            files={"file": ("lineup.csv", io.BytesIO(csv_bytes), "text/csv")},
+        )
+
+    assert r.status_code == 200
+    body = r.json()
+    # Response must not include landed_cost_usd — DAP is evidence only
+    assert "landed_cost_usd" not in body
+
+
+def test_parse_upload_unresolved_customer_stored_as_token():
+    """Unresolved customers are counted in unresolved; parse still succeeds."""
+    import io
+    from unittest.mock import patch
+
+    case = _make_case(id=4, commercial_status="draft_imported")
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=0)
+        sess.execute = AsyncMock(return_value=count_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+
+    result = _make_parse_result(case_id=4, warnings=["unknown_customer for row 1"])
+    with patch(
+        "app.api.v1.endpoints.commercial_planner.parse_current_lineup_file",
+        new=AsyncMock(return_value=result),
+    ):
+        csv_bytes = b"sku,customer,qty\nSKU-A,UNKNOWN-CUST,10\n"
+        r = client.post(
+            "/api/v1/commercial-planner/lineup-cases/4/parse-upload",
+            files={"file": ("lineup.csv", io.BytesIO(csv_bytes), "text/csv")},
+        )
+
+    assert r.status_code == 200
+    body = r.json()
+    assert "unknown_customer for row 1" in body["warnings"]
+
+
+def test_parse_upload_empty_file_returns_400():
+    """Empty file upload returns 400 before parse is attempted."""
+    import io
+
+    case = _make_case(id=5, commercial_status="draft_imported")
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=0)
+        sess.execute = AsyncMock(return_value=count_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/5/parse-upload",
+        files={"file": ("empty.csv", io.BytesIO(b""), "text/csv")},
+    )
+    assert r.status_code == 400
+    assert "empty" in r.json()["detail"].lower()
+
+
+def test_parse_upload_rejects_non_draft_case():
+    """409 returned when case is not in draft_imported status."""
+    import io
+
+    case = _make_case(id=6, commercial_status="accepted")
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/6/parse-upload",
+        files={"file": ("lineup.csv", io.BytesIO(b"sku\nSKU-A"), "text/csv")},
+    )
+    assert r.status_code == 409
+    assert "draft_imported" in r.json()["detail"]
+
+
+# ─── column-metadata endpoint tests ──────────────────────────────────────────
+
+
+def test_column_metadata_catalogue_coverage():
+    """GET /plans/{id}/column-metadata returns catalogue counts for plan's products."""
+    from types import SimpleNamespace
+
+    plan = SimpleNamespace(id=10)
+
+    cat_row = SimpleNamespace(
+        category=8,
+        form_factor=5,
+        lifecycle_status=10,
+        product_line=9,
+        series_name=4,
+        business_unit=10,
+        part_number=10,
+        sales_model_name=7,
+        model_name=10,
+    )
+
+    call_count = {"n": 0}
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=plan)
+
+        total_result = MagicMock()
+        total_result.scalar_one = MagicMock(return_value=10)
+        cat_result = MagicMock()
+        cat_result.one = MagicMock(return_value=cat_row)
+        spec_result = MagicMock()
+        spec_result.all = MagicMock(return_value=[])
+
+        async def _execute(stmt, *args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return total_result
+            if call_count["n"] == 2:
+                return cat_result
+            return spec_result
+
+        sess.execute = AsyncMock(side_effect=_execute)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/plans/10/column-metadata")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total_products"] == 10
+    assert body["catalogue"]["category"] == 8
+    assert body["catalogue"]["lifecycle_status"] == 10
+    assert body["catalogue"]["business_unit"] == 10
+    assert isinstance(body["spec_keys"], dict)
+
+
+def test_column_metadata_spec_keys_from_jsonb():
+    """GET /plans/{id}/column-metadata returns spec_keys aggregated from JSONB."""
+    from types import SimpleNamespace
+
+    plan = SimpleNamespace(id=11)
+
+    cat_row = SimpleNamespace(
+        category=2,
+        form_factor=2,
+        lifecycle_status=2,
+        product_line=2,
+        series_name=2,
+        business_unit=2,
+        part_number=2,
+        sales_model_name=2,
+        model_name=2,
+    )
+    spec_row_cpu = SimpleNamespace(key="cpu", cnt=2)
+    spec_row_ram = SimpleNamespace(key="ram", cnt=2)
+
+    call_count = {"n": 0}
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=plan)
+
+        total_result = MagicMock()
+        total_result.scalar_one = MagicMock(return_value=2)
+        cat_result = MagicMock()
+        cat_result.one = MagicMock(return_value=cat_row)
+        spec_result = MagicMock()
+        spec_result.all = MagicMock(return_value=[spec_row_cpu, spec_row_ram])
+
+        async def _execute(stmt, *args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return total_result
+            if call_count["n"] == 2:
+                return cat_result
+            return spec_result
+
+        sess.execute = AsyncMock(side_effect=_execute)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/plans/11/column-metadata")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["spec_keys"]["cpu"] == 2
+    assert body["spec_keys"]["ram"] == 2

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import func, or_, select, tuple_
+from sqlalchemy import distinct, func, or_, select, text, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -27,6 +27,7 @@ from app.models.facts import FactForecast, FactPricing, FactSalesSellout
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob
 from app.services.commercial_planner.calculator import CommercialCalcInputs, compute_line_economics
+from app.services.commercial_planner.lineup_case_parser import parse_current_lineup_file
 from app.services.commercial_planner.read_model import plan_line_read_model_extensions
 from app.services.commercial_planner.suggestions import (
     SuggestionInputs,
@@ -1777,3 +1778,143 @@ async def delete_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(case)
     await db.commit()
     return Response(status_code=204)
+
+
+@router.post("/lineup-cases/{case_id}/parse-upload", status_code=200)
+async def parse_lineup_case_upload(
+    case_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parse an uploaded lineup file, write CommercialLineupLine rows, and link an ImportJob audit record.
+
+    DAP fields are stored as evidence (dap_evidence_local) only.
+    Never mapped to landed_cost_usd.
+    """
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    if case.commercial_status not in ("draft_imported",):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Can only parse-upload to cases with status 'draft_imported'. "
+                f"Current: '{case.commercial_status}'"
+            ),
+        )
+
+    existing_count = (
+        await db.execute(
+            select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
+        )
+    ).scalar_one()
+    if existing_count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This case already has {existing_count} lines. "
+                "Delete the case and create a new one to re-upload."
+            ),
+        )
+
+    filename = file.filename or "upload"
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    try:
+        result = await parse_current_lineup_file(db, case_id, filename, file_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Parse failed: {exc}")
+
+    return {
+        "case_id": result.case_id,
+        "import_job_id": result.import_job_id,
+        "total_rows": result.total_rows,
+        "resolved_products": result.resolved_products,
+        "unresolved_products": result.unresolved_products,
+        "line_count": result.line_count,
+        "warnings": result.warnings,
+    }
+
+
+@router.get("/plans/{plan_id}/column-metadata")
+async def get_plan_column_metadata(
+    plan_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return per-field coverage counts for the plan's products.
+
+    Catalogue fields: count non-null values across DimProduct for products in the plan.
+    Spec keys: aggregate JSONB key names from specs_json across plan's products.
+    """
+    if not await db.get(CommercialPlan, plan_id):
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    total_stmt = select(func.count(distinct(CommercialPlanLine.product_id))).where(
+        CommercialPlanLine.commercial_plan_id == plan_id
+    )
+    total_products = (await db.execute(total_stmt)).scalar_one()
+
+    if total_products == 0:
+        return {
+            "plan_id": plan_id,
+            "total_products": 0,
+            "catalogue": {},
+            "spec_keys": {},
+            "coverage_note": "No products in plan.",
+        }
+
+    product_ids_subq = (
+        select(distinct(CommercialPlanLine.product_id))
+        .where(CommercialPlanLine.commercial_plan_id == plan_id)
+        .scalar_subquery()
+    )
+
+    cat_stmt = select(
+        func.count(DimProduct.category).label("category"),
+        func.count(DimProduct.form_factor).label("form_factor"),
+        func.count(DimProduct.lifecycle_status).label("lifecycle_status"),
+        func.count(DimProduct.product_line).label("product_line"),
+        func.count(DimProduct.series_name).label("series_name"),
+        func.count(DimProduct.business_unit).label("business_unit"),
+        func.count(DimProduct.part_number).label("part_number"),
+        func.count(DimProduct.sales_model_name).label("sales_model_name"),
+        func.count(DimProduct.model_name).label("model_name"),
+    ).where(DimProduct.id.in_(product_ids_subq))
+
+    cat_row = (await db.execute(cat_stmt)).one()
+    catalogue = {
+        "category": int(cat_row.category),
+        "form_factor": int(cat_row.form_factor),
+        "lifecycle_status": int(cat_row.lifecycle_status),
+        "product_line": int(cat_row.product_line),
+        "series_name": int(cat_row.series_name),
+        "business_unit": int(cat_row.business_unit),
+        "part_number": int(cat_row.part_number),
+        "sales_model_name": int(cat_row.sales_model_name),
+        "model_name": int(cat_row.model_name),
+    }
+
+    spec_stmt = text(
+        """
+        SELECT key, COUNT(*) as cnt
+        FROM dim_product p, jsonb_each_text(p.specs_json)
+        WHERE p.id IN (
+            SELECT DISTINCT product_id FROM commercial_plan_line WHERE commercial_plan_id = :plan_id
+        )
+        AND p.specs_json IS NOT NULL
+        GROUP BY key
+        ORDER BY cnt DESC
+        """
+    )
+    spec_rows = (await db.execute(spec_stmt, {"plan_id": plan_id})).all()
+    spec_keys = {row.key: int(row.cnt) for row in spec_rows}
+
+    return {
+        "plan_id": plan_id,
+        "total_products": int(total_products),
+        "catalogue": catalogue,
+        "spec_keys": spec_keys,
+        "coverage_note": "Counts are distinct products in the plan with non-null values.",
+    }

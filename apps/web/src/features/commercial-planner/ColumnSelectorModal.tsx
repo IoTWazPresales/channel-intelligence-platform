@@ -38,6 +38,14 @@ type PlanLine = {
   product_business_unit?: string | null;
 };
 
+export type ColumnMetadata = {
+  plan_id: number;
+  total_products: number;
+  catalogue: Record<string, number>;
+  spec_keys: Record<string, number>;
+  coverage_note: string;
+};
+
 export type ColumnSelectorModalProps = {
   open: boolean;
   onClose: () => void;
@@ -46,6 +54,7 @@ export type ColumnSelectorModalProps = {
   onChange: (key: string, visible: boolean) => void;
   onReset: () => void;
   onPreset: (name: string) => void;
+  columnMeta?: ColumnMetadata | null;
 };
 
 // ── Preset definitions ────────────────────────────────────────────────────────
@@ -66,6 +75,10 @@ type ColumnDef = {
   alwaysOn?: boolean;
   optional?: true;
   coverageKey?: string;
+  /** Spec JSONB candidate key names (used to look up in columnMeta.spec_keys). */
+  specCandidateKeys?: string[];
+  /** Key name in columnMeta.catalogue (may differ from client-side coverageKey). */
+  catalogueServerKey?: string;
 };
 
 type GroupDef = {
@@ -91,11 +104,11 @@ const COLUMN_GROUPS: GroupDef[] = [
     title: 'Specs',
     description: 'CPU, RAM, storage, GPU, display always shown when present. Coverage based on current plan lines.',
     columns: [
-      { key: 'product_spec_cpu', label: 'CPU', alwaysOn: true, coverageKey: 'cpu' },
-      { key: 'product_spec_ram', label: 'RAM', alwaysOn: true, coverageKey: 'ram' },
-      { key: 'product_spec_storage', label: 'Storage', alwaysOn: true, coverageKey: 'storage' },
-      { key: 'product_spec_gpu', label: 'GPU', alwaysOn: true, coverageKey: 'gpu' },
-      { key: 'product_spec_display', label: 'Display', alwaysOn: true, coverageKey: 'display' },
+      { key: 'product_spec_cpu', label: 'CPU', alwaysOn: true, coverageKey: 'cpu', specCandidateKeys: ['cpu', 'CPU', 'processor'] },
+      { key: 'product_spec_ram', label: 'RAM', alwaysOn: true, coverageKey: 'ram', specCandidateKeys: ['ram', 'RAM', 'memory'] },
+      { key: 'product_spec_storage', label: 'Storage', alwaysOn: true, coverageKey: 'storage', specCandidateKeys: ['storage', 'Storage', 'disk', 'ssd', 'hdd'] },
+      { key: 'product_spec_gpu', label: 'GPU', alwaysOn: true, coverageKey: 'gpu', specCandidateKeys: ['gpu', 'GPU', 'graphics'] },
+      { key: 'product_spec_display', label: 'Display', alwaysOn: true, coverageKey: 'display', specCandidateKeys: ['display', 'Display', 'screen', 'panel'] },
       { key: 'product_spec_warranty', label: 'Warranty', optional: true },
       { key: 'product_spec_os', label: 'OS', optional: true },
       { key: 'product_spec_colour', label: 'Colour', optional: true },
@@ -104,12 +117,12 @@ const COLUMN_GROUPS: GroupDef[] = [
   {
     title: 'Product catalogue',
     columns: [
-      { key: 'product_category', label: 'Category', optional: true, coverageKey: 'category' },
-      { key: 'product_form_factor', label: 'Form factor', optional: true, coverageKey: 'form_factor' },
-      { key: 'product_lifecycle_status', label: 'Lifecycle', optional: true, coverageKey: 'lifecycle' },
-      { key: 'product_line', label: 'Product line', optional: true, coverageKey: 'product_line' },
-      { key: 'product_series_name', label: 'Series', optional: true, coverageKey: 'series' },
-      { key: 'product_business_unit', label: 'Business unit', optional: true, coverageKey: 'bu' },
+      { key: 'product_category', label: 'Category', optional: true, coverageKey: 'category', catalogueServerKey: 'category' },
+      { key: 'product_form_factor', label: 'Form factor', optional: true, coverageKey: 'form_factor', catalogueServerKey: 'form_factor' },
+      { key: 'product_lifecycle_status', label: 'Lifecycle', optional: true, coverageKey: 'lifecycle', catalogueServerKey: 'lifecycle_status' },
+      { key: 'product_line', label: 'Product line', optional: true, coverageKey: 'product_line', catalogueServerKey: 'product_line' },
+      { key: 'product_series_name', label: 'Series', optional: true, coverageKey: 'series', catalogueServerKey: 'series_name' },
+      { key: 'product_business_unit', label: 'Business unit', optional: true, coverageKey: 'bu', catalogueServerKey: 'business_unit' },
     ],
   },
   {
@@ -148,7 +161,7 @@ const COLUMN_GROUPS: GroupDef[] = [
     description: 'Sell-in and margin in USD. Internal margin always on.',
     columns: [
       { key: 'calc_sell_in_price_usd', label: 'Channel sell-in USD / unit', alwaysOn: true },
-      { key: 'calc_internal_gp_usd', label: 'Est. internal margin USD / unit', alwaysOn: true },
+      { key: 'calc_internal_gp_usd', label: 'Est. OEM net margin USD (total, all units)', alwaysOn: true },
       { key: 'calc_buy_price_usd', label: 'Est. net after distributor margin USD / unit', optional: true },
       { key: 'calc_promo_reserve_usd', label: 'Promo reserve USD', optional: true },
       { key: 'calc_non_promo_reserve_usd', label: 'Non-promo reserve USD', optional: true },
@@ -161,6 +174,28 @@ const COLUMN_GROUPS: GroupDef[] = [
   },
 ];
 
+// ── Coverage helpers ───────────────────────────────────────────────────────────
+
+/**
+ * Compute coverage count for a spec field.
+ * When columnMeta is provided, sums across all candidate key names in spec_keys.
+ * Otherwise falls back to client-side count.
+ */
+function getSpecCoverage(
+  candidateKeys: string[],
+  columnMeta: ColumnMetadata | null | undefined,
+  clientCount: number,
+): { count: number; fromServer: boolean } {
+  if (columnMeta) {
+    const serverCount = candidateKeys.reduce(
+      (acc, k) => acc + (columnMeta.spec_keys[k] ?? 0),
+      0,
+    );
+    return { count: serverCount, fromServer: true };
+  }
+  return { count: clientCount, fromServer: false };
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ColumnSelectorModal({
@@ -171,6 +206,7 @@ export function ColumnSelectorModal({
   onChange,
   onReset,
   onPreset,
+  columnMeta,
 }: ColumnSelectorModalProps) {
   const [search, setSearch] = useState('');
 
@@ -200,11 +236,6 @@ export function ColumnSelectorModal({
     [lines]
   );
 
-  const allCoverage: Record<string, number> = {
-    ...specCoverage,
-    ...catalogueCoverage,
-  };
-
   const needle = search.trim().toLowerCase();
 
   const filteredGroups = useMemo(() => {
@@ -214,6 +245,8 @@ export function ColumnSelectorModal({
       columns: g.columns.filter((c) => c.label.toLowerCase().includes(needle) || c.key.toLowerCase().includes(needle)),
     })).filter((g) => g.columns.length > 0);
   }, [needle]);
+
+  const totalForCoverage = columnMeta ? columnMeta.total_products : lines.length;
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" aria-labelledby="col-selector-title">
@@ -261,7 +294,9 @@ export function ColumnSelectorModal({
         )}
 
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-          Coverage counts are based on current plan lines. Locked columns cannot be hidden.
+          {columnMeta
+            ? `Coverage counts from server (${columnMeta.total_products} products in plan). Locked columns cannot be hidden.`
+            : 'Coverage counts are based on current plan lines. Locked columns cannot be hidden.'}
         </Typography>
 
         {/* Groups */}
@@ -278,10 +313,34 @@ export function ColumnSelectorModal({
             )}
             <Stack spacing={0.25}>
               {group.columns.map((col) => {
-                const coverageCount = col.coverageKey != null ? allCoverage[col.coverageKey] : undefined;
-                const total = lines.length;
+                // Compute coverage count based on server or client data
+                let coverageCount: number | undefined;
+                let coverageFromServer = false;
+
+                if (col.specCandidateKeys) {
+                  // Spec column: use server spec_keys or client fallback
+                  const clientCount = col.coverageKey ? (specCoverage as Record<string, number>)[col.coverageKey] ?? 0 : 0;
+                  const { count, fromServer } = getSpecCoverage(col.specCandidateKeys, columnMeta, clientCount);
+                  coverageCount = count;
+                  coverageFromServer = fromServer;
+                } else if (col.catalogueServerKey && col.coverageKey) {
+                  // Catalogue column: use server catalogue or client fallback
+                  if (columnMeta) {
+                    coverageCount = columnMeta.catalogue[col.catalogueServerKey] ?? 0;
+                    coverageFromServer = true;
+                  } else {
+                    coverageCount = (catalogueCoverage as Record<string, number>)[col.coverageKey];
+                  }
+                } else if (col.coverageKey && !col.specCandidateKeys && !col.catalogueServerKey) {
+                  // Legacy: coverage from client allCoverage (non-spec, non-catalogue fields)
+                  const allCoverage: Record<string, number> = { ...specCoverage, ...catalogueCoverage };
+                  coverageCount = allCoverage[col.coverageKey];
+                }
+
                 const coverageLabel =
-                  coverageCount != null && total > 0 ? `${coverageCount} / ${total} populated` : null;
+                  coverageCount != null && totalForCoverage > 0
+                    ? `${coverageCount} / ${totalForCoverage} populated`
+                    : null;
 
                 if (col.locked) {
                   return (
@@ -296,6 +355,24 @@ export function ColumnSelectorModal({
                 }
 
                 if (col.alwaysOn) {
+                  // For spec columns with server data: check if coverage is 0
+                  const specHasServerData = col.specCandidateKeys && coverageFromServer;
+                  const specCoverageIsZero = specHasServerData && (coverageCount ?? 0) === 0;
+
+                  if (specCoverageIsZero) {
+                    return (
+                      <Box key={col.key} sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5, py: 0.25 }}>
+                        <Checkbox size="small" checked disabled sx={{ p: 0 }} />
+                        <Typography variant="body2" color="text.secondary">
+                          {col.label}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {`0 / ${totalForCoverage} — not in catalog`}
+                        </Typography>
+                      </Box>
+                    );
+                  }
+
                   return (
                     <Box key={col.key} sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5, py: 0.25 }}>
                       <Checkbox size="small" checked disabled sx={{ p: 0 }} />
