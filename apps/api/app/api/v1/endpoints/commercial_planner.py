@@ -27,6 +27,7 @@ from app.models.facts import FactForecast, FactPricing, FactSalesSellout
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob
 from app.services.commercial_planner.calculator import CommercialCalcInputs, compute_line_economics
+from app.services.commercial_planner.current_lineup_seed import CurrentLineupSourceNotConfiguredError
 from app.services.commercial_planner.lineup_case_parser import parse_current_lineup_file
 from app.services.commercial_planner.read_model import plan_line_read_model_extensions
 from app.services.commercial_planner.suggestions import (
@@ -1832,8 +1833,17 @@ async def parse_lineup_case_upload(
 
     try:
         result = await parse_current_lineup_file(db, case_id, filename, file_bytes)
+    except CurrentLineupSourceNotConfiguredError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "current_lineup_import_not_seeded",
+                "message": str(exc),
+                "remediation": exc.remediation,
+            },
+        ) from exc
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Parse failed: {exc}")
+        raise HTTPException(status_code=422, detail=f"Parse failed: {exc}") from exc
 
     return {
         "case_id": result.case_id,

@@ -23,6 +23,11 @@ from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupL
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
 
+from app.services.commercial_planner.current_lineup_seed import (
+    CurrentLineupSourceNotConfiguredError,
+    ensure_current_lineup_import_seed,
+)
+
 # ── Column alias mapping ──────────────────────────────────────────────────────
 
 _CANONICAL_ALIASES: dict[str, list[str]] = {
@@ -166,17 +171,34 @@ async def parse_current_lineup_file(
     if case is None:
         raise ValueError(f"CommercialLineupCase id={case_id} not found")
 
+    # Idempotent seed: upsert template + insert current_lineup_system source if missing.
+    await ensure_current_lineup_import_seed(db)
+
     # Resolve source_definition for the current_lineup template (required FK).
     source = await db.scalar(
         select(SourceDefinition)
         .join(ImportTemplate, ImportTemplate.id == SourceDefinition.import_template_id)
-        .where(ImportTemplate.slug == "current_lineup")
+        .where(ImportTemplate.slug == "current_lineup", SourceDefinition.code == "current_lineup_system")
         .limit(1)
     )
     if source is None:
-        raise ValueError(
-            "No SourceDefinition found for template 'current_lineup'. "
-            "Ensure the database seed migration has been run (see template_definitions.DEFAULT_SOURCES)."
+        tpl = await db.scalar(select(ImportTemplate).where(ImportTemplate.slug == "current_lineup"))
+        if tpl is None:
+            raise CurrentLineupSourceNotConfiguredError(
+                "Import template 'current_lineup' is missing after seed attempt.",
+                remediation=(
+                    "From the apps/api directory run: alembic upgrade head "
+                    "(revision 20260428_0021_current_lineup_template_source_seed or later). "
+                    "If developing locally, ensure PYTHONPATH includes the app package."
+                ),
+            )
+        raise CurrentLineupSourceNotConfiguredError(
+            "SourceDefinition 'current_lineup_system' is missing after seed attempt.",
+            remediation=(
+                "From the apps/api directory run: alembic upgrade head "
+                "(revision 20260428_0021_current_lineup_template_source_seed or later). "
+                "Verify import_template.slug='current_lineup' exists and re-run upgrade."
+            ),
         )
     source_id = source.id
 

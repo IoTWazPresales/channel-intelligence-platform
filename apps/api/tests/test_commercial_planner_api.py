@@ -1290,9 +1290,10 @@ def test_parse_upload_creates_import_job_with_correct_source():
 
 
 def test_parse_upload_fails_clearly_without_current_lineup_source():
-    """Parser raises ValueError with clear message when SourceDefinition is missing."""
+    """Parser raises CurrentLineupSourceNotConfiguredError when source cannot be resolved."""
     import asyncio
 
+    from app.services.commercial_planner.current_lineup_seed import CurrentLineupSourceNotConfiguredError
     from app.services.commercial_planner.lineup_case_parser import parse_current_lineup_file
 
     fake_case = SimpleNamespace(id=11, import_job_id=None, file_name=None)
@@ -1300,7 +1301,7 @@ def test_parse_upload_fails_clearly_without_current_lineup_source():
     async def run():
         db = MagicMock()
         db.get = AsyncMock(return_value=fake_case)
-        db.scalar = AsyncMock(return_value=None)  # no SourceDefinition
+        db.scalar = AsyncMock(return_value=None)  # no SourceDefinition after seed attempt
         db.add = MagicMock()
         db.flush = AsyncMock()
         db.commit = AsyncMock()
@@ -1310,8 +1311,66 @@ def test_parse_upload_fails_clearly_without_current_lineup_source():
         db.execute = AsyncMock(return_value=empty)
         return await parse_current_lineup_file(db, 11, "test.csv", b"sku,qty\nSKU-A,10\n")
 
-    with pytest.raises(ValueError, match="current_lineup"):
+    with pytest.raises(CurrentLineupSourceNotConfiguredError, match="current_lineup"):
         asyncio.run(run())
+
+
+def test_ensure_current_lineup_import_seed_idempotent():
+    """ensure_current_lineup_import_seed runs two INSERT statements each call; safe twice."""
+    import asyncio
+
+    from app.services.commercial_planner.current_lineup_seed import ensure_current_lineup_import_seed
+
+    async def run():
+        db = MagicMock()
+        db.execute = AsyncMock()
+        db.flush = AsyncMock()
+        await ensure_current_lineup_import_seed(db)
+        await ensure_current_lineup_import_seed(db)
+        return db
+
+    db = asyncio.run(run())
+    assert db.execute.call_count == 4
+
+
+def test_parse_upload_returns_structured_422_when_seed_not_configured(monkeypatch):
+    """parse-upload maps CurrentLineupSourceNotConfiguredError to structured 422 JSON."""
+    import io
+
+    from app.services.commercial_planner.current_lineup_seed import CurrentLineupSourceNotConfiguredError
+
+    case = _make_case(id=99, commercial_plan_id=1, commercial_status="draft_imported")
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        count = MagicMock()
+        count.scalar_one = MagicMock(return_value=0)
+        sess.execute = AsyncMock(return_value=count)
+        yield sess
+
+    async def boom(*args, **kwargs):
+        raise CurrentLineupSourceNotConfiguredError(
+            "test message",
+            remediation="run alembic upgrade head",
+        )
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.commercial_planner.parse_current_lineup_file",
+        boom,
+    )
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/99/parse-upload",
+        files={"file": ("lineup.csv", io.BytesIO(b"sku\nSKU-A"), "text/csv")},
+    )
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert isinstance(detail, dict)
+    assert detail["error"] == "current_lineup_import_not_seeded"
+    assert detail["message"] == "test message"
+    assert detail["remediation"] == "run alembic upgrade head"
 
 
 def test_parse_upload_unknown_distributor_diagnostic():

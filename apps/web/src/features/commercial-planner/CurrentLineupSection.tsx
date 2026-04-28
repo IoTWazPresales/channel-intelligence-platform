@@ -31,6 +31,25 @@ import { useState } from 'react';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 
+function formatHttpErrorDetail(detail: unknown): string {
+  if (typeof detail === 'string') return detail;
+  if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+    const d = detail as { message?: string; remediation?: string };
+    const parts = [d.message, d.remediation].filter((x): x is string => Boolean(x));
+    if (parts.length) return parts.join(' ');
+  }
+  if (Array.isArray(detail)) {
+    return detail
+      .map((e) =>
+        typeof e === 'object' && e !== null && 'msg' in e
+          ? String((e as { msg: unknown }).msg)
+          : JSON.stringify(e),
+      )
+      .join('; ');
+  }
+  return 'unknown error';
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type CommercialLineupCase = {
@@ -429,6 +448,94 @@ function StatusTransitionDialog({
   );
 }
 
+// ── Retry parse on empty draft case ───────────────────────────────────────────
+
+function RetryParseDialog({
+  open,
+  onClose,
+  targetCase,
+  onParsed,
+}: {
+  open: boolean;
+  onClose: () => void;
+  targetCase: CommercialLineupCase;
+  onParsed: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleClose = () => {
+    setFile(null);
+    setError(null);
+    onClose();
+  };
+
+  const handleSubmit = async () => {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const parseRes = await fetch(
+        `/api/v1/commercial-planner/lineup-cases/${targetCase.id}/parse-upload`,
+        { method: 'POST', body: fd },
+      );
+      if (!parseRes.ok) {
+        const errBody = await parseRes.json().catch(() => ({}));
+        setError(
+          `Parse failed. ${formatHttpErrorDetail(errBody.detail)} You can fix the file and try again.`,
+        );
+        return;
+      }
+      onParsed();
+      handleClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Upload file — case #{targetCase.id}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            This case has no lines yet. Choose a lineup file (.csv, .xlsx, .xlsm) to parse into the case.
+          </Typography>
+          <Button variant="outlined" component="label" size="small">
+            {file ? file.name : 'Choose file…'}
+            <input
+              type="file"
+              hidden
+              accept=".csv,.xlsx,.xlsm"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+          </Button>
+          {error && <Alert severity="error">{error}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button size="small" onClick={handleClose}>
+          Cancel
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
+          onClick={handleSubmit}
+          disabled={!file || uploading}
+          data-testid="retry-parse-confirm"
+        >
+          {uploading ? 'Uploading…' : 'Parse file'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 // ── Upload / create case dialog ────────────────────────────────────────────────
 
 function UploadLineupDialog({
@@ -479,9 +586,10 @@ function UploadLineupDialog({
         if (!parseRes.ok) {
           const errBody = await parseRes.json().catch(() => ({}));
           setError(
-            `Case created (id=${caseResponse.id}) but file parse failed: ${errBody.detail ?? 'unknown error'}`,
+            `Case created (id=${caseResponse.id}) but file parse failed. ` +
+              `The draft case has no lines yet — use "Upload file to this case" on the case card to retry, or delete the draft. ` +
+              formatHttpErrorDetail(errBody.detail),
           );
-          // Don't call onCreated — case exists but is empty; surface error instead
           return;
         }
       }
@@ -586,6 +694,7 @@ export function CurrentLineupSection({
   const [viewLinesCase, setViewLinesCase] = useState<CommercialLineupCase | null>(null);
   const [statusCase, setStatusCase] = useState<CommercialLineupCase | null>(null);
   const [syncCase, setSyncCase] = useState<CommercialLineupCase | null>(null);
+  const [retryParseCase, setRetryParseCase] = useState<CommercialLineupCase | null>(null);
 
   const { data: cases, isLoading } = useQuery<CommercialLineupCase[]>({
     queryKey: ['commercial-lineup-cases', activePlanId],
@@ -690,6 +799,16 @@ export function CurrentLineupSection({
                     <Button size="small" onClick={() => setViewLinesCase(c)}>
                       View lines
                     </Button>
+                    {c.commercial_status === 'draft_imported' && c.line_count === 0 && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => setRetryParseCase(c)}
+                        data-testid={`retry-parse-open-${c.id}`}
+                      >
+                        Upload file to this case
+                      </Button>
+                    )}
                     {(ALLOWED_TRANSITIONS[c.commercial_status]?.length ?? 0) > 0 && (
                       <Button size="small" onClick={() => setStatusCase(c)}>
                         Update status
@@ -760,6 +879,15 @@ export function CurrentLineupSection({
           onClose={() => setSyncCase(null)}
           caseItem={syncCase}
           onSyncComplete={onSyncComplete}
+        />
+      )}
+
+      {retryParseCase && (
+        <RetryParseDialog
+          open={retryParseCase != null}
+          onClose={() => setRetryParseCase(null)}
+          targetCase={retryParseCase}
+          onParsed={() => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] })}
         />
       )}
     </>
