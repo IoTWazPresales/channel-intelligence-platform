@@ -36,6 +36,15 @@ from app.services.commercial_planner.lineup_entity_resolution import (
     collect_entity_resolution_candidates,
 )
 from app.services.commercial_planner.lineup_case_parser import parse_current_lineup_file
+from app.services.commercial_planner.lineup_open_channel import (
+    CHANNEL_ROUTE_UPLOADED_CELL_KEY,
+    STAGING_OPEN_CHANNEL_KEY,
+    lineup_line_is_open_channel_staging,
+    managed_customer_token_unresolved,
+    sync_skip_detail_message,
+    sync_ui_severity_for_line,
+    uploaded_columns_from_payload,
+)
 from app.services.commercial_planner.read_model import plan_line_read_model_extensions
 from app.services.commercial_planner.suggestions import (
     SuggestionInputs,
@@ -1710,6 +1719,74 @@ async def get_lineup_entity_resolution_candidates(case_id: int, db: AsyncSession
     return await collect_entity_resolution_candidates(db, case_id)
 
 
+def _workbench_parsed_field_metadata() -> list[dict[str, str]]:
+    """Stable ids for lineup staging fields (not DB migration — API contract only)."""
+    specs = [
+        ("source_row_number", "Source row #"),
+        ("sku_raw", "SKU (raw)"),
+        ("part_number_raw", "Part # (raw)"),
+        ("model_raw", "Model (raw)"),
+        ("base_unit_raw", "Base unit (raw)"),
+        ("quantity_units", "Quantity"),
+        ("msrp_local", "MSRP / list (local)"),
+        ("promo_price_evidence_local", "Promo price (evidence)"),
+        ("dap_evidence_local", "DAP (evidence only)"),
+        ("rebate_pct_evidence", "Rebate % (evidence)"),
+        ("distributor_margin_pct_evidence", "Dealer margin % (evidence)"),
+        ("vat_pct_evidence", "VAT % (evidence)"),
+        ("customer_token", "Customer token (parsed column)"),
+        ("distributor_token_raw", "Distributor token (from upload)"),
+        ("row_status", "Row status"),
+        ("mapping_confidence", "Mapping confidence"),
+        ("diagnostic_codes", "Diagnostics"),
+    ]
+    return [{"id": f"parsed:{k}", "group": "parsed", "label": lab, "field": k} for k, lab in specs]
+
+
+def _workbench_sync_field_metadata() -> list[dict[str, str]]:
+    return [
+        {"id": "sync:sync_eligible", "group": "sync", "label": "Sync eligible", "field": "sync_eligible"},
+        {"id": "sync:sync_skip_reason", "group": "sync", "label": "Sync skip reason", "field": "sync_skip_reason"},
+        {"id": "sync:sync_skip_detail", "group": "sync", "label": "Sync detail", "field": "sync_skip_detail"},
+        {"id": "sync:sync_ui_severity", "group": "sync", "label": "Sync severity (UI)", "field": "sync_ui_severity"},
+    ]
+
+
+@router.get("/lineup-cases/{case_id}/workbench-column-metadata")
+async def get_lineup_workbench_column_metadata(case_id: int, db: AsyncSession = Depends(get_db)):
+    """Union of raw upload headers, parsed field ids, DimProduct.specs_json keys, and sync field ids."""
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    lines = (
+        (await db.execute(select(CommercialLineupLine).where(CommercialLineupLine.case_id == case_id)))
+        .scalars()
+        .all()
+    )
+    raw_columns: set[str] = set()
+    product_ids: set[int] = set()
+    for ln in lines:
+        payload = ln.raw_row_payload if isinstance(ln.raw_row_payload, dict) else None
+        raw_columns.update(uploaded_columns_from_payload(payload).keys())
+        if ln.product_id:
+            product_ids.add(int(ln.product_id))
+    spec_keys: set[str] = set()
+    if product_ids:
+        sjs = (
+            await db.execute(select(DimProduct.specs_json).where(DimProduct.id.in_(list(product_ids))))
+        ).scalars().all()
+        for sj in sjs:
+            if isinstance(sj, dict):
+                spec_keys.update(str(k) for k in sj.keys())
+    return {
+        "case_id": case_id,
+        "raw_columns": sorted(raw_columns),
+        "parsed_fields": _workbench_parsed_field_metadata(),
+        "catalogue_spec_keys": sorted(spec_keys),
+        "sync_fields": _workbench_sync_field_metadata(),
+    }
+
+
 @router.post("/lineup-cases/{case_id}/entity-resolutions/apply", status_code=200)
 async def post_lineup_entity_resolutions_apply(
     case_id: int,
@@ -1783,6 +1860,8 @@ async def list_lineup_case_lines(
     db: AsyncSession = Depends(get_db),
     include_sync_eligibility: bool = Query(default=False),
     include_raw_row_payload: bool = Query(default=False),
+    include_product_specs: bool = Query(default=False),
+    include_line_uploaded: bool = Query(default=False),
     fallback_customer_id: int | None = Query(default=None),
     fallback_distributor_id: int | None = Query(default=None),
     default_srp_local: float | None = Query(default=None),
@@ -1799,6 +1878,7 @@ async def list_lineup_case_lines(
             DimProduct.part_number.label("product_part_number"),
             DimProduct.model_name.label("product_model_name"),
             DimProduct.sales_model_name.label("product_sales_model_name"),
+            DimProduct.specs_json.label("product_specs_json"),
             DimCustomer.code.label("customer_code"),
             DimCustomer.name.label("customer_name"),
             DimDistributor.code.label("distributor_code"),
@@ -1819,6 +1899,7 @@ async def list_lineup_case_lines(
         product_part_number,
         product_model_name,
         product_sales_model_name,
+        product_specs_json,
         customer_code,
         customer_name,
         distributor_code,
@@ -1849,6 +1930,7 @@ async def list_lineup_case_lines(
             "sku_raw": ln.sku_raw,
             "part_number_raw": ln.part_number_raw,
             "model_raw": ln.model_raw,
+            "base_unit_raw": ln.base_unit_raw,
             "quantity_units": float(ln.quantity_units) if ln.quantity_units is not None else None,
             "msrp_local": float(ln.msrp_local) if ln.msrp_local is not None else None,
             "promo_price_evidence_local": float(ln.promo_price_evidence_local)
@@ -1864,7 +1946,16 @@ async def list_lineup_case_lines(
             "row_status": ln.row_status,
             "mapping_confidence": float(ln.mapping_confidence) if ln.mapping_confidence is not None else None,
             "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE,
+            "staging_open_channel": raw_payload.get(STAGING_OPEN_CHANNEL_KEY) is True,
+            "channel_route_uploaded_cell": raw_payload.get(CHANNEL_ROUTE_UPLOADED_CELL_KEY)
+            if isinstance(raw_payload.get(CHANNEL_ROUTE_UPLOADED_CELL_KEY), str)
+            else None,
         }
+        if include_product_specs:
+            d["product_specs"] = product_specs_json if isinstance(product_specs_json, dict) else {}
+        if include_line_uploaded:
+            up = raw_payload.get("uploaded")
+            d["uploaded"] = up if isinstance(up, dict) else {}
         if include_raw_row_payload:
             d["raw_row_payload"] = ln.raw_row_payload if isinstance(ln.raw_row_payload, dict) else {}
         rows_payload.append((ln, d))
@@ -1893,12 +1984,27 @@ async def list_lineup_case_lines(
         for ln, d in rows_payload:
             eligible, reason, *_ = _sync_eligibility(ln, body, keys_sim)
             d["sync_eligible"] = eligible
-            d["sync_skip_reason"] = reason if not eligible else None
             if eligible:
+                d["sync_skip_reason"] = None
+                warn_parts: list[str] = []
+                if ln.customer_id is None and body.fallback_customer_id:
+                    warn_parts.append("Customer unassigned on row — sync will use fallback customer.")
+                if ln.distributor_id is None and body.fallback_distributor_id:
+                    warn_parts.append("Distributor unassigned on row — sync will use fallback distributor.")
+                if warn_parts:
+                    d["sync_ui_severity"] = "warning"
+                    d["sync_skip_detail"] = " ".join(warn_parts)
+                else:
+                    d["sync_ui_severity"] = None
+                    d["sync_skip_detail"] = None
                 customer_id = ln.customer_id or body.fallback_customer_id
                 distributor_id = ln.distributor_id or body.fallback_distributor_id
                 if ln.product_id and customer_id and distributor_id:
                     keys_sim.add((customer_id, distributor_id, ln.product_id))
+            else:
+                d["sync_skip_reason"] = reason
+                d["sync_skip_detail"] = sync_skip_detail_message(ln, reason)
+                d["sync_ui_severity"] = sync_ui_severity_for_line(ln, reason)
 
     result = [d for _, d in rows_payload]
     return {"lines": result, "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE}
@@ -2189,13 +2295,19 @@ def _sync_eligibility(
     """Return (eligible, skip_reason, customer_id, distributor_id, srp, units).
 
     skip_reason is one of: '' (eligible), 'unresolved_product', 'missing_customer',
+    'planner_requires_customer' (Open Channel row without customer_id or fallback),
     'missing_distributor', 'missing_srp', 'missing_quantity', 'duplicate'.
     """
     if not ln.product_id:
         return False, "unresolved_product", None, None, None, None
 
+    if managed_customer_token_unresolved(ln):
+        return False, "missing_customer", None, None, None, None
+
     customer_id = ln.customer_id or body.fallback_customer_id
     if not customer_id:
+        if lineup_line_is_open_channel_staging(ln):
+            return False, "planner_requires_customer", None, None, None, None
         return False, "missing_customer", None, None, None, None
 
     distributor_id = ln.distributor_id or body.fallback_distributor_id
@@ -2274,6 +2386,7 @@ async def preview_sync_lineup_case_to_plan(
     skipped_missing_distributor = 0
     skipped_missing_quantity = 0
     skipped_missing_srp = 0
+    skipped_planner_requires_customer = 0
 
     for ln in lines:
         eligible, reason, *_ = _sync_eligibility(ln, body, existing_keys)
@@ -2290,6 +2403,8 @@ async def preview_sync_lineup_case_to_plan(
             skipped_unresolved_product += 1
         elif reason == "missing_customer":
             skipped_missing_customer += 1
+        elif reason == "planner_requires_customer":
+            skipped_planner_requires_customer += 1
         elif reason == "missing_distributor":
             skipped_missing_distributor += 1
         elif reason == "missing_quantity":
@@ -2302,6 +2417,7 @@ async def preview_sync_lineup_case_to_plan(
         + skipped_missing_customer
         + skipped_missing_distributor
         + skipped_missing_quantity
+        + skipped_planner_requires_customer
     )
 
     return {
@@ -2313,6 +2429,7 @@ async def preview_sync_lineup_case_to_plan(
         "skipped_unresolved": skipped_unresolved,
         "skipped_unresolved_product": skipped_unresolved_product,
         "skipped_missing_customer": skipped_missing_customer,
+        "skipped_planner_requires_customer": skipped_planner_requires_customer,
         "skipped_missing_distributor": skipped_missing_distributor,
         "skipped_missing_quantity": skipped_missing_quantity,
         "skipped_missing_srp": skipped_missing_srp,
@@ -2373,6 +2490,7 @@ async def sync_lineup_case_to_plan(
     skipped_missing_distributor = 0
     skipped_missing_quantity = 0
     skipped_missing_srp = 0
+    skipped_planner_requires_customer = 0
     failed = 0
     warnings: list[str] = []
 
@@ -2387,6 +2505,8 @@ async def sync_lineup_case_to_plan(
                 skipped_unresolved_product += 1
             elif reason == "missing_customer":
                 skipped_missing_customer += 1
+            elif reason == "planner_requires_customer":
+                skipped_planner_requires_customer += 1
             elif reason == "missing_distributor":
                 skipped_missing_distributor += 1
             elif reason == "missing_quantity":
@@ -2425,6 +2545,7 @@ async def sync_lineup_case_to_plan(
         + skipped_missing_customer
         + skipped_missing_distributor
         + skipped_missing_quantity
+        + skipped_planner_requires_customer
     )
 
     return {
@@ -2435,6 +2556,7 @@ async def sync_lineup_case_to_plan(
         "skipped_unresolved": skipped_unresolved,
         "skipped_unresolved_product": skipped_unresolved_product,
         "skipped_missing_customer": skipped_missing_customer,
+        "skipped_planner_requires_customer": skipped_planner_requires_customer,
         "skipped_missing_distributor": skipped_missing_distributor,
         "skipped_missing_quantity": skipped_missing_quantity,
         "skipped_missing_srp": skipped_missing_srp,

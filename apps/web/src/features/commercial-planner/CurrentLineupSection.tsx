@@ -16,6 +16,7 @@ import {
   FormControl,
   FormControlLabel,
   InputLabel,
+  ListSubheader,
   Menu,
   MenuItem,
   Select,
@@ -31,7 +32,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { EntitySearchAutocomplete } from './EntitySearchAutocomplete';
@@ -102,8 +103,15 @@ type CommercialLineupLine = {
   row_status: string;
   mapping_confidence?: number | null;
   dap_semantics_note?: string;
+  staging_open_channel?: boolean;
+  channel_route_uploaded_cell?: string | null;
+  uploaded?: Record<string, unknown>;
+  product_specs?: Record<string, unknown>;
   sync_eligible?: boolean;
   sync_skip_reason?: string | null;
+  sync_skip_detail?: string | null;
+  sync_ui_severity?: string | null;
+  base_unit_raw?: string | null;
 };
 
 type CaseLinesResponse = {
@@ -111,9 +119,18 @@ type CaseLinesResponse = {
   dap_semantics_note: string;
 };
 
-const WORKBENCH_COL_STORAGE = 'cip.commercial-planner.currentLineupWorkbench.columns.v1';
+type WorkbenchColumnMetadata = {
+  case_id: number;
+  raw_columns: string[];
+  parsed_fields: { id: string; group: string; label: string; field: string }[];
+  catalogue_spec_keys: string[];
+  sync_fields: { id: string; group: string; label: string; field: string }[];
+};
 
-const WORKBENCH_COL_IDS = [
+const WB_STORAGE_V1 = 'cip.commercial-planner.currentLineupWorkbench.columns.v1';
+const WB_STORAGE_V2 = 'cip.commercial-planner.currentLineupWorkbench.columns.v2';
+
+const CORE_WORKBENCH_IDS = [
   'num',
   'product',
   'sku',
@@ -128,9 +145,9 @@ const WORKBENCH_COL_IDS = [
   'sync',
 ] as const;
 
-type WorkbenchColId = (typeof WORKBENCH_COL_IDS)[number];
+type CoreWorkbenchId = (typeof CORE_WORKBENCH_IDS)[number];
 
-const WORKBENCH_COL_LABELS: Record<WorkbenchColId, string> = {
+const CORE_WORKBENCH_LABELS: Record<CoreWorkbenchId, string> = {
   num: '#',
   product: 'Model / product',
   sku: 'SKU',
@@ -145,21 +162,104 @@ const WORKBENCH_COL_LABELS: Record<WorkbenchColId, string> = {
   sync: 'Sync preview (plan)',
 };
 
-function readWorkbenchColumns(): Set<WorkbenchColId> {
-  if (typeof window === 'undefined') return new Set(WORKBENCH_COL_IDS);
+function defaultWorkbenchVisible(hasPlan: boolean): string[] {
+  const base = [
+    'num',
+    'product',
+    'sku',
+    'part',
+    'cust',
+    'dist',
+    'units',
+    'msrp',
+    'promo',
+    'dap',
+    'issues',
+  ];
+  return hasPlan ? [...base, 'sync'] : base;
+}
+
+function mergeWorkbenchAllowedIds(meta: WorkbenchColumnMetadata | undefined, hasPlan: boolean): Set<string> {
+  const s = new Set<string>([
+    'num',
+    'product',
+    'sku',
+    'part',
+    'cust',
+    'dist',
+    'units',
+    'msrp',
+    'promo',
+    'dap',
+    'issues',
+  ]);
+  if (hasPlan) s.add('sync');
+  if (!meta) return s;
+  const rawCols = Array.isArray(meta.raw_columns) ? meta.raw_columns : [];
+  for (const c of rawCols) s.add(`raw:${c}`);
+  const parsed = Array.isArray(meta.parsed_fields) ? meta.parsed_fields : [];
+  for (const p of parsed) s.add(p.id);
+  const specKeys = Array.isArray(meta.catalogue_spec_keys) ? meta.catalogue_spec_keys : [];
+  for (const k of specKeys) s.add(`spec:${k}`);
+  const syncFs = Array.isArray(meta.sync_fields) ? meta.sync_fields : [];
+  for (const f of syncFs) s.add(f.id);
+  return s;
+}
+
+function readInitialWorkbenchVisible(hasPlan: boolean): string[] {
+  const fallback = defaultWorkbenchVisible(hasPlan);
+  if (typeof window === 'undefined') return fallback;
   try {
-    const raw = localStorage.getItem(WORKBENCH_COL_STORAGE);
-    if (!raw) return new Set(WORKBENCH_COL_IDS);
-    const arr = JSON.parse(raw) as unknown;
-    if (!Array.isArray(arr)) return new Set(WORKBENCH_COL_IDS);
-    const next = new Set<WorkbenchColId>();
-    for (const x of arr) {
-      if (WORKBENCH_COL_IDS.includes(x as WorkbenchColId)) next.add(x as WorkbenchColId);
+    const v2 = localStorage.getItem(WB_STORAGE_V2);
+    if (v2) {
+      const arr = JSON.parse(v2) as unknown;
+      if (Array.isArray(arr) && arr.every((x) => typeof x === 'string') && arr.length) return arr;
     }
-    return next.size ? next : new Set(WORKBENCH_COL_IDS);
+    const raw = localStorage.getItem(WB_STORAGE_V1);
+    if (!raw) return fallback;
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return fallback;
+    const next = arr.filter((x): x is string => typeof x === 'string');
+    return next.length ? next : fallback;
   } catch {
-    return new Set(WORKBENCH_COL_IDS);
+    return fallback;
   }
+}
+
+function workbenchColumnLabel(colId: string, meta: WorkbenchColumnMetadata | undefined): string {
+  if ((CORE_WORKBENCH_IDS as readonly string[]).includes(colId)) {
+    return CORE_WORKBENCH_LABELS[colId as CoreWorkbenchId];
+  }
+  if (colId.startsWith('raw:')) return colId.slice(4);
+  if (colId.startsWith('spec:')) return `Spec: ${colId.slice(5)}`;
+  if (colId.startsWith('parsed:') && meta) {
+    const parsed = Array.isArray(meta.parsed_fields) ? meta.parsed_fields : [];
+    const hit = parsed.find((p) => p.id === colId);
+    if (hit) return hit.label;
+  }
+  if (colId.startsWith('sync:') && meta) {
+    const syncFs = Array.isArray(meta.sync_fields) ? meta.sync_fields : [];
+    const hit = syncFs.find((p) => p.id === colId);
+    if (hit) return hit.label;
+  }
+  if (colId.startsWith('parsed:')) return colId.replace('parsed:', '').replace(/_/g, ' ');
+  if (colId.startsWith('sync:')) return colId.replace('sync:', '').replace(/_/g, ' ');
+  return colId;
+}
+
+function formatParsedFieldForWorkbench(ln: CommercialLineupLine, field: string): string {
+  const v = (ln as Record<string, unknown>)[field];
+  if (v == null) return '—';
+  if (Array.isArray(v)) return v.length ? JSON.stringify(v) : '—';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+
+function formatSyncFieldForWorkbench(ln: CommercialLineupLine, field: string): string {
+  const v = (ln as Record<string, unknown>)[field];
+  if (v == null) return '—';
+  if (typeof v === 'boolean') return v ? 'yes' : 'no';
+  return String(v);
 }
 
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
@@ -193,13 +293,18 @@ function lineupProductLabel(ln: CommercialLineupLine): string {
 }
 
 function lineupCustomerCell(ln: CommercialLineupLine): string {
+  if (ln.staging_open_channel) {
+    const route = ln.channel_route_uploaded_cell?.trim();
+    if (route) return `Open Channel · ${route} (Unassigned)`;
+    return 'Open Channel (Unassigned)';
+  }
   if (ln.customer_id != null) {
     const bits = [ln.customer_code, ln.customer_name].filter((x) => x?.trim());
     if (bits.length) return bits.join(' — ');
   }
   const t = ln.customer_token?.trim();
-  if (t) return `${t} (unresolved)`;
-  return '—';
+  if (t) return `${t} (Unresolved)`;
+  return 'Unassigned';
 }
 
 function lineupDistributorCell(ln: CommercialLineupLine): string {
@@ -208,13 +313,14 @@ function lineupDistributorCell(ln: CommercialLineupLine): string {
     if (bits.length) return bits.join(' — ');
   }
   const t = (ln.distributor_token_raw ?? '').trim();
-  if (t) return `${t} (unresolved)`;
-  return '—';
+  if (t) return `${t} (Unresolved)`;
+  return 'Unassigned';
 }
 
 function lineupIssuesCell(ln: CommercialLineupLine): string {
   const bits = [...(ln.diagnostic_codes || [])];
-  if (ln.sync_skip_reason) bits.push(`sync preview: ${ln.sync_skip_reason}`);
+  if (ln.sync_skip_detail) bits.push(ln.sync_skip_detail);
+  else if (ln.sync_skip_reason) bits.push(`sync preview: ${ln.sync_skip_reason}`);
   return bits.length ? bits.join(', ') : ln.row_status;
 }
 
@@ -255,6 +361,8 @@ function buildCaseLinesSearchParams(opts: {
   const p = new URLSearchParams();
   if (!opts.commercialPlanId) return '';
   p.set('include_sync_eligibility', 'true');
+  p.set('include_product_specs', 'true');
+  p.set('include_line_uploaded', 'true');
   const fc = Number(opts.fallbackCustomerId.trim());
   if (Number.isFinite(fc) && fc > 0) p.set('fallback_customer_id', String(Math.trunc(fc)));
   const fd = Number(opts.fallbackDistributorId.trim());
@@ -310,6 +418,7 @@ function LineupEntityResolutionDialog({
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['lineup-entity-resolution-candidates', caseId] });
       await qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', caseId] });
+      await qc.invalidateQueries({ queryKey: ['lineup-workbench-column-metadata', caseId] });
       await qc.invalidateQueries({ queryKey: ['sync-to-plan-preview'] });
       onApplied();
       onClose();
@@ -458,6 +567,7 @@ type SyncPreview = {
   skipped_unresolved: number;
   skipped_unresolved_product: number;
   skipped_missing_customer: number;
+  skipped_planner_requires_customer?: number;
   skipped_missing_distributor: number;
   skipped_missing_quantity: number;
   skipped_missing_srp: number;
@@ -471,6 +581,7 @@ type SyncResult = {
   skipped_unresolved: number;
   skipped_unresolved_product: number;
   skipped_missing_customer: number;
+  skipped_planner_requires_customer?: number;
   skipped_missing_distributor: number;
   skipped_missing_quantity: number;
   skipped_missing_srp: number;
@@ -613,6 +724,13 @@ function SyncPreviewDialog({
                 Skipped — missing customer (use fallback or fix file): {syncResult.skipped_missing_customer}
               </Typography>
             )}
+            {syncResult.skipped_planner_requires_customer != null &&
+              syncResult.skipped_planner_requires_customer > 0 && (
+                <Typography variant="body2">
+                  Skipped — planner requires customer (Open Channel rows without customer):{' '}
+                  {syncResult.skipped_planner_requires_customer}
+                </Typography>
+              )}
             {syncResult.skipped_missing_distributor != null && syncResult.skipped_missing_distributor > 0 && (
               <Typography variant="body2">
                 Skipped — missing distributor (use fallback or fix file): {syncResult.skipped_missing_distributor}
@@ -708,6 +826,13 @@ function SyncPreviewDialog({
                     Skipped — missing customer: {preview.skipped_missing_customer}
                   </Typography>
                 )}
+                {preview.skipped_planner_requires_customer != null &&
+                  preview.skipped_planner_requires_customer > 0 && (
+                    <Typography variant="body2" color="error">
+                      Blocked — Open Channel / planner requires customer (no fallback):{' '}
+                      {preview.skipped_planner_requires_customer}
+                    </Typography>
+                  )}
                 {preview.skipped_missing_distributor != null && preview.skipped_missing_distributor > 0 && (
                   <Typography variant="body2" color="text.secondary">
                     Skipped — missing distributor: {preview.skipped_missing_distributor}
@@ -1258,12 +1383,6 @@ export function CurrentLineupSection({
     allowZeroQuantity: false,
   });
   const [colMenuAnchor, setColMenuAnchor] = useState<null | HTMLElement>(null);
-  const [visibleCols, setVisibleCols] = useState<Set<WorkbenchColId>>(() => readWorkbenchColumns());
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(WORKBENCH_COL_STORAGE, JSON.stringify([...visibleCols]));
-  }, [visibleCols]);
 
   const { data: cases, isLoading } = useQuery<CommercialLineupCase[]>({
     queryKey: ['commercial-lineup-cases', activePlanId],
@@ -1288,6 +1407,73 @@ export function CurrentLineupSection({
   }, [cases]);
 
   const activeCase = cases?.find((c) => c.id === activeCaseId);
+
+  const hasWorkbenchPlan = Boolean(activeCase?.commercial_plan_id);
+
+  const { data: wbMeta, isSuccess: wbMetaReady } = useQuery<WorkbenchColumnMetadata>({
+    queryKey: ['lineup-workbench-column-metadata', activeCaseId],
+    queryFn: ({ signal }) =>
+      apiGet<WorkbenchColumnMetadata>(
+        `/api/v1/commercial-planner/lineup-cases/${activeCaseId}/workbench-column-metadata`,
+        { signal },
+      ),
+    enabled: activeCaseId != null && activePlanId != null,
+  });
+
+  const allowedWorkbenchIds = useMemo(
+    () => mergeWorkbenchAllowedIds(wbMeta, hasWorkbenchPlan),
+    [wbMeta, hasWorkbenchPlan],
+  );
+
+  const [visibleCols, setVisibleCols] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (activeCaseId == null) {
+      setVisibleCols([]);
+      return;
+    }
+    const stored = readInitialWorkbenchVisible(hasWorkbenchPlan);
+    const baseAllow = mergeWorkbenchAllowedIds(undefined, hasWorkbenchPlan);
+    const prelim = stored.filter((id) => baseAllow.has(id));
+    setVisibleCols(prelim.length ? prelim : defaultWorkbenchVisible(hasWorkbenchPlan));
+  }, [activeCaseId, hasWorkbenchPlan]);
+
+  useEffect(() => {
+    if (activeCaseId == null || !wbMetaReady) return;
+    setVisibleCols((prev) => {
+      const allow = mergeWorkbenchAllowedIds(wbMeta, hasWorkbenchPlan);
+      const next = prev.filter((id) => allow.has(id));
+      return next.length ? next : defaultWorkbenchVisible(hasWorkbenchPlan);
+    });
+  }, [wbMetaReady, wbMeta, activeCaseId, hasWorkbenchPlan]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !visibleCols.length) return;
+    localStorage.setItem(WB_STORAGE_V2, JSON.stringify(visibleCols));
+  }, [visibleCols]);
+
+  const columnMenuEntries = useMemo(() => {
+    const rows: Array<{ kind: 'header'; label: string } | { kind: 'col'; id: string }> = [];
+    const push = (label: string, ids: string[]) => {
+      if (!ids.length) return;
+      rows.push({ kind: 'header', label });
+      for (const id of ids) rows.push({ kind: 'col', id });
+    };
+    push(
+      'Core',
+      CORE_WORKBENCH_IDS.filter((id) => id !== 'sync' || hasWorkbenchPlan),
+    );
+    if (wbMeta?.raw_columns?.length)
+      push(
+        'Raw upload (original column names)',
+        wbMeta.raw_columns.map((c) => `raw:${c}`),
+      );
+    if (wbMeta?.parsed_fields?.length) push('Parsed staging fields', wbMeta.parsed_fields.map((p) => p.id));
+    if (wbMeta?.catalogue_spec_keys?.length)
+      push('Resolved product specs', wbMeta.catalogue_spec_keys.map((k) => `spec:${k}`));
+    if (wbMeta?.sync_fields?.length && hasWorkbenchPlan) push('Sync diagnostics', wbMeta.sync_fields.map((f) => f.id));
+    return rows;
+  }, [wbMeta, hasWorkbenchPlan]);
 
   const caseLinesSuffix = useMemo(
     () =>
@@ -1362,9 +1548,145 @@ export function CurrentLineupSection({
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', activeCaseId] });
+      await qc.invalidateQueries({ queryKey: ['lineup-workbench-column-metadata', activeCaseId] });
       await qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] });
     },
   });
+
+  const visibleColsFiltered = useMemo(
+    () => visibleCols.filter((id) => allowedWorkbenchIds.has(id)),
+    [visibleCols, allowedWorkbenchIds],
+  );
+
+  const wbCellContent = useCallback(
+    (ln: CommercialLineupLine, colId: string, canEdit: boolean): ReactNode => {
+      if (colId === 'num') return ln.source_row_number ?? ln.id;
+      if (colId === 'product')
+        return <Typography variant="body2">{lineupProductLabel(ln)}</Typography>;
+      if (colId === 'sku')
+        return (
+          <Typography variant="body2" fontFamily="monospace">
+            {ln.product_sku ?? ln.sku_raw ?? '—'}
+          </Typography>
+        );
+      if (colId === 'part') return ln.product_part_number ?? ln.part_number_raw ?? '—';
+      if (colId === 'cust') return lineupCustomerCell(ln);
+      if (colId === 'dist') return lineupDistributorCell(ln);
+      if (colId === 'units')
+        return (
+          <LineupLineNumericEditor
+            disabled={!canEdit || patchLineMutation.isPending}
+            initial={ln.quantity_units}
+            width={88}
+            onCommit={(next) => {
+              if (!canEdit || next == null || !activeCaseId) return;
+              if (next === ln.quantity_units) return;
+              patchLineMutation.mutate({
+                caseId: activeCaseId,
+                lineId: ln.id,
+                body: { quantity_units: next },
+              });
+            }}
+          />
+        );
+      if (colId === 'msrp')
+        return (
+          <LineupLineNumericEditor
+            disabled={!canEdit || patchLineMutation.isPending}
+            initial={ln.msrp_local}
+            width={100}
+            onCommit={(next) => {
+              if (!canEdit || next == null || !activeCaseId) return;
+              if (next === ln.msrp_local) return;
+              patchLineMutation.mutate({
+                caseId: activeCaseId,
+                lineId: ln.id,
+                body: { msrp_local: next },
+              });
+            }}
+          />
+        );
+      if (colId === 'promo')
+        return (
+          <LineupLineNumericEditor
+            disabled={!canEdit || patchLineMutation.isPending}
+            initial={ln.promo_price_evidence_local}
+            width={100}
+            onCommit={(next) => {
+              if (!canEdit || next == null || !activeCaseId) return;
+              if (next === ln.promo_price_evidence_local) return;
+              patchLineMutation.mutate({
+                caseId: activeCaseId,
+                lineId: ln.id,
+                body: { promo_price_evidence_local: next },
+              });
+            }}
+          />
+        );
+      if (colId === 'dap')
+        return ln.dap_evidence_local != null ? ln.dap_evidence_local.toLocaleString() : '—';
+      if (colId === 'issues')
+        return <Typography variant="caption">{lineupIssuesCell(ln)}</Typography>;
+      if (colId === 'sync') {
+        return showSyncWorkbenchCol ? (
+          <Stack spacing={0.5}>
+            <Chip
+              size="small"
+              label={ln.sync_eligible ? 'eligible' : 'skipped'}
+              color={
+                ln.sync_eligible
+                  ? ln.sync_ui_severity === 'warning'
+                    ? 'warning'
+                    : 'success'
+                  : ln.sync_ui_severity === 'warning'
+                    ? 'warning'
+                    : 'default'
+              }
+              variant={ln.sync_eligible && ln.sync_ui_severity !== 'warning' ? 'filled' : 'outlined'}
+            />
+            {(ln.sync_skip_detail || (!ln.sync_eligible && ln.sync_skip_reason)) && (
+              <Typography variant="caption" color="text.secondary">
+                {ln.sync_skip_detail ?? ln.sync_skip_reason}
+              </Typography>
+            )}
+          </Stack>
+        ) : (
+          <Typography variant="caption" color="text.secondary">
+            —
+          </Typography>
+        );
+      }
+      if (colId.startsWith('raw:')) {
+        const key = colId.slice(4);
+        const up =
+          ln.uploaded && typeof ln.uploaded === 'object' && !Array.isArray(ln.uploaded)
+            ? (ln.uploaded as Record<string, unknown>)[key]
+            : undefined;
+        if (up == null || (typeof up === 'string' && !up.trim())) return '—';
+        return String(up);
+      }
+      if (colId.startsWith('parsed:')) {
+        const field = colId.slice(7);
+        return formatParsedFieldForWorkbench(ln, field);
+      }
+      if (colId.startsWith('spec:')) {
+        const k = colId.slice(5);
+        const specs =
+          ln.product_specs && typeof ln.product_specs === 'object' && !Array.isArray(ln.product_specs)
+            ? (ln.product_specs as Record<string, unknown>)
+            : {};
+        const v = specs[k];
+        if (v == null || (typeof v === 'string' && !v.trim())) return '—';
+        return String(v);
+      }
+      if (colId.startsWith('sync:')) {
+        const field = colId.slice(5);
+        return formatSyncFieldForWorkbench(ln, field);
+      }
+      return '—';
+    },
+    [activeCaseId, patchLineMutation, showSyncWorkbenchCol],
+  );
 
   const statusMutation = useMutation({
     mutationFn: ({
@@ -1540,29 +1862,36 @@ export function CurrentLineupSection({
               </Stack>
             </Stack>
             <Menu anchorEl={colMenuAnchor} open={Boolean(colMenuAnchor)} onClose={() => setColMenuAnchor(null)}>
-              {WORKBENCH_COL_IDS.filter((id) => id !== 'sync' || activeCase.commercial_plan_id).map((id) => (
-                <MenuItem key={id} disableRipple sx={{ py: 0 }}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        size="small"
-                        checked={visibleCols.has(id)}
-                        onChange={() => {
-                          setVisibleCols((prev) => {
-                            const n = new Set(prev);
-                            if (n.has(id)) n.delete(id);
-                            else n.add(id);
-                            if (n.size === 0) return prev;
-                            return n;
-                          });
-                        }}
-                      />
-                    }
-                    label={WORKBENCH_COL_LABELS[id]}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </MenuItem>
-              ))}
+              {columnMenuEntries.map((entry, idx) =>
+                entry.kind === 'header' ? (
+                  <ListSubheader key={`h-${entry.label}-${idx}`} sx={{ lineHeight: 2 }}>
+                    {entry.label}
+                  </ListSubheader>
+                ) : (
+                  <MenuItem key={entry.id} disableRipple sx={{ py: 0 }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={visibleCols.includes(entry.id)}
+                          onChange={() => {
+                            setVisibleCols((prev) => {
+                              const ix = prev.indexOf(entry.id);
+                              if (ix >= 0) {
+                                if (prev.length <= 1) return prev;
+                                return prev.filter((_, i) => i !== ix);
+                              }
+                              return [...prev, entry.id];
+                            });
+                          }}
+                        />
+                      }
+                      label={workbenchColumnLabel(entry.id, wbMeta)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </MenuItem>
+                ),
+              )}
             </Menu>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
               Case lifecycle: draft → validated → pending review → accepted → sync creates planner lines. Resolve
@@ -1633,133 +1962,19 @@ export function CurrentLineupSection({
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      {visibleCols.has('num') && <TableCell>#</TableCell>}
-                      {visibleCols.has('product') && <TableCell>Model / product</TableCell>}
-                      {visibleCols.has('sku') && <TableCell>SKU</TableCell>}
-                      {visibleCols.has('part') && <TableCell>Part #</TableCell>}
-                      {visibleCols.has('cust') && <TableCell>Customer</TableCell>}
-                      {visibleCols.has('dist') && <TableCell>Distributor</TableCell>}
-                      {visibleCols.has('units') && <TableCell>Units</TableCell>}
-                      {visibleCols.has('msrp') && <TableCell>MSRP / list</TableCell>}
-                      {visibleCols.has('promo') && <TableCell>Promo evidence</TableCell>}
-                      {visibleCols.has('dap') && <TableCell>DAP evidence</TableCell>}
-                      {visibleCols.has('issues') && <TableCell>Status / issues</TableCell>}
-                      {visibleCols.has('sync') && <TableCell>Sync preview</TableCell>}
+                      {visibleColsFiltered.map((colId) => (
+                        <TableCell key={colId}>{workbenchColumnLabel(colId, wbMeta)}</TableCell>
+                      ))}
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {workingLines.map((ln) => {
                       const canEdit = activeCase.commercial_status === 'draft_imported';
-                      const issues = lineupIssuesCell(ln);
                       return (
                         <TableRow key={ln.id}>
-                          {visibleCols.has('num') && (
-                            <TableCell>{ln.source_row_number ?? ln.id}</TableCell>
-                          )}
-                          {visibleCols.has('product') && (
-                            <TableCell>
-                              <Typography variant="body2">{lineupProductLabel(ln)}</Typography>
-                            </TableCell>
-                          )}
-                          {visibleCols.has('sku') && (
-                            <TableCell>
-                              <Typography variant="body2" fontFamily="monospace">
-                                {ln.product_sku ?? ln.sku_raw ?? '—'}
-                              </Typography>
-                            </TableCell>
-                          )}
-                          {visibleCols.has('part') && (
-                            <TableCell>{ln.product_part_number ?? ln.part_number_raw ?? '—'}</TableCell>
-                          )}
-                          {visibleCols.has('cust') && <TableCell>{lineupCustomerCell(ln)}</TableCell>}
-                          {visibleCols.has('dist') && <TableCell>{lineupDistributorCell(ln)}</TableCell>}
-                          {visibleCols.has('units') && (
-                            <TableCell>
-                              <LineupLineNumericEditor
-                                disabled={!canEdit || patchLineMutation.isPending}
-                                initial={ln.quantity_units}
-                                width={88}
-                                onCommit={(next) => {
-                                  if (!canEdit || next == null || !activeCaseId) return;
-                                  if (next === ln.quantity_units) return;
-                                  patchLineMutation.mutate({
-                                    caseId: activeCaseId,
-                                    lineId: ln.id,
-                                    body: { quantity_units: next },
-                                  });
-                                }}
-                              />
-                            </TableCell>
-                          )}
-                          {visibleCols.has('msrp') && (
-                            <TableCell>
-                              <LineupLineNumericEditor
-                                disabled={!canEdit || patchLineMutation.isPending}
-                                initial={ln.msrp_local}
-                                width={100}
-                                onCommit={(next) => {
-                                  if (!canEdit || next == null || !activeCaseId) return;
-                                  if (next === ln.msrp_local) return;
-                                  patchLineMutation.mutate({
-                                    caseId: activeCaseId,
-                                    lineId: ln.id,
-                                    body: { msrp_local: next },
-                                  });
-                                }}
-                              />
-                            </TableCell>
-                          )}
-                          {visibleCols.has('promo') && (
-                            <TableCell>
-                              <LineupLineNumericEditor
-                                disabled={!canEdit || patchLineMutation.isPending}
-                                initial={ln.promo_price_evidence_local}
-                                width={100}
-                                onCommit={(next) => {
-                                  if (!canEdit || next == null || !activeCaseId) return;
-                                  if (next === ln.promo_price_evidence_local) return;
-                                  patchLineMutation.mutate({
-                                    caseId: activeCaseId,
-                                    lineId: ln.id,
-                                    body: { promo_price_evidence_local: next },
-                                  });
-                                }}
-                              />
-                            </TableCell>
-                          )}
-                          {visibleCols.has('dap') && (
-                            <TableCell>
-                              {ln.dap_evidence_local != null ? ln.dap_evidence_local.toLocaleString() : '—'}
-                            </TableCell>
-                          )}
-                          {visibleCols.has('issues') && (
-                            <TableCell>
-                              <Typography variant="caption">{issues}</Typography>
-                            </TableCell>
-                          )}
-                          {visibleCols.has('sync') && (
-                            <TableCell>
-                              {showSyncWorkbenchCol ? (
-                                <Stack spacing={0.5}>
-                                  <Chip
-                                    size="small"
-                                    label={ln.sync_eligible ? 'eligible' : 'skipped'}
-                                    color={ln.sync_eligible ? 'success' : 'default'}
-                                    variant={ln.sync_eligible ? 'filled' : 'outlined'}
-                                  />
-                                  {!ln.sync_eligible && ln.sync_skip_reason && (
-                                    <Typography variant="caption" color="text.secondary">
-                                      {ln.sync_skip_reason}
-                                    </Typography>
-                                  )}
-                                </Stack>
-                              ) : (
-                                <Typography variant="caption" color="text.secondary">
-                                  —
-                                </Typography>
-                              )}
-                            </TableCell>
-                          )}
+                          {visibleColsFiltered.map((colId) => (
+                            <TableCell key={`${ln.id}-${colId}`}>{wbCellContent(ln, colId, canEdit)}</TableCell>
+                          ))}
                         </TableRow>
                       );
                     })}

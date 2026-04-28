@@ -1488,6 +1488,7 @@ def _make_lineup_line(
     sku_raw=None,
     part_number_raw=None,
     model_raw=None,
+    base_unit_raw=None,
     rebate_pct_evidence=None,
     distributor_margin_pct_evidence=None,
     vat_pct_evidence=None,
@@ -1512,6 +1513,7 @@ def _make_lineup_line(
         sku_raw=sku_raw,
         part_number_raw=part_number_raw,
         model_raw=model_raw,
+        base_unit_raw=base_unit_raw,
         rebate_pct_evidence=rebate_pct_evidence,
         distributor_margin_pct_evidence=distributor_margin_pct_evidence,
         vat_pct_evidence=vat_pct_evidence,
@@ -2002,7 +2004,7 @@ def test_list_lineup_lines_includes_sync_eligibility_when_plan_linked():
         quantity_units=1.0,
         msrp_local=100.0,
     )
-    row_tuple = (ln, "SKU1", "Name", "PN1", "M1", "SM1", "C1", "Cust", "D1", "Dist")
+    row_tuple = (ln, "SKU1", "Name", "PN1", "M1", "SM1", {}, "C1", "Cust", "D1", "Dist")
 
     exec_n = {"n": 0}
 
@@ -2030,3 +2032,104 @@ def test_list_lineup_lines_includes_sync_eligibility_when_plan_linked():
     assert len(lines) == 1
     assert lines[0]["sync_eligible"] is True
     assert lines[0]["sync_skip_reason"] is None
+
+
+def test_list_lineup_lines_include_line_uploaded():
+    case = _make_case(id=58, commercial_plan_id=None, commercial_status="draft_imported")
+    ln = _make_lineup_line(
+        id=1,
+        case_id=58,
+        product_id=None,
+        customer_id=None,
+        distributor_id=None,
+        raw_row_payload={"uploaded": {"Dealer buy": "99"}},
+    )
+    row_tuple = (ln, None, None, None, None, None, {}, None, None, None, None)
+
+    async def _execute(stmt):
+        res = MagicMock()
+        res.all.return_value = [row_tuple]
+        return res
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        sess.execute = AsyncMock(side_effect=_execute)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get(
+        "/api/v1/commercial-planner/lineup-cases/58/lines?include_line_uploaded=true",
+    )
+    assert r.status_code == 200
+    assert r.json()["lines"][0]["uploaded"]["Dealer buy"] == "99"
+
+
+def test_workbench_column_metadata_includes_raw_upload_headers():
+    case = _make_case(id=60, commercial_plan_id=5, commercial_status="draft_imported")
+    ln = _make_lineup_line(
+        id=1,
+        case_id=60,
+        raw_row_payload={"uploaded": {"VAT %": "15"}},
+    )
+    mr = MagicMock()
+    mr.scalars.return_value.all.return_value = [ln]
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        sess.execute = AsyncMock(return_value=mr)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/lineup-cases/60/workbench-column-metadata")
+    assert r.status_code == 200
+    body = r.json()
+    assert "VAT %" in body["raw_columns"]
+    assert any(p["field"] == "dap_evidence_local" for p in body["parsed_fields"])
+
+
+def test_sync_preview_planner_requires_customer_bucket():
+    from app.models.commercial_lineup import CommercialLineupCase
+    from app.models.commercial_planner import CommercialPlan
+
+    case = _make_case(id=61, commercial_plan_id=5, commercial_status="accepted")
+    open_ln = _make_lineup_line(
+        id=1,
+        case_id=61,
+        product_id=10,
+        customer_id=None,
+        distributor_id=3,
+        msrp_local=50.0,
+        quantity_units=1.0,
+        raw_row_payload={"staging_open_channel": True},
+    )
+
+    async def _get(model, pk):
+        if model is CommercialLineupCase and pk == 61:
+            return case
+        if model is CommercialPlan and pk == 5:
+            return SimpleNamespace(id=5)
+        return None
+
+    async def _exec(stmt):
+        res = MagicMock()
+        s = str(stmt)
+        if "commercial_lineup_line" in s.lower():
+            res.scalars.return_value.all.return_value = [open_ln]
+        else:
+            res.all.return_value = []
+        return res
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(side_effect=_get)
+        sess.execute = AsyncMock(side_effect=_exec)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get(
+        "/api/v1/commercial-planner/lineup-cases/61/sync-to-plan/preview?commercial_plan_id=5",
+    )
+    assert r.status_code == 200
+    assert r.json().get("skipped_planner_requires_customer") == 1

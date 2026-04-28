@@ -12,6 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupLine
 
+from app.services.commercial_planner.lineup_open_channel import (
+    lineup_line_is_open_channel_staging,
+    managed_customer_token_unresolved,
+)
 
 RESOLUTION_ALLOWED_CASE_STATUSES: frozenset[str] = frozenset(
     {"draft_imported", "validated", "pending_review"}
@@ -50,7 +54,7 @@ def refresh_diagnostics_after_entity_update(ln: CommercialLineupLine) -> None:
     codes: list[str] = []
     if ln.product_id is None:
         codes.append("unresolved_product")
-    if (ln.customer_token or "").strip() and ln.customer_id is None:
+    if managed_customer_token_unresolved(ln):
         codes.append("unknown_customer")
     dt = distributor_token_from_line(ln)
     if dt and ln.distributor_id is None:
@@ -81,6 +85,8 @@ async def collect_entity_resolution_candidates(
 
     for ln in lines:
         if ln.customer_id is None:
+            if lineup_line_is_open_channel_staging(ln):
+                continue
             tok = normalize_entity_token(ln.customer_token)
             if tok:
                 entry = customer_map.setdefault(

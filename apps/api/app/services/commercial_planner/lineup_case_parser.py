@@ -28,6 +28,11 @@ from app.services.commercial_planner.current_lineup_seed import (
     ensure_current_lineup_import_seed,
 )
 from app.services.commercial_planner.lineup_header_mapping import build_commercial_lineup_column_map
+from app.services.commercial_planner.lineup_open_channel import (
+    CHANNEL_ROUTE_UPLOADED_CELL_KEY,
+    STAGING_OPEN_CHANNEL_KEY,
+    extract_distributor_name_from_channel_customer_cell,
+)
 
 # ── Header detection (row scan) ─────────────────────────────────────────────────
 
@@ -233,6 +238,12 @@ async def parse_current_lineup_file(
             distributor_token_val = _safe_str(raw.get("distributor_token"))
             base_unit_raw = _safe_str(raw.get("base_unit_raw"))
 
+            channel_dist_hint = extract_distributor_name_from_channel_customer_cell(customer_token_val)
+            open_channel_row = channel_dist_hint is not None
+            channel_uploaded_cell = customer_token_val if open_channel_row else None
+            if open_channel_row:
+                customer_token_val = None
+
             resolved_product: DimProduct | None = None
             for lookup_val in (sku_raw, part_number_raw, model_raw):
                 if lookup_val and lookup_val.lower() in product_map:
@@ -256,6 +267,16 @@ async def parse_current_lineup_file(
                 resolved_distributor = distributor_map.get(distributor_token_val.lower())
                 if resolved_distributor is None:
                     diag.append("unknown_distributor")
+            elif open_channel_row and channel_dist_hint:
+                resolved_distributor = distributor_map.get(channel_dist_hint.lower())
+                if resolved_distributor is None:
+                    diag.append("unknown_distributor")
+
+            uploaded_by_header: dict[str, str] = {}
+            for col in data_df.columns:
+                cell = _safe_str(row.get(col))
+                if cell:
+                    uploaded_by_header[str(col).strip()] = cell
 
             payload_keys = {
                 "sku_raw", "part_number_raw", "model_raw", "customer_token",
@@ -264,11 +285,18 @@ async def parse_current_lineup_file(
                 "rebate_pct_evidence", "distributor_margin_pct_evidence",
                 "vat_pct_evidence", "base_unit_raw",
             }
-            raw_row_payload = {
+            raw_row_payload: dict[str, Any] = {
                 dest: _safe_str(val)
                 for dest, val in raw.items()
                 if dest in payload_keys and val is not None
             }
+            raw_row_payload["uploaded"] = uploaded_by_header
+            if open_channel_row:
+                raw_row_payload[STAGING_OPEN_CHANNEL_KEY] = True
+                if channel_uploaded_cell:
+                    raw_row_payload[CHANNEL_ROUTE_UPLOADED_CELL_KEY] = channel_uploaded_cell
+                if channel_uploaded_cell:
+                    raw_row_payload["customer_token"] = channel_uploaded_cell
 
             line = CommercialLineupLine(
                 case_id=case_id,
