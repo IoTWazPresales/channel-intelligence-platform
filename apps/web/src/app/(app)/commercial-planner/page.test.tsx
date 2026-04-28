@@ -456,8 +456,9 @@ describe('CommercialPlannerPage — QA polish', () => {
     const { user } = renderPage();
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     await user.click(await screen.findByTestId('column-manager-btn'));
-    expect(await screen.findByText('Column visibility')).toBeInTheDocument();
-    expect(await screen.findByText('Product catalogue (optional)')).toBeInTheDocument();
+    const modal = await screen.findByTestId('column-selector-modal');
+    expect(modal).toHaveTextContent('Planner line columns');
+    expect(modal).toHaveTextContent('Product catalogue (optional)');
     expect(screen.getByTestId('col-toggle-promo_mix_pct')).toBeInTheDocument();
   });
 
@@ -1512,10 +1513,10 @@ vi.mock('@/features/commercial-planner/ColumnSelectorModal', () => {
         <div
           data-testid="column-selector-modal"
           role="dialog"
-          aria-label="Column visibility"
+          aria-label="Planner line columns"
           data-column-meta-total={columnMeta?.total_products ?? ''}
         >
-          <span>Column visibility</span>
+          <span>Planner line columns</span>
           <span>Product catalogue (optional)</span>
           <span data-testid="col-modal-locked-note">Locked columns cannot be hidden</span>
           <button data-testid="col-modal-preset-product-spec" onClick={() => onPreset('product_spec')}>
@@ -1593,7 +1594,7 @@ describe('V3: Column selector modal', () => {
     await userEvent.click(btn);
     const modal = await screen.findByTestId('column-selector-modal');
     expect(modal).toBeInTheDocument();
-    expect(modal).toHaveTextContent('Column visibility');
+    expect(modal).toHaveTextContent('Planner line columns');
   });
 
   it('shows locked columns note in modal', async () => {

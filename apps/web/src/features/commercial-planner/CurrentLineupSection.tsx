@@ -32,7 +32,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { EntitySearchAutocomplete } from './EntitySearchAutocomplete';
@@ -111,7 +111,16 @@ type CommercialLineupLine = {
   sync_skip_reason?: string | null;
   sync_skip_detail?: string | null;
   sync_ui_severity?: string | null;
-  base_unit_raw?: string | null;
+  catalogue_category?: string | null;
+  catalogue_form_factor?: string | null;
+  catalogue_product_line?: string | null;
+  catalogue_series_name?: string | null;
+  catalogue_lifecycle_status?: string | null;
+  catalogue_business_unit?: string | null;
+  catalogue_marketing_name?: string | null;
+  catalogue_ean?: string | null;
+  catalogue_upc?: string | null;
+  sync_customer_resolution_note?: string | null;
 };
 
 type CaseLinesResponse = {
@@ -123,6 +132,7 @@ type WorkbenchColumnMetadata = {
   case_id: number;
   raw_columns: string[];
   parsed_fields: { id: string; group: string; label: string; field: string }[];
+  catalogue_product_fields?: { id: string; group: string; label: string; field: string }[];
   catalogue_spec_keys: string[];
   sync_fields: { id: string; group: string; label: string; field: string }[];
 };
@@ -161,6 +171,17 @@ const CORE_WORKBENCH_LABELS: Record<CoreWorkbenchId, string> = {
   issues: 'Status / issues',
   sync: 'Sync preview (plan)',
 };
+
+/** Preserve original uploaded header text; default-visible when present for Processor / CPU. */
+function pickDefaultProcessorRawColumnIds(rawColumns: string[]): string[] {
+  const out: string[] = [];
+  const byLower = new Map(rawColumns.map((c) => [c.toLowerCase(), c]));
+  for (const pref of ['cpu', 'processor']) {
+    const exact = byLower.get(pref);
+    if (exact) out.push(`raw:${exact}`);
+  }
+  return out;
+}
 
 function defaultWorkbenchVisible(hasPlan: boolean): string[] {
   const base = [
@@ -201,6 +222,8 @@ function mergeWorkbenchAllowedIds(meta: WorkbenchColumnMetadata | undefined, has
   for (const p of parsed) s.add(p.id);
   const specKeys = Array.isArray(meta.catalogue_spec_keys) ? meta.catalogue_spec_keys : [];
   for (const k of specKeys) s.add(`spec:${k}`);
+  const catFs = Array.isArray(meta.catalogue_product_fields) ? meta.catalogue_product_fields : [];
+  for (const c of catFs) s.add(c.id);
   const syncFs = Array.isArray(meta.sync_fields) ? meta.sync_fields : [];
   for (const f of syncFs) s.add(f.id);
   return s;
@@ -231,7 +254,16 @@ function workbenchColumnLabel(colId: string, meta: WorkbenchColumnMetadata | und
     return CORE_WORKBENCH_LABELS[colId as CoreWorkbenchId];
   }
   if (colId.startsWith('raw:')) return colId.slice(4);
-  if (colId.startsWith('spec:')) return `Spec: ${colId.slice(5)}`;
+  if (colId.startsWith('spec:') && meta) {
+    const k = colId.slice(5);
+    return `Spec: ${k}`;
+  }
+  if (colId.startsWith('cat:') && meta) {
+    const cats = Array.isArray(meta.catalogue_product_fields) ? meta.catalogue_product_fields : [];
+    const hit = cats.find((p) => p.id === colId);
+    if (hit) return hit.label;
+  }
+  if (colId.startsWith('cat:')) return colId.replace('cat:', '').replace(/_/g, ' ');
   if (colId.startsWith('parsed:') && meta) {
     const parsed = Array.isArray(meta.parsed_fields) ? meta.parsed_fields : [];
     const hit = parsed.find((p) => p.id === colId);
@@ -294,9 +326,14 @@ function lineupProductLabel(ln: CommercialLineupLine): string {
 
 function lineupCustomerCell(ln: CommercialLineupLine): string {
   if (ln.staging_open_channel) {
+    const code = (ln.customer_code ?? '').trim().toUpperCase();
+    if (ln.customer_id != null && code === 'OPEN_CHANNEL') {
+      const bits = [ln.customer_code, ln.customer_name].filter((x) => x?.trim());
+      return bits.length ? `${bits.join(' — ')} (Open Channel account)` : 'Open Channel account';
+    }
     const route = ln.channel_route_uploaded_cell?.trim();
-    if (route) return `Open Channel · ${route} (Unassigned)`;
-    return 'Open Channel (Unassigned)';
+    if (route) return `Open Channel · ${route} (end customer unassigned)`;
+    return 'Open Channel (end customer unassigned)';
   }
   if (ln.customer_id != null) {
     const bits = [ln.customer_code, ln.customer_name].filter((x) => x?.trim());
@@ -567,7 +604,7 @@ type SyncPreview = {
   skipped_unresolved: number;
   skipped_unresolved_product: number;
   skipped_missing_customer: number;
-  skipped_planner_requires_customer?: number;
+  skipped_open_channel_account_missing?: number;
   skipped_missing_distributor: number;
   skipped_missing_quantity: number;
   skipped_missing_srp: number;
@@ -581,7 +618,7 @@ type SyncResult = {
   skipped_unresolved: number;
   skipped_unresolved_product: number;
   skipped_missing_customer: number;
-  skipped_planner_requires_customer?: number;
+  skipped_open_channel_account_missing?: number;
   skipped_missing_distributor: number;
   skipped_missing_quantity: number;
   skipped_missing_srp: number;
@@ -724,16 +761,17 @@ function SyncPreviewDialog({
                 Skipped — missing customer (use fallback or fix file): {syncResult.skipped_missing_customer}
               </Typography>
             )}
-            {syncResult.skipped_planner_requires_customer != null &&
-              syncResult.skipped_planner_requires_customer > 0 && (
+            {syncResult.skipped_open_channel_account_missing != null &&
+              syncResult.skipped_open_channel_account_missing > 0 && (
                 <Typography variant="body2">
-                  Skipped — planner requires customer (Open Channel rows without customer):{' '}
-                  {syncResult.skipped_planner_requires_customer}
+                  Skipped — Open Channel account missing (seed dim_customer code OPEN_CHANNEL):{' '}
+                  {syncResult.skipped_open_channel_account_missing}
                 </Typography>
               )}
             {syncResult.skipped_missing_distributor != null && syncResult.skipped_missing_distributor > 0 && (
               <Typography variant="body2">
-                Skipped — missing distributor (use fallback or fix file): {syncResult.skipped_missing_distributor}
+                Skipped — distributor required for sync (CommercialPlanLine.distributor_id is not nullable; use
+                fallback or map distributor): {syncResult.skipped_missing_distributor}
               </Typography>
             )}
             {syncResult.skipped_missing_quantity != null && syncResult.skipped_missing_quantity > 0 && (
@@ -826,16 +864,17 @@ function SyncPreviewDialog({
                     Skipped — missing customer: {preview.skipped_missing_customer}
                   </Typography>
                 )}
-                {preview.skipped_planner_requires_customer != null &&
-                  preview.skipped_planner_requires_customer > 0 && (
+                {preview.skipped_open_channel_account_missing != null &&
+                  preview.skipped_open_channel_account_missing > 0 && (
                     <Typography variant="body2" color="error">
-                      Blocked — Open Channel / planner requires customer (no fallback):{' '}
-                      {preview.skipped_planner_requires_customer}
+                      Blocked — Open Channel account missing (controlled dim_customer OPEN_CHANNEL not found; run
+                      seed): {preview.skipped_open_channel_account_missing}
                     </Typography>
                   )}
                 {preview.skipped_missing_distributor != null && preview.skipped_missing_distributor > 0 && (
-                  <Typography variant="body2" color="text.secondary">
-                    Skipped — missing distributor: {preview.skipped_missing_distributor}
+                  <Typography variant="body2" color="error">
+                    Blocked — distributor required for sync (CommercialPlanLine.distributor_id is not nullable; map
+                    distributor or use fallback): {preview.skipped_missing_distributor}
                   </Typography>
                 )}
                 {preview.skipped_missing_quantity != null && preview.skipped_missing_quantity > 0 && (
@@ -1426,6 +1465,7 @@ export function CurrentLineupSection({
   );
 
   const [visibleCols, setVisibleCols] = useState<string[]>([]);
+  const processorRawInjectedKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (activeCaseId == null) {
@@ -1446,6 +1486,28 @@ export function CurrentLineupSection({
       return next.length ? next : defaultWorkbenchVisible(hasWorkbenchPlan);
     });
   }, [wbMetaReady, wbMeta, activeCaseId, hasWorkbenchPlan]);
+
+  useEffect(() => {
+    if (activeCaseId == null || !wbMetaReady || !wbMeta) return;
+    const rawCols = wbMeta.raw_columns ?? [];
+    const digest = `${activeCaseId}:${rawCols.join('\u0001')}`;
+    if (processorRawInjectedKey.current === digest) return;
+    const hints = pickDefaultProcessorRawColumnIds(rawCols);
+    processorRawInjectedKey.current = digest;
+    if (!hints.length) return;
+    setVisibleCols((prev) => {
+      const allow = mergeWorkbenchAllowedIds(wbMeta, hasWorkbenchPlan);
+      const toAdd = hints.filter((id) => allow.has(id) && !prev.includes(id));
+      if (!toAdd.length) return prev;
+      const dapIdx = prev.indexOf('dap');
+      if (dapIdx >= 0) {
+        const copy = [...prev];
+        copy.splice(dapIdx, 0, ...toAdd);
+        return copy;
+      }
+      return [...toAdd, ...prev];
+    });
+  }, [activeCaseId, wbMetaReady, wbMeta, hasWorkbenchPlan]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !visibleCols.length) return;
@@ -1469,8 +1531,13 @@ export function CurrentLineupSection({
         wbMeta.raw_columns.map((c) => `raw:${c}`),
       );
     if (wbMeta?.parsed_fields?.length) push('Parsed staging fields', wbMeta.parsed_fields.map((p) => p.id));
+    if (wbMeta?.catalogue_product_fields?.length)
+      push(
+        'Matched catalogue / product fields',
+        wbMeta.catalogue_product_fields.map((p) => p.id),
+      );
     if (wbMeta?.catalogue_spec_keys?.length)
-      push('Resolved product specs', wbMeta.catalogue_spec_keys.map((k) => `spec:${k}`));
+      push('Resolved product specs (specs_json keys)', wbMeta.catalogue_spec_keys.map((k) => `spec:${k}`));
     if (wbMeta?.sync_fields?.length && hasWorkbenchPlan) push('Sync diagnostics', wbMeta.sync_fields.map((f) => f.id));
     return rows;
   }, [wbMeta, hasWorkbenchPlan]);
@@ -1667,6 +1734,10 @@ export function CurrentLineupSection({
       }
       if (colId.startsWith('parsed:')) {
         const field = colId.slice(7);
+        return formatParsedFieldForWorkbench(ln, field);
+      }
+      if (colId.startsWith('cat:')) {
+        const field = colId.slice(4);
         return formatParsedFieldForWorkbench(ln, field);
       }
       if (colId.startsWith('spec:')) {

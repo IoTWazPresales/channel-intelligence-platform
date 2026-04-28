@@ -152,6 +152,17 @@ def run(session: Session, *, full_demo: bool = False) -> None:
     session.add_all(regions + channels + distributors)
     session.flush()
 
+    if not session.execute(select(DimCustomer.id).where(DimCustomer.code == "OPEN_CHANNEL")).scalar_one_or_none():
+        session.add(
+            DimCustomer(
+                code="OPEN_CHANNEL",
+                name="Open Channel",
+                region_id=None,
+                channel_id=None,
+            )
+        )
+        session.flush()
+
     if not full_demo:
         session.commit()
         return

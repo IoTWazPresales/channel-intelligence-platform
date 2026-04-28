@@ -123,9 +123,12 @@ type ProductPick = {
   sales_model_name: string | null;
   model_name: string | null;
   category: string | null;
+  form_factor?: string | null;
   product_line: string | null;
   series_name: string | null;
   lifecycle_status: string | null;
+  business_unit?: string | null;
+  specs_preview?: Record<string, string> | null;
 };
 
 type CustomerListResponse = { items: CustomerPick[] };
@@ -593,6 +596,29 @@ async function fetchProducts(q: string, signal: AbortSignal): Promise<ProductPic
     { signal }
   );
   return res.items;
+}
+
+function formatProductSearchOptionLabel(o: ProductPick): string {
+  const primary = [o.sku?.trim() || '—', o.sales_model_name || o.model_name || o.name || '']
+    .filter((x) => String(x).trim())
+    .join(' · ');
+  const bits: string[] = [];
+  if (o.part_number?.trim()) bits.push(`Part # ${o.part_number.trim()}`);
+  if (o.category?.trim()) bits.push(o.category.trim());
+  if (o.form_factor?.trim()) bits.push(o.form_factor.trim());
+  if (o.product_line?.trim()) bits.push(`Product line: ${o.product_line.trim()}`);
+  if (o.series_name?.trim()) bits.push(`Series: ${o.series_name.trim()}`);
+  if (o.lifecycle_status?.trim()) bits.push(`Lifecycle: ${o.lifecycle_status.trim()}`);
+  if (o.business_unit?.trim()) bits.push(`BU: ${o.business_unit.trim()}`);
+  if (o.specs_preview && Object.keys(o.specs_preview).length) {
+    const specLine = Object.entries(o.specs_preview)
+      .filter(([, v]) => v)
+      .slice(0, 4)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(' · ');
+    if (specLine) bits.push(specLine);
+  }
+  return bits.length ? `${primary} — ${bits.join(' · ')}` : primary;
 }
 
 function lineEntitySummary(line: PlanLine | undefined): string {
@@ -1857,7 +1883,7 @@ export default function CommercialPlannerPage() {
             onClick={() => setColumnSelectorOpen(true)}
             disabled={activePlanId == null}
           >
-            Columns
+            Planner line columns
           </Button>
         </Stack>
 
@@ -2146,12 +2172,73 @@ export default function CommercialPlannerPage() {
               value={lineProduct}
               onChange={setLineProduct}
               fetchOptions={fetchProducts}
-              getOptionLabel={(o) =>
-                `${o.sku || '—'} · ${o.sales_model_name || o.model_name || o.name || ''}${o.part_number ? ` (${o.part_number})` : ''}`.trim()
-              }
+              getOptionLabel={(o) => formatProductSearchOptionLabel(o)}
               disabled={createLine.isPending}
-              helperText="Type SKU or product name to search the catalog."
+              helperText="Search by SKU, model, sales model, part number, or name — pick the row that matches your catalogue."
             />
+            {lineProduct != null ? (
+              <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }} data-testid="add-line-product-summary">
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                  Selected product (review before save)
+                </Typography>
+                <Typography variant="body2">
+                  <strong>SKU:</strong> {lineProduct.sku}
+                </Typography>
+                {lineProduct.part_number?.trim() ? (
+                  <Typography variant="body2">
+                    <strong>Part #:</strong> {lineProduct.part_number}
+                  </Typography>
+                ) : null}
+                <Typography variant="body2">
+                  <strong>Name:</strong> {lineProduct.name}
+                </Typography>
+                {(lineProduct.sales_model_name || lineProduct.model_name) && (
+                  <Typography variant="body2">
+                    <strong>Model / sales model:</strong>{' '}
+                    {[lineProduct.sales_model_name, lineProduct.model_name].filter(Boolean).join(' · ')}
+                  </Typography>
+                )}
+                {lineProduct.category?.trim() ? (
+                  <Typography variant="body2">
+                    <strong>Category:</strong> {lineProduct.category}
+                  </Typography>
+                ) : null}
+                {lineProduct.form_factor?.trim() ? (
+                  <Typography variant="body2">
+                    <strong>Form factor:</strong> {lineProduct.form_factor}
+                  </Typography>
+                ) : null}
+                {lineProduct.product_line?.trim() ? (
+                  <Typography variant="body2">
+                    <strong>Product line:</strong> {lineProduct.product_line}
+                  </Typography>
+                ) : null}
+                {lineProduct.series_name?.trim() ? (
+                  <Typography variant="body2">
+                    <strong>Series:</strong> {lineProduct.series_name}
+                  </Typography>
+                ) : null}
+                {lineProduct.lifecycle_status?.trim() ? (
+                  <Typography variant="body2">
+                    <strong>Lifecycle:</strong> {lineProduct.lifecycle_status}
+                  </Typography>
+                ) : null}
+                {lineProduct.business_unit?.trim() ? (
+                  <Typography variant="body2">
+                    <strong>Business unit:</strong> {lineProduct.business_unit}
+                  </Typography>
+                ) : null}
+                {lineProduct.specs_preview && Object.keys(lineProduct.specs_preview).length > 0 ? (
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    <strong>Specs (preview):</strong>{' '}
+                    {Object.entries(lineProduct.specs_preview)
+                      .filter(([, v]) => v)
+                      .map(([k, v]) => `${k}: ${v}`)
+                      .join(' · ')}
+                  </Typography>
+                ) : null}
+              </Paper>
+            ) : null}
             {lineProduct != null ? (
               lineupEvidenceLoading ? (
                 <Typography variant="caption" color="text.secondary">
@@ -2485,9 +2572,7 @@ export default function CommercialPlannerPage() {
               value={editProduct}
               onChange={setEditProduct}
               fetchOptions={fetchProducts}
-              getOptionLabel={(o) =>
-                `${o.sku || '—'} · ${o.sales_model_name || o.model_name || o.name || ''}${o.part_number ? ` (${o.part_number})` : ''}`.trim()
-              }
+              getOptionLabel={(o) => formatProductSearchOptionLabel(o)}
               disabled={patchLineEntities.isPending}
               helperText="Search to replace the line’s product."
             />

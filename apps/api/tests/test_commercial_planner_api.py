@@ -2004,7 +2004,28 @@ def test_list_lineup_lines_includes_sync_eligibility_when_plan_linked():
         quantity_units=1.0,
         msrp_local=100.0,
     )
-    row_tuple = (ln, "SKU1", "Name", "PN1", "M1", "SM1", {}, "C1", "Cust", "D1", "Dist")
+    row_tuple = (
+        ln,
+        "SKU1",
+        "Name",
+        "PN1",
+        "M1",
+        "SM1",
+        {},
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        "C1",
+        "Cust",
+        "D1",
+        "Dist",
+    )
 
     exec_n = {"n": 0}
 
@@ -2044,7 +2065,7 @@ def test_list_lineup_lines_include_line_uploaded():
         distributor_id=None,
         raw_row_payload={"uploaded": {"Dealer buy": "99"}},
     )
-    row_tuple = (ln, None, None, None, None, None, {}, None, None, None, None)
+    row_tuple = (ln, None, None, None, None, None, {},) + (None,) * 9 + (None, None, None, None)
 
     async def _execute(stmt):
         res = MagicMock()
@@ -2087,9 +2108,12 @@ def test_workbench_column_metadata_includes_raw_upload_headers():
     body = r.json()
     assert "VAT %" in body["raw_columns"]
     assert any(p["field"] == "dap_evidence_local" for p in body["parsed_fields"])
+    assert any(x["id"].startswith("cat:") for x in body["catalogue_product_fields"])
 
 
-def test_sync_preview_planner_requires_customer_bucket():
+def test_sync_preview_open_channel_missing_controlled_account_bucket():
+    from unittest.mock import AsyncMock, patch
+
     from app.models.commercial_lineup import CommercialLineupCase
     from app.models.commercial_planner import CommercialPlan
 
@@ -2128,8 +2152,68 @@ def test_sync_preview_planner_requires_customer_bucket():
         yield sess
 
     app.dependency_overrides[get_db] = fake_db
-    r = client.get(
-        "/api/v1/commercial-planner/lineup-cases/61/sync-to-plan/preview?commercial_plan_id=5",
-    )
+    with patch(
+        "app.api.v1.endpoints.commercial_planner.get_open_channel_customer_id",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        r = client.get(
+            "/api/v1/commercial-planner/lineup-cases/61/sync-to-plan/preview?commercial_plan_id=5",
+        )
     assert r.status_code == 200
-    assert r.json().get("skipped_planner_requires_customer") == 1
+    assert r.json().get("skipped_open_channel_account_missing") == 1
+
+
+def test_sync_preview_open_channel_eligible_when_controlled_account_present():
+    from unittest.mock import AsyncMock, patch
+
+    from app.models.commercial_lineup import CommercialLineupCase
+    from app.models.commercial_planner import CommercialPlan
+
+    case = _make_case(id=62, commercial_plan_id=5, commercial_status="accepted")
+    open_ln = _make_lineup_line(
+        id=1,
+        case_id=62,
+        product_id=10,
+        customer_id=None,
+        distributor_id=3,
+        msrp_local=50.0,
+        quantity_units=1.0,
+        raw_row_payload={"staging_open_channel": True},
+    )
+
+    async def _get(model, pk):
+        if model is CommercialLineupCase and pk == 62:
+            return case
+        if model is CommercialPlan and pk == 5:
+            return SimpleNamespace(id=5)
+        return None
+
+    async def _exec(stmt):
+        res = MagicMock()
+        s = str(stmt)
+        if "commercial_lineup_line" in s.lower():
+            res.scalars.return_value.all.return_value = [open_ln]
+        else:
+            res.all.return_value = []
+        return res
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(side_effect=_get)
+        sess.execute = AsyncMock(side_effect=_exec)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    with patch(
+        "app.api.v1.endpoints.commercial_planner.get_open_channel_customer_id",
+        new_callable=AsyncMock,
+        return_value=9001,
+    ):
+        r = client.get(
+            "/api/v1/commercial-planner/lineup-cases/62/sync-to-plan/preview?commercial_plan_id=5",
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("will_create") == 1
+    assert body.get("skipped_open_channel_account_missing") == 0

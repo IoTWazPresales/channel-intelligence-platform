@@ -45,6 +45,7 @@ from app.services.commercial_planner.lineup_open_channel import (
     sync_ui_severity_for_line,
     uploaded_columns_from_payload,
 )
+from app.services.commercial_planner.open_channel_customer import get_open_channel_customer_id
 from app.services.commercial_planner.read_model import plan_line_read_model_extensions
 from app.services.commercial_planner.suggestions import (
     SuggestionInputs,
@@ -1749,7 +1750,34 @@ def _workbench_sync_field_metadata() -> list[dict[str, str]]:
         {"id": "sync:sync_skip_reason", "group": "sync", "label": "Sync skip reason", "field": "sync_skip_reason"},
         {"id": "sync:sync_skip_detail", "group": "sync", "label": "Sync detail", "field": "sync_skip_detail"},
         {"id": "sync:sync_ui_severity", "group": "sync", "label": "Sync severity (UI)", "field": "sync_ui_severity"},
+        {
+            "id": "sync:sync_customer_resolution_note",
+            "group": "sync",
+            "label": "Sync customer resolution note",
+            "field": "sync_customer_resolution_note",
+        },
     ]
+
+
+def _workbench_catalogue_product_field_metadata() -> list[dict[str, str]]:
+    """Matched dim_product fields exposed on lineup lines when product is resolved (API keys on line dict)."""
+    specs = [
+        ("product_sku", "SKU (matched product)"),
+        ("product_part_number", "Part # (matched product)"),
+        ("product_name", "Product name (catalogue)"),
+        ("product_model_name", "Model name (catalogue)"),
+        ("product_sales_model_name", "Sales model (catalogue)"),
+        ("catalogue_category", "Category (catalogue)"),
+        ("catalogue_form_factor", "Form factor (catalogue)"),
+        ("catalogue_product_line", "Product line (catalogue)"),
+        ("catalogue_series_name", "Series (catalogue)"),
+        ("catalogue_lifecycle_status", "Lifecycle (catalogue)"),
+        ("catalogue_business_unit", "Business unit (catalogue)"),
+        ("catalogue_marketing_name", "Marketing name (catalogue)"),
+        ("catalogue_ean", "EAN (catalogue)"),
+        ("catalogue_upc", "UPC (catalogue)"),
+    ]
+    return [{"id": f"cat:{k}", "group": "catalogue", "label": lab, "field": k} for k, lab in specs]
 
 
 @router.get("/lineup-cases/{case_id}/workbench-column-metadata")
@@ -1782,6 +1810,7 @@ async def get_lineup_workbench_column_metadata(case_id: int, db: AsyncSession = 
         "case_id": case_id,
         "raw_columns": sorted(raw_columns),
         "parsed_fields": _workbench_parsed_field_metadata(),
+        "catalogue_product_fields": _workbench_catalogue_product_field_metadata(),
         "catalogue_spec_keys": sorted(spec_keys),
         "sync_fields": _workbench_sync_field_metadata(),
     }
@@ -1879,6 +1908,15 @@ async def list_lineup_case_lines(
             DimProduct.model_name.label("product_model_name"),
             DimProduct.sales_model_name.label("product_sales_model_name"),
             DimProduct.specs_json.label("product_specs_json"),
+            DimProduct.category.label("catalogue_category"),
+            DimProduct.form_factor.label("catalogue_form_factor"),
+            DimProduct.product_line.label("catalogue_product_line"),
+            DimProduct.series_name.label("catalogue_series_name"),
+            DimProduct.lifecycle_status.label("catalogue_lifecycle_status"),
+            DimProduct.business_unit.label("catalogue_business_unit"),
+            DimProduct.marketing_name.label("catalogue_marketing_name"),
+            DimProduct.ean.label("catalogue_ean"),
+            DimProduct.upc.label("catalogue_upc"),
             DimCustomer.code.label("customer_code"),
             DimCustomer.name.label("customer_name"),
             DimDistributor.code.label("distributor_code"),
@@ -1900,6 +1938,15 @@ async def list_lineup_case_lines(
         product_model_name,
         product_sales_model_name,
         product_specs_json,
+        catalogue_category,
+        catalogue_form_factor,
+        catalogue_product_line,
+        catalogue_series_name,
+        catalogue_lifecycle_status,
+        catalogue_business_unit,
+        catalogue_marketing_name,
+        catalogue_ean,
+        catalogue_upc,
         customer_code,
         customer_name,
         distributor_code,
@@ -1953,6 +2000,15 @@ async def list_lineup_case_lines(
         }
         if include_product_specs:
             d["product_specs"] = product_specs_json if isinstance(product_specs_json, dict) else {}
+            d["catalogue_category"] = catalogue_category
+            d["catalogue_form_factor"] = catalogue_form_factor
+            d["catalogue_product_line"] = catalogue_product_line
+            d["catalogue_series_name"] = catalogue_series_name
+            d["catalogue_lifecycle_status"] = catalogue_lifecycle_status
+            d["catalogue_business_unit"] = catalogue_business_unit
+            d["catalogue_marketing_name"] = catalogue_marketing_name
+            d["catalogue_ean"] = catalogue_ean
+            d["catalogue_upc"] = catalogue_upc
         if include_line_uploaded:
             up = raw_payload.get("uploaded")
             d["uploaded"] = up if isinstance(up, dict) else {}
@@ -1981,8 +2037,11 @@ async def list_lineup_case_lines(
         ).where(CommercialPlanLine.commercial_plan_id == plan_id)
         existing_rows = (await db.execute(existing_stmt)).all()
         keys_sim: set[tuple] = {(r.customer_id, r.distributor_id, r.product_id) for r in existing_rows}
+        open_channel_customer_id = await get_open_channel_customer_id(db)
         for ln, d in rows_payload:
-            eligible, reason, *_ = _sync_eligibility(ln, body, keys_sim)
+            eligible, reason, cust_res, dist_res, _, _ = _sync_eligibility(
+                ln, body, keys_sim, open_channel_customer_id=open_channel_customer_id
+            )
             d["sync_eligible"] = eligible
             if eligible:
                 d["sync_skip_reason"] = None
@@ -1991,16 +2050,25 @@ async def list_lineup_case_lines(
                     warn_parts.append("Customer unassigned on row — sync will use fallback customer.")
                 if ln.distributor_id is None and body.fallback_distributor_id:
                     warn_parts.append("Distributor unassigned on row — sync will use fallback distributor.")
+                if (
+                    lineup_line_is_open_channel_staging(ln)
+                    and open_channel_customer_id
+                    and ln.customer_id is None
+                    and not body.fallback_customer_id
+                ):
+                    d["sync_customer_resolution_note"] = (
+                        "Sync will use Open Channel account (dim_customer code OPEN_CHANNEL)."
+                    )
+                else:
+                    d["sync_customer_resolution_note"] = None
                 if warn_parts:
                     d["sync_ui_severity"] = "warning"
                     d["sync_skip_detail"] = " ".join(warn_parts)
                 else:
                     d["sync_ui_severity"] = None
                     d["sync_skip_detail"] = None
-                customer_id = ln.customer_id or body.fallback_customer_id
-                distributor_id = ln.distributor_id or body.fallback_distributor_id
-                if ln.product_id and customer_id and distributor_id:
-                    keys_sim.add((customer_id, distributor_id, ln.product_id))
+                if ln.product_id and cust_res and dist_res:
+                    keys_sim.add((cust_res, dist_res, ln.product_id))
             else:
                 d["sync_skip_reason"] = reason
                 d["sync_skip_detail"] = sync_skip_detail_message(ln, reason)
@@ -2291,11 +2359,13 @@ def _sync_eligibility(
     ln: CommercialLineupLine,
     body: SyncToPlanRequest,
     existing_keys: set[tuple],
+    *,
+    open_channel_customer_id: int | None = None,
 ) -> tuple[bool, str, int | None, int | None, float | None, float | None]:
     """Return (eligible, skip_reason, customer_id, distributor_id, srp, units).
 
     skip_reason is one of: '' (eligible), 'unresolved_product', 'missing_customer',
-    'planner_requires_customer' (Open Channel row without customer_id or fallback),
+    'open_channel_account_missing' (Open Channel staging but OPEN_CHANNEL dim row missing),
     'missing_distributor', 'missing_srp', 'missing_quantity', 'duplicate'.
     """
     if not ln.product_id:
@@ -2305,9 +2375,12 @@ def _sync_eligibility(
         return False, "missing_customer", None, None, None, None
 
     customer_id = ln.customer_id or body.fallback_customer_id
+    if not customer_id and lineup_line_is_open_channel_staging(ln):
+        if open_channel_customer_id:
+            customer_id = open_channel_customer_id
+        else:
+            return False, "open_channel_account_missing", None, None, None, None
     if not customer_id:
-        if lineup_line_is_open_channel_staging(ln):
-            return False, "planner_requires_customer", None, None, None, None
         return False, "missing_customer", None, None, None, None
 
     distributor_id = ln.distributor_id or body.fallback_distributor_id
@@ -2386,15 +2459,18 @@ async def preview_sync_lineup_case_to_plan(
     skipped_missing_distributor = 0
     skipped_missing_quantity = 0
     skipped_missing_srp = 0
-    skipped_planner_requires_customer = 0
+    skipped_open_channel_account_missing = 0
+
+    open_channel_customer_id = await get_open_channel_customer_id(db)
 
     for ln in lines:
-        eligible, reason, *_ = _sync_eligibility(ln, body, existing_keys)
+        eligible, reason, cust_res, dist_res, _, _ = _sync_eligibility(
+            ln, body, existing_keys, open_channel_customer_id=open_channel_customer_id
+        )
         if eligible:
             will_create += 1
-            customer_id = ln.customer_id or body.fallback_customer_id
-            distributor_id = ln.distributor_id or body.fallback_distributor_id
-            existing_keys.add((customer_id, distributor_id, ln.product_id))
+            if cust_res is not None and dist_res is not None and ln.product_id:
+                existing_keys.add((cust_res, dist_res, ln.product_id))
         elif reason == "duplicate":
             skipped_duplicates += 1
         elif reason == "missing_srp":
@@ -2403,8 +2479,8 @@ async def preview_sync_lineup_case_to_plan(
             skipped_unresolved_product += 1
         elif reason == "missing_customer":
             skipped_missing_customer += 1
-        elif reason == "planner_requires_customer":
-            skipped_planner_requires_customer += 1
+        elif reason == "open_channel_account_missing":
+            skipped_open_channel_account_missing += 1
         elif reason == "missing_distributor":
             skipped_missing_distributor += 1
         elif reason == "missing_quantity":
@@ -2417,7 +2493,7 @@ async def preview_sync_lineup_case_to_plan(
         + skipped_missing_customer
         + skipped_missing_distributor
         + skipped_missing_quantity
-        + skipped_planner_requires_customer
+        + skipped_open_channel_account_missing
     )
 
     return {
@@ -2429,7 +2505,7 @@ async def preview_sync_lineup_case_to_plan(
         "skipped_unresolved": skipped_unresolved,
         "skipped_unresolved_product": skipped_unresolved_product,
         "skipped_missing_customer": skipped_missing_customer,
-        "skipped_planner_requires_customer": skipped_planner_requires_customer,
+        "skipped_open_channel_account_missing": skipped_open_channel_account_missing,
         "skipped_missing_distributor": skipped_missing_distributor,
         "skipped_missing_quantity": skipped_missing_quantity,
         "skipped_missing_srp": skipped_missing_srp,
@@ -2490,12 +2566,16 @@ async def sync_lineup_case_to_plan(
     skipped_missing_distributor = 0
     skipped_missing_quantity = 0
     skipped_missing_srp = 0
-    skipped_planner_requires_customer = 0
+    skipped_open_channel_account_missing = 0
     failed = 0
     warnings: list[str] = []
 
+    open_channel_customer_id = await get_open_channel_customer_id(db)
+
     for ln in lines:
-        eligible, reason, customer_id, distributor_id, srp, units = _sync_eligibility(ln, body, existing_keys)
+        eligible, reason, customer_id, distributor_id, srp, units = _sync_eligibility(
+            ln, body, existing_keys, open_channel_customer_id=open_channel_customer_id
+        )
         if not eligible:
             if reason == "duplicate":
                 skipped_duplicates += 1
@@ -2505,8 +2585,8 @@ async def sync_lineup_case_to_plan(
                 skipped_unresolved_product += 1
             elif reason == "missing_customer":
                 skipped_missing_customer += 1
-            elif reason == "planner_requires_customer":
-                skipped_planner_requires_customer += 1
+            elif reason == "open_channel_account_missing":
+                skipped_open_channel_account_missing += 1
             elif reason == "missing_distributor":
                 skipped_missing_distributor += 1
             elif reason == "missing_quantity":
@@ -2545,7 +2625,7 @@ async def sync_lineup_case_to_plan(
         + skipped_missing_customer
         + skipped_missing_distributor
         + skipped_missing_quantity
-        + skipped_planner_requires_customer
+        + skipped_open_channel_account_missing
     )
 
     return {
@@ -2556,7 +2636,7 @@ async def sync_lineup_case_to_plan(
         "skipped_unresolved": skipped_unresolved,
         "skipped_unresolved_product": skipped_unresolved_product,
         "skipped_missing_customer": skipped_missing_customer,
-        "skipped_planner_requires_customer": skipped_planner_requires_customer,
+        "skipped_open_channel_account_missing": skipped_open_channel_account_missing,
         "skipped_missing_distributor": skipped_missing_distributor,
         "skipped_missing_quantity": skipped_missing_quantity,
         "skipped_missing_srp": skipped_missing_srp,

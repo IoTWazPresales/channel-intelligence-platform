@@ -64,7 +64,7 @@ export type ColumnSelectorModalProps = {
 
 const PRESETS: { name: string; label: string; tooltip: string }[] = [
   { name: 'planning', label: 'Planning', tooltip: 'Default planning columns' },
-  { name: 'product_spec', label: 'Product / spec', tooltip: 'Enable CPU, RAM, GPU, storage, display spec columns' },
+  { name: 'product_spec', label: 'Product / spec', tooltip: 'Optional warranty, OS, colour. Use “Discovered spec JSON keys” below for additional catalogue dimensions.' },
   { name: 'commercial', label: 'Commercial', tooltip: 'Enable effective commercial term columns' },
   { name: 'economics', label: 'Economics', tooltip: 'Enable USD output columns (sell-in, net after disti, margin, reserves)' },
 ];
@@ -105,7 +105,8 @@ const COLUMN_GROUPS: GroupDef[] = [
   },
   {
     title: 'Specs',
-    description: 'CPU, RAM, storage, GPU, display always shown when present. Coverage based on current plan lines.',
+    description:
+      'Named slots (CPU, RAM, …) map common flattened fields when the API provides them. Other dimensions from specs_json appear under “Discovered spec JSON keys” above — toggle those to add columns.',
     columns: [
       { key: 'product_spec_cpu', label: 'CPU', alwaysOn: true, coverageKey: 'cpu', specCandidateKeys: ['cpu', 'CPU', 'processor'] },
       { key: 'product_spec_ram', label: 'RAM', alwaysOn: true, coverageKey: 'ram', specCandidateKeys: ['ram', 'RAM', 'memory'] },
@@ -274,9 +275,15 @@ export function ColumnSelectorModal({
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xl" aria-labelledby="col-selector-title">
       <DialogTitle id="col-selector-title">
-        <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap" useFlexGap>
-          <span>Column visibility</span>
-          <Chip size="small" label={`${optionalSelectedCount} optional on`} variant="outlined" />
+        <Stack spacing={0.25}>
+          <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap" useFlexGap>
+            <span>Planner line columns</span>
+            <Chip size="small" label={`${optionalSelectedCount} optional on`} variant="outlined" />
+          </Stack>
+          <Typography variant="caption" color="text.secondary" component="span">
+            Commercial planner grid — optional fields and discovered product spec keys. (Workbench columns for uploaded
+            lineup rows are on the Current lineup card.)
+          </Typography>
         </Stack>
       </DialogTitle>
       <DialogContent dividers>

@@ -1,21 +1,54 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import Date, and_, asc, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
-
 from app.api.deps import get_db
 from app.models.dimensions import DimChannel, DimProduct
+from app.models.ingestion import ImportJob
+from app.models.product_catalog import CatalogProduct
 from app.services.product_usage import cleanup_soft_product_references, product_hard_reference_breakdown
 
 router = APIRouter()
+
+
+def _compact_specs_preview(
+    specs: dict | None, *, max_keys: int = 8, max_val_len: int = 56
+) -> dict[str, str]:
+    """Small string map for list/search UIs — not a full specs_json dump."""
+    if not isinstance(specs, dict) or not specs:
+        return {}
+
+    def _one(v: object) -> str:
+        if v is None:
+            return ''
+        if isinstance(v, bool):
+            return 'true' if v else 'false'
+        if isinstance(v, (int, float)):
+            return str(v)
+        if isinstance(v, str):
+            s = v.strip().replace('\n', ' ')
+        else:
+            s = str(v).strip().replace('\n', ' ')
+        if len(s) > max_val_len:
+            return f'{s[: max_val_len - 1]}…'
+        return s
+
+    out: dict[str, str] = {}
+    for k in sorted(str(x) for x in specs.keys())[:max_keys]:
+        out[str(k)] = _one(specs.get(k))
+    return out
 
 
 class ProductPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=512)
     category: str | None = Field(default=None, max_length=256)
     form_factor: str | None = Field(default=None, max_length=128)
+    lifecycle_status: str | None = Field(default=None, max_length=64)
+    launch_date: date | None = None
+    retired_date: date | None = None
     is_active: bool | None = None
     channel_id: int | None = None
 
@@ -32,25 +65,147 @@ class ProductBulkBody(BaseModel):
 
 
 @router.get("")
-async def list_products(db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(DimProduct).options(joinedload(DimProduct.channel)))
-    items = res.unique().scalars().all()
-    out = []
-    for p in items:
-        out.append(
+async def list_products(
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    q: str | None = Query(default=None, description="Global search over product identity fields"),
+    is_active: bool | None = Query(default=None),
+    category: str | None = Query(default=None),
+    lifecycle_status: str | None = Query(default=None),
+    channel_code: str | None = Query(default=None),
+    launch_date_from: date | None = Query(default=None),
+    launch_date_to: date | None = Query(default=None),
+    retired_date_from: date | None = Query(default=None),
+    retired_date_to: date | None = Query(default=None),
+    sort_by: str = Query(default="sku"),
+    sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
+):
+    allowed_sort = {
+        "sku": DimProduct.sku,
+        "name": DimProduct.name,
+        "category": DimProduct.category,
+        "lifecycle_status": DimProduct.lifecycle_status,
+        "launch_date": DimProduct.launch_date,
+        "retired_date": DimProduct.retired_date,
+        "is_active": DimProduct.is_active,
+        "updated_at": DimProduct.updated_at,
+    }
+    sort_col = allowed_sort.get(sort_by, DimProduct.sku)
+    sort_fn = asc if sort_dir == "asc" else desc
+
+    last_import_subq = (
+        select(
+            DimProduct.id.label("product_id"),
+            func.max(func.cast(ImportJob.completed_at, Date)).label("last_import_date"),
+        )
+        .select_from(DimProduct)
+        .join(CatalogProduct, CatalogProduct.canonical_product_id == DimProduct.id, isouter=True)
+        .join(ImportJob, ImportJob.id == CatalogProduct.last_import_job_id, isouter=True)
+        .group_by(DimProduct.id)
+        .subquery()
+    )
+
+    base = (
+        select(DimProduct, DimChannel.code.label("channel_code"), last_import_subq.c.last_import_date)
+        .join(DimChannel, DimChannel.id == DimProduct.channel_id, isouter=True)
+        .join(last_import_subq, last_import_subq.c.product_id == DimProduct.id, isouter=True)
+    )
+    count_stmt = select(func.count()).select_from(DimProduct)
+    filters = []
+
+    if q and q.strip():
+        needle = f"%{q.strip()}%"
+        filters.append(
+            or_(
+                DimProduct.sku.ilike(needle),
+                DimProduct.name.ilike(needle),
+                DimProduct.category.ilike(needle),
+                DimProduct.model_name.ilike(needle),
+                DimProduct.sales_model_name.ilike(needle),
+                DimProduct.part_number.ilike(needle),
+                DimProduct.product_line.ilike(needle),
+                DimProduct.series_name.ilike(needle),
+            )
+        )
+    if is_active is not None:
+        filters.append(DimProduct.is_active.is_(is_active))
+    if category and category.strip():
+        filters.append(DimProduct.category == category.strip())
+    if lifecycle_status and lifecycle_status.strip():
+        filters.append(DimProduct.lifecycle_status == lifecycle_status.strip())
+    if channel_code and channel_code.strip():
+        base = base.where(DimChannel.code == channel_code.strip())
+        count_stmt = count_stmt.join(DimChannel, DimChannel.id == DimProduct.channel_id)
+    if launch_date_from is not None:
+        filters.append(DimProduct.launch_date >= launch_date_from)
+    if launch_date_to is not None:
+        filters.append(DimProduct.launch_date <= launch_date_to)
+    if retired_date_from is not None:
+        filters.append(DimProduct.retired_date >= retired_date_from)
+    if retired_date_to is not None:
+        filters.append(DimProduct.retired_date <= retired_date_to)
+
+    if filters:
+        base = base.where(and_(*filters))
+        count_stmt = count_stmt.where(and_(*filters))
+
+    total = int((await db.execute(count_stmt)).scalar_one())
+    offset = (page - 1) * page_size
+    rows = (
+        await db.execute(
+            base.order_by(sort_fn(sort_col), asc(DimProduct.id)).offset(offset).limit(page_size)
+        )
+    ).all()
+
+    items = []
+    for p, channel_code_out, last_import_date in rows:
+        missing_required = []
+        if not (p.sku or "").strip():
+            missing_required.append("sku")
+        if not (p.name or "").strip():
+            missing_required.append("name")
+        if not (p.category or "").strip():
+            missing_required.append("category")
+        if not (p.lifecycle_status or "").strip():
+            missing_required.append("lifecycle_status")
+        if p.channel_id is None:
+            missing_required.append("channel")
+        items.append(
             {
                 "id": p.id,
                 "sku": p.sku,
+                "part_number": p.part_number,
                 "name": p.name,
+                "sales_model_name": p.sales_model_name,
+                "model_name": p.model_name,
+                "series_name": p.series_name,
+                "product_line": p.product_line,
+                "business_unit": p.business_unit,
                 "category": p.category,
                 "form_factor": p.form_factor,
+                "country_code": p.country_code,
+                "ean": p.ean,
+                "upc": p.upc,
+                "lifecycle_status": p.lifecycle_status,
+                "launch_date": p.launch_date.isoformat() if p.launch_date else None,
+                "retired_date": p.retired_date.isoformat() if p.retired_date else None,
                 "is_active": p.is_active,
                 "channel_id": p.channel_id,
-                "channel_code": p.channel.code if p.channel else None,
+                "channel_code": channel_code_out,
+                "missing_required_fields": missing_required,
+                "last_import_date": last_import_date.isoformat() if last_import_date else None,
+                "specs_preview": _compact_specs_preview(p.specs_json),
             }
         )
-    out.sort(key=lambda x: x["sku"])
-    return out
+    return {
+        "items": items,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "sort_by": sort_by if sort_by in allowed_sort else "sku",
+        "sort_dir": sort_dir,
+    }
 
 
 async def _product_references_bundle(db: AsyncSession, product_id: int) -> dict:
@@ -89,6 +244,12 @@ async def patch_product(product_id: int, body: ProductPatch, db: AsyncSession = 
         row.category = (data["category"] or "").strip() or None
     if "form_factor" in data:
         row.form_factor = (data["form_factor"] or "").strip() or None
+    if "lifecycle_status" in data:
+        row.lifecycle_status = (data["lifecycle_status"] or "").strip() or None
+    if "launch_date" in data:
+        row.launch_date = data["launch_date"]
+    if "retired_date" in data:
+        row.retired_date = data["retired_date"]
     if "is_active" in data:
         row.is_active = bool(data["is_active"])
     if "channel_id" in data:
@@ -105,6 +266,11 @@ async def patch_product(product_id: int, body: ProductPatch, db: AsyncSession = 
         "sku": row.sku,
         "name": row.name,
         "category": row.category,
+        "form_factor": row.form_factor,
+        "lifecycle_status": row.lifecycle_status,
+        "launch_date": row.launch_date.isoformat() if row.launch_date else None,
+        "retired_date": row.retired_date.isoformat() if row.retired_date else None,
+        "is_active": row.is_active,
         "channel_id": row.channel_id,
     }
 
