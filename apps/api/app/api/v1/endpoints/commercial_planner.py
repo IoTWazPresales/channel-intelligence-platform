@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import distinct, func, or_, select, text, tuple_
@@ -28,6 +30,11 @@ from app.models.historical_lineup import HistoricalLineupImportHeader, Historica
 from app.models.ingestion import ImportJob
 from app.services.commercial_planner.calculator import CommercialCalcInputs, compute_line_economics
 from app.services.commercial_planner.current_lineup_seed import CurrentLineupSourceNotConfiguredError
+from app.services.commercial_planner.lineup_entity_resolution import (
+    RESOLUTION_ALLOWED_CASE_STATUSES,
+    apply_entity_resolutions,
+    collect_entity_resolution_candidates,
+)
 from app.services.commercial_planner.lineup_case_parser import parse_current_lineup_file
 from app.services.commercial_planner.read_model import plan_line_read_model_extensions
 from app.services.commercial_planner.suggestions import (
@@ -1610,6 +1617,16 @@ class CommercialLineupLinePatch(BaseModel):
     promo_price_evidence_local: float | None = None
 
 
+class EntityResolutionItem(BaseModel):
+    kind: Literal["customer", "distributor"]
+    token: str = Field(min_length=1, max_length=512)
+    dim_id: int = Field(ge=1)
+
+
+class EntityResolutionApplyBody(BaseModel):
+    resolutions: list[EntityResolutionItem] = Field(min_length=1)
+
+
 def _case_payload(case: CommercialLineupCase, line_count: int) -> dict:
     return {
         "id": case.id,
@@ -1683,6 +1700,48 @@ async def get_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
     return _case_payload(case, int(line_count))
 
 
+@router.get("/lineup-cases/{case_id}/entity-resolution-candidates")
+async def get_lineup_entity_resolution_candidates(case_id: int, db: AsyncSession = Depends(get_db)):
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    if case.commercial_status == "cancelled":
+        raise HTTPException(status_code=409, detail="Case is cancelled")
+    return await collect_entity_resolution_candidates(db, case_id)
+
+
+@router.post("/lineup-cases/{case_id}/entity-resolutions/apply", status_code=200)
+async def post_lineup_entity_resolutions_apply(
+    case_id: int,
+    body: EntityResolutionApplyBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply case-scoped token → DimCustomer / DimDistributor mappings. Does not touch DAP or cost fields."""
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    if case.commercial_status not in RESOLUTION_ALLOWED_CASE_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Entity resolutions are only allowed while the case is in draft/review "
+                f"(statuses: {', '.join(sorted(RESOLUTION_ALLOWED_CASE_STATUSES))}). "
+                f"Current: '{case.commercial_status}'"
+            ),
+        )
+    for item in body.resolutions:
+        if item.kind == "customer":
+            if not await db.get(DimCustomer, item.dim_id):
+                raise HTTPException(status_code=400, detail=f"Unknown customer_id={item.dim_id}")
+        else:
+            if not await db.get(DimDistributor, item.dim_id):
+                raise HTTPException(status_code=400, detail=f"Unknown distributor_id={item.dim_id}")
+    raw = [item.model_dump() for item in body.resolutions]
+    out = await apply_entity_resolutions(db, case_id, raw)
+    await db.commit()
+    return out
+
+
 @router.patch("/lineup-cases/{case_id}/status")
 async def patch_lineup_case_status(case_id: int, body: LineupCaseStatusPatch, db: AsyncSession = Depends(get_db)):
     case = await db.get(CommercialLineupCase, case_id)
@@ -1719,7 +1778,16 @@ async def patch_lineup_case_status(case_id: int, body: LineupCaseStatusPatch, db
 
 
 @router.get("/lineup-cases/{case_id}/lines")
-async def list_lineup_case_lines(case_id: int, db: AsyncSession = Depends(get_db)):
+async def list_lineup_case_lines(
+    case_id: int,
+    db: AsyncSession = Depends(get_db),
+    include_sync_eligibility: bool = Query(default=False),
+    include_raw_row_payload: bool = Query(default=False),
+    fallback_customer_id: int | None = Query(default=None),
+    fallback_distributor_id: int | None = Query(default=None),
+    default_srp_local: float | None = Query(default=None),
+    allow_zero_quantity: bool = Query(default=False),
+):
     case = await db.get(CommercialLineupCase, case_id)
     if not case:
         raise HTTPException(status_code=404, detail="Lineup case not found")
@@ -1743,7 +1811,7 @@ async def list_lineup_case_lines(case_id: int, db: AsyncSession = Depends(get_db
         .order_by(CommercialLineupLine.source_row_number, CommercialLineupLine.id)
     )
     rows = (await db.execute(stmt)).all()
-    result = []
+    rows_payload: list[tuple[CommercialLineupLine, dict]] = []
     for (
         ln,
         product_sku,
@@ -1760,45 +1828,79 @@ async def list_lineup_case_lines(case_id: int, db: AsyncSession = Depends(get_db
         distributor_token_raw = raw_payload.get("distributor_token")
         if distributor_token_raw is not None:
             distributor_token_raw = str(distributor_token_raw).strip() or None
-        result.append(
-            {
-                "id": ln.id,
-                "case_id": ln.case_id,
-                "source_row_number": ln.source_row_number,
-                "product_id": ln.product_id,
-                "product_sku": product_sku,
-                "product_name": product_name,
-                "product_part_number": product_part_number,
-                "product_model_name": product_model_name,
-                "product_sales_model_name": product_sales_model_name,
-                "customer_id": ln.customer_id,
-                "customer_code": customer_code,
-                "customer_name": customer_name,
-                "distributor_id": ln.distributor_id,
-                "distributor_code": distributor_code,
-                "distributor_name": distributor_name,
-                "customer_token": ln.customer_token,
-                "distributor_token_raw": distributor_token_raw,
-                "sku_raw": ln.sku_raw,
-                "part_number_raw": ln.part_number_raw,
-                "model_raw": ln.model_raw,
-                "quantity_units": float(ln.quantity_units) if ln.quantity_units is not None else None,
-                "msrp_local": float(ln.msrp_local) if ln.msrp_local is not None else None,
-                "promo_price_evidence_local": float(ln.promo_price_evidence_local)
-                if ln.promo_price_evidence_local is not None
-                else None,
-                "dap_evidence_local": float(ln.dap_evidence_local) if ln.dap_evidence_local is not None else None,
-                "rebate_pct_evidence": float(ln.rebate_pct_evidence) if ln.rebate_pct_evidence is not None else None,
-                "distributor_margin_pct_evidence": float(ln.distributor_margin_pct_evidence)
-                if ln.distributor_margin_pct_evidence is not None
-                else None,
-                "vat_pct_evidence": float(ln.vat_pct_evidence) if ln.vat_pct_evidence is not None else None,
-                "diagnostic_codes": ln.diagnostic_codes or [],
-                "row_status": ln.row_status,
-                "mapping_confidence": float(ln.mapping_confidence) if ln.mapping_confidence is not None else None,
-                "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE,
-            }
+        d: dict = {
+            "id": ln.id,
+            "case_id": ln.case_id,
+            "source_row_number": ln.source_row_number,
+            "product_id": ln.product_id,
+            "product_sku": product_sku,
+            "product_name": product_name,
+            "product_part_number": product_part_number,
+            "product_model_name": product_model_name,
+            "product_sales_model_name": product_sales_model_name,
+            "customer_id": ln.customer_id,
+            "customer_code": customer_code,
+            "customer_name": customer_name,
+            "distributor_id": ln.distributor_id,
+            "distributor_code": distributor_code,
+            "distributor_name": distributor_name,
+            "customer_token": ln.customer_token,
+            "distributor_token_raw": distributor_token_raw,
+            "sku_raw": ln.sku_raw,
+            "part_number_raw": ln.part_number_raw,
+            "model_raw": ln.model_raw,
+            "quantity_units": float(ln.quantity_units) if ln.quantity_units is not None else None,
+            "msrp_local": float(ln.msrp_local) if ln.msrp_local is not None else None,
+            "promo_price_evidence_local": float(ln.promo_price_evidence_local)
+            if ln.promo_price_evidence_local is not None
+            else None,
+            "dap_evidence_local": float(ln.dap_evidence_local) if ln.dap_evidence_local is not None else None,
+            "rebate_pct_evidence": float(ln.rebate_pct_evidence) if ln.rebate_pct_evidence is not None else None,
+            "distributor_margin_pct_evidence": float(ln.distributor_margin_pct_evidence)
+            if ln.distributor_margin_pct_evidence is not None
+            else None,
+            "vat_pct_evidence": float(ln.vat_pct_evidence) if ln.vat_pct_evidence is not None else None,
+            "diagnostic_codes": ln.diagnostic_codes or [],
+            "row_status": ln.row_status,
+            "mapping_confidence": float(ln.mapping_confidence) if ln.mapping_confidence is not None else None,
+            "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE,
+        }
+        if include_raw_row_payload:
+            d["raw_row_payload"] = ln.raw_row_payload if isinstance(ln.raw_row_payload, dict) else {}
+        rows_payload.append((ln, d))
+
+    if include_sync_eligibility:
+        plan_id = case.commercial_plan_id
+        if not plan_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot compute sync eligibility: case has no commercial_plan_id.",
+            )
+        body = SyncToPlanRequest(
+            commercial_plan_id=plan_id,
+            fallback_customer_id=fallback_customer_id,
+            fallback_distributor_id=fallback_distributor_id,
+            default_srp_local=default_srp_local,
+            allow_zero_quantity=allow_zero_quantity,
         )
+        existing_stmt = select(
+            CommercialPlanLine.customer_id,
+            CommercialPlanLine.distributor_id,
+            CommercialPlanLine.product_id,
+        ).where(CommercialPlanLine.commercial_plan_id == plan_id)
+        existing_rows = (await db.execute(existing_stmt)).all()
+        keys_sim: set[tuple] = {(r.customer_id, r.distributor_id, r.product_id) for r in existing_rows}
+        for ln, d in rows_payload:
+            eligible, reason, *_ = _sync_eligibility(ln, body, keys_sim)
+            d["sync_eligible"] = eligible
+            d["sync_skip_reason"] = reason if not eligible else None
+            if eligible:
+                customer_id = ln.customer_id or body.fallback_customer_id
+                distributor_id = ln.distributor_id or body.fallback_distributor_id
+                if ln.product_id and customer_id and distributor_id:
+                    keys_sim.add((customer_id, distributor_id, ln.product_id))
+
+    result = [d for _, d in rows_payload]
     return {"lines": result, "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE}
 
 

@@ -1483,6 +1483,16 @@ def _make_lineup_line(
     promo_price_evidence_local=None,
     dap_evidence_local=None,
     diagnostic_codes=None,
+    customer_token=None,
+    raw_row_payload=None,
+    sku_raw=None,
+    part_number_raw=None,
+    model_raw=None,
+    rebate_pct_evidence=None,
+    distributor_margin_pct_evidence=None,
+    vat_pct_evidence=None,
+    row_status="imported",
+    mapping_confidence=None,
 ):
     from types import SimpleNamespace
     return SimpleNamespace(
@@ -1497,6 +1507,16 @@ def _make_lineup_line(
         promo_price_evidence_local=promo_price_evidence_local,
         dap_evidence_local=dap_evidence_local,
         diagnostic_codes=diagnostic_codes,
+        customer_token=customer_token,
+        raw_row_payload=raw_row_payload,
+        sku_raw=sku_raw,
+        part_number_raw=part_number_raw,
+        model_raw=model_raw,
+        rebate_pct_evidence=rebate_pct_evidence,
+        distributor_margin_pct_evidence=distributor_margin_pct_evidence,
+        vat_pct_evidence=vat_pct_evidence,
+        row_status=row_status,
+        mapping_confidence=mapping_confidence,
     )
 
 
@@ -1799,3 +1819,214 @@ def test_sync_preview_returns_counts():
     assert body["created_line_ids"] == []
     # Verify no commit was called (preview must not persist)
     # (The mock's commit is not called because the preview endpoint doesn't commit)
+
+
+# ─── Entity resolution + lineup lines sync eligibility ─────────────────────────
+
+
+def test_entity_resolution_candidates_404():
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=None)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/lineup-cases/99999/entity-resolution-candidates")
+    assert r.status_code == 404
+
+
+def test_entity_resolution_candidates_409_cancelled():
+    case = _make_case(id=51, commercial_status="cancelled")
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/lineup-cases/51/entity-resolution-candidates")
+    assert r.status_code == 409
+
+
+def test_entity_resolution_candidates_returns_tokens():
+    case = _make_case(id=52, commercial_status="validated", commercial_plan_id=5)
+    line1 = _make_lineup_line(
+        id=1,
+        case_id=52,
+        customer_id=None,
+        customer_token="Acme Retail",
+        distributor_id=None,
+        raw_row_payload={"distributor_token": "Summit Supply"},
+        product_id=10,
+    )
+    line2 = _make_lineup_line(
+        id=2,
+        case_id=52,
+        customer_id=None,
+        customer_token="Acme Retail",
+        distributor_id=3,
+        product_id=10,
+    )
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        exec_result = MagicMock()
+        exec_result.scalars.return_value.all.return_value = [line1, line2]
+        sess.execute = AsyncMock(return_value=exec_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/lineup-cases/52/entity-resolution-candidates")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["case_id"] == 52
+    cust = body["customer_tokens"]
+    assert len(cust) == 1
+    assert cust[0]["token_display"] == "Acme Retail"
+    assert cust[0]["line_count"] == 2
+    dist = body["distributor_tokens"]
+    assert len(dist) == 1
+    assert dist[0]["token_display"] == "Summit Supply"
+
+
+def test_entity_resolution_apply_409_when_accepted():
+    case = _make_case(id=53, commercial_status="accepted", commercial_plan_id=5)
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/53/entity-resolutions/apply",
+        json={"resolutions": [{"kind": "customer", "token": "x", "dim_id": 1}]},
+    )
+    assert r.status_code == 409
+
+
+def test_entity_resolution_apply_400_unknown_dim_customer():
+    case = _make_case(id=54, commercial_status="validated", commercial_plan_id=5)
+
+    async def _get(model, pk):
+        if model.__name__ == "CommercialLineupCase":
+            return case
+        return None
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(side_effect=_get)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/54/entity-resolutions/apply",
+        json={"resolutions": [{"kind": "customer", "token": "Acme", "dim_id": 999}]},
+    )
+    assert r.status_code == 400
+    assert "Unknown customer_id" in r.json()["detail"]
+
+
+def test_entity_resolution_apply_updates_customer_preserves_dap():
+    case = _make_case(id=55, commercial_status="validated", commercial_plan_id=5)
+    line = _make_lineup_line(
+        id=10,
+        case_id=55,
+        customer_id=None,
+        customer_token="Acme Retail",
+        distributor_id=3,
+        product_id=10,
+        dap_evidence_local=12.34,
+        diagnostic_codes=["unknown_customer"],
+    )
+    dim_cust = SimpleNamespace(id=7)
+
+    async def _get(model, pk):
+        if model.__name__ == "CommercialLineupCase":
+            return case
+        if model.__name__ == "DimCustomer" and pk == 7:
+            return dim_cust
+        return None
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(side_effect=_get)
+        exec_result = MagicMock()
+        exec_result.scalars.return_value.all.return_value = [line]
+        sess.execute = AsyncMock(return_value=exec_result)
+        sess.commit = AsyncMock()
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/55/entity-resolutions/apply",
+        json={"resolutions": [{"kind": "customer", "token": "Acme Retail", "dim_id": 7}]},
+    )
+    assert r.status_code == 200
+    out = r.json()
+    assert out["updated_lines"] == 1
+    assert line.customer_id == 7
+    assert line.dap_evidence_local == 12.34
+    assert "unknown_customer" not in (line.diagnostic_codes or [])
+    assert any(x.startswith("manual_case_resolution_") for x in (line.diagnostic_codes or []))
+
+
+def test_list_lineup_lines_sync_eligibility_requires_plan():
+    case = _make_case(id=56, commercial_plan_id=None, commercial_status="draft_imported")
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        exec_res = MagicMock()
+        exec_res.all.return_value = []
+        sess.execute = AsyncMock(return_value=exec_res)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get(
+        "/api/v1/commercial-planner/lineup-cases/56/lines?include_sync_eligibility=true",
+    )
+    assert r.status_code == 400
+    assert "commercial_plan_id" in r.json()["detail"].lower()
+
+
+def test_list_lineup_lines_includes_sync_eligibility_when_plan_linked():
+    case = _make_case(id=57, commercial_plan_id=5, commercial_status="validated")
+    ln = _make_lineup_line(
+        id=20,
+        case_id=57,
+        product_id=10,
+        customer_id=7,
+        distributor_id=3,
+        quantity_units=1.0,
+        msrp_local=100.0,
+    )
+    row_tuple = (ln, "SKU1", "Name", "PN1", "M1", "SM1", "C1", "Cust", "D1", "Dist")
+
+    exec_n = {"n": 0}
+
+    async def _execute(stmt):
+        exec_n["n"] += 1
+        res = MagicMock()
+        if exec_n["n"] == 1:
+            res.all.return_value = [row_tuple]
+        else:
+            res.all.return_value = []
+        return res
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        sess.execute = AsyncMock(side_effect=_execute)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get(
+        "/api/v1/commercial-planner/lineup-cases/57/lines?include_sync_eligibility=true",
+    )
+    assert r.status_code == 200
+    lines = r.json()["lines"]
+    assert len(lines) == 1
+    assert lines[0]["sync_eligible"] is True
+    assert lines[0]["sync_skip_reason"] is None

@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Collapse,
@@ -11,8 +12,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
+  FormControlLabel,
   InputLabel,
+  Menu,
   MenuItem,
   Select,
   Stack,
@@ -27,9 +31,10 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { EntitySearchAutocomplete } from './EntitySearchAutocomplete';
 
 function formatHttpErrorDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail;
@@ -95,13 +100,85 @@ type CommercialLineupLine = {
   dap_evidence_local: number | null;
   diagnostic_codes: string[];
   row_status: string;
+  mapping_confidence?: number | null;
   dap_semantics_note?: string;
+  sync_eligible?: boolean;
+  sync_skip_reason?: string | null;
 };
 
 type CaseLinesResponse = {
   lines: CommercialLineupLine[];
   dap_semantics_note: string;
 };
+
+const WORKBENCH_COL_STORAGE = 'cip.commercial-planner.currentLineupWorkbench.columns.v1';
+
+const WORKBENCH_COL_IDS = [
+  'num',
+  'product',
+  'sku',
+  'part',
+  'cust',
+  'dist',
+  'units',
+  'msrp',
+  'promo',
+  'dap',
+  'issues',
+  'sync',
+] as const;
+
+type WorkbenchColId = (typeof WORKBENCH_COL_IDS)[number];
+
+const WORKBENCH_COL_LABELS: Record<WorkbenchColId, string> = {
+  num: '#',
+  product: 'Model / product',
+  sku: 'SKU',
+  part: 'Part #',
+  cust: 'Customer',
+  dist: 'Distributor',
+  units: 'Units',
+  msrp: 'MSRP / list',
+  promo: 'Promo evidence',
+  dap: 'DAP evidence',
+  issues: 'Status / issues',
+  sync: 'Sync preview (plan)',
+};
+
+function readWorkbenchColumns(): Set<WorkbenchColId> {
+  if (typeof window === 'undefined') return new Set(WORKBENCH_COL_IDS);
+  try {
+    const raw = localStorage.getItem(WORKBENCH_COL_STORAGE);
+    if (!raw) return new Set(WORKBENCH_COL_IDS);
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return new Set(WORKBENCH_COL_IDS);
+    const next = new Set<WorkbenchColId>();
+    for (const x of arr) {
+      if (WORKBENCH_COL_IDS.includes(x as WorkbenchColId)) next.add(x as WorkbenchColId);
+    }
+    return next.size ? next : new Set(WORKBENCH_COL_IDS);
+  } catch {
+    return new Set(WORKBENCH_COL_IDS);
+  }
+}
+
+type CustomerPick = { id: number; customer_code: string; customer_name: string };
+type DistributorPick = { id: number; distributor_code: string; distributor_name: string };
+
+type EntityTokenCandidate = {
+  token_norm: string;
+  token_display: string;
+  line_count: number;
+  sample_line_ids: number[];
+};
+
+type EntityResolutionCandidatesResponse = {
+  case_id: number;
+  customer_tokens: EntityTokenCandidate[];
+  distributor_tokens: EntityTokenCandidate[];
+};
+
+const RESOLUTION_UI_STATUSES = new Set(['draft_imported', 'validated', 'pending_review']);
 
 function lineupProductLabel(ln: CommercialLineupLine): string {
   const a =
@@ -135,6 +212,12 @@ function lineupDistributorCell(ln: CommercialLineupLine): string {
   return '—';
 }
 
+function lineupIssuesCell(ln: CommercialLineupLine): string {
+  const bits = [...(ln.diagnostic_codes || [])];
+  if (ln.sync_skip_reason) bits.push(`sync preview: ${ln.sync_skip_reason}`);
+  return bits.length ? bits.join(', ') : ln.row_status;
+}
+
 // ── Status chip colors ─────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> =
@@ -161,6 +244,208 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   received_closed: [],
   cancelled: [],
 };
+
+function buildCaseLinesSearchParams(opts: {
+  commercialPlanId: number | null | undefined;
+  fallbackCustomerId: string;
+  fallbackDistributorId: string;
+  defaultSrpLocal: string;
+  allowZeroQuantity: boolean;
+}): string {
+  const p = new URLSearchParams();
+  if (!opts.commercialPlanId) return '';
+  p.set('include_sync_eligibility', 'true');
+  const fc = Number(opts.fallbackCustomerId.trim());
+  if (Number.isFinite(fc) && fc > 0) p.set('fallback_customer_id', String(Math.trunc(fc)));
+  const fd = Number(opts.fallbackDistributorId.trim());
+  if (Number.isFinite(fd) && fd > 0) p.set('fallback_distributor_id', String(Math.trunc(fd)));
+  const srp = Number(opts.defaultSrpLocal.trim());
+  if (Number.isFinite(srp) && srp > 0) p.set('default_srp_local', String(srp));
+  if (opts.allowZeroQuantity) p.set('allow_zero_quantity', 'true');
+  return p.toString();
+}
+
+function LineupEntityResolutionDialog({
+  open,
+  onClose,
+  caseId,
+  caseStatus,
+  onApplied,
+}: {
+  open: boolean;
+  onClose: () => void;
+  caseId: number;
+  caseStatus: string;
+  onApplied: () => void;
+}) {
+  const qc = useQueryClient();
+  const [customerPicks, setCustomerPicks] = useState<Record<string, CustomerPick | null>>({});
+  const [distributorPicks, setDistributorPicks] = useState<Record<string, DistributorPick | null>>({});
+  const [applyError, setApplyError] = useState<string | null>(null);
+
+  const { data, isLoading } = useQuery<EntityResolutionCandidatesResponse>({
+    queryKey: ['lineup-entity-resolution-candidates', caseId],
+    queryFn: ({ signal }) =>
+      apiGet<EntityResolutionCandidatesResponse>(
+        `/api/v1/commercial-planner/lineup-cases/${caseId}/entity-resolution-candidates`,
+        { signal },
+      ),
+    enabled: open && RESOLUTION_UI_STATUSES.has(caseStatus),
+  });
+
+  useEffect(() => {
+    if (!open) {
+      setCustomerPicks({});
+      setDistributorPicks({});
+      setApplyError(null);
+    }
+  }, [open, caseId]);
+
+  const applyMutation = useMutation({
+    mutationFn: async (resolutions: { kind: 'customer' | 'distributor'; token: string; dim_id: number }[]) => {
+      await apiPost(`/api/v1/commercial-planner/lineup-cases/${caseId}/entity-resolutions/apply`, {
+        resolutions,
+      });
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['lineup-entity-resolution-candidates', caseId] });
+      await qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', caseId] });
+      await qc.invalidateQueries({ queryKey: ['sync-to-plan-preview'] });
+      onApplied();
+      onClose();
+    },
+    onError: (e: unknown) => {
+      setApplyError(e instanceof Error ? e.message : 'Apply failed');
+    },
+  });
+
+  const handleApply = () => {
+    setApplyError(null);
+    if (!data) return;
+    const resolutions: { kind: 'customer' | 'distributor'; token: string; dim_id: number }[] = [];
+    for (const t of data.customer_tokens) {
+      const pick = customerPicks[t.token_norm];
+      if (pick)
+        resolutions.push({ kind: 'customer', token: t.token_display || t.token_norm, dim_id: pick.id });
+    }
+    for (const t of data.distributor_tokens) {
+      const pick = distributorPicks[t.token_norm];
+      if (pick)
+        resolutions.push({ kind: 'distributor', token: t.token_display || t.token_norm, dim_id: pick.id });
+    }
+    if (!resolutions.length) {
+      setApplyError('Select at least one customer or distributor mapping.');
+      return;
+    }
+    applyMutation.mutate(resolutions);
+  };
+
+  const totalUnresolved =
+    (data?.customer_tokens.length ?? 0) + (data?.distributor_tokens.length ?? 0);
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>Resolve lineup entities (this case only)</DialogTitle>
+      <DialogContent dividers>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Map file tokens to existing customers and distributors. This updates lineup rows only — DAP stays evidence-only
+          and is not used as cost.
+        </Alert>
+        {isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+            <CircularProgress size={28} />
+          </Box>
+        ) : !data || totalUnresolved === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No unresolved customer or distributor tokens on this case.
+          </Typography>
+        ) : (
+          <Stack spacing={3}>
+            {data.customer_tokens.length > 0 && (
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Customers ({data.customer_tokens.length})
+                </Typography>
+                <Stack spacing={2}>
+                  {data.customer_tokens.map((t) => (
+                    <Box key={`c-${t.token_norm}`}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}): {t.token_display}
+                      </Typography>
+                      <EntitySearchAutocomplete<CustomerPick>
+                        label="Map to customer"
+                        helperText="Search master data; nothing is auto-created."
+                        value={customerPicks[t.token_norm] ?? null}
+                        onChange={(next) =>
+                          setCustomerPicks((prev) => ({ ...prev, [t.token_norm]: next }))
+                        }
+                        fetchOptions={async (q, signal) => {
+                          const res = await apiGet<{ items: CustomerPick[] }>(
+                            `/api/v1/customers?page=1&page_size=25&q=${encodeURIComponent(q)}`,
+                            { signal },
+                          );
+                          return res.items;
+                        }}
+                        getOptionLabel={(o) => `${o.customer_code} — ${o.customer_name}`}
+                      />
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
+            )}
+            {data.distributor_tokens.length > 0 && (
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Distributors ({data.distributor_tokens.length})
+                </Typography>
+                <Stack spacing={2}>
+                  {data.distributor_tokens.map((t) => (
+                    <Box key={`d-${t.token_norm}`}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}): {t.token_display}
+                      </Typography>
+                      <EntitySearchAutocomplete<DistributorPick>
+                        label="Map to distributor"
+                        helperText="Search master data; nothing is auto-created."
+                        value={distributorPicks[t.token_norm] ?? null}
+                        onChange={(next) =>
+                          setDistributorPicks((prev) => ({ ...prev, [t.token_norm]: next }))
+                        }
+                        fetchOptions={async (q, signal) => {
+                          const res = await apiGet<{ items: DistributorPick[] }>(
+                            `/api/v1/distributors?page=1&page_size=25&q=${encodeURIComponent(q)}`,
+                            { signal },
+                          );
+                          return res.items;
+                        }}
+                        getOptionLabel={(o) => `${o.distributor_code} — ${o.distributor_name}`}
+                      />
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
+            )}
+            {applyError && <Alert severity="error">{applyError}</Alert>}
+          </Stack>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button size="small" onClick={onClose}>
+          Close
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
+          disabled={applyMutation.isPending || isLoading || !data || totalUnresolved === 0}
+          onClick={handleApply}
+          data-testid="lineup-entity-resolution-apply"
+        >
+          {applyMutation.isPending ? 'Applying…' : 'Apply mappings'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
 
 // ── Types: sync ───────────────────────────────────────────────────────────────
 
@@ -210,22 +495,79 @@ function SyncPreviewDialog({
   const qc = useQueryClient();
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [fallbackCustomerId, setFallbackCustomerId] = useState('');
+  const [fallbackDistributorId, setFallbackDistributorId] = useState('');
+  const [defaultSrpLocal, setDefaultSrpLocal] = useState('');
+  const [allowZeroQuantity, setAllowZeroQuantity] = useState(false);
 
-  const previewUrl = `/api/v1/commercial-planner/lineup-cases/${caseItem.id}/sync-to-plan/preview${
-    caseItem.commercial_plan_id ? `?commercial_plan_id=${caseItem.commercial_plan_id}` : ''
-  }`;
+  useEffect(() => {
+    if (!open) return;
+    setSyncResult(null);
+    setSyncError(null);
+  }, [open, caseItem.id]);
+
+  const previewQuerySuffix = useMemo(() => {
+    const p = new URLSearchParams();
+    if (caseItem.commercial_plan_id != null) {
+      p.set('commercial_plan_id', String(caseItem.commercial_plan_id));
+    }
+    const fc = Number(fallbackCustomerId.trim());
+    if (Number.isFinite(fc) && fc > 0) p.set('fallback_customer_id', String(Math.trunc(fc)));
+    const fd = Number(fallbackDistributorId.trim());
+    if (Number.isFinite(fd) && fd > 0) p.set('fallback_distributor_id', String(Math.trunc(fd)));
+    const srp = Number(defaultSrpLocal.trim());
+    if (Number.isFinite(srp) && srp > 0) p.set('default_srp_local', String(srp));
+    if (allowZeroQuantity) p.set('allow_zero_quantity', 'true');
+    const s = p.toString();
+    return s ? `?${s}` : '';
+  }, [
+    caseItem.commercial_plan_id,
+    fallbackCustomerId,
+    fallbackDistributorId,
+    defaultSrpLocal,
+    allowZeroQuantity,
+  ]);
+
+  const previewUrl = `/api/v1/commercial-planner/lineup-cases/${caseItem.id}/sync-to-plan/preview${previewQuerySuffix}`;
+
+  const syncBody = useMemo(
+    () => ({
+      commercial_plan_id: caseItem.commercial_plan_id ?? null,
+      fallback_customer_id:
+        Number.isFinite(Number(fallbackCustomerId.trim())) && Number(fallbackCustomerId.trim()) > 0
+          ? Math.trunc(Number(fallbackCustomerId.trim()))
+          : null,
+      fallback_distributor_id:
+        Number.isFinite(Number(fallbackDistributorId.trim())) && Number(fallbackDistributorId.trim()) > 0
+          ? Math.trunc(Number(fallbackDistributorId.trim()))
+          : null,
+      default_srp_local:
+        Number.isFinite(Number(defaultSrpLocal.trim())) && Number(defaultSrpLocal.trim()) > 0
+          ? Number(defaultSrpLocal.trim())
+          : null,
+      allow_zero_quantity: allowZeroQuantity,
+    }),
+    [
+      caseItem.commercial_plan_id,
+      fallbackCustomerId,
+      fallbackDistributorId,
+      defaultSrpLocal,
+      allowZeroQuantity,
+    ],
+  );
 
   const { data: preview, isLoading: previewLoading } = useQuery<SyncPreview>({
-    queryKey: ['sync-to-plan-preview', caseItem.id, caseItem.commercial_plan_id],
+    queryKey: ['sync-to-plan-preview', caseItem.id, previewQuerySuffix],
     queryFn: ({ signal }) => apiGet<SyncPreview>(previewUrl, { signal }),
     enabled: open && !syncResult,
   });
 
   const syncMutation = useMutation({
     mutationFn: () =>
-      apiPost<SyncResult>(`/api/v1/commercial-planner/lineup-cases/${caseItem.id}/sync-to-plan`, {
-        commercial_plan_id: caseItem.commercial_plan_id ?? null,
-      }),
+      apiPost<SyncResult>(
+        `/api/v1/commercial-planner/lineup-cases/${caseItem.id}/sync-to-plan`,
+        syncBody,
+      ),
     onSuccess: (result) => {
       setSyncResult(result);
       qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
@@ -239,6 +581,10 @@ function SyncPreviewDialog({
   const handleClose = () => {
     setSyncResult(null);
     setSyncError(null);
+    setFallbackCustomerId('');
+    setFallbackDistributorId('');
+    setDefaultSrpLocal('');
+    setAllowZeroQuantity(false);
     onClose();
   };
 
@@ -295,55 +641,97 @@ function SyncPreviewDialog({
           </Alert>
         ) : syncError ? (
           <Alert severity="error">{syncError}</Alert>
-        ) : previewLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-            <CircularProgress size={28} />
-          </Box>
-        ) : preview ? (
-          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-            <Typography variant="body2">
-              Total lines in case: <strong>{preview.total_lines}</strong>
+        ) : (
+          <Stack spacing={2} sx={{ mt: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Optional fallbacks apply to preview and to the sync request. They do not change DAP evidence on lineup
+              rows.
             </Typography>
-            <Typography variant="body2" color="success.main">
-              Eligible (will be created): <strong>{preview.will_create}</strong>
-            </Typography>
-            {preview.skipped_duplicates > 0 && (
-              <Typography variant="body2" color="text.secondary">
-                Skipped — already in plan: {preview.skipped_duplicates}
-              </Typography>
-            )}
-            {preview.skipped_unresolved_product != null && preview.skipped_unresolved_product > 0 && (
-              <Typography variant="body2" color="text.secondary">
-                Skipped — unresolved product: {preview.skipped_unresolved_product}
-              </Typography>
-            )}
-            {preview.skipped_missing_customer != null && preview.skipped_missing_customer > 0 && (
-              <Typography variant="body2" color="text.secondary">
-                Skipped — missing customer: {preview.skipped_missing_customer}
-              </Typography>
-            )}
-            {preview.skipped_missing_distributor != null && preview.skipped_missing_distributor > 0 && (
-              <Typography variant="body2" color="text.secondary">
-                Skipped — missing distributor: {preview.skipped_missing_distributor}
-              </Typography>
-            )}
-            {preview.skipped_missing_quantity != null && preview.skipped_missing_quantity > 0 && (
-              <Typography variant="body2" color="text.secondary">
-                Skipped — missing quantity: {preview.skipped_missing_quantity}
-              </Typography>
-            )}
-            {preview.skipped_unresolved > 0 && (
-              <Typography variant="body2" color="text.secondary">
-                Total blocked (excl. duplicates / missing SRP): {preview.skipped_unresolved}
-              </Typography>
-            )}
-            {preview.skipped_missing_srp > 0 && (
-              <Typography variant="body2" color="text.secondary">
-                Skipped — missing SRP: {preview.skipped_missing_srp}
-              </Typography>
-            )}
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <TextField
+                size="small"
+                label="Fallback customer id"
+                value={fallbackCustomerId}
+                onChange={(e) => setFallbackCustomerId(e.target.value)}
+                sx={{ width: 168 }}
+              />
+              <TextField
+                size="small"
+                label="Fallback distributor id"
+                value={fallbackDistributorId}
+                onChange={(e) => setFallbackDistributorId(e.target.value)}
+                sx={{ width: 176 }}
+              />
+              <TextField
+                size="small"
+                label="Default SRP (local)"
+                value={defaultSrpLocal}
+                onChange={(e) => setDefaultSrpLocal(e.target.value)}
+                sx={{ width: 140 }}
+              />
+            </Stack>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={allowZeroQuantity}
+                  onChange={(e) => setAllowZeroQuantity(e.target.checked)}
+                />
+              }
+              label="Allow missing quantity (treat as 0 for sync)"
+            />
+            <Divider />
+            {previewLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                <CircularProgress size={28} />
+              </Box>
+            ) : preview ? (
+              <Stack spacing={1.5}>
+                <Typography variant="body2">
+                  Total lines in this lineup case: <strong>{preview.total_lines}</strong>
+                </Typography>
+                <Typography variant="body2" color="success.main">
+                  Eligible planner lines (would be created): <strong>{preview.will_create}</strong>
+                </Typography>
+                {preview.skipped_duplicates > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Skipped — already in plan: {preview.skipped_duplicates}
+                  </Typography>
+                )}
+                {preview.skipped_unresolved_product != null && preview.skipped_unresolved_product > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Skipped — unresolved product: {preview.skipped_unresolved_product}
+                  </Typography>
+                )}
+                {preview.skipped_missing_customer != null && preview.skipped_missing_customer > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Skipped — missing customer: {preview.skipped_missing_customer}
+                  </Typography>
+                )}
+                {preview.skipped_missing_distributor != null && preview.skipped_missing_distributor > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Skipped — missing distributor: {preview.skipped_missing_distributor}
+                  </Typography>
+                )}
+                {preview.skipped_missing_quantity != null && preview.skipped_missing_quantity > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Skipped — missing quantity: {preview.skipped_missing_quantity}
+                  </Typography>
+                )}
+                {preview.skipped_unresolved > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Total blocked (excl. duplicates / missing SRP): {preview.skipped_unresolved}
+                  </Typography>
+                )}
+                {preview.skipped_missing_srp > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Skipped — missing SRP: {preview.skipped_missing_srp}
+                  </Typography>
+                )}
+              </Stack>
+            ) : null}
           </Stack>
-        ) : null}
+        )}
       </DialogContent>
       <DialogActions>
         <Button size="small" onClick={handleClose}>
@@ -862,6 +1250,20 @@ export function CurrentLineupSection({
   const [syncCase, setSyncCase] = useState<CommercialLineupCase | null>(null);
   const [retryParseCase, setRetryParseCase] = useState<CommercialLineupCase | null>(null);
   const [activeCaseId, setActiveCaseId] = useState<number | null>(null);
+  const [resolutionCase, setResolutionCase] = useState<CommercialLineupCase | null>(null);
+  const [wbSync, setWbSync] = useState({
+    fallbackCustomerId: '',
+    fallbackDistributorId: '',
+    defaultSrpLocal: '',
+    allowZeroQuantity: false,
+  });
+  const [colMenuAnchor, setColMenuAnchor] = useState<null | HTMLElement>(null);
+  const [visibleCols, setVisibleCols] = useState<Set<WorkbenchColId>>(() => readWorkbenchColumns());
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(WORKBENCH_COL_STORAGE, JSON.stringify([...visibleCols]));
+  }, [visibleCols]);
 
   const { data: cases, isLoading } = useQuery<CommercialLineupCase[]>({
     queryKey: ['commercial-lineup-cases', activePlanId],
@@ -885,18 +1287,63 @@ export function CurrentLineupSection({
     });
   }, [cases]);
 
+  const activeCase = cases?.find((c) => c.id === activeCaseId);
+
+  const caseLinesSuffix = useMemo(
+    () =>
+      buildCaseLinesSearchParams({
+        commercialPlanId: activeCase?.commercial_plan_id ?? null,
+        fallbackCustomerId: wbSync.fallbackCustomerId,
+        fallbackDistributorId: wbSync.fallbackDistributorId,
+        defaultSrpLocal: wbSync.defaultSrpLocal,
+        allowZeroQuantity: wbSync.allowZeroQuantity,
+      }),
+    [
+      activeCase?.commercial_plan_id,
+      wbSync.fallbackCustomerId,
+      wbSync.fallbackDistributorId,
+      wbSync.defaultSrpLocal,
+      wbSync.allowZeroQuantity,
+    ],
+  );
+
+  const workingLinesUrl = useMemo(() => {
+    if (activeCaseId == null) return null;
+    const base = `/api/v1/commercial-planner/lineup-cases/${activeCaseId}/lines`;
+    if (!caseLinesSuffix) return base;
+    return `${base}?${caseLinesSuffix}`;
+  }, [activeCaseId, caseLinesSuffix]);
+
   const { data: workingLinesData } = useQuery<CaseLinesResponse>({
-    queryKey: ['commercial-lineup-case-lines', activeCaseId],
-    queryFn: ({ signal }) =>
-      apiGet<CaseLinesResponse>(
-        `/api/v1/commercial-planner/lineup-cases/${activeCaseId}/lines`,
-        { signal }
-      ),
-    enabled: activeCaseId != null && activePlanId != null,
+    queryKey: ['commercial-lineup-case-lines', activeCaseId, caseLinesSuffix],
+    queryFn: ({ signal }) => apiGet<CaseLinesResponse>(workingLinesUrl!, { signal }),
+    enabled: activeCaseId != null && activePlanId != null && workingLinesUrl != null,
   });
 
   const workingLines = workingLinesData?.lines ?? [];
-  const activeCase = cases?.find((c) => c.id === activeCaseId);
+
+  const syncSummary = useMemo(() => {
+    if (!workingLines.length || !activeCase?.commercial_plan_id) return null;
+    const first = workingLines[0];
+    if (typeof first.sync_eligible !== 'boolean') return null;
+    let eligible = 0;
+    const reasons: Record<string, number> = {};
+    for (const ln of workingLines) {
+      if (ln.sync_eligible) eligible += 1;
+      else if (ln.sync_skip_reason) {
+        reasons[ln.sync_skip_reason] = (reasons[ln.sync_skip_reason] ?? 0) + 1;
+      }
+    }
+    return { eligible, reasons, total: workingLines.length };
+  }, [workingLines, activeCase?.commercial_plan_id]);
+
+  const showSyncWorkbenchCol = useMemo(
+    () =>
+      Boolean(activeCase?.commercial_plan_id) &&
+      workingLines.length > 0 &&
+      typeof workingLines[0]?.sync_eligible === 'boolean',
+    [activeCase?.commercial_plan_id, workingLines],
+  );
 
   useEffect(() => {
     onStagedLineupSummary?.({ caseId: activeCaseId, lineCount: workingLines.length });
@@ -1067,14 +1514,116 @@ export function CurrentLineupSection({
           <Box sx={{ mt: 2 }} data-testid="current-lineup-working-grid">
             {planLineCount === 0 && workingLines.length > 0 && (
               <Alert severity="info" sx={{ mb: 1 }}>
-                Current lineup rows are staged for this plan. Accept the case and sync to plan to create planner
-                lines.
+                This plan has no commercial planner lines yet. Lineup rows below are staged on this case. Accept the
+                case, then use Sync to plan to create planner lines from eligible rows.
               </Alert>
             )}
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              Current lineup working rows — case #{activeCase.id}
-              {activeCase.file_name ? ` · ${activeCase.file_name}` : ''}
+            <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1} sx={{ mb: 1 }}>
+              <Typography variant="subtitle2">
+                Current lineup working rows — case #{activeCase.id}
+                {activeCase.file_name ? ` · ${activeCase.file_name}` : ''}
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                {RESOLUTION_UI_STATUSES.has(activeCase.commercial_status) && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setResolutionCase(activeCase)}
+                    data-testid="lineup-entity-resolution-open"
+                  >
+                    Resolve entities
+                  </Button>
+                )}
+                <Button size="small" variant="text" onClick={(e) => setColMenuAnchor(e.currentTarget)} data-testid="lineup-workbench-columns">
+                  Workbench columns
+                </Button>
+              </Stack>
+            </Stack>
+            <Menu anchorEl={colMenuAnchor} open={Boolean(colMenuAnchor)} onClose={() => setColMenuAnchor(null)}>
+              {WORKBENCH_COL_IDS.filter((id) => id !== 'sync' || activeCase.commercial_plan_id).map((id) => (
+                <MenuItem key={id} disableRipple sx={{ py: 0 }}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={visibleCols.has(id)}
+                        onChange={() => {
+                          setVisibleCols((prev) => {
+                            const n = new Set(prev);
+                            if (n.has(id)) n.delete(id);
+                            else n.add(id);
+                            if (n.size === 0) return prev;
+                            return n;
+                          });
+                        }}
+                      />
+                    }
+                    label={WORKBENCH_COL_LABELS[id]}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </MenuItem>
+              ))}
+            </Menu>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Case lifecycle: draft → validated → pending review → accepted → sync creates planner lines. Resolve
+              customer/distributor tokens before accept when needed. DAP on rows is import evidence only — not landed
+              cost.
             </Typography>
+            {activeCase.commercial_plan_id != null && (
+              <Stack spacing={1} sx={{ mb: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Optional fallbacks for sync-eligibility preview (same query params as sync-to-plan preview). Does not
+                  change DAP.
+                </Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <TextField
+                    size="small"
+                    label="Fallback customer id"
+                    value={wbSync.fallbackCustomerId}
+                    onChange={(e) => setWbSync((s) => ({ ...s, fallbackCustomerId: e.target.value }))}
+                    sx={{ width: 168 }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Fallback distributor id"
+                    value={wbSync.fallbackDistributorId}
+                    onChange={(e) => setWbSync((s) => ({ ...s, fallbackDistributorId: e.target.value }))}
+                    sx={{ width: 176 }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Default SRP (local)"
+                    value={wbSync.defaultSrpLocal}
+                    onChange={(e) => setWbSync((s) => ({ ...s, defaultSrpLocal: e.target.value }))}
+                    sx={{ width: 140 }}
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={wbSync.allowZeroQuantity}
+                        onChange={(e) => setWbSync((s) => ({ ...s, allowZeroQuantity: e.target.checked }))}
+                      />
+                    }
+                    label="Allow zero qty preview"
+                  />
+                </Stack>
+              </Stack>
+            )}
+            {syncSummary && (
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+                <Chip
+                  variant="outlined"
+                  size="small"
+                  color="success"
+                  label={`Sync-eligible rows: ${syncSummary.eligible} / ${syncSummary.total}`}
+                  data-testid="lineup-workbench-sync-eligible-chip"
+                />
+                {Object.entries(syncSummary.reasons).map(([k, v]) => (
+                  <Chip key={k} variant="outlined" size="small" label={`${k}: ${v}`} />
+                ))}
+              </Stack>
+            )}
             {workingLines.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
                 No rows in the selected case yet. Upload a file or choose another case.
@@ -1084,92 +1633,133 @@ export function CurrentLineupSection({
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell>#</TableCell>
-                      <TableCell>Model / product</TableCell>
-                      <TableCell>SKU</TableCell>
-                      <TableCell>Part #</TableCell>
-                      <TableCell>Customer</TableCell>
-                      <TableCell>Distributor</TableCell>
-                      <TableCell>Units</TableCell>
-                      <TableCell>MSRP / list</TableCell>
-                      <TableCell>Promo evidence</TableCell>
-                      <TableCell>DAP evidence</TableCell>
-                      <TableCell>Status / issues</TableCell>
+                      {visibleCols.has('num') && <TableCell>#</TableCell>}
+                      {visibleCols.has('product') && <TableCell>Model / product</TableCell>}
+                      {visibleCols.has('sku') && <TableCell>SKU</TableCell>}
+                      {visibleCols.has('part') && <TableCell>Part #</TableCell>}
+                      {visibleCols.has('cust') && <TableCell>Customer</TableCell>}
+                      {visibleCols.has('dist') && <TableCell>Distributor</TableCell>}
+                      {visibleCols.has('units') && <TableCell>Units</TableCell>}
+                      {visibleCols.has('msrp') && <TableCell>MSRP / list</TableCell>}
+                      {visibleCols.has('promo') && <TableCell>Promo evidence</TableCell>}
+                      {visibleCols.has('dap') && <TableCell>DAP evidence</TableCell>}
+                      {visibleCols.has('issues') && <TableCell>Status / issues</TableCell>}
+                      {visibleCols.has('sync') && <TableCell>Sync preview</TableCell>}
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {workingLines.map((ln) => {
                       const canEdit = activeCase.commercial_status === 'draft_imported';
-                      const issues =
-                        (ln.diagnostic_codes?.length && ln.diagnostic_codes.join(', ')) || ln.row_status;
+                      const issues = lineupIssuesCell(ln);
                       return (
                         <TableRow key={ln.id}>
-                          <TableCell>{ln.source_row_number ?? ln.id}</TableCell>
-                          <TableCell>
-                            <Typography variant="body2">{lineupProductLabel(ln)}</Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" fontFamily="monospace">
-                              {ln.product_sku ?? ln.sku_raw ?? '—'}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>{ln.product_part_number ?? ln.part_number_raw ?? '—'}</TableCell>
-                          <TableCell>{lineupCustomerCell(ln)}</TableCell>
-                          <TableCell>{lineupDistributorCell(ln)}</TableCell>
-                          <TableCell>
-                            <LineupLineNumericEditor
-                              disabled={!canEdit || patchLineMutation.isPending}
-                              initial={ln.quantity_units}
-                              width={88}
-                              onCommit={(next) => {
-                                if (!canEdit || next == null || !activeCaseId) return;
-                                if (next === ln.quantity_units) return;
-                                patchLineMutation.mutate({
-                                  caseId: activeCaseId,
-                                  lineId: ln.id,
-                                  body: { quantity_units: next },
-                                });
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <LineupLineNumericEditor
-                              disabled={!canEdit || patchLineMutation.isPending}
-                              initial={ln.msrp_local}
-                              width={100}
-                              onCommit={(next) => {
-                                if (!canEdit || next == null || !activeCaseId) return;
-                                if (next === ln.msrp_local) return;
-                                patchLineMutation.mutate({
-                                  caseId: activeCaseId,
-                                  lineId: ln.id,
-                                  body: { msrp_local: next },
-                                });
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <LineupLineNumericEditor
-                              disabled={!canEdit || patchLineMutation.isPending}
-                              initial={ln.promo_price_evidence_local}
-                              width={100}
-                              onCommit={(next) => {
-                                if (!canEdit || next == null || !activeCaseId) return;
-                                if (next === ln.promo_price_evidence_local) return;
-                                patchLineMutation.mutate({
-                                  caseId: activeCaseId,
-                                  lineId: ln.id,
-                                  body: { promo_price_evidence_local: next },
-                                });
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {ln.dap_evidence_local != null ? ln.dap_evidence_local.toLocaleString() : '—'}
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="caption">{issues}</Typography>
-                          </TableCell>
+                          {visibleCols.has('num') && (
+                            <TableCell>{ln.source_row_number ?? ln.id}</TableCell>
+                          )}
+                          {visibleCols.has('product') && (
+                            <TableCell>
+                              <Typography variant="body2">{lineupProductLabel(ln)}</Typography>
+                            </TableCell>
+                          )}
+                          {visibleCols.has('sku') && (
+                            <TableCell>
+                              <Typography variant="body2" fontFamily="monospace">
+                                {ln.product_sku ?? ln.sku_raw ?? '—'}
+                              </Typography>
+                            </TableCell>
+                          )}
+                          {visibleCols.has('part') && (
+                            <TableCell>{ln.product_part_number ?? ln.part_number_raw ?? '—'}</TableCell>
+                          )}
+                          {visibleCols.has('cust') && <TableCell>{lineupCustomerCell(ln)}</TableCell>}
+                          {visibleCols.has('dist') && <TableCell>{lineupDistributorCell(ln)}</TableCell>}
+                          {visibleCols.has('units') && (
+                            <TableCell>
+                              <LineupLineNumericEditor
+                                disabled={!canEdit || patchLineMutation.isPending}
+                                initial={ln.quantity_units}
+                                width={88}
+                                onCommit={(next) => {
+                                  if (!canEdit || next == null || !activeCaseId) return;
+                                  if (next === ln.quantity_units) return;
+                                  patchLineMutation.mutate({
+                                    caseId: activeCaseId,
+                                    lineId: ln.id,
+                                    body: { quantity_units: next },
+                                  });
+                                }}
+                              />
+                            </TableCell>
+                          )}
+                          {visibleCols.has('msrp') && (
+                            <TableCell>
+                              <LineupLineNumericEditor
+                                disabled={!canEdit || patchLineMutation.isPending}
+                                initial={ln.msrp_local}
+                                width={100}
+                                onCommit={(next) => {
+                                  if (!canEdit || next == null || !activeCaseId) return;
+                                  if (next === ln.msrp_local) return;
+                                  patchLineMutation.mutate({
+                                    caseId: activeCaseId,
+                                    lineId: ln.id,
+                                    body: { msrp_local: next },
+                                  });
+                                }}
+                              />
+                            </TableCell>
+                          )}
+                          {visibleCols.has('promo') && (
+                            <TableCell>
+                              <LineupLineNumericEditor
+                                disabled={!canEdit || patchLineMutation.isPending}
+                                initial={ln.promo_price_evidence_local}
+                                width={100}
+                                onCommit={(next) => {
+                                  if (!canEdit || next == null || !activeCaseId) return;
+                                  if (next === ln.promo_price_evidence_local) return;
+                                  patchLineMutation.mutate({
+                                    caseId: activeCaseId,
+                                    lineId: ln.id,
+                                    body: { promo_price_evidence_local: next },
+                                  });
+                                }}
+                              />
+                            </TableCell>
+                          )}
+                          {visibleCols.has('dap') && (
+                            <TableCell>
+                              {ln.dap_evidence_local != null ? ln.dap_evidence_local.toLocaleString() : '—'}
+                            </TableCell>
+                          )}
+                          {visibleCols.has('issues') && (
+                            <TableCell>
+                              <Typography variant="caption">{issues}</Typography>
+                            </TableCell>
+                          )}
+                          {visibleCols.has('sync') && (
+                            <TableCell>
+                              {showSyncWorkbenchCol ? (
+                                <Stack spacing={0.5}>
+                                  <Chip
+                                    size="small"
+                                    label={ln.sync_eligible ? 'eligible' : 'skipped'}
+                                    color={ln.sync_eligible ? 'success' : 'default'}
+                                    variant={ln.sync_eligible ? 'filled' : 'outlined'}
+                                  />
+                                  {!ln.sync_eligible && ln.sync_skip_reason && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      {ln.sync_skip_reason}
+                                    </Typography>
+                                  )}
+                                </Stack>
+                              ) : (
+                                <Typography variant="caption" color="text.secondary">
+                                  —
+                                </Typography>
+                              )}
+                            </TableCell>
+                          )}
                         </TableRow>
                       );
                     })}
@@ -1228,6 +1818,18 @@ export function CurrentLineupSection({
           onClose={() => setRetryParseCase(null)}
           targetCase={retryParseCase}
           onParsed={() => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] })}
+        />
+      )}
+
+      {resolutionCase && (
+        <LineupEntityResolutionDialog
+          open
+          onClose={() => setResolutionCase(null)}
+          caseId={resolutionCase.id}
+          caseStatus={resolutionCase.commercial_status}
+          onApplied={() => {
+            void qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', resolutionCase.id] });
+          }}
         />
       )}
     </>
