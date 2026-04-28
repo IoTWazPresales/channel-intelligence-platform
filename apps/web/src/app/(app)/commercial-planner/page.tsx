@@ -51,6 +51,7 @@ type Plan = {
   period_start: string;
   period_end: string | null;
   owner: string | null;
+  country_code: string | null;
   currency_code: string;
   line_count: number;
   notes: string | null;
@@ -84,6 +85,8 @@ type PlanLine = {
   product_spec_warranty?: string | null;
   product_spec_os?: string | null;
   product_spec_colour?: string | null;
+  /** Flattened specs_json string map for optional dynamic columns. */
+  product_specs_flat?: Record<string, string>;
   effective_customer_margin_pct?: number | null;
   effective_customer_rebate_pct?: number | null;
   effective_distributor_margin_pct?: number | null;
@@ -345,6 +348,34 @@ export function monthSplitTotalUnits(m: Record<string, number> | null | undefine
   return t > 0 ? t : null;
 }
 
+function coverageLineupProductLabel(row: LineupCoverageLine): string {
+  return (
+    row.product_name?.trim() ||
+    row.model_raw?.trim() ||
+    row.product_sku?.trim() ||
+    row.part_number_raw?.trim() ||
+    '—'
+  );
+}
+
+function coverageLineupCustomerCell(row: LineupCoverageLine): string {
+  if (row.header_customer_id != null) {
+    const bits = [row.header_customer_code, row.header_customer_name].filter((x) => x?.trim());
+    if (bits.length) return bits.join(' — ');
+  }
+  const t = row.customer_token?.trim();
+  if (t) return `${t} (unresolved)`;
+  return '—';
+}
+
+function coverageLineupDistributorCell(row: LineupCoverageLine): string {
+  if (row.header_distributor_id != null) {
+    const bits = [row.header_distributor_code, row.header_distributor_name].filter((x) => x?.trim());
+    if (bits.length) return bits.join(' — ');
+  }
+  return '—';
+}
+
 /** Model / sales model for grid and detail (read-only from DimProduct). */
 export function fmtModelSalesModel(line: {
   product_model_name?: string | null;
@@ -406,6 +437,7 @@ const OPTIONAL_GRID_COL_FIELDS = [
 type OptionalGridColField = (typeof OPTIONAL_GRID_COL_FIELDS)[number];
 
 const LS_GRID_COLS_V4 = 'cip.commercial-planner.gridColumns.v4';
+const LS_SPEC_OPTIONAL_KEYS = 'cip.commercial-planner.optionalSpecKeys.v1';
 const LS_GRID_COLS_V3 = 'cip.commercial-planner.gridColumns.v3';
 const LS_GRID_COLS_V2 = 'cip.commercial-planner.gridColumns.v2';
 const LS_OPTIONAL_COLS_V1 = 'cip.commercial-planner.optionalColumns.v1';
@@ -623,6 +655,12 @@ export default function CommercialPlannerPage() {
   const [lineupFbDistributor, setLineupFbDistributor] = useState<DistributorPick | null>(null);
   const [lineupBatchSummary, setLineupBatchSummary] = useState<string | null>(null);
   const [lineupBatchRunning, setLineupBatchRunning] = useState(false);
+  const [stagedLineupSummary, setStagedLineupSummary] = useState<{ caseId: number | null; lineCount: number }>({
+    caseId: null,
+    lineCount: 0,
+  });
+  const [optionalSpecKeyVisible, setOptionalSpecKeyVisible] = useState<Record<string, boolean>>({});
+  const [specKeyPrefsLoaded, setSpecKeyPrefsLoaded] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -684,6 +722,29 @@ export default function CommercialPlannerPage() {
       /* ignore */
     }
   }, [optionalVisible, optionalColsHydrated]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(LS_SPEC_OPTIONAL_KEYS);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, boolean>;
+        if (parsed && typeof parsed === 'object') setOptionalSpecKeyVisible(parsed);
+      }
+    } catch {
+      /* ignore */
+    }
+    setSpecKeyPrefsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!specKeyPrefsLoaded || typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(LS_SPEC_OPTIONAL_KEYS, JSON.stringify(optionalSpecKeyVisible));
+    } catch {
+      /* ignore */
+    }
+  }, [optionalSpecKeyVisible, specKeyPrefsLoaded]);
 
   const { data: plans, isLoading, isError, error } = useQuery({
     queryKey: ['commercial-plans'],
@@ -749,6 +810,7 @@ export default function CommercialPlannerPage() {
     () => plans?.find((p) => p.id === activePlanId)?.currency_code ?? 'USD',
     [plans, activePlanId]
   );
+  const activePlan = useMemo(() => plans?.find((p) => p.id === activePlanId) ?? null, [plans, activePlanId]);
   const { data: lines, isPending: linesPending } = useQuery({
     queryKey: ['commercial-plan-lines', activePlanId],
     queryFn: ({ signal }) => apiGet<PlanLine[]>(`/api/v1/commercial-planner/plans/${activePlanId}/lines`, { signal }),
@@ -783,6 +845,17 @@ export default function CommercialPlannerPage() {
     enabled: activePlanId != null,
     staleTime: 60_000,
   });
+
+  useEffect(() => {
+    if (!columnMetaData?.spec_keys) return;
+    setOptionalSpecKeyVisible((prev) => {
+      const next = { ...prev };
+      for (const k of Object.keys(columnMetaData.spec_keys)) {
+        if (!(k in next)) next[k] = false;
+      }
+      return next;
+    });
+  }, [columnMetaData]);
 
   const { data: lineupEvidence, isLoading: lineupEvidenceLoading } = useQuery({
     queryKey: ['lineup-evidence', lineProduct?.id],
@@ -1375,6 +1448,23 @@ export default function CommercialPlannerPage() {
           return d.calc_non_promo_reserve_usd != null ? String(d.calc_non_promo_reserve_usd) : '—';
         },
       },
+      ...Object.keys(optionalSpecKeyVisible)
+        .filter((k) => optionalSpecKeyVisible[k])
+        .map((specKey) => ({
+          colId: `spec_flat_${specKey}`,
+          headerName: specKey,
+          minWidth: 120,
+          valueGetter: (p: { data?: PlanLine }) => {
+            const flat = p.data?.product_specs_flat;
+            if (!flat) return '—';
+            const direct = flat[specKey];
+            if (direct != null && String(direct).trim()) return String(direct);
+            const lower = specKey.toLowerCase();
+            const matchKey = Object.keys(flat).find((fk) => fk.toLowerCase() === lower);
+            const v = matchKey ? flat[matchKey] : undefined;
+            return v != null && String(v).trim() ? String(v) : '—';
+          },
+        })),
       {
         field: 'calc_flags',
         headerName: 'Issues',
@@ -1415,7 +1505,7 @@ export default function CommercialPlannerPage() {
           ) : null,
       },
     ],
-    [deleteLine, openEditLine, optionalVisible, planCurrencyCode]
+    [deleteLine, openEditLine, optionalSpecKeyVisible, optionalVisible, planCurrencyCode]
   );
 
   const lineGrid: GridOptions<PlanLine> = useMemo(
@@ -1774,6 +1864,10 @@ export default function CommercialPlannerPage() {
         {/* Current lineups section */}
         <CurrentLineupSection
           activePlanId={activePlanId}
+          planLineCount={activePlan?.line_count ?? 0}
+          planCountryCode={activePlan?.country_code ?? null}
+          planCurrencyCode={activePlan?.currency_code ?? null}
+          onStagedLineupSummary={setStagedLineupSummary}
           onSyncComplete={() => {
             void qc.invalidateQueries({ queryKey: ['commercial-plan-lines', activePlanId] });
             void qc.invalidateQueries({ queryKey: ['commercial-plan-summary', activePlanId] });
@@ -1821,6 +1915,11 @@ export default function CommercialPlannerPage() {
         )}
 
         {/* Grid + conditional line-detail sidebar */}
+        {lines !== undefined && (lines?.length ?? 0) === 0 && stagedLineupSummary.lineCount > 0 && (
+          <Alert severity="info" sx={{ mb: 1 }} data-testid="staged-lineup-banner">
+            Current lineup rows are staged. Accept the case and sync to plan to create planner lines.
+          </Alert>
+        )}
         <Stack direction="row" spacing={2} alignItems="stretch">
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <EnterpriseDataGrid rowData={lines ?? []} columnDefs={lineCols} gridOptions={lineGrid} height={480} />
@@ -2289,9 +2388,11 @@ export default function CommercialPlannerPage() {
                       />
                     </TableCell>
                     <TableCell>Row</TableCell>
+                    <TableCell>Model / product</TableCell>
                     <TableCell>SKU</TableCell>
+                    <TableCell>Part #</TableCell>
                     <TableCell>Customer</TableCell>
-                    <TableCell>Dist</TableCell>
+                    <TableCell>Distributor</TableCell>
                     <TableCell>Qty</TableCell>
                     <TableCell>MSRP</TableCell>
                   </TableRow>
@@ -2313,11 +2414,15 @@ export default function CommercialPlannerPage() {
                         />
                       </TableCell>
                       <TableCell>{row.source_row_number}</TableCell>
-                      <TableCell>{row.product_sku ?? '—'}</TableCell>
+                      <TableCell>{coverageLineupProductLabel(row)}</TableCell>
                       <TableCell>
-                        {row.header_customer_code ?? (row.has_unknown_customer ? '?' : '—')}
+                        <Typography variant="body2" fontFamily="monospace" component="span">
+                          {row.product_sku ?? '—'}
+                        </Typography>
                       </TableCell>
-                      <TableCell>{row.header_distributor_code ?? '—'}</TableCell>
+                      <TableCell>{row.part_number_raw?.trim() || '—'}</TableCell>
+                      <TableCell>{coverageLineupCustomerCell(row)}</TableCell>
+                      <TableCell>{coverageLineupDistributorCell(row)}</TableCell>
                       <TableCell>
                         {row.quantity_units ?? monthSplitTotalUnits(row.month_split_json) ?? '—'}
                       </TableCell>
@@ -2758,8 +2863,19 @@ export default function CommercialPlannerPage() {
         onClose={() => setColumnSelectorOpen(false)}
         lines={lines ?? []}
         optionalVisible={optionalVisible}
+        specKeyVisible={optionalSpecKeyVisible}
+        onSpecKeyToggle={(key, visible) =>
+          setOptionalSpecKeyVisible((prev) => ({ ...prev, [key]: visible }))
+        }
         onChange={(key, visible) => setOptionalVisible((prev) => ({ ...prev, [key]: visible }))}
-        onReset={() => setOptionalVisible(defaultOptionalVisibility())}
+        onReset={() => {
+          setOptionalVisible(defaultOptionalVisibility());
+          setOptionalSpecKeyVisible((prev) => {
+            const next = { ...prev };
+            for (const k of Object.keys(next)) next[k] = false;
+            return next;
+          });
+        }}
         columnMeta={columnMetaData ?? null}
         onPreset={(preset) => {
           if (preset === 'planning') {

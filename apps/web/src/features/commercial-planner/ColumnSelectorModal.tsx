@@ -55,6 +55,9 @@ export type ColumnSelectorModalProps = {
   onReset: () => void;
   onPreset: (name: string) => void;
   columnMeta?: ColumnMetadata | null;
+  /** Per discovered specs_json key visibility (server metadata keys). */
+  specKeyVisible?: Record<string, boolean>;
+  onSpecKeyToggle?: (key: string, visible: boolean) => void;
 };
 
 // ── Preset definitions ────────────────────────────────────────────────────────
@@ -207,6 +210,8 @@ export function ColumnSelectorModal({
   onReset,
   onPreset,
   columnMeta,
+  specKeyVisible = {},
+  onSpecKeyToggle,
 }: ColumnSelectorModalProps) {
   const [search, setSearch] = useState('');
 
@@ -238,6 +243,20 @@ export function ColumnSelectorModal({
 
   const needle = search.trim().toLowerCase();
 
+  const discoveredSpecEntries = useMemo(() => {
+    const keys = columnMeta?.spec_keys ? Object.keys(columnMeta.spec_keys) : [];
+    return keys
+      .map((k) => ({ key: k, count: columnMeta!.spec_keys[k] ?? 0 }))
+      .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  }, [columnMeta]);
+
+  const filteredDiscovered = useMemo(() => {
+    if (!needle) return discoveredSpecEntries;
+    return discoveredSpecEntries.filter(
+      (e) => e.key.toLowerCase().includes(needle) || `${e.count}`.includes(needle)
+    );
+  }, [discoveredSpecEntries, needle]);
+
   const filteredGroups = useMemo(() => {
     if (!needle) return COLUMN_GROUPS;
     return COLUMN_GROUPS.map((g) => ({
@@ -248,15 +267,24 @@ export function ColumnSelectorModal({
 
   const totalForCoverage = columnMeta ? columnMeta.total_products : lines.length;
 
+  const optionalSelectedCount =
+    Object.values(optionalVisible).filter(Boolean).length +
+    Object.values(specKeyVisible).filter(Boolean).length;
+
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" aria-labelledby="col-selector-title">
-      <DialogTitle id="col-selector-title">Column visibility</DialogTitle>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xl" aria-labelledby="col-selector-title">
+      <DialogTitle id="col-selector-title">
+        <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap" useFlexGap>
+          <span>Column visibility</span>
+          <Chip size="small" label={`${optionalSelectedCount} optional on`} variant="outlined" />
+        </Stack>
+      </DialogTitle>
       <DialogContent dividers>
         {/* Search */}
         <TextField
           size="small"
           fullWidth
-          placeholder="Search columns…"
+          placeholder="Search columns and discovered spec keys…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           sx={{ mb: 2 }}
@@ -299,7 +327,76 @@ export function ColumnSelectorModal({
             : 'Coverage counts are based on current plan lines. Locked columns cannot be hidden.'}
         </Typography>
 
+        {onSpecKeyToggle && discoveredSpecEntries.length > 0 && (
+          <Box
+            sx={{ mb: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
+            data-testid="column-selector-discovered-specs"
+          >
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              Discovered spec JSON keys
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              From server metadata for this plan. Toggle to add as optional grid columns (0/N keys stay off by
+              default).
+            </Typography>
+            {filteredDiscovered.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No keys match this search.
+              </Typography>
+            ) : (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+                  gap: 0.5,
+                }}
+              >
+                {filteredDiscovered.map((e) => {
+                  const total = columnMeta?.total_products ?? lines.length;
+                  const coverageLabel = total > 0 ? `${e.count} / ${total} products` : null;
+                  const checked = specKeyVisible[e.key] ?? false;
+                  return (
+                    <FormControlLabel
+                      key={e.key}
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={checked}
+                          onChange={() => onSpecKeyToggle(e.key, !checked)}
+                          data-testid={`col-spec-toggle-${e.key}`}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2" component="span">
+                            {e.key}
+                          </Typography>
+                          {coverageLabel && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              {coverageLabel}
+                              {e.count === 0 ? ' — not found in selected products' : ''}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                      sx={{ m: 0, alignItems: 'flex-start' }}
+                    />
+                  );
+                })}
+              </Box>
+            )}
+          </Box>
+        )}
+
         {/* Groups */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
+            gap: 2,
+            alignItems: 'start',
+          }}
+        >
         {filteredGroups.map((group, gi) => (
           <Box key={group.title} sx={{ mb: 2 }}>
             {gi > 0 && <Divider sx={{ mb: 1.5 }} />}
@@ -415,6 +512,7 @@ export function ColumnSelectorModal({
             </Stack>
           </Box>
         ))}
+        </Box>
       </DialogContent>
       <DialogActions>
         <Button

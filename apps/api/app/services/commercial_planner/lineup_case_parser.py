@@ -27,27 +27,9 @@ from app.services.commercial_planner.current_lineup_seed import (
     CurrentLineupSourceNotConfiguredError,
     ensure_current_lineup_import_seed,
 )
+from app.services.commercial_planner.lineup_header_mapping import build_commercial_lineup_column_map
 
-# ── Column alias mapping ──────────────────────────────────────────────────────
-
-_CANONICAL_ALIASES: dict[str, list[str]] = {
-    "sku_raw": ["sku", "item", "product_sku", "sku_raw"],
-    "part_number_raw": ["part_number", "mpn", "part_no", "part no", "sales_part_number"],
-    "model_raw": ["model", "model_name", "model name", "series"],
-    "customer_token": ["customer", "customer_code", "account", "account_name"],
-    "distributor_token": ["distributor", "disti", "distributor_code"],
-    "quantity_units": ["qty", "quantity", "units", "forecast_qty"],
-    "msrp_local": ["msrp", "srp", "rrp", "list_price", "retail_price"],
-    "promo_price_evidence_local": [
-        "promo_price", "promo_srp", "promo", "deal_price", "promo price",
-        "suggested_promo_price",
-    ],
-    "dap_evidence_local": ["dap", "dap_local"],
-    "rebate_pct_evidence": ["rebate", "rebate_pct"],
-    "distributor_margin_pct_evidence": ["disti_margin", "distributor_margin", "disti_margin_pct"],
-    "vat_pct_evidence": ["vat", "vat_pct", "tax_pct"],
-    "base_unit_raw": ["base_unit", "baseunit", "base unit"],
-}
+# ── Header detection (row scan) ─────────────────────────────────────────────────
 
 _HEADER_TOKENS = {"sku", "model", "part", "qty", "quantity", "units", "msrp", "srp", "dap", "promo"}
 
@@ -78,23 +60,6 @@ def _safe_str(val: Any) -> str | None:
         return None
     s = str(val).strip()
     return s if s and s.lower() not in ("nan", "none") else None
-
-
-def _build_alias_lookup(columns: list[str]) -> dict[str, str]:
-    """Return {canonical_field: actual_column_name} by matching lowercased aliases."""
-    col_lower = {c.lower().replace(" ", "_"): c for c in columns}
-    col_lower_space = {c.lower(): c for c in columns}
-    mapping: dict[str, str] = {}
-    for field_name, aliases in _CANONICAL_ALIASES.items():
-        for alias in aliases:
-            norm = alias.lower().replace(" ", "_")
-            if norm in col_lower:
-                mapping[field_name] = col_lower[norm]
-                break
-            if alias.lower() in col_lower_space:
-                mapping[field_name] = col_lower_space[alias.lower()]
-                break
-    return mapping
 
 
 def _find_header_row(df: pd.DataFrame) -> int | None:
@@ -228,7 +193,7 @@ async def parse_current_lineup_file(
         data_df.columns = header  # type: ignore[assignment]
         data_df = data_df.reset_index(drop=True)
 
-        col_map = _build_alias_lookup(header)
+        col_map = build_commercial_lineup_column_map(header)
 
         if not col_map:
             warnings.append("No recognisable columns found in file; no lines written.")

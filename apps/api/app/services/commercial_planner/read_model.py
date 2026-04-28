@@ -51,6 +51,37 @@ def _pick_spec_value(flat: dict[str, Any], candidate_keys: tuple[str, ...]) -> s
     return None
 
 
+def specs_json_flat_string_map(specs_json: dict[str, Any] | None, *, max_keys: int = 220) -> dict[str, str]:
+    """Flatten specs_json to string values for optional grid columns (no nested objects)."""
+    flat = _flatten_specs_json(specs_json)
+    out: dict[str, str] = {}
+    skip = frozenset({"import_staging", "importStaging"})
+    for raw_k, v in flat.items():
+        if len(out) >= max_keys:
+            break
+        k = str(raw_k).strip()
+        if not k or k in skip:
+            continue
+        if isinstance(v, (dict, list)):
+            continue
+        if v is None:
+            continue
+        if isinstance(v, bool):
+            continue
+        if isinstance(v, (int, float)):
+            if isinstance(v, float) and math.isnan(v):
+                continue
+            s = str(v).strip()
+        elif isinstance(v, str):
+            s = v.strip()
+        else:
+            continue
+        if not s:
+            continue
+        out[k] = s[:512]
+    return out
+
+
 def product_specs_from_json(specs_json: dict[str, Any] | None) -> dict[str, str | None]:
     """Extract notebook-style specs only from structured specs_json keys (no inference)."""
     flat = _flatten_specs_json(specs_json)
@@ -181,7 +212,14 @@ def plan_line_read_model_extensions(
     sell_usd = float(line.calc_sell_in_price_usd) if line.calc_sell_in_price_usd is not None else None
     buy_usd = float(line.calc_buy_price_usd) if line.calc_buy_price_usd is not None else None
     sell_l, buy_l = local_prices_from_usd(sell_usd, buy_usd, eff.get("effective_fx_rate_to_usd"))
-    out: dict[str, Any] = {**specs, **eff, "calc_sell_in_price_local": sell_l, "calc_distributor_net_local": buy_l}
+    flat_specs = specs_json_flat_string_map(specs_json if isinstance(specs_json, dict) else None)
+    out: dict[str, Any] = {
+        **specs,
+        **eff,
+        "product_specs_flat": flat_specs,
+        "calc_sell_in_price_local": sell_l,
+        "calc_distributor_net_local": buy_l,
+    }
     return out
 
 

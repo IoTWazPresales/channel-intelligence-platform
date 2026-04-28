@@ -27,7 +27,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 
@@ -72,10 +72,20 @@ type CommercialLineupLine = {
   id: number;
   case_id: number;
   source_row_number: number | null;
+  product_id: number | null;
   product_sku: string | null;
   product_name: string | null;
   product_part_number: string | null;
+  product_model_name: string | null;
   product_sales_model_name: string | null;
+  customer_id: number | null;
+  customer_code: string | null;
+  customer_name: string | null;
+  distributor_id: number | null;
+  distributor_code: string | null;
+  distributor_name: string | null;
+  customer_token: string | null;
+  distributor_token_raw: string | null;
   sku_raw: string | null;
   part_number_raw: string | null;
   model_raw: string | null;
@@ -83,6 +93,7 @@ type CommercialLineupLine = {
   msrp_local: number | null;
   promo_price_evidence_local: number | null;
   dap_evidence_local: number | null;
+  diagnostic_codes: string[];
   row_status: string;
   dap_semantics_note?: string;
 };
@@ -91,6 +102,38 @@ type CaseLinesResponse = {
   lines: CommercialLineupLine[];
   dap_semantics_note: string;
 };
+
+function lineupProductLabel(ln: CommercialLineupLine): string {
+  const a =
+    ln.product_sales_model_name?.trim() ||
+    ln.product_model_name?.trim() ||
+    ln.model_raw?.trim() ||
+    ln.product_name?.trim() ||
+    ln.product_sku?.trim() ||
+    ln.sku_raw?.trim() ||
+    ln.part_number_raw?.trim();
+  return a || '—';
+}
+
+function lineupCustomerCell(ln: CommercialLineupLine): string {
+  if (ln.customer_id != null) {
+    const bits = [ln.customer_code, ln.customer_name].filter((x) => x?.trim());
+    if (bits.length) return bits.join(' — ');
+  }
+  const t = ln.customer_token?.trim();
+  if (t) return `${t} (unresolved)`;
+  return '—';
+}
+
+function lineupDistributorCell(ln: CommercialLineupLine): string {
+  if (ln.distributor_id != null) {
+    const bits = [ln.distributor_code, ln.distributor_name].filter((x) => x?.trim());
+    if (bits.length) return bits.join(' — ');
+  }
+  const t = (ln.distributor_token_raw ?? '').trim();
+  if (t) return `${t} (unresolved)`;
+  return '—';
+}
 
 // ── Status chip colors ─────────────────────────────────────────────────────────
 
@@ -128,6 +171,10 @@ type SyncPreview = {
   will_create: number;
   skipped_duplicates: number;
   skipped_unresolved: number;
+  skipped_unresolved_product: number;
+  skipped_missing_customer: number;
+  skipped_missing_distributor: number;
+  skipped_missing_quantity: number;
   skipped_missing_srp: number;
 };
 
@@ -137,6 +184,10 @@ type SyncResult = {
   created: number;
   skipped_duplicates: number;
   skipped_unresolved: number;
+  skipped_unresolved_product: number;
+  skipped_missing_customer: number;
+  skipped_missing_distributor: number;
+  skipped_missing_quantity: number;
   skipped_missing_srp: number;
   failed: number;
   created_line_ids: number[];
@@ -206,9 +257,29 @@ function SyncPreviewDialog({
                 Skipped {syncResult.skipped_duplicates} duplicate(s).
               </Typography>
             )}
-            {syncResult.skipped_unresolved > 0 && (
+            {syncResult.skipped_unresolved_product != null && syncResult.skipped_unresolved_product > 0 && (
               <Typography variant="body2">
-                Skipped {syncResult.skipped_unresolved} unresolved (no product / customer / distributor).
+                Skipped — unresolved product: {syncResult.skipped_unresolved_product}
+              </Typography>
+            )}
+            {syncResult.skipped_missing_customer != null && syncResult.skipped_missing_customer > 0 && (
+              <Typography variant="body2">
+                Skipped — missing customer (use fallback or fix file): {syncResult.skipped_missing_customer}
+              </Typography>
+            )}
+            {syncResult.skipped_missing_distributor != null && syncResult.skipped_missing_distributor > 0 && (
+              <Typography variant="body2">
+                Skipped — missing distributor (use fallback or fix file): {syncResult.skipped_missing_distributor}
+              </Typography>
+            )}
+            {syncResult.skipped_missing_quantity != null && syncResult.skipped_missing_quantity > 0 && (
+              <Typography variant="body2">
+                Skipped — missing quantity: {syncResult.skipped_missing_quantity}
+              </Typography>
+            )}
+            {syncResult.skipped_unresolved > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Total blocked rows (excl. duplicates / missing SRP): {syncResult.skipped_unresolved}
               </Typography>
             )}
             {syncResult.skipped_missing_srp > 0 && (
@@ -241,9 +312,29 @@ function SyncPreviewDialog({
                 Skipped — already in plan: {preview.skipped_duplicates}
               </Typography>
             )}
+            {preview.skipped_unresolved_product != null && preview.skipped_unresolved_product > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Skipped — unresolved product: {preview.skipped_unresolved_product}
+              </Typography>
+            )}
+            {preview.skipped_missing_customer != null && preview.skipped_missing_customer > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Skipped — missing customer: {preview.skipped_missing_customer}
+              </Typography>
+            )}
+            {preview.skipped_missing_distributor != null && preview.skipped_missing_distributor > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Skipped — missing distributor: {preview.skipped_missing_distributor}
+              </Typography>
+            )}
+            {preview.skipped_missing_quantity != null && preview.skipped_missing_quantity > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Skipped — missing quantity: {preview.skipped_missing_quantity}
+              </Typography>
+            )}
             {preview.skipped_unresolved > 0 && (
               <Typography variant="body2" color="text.secondary">
-                Skipped — unresolved (no product/customer/distributor): {preview.skipped_unresolved}
+                Total blocked (excl. duplicates / missing SRP): {preview.skipped_unresolved}
               </Typography>
             )}
             {preview.skipped_missing_srp > 0 && (
@@ -313,9 +404,11 @@ function CaseLinesDialog({
               <TableHead>
                 <TableRow>
                   <TableCell>#</TableCell>
-                  <TableCell>SKU (raw / resolved)</TableCell>
+                  <TableCell>Model / product</TableCell>
+                  <TableCell>SKU</TableCell>
                   <TableCell>Part #</TableCell>
-                  <TableCell>Model</TableCell>
+                  <TableCell>Customer</TableCell>
+                  <TableCell>Distributor</TableCell>
                   <TableCell>Units</TableCell>
                   <TableCell>MSRP local</TableCell>
                   <TableCell>Promo evidence</TableCell>
@@ -328,17 +421,21 @@ function CaseLinesDialog({
                   <TableRow key={ln.id}>
                     <TableCell>{ln.source_row_number ?? ln.id}</TableCell>
                     <TableCell>
-                      <Typography variant="body2" fontFamily="monospace">
-                        {ln.product_sku ?? ln.sku_raw ?? '—'}
-                      </Typography>
+                      <Typography variant="body2">{lineupProductLabel(ln)}</Typography>
                       {ln.product_sku && ln.sku_raw && ln.product_sku !== ln.sku_raw && (
-                        <Typography variant="caption" color="text.secondary">
-                          raw: {ln.sku_raw}
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          SKU raw: {ln.sku_raw}
                         </Typography>
                       )}
                     </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontFamily="monospace">
+                        {ln.product_sku ?? ln.sku_raw ?? '—'}
+                      </Typography>
+                    </TableCell>
                     <TableCell>{ln.product_part_number ?? ln.part_number_raw ?? '—'}</TableCell>
-                    <TableCell>{ln.product_sales_model_name ?? ln.model_raw ?? '—'}</TableCell>
+                    <TableCell>{lineupCustomerCell(ln)}</TableCell>
+                    <TableCell>{lineupDistributorCell(ln)}</TableCell>
                     <TableCell>{ln.quantity_units != null ? ln.quantity_units.toLocaleString() : '—'}</TableCell>
                     <TableCell>{ln.msrp_local != null ? ln.msrp_local.toLocaleString() : '—'}</TableCell>
                     <TableCell>
@@ -542,24 +639,38 @@ function UploadLineupDialog({
   open,
   onClose,
   activePlanId,
+  planCountryCode,
+  planCurrencyCode,
   onCreated,
 }: {
   open: boolean;
   onClose: () => void;
   activePlanId: number | null;
+  planCountryCode?: string | null;
+  planCurrencyCode?: string | null;
   onCreated: () => void;
 }) {
   const [periodLabel, setPeriodLabel] = useState('');
-  const [currencyCode, setCurrencyCode] = useState('');
-  const [countryCode, setCountryCode] = useState('');
+  const [currencyCode, setCurrencyCode] = useState('ZAR');
+  const [countryCode, setCountryCode] = useState('ZA');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!open) return;
+    const cc = (planCountryCode ?? '').trim() || 'ZA';
+    const cur = (planCurrencyCode ?? '').trim() || 'ZAR';
+    setCountryCode(cc.length <= 3 ? cc.toUpperCase() : 'ZA');
+    setCurrencyCode(['ZAR', 'USD'].includes(cur.toUpperCase()) ? cur.toUpperCase() : 'ZAR');
+  }, [open, planCountryCode, planCurrencyCode]);
+
   const handleClose = () => {
     setFile(null);
     setError(null);
+    setPeriodLabel('');
+    setNotes('');
     onClose();
   };
 
@@ -571,8 +682,8 @@ function UploadLineupDialog({
       const caseResponse = await apiPost<{ id: number }>('/api/v1/commercial-planner/lineup-cases', {
         commercial_plan_id: activePlanId,
         period_label: periodLabel.trim() || null,
-        currency_code: currencyCode.trim() || null,
-        country_code: countryCode.trim() || null,
+        currency_code: currencyCode,
+        country_code: countryCode,
         notes: notes.trim() || null,
       });
 
@@ -617,23 +728,33 @@ function UploadLineupDialog({
             placeholder="e.g. Q2 2026"
             fullWidth
           />
+          <Typography variant="caption" color="text.secondary" display="block">
+            Country and currency describe this uploaded lineup (metadata only; no FX conversion here).
+          </Typography>
           <Stack direction="row" spacing={2}>
-            <TextField
-              size="small"
-              label="Currency code"
-              value={currencyCode}
-              onChange={(e) => setCurrencyCode(e.target.value)}
-              placeholder="e.g. USD"
-              sx={{ flex: 1 }}
-            />
-            <TextField
-              size="small"
-              label="Country code"
-              value={countryCode}
-              onChange={(e) => setCountryCode(e.target.value)}
-              placeholder="e.g. US"
-              sx={{ flex: 1 }}
-            />
+            <FormControl size="small" sx={{ flex: 1 }} data-testid="upload-lineup-country">
+              <InputLabel id="upload-lineup-country-label">Country</InputLabel>
+              <Select
+                labelId="upload-lineup-country-label"
+                label="Country"
+                value={countryCode}
+                onChange={(e) => setCountryCode(String(e.target.value))}
+              >
+                <MenuItem value="ZA">ZA</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ flex: 1 }} data-testid="upload-lineup-currency">
+              <InputLabel id="upload-lineup-currency-label">Currency</InputLabel>
+              <Select
+                labelId="upload-lineup-currency-label"
+                label="Currency"
+                value={currencyCode}
+                onChange={(e) => setCurrencyCode(String(e.target.value))}
+              >
+                <MenuItem value="ZAR">ZAR</MenuItem>
+                <MenuItem value="USD">USD</MenuItem>
+              </Select>
+            </FormControl>
           </Stack>
           <TextField
             size="small"
@@ -679,22 +800,68 @@ function UploadLineupDialog({
   );
 }
 
+function LineupLineNumericEditor({
+  disabled,
+  initial,
+  onCommit,
+  width,
+}: {
+  disabled?: boolean;
+  initial: number | null;
+  onCommit: (next: number | null) => void;
+  width: number;
+}) {
+  const [text, setText] = useState(initial != null ? String(initial) : '');
+  useEffect(() => {
+    setText(initial != null ? String(initial) : '');
+  }, [initial]);
+  return (
+    <TextField
+      size="small"
+      type="number"
+      disabled={disabled}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        const t = text.trim();
+        if (t === '') {
+          onCommit(null);
+          return;
+        }
+        const n = Number(t);
+        if (!Number.isFinite(n)) return;
+        onCommit(n);
+      }}
+      sx={{ width }}
+    />
+  );
+}
+
 // ── Main section ──────────────────────────────────────────────────────────────
 
 export function CurrentLineupSection({
   activePlanId,
+  planLineCount = 0,
+  planCountryCode,
+  planCurrencyCode,
   onSyncComplete,
+  onStagedLineupSummary,
 }: {
   activePlanId: number | null;
+  planLineCount?: number;
+  planCountryCode?: string | null;
+  planCurrencyCode?: string | null;
   onSyncComplete?: () => void;
+  onStagedLineupSummary?: (summary: { caseId: number | null; lineCount: number }) => void;
 }) {
   const qc = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewLinesCase, setViewLinesCase] = useState<CommercialLineupCase | null>(null);
   const [statusCase, setStatusCase] = useState<CommercialLineupCase | null>(null);
   const [syncCase, setSyncCase] = useState<CommercialLineupCase | null>(null);
   const [retryParseCase, setRetryParseCase] = useState<CommercialLineupCase | null>(null);
+  const [activeCaseId, setActiveCaseId] = useState<number | null>(null);
 
   const { data: cases, isLoading } = useQuery<CommercialLineupCase[]>({
     queryKey: ['commercial-lineup-cases', activePlanId],
@@ -704,6 +871,52 @@ export function CurrentLineupSection({
         { signal }
       ),
     enabled: activePlanId != null,
+  });
+
+  useEffect(() => {
+    if (!cases?.length) {
+      setActiveCaseId(null);
+      return;
+    }
+    setActiveCaseId((prev) => {
+      if (prev != null && cases.some((c) => c.id === prev)) return prev;
+      const preferred = cases.find((c) => c.line_count > 0) ?? cases[0];
+      return preferred?.id ?? null;
+    });
+  }, [cases]);
+
+  const { data: workingLinesData } = useQuery<CaseLinesResponse>({
+    queryKey: ['commercial-lineup-case-lines', activeCaseId],
+    queryFn: ({ signal }) =>
+      apiGet<CaseLinesResponse>(
+        `/api/v1/commercial-planner/lineup-cases/${activeCaseId}/lines`,
+        { signal }
+      ),
+    enabled: activeCaseId != null && activePlanId != null,
+  });
+
+  const workingLines = workingLinesData?.lines ?? [];
+  const activeCase = cases?.find((c) => c.id === activeCaseId);
+
+  useEffect(() => {
+    onStagedLineupSummary?.({ caseId: activeCaseId, lineCount: workingLines.length });
+  }, [activeCaseId, workingLines.length, onStagedLineupSummary]);
+
+  const patchLineMutation = useMutation({
+    mutationFn: async (payload: {
+      caseId: number;
+      lineId: number;
+      body: { quantity_units?: number | null; msrp_local?: number | null; promo_price_evidence_local?: number | null };
+    }) => {
+      await apiPatch(
+        `/api/v1/commercial-planner/lineup-cases/${payload.caseId}/lines/${payload.lineId}`,
+        payload.body
+      );
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', activeCaseId] });
+      await qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] });
+    },
   });
 
   const statusMutation = useMutation({
@@ -775,7 +988,7 @@ export function CurrentLineupSection({
                     key={c.id}
                     sx={{
                       border: '1px solid',
-                      borderColor: 'divider',
+                      borderColor: activeCaseId === c.id ? 'primary.main' : 'divider',
                       borderRadius: 1,
                       p: 1,
                       display: 'flex',
@@ -796,8 +1009,16 @@ export function CurrentLineupSection({
                     <Typography variant="caption" color="text.secondary">
                       {c.line_count} line{c.line_count === 1 ? '' : 's'}
                     </Typography>
+                    <Button
+                      size="small"
+                      variant={activeCaseId === c.id ? 'contained' : 'outlined'}
+                      onClick={() => setActiveCaseId(c.id)}
+                      data-testid={`lineup-workbench-${c.id}`}
+                    >
+                      Workbench
+                    </Button>
                     <Button size="small" onClick={() => setViewLinesCase(c)}>
-                      View lines
+                      Details
                     </Button>
                     {c.commercial_status === 'draft_imported' && c.line_count === 0 && (
                       <Button
@@ -841,12 +1062,131 @@ export function CurrentLineupSection({
             )}
           </Box>
         </Collapse>
+
+        {activeCaseId != null && activeCase && (
+          <Box sx={{ mt: 2 }} data-testid="current-lineup-working-grid">
+            {planLineCount === 0 && workingLines.length > 0 && (
+              <Alert severity="info" sx={{ mb: 1 }}>
+                Current lineup rows are staged for this plan. Accept the case and sync to plan to create planner
+                lines.
+              </Alert>
+            )}
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Current lineup working rows — case #{activeCase.id}
+              {activeCase.file_name ? ` · ${activeCase.file_name}` : ''}
+            </Typography>
+            {workingLines.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No rows in the selected case yet. Upload a file or choose another case.
+              </Typography>
+            ) : (
+              <Box sx={{ overflowX: 'auto' }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>#</TableCell>
+                      <TableCell>Model / product</TableCell>
+                      <TableCell>SKU</TableCell>
+                      <TableCell>Part #</TableCell>
+                      <TableCell>Customer</TableCell>
+                      <TableCell>Distributor</TableCell>
+                      <TableCell>Units</TableCell>
+                      <TableCell>MSRP / list</TableCell>
+                      <TableCell>Promo evidence</TableCell>
+                      <TableCell>DAP evidence</TableCell>
+                      <TableCell>Status / issues</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {workingLines.map((ln) => {
+                      const canEdit = activeCase.commercial_status === 'draft_imported';
+                      const issues =
+                        (ln.diagnostic_codes?.length && ln.diagnostic_codes.join(', ')) || ln.row_status;
+                      return (
+                        <TableRow key={ln.id}>
+                          <TableCell>{ln.source_row_number ?? ln.id}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2">{lineupProductLabel(ln)}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontFamily="monospace">
+                              {ln.product_sku ?? ln.sku_raw ?? '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{ln.product_part_number ?? ln.part_number_raw ?? '—'}</TableCell>
+                          <TableCell>{lineupCustomerCell(ln)}</TableCell>
+                          <TableCell>{lineupDistributorCell(ln)}</TableCell>
+                          <TableCell>
+                            <LineupLineNumericEditor
+                              disabled={!canEdit || patchLineMutation.isPending}
+                              initial={ln.quantity_units}
+                              width={88}
+                              onCommit={(next) => {
+                                if (!canEdit || next == null || !activeCaseId) return;
+                                if (next === ln.quantity_units) return;
+                                patchLineMutation.mutate({
+                                  caseId: activeCaseId,
+                                  lineId: ln.id,
+                                  body: { quantity_units: next },
+                                });
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <LineupLineNumericEditor
+                              disabled={!canEdit || patchLineMutation.isPending}
+                              initial={ln.msrp_local}
+                              width={100}
+                              onCommit={(next) => {
+                                if (!canEdit || next == null || !activeCaseId) return;
+                                if (next === ln.msrp_local) return;
+                                patchLineMutation.mutate({
+                                  caseId: activeCaseId,
+                                  lineId: ln.id,
+                                  body: { msrp_local: next },
+                                });
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <LineupLineNumericEditor
+                              disabled={!canEdit || patchLineMutation.isPending}
+                              initial={ln.promo_price_evidence_local}
+                              width={100}
+                              onCommit={(next) => {
+                                if (!canEdit || next == null || !activeCaseId) return;
+                                if (next === ln.promo_price_evidence_local) return;
+                                patchLineMutation.mutate({
+                                  caseId: activeCaseId,
+                                  lineId: ln.id,
+                                  body: { promo_price_evidence_local: next },
+                                });
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {ln.dap_evidence_local != null ? ln.dap_evidence_local.toLocaleString() : '—'}
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="caption">{issues}</Typography>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </Box>
+            )}
+          </Box>
+        )}
       </Box>
 
       <UploadLineupDialog
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
         activePlanId={activePlanId}
+        planCountryCode={planCountryCode}
+        planCurrencyCode={planCurrencyCode}
         onCreated={() => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] })}
       />
 

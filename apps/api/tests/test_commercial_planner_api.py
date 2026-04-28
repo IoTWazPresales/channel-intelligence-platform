@@ -1679,6 +1679,7 @@ def test_sync_to_plan_skips_unresolved():
     body = r.json()
     assert body["created"] == 0
     assert body["skipped_unresolved"] == 1
+    assert body["skipped_unresolved_product"] == 1
 
 
 def test_sync_to_plan_does_not_write_dap_as_cost():

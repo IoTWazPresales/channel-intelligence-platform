@@ -1604,6 +1604,12 @@ class LineupCaseStatusPatch(BaseModel):
     accepted_by: str | None = None
 
 
+class CommercialLineupLinePatch(BaseModel):
+    quantity_units: float | None = None
+    msrp_local: float | None = None
+    promo_price_evidence_local: float | None = None
+
+
 def _case_payload(case: CommercialLineupCase, line_count: int) -> dict:
     return {
         "id": case.id,
@@ -1723,9 +1729,12 @@ async def list_lineup_case_lines(case_id: int, db: AsyncSession = Depends(get_db
             DimProduct.sku.label("product_sku"),
             DimProduct.name.label("product_name"),
             DimProduct.part_number.label("product_part_number"),
+            DimProduct.model_name.label("product_model_name"),
             DimProduct.sales_model_name.label("product_sales_model_name"),
             DimCustomer.code.label("customer_code"),
+            DimCustomer.name.label("customer_name"),
             DimDistributor.code.label("distributor_code"),
+            DimDistributor.name.label("distributor_name"),
         )
         .outerjoin(DimProduct, DimProduct.id == CommercialLineupLine.product_id)
         .outerjoin(DimCustomer, DimCustomer.id == CommercialLineupLine.customer_id)
@@ -1735,7 +1744,22 @@ async def list_lineup_case_lines(case_id: int, db: AsyncSession = Depends(get_db
     )
     rows = (await db.execute(stmt)).all()
     result = []
-    for (ln, product_sku, product_name, product_part_number, product_sales_model_name, customer_code, distributor_code) in rows:
+    for (
+        ln,
+        product_sku,
+        product_name,
+        product_part_number,
+        product_model_name,
+        product_sales_model_name,
+        customer_code,
+        customer_name,
+        distributor_code,
+        distributor_name,
+    ) in rows:
+        raw_payload = ln.raw_row_payload if isinstance(ln.raw_row_payload, dict) else {}
+        distributor_token_raw = raw_payload.get("distributor_token")
+        if distributor_token_raw is not None:
+            distributor_token_raw = str(distributor_token_raw).strip() or None
         result.append(
             {
                 "id": ln.id,
@@ -1745,12 +1769,16 @@ async def list_lineup_case_lines(case_id: int, db: AsyncSession = Depends(get_db
                 "product_sku": product_sku,
                 "product_name": product_name,
                 "product_part_number": product_part_number,
+                "product_model_name": product_model_name,
                 "product_sales_model_name": product_sales_model_name,
                 "customer_id": ln.customer_id,
                 "customer_code": customer_code,
+                "customer_name": customer_name,
                 "distributor_id": ln.distributor_id,
                 "distributor_code": distributor_code,
+                "distributor_name": distributor_name,
                 "customer_token": ln.customer_token,
+                "distributor_token_raw": distributor_token_raw,
                 "sku_raw": ln.sku_raw,
                 "part_number_raw": ln.part_number_raw,
                 "model_raw": ln.model_raw,
@@ -1772,6 +1800,116 @@ async def list_lineup_case_lines(case_id: int, db: AsyncSession = Depends(get_db
             }
         )
     return {"lines": result, "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE}
+
+
+@router.patch("/lineup-cases/{case_id}/lines/{line_id}", status_code=200)
+async def patch_lineup_case_line(
+    case_id: int,
+    line_id: int,
+    body: CommercialLineupLinePatch,
+    db: AsyncSession = Depends(get_db),
+):
+    """Edit draft current-lineup row fields (units, MSRP, promo evidence). Safe for pre-sync staging only."""
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    if case.commercial_status != "draft_imported":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Can only edit lineup lines on cases with status 'draft_imported'. "
+                f"Current: '{case.commercial_status}'"
+            ),
+        )
+    ln = await db.get(CommercialLineupLine, line_id)
+    if ln is None or ln.case_id != case_id:
+        raise HTTPException(status_code=404, detail="Lineup line not found")
+
+    if body.quantity_units is not None:
+        ln.quantity_units = body.quantity_units
+    if body.msrp_local is not None:
+        ln.msrp_local = body.msrp_local
+    if body.promo_price_evidence_local is not None:
+        ln.promo_price_evidence_local = body.promo_price_evidence_local
+
+    await db.commit()
+    await db.refresh(ln)
+
+    stmt = (
+        select(
+            CommercialLineupLine,
+            DimProduct.sku.label("product_sku"),
+            DimProduct.name.label("product_name"),
+            DimProduct.part_number.label("product_part_number"),
+            DimProduct.model_name.label("product_model_name"),
+            DimProduct.sales_model_name.label("product_sales_model_name"),
+            DimCustomer.code.label("customer_code"),
+            DimCustomer.name.label("customer_name"),
+            DimDistributor.code.label("distributor_code"),
+            DimDistributor.name.label("distributor_name"),
+        )
+        .outerjoin(DimProduct, DimProduct.id == CommercialLineupLine.product_id)
+        .outerjoin(DimCustomer, DimCustomer.id == CommercialLineupLine.customer_id)
+        .outerjoin(DimDistributor, DimDistributor.id == CommercialLineupLine.distributor_id)
+        .where(CommercialLineupLine.id == line_id)
+        .limit(1)
+    )
+    row = (await db.execute(stmt)).one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Lineup line not found")
+    (
+        ln2,
+        product_sku,
+        product_name,
+        product_part_number,
+        product_model_name,
+        product_sales_model_name,
+        customer_code,
+        customer_name,
+        distributor_code,
+        distributor_name,
+    ) = row
+    raw_payload = ln2.raw_row_payload if isinstance(ln2.raw_row_payload, dict) else {}
+    distributor_token_raw = raw_payload.get("distributor_token")
+    if distributor_token_raw is not None:
+        distributor_token_raw = str(distributor_token_raw).strip() or None
+    return {
+        "id": ln2.id,
+        "case_id": ln2.case_id,
+        "source_row_number": ln2.source_row_number,
+        "product_id": ln2.product_id,
+        "product_sku": product_sku,
+        "product_name": product_name,
+        "product_part_number": product_part_number,
+        "product_model_name": product_model_name,
+        "product_sales_model_name": product_sales_model_name,
+        "customer_id": ln2.customer_id,
+        "customer_code": customer_code,
+        "customer_name": customer_name,
+        "distributor_id": ln2.distributor_id,
+        "distributor_code": distributor_code,
+        "distributor_name": distributor_name,
+        "customer_token": ln2.customer_token,
+        "distributor_token_raw": distributor_token_raw,
+        "sku_raw": ln2.sku_raw,
+        "part_number_raw": ln2.part_number_raw,
+        "model_raw": ln2.model_raw,
+        "quantity_units": float(ln2.quantity_units) if ln2.quantity_units is not None else None,
+        "msrp_local": float(ln2.msrp_local) if ln2.msrp_local is not None else None,
+        "promo_price_evidence_local": float(ln2.promo_price_evidence_local)
+        if ln2.promo_price_evidence_local is not None
+        else None,
+        "dap_evidence_local": float(ln2.dap_evidence_local) if ln2.dap_evidence_local is not None else None,
+        "rebate_pct_evidence": float(ln2.rebate_pct_evidence) if ln2.rebate_pct_evidence is not None else None,
+        "distributor_margin_pct_evidence": float(ln2.distributor_margin_pct_evidence)
+        if ln2.distributor_margin_pct_evidence is not None
+        else None,
+        "vat_pct_evidence": float(ln2.vat_pct_evidence) if ln2.vat_pct_evidence is not None else None,
+        "diagnostic_codes": ln2.diagnostic_codes or [],
+        "row_status": ln2.row_status,
+        "mapping_confidence": float(ln2.mapping_confidence) if ln2.mapping_confidence is not None else None,
+        "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE,
+    }
 
 
 @router.delete("/lineup-cases/{case_id}", status_code=204)
@@ -1946,17 +2084,21 @@ def _sync_eligibility(
     body: SyncToPlanRequest,
     existing_keys: set[tuple],
 ) -> tuple[bool, str, int | None, int | None, float | None, float | None]:
-    """Return (eligible, skip_reason, customer_id, distributor_id, srp, units)."""
+    """Return (eligible, skip_reason, customer_id, distributor_id, srp, units).
+
+    skip_reason is one of: '' (eligible), 'unresolved_product', 'missing_customer',
+    'missing_distributor', 'missing_srp', 'missing_quantity', 'duplicate'.
+    """
     if not ln.product_id:
-        return False, "unresolved", None, None, None, None
+        return False, "unresolved_product", None, None, None, None
 
     customer_id = ln.customer_id or body.fallback_customer_id
     if not customer_id:
-        return False, "unresolved", None, None, None, None
+        return False, "missing_customer", None, None, None, None
 
     distributor_id = ln.distributor_id or body.fallback_distributor_id
     if not distributor_id:
-        return False, "unresolved", None, None, None, None
+        return False, "missing_distributor", None, None, None, None
 
     srp = ln.msrp_local or body.default_srp_local
     if not srp:
@@ -1967,7 +2109,7 @@ def _sync_eligibility(
         if body.allow_zero_quantity:
             units = 0.0
         else:
-            return False, "unresolved", None, None, None, None
+            return False, "missing_quantity", None, None, None, None
 
     key = (customer_id, distributor_id, ln.product_id)
     if key in existing_keys:
@@ -2025,7 +2167,10 @@ async def preview_sync_lineup_case_to_plan(
 
     will_create = 0
     skipped_duplicates = 0
-    skipped_unresolved = 0
+    skipped_unresolved_product = 0
+    skipped_missing_customer = 0
+    skipped_missing_distributor = 0
+    skipped_missing_quantity = 0
     skipped_missing_srp = 0
 
     for ln in lines:
@@ -2039,8 +2184,23 @@ async def preview_sync_lineup_case_to_plan(
             skipped_duplicates += 1
         elif reason == "missing_srp":
             skipped_missing_srp += 1
+        elif reason == "unresolved_product":
+            skipped_unresolved_product += 1
+        elif reason == "missing_customer":
+            skipped_missing_customer += 1
+        elif reason == "missing_distributor":
+            skipped_missing_distributor += 1
+        elif reason == "missing_quantity":
+            skipped_missing_quantity += 1
         else:
-            skipped_unresolved += 1
+            skipped_unresolved_product += 1
+
+    skipped_unresolved = (
+        skipped_unresolved_product
+        + skipped_missing_customer
+        + skipped_missing_distributor
+        + skipped_missing_quantity
+    )
 
     return {
         "case_id": case_id,
@@ -2049,6 +2209,10 @@ async def preview_sync_lineup_case_to_plan(
         "will_create": will_create,
         "skipped_duplicates": skipped_duplicates,
         "skipped_unresolved": skipped_unresolved,
+        "skipped_unresolved_product": skipped_unresolved_product,
+        "skipped_missing_customer": skipped_missing_customer,
+        "skipped_missing_distributor": skipped_missing_distributor,
+        "skipped_missing_quantity": skipped_missing_quantity,
         "skipped_missing_srp": skipped_missing_srp,
         "created": 0,
         "created_line_ids": [],
@@ -2102,7 +2266,10 @@ async def sync_lineup_case_to_plan(
 
     created_ids: list[int] = []
     skipped_duplicates = 0
-    skipped_unresolved = 0
+    skipped_unresolved_product = 0
+    skipped_missing_customer = 0
+    skipped_missing_distributor = 0
+    skipped_missing_quantity = 0
     skipped_missing_srp = 0
     failed = 0
     warnings: list[str] = []
@@ -2114,8 +2281,16 @@ async def sync_lineup_case_to_plan(
                 skipped_duplicates += 1
             elif reason == "missing_srp":
                 skipped_missing_srp += 1
+            elif reason == "unresolved_product":
+                skipped_unresolved_product += 1
+            elif reason == "missing_customer":
+                skipped_missing_customer += 1
+            elif reason == "missing_distributor":
+                skipped_missing_distributor += 1
+            elif reason == "missing_quantity":
+                skipped_missing_quantity += 1
             else:
-                skipped_unresolved += 1
+                skipped_unresolved_product += 1
             continue
 
         if ln.quantity_units is None and body.allow_zero_quantity:
@@ -2143,12 +2318,23 @@ async def sync_lineup_case_to_plan(
 
     await db.commit()
 
+    skipped_unresolved = (
+        skipped_unresolved_product
+        + skipped_missing_customer
+        + skipped_missing_distributor
+        + skipped_missing_quantity
+    )
+
     return {
         "case_id": case_id,
         "plan_id": plan_id,
         "created": len(created_ids),
         "skipped_duplicates": skipped_duplicates,
         "skipped_unresolved": skipped_unresolved,
+        "skipped_unresolved_product": skipped_unresolved_product,
+        "skipped_missing_customer": skipped_missing_customer,
+        "skipped_missing_distributor": skipped_missing_distributor,
+        "skipped_missing_quantity": skipped_missing_quantity,
         "skipped_missing_srp": skipped_missing_srp,
         "failed": failed,
         "created_line_ids": created_ids,

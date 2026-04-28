@@ -113,7 +113,6 @@ export function AddProductSetDialog({
 
   const handleProductsSelected = (products: ProductPick[]) => {
     setSelectedProducts(products);
-    if (products.length > 0) setStep(2);
   };
 
   const buildRowDrafts = () => {

@@ -83,7 +83,7 @@ export function ProductPickerDialog({
   useEffect(() => {
     if (!open) return;
     const ctrl = new AbortController();
-    const timer = setTimeout(() => doFetch(q, isActiveOnly, ctrl.signal), 200);
+    const timer = setTimeout(() => doFetch(q, isActiveOnly, ctrl.signal), 400);
     return () => {
       clearTimeout(timer);
       ctrl.abort();
@@ -155,19 +155,36 @@ export function ProductPickerDialog({
             }
             label="Active only"
             sx={{ m: 0 }}
+            title="Filters catalogue rows where is_active is true (separate from lifecycle_status)."
           />
         </Stack>
 
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress size={32} />
-          </Box>
-        ) : products.length === 0 ? (
-          <Typography color="text.secondary" sx={{ py: 2 }}>
-            No products found.
-          </Typography>
-        ) : (
-          <Box sx={{ overflowX: 'auto' }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          Active only uses the products API <code>is_active=true</code> filter (not lifecycle status).
+        </Typography>
+
+        <Box sx={{ position: 'relative', minHeight: 320, overflowX: 'auto' }}>
+          {loading && (
+            <Box
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: 'action.hover',
+                zIndex: 1,
+                opacity: 0.85,
+              }}
+            >
+              <CircularProgress size={32} />
+            </Box>
+          )}
+          {products.length === 0 && !loading ? (
+            <Typography color="text.secondary" sx={{ py: 2 }}>
+              No products found.
+            </Typography>
+          ) : (
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
@@ -194,8 +211,18 @@ export function ProductPickerDialog({
                       data-testid={`product-row-${p.id}`}
                     >
                       {multiSelect && (
-                        <TableCell padding="checkbox">
-                          <Checkbox size="small" checked={isSelected} onChange={() => toggleSelect(p)} />
+                        <TableCell
+                          padding="checkbox"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                          }}
+                        >
+                          <Checkbox
+                            size="small"
+                            checked={isSelected}
+                            onChange={() => toggleSelect(p)}
+                            inputProps={{ 'aria-label': `Select ${p.sku}` }}
+                          />
                         </TableCell>
                       )}
                       <TableCell>
@@ -214,8 +241,8 @@ export function ProductPickerDialog({
                 })}
               </TableBody>
             </Table>
-          </Box>
-        )}
+          )}
+        </Box>
       </DialogContent>
       {multiSelect && (
         <DialogActions>
