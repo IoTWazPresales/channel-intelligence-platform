@@ -971,6 +971,27 @@ def test_current_lineup_template_exists():
     assert "promo_price_evidence_local" in template["expected_columns"]
 
 
+def test_current_lineup_template_hidden():
+    """current_lineup template is hidden from generic imports UI."""
+    from app.services.imports.template_definitions import IMPORT_TEMPLATE_ROWS
+
+    template = next(t for t in IMPORT_TEMPLATE_ROWS if t["slug"] == "current_lineup")
+    assert template["hidden"] is True, "current_lineup must be hidden from generic imports UI"
+    assert template["enabled"] is True  # Still enabled for parse-upload path
+    assert template["pipeline_handler"] == "stub_noop"
+
+
+def test_current_lineup_source_in_default_sources():
+    """current_lineup_system is present in DEFAULT_SOURCES with correct template slug."""
+    from app.services.imports.template_definitions import DEFAULT_SOURCES
+
+    codes = [s[0] for s in DEFAULT_SOURCES]
+    assert "current_lineup_system" in codes, "current_lineup_system must be in DEFAULT_SOURCES"
+    source = next(s for s in DEFAULT_SOURCES if s[0] == "current_lineup_system")
+    assert source[2] == "current_lineup", f"Expected template_slug 'current_lineup', got '{source[2]}'"
+    assert source[3] == "planning_extract", f"Expected source_kind 'planning_extract', got '{source[3]}'"
+
+
 # ─── parse-upload endpoint tests ─────────────────────────────────────────────
 
 
