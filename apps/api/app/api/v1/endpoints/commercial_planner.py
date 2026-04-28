@@ -93,6 +93,14 @@ class ClearBody(BaseModel):
     confirm: bool = False
 
 
+class SyncToPlanRequest(BaseModel):
+    commercial_plan_id: int | None = None
+    fallback_customer_id: int | None = None
+    fallback_distributor_id: int | None = None
+    default_srp_local: float | None = None
+    allow_zero_quantity: bool = False
+
+
 def _line_payload(
     line: CommercialPlanLine,
     *,
@@ -1917,4 +1925,222 @@ async def get_plan_column_metadata(
         "catalogue": catalogue,
         "spec_keys": spec_keys,
         "coverage_note": "Counts are distinct products in the plan with non-null values.",
+    }
+
+
+# ─── Sync lineup case → plan lines ───────────────────────────────────────────
+
+
+def _sync_eligibility(
+    ln: CommercialLineupLine,
+    body: SyncToPlanRequest,
+    existing_keys: set[tuple],
+) -> tuple[bool, str, int | None, int | None, float | None, float | None]:
+    """Return (eligible, skip_reason, customer_id, distributor_id, srp, units)."""
+    if not ln.product_id:
+        return False, "unresolved", None, None, None, None
+
+    customer_id = ln.customer_id or body.fallback_customer_id
+    if not customer_id:
+        return False, "unresolved", None, None, None, None
+
+    distributor_id = ln.distributor_id or body.fallback_distributor_id
+    if not distributor_id:
+        return False, "unresolved", None, None, None, None
+
+    srp = ln.msrp_local or body.default_srp_local
+    if not srp:
+        return False, "missing_srp", None, None, None, None
+
+    units = ln.quantity_units
+    if units is None:
+        if body.allow_zero_quantity:
+            units = 0.0
+        else:
+            return False, "unresolved", None, None, None, None
+
+    key = (customer_id, distributor_id, ln.product_id)
+    if key in existing_keys:
+        return False, "duplicate", None, None, None, None
+
+    return True, "", customer_id, distributor_id, srp, units
+
+
+@router.get("/lineup-cases/{case_id}/sync-to-plan/preview")
+async def preview_sync_lineup_case_to_plan(
+    case_id: int,
+    commercial_plan_id: int | None = None,
+    fallback_customer_id: int | None = None,
+    fallback_distributor_id: int | None = None,
+    default_srp_local: float | None = None,
+    allow_zero_quantity: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """Preview what sync-to-plan would create/skip without committing any rows."""
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(404, "Lineup case not found")
+    if case.commercial_status != "accepted":
+        raise HTTPException(409, f"Sync requires case status 'accepted'. Current: '{case.commercial_status}'")
+
+    plan_id = commercial_plan_id or case.commercial_plan_id
+    if not plan_id:
+        raise HTTPException(400, "commercial_plan_id required (set on case or in request body)")
+
+    if not await db.get(CommercialPlan, plan_id):
+        raise HTTPException(404, f"CommercialPlan id={plan_id} not found")
+
+    body = SyncToPlanRequest(
+        commercial_plan_id=commercial_plan_id,
+        fallback_customer_id=fallback_customer_id,
+        fallback_distributor_id=fallback_distributor_id,
+        default_srp_local=default_srp_local,
+        allow_zero_quantity=allow_zero_quantity,
+    )
+
+    lines_result = await db.execute(
+        select(CommercialLineupLine).where(CommercialLineupLine.case_id == case_id)
+    )
+    lines = lines_result.scalars().all()
+
+    existing_stmt = select(
+        CommercialPlanLine.customer_id,
+        CommercialPlanLine.distributor_id,
+        CommercialPlanLine.product_id,
+    ).where(CommercialPlanLine.commercial_plan_id == plan_id)
+    existing_rows = (await db.execute(existing_stmt)).all()
+    existing_keys: set[tuple] = {
+        (r.customer_id, r.distributor_id, r.product_id) for r in existing_rows
+    }
+
+    will_create = 0
+    skipped_duplicates = 0
+    skipped_unresolved = 0
+    skipped_missing_srp = 0
+
+    for ln in lines:
+        eligible, reason, *_ = _sync_eligibility(ln, body, existing_keys)
+        if eligible:
+            will_create += 1
+            customer_id = ln.customer_id or body.fallback_customer_id
+            distributor_id = ln.distributor_id or body.fallback_distributor_id
+            existing_keys.add((customer_id, distributor_id, ln.product_id))
+        elif reason == "duplicate":
+            skipped_duplicates += 1
+        elif reason == "missing_srp":
+            skipped_missing_srp += 1
+        else:
+            skipped_unresolved += 1
+
+    return {
+        "case_id": case_id,
+        "plan_id": plan_id,
+        "total_lines": len(lines),
+        "will_create": will_create,
+        "skipped_duplicates": skipped_duplicates,
+        "skipped_unresolved": skipped_unresolved,
+        "skipped_missing_srp": skipped_missing_srp,
+        "created": 0,
+        "created_line_ids": [],
+        "warnings": [],
+    }
+
+
+@router.post("/lineup-cases/{case_id}/sync-to-plan", status_code=200)
+async def sync_lineup_case_to_plan(
+    case_id: int,
+    body: SyncToPlanRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Sync accepted lineup case lines to CommercialPlanLine rows.
+
+    Only creates lines for resolved rows (product_id, customer_id/fallback, distributor_id/fallback set).
+    Skips duplicates by plan_id + customer_id + distributor_id + product_id.
+    Never writes dap_evidence_local to any cost field.
+    Requires commercial_status = accepted.
+    Does not mutate CommercialLineupLine rows.
+    Does not mutate historical lineup rows.
+    """
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(404, "Lineup case not found")
+    if case.commercial_status != "accepted":
+        raise HTTPException(409, f"Sync requires case status 'accepted'. Current: '{case.commercial_status}'")
+
+    plan_id = body.commercial_plan_id or case.commercial_plan_id
+    if not plan_id:
+        raise HTTPException(400, "commercial_plan_id required (set on case or in request body)")
+
+    plan = await db.get(CommercialPlan, plan_id)
+    if not plan:
+        raise HTTPException(404, f"CommercialPlan id={plan_id} not found")
+
+    lines_result = await db.execute(
+        select(CommercialLineupLine).where(CommercialLineupLine.case_id == case_id)
+    )
+    lines = lines_result.scalars().all()
+
+    existing_stmt = select(
+        CommercialPlanLine.customer_id,
+        CommercialPlanLine.distributor_id,
+        CommercialPlanLine.product_id,
+    ).where(CommercialPlanLine.commercial_plan_id == plan_id)
+    existing_rows = (await db.execute(existing_stmt)).all()
+    existing_keys: set[tuple] = {
+        (r.customer_id, r.distributor_id, r.product_id) for r in existing_rows
+    }
+
+    created_ids: list[int] = []
+    skipped_duplicates = 0
+    skipped_unresolved = 0
+    skipped_missing_srp = 0
+    failed = 0
+    warnings: list[str] = []
+
+    for ln in lines:
+        eligible, reason, customer_id, distributor_id, srp, units = _sync_eligibility(ln, body, existing_keys)
+        if not eligible:
+            if reason == "duplicate":
+                skipped_duplicates += 1
+            elif reason == "missing_srp":
+                skipped_missing_srp += 1
+            else:
+                skipped_unresolved += 1
+            continue
+
+        if ln.quantity_units is None and body.allow_zero_quantity:
+            warnings.append(f"Row {ln.source_row_number}: quantity_units missing; using 0.")
+
+        # Create plan line — NEVER write DAP as cost
+        new_line = CommercialPlanLine(
+            commercial_plan_id=plan_id,
+            customer_id=customer_id,
+            distributor_id=distributor_id,
+            product_id=ln.product_id,
+            target_units=units,
+            target_srp_local=srp,
+            promo_srp_local=ln.promo_price_evidence_local,  # evidence only; promo is suggested
+        )
+        db.add(new_line)
+        try:
+            await db.flush()
+            created_ids.append(new_line.id)
+            existing_keys.add((customer_id, distributor_id, ln.product_id))
+        except Exception as exc:
+            await db.rollback()
+            failed += 1
+            warnings.append(f"Row {ln.source_row_number}: failed to create plan line: {exc}")
+
+    await db.commit()
+
+    return {
+        "case_id": case_id,
+        "plan_id": plan_id,
+        "created": len(created_ids),
+        "skipped_duplicates": skipped_duplicates,
+        "skipped_unresolved": skipped_unresolved,
+        "skipped_missing_srp": skipped_missing_srp,
+        "failed": failed,
+        "created_line_ids": created_ids,
+        "warnings": warnings,
     }

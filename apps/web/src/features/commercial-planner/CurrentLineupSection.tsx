@@ -100,7 +100,160 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   cancelled: [],
 };
 
+// ── Types: sync ───────────────────────────────────────────────────────────────
+
+type SyncPreview = {
+  case_id: number;
+  plan_id: number;
+  total_lines: number;
+  will_create: number;
+  skipped_duplicates: number;
+  skipped_unresolved: number;
+  skipped_missing_srp: number;
+};
+
+type SyncResult = {
+  case_id: number;
+  plan_id: number;
+  created: number;
+  skipped_duplicates: number;
+  skipped_unresolved: number;
+  skipped_missing_srp: number;
+  failed: number;
+  created_line_ids: number[];
+  warnings: string[];
+};
+
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+function SyncPreviewDialog({
+  open,
+  onClose,
+  caseItem,
+  onSyncComplete,
+}: {
+  open: boolean;
+  onClose: () => void;
+  caseItem: CommercialLineupCase;
+  onSyncComplete?: () => void;
+}) {
+  const qc = useQueryClient();
+  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  const previewUrl = `/api/v1/commercial-planner/lineup-cases/${caseItem.id}/sync-to-plan/preview${
+    caseItem.commercial_plan_id ? `?commercial_plan_id=${caseItem.commercial_plan_id}` : ''
+  }`;
+
+  const { data: preview, isLoading: previewLoading } = useQuery<SyncPreview>({
+    queryKey: ['sync-to-plan-preview', caseItem.id, caseItem.commercial_plan_id],
+    queryFn: ({ signal }) => apiGet<SyncPreview>(previewUrl, { signal }),
+    enabled: open && !syncResult,
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: () =>
+      apiPost<SyncResult>(`/api/v1/commercial-planner/lineup-cases/${caseItem.id}/sync-to-plan`, {
+        commercial_plan_id: caseItem.commercial_plan_id ?? null,
+      }),
+    onSuccess: (result) => {
+      setSyncResult(result);
+      qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+      onSyncComplete?.();
+    },
+    onError: (e: unknown) => {
+      setSyncError(e instanceof Error ? e.message : 'Sync failed');
+    },
+  });
+
+  const handleClose = () => {
+    setSyncResult(null);
+    setSyncError(null);
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Sync to plan</DialogTitle>
+      <DialogContent>
+        {syncResult ? (
+          <Alert severity="success">
+            <Typography variant="body2">
+              Sync complete: <strong>{syncResult.created}</strong> line
+              {syncResult.created !== 1 ? 's' : ''} created.
+            </Typography>
+            {syncResult.skipped_duplicates > 0 && (
+              <Typography variant="body2">
+                Skipped {syncResult.skipped_duplicates} duplicate(s).
+              </Typography>
+            )}
+            {syncResult.skipped_unresolved > 0 && (
+              <Typography variant="body2">
+                Skipped {syncResult.skipped_unresolved} unresolved (no product / customer / distributor).
+              </Typography>
+            )}
+            {syncResult.skipped_missing_srp > 0 && (
+              <Typography variant="body2">
+                Skipped {syncResult.skipped_missing_srp} missing SRP.
+              </Typography>
+            )}
+            {syncResult.warnings.length > 0 && (
+              <Typography variant="body2">
+                Warnings: {syncResult.warnings.join('; ')}
+              </Typography>
+            )}
+          </Alert>
+        ) : syncError ? (
+          <Alert severity="error">{syncError}</Alert>
+        ) : previewLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+            <CircularProgress size={28} />
+          </Box>
+        ) : preview ? (
+          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <Typography variant="body2">
+              Total lines in case: <strong>{preview.total_lines}</strong>
+            </Typography>
+            <Typography variant="body2" color="success.main">
+              Eligible (will be created): <strong>{preview.will_create}</strong>
+            </Typography>
+            {preview.skipped_duplicates > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Skipped — already in plan: {preview.skipped_duplicates}
+              </Typography>
+            )}
+            {preview.skipped_unresolved > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Skipped — unresolved (no product/customer/distributor): {preview.skipped_unresolved}
+              </Typography>
+            )}
+            {preview.skipped_missing_srp > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Skipped — missing SRP: {preview.skipped_missing_srp}
+              </Typography>
+            )}
+          </Stack>
+        ) : null}
+      </DialogContent>
+      <DialogActions>
+        <Button size="small" onClick={handleClose}>
+          {syncResult ? 'Close' : 'Cancel'}
+        </Button>
+        {!syncResult && (
+          <Button
+            size="small"
+            variant="contained"
+            disabled={syncMutation.isPending || previewLoading || !preview}
+            onClick={() => syncMutation.mutate()}
+            data-testid="sync-to-plan-confirm"
+          >
+            {syncMutation.isPending ? 'Syncing…' : 'Sync to plan'}
+          </Button>
+        )}
+      </DialogActions>
+    </Dialog>
+  );
+}
 
 function CaseLinesDialog({
   open,
@@ -420,12 +573,19 @@ function UploadLineupDialog({
 
 // ── Main section ──────────────────────────────────────────────────────────────
 
-export function CurrentLineupSection({ activePlanId }: { activePlanId: number | null }) {
+export function CurrentLineupSection({
+  activePlanId,
+  onSyncComplete,
+}: {
+  activePlanId: number | null;
+  onSyncComplete?: () => void;
+}) {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewLinesCase, setViewLinesCase] = useState<CommercialLineupCase | null>(null);
   const [statusCase, setStatusCase] = useState<CommercialLineupCase | null>(null);
+  const [syncCase, setSyncCase] = useState<CommercialLineupCase | null>(null);
 
   const { data: cases, isLoading } = useQuery<CommercialLineupCase[]>({
     queryKey: ['commercial-lineup-cases', activePlanId],
@@ -535,6 +695,17 @@ export function CurrentLineupSection({ activePlanId }: { activePlanId: number | 
                         Update status
                       </Button>
                     )}
+                    {c.commercial_status === 'accepted' && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        onClick={() => setSyncCase(c)}
+                        data-testid="sync-to-plan-btn"
+                      >
+                        Sync to plan
+                      </Button>
+                    )}
                     {c.commercial_status === 'draft_imported' && (
                       <Button
                         size="small"
@@ -580,6 +751,15 @@ export function CurrentLineupSection({ activePlanId }: { activePlanId: number | 
           onConfirm={(status, notes, acceptedBy) => {
             statusMutation.mutate({ caseId: statusCase.id, status, notes, acceptedBy });
           }}
+        />
+      )}
+
+      {syncCase && (
+        <SyncPreviewDialog
+          open={syncCase != null}
+          onClose={() => setSyncCase(null)}
+          caseItem={syncCase}
+          onSyncComplete={onSyncComplete}
         />
       )}
     </>

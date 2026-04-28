@@ -100,7 +100,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "display_name": "Current working lineup",
         "description": "Active/proposed commercial lineup uploaded from Commercial Planner. Import intent: current_working_lineup. Not historical evidence.",
         "enabled": True,
-        "hidden": False,
+        "hidden": True,  # use Commercial Planner parse-upload, not generic imports UI
         "admin_only": False,
         "requires_provider": False,
         "pipeline_handler": "stub_noop",
@@ -222,6 +222,7 @@ DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
         "planning_extract",
     ),
     ("promotion_plan_default", "Default promotion plan feed", "promotion_plan", "promo_extract"),
+    ("current_lineup_system", "Current working lineup (Commercial Planner upload)", "current_lineup", "planning_extract"),
 ]
 
 

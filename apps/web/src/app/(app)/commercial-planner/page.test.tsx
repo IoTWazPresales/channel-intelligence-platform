@@ -1563,7 +1563,7 @@ vi.mock('@/features/commercial-planner/AddProductSetDialog', () => ({
 }));
 
 vi.mock('@/features/commercial-planner/CurrentLineupSection', () => ({
-  CurrentLineupSection: ({ activePlanId }: { activePlanId: number | null }) => (
+  CurrentLineupSection: ({ activePlanId }: { activePlanId: number | null; onSyncComplete?: () => void }) => (
     <div data-testid="current-lineup-section">
       {activePlanId != null && (
         <button data-testid="upload-current-lineup-btn">Upload current lineup</button>
@@ -1746,5 +1746,103 @@ describe('V4: Column metadata and label fixes', () => {
     // Old label must not appear
     expect(summaryPanel).not.toHaveTextContent('Estimated internal margin USD');
     expect(summaryPanel).not.toHaveTextContent('/ unit');
+  });
+});
+
+// ── Phase 2: CurrentLineupSection sync-to-plan tests ─────────────────────────
+
+describe('CurrentLineupSection — sync to plan', () => {
+  async function renderCLS(
+    activePlanId: number | null,
+    casesImpl: (url: string) => any,
+  ) {
+    const { CurrentLineupSection: RealCLS } = await vi.importActual<
+      typeof import('@/features/commercial-planner/CurrentLineupSection')
+    >('@/features/commercial-planner/CurrentLineupSection');
+
+    mockState.apiGetMock.mockImplementation(casesImpl);
+    mockState.apiPostMock.mockClear();
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          {/* @ts-expect-error: importActual may return mismatched types in test context */}
+          <RealCLS activePlanId={activePlanId} />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  const ACCEPTED_CASE = {
+    id: 1,
+    import_job_id: null,
+    commercial_plan_id: 5,
+    file_name: 'lineup_q2.csv',
+    period_label: 'Q2 2026',
+    country_code: 'US',
+    currency_code: 'USD',
+    commercial_status: 'accepted',
+    notes: null,
+    accepted_at: '2026-04-01T00:00:00Z',
+    accepted_by: 'manager',
+    line_count: 10,
+    created_at: null,
+  };
+
+  const DRAFT_CASE = {
+    ...ACCEPTED_CASE,
+    id: 2,
+    commercial_status: 'draft_imported',
+    accepted_at: null,
+    accepted_by: null,
+  };
+
+  it('sync button visible only for accepted cases', async () => {
+    const { user } = await renderCLS(5, async (url: string) => {
+      if (url.includes('/lineup-cases')) return [ACCEPTED_CASE, DRAFT_CASE];
+      return [];
+    });
+
+    // Expand section
+    const toggle = await screen.findByTestId('current-lineup-section-toggle');
+    await user.click(toggle);
+
+    // Sync button present for accepted case, absent for draft case
+    const syncBtns = screen.queryAllByTestId('sync-to-plan-btn');
+    expect(syncBtns.length).toBe(1);
+  });
+
+  it('sync preview dialog shows counts when sync button is clicked', async () => {
+    const previewPayload = {
+      case_id: 1,
+      plan_id: 5,
+      total_lines: 10,
+      will_create: 8,
+      skipped_duplicates: 1,
+      skipped_unresolved: 1,
+      skipped_missing_srp: 0,
+      created: 0,
+      created_line_ids: [],
+      warnings: [],
+    };
+
+    const { user } = await renderCLS(5, async (url: string) => {
+      if (url.includes('/lineup-cases') && !url.includes('/sync-to-plan')) return [ACCEPTED_CASE];
+      if (url.includes('/sync-to-plan/preview')) return previewPayload;
+      return [];
+    });
+
+    // Expand and click sync
+    await user.click(await screen.findByTestId('current-lineup-section-toggle'));
+    await user.click(await screen.findByTestId('sync-to-plan-btn'));
+
+    // Dialog should appear with counts
+    await waitFor(() => {
+      expect(screen.getByText(/Total lines in case/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Total lines in case/i)).toBeInTheDocument();
+    expect(screen.getByText(/Eligible.*will be created/i)).toBeInTheDocument();
   });
 });

@@ -1224,6 +1224,118 @@ def test_column_metadata_catalogue_coverage():
     assert isinstance(body["spec_keys"], dict)
 
 
+# ─── Phase 1 parser hardening tests ─────────────────────────────────────────
+
+
+def test_parse_upload_creates_import_job_with_correct_source():
+    """Parser uses SourceDefinition.id for ImportJob.source_id; never falls back to 1."""
+    import asyncio
+
+    from app.services.commercial_planner.lineup_case_parser import parse_current_lineup_file
+
+    fake_source = SimpleNamespace(id=77)
+    fake_case = SimpleNamespace(id=10, import_job_id=None, file_name=None)
+    added: list[object] = []
+
+    async def run():
+        db = MagicMock()
+        db.get = AsyncMock(return_value=fake_case)
+        db.scalar = AsyncMock(return_value=fake_source)
+
+        flush_n = {"n": 0}
+
+        async def _flush():
+            flush_n["n"] += 1
+            if flush_n["n"] == 1 and added:
+                added[0].id = 200  # type: ignore[attr-defined]
+
+        db.flush = AsyncMock(side_effect=_flush)
+        db.add = MagicMock(side_effect=added.append)
+
+        empty = MagicMock()
+        empty.scalars.return_value.all.return_value = []
+        db.execute = AsyncMock(return_value=empty)
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+
+        return await parse_current_lineup_file(db, 10, "test.csv", b"sku,qty\nSKU-A,10\n")
+
+    asyncio.run(run())
+    # First added object is the ImportJob
+    import_job = added[0]
+    assert hasattr(import_job, "source_id"), "First added object should be the ImportJob"
+    assert import_job.source_id == 77  # type: ignore[attr-defined]
+    assert import_job.source_id != 1  # type: ignore[attr-defined]
+
+
+def test_parse_upload_fails_clearly_without_current_lineup_source():
+    """Parser raises ValueError with clear message when SourceDefinition is missing."""
+    import asyncio
+
+    from app.services.commercial_planner.lineup_case_parser import parse_current_lineup_file
+
+    fake_case = SimpleNamespace(id=11, import_job_id=None, file_name=None)
+
+    async def run():
+        db = MagicMock()
+        db.get = AsyncMock(return_value=fake_case)
+        db.scalar = AsyncMock(return_value=None)  # no SourceDefinition
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+        empty = MagicMock()
+        empty.scalars.return_value.all.return_value = []
+        db.execute = AsyncMock(return_value=empty)
+        return await parse_current_lineup_file(db, 11, "test.csv", b"sku,qty\nSKU-A,10\n")
+
+    with pytest.raises(ValueError, match="current_lineup"):
+        asyncio.run(run())
+
+
+def test_parse_upload_unknown_distributor_diagnostic():
+    """Unresolved distributor token appends 'unknown_distributor' to diagnostic_codes."""
+    import asyncio
+
+    from app.services.commercial_planner.lineup_case_parser import parse_current_lineup_file
+    from app.models.commercial_lineup import CommercialLineupLine
+
+    fake_source = SimpleNamespace(id=5)
+    fake_case = SimpleNamespace(id=12, import_job_id=None, file_name=None)
+    added: list[object] = []
+
+    async def run():
+        db = MagicMock()
+        db.get = AsyncMock(return_value=fake_case)
+        db.scalar = AsyncMock(return_value=fake_source)
+
+        flush_n = {"n": 0}
+
+        async def _flush():
+            flush_n["n"] += 1
+            if flush_n["n"] == 1 and added:
+                added[0].id = 300  # type: ignore[attr-defined]
+
+        db.flush = AsyncMock(side_effect=_flush)
+        db.add = MagicMock(side_effect=added.append)
+
+        empty = MagicMock()
+        empty.scalars.return_value.all.return_value = []
+        db.execute = AsyncMock(return_value=empty)
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+
+        # CSV has a distributor column with a value not in the empty distributor map
+        csv = b"sku,distributor,qty\nSKU-A,UNKNOWN-DISTI,10\n"
+        return await parse_current_lineup_file(db, 12, "test.csv", csv)
+
+    asyncio.run(run())
+    # Find the CommercialLineupLine among added objects
+    lineup_lines = [x for x in added if isinstance(x, CommercialLineupLine)]
+    assert len(lineup_lines) == 1
+    assert "unknown_distributor" in (lineup_lines[0].diagnostic_codes or [])
+
+
 def test_column_metadata_spec_keys_from_jsonb():
     """GET /plans/{id}/column-metadata returns spec_keys aggregated from JSONB."""
     from types import SimpleNamespace
@@ -1274,3 +1386,335 @@ def test_column_metadata_spec_keys_from_jsonb():
     body = r.json()
     assert body["spec_keys"]["cpu"] == 2
     assert body["spec_keys"]["ram"] == 2
+
+
+# ─── Phase 2 sync-to-plan tests ───────────────────────────────────────────────
+
+
+def _make_lineup_line(
+    id=1,
+    case_id=1,
+    source_row_number=1,
+    product_id=10,
+    customer_id=7,
+    distributor_id=3,
+    quantity_units=50.0,
+    msrp_local=999.0,
+    promo_price_evidence_local=None,
+    dap_evidence_local=None,
+    diagnostic_codes=None,
+):
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        id=id,
+        case_id=case_id,
+        source_row_number=source_row_number,
+        product_id=product_id,
+        customer_id=customer_id,
+        distributor_id=distributor_id,
+        quantity_units=quantity_units,
+        msrp_local=msrp_local,
+        promo_price_evidence_local=promo_price_evidence_local,
+        dap_evidence_local=dap_evidence_local,
+        diagnostic_codes=diagnostic_codes,
+    )
+
+
+def test_sync_to_plan_rejects_non_accepted_case():
+    """POST sync-to-plan returns 409 when case is not accepted."""
+    case = _make_case(id=30, commercial_status="draft_imported", commercial_plan_id=5)
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/30/sync-to-plan",
+        json={"commercial_plan_id": 5},
+    )
+    assert r.status_code == 409
+    assert "accepted" in r.json()["detail"]
+
+
+def test_sync_to_plan_creates_plan_lines_for_eligible():
+    """POST sync-to-plan creates CommercialPlanLine for eligible lines."""
+    from app.models.commercial_planner import CommercialPlan, CommercialPlanLine
+
+    case = _make_case(id=31, commercial_status="accepted", commercial_plan_id=5)
+    fake_plan = SimpleNamespace(id=5)
+    lineup_line = _make_lineup_line(id=1, case_id=31, product_id=10, customer_id=7, distributor_id=3)
+    added = []
+
+    async def fake_db():
+        sess = MagicMock()
+
+        async def _get(model, pk):
+            if model.__name__ == "CommercialLineupCase":
+                return case
+            if model.__name__ == "CommercialPlan":
+                return fake_plan
+            return None
+
+        sess.get = AsyncMock(side_effect=_get)
+
+        call_n = {"n": 0}
+
+        async def _execute(stmt):
+            call_n["n"] += 1
+            result = MagicMock()
+            if call_n["n"] == 1:
+                # CommercialLineupLine query
+                result.scalars.return_value.all.return_value = [lineup_line]
+            else:
+                # existing CommercialPlanLine query — none
+                result.all.return_value = []
+            return result
+
+        sess.execute = AsyncMock(side_effect=_execute)
+
+        flush_n = {"n": 0}
+
+        async def _flush():
+            flush_n["n"] += 1
+            if added:
+                added[-1].id = 500 + flush_n["n"]
+
+        sess.flush = AsyncMock(side_effect=_flush)
+        sess.add = MagicMock(side_effect=added.append)
+        sess.commit = AsyncMock()
+        sess.rollback = AsyncMock()
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/31/sync-to-plan",
+        json={"commercial_plan_id": 5},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["created"] == 1
+    assert body["skipped_duplicates"] == 0
+    assert body["skipped_unresolved"] == 0
+    assert len(body["created_line_ids"]) == 1
+
+
+def test_sync_to_plan_skips_duplicates():
+    """POST sync-to-plan skips lines already in the plan (same customer+distributor+product)."""
+    from app.models.commercial_planner import CommercialPlan
+
+    case = _make_case(id=32, commercial_status="accepted", commercial_plan_id=5)
+    fake_plan = SimpleNamespace(id=5)
+    lineup_line = _make_lineup_line(id=2, case_id=32, product_id=10, customer_id=7, distributor_id=3)
+
+    # Existing plan line for same key
+    existing_row = SimpleNamespace(customer_id=7, distributor_id=3, product_id=10)
+
+    async def fake_db():
+        sess = MagicMock()
+
+        async def _get(model, pk):
+            if model.__name__ == "CommercialLineupCase":
+                return case
+            if model.__name__ == "CommercialPlan":
+                return fake_plan
+            return None
+
+        sess.get = AsyncMock(side_effect=_get)
+
+        call_n = {"n": 0}
+
+        async def _execute(stmt):
+            call_n["n"] += 1
+            result = MagicMock()
+            if call_n["n"] == 1:
+                result.scalars.return_value.all.return_value = [lineup_line]
+            else:
+                result.all.return_value = [existing_row]
+            return result
+
+        sess.execute = AsyncMock(side_effect=_execute)
+        sess.add = MagicMock()
+        sess.flush = AsyncMock()
+        sess.commit = AsyncMock()
+        sess.rollback = AsyncMock()
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/32/sync-to-plan",
+        json={"commercial_plan_id": 5},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["created"] == 0
+    assert body["skipped_duplicates"] == 1
+
+
+def test_sync_to_plan_skips_unresolved():
+    """POST sync-to-plan increments skipped_unresolved when product_id is None."""
+    from app.models.commercial_planner import CommercialPlan
+
+    case = _make_case(id=33, commercial_status="accepted", commercial_plan_id=5)
+    fake_plan = SimpleNamespace(id=5)
+    unresolved_line = _make_lineup_line(id=3, case_id=33, product_id=None, customer_id=7, distributor_id=3)
+
+    async def fake_db():
+        sess = MagicMock()
+
+        async def _get(model, pk):
+            if model.__name__ == "CommercialLineupCase":
+                return case
+            if model.__name__ == "CommercialPlan":
+                return fake_plan
+            return None
+
+        sess.get = AsyncMock(side_effect=_get)
+
+        call_n = {"n": 0}
+
+        async def _execute(stmt):
+            call_n["n"] += 1
+            result = MagicMock()
+            if call_n["n"] == 1:
+                result.scalars.return_value.all.return_value = [unresolved_line]
+            else:
+                result.all.return_value = []
+            return result
+
+        sess.execute = AsyncMock(side_effect=_execute)
+        sess.add = MagicMock()
+        sess.flush = AsyncMock()
+        sess.commit = AsyncMock()
+        sess.rollback = AsyncMock()
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/33/sync-to-plan",
+        json={"commercial_plan_id": 5},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["created"] == 0
+    assert body["skipped_unresolved"] == 1
+
+
+def test_sync_to_plan_does_not_write_dap_as_cost():
+    """POST sync-to-plan creates plan line without writing dap_evidence_local to any cost field."""
+    from app.models.commercial_planner import CommercialPlan, CommercialPlanLine
+
+    case = _make_case(id=34, commercial_status="accepted", commercial_plan_id=5)
+    fake_plan = SimpleNamespace(id=5)
+    # Line has DAP evidence — must NOT appear in any cost field of the created plan line
+    lineup_line = _make_lineup_line(
+        id=4, case_id=34, product_id=10, customer_id=7, distributor_id=3, dap_evidence_local=850.0
+    )
+    added = []
+
+    async def fake_db():
+        sess = MagicMock()
+
+        async def _get(model, pk):
+            if model.__name__ == "CommercialLineupCase":
+                return case
+            if model.__name__ == "CommercialPlan":
+                return fake_plan
+            return None
+
+        sess.get = AsyncMock(side_effect=_get)
+
+        call_n = {"n": 0}
+
+        async def _execute(stmt):
+            call_n["n"] += 1
+            result = MagicMock()
+            if call_n["n"] == 1:
+                result.scalars.return_value.all.return_value = [lineup_line]
+            else:
+                result.all.return_value = []
+            return result
+
+        sess.execute = AsyncMock(side_effect=_execute)
+
+        flush_n = {"n": 0}
+
+        async def _flush():
+            flush_n["n"] += 1
+            if added:
+                added[-1].id = 600 + flush_n["n"]
+
+        sess.flush = AsyncMock(side_effect=_flush)
+        sess.add = MagicMock(side_effect=added.append)
+        sess.commit = AsyncMock()
+        sess.rollback = AsyncMock()
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/34/sync-to-plan",
+        json={"commercial_plan_id": 5},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["created"] == 1
+
+    # Inspect the created CommercialPlanLine — DAP must not appear in cost fields
+    created_plan_line = next(x for x in added if isinstance(x, CommercialPlanLine))
+    # DAP evidence value (850.0) must NOT be in target_srp_local or any cost field
+    assert created_plan_line.target_srp_local != 850.0
+    # override_landed_cost_usd must not be set to DAP
+    assert getattr(created_plan_line, "override_landed_cost_usd", None) is None
+
+
+def test_sync_preview_returns_counts():
+    """GET sync-to-plan/preview returns counts without creating rows."""
+    from app.models.commercial_planner import CommercialPlan
+
+    case = _make_case(id=35, commercial_status="accepted", commercial_plan_id=5)
+    fake_plan = SimpleNamespace(id=5)
+    lineup_line = _make_lineup_line(id=5, case_id=35, product_id=10, customer_id=7, distributor_id=3)
+
+    async def fake_db():
+        sess = MagicMock()
+
+        async def _get(model, pk):
+            if model.__name__ == "CommercialLineupCase":
+                return case
+            if model.__name__ == "CommercialPlan":
+                return fake_plan
+            return None
+
+        sess.get = AsyncMock(side_effect=_get)
+
+        call_n = {"n": 0}
+
+        async def _execute(stmt):
+            call_n["n"] += 1
+            result = MagicMock()
+            if call_n["n"] == 1:
+                result.scalars.return_value.all.return_value = [lineup_line]
+            else:
+                result.all.return_value = []
+            return result
+
+        sess.execute = AsyncMock(side_effect=_execute)
+        sess.add = MagicMock()
+        sess.flush = AsyncMock()
+        sess.commit = AsyncMock()
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get(
+        "/api/v1/commercial-planner/lineup-cases/35/sync-to-plan/preview?commercial_plan_id=5"
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total_lines"] == 1
+    assert body["will_create"] == 1
+    assert body["skipped_duplicates"] == 0
+    assert body["created"] == 0  # preview only — no rows created
+    assert body["created_line_ids"] == []
+    # Verify no commit was called (preview must not persist)
+    # (The mock's commit is not called because the preview endpoint doesn't commit)

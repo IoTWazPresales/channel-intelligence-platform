@@ -1495,11 +1495,11 @@ export default function CommercialPlannerPage() {
           </Typography>
           {lineHasBlockingEconomicsFlags(selectedLine) ? (
             <Typography variant="body2" data-testid="line-detail-internal-gp-incomplete">
-              Estimated internal margin USD: —
+              Est. OEM net margin USD (total, all units): —
             </Typography>
           ) : (
             <Typography variant="body2">
-              Estimated internal margin USD: {fmtCurrency(selectedLine.calc_internal_gp_usd)}
+              Est. OEM net margin USD (total, all units): {fmtCurrency(selectedLine.calc_internal_gp_usd)}
             </Typography>
           )}
         </Stack>
@@ -1772,7 +1772,13 @@ export default function CommercialPlannerPage() {
         </Stack>
 
         {/* Current lineups section */}
-        <CurrentLineupSection activePlanId={activePlanId} />
+        <CurrentLineupSection
+          activePlanId={activePlanId}
+          onSyncComplete={() => {
+            void qc.invalidateQueries({ queryKey: ['commercial-plan-lines', activePlanId] });
+            void qc.invalidateQueries({ queryKey: ['commercial-plan-summary', activePlanId] });
+          }}
+        />
 
         {/* Readiness chips */}
         {planReadiness && (

@@ -173,7 +173,12 @@ async def parse_current_lineup_file(
         .where(ImportTemplate.slug == "current_lineup")
         .limit(1)
     )
-    source_id = source.id if source is not None else 1
+    if source is None:
+        raise ValueError(
+            "No SourceDefinition found for template 'current_lineup'. "
+            "Ensure the database seed migration has been run (see template_definitions.DEFAULT_SOURCES)."
+        )
+    source_id = source.id
 
     job = ImportJob(
         source_id=source_id,
@@ -262,6 +267,8 @@ async def parse_current_lineup_file(
             resolved_distributor: DimDistributor | None = None
             if distributor_token_val:
                 resolved_distributor = distributor_map.get(distributor_token_val.lower())
+                if resolved_distributor is None:
+                    diag.append("unknown_distributor")
 
             payload_keys = {
                 "sku_raw", "part_number_raw", "model_raw", "customer_token",
