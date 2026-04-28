@@ -22,11 +22,6 @@ import { useMemo, useState } from 'react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type PlanLine = {
-  product_spec_cpu?: string | null;
-  product_spec_ram?: string | null;
-  product_spec_storage?: string | null;
-  product_spec_gpu?: string | null;
-  product_spec_display?: string | null;
   product_spec_warranty?: string | null;
   product_spec_os?: string | null;
   product_spec_colour?: string | null;
@@ -78,8 +73,6 @@ type ColumnDef = {
   alwaysOn?: boolean;
   optional?: true;
   coverageKey?: string;
-  /** Spec JSONB candidate key names (used to look up in columnMeta.spec_keys). */
-  specCandidateKeys?: string[];
   /** Key name in columnMeta.catalogue (may differ from client-side coverageKey). */
   catalogueServerKey?: string;
 };
@@ -101,21 +94,6 @@ const COLUMN_GROUPS: GroupDef[] = [
       { key: 'product_part_number', label: 'Part #', locked: true },
       { key: 'product_model_sales_model', label: 'Model / Sales model', locked: true },
       { key: 'product_name', label: 'Product name', locked: true },
-    ],
-  },
-  {
-    title: 'Specs',
-    description:
-      'Named slots (CPU, RAM, …) map common flattened fields when the API provides them. Other dimensions from specs_json appear under “Discovered spec JSON keys” above — toggle those to add columns.',
-    columns: [
-      { key: 'product_spec_cpu', label: 'CPU', alwaysOn: true, coverageKey: 'cpu', specCandidateKeys: ['cpu', 'CPU', 'processor'] },
-      { key: 'product_spec_ram', label: 'RAM', alwaysOn: true, coverageKey: 'ram', specCandidateKeys: ['ram', 'RAM', 'memory'] },
-      { key: 'product_spec_storage', label: 'Storage', alwaysOn: true, coverageKey: 'storage', specCandidateKeys: ['storage', 'Storage', 'disk', 'ssd', 'hdd'] },
-      { key: 'product_spec_gpu', label: 'GPU', alwaysOn: true, coverageKey: 'gpu', specCandidateKeys: ['gpu', 'GPU', 'graphics'] },
-      { key: 'product_spec_display', label: 'Display', alwaysOn: true, coverageKey: 'display', specCandidateKeys: ['display', 'Display', 'screen', 'panel'] },
-      { key: 'product_spec_warranty', label: 'Warranty', optional: true },
-      { key: 'product_spec_os', label: 'OS', optional: true },
-      { key: 'product_spec_colour', label: 'Colour', optional: true },
     ],
   },
   {
@@ -178,28 +156,6 @@ const COLUMN_GROUPS: GroupDef[] = [
   },
 ];
 
-// ── Coverage helpers ───────────────────────────────────────────────────────────
-
-/**
- * Compute coverage count for a spec field.
- * When columnMeta is provided, sums across all candidate key names in spec_keys.
- * Otherwise falls back to client-side count.
- */
-function getSpecCoverage(
-  candidateKeys: string[],
-  columnMeta: ColumnMetadata | null | undefined,
-  clientCount: number,
-): { count: number; fromServer: boolean } {
-  if (columnMeta) {
-    const serverCount = candidateKeys.reduce(
-      (acc, k) => acc + (columnMeta.spec_keys[k] ?? 0),
-      0,
-    );
-    return { count: serverCount, fromServer: true };
-  }
-  return { count: clientCount, fromServer: false };
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ColumnSelectorModal({
@@ -215,19 +171,6 @@ export function ColumnSelectorModal({
   onSpecKeyToggle,
 }: ColumnSelectorModalProps) {
   const [search, setSearch] = useState('');
-
-  const specCoverage = useMemo(() => {
-    const total = lines.length;
-    if (total === 0) return { cpu: 0, ram: 0, storage: 0, gpu: 0, display: 0, total: 0 };
-    return {
-      cpu: lines.filter((l) => l.product_spec_cpu?.trim()).length,
-      ram: lines.filter((l) => l.product_spec_ram?.trim()).length,
-      storage: lines.filter((l) => l.product_spec_storage?.trim()).length,
-      gpu: lines.filter((l) => l.product_spec_gpu?.trim()).length,
-      display: lines.filter((l) => l.product_spec_display?.trim()).length,
-      total,
-    };
-  }, [lines]);
 
   const catalogueCoverage = useMemo(
     () => ({
@@ -417,28 +360,16 @@ export function ColumnSelectorModal({
             )}
             <Stack spacing={0.25}>
               {group.columns.map((col) => {
-                // Compute coverage count based on server or client data
                 let coverageCount: number | undefined;
-                let coverageFromServer = false;
 
-                if (col.specCandidateKeys) {
-                  // Spec column: use server spec_keys or client fallback
-                  const clientCount = col.coverageKey ? (specCoverage as Record<string, number>)[col.coverageKey] ?? 0 : 0;
-                  const { count, fromServer } = getSpecCoverage(col.specCandidateKeys, columnMeta, clientCount);
-                  coverageCount = count;
-                  coverageFromServer = fromServer;
-                } else if (col.catalogueServerKey && col.coverageKey) {
-                  // Catalogue column: use server catalogue or client fallback
+                if (col.catalogueServerKey && col.coverageKey) {
                   if (columnMeta) {
                     coverageCount = columnMeta.catalogue[col.catalogueServerKey] ?? 0;
-                    coverageFromServer = true;
                   } else {
                     coverageCount = (catalogueCoverage as Record<string, number>)[col.coverageKey];
                   }
-                } else if (col.coverageKey && !col.specCandidateKeys && !col.catalogueServerKey) {
-                  // Legacy: coverage from client allCoverage (non-spec, non-catalogue fields)
-                  const allCoverage: Record<string, number> = { ...specCoverage, ...catalogueCoverage };
-                  coverageCount = allCoverage[col.coverageKey];
+                } else if (col.coverageKey && !col.catalogueServerKey) {
+                  coverageCount = (catalogueCoverage as Record<string, number>)[col.coverageKey];
                 }
 
                 const coverageLabel =
@@ -459,24 +390,6 @@ export function ColumnSelectorModal({
                 }
 
                 if (col.alwaysOn) {
-                  // For spec columns with server data: check if coverage is 0
-                  const specHasServerData = col.specCandidateKeys && coverageFromServer;
-                  const specCoverageIsZero = specHasServerData && (coverageCount ?? 0) === 0;
-
-                  if (specCoverageIsZero) {
-                    return (
-                      <Box key={col.key} sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5, py: 0.25 }}>
-                        <Checkbox size="small" checked disabled sx={{ p: 0 }} />
-                        <Typography variant="body2" color="text.secondary">
-                          {col.label}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {`0 / ${totalForCoverage} — not in catalog`}
-                        </Typography>
-                      </Box>
-                    );
-                  }
-
                   return (
                     <Box key={col.key} sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5, py: 0.25 }}>
                       <Checkbox size="small" checked disabled sx={{ p: 0 }} />

@@ -77,6 +77,7 @@ const mockState = vi.hoisted(() => {
           calc_internal_gp_usd: 300,
           calc_flags: [],
           calc_explanation: 'ok',
+          product_specs_flat: { cpu: 'Intel Core i7' },
         },
       ];
     }
@@ -193,9 +194,13 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
         const gpCol = columnDefs?.find((c: any) => c.field === 'calc_internal_gp_usd');
         const gpDisplay =
           typeof gpCol?.valueGetter === 'function' ? String(gpCol.valueGetter({ data: r } as any) ?? '') : '';
-        const cpuCol = columnDefs?.find((c: any) => c.field === 'product_spec_cpu');
+        const specCpuCol = columnDefs?.find(
+          (c: any) => c.colId === 'spec_flat_cpu' || c.field === 'product_spec_cpu',
+        );
         const cpuDisplay =
-          typeof cpuCol?.valueGetter === 'function' ? String(cpuCol.valueGetter({ data: r } as any) ?? '') : '';
+          typeof specCpuCol?.valueGetter === 'function'
+            ? String(specCpuCol.valueGetter({ data: r } as any) ?? '')
+            : '';
         return (
           <div
             key={r.id}
@@ -426,8 +431,28 @@ describe('CommercialPlannerPage — QA polish', () => {
             calc_flags: ['missing_sku_assumption'],
             calc_explanation: 'ok',
             override_landed_cost_usd: null,
+            product_specs_flat: { cpu: 'Intel Core i7' },
           },
         ];
+      }
+      if (url.startsWith('/api/v1/commercial-planner/plans/1/column-metadata')) {
+        return {
+          plan_id: 1,
+          total_products: 10,
+          catalogue: {
+            category: 8,
+            form_factor: 5,
+            lifecycle_status: 10,
+            product_line: 9,
+            series_name: 4,
+            business_unit: 10,
+            part_number: 10,
+            sales_model_name: 7,
+            model_name: 10,
+          },
+          spec_keys: { cpu: 8, ram: 10, storage: 6 },
+          coverage_note: 'Counts are distinct products in the plan with non-null values.',
+        };
       }
       if (url === '/api/v1/commercial-planner/plans/1/summary') {
         return { line_count: 1, total_units: 100, total_internal_gp_usd: 300, total_promo_reserve_usd: 200, total_non_promo_reserve_usd: 200, flags: [] };
@@ -495,11 +520,14 @@ describe('CommercialPlannerPage — QA polish', () => {
     });
   });
 
-  it('CPU spec column shows em dash when API omits product_spec_cpu (no fake values)', async () => {
-    renderPage();
+  it('CPU spec shows value from product_specs_flat when metadata-driven spec column is enabled', async () => {
+    const { user } = renderPage();
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
+    await user.click(await screen.findByTestId('column-manager-btn'));
+    await user.click(await screen.findByTestId('col-spec-toggle-cpu'));
+    await user.click(await screen.findByTestId('col-modal-close'));
     const row = await screen.findByTestId('grid-row-11');
-    expect(row.getAttribute('data-cpu-display')).toBe('—');
+    expect(row.getAttribute('data-cpu-display')).toBe('Intel Core i7');
   });
 
   it('toggling effective FX shows column in grid defs', async () => {
@@ -1499,6 +1527,8 @@ vi.mock('@/features/commercial-planner/ColumnSelectorModal', () => {
       optionalVisible,
       onChange,
       columnMeta,
+      specKeyVisible,
+      onSpecKeyToggle,
     }: {
       open: boolean;
       onClose: () => void;
@@ -1508,6 +1538,8 @@ vi.mock('@/features/commercial-planner/ColumnSelectorModal', () => {
       onChange: (k: string, v: boolean) => void;
       lines: any[];
       columnMeta?: { total_products: number } | null;
+      specKeyVisible?: Record<string, boolean>;
+      onSpecKeyToggle?: (k: string, v: boolean) => void;
     }) =>
       open ? (
         <div
@@ -1518,10 +1550,21 @@ vi.mock('@/features/commercial-planner/ColumnSelectorModal', () => {
         >
           <span>Planner line columns</span>
           <span>Product catalogue (optional)</span>
+          <span data-testid="column-selector-discovered-specs">Discovered spec JSON keys</span>
           <span data-testid="col-modal-locked-note">Locked columns cannot be hidden</span>
           <button data-testid="col-modal-preset-product-spec" onClick={() => onPreset('product_spec')}>
             Product / spec
           </button>
+          {['cpu', 'ram', 'storage'].map((key) => (
+            <button
+              key={key}
+              type="button"
+              data-testid={`col-spec-toggle-${key}`}
+              onClick={() => onSpecKeyToggle?.(key, !(specKeyVisible?.[key] ?? false))}
+            >
+              toggle spec {key}
+            </button>
+          ))}
           <button data-testid="col-reset-defaults" onClick={onReset}>
             Reset to defaults
           </button>

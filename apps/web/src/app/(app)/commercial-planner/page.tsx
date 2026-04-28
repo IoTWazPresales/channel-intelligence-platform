@@ -873,7 +873,7 @@ export default function CommercialPlannerPage() {
   });
 
   useEffect(() => {
-    if (!columnMetaData?.spec_keys) return;
+    if (!columnMetaData?.spec_keys || !specKeyPrefsLoaded) return;
     setOptionalSpecKeyVisible((prev) => {
       const next = { ...prev };
       for (const k of Object.keys(columnMetaData.spec_keys)) {
@@ -881,7 +881,7 @@ export default function CommercialPlannerPage() {
       }
       return next;
     });
-  }, [columnMetaData]);
+  }, [columnMetaData, specKeyPrefsLoaded]);
 
   const { data: lineupEvidence, isLoading: lineupEvidenceLoading } = useQuery({
     queryKey: ['lineup-evidence', lineProduct?.id],
@@ -1193,6 +1193,8 @@ export default function CommercialPlannerPage() {
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
+          const code = (d.distributor_code ?? '').trim().toUpperCase();
+          if (code === 'UNASSIGNED') return 'Distributor unassigned';
           const bits = [d.distributor_code, d.distributor_name].filter(Boolean);
           return bits.length ? bits.join(' — ') : `#${d.distributor_id}`;
         },
@@ -1232,36 +1234,6 @@ export default function CommercialPlannerPage() {
           if (!d) return '';
           return d.product_name?.trim() ? d.product_name : `#${d.product_id}`;
         },
-      },
-      {
-        field: 'product_spec_cpu',
-        headerName: 'CPU',
-        minWidth: 110,
-        valueGetter: (p) => (p.data?.product_spec_cpu?.trim() ? p.data!.product_spec_cpu : '—'),
-      },
-      {
-        field: 'product_spec_ram',
-        headerName: 'RAM',
-        minWidth: 90,
-        valueGetter: (p) => (p.data?.product_spec_ram?.trim() ? p.data!.product_spec_ram : '—'),
-      },
-      {
-        field: 'product_spec_storage',
-        headerName: 'Storage',
-        minWidth: 100,
-        valueGetter: (p) => (p.data?.product_spec_storage?.trim() ? p.data!.product_spec_storage : '—'),
-      },
-      {
-        field: 'product_spec_gpu',
-        headerName: 'GPU',
-        minWidth: 100,
-        valueGetter: (p) => (p.data?.product_spec_gpu?.trim() ? p.data!.product_spec_gpu : '—'),
-      },
-      {
-        field: 'product_spec_display',
-        headerName: 'Display',
-        minWidth: 110,
-        valueGetter: (p) => (p.data?.product_spec_display?.trim() ? p.data!.product_spec_display : '—'),
       },
       {
         field: 'product_spec_warranty',
@@ -2972,6 +2944,17 @@ export default function CommercialPlannerPage() {
               product_spec_os: true,
               product_spec_colour: true,
             }));
+            if (columnMetaData?.spec_keys) {
+              const keys = Object.entries(columnMetaData.spec_keys)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8)
+                .map(([k]) => k);
+              setOptionalSpecKeyVisible((prev) => {
+                const next = { ...prev };
+                for (const k of keys) next[k] = true;
+                return next;
+              });
+            }
           } else if (preset === 'commercial') {
             setOptionalVisible((prev) => ({
               ...prev,

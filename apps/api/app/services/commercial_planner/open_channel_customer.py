@@ -2,6 +2,12 @@
 
 This is not auto-creation from upload tokens. The OPEN_CHANNEL dim_customer row should exist
 after seed (see seed_demo). Sync uses it only when a lineup row is flagged as Open Channel staging.
+
+If sync preview shows open_channel_account_missing, treat it as missing reference data, not a
+per-upload row mapping defect. Idempotent provisioning (repo root):
+
+- Local API venv: pnpm local:db:seed (runs scripts/seed.py via scripts/run-api-python.cjs)
+- Docker stack: pnpm docker:seed (exec into api container)
 """
 from __future__ import annotations
 

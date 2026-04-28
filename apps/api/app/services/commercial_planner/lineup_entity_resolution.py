@@ -11,11 +11,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupLine
+from app.models.dimensions import DimCustomer, DimDistributor
 
 from app.services.commercial_planner.lineup_open_channel import (
     lineup_line_is_open_channel_staging,
     managed_customer_token_unresolved,
 )
+
 
 RESOLUTION_ALLOWED_CASE_STATUSES: frozenset[str] = frozenset(
     {"draft_imported", "validated", "pending_review"}
@@ -121,12 +123,102 @@ async def collect_entity_resolution_candidates(
     }
 
 
+def _mark_open_channel_staging_for_token(lines: list[CommercialLineupLine], norm: str) -> int:
+    updated = 0
+    for ln in lines:
+        if normalize_entity_token(ln.customer_token) != norm:
+            continue
+        if lineup_line_is_open_channel_staging(ln):
+            continue
+        p = dict(ln.raw_row_payload) if isinstance(ln.raw_row_payload, dict) else {}
+        prior = (ln.customer_token or "").strip()
+        if prior:
+            aud = p.get("resolution_audit_customer_tokens_prior")
+            if not isinstance(aud, list):
+                aud = []
+            aud.append(prior)
+            p["resolution_audit_customer_tokens_prior"] = aud
+        p["staging_open_channel"] = True
+        ln.raw_row_payload = p
+        ln.customer_token = None
+        ln.customer_id = None
+        refresh_diagnostics_after_entity_update(ln)
+        append_manual_resolution_tag(ln, "manual_case_resolution_open_channel_staging")
+        updated += 1
+    return updated
+
+
+def _map_customer_token_lines(lines: list[CommercialLineupLine], norm: str, dim_id: int) -> int:
+    updated = 0
+    for ln in lines:
+        if normalize_entity_token(ln.customer_token) != norm:
+            continue
+        ln.customer_id = dim_id
+        refresh_diagnostics_after_entity_update(ln)
+        append_manual_resolution_tag(ln, "manual_case_resolution_customer")
+        updated += 1
+    return updated
+
+
+def _map_distributor_token_lines(lines: list[CommercialLineupLine], norm: str, dim_id: int) -> int:
+    updated = 0
+    for ln in lines:
+        if normalize_entity_token(distributor_token_from_line(ln)) != norm:
+            continue
+        ln.distributor_id = dim_id
+        refresh_diagnostics_after_entity_update(ln)
+        append_manual_resolution_tag(ln, "manual_case_resolution_distributor")
+        updated += 1
+    return updated
+
+
+def _redirect_customer_token_to_distributor(lines: list[CommercialLineupLine], norm: str, dim_id: int) -> int:
+    """Customer-column token actually names a distributor (explicit user action)."""
+    updated = 0
+    for ln in lines:
+        if lineup_line_is_open_channel_staging(ln):
+            continue
+        if normalize_entity_token(ln.customer_token) != norm:
+            continue
+        ln.distributor_id = dim_id
+        ln.customer_token = None
+        ln.customer_id = None
+        refresh_diagnostics_after_entity_update(ln)
+        append_manual_resolution_tag(ln, "manual_case_resolution_customer_token_as_distributor")
+        updated += 1
+    return updated
+
+
+def _redirect_distributor_token_to_customer(lines: list[CommercialLineupLine], norm: str, dim_id: int) -> int:
+    """Distributor-column token actually names a customer (explicit user action)."""
+    updated = 0
+    for ln in lines:
+        if normalize_entity_token(distributor_token_from_line(ln)) != norm:
+            continue
+        ln.customer_id = dim_id
+        p = dict(ln.raw_row_payload) if isinstance(ln.raw_row_payload, dict) else {}
+        prior = distributor_token_from_line(ln)
+        if prior:
+            aud = p.get("resolution_audit_distributor_tokens_prior")
+            if not isinstance(aud, list):
+                aud = []
+            aud.append(prior)
+            p["resolution_audit_distributor_tokens_prior"] = aud
+        if "distributor_token" in p:
+            p["distributor_token"] = None
+        ln.raw_row_payload = p
+        refresh_diagnostics_after_entity_update(ln)
+        append_manual_resolution_tag(ln, "manual_case_resolution_distributor_token_as_customer")
+        updated += 1
+    return updated
+
+
 async def apply_entity_resolutions(
     db: AsyncSession,
     case_id: int,
     resolutions: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Apply token → dim_id mappings for all matching lines in the case. Idempotent."""
+    """Apply token → dim mappings and explicit resolution actions. Idempotent per token batch."""
     result = await db.execute(select(CommercialLineupLine).where(CommercialLineupLine.case_id == case_id))
     lines = list(result.scalars().all())
     per: list[dict[str, Any]] = []
@@ -135,36 +227,66 @@ async def apply_entity_resolutions(
     for item in resolutions:
         kind = item.get("kind")
         token = item.get("token")
-        dim_id = item.get("dim_id")
-        if kind not in ("customer", "distributor"):
-            continue
+        action = item.get("action") or "map_existing"
         if not isinstance(token, str) or not token.strip():
-            continue
-        if not isinstance(dim_id, int):
             continue
         norm = normalize_entity_token(token)
         if not norm:
             continue
 
         updated = 0
-        if kind == "customer":
-            for ln in lines:
-                if normalize_entity_token(ln.customer_token) != norm:
+        dim_id = item.get("dim_id")
+
+        if action == "mark_open_channel_staging":
+            if kind != "customer":
+                continue
+            updated = _mark_open_channel_staging_for_token(lines, norm)
+        elif action == "create_dim":
+            if kind == "customer":
+                code = str(item.get("new_code") or "").strip()[:64]
+                name = str(item.get("new_name") or "").strip()[:256]
+                if not code or not name:
                     continue
-                ln.customer_id = dim_id
-                refresh_diagnostics_after_entity_update(ln)
-                append_manual_resolution_tag(ln, "manual_case_resolution_customer")
-                updated += 1
+                row = DimCustomer(code=code, name=name, customer_status="active")
+                db.add(row)
+                await db.flush()
+                dim_id = int(row.id)
+                updated = _map_customer_token_lines(lines, norm, dim_id)
+            elif kind == "distributor":
+                code = str(item.get("new_code") or "").strip()[:32]
+                name = str(item.get("new_name") or "").strip()[:256]
+                if not code or not name:
+                    continue
+                row = DimDistributor(code=code, name=name)
+                db.add(row)
+                await db.flush()
+                dim_id = int(row.id)
+                updated = _map_distributor_token_lines(lines, norm, dim_id)
+            else:
+                continue
         else:
-            for ln in lines:
-                if normalize_entity_token(distributor_token_from_line(ln)) != norm:
-                    continue
-                ln.distributor_id = dim_id
-                refresh_diagnostics_after_entity_update(ln)
-                append_manual_resolution_tag(ln, "manual_case_resolution_distributor")
-                updated += 1
+            if not isinstance(dim_id, int):
+                continue
+            if kind == "customer":
+                updated = _map_customer_token_lines(lines, norm, dim_id)
+            elif kind == "distributor":
+                updated = _map_distributor_token_lines(lines, norm, dim_id)
+            elif kind == "customer_token_as_distributor":
+                updated = _redirect_customer_token_to_distributor(lines, norm, dim_id)
+            elif kind == "distributor_token_as_customer":
+                updated = _redirect_distributor_token_to_customer(lines, norm, dim_id)
+            else:
+                continue
 
         total_updated += updated
-        per.append({"kind": kind, "token": token.strip(), "dim_id": dim_id, "updated_lines": updated})
+        entry: dict[str, Any] = {
+            "kind": kind,
+            "token": token.strip(),
+            "action": action,
+            "updated_lines": updated,
+        }
+        if dim_id is not None:
+            entry["dim_id"] = dim_id
+        per.append(entry)
 
     return {"case_id": case_id, "updated_lines": total_updated, "per_resolution": per}

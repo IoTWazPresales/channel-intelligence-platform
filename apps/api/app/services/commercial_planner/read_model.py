@@ -88,7 +88,20 @@ def product_specs_from_json(specs_json: dict[str, Any] | None) -> dict[str, str 
     return {
         "product_spec_cpu": _pick_spec_value(
             flat,
-            ("cpu", "CPU", "processor", "Processor", "proc", "chipset"),
+            (
+                "cpu",
+                "CPU",
+                "processor",
+                "Processor",
+                "proc",
+                "chipset",
+                "processor model",
+                "Processor Model",
+                "processor type",
+                "Processor Type",
+                "processormodel",
+                "processortype",
+            ),
         ),
         "product_spec_ram": _pick_spec_value(
             flat,

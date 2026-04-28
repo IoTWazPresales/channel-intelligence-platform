@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timezone
 
 from typing import Literal
@@ -39,6 +40,7 @@ from app.services.commercial_planner.lineup_case_parser import parse_current_lin
 from app.services.commercial_planner.lineup_open_channel import (
     CHANNEL_ROUTE_UPLOADED_CELL_KEY,
     STAGING_OPEN_CHANNEL_KEY,
+    distributor_unassigned_soft,
     lineup_line_is_open_channel_staging,
     managed_customer_token_unresolved,
     sync_skip_detail_message,
@@ -46,6 +48,7 @@ from app.services.commercial_planner.lineup_open_channel import (
     uploaded_columns_from_payload,
 )
 from app.services.commercial_planner.open_channel_customer import get_open_channel_customer_id
+from app.services.commercial_planner.unassigned_distributor import get_unassigned_distributor_id
 from app.services.commercial_planner.read_model import plan_line_read_model_extensions
 from app.services.commercial_planner.suggestions import (
     SuggestionInputs,
@@ -1628,9 +1631,36 @@ class CommercialLineupLinePatch(BaseModel):
 
 
 class EntityResolutionItem(BaseModel):
-    kind: Literal["customer", "distributor"]
+    kind: Literal[
+        "customer",
+        "distributor",
+        "customer_token_as_distributor",
+        "distributor_token_as_customer",
+    ]
     token: str = Field(min_length=1, max_length=512)
-    dim_id: int = Field(ge=1)
+    action: Literal["map_existing", "create_dim", "mark_open_channel_staging"] = "map_existing"
+    dim_id: int | None = Field(default=None, ge=1)
+    new_code: str | None = Field(default=None, max_length=64)
+    new_name: str | None = Field(default=None, max_length=256)
+    confirm_create: bool = False
+
+    @model_validator(mode="after")
+    def _validate_action(self) -> EntityResolutionItem:
+        if self.action == "mark_open_channel_staging":
+            if self.kind != "customer":
+                raise ValueError("mark_open_channel_staging requires kind=customer")
+            return self
+        if self.action == "create_dim":
+            if not self.confirm_create:
+                raise ValueError("confirm_create must be true for create_dim")
+            if not (self.new_code and self.new_name):
+                raise ValueError("new_code and new_name are required for create_dim")
+            if self.kind not in ("customer", "distributor"):
+                raise ValueError("create_dim requires kind=customer or kind=distributor")
+            return self
+        if self.dim_id is None:
+            raise ValueError("dim_id is required for map_existing and redirect kinds")
+        return self
 
 
 class EntityResolutionApplyBody(BaseModel):
@@ -1806,12 +1836,14 @@ async def get_lineup_workbench_column_metadata(case_id: int, db: AsyncSession = 
         for sj in sjs:
             if isinstance(sj, dict):
                 spec_keys.update(str(k) for k in sj.keys())
+    proc_hints = sorted(k for k in spec_keys if re.search(r"cpu|processor", k, re.IGNORECASE))
     return {
         "case_id": case_id,
         "raw_columns": sorted(raw_columns),
         "parsed_fields": _workbench_parsed_field_metadata(),
         "catalogue_product_fields": _workbench_catalogue_product_field_metadata(),
         "catalogue_spec_keys": sorted(spec_keys),
+        "processor_spec_key_hints": proc_hints,
         "sync_fields": _workbench_sync_field_metadata(),
     }
 
@@ -1836,10 +1868,26 @@ async def post_lineup_entity_resolutions_apply(
             ),
         )
     for item in body.resolutions:
-        if item.kind == "customer":
+        if item.action == "mark_open_channel_staging":
+            continue
+        if item.action == "create_dim":
+            code = (item.new_code or "").strip()
+            if item.kind == "customer":
+                exists = await db.scalar(select(func.count()).select_from(DimCustomer).where(DimCustomer.code == code[:64]))
+                if exists:
+                    raise HTTPException(status_code=400, detail=f"Customer code already exists: {code[:64]}")
+            else:
+                exists = await db.scalar(
+                    select(func.count()).select_from(DimDistributor).where(DimDistributor.code == code[:32])
+                )
+                if exists:
+                    raise HTTPException(status_code=400, detail=f"Distributor code already exists: {code[:32]}")
+            continue
+        assert item.dim_id is not None
+        if item.kind in ("customer", "distributor_token_as_customer"):
             if not await db.get(DimCustomer, item.dim_id):
                 raise HTTPException(status_code=400, detail=f"Unknown customer_id={item.dim_id}")
-        else:
+        if item.kind in ("distributor", "customer_token_as_distributor"):
             if not await db.get(DimDistributor, item.dim_id):
                 raise HTTPException(status_code=400, detail=f"Unknown distributor_id={item.dim_id}")
     raw = [item.model_dump() for item in body.resolutions]
@@ -2038,9 +2086,14 @@ async def list_lineup_case_lines(
         existing_rows = (await db.execute(existing_stmt)).all()
         keys_sim: set[tuple] = {(r.customer_id, r.distributor_id, r.product_id) for r in existing_rows}
         open_channel_customer_id = await get_open_channel_customer_id(db)
+        unassigned_distributor_id = await get_unassigned_distributor_id(db)
         for ln, d in rows_payload:
             eligible, reason, cust_res, dist_res, _, _ = _sync_eligibility(
-                ln, body, keys_sim, open_channel_customer_id=open_channel_customer_id
+                ln,
+                body,
+                keys_sim,
+                open_channel_customer_id=open_channel_customer_id,
+                unassigned_distributor_id=unassigned_distributor_id,
             )
             d["sync_eligible"] = eligible
             if eligible:
@@ -2050,6 +2103,16 @@ async def list_lineup_case_lines(
                     warn_parts.append("Customer unassigned on row — sync will use fallback customer.")
                 if ln.distributor_id is None and body.fallback_distributor_id:
                     warn_parts.append("Distributor unassigned on row — sync will use fallback distributor.")
+                if (
+                    distributor_unassigned_soft(ln)
+                    and unassigned_distributor_id
+                    and dist_res == unassigned_distributor_id
+                    and ln.distributor_id is None
+                    and not body.fallback_distributor_id
+                ):
+                    warn_parts.append(
+                        "Distributor intentionally unassigned — sync will use placeholder dim_distributor UNASSIGNED."
+                    )
                 if (
                     lineup_line_is_open_channel_staging(ln)
                     and open_channel_customer_id
@@ -2361,6 +2424,7 @@ def _sync_eligibility(
     existing_keys: set[tuple],
     *,
     open_channel_customer_id: int | None = None,
+    unassigned_distributor_id: int | None = None,
 ) -> tuple[bool, str, int | None, int | None, float | None, float | None]:
     """Return (eligible, skip_reason, customer_id, distributor_id, srp, units).
 
@@ -2384,6 +2448,8 @@ def _sync_eligibility(
         return False, "missing_customer", None, None, None, None
 
     distributor_id = ln.distributor_id or body.fallback_distributor_id
+    if not distributor_id and distributor_unassigned_soft(ln) and unassigned_distributor_id:
+        distributor_id = unassigned_distributor_id
     if not distributor_id:
         return False, "missing_distributor", None, None, None, None
 
@@ -2462,10 +2528,15 @@ async def preview_sync_lineup_case_to_plan(
     skipped_open_channel_account_missing = 0
 
     open_channel_customer_id = await get_open_channel_customer_id(db)
+    unassigned_distributor_id = await get_unassigned_distributor_id(db)
 
     for ln in lines:
         eligible, reason, cust_res, dist_res, _, _ = _sync_eligibility(
-            ln, body, existing_keys, open_channel_customer_id=open_channel_customer_id
+            ln,
+            body,
+            existing_keys,
+            open_channel_customer_id=open_channel_customer_id,
+            unassigned_distributor_id=unassigned_distributor_id,
         )
         if eligible:
             will_create += 1
@@ -2571,10 +2642,15 @@ async def sync_lineup_case_to_plan(
     warnings: list[str] = []
 
     open_channel_customer_id = await get_open_channel_customer_id(db)
+    unassigned_distributor_id = await get_unassigned_distributor_id(db)
 
     for ln in lines:
         eligible, reason, customer_id, distributor_id, srp, units = _sync_eligibility(
-            ln, body, existing_keys, open_channel_customer_id=open_channel_customer_id
+            ln,
+            body,
+            existing_keys,
+            open_channel_customer_id=open_channel_customer_id,
+            unassigned_distributor_id=unassigned_distributor_id,
         )
         if not eligible:
             if reason == "duplicate":

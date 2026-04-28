@@ -1892,6 +1892,35 @@ def test_entity_resolution_candidates_returns_tokens():
     assert dist[0]["token_display"] == "Summit Supply"
 
 
+def test_entity_resolution_candidates_lists_abbreviation_token_until_explicit_resolution():
+    """Ambiguous tokens (e.g. IC) appear as candidates only; nothing is auto-mapped at list time."""
+    case = _make_case(id=74, commercial_status="draft_imported", commercial_plan_id=5)
+    line = _make_lineup_line(
+        id=1,
+        case_id=74,
+        customer_id=None,
+        customer_token="IC",
+        distributor_id=3,
+        product_id=10,
+    )
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        exec_result = MagicMock()
+        exec_result.scalars.return_value.all.return_value = [line]
+        sess.execute = AsyncMock(return_value=exec_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/lineup-cases/74/entity-resolution-candidates")
+    assert r.status_code == 200
+    cust = r.json()["customer_tokens"]
+    assert len(cust) == 1
+    assert cust[0]["token_display"] == "IC"
+    assert line.customer_id is None
+
+
 def test_entity_resolution_apply_409_when_accepted():
     case = _make_case(id=53, commercial_status="accepted", commercial_plan_id=5)
 
@@ -1972,6 +2001,101 @@ def test_entity_resolution_apply_updates_customer_preserves_dap():
     assert line.dap_evidence_local == 12.34
     assert "unknown_customer" not in (line.diagnostic_codes or [])
     assert any(x.startswith("manual_case_resolution_") for x in (line.diagnostic_codes or []))
+
+
+def test_entity_resolution_mark_open_channel_staging_preserves_dap():
+    case = _make_case(id=71, commercial_status="validated", commercial_plan_id=5)
+    line = _make_lineup_line(
+        id=11,
+        case_id=71,
+        customer_id=None,
+        customer_token="Retail Route A",
+        distributor_id=3,
+        product_id=10,
+        dap_evidence_local=44.4,
+        diagnostic_codes=["unknown_customer"],
+        raw_row_payload={},
+    )
+
+    async def _get(model, pk):
+        if model.__name__ == "CommercialLineupCase":
+            return case
+        return None
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(side_effect=_get)
+        exec_result = MagicMock()
+        exec_result.scalars.return_value.all.return_value = [line]
+        sess.execute = AsyncMock(return_value=exec_result)
+        sess.commit = AsyncMock()
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/71/entity-resolutions/apply",
+        json={
+            "resolutions": [
+                {"kind": "customer", "token": "Retail Route A", "action": "mark_open_channel_staging"},
+            ],
+        },
+    )
+    assert r.status_code == 200
+    assert line.dap_evidence_local == 44.4
+    assert isinstance(line.raw_row_payload, dict)
+    assert line.raw_row_payload.get("staging_open_channel") is True
+    assert line.customer_token is None
+
+
+def test_entity_resolution_customer_token_as_distributor_preserves_dap():
+    case = _make_case(id=72, commercial_status="draft_imported", commercial_plan_id=5)
+    line = _make_lineup_line(
+        id=12,
+        case_id=72,
+        customer_id=None,
+        customer_token="MITSUMI",
+        distributor_id=None,
+        product_id=10,
+        dap_evidence_local=55.5,
+        diagnostic_codes=["unknown_customer"],
+        raw_row_payload={},
+    )
+    dim_dist = SimpleNamespace(id=9)
+
+    async def _get(model, pk):
+        if model.__name__ == "CommercialLineupCase":
+            return case
+        if model.__name__ == "DimDistributor" and pk == 9:
+            return dim_dist
+        return None
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(side_effect=_get)
+        exec_result = MagicMock()
+        exec_result.scalars.return_value.all.return_value = [line]
+        sess.execute = AsyncMock(return_value=exec_result)
+        sess.commit = AsyncMock()
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.post(
+        "/api/v1/commercial-planner/lineup-cases/72/entity-resolutions/apply",
+        json={
+            "resolutions": [
+                {
+                    "kind": "customer_token_as_distributor",
+                    "token": "MITSUMI",
+                    "action": "map_existing",
+                    "dim_id": 9,
+                },
+            ],
+        },
+    )
+    assert r.status_code == 200
+    assert line.distributor_id == 9
+    assert line.dap_evidence_local == 55.5
+    assert line.customer_token is None
 
 
 def test_list_lineup_lines_sync_eligibility_requires_plan():

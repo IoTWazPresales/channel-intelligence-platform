@@ -94,18 +94,23 @@ def sync_skip_detail_message(ln: CommercialLineupLine, skip_reason: str) -> str 
         return None
     if skip_reason == "open_channel_account_missing":
         return (
-            "Open Channel sync requires controlled customer OPEN_CHANNEL in master data. "
-            "Run database seed (or insert dim_customer code OPEN_CHANNEL) — not created from uploads."
+            "Reference data missing: dim_customer code OPEN_CHANNEL (controlled Open Channel account). "
+            "Not a row-mapping issue — run seed from repo root: pnpm local:db:seed or pnpm docker:seed. "
+            "Never created from upload tokens."
         )
     if skip_reason == "missing_customer":
         return "Customer unresolved — map a customer or use a sync fallback."
     if skip_reason == "missing_distributor":
         if distributor_unassigned_soft(ln):
             return (
-                "Distributor unassigned — CommercialPlanLine requires distributor_id (not nullable). "
-                "Map a distributor or use a sync fallback before sync."
+                "Reference data missing: dim_distributor code UNASSIGNED (placeholder for intentionally "
+                "blank distributor). Run seed: pnpm local:db:seed or pnpm docker:seed. "
+                "Or map a real distributor / use sync fallback."
             )
-        return "Distributor unresolved — map a distributor or use a sync fallback."
+        return (
+            "Distributor unresolved — a distributor_token is present but not mapped. "
+            "Map to an existing distributor or use a sync fallback (not the UNASSIGNED placeholder)."
+        )
     return None
 
 

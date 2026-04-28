@@ -15,6 +15,7 @@ import {
   Divider,
   FormControl,
   FormControlLabel,
+  FormHelperText,
   InputLabel,
   ListSubheader,
   Menu,
@@ -134,6 +135,8 @@ type WorkbenchColumnMetadata = {
   parsed_fields: { id: string; group: string; label: string; field: string }[];
   catalogue_product_fields?: { id: string; group: string; label: string; field: string }[];
   catalogue_spec_keys: string[];
+  /** Server-derived spec_json keys matching processor/CPU aliases (metadata-driven). */
+  processor_spec_key_hints?: string[];
   sync_fields: { id: string; group: string; label: string; field: string }[];
 };
 
@@ -172,13 +175,28 @@ const CORE_WORKBENCH_LABELS: Record<CoreWorkbenchId, string> = {
   sync: 'Sync preview (plan)',
 };
 
-/** Preserve original uploaded header text; default-visible when present for Processor / CPU. */
-function pickDefaultProcessorRawColumnIds(rawColumns: string[]): string[] {
+function rawHeaderMatchesProcessorAliases(header: string): boolean {
+  const n = header.toLowerCase().trim();
+  if (!n) return false;
+  const needles = ['processor', 'cpu', 'processor model', 'processor type'];
+  return needles.some((t) => n === t || n.includes(t));
+}
+
+/** Raw upload columns + resolved spec keys (from metadata hints) to show by default when present. */
+function pickDefaultProcessorWorkbenchIds(meta: WorkbenchColumnMetadata): string[] {
   const out: string[] = [];
+  const rawColumns = meta.raw_columns ?? [];
   const byLower = new Map(rawColumns.map((c) => [c.toLowerCase(), c]));
   for (const pref of ['cpu', 'processor']) {
     const exact = byLower.get(pref);
     if (exact) out.push(`raw:${exact}`);
+  }
+  for (const c of rawColumns) {
+    if (rawHeaderMatchesProcessorAliases(c) && !out.includes(`raw:${c}`)) out.push(`raw:${c}`);
+  }
+  const specKeySet = new Set(meta.catalogue_spec_keys ?? []);
+  for (const k of meta.processor_spec_key_hints ?? []) {
+    if (specKeySet.has(k) && !out.includes(`spec:${k}`)) out.push(`spec:${k}`);
   }
   return out;
 }
@@ -346,6 +364,8 @@ function lineupCustomerCell(ln: CommercialLineupLine): string {
 
 function lineupDistributorCell(ln: CommercialLineupLine): string {
   if (ln.distributor_id != null) {
+    const code = (ln.distributor_code ?? '').trim().toUpperCase();
+    if (code === 'UNASSIGNED') return 'Distributor unassigned';
     const bits = [ln.distributor_code, ln.distributor_name].filter((x) => x?.trim());
     if (bits.length) return bits.join(' — ');
   }
@@ -410,6 +430,19 @@ function buildCaseLinesSearchParams(opts: {
   return p.toString();
 }
 
+type CustomerTokenResolutionMode = 'map_customer' | 'customer_as_distributor' | 'open_channel' | 'create_customer';
+type DistributorTokenResolutionMode = 'map_distributor' | 'distributor_as_customer' | 'create_distributor';
+
+type EntityResolutionApplyItem = {
+  kind: string;
+  token: string;
+  action?: string;
+  dim_id?: number;
+  new_code?: string;
+  new_name?: string;
+  confirm_create?: boolean;
+};
+
 function LineupEntityResolutionDialog({
   open,
   onClose,
@@ -424,8 +457,14 @@ function LineupEntityResolutionDialog({
   onApplied: () => void;
 }) {
   const qc = useQueryClient();
+  const [custModes, setCustModes] = useState<Record<string, CustomerTokenResolutionMode>>({});
+  const [distModes, setDistModes] = useState<Record<string, DistributorTokenResolutionMode>>({});
   const [customerPicks, setCustomerPicks] = useState<Record<string, CustomerPick | null>>({});
   const [distributorPicks, setDistributorPicks] = useState<Record<string, DistributorPick | null>>({});
+  const [distributorForCustToken, setDistributorForCustToken] = useState<Record<string, DistributorPick | null>>({});
+  const [customerForDistToken, setCustomerForDistToken] = useState<Record<string, CustomerPick | null>>({});
+  const [custCreate, setCustCreate] = useState<Record<string, { code: string; name: string; confirm: boolean }>>({});
+  const [distCreate, setDistCreate] = useState<Record<string, { code: string; name: string; confirm: boolean }>>({});
   const [applyError, setApplyError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<EntityResolutionCandidatesResponse>({
@@ -440,14 +479,37 @@ function LineupEntityResolutionDialog({
 
   useEffect(() => {
     if (!open) {
+      setCustModes({});
+      setDistModes({});
       setCustomerPicks({});
       setDistributorPicks({});
+      setDistributorForCustToken({});
+      setCustomerForDistToken({});
+      setCustCreate({});
+      setDistCreate({});
       setApplyError(null);
+      return;
     }
-  }, [open, caseId]);
+    if (!data) return;
+    setCustModes(
+      Object.fromEntries(data.customer_tokens.map((t) => [t.token_norm, 'map_customer' satisfies CustomerTokenResolutionMode])),
+    );
+    setDistModes(
+      Object.fromEntries(
+        data.distributor_tokens.map((t) => [t.token_norm, 'map_distributor' satisfies DistributorTokenResolutionMode]),
+      ),
+    );
+    setCustomerPicks({});
+    setDistributorPicks({});
+    setDistributorForCustToken({});
+    setCustomerForDistToken({});
+    setCustCreate({});
+    setDistCreate({});
+    setApplyError(null);
+  }, [open, caseId, data]);
 
   const applyMutation = useMutation({
-    mutationFn: async (resolutions: { kind: 'customer' | 'distributor'; token: string; dim_id: number }[]) => {
+    mutationFn: async (resolutions: EntityResolutionApplyItem[]) => {
       await apiPost(`/api/v1/commercial-planner/lineup-cases/${caseId}/entity-resolutions/apply`, {
         resolutions,
       });
@@ -468,19 +530,92 @@ function LineupEntityResolutionDialog({
   const handleApply = () => {
     setApplyError(null);
     if (!data) return;
-    const resolutions: { kind: 'customer' | 'distributor'; token: string; dim_id: number }[] = [];
+    const resolutions: EntityResolutionApplyItem[] = [];
+
     for (const t of data.customer_tokens) {
-      const pick = customerPicks[t.token_norm];
-      if (pick)
-        resolutions.push({ kind: 'customer', token: t.token_display || t.token_norm, dim_id: pick.id });
+      const token = (t.token_display || t.token_norm).trim();
+      if (!token) continue;
+      const mode = custModes[t.token_norm] ?? 'map_customer';
+      if (mode === 'open_channel') {
+        resolutions.push({ kind: 'customer', token, action: 'mark_open_channel_staging' });
+      } else if (mode === 'create_customer') {
+        const c = custCreate[t.token_norm];
+        const code = c?.code?.trim() ?? '';
+        const name = c?.name?.trim() ?? '';
+        if (code || name || c?.confirm) {
+          if (!code || !name || !c?.confirm) {
+            setApplyError('Create customer: enter code and name and tick confirmation, or clear those fields.');
+            return;
+          }
+          resolutions.push({
+            kind: 'customer',
+            token,
+            action: 'create_dim',
+            new_code: code,
+            new_name: name,
+            confirm_create: true,
+          });
+        }
+      } else if (mode === 'customer_as_distributor') {
+        const pick = distributorForCustToken[t.token_norm];
+        if (pick) {
+          resolutions.push({
+            kind: 'customer_token_as_distributor',
+            token,
+            action: 'map_existing',
+            dim_id: pick.id,
+          });
+        }
+      } else {
+        const pick = customerPicks[t.token_norm];
+        if (pick) {
+          resolutions.push({ kind: 'customer', token, action: 'map_existing', dim_id: pick.id });
+        }
+      }
     }
+
     for (const t of data.distributor_tokens) {
-      const pick = distributorPicks[t.token_norm];
-      if (pick)
-        resolutions.push({ kind: 'distributor', token: t.token_display || t.token_norm, dim_id: pick.id });
+      const token = (t.token_display || t.token_norm).trim();
+      if (!token) continue;
+      const mode = distModes[t.token_norm] ?? 'map_distributor';
+      if (mode === 'create_distributor') {
+        const c = distCreate[t.token_norm];
+        const code = c?.code?.trim() ?? '';
+        const name = c?.name?.trim() ?? '';
+        if (code || name || c?.confirm) {
+          if (!code || !name || !c?.confirm) {
+            setApplyError('Create distributor: enter code and name and tick confirmation, or clear those fields.');
+            return;
+          }
+          resolutions.push({
+            kind: 'distributor',
+            token,
+            action: 'create_dim',
+            new_code: code,
+            new_name: name,
+            confirm_create: true,
+          });
+        }
+      } else if (mode === 'distributor_as_customer') {
+        const pick = customerForDistToken[t.token_norm];
+        if (pick) {
+          resolutions.push({
+            kind: 'distributor_token_as_customer',
+            token,
+            action: 'map_existing',
+            dim_id: pick.id,
+          });
+        }
+      } else {
+        const pick = distributorPicks[t.token_norm];
+        if (pick) {
+          resolutions.push({ kind: 'distributor', token, action: 'map_existing', dim_id: pick.id });
+        }
+      }
     }
+
     if (!resolutions.length) {
-      setApplyError('Select at least one customer or distributor mapping.');
+      setApplyError('Select at least one completed resolution (map, redirect, Open Channel, or confirmed create).');
       return;
     }
     applyMutation.mutate(resolutions);
@@ -494,8 +629,9 @@ function LineupEntityResolutionDialog({
       <DialogTitle>Resolve lineup entities (this case only)</DialogTitle>
       <DialogContent dividers>
         <Alert severity="info" sx={{ mb: 2 }}>
-          Map file tokens to existing customers and distributors. This updates lineup rows only — DAP stays evidence-only
-          and is not used as cost.
+          Map file tokens with explicit actions only — abbreviations (for example IC, MITSUMI) are never auto-created or
+          guessed. Raw tokens stay in the row audit trail. Lineup updates only — DAP stays evidence-only and is not used
+          as cost.
         </Alert>
         {isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
@@ -510,64 +646,263 @@ function LineupEntityResolutionDialog({
             {data.customer_tokens.length > 0 && (
               <Box>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Customers ({data.customer_tokens.length})
+                  Customer column tokens ({data.customer_tokens.length})
                 </Typography>
-                <Stack spacing={2}>
-                  {data.customer_tokens.map((t) => (
-                    <Box key={`c-${t.token_norm}`}>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}): {t.token_display}
-                      </Typography>
-                      <EntitySearchAutocomplete<CustomerPick>
-                        label="Map to customer"
-                        helperText="Search master data; nothing is auto-created."
-                        value={customerPicks[t.token_norm] ?? null}
-                        onChange={(next) =>
-                          setCustomerPicks((prev) => ({ ...prev, [t.token_norm]: next }))
-                        }
-                        fetchOptions={async (q, signal) => {
-                          const res = await apiGet<{ items: CustomerPick[] }>(
-                            `/api/v1/customers?page=1&page_size=25&q=${encodeURIComponent(q)}`,
-                            { signal },
-                          );
-                          return res.items;
-                        }}
-                        getOptionLabel={(o) => `${o.customer_code} — ${o.customer_name}`}
-                      />
-                    </Box>
-                  ))}
+                <Stack spacing={2.5}>
+                  {data.customer_tokens.map((t) => {
+                    const mode = custModes[t.token_norm] ?? 'map_customer';
+                    const lid = `cust-res-${t.token_norm}`;
+                    return (
+                      <Box key={`c-${t.token_norm}`}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}): {t.token_display}
+                        </Typography>
+                        <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+                          <InputLabel id={`${lid}-mode`}>Resolution</InputLabel>
+                          <Select
+                            labelId={`${lid}-mode`}
+                            label="Resolution"
+                            value={mode}
+                            onChange={(e) =>
+                              setCustModes((prev) => ({
+                                ...prev,
+                                [t.token_norm]: e.target.value as CustomerTokenResolutionMode,
+                              }))
+                            }
+                          >
+                            <MenuItem value="map_customer">Map to existing customer</MenuItem>
+                            <MenuItem value="customer_as_distributor">
+                              Token is a distributor (channel stock / distributor column)
+                            </MenuItem>
+                            <MenuItem value="open_channel">Mark as Open Channel staging (end customer unassigned)</MenuItem>
+                            <MenuItem value="create_customer">Create new customer (requires confirmation)</MenuItem>
+                          </Select>
+                          <FormHelperText>
+                            Mis-filed tokens (for example a distributor name in the customer column) use the second
+                            option — still explicit user action.
+                          </FormHelperText>
+                        </FormControl>
+                        {mode === 'map_customer' && (
+                          <EntitySearchAutocomplete<CustomerPick>
+                            label="Map to customer"
+                            helperText="Search master data; nothing is auto-created."
+                            value={customerPicks[t.token_norm] ?? null}
+                            onChange={(next) =>
+                              setCustomerPicks((prev) => ({ ...prev, [t.token_norm]: next }))
+                            }
+                            fetchOptions={async (q, signal) => {
+                              const res = await apiGet<{ items: CustomerPick[] }>(
+                                `/api/v1/customers?page=1&page_size=25&q=${encodeURIComponent(q)}`,
+                                { signal },
+                              );
+                              return res.items;
+                            }}
+                            getOptionLabel={(o) => `${o.customer_code} — ${o.customer_name}`}
+                          />
+                        )}
+                        {mode === 'customer_as_distributor' && (
+                          <EntitySearchAutocomplete<DistributorPick>
+                            label="Map token to distributor"
+                            helperText="Search distributors; assigns distributor_id from the customer-column token."
+                            value={distributorForCustToken[t.token_norm] ?? null}
+                            onChange={(next) =>
+                              setDistributorForCustToken((prev) => ({ ...prev, [t.token_norm]: next }))
+                            }
+                            fetchOptions={async (q, signal) => {
+                              const res = await apiGet<{ items: DistributorPick[] }>(
+                                `/api/v1/distributors?page=1&page_size=25&q=${encodeURIComponent(q)}`,
+                                { signal },
+                              );
+                              return res.items;
+                            }}
+                            getOptionLabel={(o) => `${o.distributor_code} — ${o.distributor_name}`}
+                          />
+                        )}
+                        {mode === 'create_customer' && (
+                          <Stack spacing={1} sx={{ mt: 1 }}>
+                            <TextField
+                              size="small"
+                              label="New customer code"
+                              value={custCreate[t.token_norm]?.code ?? ''}
+                              onChange={(e) =>
+                                setCustCreate((prev) => ({
+                                  ...prev,
+                                  [t.token_norm]: {
+                                    code: e.target.value,
+                                    name: prev[t.token_norm]?.name ?? '',
+                                    confirm: prev[t.token_norm]?.confirm ?? false,
+                                  },
+                                }))
+                              }
+                            />
+                            <TextField
+                              size="small"
+                              label="New customer name"
+                              value={custCreate[t.token_norm]?.name ?? ''}
+                              onChange={(e) =>
+                                setCustCreate((prev) => ({
+                                  ...prev,
+                                  [t.token_norm]: {
+                                    code: prev[t.token_norm]?.code ?? '',
+                                    name: e.target.value,
+                                    confirm: prev[t.token_norm]?.confirm ?? false,
+                                  },
+                                }))
+                              }
+                            />
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={custCreate[t.token_norm]?.confirm ?? false}
+                                  onChange={(e) =>
+                                    setCustCreate((prev) => ({
+                                      ...prev,
+                                      [t.token_norm]: {
+                                        code: prev[t.token_norm]?.code ?? '',
+                                        name: prev[t.token_norm]?.name ?? '',
+                                        confirm: e.target.checked,
+                                      },
+                                    }))
+                                  }
+                                />
+                              }
+                              label="I confirm creating this customer in master data"
+                            />
+                          </Stack>
+                        )}
+                      </Box>
+                    );
+                  })}
                 </Stack>
               </Box>
             )}
             {data.distributor_tokens.length > 0 && (
               <Box>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Distributors ({data.distributor_tokens.length})
+                  Distributor column tokens ({data.distributor_tokens.length})
                 </Typography>
-                <Stack spacing={2}>
-                  {data.distributor_tokens.map((t) => (
-                    <Box key={`d-${t.token_norm}`}>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}): {t.token_display}
-                      </Typography>
-                      <EntitySearchAutocomplete<DistributorPick>
-                        label="Map to distributor"
-                        helperText="Search master data; nothing is auto-created."
-                        value={distributorPicks[t.token_norm] ?? null}
-                        onChange={(next) =>
-                          setDistributorPicks((prev) => ({ ...prev, [t.token_norm]: next }))
-                        }
-                        fetchOptions={async (q, signal) => {
-                          const res = await apiGet<{ items: DistributorPick[] }>(
-                            `/api/v1/distributors?page=1&page_size=25&q=${encodeURIComponent(q)}`,
-                            { signal },
-                          );
-                          return res.items;
-                        }}
-                        getOptionLabel={(o) => `${o.distributor_code} — ${o.distributor_name}`}
-                      />
-                    </Box>
-                  ))}
+                <Stack spacing={2.5}>
+                  {data.distributor_tokens.map((t) => {
+                    const mode = distModes[t.token_norm] ?? 'map_distributor';
+                    const lid = `dist-res-${t.token_norm}`;
+                    return (
+                      <Box key={`d-${t.token_norm}`}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}): {t.token_display}
+                        </Typography>
+                        <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+                          <InputLabel id={`${lid}-mode`}>Resolution</InputLabel>
+                          <Select
+                            labelId={`${lid}-mode`}
+                            label="Resolution"
+                            value={mode}
+                            onChange={(e) =>
+                              setDistModes((prev) => ({
+                                ...prev,
+                                [t.token_norm]: e.target.value as DistributorTokenResolutionMode,
+                              }))
+                            }
+                          >
+                            <MenuItem value="map_distributor">Map to existing distributor</MenuItem>
+                            <MenuItem value="distributor_as_customer">
+                              Token is a customer (map into customer column)
+                            </MenuItem>
+                            <MenuItem value="create_distributor">Create new distributor (requires confirmation)</MenuItem>
+                          </Select>
+                        </FormControl>
+                        {mode === 'map_distributor' && (
+                          <EntitySearchAutocomplete<DistributorPick>
+                            label="Map to distributor"
+                            helperText="Search master data; nothing is auto-created."
+                            value={distributorPicks[t.token_norm] ?? null}
+                            onChange={(next) =>
+                              setDistributorPicks((prev) => ({ ...prev, [t.token_norm]: next }))
+                            }
+                            fetchOptions={async (q, signal) => {
+                              const res = await apiGet<{ items: DistributorPick[] }>(
+                                `/api/v1/distributors?page=1&page_size=25&q=${encodeURIComponent(q)}`,
+                                { signal },
+                              );
+                              return res.items;
+                            }}
+                            getOptionLabel={(o) => `${o.distributor_code} — ${o.distributor_name}`}
+                          />
+                        )}
+                        {mode === 'distributor_as_customer' && (
+                          <EntitySearchAutocomplete<CustomerPick>
+                            label="Map token to customer"
+                            helperText="Search customers; assigns customer_id from the distributor-column token."
+                            value={customerForDistToken[t.token_norm] ?? null}
+                            onChange={(next) =>
+                              setCustomerForDistToken((prev) => ({ ...prev, [t.token_norm]: next }))
+                            }
+                            fetchOptions={async (q, signal) => {
+                              const res = await apiGet<{ items: CustomerPick[] }>(
+                                `/api/v1/customers?page=1&page_size=25&q=${encodeURIComponent(q)}`,
+                                { signal },
+                              );
+                              return res.items;
+                            }}
+                            getOptionLabel={(o) => `${o.customer_code} — ${o.customer_name}`}
+                          />
+                        )}
+                        {mode === 'create_distributor' && (
+                          <Stack spacing={1} sx={{ mt: 1 }}>
+                            <TextField
+                              size="small"
+                              label="New distributor code"
+                              value={distCreate[t.token_norm]?.code ?? ''}
+                              onChange={(e) =>
+                                setDistCreate((prev) => ({
+                                  ...prev,
+                                  [t.token_norm]: {
+                                    code: e.target.value,
+                                    name: prev[t.token_norm]?.name ?? '',
+                                    confirm: prev[t.token_norm]?.confirm ?? false,
+                                  },
+                                }))
+                              }
+                            />
+                            <TextField
+                              size="small"
+                              label="New distributor name"
+                              value={distCreate[t.token_norm]?.name ?? ''}
+                              onChange={(e) =>
+                                setDistCreate((prev) => ({
+                                  ...prev,
+                                  [t.token_norm]: {
+                                    code: prev[t.token_norm]?.code ?? '',
+                                    name: e.target.value,
+                                    confirm: prev[t.token_norm]?.confirm ?? false,
+                                  },
+                                }))
+                              }
+                            />
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={distCreate[t.token_norm]?.confirm ?? false}
+                                  onChange={(e) =>
+                                    setDistCreate((prev) => ({
+                                      ...prev,
+                                      [t.token_norm]: {
+                                        code: prev[t.token_norm]?.code ?? '',
+                                        name: prev[t.token_norm]?.name ?? '',
+                                        confirm: e.target.checked,
+                                      },
+                                    }))
+                                  }
+                                />
+                              }
+                              label="I confirm creating this distributor in master data"
+                            />
+                          </Stack>
+                        )}
+                      </Box>
+                    );
+                  })}
                 </Stack>
               </Box>
             )}
@@ -586,7 +921,7 @@ function LineupEntityResolutionDialog({
           onClick={handleApply}
           data-testid="lineup-entity-resolution-apply"
         >
-          {applyMutation.isPending ? 'Applying…' : 'Apply mappings'}
+          {applyMutation.isPending ? 'Applying…' : 'Apply resolutions'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -764,14 +1099,16 @@ function SyncPreviewDialog({
             {syncResult.skipped_open_channel_account_missing != null &&
               syncResult.skipped_open_channel_account_missing > 0 && (
                 <Typography variant="body2">
-                  Skipped — Open Channel account missing (seed dim_customer code OPEN_CHANNEL):{' '}
-                  {syncResult.skipped_open_channel_account_missing}
+                  Blocked — reference data missing: controlled dim_customer OPEN_CHANNEL not found (not a normal row
+                  mapping issue). From repo root run pnpm local:db:seed or pnpm docker:seed — never create from upload
+                  tokens: {syncResult.skipped_open_channel_account_missing}
                 </Typography>
               )}
             {syncResult.skipped_missing_distributor != null && syncResult.skipped_missing_distributor > 0 && (
               <Typography variant="body2">
-                Skipped — distributor required for sync (CommercialPlanLine.distributor_id is not nullable; use
-                fallback or map distributor): {syncResult.skipped_missing_distributor}
+                Skipped — distributor required for sync (includes unresolved distributor_token rows and missing
+                UNASSIGNED placeholder when distributor was intentionally blank). Map a distributor, use fallback, or
+                seed dim_distributor UNASSIGNED: {syncResult.skipped_missing_distributor}
               </Typography>
             )}
             {syncResult.skipped_missing_quantity != null && syncResult.skipped_missing_quantity > 0 && (
@@ -867,14 +1204,16 @@ function SyncPreviewDialog({
                 {preview.skipped_open_channel_account_missing != null &&
                   preview.skipped_open_channel_account_missing > 0 && (
                     <Typography variant="body2" color="error">
-                      Blocked — Open Channel account missing (controlled dim_customer OPEN_CHANNEL not found; run
-                      seed): {preview.skipped_open_channel_account_missing}
+                      Blocked — reference data setup: dim_customer OPEN_CHANNEL missing (pnpm local:db:seed or pnpm
+                      docker:seed). Not a row-mapping issue — do not create from file tokens:{' '}
+                      {preview.skipped_open_channel_account_missing}
                     </Typography>
                   )}
                 {preview.skipped_missing_distributor != null && preview.skipped_missing_distributor > 0 && (
                   <Typography variant="body2" color="error">
-                    Blocked — distributor required for sync (CommercialPlanLine.distributor_id is not nullable; map
-                    distributor or use fallback): {preview.skipped_missing_distributor}
+                    Blocked — distributor required for planner lines (unresolved distributor tokens, or intentionally
+                    blank distributor without UNASSIGNED seed). Map distributor, use fallback, or seed UNASSIGNED:{' '}
+                    {preview.skipped_missing_distributor}
                   </Typography>
                 )}
                 {preview.skipped_missing_quantity != null && preview.skipped_missing_quantity > 0 && (
@@ -1490,9 +1829,10 @@ export function CurrentLineupSection({
   useEffect(() => {
     if (activeCaseId == null || !wbMetaReady || !wbMeta) return;
     const rawCols = wbMeta.raw_columns ?? [];
-    const digest = `${activeCaseId}:${rawCols.join('\u0001')}`;
+    const hintPart = (wbMeta.processor_spec_key_hints ?? []).join('\u0002');
+    const digest = `${activeCaseId}:${rawCols.join('\u0001')}:${hintPart}`;
     if (processorRawInjectedKey.current === digest) return;
-    const hints = pickDefaultProcessorRawColumnIds(rawCols);
+    const hints = pickDefaultProcessorWorkbenchIds(wbMeta);
     processorRawInjectedKey.current = digest;
     if (!hints.length) return;
     setVisibleCols((prev) => {
