@@ -1,4 +1,10 @@
-"""Idempotent-ish demo seed: clears fact/derived/import rows, keeps dimensions fresh."""
+"""Demo / dev catalog seed: **wipes the database** then reloads import templates + dimension rows.
+
+For production-like environments, controlled Commercial Planner reference rows (**OPEN_CHANNEL**,
+**UNASSIGNED**) are ensured by **Alembic migration** ``20260429_0022`` and/or
+``python scripts/seed.py --commercial-system-reference-only`` (no wipe).
+
+This module is not the sole portability path for those two rows — see ``reference_bootstrap``."""
 
 from __future__ import annotations
 
@@ -57,6 +63,8 @@ from app.services.planning.wos import WosInputs, classify_stock_risk
 from app.services.promo_export.cpor_xlsx import TEMPLATE_CODE, build_promo_plan_workbook_bytes
 from app.services.imports.template_definitions import DEFAULT_SOURCES, IMPORT_TEMPLATE_ROWS
 from app.storage.local import LocalStorageBackend
+
+from app.services.commercial_planner.reference_bootstrap import ensure_commercial_planner_system_reference_data_sync
 
 
 def _seed_import_core(session: Session) -> None:
@@ -146,23 +154,14 @@ def run(session: Session, *, full_demo: bool = False) -> None:
         DimChannel(code="ECOM", name="eCommerce"),
     ]
     distributors = [
-        DimDistributor(code="UNASSIGNED", name="Unassigned Distributor"),
         DimDistributor(code="DIST-01", name="Summit Supply Co."),
         DimDistributor(code="DIST-02", name="Harbor Wholesale"),
     ]
     session.add_all(regions + channels + distributors)
     session.flush()
 
-    if not session.execute(select(DimCustomer.id).where(DimCustomer.code == "OPEN_CHANNEL")).scalar_one_or_none():
-        session.add(
-            DimCustomer(
-                code="OPEN_CHANNEL",
-                name="Open Channel",
-                region_id=None,
-                channel_id=None,
-            )
-        )
-        session.flush()
+    # System reference dimensions (OPEN_CHANNEL, UNASSIGNED) — same path as Alembic migration / seed flag.
+    ensure_commercial_planner_system_reference_data_sync(session.connection())
 
     if not full_demo:
         session.commit()

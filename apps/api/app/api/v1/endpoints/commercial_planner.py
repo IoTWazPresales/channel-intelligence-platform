@@ -843,6 +843,19 @@ async def get_plan_readiness(plan_id: int, db: AsyncSession = Depends(get_db)):
     ).scalars().all()
 
     if not rows:
+        open_channel_dim_ok = await get_open_channel_customer_id(db) is not None
+        unassigned_dim_ok = await get_unassigned_distributor_id(db) is not None
+        parts0: list[str] = []
+        if not open_channel_dim_ok:
+            parts0.append(
+                "Admin/setup: dim_customer OPEN_CHANNEL missing — run `alembic upgrade head` or "
+                "`python scripts/seed.py --commercial-system-reference-only`."
+            )
+        if not unassigned_dim_ok:
+            parts0.append(
+                "Admin/setup: dim_distributor UNASSIGNED missing — run `alembic upgrade head` or "
+                "`python scripts/seed.py --commercial-system-reference-only`."
+            )
         return {
             "plan_id": plan_id,
             "line_count": 0,
@@ -850,8 +863,12 @@ async def get_plan_readiness(plan_id: int, db: AsyncSession = Depends(get_db)):
             "missing_distributor_term": 0,
             "missing_sku_assumption": 0,
             "lines_with_calc_flags": 0,
-            "ready": True,
-            "readiness_summary": "No lines in plan.",
+            "ready": open_channel_dim_ok and unassigned_dim_ok,
+            "system_reference_open_channel_dim_ok": open_channel_dim_ok,
+            "system_reference_unassigned_distributor_dim_ok": unassigned_dim_ok,
+            "readiness_summary": (
+                "; ".join(parts0) if parts0 else "No lines in plan."
+            ),
         }
 
     product_ids = list({r.product_id for r in rows})
@@ -881,8 +898,28 @@ async def get_plan_readiness(plan_id: int, db: AsyncSession = Depends(get_db)):
     missing_sku = sum(1 for r in rows if r.product_id not in existing_skus)
     lines_with_flags = sum(1 for r in rows if r.calc_flags)
 
-    ready = missing_ct == 0 and missing_dt == 0 and missing_sku == 0
     parts: list[str] = []
+
+    open_channel_dim_ok = await get_open_channel_customer_id(db) is not None
+    unassigned_dim_ok = await get_unassigned_distributor_id(db) is not None
+    if not open_channel_dim_ok:
+        parts.append(
+            "Admin/setup: dim_customer OPEN_CHANNEL missing — run `alembic upgrade head` or "
+            "`python scripts/seed.py --commercial-system-reference-only` (not created from uploads)."
+        )
+    if not unassigned_dim_ok:
+        parts.append(
+            "Admin/setup: dim_distributor UNASSIGNED missing — run `alembic upgrade head` or "
+            "`python scripts/seed.py --commercial-system-reference-only` (not created from uploads)."
+        )
+
+    ready = (
+        missing_ct == 0
+        and missing_dt == 0
+        and missing_sku == 0
+        and open_channel_dim_ok
+        and unassigned_dim_ok
+    )
     if missing_ct:
         parts.append(f"{missing_ct} line(s) missing customer terms")
     if missing_dt:
@@ -900,6 +937,8 @@ async def get_plan_readiness(plan_id: int, db: AsyncSession = Depends(get_db)):
         "missing_sku_assumption": missing_sku,
         "lines_with_calc_flags": lines_with_flags,
         "ready": ready,
+        "system_reference_open_channel_dim_ok": open_channel_dim_ok,
+        "system_reference_unassigned_distributor_dim_ok": unassigned_dim_ok,
         "readiness_summary": "; ".join(parts) if parts else "All defaults present.",
     }
 

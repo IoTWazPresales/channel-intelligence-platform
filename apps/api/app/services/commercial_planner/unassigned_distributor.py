@@ -4,13 +4,12 @@ CommercialPlanLine.distributor_id is NOT NULL. When a lineup row has no distribu
 and no distributor_token to resolve, sync uses this dim row instead of inventing distributors
 from uploads.
 
-Provision idempotently via seed_demo (code UNASSIGNED). Local/dev:
+Provision idempotently as **system reference** (same as ``OPEN_CHANNEL``):
 
-  pnpm local:db:seed
+- ``alembic upgrade head`` (migration ``20260429_0022``), and/or
+- ``python scripts/seed.py --commercial-system-reference-only``.
 
-or Docker:
-
-  pnpm docker:seed
+Demo seed also ensures these rows after its DB wipe — not the portability path for non-demo DBs.
 """
 from __future__ import annotations
 

@@ -1,13 +1,20 @@
 """Controlled Open Channel customer account for commercial planner sync (reference data).
 
-This is not auto-creation from upload tokens. The OPEN_CHANNEL dim_customer row should exist
-after seed (see seed_demo). Sync uses it only when a lineup row is flagged as Open Channel staging.
+This is not auto-creation from upload tokens. The OPEN_CHANNEL dim_customer row is **system
+reference data** (global ``dim_customer``), ensured by:
+
+- ``alembic upgrade head`` (migration ``20260429_0022``), and/or
+- ``python scripts/seed.py --commercial-system-reference-only`` (repair, no DB wipe).
+
+Demo ``seed_demo.run()`` also calls the same ensure helper after its wipe — not the only path.
+
+Sync uses this row only when a lineup row is flagged as Open Channel staging.
 
 If sync preview shows open_channel_account_missing, treat it as missing reference data, not a
-per-upload row mapping defect. Idempotent provisioning (repo root):
+per-upload row mapping defect.
 
-- Local API venv: pnpm local:db:seed (runs scripts/seed.py via scripts/run-api-python.cjs)
-- Docker stack: pnpm docker:seed (exec into api container)
+Convenience (default ``pnpm local:db:seed`` / ``pnpm docker:seed`` runs **destructive** demo seed;
+use ``--commercial-system-reference-only`` when you must not wipe).
 """
 from __future__ import annotations
 

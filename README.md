@@ -101,7 +101,13 @@ Optional: clear demo data after migrations — from repo root **`pnpm local:db:w
 
 Open [http://localhost:3000](http://localhost:3000) (redirects to `/dashboard`).
 
-**Commercial planner — controlled reference data (local/dev):** sync and lineup tooling expect master-data rows, not file-derived entities: `dim_customer` code **`OPEN_CHANNEL`** (Open Channel account) and `dim_distributor` code **`UNASSIGNED`** (intentionally blank distributor placeholder). Idempotent provisioning: from repo root run **`pnpm local:db:seed`** (native venv) or **`pnpm docker:seed`** (catalog seed inside the API container). Do not create these from upload tokens.
+**Commercial planner — controlled reference data:** `dim_customer` **`OPEN_CHANNEL`** and `dim_distributor` **`UNASSIGNED`** are **global system dimensions** (not tenant-scoped), required for Open Channel sync and intentionally-unassigned distributor sync. They are **not** created from upload tokens.
+
+- **Portable path (all environments):** run **`pnpm local:db:migrate`** / **`alembic upgrade head`** — migration **`20260429_0022`** inserts both rows idempotently.
+- **Repair without wiping the DB:** from `apps/api` with venv active: **`python scripts/seed.py --commercial-system-reference-only`**.
+- **Default `pnpm local:db:seed` / `pnpm docker:seed`** runs **`scripts/seed.py`** which by default calls **destructive demo seed** (`seed_demo.run` wipes the DB first). That is a dev/demo reset, **not** the production reference-data contract — use migrate or `--commercial-system-reference-only` when you must not wipe.
+
+Plan readiness (`GET .../plans/{id}/readiness`) reports **`system_reference_*_dim_ok`** and admin/setup text if either row is missing.
 
 ### Celery worker (optional)
 
