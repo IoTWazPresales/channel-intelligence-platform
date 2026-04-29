@@ -2059,6 +2059,11 @@ async def list_lineup_case_lines(
             status_code=400,
             detail="workbench_scope 'ready' or 'blocked' requires commercial_plan_id on the lineup case.",
         )
+    if include_sync_eligibility and not case.commercial_plan_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot compute sync eligibility: case has no commercial_plan_id.",
+        )
     need_eligibility = bool(case.commercial_plan_id) and (
         include_sync_eligibility or workbench_scope in ("ready", "blocked")
     )

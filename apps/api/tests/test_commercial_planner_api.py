@@ -1263,10 +1263,11 @@ def test_column_metadata_catalogue_coverage():
 
         async def _execute(stmt, *args, **kwargs):
             call_count["n"] += 1
+            # Endpoint order: plan_line_count, distinct product_id count, catalogue agg, specs rows
             if call_count["n"] == 1:
-                return total_result
-            if call_count["n"] == 2:
                 return line_count_result
+            if call_count["n"] == 2:
+                return total_result
             if call_count["n"] == 3:
                 return cat_result
             return spec_wrap
@@ -1491,9 +1492,9 @@ def test_column_metadata_spec_keys_from_jsonb():
         async def _execute(stmt, *args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return total_result
-            if call_count["n"] == 2:
                 return line_count_result
+            if call_count["n"] == 2:
+                return total_result
             if call_count["n"] == 3:
                 return cat_result
             spec_scalars = MagicMock()
@@ -1509,8 +1510,10 @@ def test_column_metadata_spec_keys_from_jsonb():
     r = client.get("/api/v1/commercial-planner/plans/11/column-metadata")
     assert r.status_code == 200
     body = r.json()
-    assert body["spec_keys"]["cpu"] == 2
-    assert body["spec_keys"]["ram"] == 2
+    # One distinct product row per specs_json blob; counts are per flattened key name (case-sensitive).
+    assert body["spec_keys"]["cpu"] == 1
+    assert body["spec_keys"]["RAM"] == 1
+    assert body["spec_keys"]["ram"] == 1
     assert body["spec_keys"]["Processor"] == 1
     assert body.get("plan_line_count") == 5
 
