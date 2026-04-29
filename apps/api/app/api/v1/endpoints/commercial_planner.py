@@ -8,7 +8,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import distinct, func, or_, select, tuple_
+from sqlalchemy import delete as sa_delete, distinct, func, or_, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -459,8 +459,14 @@ async def delete_plan(
             payload = dict(ll.raw_row_payload)
             payload.pop(CAP_COMMERCIAL_PLAN_SYNC_KEY, None)
             ll.raw_row_payload = payload
-    for line in lines:
-        await db.delete(line)
+    # Flush JSONB updates for lineup lines before deleting plan rows
+    await db.flush()
+    # Use a bulk SQL DELETE for plan lines so the FK is cleared immediately,
+    # before the ORM tries to delete the parent plan row.
+    # (ORM per-row db.delete() defers to flush and may order plan before lines.)
+    await db.execute(
+        sa_delete(CommercialPlanLine).where(CommercialPlanLine.commercial_plan_id == plan_id)
+    )
     await db.delete(plan)
     await db.commit()
     return Response(status_code=204)

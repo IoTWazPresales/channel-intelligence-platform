@@ -2538,6 +2538,7 @@ def test_delete_plan_draft_empty_succeeds():
         sess.get = AsyncMock(return_value=plan)
         sess.execute = AsyncMock(side_effect=_execute)
         sess.delete = AsyncMock()
+        sess.flush = AsyncMock()
         sess.commit = AsyncMock()
         yield sess
 
