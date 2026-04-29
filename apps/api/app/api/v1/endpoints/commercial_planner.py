@@ -49,6 +49,7 @@ from app.services.commercial_planner.lineup_open_channel import (
     uploaded_columns_from_payload,
 )
 from app.services.commercial_planner.lineup_plan_sync import (
+    CAP_COMMERCIAL_PLAN_SYNC_KEY,
     attach_plan_line_sync_to_lineup_row,
     synced_commercial_plan_line_id,
 )
@@ -408,13 +409,58 @@ async def patch_plan(plan_id: int, body: PlanPatch, db: AsyncSession = Depends(g
 
 
 @router.delete("/plans/{plan_id}", status_code=204)
-async def delete_plan(plan_id: int, db: AsyncSession = Depends(get_db)):
-    lines = (await db.execute(select(CommercialPlanLine).where(CommercialPlanLine.commercial_plan_id == plan_id))).scalars().all()
-    for line in lines:
-        await db.delete(line)
+async def delete_plan(
+    plan_id: int,
+    force: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a commercial plan. Only draft plans may be deleted.
+
+    If the plan has planner lines, ``force=true`` must be passed to confirm.
+    Any current-lineup sync markers (``_cip_commercial_plan_sync``) that reference
+    this plan are cleared from CommercialLineupLine.raw_row_payload to prevent
+    stale workbench filtering.
+    """
     plan = await db.get(CommercialPlan, plan_id)
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
+    if plan.status != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot delete plan '{plan.plan_name}' with status '{plan.status}'. "
+                "Only draft plans may be deleted."
+            ),
+        )
+    lines = (
+        await db.execute(select(CommercialPlanLine).where(CommercialPlanLine.commercial_plan_id == plan_id))
+    ).scalars().all()
+    if lines and not force:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Plan '{plan.plan_name}' has {len(lines)} planner line(s). "
+                "Pass force=true to confirm deletion. "
+                "All planner lines and current-lineup sync markers for this plan will be removed."
+            ),
+        )
+    # Clean up JSONB sync markers in current-lineup rows that reference this plan
+    linked_lineup_lines = (
+        await db.execute(
+            select(CommercialLineupLine).where(
+                CommercialLineupLine.raw_row_payload.contains(
+                    {CAP_COMMERCIAL_PLAN_SYNC_KEY: {"commercial_plan_id": plan_id}}
+                )
+            )
+        )
+    ).scalars().all()
+    for ll in linked_lineup_lines:
+        if isinstance(ll.raw_row_payload, dict):
+            payload = dict(ll.raw_row_payload)
+            payload.pop(CAP_COMMERCIAL_PLAN_SYNC_KEY, None)
+            ll.raw_row_payload = payload
+    for line in lines:
+        await db.delete(line)
     await db.delete(plan)
     await db.commit()
     return Response(status_code=204)
@@ -2183,7 +2229,11 @@ async def list_lineup_case_lines(
             "synced_commercial_plan_line_id": synced_commercial_plan_line_id(ln.raw_row_payload),
         }
         if include_product_specs:
-            d["product_specs"] = product_specs_json if isinstance(product_specs_json, dict) else {}
+            safe_specs_json = product_specs_json if isinstance(product_specs_json, dict) else None
+            d["product_specs"] = safe_specs_json or {}
+            # product_specs_flat is the flattened, non-empty-value map used by the column selector
+            # and workbench spec: column rendering — same keys reported by workbench-column-metadata
+            d["product_specs_flat"] = specs_json_flat_string_map(safe_specs_json)
             d["catalogue_category"] = catalogue_category
             d["catalogue_form_factor"] = catalogue_form_factor
             d["catalogue_product_line"] = catalogue_product_line
@@ -2193,7 +2243,7 @@ async def list_lineup_case_lines(
             d["catalogue_marketing_name"] = catalogue_marketing_name
             d["catalogue_ean"] = catalogue_ean
             d["catalogue_upc"] = catalogue_upc
-            spec_bits = product_specs_from_json(product_specs_json if isinstance(product_specs_json, dict) else None)
+            spec_bits = product_specs_from_json(safe_specs_json)
             for k, v in spec_bits.items():
                 if v is not None:
                     d[k] = v

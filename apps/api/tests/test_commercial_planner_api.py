@@ -2395,3 +2395,164 @@ def test_sync_preview_open_channel_eligible_when_controlled_account_present():
     body = r.json()
     assert body.get("will_create") == 1
     assert body.get("skipped_open_channel_account_missing") == 0
+
+
+# ── product_specs_flat on lineup lines ────────────────────────────────────────
+
+def test_list_lineup_lines_product_specs_flat_populated():
+    """product_specs_flat must appear on line payloads when include_product_specs=true."""
+    case = _make_case(id=70, commercial_plan_id=None, commercial_status="draft_imported")
+    ln = _make_lineup_line(id=1, case_id=70, product_id=10, customer_id=7, distributor_id=3)
+    specs = {"cpu": "Intel i7", "RAM": "16 GB", "import_staging": {"storage": "512 GB SSD"}}
+    row_tuple = (
+        ln,
+        "SKU-10",
+        "Laptop Pro",
+        "PN-10",
+        "Model X",
+        "SM-X",
+        specs,   # product_specs_json
+        "Notebook",    # catalogue_category
+        None, None, None, None, None, None, None, None,
+        "CUST-01", "Cust One",
+        "DIST-01", "Dist One",
+    )
+
+    async def _execute(stmt):
+        res = MagicMock()
+        res.all.return_value = [row_tuple]
+        return res
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        sess.execute = AsyncMock(side_effect=_execute)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get(
+        "/api/v1/commercial-planner/lineup-cases/70/lines"
+        "?include_product_specs=true&workbench_scope=all",
+    )
+    assert r.status_code == 200
+    lines = r.json()["lines"]
+    assert len(lines) == 1
+    flat = lines[0].get("product_specs_flat")
+    assert isinstance(flat, dict), "product_specs_flat must be a dict"
+    # Top-level keys present in flat map
+    assert flat.get("cpu") == "Intel i7"
+    assert flat.get("RAM") == "16 GB"
+    # Nested import_staging key promoted to flat map
+    assert flat.get("storage") == "512 GB SSD"
+    # product_specs_flat must not contain import_staging itself
+    assert "import_staging" not in flat
+
+
+def test_list_lineup_lines_product_specs_flat_empty_when_no_specs():
+    """product_specs_flat must be an empty dict when product has no specs_json."""
+    case = _make_case(id=71, commercial_plan_id=None, commercial_status="draft_imported")
+    ln = _make_lineup_line(id=2, case_id=71, product_id=None, customer_id=None, distributor_id=None)
+    row_tuple = (ln, None, None, None, None, None, None,) + (None,) * 9 + (None, None, None, None)
+
+    async def _execute(stmt):
+        res = MagicMock()
+        res.all.return_value = [row_tuple]
+        return res
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        sess.execute = AsyncMock(side_effect=_execute)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get(
+        "/api/v1/commercial-planner/lineup-cases/71/lines"
+        "?include_product_specs=true&workbench_scope=all",
+    )
+    assert r.status_code == 200
+    lines = r.json()["lines"]
+    flat = lines[0].get("product_specs_flat")
+    assert isinstance(flat, dict)
+    assert flat == {}
+
+
+# ── Safe plan deletion ─────────────────────────────────────────────────────────
+
+def test_delete_plan_blocks_non_draft():
+    """DELETE /plans/{id} must return 409 for non-draft plans."""
+    plan = SimpleNamespace(id=99, plan_name="Approved Plan", status="approved", line_count=0)
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=plan)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.delete("/api/v1/commercial-planner/plans/99")
+    assert r.status_code == 409
+    assert "approved" in r.json()["detail"].lower()
+
+
+def test_delete_plan_blocks_without_force_when_has_lines():
+    """DELETE /plans/{id} must return 409 if plan has lines and force is not set."""
+    plan = SimpleNamespace(id=100, plan_name="Draft With Lines", status="draft", line_count=3)
+    fake_line = SimpleNamespace(id=1, commercial_plan_id=100)
+
+    exec_call = {"n": 0}
+
+    async def _execute(stmt):
+        exec_call["n"] += 1
+        res = MagicMock()
+        # First execute: CommercialPlanLine select
+        res.scalars.return_value.all.return_value = [fake_line]
+        return res
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=plan)
+        sess.execute = AsyncMock(side_effect=_execute)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.delete("/api/v1/commercial-planner/plans/100")
+    assert r.status_code == 409
+    assert "force=true" in r.json()["detail"].lower()
+
+
+def test_delete_plan_draft_empty_succeeds():
+    """DELETE /plans/{id} must succeed (204) for an empty draft plan."""
+    plan = SimpleNamespace(id=101, plan_name="Empty Draft", status="draft", line_count=0)
+
+    exec_call = {"n": 0}
+
+    async def _execute(stmt):
+        exec_call["n"] += 1
+        res = MagicMock()
+        # No plan lines, no linked lineup lines
+        res.scalars.return_value.all.return_value = []
+        return res
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=plan)
+        sess.execute = AsyncMock(side_effect=_execute)
+        sess.delete = AsyncMock()
+        sess.commit = AsyncMock()
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.delete("/api/v1/commercial-planner/plans/101")
+    assert r.status_code == 204
+
+
+def test_delete_plan_not_found():
+    """DELETE /plans/{id} must return 404 for unknown plan id."""
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=None)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.delete("/api/v1/commercial-planner/plans/9999")
+    assert r.status_code == 404

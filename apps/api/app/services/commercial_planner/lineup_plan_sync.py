@@ -10,7 +10,7 @@ from typing import Any
 from app.models.commercial_lineup import CommercialLineupLine
 
 # Stable namespace — avoid collisions with parser ``uploaded`` / staging keys.
-CAP_COMMERCIAL_PLAN_SYNC_KEY = "_cip_commercial_plan_sync"
+CAP_COMMERCIAL_PLAN_SYNC_KEY: str = "_cip_commercial_plan_sync"
 
 
 def synced_commercial_plan_line_id(raw_row_payload: dict[str, Any] | list | None) -> int | None:

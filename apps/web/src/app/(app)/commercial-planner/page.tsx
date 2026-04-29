@@ -693,6 +693,7 @@ export default function CommercialPlannerPage() {
   const [suggestionPreview, setSuggestionPreview] = useState<SuggestionPreviewState | null>(null);
   const [addProductSetOpen, setAddProductSetOpen] = useState(false);
   const [columnSelectorOpen, setColumnSelectorOpen] = useState(false);
+  const [deletePlanOpen, setDeletePlanOpen] = useState(false);
   const [addFromLineupOpen, setAddFromLineupOpen] = useState(false);
   const [addLineupJobId, setAddLineupJobId] = useState<number | null>(null);
   const [lineupModalFilter, setLineupModalFilter] = useState('');
@@ -1123,6 +1124,16 @@ export default function CommercialPlannerPage() {
       void qc.invalidateQueries({ queryKey: ['commercial-plan-lines', activePlanId] });
       void qc.invalidateQueries({ queryKey: ['commercial-plan-summary', activePlanId] });
       void qc.invalidateQueries({ queryKey: ['commercial-plan-suggestions', activePlanId] });
+    },
+  });
+
+  const deletePlan = useMutation({
+    mutationFn: ({ planId, force }: { planId: number; force: boolean }) =>
+      apiDelete(`/api/v1/commercial-planner/plans/${planId}?force=${force ? 'true' : 'false'}`),
+    onSuccess: () => {
+      setDeletePlanOpen(false);
+      setSelectedPlanId(null);
+      void qc.invalidateQueries({ queryKey: ['commercial-plans'] });
     },
   });
   const recalc = useMutation({
@@ -1858,6 +1869,17 @@ export default function CommercialPlannerPage() {
           <Button size="small" variant="outlined" onClick={() => setAddPlanOpen(true)} sx={{ ml: 'auto' }}>
             + New plan
           </Button>
+          {activePlan?.status === 'draft' && (
+            <Button
+              size="small"
+              variant="outlined"
+              color="error"
+              data-testid="delete-plan-btn"
+              onClick={() => setDeletePlanOpen(true)}
+            >
+              Delete plan
+            </Button>
+          )}
           <Button size="small" variant="contained" onClick={() => setAddLineOpen(true)} disabled={activePlanId == null}>
             Add line
           </Button>
@@ -2135,6 +2157,49 @@ export default function CommercialPlannerPage() {
           )}
         </Paper>
       )}
+
+      {/* ─── Delete plan confirmation ──────────────────────────────────────── */}
+      <Dialog open={deletePlanOpen} onClose={() => !deletePlan.isPending && setDeletePlanOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Delete plan</DialogTitle>
+        <DialogContent>
+          {activePlan && (
+            <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+              <Alert severity="warning">
+                <strong>Deleting plan: {activePlan.plan_name}</strong>
+                <br />
+                {(activePlan.line_count ?? 0) > 0
+                  ? `This plan has ${activePlan.line_count} planner line(s). Deleting it will remove all lines and clear any current-lineup sync markers that reference this plan.`
+                  : 'This empty draft plan will be permanently deleted.'}
+              </Alert>
+              {deletePlan.error && (
+                <Alert severity="error">
+                  {deletePlan.error instanceof Error ? deletePlan.error.message : 'Delete failed.'}
+                </Alert>
+              )}
+              <Typography variant="body2" color="text.secondary">
+                Only draft plans may be deleted. This action cannot be undone.
+              </Typography>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeletePlanOpen(false)} disabled={deletePlan.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            data-testid="delete-plan-confirm-btn"
+            disabled={deletePlan.isPending || activePlanId == null}
+            onClick={() => {
+              if (activePlanId == null) return;
+              deletePlan.mutate({ planId: activePlanId, force: (activePlan?.line_count ?? 0) > 0 });
+            }}
+          >
+            {deletePlan.isPending ? 'Deleting…' : 'Confirm delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={addPlanOpen} onClose={() => !createPlan.isPending && setAddPlanOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Create commercial plan</DialogTitle>

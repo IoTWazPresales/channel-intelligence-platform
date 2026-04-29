@@ -128,6 +128,8 @@ type CommercialLineupLine = {
   synced_commercial_plan_line_id?: number | null;
   product_spec_cpu?: string | null;
   product_spec_processor?: string | null;
+  /** Flattened, non-empty specs_json map — same keys as workbench-column-metadata catalogue_spec_keys. */
+  product_specs_flat?: Record<string, string>;
 };
 
 type WorkbenchLineCounts = {
@@ -2142,13 +2144,17 @@ export function CurrentLineupSection({
       }
       if (colId.startsWith('spec:')) {
         const k = colId.slice(5);
-        const specs =
-          ln.product_specs && typeof ln.product_specs === 'object' && !Array.isArray(ln.product_specs)
-            ? (ln.product_specs as Record<string, unknown>)
-            : {};
-        const v = specs[k];
-        if (v == null || (typeof v === 'string' && !v.trim())) return '—';
-        return String(v);
+        // Use product_specs_flat (flattened, non-empty map) — same keys as workbench-column-metadata
+        // catalogue_spec_keys. This handles nested import_staging keys correctly.
+        const flat = ln.product_specs_flat;
+        if (!flat) return '—';
+        const direct = flat[k];
+        if (direct?.trim()) return direct;
+        // Case-insensitive fallback for key casing mismatches
+        const lower = k.toLowerCase();
+        const matchKey = Object.keys(flat).find((fk) => fk.toLowerCase() === lower);
+        const fallback = matchKey ? flat[matchKey] : undefined;
+        return fallback?.trim() ? fallback : '—';
       }
       if (colId.startsWith('sync:')) {
         const field = colId.slice(5);
@@ -2332,22 +2338,29 @@ export function CurrentLineupSection({
                 </Button>
               </Stack>
             </Stack>
-            <Dialog open={colSelectorOpen} onClose={() => setColSelectorOpen(false)} maxWidth="md" fullWidth>
-              <DialogTitle>
+            <Dialog
+              open={colSelectorOpen}
+              onClose={() => setColSelectorOpen(false)}
+              maxWidth={false}
+              fullWidth
+              PaperProps={{ sx: { width: '90vw', maxWidth: 1200, maxHeight: '85vh', m: 2, display: 'flex', flexDirection: 'column' } }}
+            >
+              <DialogTitle sx={{ pb: 1 }}>
                 Workbench columns
                 <Typography variant="body2" color="text.secondary" component="span" sx={{ ml: 1 }}>
                   — {visibleColsFiltered.length} selected
                 </Typography>
               </DialogTitle>
-              <DialogContent dividers>
+              <Box sx={{ px: 3, pb: 1, position: 'sticky', top: 0, bgcolor: 'background.paper', zIndex: 1 }}>
                 <TextField
                   size="small"
                   placeholder="Search columns…"
                   value={colSelectorSearch}
                   onChange={(e) => setColSelectorSearch(e.target.value)}
                   fullWidth
-                  sx={{ mb: 2 }}
                 />
+              </Box>
+              <DialogContent dividers sx={{ overflowY: 'auto', flex: 1 }}>
                 <Stack spacing={2}>
                   {columnMenuEntries.reduce<Array<{ label: string; cols: string[] }>>(
                     (groups, entry) => {

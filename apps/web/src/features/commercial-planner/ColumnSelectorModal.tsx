@@ -228,8 +228,15 @@ export function ColumnSelectorModal({
     Object.values(specKeyVisible).filter(Boolean).length;
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xl" aria-labelledby="col-selector-title">
-      <DialogTitle id="col-selector-title">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth={false}
+      aria-labelledby="col-selector-title"
+      PaperProps={{ sx: { width: '90vw', maxWidth: 1200, maxHeight: '85vh', m: 2, display: 'flex', flexDirection: 'column' } }}
+    >
+      <DialogTitle id="col-selector-title" sx={{ pb: 1 }}>
         <Stack spacing={0.25}>
           <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap" useFlexGap>
             <span>Planner line columns</span>
@@ -241,7 +248,7 @@ export function ColumnSelectorModal({
           </Typography>
         </Stack>
       </DialogTitle>
-      <DialogContent dividers>
+      <Box sx={{ px: 3, pb: 1, position: 'sticky', top: 0, bgcolor: 'background.paper', zIndex: 1 }}>
         {/* Search */}
         <TextField
           size="small"
@@ -249,7 +256,6 @@ export function ColumnSelectorModal({
           placeholder="Search columns and discovered spec keys…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{ mb: 2 }}
           slotProps={{
             input: {
               startAdornment: (
@@ -260,7 +266,8 @@ export function ColumnSelectorModal({
             },
           }}
         />
-
+      </Box>
+      <DialogContent dividers sx={{ overflowY: 'auto', flex: 1 }}>
         {/* Preset chips */}
         {!needle && (
           <Box sx={{ mb: 2 }}>

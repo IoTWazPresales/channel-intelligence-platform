@@ -329,7 +329,14 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       line_count: 1,
       created_at: null,
     };
-    const line = { ...lineupLineOpenChannel(), case_id: 5, id: 2, product_specs: { cpu: 'Intel i7' } };
+    const line = {
+      ...lineupLineOpenChannel(),
+      case_id: 5,
+      id: 2,
+      product_specs: { cpu: 'Intel i7' },
+      // product_specs_flat is the flattened map used by wbCellContent for spec: columns
+      product_specs_flat: { cpu: 'Intel i7' },
+    };
     apiGetMock.mockImplementation(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [draftCase];
       if (url.includes('/workbench-column-metadata')) {
