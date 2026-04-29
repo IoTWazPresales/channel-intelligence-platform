@@ -58,6 +58,7 @@ const mockState = vi.hoisted(() => ({
       notes_summary: null,
     },
   ] as any[],
+  customerCommercialTermsRows: [] as any[],
 }));
 
 vi.mock('next/navigation', () => ({
@@ -140,6 +141,7 @@ vi.mock('@/lib/api', () => ({
     if (url === '/api/v1/distributors') return [{ id: 30, code: 'DIST-01', name: 'Summit Supply' }];
     if (url === '/api/v1/customers/1/locations') return mockState.locationItems;
     if (url === '/api/v1/customers/1/contacts') return mockState.contactItems;
+    if (url.startsWith('/api/v1/commercial-planner/customer-terms')) return mockState.customerCommercialTermsRows;
     return [];
   }),
   apiPost: mockState.apiPostMock,
@@ -212,6 +214,7 @@ describe('AdminCustomersPage phase1 behaviors', () => {
         notes_summary: null,
       },
     ];
+    mockState.customerCommercialTermsRows = [];
   });
 
   it('applies URL-backed customer search updates', async () => {
@@ -331,6 +334,7 @@ describe('AdminCustomersPage phase1 behaviors', () => {
         return { items: mockState.customerItems, page: 1, page_size: 50, total: 1, sort_by: 'code', sort_dir: 'asc' };
       if (url === '/api/v1/catalog/channels') return [{ id: 20, code: 'RET', name: 'Retail' }];
       if (url === '/api/v1/catalog/regions') return [{ id: 10, code: 'NA-W', name: 'North America West' }];
+      if (url.startsWith('/api/v1/commercial-planner/customer-terms')) return mockState.customerCommercialTermsRows;
       return [];
     });
     renderPage();
@@ -350,6 +354,70 @@ describe('AdminCustomersPage phase1 behaviors', () => {
     expect(screen.getByRole('link', { name: 'Import customer master' })).toHaveAttribute(
       'href',
       '/admin/imports?template=customer_master'
+    );
+  });
+
+  it('shows commercial terms empty state in drawer and opens create dialog', async () => {
+    mockState.customerCommercialTermsRows = [];
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    expect(await screen.findByTestId('customer-terms-empty')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('customer-terms-create'));
+    expect(await screen.findByRole('dialog', { name: /Create commercial terms/i })).toBeInTheDocument();
+  });
+
+  it('POSTs customer commercial terms from drawer', async () => {
+    mockState.customerCommercialTermsRows = [];
+    mockState.apiPostMock.mockResolvedValueOnce({
+      id: 99,
+      customer_id: 1,
+      customer_code: 'CUST-1',
+      customer_name: 'Metro Market',
+      customer_margin_pct: 0.11,
+      customer_rebate_pct: 0.03,
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    fireEvent.click(await screen.findByTestId('customer-terms-create'));
+    const dlg = await screen.findByRole('dialog', { name: /Create commercial terms/i });
+    fireEvent.change(within(dlg).getByLabelText(/Customer margin/i), { target: { value: '0.11' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockState.apiPostMock).toHaveBeenCalledWith('/api/v1/commercial-planner/customer-terms', {
+        customer_id: 1,
+        customer_margin_pct: 0.11,
+        customer_rebate_pct: 0.03,
+      })
+    );
+  });
+
+  it('shows commercial terms values and PATCHes on edit', async () => {
+    mockState.customerCommercialTermsRows = [
+      {
+        id: 5,
+        customer_id: 1,
+        customer_code: 'CUST-1',
+        customer_name: 'Metro Market',
+        customer_margin_pct: 0.1,
+        customer_rebate_pct: 0.02,
+      },
+    ];
+    mockState.apiPatchMock.mockResolvedValueOnce({
+      ...mockState.customerCommercialTermsRows[0],
+      customer_margin_pct: 0.15,
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    expect(await screen.findByText(/10\.00%/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('customer-terms-edit'));
+    const dlg = await screen.findByRole('dialog', { name: /Edit commercial terms/i });
+    fireEvent.change(within(dlg).getByLabelText(/Customer margin/i), { target: { value: '0.15' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockState.apiPatchMock).toHaveBeenCalledWith('/api/v1/commercial-planner/customer-terms/5', {
+        customer_margin_pct: 0.15,
+        customer_rebate_pct: 0.02,
+      })
     );
   });
 });

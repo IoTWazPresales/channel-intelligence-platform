@@ -193,6 +193,57 @@ def test_patch_customer_term_rejects_margin_stack():
     assert "below 0.92" in (r.json().get("detail") or "")
 
 
+def test_list_customer_terms_filters_by_customer_id():
+    """GET customer-terms?customer_id= returns only that customer's term row."""
+    from types import SimpleNamespace
+
+    from app.models.commercial_planner import CommercialCustomerTerm
+    from app.models.dimensions import DimCustomer
+
+    term = SimpleNamespace(id=3, customer_id=42, customer_margin_pct=0.11, customer_rebate_pct=0.02)
+    fake_row = (term, "C42", "Customer 42")
+
+    async def fake_db():
+        sess = MagicMock()
+        res = MagicMock()
+        res.all = MagicMock(return_value=[fake_row])
+        sess.execute = AsyncMock(return_value=res)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/customer-terms?customer_id=42")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["customer_id"] == 42
+    assert body[0]["customer_margin_pct"] == 0.11
+
+
+def test_list_distributor_terms_filters_by_distributor_id():
+    """GET distributor-terms?distributor_id= returns only that distributor's term row."""
+    from types import SimpleNamespace
+
+    from app.models.commercial_planner import CommercialDistributorTerm
+
+    term = SimpleNamespace(id=7, distributor_id=99, distributor_margin_pct=0.07)
+    fake_row = (term, "D99", "Dist 99")
+
+    async def fake_db():
+        sess = MagicMock()
+        res = MagicMock()
+        res.all = MagicMock(return_value=[fake_row])
+        sess.execute = AsyncMock(return_value=res)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/distributor-terms?distributor_id=99")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["distributor_id"] == 99
+    assert body[0]["distributor_margin_pct"] == 0.07
+
+
 def test_lineup_jobs_endpoint_lists_apply_jobs():
     """GET /commercial-planner/lineup-jobs returns job list with line counts."""
     from types import SimpleNamespace

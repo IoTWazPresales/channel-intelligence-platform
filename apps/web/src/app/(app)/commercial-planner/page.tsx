@@ -14,6 +14,7 @@ import {
   FormControl,
   FormControlLabel,
   InputLabel,
+  Link as MuiLink,
   MenuItem,
   Paper,
   Select,
@@ -30,6 +31,7 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CellValueChangedEvent, ColDef, GridOptions, ICellRendererParams } from 'ag-grid-community';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
@@ -38,6 +40,7 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { AddProductSetDialog } from '@/features/commercial-planner/AddProductSetDialog';
 import { ColumnSelectorModal, type ColumnMetadata } from '@/features/commercial-planner/ColumnSelectorModal';
+import { CommercialDataMap } from '@/features/commercial-planner/CommercialDataMap';
 import { CurrentLineupSection } from '@/features/commercial-planner/CurrentLineupSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { PlannerDefaultsMaintenance } from '@/features/commercial-planner/PlannerDefaultsMaintenance';
@@ -286,15 +289,26 @@ export function fmtCurrency(v: number | null | undefined): string {
   return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** Economics pipeline persists USD-valued outputs today (see commercial_plan_line.calc_*_usd). */
+export const ECONOMICS_PIPELINE_CURRENCY = 'USD';
+
+export function fmtMoneyWithCcy(v: number | null | undefined, currencyCode: string): string {
+  if (v == null) return '—';
+  return `${fmtCurrency(v)} ${currencyCode}`;
+}
+
 /** Translate a calc_flag / readiness code to a user-facing message (full text, tooltips). */
 export function fmtFlag(flag: string): string {
   const labels: Record<string, string> = {
-    missing_sku_assumption: 'Controlled cost missing — add SKU assumption in Planner defaults',
+    missing_sku_assumption:
+      'Controlled cost missing — add SKU assumptions in Planner defaults (not populated from DAP)',
     missing_or_invalid_landed_cost: 'Controlled cost unavailable — verify SKU assumption or line override',
-    missing_distributor_term: 'Missing distributor terms — add in Planner defaults',
-    missing_customer_term: 'Missing customer terms — add in Planner defaults',
+    missing_distributor_term:
+      'Missing distributor terms — configure on the Distributor admin page or bulk edit in Planner defaults',
+    missing_customer_term:
+      'Missing customer terms — configure on the Customer admin page or bulk edit in Planner defaults',
     non_positive_target_units: 'Units must be positive',
-    non_positive_target_srp: 'Target SRP must be positive',
+    non_positive_target_srp: 'Customer-facing list price must be positive',
     invalid_fx_rate_to_usd: 'FX rate invalid',
     impossible_margin_stack: 'Margin stack unsustainable (margins ≥ 95%)',
     margin_floor_breach: 'Margin below floor — buy price is under controlled cost',
@@ -313,7 +327,7 @@ export function fmtIssueChipLabel(flag: string): string {
     missing_distributor_term: 'Missing distributor terms',
     missing_customer_term: 'Missing customer terms',
     non_positive_target_units: 'Invalid units',
-    non_positive_target_srp: 'Invalid target SRP',
+    non_positive_target_srp: 'Invalid list price',
     invalid_fx_rate_to_usd: 'Invalid FX',
     impossible_margin_stack: 'Unsustainable margin stack',
     margin_floor_breach: 'Margin below floor',
@@ -472,18 +486,18 @@ const OPTIONAL_COLUMN_LABELS: Record<OptionalGridColField, string> = {
   effective_customer_rebate_pct: 'Customer rebate % (effective)',
   effective_distributor_margin_pct: 'Distributor margin % (effective)',
   effective_vat_rate_pct: 'VAT % (effective)',
-  effective_fx_rate_to_usd: 'FX (local per USD, effective)',
+  effective_fx_rate_to_usd: 'FX: plan currency per 1 USD (effective)',
   effective_reserve_total_pct: 'Reserve total % (effective)',
   effective_promo_reserve_split_pct: 'Promo reserve split % (effective)',
-  effective_controlled_cost_usd_per_unit: 'Controlled cost USD / unit (effective)',
+  effective_controlled_cost_usd_per_unit: `Controlled cost (${ECONOMICS_PIPELINE_CURRENCY} / unit, effective)`,
   promo_mix_pct: 'Promo mix %',
-  calc_sell_in_price_local: 'Sell-in (local)',
-  calc_distributor_net_local: 'Distributor-net (local)',
-  calc_sell_in_price_usd: 'Channel sell-in USD / unit',
-  calc_internal_gp_usd: 'Est. OEM net margin USD (total, all units)',
-  calc_buy_price_usd: 'Est. net after distributor margin USD / unit',
-  calc_promo_reserve_usd: 'Promo reserve USD',
-  calc_non_promo_reserve_usd: 'Non-promo reserve USD',
+  calc_sell_in_price_local: 'Estimated OEM/channel sell-in (plan currency / unit)',
+  calc_distributor_net_local: 'Estimated distributor net (plan currency / unit)',
+  calc_sell_in_price_usd: `Estimated OEM/channel sell-in (${ECONOMICS_PIPELINE_CURRENCY} / unit)`,
+  calc_internal_gp_usd: `Estimated internal GP (${ECONOMICS_PIPELINE_CURRENCY}, total, after reserves)`,
+  calc_buy_price_usd: `Estimated distributor net (${ECONOMICS_PIPELINE_CURRENCY} / unit)`,
+  calc_promo_reserve_usd: `Promo reserve (${ECONOMICS_PIPELINE_CURRENCY})`,
+  calc_non_promo_reserve_usd: `Non-promo reserve (${ECONOMICS_PIPELINE_CURRENCY})`,
 };
 
 function defaultOptionalVisibility(): Record<OptionalGridColField, boolean> {
@@ -550,12 +564,12 @@ function buildSuggestionPreview(line: PlanLine, s: Suggestion, key: string): Sug
       applyValue: s.value,
       rows: [
         {
-          label: 'Target SRP',
+          label: 'Customer-facing list price',
           from: fmtCurrency(line.target_srp_local),
           to: fmtCurrency(v.target_srp_local),
         },
         {
-          label: 'Promo SRP',
+          label: 'Campaign / event price',
           from: line.promo_srp_local != null ? fmtCurrency(line.promo_srp_local) : '—',
           to: fmtCurrency(v.promo_srp_local),
         },
@@ -805,7 +819,7 @@ export default function CommercialPlannerPage() {
   const { data: lineupJobs, isLoading: lineupJobsLoading } = useQuery({
     queryKey: ['lineup-jobs'],
     queryFn: ({ signal }) => apiGet<LineupJob[]>('/api/v1/commercial-planner/lineup-jobs', { signal }),
-    enabled: tab === 2 || (tab === 0 && addFromLineupOpen),
+    enabled: tab === 3 || (tab === 0 && addFromLineupOpen),
   });
 
   const { data: coverageLines, isLoading: coverageLoading } = useQuery({
@@ -815,7 +829,7 @@ export default function CommercialPlannerPage() {
         `/api/v1/commercial-planner/lineup-coverage?job_id=${lineupJobId}`,
         { signal }
       ),
-    enabled: lineupJobId != null && tab === 2,
+    enabled: lineupJobId != null && tab === 3,
   });
 
   useEffect(() => {
@@ -839,7 +853,7 @@ export default function CommercialPlannerPage() {
         `/api/v1/commercial-planner/lineup-product-gaps?job_id=${lineupJobId}`,
         { signal }
       ),
-    enabled: lineupJobId != null && tab === 2,
+    enabled: lineupJobId != null && tab === 3,
   });
 
   // Auto-select the newest job when lineup-jobs loads and no job has been chosen yet.
@@ -1368,11 +1382,11 @@ export default function CommercialPlannerPage() {
         minWidth: 85,
         valueFormatter: (p) => (p.value != null && p.value !== '' ? String(roundPlannerUnits(Number(p.value))) : ''),
       },
-      { field: 'target_srp_local', headerName: 'Target SRP', editable: true, type: 'numericColumn', minWidth: 95 },
-      { field: 'promo_srp_local', headerName: 'Promo SRP', editable: true, type: 'numericColumn', minWidth: 95 },
+      { field: 'target_srp_local', headerName: `Customer-facing list price (${planCurrencyCode})`, editable: true, type: 'numericColumn', minWidth: 120 },
+      { field: 'promo_srp_local', headerName: `Campaign / event price (${planCurrencyCode})`, editable: true, type: 'numericColumn', minWidth: 120 },
       {
         field: 'calc_sell_in_price_local',
-        headerName: `Est. channel sell-in / unit (${planCurrencyCode})`,
+        headerName: `Estimated OEM/channel sell-in / unit (${planCurrencyCode})`,
         minWidth: 190,
         hide: !optionalVisible.calc_sell_in_price_local,
         valueGetter: (p) => {
@@ -1382,7 +1396,7 @@ export default function CommercialPlannerPage() {
       },
       {
         field: 'calc_distributor_net_local',
-        headerName: `Est. net after distributor margin / unit (${planCurrencyCode})`,
+        headerName: `Estimated distributor net / unit (${planCurrencyCode})`,
         minWidth: 240,
         hide: !optionalVisible.calc_distributor_net_local,
         valueGetter: (p) => {
@@ -1424,7 +1438,7 @@ export default function CommercialPlannerPage() {
       },
       {
         field: 'effective_fx_rate_to_usd',
-        headerName: 'FX local/USD (eff.)',
+        headerName: `FX: ${planCurrencyCode} per 1 USD (eff.)`,
         hide: !optionalVisible.effective_fx_rate_to_usd,
         valueGetter: (p) => (p.data?.effective_fx_rate_to_usd != null ? String(p.data.effective_fx_rate_to_usd) : '—'),
       },
@@ -1442,27 +1456,27 @@ export default function CommercialPlannerPage() {
       },
       {
         field: 'effective_controlled_cost_usd_per_unit',
-        headerName: 'Controlled cost USD/u (eff.)',
+        headerName: `Controlled cost (${ECONOMICS_PIPELINE_CURRENCY}/u, eff.)`,
         hide: !optionalVisible.effective_controlled_cost_usd_per_unit,
         valueGetter: (p) => fmtCurrency(p.data?.effective_controlled_cost_usd_per_unit ?? null),
       },
       {
         field: 'calc_sell_in_price_usd',
-        headerName: 'Est. channel sell-in USD / unit',
+        headerName: `Estimated OEM/channel sell-in (${ECONOMICS_PIPELINE_CURRENCY} / unit)`,
         minWidth: 170,
         hide: !optionalVisible.calc_sell_in_price_usd,
         valueFormatter: (p) => (p.value != null && p.value !== '' ? String(p.value) : '—'),
       },
       {
         field: 'calc_buy_price_usd',
-        headerName: 'Est. net after distributor margin USD / unit',
+        headerName: `Estimated distributor net (${ECONOMICS_PIPELINE_CURRENCY} / unit)`,
         minWidth: 240,
         hide: !optionalVisible.calc_buy_price_usd,
         valueFormatter: (p) => (p.value != null && p.value !== '' ? String(p.value) : '—'),
       },
       {
         field: 'calc_internal_gp_usd',
-        headerName: 'Est. OEM net margin USD (total, all units)',
+        headerName: `Estimated internal GP (${ECONOMICS_PIPELINE_CURRENCY}, total, after reserves)`,
         minWidth: 190,
         hide: !optionalVisible.calc_internal_gp_usd,
         tooltipValueGetter: (p) => economicsBlockingTooltip(p.data ?? undefined),
@@ -1609,9 +1623,13 @@ export default function CommercialPlannerPage() {
       </Typography>
       <Stack spacing={0.25} sx={{ mb: 1 }}>
         <Typography variant="body2">Units: {selectedLine.target_units.toLocaleString()}</Typography>
-        <Typography variant="body2">Target SRP: {fmtCurrency(selectedLine.target_srp_local)}</Typography>
+        <Typography variant="body2">
+          Customer-facing list price ({planCurrencyCode}): {fmtCurrency(selectedLine.target_srp_local)}
+        </Typography>
         {selectedLine.promo_srp_local != null ? (
-          <Typography variant="body2">Promo SRP: {fmtCurrency(selectedLine.promo_srp_local)}</Typography>
+          <Typography variant="body2">
+            Campaign / event price ({planCurrencyCode}): {fmtCurrency(selectedLine.promo_srp_local)}
+          </Typography>
         ) : null}
         <Typography variant="body2">Promo mix: {(selectedLine.promo_mix_pct * 100).toFixed(0)}%</Typography>
       </Stack>
@@ -1629,20 +1647,33 @@ export default function CommercialPlannerPage() {
       ) : (
         <Stack spacing={0.25} sx={{ mb: 0.75 }}>
           <Typography variant="body2">
-            Est. channel sell-in USD / unit: {fmtCurrency(selectedLine.calc_sell_in_price_usd)}
+            Estimated OEM/channel sell-in ({ECONOMICS_PIPELINE_CURRENCY} / unit):{' '}
+            {fmtMoneyWithCcy(selectedLine.calc_sell_in_price_usd, ECONOMICS_PIPELINE_CURRENCY)}
           </Typography>
           <Typography variant="body2">
-            Est. net after distributor margin USD / unit: {fmtCurrency(selectedLine.calc_buy_price_usd)}
+            Estimated distributor net ({ECONOMICS_PIPELINE_CURRENCY} / unit):{' '}
+            {fmtMoneyWithCcy(selectedLine.calc_buy_price_usd, ECONOMICS_PIPELINE_CURRENCY)}
           </Typography>
           {lineHasBlockingEconomicsFlags(selectedLine) ? (
             <Typography variant="body2" data-testid="line-detail-internal-gp-incomplete">
-              Est. OEM net margin USD (total, all units): —
+              Estimated internal GP ({ECONOMICS_PIPELINE_CURRENCY}, total, after reserves): —
             </Typography>
           ) : (
             <Typography variant="body2">
-              Est. OEM net margin USD (total, all units): {fmtCurrency(selectedLine.calc_internal_gp_usd)}
+              Estimated internal GP ({ECONOMICS_PIPELINE_CURRENCY}, total, after reserves):{' '}
+              {fmtMoneyWithCcy(selectedLine.calc_internal_gp_usd, ECONOMICS_PIPELINE_CURRENCY)}
             </Typography>
           )}
+          {selectedLine.calc_customer_gp_pct != null ? (
+            <Typography variant="body2" color="text.secondary">
+              Customer margin % (input): {fmtMarginPct(selectedLine.calc_customer_gp_pct)}
+            </Typography>
+          ) : null}
+          {selectedLine.calc_distributor_gp_pct != null ? (
+            <Typography variant="body2" color="text.secondary">
+              Distributor margin % (input): {fmtMarginPct(selectedLine.calc_distributor_gp_pct)}
+            </Typography>
+          ) : null}
         </Stack>
       )}
       {(selectedLine.calc_flags ?? []).length > 0 ? (
@@ -1664,7 +1695,7 @@ export default function CommercialPlannerPage() {
       {selectedLine.override_landed_cost_usd != null ? (
         <Chip
           size="small"
-          label={`Line override: ${fmtCurrency(selectedLine.override_landed_cost_usd)} USD`}
+          label={`Override controlled cost: ${fmtMoneyWithCcy(selectedLine.override_landed_cost_usd, ECONOMICS_PIPELINE_CURRENCY)}`}
           color="info"
           variant="outlined"
           sx={{ mb: 1 }}
@@ -1709,7 +1740,7 @@ export default function CommercialPlannerPage() {
                 label={`DAP evidence: ${fmtCurrency(selectedLineEvidence.evidence.dap_local)}`}
                 variant="outlined"
                 color="info"
-                title="DAP is source/local evidence — not PM bottom or landed cost"
+                title="DAP is evidence in plan currency — not controlled cost or PM bottom"
               />
             ) : null}
             {selectedLineEvidence.evidence.total_quantity_units != null ? (
@@ -1945,23 +1976,56 @@ export default function CommercialPlannerPage() {
           <Box sx={{ mb: 1 }} data-testid="plan-readiness-panel">
             {planReadiness.missing_sku_assumption > 0 && (
               <Alert severity="warning" sx={{ mb: 0.5, py: 0.5 }}>
-                <strong>SKU assumption missing</strong> ({planReadiness.missing_sku_assumption} line
-                {planReadiness.missing_sku_assumption !== 1 ? 's' : ''}) — add controlled cost / assumption before
-                economics can calculate.
+                <Typography variant="body2" component="div" sx={{ mb: 0.5 }}>
+                  <strong>SKU assumption missing</strong> ({planReadiness.missing_sku_assumption} line
+                  {planReadiness.missing_sku_assumption !== 1 ? 's' : ''}) — add controlled cost / VAT / FX / reserves
+                  before economics can calculate.
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                  Add SKU controlled cost assumptions in Planner defaults. These assumptions feed Commercial Planner
+                  economics and are not populated from DAP.
+                </Typography>
+                <Button size="small" variant="outlined" onClick={() => setTab(1)} data-testid="readiness-open-planner-defaults-sku">
+                  Open Planner defaults (SKU assumptions)
+                </Button>
               </Alert>
             )}
             {planReadiness.missing_customer_term > 0 && (
               <Alert severity="warning" sx={{ mb: 0.5, py: 0.5 }}>
-                <strong>Customer terms missing</strong> ({planReadiness.missing_customer_term} line
-                {planReadiness.missing_customer_term !== 1 ? 's' : ''}) — configure default terms for this customer or
-                override on the plan.
+                <Typography variant="body2" component="div" sx={{ mb: 0.5 }}>
+                  <strong>Customer terms missing</strong> ({planReadiness.missing_customer_term} line
+                  {planReadiness.missing_customer_term !== 1 ? 's' : ''}).
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                  Configure customer terms on the Customer page or bulk edit in Planner defaults.
+                </Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <MuiLink component={Link} href="/admin/customers" underline="hover" data-testid="readiness-link-customer-admin">
+                    Customer admin
+                  </MuiLink>
+                  <Button size="small" variant="outlined" onClick={() => setTab(1)} data-testid="readiness-open-planner-defaults-customer">
+                    Planner defaults (customer terms)
+                  </Button>
+                </Stack>
               </Alert>
             )}
             {planReadiness.missing_distributor_term > 0 && (
               <Alert severity="warning" sx={{ mb: 0.5, py: 0.5 }}>
-                <strong>Distributor terms missing</strong> ({planReadiness.missing_distributor_term} line
-                {planReadiness.missing_distributor_term !== 1 ? 's' : ''}) — configure default distributor terms or
-                override on the plan.
+                <Typography variant="body2" component="div" sx={{ mb: 0.5 }}>
+                  <strong>Distributor terms missing</strong> ({planReadiness.missing_distributor_term} line
+                  {planReadiness.missing_distributor_term !== 1 ? 's' : ''}).
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                  Configure distributor terms on the Distributor page or bulk edit in Planner defaults.
+                </Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <MuiLink component={Link} href="/admin/distributors" underline="hover" data-testid="readiness-link-distributor-admin">
+                    Distributor admin
+                  </MuiLink>
+                  <Button size="small" variant="outlined" onClick={() => setTab(1)} data-testid="readiness-open-planner-defaults-distributor">
+                    Planner defaults (distributor terms)
+                  </Button>
+                </Stack>
               </Alert>
             )}
             {planReadiness.ready && planReadiness.line_count > 0 && (
@@ -2014,13 +2078,15 @@ export default function CommercialPlannerPage() {
             {economicsComplete ? (
               <>
                 <Typography variant="body2">
-                  <strong>Est. OEM net margin USD (total):</strong> {summary?.total_internal_gp_usd ?? 0}
+                  <strong>Estimated internal GP ({ECONOMICS_PIPELINE_CURRENCY}, total, after reserves):</strong>{' '}
+                  {summary?.total_internal_gp_usd ?? 0}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Promo reserve USD:</strong> {summary?.total_promo_reserve_usd ?? 0}
+                  <strong>Promo reserve ({ECONOMICS_PIPELINE_CURRENCY}):</strong> {summary?.total_promo_reserve_usd ?? 0}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Non-promo reserve USD:</strong> {summary?.total_non_promo_reserve_usd ?? 0}
+                  <strong>Non-promo reserve ({ECONOMICS_PIPELINE_CURRENCY}):</strong>{' '}
+                  {summary?.total_non_promo_reserve_usd ?? 0}
                 </Typography>
               </>
             ) : (
@@ -2349,7 +2415,7 @@ export default function CommercialPlannerPage() {
                           }))
                         }
                         clickable
-                        title="Click to use as Target SRP"
+                        title="Click to use as customer-facing list price"
                         data-testid="use-msrp-as-srp"
                       />
                     ) : null}
@@ -2364,7 +2430,7 @@ export default function CommercialPlannerPage() {
                           }))
                         }
                         clickable
-                        title="Click to use as Promo SRP"
+                        title="Click to use as campaign / event price"
                         data-testid="use-promo-as-srp"
                       />
                     ) : null}
@@ -2381,12 +2447,12 @@ export default function CommercialPlannerPage() {
                         label={`DAP evidence: ${fmtCurrency(lineupEvidence.evidence.dap_local)}`}
                         variant="outlined"
                         color="info"
-                        title="DAP is source/local evidence only — not landed cost"
+                        title="DAP is source/local evidence only — not controlled cost or PM bottom"
                       />
                     ) : null}
                   </Stack>
                   <Typography variant="caption" color="text.disabled" display="block" sx={{ mt: 0.5 }}>
-                    Click MSRP or Promo chip to prefill. DAP is not landed cost.
+                    Click MSRP/list or promo chip to prefill. DAP is evidence only—not controlled cost.
                   </Typography>
                 </Paper>
               ) : (
@@ -2398,12 +2464,12 @@ export default function CommercialPlannerPage() {
             <Divider />
             <TextField label="Target units" value={lineDraft.target_units} onChange={(e) => setLineDraft((p) => ({ ...p, target_units: e.target.value }))} />
             <TextField
-              label="Target SRP local"
+              label={`Customer-facing list price (${planCurrencyCode})`}
               value={lineDraft.target_srp_local}
               onChange={(e) => setLineDraft((p) => ({ ...p, target_srp_local: e.target.value }))}
             />
             <TextField
-              label="Promo SRP local"
+              label={`Campaign / event price (${planCurrencyCode}, optional)`}
               value={lineDraft.promo_srp_local}
               onChange={(e) => setLineDraft((p) => ({ ...p, promo_srp_local: e.target.value }))}
             />
@@ -2791,15 +2857,15 @@ export default function CommercialPlannerPage() {
           </Stack>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }} data-testid="product-gaps-caption">
             Product defaults coverage shows one row per product in this lineup and whether the planner
-            already has SKU-level assumptions for that product. DAP is source/local evidence only, not
-            landed cost.
+            already has SKU-level assumptions for that product. DAP is source/local evidence only—not controlled cost
+            or PM bottom.
           </Typography>
           {showProductGaps ? (
             <>
               <Alert severity="info" icon={false} sx={{ mb: 1, py: 0.5 }}>
                 <Typography variant="caption">
-                  <strong>Cost semantics:</strong> DAP (Distributor Acquisition Price) is the source import
-                  value. It is <em>not</em> the same as landed cost and must not be mapped to{' '}
+                  <strong>Evidence semantics:</strong> DAP (Distributor Acquisition Price) is the source import value. It
+                  is <em>not</em> controlled cost (PM bottom) and must not be mapped to{' '}
                   <code>landed_cost_usd</code> without verification.
                 </Typography>
               </Alert>
@@ -2898,7 +2964,8 @@ export default function CommercialPlannerPage() {
                     <TableCell align="right">Qty</TableCell>
                     <TableCell align="right">MSRP / list</TableCell>
                     <TableCell align="right">Promo price</TableCell>
-                    <TableCell align="right">DAP (src/local)</TableCell>
+                    <TableCell align="right">DAP evidence (src/local)</TableCell>
+                    <TableCell align="right">Disti-reported cost evidence</TableCell>
                     <TableCell align="right">Disti %</TableCell>
                     <TableCell align="right">Rebate %</TableCell>
                     <TableCell align="right">VAT %</TableCell>
@@ -2921,6 +2988,7 @@ export default function CommercialPlannerPage() {
                       <TableCell align="right">{fmtCurrency(ln.msrp_local)}</TableCell>
                       <TableCell align="right">{fmtCurrency(ln.promo_price_local)}</TableCell>
                       <TableCell align="right">{fmtCurrency(ln.dap_local)}</TableCell>
+                      <TableCell align="right">{fmtCurrency(ln.disti_cost_local)}</TableCell>
                       <TableCell align="right" data-testid={`disti-margin-${ln.id}`}>
                         {fmtMarginPct(ln.disti_margin_pct)}
                       </TableCell>
@@ -2981,6 +3049,10 @@ export default function CommercialPlannerPage() {
                   changing defaults, click <strong>Recalculate</strong> so stored line calcs match.
                 </li>
                 <li>
+                  <strong>Data map</strong> — Read-only view of which commercial fields exist, where they are edited, and how
+                  they relate to readiness and the calculator (including DAP as evidence only).
+                </li>
+                <li>
                   <strong>Assisted suggestions</strong> — Optional hints from history and forecasts. <strong>Apply</strong> writes the
                   suggestion to the line; recalculate again if you need updated dollars.
                 </li>
@@ -2997,6 +3069,7 @@ export default function CommercialPlannerPage() {
             id="commercial-planner-tab-defaults"
             aria-controls="commercial-planner-panel-defaults"
           />
+          <Tab label="Data map" id="commercial-planner-tab-datamap" aria-controls="commercial-planner-panel-datamap" />
           <Tab
             label="Lineup coverage"
             id="commercial-planner-tab-lineup"
@@ -3011,17 +3084,29 @@ export default function CommercialPlannerPage() {
             ? 'commercial-planner-panel-plans'
             : tab === 1
               ? 'commercial-planner-panel-defaults'
-              : 'commercial-planner-panel-lineup'
+              : tab === 2
+                ? 'commercial-planner-panel-datamap'
+                : 'commercial-planner-panel-lineup'
         }
         aria-labelledby={
           tab === 0
             ? 'commercial-planner-tab-plans'
             : tab === 1
               ? 'commercial-planner-tab-defaults'
-              : 'commercial-planner-tab-lineup'
+              : tab === 2
+                ? 'commercial-planner-tab-datamap'
+                : 'commercial-planner-tab-lineup'
         }
       >
-        {tab === 0 ? plansPanel : tab === 1 ? <PlannerDefaultsMaintenance /> : lineupCoveragePanel}
+        {tab === 0 ? (
+          plansPanel
+        ) : tab === 1 ? (
+          <PlannerDefaultsMaintenance />
+        ) : tab === 2 ? (
+          <CommercialDataMap />
+        ) : (
+          lineupCoveragePanel
+        )}
       </div>
 
       {/* Column selector modal (replaces Popover) */}

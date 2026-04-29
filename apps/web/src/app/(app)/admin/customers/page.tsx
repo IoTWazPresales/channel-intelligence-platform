@@ -8,6 +8,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   Drawer,
   FormControl,
   InputLabel,
@@ -36,6 +37,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { CustomerCommercialTermsPanel } from '@/features/admin/CustomerCommercialTermsPanel';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -1084,6 +1086,8 @@ function AdminCustomersPageContent() {
               <Typography variant="body2">
                 <strong>Notes:</strong> {selectedRow.notes_summary ?? '—'}
               </Typography>
+              <Divider sx={{ my: 1 }} />
+              <CustomerCommercialTermsPanel customerId={selectedRow.id} customerCode={selectedRow.customer_code} />
               <Typography variant="subtitle2" sx={{ pt: 1 }}>
                 Locations
               </Typography>

@@ -1197,13 +1197,16 @@ def _sku_assumption_json(row: CommercialSkuAssumption, sku: str, product_name: s
 async def list_customer_terms(
     db: AsyncSession = Depends(get_db),
     q: str | None = Query(default=None, description="Filter by customer code or name"),
+    customer_id: int | None = Query(default=None, description="Exact dim_customer.id (non-breaking filter)"),
 ):
     stmt = (
         select(CommercialCustomerTerm, DimCustomer.code, DimCustomer.name)
         .join(DimCustomer, DimCustomer.id == CommercialCustomerTerm.customer_id)
         .order_by(DimCustomer.code)
     )
-    if q and q.strip():
+    if customer_id is not None:
+        stmt = stmt.where(CommercialCustomerTerm.customer_id == customer_id)
+    elif q and q.strip():
         needle = f"%{q.strip()}%"
         stmt = stmt.where(or_(DimCustomer.code.ilike(needle), DimCustomer.name.ilike(needle)))
     rows = (await db.execute(stmt)).all()
@@ -1274,13 +1277,16 @@ async def delete_customer_term(term_id: int, db: AsyncSession = Depends(get_db))
 async def list_distributor_terms(
     db: AsyncSession = Depends(get_db),
     q: str | None = Query(default=None),
+    distributor_id: int | None = Query(default=None, description="Exact dim_distributor.id (non-breaking filter)"),
 ):
     stmt = (
         select(CommercialDistributorTerm, DimDistributor.code, DimDistributor.name)
         .join(DimDistributor, DimDistributor.id == CommercialDistributorTerm.distributor_id)
         .order_by(DimDistributor.code)
     )
-    if q and q.strip():
+    if distributor_id is not None:
+        stmt = stmt.where(CommercialDistributorTerm.distributor_id == distributor_id)
+    elif q and q.strip():
         needle = f"%{q.strip()}%"
         stmt = stmt.where(or_(DimDistributor.code.ilike(needle), DimDistributor.name.ilike(needle)))
     rows = (await db.execute(stmt)).all()

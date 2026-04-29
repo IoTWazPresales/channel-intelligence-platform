@@ -323,7 +323,7 @@ describe('CommercialPlannerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /How this workspace fits together/i }));
     expect(guide).toHaveTextContent('open the builder');
     expect(guide).toHaveTextContent('Planner defaults');
-    expect(guide).toHaveTextContent('Recalculate');
+    expect(guide).toHaveTextContent('Data map');
   });
 
   it('renders plan selector chips and action buttons in the compact plan controls', async () => {
@@ -350,6 +350,15 @@ describe('CommercialPlannerPage', () => {
         value: 120,
       })
     );
+  });
+
+  it('Data map tab shows commercial field map', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Data map/i }));
+    expect(await screen.findByTestId('commercial-data-map')).toBeInTheDocument();
+    expect(screen.getByText(/SKU controlled cost \(PM bottom\)/)).toBeInTheDocument();
+    expect(screen.getByText(/DAP \(lineup\)/)).toBeInTheDocument();
   });
 
   it('loads planner defaults tab and fetches maintenance lists', async () => {
@@ -890,7 +899,7 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     mockState.apiGetMock.mockClear();
     await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
 
-    // Wait for the lineup-jobs query (the only query expected on tab 2).
+    // Wait for the lineup-jobs query (expected when Lineup coverage tab is active).
     await waitFor(() => {
       const calls = mockState.apiGetMock.mock.calls.map((c) => String(c[0]));
       expect(calls.some((u) => u.includes('lineup-jobs'))).toBe(true);
@@ -950,6 +959,7 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     expect(table).toHaveTextContent('NB-X1');
     expect(table).toHaveTextContent('Model X');
     expect(table).toHaveTextContent('PART-002');
+    expect(table).toHaveTextContent('Disti-reported cost evidence');
   });
 
   it('shows no-lines state when coverage returns empty array', async () => {
@@ -987,7 +997,7 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     await user.click(await screen.findByRole('tab', { name: /Lineup coverage/i }));
 
     const section = await screen.findByTestId('product-defaults-coverage');
-    expect(section).toHaveTextContent('Cost semantics');
+    expect(section).toHaveTextContent('Evidence semantics');
     expect(section).toHaveTextContent('DAP');
     expect(section).toHaveTextContent('not');
   });
@@ -1076,7 +1086,7 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
     const caption = await screen.findByTestId('product-gaps-caption');
     expect(caption).toHaveTextContent('Product defaults coverage shows one row per product');
     expect(caption).toHaveTextContent('DAP is source/local evidence only');
-    expect(caption).toHaveTextContent('not landed cost');
+    expect(caption).toHaveTextContent('not controlled cost');
   });
 });
 
@@ -1136,6 +1146,62 @@ describe('Plan readiness chips', () => {
     const panel = await screen.findByTestId('plan-readiness-panel');
     expect(panel).toHaveTextContent('All defaults present');
   });
+
+  it('readiness missing customer term shows Customer admin link and Planner defaults action', async () => {
+    mockState.planReadiness = {
+      plan_id: 1,
+      line_count: 1,
+      missing_customer_term: 1,
+      missing_distributor_term: 0,
+      missing_sku_assumption: 0,
+      lines_with_calc_flags: 0,
+      ready: false,
+      readiness_summary: 'missing customer',
+    };
+    renderPage();
+    await screen.findByText(/Q3 Plan \(draft\)/i);
+    const panel = await screen.findByTestId('plan-readiness-panel');
+    expect(panel).toHaveTextContent('Configure customer terms on the Customer page');
+    expect(await screen.findByTestId('readiness-link-customer-admin')).toHaveAttribute('href', '/admin/customers');
+    expect(await screen.findByTestId('readiness-open-planner-defaults-customer')).toBeInTheDocument();
+  });
+
+  it('readiness missing distributor term shows Distributor admin link and Planner defaults action', async () => {
+    mockState.planReadiness = {
+      plan_id: 1,
+      line_count: 1,
+      missing_customer_term: 0,
+      missing_distributor_term: 1,
+      missing_sku_assumption: 0,
+      lines_with_calc_flags: 0,
+      ready: false,
+      readiness_summary: 'missing distributor',
+    };
+    renderPage();
+    await screen.findByText(/Q3 Plan \(draft\)/i);
+    const panel = await screen.findByTestId('plan-readiness-panel');
+    expect(panel).toHaveTextContent('Configure distributor terms on the Distributor page');
+    expect(await screen.findByTestId('readiness-link-distributor-admin')).toHaveAttribute('href', '/admin/distributors');
+    expect(await screen.findByTestId('readiness-open-planner-defaults-distributor')).toBeInTheDocument();
+  });
+
+  it('readiness missing SKU assumption shows Planner defaults action for SKU assumptions', async () => {
+    mockState.planReadiness = {
+      plan_id: 1,
+      line_count: 1,
+      missing_customer_term: 0,
+      missing_distributor_term: 0,
+      missing_sku_assumption: 2,
+      lines_with_calc_flags: 0,
+      ready: false,
+      readiness_summary: 'missing sku',
+    };
+    renderPage();
+    await screen.findByText(/Q3 Plan \(draft\)/i);
+    const panel = await screen.findByTestId('plan-readiness-panel');
+    expect(panel).toHaveTextContent('Add SKU controlled cost assumptions in Planner defaults');
+    expect(await screen.findByTestId('readiness-open-planner-defaults-sku')).toBeInTheDocument();
+  });
 });
 
 // ── Lineup evidence panel in Add line dialog ──────────────────────────────────
@@ -1192,7 +1258,7 @@ describe('Lineup evidence panel in Add line dialog', () => {
     const panel = await screen.findByTestId('lineup-evidence-panel');
     expect(panel).toHaveTextContent('2026-Q2');
     expect(panel).toHaveTextContent('999');
-    expect(panel).toHaveTextContent('DAP is not landed cost');
+    expect(panel).toHaveTextContent('DAP is evidence only');
   });
 
   it('clicking MSRP chip prefills the Target SRP field', async () => {
@@ -1227,7 +1293,7 @@ describe('Lineup evidence panel in Add line dialog', () => {
     await user.click(msrpChip);
 
     // Target SRP input should now show the MSRP value
-    const srpInput = screen.getByLabelText(/Target SRP local/i) as HTMLInputElement;
+    const srpInput = screen.getByLabelText(/Customer-facing list price \(USD\)/i) as HTMLInputElement;
     expect(srpInput.value).toBe('1100');
   });
 });
@@ -1378,7 +1444,7 @@ describe('CommercialPlannerPage — Workspace V1', () => {
     expect(summary).toHaveTextContent('Units:');
     expect(await screen.findByTestId('economics-incomplete-chip')).toBeInTheDocument();
     expect(summary).toHaveTextContent('Complete missing defaults, then Recalculate.');
-    expect(summary).not.toHaveTextContent('Est. OEM net margin USD');
+    expect(summary).not.toHaveTextContent('Estimated internal GP (USD, total, after reserves)');
   });
 
   it('plan summary strip shows OEM net margin label when economics are complete', async () => {
@@ -1387,8 +1453,9 @@ describe('CommercialPlannerPage — Workspace V1', () => {
     await screen.findByText(/Q3 Plan \(draft\)/i);
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     const summary = screen.getByTestId('plan-summary-panel');
-    expect(summary).toHaveTextContent('Est. OEM net margin USD (total)');
-    expect(summary).toHaveTextContent('Promo reserve USD');
+    expect(summary).toHaveTextContent('Estimated internal GP (USD, total, after reserves)');
+    expect(summary).toHaveTextContent('Promo reserve (USD)');
+    expect(summary).toHaveTextContent('Non-promo reserve (USD)');
     expect(summary).not.toHaveTextContent('Economics incomplete');
   });
 
@@ -1442,6 +1509,7 @@ describe('fmtIssueChipLabel', () => {
     expect(fmtIssueChipLabel('missing_distributor_term')).toBe('Missing distributor terms');
     expect(fmtIssueChipLabel('missing_customer_term')).toBe('Missing customer terms');
     expect(fmtIssueChipLabel('missing_or_invalid_landed_cost')).toBe('Controlled cost unavailable');
+    expect(fmtIssueChipLabel('non_positive_target_srp')).toBe('Invalid list price');
     expect(fmtIssueChipLabel('margin_floor_breach')).toBe('Margin below floor');
   });
 });
@@ -1786,7 +1854,7 @@ describe('V4: Column metadata and label fixes', () => {
       expect(summaryPanel).not.toHaveTextContent('Loading plan…');
     });
     // New label should appear
-    expect(summaryPanel).toHaveTextContent('Est. OEM net margin USD (total)');
+    expect(summaryPanel).toHaveTextContent('Estimated internal GP (USD, total, after reserves)');
     // Old label must not appear
     expect(summaryPanel).not.toHaveTextContent('Estimated internal margin USD');
     expect(summaryPanel).not.toHaveTextContent('/ unit');

@@ -62,7 +62,7 @@ const PRESETS: { name: string; label: string; tooltip: string }[] = [
   { name: 'planning', label: 'Planning', tooltip: 'Default planning columns' },
   { name: 'product_spec', label: 'Product / spec', tooltip: 'Optional CPU, Processor, warranty, OS, colour; top discovered spec keys from metadata.' },
   { name: 'commercial', label: 'Commercial', tooltip: 'Enable effective commercial term columns' },
-  { name: 'economics', label: 'Economics', tooltip: 'Enable USD output columns (sell-in, net after disti, margin, reserves)' },
+  { name: 'economics', label: 'Economics', tooltip: 'Enable pipeline-currency outputs (sell-in, distributor net, internal GP, reserves)' },
 ];
 
 // ── Group definitions ─────────────────────────────────────────────────────────
@@ -123,8 +123,8 @@ const COLUMN_GROUPS: GroupDef[] = [
     title: 'Planning inputs',
     columns: [
       { key: 'target_units', label: 'Units', locked: true },
-      { key: 'target_srp_local', label: 'Target SRP', locked: true },
-      { key: 'promo_srp_local', label: 'Promo SRP', locked: true },
+      { key: 'target_srp_local', label: 'Customer-facing list price', locked: true },
+      { key: 'promo_srp_local', label: 'Campaign / event price', locked: true },
       { key: 'promo_mix_pct', label: 'Promo mix %', optional: true },
     ],
   },
@@ -136,29 +136,29 @@ const COLUMN_GROUPS: GroupDef[] = [
       { key: 'effective_customer_rebate_pct', label: 'Customer rebate % (effective)', optional: true },
       { key: 'effective_distributor_margin_pct', label: 'Distributor margin % (effective)', optional: true },
       { key: 'effective_vat_rate_pct', label: 'VAT % (effective)', optional: true },
-      { key: 'effective_fx_rate_to_usd', label: 'FX (local per USD, effective)', optional: true },
+      { key: 'effective_fx_rate_to_usd', label: 'FX: plan currency per 1 USD (effective)', optional: true },
       { key: 'effective_reserve_total_pct', label: 'Reserve total % (effective)', optional: true },
       { key: 'effective_promo_reserve_split_pct', label: 'Promo reserve split % (effective)', optional: true },
-      { key: 'effective_controlled_cost_usd_per_unit', label: 'Controlled cost USD / unit (effective)', optional: true },
+      { key: 'effective_controlled_cost_usd_per_unit', label: 'Controlled cost (USD / unit, effective)', optional: true },
     ],
   },
   {
     title: 'Local currency values',
-    description: 'Sell-in and distributor-net in plan currency (optional until you turn them on).',
+    description: 'Estimated OEM/channel sell-in and distributor net in plan currency (optional).',
     columns: [
-      { key: 'calc_sell_in_price_local', label: 'Sell-in (local)', optional: true },
-      { key: 'calc_distributor_net_local', label: 'Distributor-net (local)', optional: true },
+      { key: 'calc_sell_in_price_local', label: 'Estimated OEM/channel sell-in (local)', optional: true },
+      { key: 'calc_distributor_net_local', label: 'Estimated distributor net (local)', optional: true },
     ],
   },
   {
-    title: 'USD model outputs',
-    description: 'USD economics columns (optional by default; enable when calculated values are useful).',
+    title: 'Pipeline-currency model outputs',
+    description: 'Economics columns stored on the USD pipeline path today (amounts in pipeline currency, typically USD).',
     columns: [
-      { key: 'calc_sell_in_price_usd', label: 'Channel sell-in USD / unit', optional: true },
-      { key: 'calc_internal_gp_usd', label: 'Est. OEM net margin USD (total, all units)', optional: true },
-      { key: 'calc_buy_price_usd', label: 'Est. net after distributor margin USD / unit', optional: true },
-      { key: 'calc_promo_reserve_usd', label: 'Promo reserve USD', optional: true },
-      { key: 'calc_non_promo_reserve_usd', label: 'Non-promo reserve USD', optional: true },
+      { key: 'calc_sell_in_price_usd', label: 'Estimated OEM/channel sell-in (pipeline CCY / unit)', optional: true },
+      { key: 'calc_internal_gp_usd', label: 'Estimated internal GP (pipeline CCY, total, after reserves)', optional: true },
+      { key: 'calc_buy_price_usd', label: 'Estimated distributor net (pipeline CCY / unit)', optional: true },
+      { key: 'calc_promo_reserve_usd', label: 'Promo reserve (pipeline CCY)', optional: true },
+      { key: 'calc_non_promo_reserve_usd', label: 'Non-promo reserve (pipeline CCY)', optional: true },
     ],
   },
   {
