@@ -28,6 +28,8 @@ import {
   TableHead,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -122,10 +124,22 @@ type CommercialLineupLine = {
   catalogue_ean?: string | null;
   catalogue_upc?: string | null;
   sync_customer_resolution_note?: string | null;
+  synced_commercial_plan_line_id?: number | null;
+  product_spec_cpu?: string | null;
+  product_spec_processor?: string | null;
+};
+
+type WorkbenchLineCounts = {
+  all_lines: number;
+  synced_to_planner: number;
+  ready_to_sync: number;
+  blocked_from_sync: number;
+  needs_resolution: number;
 };
 
 type CaseLinesResponse = {
   lines: CommercialLineupLine[];
+  workbench_counts?: WorkbenchLineCounts;
   dap_semantics_note: string;
 };
 
@@ -271,7 +285,7 @@ function workbenchColumnLabel(colId: string, meta: WorkbenchColumnMetadata | und
   if ((CORE_WORKBENCH_IDS as readonly string[]).includes(colId)) {
     return CORE_WORKBENCH_LABELS[colId as CoreWorkbenchId];
   }
-  if (colId.startsWith('raw:')) return colId.slice(4);
+  if (colId.startsWith('raw:')) return `Raw: ${colId.slice(4)}`;
   if (colId.startsWith('spec:') && meta) {
     const k = colId.slice(5);
     return `Spec: ${k}`;
@@ -381,6 +395,22 @@ function lineupIssuesCell(ln: CommercialLineupLine): string {
   return bits.length ? bits.join(', ') : ln.row_status;
 }
 
+/** User-facing staging labels — internal enum values unchanged. */
+function lineupCaseStatusLabel(status: string): string {
+  const m: Record<string, string> = {
+    draft_imported: 'Imported',
+    validated: 'Reviewing',
+    pending_review: 'Needs review',
+    accepted: 'Ready to sync',
+    po_pending: 'PO pending',
+    po_issued: 'PO issued',
+    in_fulfillment: 'In fulfillment',
+    received_closed: 'Received — closed',
+    cancelled: 'Cancelled',
+  };
+  return m[status] ?? status;
+}
+
 // ── Status chip colors ─────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> =
@@ -414,12 +444,14 @@ function buildCaseLinesSearchParams(opts: {
   fallbackDistributorId: string;
   defaultSrpLocal: string;
   allowZeroQuantity: boolean;
+  workbenchScope: 'active' | 'synced' | 'ready' | 'blocked' | 'all';
 }): string {
   const p = new URLSearchParams();
   if (!opts.commercialPlanId) return '';
   p.set('include_sync_eligibility', 'true');
   p.set('include_product_specs', 'true');
   p.set('include_line_uploaded', 'true');
+  p.set('workbench_scope', opts.workbenchScope);
   const fc = Number(opts.fallbackCustomerId.trim());
   if (Number.isFinite(fc) && fc > 0) p.set('fallback_customer_id', String(Math.trunc(fc)));
   const fd = Number(opts.fallbackDistributorId.trim());
@@ -973,7 +1005,7 @@ function SyncPreviewDialog({
   open: boolean;
   onClose: () => void;
   caseItem: CommercialLineupCase;
-  onSyncComplete?: () => void;
+  onSyncComplete?: (info: { planId: number; caseId: number }) => void;
 }) {
   const qc = useQueryClient();
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
@@ -1053,8 +1085,16 @@ function SyncPreviewDialog({
       ),
     onSuccess: (result) => {
       setSyncResult(result);
-      qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
-      onSyncComplete?.();
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', caseItem.id] });
+      void qc.invalidateQueries({ queryKey: ['lineup-workbench-column-metadata', caseItem.id] });
+      void qc.invalidateQueries({ queryKey: ['sync-to-plan-preview'] });
+      void qc.invalidateQueries({ queryKey: ['commercial-plan-lines', result.plan_id] });
+      void qc.invalidateQueries({ queryKey: ['commercial-plan-summary', result.plan_id] });
+      void qc.invalidateQueries({ queryKey: ['commercial-column-metadata', result.plan_id] });
+      void qc.invalidateQueries({ queryKey: ['commercial-plans'] });
+      void qc.invalidateQueries({ queryKey: ['plan-readiness', result.plan_id] });
+      onSyncComplete?.({ planId: result.plan_id, caseId: result.case_id });
     },
     onError: (e: unknown) => {
       setSyncError(e instanceof Error ? e.message : 'Sync failed');
@@ -1376,7 +1416,7 @@ function StatusTransitionDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            Current status: <strong>{currentCase.commercial_status}</strong>
+            Current status: <strong>{lineupCaseStatusLabel(currentCase.commercial_status)}</strong>
           </Typography>
           {allowed.length === 0 ? (
             <Alert severity="info">This case is in a terminal state and cannot be transitioned further.</Alert>
@@ -1742,7 +1782,7 @@ export function CurrentLineupSection({
   planLineCount?: number;
   planCountryCode?: string | null;
   planCurrencyCode?: string | null;
-  onSyncComplete?: () => void;
+  onSyncComplete?: (info: { planId: number; caseId: number }) => void;
   onStagedLineupSummary?: (summary: { caseId: number | null; lineCount: number }) => void;
 }) {
   const qc = useQueryClient();
@@ -1760,6 +1800,7 @@ export function CurrentLineupSection({
     defaultSrpLocal: '',
     allowZeroQuantity: false,
   });
+  const [workbenchScope, setWorkbenchScope] = useState<'active' | 'synced' | 'ready' | 'blocked' | 'all'>('active');
   const [colMenuAnchor, setColMenuAnchor] = useState<null | HTMLElement>(null);
 
   const { data: cases, isLoading } = useQuery<CommercialLineupCase[]>({
@@ -1890,6 +1931,7 @@ export function CurrentLineupSection({
         fallbackDistributorId: wbSync.fallbackDistributorId,
         defaultSrpLocal: wbSync.defaultSrpLocal,
         allowZeroQuantity: wbSync.allowZeroQuantity,
+        workbenchScope,
       }),
     [
       activeCase?.commercial_plan_id,
@@ -1897,6 +1939,7 @@ export function CurrentLineupSection({
       wbSync.fallbackDistributorId,
       wbSync.defaultSrpLocal,
       wbSync.allowZeroQuantity,
+      workbenchScope,
     ],
   );
 
@@ -1914,21 +1957,7 @@ export function CurrentLineupSection({
   });
 
   const workingLines = workingLinesData?.lines ?? [];
-
-  const syncSummary = useMemo(() => {
-    if (!workingLines.length || !activeCase?.commercial_plan_id) return null;
-    const first = workingLines[0];
-    if (typeof first.sync_eligible !== 'boolean') return null;
-    let eligible = 0;
-    const reasons: Record<string, number> = {};
-    for (const ln of workingLines) {
-      if (ln.sync_eligible) eligible += 1;
-      else if (ln.sync_skip_reason) {
-        reasons[ln.sync_skip_reason] = (reasons[ln.sync_skip_reason] ?? 0) + 1;
-      }
-    }
-    return { eligible, reasons, total: workingLines.length };
-  }, [workingLines, activeCase?.commercial_plan_id]);
+  const workbenchCounts = workingLinesData?.workbench_counts;
 
   const showSyncWorkbenchCol = useMemo(
     () =>
@@ -1939,8 +1968,9 @@ export function CurrentLineupSection({
   );
 
   useEffect(() => {
-    onStagedLineupSummary?.({ caseId: activeCaseId, lineCount: workingLines.length });
-  }, [activeCaseId, workingLines.length, onStagedLineupSummary]);
+    const n = workbenchCounts?.all_lines ?? workingLines.length;
+    onStagedLineupSummary?.({ caseId: activeCaseId, lineCount: n });
+  }, [activeCaseId, workingLines.length, workbenchCounts?.all_lines, onStagedLineupSummary]);
 
   const patchLineMutation = useMutation({
     mutationFn: async (payload: {
@@ -2182,7 +2212,7 @@ export function CurrentLineupSection({
                       {c.period_label ? ` · ${c.period_label}` : ''}
                     </Typography>
                     <Chip
-                      label={c.commercial_status}
+                      label={lineupCaseStatusLabel(c.commercial_status)}
                       size="small"
                       color={STATUS_COLORS[c.commercial_status] ?? 'default'}
                     />
@@ -2309,6 +2339,26 @@ export function CurrentLineupSection({
               customer/distributor tokens before accept when needed. DAP on rows is import evidence only — not landed
               cost.
             </Typography>
+            <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+                Row filter
+              </Typography>
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={workbenchScope}
+                onChange={(_, v: 'active' | 'synced' | 'ready' | 'blocked' | 'all' | null) => {
+                  if (v != null) setWorkbenchScope(v);
+                }}
+                aria-label="Lineup workbench row filter"
+              >
+                <ToggleButton value="active">Needs action</ToggleButton>
+                <ToggleButton value="ready">Ready to sync</ToggleButton>
+                <ToggleButton value="synced">Synced</ToggleButton>
+                <ToggleButton value="blocked">Blocked</ToggleButton>
+                <ToggleButton value="all">All rows</ToggleButton>
+              </ToggleButtonGroup>
+            </Stack>
             {activeCase.commercial_plan_id != null && (
               <Stack spacing={1} sx={{ mb: 1 }}>
                 <Typography variant="caption" color="text.secondary">
@@ -2350,24 +2400,36 @@ export function CurrentLineupSection({
                 </Stack>
               </Stack>
             )}
-            {syncSummary && (
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+            {workbenchCounts && activeCase.commercial_plan_id != null && (
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }} data-testid="lineup-workbench-counts">
                 <Chip
                   variant="outlined"
                   size="small"
+                  label={`Synced to planner: ${workbenchCounts.synced_to_planner}`}
                   color="success"
-                  label={`Sync-eligible rows: ${syncSummary.eligible} / ${syncSummary.total}`}
-                  data-testid="lineup-workbench-sync-eligible-chip"
                 />
-                {Object.entries(syncSummary.reasons).map(([k, v]) => (
-                  <Chip key={k} variant="outlined" size="small" label={`${k}: ${v}`} />
-                ))}
+                <Chip
+                  variant="outlined"
+                  size="small"
+                  label={`Needs resolution: ${workbenchCounts.needs_resolution}`}
+                  color={workbenchCounts.needs_resolution > 0 ? 'warning' : 'default'}
+                />
+                <Chip variant="outlined" size="small" label={`Ready to sync: ${workbenchCounts.ready_to_sync}`} />
+                <Chip variant="outlined" size="small" label={`Blocked from sync: ${workbenchCounts.blocked_from_sync}`} />
+                <Chip variant="outlined" size="small" label={`All rows in case: ${workbenchCounts.all_lines}`} />
               </Stack>
             )}
             {workingLines.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No rows in the selected case yet. Upload a file or choose another case.
-              </Typography>
+              workbenchCounts && workbenchCounts.all_lines > 0 && workbenchScope !== 'all' ? (
+                <Typography variant="body2" color="text.secondary">
+                  No rows in this view. Switch the row filter (for example &quot;All rows&quot;) to inspect synced or
+                  blocked lines.
+                </Typography>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No rows in the selected case yet. Upload a file or choose another case.
+                </Typography>
+              )
             ) : (
               <Box sx={{ overflowX: 'auto' }}>
                 <Table size="small" stickyHeader>

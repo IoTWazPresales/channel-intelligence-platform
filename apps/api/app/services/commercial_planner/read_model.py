@@ -85,24 +85,31 @@ def specs_json_flat_string_map(specs_json: dict[str, Any] | None, *, max_keys: i
 def product_specs_from_json(specs_json: dict[str, Any] | None) -> dict[str, str | None]:
     """Extract notebook-style specs only from structured specs_json keys (no inference)."""
     flat = _flatten_specs_json(specs_json)
-    return {
-        "product_spec_cpu": _pick_spec_value(
-            flat,
-            (
-                "cpu",
-                "CPU",
-                "processor",
-                "Processor",
-                "proc",
-                "chipset",
-                "processor model",
-                "Processor Model",
-                "processor type",
-                "Processor Type",
-                "processormodel",
-                "processortype",
-            ),
+    processor_detail = _pick_spec_value(
+        flat,
+        (
+            "processor",
+            "Processor",
+            "processor model",
+            "Processor Model",
+            "processor type",
+            "Processor Type",
+            "processormodel",
+            "processortype",
         ),
+    )
+    cpu_slot = _pick_spec_value(
+        flat,
+        (
+            "cpu",
+            "CPU",
+            "proc",
+            "chipset",
+        ),
+    )
+    return {
+        "product_spec_processor": processor_detail,
+        "product_spec_cpu": cpu_slot,
         "product_spec_ram": _pick_spec_value(
             flat,
             ("ram", "RAM", "memory", "Memory", "system_memory", "systemMemory"),

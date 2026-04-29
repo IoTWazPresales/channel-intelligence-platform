@@ -194,9 +194,9 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
         const gpCol = columnDefs?.find((c: any) => c.field === 'calc_internal_gp_usd');
         const gpDisplay =
           typeof gpCol?.valueGetter === 'function' ? String(gpCol.valueGetter({ data: r } as any) ?? '') : '';
-        const specCpuCol = columnDefs?.find(
-          (c: any) => c.colId === 'spec_flat_cpu' || c.field === 'product_spec_cpu',
-        );
+        const specCpuCol =
+          columnDefs?.find((c: any) => c.colId === 'spec_flat_cpu') ||
+          columnDefs?.find((c: any) => c.field === 'product_spec_cpu');
         const cpuDisplay =
           typeof specCpuCol?.valueGetter === 'function'
             ? String(specCpuCol.valueGetter({ data: r } as any) ?? '')
@@ -1938,12 +1938,23 @@ describe('CurrentLineupSection — sync to plan', () => {
     };
     const { user } = await renderCLS(5, async (url: string) => {
       if (url.includes('/lineup-cases?')) return [draft];
-      if (url.includes('/lineup-cases/3/lines')) return { lines: [line], dap_semantics_note: 'DAP is evidence-only.' };
+      if (url.includes('/lineup-cases/3/lines'))
+        return {
+          lines: [line],
+          workbench_counts: {
+            all_lines: 1,
+            synced_to_planner: 0,
+            ready_to_sync: 1,
+            blocked_from_sync: 0,
+            needs_resolution: 0,
+          },
+          dap_semantics_note: 'DAP is evidence-only.',
+        };
       return [];
     });
     await user.click(await screen.findByTestId('current-lineup-section-toggle'));
     await user.click(await screen.findByTestId('lineup-workbench-3'));
     expect(await screen.findByTestId('lineup-entity-resolution-open')).toBeInTheDocument();
-    expect(await screen.findByTestId('lineup-workbench-sync-eligible-chip')).toBeInTheDocument();
+    expect(await screen.findByTestId('lineup-workbench-counts')).toBeInTheDocument();
   });
 });

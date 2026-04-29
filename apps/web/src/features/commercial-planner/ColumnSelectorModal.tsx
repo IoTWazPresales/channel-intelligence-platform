@@ -35,6 +35,7 @@ type PlanLine = {
 
 export type ColumnMetadata = {
   plan_id: number;
+  plan_line_count?: number;
   total_products: number;
   catalogue: Record<string, number>;
   spec_keys: Record<string, number>;
@@ -59,7 +60,7 @@ export type ColumnSelectorModalProps = {
 
 const PRESETS: { name: string; label: string; tooltip: string }[] = [
   { name: 'planning', label: 'Planning', tooltip: 'Default planning columns' },
-  { name: 'product_spec', label: 'Product / spec', tooltip: 'Optional warranty, OS, colour. Use “Discovered spec JSON keys” below for additional catalogue dimensions.' },
+  { name: 'product_spec', label: 'Product / spec', tooltip: 'Optional CPU, Processor, warranty, OS, colour; top discovered spec keys from metadata.' },
   { name: 'commercial', label: 'Commercial', tooltip: 'Enable effective commercial term columns' },
   { name: 'economics', label: 'Economics', tooltip: 'Enable USD output columns (sell-in, net after disti, margin, reserves)' },
 ];
@@ -94,6 +95,17 @@ const COLUMN_GROUPS: GroupDef[] = [
       { key: 'product_part_number', label: 'Part #', locked: true },
       { key: 'product_model_sales_model', label: 'Model / Sales model', locked: true },
       { key: 'product_name', label: 'Product name', locked: true },
+    ],
+  },
+  {
+    title: 'Product spec (canonical picks)',
+    description: 'Optional columns from structured specs_json (CPU vs Processor when both exist).',
+    columns: [
+      { key: 'product_spec_cpu', label: 'CPU / chipset (spec)', optional: true },
+      { key: 'product_spec_processor', label: 'Processor (spec)', optional: true },
+      { key: 'product_spec_warranty', label: 'Warranty', optional: true },
+      { key: 'product_spec_os', label: 'OS', optional: true },
+      { key: 'product_spec_colour', label: 'Colour', optional: true },
     ],
   },
   {
@@ -132,18 +144,18 @@ const COLUMN_GROUPS: GroupDef[] = [
   },
   {
     title: 'Local currency values',
-    description: 'Sell-in and distributor-net in plan currency using effective FX × USD outputs. Always on when FX is configured.',
+    description: 'Sell-in and distributor-net in plan currency (optional until you turn them on).',
     columns: [
-      { key: 'calc_sell_in_price_local', label: 'Sell-in (local)', alwaysOn: true },
-      { key: 'calc_distributor_net_local', label: 'Distributor-net (local)', alwaysOn: true },
+      { key: 'calc_sell_in_price_local', label: 'Sell-in (local)', optional: true },
+      { key: 'calc_distributor_net_local', label: 'Distributor-net (local)', optional: true },
     ],
   },
   {
     title: 'USD model outputs',
-    description: 'Sell-in and margin in USD. Internal margin always on.',
+    description: 'USD economics columns (optional by default; enable when calculated values are useful).',
     columns: [
-      { key: 'calc_sell_in_price_usd', label: 'Channel sell-in USD / unit', alwaysOn: true },
-      { key: 'calc_internal_gp_usd', label: 'Est. OEM net margin USD (total, all units)', alwaysOn: true },
+      { key: 'calc_sell_in_price_usd', label: 'Channel sell-in USD / unit', optional: true },
+      { key: 'calc_internal_gp_usd', label: 'Est. OEM net margin USD (total, all units)', optional: true },
       { key: 'calc_buy_price_usd', label: 'Est. net after distributor margin USD / unit', optional: true },
       { key: 'calc_promo_reserve_usd', label: 'Promo reserve USD', optional: true },
       { key: 'calc_non_promo_reserve_usd', label: 'Non-promo reserve USD', optional: true },
@@ -273,7 +285,9 @@ export function ColumnSelectorModal({
 
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
           {columnMeta
-            ? `Coverage counts from server (${columnMeta.total_products} products in plan). Locked columns cannot be hidden.`
+            ? `Coverage from server: ${columnMeta.total_products} distinct product(s) in plan${
+                columnMeta.plan_line_count != null ? `, ${columnMeta.plan_line_count} planner line(s)` : ''
+              }. Locked columns cannot be hidden.`
             : 'Coverage counts are based on current plan lines. Locked columns cannot be hidden.'}
         </Typography>
 

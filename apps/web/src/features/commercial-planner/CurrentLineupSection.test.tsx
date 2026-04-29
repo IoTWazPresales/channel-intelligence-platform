@@ -252,7 +252,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     await user.click(await screen.findByTestId('current-lineup-section-toggle'));
     await user.click(await screen.findByTestId('lineup-workbench-3'));
 
-    expect(await screen.findByText('CPU')).toBeInTheDocument();
+    expect(await screen.findByText(/Raw:\s*CPU/i)).toBeInTheDocument();
     expect(await screen.findByText('Ultra 7 155H')).toBeInTheDocument();
   });
 

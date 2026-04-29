@@ -78,6 +78,7 @@ type PlanLine = {
   product_series_name?: string | null;
   product_business_unit?: string | null;
   product_spec_cpu?: string | null;
+  product_spec_processor?: string | null;
   product_spec_ram?: string | null;
   product_spec_storage?: string | null;
   product_spec_gpu?: string | null;
@@ -399,7 +400,13 @@ export function economicsBlockingTooltip(line: PlanLine | undefined): string | u
   return msgs.length ? msgs.join(' · ') : 'Economics blocked — see Issues column.';
 }
 
-const SPECS_OPTIONAL_FIELDS = ['product_spec_warranty', 'product_spec_os', 'product_spec_colour'] as const;
+const SPECS_OPTIONAL_FIELDS = [
+  'product_spec_cpu',
+  'product_spec_processor',
+  'product_spec_warranty',
+  'product_spec_os',
+  'product_spec_colour',
+] as const;
 
 const CATALOGUE_OPTIONAL_FIELDS = [
   'product_category',
@@ -424,6 +431,10 @@ const COMMERCIAL_TERM_OPTIONAL_FIELDS = [
 const PLANNING_OPTIONAL_FIELDS = ['promo_mix_pct'] as const;
 
 const USD_OUTPUT_OPTIONAL_FIELDS = [
+  'calc_sell_in_price_local',
+  'calc_distributor_net_local',
+  'calc_sell_in_price_usd',
+  'calc_internal_gp_usd',
   'calc_buy_price_usd',
   'calc_promo_reserve_usd',
   'calc_non_promo_reserve_usd',
@@ -446,6 +457,8 @@ const LS_GRID_COLS_V2 = 'cip.commercial-planner.gridColumns.v2';
 const LS_OPTIONAL_COLS_V1 = 'cip.commercial-planner.optionalColumns.v1';
 
 const OPTIONAL_COLUMN_LABELS: Record<OptionalGridColField, string> = {
+  product_spec_cpu: 'CPU / chipset (spec)',
+  product_spec_processor: 'Processor (spec)',
   product_spec_warranty: 'Warranty',
   product_spec_os: 'OS',
   product_spec_colour: 'Colour',
@@ -464,6 +477,10 @@ const OPTIONAL_COLUMN_LABELS: Record<OptionalGridColField, string> = {
   effective_promo_reserve_split_pct: 'Promo reserve split % (effective)',
   effective_controlled_cost_usd_per_unit: 'Controlled cost USD / unit (effective)',
   promo_mix_pct: 'Promo mix %',
+  calc_sell_in_price_local: 'Sell-in (local)',
+  calc_distributor_net_local: 'Distributor-net (local)',
+  calc_sell_in_price_usd: 'Channel sell-in USD / unit',
+  calc_internal_gp_usd: 'Est. OEM net margin USD (total, all units)',
   calc_buy_price_usd: 'Est. net after distributor margin USD / unit',
   calc_promo_reserve_usd: 'Promo reserve USD',
   calc_non_promo_reserve_usd: 'Non-promo reserve USD',
@@ -471,6 +488,8 @@ const OPTIONAL_COLUMN_LABELS: Record<OptionalGridColField, string> = {
 
 function defaultOptionalVisibility(): Record<OptionalGridColField, boolean> {
   return {
+    product_spec_cpu: false,
+    product_spec_processor: false,
     product_spec_warranty: false,
     product_spec_os: false,
     product_spec_colour: false,
@@ -489,6 +508,10 @@ function defaultOptionalVisibility(): Record<OptionalGridColField, boolean> {
     effective_promo_reserve_split_pct: false,
     effective_controlled_cost_usd_per_unit: false,
     promo_mix_pct: false,
+    calc_sell_in_price_local: false,
+    calc_distributor_net_local: false,
+    calc_sell_in_price_usd: false,
+    calc_internal_gp_usd: false,
     calc_buy_price_usd: false,
     calc_promo_reserve_usd: false,
     calc_non_promo_reserve_usd: false,
@@ -1257,6 +1280,21 @@ export default function CommercialPlannerPage() {
         valueGetter: (p) => (p.data?.product_spec_colour?.trim() ? p.data!.product_spec_colour : '—'),
       },
       {
+        field: 'product_spec_cpu',
+        headerName: 'CPU (spec)',
+        minWidth: 110,
+        hide: !optionalVisible.product_spec_cpu,
+        valueGetter: (p) => (p.data?.product_spec_cpu?.trim() ? p.data!.product_spec_cpu : '—'),
+      },
+      {
+        field: 'product_spec_processor',
+        headerName: 'Processor (spec)',
+        minWidth: 120,
+        hide: !optionalVisible.product_spec_processor,
+        valueGetter: (p) =>
+          p.data?.product_spec_processor?.trim() ? p.data!.product_spec_processor : '—',
+      },
+      {
         field: 'product_category',
         headerName: 'Category',
         minWidth: 110,
@@ -1325,6 +1363,7 @@ export default function CommercialPlannerPage() {
         field: 'calc_sell_in_price_local',
         headerName: `Est. channel sell-in / unit (${planCurrencyCode})`,
         minWidth: 190,
+        hide: !optionalVisible.calc_sell_in_price_local,
         valueGetter: (p) => {
           const v = p.data?.calc_sell_in_price_local;
           return v != null ? fmtCurrency(v) : '—';
@@ -1334,6 +1373,7 @@ export default function CommercialPlannerPage() {
         field: 'calc_distributor_net_local',
         headerName: `Est. net after distributor margin / unit (${planCurrencyCode})`,
         minWidth: 240,
+        hide: !optionalVisible.calc_distributor_net_local,
         valueGetter: (p) => {
           const v = p.data?.calc_distributor_net_local;
           return v != null ? fmtCurrency(v) : '—';
@@ -1399,6 +1439,7 @@ export default function CommercialPlannerPage() {
         field: 'calc_sell_in_price_usd',
         headerName: 'Est. channel sell-in USD / unit',
         minWidth: 170,
+        hide: !optionalVisible.calc_sell_in_price_usd,
         valueFormatter: (p) => (p.value != null && p.value !== '' ? String(p.value) : '—'),
       },
       {
@@ -1412,6 +1453,7 @@ export default function CommercialPlannerPage() {
         field: 'calc_internal_gp_usd',
         headerName: 'Est. OEM net margin USD (total, all units)',
         minWidth: 190,
+        hide: !optionalVisible.calc_internal_gp_usd,
         tooltipValueGetter: (p) => economicsBlockingTooltip(p.data ?? undefined),
         valueGetter: (p) => {
           const d = p.data;
@@ -1866,9 +1908,13 @@ export default function CommercialPlannerPage() {
           planCountryCode={activePlan?.country_code ?? null}
           planCurrencyCode={activePlan?.currency_code ?? null}
           onStagedLineupSummary={setStagedLineupSummary}
-          onSyncComplete={() => {
-            void qc.invalidateQueries({ queryKey: ['commercial-plan-lines', activePlanId] });
-            void qc.invalidateQueries({ queryKey: ['commercial-plan-summary', activePlanId] });
+          onSyncComplete={({ planId, caseId }) => {
+            void qc.invalidateQueries({ queryKey: ['commercial-plan-lines', planId] });
+            void qc.invalidateQueries({ queryKey: ['commercial-plan-summary', planId] });
+            void qc.invalidateQueries({ queryKey: ['commercial-column-metadata', planId] });
+            void qc.invalidateQueries({ queryKey: ['commercial-plans'] });
+            void qc.invalidateQueries({ queryKey: ['plan-readiness', planId] });
+            void qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', caseId] });
           }}
         />
 
@@ -2940,6 +2986,8 @@ export default function CommercialPlannerPage() {
           } else if (preset === 'product_spec') {
             setOptionalVisible((prev) => ({
               ...prev,
+              product_spec_cpu: true,
+              product_spec_processor: true,
               product_spec_warranty: true,
               product_spec_os: true,
               product_spec_colour: true,
@@ -2970,6 +3018,10 @@ export default function CommercialPlannerPage() {
           } else if (preset === 'economics') {
             setOptionalVisible((prev) => ({
               ...prev,
+              calc_sell_in_price_local: true,
+              calc_distributor_net_local: true,
+              calc_sell_in_price_usd: true,
+              calc_internal_gp_usd: true,
               calc_buy_price_usd: true,
               calc_promo_reserve_usd: true,
               calc_non_promo_reserve_usd: true,

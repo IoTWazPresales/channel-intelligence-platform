@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from datetime import date, datetime, timezone
 
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import distinct, func, or_, select, text, tuple_
+from sqlalchemy import distinct, func, or_, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -47,9 +48,17 @@ from app.services.commercial_planner.lineup_open_channel import (
     sync_ui_severity_for_line,
     uploaded_columns_from_payload,
 )
+from app.services.commercial_planner.lineup_plan_sync import (
+    attach_plan_line_sync_to_lineup_row,
+    synced_commercial_plan_line_id,
+)
 from app.services.commercial_planner.open_channel_customer import get_open_channel_customer_id
 from app.services.commercial_planner.unassigned_distributor import get_unassigned_distributor_id
-from app.services.commercial_planner.read_model import plan_line_read_model_extensions
+from app.services.commercial_planner.read_model import (
+    plan_line_read_model_extensions,
+    product_specs_from_json,
+    specs_json_flat_string_map,
+)
 from app.services.commercial_planner.suggestions import (
     SuggestionInputs,
     build_promo_mix_suggestion,
@@ -1845,6 +1854,8 @@ def _workbench_catalogue_product_field_metadata() -> list[dict[str, str]]:
         ("catalogue_marketing_name", "Marketing name (catalogue)"),
         ("catalogue_ean", "EAN (catalogue)"),
         ("catalogue_upc", "UPC (catalogue)"),
+        ("product_spec_processor", "Processor (catalogue spec)"),
+        ("product_spec_cpu", "CPU / chipset (catalogue spec)"),
     ]
     return [{"id": f"cat:{k}", "group": "catalogue", "label": lab, "field": k} for k, lab in specs]
 
@@ -1873,8 +1884,8 @@ async def get_lineup_workbench_column_metadata(case_id: int, db: AsyncSession = 
             await db.execute(select(DimProduct.specs_json).where(DimProduct.id.in_(list(product_ids))))
         ).scalars().all()
         for sj in sjs:
-            if isinstance(sj, dict):
-                spec_keys.update(str(k) for k in sj.keys())
+            flat = specs_json_flat_string_map(sj if isinstance(sj, dict) else None)
+            spec_keys.update(flat.keys())
     proc_hints = sorted(k for k in spec_keys if re.search(r"cpu|processor", k, re.IGNORECASE))
     return {
         "case_id": case_id,
@@ -1970,6 +1981,62 @@ async def patch_lineup_case_status(case_id: int, body: LineupCaseStatusPatch, db
     return _case_payload(case, int(line_count))
 
 
+def _lineup_row_needs_resolution(ln: CommercialLineupLine, raw_payload: dict) -> bool:
+    """Heuristic: unsynced rows that still need product or entity work before sync."""
+    if not ln.product_id or (ln.row_status or "").strip().lower() == "unresolved":
+        return True
+    if managed_customer_token_unresolved(ln):
+        return True
+    dist_tok = raw_payload.get("distributor_token")
+    if ln.distributor_id is None and isinstance(dist_tok, str) and dist_tok.strip():
+        return True
+    return False
+
+
+def _workbench_counts_payload(
+    rows_payload: list[tuple[CommercialLineupLine, dict]],
+    *,
+    need_eligibility: bool,
+) -> dict[str, int]:
+    out: dict[str, int] = {
+        "all_lines": len(rows_payload),
+        "synced_to_planner": 0,
+        "ready_to_sync": 0,
+        "blocked_from_sync": 0,
+        "needs_resolution": 0,
+    }
+    for ln, d in rows_payload:
+        raw = ln.raw_row_payload if isinstance(ln.raw_row_payload, dict) else {}
+        if d.get("synced_commercial_plan_line_id"):
+            out["synced_to_planner"] += 1
+            continue
+        if need_eligibility and "sync_eligible" in d:
+            if d["sync_eligible"]:
+                out["ready_to_sync"] += 1
+            else:
+                out["blocked_from_sync"] += 1
+        if _lineup_row_needs_resolution(ln, raw):
+            out["needs_resolution"] += 1
+    return out
+
+
+def _workbench_scope_keep_line(d: dict, scope: str, *, need_eligibility: bool) -> bool:
+    sid = d.get("synced_commercial_plan_line_id")
+    if scope == "all":
+        return True
+    if scope == "active":
+        return sid is None
+    if scope == "synced":
+        return sid is not None
+    if not need_eligibility:
+        return True
+    if scope == "ready":
+        return sid is None and bool(d.get("sync_eligible"))
+    if scope == "blocked":
+        return sid is None and not bool(d.get("sync_eligible"))
+    return True
+
+
 @router.get("/lineup-cases/{case_id}/lines")
 async def list_lineup_case_lines(
     case_id: int,
@@ -1982,10 +2049,19 @@ async def list_lineup_case_lines(
     fallback_distributor_id: int | None = Query(default=None),
     default_srp_local: float | None = Query(default=None),
     allow_zero_quantity: bool = Query(default=False),
+    workbench_scope: Literal["active", "synced", "ready", "blocked", "all"] = Query(default="active"),
 ):
     case = await db.get(CommercialLineupCase, case_id)
     if not case:
         raise HTTPException(status_code=404, detail="Lineup case not found")
+    if workbench_scope in ("ready", "blocked") and not case.commercial_plan_id:
+        raise HTTPException(
+            status_code=400,
+            detail="workbench_scope 'ready' or 'blocked' requires commercial_plan_id on the lineup case.",
+        )
+    need_eligibility = bool(case.commercial_plan_id) and (
+        include_sync_eligibility or workbench_scope in ("ready", "blocked")
+    )
     stmt = (
         select(
             CommercialLineupLine,
@@ -2084,6 +2160,7 @@ async def list_lineup_case_lines(
             "channel_route_uploaded_cell": raw_payload.get(CHANNEL_ROUTE_UPLOADED_CELL_KEY)
             if isinstance(raw_payload.get(CHANNEL_ROUTE_UPLOADED_CELL_KEY), str)
             else None,
+            "synced_commercial_plan_line_id": synced_commercial_plan_line_id(ln.raw_row_payload),
         }
         if include_product_specs:
             d["product_specs"] = product_specs_json if isinstance(product_specs_json, dict) else {}
@@ -2096,6 +2173,10 @@ async def list_lineup_case_lines(
             d["catalogue_marketing_name"] = catalogue_marketing_name
             d["catalogue_ean"] = catalogue_ean
             d["catalogue_upc"] = catalogue_upc
+            spec_bits = product_specs_from_json(product_specs_json if isinstance(product_specs_json, dict) else None)
+            for k, v in spec_bits.items():
+                if v is not None:
+                    d[k] = v
         if include_line_uploaded:
             up = raw_payload.get("uploaded")
             d["uploaded"] = up if isinstance(up, dict) else {}
@@ -2103,7 +2184,7 @@ async def list_lineup_case_lines(
             d["raw_row_payload"] = ln.raw_row_payload if isinstance(ln.raw_row_payload, dict) else {}
         rows_payload.append((ln, d))
 
-    if include_sync_eligibility:
+    if need_eligibility:
         plan_id = case.commercial_plan_id
         if not plan_id:
             raise HTTPException(
@@ -2176,8 +2257,13 @@ async def list_lineup_case_lines(
                 d["sync_skip_detail"] = sync_skip_detail_message(ln, reason)
                 d["sync_ui_severity"] = sync_ui_severity_for_line(ln, reason)
 
-    result = [d for _, d in rows_payload]
-    return {"lines": result, "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE}
+    counts = _workbench_counts_payload(rows_payload, need_eligibility=need_eligibility)
+    filtered = [
+        d
+        for ln, d in rows_payload
+        if _workbench_scope_keep_line(d, workbench_scope, need_eligibility=need_eligibility)
+    ]
+    return {"lines": filtered, "workbench_counts": counts, "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE}
 
 
 @router.patch("/lineup-cases/{case_id}/lines/{line_id}", status_code=200)
@@ -2380,10 +2466,16 @@ async def get_plan_column_metadata(
     """Return per-field coverage counts for the plan's products.
 
     Catalogue fields: count non-null values across DimProduct for products in the plan.
-    Spec keys: aggregate JSONB key names from specs_json across plan's products.
+    Spec keys: aggregate flattened specs_json key names (includes nested import staging) across plan products.
     """
     if not await db.get(CommercialPlan, plan_id):
         raise HTTPException(status_code=404, detail="Plan not found")
+
+    plan_line_count = (
+        await db.execute(
+            select(func.count(CommercialPlanLine.id)).where(CommercialPlanLine.commercial_plan_id == plan_id)
+        )
+    ).scalar_one()
 
     total_stmt = select(func.count(distinct(CommercialPlanLine.product_id))).where(
         CommercialPlanLine.commercial_plan_id == plan_id
@@ -2393,6 +2485,7 @@ async def get_plan_column_metadata(
     if total_products == 0:
         return {
             "plan_id": plan_id,
+            "plan_line_count": int(plan_line_count),
             "total_products": 0,
             "catalogue": {},
             "spec_keys": {},
@@ -2430,23 +2523,19 @@ async def get_plan_column_metadata(
         "model_name": int(cat_row.model_name),
     }
 
-    spec_stmt = text(
-        """
-        SELECT key, COUNT(*) as cnt
-        FROM dim_product p, jsonb_each_text(p.specs_json)
-        WHERE p.id IN (
-            SELECT DISTINCT product_id FROM commercial_plan_line WHERE commercial_plan_id = :plan_id
-        )
-        AND p.specs_json IS NOT NULL
-        GROUP BY key
-        ORDER BY cnt DESC
-        """
-    )
-    spec_rows = (await db.execute(spec_stmt, {"plan_id": plan_id})).all()
-    spec_keys = {row.key: int(row.cnt) for row in spec_rows}
+    spec_rows = (
+        await db.execute(select(DimProduct.specs_json).where(DimProduct.id.in_(product_ids_subq)))
+    ).scalars().all()
+    spec_keys_counter: Counter[str] = Counter()
+    for sj in spec_rows:
+        flat = specs_json_flat_string_map(sj if isinstance(sj, dict) else None)
+        for k in flat:
+            spec_keys_counter[k] += 1
+    spec_keys = dict(sorted(spec_keys_counter.items(), key=lambda kv: (-kv[1], kv[0])))
 
     return {
         "plan_id": plan_id,
+        "plan_line_count": int(plan_line_count),
         "total_products": int(total_products),
         "catalogue": catalogue,
         "spec_keys": spec_keys,
@@ -2637,7 +2726,7 @@ async def sync_lineup_case_to_plan(
     Skips duplicates by plan_id + customer_id + distributor_id + product_id.
     Never writes dap_evidence_local to any cost field.
     Requires commercial_status = accepted.
-    Does not mutate CommercialLineupLine rows.
+    Writes a small sync linkage block into each synced row's ``raw_row_payload`` for audit and workbench filtering.
     Does not mutate historical lineup rows.
     """
     case = await db.get(CommercialLineupCase, case_id)
@@ -2728,6 +2817,11 @@ async def sync_lineup_case_to_plan(
             await db.flush()
             created_ids.append(new_line.id)
             existing_keys.add((customer_id, distributor_id, ln.product_id))
+            attach_plan_line_sync_to_lineup_row(
+                ln,
+                commercial_plan_id=plan_id,
+                commercial_plan_line_id=new_line.id,
+            )
         except Exception as exc:
             await db.rollback()
             failed += 1

@@ -784,10 +784,44 @@ def test_plan_line_read_model_extensions_merges_specs_and_local_prices():
         sku_landed_cost_usd=100.0,
     )
     assert ext["product_spec_cpu"] == "i5"
+    assert ext.get("product_spec_processor") is None
     assert ext["product_spec_ram"] == "16GB"
     assert ext["effective_fx_rate_to_usd"] == 2.0
     assert ext["calc_sell_in_price_local"] == 20.0
     assert ext["calc_distributor_net_local"] == 16.0
+
+
+def test_plan_line_read_model_extensions_splits_processor_and_cpu_specs():
+    from types import SimpleNamespace
+
+    from app.services.commercial_planner.read_model import plan_line_read_model_extensions
+
+    line = SimpleNamespace(
+        calc_sell_in_price_usd=None,
+        calc_buy_price_usd=None,
+        override_customer_margin_pct=None,
+        override_customer_rebate_pct=None,
+        override_distributor_margin_pct=None,
+        override_vat_rate_pct=None,
+        override_fx_rate_to_usd=None,
+        override_reserve_total_pct=None,
+        override_promo_reserve_split_pct=None,
+        override_landed_cost_usd=None,
+    )
+    ext = plan_line_read_model_extensions(
+        line,
+        {"Processor": "Intel Core Ultra 7", "cpu": "Snapdragon X"},
+        customer_margin_pct=0.1,
+        customer_rebate_pct=0.02,
+        distributor_margin_pct=0.08,
+        sku_vat_rate_pct=0.15,
+        sku_fx_rate_to_usd=1.0,
+        sku_reserve_total_pct=0.1,
+        sku_promo_reserve_split_pct=0.5,
+        sku_landed_cost_usd=100.0,
+    )
+    assert ext["product_spec_processor"] == "Intel Core Ultra 7"
+    assert ext["product_spec_cpu"] == "Snapdragon X"
 
 
 # ─── Commercial Lineup Case tests ────────────────────────────────────────────
@@ -1218,18 +1252,24 @@ def test_column_metadata_catalogue_coverage():
 
         total_result = MagicMock()
         total_result.scalar_one = MagicMock(return_value=10)
+        line_count_result = MagicMock()
+        line_count_result.scalar_one = MagicMock(return_value=42)
         cat_result = MagicMock()
         cat_result.one = MagicMock(return_value=cat_row)
-        spec_result = MagicMock()
-        spec_result.all = MagicMock(return_value=[])
+        spec_scalars = MagicMock()
+        spec_scalars.all.return_value = []
+        spec_wrap = MagicMock()
+        spec_wrap.scalars.return_value = spec_scalars
 
         async def _execute(stmt, *args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
                 return total_result
             if call_count["n"] == 2:
+                return line_count_result
+            if call_count["n"] == 3:
                 return cat_result
-            return spec_result
+            return spec_wrap
 
         sess.execute = AsyncMock(side_effect=_execute)
         yield sess
@@ -1239,6 +1279,7 @@ def test_column_metadata_catalogue_coverage():
     assert r.status_code == 200
     body = r.json()
     assert body["total_products"] == 10
+    assert body.get("plan_line_count") == 42
     assert body["catalogue"]["category"] == 8
     assert body["catalogue"]["lifecycle_status"] == 10
     assert body["catalogue"]["business_unit"] == 10
@@ -1433,8 +1474,6 @@ def test_column_metadata_spec_keys_from_jsonb():
         sales_model_name=2,
         model_name=2,
     )
-    spec_row_cpu = SimpleNamespace(key="cpu", cnt=2)
-    spec_row_ram = SimpleNamespace(key="ram", cnt=2)
 
     call_count = {"n": 0}
 
@@ -1444,18 +1483,24 @@ def test_column_metadata_spec_keys_from_jsonb():
 
         total_result = MagicMock()
         total_result.scalar_one = MagicMock(return_value=2)
+        line_count_result = MagicMock()
+        line_count_result.scalar_one = MagicMock(return_value=5)
         cat_result = MagicMock()
         cat_result.one = MagicMock(return_value=cat_row)
-        spec_result = MagicMock()
-        spec_result.all = MagicMock(return_value=[spec_row_cpu, spec_row_ram])
 
         async def _execute(stmt, *args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
                 return total_result
             if call_count["n"] == 2:
+                return line_count_result
+            if call_count["n"] == 3:
                 return cat_result
-            return spec_result
+            spec_scalars = MagicMock()
+            spec_scalars.all.return_value = [{"cpu": "i5", "RAM": "8GB"}, {"Processor": "i7", "ram": "16GB"}]
+            spec_wrap = MagicMock()
+            spec_wrap.scalars.return_value = spec_scalars
+            return spec_wrap
 
         sess.execute = AsyncMock(side_effect=_execute)
         yield sess
@@ -1466,6 +1511,8 @@ def test_column_metadata_spec_keys_from_jsonb():
     body = r.json()
     assert body["spec_keys"]["cpu"] == 2
     assert body["spec_keys"]["ram"] == 2
+    assert body["spec_keys"]["Processor"] == 1
+    assert body.get("plan_line_count") == 5
 
 
 # ─── Phase 2 sync-to-plan tests ───────────────────────────────────────────────
@@ -1546,7 +1593,7 @@ def test_sync_to_plan_creates_plan_lines_for_eligible():
 
     case = _make_case(id=31, commercial_status="accepted", commercial_plan_id=5)
     fake_plan = SimpleNamespace(id=5)
-    lineup_line = _make_lineup_line(id=1, case_id=31, product_id=10, customer_id=7, distributor_id=3)
+    lineup_line = _make_lineup_line(id=1, case_id=31, product_id=10, customer_id=7, distributor_id=3, raw_row_payload={})
     added = []
 
     async def fake_db():
@@ -1600,6 +1647,10 @@ def test_sync_to_plan_creates_plan_lines_for_eligible():
     assert body["skipped_duplicates"] == 0
     assert body["skipped_unresolved"] == 0
     assert len(body["created_line_ids"]) == 1
+    cap = lineup_line.raw_row_payload.get("_cip_commercial_plan_sync")
+    assert isinstance(cap, dict)
+    assert cap["commercial_plan_line_id"] == body["created_line_ids"][0]
+    assert cap["commercial_plan_id"] == 5
 
 
 def test_sync_to_plan_skips_duplicates():
