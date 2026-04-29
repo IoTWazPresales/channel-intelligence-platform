@@ -1080,7 +1080,7 @@ describe('CommercialPlannerPage — Lineup coverage tab', () => {
   });
 });
 
-// ── Planner readiness chips ───────────────────────────────────────────────────
+// ── Planner readiness panel ───────────────────────────────────────────────────
 describe('Plan readiness chips', () => {
   function renderPage() {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -1115,11 +1115,11 @@ describe('Plan readiness chips', () => {
     renderPage();
     await screen.findByText(/Q3 Plan \(draft\)/i);
 
-    const chips = await screen.findByTestId('plan-readiness-chips');
-    expect(chips).toHaveTextContent('Missing SKU assumptions: 1');
+    const panel = await screen.findByTestId('plan-readiness-panel');
+    expect(panel).toHaveTextContent('SKU assumption missing');
   });
 
-  it('shows all-defaults-present chip when plan is ready', async () => {
+  it('shows all-defaults-present message when plan is ready', async () => {
     mockState.planReadiness = {
       plan_id: 1,
       line_count: 1,
@@ -1133,8 +1133,8 @@ describe('Plan readiness chips', () => {
     renderPage();
     await screen.findByText(/Q3 Plan \(draft\)/i);
 
-    const chips = await screen.findByTestId('plan-readiness-chips');
-    expect(chips).toHaveTextContent('All defaults present');
+    const panel = await screen.findByTestId('plan-readiness-panel');
+    expect(panel).toHaveTextContent('All defaults present');
   });
 });
 

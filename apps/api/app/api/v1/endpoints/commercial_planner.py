@@ -1993,6 +1993,13 @@ def _lineup_row_needs_resolution(ln: CommercialLineupLine, raw_payload: dict) ->
     return False
 
 
+def _is_duplicate_in_planner(d: dict, *, need_eligibility: bool) -> bool:
+    """Row already represented in plan by dedupe-key match (not via _cip marker)."""
+    if not need_eligibility:
+        return False
+    return not bool(d.get("sync_eligible")) and d.get("sync_skip_reason") == "duplicate"
+
+
 def _workbench_counts_payload(
     rows_payload: list[tuple[CommercialLineupLine, dict]],
     *,
@@ -2001,6 +2008,7 @@ def _workbench_counts_payload(
     out: dict[str, int] = {
         "all_lines": len(rows_payload),
         "synced_to_planner": 0,
+        "already_in_planner": 0,
         "ready_to_sync": 0,
         "blocked_from_sync": 0,
         "needs_resolution": 0,
@@ -2013,6 +2021,8 @@ def _workbench_counts_payload(
         if need_eligibility and "sync_eligible" in d:
             if d["sync_eligible"]:
                 out["ready_to_sync"] += 1
+            elif d.get("sync_skip_reason") == "duplicate":
+                out["already_in_planner"] += 1
             else:
                 out["blocked_from_sync"] += 1
         if _lineup_row_needs_resolution(ln, raw):
@@ -2025,7 +2035,12 @@ def _workbench_scope_keep_line(d: dict, scope: str, *, need_eligibility: bool) -
     if scope == "all":
         return True
     if scope == "active":
-        return sid is None
+        if sid is not None:
+            return False
+        # Rows already represented in plan by dedupe key are not active work
+        if _is_duplicate_in_planner(d, need_eligibility=need_eligibility):
+            return False
+        return True
     if scope == "synced":
         return sid is not None
     if not need_eligibility:

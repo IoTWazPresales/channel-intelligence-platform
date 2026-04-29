@@ -252,7 +252,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     await user.click(await screen.findByTestId('current-lineup-section-toggle'));
     await user.click(await screen.findByTestId('lineup-workbench-3'));
 
-    expect(await screen.findByText(/Raw:\s*CPU/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Upload:\s*CPU/i)).toBeInTheDocument();
     expect(await screen.findByText('Ultra 7 155H')).toBeInTheDocument();
   });
 
@@ -358,7 +358,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     await user.click(await screen.findByTestId('current-lineup-section-toggle'));
     await user.click(await screen.findByTestId('lineup-workbench-5'));
 
-    expect(await screen.findByText('Spec: cpu')).toBeInTheDocument();
+    expect(await screen.findByText('Spec: CPU')).toBeInTheDocument();
     expect(await screen.findByText('Intel i7')).toBeInTheDocument();
   });
 

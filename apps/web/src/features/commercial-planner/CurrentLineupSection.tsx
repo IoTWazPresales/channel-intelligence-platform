@@ -20,6 +20,7 @@ import {
   ListSubheader,
   Menu,
   MenuItem,
+  Paper,
   Select,
   Stack,
   Table,
@@ -132,6 +133,7 @@ type CommercialLineupLine = {
 type WorkbenchLineCounts = {
   all_lines: number;
   synced_to_planner: number;
+  already_in_planner: number;
   ready_to_sync: number;
   blocked_from_sync: number;
   needs_resolution: number;
@@ -281,14 +283,42 @@ function readInitialWorkbenchVisible(hasPlan: boolean): string[] {
   }
 }
 
+const SPEC_KEY_HUMAN_LABELS: Record<string, string> = {
+  cpu: 'CPU',
+  cpu_model: 'CPU model',
+  cpu_platform: 'CPU platform',
+  cpu_segment: 'CPU segment',
+  cpu_vendor: 'CPU vendor',
+  processor: 'Processor',
+  processor_model: 'Processor model',
+  neural_processor: 'Neural processor',
+  gpu: 'GPU',
+  ram: 'RAM',
+  storage: 'Storage',
+  display: 'Display',
+  display_size: 'Display size',
+  product_line: 'Product line',
+  sales_model: 'Sales model',
+  model_name: 'Model name',
+  os: 'OS',
+  colour: 'Colour',
+  warranty: 'Warranty',
+  battery: 'Battery',
+  weight: 'Weight',
+};
+
+function humanizeSpecKey(k: string): string {
+  return SPEC_KEY_HUMAN_LABELS[k.toLowerCase()] ?? k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function workbenchColumnLabel(colId: string, meta: WorkbenchColumnMetadata | undefined): string {
   if ((CORE_WORKBENCH_IDS as readonly string[]).includes(colId)) {
     return CORE_WORKBENCH_LABELS[colId as CoreWorkbenchId];
   }
-  if (colId.startsWith('raw:')) return `Raw: ${colId.slice(4)}`;
-  if (colId.startsWith('spec:') && meta) {
+  if (colId.startsWith('raw:')) return `Upload: ${colId.slice(4)}`;
+  if (colId.startsWith('spec:')) {
     const k = colId.slice(5);
-    return `Spec: ${k}`;
+    return `Spec: ${humanizeSpecKey(k)}`;
   }
   if (colId.startsWith('cat:') && meta) {
     const cats = Array.isArray(meta.catalogue_product_fields) ? meta.catalogue_product_fields : [];
@@ -402,10 +432,7 @@ function lineupCaseStatusLabel(status: string): string {
     validated: 'Reviewing',
     pending_review: 'Needs review',
     accepted: 'Ready to sync',
-    po_pending: 'PO pending',
-    po_issued: 'PO issued',
-    in_fulfillment: 'In fulfillment',
-    received_closed: 'Received — closed',
+    synced: 'Synced to planner',
     cancelled: 'Cancelled',
   };
   return m[status] ?? status;
@@ -419,22 +446,21 @@ const STATUS_COLORS: Record<string, 'default' | 'primary' | 'secondary' | 'error
     validated: 'info',
     pending_review: 'warning',
     accepted: 'success',
-    po_pending: 'secondary',
+    synced: 'success',
     po_issued: 'secondary',
     in_fulfillment: 'info',
     received_closed: 'default',
     cancelled: 'error',
   };
 
+// Staging-only transitions for current-lineup cases (not PO/customer workflow).
+// Internal values map to staging labels via lineupCaseStatusLabel.
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   draft_imported: ['validated', 'cancelled'],
   validated: ['pending_review', 'cancelled'],
   pending_review: ['accepted', 'validated', 'cancelled'],
-  accepted: ['po_pending', 'cancelled'],
-  po_pending: ['po_issued', 'cancelled'],
-  po_issued: ['in_fulfillment'],
-  in_fulfillment: ['received_closed'],
-  received_closed: [],
+  accepted: ['cancelled'],
+  synced: [],
   cancelled: [],
 };
 
@@ -1408,11 +1434,14 @@ function StatusTransitionDialog({
   const allowed = ALLOWED_TRANSITIONS[currentCase.commercial_status] ?? [];
   const [nextStatus, setNextStatus] = useState(allowed[0] ?? '');
   const [notes, setNotes] = useState('');
-  const [acceptedBy, setAcceptedBy] = useState('');
+  const [markedBy, setMarkedBy] = useState('');
+
+  const confirmLabel =
+    nextStatus === 'accepted' ? 'Mark ready to sync' : nextStatus === 'cancelled' ? 'Cancel case' : 'Update status';
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Update status</DialogTitle>
+      <DialogTitle>Update staging status</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body2" color="text.secondary">
@@ -1430,7 +1459,7 @@ function StatusTransitionDialog({
               >
                 {allowed.map((s) => (
                   <MenuItem key={s} value={s}>
-                    {s}
+                    {lineupCaseStatusLabel(s)}
                   </MenuItem>
                 ))}
               </Select>
@@ -1439,9 +1468,9 @@ function StatusTransitionDialog({
           {nextStatus === 'accepted' && (
             <TextField
               size="small"
-              label="Accepted by"
-              value={acceptedBy}
-              onChange={(e) => setAcceptedBy(e.target.value)}
+              label="Marked ready by (optional)"
+              value={markedBy}
+              onChange={(e) => setMarkedBy(e.target.value)}
               fullWidth
             />
           )}
@@ -1465,11 +1494,11 @@ function StatusTransitionDialog({
           variant="contained"
           disabled={!nextStatus || allowed.length === 0}
           onClick={() => {
-            onConfirm(nextStatus, notes, acceptedBy || undefined);
+            onConfirm(nextStatus, notes, markedBy || undefined);
             onClose();
           }}
         >
-          Confirm
+          {confirmLabel}
         </Button>
       </DialogActions>
     </Dialog>
@@ -1801,7 +1830,8 @@ export function CurrentLineupSection({
     allowZeroQuantity: false,
   });
   const [workbenchScope, setWorkbenchScope] = useState<'active' | 'synced' | 'ready' | 'blocked' | 'all'>('active');
-  const [colMenuAnchor, setColMenuAnchor] = useState<null | HTMLElement>(null);
+  const [colSelectorOpen, setColSelectorOpen] = useState(false);
+  const [colSelectorSearch, setColSelectorSearch] = useState('');
 
   const { data: cases, isLoading } = useQuery<CommercialLineupCase[]>({
     queryKey: ['commercial-lineup-cases', activePlanId],
@@ -2277,8 +2307,8 @@ export function CurrentLineupSection({
           <Box sx={{ mt: 2 }} data-testid="current-lineup-working-grid">
             {planLineCount === 0 && workingLines.length > 0 && (
               <Alert severity="info" sx={{ mb: 1 }}>
-                This plan has no commercial planner lines yet. Lineup rows below are staged on this case. Accept the
-                case, then use Sync to plan to create planner lines from eligible rows.
+                This plan has no commercial planner lines yet. Lineup rows below are staged on this case. Mark the
+                case as Ready to sync, then use Sync to plan to create planner lines from eligible rows.
               </Alert>
             )}
             <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1} sx={{ mb: 1 }}>
@@ -2297,47 +2327,109 @@ export function CurrentLineupSection({
                     Resolve entities
                   </Button>
                 )}
-                <Button size="small" variant="text" onClick={(e) => setColMenuAnchor(e.currentTarget)} data-testid="lineup-workbench-columns">
+                <Button size="small" variant="text" onClick={() => setColSelectorOpen(true)} data-testid="lineup-workbench-columns">
                   Workbench columns
                 </Button>
               </Stack>
             </Stack>
-            <Menu anchorEl={colMenuAnchor} open={Boolean(colMenuAnchor)} onClose={() => setColMenuAnchor(null)}>
-              {columnMenuEntries.map((entry, idx) =>
-                entry.kind === 'header' ? (
-                  <ListSubheader key={`h-${entry.label}-${idx}`} sx={{ lineHeight: 2 }}>
-                    {entry.label}
-                  </ListSubheader>
-                ) : (
-                  <MenuItem key={entry.id} disableRipple sx={{ py: 0 }}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          size="small"
-                          checked={visibleCols.includes(entry.id)}
-                          onChange={() => {
-                            setVisibleCols((prev) => {
-                              const ix = prev.indexOf(entry.id);
-                              if (ix >= 0) {
-                                if (prev.length <= 1) return prev;
-                                return prev.filter((_, i) => i !== ix);
-                              }
-                              return [...prev, entry.id];
-                            });
-                          }}
-                        />
+            <Dialog open={colSelectorOpen} onClose={() => setColSelectorOpen(false)} maxWidth="md" fullWidth>
+              <DialogTitle>
+                Workbench columns
+                <Typography variant="body2" color="text.secondary" component="span" sx={{ ml: 1 }}>
+                  — {visibleColsFiltered.length} selected
+                </Typography>
+              </DialogTitle>
+              <DialogContent dividers>
+                <TextField
+                  size="small"
+                  placeholder="Search columns…"
+                  value={colSelectorSearch}
+                  onChange={(e) => setColSelectorSearch(e.target.value)}
+                  fullWidth
+                  sx={{ mb: 2 }}
+                />
+                <Stack spacing={2}>
+                  {columnMenuEntries.reduce<Array<{ label: string; cols: string[] }>>(
+                    (groups, entry) => {
+                      if (entry.kind === 'header') {
+                        groups.push({ label: entry.label, cols: [] });
+                      } else {
+                        const last = groups[groups.length - 1];
+                        if (last) last.cols.push(entry.id);
                       }
-                      label={workbenchColumnLabel(entry.id, wbMeta)}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </MenuItem>
-                ),
-              )}
-            </Menu>
+                      return groups;
+                    },
+                    [],
+                  ).map((group) => {
+                    const q = colSelectorSearch.toLowerCase().trim();
+                    const cols = q
+                      ? group.cols.filter((id) =>
+                          workbenchColumnLabel(id, wbMeta).toLowerCase().includes(q),
+                        )
+                      : group.cols;
+                    if (!cols.length) return null;
+                    return (
+                      <Paper key={group.label} variant="outlined" sx={{ p: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          {group.label}
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                            gap: 0.5,
+                          }}
+                        >
+                          {cols.map((id) => (
+                            <FormControlLabel
+                              key={id}
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={visibleCols.includes(id)}
+                                  onChange={() => {
+                                    setVisibleCols((prev) => {
+                                      const ix = prev.indexOf(id);
+                                      if (ix >= 0) {
+                                        if (prev.length <= 1) return prev;
+                                        return prev.filter((_, i) => i !== ix);
+                                      }
+                                      return [...prev, id];
+                                    });
+                                  }}
+                                />
+                              }
+                              label={
+                                <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
+                                  {workbenchColumnLabel(id, wbMeta)}
+                                </Typography>
+                              }
+                            />
+                          ))}
+                        </Box>
+                      </Paper>
+                    );
+                  })}
+                </Stack>
+              </DialogContent>
+              <DialogActions>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setVisibleCols(defaultWorkbenchVisible(hasWorkbenchPlan));
+                  }}
+                >
+                  Reset to defaults
+                </Button>
+                <Button size="small" variant="contained" onClick={() => setColSelectorOpen(false)}>
+                  Done
+                </Button>
+              </DialogActions>
+            </Dialog>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Case lifecycle: draft → validated → pending review → accepted → sync creates planner lines. Resolve
-              customer/distributor tokens before accept when needed. DAP on rows is import evidence only — not landed
-              cost.
+              Staging flow: Imported → Reviewing → Needs review → Ready to sync → Sync to plan. Resolve
+              customer/distributor tokens before marking ready when needed. DAP on rows is import evidence only — not
+              landed cost.
             </Typography>
             <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 1 }}>
               <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
@@ -2408,6 +2500,14 @@ export function CurrentLineupSection({
                   label={`Synced to planner: ${workbenchCounts.synced_to_planner}`}
                   color="success"
                 />
+                {(workbenchCounts.already_in_planner ?? 0) > 0 && (
+                  <Chip
+                    variant="outlined"
+                    size="small"
+                    label={`Already in plan (duplicate key): ${workbenchCounts.already_in_planner}`}
+                    color="info"
+                  />
+                )}
                 <Chip
                   variant="outlined"
                   size="small"

@@ -1918,37 +1918,36 @@ export default function CommercialPlannerPage() {
           }}
         />
 
-        {/* Readiness chips */}
+        {/* Readiness panel */}
         {planReadiness && (
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }} data-testid="plan-readiness-chips">
+          <Box sx={{ mb: 1 }} data-testid="plan-readiness-panel">
             {planReadiness.missing_sku_assumption > 0 && (
-              <Chip
-                size="small"
-                label={`Missing SKU assumptions: ${planReadiness.missing_sku_assumption} — controlled cost unavailable`}
-                color="warning"
-                variant="outlined"
-              />
+              <Alert severity="warning" sx={{ mb: 0.5, py: 0.5 }}>
+                <strong>SKU assumption missing</strong> ({planReadiness.missing_sku_assumption} line
+                {planReadiness.missing_sku_assumption !== 1 ? 's' : ''}) — add controlled cost / assumption before
+                economics can calculate.
+              </Alert>
             )}
             {planReadiness.missing_customer_term > 0 && (
-              <Chip
-                size="small"
-                label={`Missing customer terms: ${planReadiness.missing_customer_term}`}
-                color="warning"
-                variant="outlined"
-              />
+              <Alert severity="warning" sx={{ mb: 0.5, py: 0.5 }}>
+                <strong>Customer terms missing</strong> ({planReadiness.missing_customer_term} line
+                {planReadiness.missing_customer_term !== 1 ? 's' : ''}) — configure default terms for this customer or
+                override on the plan.
+              </Alert>
             )}
             {planReadiness.missing_distributor_term > 0 && (
-              <Chip
-                size="small"
-                label={`Missing distributor terms: ${planReadiness.missing_distributor_term}`}
-                color="warning"
-                variant="outlined"
-              />
+              <Alert severity="warning" sx={{ mb: 0.5, py: 0.5 }}>
+                <strong>Distributor terms missing</strong> ({planReadiness.missing_distributor_term} line
+                {planReadiness.missing_distributor_term !== 1 ? 's' : ''}) — configure default distributor terms or
+                override on the plan.
+              </Alert>
             )}
             {planReadiness.ready && planReadiness.line_count > 0 && (
-              <Chip size="small" label="All defaults present" color="success" variant="outlined" />
+              <Alert severity="success" sx={{ mb: 0.5, py: 0.5 }}>
+                All defaults present — press <strong>Recalculate</strong> to compute economics.
+              </Alert>
             )}
-          </Stack>
+          </Box>
         )}
 
         {/* Recalculate-needed banner */}
@@ -1961,7 +1960,7 @@ export default function CommercialPlannerPage() {
         {/* Grid + conditional line-detail sidebar */}
         {lines !== undefined && (lines?.length ?? 0) === 0 && stagedLineupSummary.lineCount > 0 && (
           <Alert severity="info" sx={{ mb: 1 }} data-testid="staged-lineup-banner">
-            Current lineup rows are staged. Accept the case and sync to plan to create planner lines.
+            Current lineup rows are staged. Mark the case as Ready to sync, then use Sync to plan to create planner lines.
           </Alert>
         )}
         <Stack direction="row" spacing={2} alignItems="stretch">
