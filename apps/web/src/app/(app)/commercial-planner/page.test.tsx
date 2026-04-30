@@ -284,6 +284,13 @@ vi.mock('@/lib/api', () => ({
   apiPost: mockState.apiPostMock,
   apiPatch: mockState.apiPatchMock,
   apiDelete: mockState.apiDeleteMock,
+  apiDownloadBlob: vi.fn(() => Promise.resolve()),
+  apiPostFormData: vi.fn(async () => ({
+    parse_errors: [],
+    rows: [],
+    summary: { creates: 0, updates: 0, errors: 0, blocking_errors: 0 },
+    can_apply: false,
+  })),
 }));
 
 describe('CommercialPlannerPage', () => {

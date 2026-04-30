@@ -45,6 +45,12 @@ import { CurrentLineupSection } from '@/features/commercial-planner/CurrentLineu
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { LineEconomicsWaterfall } from '@/features/commercial-planner/LineEconomicsWaterfall';
 import { PlannerDefaultsMaintenance } from '@/features/commercial-planner/PlannerDefaultsMaintenance';
+import {
+  COMMON_SKU_COST_ISO_CODES,
+  SKU_COST_CURRENCY_OTHER,
+  resolveCostCurrencyFromSelect,
+  splitCostCurrencyForSelect,
+} from '@/features/commercial-planner/skuEconomicsCurrencyUi';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -55,6 +61,7 @@ type Plan = {
   period_start: string;
   period_end: string | null;
   owner: string | null;
+  environment?: string | null;
   country_code: string | null;
   currency_code: string;
   line_count: number;
@@ -753,6 +760,20 @@ export default function CommercialPlannerPage() {
     owner: 'planner',
     currency_code: 'USD',
   });
+  const [planSettingsOpen, setPlanSettingsOpen] = useState(false);
+  const [planSettingsDraft, setPlanSettingsDraft] = useState({
+    plan_name: '',
+    status: 'draft',
+    country_code: '',
+    period_start: '',
+    period_end: '',
+    notes: '',
+  });
+  const [planSetCcySelect, setPlanSetCcySelect] = useState('USD');
+  const [planSetCcyOther, setPlanSetCcyOther] = useState('');
+  const [planSetInitialCcy, setPlanSetInitialCcy] = useState('');
+  const [planCcyChangeAck, setPlanCcyChangeAck] = useState(false);
+  const [planSettingsSaveError, setPlanSettingsSaveError] = useState<string | null>(null);
   const [lineCustomer, setLineCustomer] = useState<CustomerPick | null>(null);
   const [lineDistributor, setLineDistributor] = useState<DistributorPick | null>(null);
   const [lineProduct, setLineProduct] = useState<ProductPick | null>(null);
@@ -941,6 +962,24 @@ export default function CommercialPlannerPage() {
 
   const activePlanId = selectedPlanId ?? plans?.[0]?.id ?? null;
   const activePlan = useMemo(() => plans?.find((p) => p.id === activePlanId) ?? null, [plans, activePlanId]);
+  const openPlanSettings = useCallback(() => {
+    if (!activePlan) return;
+    setPlanSettingsSaveError(null);
+    setPlanSettingsDraft({
+      plan_name: activePlan.plan_name,
+      status: activePlan.status,
+      country_code: activePlan.country_code ?? '',
+      period_start: activePlan.period_start,
+      period_end: activePlan.period_end ?? '',
+      notes: activePlan.notes ?? '',
+    });
+    const sp = splitCostCurrencyForSelect(activePlan.currency_code);
+    setPlanSetCcySelect(sp.selectValue);
+    setPlanSetCcyOther(sp.otherIso);
+    setPlanSetInitialCcy(resolveCostCurrencyFromSelect(sp.selectValue, sp.otherIso));
+    setPlanCcyChangeAck(false);
+    setPlanSettingsOpen(true);
+  }, [activePlan]);
   const planCcyIso = useMemo(() => (activePlan?.currency_code ?? '').trim(), [activePlan?.currency_code]);
   const planCurrencyLabel = planCcyIso || 'Plan currency not set';
   const { data: lines, isPending: linesPending } = useQuery({
@@ -1189,6 +1228,26 @@ export default function CommercialPlannerPage() {
         currency_code: 'USD',
       });
       void qc.invalidateQueries({ queryKey: ['commercial-plans'] });
+    },
+  });
+
+  const patchPlan = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      apiPatch<Plan>(`/api/v1/commercial-planner/plans/${activePlanId!}`, body),
+    onSuccess: () => {
+      setPlanSettingsOpen(false);
+      setPlanSettingsSaveError(null);
+      void qc.invalidateQueries({ queryKey: ['commercial-plans'] });
+      if (activePlanId != null) {
+        void qc.invalidateQueries({ queryKey: ['plan-readiness', activePlanId] });
+        void qc.invalidateQueries({ queryKey: ['commercial-plan-lines', activePlanId] });
+        void qc.invalidateQueries({ queryKey: ['commercial-plan-summary', activePlanId] });
+        void qc.invalidateQueries({ queryKey: ['commercial-plan-suggestions', activePlanId] });
+        void qc.invalidateQueries({ queryKey: ['commercial-column-metadata', activePlanId] });
+      }
+    },
+    onError: (e: unknown) => {
+      setPlanSettingsSaveError(e instanceof Error ? e.message : 'Save failed');
     },
   });
   const createLine = useMutation({
@@ -2077,6 +2136,15 @@ export default function CommercialPlannerPage() {
               Delete plan
             </Button>
           )}
+          <Button
+            size="small"
+            variant="outlined"
+            data-testid="plan-settings-btn"
+            onClick={openPlanSettings}
+            disabled={!activePlan}
+          >
+            Plan settings
+          </Button>
           <Button size="small" variant="contained" onClick={() => setAddLineOpen(true)} disabled={activePlanId == null}>
             Add line
           </Button>
@@ -2600,6 +2668,152 @@ export default function CommercialPlannerPage() {
         <DialogActions>
           <Button onClick={() => setAddPlanOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={() => createPlan.mutate()} disabled={!planDraft.plan_name.trim()}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={planSettingsOpen}
+        onClose={() => !patchPlan.isPending && setPlanSettingsOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Plan settings</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ mt: 1 }}>
+            <Alert severity="info" sx={{ py: 0.5 }}>
+              <Typography variant="caption" component="div">
+                Changing <strong>Plan / customer-facing currency</strong> updates labels only. Existing numeric amounts on
+                plan lines (list price, campaign price, etc.) are <strong>not</strong> converted automatically — they stay as
+                the numbers you already entered, now interpreted in the new currency unless you edit them.
+              </Typography>
+            </Alert>
+            <TextField
+              label="Plan name"
+              value={planSettingsDraft.plan_name}
+              onChange={(e) => setPlanSettingsDraft((p) => ({ ...p, plan_name: e.target.value }))}
+            />
+            <FormControl fullWidth size="small">
+              <InputLabel id="plan-settings-status-label">Status</InputLabel>
+              <Select
+                labelId="plan-settings-status-label"
+                label="Status"
+                value={planSettingsDraft.status}
+                onChange={(e) => setPlanSettingsDraft((p) => ({ ...p, status: String(e.target.value) }))}
+              >
+                <MenuItem value="draft">draft</MenuItem>
+                <MenuItem value="review">review</MenuItem>
+                <MenuItem value="approved">approved</MenuItem>
+                <MenuItem value="published">published</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              label="Country code (optional)"
+              value={planSettingsDraft.country_code}
+              onChange={(e) => setPlanSettingsDraft((p) => ({ ...p, country_code: e.target.value.toUpperCase() }))}
+              inputProps={{ maxLength: 8 }}
+            />
+            <TextField
+              label="Period start"
+              type="date"
+              InputLabelProps={{ shrink: true }}
+              value={planSettingsDraft.period_start}
+              onChange={(e) => setPlanSettingsDraft((p) => ({ ...p, period_start: e.target.value }))}
+            />
+            <TextField
+              label="Period end (optional)"
+              type="date"
+              InputLabelProps={{ shrink: true }}
+              value={planSettingsDraft.period_end}
+              onChange={(e) => setPlanSettingsDraft((p) => ({ ...p, period_end: e.target.value }))}
+            />
+            <FormControl fullWidth data-testid="plan-settings-currency-select">
+              <InputLabel id="plan-settings-ccy-label">Plan / customer-facing currency</InputLabel>
+              <Select
+                labelId="plan-settings-ccy-label"
+                label="Plan / customer-facing currency"
+                value={planSetCcySelect}
+                onChange={(e) => setPlanSetCcySelect(String(e.target.value))}
+              >
+                {COMMON_SKU_COST_ISO_CODES.map((c) => (
+                  <MenuItem key={c} value={c}>
+                    {c}
+                  </MenuItem>
+                ))}
+                <MenuItem value={SKU_COST_CURRENCY_OTHER}>Other (enter ISO code)</MenuItem>
+              </Select>
+            </FormControl>
+            {planSetCcySelect === SKU_COST_CURRENCY_OTHER ? (
+              <TextField
+                label="Other ISO currency code"
+                value={planSetCcyOther}
+                onChange={(e) => setPlanSetCcyOther(e.target.value.toUpperCase())}
+                inputProps={{ maxLength: 8 }}
+              />
+            ) : null}
+            <Typography variant="caption" color="text.secondary" display="block">
+              Customer-facing list and campaign/event prices use this currency. Controlled cost may use a different
+              currency (SKU economics).
+            </Typography>
+            {resolveCostCurrencyFromSelect(planSetCcySelect, planSetCcyOther) !== planSetInitialCcy ? (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={planCcyChangeAck}
+                    onChange={(e) => setPlanCcyChangeAck(e.target.checked)}
+                    data-testid="plan-ccy-change-ack"
+                  />
+                }
+                label="I understand existing line price amounts are not auto-converted when the plan currency changes."
+              />
+            ) : null}
+            <TextField
+              label="Notes"
+              value={planSettingsDraft.notes}
+              onChange={(e) => setPlanSettingsDraft((p) => ({ ...p, notes: e.target.value }))}
+              multiline
+              minRows={2}
+            />
+            {planSettingsSaveError ? <Alert severity="warning">{planSettingsSaveError}</Alert> : null}
+            {patchPlan.isError ? (
+              <Alert severity="error">Save failed. Check values and try again.</Alert>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPlanSettingsOpen(false)} disabled={patchPlan.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={
+              patchPlan.isPending ||
+              !planSettingsDraft.plan_name.trim() ||
+              (resolveCostCurrencyFromSelect(planSetCcySelect, planSetCcyOther) !== planSetInitialCcy &&
+                !planCcyChangeAck)
+            }
+            onClick={() => {
+              const nextCcy = resolveCostCurrencyFromSelect(planSetCcySelect, planSetCcyOther);
+              if (nextCcy !== planSetInitialCcy && !planCcyChangeAck) {
+                setPlanSettingsSaveError(
+                  'Confirm that plan currency change does not auto-convert existing line amounts (checkbox).'
+                );
+                return;
+              }
+              if (activePlanId == null) return;
+              setPlanSettingsSaveError(null);
+              patchPlan.mutate({
+                plan_name: planSettingsDraft.plan_name.trim(),
+                status: planSettingsDraft.status,
+                country_code: planSettingsDraft.country_code.trim() || null,
+                currency_code: nextCcy,
+                period_start: planSettingsDraft.period_start,
+                period_end: planSettingsDraft.period_end.trim() || null,
+                notes: planSettingsDraft.notes.trim() ? planSettingsDraft.notes.trim() : null,
+              });
+            }}
+          >
             Save
           </Button>
         </DialogActions>

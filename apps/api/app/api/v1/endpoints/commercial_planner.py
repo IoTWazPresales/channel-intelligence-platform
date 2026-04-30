@@ -6,8 +6,8 @@ from datetime import date, datetime, timezone
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
-from pydantic import BaseModel, Field, model_validator
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete as sa_delete, distinct, func, or_, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,6 +64,11 @@ from app.services.commercial_planner.read_model import (
     plan_line_read_model_extensions,
     product_specs_from_json,
     specs_json_flat_string_map,
+)
+from app.services.commercial_planner.sku_economics_import import (
+    apply_sku_economics_import,
+    build_template_csv,
+    preview_sku_economics_import,
 )
 from app.services.commercial_planner.suggestions import (
     SuggestionInputs,
@@ -297,6 +302,30 @@ class PlanPatch(BaseModel):
     status: str | None = None
     owner: str | None = None
     notes: str | None = None
+    country_code: str | None = Field(default=None, max_length=8)
+    currency_code: str | None = Field(default=None, max_length=8)
+    period_start: date | None = None
+    period_end: date | None = None
+
+    @field_validator("currency_code", mode="before")
+    @classmethod
+    def normalize_currency_code(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            s = v.strip().upper()
+            return s if s else None
+        return v
+
+    @field_validator("country_code", mode="before")
+    @classmethod
+    def normalize_country_code(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            s = v.strip().upper()
+            return s if s else None
+        return v
 
 
 class PlanLineCreate(BaseModel):
@@ -600,6 +629,22 @@ async def _resolve_terms_and_calc(
     return payload, payload["calc_flags"]
 
 
+def _commercial_plan_api_item(p: CommercialPlan, line_count: int) -> dict:
+    return {
+        "id": p.id,
+        "plan_name": p.plan_name,
+        "status": p.status,
+        "period_start": p.period_start.isoformat(),
+        "period_end": p.period_end.isoformat() if p.period_end else None,
+        "owner": p.owner,
+        "environment": p.environment,
+        "country_code": p.country_code,
+        "currency_code": p.currency_code,
+        "notes": p.notes,
+        "line_count": int(line_count),
+    }
+
+
 @router.get("/plans")
 async def list_plans(db: AsyncSession = Depends(get_db)):
     plans = (await db.execute(select(CommercialPlan).order_by(CommercialPlan.id.desc()))).scalars().all()
@@ -608,21 +653,7 @@ async def list_plans(db: AsyncSession = Depends(get_db)):
         line_count = (
             await db.execute(select(func.count(CommercialPlanLine.id)).where(CommercialPlanLine.commercial_plan_id == p.id))
         ).scalar_one()
-        out.append(
-            {
-                "id": p.id,
-                "plan_name": p.plan_name,
-                "status": p.status,
-                "period_start": p.period_start.isoformat(),
-                "period_end": p.period_end.isoformat() if p.period_end else None,
-                "owner": p.owner,
-                "environment": p.environment,
-                "country_code": p.country_code,
-                "currency_code": p.currency_code,
-                "notes": p.notes,
-                "line_count": int(line_count),
-            }
-        )
+        out.append(_commercial_plan_api_item(p, int(line_count)))
     return out
 
 
@@ -643,11 +674,21 @@ async def patch_plan(plan_id: int, body: PlanPatch, db: AsyncSession = Depends(g
     data = body.model_dump(exclude_unset=True)
     if "status" in data and data["status"] not in ALLOWED_PLAN_STATUSES:
         raise HTTPException(status_code=400, detail=f"status must be one of: {', '.join(sorted(ALLOWED_PLAN_STATUSES))}")
+    if "currency_code" in data and data["currency_code"] is not None:
+        ccy = data["currency_code"]
+        if not re.fullmatch(r"[A-Z]{3,8}", ccy):
+            raise HTTPException(
+                status_code=400,
+                detail="currency_code must be a 3–8 letter ISO-style code (A–Z only)",
+            )
     for k, v in data.items():
         setattr(plan, k, v)
     await db.commit()
     await db.refresh(plan)
-    return {"id": plan.id, "status": plan.status}
+    line_count = (
+        await db.execute(select(func.count(CommercialPlanLine.id)).where(CommercialPlanLine.commercial_plan_id == plan.id))
+    ).scalar_one()
+    return _commercial_plan_api_item(plan, int(line_count))
 
 
 @router.delete("/plans/{plan_id}", status_code=204)
@@ -1562,6 +1603,45 @@ async def delete_distributor_term(term_id: int, db: AsyncSession = Depends(get_d
     await db.delete(row)
     await db.commit()
     return Response(status_code=204)
+
+
+@router.get("/sku-assumptions/import-template")
+async def sku_economics_import_template():
+    return Response(
+        content=build_template_csv().encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="sku_economics_template.csv"'},
+    )
+
+
+@router.post("/sku-assumptions/import-preview")
+async def sku_economics_import_preview(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    content = await file.read()
+    if not content or not content.strip():
+        raise HTTPException(status_code=400, detail="Empty file")
+    return await preview_sku_economics_import(db, content)
+
+
+@router.post("/sku-assumptions/import-apply")
+async def sku_economics_import_apply(
+    confirm: bool = Form(False),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    if not confirm:
+        raise HTTPException(status_code=400, detail="confirm must be true to apply import changes")
+    content = await file.read()
+    if not content or not content.strip():
+        raise HTTPException(status_code=400, detail="Empty file")
+    try:
+        return await apply_sku_economics_import(db, content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except IntegrityError:
+        raise HTTPException(
+            status_code=409,
+            detail="Apply conflicted with existing rows (e.g. duplicate product); refresh and retry.",
+        ) from None
 
 
 @router.get("/sku-assumptions")

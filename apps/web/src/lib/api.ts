@@ -98,6 +98,25 @@ export async function apiPost<T>(path: string, body?: unknown, init?: RequestIni
   return res.json() as Promise<T>;
 }
 
+/** POST multipart (e.g. CSV upload). Do not set JSON Content-Type — browser sets multipart boundary. */
+export async function apiPostFormData<T>(path: string, formData: FormData, init?: RequestInit): Promise<T> {
+  const res = await fetch(apiUrl(path), {
+    method: 'POST',
+    ...init,
+    headers: {
+      'X-User-Role': 'admin',
+      'X-User-Id': 'demo-user',
+      ...init?.headers,
+    },
+    body: formData,
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(`${res.status} ${await readFetchError(res)}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 export async function apiPatch<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
   const res = await fetch(apiUrl(path), {
     method: 'PATCH',
