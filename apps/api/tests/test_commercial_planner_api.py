@@ -507,12 +507,14 @@ def test_lineup_evidence_endpoint_returns_aggregated_evidence():
         promo_price_local=Decimal("899"),
         dap_local=Decimal("750"),
         actual_dap_local=None,
+        disti_cost_local=Decimal("640"),
         disti_margin_pct=Decimal("0.08"),
         vat_pct=Decimal("0.15"),
         rebate_pct=Decimal("0.03"),
         total_quantity_units=Decimal("216"),
         line_count=2,
         period_label="2026-Q2",
+        evidence_currency_code="ZAR",
     )
     fake_execute_result = MagicMock()
     fake_execute_result.one = MagicMock(return_value=fake_row)
@@ -535,6 +537,8 @@ def test_lineup_evidence_endpoint_returns_aggregated_evidence():
     assert ev["promo_price_local"] == pytest.approx(899.0)
     assert ev["dap_local"] == pytest.approx(750.0)
     assert ev["actual_dap_local"] is None
+    assert ev["disti_cost_local"] == pytest.approx(640.0)
+    assert ev["evidence_currency_code"] == "ZAR"
     assert ev["line_count"] == 2
     assert ev["period_label"] == "2026-Q2"
     # Cost semantics note must mention DAP and SKU controlled cost (not DAP as cost).

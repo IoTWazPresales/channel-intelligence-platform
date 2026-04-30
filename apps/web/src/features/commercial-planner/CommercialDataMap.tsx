@@ -127,6 +127,19 @@ const ROWS: Row[] = [
       'Total reserve and split between campaign vs non-campaign buckets; split is not “promo-only” naming in business terms.',
   },
   {
+    concept: 'Plan currency (customer-facing scope)',
+    dbField: 'commercial_plan.currency_code',
+    userLabel: 'Plan / customer-facing currency',
+    kind: 'input',
+    editedIn: 'Create plan · API',
+    displayedIn: 'Planner header · grid column headers · add-line dialog',
+    readiness: 'partial',
+    calculator: 'partial',
+    currencyNote: 'ISO code for list/campaign prices',
+    notes:
+      'Labels customer-facing list and campaign/event amounts. Economics output currency may differ per line (economics_calc_currency_code).',
+  },
+  {
     concept: 'Plan line customer-facing prices',
     dbField: 'commercial_plan_line.target_srp_local, promo_srp_local',
     userLabel: 'Customer-facing list price, campaign/event price',
@@ -209,6 +222,32 @@ const ROWS: Row[] = [
     calculator: 'no',
     currencyNote: 'Line / header currency context',
     notes: 'Must never map to SKU controlled cost, SKU assumption, or cost fields.',
+  },
+  {
+    concept: 'Rand landed / local DAP style import headers',
+    dbField: 'historical_lineup_import_line.dap_local (column aliases)',
+    userLabel: 'Local DAP / distributor-acquisition evidence',
+    kind: 'evidence',
+    editedIn: 'Historical lineup import (header mapping)',
+    displayedIn: 'Lineup coverage · line evidence · waterfall section D',
+    readiness: 'no',
+    calculator: 'no',
+    currencyNote: 'Import / header currency when present',
+    notes:
+      'Headers such as Rand landed cost map to dap_local as commercial sell-in / acquisition evidence, not PM bottom or true landed cost (logistics not modeled).',
+  },
+  {
+    concept: 'Future FX provider automation',
+    dbField: '— (not implemented)',
+    userLabel: 'Latest FX → accept/lock',
+    kind: 'system',
+    editedIn: 'Future integration',
+    displayedIn: 'Future planner / assumptions UI',
+    readiness: 'no',
+    calculator: 'no',
+    currencyNote: '—',
+    notes:
+      'Should fetch a provider spot/forward rate, show it to the user, then persist an explicit accepted rate on plan or SKU assumption — never silently overwrite FX on page load.',
   },
   {
     concept: 'Disti-reported cost (import)',
@@ -296,7 +335,8 @@ export function CommercialDataMap() {
       <Typography variant="caption" color="text.secondary">
         Deferred (needs migration / future modules): payment terms, distributor rebate, cost currency & source,
         logistics assumptions, FX scenario table, true landed cost stack, pricing simulation, BOM/configurator-sourced
-        simulated controlled cost.
+        simulated controlled cost. Latest FX provider wiring is intentionally not in this build — SKU FX remains manual
+        and auditable.
       </Typography>
     </Stack>
   );

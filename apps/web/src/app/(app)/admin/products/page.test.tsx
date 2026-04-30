@@ -94,6 +94,9 @@ vi.mock('@/lib/api', () => ({
     if (url.startsWith('/api/v1/commercial-planner/sku-assumptions?')) {
       return [];
     }
+    if (url === '/api/v1/commercial-planner/plans') {
+      return [{ id: 1, currency_code: 'ZAR' }];
+    }
     if (url.startsWith('/api/v1/products?')) {
       return {
         items: [
@@ -188,6 +191,15 @@ describe('AdminProductsPage pass1 behaviors', () => {
     expect(await screen.findByTestId('product-sku-economics-empty')).toBeInTheDocument();
     expect(await screen.findByTestId('product-sku-economics-create')).toBeInTheDocument();
     expect(panel).toHaveTextContent(/not.*populated.*DAP/i);
+  });
+
+  it('SKU economics create dialog uses controlled cost currency select and FX helper text', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    fireEvent.click(await screen.findByTestId('product-sku-economics-create'));
+    expect(await screen.findByTestId('product-sku-economics-ccy-select')).toBeInTheDocument();
+    expect(await screen.findByText(/Example: if plan currency is ZAR and controlled cost is USD/i)).toBeInTheDocument();
+    expect(await screen.findByTestId('product-sku-economics-fx-manual-notice')).toBeInTheDocument();
   });
 
   it('exports current filtered/sorted view through grid api', async () => {

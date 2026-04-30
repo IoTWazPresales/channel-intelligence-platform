@@ -8,7 +8,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -19,9 +23,16 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import {
+  COMMON_SKU_COST_ISO_CODES,
+  SKU_COST_CURRENCY_OTHER,
+  resolveCostCurrencyFromSelect,
+  splitCostCurrencyForSelect,
+  validateSkuEconomicsInputs,
+} from '@/features/commercial-planner/skuEconomicsCurrencyUi';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 
 type CustomerTerm = {
@@ -57,6 +68,7 @@ type SkuAssumption = {
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 type DistributorPick = { id: number; distributor_code: string; distributor_name: string };
 type ProductPick = { id: number; sku: string; name: string };
+type PlanRow = { id: number; currency_code: string };
 
 type CustomerListResponse = { items: CustomerPick[] };
 type DistributorListResponse = { items: DistributorPick[] };
@@ -110,6 +122,11 @@ export function PlannerDefaultsMaintenance() {
       apiGet<SkuAssumption[]>(`/api/v1/commercial-planner/sku-assumptions?q=${encodeURIComponent(skuQ)}`, { signal }),
   });
 
+  const { data: plansForCcy } = useQuery({
+    queryKey: ['commercial-planner', 'plans'],
+    queryFn: ({ signal }) => apiGet<PlanRow[]>('/api/v1/commercial-planner/plans', { signal }),
+  });
+
   const [custDlg, setCustDlg] = useState<'add' | 'edit' | null>(null);
   const [custPick, setCustPick] = useState<CustomerPick | null>(null);
   const [custMargin, setCustMargin] = useState('0.12');
@@ -124,12 +141,38 @@ export function PlannerDefaultsMaintenance() {
   const [skuDlg, setSkuDlg] = useState<'add' | 'edit' | null>(null);
   const [skuPick, setSkuPick] = useState<ProductPick | null>(null);
   const [controlledCost, setControlledCost] = useState('100');
-  const [skuCostCcy, setSkuCostCcy] = useState('USD');
+  const [skuCcySelect, setSkuCcySelect] = useState('USD');
+  const [skuCcyOther, setSkuCcyOther] = useState('');
   const [vat, setVat] = useState('0.15');
   const [fx, setFx] = useState('1');
   const [resTot, setResTot] = useState('0.10');
   const [resSplit, setResSplit] = useState('0.5');
   const [editSkuId, setEditSkuId] = useState<number | null>(null);
+
+  const planCurrencyHint = useMemo(() => {
+    const raw = (plansForCcy?.[0]?.currency_code ?? '').trim();
+    return raw || null;
+  }, [plansForCcy]);
+
+  const resolvedSkuCcy = useMemo(
+    () => resolveCostCurrencyFromSelect(skuCcySelect, skuCcyOther),
+    [skuCcySelect, skuCcyOther],
+  );
+  const skuFxLabel = planCurrencyHint
+    ? `FX: ${planCurrencyHint} per 1 ${resolvedSkuCcy}`
+    : 'FX: plan/local currency units per 1 controlled-cost currency';
+  const skuValidationErrors = useMemo(
+    () =>
+      validateSkuEconomicsInputs({
+        controlled_cost_amount: Number(controlledCost),
+        controlled_cost_currency_code: resolvedSkuCcy,
+        fx_plan_currency_per_cost_currency: Number(fx),
+        vat_rate_pct: Number(vat),
+        reserve_total_pct: Number(resTot),
+        promo_reserve_split_pct: Number(resSplit),
+      }),
+    [controlledCost, resolvedSkuCcy, fx, vat, resTot, resSplit],
+  );
 
   const invalidateAll = () => {
     void qc.invalidateQueries({ queryKey: ['commercial-planner'] });
@@ -187,7 +230,7 @@ export function PlannerDefaultsMaintenance() {
     mutationFn: async () => {
       const payload = {
         controlled_cost_amount: Number(controlledCost),
-        controlled_cost_currency_code: skuCostCcy.trim() || 'USD',
+        controlled_cost_currency_code: resolvedSkuCcy,
         vat_rate_pct: Number(vat),
         fx_plan_currency_per_cost_currency: Number(fx),
         reserve_total_pct: Number(resTot),
@@ -204,6 +247,7 @@ export function PlannerDefaultsMaintenance() {
     onSuccess: () => {
       setSkuDlg(null);
       setSkuPick(null);
+      setEditSkuId(null);
       invalidateAll();
     },
   });
@@ -244,7 +288,9 @@ export function PlannerDefaultsMaintenance() {
     setEditSkuId(row.id);
     setSkuPick({ id: row.product_id, sku: row.product_sku, name: row.product_name });
     setControlledCost(String(row.controlled_cost_amount));
-    setSkuCostCcy((row.controlled_cost_currency_code || 'USD').trim() || 'USD');
+    const sp = splitCostCurrencyForSelect(row.controlled_cost_currency_code);
+    setSkuCcySelect(sp.selectValue);
+    setSkuCcyOther(sp.otherIso);
     setVat(String(row.vat_rate_pct));
     setFx(String(row.fx_plan_currency_per_cost_currency));
     setResTot(String(row.reserve_total_pct));
@@ -374,7 +420,22 @@ export function PlannerDefaultsMaintenance() {
       <Paper sx={{ p: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
           <Typography variant="subtitle1">SKU assumptions (controlled cost, VAT, FX, reserves)</Typography>
-          <Button size="small" variant="contained" onClick={() => { setSkuDlg('add'); setEditSkuId(null); setSkuPick(null); setControlledCost('100'); setSkuCostCcy('USD'); setVat('0.15'); setFx('1'); setResTot('0.10'); setResSplit('0.5'); }}>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={() => {
+              setSkuDlg('add');
+              setEditSkuId(null);
+              setSkuPick(null);
+              setControlledCost('100');
+              setSkuCcySelect('USD');
+              setSkuCcyOther('');
+              setVat('0.15');
+              setFx('1');
+              setResTot('0.10');
+              setResSplit('0.5');
+            }}
+          >
             Add
           </Button>
         </Stack>
@@ -528,34 +589,77 @@ export function PlannerDefaultsMaintenance() {
                 Product: {skuPick ? `${skuPick.sku} — ${skuPick.name}` : ''}
               </Typography>
             )}
+            <Typography variant="body2" color="text.secondary">
+              <strong>Controlled cost / PM bottom</strong> is the internal SKU cost basis for economics — not from DAP
+              or lineup, and not logistics-inclusive landed cost.
+            </Typography>
             <TextField
               label="Controlled cost amount (>0)"
               value={controlledCost}
               onChange={(e) => setControlledCost(e.target.value)}
             />
-            <TextField
-              label="Controlled cost currency (ISO, e.g. USD)"
-              value={skuCostCcy}
-              onChange={(e) => setSkuCostCcy(e.target.value.toUpperCase())}
-            />
+            <FormControl fullWidth data-testid="planner-defaults-sku-ccy-select">
+              <InputLabel id="planner-sku-ccy-label">Controlled cost currency</InputLabel>
+              <Select
+                labelId="planner-sku-ccy-label"
+                label="Controlled cost currency"
+                value={skuCcySelect}
+                onChange={(e) => setSkuCcySelect(String(e.target.value))}
+              >
+                {COMMON_SKU_COST_ISO_CODES.map((c) => (
+                  <MenuItem key={c} value={c}>
+                    {c}
+                  </MenuItem>
+                ))}
+                <MenuItem value={SKU_COST_CURRENCY_OTHER}>Other (enter ISO code)</MenuItem>
+              </Select>
+            </FormControl>
+            {skuCcySelect === SKU_COST_CURRENCY_OTHER ? (
+              <TextField
+                label="Other ISO currency code"
+                value={skuCcyOther}
+                onChange={(e) => setSkuCcyOther(e.target.value.toUpperCase())}
+                inputProps={{ maxLength: 8 }}
+              />
+            ) : null}
             <TextField label="VAT rate (0–1)" value={vat} onChange={(e) => setVat(e.target.value)} />
-            <TextField
-              label="FX: plan currency units per 1 controlled-cost currency (>0)"
-              value={fx}
-              onChange={(e) => setFx(e.target.value)}
-            />
+            <TextField label={skuFxLabel} value={fx} onChange={(e) => setFx(e.target.value)} />
+            <Typography variant="caption" color="text.secondary" display="block">
+              {planCurrencyHint
+                ? `Example: if plan currency is ${planCurrencyHint} and controlled cost is ${resolvedSkuCcy}, enter ${planCurrencyHint} per 1 ${resolvedSkuCcy}.`
+                : 'Plan currency hint uses the first commercial plan in this workspace when available.'}
+            </Typography>
+            <Alert severity="info" sx={{ py: 0.5 }} data-testid="planner-defaults-fx-manual-notice">
+              <Typography variant="caption" component="div">
+                FX is manually entered and locked on this assumption until you change it. Latest-rate automation will
+                require an FX provider and an explicit accept/lock step — not silent refresh on every visit.
+              </Typography>
+            </Alert>
             <TextField label="Reserve total (0–1)" value={resTot} onChange={(e) => setResTot(e.target.value)} />
             <TextField
               label="Campaign / support reserve split (0–1)"
               value={resSplit}
               onChange={(e) => setResSplit(e.target.value)}
             />
+            {skuValidationErrors.length ? (
+              <Alert severity="warning" data-testid="planner-defaults-sku-validation">
+                {skuValidationErrors.map((e) => (
+                  <Typography key={e} variant="caption" display="block">
+                    {e}
+                  </Typography>
+                ))}
+              </Alert>
+            ) : null}
             {saveSku.isError ? <Alert severity="error">Save failed. Check values and duplicates.</Alert> : null}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSkuDlg(null)}>Cancel</Button>
-          <Button variant="contained" disabled={!skuPick || saveSku.isPending} onClick={() => void saveSku.mutateAsync().catch(() => undefined)}>
+          <Button
+            variant="contained"
+            disabled={!skuPick || saveSku.isPending || skuValidationErrors.length > 0}
+            onClick={() => void saveSku.mutateAsync().catch(() => undefined)}
+          >
             Save
           </Button>
         </DialogActions>

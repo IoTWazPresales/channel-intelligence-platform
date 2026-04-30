@@ -236,7 +236,9 @@ async def compute_plan_readiness_payload(db: AsyncSession, plan_id: int) -> dict
     if invalid_cc:
         parts.append(f"{invalid_cc} line(s) have invalid or missing controlled cost on SKU assumption")
     if invalid_fx:
-        parts.append(f"{invalid_fx} line(s) have invalid FX (plan currency per 1 USD) on SKU assumption")
+        parts.append(
+            f"{invalid_fx} line(s) have invalid FX (plan currency units per 1 controlled-cost currency) on SKU assumption"
+        )
     if invalid_vat:
         parts.append(f"{invalid_vat} line(s) have invalid VAT % on SKU assumption")
     if invalid_res:
@@ -1250,12 +1252,14 @@ async def get_lineup_evidence(
                 func.max(HistoricalLineupImportLine.promo_price_local).label("promo_price_local"),
                 func.max(HistoricalLineupImportLine.dap_local).label("dap_local"),
                 func.max(HistoricalLineupImportLine.actual_dap_local).label("actual_dap_local"),
+                func.max(HistoricalLineupImportLine.disti_cost_local).label("disti_cost_local"),
                 func.max(HistoricalLineupImportLine.disti_margin_pct).label("disti_margin_pct"),
                 func.max(HistoricalLineupImportLine.vat_pct).label("vat_pct"),
                 func.max(HistoricalLineupImportLine.rebate_pct).label("rebate_pct"),
                 func.sum(HistoricalLineupImportLine.quantity_units).label("total_quantity_units"),
                 func.count(HistoricalLineupImportLine.id).label("line_count"),
                 func.max(HistoricalLineupImportHeader.period_label).label("period_label"),
+                func.max(HistoricalLineupImportHeader.currency_code).label("evidence_currency_code"),
             )
             .join(
                 HistoricalLineupImportHeader,
@@ -1276,12 +1280,15 @@ async def get_lineup_evidence(
             "promo_price_local": float(r.promo_price_local) if r.promo_price_local is not None else None,
             "dap_local": float(r.dap_local) if r.dap_local is not None else None,
             "actual_dap_local": float(r.actual_dap_local) if r.actual_dap_local is not None else None,
+            "disti_cost_local": float(r.disti_cost_local) if r.disti_cost_local is not None else None,
             "disti_margin_pct": float(r.disti_margin_pct) if r.disti_margin_pct is not None else None,
             "vat_pct": float(r.vat_pct) if r.vat_pct is not None else None,
             "rebate_pct": float(r.rebate_pct) if r.rebate_pct is not None else None,
             "total_quantity_units": float(r.total_quantity_units) if r.total_quantity_units is not None else None,
             "line_count": int(r.line_count),
             "period_label": r.period_label,
+            "evidence_currency_code": (str(r.evidence_currency_code).strip() if r.evidence_currency_code else None)
+            or None,
         },
         "cost_semantics_note": _COST_SEMANTICS_NOTE,
     }
@@ -1644,9 +1651,10 @@ _COVERAGE_NON_WARNING_CODES: frozenset[str] = frozenset(
 # Included verbatim in lineup-product-gaps responses.  DAP is NOT equivalent to SKU controlled cost.
 # Never map dap_local directly to controlled_cost_amount without explicit cost-basis verification.
 _COST_SEMANTICS_NOTE = (
-    "DAP (Distributor Acquisition Price) is the source/import value from the historical lineup. "
-    "It is not equivalent to SKU controlled_cost_amount (PM bottom / internal cost basis) and must not "
-    "be used as a cost input to the planner without verification of the cost basis."
+    "DAP and similar columns (including Rand landed / local DAP style headers mapped to dap_local) are "
+    "sell-in / distributor-acquisition evidence from historical lineup imports — not PM bottom or true "
+    "landed cost (logistics is not modeled here). They are not equivalent to SKU controlled_cost_amount "
+    "(internal cost basis) and must not be used as a controlled cost input without explicit cost-basis verification."
 )
 
 

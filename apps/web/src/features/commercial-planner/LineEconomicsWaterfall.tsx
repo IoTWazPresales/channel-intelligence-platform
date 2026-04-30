@@ -68,23 +68,32 @@ function provChip(p: { source: string; trusted?: boolean; detail?: string } | un
   );
 }
 
+export type WaterfallEvidence = {
+  /** Import / lineup header currency when known; else amounts are still evidence-only. */
+  evidenceCurrencyCode?: string | null;
+  dapLocal?: number | null;
+  actualDapLocal?: number | null;
+  distiCostLocal?: number | null;
+};
+
 type Props = {
   line: WaterfallLine;
-  planCurrencyCode: string;
+  /** ISO code or a readable fallback such as "Plan currency not set". */
+  planCurrencyLabel: string;
   /** Fallback when line.economics_calc_currency_code is absent (older payloads). */
   economicsReportingCurrency?: string;
   /** Map calc_flag / trust reason codes to readable text (from planner page). */
   formatTrustReason?: (code: string) => string;
-  dapEvidenceLocal?: number | null;
+  evidence?: WaterfallEvidence | null;
 };
 
 /** Per-line economics waterfall (read-only; uses persisted calc_* and effective_* from API). */
 export function LineEconomicsWaterfall({
   line,
-  planCurrencyCode,
+  planCurrencyLabel,
   economicsReportingCurrency = 'USD',
   formatTrustReason,
-  dapEvidenceLocal,
+  evidence,
 }: Props) {
   const prov = line.economics_field_provenance ?? {};
   const tier = line.economics_line_trust ?? 'ok';
@@ -96,6 +105,11 @@ export function LineEconomicsWaterfall({
     flags.includes('missing_or_invalid_landed_cost') ||
     flags.includes('missing_or_invalid_controlled_cost') ||
     flags.includes('missing_sku_assumption');
+
+  const evCcy = (evidence?.evidenceCurrencyCode ?? '').trim() || planCurrencyLabel;
+  const hasEvidence =
+    evidence != null &&
+    (evidence.dapLocal != null || evidence.actualDapLocal != null || evidence.distiCostLocal != null);
 
   return (
     <Stack spacing={1.25} data-testid="line-economics-waterfall">
@@ -125,25 +139,25 @@ export function LineEconomicsWaterfall({
 
       {costMissing ? (
         <Typography variant="caption" color="warning.main" display="block" data-testid="line-detail-cost-missing">
-          Controlled cost unavailable — add SKU economics in Planner defaults or a line override. DAP evidence is not PM
-          bottom.
+          Controlled cost unavailable — add SKU economics in Planner defaults or a line override. DAP / local DAP /
+          disti-reported evidence is not PM bottom and does not substitute for controlled cost.
         </Typography>
       ) : null}
 
-      <Typography variant="caption" color="text.secondary" display="block">
-        Calculator amounts (sell-in, distributor net, reserves, internal GP) are shown in{' '}
-        <strong>{econCcy}</strong> per persisted <code>economics_calc_currency_code</code>. Controlled cost uses{' '}
-        <strong>{costCcy}</strong> when set on the SKU or line override.
+      <Typography variant="caption" color="text.secondary" display="block" data-testid="waterfall-currency-legend">
+        Customer-facing prices use <strong>{planCurrencyLabel}</strong>. Economics outputs (sell-in, distributor net,
+        reserves, internal GP) use <strong>{econCcy}</strong> per persisted <code>economics_calc_currency_code</code>.
+        Controlled cost / PM bottom uses <strong>{costCcy}</strong> when set on the SKU or line override.
       </Typography>
 
-      <Typography variant="subtitle2">Price / commercial stack</Typography>
+      <Typography variant="subtitle2">A. Customer-facing stack ({planCurrencyLabel})</Typography>
       <Stack spacing={0.5}>
         <Typography variant="body2">
-          Customer-facing list price ({planCurrencyCode}): {fmtCurrency(line.target_srp_local)}
+          Customer-facing list price ({planCurrencyLabel}): {fmtCurrency(line.target_srp_local)}
         </Typography>
         {line.promo_srp_local != null ? (
           <Typography variant="body2">
-            Campaign / event price ({planCurrencyCode}): {fmtCurrency(line.promo_srp_local)}
+            Campaign / event price ({planCurrencyLabel}): {fmtCurrency(line.promo_srp_local)}
           </Typography>
         ) : null}
         <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
@@ -152,7 +166,7 @@ export function LineEconomicsWaterfall({
         </Stack>
         <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
           <Typography variant="body2">
-            FX bridge ({planCurrencyCode} per 1 {costCcy}): {line.effective_fx_plan_currency_per_cost_currency ?? '—'}
+            FX bridge ({planCurrencyLabel} per 1 {costCcy}): {line.effective_fx_plan_currency_per_cost_currency ?? '—'}
           </Typography>
           {provChip(prov['fx_plan_currency_per_cost_currency'])}
         </Stack>
@@ -172,7 +186,10 @@ export function LineEconomicsWaterfall({
           </Typography>
           {provChip(prov['distributor_margin_pct'])}
         </Stack>
-        <Divider sx={{ my: 0.5 }} />
+      </Stack>
+
+      <Typography variant="subtitle2">B. Commercial / economics outputs ({econCcy})</Typography>
+      <Stack spacing={0.5}>
         <Typography variant="body2">
           Estimated OEM/channel sell-in ({econCcy} / unit):{' '}
           {line.calc_oem_sell_in_amount != null
@@ -191,7 +208,7 @@ export function LineEconomicsWaterfall({
         </Typography>
       </Stack>
 
-      <Typography variant="subtitle2">Cost / PM bottom stack</Typography>
+      <Typography variant="subtitle2">C. Internal cost / GP ({costCcy} amounts where noted)</Typography>
       <Stack spacing={0.5}>
         <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
           <Typography variant="body2">
@@ -207,8 +224,8 @@ export function LineEconomicsWaterfall({
         ) : null}
         <Alert severity="info" sx={{ py: 0.25 }}>
           <Typography variant="caption">
-            Logistics, duties, freight, and true landed / loaded cost are <strong>not modeled</strong> in this version
-            (deferred). Do not treat controlled cost as full landed cost.
+            Logistics, duties, freight, insurance, handling, and <strong>true landed / loaded cost</strong> are{' '}
+            <strong>not modeled</strong> here (deferred). Do not treat controlled cost as full landed cost.
           </Typography>
         </Alert>
         <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
@@ -224,10 +241,16 @@ export function LineEconomicsWaterfall({
           {provChip(prov['promo_reserve_split_pct'])}
         </Stack>
         <Typography variant="body2">
-          Campaign support reserve ({econCcy}): {line.calc_campaign_support_reserve_amount ?? '—'}
+          Campaign support reserve ({econCcy}):{' '}
+          {line.calc_campaign_support_reserve_amount != null
+            ? fmtMoneyWithCcy(line.calc_campaign_support_reserve_amount, econCcy)
+            : '—'}
         </Typography>
         <Typography variant="body2">
-          Non-campaign reserve ({econCcy}): {line.calc_non_campaign_reserve_amount ?? '—'}
+          Non-campaign reserve ({econCcy}):{' '}
+          {line.calc_non_campaign_reserve_amount != null
+            ? fmtMoneyWithCcy(line.calc_non_campaign_reserve_amount, econCcy)
+            : '—'}
         </Typography>
         <Typography variant="body2">
           Estimated internal GP ({econCcy}, total, after reserves):{' '}
@@ -235,14 +258,30 @@ export function LineEconomicsWaterfall({
         </Typography>
       </Stack>
 
-      {dapEvidenceLocal != null ? (
+      {hasEvidence ? (
         <>
           <Divider />
-          <Typography variant="subtitle2">Sell-in evidence (not cost)</Typography>
-          <Typography variant="caption" color="text.secondary" display="block">
-            DAP / lineup evidence: {fmtCurrency(dapEvidenceLocal)} {planCurrencyCode} — reference only; not PM bottom or
-            controlled cost.
+          <Typography variant="subtitle2">D. Evidence / reference (not PM bottom)</Typography>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+            Lineup import values below are commercial sell-in / distributor-acquisition <strong>evidence</strong> only.
+            They are shown in <strong>{evCcy}</strong> when import currency is known — otherwise treat amounts as raw
+            import context. Never used as controlled cost in economics.
           </Typography>
+          {evidence?.dapLocal != null ? (
+            <Typography variant="body2" data-testid="waterfall-evidence-dap">
+              Local DAP / Rand-style landed evidence ({evCcy}): {fmtMoneyWithCcy(evidence.dapLocal, evCcy)}
+            </Typography>
+          ) : null}
+          {evidence?.actualDapLocal != null ? (
+            <Typography variant="body2">
+              Actual DAP evidence ({evCcy}): {fmtMoneyWithCcy(evidence.actualDapLocal, evCcy)}
+            </Typography>
+          ) : null}
+          {evidence?.distiCostLocal != null ? (
+            <Typography variant="body2">
+              Disti-reported cost evidence ({evCcy}): {fmtMoneyWithCcy(evidence.distiCostLocal, evCcy)}
+            </Typography>
+          ) : null}
         </>
       ) : null}
     </Stack>

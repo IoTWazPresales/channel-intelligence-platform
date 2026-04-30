@@ -271,12 +271,14 @@ type LineupEvidence = {
     promo_price_local: number | null;
     dap_local: number | null;
     actual_dap_local: number | null;
+    disti_cost_local: number | null;
     disti_margin_pct: number | null;
     vat_pct: number | null;
     rebate_pct: number | null;
     total_quantity_units: number | null;
     line_count: number;
     period_label: string | null;
+    evidence_currency_code: string | null;
   } | null;
   cost_semantics_note: string;
 };
@@ -329,7 +331,7 @@ export function fmtMoneyWithCcy(v: number | null | undefined, currencyCode: stri
 export function fmtFlag(flag: string): string {
   const labels: Record<string, string> = {
     missing_sku_assumption:
-      'Controlled cost missing — add SKU assumptions in Planner defaults (not populated from DAP)',
+      'Controlled cost missing — add SKU assumptions in Planner defaults (not populated from DAP). Lineup DAP / local DAP / disti-reported evidence does not substitute for controlled cost.',
     missing_or_invalid_landed_cost: 'Controlled cost unavailable — verify SKU assumption or line override',
     missing_or_invalid_controlled_cost: 'Controlled cost unavailable — verify SKU assumption or line override',
     missing_distributor_term:
@@ -338,8 +340,10 @@ export function fmtFlag(flag: string): string {
       'Missing customer terms — configure on the Customer admin page or bulk edit in Planner defaults',
     non_positive_target_units: 'Units must be positive',
     non_positive_target_srp: 'Customer-facing list price must be positive',
-    invalid_fx_rate_to_usd: 'FX bridge invalid (plan currency per 1 cost currency)',
-    invalid_fx_plan_currency_per_cost_currency: 'FX bridge invalid (plan currency per 1 cost currency)',
+    invalid_fx_rate_to_usd:
+      'FX bridge invalid — plan currency units per 1 controlled-cost currency must be positive so list/campaign prices can bridge to economics outputs',
+    invalid_fx_plan_currency_per_cost_currency:
+      'FX bridge invalid — plan currency units per 1 controlled-cost currency must be positive so list/campaign prices can bridge to economics outputs',
     impossible_margin_stack: 'Margin stack unsustainable (margins ≥ 95%)',
     margin_floor_breach: 'Margin below floor — buy price is under controlled cost',
     reserve_breach: 'Reserve exceeds 80% of revenue',
@@ -936,11 +940,9 @@ export default function CommercialPlannerPage() {
   }, [lineupJobId]);
 
   const activePlanId = selectedPlanId ?? plans?.[0]?.id ?? null;
-  const planCurrencyCode = useMemo(
-    () => plans?.find((p) => p.id === activePlanId)?.currency_code ?? 'USD',
-    [plans, activePlanId]
-  );
   const activePlan = useMemo(() => plans?.find((p) => p.id === activePlanId) ?? null, [plans, activePlanId]);
+  const planCcyIso = useMemo(() => (activePlan?.currency_code ?? '').trim(), [activePlan?.currency_code]);
+  const planCurrencyLabel = planCcyIso || 'Plan currency not set';
   const { data: lines, isPending: linesPending } = useQuery({
     queryKey: ['commercial-plan-lines', activePlanId],
     queryFn: ({ signal }) => apiGet<PlanLine[]>(`/api/v1/commercial-planner/plans/${activePlanId}/lines`, { signal }),
@@ -952,10 +954,6 @@ export default function CommercialPlannerPage() {
     queryFn: ({ signal }) => apiGet<Summary>(`/api/v1/commercial-planner/plans/${activePlanId}/summary`, { signal }),
     enabled: tab === 0 && activePlanId != null,
   });
-  const economicsSummaryCcy = useMemo(
-    () => (summary?.economics_calc_currency_code ?? planCurrencyCode).trim() || FALLBACK_ECONOMICS_CCY,
-    [summary?.economics_calc_currency_code, planCurrencyCode],
-  );
   const { data: suggestions } = useQuery({
     queryKey: ['commercial-plan-suggestions', activePlanId],
     queryFn: ({ signal }) => apiGet<SuggestionBundle[]>(`/api/v1/commercial-planner/plans/${activePlanId}/suggestions`, { signal }),
@@ -1006,6 +1004,16 @@ export default function CommercialPlannerPage() {
   });
 
   const lineById = useMemo(() => new Map((lines ?? []).map((l) => [l.id, l])), [lines]);
+
+  const firstLineEconCcy = useMemo(() => {
+    const hit = (lines ?? []).find((l) => (l.economics_calc_currency_code ?? '').trim());
+    return ((hit?.economics_calc_currency_code ?? '') as string).trim();
+  }, [lines]);
+  const economicsSummaryCcy = useMemo(
+    () =>
+      (summary?.economics_calc_currency_code ?? '').trim() || firstLineEconCcy || FALLBACK_ECONOMICS_CCY,
+    [summary?.economics_calc_currency_code, firstLineEconCcy],
+  );
 
   const lineupDupKeySet = useMemo(() => {
     const s = new Set<string>();
@@ -1482,8 +1490,8 @@ export default function CommercialPlannerPage() {
         minWidth: 85,
         valueFormatter: (p) => (p.value != null && p.value !== '' ? String(roundPlannerUnits(Number(p.value))) : ''),
       },
-      { field: 'target_srp_local', headerName: `Customer-facing list price (${planCurrencyCode})`, editable: true, type: 'numericColumn', minWidth: 120 },
-      { field: 'promo_srp_local', headerName: `Campaign / event price (${planCurrencyCode})`, editable: true, type: 'numericColumn', minWidth: 120 },
+      { field: 'target_srp_local', headerName: `Customer-facing list price (${planCurrencyLabel})`, editable: true, type: 'numericColumn', minWidth: 120 },
+      { field: 'promo_srp_local', headerName: `Campaign / event price (${planCurrencyLabel})`, editable: true, type: 'numericColumn', minWidth: 120 },
       {
         colId: 'economics_line_trust',
         headerName: 'Economics trust',
@@ -1522,7 +1530,7 @@ export default function CommercialPlannerPage() {
       },
       {
         field: 'calc_sell_in_price_local',
-        headerName: `Estimated OEM/channel sell-in / unit (${planCurrencyCode})`,
+        headerName: `Estimated OEM/channel sell-in / unit (${planCurrencyLabel})`,
         minWidth: 190,
         hide: !optionalVisible.calc_sell_in_price_local,
         valueGetter: (p) => {
@@ -1532,7 +1540,7 @@ export default function CommercialPlannerPage() {
       },
       {
         field: 'calc_distributor_net_local',
-        headerName: `Estimated distributor net / unit (${planCurrencyCode})`,
+        headerName: `Estimated distributor net / unit (${planCurrencyLabel})`,
         minWidth: 240,
         hide: !optionalVisible.calc_distributor_net_local,
         valueGetter: (p) => {
@@ -1574,7 +1582,7 @@ export default function CommercialPlannerPage() {
       },
       {
         field: 'effective_fx_plan_currency_per_cost_currency',
-        headerName: `FX (${planCurrencyCode} per 1 cost currency, eff.)`,
+        headerName: `FX (${planCurrencyLabel} per 1 cost ccy, eff.)`,
         hide: !optionalVisible.effective_fx_plan_currency_per_cost_currency,
         valueGetter: (p) => (p.data?.effective_fx_plan_currency_per_cost_currency != null ? String(p.data.effective_fx_plan_currency_per_cost_currency) : '—'),
       },
@@ -1727,7 +1735,7 @@ export default function CommercialPlannerPage() {
           ) : null,
       },
     ],
-    [deleteLine, openEditLine, optionalSpecKeyVisible, optionalVisible, planCurrencyCode, economicsSummaryCcy]
+    [deleteLine, openEditLine, optionalSpecKeyVisible, optionalVisible, planCurrencyLabel, economicsSummaryCcy]
   );
 
   const lineGrid: GridOptions<PlanLine> = useMemo(
@@ -1781,11 +1789,11 @@ export default function CommercialPlannerPage() {
       <Stack spacing={0.25} sx={{ mb: 1 }}>
         <Typography variant="body2">Units: {selectedLine.target_units.toLocaleString()}</Typography>
         <Typography variant="body2">
-          Customer-facing list price ({planCurrencyCode}): {fmtCurrency(selectedLine.target_srp_local)}
+          Customer-facing list price ({planCurrencyLabel}): {fmtCurrency(selectedLine.target_srp_local)}
         </Typography>
         {selectedLine.promo_srp_local != null ? (
           <Typography variant="body2">
-            Campaign / event price ({planCurrencyCode}): {fmtCurrency(selectedLine.promo_srp_local)}
+            Campaign / event price ({planCurrencyLabel}): {fmtCurrency(selectedLine.promo_srp_local)}
           </Typography>
         ) : null}
         <Typography variant="body2">Promo mix: {(selectedLine.promo_mix_pct * 100).toFixed(0)}%</Typography>
@@ -1821,10 +1829,15 @@ export default function CommercialPlannerPage() {
           economics_field_provenance: selectedLine.economics_field_provenance,
           calc_flags: selectedLine.calc_flags,
         }}
-        planCurrencyCode={planCurrencyCode}
+        planCurrencyLabel={planCurrencyLabel}
         economicsReportingCurrency={(selectedLine.economics_calc_currency_code ?? '').trim() || economicsSummaryCcy}
         formatTrustReason={fmtFlag}
-        dapEvidenceLocal={selectedLineEvidence?.evidence?.dap_local ?? null}
+        evidence={{
+          evidenceCurrencyCode: selectedLineEvidence?.evidence?.evidence_currency_code ?? null,
+          dapLocal: selectedLineEvidence?.evidence?.dap_local ?? null,
+          actualDapLocal: selectedLineEvidence?.evidence?.actual_dap_local ?? null,
+          distiCostLocal: selectedLineEvidence?.evidence?.disti_cost_local ?? null,
+        }}
       />
       {selectedLine.override_controlled_cost_amount != null ? (
         <Chip
@@ -1872,10 +1885,28 @@ export default function CommercialPlannerPage() {
             {selectedLineEvidence.evidence.dap_local != null ? (
               <Chip
                 size="small"
-                label={`DAP evidence: ${fmtCurrency(selectedLineEvidence.evidence.dap_local)}`}
+                label={`Local DAP / Rand-style evidence: ${fmtCurrency(selectedLineEvidence.evidence.dap_local)}`}
                 variant="outlined"
                 color="info"
-                title="DAP is evidence in plan currency — not controlled cost or PM bottom"
+                title="Sell-in / distributor-acquisition evidence — not controlled cost or PM bottom"
+              />
+            ) : null}
+            {selectedLineEvidence.evidence.actual_dap_local != null ? (
+              <Chip
+                size="small"
+                label={`Actual DAP evidence: ${fmtCurrency(selectedLineEvidence.evidence.actual_dap_local)}`}
+                variant="outlined"
+                color="info"
+                title="Evidence only — not PM bottom"
+              />
+            ) : null}
+            {selectedLineEvidence.evidence.disti_cost_local != null ? (
+              <Chip
+                size="small"
+                label={`Disti-reported cost evidence: ${fmtCurrency(selectedLineEvidence.evidence.disti_cost_local)}`}
+                variant="outlined"
+                color="info"
+                title="Disti-reported acquisition evidence — not controlled cost"
               />
             ) : null}
             {selectedLineEvidence.evidence.total_quantity_units != null ? (
@@ -2089,6 +2120,23 @@ export default function CommercialPlannerPage() {
           </Button>
         </Stack>
 
+        {activePlanId != null && activePlan ? (
+          <Typography variant="body2" color="text.secondary" data-testid="plan-currency-banner" sx={{ mb: 1 }}>
+            <strong>Plan / customer-facing currency:</strong> {planCurrencyLabel}
+            {planCcyIso ? (
+              <Typography component="span" variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                List and campaign/event prices on this grid use this currency. Economics output amounts use each line’s{' '}
+                <code>economics_calc_currency_code</code> (often the controlled-cost currency — check the waterfall).
+              </Typography>
+            ) : (
+              <Typography component="span" variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.25 }}>
+                Configure a 3-letter ISO plan currency when creating or editing the plan so customer-facing columns are
+                labelled correctly.
+              </Typography>
+            )}
+          </Typography>
+        ) : null}
+
         {recalcFeedback ? (
           <Alert
             severity={
@@ -2172,7 +2220,9 @@ export default function CommercialPlannerPage() {
                 Readiness counts missing or invalid defaults before you run the calculator. <strong>Recalculate</strong>{' '}
                 refreshes persisted line outputs and returns a trust summary (ok / warning / blocked). Line trust and the
                 economics waterfall explain which inputs were overrides, defaults, placeholders, or evidence — so
-                outputs are never implied to be commercially valid when flags say otherwise.
+                outputs are never implied to be commercially valid when flags say otherwise. Plan currency drives
+                customer-facing list/campaign labels; economics output currency may differ (see each line’s waterfall).
+                DAP / local DAP / disti-reported lineup values are evidence only — never controlled cost.
               </Typography>
             </Alert>
             {planReadiness.missing_sku_assumption > 0 && (
@@ -2245,8 +2295,9 @@ export default function CommercialPlannerPage() {
               <Alert severity="warning" sx={{ mb: 0.5, py: 0.5 }} data-testid="readiness-invalid-fx">
                 <Typography variant="body2" component="div" sx={{ mb: 0.5 }}>
                   <strong>Invalid FX on SKU assumption</strong> ({planReadiness.invalid_fx} line
-                  {(planReadiness.invalid_fx ?? 0) !== 1 ? 's' : ''}) — FX must be plan/local currency units per 1 USD,
-                  positive.
+                  {(planReadiness.invalid_fx ?? 0) !== 1 ? 's' : ''}) — FX must be{' '}
+                  <strong>plan / customer-facing currency units per 1 controlled-cost currency</strong>, positive. Without a
+                  valid bridge, list/campaign prices cannot be converted reliably to economics outputs.
                 </Typography>
                 <Button size="small" variant="outlined" onClick={() => setTab(1)} data-testid="readiness-open-planner-defaults-sku-invalid-fx">
                   Open Planner defaults (SKU economics)
@@ -2322,7 +2373,8 @@ export default function CommercialPlannerPage() {
               Loading plan…
             </Typography>
           ) : (
-          <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap" useFlexGap>
+            <>
+              <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap" useFlexGap>
             <Typography variant="body2">
               <strong>Lines:</strong> {summary?.line_count ?? lines.length}
             </Typography>
@@ -2362,6 +2414,13 @@ export default function CommercialPlannerPage() {
               </>
             )}
           </Stack>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }} data-testid="plan-summary-currency-note">
+                Plan / customer-facing currency: <strong>{planCurrencyLabel}</strong>. Summary reserve and internal GP totals
+                above use <strong>{economicsSummaryCcy}</strong> from the plan summary API (first line’s economics currency
+                when present). If lines mix output currencies, treat totals as indicative until a multi-currency aggregation
+                rule exists.
+              </Typography>
+            </>
           )}
         </Paper>
       )}
@@ -2384,8 +2443,8 @@ export default function CommercialPlannerPage() {
           {showSuggestions && (
             <>
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                Heuristics from history and forecasts — optional. Applying updates the line; use Recalculate when you
-                need refreshed dollar outputs. Click a row in the grid to see per-line suggestions with evidence
+                Heuristics from history and forecasts — optional. Applying updates the line; use <strong>Recalculate</strong> when you
+                need refreshed economics output amounts. Click a row in the grid to see per-line suggestions with evidence
                 context.
               </Typography>
               <Stack spacing={1}>
@@ -2531,9 +2590,10 @@ export default function CommercialPlannerPage() {
             <TextField label="Period start" value={planDraft.period_start} onChange={(e) => setPlanDraft((p) => ({ ...p, period_start: e.target.value }))} />
             <TextField label="Owner" value={planDraft.owner} onChange={(e) => setPlanDraft((p) => ({ ...p, owner: e.target.value }))} />
             <TextField
-              label="Currency"
+              label="Plan / customer-facing currency (ISO code)"
               value={planDraft.currency_code}
-              onChange={(e) => setPlanDraft((p) => ({ ...p, currency_code: e.target.value }))}
+              onChange={(e) => setPlanDraft((p) => ({ ...p, currency_code: e.target.value.toUpperCase() }))}
+              helperText="Used for customer-facing list and campaign/event prices on plan lines. Not the economics output currency unless they match by design."
             />
           </Stack>
         </DialogContent>
@@ -2700,10 +2760,26 @@ export default function CommercialPlannerPage() {
                     {lineupEvidence.evidence.dap_local != null ? (
                       <Chip
                         size="small"
-                        label={`DAP evidence: ${fmtCurrency(lineupEvidence.evidence.dap_local)}`}
+                        label={`Local DAP / Rand-style evidence: ${fmtCurrency(lineupEvidence.evidence.dap_local)}`}
                         variant="outlined"
                         color="info"
-                        title="DAP is source/local evidence only — not controlled cost or PM bottom"
+                        title="Evidence only — not controlled cost or PM bottom"
+                      />
+                    ) : null}
+                    {lineupEvidence.evidence.actual_dap_local != null ? (
+                      <Chip
+                        size="small"
+                        label={`Actual DAP evidence: ${fmtCurrency(lineupEvidence.evidence.actual_dap_local)}`}
+                        variant="outlined"
+                        color="info"
+                      />
+                    ) : null}
+                    {lineupEvidence.evidence.disti_cost_local != null ? (
+                      <Chip
+                        size="small"
+                        label={`Disti-reported cost evidence: ${fmtCurrency(lineupEvidence.evidence.disti_cost_local)}`}
+                        variant="outlined"
+                        color="info"
                       />
                     ) : null}
                   </Stack>
@@ -2720,12 +2796,12 @@ export default function CommercialPlannerPage() {
             <Divider />
             <TextField label="Target units" value={lineDraft.target_units} onChange={(e) => setLineDraft((p) => ({ ...p, target_units: e.target.value }))} />
             <TextField
-              label={`Customer-facing list price (${planCurrencyCode})`}
+              label={`Customer-facing list price (${planCurrencyLabel})`}
               value={lineDraft.target_srp_local}
               onChange={(e) => setLineDraft((p) => ({ ...p, target_srp_local: e.target.value }))}
             />
             <TextField
-              label={`Campaign / event price (${planCurrencyCode}, optional)`}
+              label={`Campaign / event price (${planCurrencyLabel}, optional)`}
               value={lineDraft.promo_srp_local}
               onChange={(e) => setLineDraft((p) => ({ ...p, promo_srp_local: e.target.value }))}
             />

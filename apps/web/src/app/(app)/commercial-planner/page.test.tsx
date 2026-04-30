@@ -1455,6 +1455,13 @@ describe('CommercialPlannerPage — Workspace V1', () => {
     expect(await screen.findByTestId('recalc-needed-banner')).toBeInTheDocument();
   });
 
+  it('shows plan / customer-facing currency banner from active plan', async () => {
+    renderPage();
+    const banner = await screen.findByTestId('plan-currency-banner');
+    expect(banner).toHaveTextContent(/Plan \/ customer-facing currency/i);
+    expect(banner).toHaveTextContent('USD');
+  });
+
   it('selected-line detail panel appears when a grid row is clicked', async () => {
     const { user } = renderPage();
     // Wait for the plan and lines to load

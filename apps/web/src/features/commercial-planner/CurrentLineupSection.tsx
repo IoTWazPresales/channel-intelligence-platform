@@ -1623,9 +1623,9 @@ function UploadLineupDialog({
   useEffect(() => {
     if (!open) return;
     const cc = (planCountryCode ?? '').trim() || 'ZA';
-    const cur = (planCurrencyCode ?? '').trim() || 'ZAR';
+    const cur = (planCurrencyCode ?? '').trim() || 'USD';
     setCountryCode(cc.length <= 3 ? cc.toUpperCase() : 'ZA');
-    setCurrencyCode(['ZAR', 'USD'].includes(cur.toUpperCase()) ? cur.toUpperCase() : 'ZAR');
+    setCurrencyCode(cur.length >= 3 ? cur.toUpperCase().slice(0, 8) : 'USD');
   }, [open, planCountryCode, planCurrencyCode]);
 
   const handleClose = () => {

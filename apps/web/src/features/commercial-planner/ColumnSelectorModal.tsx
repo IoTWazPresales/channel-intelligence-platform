@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Alert,
   Box,
   Button,
   Checkbox,
@@ -62,7 +63,7 @@ const PRESETS: { name: string; label: string; tooltip: string }[] = [
   { name: 'planning', label: 'Planning', tooltip: 'Default planning columns' },
   { name: 'product_spec', label: 'Product / spec', tooltip: 'Optional CPU, Processor, warranty, OS, colour; top discovered spec keys from metadata.' },
   { name: 'commercial', label: 'Commercial', tooltip: 'Enable effective commercial term columns' },
-  { name: 'economics', label: 'Economics', tooltip: 'Enable pipeline-currency outputs (sell-in, distributor net, internal GP, reserves)' },
+  { name: 'economics', label: 'Economics', tooltip: 'Economics output amounts (sell-in, distributor net, GP, reserves) in economics_calc_currency_code' },
 ];
 
 // ── Group definitions ─────────────────────────────────────────────────────────
@@ -120,7 +121,8 @@ const COLUMN_GROUPS: GroupDef[] = [
     ],
   },
   {
-    title: 'Planning inputs',
+    title: 'Planning inputs (plan / customer-facing currency)',
+    description: 'List and campaign/event prices are stored in the plan’s currency_code.',
     columns: [
       { key: 'target_units', label: 'Units', locked: true },
       { key: 'target_srp_local', label: 'Customer-facing list price', locked: true },
@@ -129,8 +131,8 @@ const COLUMN_GROUPS: GroupDef[] = [
     ],
   },
   {
-    title: 'Commercial terms',
-    description: 'Effective values used for economics. Optional columns.',
+    title: 'SKU economics inputs (effective on line)',
+    description: 'Controlled cost currency and FX bridge (plan per 1 cost ccy) from SKU assumptions or overrides.',
     columns: [
       { key: 'effective_customer_margin_pct', label: 'Customer margin % (effective)', optional: true },
       { key: 'effective_customer_rebate_pct', label: 'Customer rebate % (effective)', optional: true },
@@ -143,17 +145,18 @@ const COLUMN_GROUPS: GroupDef[] = [
     ],
   },
   {
-    title: 'Local currency values',
-    description: 'Estimated OEM/channel sell-in and distributor net in plan currency (optional).',
+    title: 'Plan-currency bridge (sell-in / disti net estimates)',
+    description:
+      'Optional: estimated OEM/channel sell-in and distributor net expressed in plan / customer-facing currency (derived via FX bridge).',
     columns: [
-      { key: 'calc_sell_in_price_local', label: 'Estimated OEM/channel sell-in (local)', optional: true },
-      { key: 'calc_distributor_net_local', label: 'Estimated distributor net (local)', optional: true },
+      { key: 'calc_sell_in_price_local', label: 'Estimated OEM/channel sell-in (plan ccy / unit)', optional: true },
+      { key: 'calc_distributor_net_local', label: 'Estimated distributor net (plan ccy / unit)', optional: true },
     ],
   },
   {
     title: 'Economics output amounts',
     description:
-      'Persisted calculator amounts use economics_calc_currency_code on each line (often USD for legacy data; not necessarily plan currency).',
+      'Persisted calculator amounts use economics_calc_currency_code on each line (often the controlled-cost currency for legacy data — not necessarily plan currency).',
     columns: [
       { key: 'calc_oem_sell_in_amount', label: 'OEM/channel sell-in (economics ccy / unit)', optional: true },
       { key: 'calc_internal_gp_amount', label: 'Internal GP (economics ccy, total, after reserves)', optional: true },
@@ -288,6 +291,14 @@ export function ColumnSelectorModal({
                 />
               ))}
             </Stack>
+            <Alert severity="info" sx={{ mt: 1.5, py: 0.75 }} data-testid="column-selector-evidence-note">
+              <Typography variant="caption" component="div">
+                <strong>Lineup / import evidence</strong> (DAP, Rand landed style columns, actual DAP, disti-reported
+                cost) is shown in the lineup workbench and line detail panel — <strong>not</strong> as optional grid
+                columns. It is commercial sell-in / acquisition <strong>evidence only</strong>, never PM bottom or{' '}
+                <code>controlled_cost_amount</code>.
+              </Typography>
+            </Alert>
           </Box>
         )}
 
