@@ -78,6 +78,9 @@ const mockState = vi.hoisted(() => {
           calc_flags: [],
           calc_explanation: 'ok',
           product_specs_flat: { cpu: 'Intel Core i7' },
+          economics_line_trust: 'ok',
+          economics_line_trust_reasons: [],
+          economics_field_provenance: {},
         },
       ];
     }
@@ -360,6 +363,8 @@ describe('CommercialPlannerPage', () => {
     expect(within(map).getByText(/SKU controlled cost \(PM bottom\)/)).toBeInTheDocument();
     expect(within(map).getByText(/DAP \(lineup\)/)).toBeInTheDocument();
     expect(within(map).getByText(/misleading name/i)).toBeInTheDocument();
+    expect(within(map).getByText(/Line economics trust \(read model\)/)).toBeInTheDocument();
+    expect(within(map).getByText(/POST recalculate trust summary/i)).toBeInTheDocument();
     expect(within(map).getByText(/Never from DAP/i)).toBeInTheDocument();
   });
 
@@ -389,6 +394,13 @@ describe('CommercialPlannerPage', () => {
           flags: [],
           economics_trust: 'low',
           economics_trust_note: 'Some lines still have missing commercial defaults.',
+          economics_plan_trust: 'warning',
+          recalculate_trust_summary: {
+            lines_trusted_ok: 0,
+            lines_warning: 1,
+            lines_blocked: 0,
+            top_blocker_flags: [],
+          },
         };
       }
       return {};
@@ -399,6 +411,7 @@ describe('CommercialPlannerPage', () => {
     const banner = await screen.findByTestId('recalculate-trust-banner');
     expect(banner).toHaveTextContent(/economics trust is low/i);
     expect(banner).toHaveTextContent(/Some lines still have missing commercial defaults/i);
+    expect(banner).toHaveTextContent(/Trusted ok:/i);
     mockState.apiPostMock.mockImplementation(async () => ({}));
   });
 
@@ -1386,6 +1399,9 @@ const CLEAN_LINE = {
   calc_promo_reserve_usd: 200, calc_non_promo_reserve_usd: 200, calc_internal_gp_usd: 300,
   calc_customer_gp_pct: null, calc_distributor_gp_pct: null,
   calc_flags: [], calc_explanation: 'ok', override_landed_cost_usd: null,
+  economics_line_trust: 'ok' as const,
+  economics_line_trust_reasons: [] as string[],
+  economics_field_provenance: {} as Record<string, { source: string; trusted?: boolean; detail?: string }>,
 };
 
 function makeDefaultMock(linesOverride?: any[]) {
@@ -1455,12 +1471,25 @@ describe('CommercialPlannerPage — Workspace V1', () => {
     await user.click(await screen.findByTestId('grid-row-11'));
 
     const detailPanel = await screen.findByTestId('line-detail-panel');
-    expect(detailPanel).toHaveTextContent('Economics OK');
+    expect(await screen.findByTestId('line-economics-trust-alert')).toHaveTextContent(/Economics trust:\s*Ok/i);
+    expect(detailPanel).toHaveTextContent('Economics waterfall');
   });
 
   it('selected-line detail shows controlled cost missing warning when flag is present', async () => {
     mockState.apiGetMock.mockImplementation(
-      makeDefaultMock([{ ...CLEAN_LINE, calc_sell_in_price_usd: 0, calc_buy_price_usd: 0, calc_promo_reserve_usd: 0, calc_non_promo_reserve_usd: 0, calc_internal_gp_usd: 0, calc_flags: ['missing_or_invalid_landed_cost'] }])
+      makeDefaultMock([
+        {
+          ...CLEAN_LINE,
+          calc_sell_in_price_usd: 0,
+          calc_buy_price_usd: 0,
+          calc_promo_reserve_usd: 0,
+          calc_non_promo_reserve_usd: 0,
+          calc_internal_gp_usd: 0,
+          calc_flags: ['missing_or_invalid_landed_cost'],
+          economics_line_trust: 'blocked',
+          economics_line_trust_reasons: ['missing_or_invalid_landed_cost'],
+        },
+      ])
     );
 
     const { user } = renderPage();
@@ -1618,7 +1647,14 @@ describe('lineHasBlockingEconomicsFlags', () => {
   it('returns true for configured blocking flags', () => {
     expect(lineHasBlockingEconomicsFlags({ calc_flags: ['missing_sku_assumption'] })).toBe(true);
     expect(lineHasBlockingEconomicsFlags({ calc_flags: ['missing_or_invalid_landed_cost'] })).toBe(true);
-    expect(lineHasBlockingEconomicsFlags({ calc_flags: ['missing_distributor_term'] })).toBe(true);
+    expect(lineHasBlockingEconomicsFlags({ calc_flags: ['invalid_fx_rate_to_usd'] })).toBe(true);
+    expect(lineHasBlockingEconomicsFlags({ calc_flags: ['impossible_economics'] })).toBe(true);
+    expect(lineHasBlockingEconomicsFlags({ calc_flags: ['non_positive_target_units'] })).toBe(true);
+    expect(lineHasBlockingEconomicsFlags({ calc_flags: ['non_positive_target_srp'] })).toBe(true);
+  });
+  it('returns false for warning-only flags (missing terms are unreliable but not hard-blocked here)', () => {
+    expect(lineHasBlockingEconomicsFlags({ calc_flags: ['missing_distributor_term'] })).toBe(false);
+    expect(lineHasBlockingEconomicsFlags({ calc_flags: ['missing_customer_term'] })).toBe(false);
   });
   it('returns false when no blocking flags', () => {
     expect(lineHasBlockingEconomicsFlags({ calc_flags: ['margin_floor_breach'] })).toBe(false);

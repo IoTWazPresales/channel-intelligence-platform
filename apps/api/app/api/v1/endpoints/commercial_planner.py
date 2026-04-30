@@ -31,6 +31,11 @@ from app.models.facts import FactForecast, FactPricing, FactSalesSellout
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob
 from app.services.commercial_planner.calculator import CommercialCalcInputs, compute_line_economics
+from app.services.commercial_planner.economics_trust import (
+    classify_line_economics_trust,
+    plan_trust_from_line_tiers,
+    summarize_recalculate_trust,
+)
 from app.services.commercial_planner.current_lineup_seed import CurrentLineupSourceNotConfiguredError
 from app.services.commercial_planner.lineup_entity_resolution import (
     RESOLUTION_ALLOWED_CASE_STATUSES,
@@ -485,6 +490,10 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
         sku_reserve_total_pct=float(sa_reserve) if sa_reserve is not None else None,
         sku_promo_reserve_split_pct=float(sa_pr) if sa_pr is not None else None,
         sku_landed_cost_usd=float(sa_landed) if sa_landed is not None else None,
+        join_customer_term_present=ct_margin is not None,
+        join_distributor_term_present=dt_margin is not None,
+        join_sku_assumption_present=sa_landed is not None,
+        distributor_code=dc,
     )
     return _line_payload(
         line,
@@ -507,7 +516,12 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
     )
 
 
-async def _resolve_terms_and_calc(db: AsyncSession, line: CommercialPlanLine) -> tuple[dict, list[str]]:
+async def _resolve_terms_and_calc(
+    db: AsyncSession,
+    line: CommercialPlanLine,
+    *,
+    unassigned_distributor_id: int | None = None,
+) -> tuple[dict, list[str]]:
     missing: list[str] = []
     cterm = (
         await db.execute(select(CommercialCustomerTerm).where(CommercialCustomerTerm.customer_id == line.customer_id))
@@ -526,6 +540,16 @@ async def _resolve_terms_and_calc(db: AsyncSession, line: CommercialPlanLine) ->
         missing.append("missing_distributor_term")
     if sku is None:
         missing.append("missing_sku_assumption")
+    if unassigned_distributor_id is not None and line.distributor_id == unassigned_distributor_id:
+        missing.append("unassigned_distributor_placeholder")
+    if sku is None and line.override_fx_rate_to_usd is None:
+        missing.append("economics_placeholder_fx_without_sku")
+    if sku is None and line.override_vat_rate_pct is None:
+        missing.append("economics_placeholder_vat_without_sku")
+    if sku is None and (
+        line.override_reserve_total_pct is None or line.override_promo_reserve_split_pct is None
+    ):
+        missing.append("economics_placeholder_reserves_without_sku")
 
     inp = CommercialCalcInputs(
         target_units=float(line.target_units),
@@ -754,6 +778,10 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
             sku_reserve_total_pct=float(sa_reserve) if sa_reserve is not None else None,
             sku_promo_reserve_split_pct=float(sa_pr) if sa_pr is not None else None,
             sku_landed_cost_usd=float(sa_landed) if sa_landed is not None else None,
+            join_customer_term_present=ct_margin is not None,
+            join_distributor_term_present=dt_margin is not None,
+            join_sku_assumption_present=sa_landed is not None,
+            distributor_code=dc,
         )
         out.append(
             _line_payload(
@@ -843,17 +871,46 @@ async def recalculate_plan(plan_id: int, db: AsyncSession = Depends(get_db)):
             "readiness": rd,
             "economics_trust": "ok",
             "economics_trust_note": None,
+            "economics_plan_trust": "ok",
+            "recalculate_trust_summary": {
+                "lines_trusted_ok": 0,
+                "lines_warning": 0,
+                "lines_blocked": 0,
+                "top_blocker_flags": [],
+            },
         }
     all_flags: list[str] = []
+    unassigned_id = await get_unassigned_distributor_id(db)
+    line_trust_rows: list[tuple[int, list[str], str]] = []
     for row in rows:
-        payload, flags = await _resolve_terms_and_calc(db, row)
+        payload, flags = await _resolve_terms_and_calc(db, row, unassigned_distributor_id=unassigned_id)
         for k, v in payload.items():
             setattr(row, k, v)
         all_flags.extend(flags)
+        tier, _reasons = classify_line_economics_trust(flags)
+        line_trust_rows.append((row.id, flags, tier))
     await db.commit()
     rd2 = await compute_plan_readiness_payload(db, plan_id)
+    plan_tier = plan_trust_from_line_tiers([t for _, _, t in line_trust_rows])
+    summary = summarize_recalculate_trust(line_trust_rows)
     trust = "ok"
     note: str | None = None
+    base_summary = (
+        f"Recalculated {len(rows)} line(s): {summary['lines_trusted_ok']} ok, "
+        f"{summary['lines_warning']} warning, {summary['lines_blocked']} blocked."
+    )
+    if plan_tier == "blocked":
+        trust = "low"
+        note = (
+            f"{base_summary} Blocked lines are not decision-grade. "
+            f"Top flags: {', '.join(summary['top_blocker_flags']) or 'see Issues column on lines'}."
+        )
+    elif plan_tier == "warning":
+        trust = "attention"
+        note = f"{base_summary} Review warnings and placeholders before trusting totals."
+    else:
+        note = base_summary
+
     if rd2["line_count"] > 0:
         if (
             not rd2["ready"]
@@ -863,10 +920,11 @@ async def recalculate_plan(plan_id: int, db: AsyncSession = Depends(get_db)):
             or rd2.get("invalid_reserve", 0)
         ):
             trust = "low"
-            note = (
-                "Some lines still have missing commercial defaults or invalid SKU economics inputs; "
-                "stored calculator outputs may be unreliable until readiness is clean."
+            extra = (
+                "Plan readiness: missing defaults or invalid SKU economics remain — "
+                "outputs may be unreliable until fixed."
             )
+            note = f"{note} {extra}" if note else extra
         if rd2.get("using_unassigned_distributor", 0) > 0:
             extra = (
                 f"{rd2['using_unassigned_distributor']} line(s) use the UNASSIGNED distributor placeholder; "
@@ -874,7 +932,7 @@ async def recalculate_plan(plan_id: int, db: AsyncSession = Depends(get_db)):
             )
             if trust == "ok":
                 trust = "attention"
-                note = extra
+                note = f"{note} {extra}" if note else extra
             else:
                 note = f"{note} {extra}" if note else extra
     return {
@@ -884,6 +942,8 @@ async def recalculate_plan(plan_id: int, db: AsyncSession = Depends(get_db)):
         "readiness": rd2,
         "economics_trust": trust,
         "economics_trust_note": note,
+        "economics_plan_trust": plan_tier,
+        "recalculate_trust_summary": summary,
     }
 
 

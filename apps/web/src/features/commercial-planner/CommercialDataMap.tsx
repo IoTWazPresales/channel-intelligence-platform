@@ -157,11 +157,47 @@ const ROWS: Row[] = [
     userLabel: 'Estimated sell-in, distributor net, internal GP, reserves (USD path)',
     kind: 'output',
     editedIn: 'Recalculate (POST …/recalculate)',
-    displayedIn: 'Planner grid · line detail',
+    displayedIn: 'Planner grid · line waterfall · readiness',
     readiness: 'partial',
     calculator: 'yes',
     currencyNote: 'Stored USD; local columns derived via FX',
-    notes: 'calc_customer_gp_pct / calc_distributor_gp_pct echo input margins, not derived GP%.',
+    notes: 'calc_customer_gp_pct / calc_distributor_gp_pct echo input margins, not derived GP%. Trust tier and flags determine whether to treat dollars as decision-grade.',
+  },
+  {
+    concept: 'Line economics trust (read model)',
+    dbField: 'derived on GET lines — economics_line_trust, economics_line_trust_reasons',
+    userLabel: 'Economics trust (ok / warning / blocked)',
+    kind: 'output',
+    editedIn: 'Recalculate (persists calc_flags) + GET lines read model',
+    displayedIn: 'Planner grid trust column · line waterfall alert',
+    readiness: 'partial',
+    calculator: 'partial',
+    currencyNote: '—',
+    notes: 'Tier from calc_flags using the same rules as POST /recalculate trust summary; blocked lines are not reliable for decisions.',
+  },
+  {
+    concept: 'Field provenance (read model)',
+    dbField: 'economics_field_provenance JSON on line payload',
+    userLabel: 'Source chips (override / defaults / SKU / placeholder)',
+    kind: 'output',
+    editedIn: 'GET lines (read model only)',
+    displayedIn: 'Line economics waterfall',
+    readiness: 'partial',
+    calculator: 'no',
+    currencyNote: '—',
+    notes: 'Explains whether each effective input came from line override, planner default terms, SKU economics, or missing/placeholder (untrusted).',
+  },
+  {
+    concept: 'POST recalculate trust summary',
+    dbField: 'recalculate_trust_summary, economics_plan_trust on recalculate response',
+    userLabel: 'Recalculate result: counts by trust tier',
+    kind: 'output',
+    editedIn: 'POST …/recalculate',
+    displayedIn: 'Planner banner after recalculate',
+    readiness: 'partial',
+    calculator: 'partial',
+    currencyNote: '—',
+    notes: 'Non-breaking API addition; complements economics_trust / economics_trust_note. Does not replace line-level review.',
   },
   {
     concept: 'DAP (lineup)',
@@ -219,8 +255,9 @@ export function CommercialDataMap() {
       <Alert severity="info" sx={{ py: 0.75 }}>
         Read-only field map for commercial planner economics. DB/API names stay unchanged; labels here match the UI
         naming pass. DAP and import costs are <strong>evidence only</strong>—never treated as controlled cost (PM bottom).
-        Logistics / true landed cost is a future assumption layer, separate from{' '}
-        <code>landed_cost_usd</code>.
+        Line <strong>economics trust</strong> and the <strong>waterfall</strong> tie readiness, recalculate outputs, and
+        provenance together so placeholders are visible. Logistics / true landed cost is a future assumption layer,
+        separate from <code>landed_cost_usd</code>. A future pricing page can consume economics only when trust is ok.
       </Alert>
       <Paper variant="outlined" sx={{ overflow: 'auto' }}>
         <Table size="small" stickyHeader>

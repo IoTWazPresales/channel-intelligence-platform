@@ -43,6 +43,7 @@ import { ColumnSelectorModal, type ColumnMetadata } from '@/features/commercial-
 import { CommercialDataMap } from '@/features/commercial-planner/CommercialDataMap';
 import { CurrentLineupSection } from '@/features/commercial-planner/CurrentLineupSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { LineEconomicsWaterfall } from '@/features/commercial-planner/LineEconomicsWaterfall';
 import { PlannerDefaultsMaintenance } from '@/features/commercial-planner/PlannerDefaultsMaintenance';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -115,6 +116,9 @@ type PlanLine = {
   calc_flags: string[];
   calc_explanation: string | null;
   override_landed_cost_usd: number | null;
+  economics_line_trust?: 'ok' | 'warning' | 'blocked' | string;
+  economics_line_trust_reasons?: string[];
+  economics_field_provenance?: Record<string, { source: string; trusted?: boolean; detail?: string }>;
 };
 
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
@@ -170,6 +174,19 @@ type Summary = {
   total_promo_reserve_usd: number;
   total_non_promo_reserve_usd: number;
   flags: string[];
+};
+
+type RecalcFeedback = {
+  updated: number;
+  economics_trust: string;
+  economics_trust_note: string | null;
+  economics_plan_trust?: string;
+  recalculate_trust_summary?: {
+    lines_trusted_ok: number;
+    lines_warning: number;
+    lines_blocked: number;
+    top_blocker_flags: string[];
+  };
 };
 
 type LineupJob = {
@@ -320,6 +337,10 @@ export function fmtFlag(flag: string): string {
     reserve_breach: 'Reserve exceeds 80% of revenue',
     impossible_economics: 'Cannot compute sell-in price',
     partial_margin_stack: 'Partial margin stack — some terms defaulted to zero',
+    economics_placeholder_fx_without_sku: 'FX used as placeholder without SKU economics — untrusted',
+    economics_placeholder_vat_without_sku: 'VAT used as placeholder without SKU economics — untrusted',
+    economics_placeholder_reserves_without_sku: 'Reserves used as placeholder without SKU economics — untrusted',
+    unassigned_distributor_placeholder: 'UNASSIGNED distributor placeholder — assign a distributor for trusted channel economics',
   };
   return labels[flag] ?? flag;
 }
@@ -339,6 +360,10 @@ export function fmtIssueChipLabel(flag: string): string {
     reserve_breach: 'Reserve breach',
     impossible_economics: 'Cannot compute sell-in',
     partial_margin_stack: 'Partial margin stack',
+    economics_placeholder_fx_without_sku: 'FX placeholder without SKU economics',
+    economics_placeholder_vat_without_sku: 'VAT placeholder without SKU economics',
+    economics_placeholder_reserves_without_sku: 'Reserve placeholder without SKU economics',
+    unassigned_distributor_placeholder: 'UNASSIGNED distributor — review before trusting',
   };
   return short[flag] ?? (flag.includes('_') ? flag.replace(/_/g, ' ') : flag);
 }
@@ -346,8 +371,10 @@ export function fmtIssueChipLabel(flag: string): string {
 const BLOCKING_ECONOMICS_FLAGS = new Set([
   'missing_sku_assumption',
   'missing_or_invalid_landed_cost',
-  'missing_distributor_term',
-  'missing_customer_term',
+  'invalid_fx_rate_to_usd',
+  'impossible_economics',
+  'non_positive_target_units',
+  'non_positive_target_srp',
 ]);
 
 /** True when line calc_flags indicate GP/reserve outputs must not be trusted as complete economics. */
@@ -704,7 +731,7 @@ export default function CommercialPlannerPage() {
   const [showProductGaps, setShowProductGaps] = useState(true);
   const [showGuide, setShowGuide] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
-  const [recalcTrustFeedback, setRecalcTrustFeedback] = useState<{ trust: string; note: string | null } | null>(null);
+  const [recalcFeedback, setRecalcFeedback] = useState<RecalcFeedback | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [optionalColsHydrated, setOptionalColsHydrated] = useState(false);
   const [optionalVisible, setOptionalVisible] = useState<Record<OptionalGridColField, boolean>>(() =>
@@ -906,7 +933,7 @@ export default function CommercialPlannerPage() {
   });
 
   useEffect(() => {
-    setRecalcTrustFeedback(null);
+    setRecalcFeedback(null);
   }, [activePlanId]);
 
   const { data: columnMetaData } = useQuery({
@@ -1038,13 +1065,17 @@ export default function CommercialPlannerPage() {
     qc,
   ]);
 
-  const economicsComplete = useMemo(
-    () =>
-      (lines?.length ?? 0) > 0 &&
-      (lines ?? []).every((l) => l.calc_sell_in_price_usd != null) &&
-      (summary?.flags?.length ?? 0) === 0,
-    [lines, summary]
-  );
+  const economicsComplete = useMemo(() => {
+    if ((lines?.length ?? 0) === 0) return false;
+    if ((summary?.flags?.length ?? 0) > 0) return false;
+    return (lines ?? []).every((l) => {
+      if (l.calc_sell_in_price_usd == null) return false;
+      const tier = l.economics_line_trust;
+      if (tier && tier !== 'ok') return false;
+      if (!tier && lineHasBlockingEconomicsFlags(l)) return false;
+      return true;
+    });
+  }, [lines, summary]);
 
   const selectedLine = selectedLineId != null ? (lineById.get(selectedLineId) ?? null) : null;
 
@@ -1168,11 +1199,21 @@ export default function CommercialPlannerPage() {
         flags: string[];
         economics_trust?: string;
         economics_trust_note?: string | null;
+        economics_plan_trust?: string;
+        recalculate_trust_summary?: {
+          lines_trusted_ok: number;
+          lines_warning: number;
+          lines_blocked: number;
+          top_blocker_flags: string[];
+        };
       }>(`/api/v1/commercial-planner/plans/${activePlanId}/recalculate`),
     onSuccess: (data) => {
-      setRecalcTrustFeedback({
-        trust: data.economics_trust ?? 'ok',
-        note: data.economics_trust_note ?? null,
+      setRecalcFeedback({
+        updated: data.updated,
+        economics_trust: data.economics_trust ?? 'ok',
+        economics_trust_note: data.economics_trust_note ?? null,
+        economics_plan_trust: data.economics_plan_trust,
+        recalculate_trust_summary: data.recalculate_trust_summary,
       });
       void qc.invalidateQueries({ queryKey: ['plan-readiness', activePlanId] });
       void qc.invalidateQueries({ queryKey: ['commercial-plan-lines', activePlanId] });
@@ -1406,6 +1447,42 @@ export default function CommercialPlannerPage() {
       },
       { field: 'target_srp_local', headerName: `Customer-facing list price (${planCurrencyCode})`, editable: true, type: 'numericColumn', minWidth: 120 },
       { field: 'promo_srp_local', headerName: `Campaign / event price (${planCurrencyCode})`, editable: true, type: 'numericColumn', minWidth: 120 },
+      {
+        colId: 'economics_line_trust',
+        headerName: 'Economics trust',
+        minWidth: 130,
+        valueGetter: (p) => {
+          const d = p.data;
+          if (!d) return '';
+          if (d.calc_sell_in_price_usd == null && (d.economics_line_trust == null || d.economics_line_trust === '')) {
+            return 'Needs recalculation';
+          }
+          if (d.economics_line_trust) return String(d.economics_line_trust);
+          if (lineHasBlockingEconomicsFlags(d)) return 'blocked';
+          return 'ok';
+        },
+        cellRenderer: (p: ICellRendererParams<PlanLine>) => {
+          const d = p.data;
+          if (!d) return null;
+          const raw =
+            d.calc_sell_in_price_usd == null && (d.economics_line_trust == null || d.economics_line_trust === '')
+              ? 'needs_recalc'
+              : d.economics_line_trust ?? (lineHasBlockingEconomicsFlags(d) ? 'blocked' : 'ok');
+          const label =
+            raw === 'needs_recalc'
+              ? 'Needs recalculation'
+              : raw === 'blocked'
+                ? 'Blocked'
+                : raw === 'warning'
+                  ? 'Warning'
+                  : raw === 'ok'
+                    ? 'Ok'
+                    : String(raw);
+          const color =
+            raw === 'blocked' || raw === 'needs_recalc' ? 'error' : raw === 'warning' ? 'warning' : 'success';
+          return <Chip size="small" label={label} color={color} variant="outlined" data-testid={`economics-trust-cell-${d.id}`} />;
+        },
+      },
       {
         field: 'calc_sell_in_price_local',
         headerName: `Estimated OEM/channel sell-in / unit (${planCurrencyCode})`,
@@ -1658,81 +1735,54 @@ export default function CommercialPlannerPage() {
 
       <Divider sx={{ mb: 1 }} />
 
-      {/* Economics */}
       <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-        Economics
+        Economics waterfall
       </Typography>
-      {selectedLine.calc_sell_in_price_usd == null ? (
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }} data-testid="line-detail-not-calculated">
-          Not calculated yet — press <strong>Recalculate</strong>.
-        </Typography>
-      ) : (
-        <Stack spacing={0.25} sx={{ mb: 0.75 }}>
-          <Typography variant="body2">
-            Estimated OEM/channel sell-in ({ECONOMICS_PIPELINE_CURRENCY} / unit):{' '}
-            {fmtMoneyWithCcy(selectedLine.calc_sell_in_price_usd, ECONOMICS_PIPELINE_CURRENCY)}
-          </Typography>
-          <Typography variant="body2">
-            Estimated distributor net ({ECONOMICS_PIPELINE_CURRENCY} / unit):{' '}
-            {fmtMoneyWithCcy(selectedLine.calc_buy_price_usd, ECONOMICS_PIPELINE_CURRENCY)}
-          </Typography>
-          {lineHasBlockingEconomicsFlags(selectedLine) ? (
-            <Typography variant="body2" data-testid="line-detail-internal-gp-incomplete">
-              Estimated internal GP ({ECONOMICS_PIPELINE_CURRENCY}, total, after reserves): —
-            </Typography>
-          ) : (
-            <Typography variant="body2">
-              Estimated internal GP ({ECONOMICS_PIPELINE_CURRENCY}, total, after reserves):{' '}
-              {fmtMoneyWithCcy(selectedLine.calc_internal_gp_usd, ECONOMICS_PIPELINE_CURRENCY)}
-            </Typography>
-          )}
-          {selectedLine.calc_customer_gp_pct != null ? (
-            <Typography variant="body2" color="text.secondary">
-              Customer margin % (input): {fmtMarginPct(selectedLine.calc_customer_gp_pct)}
-            </Typography>
-          ) : null}
-          {selectedLine.calc_distributor_gp_pct != null ? (
-            <Typography variant="body2" color="text.secondary">
-              Distributor margin % (input): {fmtMarginPct(selectedLine.calc_distributor_gp_pct)}
-            </Typography>
-          ) : null}
-        </Stack>
-      )}
-      {(selectedLine.calc_flags ?? []).length > 0 ? (
-        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1 }} data-testid="line-detail-flags">
-          {selectedLine.calc_flags!.map((f) => (
-            <Chip key={f} size="small" label={fmtFlag(f)} color="warning" variant="outlined" />
-          ))}
-        </Stack>
-      ) : selectedLine.calc_sell_in_price_usd != null ? (
-        <Chip size="small" label="Economics OK" color="success" variant="outlined" sx={{ mb: 1 }} />
-      ) : null}
-
-      <Divider sx={{ mb: 1 }} />
-
-      {/* Controlled cost / PM bottom */}
-      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-        Controlled cost (PM bottom)
-      </Typography>
+      <LineEconomicsWaterfall
+        line={{
+          target_srp_local: selectedLine.target_srp_local,
+          promo_srp_local: selectedLine.promo_srp_local,
+          effective_vat_rate_pct: selectedLine.effective_vat_rate_pct,
+          effective_fx_rate_to_usd: selectedLine.effective_fx_rate_to_usd,
+          effective_customer_margin_pct: selectedLine.effective_customer_margin_pct,
+          effective_customer_rebate_pct: selectedLine.effective_customer_rebate_pct,
+          effective_distributor_margin_pct: selectedLine.effective_distributor_margin_pct,
+          effective_reserve_total_pct: selectedLine.effective_reserve_total_pct,
+          effective_promo_reserve_split_pct: selectedLine.effective_promo_reserve_split_pct,
+          effective_controlled_cost_usd_per_unit: selectedLine.effective_controlled_cost_usd_per_unit,
+          override_landed_cost_usd: selectedLine.override_landed_cost_usd,
+          calc_sell_in_price_usd: selectedLine.calc_sell_in_price_usd,
+          calc_buy_price_usd: selectedLine.calc_buy_price_usd,
+          calc_promo_reserve_usd: selectedLine.calc_promo_reserve_usd,
+          calc_non_promo_reserve_usd: selectedLine.calc_non_promo_reserve_usd,
+          calc_internal_gp_usd: selectedLine.calc_internal_gp_usd,
+          economics_line_trust: selectedLine.economics_line_trust,
+          economics_line_trust_reasons: selectedLine.economics_line_trust_reasons,
+          economics_field_provenance: selectedLine.economics_field_provenance,
+          calc_flags: selectedLine.calc_flags,
+        }}
+        planCurrencyCode={planCurrencyCode}
+        economicsReportingCurrency={ECONOMICS_PIPELINE_CURRENCY}
+        formatTrustReason={fmtFlag}
+        dapEvidenceLocal={selectedLineEvidence?.evidence?.dap_local ?? null}
+      />
       {selectedLine.override_landed_cost_usd != null ? (
         <Chip
           size="small"
           label={`Override controlled cost: ${fmtMoneyWithCcy(selectedLine.override_landed_cost_usd, ECONOMICS_PIPELINE_CURRENCY)}`}
           color="info"
           variant="outlined"
-          sx={{ mb: 1 }}
+          sx={{ mt: 0.75, mb: 0.5 }}
           data-testid="line-detail-cost-override"
         />
-      ) : (selectedLine.calc_flags ?? []).includes('missing_or_invalid_landed_cost') ? (
-        <Typography variant="caption" color="warning.main" display="block" sx={{ mb: 1 }} data-testid="line-detail-cost-missing">
-          ⚠ Controlled cost unavailable — add a SKU assumption in <strong>Planner defaults</strong> to enable profit calculations.
-          DAP evidence is not PM bottom.
-        </Typography>
-      ) : (
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-          From SKU assumption defaults.
-        </Typography>
-      )}
+      ) : null}
+      {(selectedLine.calc_flags ?? []).length > 0 ? (
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1 }} data-testid="line-detail-flags">
+          {selectedLine.calc_flags!.map((f) => (
+            <Chip key={f} size="small" label={fmtFlag(f)} color="warning" variant="outlined" />
+          ))}
+        </Stack>
+      ) : null}
 
       {/* Lineup evidence for this product */}
       {selectedLineEvidenceLoading ? (
@@ -1976,21 +2026,56 @@ export default function CommercialPlannerPage() {
           </Button>
         </Stack>
 
-        {recalcTrustFeedback && recalcTrustFeedback.trust !== 'ok' ? (
+        {recalcFeedback ? (
           <Alert
-            severity={recalcTrustFeedback.trust === 'low' ? 'warning' : 'info'}
+            severity={
+              recalcFeedback.economics_plan_trust === 'blocked' ||
+              (recalcFeedback.recalculate_trust_summary?.lines_blocked ?? 0) > 0
+                ? 'error'
+                : recalcFeedback.economics_plan_trust === 'warning' ||
+                    recalcFeedback.economics_trust === 'low' ||
+                    recalcFeedback.economics_trust === 'attention'
+                  ? 'warning'
+                  : 'success'
+            }
             sx={{ mb: 1 }}
             data-testid="recalculate-trust-banner"
-            onClose={() => setRecalcTrustFeedback(null)}
+            onClose={() => setRecalcFeedback(null)}
           >
-            <Typography variant="body2" component="div">
-              {recalcTrustFeedback.trust === 'low'
-                ? 'Recalculate completed, but economics trust is low until readiness is clean.'
-                : 'Recalculate completed — review distributor assignment.'}
+            <Typography variant="body2" fontWeight={600} component="div">
+              Recalculate complete — {recalcFeedback.updated} line{recalcFeedback.updated !== 1 ? 's' : ''} updated
             </Typography>
-            {recalcTrustFeedback.note ? (
+            {recalcFeedback.recalculate_trust_summary ? (
+              <Typography variant="body2" component="div" data-testid="recalculate-trust-summary" sx={{ mt: 0.5 }}>
+                Trusted ok: {recalcFeedback.recalculate_trust_summary.lines_trusted_ok} · Warning / review:{' '}
+                {recalcFeedback.recalculate_trust_summary.lines_warning} · Blocked / untrusted:{' '}
+                {recalcFeedback.recalculate_trust_summary.lines_blocked}
+                {recalcFeedback.recalculate_trust_summary.top_blocker_flags?.length ? (
+                  <span>
+                    {' '}
+                    — Top blockers:{' '}
+                    {recalcFeedback.recalculate_trust_summary.top_blocker_flags
+                      .map((f) => fmtIssueChipLabel(f))
+                      .join(', ')}
+                  </span>
+                ) : null}
+              </Typography>
+            ) : null}
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+              Plan line economics tier (aggregate): <strong>{recalcFeedback.economics_plan_trust ?? '—'}</strong>.
+              {recalcFeedback.economics_trust === 'low'
+                ? ' Recalculate completed, but economics trust is low until readiness and line assumptions are clean.'
+                : ''}
+              {recalcFeedback.economics_trust === 'attention'
+                ? ' Review line trust chips, Issues flags, and distributor assignment before treating totals as decision-grade.'
+                : ''}
+              {recalcFeedback.economics_trust === 'ok' && recalcFeedback.economics_plan_trust === 'ok'
+                ? ' Numbers were refreshed — this does not automatically mean every line is commercially valid without checking trust and flags.'
+                : ''}
+            </Typography>
+            {recalcFeedback.economics_trust_note ? (
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                {recalcTrustFeedback.note}
+                {recalcFeedback.economics_trust_note}
               </Typography>
             ) : null}
           </Alert>
@@ -2016,6 +2101,17 @@ export default function CommercialPlannerPage() {
         {/* Readiness panel */}
         {planReadiness && (
           <Box sx={{ mb: 1 }} data-testid="plan-readiness-panel">
+            <Alert severity="info" sx={{ mb: 0.75, py: 0.5 }} data-testid="readiness-trust-intro">
+              <Typography variant="body2" component="div" sx={{ mb: 0.25 }}>
+                <strong>Readiness vs recalculate vs trust</strong>
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Readiness counts missing or invalid defaults before you run the calculator. <strong>Recalculate</strong>{' '}
+                refreshes persisted line outputs and returns a trust summary (ok / warning / blocked). Line trust and the
+                economics waterfall explain which inputs were overrides, defaults, placeholders, or evidence — so
+                outputs are never implied to be commercially valid when flags say otherwise.
+              </Typography>
+            </Alert>
             {planReadiness.missing_sku_assumption > 0 && (
               <Alert severity="warning" sx={{ mb: 0.5, py: 0.5 }}>
                 <Typography variant="body2" component="div" sx={{ mb: 0.5 }}>
@@ -2150,7 +2246,7 @@ export default function CommercialPlannerPage() {
             <EnterpriseDataGrid rowData={lines ?? []} columnDefs={lineCols} gridOptions={lineGrid} height={480} />
           </Box>
           {selectedLine && (
-            <Box sx={{ flex: '0 0 380px', width: 380, minWidth: 320 }}>{lineDetailPanel}</Box>
+            <Box sx={{ flex: '0 0 420px', width: 420, minWidth: 320 }}>{lineDetailPanel}</Box>
           )}
         </Stack>
       </Paper>

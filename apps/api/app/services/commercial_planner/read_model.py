@@ -7,6 +7,8 @@ from typing import Any
 
 from app.models.commercial_planner import CommercialPlanLine
 
+from app.services.commercial_planner.economics_trust import classify_line_economics_trust
+
 
 def _flatten_specs_json(specs_json: dict[str, Any] | None) -> dict[str, Any]:
     """Merge top-level specs_json with import_staging nested dict when present (read-only)."""
@@ -203,6 +205,88 @@ def effective_commercial_fields_flat(
     }
 
 
+def _field_provenance(
+    line: CommercialPlanLine,
+    *,
+    join_customer_term_present: bool,
+    join_distributor_term_present: bool,
+    join_sku_assumption_present: bool,
+) -> dict[str, dict[str, str | bool]]:
+    """Source labels for waterfall / trust UI (no new DB fields)."""
+
+    def prov_entry(
+        *,
+        override_set: bool,
+        term_present: bool,
+        sku_field: bool,
+        placeholder_flag: str | None = None,
+    ) -> dict[str, str | bool]:
+        if override_set:
+            return {"source": "line_override", "trusted": True}
+        if sku_field and join_sku_assumption_present:
+            return {"source": "sku_economics_input", "trusted": True}
+        if not sku_field and term_present:
+            return {"source": "planner_default_terms", "trusted": True}
+        if sku_field and not join_sku_assumption_present:
+            return {
+                "source": "placeholder_or_missing",
+                "trusted": False,
+                "detail": placeholder_flag or "missing_sku_assumption",
+            }
+        if not sku_field and not term_present:
+            return {"source": "missing", "trusted": False}
+        return {"source": "unknown", "trusted": False}
+
+    sku_f = join_sku_assumption_present
+    return {
+        "customer_margin_pct": prov_entry(
+            override_set=line.override_customer_margin_pct is not None,
+            term_present=join_customer_term_present,
+            sku_field=False,
+        ),
+        "customer_rebate_pct": prov_entry(
+            override_set=line.override_customer_rebate_pct is not None,
+            term_present=join_customer_term_present,
+            sku_field=False,
+        ),
+        "distributor_margin_pct": prov_entry(
+            override_set=line.override_distributor_margin_pct is not None,
+            term_present=join_distributor_term_present,
+            sku_field=False,
+        ),
+        "vat_rate_pct": prov_entry(
+            override_set=line.override_vat_rate_pct is not None,
+            term_present=False,
+            sku_field=True,
+            placeholder_flag="economics_placeholder_vat_without_sku",
+        ),
+        "fx_rate_to_usd": prov_entry(
+            override_set=line.override_fx_rate_to_usd is not None,
+            term_present=False,
+            sku_field=True,
+            placeholder_flag="economics_placeholder_fx_without_sku",
+        ),
+        "reserve_total_pct": prov_entry(
+            override_set=line.override_reserve_total_pct is not None,
+            term_present=False,
+            sku_field=True,
+            placeholder_flag="economics_placeholder_reserves_without_sku",
+        ),
+        "promo_reserve_split_pct": prov_entry(
+            override_set=line.override_promo_reserve_split_pct is not None,
+            term_present=False,
+            sku_field=True,
+            placeholder_flag="economics_placeholder_reserves_without_sku",
+        ),
+        "controlled_cost_usd_per_unit": prov_entry(
+            override_set=line.override_landed_cost_usd is not None,
+            term_present=False,
+            sku_field=True,
+            placeholder_flag="missing_sku_assumption",
+        ),
+    }
+
+
 def plan_line_read_model_extensions(
     line: CommercialPlanLine,
     specs_json: dict[str, Any] | None,
@@ -215,6 +299,10 @@ def plan_line_read_model_extensions(
     sku_reserve_total_pct: float | None,
     sku_promo_reserve_split_pct: float | None,
     sku_landed_cost_usd: float | None,
+    join_customer_term_present: bool = False,
+    join_distributor_term_present: bool = False,
+    join_sku_assumption_present: bool = False,
+    distributor_code: str | None = None,
 ) -> dict[str, Any]:
     """Specs + effective commercial snapshot + local USD-derived prices (same FX convention as calculator)."""
     specs = product_specs_from_json(specs_json)
@@ -233,12 +321,26 @@ def plan_line_read_model_extensions(
     buy_usd = float(line.calc_buy_price_usd) if line.calc_buy_price_usd is not None else None
     sell_l, buy_l = local_prices_from_usd(sell_usd, buy_usd, eff.get("effective_fx_rate_to_usd"))
     flat_specs = specs_json_flat_string_map(specs_json if isinstance(specs_json, dict) else None)
+    flags_for_trust = list(line.calc_flags or [])
+    if distributor_code and distributor_code.strip().upper() == "UNASSIGNED":
+        if "unassigned_distributor_placeholder" not in flags_for_trust:
+            flags_for_trust.append("unassigned_distributor_placeholder")
+    trust_tier, trust_reasons = classify_line_economics_trust(flags_for_trust)
+    provenance = _field_provenance(
+        line,
+        join_customer_term_present=join_customer_term_present,
+        join_distributor_term_present=join_distributor_term_present,
+        join_sku_assumption_present=join_sku_assumption_present,
+    )
     out: dict[str, Any] = {
         **specs,
         **eff,
         "product_specs_flat": flat_specs,
         "calc_sell_in_price_local": sell_l,
         "calc_distributor_net_local": buy_l,
+        "economics_line_trust": trust_tier,
+        "economics_line_trust_reasons": trust_reasons,
+        "economics_field_provenance": provenance,
     }
     return out
 

@@ -926,6 +926,7 @@ def test_plan_line_read_model_extensions_merges_specs_and_local_prices():
     line = SimpleNamespace(
         calc_sell_in_price_usd=10.0,
         calc_buy_price_usd=8.0,
+        calc_flags=[],
         override_customer_margin_pct=None,
         override_customer_rebate_pct=None,
         override_distributor_margin_pct=None,
@@ -946,6 +947,10 @@ def test_plan_line_read_model_extensions_merges_specs_and_local_prices():
         sku_reserve_total_pct=0.1,
         sku_promo_reserve_split_pct=0.5,
         sku_landed_cost_usd=100.0,
+        join_customer_term_present=True,
+        join_distributor_term_present=True,
+        join_sku_assumption_present=True,
+        distributor_code="D1",
     )
     assert ext["product_spec_cpu"] == "i5"
     assert ext.get("product_spec_processor") is None
@@ -953,6 +958,8 @@ def test_plan_line_read_model_extensions_merges_specs_and_local_prices():
     assert ext["effective_fx_rate_to_usd"] == 2.0
     assert ext["calc_sell_in_price_local"] == 20.0
     assert ext["calc_distributor_net_local"] == 16.0
+    assert ext["economics_line_trust"] == "ok"
+    assert ext["economics_field_provenance"]["customer_margin_pct"]["source"] == "planner_default_terms"
 
 
 def test_plan_line_read_model_extensions_splits_processor_and_cpu_specs():
@@ -963,6 +970,7 @@ def test_plan_line_read_model_extensions_splits_processor_and_cpu_specs():
     line = SimpleNamespace(
         calc_sell_in_price_usd=None,
         calc_buy_price_usd=None,
+        calc_flags=[],
         override_customer_margin_pct=None,
         override_customer_rebate_pct=None,
         override_distributor_margin_pct=None,
@@ -983,6 +991,10 @@ def test_plan_line_read_model_extensions_splits_processor_and_cpu_specs():
         sku_reserve_total_pct=0.1,
         sku_promo_reserve_split_pct=0.5,
         sku_landed_cost_usd=100.0,
+        join_customer_term_present=True,
+        join_distributor_term_present=True,
+        join_sku_assumption_present=True,
+        distributor_code="D1",
     )
     assert ext["product_spec_processor"] == "Intel Core Ultra 7"
     assert ext["product_spec_cpu"] == "Snapdragon X"
