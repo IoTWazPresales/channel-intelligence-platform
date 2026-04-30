@@ -81,24 +81,51 @@ const ROWS: Row[] = [
     dbField: 'commercial_sku_assumption.landed_cost_usd',
     userLabel: 'Controlled cost (stored USD amount today)',
     kind: 'input',
-    editedIn: 'Planner defaults (Product admin link later)',
-    displayedIn: 'Planner line effective controlled cost',
+    editedIn: 'Planner defaults · Product admin (SKU economics panel)',
+    displayedIn: 'Planner line effective controlled cost · readiness',
     readiness: 'yes',
     calculator: 'yes',
-    currencyNote: 'DB column name contains USD; not logistics landed cost',
-    notes: 'Risk: “landed” in DB name is misleading—true landed = controlled + logistics (future). Not populated from DAP.',
+    currencyNote: 'Stored USD amount today; not logistics landed cost',
+    notes:
+      'Risk: DB column landed_cost_usd is a misleading name — concept is PM bottom / controlled cost only. ' +
+      'True landed cost adds logistics (deferred). Used by calculator + readiness. Never from DAP.',
   },
   {
-    concept: 'SKU VAT / FX / reserves',
-    dbField: 'commercial_sku_assumption.vat_rate_pct, fx_rate_to_usd, reserve_*',
-    userLabel: 'VAT %, FX (plan CCY per 1 USD), reserves',
+    concept: 'SKU VAT rate',
+    dbField: 'commercial_sku_assumption.vat_rate_pct',
+    userLabel: 'VAT % (decimal 0–1)',
     kind: 'input',
-    editedIn: 'Planner defaults',
-    displayedIn: 'Planner effective columns',
+    editedIn: 'Planner defaults · Product admin',
+    displayedIn: 'Planner effective VAT',
     readiness: 'partial',
     calculator: 'yes',
-    currencyNote: 'FX bridges plan-currency SRP to USD economics path',
-    notes: 'fx_rate_to_usd = local currency units per 1 USD (see calculator + read_model).',
+    currencyNote: 'Unitless',
+    notes: 'Outside 0–1 fails readiness (invalid_vat).',
+  },
+  {
+    concept: 'SKU FX bridge to USD economics',
+    dbField: 'commercial_sku_assumption.fx_rate_to_usd',
+    userLabel: 'FX: plan/local currency units per 1 USD',
+    kind: 'input',
+    editedIn: 'Planner defaults · Product admin',
+    displayedIn: 'Planner effective FX',
+    readiness: 'partial',
+    calculator: 'yes',
+    currencyNote: 'Local units per 1 USD (not USD per local)',
+    notes: 'Must be &gt; 0. Used to express local SRP on lines in the USD economics path.',
+  },
+  {
+    concept: 'SKU reserves (support / campaign)',
+    dbField: 'commercial_sku_assumption.reserve_total_pct, promo_reserve_split_pct',
+    userLabel: 'Reserve total %, campaign/support split',
+    kind: 'input',
+    editedIn: 'Planner defaults · Product admin',
+    displayedIn: 'Planner effective reserve columns',
+    readiness: 'partial',
+    calculator: 'yes',
+    currencyNote: '0–1 fractions',
+    notes:
+      'Total reserve and split between campaign vs non-campaign buckets; split is not “promo-only” naming in business terms.',
   },
   {
     concept: 'Plan line customer-facing prices',
@@ -191,7 +218,9 @@ export function CommercialDataMap() {
     <Stack spacing={2} data-testid="commercial-data-map">
       <Alert severity="info" sx={{ py: 0.75 }}>
         Read-only field map for commercial planner economics. DB/API names stay unchanged; labels here match the UI
-        naming pass. DAP and import costs are <strong>evidence only</strong>—never treated as controlled cost.
+        naming pass. DAP and import costs are <strong>evidence only</strong>—never treated as controlled cost (PM bottom).
+        Logistics / true landed cost is a future assumption layer, separate from{' '}
+        <code>landed_cost_usd</code>.
       </Alert>
       <Paper variant="outlined" sx={{ overflow: 'auto' }}>
         <Table size="small" stickyHeader>
@@ -229,7 +258,8 @@ export function CommercialDataMap() {
       </Paper>
       <Typography variant="caption" color="text.secondary">
         Deferred (needs migration / future modules): payment terms, distributor rebate, cost currency & source,
-        logistics assumptions, FX scenario table, true landed cost stack, pricing simulation, BOM/configurator.
+        logistics assumptions, FX scenario table, true landed cost stack, pricing simulation, BOM/configurator-sourced
+        simulated controlled cost.
       </Typography>
     </Stack>
   );

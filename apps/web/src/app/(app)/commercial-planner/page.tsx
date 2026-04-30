@@ -266,6 +266,11 @@ type PlanReadiness = {
   missing_customer_term: number;
   missing_distributor_term: number;
   missing_sku_assumption: number;
+  invalid_controlled_cost?: number;
+  invalid_fx?: number;
+  invalid_vat?: number;
+  invalid_reserve?: number;
+  using_unassigned_distributor?: number;
   lines_with_calc_flags: number;
   ready: boolean;
   readiness_summary: string;
@@ -699,6 +704,7 @@ export default function CommercialPlannerPage() {
   const [showProductGaps, setShowProductGaps] = useState(true);
   const [showGuide, setShowGuide] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
+  const [recalcTrustFeedback, setRecalcTrustFeedback] = useState<{ trust: string; note: string | null } | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [optionalColsHydrated, setOptionalColsHydrated] = useState(false);
   const [optionalVisible, setOptionalVisible] = useState<Record<OptionalGridColField, boolean>>(() =>
@@ -898,6 +904,10 @@ export default function CommercialPlannerPage() {
       apiGet<PlanReadiness>(`/api/v1/commercial-planner/plans/${activePlanId}/readiness`, { signal }),
     enabled: tab === 0 && activePlanId != null,
   });
+
+  useEffect(() => {
+    setRecalcTrustFeedback(null);
+  }, [activePlanId]);
 
   const { data: columnMetaData } = useQuery({
     queryKey: ['commercial-column-metadata', activePlanId],
@@ -1151,8 +1161,20 @@ export default function CommercialPlannerPage() {
     },
   });
   const recalc = useMutation({
-    mutationFn: () => apiPost(`/api/v1/commercial-planner/plans/${activePlanId}/recalculate`),
-    onSuccess: () => {
+    mutationFn: () =>
+      apiPost<{
+        updated: number;
+        plan_id: number;
+        flags: string[];
+        economics_trust?: string;
+        economics_trust_note?: string | null;
+      }>(`/api/v1/commercial-planner/plans/${activePlanId}/recalculate`),
+    onSuccess: (data) => {
+      setRecalcTrustFeedback({
+        trust: data.economics_trust ?? 'ok',
+        note: data.economics_trust_note ?? null,
+      });
+      void qc.invalidateQueries({ queryKey: ['plan-readiness', activePlanId] });
       void qc.invalidateQueries({ queryKey: ['commercial-plan-lines', activePlanId] });
       void qc.invalidateQueries({ queryKey: ['commercial-plan-summary', activePlanId] });
     },
@@ -1954,6 +1976,26 @@ export default function CommercialPlannerPage() {
           </Button>
         </Stack>
 
+        {recalcTrustFeedback && recalcTrustFeedback.trust !== 'ok' ? (
+          <Alert
+            severity={recalcTrustFeedback.trust === 'low' ? 'warning' : 'info'}
+            sx={{ mb: 1 }}
+            data-testid="recalculate-trust-banner"
+            onClose={() => setRecalcTrustFeedback(null)}
+          >
+            <Typography variant="body2" component="div">
+              {recalcTrustFeedback.trust === 'low'
+                ? 'Recalculate completed, but economics trust is low until readiness is clean.'
+                : 'Recalculate completed — review distributor assignment.'}
+            </Typography>
+            {recalcTrustFeedback.note ? (
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                {recalcTrustFeedback.note}
+              </Typography>
+            ) : null}
+          </Alert>
+        ) : null}
+
         {/* Current lineups section */}
         <CurrentLineupSection
           activePlanId={activePlanId}
@@ -2026,6 +2068,60 @@ export default function CommercialPlannerPage() {
                     Planner defaults (distributor terms)
                   </Button>
                 </Stack>
+              </Alert>
+            )}
+            {(planReadiness.invalid_controlled_cost ?? 0) > 0 && (
+              <Alert severity="warning" sx={{ mb: 0.5, py: 0.5 }} data-testid="readiness-invalid-controlled-cost">
+                <Typography variant="body2" component="div" sx={{ mb: 0.5 }}>
+                  <strong>Invalid controlled cost</strong> ({planReadiness.invalid_controlled_cost} line
+                  {(planReadiness.invalid_controlled_cost ?? 0) !== 1 ? 's' : ''}) — SKU assumption exists but PM bottom /
+                  controlled cost is missing, zero, or negative. Fix in Planner defaults or Product admin.
+                </Typography>
+                <Button size="small" variant="outlined" onClick={() => setTab(1)} data-testid="readiness-open-planner-defaults-sku-invalid">
+                  Open Planner defaults (SKU economics)
+                </Button>
+              </Alert>
+            )}
+            {(planReadiness.invalid_fx ?? 0) > 0 && (
+              <Alert severity="warning" sx={{ mb: 0.5, py: 0.5 }} data-testid="readiness-invalid-fx">
+                <Typography variant="body2" component="div" sx={{ mb: 0.5 }}>
+                  <strong>Invalid FX on SKU assumption</strong> ({planReadiness.invalid_fx} line
+                  {(planReadiness.invalid_fx ?? 0) !== 1 ? 's' : ''}) — FX must be plan/local currency units per 1 USD,
+                  positive.
+                </Typography>
+                <Button size="small" variant="outlined" onClick={() => setTab(1)} data-testid="readiness-open-planner-defaults-sku-invalid-fx">
+                  Open Planner defaults (SKU economics)
+                </Button>
+              </Alert>
+            )}
+            {(planReadiness.invalid_vat ?? 0) > 0 && (
+              <Alert severity="warning" sx={{ mb: 0.5, py: 0.5 }} data-testid="readiness-invalid-vat">
+                <Typography variant="body2" component="div" sx={{ mb: 0.5 }}>
+                  <strong>Invalid VAT on SKU assumption</strong> ({planReadiness.invalid_vat} line
+                  {(planReadiness.invalid_vat ?? 0) !== 1 ? 's' : ''}) — use decimal fraction 0–1 (e.g. 0.15 for 15%).
+                </Typography>
+                <Button size="small" variant="outlined" onClick={() => setTab(1)} data-testid="readiness-open-planner-defaults-sku-invalid-vat">
+                  Open Planner defaults (SKU economics)
+                </Button>
+              </Alert>
+            )}
+            {(planReadiness.invalid_reserve ?? 0) > 0 && (
+              <Alert severity="warning" sx={{ mb: 0.5, py: 0.5 }} data-testid="readiness-invalid-reserve">
+                <Typography variant="body2" component="div" sx={{ mb: 0.5 }}>
+                  <strong>Invalid reserves on SKU assumption</strong> ({planReadiness.invalid_reserve} line
+                  {(planReadiness.invalid_reserve ?? 0) !== 1 ? 's' : ''}) — reserve total and campaign/support split must
+                  be valid decimals in 0–1.
+                </Typography>
+                <Button size="small" variant="outlined" onClick={() => setTab(1)} data-testid="readiness-open-planner-defaults-sku-invalid-reserve">
+                  Open Planner defaults (SKU economics)
+                </Button>
+              </Alert>
+            )}
+            {(planReadiness.using_unassigned_distributor ?? 0) > 0 && (
+              <Alert severity="info" sx={{ mb: 0.5, py: 0.5 }} data-testid="readiness-unassigned-distributor">
+                <strong>UNASSIGNED distributor</strong> on {planReadiness.using_unassigned_distributor} line
+                {(planReadiness.using_unassigned_distributor ?? 0) !== 1 ? 's' : ''} — economics may need a real
+                distributor and terms before they are commercially trustworthy.
               </Alert>
             )}
             {planReadiness.ready && planReadiness.line_count > 0 && (

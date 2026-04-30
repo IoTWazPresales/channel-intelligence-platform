@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -356,9 +356,11 @@ describe('CommercialPlannerPage', () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(await screen.findByRole('tab', { name: /Data map/i }));
-    expect(await screen.findByTestId('commercial-data-map')).toBeInTheDocument();
-    expect(screen.getByText(/SKU controlled cost \(PM bottom\)/)).toBeInTheDocument();
-    expect(screen.getByText(/DAP \(lineup\)/)).toBeInTheDocument();
+    const map = await screen.findByTestId('commercial-data-map');
+    expect(within(map).getByText(/SKU controlled cost \(PM bottom\)/)).toBeInTheDocument();
+    expect(within(map).getByText(/DAP \(lineup\)/)).toBeInTheDocument();
+    expect(within(map).getByText(/misleading name/i)).toBeInTheDocument();
+    expect(within(map).getByText(/Never from DAP/i)).toBeInTheDocument();
   });
 
   it('loads planner defaults tab and fetches maintenance lists', async () => {
@@ -366,10 +368,38 @@ describe('CommercialPlannerPage', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /Planner defaults/i }));
     expect(await screen.findByText('Customer commercial terms')).toBeInTheDocument();
     expect(await screen.findByTestId('planner-defaults-guide')).toBeInTheDocument();
+    expect(screen.getByText(/SKU assumptions \(controlled cost, VAT, FX, reserves\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/local or plan currency units per 1 USD/i)).toBeInTheDocument();
+    expect(await screen.findByTestId('planner-defaults-sku-economics-disclaimers')).toHaveTextContent(
+      /DAP.*sell-in evidence/i
+    );
+    expect(screen.getByTestId('planner-defaults-sku-economics-disclaimers')).toHaveTextContent(/logistics/i);
     await waitFor(() => {
       const hits = mockState.apiGetMock.mock.calls.filter((c) => String(c[0]).includes('/commercial-planner/customer-terms'));
       expect(hits.length).toBeGreaterThan(0);
     });
+  });
+
+  it('shows economics trust banner after Recalculate when API reports low trust', async () => {
+    mockState.apiPostMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('/recalculate')) {
+        return {
+          updated: 1,
+          plan_id: 1,
+          flags: [],
+          economics_trust: 'low',
+          economics_trust_note: 'Some lines still have missing commercial defaults.',
+        };
+      }
+      return {};
+    });
+    renderPage();
+    await screen.findByText(/Q3 Plan \(draft\)/i);
+    fireEvent.click(await screen.findByRole('button', { name: /Recalculate/i }));
+    const banner = await screen.findByTestId('recalculate-trust-banner');
+    expect(banner).toHaveTextContent(/economics trust is low/i);
+    expect(banner).toHaveTextContent(/Some lines still have missing commercial defaults/i);
+    mockState.apiPostMock.mockImplementation(async () => ({}));
   });
 
 });
@@ -1201,6 +1231,49 @@ describe('Plan readiness chips', () => {
     const panel = await screen.findByTestId('plan-readiness-panel');
     expect(panel).toHaveTextContent('Add SKU controlled cost assumptions in Planner defaults');
     expect(await screen.findByTestId('readiness-open-planner-defaults-sku')).toBeInTheDocument();
+  });
+
+  it('readiness invalid controlled cost shows warning and link to planner defaults', async () => {
+    mockState.planReadiness = {
+      plan_id: 1,
+      line_count: 2,
+      missing_customer_term: 0,
+      missing_distributor_term: 0,
+      missing_sku_assumption: 0,
+      invalid_controlled_cost: 1,
+      invalid_fx: 0,
+      invalid_vat: 0,
+      invalid_reserve: 0,
+      using_unassigned_distributor: 0,
+      lines_with_calc_flags: 0,
+      ready: false,
+      readiness_summary: 'invalid cost',
+    };
+    renderPage();
+    await screen.findByText(/Q3 Plan \(draft\)/i);
+    expect(await screen.findByTestId('readiness-invalid-controlled-cost')).toHaveTextContent(/Invalid controlled cost/i);
+    expect(await screen.findByTestId('readiness-open-planner-defaults-sku-invalid')).toBeInTheDocument();
+  });
+
+  it('readiness UNASSIGNED distributor shows informational alert', async () => {
+    mockState.planReadiness = {
+      plan_id: 1,
+      line_count: 1,
+      missing_customer_term: 0,
+      missing_distributor_term: 0,
+      missing_sku_assumption: 0,
+      invalid_controlled_cost: 0,
+      invalid_fx: 0,
+      invalid_vat: 0,
+      invalid_reserve: 0,
+      using_unassigned_distributor: 1,
+      lines_with_calc_flags: 0,
+      ready: true,
+      readiness_summary: 'ok',
+    };
+    renderPage();
+    await screen.findByText(/Q3 Plan \(draft\)/i);
+    expect(await screen.findByTestId('readiness-unassigned-distributor')).toHaveTextContent(/UNASSIGNED distributor/i);
   });
 });
 

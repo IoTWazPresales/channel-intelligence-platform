@@ -375,21 +375,29 @@ export function PlannerDefaultsMaintenance() {
           </Button>
         </Stack>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-          One row per product: <strong>controlled cost (PM bottom)</strong> stored in <code>landed_cost_usd</code> today,{' '}
-          <strong>VAT rate</strong>, <strong>FX (plan currency units per 1 USD)</strong>, total <strong>reserve %</strong>, and how
-          much of that reserve accrues under promo vs non-promo. These assumptions feed Commercial Planner economics and are{' '}
-          <strong>not</strong> populated from DAP. Controlled cost must be &gt; 0 or the calculator flags invalid economics.
+          One row per product: <strong>controlled cost / PM bottom</strong> (amount stored in today&apos;s economics currency
+          in <code>landed_cost_usd</code>), <strong>VAT rate</strong> (0–1),{' '}
+          <strong>FX: local or plan currency units per 1 USD</strong>, total <strong>reserve %</strong>, and{' '}
+          <strong>campaign/support reserve split</strong> (share of the reserve bucket). These inputs feed Commercial Planner
+          economics. <strong>DAP evidence is not used as controlled cost.</strong> True landed cost (logistics, duties,
+          freight, etc.) will be handled in a later phase — not in this field.
         </Typography>
+        <Alert severity="info" sx={{ mb: 1, py: 0.5 }} data-testid="planner-defaults-sku-economics-disclaimers">
+          <Typography variant="caption" component="div">
+            DAP / sell-in evidence stays on the lineup and workbench — it does not populate SKU economics inputs. Logistics
+            and true landed cost are separate from PM bottom.
+          </Typography>
+        </Alert>
         <TextField size="small" label="Filter" value={skuQ} onChange={(e) => setSkuQ(e.target.value)} sx={{ mb: 1, minWidth: 240 }} />
         <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell>Product</TableCell>
-              <TableCell>Controlled cost (USD)</TableCell>
-              <TableCell>VAT %</TableCell>
-              <TableCell>FX (per 1 USD)</TableCell>
-              <TableCell>Reserve %</TableCell>
-              <TableCell>Promo split</TableCell>
+              <TableCell>PM bottom / controlled cost (stored USD amount)</TableCell>
+              <TableCell>VAT (0–1)</TableCell>
+              <TableCell>FX (local CCY per 1 USD)</TableCell>
+              <TableCell>Reserve total (0–1)</TableCell>
+              <TableCell>Campaign / support split (0–1)</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -526,7 +534,11 @@ export function PlannerDefaultsMaintenance() {
               onChange={(e) => setFx(e.target.value)}
             />
             <TextField label="Reserve total (0–1)" value={resTot} onChange={(e) => setResTot(e.target.value)} />
-            <TextField label="Promo reserve split (0–1)" value={resSplit} onChange={(e) => setResSplit(e.target.value)} />
+            <TextField
+              label="Campaign / support reserve split (0–1)"
+              value={resSplit}
+              onChange={(e) => setResSplit(e.target.value)}
+            />
             {saveSku.isError ? <Alert severity="error">Save failed. Check values and duplicates.</Alert> : null}
           </Stack>
         </DialogContent>

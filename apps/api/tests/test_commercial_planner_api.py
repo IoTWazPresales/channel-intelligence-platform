@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -558,8 +558,6 @@ def test_lineup_evidence_endpoint_returns_null_evidence_when_no_lineup_data():
 
 def test_plan_readiness_reports_missing_defaults():
     """GET /commercial-planner/plans/{plan_id}/readiness counts lines with missing terms and SKU assumptions."""
-    from app.models.commercial_planner import CommercialCustomerTerm, CommercialDistributorTerm, CommercialPlanLine, CommercialSkuAssumption
-
     fake_plan = SimpleNamespace(id=1)
     fake_line = SimpleNamespace(
         id=11,
@@ -595,7 +593,19 @@ def test_plan_readiness_reports_missing_defaults():
         yield sess
 
     app.dependency_overrides[get_db] = fake_db
-    r = client.get("/api/v1/commercial-planner/plans/1/readiness")
+    with (
+        patch(
+            "app.api.v1.endpoints.commercial_planner.get_open_channel_customer_id",
+            new_callable=AsyncMock,
+            return_value=1,
+        ),
+        patch(
+            "app.api.v1.endpoints.commercial_planner.get_unassigned_distributor_id",
+            new_callable=AsyncMock,
+            return_value=2,
+        ),
+    ):
+        r = client.get("/api/v1/commercial-planner/plans/1/readiness")
     assert r.status_code == 200
     body = r.json()
     assert body["plan_id"] == 1
@@ -603,8 +613,111 @@ def test_plan_readiness_reports_missing_defaults():
     assert body["missing_customer_term"] == 1
     assert body["missing_distributor_term"] == 1
     assert body["missing_sku_assumption"] == 1
+    assert body.get("invalid_controlled_cost", 0) == 0
     assert body["ready"] is False
     assert "missing" in body["readiness_summary"].lower()
+
+
+def test_plan_readiness_flags_invalid_controlled_cost_when_sku_row_zero():
+    """SKU assumption present but landed_cost_usd <= 0 counts as invalid_controlled_cost (not missing_sku_assumption)."""
+    fake_plan = SimpleNamespace(id=1)
+    fake_line = SimpleNamespace(
+        id=11,
+        commercial_plan_id=1,
+        customer_id=7,
+        distributor_id=8,
+        product_id=9,
+        calc_flags=[],
+    )
+    bad_sku = SimpleNamespace(
+        product_id=9,
+        landed_cost_usd=0.0,
+        fx_rate_to_usd=1.0,
+        vat_rate_pct=0.15,
+        reserve_total_pct=0.1,
+        promo_reserve_split_pct=0.5,
+    )
+
+    call_count = 0
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=fake_plan)
+
+        nonlocal call_count
+        call_count = 0
+
+        async def execute_side(stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            if call_count == 1:
+                result.scalars.return_value.all.return_value = [fake_line]
+            elif call_count == 2:
+                result.scalars.return_value.all.return_value = [7]
+            elif call_count == 3:
+                result.scalars.return_value.all.return_value = [8]
+            elif call_count == 4:
+                result.scalars.return_value.all.return_value = [bad_sku]
+            else:
+                result.scalars.return_value.all.return_value = []
+            return result
+
+        sess.execute = AsyncMock(side_effect=execute_side)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    with (
+        patch(
+            "app.api.v1.endpoints.commercial_planner.get_open_channel_customer_id",
+            new_callable=AsyncMock,
+            return_value=1,
+        ),
+        patch(
+            "app.api.v1.endpoints.commercial_planner.get_unassigned_distributor_id",
+            new_callable=AsyncMock,
+            return_value=2,
+        ),
+    ):
+        r = client.get("/api/v1/commercial-planner/plans/1/readiness")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["missing_sku_assumption"] == 0
+    assert body["invalid_controlled_cost"] == 1
+    assert body["ready"] is False
+
+
+def test_list_sku_assumptions_filters_by_product_id():
+    """GET sku-assumptions?product_id= returns rows from mocked join (API applies product_id filter)."""
+    prod_row = SimpleNamespace(id=5, sku="SKU-A", name="Alpha")
+    assumption = SimpleNamespace(
+        id=10,
+        product_id=5,
+        landed_cost_usd=120.0,
+        vat_rate_pct=0.15,
+        fx_rate_to_usd=18.0,
+        reserve_total_pct=0.1,
+        promo_reserve_split_pct=0.5,
+    )
+
+    async def fake_db():
+        sess = MagicMock()
+
+        async def execute_side(stmt):
+            result = MagicMock()
+            result.all.return_value = [(assumption, prod_row.sku, prod_row.name)]
+            return result
+
+        sess.execute = AsyncMock(side_effect=execute_side)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/sku-assumptions?product_id=5")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data) == 1
+    assert data[0]["product_id"] == 5
+    assert data[0]["landed_cost_usd"] == 120.0
 
 
 def test_suggestions_batched_endpoint_returns_meta_structure():
