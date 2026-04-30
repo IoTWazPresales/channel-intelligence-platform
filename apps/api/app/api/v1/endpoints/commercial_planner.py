@@ -89,14 +89,14 @@ def _coerce_float(v) -> float | None:
 def _sku_assumption_invalid_controlled_cost(sku: CommercialSkuAssumption | None) -> bool:
     if sku is None:
         return False
-    v = _coerce_float(sku.landed_cost_usd)
+    v = _coerce_float(sku.controlled_cost_amount)
     return v is None or v <= 0
 
 
 def _sku_assumption_invalid_fx(sku: CommercialSkuAssumption | None) -> bool:
     if sku is None:
         return False
-    v = _coerce_float(sku.fx_rate_to_usd)
+    v = _coerce_float(sku.fx_plan_currency_per_cost_currency)
     return v is None or v <= 0
 
 
@@ -311,9 +311,10 @@ class PlanLineCreate(BaseModel):
     override_customer_margin_pct: float | None = None
     override_customer_rebate_pct: float | None = None
     override_distributor_margin_pct: float | None = None
-    override_landed_cost_usd: float | None = None
+    override_controlled_cost_amount: float | None = None
+    override_controlled_cost_currency_code: str | None = None
     override_vat_rate_pct: float | None = None
-    override_fx_rate_to_usd: float | None = None
+    override_fx_plan_currency_per_cost_currency: float | None = None
     override_reserve_total_pct: float | None = None
     override_promo_reserve_split_pct: float | None = None
 
@@ -387,25 +388,27 @@ def _line_payload(
         "launch_date": line.launch_date.isoformat() if line.launch_date else None,
         "promo_start_date": line.promo_start_date.isoformat() if line.promo_start_date else None,
         "notes": line.notes,
-        "calc_sell_in_price_usd": float(line.calc_sell_in_price_usd) if line.calc_sell_in_price_usd is not None else None,
-        "calc_buy_price_usd": float(line.calc_buy_price_usd) if line.calc_buy_price_usd is not None else None,
-        "calc_promo_reserve_usd": float(line.calc_promo_reserve_usd) if line.calc_promo_reserve_usd is not None else None,
-        "calc_non_promo_reserve_usd": float(line.calc_non_promo_reserve_usd) if line.calc_non_promo_reserve_usd is not None else None,
-        "calc_internal_gp_usd": float(line.calc_internal_gp_usd) if line.calc_internal_gp_usd is not None else None,
-        "calc_customer_gp_pct": float(line.calc_customer_gp_pct) if line.calc_customer_gp_pct is not None else None,
-        "calc_distributor_gp_pct": float(line.calc_distributor_gp_pct) if line.calc_distributor_gp_pct is not None else None,
+        "calc_oem_sell_in_amount": float(line.calc_oem_sell_in_amount) if line.calc_oem_sell_in_amount is not None else None,
+        "calc_distributor_net_amount": float(line.calc_distributor_net_amount) if line.calc_distributor_net_amount is not None else None,
+        "calc_campaign_support_reserve_amount": float(line.calc_campaign_support_reserve_amount) if line.calc_campaign_support_reserve_amount is not None else None,
+        "calc_non_campaign_reserve_amount": float(line.calc_non_campaign_reserve_amount) if line.calc_non_campaign_reserve_amount is not None else None,
+        "calc_internal_gp_amount": float(line.calc_internal_gp_amount) if line.calc_internal_gp_amount is not None else None,
+        "calc_customer_margin_input_pct": float(line.calc_customer_margin_input_pct) if line.calc_customer_margin_input_pct is not None else None,
+        "calc_distributor_margin_input_pct": float(line.calc_distributor_margin_input_pct) if line.calc_distributor_margin_input_pct is not None else None,
         "calc_flags": line.calc_flags or [],
         "calc_explanation": line.calc_explanation,
         "override_customer_margin_pct": float(line.override_customer_margin_pct) if line.override_customer_margin_pct is not None else None,
         "override_customer_rebate_pct": float(line.override_customer_rebate_pct) if line.override_customer_rebate_pct is not None else None,
         "override_distributor_margin_pct": float(line.override_distributor_margin_pct) if line.override_distributor_margin_pct is not None else None,
-        "override_landed_cost_usd": float(line.override_landed_cost_usd) if line.override_landed_cost_usd is not None else None,
+        "override_controlled_cost_amount": float(line.override_controlled_cost_amount) if line.override_controlled_cost_amount is not None else None,
         "override_vat_rate_pct": float(line.override_vat_rate_pct) if line.override_vat_rate_pct is not None else None,
-        "override_fx_rate_to_usd": float(line.override_fx_rate_to_usd) if line.override_fx_rate_to_usd is not None else None,
+        "override_fx_plan_currency_per_cost_currency": float(line.override_fx_plan_currency_per_cost_currency) if line.override_fx_plan_currency_per_cost_currency is not None else None,
         "override_reserve_total_pct": float(line.override_reserve_total_pct) if line.override_reserve_total_pct is not None else None,
         "override_promo_reserve_split_pct": float(line.override_promo_reserve_split_pct)
         if line.override_promo_reserve_split_pct is not None
         else None,
+        "economics_calc_currency_code": (line.economics_calc_currency_code or "USD").strip(),
+        "override_controlled_cost_currency_code": (line.override_controlled_cost_currency_code or "").strip() or None,
     }
     if read_extensions:
         out.update(read_extensions)
@@ -436,10 +439,11 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
                 CommercialCustomerTerm.customer_rebate_pct,
                 CommercialDistributorTerm.distributor_margin_pct,
                 CommercialSkuAssumption.vat_rate_pct,
-                CommercialSkuAssumption.fx_rate_to_usd,
+                CommercialSkuAssumption.fx_plan_currency_per_cost_currency,
                 CommercialSkuAssumption.reserve_total_pct,
                 CommercialSkuAssumption.promo_reserve_split_pct,
-                CommercialSkuAssumption.landed_cost_usd,
+                CommercialSkuAssumption.controlled_cost_amount,
+                CommercialSkuAssumption.controlled_cost_currency_code,
             )
             .select_from(CommercialPlanLine)
             .join(DimCustomer, DimCustomer.id == CommercialPlanLine.customer_id)
@@ -477,7 +481,8 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
         sa_fx,
         sa_reserve,
         sa_pr,
-        sa_landed,
+        sa_cc,
+        sa_ccy,
     ) = r
     read_ext = plan_line_read_model_extensions(
         line,
@@ -486,13 +491,14 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
         customer_rebate_pct=float(ct_rebate) if ct_rebate is not None else None,
         distributor_margin_pct=float(dt_margin) if dt_margin is not None else None,
         sku_vat_rate_pct=float(sa_vat) if sa_vat is not None else None,
-        sku_fx_rate_to_usd=float(sa_fx) if sa_fx is not None else None,
+        sku_fx_plan_currency_per_cost_currency=float(sa_fx) if sa_fx is not None else None,
         sku_reserve_total_pct=float(sa_reserve) if sa_reserve is not None else None,
         sku_promo_reserve_split_pct=float(sa_pr) if sa_pr is not None else None,
-        sku_landed_cost_usd=float(sa_landed) if sa_landed is not None else None,
+        sku_controlled_cost_amount=float(sa_cc) if sa_cc is not None else None,
+        sku_controlled_cost_currency_code=str(sa_ccy).strip() if sa_ccy is not None else None,
         join_customer_term_present=ct_margin is not None,
         join_distributor_term_present=dt_margin is not None,
-        join_sku_assumption_present=sa_landed is not None,
+        join_sku_assumption_present=sa_cc is not None,
         distributor_code=dc,
     )
     return _line_payload(
@@ -542,7 +548,7 @@ async def _resolve_terms_and_calc(
         missing.append("missing_sku_assumption")
     if unassigned_distributor_id is not None and line.distributor_id == unassigned_distributor_id:
         missing.append("unassigned_distributor_placeholder")
-    if sku is None and line.override_fx_rate_to_usd is None:
+    if sku is None and line.override_fx_plan_currency_per_cost_currency is None:
         missing.append("economics_placeholder_fx_without_sku")
     if sku is None and line.override_vat_rate_pct is None:
         missing.append("economics_placeholder_vat_without_sku")
@@ -556,9 +562,12 @@ async def _resolve_terms_and_calc(
         target_srp_local=float(line.target_srp_local),
         promo_srp_local=float(line.promo_srp_local) if line.promo_srp_local is not None else None,
         promo_mix_pct=float(line.promo_mix_pct),
-        fx_rate_to_usd=float(line.override_fx_rate_to_usd or (sku.fx_rate_to_usd if sku else 1.0)),
+        fx_plan_currency_per_cost_currency=float(
+            line.override_fx_plan_currency_per_cost_currency
+            or (sku.fx_plan_currency_per_cost_currency if sku else 1.0)
+        ),
         vat_rate_pct=float(line.override_vat_rate_pct or (sku.vat_rate_pct if sku else 0.15)),
-        landed_cost_usd=float(line.override_landed_cost_usd or (sku.landed_cost_usd if sku else 0.0)),
+        controlled_cost_amount=float(line.override_controlled_cost_amount or (sku.controlled_cost_amount if sku else 0.0)),
         customer_margin_pct=float(line.override_customer_margin_pct or (cterm.customer_margin_pct if cterm else 0.0)),
         customer_rebate_pct=float(line.override_customer_rebate_pct or (cterm.customer_rebate_pct if cterm else 0.0)),
         distributor_margin_pct=float(
@@ -570,14 +579,19 @@ async def _resolve_terms_and_calc(
         ),
     )
     calc = compute_line_economics(inp)
+    if line.override_controlled_cost_amount is not None:
+        econ_ccy = (line.override_controlled_cost_currency_code or "").strip() or "USD"
+    else:
+        econ_ccy = ((sku.controlled_cost_currency_code if sku else None) or "").strip() or "USD"
     payload = {
-        "calc_sell_in_price_usd": calc.sell_in_price_usd,
-        "calc_buy_price_usd": calc.buy_price_usd,
-        "calc_promo_reserve_usd": calc.promo_reserve_usd,
-        "calc_non_promo_reserve_usd": calc.non_promo_reserve_usd,
-        "calc_internal_gp_usd": calc.internal_gp_usd,
-        "calc_customer_gp_pct": calc.customer_gp_pct,
-        "calc_distributor_gp_pct": calc.distributor_gp_pct,
+        "calc_oem_sell_in_amount": calc.calc_oem_sell_in_amount,
+        "calc_distributor_net_amount": calc.calc_distributor_net_amount,
+        "calc_campaign_support_reserve_amount": calc.calc_campaign_support_reserve_amount,
+        "calc_non_campaign_reserve_amount": calc.calc_non_campaign_reserve_amount,
+        "calc_internal_gp_amount": calc.calc_internal_gp_amount,
+        "calc_customer_margin_input_pct": calc.calc_customer_margin_input_pct,
+        "calc_distributor_margin_input_pct": calc.calc_distributor_margin_input_pct,
+        "economics_calc_currency_code": econ_ccy,
         "calc_flags": list(dict.fromkeys([*missing, *calc.flags])),
         "calc_explanation": calc.explanation,
     }
@@ -724,10 +738,11 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
                 CommercialCustomerTerm.customer_rebate_pct.label("row_ct_rebate"),
                 CommercialDistributorTerm.distributor_margin_pct.label("row_dt_margin"),
                 CommercialSkuAssumption.vat_rate_pct.label("row_sa_vat"),
-                CommercialSkuAssumption.fx_rate_to_usd.label("row_sa_fx"),
+                CommercialSkuAssumption.fx_plan_currency_per_cost_currency.label("row_sa_fx"),
                 CommercialSkuAssumption.reserve_total_pct.label("row_sa_reserve"),
                 CommercialSkuAssumption.promo_reserve_split_pct.label("row_sa_pr"),
-                CommercialSkuAssumption.landed_cost_usd.label("row_sa_landed"),
+                CommercialSkuAssumption.controlled_cost_amount.label("row_sa_cc"),
+                CommercialSkuAssumption.controlled_cost_currency_code.label("row_sa_ccy"),
             )
             .join(DimCustomer, DimCustomer.id == CommercialPlanLine.customer_id)
             .join(DimDistributor, DimDistributor.id == CommercialPlanLine.distributor_id)
@@ -765,7 +780,8 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
         sa_fx,
         sa_reserve,
         sa_pr,
-        sa_landed,
+        sa_cc,
+        sa_ccy,
     ) in rows:
         read_ext = plan_line_read_model_extensions(
             line,
@@ -774,13 +790,14 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
             customer_rebate_pct=float(ct_rebate) if ct_rebate is not None else None,
             distributor_margin_pct=float(dt_margin) if dt_margin is not None else None,
             sku_vat_rate_pct=float(sa_vat) if sa_vat is not None else None,
-            sku_fx_rate_to_usd=float(sa_fx) if sa_fx is not None else None,
+            sku_fx_plan_currency_per_cost_currency=float(sa_fx) if sa_fx is not None else None,
             sku_reserve_total_pct=float(sa_reserve) if sa_reserve is not None else None,
             sku_promo_reserve_split_pct=float(sa_pr) if sa_pr is not None else None,
-            sku_landed_cost_usd=float(sa_landed) if sa_landed is not None else None,
+            sku_controlled_cost_amount=float(sa_cc) if sa_cc is not None else None,
+            sku_controlled_cost_currency_code=str(sa_ccy).strip() if sa_ccy is not None else None,
             join_customer_term_present=ct_margin is not None,
             join_distributor_term_present=dt_margin is not None,
-            join_sku_assumption_present=sa_landed is not None,
+            join_sku_assumption_present=sa_cc is not None,
             distributor_code=dc,
         )
         out.append(
@@ -959,18 +976,19 @@ async def get_plan_summary(plan_id: int, db: AsyncSession = Depends(get_db)):
     flags: set[str] = set()
     for row in rows:
         total_units += float(row.target_units)
-        total_gp += float(row.calc_internal_gp_usd or 0.0)
-        total_promo_reserve += float(row.calc_promo_reserve_usd or 0.0)
-        total_nonpromo_reserve += float(row.calc_non_promo_reserve_usd or 0.0)
+        total_gp += float(row.calc_internal_gp_amount or 0.0)
+        total_promo_reserve += float(row.calc_campaign_support_reserve_amount or 0.0)
+        total_nonpromo_reserve += float(row.calc_non_campaign_reserve_amount or 0.0)
         for f in row.calc_flags or []:
             flags.add(str(f))
     return {
         "plan_id": plan_id,
         "line_count": len(rows),
         "total_units": round(total_units, 4),
-        "total_internal_gp_usd": round(total_gp, 4),
-        "total_promo_reserve_usd": round(total_promo_reserve, 4),
-        "total_non_promo_reserve_usd": round(total_nonpromo_reserve, 4),
+        "total_internal_gp_amount": round(total_gp, 4),
+        "total_campaign_support_reserve_amount": round(total_promo_reserve, 4),
+        "total_non_campaign_reserve_amount": round(total_nonpromo_reserve, 4),
+        "economics_calc_currency_code": rows[0].economics_calc_currency_code if rows else "USD",
         "flags": sorted(flags),
     }
 
@@ -982,7 +1000,7 @@ async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db))
     Queries are batched: 5 SQL round-trips total regardless of line count.
     Prior-planned uses data from *other* plans only (same product+customer pair).
     Lineup evidence is sourced from the latest historical_lineup apply job — DAP is
-    never used as landed_cost_usd.
+    never used as SKU controlled cost (PM bottom).
     """
     rows = (
         await db.execute(
@@ -1204,7 +1222,7 @@ async def get_lineup_evidence(
     """Return aggregated lineup evidence for a single product from the latest apply job (read-only).
 
     DAP (Distributor Acquisition Price) is the source/import value from the historical lineup.
-    It is NOT equivalent to landed_cost_usd and must never be mapped directly as a cost input.
+    It is NOT equivalent to SKU controlled cost (PM bottom) and must never be mapped directly as a cost input.
     Returns evidence=null when no apply job has a line for this product.
     """
     latest_job_id = await db.scalar(
@@ -1335,17 +1353,19 @@ class DistributorTermPatch(BaseModel):
 
 class SkuAssumptionCreate(BaseModel):
     product_id: int
-    landed_cost_usd: float = Field(gt=0)
+    controlled_cost_amount: float = Field(gt=0)
+    controlled_cost_currency_code: str = Field(default="USD", min_length=3, max_length=8)
     vat_rate_pct: float = Field(ge=0.0, le=1.0)
-    fx_rate_to_usd: float = Field(gt=0)
+    fx_plan_currency_per_cost_currency: float = Field(gt=0)
     reserve_total_pct: float = Field(ge=0.0, le=1.0)
     promo_reserve_split_pct: float = Field(ge=0.0, le=1.0)
 
 
 class SkuAssumptionPatch(BaseModel):
-    landed_cost_usd: float | None = Field(default=None, gt=0)
+    controlled_cost_amount: float | None = Field(default=None, gt=0)
+    controlled_cost_currency_code: str | None = Field(default=None, min_length=3, max_length=8)
     vat_rate_pct: float | None = Field(default=None, ge=0.0, le=1.0)
-    fx_rate_to_usd: float | None = Field(default=None, gt=0)
+    fx_plan_currency_per_cost_currency: float | None = Field(default=None, gt=0)
     reserve_total_pct: float | None = Field(default=None, ge=0.0, le=1.0)
     promo_reserve_split_pct: float | None = Field(default=None, ge=0.0, le=1.0)
 
@@ -1377,9 +1397,10 @@ def _sku_assumption_json(row: CommercialSkuAssumption, sku: str, product_name: s
         "product_id": row.product_id,
         "product_sku": sku,
         "product_name": product_name,
-        "landed_cost_usd": float(row.landed_cost_usd),
+        "controlled_cost_amount": float(row.controlled_cost_amount),
+        "controlled_cost_currency_code": str(row.controlled_cost_currency_code or "USD").strip(),
         "vat_rate_pct": float(row.vat_rate_pct),
-        "fx_rate_to_usd": float(row.fx_rate_to_usd),
+        "fx_plan_currency_per_cost_currency": float(row.fx_plan_currency_per_cost_currency),
         "reserve_total_pct": float(row.reserve_total_pct),
         "promo_reserve_split_pct": float(row.promo_reserve_split_pct),
     }
@@ -1567,9 +1588,10 @@ async def create_sku_assumption(body: SkuAssumptionCreate, db: AsyncSession = De
         raise HTTPException(status_code=409, detail="A SKU assumption already exists for this product")
     row = CommercialSkuAssumption(
         product_id=body.product_id,
-        landed_cost_usd=body.landed_cost_usd,
+        controlled_cost_amount=body.controlled_cost_amount,
+        controlled_cost_currency_code=(body.controlled_cost_currency_code or "USD").strip(),
         vat_rate_pct=body.vat_rate_pct,
-        fx_rate_to_usd=body.fx_rate_to_usd,
+        fx_plan_currency_per_cost_currency=body.fx_plan_currency_per_cost_currency,
         reserve_total_pct=body.reserve_total_pct,
         promo_reserve_split_pct=body.promo_reserve_split_pct,
     )
@@ -1619,12 +1641,12 @@ _COVERAGE_NON_WARNING_CODES: frozenset[str] = frozenset(
     {"historical_lineup_processed", "historical_lineup_sheet_summary"}
 )
 
-# Included verbatim in lineup-product-gaps responses.  DAP is NOT equivalent to landed_cost_usd.
-# Never map dap_local directly to landed_cost_usd without explicit cost-basis verification.
+# Included verbatim in lineup-product-gaps responses.  DAP is NOT equivalent to SKU controlled cost.
+# Never map dap_local directly to controlled_cost_amount without explicit cost-basis verification.
 _COST_SEMANTICS_NOTE = (
     "DAP (Distributor Acquisition Price) is the source/import value from the historical lineup. "
-    "It is not equivalent to landed_cost_usd and must not be used as a cost input to the planner "
-    "without verification of the cost basis."
+    "It is not equivalent to SKU controlled_cost_amount (PM bottom / internal cost basis) and must not "
+    "be used as a cost input to the planner without verification of the cost basis."
 )
 
 
@@ -1801,7 +1823,7 @@ async def get_lineup_product_gaps(
 
     Returns one record per resolved product in the job, aggregating lineup evidence fields and
     flagging which planner defaults are missing.  The cost_semantics_note field on each record
-    makes explicit that DAP is NOT landed_cost_usd and must never be mapped directly as a cost
+    makes explicit that DAP is NOT SKU controlled cost and must never be mapped directly as a cost
     input to the commercial planner.
 
     Returns 400 when job_id does not resolve to a historical_lineup apply job with a persisted
@@ -1906,7 +1928,7 @@ ALLOWED_CASE_STATUS_TRANSITIONS: dict[str, list[str]] = {
 
 _LINEUP_DAP_SEMANTICS_NOTE = (
     "dap_evidence_local is sourced from the uploaded lineup file. "
-    "It is NOT equivalent to landed_cost_usd and must not be used as a cost input "
+    "It is NOT equivalent to SKU controlled cost (PM bottom) and must not be used as a cost input "
     "to the commercial planner without explicit cost-basis verification."
 )
 
@@ -2677,7 +2699,7 @@ async def parse_lineup_case_upload(
     """Parse an uploaded lineup file, write CommercialLineupLine rows, and link an ImportJob audit record.
 
     DAP fields are stored as evidence (dap_evidence_local) only.
-    Never mapped to landed_cost_usd.
+    Never mapped to SKU controlled cost or override_controlled_cost_amount.
     """
     case = await db.get(CommercialLineupCase, case_id)
     if not case:

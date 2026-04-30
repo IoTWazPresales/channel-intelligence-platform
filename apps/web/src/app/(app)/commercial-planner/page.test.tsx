@@ -70,11 +70,11 @@ const mockState = vi.hoisted(() => {
           target_srp_local: 1000,
           promo_srp_local: 900,
           promo_mix_pct: 0.5,
-          calc_sell_in_price_usd: 40,
-          calc_buy_price_usd: 36,
-          calc_promo_reserve_usd: 200,
-          calc_non_promo_reserve_usd: 200,
-          calc_internal_gp_usd: 300,
+          calc_oem_sell_in_amount: 40,
+          calc_distributor_net_amount: 36,
+          calc_campaign_support_reserve_amount: 200,
+          calc_non_campaign_reserve_amount: 200,
+          calc_internal_gp_amount: 300,
           calc_flags: [],
           calc_explanation: 'ok',
           product_specs_flat: { cpu: 'Intel Core i7' },
@@ -97,9 +97,10 @@ const mockState = vi.hoisted(() => {
       return {
         line_count: 1,
         total_units: 100,
-        total_internal_gp_usd: 300,
-        total_promo_reserve_usd: 200,
-        total_non_promo_reserve_usd: 200,
+        total_internal_gp_amount: 300,
+        total_campaign_support_reserve_amount: 200,
+        total_non_campaign_reserve_amount: 200,
+        economics_calc_currency_code: 'USD',
         flags: [],
       };
     }
@@ -194,7 +195,7 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
     <div data-testid="enterprise-grid">
       {gridOptions?.loading ? <span data-testid="grid-loading-overlay">Loading grid…</span> : null}
       {(rowData ?? []).map((r) => {
-        const gpCol = columnDefs?.find((c: any) => c.field === 'calc_internal_gp_usd');
+        const gpCol = columnDefs?.find((c: any) => c.field === 'calc_internal_gp_amount');
         const gpDisplay =
           typeof gpCol?.valueGetter === 'function' ? String(gpCol.valueGetter({ data: r } as any) ?? '') : '';
         const specCpuCol =
@@ -235,14 +236,14 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
                 'effective_customer_rebate_pct',
                 'effective_distributor_margin_pct',
                 'effective_vat_rate_pct',
-                'effective_fx_rate_to_usd',
+                'effective_fx_plan_currency_per_cost_currency',
                 'effective_reserve_total_pct',
                 'effective_promo_reserve_split_pct',
-                'effective_controlled_cost_usd_per_unit',
+                'effective_controlled_cost_amount',
                 'promo_mix_pct',
-                'calc_buy_price_usd',
-                'calc_promo_reserve_usd',
-                'calc_non_promo_reserve_usd',
+                'calc_distributor_net_amount',
+                'calc_campaign_support_reserve_amount',
+                'calc_non_campaign_reserve_amount',
               ].includes(c.field) &&
               c.hide === false
           )
@@ -362,7 +363,7 @@ describe('CommercialPlannerPage', () => {
     const map = await screen.findByTestId('commercial-data-map');
     expect(within(map).getByText(/SKU controlled cost \(PM bottom\)/)).toBeInTheDocument();
     expect(within(map).getByText(/DAP \(lineup\)/)).toBeInTheDocument();
-    expect(within(map).getByText(/misleading name/i)).toBeInTheDocument();
+    expect(within(map).getByText(/commercial_sku_assumption\.controlled_cost_amount/i)).toBeInTheDocument();
     expect(within(map).getByText(/Line economics trust \(read model\)/)).toBeInTheDocument();
     expect(within(map).getByText(/POST recalculate trust summary/i)).toBeInTheDocument();
     expect(within(map).getByText(/Never from DAP/i)).toBeInTheDocument();
@@ -374,7 +375,7 @@ describe('CommercialPlannerPage', () => {
     expect(await screen.findByText('Customer commercial terms')).toBeInTheDocument();
     expect(await screen.findByTestId('planner-defaults-guide')).toBeInTheDocument();
     expect(screen.getByText(/SKU assumptions \(controlled cost, VAT, FX, reserves\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/local or plan currency units per 1 USD/i)).toBeInTheDocument();
+    expect(screen.getByText(/plan currency units per 1 controlled-cost currency/i)).toBeInTheDocument();
     expect(await screen.findByTestId('planner-defaults-sku-economics-disclaimers')).toHaveTextContent(
       /DAP.*sell-in evidence/i
     );
@@ -473,16 +474,16 @@ describe('CommercialPlannerPage — QA polish', () => {
             target_srp_local: 1000,
             promo_srp_local: 900,
             promo_mix_pct: 0.5,
-            calc_sell_in_price_usd: 40,
-            calc_buy_price_usd: 36,
-            calc_promo_reserve_usd: 200,
-            calc_non_promo_reserve_usd: 200,
-            calc_internal_gp_usd: 300,
-            calc_customer_gp_pct: null,
-            calc_distributor_gp_pct: null,
+            calc_oem_sell_in_amount: 40,
+            calc_distributor_net_amount: 36,
+            calc_campaign_support_reserve_amount: 200,
+            calc_non_campaign_reserve_amount: 200,
+            calc_internal_gp_amount: 300,
+            calc_customer_margin_input_pct: null,
+            calc_distributor_margin_input_pct: null,
             calc_flags: ['missing_sku_assumption'],
             calc_explanation: 'ok',
-            override_landed_cost_usd: null,
+            override_controlled_cost_amount: null,
             product_specs_flat: { cpu: 'Intel Core i7' },
           },
         ];
@@ -507,7 +508,7 @@ describe('CommercialPlannerPage — QA polish', () => {
         };
       }
       if (url === '/api/v1/commercial-planner/plans/1/summary') {
-        return { line_count: 1, total_units: 100, total_internal_gp_usd: 300, total_promo_reserve_usd: 200, total_non_promo_reserve_usd: 200, flags: [] };
+        return { line_count: 1, total_units: 100, total_internal_gp_amount: 300, total_campaign_support_reserve_amount: 200, total_non_campaign_reserve_amount: 200, economics_calc_currency_code: 'USD', flags: [] };
       }
       if (url === '/api/v1/commercial-planner/plans/1/suggestions') {
         return [
@@ -562,13 +563,13 @@ describe('CommercialPlannerPage — QA polish', () => {
     const { user } = renderPage();
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     await user.click(await screen.findByTestId('column-manager-btn'));
-    await user.click(await screen.findByTestId('col-toggle-effective_fx_rate_to_usd'));
+    await user.click(await screen.findByTestId('col-toggle-effective_fx_plan_currency_per_cost_currency'));
     await waitFor(() => {
       const raw = localStorage.getItem('cip.commercial-planner.gridColumns.v4');
       expect(raw).toBeTruthy();
       const parsed = JSON.parse(raw!);
       expect(parsed.version).toBe(4);
-      expect(parsed.visibleOptional?.effective_fx_rate_to_usd).toBe(true);
+      expect(parsed.visibleOptional?.effective_fx_plan_currency_per_cost_currency).toBe(true);
     });
   });
 
@@ -586,8 +587,8 @@ describe('CommercialPlannerPage — QA polish', () => {
     const { user } = renderPage();
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     await user.click(await screen.findByTestId('column-manager-btn'));
-    await user.click(await screen.findByTestId('col-toggle-effective_fx_rate_to_usd'));
-    expect(await screen.findByTestId('visible-optional-cols')).toHaveTextContent('effective_fx_rate_to_usd');
+    await user.click(await screen.findByTestId('col-toggle-effective_fx_plan_currency_per_cost_currency'));
+    expect(await screen.findByTestId('visible-optional-cols')).toHaveTextContent('effective_fx_plan_currency_per_cost_currency');
   });
 
   it('Add from lineup posts new lines without landed_cost_usd and skips plan duplicates', async () => {
@@ -694,7 +695,7 @@ describe('CommercialPlannerPage — QA polish', () => {
     expect(body.target_units).toBe(5);
     expect(body.target_srp_local).toBe(1200);
     expect('landed_cost_usd' in body).toBe(false);
-    expect('override_landed_cost_usd' in body).toBe(false);
+    expect('override_controlled_cost_amount' in body).toBe(false);
   });
 
   it('fractional target_units suggestion preview shows rounded value and confirm sends integer', async () => {
@@ -726,7 +727,7 @@ describe('CommercialPlannerPage — QA polish', () => {
         return [{ id: 1, plan_name: 'Q3 Plan', status: 'draft', period_start: '2026-07-01', period_end: null, owner: 'planner', currency_code: 'USD', line_count: 1, notes: null }];
       }
       if (url === '/api/v1/commercial-planner/plans/1/summary') {
-        return { line_count: 0, total_units: 0, total_internal_gp_usd: 0, total_promo_reserve_usd: 0, total_non_promo_reserve_usd: 0, flags: [] };
+        return { line_count: 0, total_units: 0, total_internal_gp_amount: 0, total_campaign_support_reserve_amount: 0, total_non_campaign_reserve_amount: 0, economics_calc_currency_code: 'USD', flags: [] };
       }
       if (url === '/api/v1/commercial-planner/plans/1/suggestions') return [];
       return [];
@@ -750,11 +751,11 @@ describe('CommercialPlannerPage — QA polish', () => {
         target_srp_local: 1,
         promo_srp_local: null,
         promo_mix_pct: 0.5,
-        calc_sell_in_price_usd: null,
-        calc_buy_price_usd: null,
-        calc_promo_reserve_usd: null,
-        calc_non_promo_reserve_usd: null,
-        calc_internal_gp_usd: null,
+        calc_oem_sell_in_amount: null,
+        calc_distributor_net_amount: null,
+        calc_campaign_support_reserve_amount: null,
+        calc_non_campaign_reserve_amount: null,
+        calc_internal_gp_amount: null,
         calc_flags: [],
         calc_explanation: null,
       },
@@ -1395,10 +1396,14 @@ const CLEAN_LINE = {
   distributor_code: 'DIST01', distributor_name: 'Summit Supply',
   product_sku: 'NB-X1', product_name: 'Notebook X1',
   target_units: 100, target_srp_local: 1000, promo_srp_local: 900, promo_mix_pct: 0.5,
-  calc_sell_in_price_usd: 40, calc_buy_price_usd: 36,
-  calc_promo_reserve_usd: 200, calc_non_promo_reserve_usd: 200, calc_internal_gp_usd: 300,
-  calc_customer_gp_pct: null, calc_distributor_gp_pct: null,
-  calc_flags: [], calc_explanation: 'ok', override_landed_cost_usd: null,
+  economics_calc_currency_code: 'USD',
+  effective_fx_plan_currency_per_cost_currency: 18,
+  effective_controlled_cost_amount: 400,
+  effective_controlled_cost_currency_code: 'USD',
+  calc_oem_sell_in_amount: 40, calc_distributor_net_amount: 36,
+  calc_campaign_support_reserve_amount: 200, calc_non_campaign_reserve_amount: 200, calc_internal_gp_amount: 300,
+  calc_customer_margin_input_pct: null, calc_distributor_margin_input_pct: null,
+  calc_flags: [], calc_explanation: 'ok', override_controlled_cost_amount: null,
   economics_line_trust: 'ok' as const,
   economics_line_trust_reasons: [] as string[],
   economics_field_provenance: {} as Record<string, { source: string; trusted?: boolean; detail?: string }>,
@@ -1413,7 +1418,7 @@ function makeDefaultMock(linesOverride?: any[]) {
     }
     if (url === '/api/v1/commercial-planner/plans/1/lines') return linesOverride ?? [CLEAN_LINE];
     if (url === '/api/v1/commercial-planner/plans/1/summary') {
-      return { line_count: 1, total_units: 100, total_internal_gp_usd: 300, total_promo_reserve_usd: 200, total_non_promo_reserve_usd: 200, flags: [] };
+      return { line_count: 1, total_units: 100, total_internal_gp_amount: 300, total_campaign_support_reserve_amount: 200, total_non_campaign_reserve_amount: 200, economics_calc_currency_code: 'USD', flags: [] };
     }
     if (url === '/api/v1/commercial-planner/plans/1/suggestions') {
       return [{ line_id: 11, suggestions: [{ type: 'target_units', value: 120, reason: 'Historical uplift', confidence: 'medium', factors: { avg_sellout_units: 100 } }] }];
@@ -1444,7 +1449,7 @@ describe('CommercialPlannerPage — Workspace V1', () => {
 
   it('recalculate-needed banner appears when a line has null economics', async () => {
     mockState.apiGetMock.mockImplementation(
-      makeDefaultMock([{ ...CLEAN_LINE, calc_sell_in_price_usd: null, calc_buy_price_usd: null, calc_promo_reserve_usd: null, calc_non_promo_reserve_usd: null, calc_internal_gp_usd: null }])
+      makeDefaultMock([{ ...CLEAN_LINE, calc_oem_sell_in_amount: null, calc_distributor_net_amount: null, calc_campaign_support_reserve_amount: null, calc_non_campaign_reserve_amount: null, calc_internal_gp_amount: null }])
     );
     renderPage();
     expect(await screen.findByTestId('recalc-needed-banner')).toBeInTheDocument();
@@ -1480,11 +1485,11 @@ describe('CommercialPlannerPage — Workspace V1', () => {
       makeDefaultMock([
         {
           ...CLEAN_LINE,
-          calc_sell_in_price_usd: 0,
-          calc_buy_price_usd: 0,
-          calc_promo_reserve_usd: 0,
-          calc_non_promo_reserve_usd: 0,
-          calc_internal_gp_usd: 0,
+          calc_oem_sell_in_amount: 0,
+          calc_distributor_net_amount: 0,
+          calc_campaign_support_reserve_amount: 0,
+          calc_non_campaign_reserve_amount: 0,
+          calc_internal_gp_amount: 0,
           calc_flags: ['missing_or_invalid_landed_cost'],
           economics_line_trust: 'blocked',
           economics_line_trust_reasons: ['missing_or_invalid_landed_cost'],
@@ -1527,16 +1532,16 @@ describe('CommercialPlannerPage — Workspace V1', () => {
 
   it('plan summary strip shows "Economics incomplete" when a line has null sell-in price', async () => {
     mockState.apiGetMock.mockImplementation(
-      makeDefaultMock([{ ...CLEAN_LINE, calc_sell_in_price_usd: null, calc_buy_price_usd: null,
-        calc_promo_reserve_usd: null, calc_non_promo_reserve_usd: null, calc_internal_gp_usd: null,
+      makeDefaultMock([{ ...CLEAN_LINE, calc_oem_sell_in_amount: null, calc_distributor_net_amount: null,
+        calc_campaign_support_reserve_amount: null, calc_non_campaign_reserve_amount: null, calc_internal_gp_amount: null,
         calc_flags: ['missing_or_invalid_landed_cost'] }])
     );
     // Summary returns flags so economicsComplete stays false
     mockState.apiGetMock.mockImplementation(async (url: string) => {
       if (url === '/api/v1/commercial-planner/plans/1/summary') {
-        return { line_count: 1, total_units: 100, total_internal_gp_usd: null, total_promo_reserve_usd: null, total_non_promo_reserve_usd: null, flags: ['missing_or_invalid_landed_cost'] };
+        return { line_count: 1, total_units: 100, total_internal_gp_amount: null, total_campaign_support_reserve_amount: null, total_non_campaign_reserve_amount: null, economics_calc_currency_code: 'USD', flags: ['missing_or_invalid_landed_cost'] };
       }
-      return makeDefaultMock([{ ...CLEAN_LINE, calc_sell_in_price_usd: null, calc_flags: ['missing_or_invalid_landed_cost'] }])(url);
+      return makeDefaultMock([{ ...CLEAN_LINE, calc_oem_sell_in_amount: null, calc_flags: ['missing_or_invalid_landed_cost'] }])(url);
     });
     renderPage();
     await screen.findByText(/Q3 Plan \(draft\)/i);
@@ -1556,8 +1561,8 @@ describe('CommercialPlannerPage — Workspace V1', () => {
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     const summary = screen.getByTestId('plan-summary-panel');
     expect(summary).toHaveTextContent('Estimated internal GP (USD, total, after reserves)');
-    expect(summary).toHaveTextContent('Promo reserve (USD)');
-    expect(summary).toHaveTextContent('Non-promo reserve (USD)');
+    expect(summary).toHaveTextContent('Campaign support reserve (USD)');
+    expect(summary).toHaveTextContent('Non-campaign reserve (USD)');
     expect(summary).not.toHaveTextContent('Economics incomplete');
   });
 
@@ -1686,14 +1691,14 @@ vi.mock('@/features/commercial-planner/ColumnSelectorModal', () => {
     'effective_customer_rebate_pct',
     'effective_distributor_margin_pct',
     'effective_vat_rate_pct',
-    'effective_fx_rate_to_usd',
+    'effective_fx_plan_currency_per_cost_currency',
     'effective_reserve_total_pct',
     'effective_promo_reserve_split_pct',
-    'effective_controlled_cost_usd_per_unit',
+    'effective_controlled_cost_amount',
     'promo_mix_pct',
-    'calc_buy_price_usd',
-    'calc_promo_reserve_usd',
-    'calc_non_promo_reserve_usd',
+    'calc_distributor_net_amount',
+    'calc_campaign_support_reserve_amount',
+    'calc_non_campaign_reserve_amount',
   ];
   return {
     ColumnSelectorModal: ({

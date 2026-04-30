@@ -46,9 +46,10 @@ type SkuAssumption = {
   product_id: number;
   product_sku: string;
   product_name: string;
-  landed_cost_usd: number;
+  controlled_cost_amount: number;
+  controlled_cost_currency_code: string;
   vat_rate_pct: number;
-  fx_rate_to_usd: number;
+  fx_plan_currency_per_cost_currency: number;
   reserve_total_pct: number;
   promo_reserve_split_pct: number;
 };
@@ -122,7 +123,8 @@ export function PlannerDefaultsMaintenance() {
 
   const [skuDlg, setSkuDlg] = useState<'add' | 'edit' | null>(null);
   const [skuPick, setSkuPick] = useState<ProductPick | null>(null);
-  const [landed, setLanded] = useState('100');
+  const [controlledCost, setControlledCost] = useState('100');
+  const [skuCostCcy, setSkuCostCcy] = useState('USD');
   const [vat, setVat] = useState('0.15');
   const [fx, setFx] = useState('1');
   const [resTot, setResTot] = useState('0.10');
@@ -184,9 +186,10 @@ export function PlannerDefaultsMaintenance() {
   const saveSku = useMutation({
     mutationFn: async () => {
       const payload = {
-        landed_cost_usd: Number(landed),
+        controlled_cost_amount: Number(controlledCost),
+        controlled_cost_currency_code: skuCostCcy.trim() || 'USD',
         vat_rate_pct: Number(vat),
-        fx_rate_to_usd: Number(fx),
+        fx_plan_currency_per_cost_currency: Number(fx),
         reserve_total_pct: Number(resTot),
         promo_reserve_split_pct: Number(resSplit),
       };
@@ -240,9 +243,10 @@ export function PlannerDefaultsMaintenance() {
   const openEditSku = (row: SkuAssumption) => {
     setEditSkuId(row.id);
     setSkuPick({ id: row.product_id, sku: row.product_sku, name: row.product_name });
-    setLanded(String(row.landed_cost_usd));
+    setControlledCost(String(row.controlled_cost_amount));
+    setSkuCostCcy((row.controlled_cost_currency_code || 'USD').trim() || 'USD');
     setVat(String(row.vat_rate_pct));
-    setFx(String(row.fx_rate_to_usd));
+    setFx(String(row.fx_plan_currency_per_cost_currency));
     setResTot(String(row.reserve_total_pct));
     setResSplit(String(row.promo_reserve_split_pct));
     setSkuDlg('edit');
@@ -370,14 +374,14 @@ export function PlannerDefaultsMaintenance() {
       <Paper sx={{ p: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
           <Typography variant="subtitle1">SKU assumptions (controlled cost, VAT, FX, reserves)</Typography>
-          <Button size="small" variant="contained" onClick={() => { setSkuDlg('add'); setEditSkuId(null); setSkuPick(null); setLanded('100'); setVat('0.15'); setFx('1'); setResTot('0.10'); setResSplit('0.5'); }}>
+          <Button size="small" variant="contained" onClick={() => { setSkuDlg('add'); setEditSkuId(null); setSkuPick(null); setControlledCost('100'); setSkuCostCcy('USD'); setVat('0.15'); setFx('1'); setResTot('0.10'); setResSplit('0.5'); }}>
             Add
           </Button>
         </Stack>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-          One row per product: <strong>controlled cost / PM bottom</strong> (amount stored in today&apos;s economics currency
-          in <code>landed_cost_usd</code>), <strong>VAT rate</strong> (0–1),{' '}
-          <strong>FX: local or plan currency units per 1 USD</strong>, total <strong>reserve %</strong>, and{' '}
+          One row per product: <strong>controlled cost / PM bottom</strong> (amount +{' '}
+          <code>controlled_cost_currency_code</code>), <strong>VAT rate</strong> (0–1),{' '}
+          <strong>FX: plan currency units per 1 controlled-cost currency</strong>, total <strong>reserve %</strong>, and{' '}
           <strong>campaign/support reserve split</strong> (share of the reserve bucket). These inputs feed Commercial Planner
           economics. <strong>DAP evidence is not used as controlled cost.</strong> True landed cost (logistics, duties,
           freight, etc.) will be handled in a later phase — not in this field.
@@ -393,9 +397,9 @@ export function PlannerDefaultsMaintenance() {
           <TableHead>
             <TableRow>
               <TableCell>Product</TableCell>
-              <TableCell>PM bottom / controlled cost (stored USD amount)</TableCell>
+              <TableCell>PM bottom / controlled cost (amount + ccy)</TableCell>
               <TableCell>VAT (0–1)</TableCell>
-              <TableCell>FX (local CCY per 1 USD)</TableCell>
+              <TableCell>FX (plan per 1 cost ccy)</TableCell>
               <TableCell>Reserve total (0–1)</TableCell>
               <TableCell>Campaign / support split (0–1)</TableCell>
               <TableCell align="right">Actions</TableCell>
@@ -416,9 +420,11 @@ export function PlannerDefaultsMaintenance() {
                   <TableCell>
                     {r.product_sku} — {r.product_name}
                   </TableCell>
-                  <TableCell>{r.landed_cost_usd}</TableCell>
+                  <TableCell>
+                    {r.controlled_cost_amount} {(r.controlled_cost_currency_code || 'USD').trim()}
+                  </TableCell>
                   <TableCell>{r.vat_rate_pct}</TableCell>
-                  <TableCell>{r.fx_rate_to_usd}</TableCell>
+                  <TableCell>{r.fx_plan_currency_per_cost_currency}</TableCell>
                   <TableCell>{r.reserve_total_pct}</TableCell>
                   <TableCell>{r.promo_reserve_split_pct}</TableCell>
                   <TableCell align="right">
@@ -523,13 +529,18 @@ export function PlannerDefaultsMaintenance() {
               </Typography>
             )}
             <TextField
-              label="Controlled cost — USD amount stored as landed_cost_usd (>0)"
-              value={landed}
-              onChange={(e) => setLanded(e.target.value)}
+              label="Controlled cost amount (>0)"
+              value={controlledCost}
+              onChange={(e) => setControlledCost(e.target.value)}
+            />
+            <TextField
+              label="Controlled cost currency (ISO, e.g. USD)"
+              value={skuCostCcy}
+              onChange={(e) => setSkuCostCcy(e.target.value.toUpperCase())}
             />
             <TextField label="VAT rate (0–1)" value={vat} onChange={(e) => setVat(e.target.value)} />
             <TextField
-              label="FX: local/plan currency units per 1 USD (>0)"
+              label="FX: plan currency units per 1 controlled-cost currency (>0)"
               value={fx}
               onChange={(e) => setFx(e.target.value)}
             />

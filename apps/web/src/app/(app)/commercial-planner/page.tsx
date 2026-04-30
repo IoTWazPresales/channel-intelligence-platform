@@ -96,26 +96,29 @@ type PlanLine = {
   effective_customer_rebate_pct?: number | null;
   effective_distributor_margin_pct?: number | null;
   effective_vat_rate_pct?: number | null;
-  effective_fx_rate_to_usd?: number | null;
+  effective_fx_plan_currency_per_cost_currency?: number | null;
   effective_reserve_total_pct?: number | null;
   effective_promo_reserve_split_pct?: number | null;
-  effective_controlled_cost_usd_per_unit?: number | null;
+  effective_controlled_cost_amount?: number | null;
+  effective_controlled_cost_currency_code?: string | null;
+  economics_calc_currency_code?: string | null;
   calc_sell_in_price_local?: number | null;
   calc_distributor_net_local?: number | null;
   target_units: number;
   target_srp_local: number;
   promo_srp_local: number | null;
   promo_mix_pct: number;
-  calc_sell_in_price_usd: number | null;
-  calc_buy_price_usd: number | null;
-  calc_promo_reserve_usd: number | null;
-  calc_non_promo_reserve_usd: number | null;
-  calc_internal_gp_usd: number | null;
-  calc_customer_gp_pct: number | null;
-  calc_distributor_gp_pct: number | null;
+  calc_oem_sell_in_amount: number | null;
+  calc_distributor_net_amount: number | null;
+  calc_campaign_support_reserve_amount: number | null;
+  calc_non_campaign_reserve_amount: number | null;
+  calc_internal_gp_amount: number | null;
+  calc_customer_margin_input_pct: number | null;
+  calc_distributor_margin_input_pct: number | null;
   calc_flags: string[];
   calc_explanation: string | null;
-  override_landed_cost_usd: number | null;
+  override_controlled_cost_amount: number | null;
+  override_controlled_cost_currency_code?: string | null;
   economics_line_trust?: 'ok' | 'warning' | 'blocked' | string;
   economics_line_trust_reasons?: string[];
   economics_field_provenance?: Record<string, { source: string; trusted?: boolean; detail?: string }>;
@@ -170,9 +173,10 @@ type SuggestionBundle = {
 type Summary = {
   line_count: number;
   total_units: number;
-  total_internal_gp_usd: number;
-  total_promo_reserve_usd: number;
-  total_non_promo_reserve_usd: number;
+  total_internal_gp_amount: number;
+  total_campaign_support_reserve_amount: number;
+  total_non_campaign_reserve_amount: number;
+  economics_calc_currency_code?: string | null;
   flags: string[];
 };
 
@@ -311,8 +315,10 @@ export function fmtCurrency(v: number | null | undefined): string {
   return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/** Economics pipeline persists USD-valued outputs today (see commercial_plan_line.calc_*_usd). */
-export const ECONOMICS_PIPELINE_CURRENCY = 'USD';
+/** When API omits `economics_calc_currency_code`, persisted calculator outputs default to this (historically USD-shaped). */
+export const FALLBACK_ECONOMICS_CCY = 'USD';
+/** @deprecated Prefer per-line `economics_calc_currency_code` from the API. */
+export const ECONOMICS_PIPELINE_CURRENCY = FALLBACK_ECONOMICS_CCY;
 
 export function fmtMoneyWithCcy(v: number | null | undefined, currencyCode: string): string {
   if (v == null) return '—';
@@ -325,13 +331,15 @@ export function fmtFlag(flag: string): string {
     missing_sku_assumption:
       'Controlled cost missing — add SKU assumptions in Planner defaults (not populated from DAP)',
     missing_or_invalid_landed_cost: 'Controlled cost unavailable — verify SKU assumption or line override',
+    missing_or_invalid_controlled_cost: 'Controlled cost unavailable — verify SKU assumption or line override',
     missing_distributor_term:
       'Missing distributor terms — configure on the Distributor admin page or bulk edit in Planner defaults',
     missing_customer_term:
       'Missing customer terms — configure on the Customer admin page or bulk edit in Planner defaults',
     non_positive_target_units: 'Units must be positive',
     non_positive_target_srp: 'Customer-facing list price must be positive',
-    invalid_fx_rate_to_usd: 'FX rate invalid',
+    invalid_fx_rate_to_usd: 'FX bridge invalid (plan currency per 1 cost currency)',
+    invalid_fx_plan_currency_per_cost_currency: 'FX bridge invalid (plan currency per 1 cost currency)',
     impossible_margin_stack: 'Margin stack unsustainable (margins ≥ 95%)',
     margin_floor_breach: 'Margin below floor — buy price is under controlled cost',
     reserve_breach: 'Reserve exceeds 80% of revenue',
@@ -350,11 +358,13 @@ export function fmtIssueChipLabel(flag: string): string {
   const short: Record<string, string> = {
     missing_sku_assumption: 'Controlled cost missing',
     missing_or_invalid_landed_cost: 'Controlled cost unavailable',
+    missing_or_invalid_controlled_cost: 'Controlled cost unavailable',
     missing_distributor_term: 'Missing distributor terms',
     missing_customer_term: 'Missing customer terms',
     non_positive_target_units: 'Invalid units',
     non_positive_target_srp: 'Invalid list price',
-    invalid_fx_rate_to_usd: 'Invalid FX',
+    invalid_fx_rate_to_usd: 'Invalid FX bridge',
+    invalid_fx_plan_currency_per_cost_currency: 'Invalid FX bridge',
     impossible_margin_stack: 'Unsustainable margin stack',
     margin_floor_breach: 'Margin below floor',
     reserve_breach: 'Reserve breach',
@@ -371,7 +381,9 @@ export function fmtIssueChipLabel(flag: string): string {
 const BLOCKING_ECONOMICS_FLAGS = new Set([
   'missing_sku_assumption',
   'missing_or_invalid_landed_cost',
+  'missing_or_invalid_controlled_cost',
   'invalid_fx_rate_to_usd',
+  'invalid_fx_plan_currency_per_cost_currency',
   'impossible_economics',
   'non_positive_target_units',
   'non_positive_target_srp',
@@ -468,10 +480,10 @@ const COMMERCIAL_TERM_OPTIONAL_FIELDS = [
   'effective_customer_rebate_pct',
   'effective_distributor_margin_pct',
   'effective_vat_rate_pct',
-  'effective_fx_rate_to_usd',
+  'effective_fx_plan_currency_per_cost_currency',
   'effective_reserve_total_pct',
   'effective_promo_reserve_split_pct',
-  'effective_controlled_cost_usd_per_unit',
+  'effective_controlled_cost_amount',
 ] as const;
 
 const PLANNING_OPTIONAL_FIELDS = ['promo_mix_pct'] as const;
@@ -479,11 +491,11 @@ const PLANNING_OPTIONAL_FIELDS = ['promo_mix_pct'] as const;
 const USD_OUTPUT_OPTIONAL_FIELDS = [
   'calc_sell_in_price_local',
   'calc_distributor_net_local',
-  'calc_sell_in_price_usd',
-  'calc_internal_gp_usd',
-  'calc_buy_price_usd',
-  'calc_promo_reserve_usd',
-  'calc_non_promo_reserve_usd',
+  'calc_oem_sell_in_amount',
+  'calc_internal_gp_amount',
+  'calc_distributor_net_amount',
+  'calc_campaign_support_reserve_amount',
+  'calc_non_campaign_reserve_amount',
 ] as const;
 
 const OPTIONAL_GRID_COL_FIELDS = [
@@ -502,6 +514,27 @@ const LS_GRID_COLS_V3 = 'cip.commercial-planner.gridColumns.v3';
 const LS_GRID_COLS_V2 = 'cip.commercial-planner.gridColumns.v2';
 const LS_OPTIONAL_COLS_V1 = 'cip.commercial-planner.optionalColumns.v1';
 
+/** Map legacy optional-column localStorage keys to current field ids (commercial naming migration). */
+function remapLegacyOptionalVisibilityKeys<T extends Record<string, unknown>>(obj: T): T {
+  const next: Record<string, unknown> = { ...obj };
+  const pairs: [string, string][] = [
+    ['effective_fx_rate_to_usd', 'effective_fx_plan_currency_per_cost_currency'],
+    ['effective_controlled_cost_usd_per_unit', 'effective_controlled_cost_amount'],
+    ['calc_sell_in_price_usd', 'calc_oem_sell_in_amount'],
+    ['calc_buy_price_usd', 'calc_distributor_net_amount'],
+    ['calc_internal_gp_usd', 'calc_internal_gp_amount'],
+    ['calc_promo_reserve_usd', 'calc_campaign_support_reserve_amount'],
+    ['calc_non_promo_reserve_usd', 'calc_non_campaign_reserve_amount'],
+  ];
+  for (const [oldK, newK] of pairs) {
+    if (oldK in next && !(newK in next) && typeof next[oldK] === 'boolean') {
+      next[newK] = next[oldK];
+    }
+    delete next[oldK];
+  }
+  return next as T;
+}
+
 const OPTIONAL_COLUMN_LABELS: Record<OptionalGridColField, string> = {
   product_spec_cpu: 'CPU / chipset (spec)',
   product_spec_processor: 'Processor (spec)',
@@ -518,18 +551,18 @@ const OPTIONAL_COLUMN_LABELS: Record<OptionalGridColField, string> = {
   effective_customer_rebate_pct: 'Customer rebate % (effective)',
   effective_distributor_margin_pct: 'Distributor margin % (effective)',
   effective_vat_rate_pct: 'VAT % (effective)',
-  effective_fx_rate_to_usd: 'FX: plan currency per 1 USD (effective)',
+  effective_fx_plan_currency_per_cost_currency: 'FX bridge: plan currency per 1 cost currency (effective)',
   effective_reserve_total_pct: 'Reserve total % (effective)',
   effective_promo_reserve_split_pct: 'Promo reserve split % (effective)',
-  effective_controlled_cost_usd_per_unit: `Controlled cost (${ECONOMICS_PIPELINE_CURRENCY} / unit, effective)`,
+  effective_controlled_cost_amount: 'Controlled cost / PM bottom (effective amount; currency per SKU/line)',
   promo_mix_pct: 'Promo mix %',
   calc_sell_in_price_local: 'Estimated OEM/channel sell-in (plan currency / unit)',
   calc_distributor_net_local: 'Estimated distributor net (plan currency / unit)',
-  calc_sell_in_price_usd: `Estimated OEM/channel sell-in (${ECONOMICS_PIPELINE_CURRENCY} / unit)`,
-  calc_internal_gp_usd: `Estimated internal GP (${ECONOMICS_PIPELINE_CURRENCY}, total, after reserves)`,
-  calc_buy_price_usd: `Estimated distributor net (${ECONOMICS_PIPELINE_CURRENCY} / unit)`,
-  calc_promo_reserve_usd: `Promo reserve (${ECONOMICS_PIPELINE_CURRENCY})`,
-  calc_non_promo_reserve_usd: `Non-promo reserve (${ECONOMICS_PIPELINE_CURRENCY})`,
+  calc_oem_sell_in_amount: 'OEM/channel sell-in (economics output amount / unit)',
+  calc_internal_gp_amount: 'Internal GP (economics output currency, total, after reserves)',
+  calc_distributor_net_amount: 'Distributor net (economics output amount / unit)',
+  calc_campaign_support_reserve_amount: 'Campaign support reserve (economics output currency)',
+  calc_non_campaign_reserve_amount: 'Non-campaign reserve (economics output currency)',
 };
 
 function defaultOptionalVisibility(): Record<OptionalGridColField, boolean> {
@@ -549,18 +582,18 @@ function defaultOptionalVisibility(): Record<OptionalGridColField, boolean> {
     effective_customer_rebate_pct: false,
     effective_distributor_margin_pct: false,
     effective_vat_rate_pct: false,
-    effective_fx_rate_to_usd: false,
+    effective_fx_plan_currency_per_cost_currency: false,
     effective_reserve_total_pct: false,
     effective_promo_reserve_split_pct: false,
-    effective_controlled_cost_usd_per_unit: false,
+    effective_controlled_cost_amount: false,
     promo_mix_pct: false,
     calc_sell_in_price_local: false,
     calc_distributor_net_local: false,
-    calc_sell_in_price_usd: false,
-    calc_internal_gp_usd: false,
-    calc_buy_price_usd: false,
-    calc_promo_reserve_usd: false,
-    calc_non_promo_reserve_usd: false,
+    calc_oem_sell_in_amount: false,
+    calc_internal_gp_amount: false,
+    calc_distributor_net_amount: false,
+    calc_campaign_support_reserve_amount: false,
+    calc_non_campaign_reserve_amount: false,
   };
 }
 
@@ -766,7 +799,7 @@ export default function CommercialPlannerPage() {
       if (rawV4) {
         const parsed = JSON.parse(rawV4) as { visibleOptional?: Partial<Record<OptionalGridColField, boolean>> };
         if (parsed.visibleOptional && typeof parsed.visibleOptional === 'object') {
-          setOptionalVisible((prev) => ({ ...prev, ...parsed.visibleOptional }));
+          setOptionalVisible((prev) => ({ ...prev, ...remapLegacyOptionalVisibilityKeys(parsed.visibleOptional) }));
         }
         setOptionalColsHydrated(true);
         return;
@@ -776,7 +809,7 @@ export default function CommercialPlannerPage() {
       if (rawV3) {
         const parsed = JSON.parse(rawV3) as { optional?: Partial<Record<OptionalGridColField, boolean>> };
         if (parsed.optional && typeof parsed.optional === 'object') {
-          setOptionalVisible((prev) => ({ ...prev, ...parsed.optional }));
+          setOptionalVisible((prev) => ({ ...prev, ...remapLegacyOptionalVisibilityKeys(parsed.optional) }));
         }
         setOptionalColsHydrated(true);
         return;
@@ -919,6 +952,10 @@ export default function CommercialPlannerPage() {
     queryFn: ({ signal }) => apiGet<Summary>(`/api/v1/commercial-planner/plans/${activePlanId}/summary`, { signal }),
     enabled: tab === 0 && activePlanId != null,
   });
+  const economicsSummaryCcy = useMemo(
+    () => (summary?.economics_calc_currency_code ?? planCurrencyCode).trim() || FALLBACK_ECONOMICS_CCY,
+    [summary?.economics_calc_currency_code, planCurrencyCode],
+  );
   const { data: suggestions } = useQuery({
     queryKey: ['commercial-plan-suggestions', activePlanId],
     queryFn: ({ signal }) => apiGet<SuggestionBundle[]>(`/api/v1/commercial-planner/plans/${activePlanId}/suggestions`, { signal }),
@@ -1069,7 +1106,7 @@ export default function CommercialPlannerPage() {
     if ((lines?.length ?? 0) === 0) return false;
     if ((summary?.flags?.length ?? 0) > 0) return false;
     return (lines ?? []).every((l) => {
-      if (l.calc_sell_in_price_usd == null) return false;
+      if (l.calc_oem_sell_in_amount == null) return false;
       const tier = l.economics_line_trust;
       if (tier && tier !== 'ok') return false;
       if (!tier && lineHasBlockingEconomicsFlags(l)) return false;
@@ -1454,7 +1491,7 @@ export default function CommercialPlannerPage() {
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
-          if (d.calc_sell_in_price_usd == null && (d.economics_line_trust == null || d.economics_line_trust === '')) {
+          if (d.calc_oem_sell_in_amount == null && (d.economics_line_trust == null || d.economics_line_trust === '')) {
             return 'Needs recalculation';
           }
           if (d.economics_line_trust) return String(d.economics_line_trust);
@@ -1465,7 +1502,7 @@ export default function CommercialPlannerPage() {
           const d = p.data;
           if (!d) return null;
           const raw =
-            d.calc_sell_in_price_usd == null && (d.economics_line_trust == null || d.economics_line_trust === '')
+            d.calc_oem_sell_in_amount == null && (d.economics_line_trust == null || d.economics_line_trust === '')
               ? 'needs_recalc'
               : d.economics_line_trust ?? (lineHasBlockingEconomicsFlags(d) ? 'blocked' : 'ok');
           const label =
@@ -1536,10 +1573,10 @@ export default function CommercialPlannerPage() {
         valueGetter: (p) => fmtMarginPct(p.data?.effective_vat_rate_pct ?? null),
       },
       {
-        field: 'effective_fx_rate_to_usd',
-        headerName: `FX: ${planCurrencyCode} per 1 USD (eff.)`,
-        hide: !optionalVisible.effective_fx_rate_to_usd,
-        valueGetter: (p) => (p.data?.effective_fx_rate_to_usd != null ? String(p.data.effective_fx_rate_to_usd) : '—'),
+        field: 'effective_fx_plan_currency_per_cost_currency',
+        headerName: `FX (${planCurrencyCode} per 1 cost currency, eff.)`,
+        hide: !optionalVisible.effective_fx_plan_currency_per_cost_currency,
+        valueGetter: (p) => (p.data?.effective_fx_plan_currency_per_cost_currency != null ? String(p.data.effective_fx_plan_currency_per_cost_currency) : '—'),
       },
       {
         field: 'effective_reserve_total_pct',
@@ -1554,62 +1591,83 @@ export default function CommercialPlannerPage() {
         valueGetter: (p) => fmtMarginPct(p.data?.effective_promo_reserve_split_pct ?? null),
       },
       {
-        field: 'effective_controlled_cost_usd_per_unit',
-        headerName: `Controlled cost (${ECONOMICS_PIPELINE_CURRENCY}/u, eff.)`,
-        hide: !optionalVisible.effective_controlled_cost_usd_per_unit,
-        valueGetter: (p) => fmtCurrency(p.data?.effective_controlled_cost_usd_per_unit ?? null),
+        field: 'effective_controlled_cost_amount',
+        headerName: 'Controlled cost (eff., with ccy)',
+        hide: !optionalVisible.effective_controlled_cost_amount,
+        valueGetter: (p) => {
+          const d = p.data;
+          if (d?.effective_controlled_cost_amount == null) return '—';
+          const ccy = (d.effective_controlled_cost_currency_code ?? '').trim() || FALLBACK_ECONOMICS_CCY;
+          return fmtMoneyWithCcy(d.effective_controlled_cost_amount, ccy);
+        },
       },
       {
-        field: 'calc_sell_in_price_usd',
-        headerName: `Estimated OEM/channel sell-in (${ECONOMICS_PIPELINE_CURRENCY} / unit)`,
+        field: 'calc_oem_sell_in_amount',
+        headerName: `OEM sell-in (${economicsSummaryCcy} / unit)`,
         minWidth: 170,
-        hide: !optionalVisible.calc_sell_in_price_usd,
-        valueFormatter: (p) => (p.value != null && p.value !== '' ? String(p.value) : '—'),
+        hide: !optionalVisible.calc_oem_sell_in_amount,
+        valueGetter: (p) => {
+          const d = p.data;
+          if (!d || d.calc_oem_sell_in_amount == null) return '—';
+          const ccy = (d.economics_calc_currency_code ?? '').trim() || economicsSummaryCcy;
+          return fmtMoneyWithCcy(d.calc_oem_sell_in_amount, ccy);
+        },
       },
       {
-        field: 'calc_buy_price_usd',
-        headerName: `Estimated distributor net (${ECONOMICS_PIPELINE_CURRENCY} / unit)`,
+        field: 'calc_distributor_net_amount',
+        headerName: `Distributor net (${economicsSummaryCcy} / unit)`,
         minWidth: 240,
-        hide: !optionalVisible.calc_buy_price_usd,
-        valueFormatter: (p) => (p.value != null && p.value !== '' ? String(p.value) : '—'),
+        hide: !optionalVisible.calc_distributor_net_amount,
+        valueGetter: (p) => {
+          const d = p.data;
+          if (!d || d.calc_distributor_net_amount == null) return '—';
+          const ccy = (d.economics_calc_currency_code ?? '').trim() || economicsSummaryCcy;
+          return fmtMoneyWithCcy(d.calc_distributor_net_amount, ccy);
+        },
       },
       {
-        field: 'calc_internal_gp_usd',
-        headerName: `Estimated internal GP (${ECONOMICS_PIPELINE_CURRENCY}, total, after reserves)`,
+        field: 'calc_internal_gp_amount',
+        headerName: `Internal GP (${economicsSummaryCcy}, total)`,
         minWidth: 190,
-        hide: !optionalVisible.calc_internal_gp_usd,
+        hide: !optionalVisible.calc_internal_gp_amount,
         tooltipValueGetter: (p) => economicsBlockingTooltip(p.data ?? undefined),
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
           if (lineHasBlockingEconomicsFlags(d)) return '—';
-          return d.calc_internal_gp_usd != null ? String(d.calc_internal_gp_usd) : '—';
+          if (d.calc_internal_gp_amount == null) return '—';
+          const ccy = (d.economics_calc_currency_code ?? '').trim() || economicsSummaryCcy;
+          return fmtMoneyWithCcy(d.calc_internal_gp_amount, ccy);
         },
       },
       {
-        field: 'calc_promo_reserve_usd',
-        headerName: 'Promo reserve',
+        field: 'calc_campaign_support_reserve_amount',
+        headerName: `Campaign support reserve (${economicsSummaryCcy})`,
         minWidth: 120,
-        hide: !optionalVisible.calc_promo_reserve_usd,
+        hide: !optionalVisible.calc_campaign_support_reserve_amount,
         tooltipValueGetter: (p) => economicsBlockingTooltip(p.data ?? undefined),
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
           if (lineHasBlockingEconomicsFlags(d)) return '—';
-          return d.calc_promo_reserve_usd != null ? String(d.calc_promo_reserve_usd) : '—';
+          if (d.calc_campaign_support_reserve_amount == null) return '—';
+          const ccy = (d.economics_calc_currency_code ?? '').trim() || economicsSummaryCcy;
+          return fmtMoneyWithCcy(d.calc_campaign_support_reserve_amount, ccy);
         },
       },
       {
-        field: 'calc_non_promo_reserve_usd',
-        headerName: 'Non-promo reserve',
+        field: 'calc_non_campaign_reserve_amount',
+        headerName: `Non-campaign reserve (${economicsSummaryCcy})`,
         minWidth: 140,
-        hide: !optionalVisible.calc_non_promo_reserve_usd,
+        hide: !optionalVisible.calc_non_campaign_reserve_amount,
         tooltipValueGetter: (p) => economicsBlockingTooltip(p.data ?? undefined),
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
           if (lineHasBlockingEconomicsFlags(d)) return '—';
-          return d.calc_non_promo_reserve_usd != null ? String(d.calc_non_promo_reserve_usd) : '—';
+          if (d.calc_non_campaign_reserve_amount == null) return '—';
+          const ccy = (d.economics_calc_currency_code ?? '').trim() || economicsSummaryCcy;
+          return fmtMoneyWithCcy(d.calc_non_campaign_reserve_amount, ccy);
         },
       },
       ...Object.keys(optionalSpecKeyVisible)
@@ -1669,7 +1727,7 @@ export default function CommercialPlannerPage() {
           ) : null,
       },
     ],
-    [deleteLine, openEditLine, optionalSpecKeyVisible, optionalVisible, planCurrencyCode]
+    [deleteLine, openEditLine, optionalSpecKeyVisible, optionalVisible, planCurrencyCode, economicsSummaryCcy]
   );
 
   const lineGrid: GridOptions<PlanLine> = useMemo(
@@ -1743,33 +1801,38 @@ export default function CommercialPlannerPage() {
           target_srp_local: selectedLine.target_srp_local,
           promo_srp_local: selectedLine.promo_srp_local,
           effective_vat_rate_pct: selectedLine.effective_vat_rate_pct,
-          effective_fx_rate_to_usd: selectedLine.effective_fx_rate_to_usd,
+          effective_fx_plan_currency_per_cost_currency: selectedLine.effective_fx_plan_currency_per_cost_currency,
           effective_customer_margin_pct: selectedLine.effective_customer_margin_pct,
           effective_customer_rebate_pct: selectedLine.effective_customer_rebate_pct,
           effective_distributor_margin_pct: selectedLine.effective_distributor_margin_pct,
           effective_reserve_total_pct: selectedLine.effective_reserve_total_pct,
           effective_promo_reserve_split_pct: selectedLine.effective_promo_reserve_split_pct,
-          effective_controlled_cost_usd_per_unit: selectedLine.effective_controlled_cost_usd_per_unit,
-          override_landed_cost_usd: selectedLine.override_landed_cost_usd,
-          calc_sell_in_price_usd: selectedLine.calc_sell_in_price_usd,
-          calc_buy_price_usd: selectedLine.calc_buy_price_usd,
-          calc_promo_reserve_usd: selectedLine.calc_promo_reserve_usd,
-          calc_non_promo_reserve_usd: selectedLine.calc_non_promo_reserve_usd,
-          calc_internal_gp_usd: selectedLine.calc_internal_gp_usd,
+          effective_controlled_cost_amount: selectedLine.effective_controlled_cost_amount,
+          effective_controlled_cost_currency_code: selectedLine.effective_controlled_cost_currency_code,
+          economics_calc_currency_code: selectedLine.economics_calc_currency_code,
+          override_controlled_cost_amount: selectedLine.override_controlled_cost_amount,
+          calc_oem_sell_in_amount: selectedLine.calc_oem_sell_in_amount,
+          calc_distributor_net_amount: selectedLine.calc_distributor_net_amount,
+          calc_campaign_support_reserve_amount: selectedLine.calc_campaign_support_reserve_amount,
+          calc_non_campaign_reserve_amount: selectedLine.calc_non_campaign_reserve_amount,
+          calc_internal_gp_amount: selectedLine.calc_internal_gp_amount,
           economics_line_trust: selectedLine.economics_line_trust,
           economics_line_trust_reasons: selectedLine.economics_line_trust_reasons,
           economics_field_provenance: selectedLine.economics_field_provenance,
           calc_flags: selectedLine.calc_flags,
         }}
         planCurrencyCode={planCurrencyCode}
-        economicsReportingCurrency={ECONOMICS_PIPELINE_CURRENCY}
+        economicsReportingCurrency={(selectedLine.economics_calc_currency_code ?? '').trim() || economicsSummaryCcy}
         formatTrustReason={fmtFlag}
         dapEvidenceLocal={selectedLineEvidence?.evidence?.dap_local ?? null}
       />
-      {selectedLine.override_landed_cost_usd != null ? (
+      {selectedLine.override_controlled_cost_amount != null ? (
         <Chip
           size="small"
-          label={`Override controlled cost: ${fmtMoneyWithCcy(selectedLine.override_landed_cost_usd, ECONOMICS_PIPELINE_CURRENCY)}`}
+          label={`Override controlled cost: ${fmtMoneyWithCcy(
+            selectedLine.override_controlled_cost_amount,
+            (selectedLine.override_controlled_cost_currency_code ?? selectedLine.effective_controlled_cost_currency_code ?? economicsSummaryCcy).trim() || economicsSummaryCcy,
+          )}`}
           color="info"
           variant="outlined"
           sx={{ mt: 0.75, mb: 0.5 }}
@@ -2229,7 +2292,7 @@ export default function CommercialPlannerPage() {
         )}
 
         {/* Recalculate-needed banner */}
-        {lines != null && lines.some((l) => l.calc_sell_in_price_usd == null) && (
+        {lines != null && lines.some((l) => l.calc_oem_sell_in_amount == null) && (
           <Alert severity="info" sx={{ mb: 1, py: 0.5 }} data-testid="recalc-needed-banner">
             Some lines have no calculated economics — press <strong>Recalculate</strong> to compute.
           </Alert>
@@ -2270,15 +2333,16 @@ export default function CommercialPlannerPage() {
             {economicsComplete ? (
               <>
                 <Typography variant="body2">
-                  <strong>Estimated internal GP ({ECONOMICS_PIPELINE_CURRENCY}, total, after reserves):</strong>{' '}
-                  {summary?.total_internal_gp_usd ?? 0}
+                  <strong>Estimated internal GP ({economicsSummaryCcy}, total, after reserves):</strong>{' '}
+                  {summary?.total_internal_gp_amount ?? 0}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Promo reserve ({ECONOMICS_PIPELINE_CURRENCY}):</strong> {summary?.total_promo_reserve_usd ?? 0}
+                  <strong>Campaign support reserve ({economicsSummaryCcy}):</strong>{' '}
+                  {summary?.total_campaign_support_reserve_amount ?? 0}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Non-promo reserve ({ECONOMICS_PIPELINE_CURRENCY}):</strong>{' '}
-                  {summary?.total_non_promo_reserve_usd ?? 0}
+                  <strong>Non-campaign reserve ({economicsSummaryCcy}):</strong>{' '}
+                  {summary?.total_non_campaign_reserve_amount ?? 0}
                 </Typography>
               </>
             ) : (
@@ -2706,7 +2770,7 @@ export default function CommercialPlannerPage() {
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2" color="text.secondary">
               Uses read-only lineup import rows. DAP and other lineup fields are never sent as controlled cost or
-              landed_cost_usd.
+              SKU <code>controlled_cost_amount</code>.
             </Typography>
             <FormControl size="small" sx={{ minWidth: 280 }}>
               <InputLabel id="add-lineup-job-label">Lineup job</InputLabel>
@@ -3058,7 +3122,7 @@ export default function CommercialPlannerPage() {
                 <Typography variant="caption">
                   <strong>Evidence semantics:</strong> DAP (Distributor Acquisition Price) is the source import value. It
                   is <em>not</em> controlled cost (PM bottom) and must not be mapped to{' '}
-                  <code>landed_cost_usd</code> without verification.
+                  <code>controlled_cost_amount</code> without verification.
                 </Typography>
               </Alert>
               {productGapsLoading ? (
@@ -3351,21 +3415,21 @@ export default function CommercialPlannerPage() {
               effective_customer_rebate_pct: true,
               effective_distributor_margin_pct: true,
               effective_vat_rate_pct: true,
-              effective_fx_rate_to_usd: true,
+              effective_fx_plan_currency_per_cost_currency: true,
               effective_reserve_total_pct: true,
               effective_promo_reserve_split_pct: true,
-              effective_controlled_cost_usd_per_unit: true,
+              effective_controlled_cost_amount: true,
             }));
           } else if (preset === 'economics') {
             setOptionalVisible((prev) => ({
               ...prev,
               calc_sell_in_price_local: true,
               calc_distributor_net_local: true,
-              calc_sell_in_price_usd: true,
-              calc_internal_gp_usd: true,
-              calc_buy_price_usd: true,
-              calc_promo_reserve_usd: true,
-              calc_non_promo_reserve_usd: true,
+              calc_oem_sell_in_amount: true,
+              calc_internal_gp_amount: true,
+              calc_distributor_net_amount: true,
+              calc_campaign_support_reserve_amount: true,
+              calc_non_campaign_reserve_amount: true,
             }));
           }
         }}

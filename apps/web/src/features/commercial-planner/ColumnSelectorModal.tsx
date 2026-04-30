@@ -136,10 +136,10 @@ const COLUMN_GROUPS: GroupDef[] = [
       { key: 'effective_customer_rebate_pct', label: 'Customer rebate % (effective)', optional: true },
       { key: 'effective_distributor_margin_pct', label: 'Distributor margin % (effective)', optional: true },
       { key: 'effective_vat_rate_pct', label: 'VAT % (effective)', optional: true },
-      { key: 'effective_fx_rate_to_usd', label: 'FX: plan currency per 1 USD (effective)', optional: true },
+      { key: 'effective_fx_plan_currency_per_cost_currency', label: 'FX: plan currency per 1 cost currency (effective)', optional: true },
       { key: 'effective_reserve_total_pct', label: 'Reserve total % (effective)', optional: true },
       { key: 'effective_promo_reserve_split_pct', label: 'Promo reserve split % (effective)', optional: true },
-      { key: 'effective_controlled_cost_usd_per_unit', label: 'Controlled cost (USD / unit, effective)', optional: true },
+      { key: 'effective_controlled_cost_amount', label: 'Controlled cost / PM bottom (effective; currency per SKU/line)', optional: true },
     ],
   },
   {
@@ -151,14 +151,15 @@ const COLUMN_GROUPS: GroupDef[] = [
     ],
   },
   {
-    title: 'Pipeline-currency model outputs',
-    description: 'Economics columns stored on the USD pipeline path today (amounts in pipeline currency, typically USD).',
+    title: 'Economics output amounts',
+    description:
+      'Persisted calculator amounts use economics_calc_currency_code on each line (often USD for legacy data; not necessarily plan currency).',
     columns: [
-      { key: 'calc_sell_in_price_usd', label: 'Estimated OEM/channel sell-in (pipeline CCY / unit)', optional: true },
-      { key: 'calc_internal_gp_usd', label: 'Estimated internal GP (pipeline CCY, total, after reserves)', optional: true },
-      { key: 'calc_buy_price_usd', label: 'Estimated distributor net (pipeline CCY / unit)', optional: true },
-      { key: 'calc_promo_reserve_usd', label: 'Promo reserve (pipeline CCY)', optional: true },
-      { key: 'calc_non_promo_reserve_usd', label: 'Non-promo reserve (pipeline CCY)', optional: true },
+      { key: 'calc_oem_sell_in_amount', label: 'OEM/channel sell-in (economics ccy / unit)', optional: true },
+      { key: 'calc_internal_gp_amount', label: 'Internal GP (economics ccy, total, after reserves)', optional: true },
+      { key: 'calc_distributor_net_amount', label: 'Distributor net (economics ccy / unit)', optional: true },
+      { key: 'calc_campaign_support_reserve_amount', label: 'Campaign support reserve (economics ccy)', optional: true },
+      { key: 'calc_non_campaign_reserve_amount', label: 'Non-campaign reserve (economics ccy)', optional: true },
     ],
   },
   {

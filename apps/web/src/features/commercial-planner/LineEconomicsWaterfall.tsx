@@ -24,19 +24,21 @@ export type WaterfallLine = {
   target_srp_local: number;
   promo_srp_local: number | null;
   effective_vat_rate_pct?: number | null;
-  effective_fx_rate_to_usd?: number | null;
+  effective_fx_plan_currency_per_cost_currency?: number | null;
   effective_customer_margin_pct?: number | null;
   effective_customer_rebate_pct?: number | null;
   effective_distributor_margin_pct?: number | null;
   effective_reserve_total_pct?: number | null;
   effective_promo_reserve_split_pct?: number | null;
-  effective_controlled_cost_usd_per_unit?: number | null;
-  override_landed_cost_usd?: number | null;
-  calc_sell_in_price_usd: number | null;
-  calc_buy_price_usd: number | null;
-  calc_promo_reserve_usd: number | null;
-  calc_non_promo_reserve_usd: number | null;
-  calc_internal_gp_usd: number | null;
+  effective_controlled_cost_amount?: number | null;
+  effective_controlled_cost_currency_code?: string | null;
+  economics_calc_currency_code?: string | null;
+  override_controlled_cost_amount?: number | null;
+  calc_oem_sell_in_amount: number | null;
+  calc_distributor_net_amount: number | null;
+  calc_campaign_support_reserve_amount: number | null;
+  calc_non_campaign_reserve_amount: number | null;
+  calc_internal_gp_amount: number | null;
   economics_line_trust?: string;
   economics_line_trust_reasons?: string[];
   economics_field_provenance?: Record<string, { source: string; trusted?: boolean; detail?: string }>;
@@ -69,7 +71,7 @@ function provChip(p: { source: string; trusted?: boolean; detail?: string } | un
 type Props = {
   line: WaterfallLine;
   planCurrencyCode: string;
-  /** Persisted calc_* path is USD-labeled in the API today; shown as reporting currency, not universal. */
+  /** Fallback when line.economics_calc_currency_code is absent (older payloads). */
   economicsReportingCurrency?: string;
   /** Map calc_flag / trust reason codes to readable text (from planner page). */
   formatTrustReason?: (code: string) => string;
@@ -87,13 +89,17 @@ export function LineEconomicsWaterfall({
   const prov = line.economics_field_provenance ?? {};
   const tier = line.economics_line_trust ?? 'ok';
   const reasons = line.economics_line_trust_reasons ?? [];
-  const repCcy = economicsReportingCurrency;
+  const econCcy = (line.economics_calc_currency_code ?? economicsReportingCurrency).trim() || economicsReportingCurrency;
+  const costCcy = (line.effective_controlled_cost_currency_code ?? '').trim() || econCcy;
   const flags = line.calc_flags ?? [];
-  const costMissing = flags.includes('missing_or_invalid_landed_cost') || flags.includes('missing_sku_assumption');
+  const costMissing =
+    flags.includes('missing_or_invalid_landed_cost') ||
+    flags.includes('missing_or_invalid_controlled_cost') ||
+    flags.includes('missing_sku_assumption');
 
   return (
     <Stack spacing={1.25} data-testid="line-economics-waterfall">
-      {line.calc_sell_in_price_usd == null ? (
+      {line.calc_oem_sell_in_amount == null ? (
         <Typography variant="caption" color="text.secondary" display="block" data-testid="line-detail-not-calculated">
           Not calculated yet — press <strong>Recalculate</strong>.
         </Typography>
@@ -125,8 +131,9 @@ export function LineEconomicsWaterfall({
       ) : null}
 
       <Typography variant="caption" color="text.secondary" display="block">
-        Amounts in {repCcy} use the current economics reporting currency for persisted calculator outputs (API{' '}
-        <code>calc_*_usd</code>).
+        Calculator amounts (sell-in, distributor net, reserves, internal GP) are shown in{' '}
+        <strong>{econCcy}</strong> per persisted <code>economics_calc_currency_code</code>. Controlled cost uses{' '}
+        <strong>{costCcy}</strong> when set on the SKU or line override.
       </Typography>
 
       <Typography variant="subtitle2">Price / commercial stack</Typography>
@@ -144,8 +151,10 @@ export function LineEconomicsWaterfall({
           {provChip(prov['vat_rate_pct'])}
         </Stack>
         <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
-          <Typography variant="body2">FX (local per 1 USD): {line.effective_fx_rate_to_usd ?? '—'}</Typography>
-          {provChip(prov['fx_rate_to_usd'])}
+          <Typography variant="body2">
+            FX bridge ({planCurrencyCode} per 1 {costCcy}): {line.effective_fx_plan_currency_per_cost_currency ?? '—'}
+          </Typography>
+          {provChip(prov['fx_plan_currency_per_cost_currency'])}
         </Stack>
         <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
           <Typography variant="body2">Customer margin % (input): {fmtMarginPct(line.effective_customer_margin_pct ?? null)}</Typography>
@@ -165,17 +174,17 @@ export function LineEconomicsWaterfall({
         </Stack>
         <Divider sx={{ my: 0.5 }} />
         <Typography variant="body2">
-          Estimated OEM/channel sell-in ({repCcy} / unit):{' '}
-          {line.calc_sell_in_price_usd != null
-            ? fmtMoneyWithCcy(line.calc_sell_in_price_usd, repCcy)
+          Estimated OEM/channel sell-in ({econCcy} / unit):{' '}
+          {line.calc_oem_sell_in_amount != null
+            ? fmtMoneyWithCcy(line.calc_oem_sell_in_amount, econCcy)
             : '— (recalculate)'}
           <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
             (calculated output)
           </Typography>
         </Typography>
         <Typography variant="body2">
-          Estimated distributor net ({repCcy} / unit):{' '}
-          {line.calc_buy_price_usd != null ? fmtMoneyWithCcy(line.calc_buy_price_usd, repCcy) : '—'}
+          Estimated distributor net ({econCcy} / unit):{' '}
+          {line.calc_distributor_net_amount != null ? fmtMoneyWithCcy(line.calc_distributor_net_amount, econCcy) : '—'}
           <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
             (calculated output)
           </Typography>
@@ -186,12 +195,12 @@ export function LineEconomicsWaterfall({
       <Stack spacing={0.5}>
         <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
           <Typography variant="body2">
-            Controlled cost / PM bottom ({repCcy} / unit, effective):{' '}
-            {fmtMoneyWithCcy(line.effective_controlled_cost_usd_per_unit ?? null, repCcy)}
+            Controlled cost / PM bottom ({costCcy} / unit, effective):{' '}
+            {fmtMoneyWithCcy(line.effective_controlled_cost_amount ?? null, costCcy)}
           </Typography>
-          {provChip(prov['controlled_cost_usd_per_unit'])}
+          {provChip(prov['controlled_cost_amount'])}
         </Stack>
-        {line.override_landed_cost_usd != null ? (
+        {line.override_controlled_cost_amount != null ? (
           <Typography variant="caption" color="text.secondary">
             Line override controlled cost is set — overrides SKU assumption for this line.
           </Typography>
@@ -215,14 +224,14 @@ export function LineEconomicsWaterfall({
           {provChip(prov['promo_reserve_split_pct'])}
         </Stack>
         <Typography variant="body2">
-          Promo reserve ({repCcy}): {line.calc_promo_reserve_usd ?? '—'}
+          Campaign support reserve ({econCcy}): {line.calc_campaign_support_reserve_amount ?? '—'}
         </Typography>
         <Typography variant="body2">
-          Non-promo reserve ({repCcy}): {line.calc_non_promo_reserve_usd ?? '—'}
+          Non-campaign reserve ({econCcy}): {line.calc_non_campaign_reserve_amount ?? '—'}
         </Typography>
         <Typography variant="body2">
-          Estimated internal GP ({repCcy}, total, after reserves):{' '}
-          {line.calc_internal_gp_usd != null ? fmtMoneyWithCcy(line.calc_internal_gp_usd, repCcy) : '—'}
+          Estimated internal GP ({econCcy}, total, after reserves):{' '}
+          {line.calc_internal_gp_amount != null ? fmtMoneyWithCcy(line.calc_internal_gp_amount, econCcy) : '—'}
         </Typography>
       </Stack>
 

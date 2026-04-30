@@ -12,7 +12,7 @@ class SuggestionInputs:
     target_srp_local: float
     promo_mix_pct: float
     # Lineup evidence — optional, from the latest historical lineup apply job.
-    # These fields are never seeded from DAP and must not be mapped to landed_cost_usd.
+    # These fields are never seeded from DAP and must not be mapped to SKU controlled_cost_amount.
     lineup_msrp_local: float | None = field(default=None)
     lineup_promo_price_local: float | None = field(default=None)
     lineup_quantity_units: float | None = field(default=None)

@@ -11,9 +11,9 @@ def test_commercial_calculator_outputs_reserves_and_gp():
             target_srp_local=1200,
             promo_srp_local=1000,
             promo_mix_pct=0.5,
-            fx_rate_to_usd=20,
+            fx_plan_currency_per_cost_currency=20,
             vat_rate_pct=0.15,
-            landed_cost_usd=30,
+            controlled_cost_amount=30,
             customer_margin_pct=0.12,
             customer_rebate_pct=0.03,
             distributor_margin_pct=0.08,
@@ -21,9 +21,9 @@ def test_commercial_calculator_outputs_reserves_and_gp():
             promo_reserve_split_pct=0.5,
         )
     )
-    assert result.sell_in_price_usd > 0
-    assert result.promo_reserve_usd > 0
-    assert result.non_promo_reserve_usd > 0
+    assert result.calc_oem_sell_in_amount > 0
+    assert result.calc_campaign_support_reserve_amount > 0
+    assert result.calc_non_campaign_reserve_amount > 0
     assert isinstance(result.flags, list)
 
 
@@ -35,9 +35,9 @@ def test_commercial_calculator_still_runs_with_placeholder_defaults_but_flags_is
             target_srp_local=1200,
             promo_srp_local=None,
             promo_mix_pct=0.5,
-            fx_rate_to_usd=1.0,
+            fx_plan_currency_per_cost_currency=1.0,
             vat_rate_pct=0.15,
-            landed_cost_usd=0.0,
+            controlled_cost_amount=0.0,
             customer_margin_pct=0.0,
             customer_rebate_pct=0.0,
             distributor_margin_pct=0.0,
@@ -45,7 +45,7 @@ def test_commercial_calculator_still_runs_with_placeholder_defaults_but_flags_is
             promo_reserve_split_pct=0.5,
         )
     )
-    assert "missing_or_invalid_landed_cost" in result.flags
+    assert "missing_or_invalid_controlled_cost" in result.flags
 
 
 def test_commercial_calculator_flags_impossible_stack():
@@ -55,9 +55,9 @@ def test_commercial_calculator_flags_impossible_stack():
             target_srp_local=800,
             promo_srp_local=None,
             promo_mix_pct=0.5,
-            fx_rate_to_usd=18,
+            fx_plan_currency_per_cost_currency=18,
             vat_rate_pct=0.15,
-            landed_cost_usd=100,
+            controlled_cost_amount=100,
             customer_margin_pct=0.5,
             customer_rebate_pct=0.3,
             distributor_margin_pct=0.2,

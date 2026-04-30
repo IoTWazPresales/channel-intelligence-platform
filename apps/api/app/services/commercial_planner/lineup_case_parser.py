@@ -4,7 +4,7 @@ Populates CommercialLineupLine rows from CSV or XLSX.
 Creates an ImportJob audit record for every parse run.
 
 Hard constraints (never violate):
-- dap_evidence_local is stored as evidence only — never written to landed_cost_usd.
+- dap_evidence_local is stored as evidence only — never written to controlled_cost_amount.
 - Never auto-creates products, customers, or distributors.
 - Never touches HistoricalLineupImportLine.
 """
@@ -133,7 +133,7 @@ async def parse_current_lineup_file(
     """Parse an uploaded lineup file and write CommercialLineupLine rows.
 
     Creates an ImportJob audit record.
-    dap_evidence_local is stored as evidence only — never written to landed_cost_usd.
+    dap_evidence_local is stored as evidence only — never written to controlled_cost_amount.
     """
     now = datetime.now(tz=timezone.utc)
 

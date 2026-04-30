@@ -78,17 +78,16 @@ const ROWS: Row[] = [
   },
   {
     concept: 'SKU controlled cost (PM bottom)',
-    dbField: 'commercial_sku_assumption.landed_cost_usd',
-    userLabel: 'Controlled cost (stored USD amount today)',
+    dbField: 'commercial_sku_assumption.controlled_cost_amount, controlled_cost_currency_code',
+    userLabel: 'Controlled cost (amount + currency)',
     kind: 'input',
     editedIn: 'Planner defaults · Product admin (SKU economics panel)',
     displayedIn: 'Planner line effective controlled cost · readiness',
     readiness: 'yes',
     calculator: 'yes',
-    currencyNote: 'Stored USD amount today; not logistics landed cost',
+    currencyNote: 'Explicit cost currency; not logistics landed cost',
     notes:
-      'Risk: DB column landed_cost_usd is a misleading name — concept is PM bottom / controlled cost only. ' +
-      'True landed cost adds logistics (deferred). Used by calculator + readiness. Never from DAP.',
+      'PM bottom / internal cost basis only. True landed cost adds logistics (deferred). Used by calculator + readiness. Never from DAP.',
   },
   {
     concept: 'SKU VAT rate',
@@ -103,16 +102,16 @@ const ROWS: Row[] = [
     notes: 'Outside 0–1 fails readiness (invalid_vat).',
   },
   {
-    concept: 'SKU FX bridge to USD economics',
-    dbField: 'commercial_sku_assumption.fx_rate_to_usd',
-    userLabel: 'FX: plan/local currency units per 1 USD',
+    concept: 'SKU FX bridge (plan per cost currency)',
+    dbField: 'commercial_sku_assumption.fx_plan_currency_per_cost_currency',
+    userLabel: 'FX: plan currency units per 1 controlled-cost currency',
     kind: 'input',
     editedIn: 'Planner defaults · Product admin',
     displayedIn: 'Planner effective FX',
     readiness: 'partial',
     calculator: 'yes',
-    currencyNote: 'Local units per 1 USD (not USD per local)',
-    notes: 'Must be &gt; 0. Used to express local SRP on lines in the USD economics path.',
+    currencyNote: 'Plan (local) units per 1 unit of controlled-cost currency',
+    notes: 'Must be &gt; 0. Bridges plan-currency list/campaign prices to economics amounts in controlled-cost currency.',
   },
   {
     concept: 'SKU reserves (support / campaign)',
@@ -148,20 +147,20 @@ const ROWS: Row[] = [
     displayedIn: 'Line detail chips · effective columns',
     readiness: 'no',
     calculator: 'yes',
-    currencyNote: 'override_landed_cost_usd is USD scalar today',
+    currencyNote: 'override_controlled_cost_amount + optional override_controlled_cost_currency_code',
     notes: 'Explicit per-line; audited in persisted row.',
   },
   {
     concept: 'Economics outputs',
-    dbField: 'commercial_plan_line.calc_sell_in_price_usd, calc_buy_price_usd, calc_internal_gp_usd, …',
-    userLabel: 'Estimated sell-in, distributor net, internal GP, reserves (USD path)',
+    dbField: 'commercial_plan_line.calc_oem_sell_in_amount, calc_distributor_net_amount, calc_internal_gp_amount, economics_calc_currency_code, …',
+    userLabel: 'Economics outputs (amounts + output currency)',
     kind: 'output',
     editedIn: 'Recalculate (POST …/recalculate)',
     displayedIn: 'Planner grid · line waterfall · readiness',
     readiness: 'partial',
     calculator: 'yes',
-    currencyNote: 'Stored USD; local columns derived via FX',
-    notes: 'calc_customer_gp_pct / calc_distributor_gp_pct echo input margins, not derived GP%. Trust tier and flags determine whether to treat dollars as decision-grade.',
+    currencyNote: 'economics_calc_currency_code on each line',
+    notes: 'calc_customer_margin_input_pct / calc_distributor_margin_input_pct echo input margins, not derived GP%. Trust tier and flags determine whether outputs are decision-grade.',
   },
   {
     concept: 'Line economics trust (read model)',
@@ -209,7 +208,7 @@ const ROWS: Row[] = [
     readiness: 'no',
     calculator: 'no',
     currencyNote: 'Line / header currency context',
-    notes: 'Must never map to landed_cost_usd, SKU assumption, or cost fields.',
+    notes: 'Must never map to SKU controlled cost, SKU assumption, or cost fields.',
   },
   {
     concept: 'Disti-reported cost (import)',
@@ -253,11 +252,12 @@ export function CommercialDataMap() {
   return (
     <Stack spacing={2} data-testid="commercial-data-map">
       <Alert severity="info" sx={{ py: 0.75 }}>
-        Read-only field map for commercial planner economics. DB/API names stay unchanged; labels here match the UI
-        naming pass. DAP and import costs are <strong>evidence only</strong>—never treated as controlled cost (PM bottom).
-        Line <strong>economics trust</strong> and the <strong>waterfall</strong> tie readiness, recalculate outputs, and
-        provenance together so placeholders are visible. Logistics / true landed cost is a future assumption layer,
-        separate from <code>landed_cost_usd</code>. A future pricing page can consume economics only when trust is ok.
+        Read-only field map for commercial planner economics. DB/API names reflect controlled cost, FX bridge, and
+        economics output amounts with explicit currency fields. DAP and import costs are <strong>evidence only</strong>
+        —never treated as controlled cost (PM bottom). Line <strong>economics trust</strong> and the{' '}
+        <strong>waterfall</strong> tie readiness, recalculate outputs, and provenance together so placeholders are
+        visible. Logistics / true landed cost is a future assumption layer, separate from controlled cost. A future
+        pricing page can consume economics only when trust is ok.
       </Alert>
       <Paper variant="outlined" sx={{ overflow: 'auto' }}>
         <Table size="small" stickyHeader>

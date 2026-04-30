@@ -23,9 +23,10 @@ export type SkuAssumptionRow = {
   product_id: number;
   product_sku: string;
   product_name: string;
-  landed_cost_usd: number;
+  controlled_cost_amount: number;
+  controlled_cost_currency_code: string;
   vat_rate_pct: number;
-  fx_rate_to_usd: number;
+  fx_plan_currency_per_cost_currency: number;
   reserve_total_pct: number;
   promo_reserve_split_pct: number;
 };
@@ -48,6 +49,7 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
   const row = data?.length === 1 ? data[0] : undefined;
   const [dlgOpen, setDlgOpen] = useState(false);
   const [controlled, setControlled] = useState('100');
+  const [ccy, setCcy] = useState('USD');
   const [vat, setVat] = useState('0.15');
   const [fx, setFx] = useState('1');
   const [resTot, setResTot] = useState('0.10');
@@ -57,14 +59,16 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
   useEffect(() => {
     if (row) {
       setEditId(row.id);
-      setControlled(String(row.landed_cost_usd));
+      setControlled(String(row.controlled_cost_amount));
+      setCcy((row.controlled_cost_currency_code || 'USD').trim() || 'USD');
       setVat(String(row.vat_rate_pct));
-      setFx(String(row.fx_rate_to_usd));
+      setFx(String(row.fx_plan_currency_per_cost_currency));
       setResTot(String(row.reserve_total_pct));
       setResSplit(String(row.promo_reserve_split_pct));
     } else {
       setEditId(null);
       setControlled('100');
+      setCcy('USD');
       setVat('0.15');
       setFx('1');
       setResTot('0.10');
@@ -75,9 +79,10 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
   const save = useMutation({
     mutationFn: async () => {
       const payload = {
-        landed_cost_usd: Number(controlled),
+        controlled_cost_amount: Number(controlled),
+        controlled_cost_currency_code: ccy.trim() || 'USD',
         vat_rate_pct: Number(vat),
-        fx_rate_to_usd: Number(fx),
+        fx_plan_currency_per_cost_currency: Number(fx),
         reserve_total_pct: Number(resTot),
         promo_reserve_split_pct: Number(resSplit),
       };
@@ -126,13 +131,14 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
       ) : (
         <Stack spacing={0.75}>
           <Typography variant="body2">
-            <strong>Controlled cost / PM bottom (stored amount):</strong> USD {Number(row.landed_cost_usd).toFixed(2)}
+            <strong>Controlled cost / PM bottom:</strong> {Number(row.controlled_cost_amount).toFixed(2)}{' '}
+            {(row.controlled_cost_currency_code || 'USD').trim()}
           </Typography>
           <Typography variant="body2">
             <strong>VAT % (decimal):</strong> {row.vat_rate_pct}
           </Typography>
           <Typography variant="body2">
-            <strong>FX (local currency units per 1 USD):</strong> {row.fx_rate_to_usd}
+            <strong>FX (plan currency units per 1 cost currency):</strong> {row.fx_plan_currency_per_cost_currency}
           </Typography>
           <Typography variant="body2">
             <strong>Reserve total %:</strong> {row.reserve_total_pct}
@@ -154,15 +160,22 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
               Product: {productSku} (id {productId})
             </Typography>
             <TextField
-              label="Controlled cost / PM bottom — USD amount (landed_cost_usd, >0)"
+              label="Controlled cost amount (>0)"
               value={controlled}
               onChange={(e) => setControlled(e.target.value)}
               size="small"
               fullWidth
             />
+            <TextField
+              label="Controlled cost currency (ISO code, e.g. USD)"
+              value={ccy}
+              onChange={(e) => setCcy(e.target.value.toUpperCase())}
+              size="small"
+              fullWidth
+            />
             <TextField label="VAT rate (0–1 decimal)" value={vat} onChange={(e) => setVat(e.target.value)} size="small" fullWidth />
             <TextField
-              label="FX: plan/local currency units per 1 USD (>0)"
+              label="FX: plan currency units per 1 controlled-cost currency (>0)"
               value={fx}
               onChange={(e) => setFx(e.target.value)}
               size="small"

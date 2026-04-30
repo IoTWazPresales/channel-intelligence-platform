@@ -11,8 +11,12 @@ TrustTier = Literal["ok", "warning", "blocked"]
 BLOCKING_TRUST_FLAGS: frozenset[str] = frozenset(
     {
         "missing_sku_assumption",
+        # Legacy persisted calc_flags (pre-rename migration / old recalculates)
         "missing_or_invalid_landed_cost",
         "invalid_fx_rate_to_usd",
+        # Current calculator / trust flags
+        "missing_or_invalid_controlled_cost",
+        "invalid_fx_plan_currency_per_cost_currency",
         "impossible_economics",
         "non_positive_target_units",
         "non_positive_target_srp",

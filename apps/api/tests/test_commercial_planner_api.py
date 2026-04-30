@@ -67,21 +67,23 @@ def test_apply_suggestion_updates_line_units():
         launch_date=None,
         promo_start_date=None,
         notes=None,
-        calc_sell_in_price_usd=None,
-        calc_buy_price_usd=None,
-        calc_promo_reserve_usd=None,
-        calc_non_promo_reserve_usd=None,
-        calc_internal_gp_usd=None,
-        calc_customer_gp_pct=None,
-        calc_distributor_gp_pct=None,
+        economics_calc_currency_code="USD",
+        calc_oem_sell_in_amount=None,
+        calc_distributor_net_amount=None,
+        calc_campaign_support_reserve_amount=None,
+        calc_non_campaign_reserve_amount=None,
+        calc_internal_gp_amount=None,
+        calc_customer_margin_input_pct=None,
+        calc_distributor_margin_input_pct=None,
         calc_flags=[],
         calc_explanation=None,
         override_customer_margin_pct=None,
         override_customer_rebate_pct=None,
         override_distributor_margin_pct=None,
-        override_landed_cost_usd=None,
+        override_controlled_cost_amount=None,
+        override_controlled_cost_currency_code=None,
         override_vat_rate_pct=None,
-        override_fx_rate_to_usd=None,
+        override_fx_plan_currency_per_cost_currency=None,
         override_reserve_total_pct=None,
         override_promo_reserve_split_pct=None,
     )
@@ -113,6 +115,7 @@ def test_apply_suggestion_updates_line_units():
             0.10,
             0.50,
             420.0,
+            "USD",
         )
     )
 
@@ -145,8 +148,9 @@ def test_apply_suggestion_updates_line_units():
     assert body["product_business_unit"] == "PCSD"
     assert body["product_spec_cpu"] == "i7-1360P"
     assert body["effective_customer_margin_pct"] == 0.12
-    assert body["effective_fx_rate_to_usd"] == 18.5
-    assert body["effective_controlled_cost_usd_per_unit"] == 420.0
+    assert body["effective_fx_plan_currency_per_cost_currency"] == 18.5
+    assert body["effective_controlled_cost_amount"] == 420.0
+    assert body["effective_controlled_cost_currency_code"] == "USD"
 
 
 def test_customer_term_create_rejects_excessive_margin_stack():
@@ -477,7 +481,7 @@ def test_lineup_product_gaps_returns_per_product_gap_status():
     assert ev["actual_dap_local"] is None
     # Cost semantics note must be present and mention DAP.
     assert "DAP" in item["cost_semantics_note"]
-    assert "landed_cost_usd" in item["cost_semantics_note"]
+    assert "controlled_cost_amount" in item["cost_semantics_note"]
 
 
 def test_lineup_product_gaps_returns_400_for_invalid_job():
@@ -533,9 +537,9 @@ def test_lineup_evidence_endpoint_returns_aggregated_evidence():
     assert ev["actual_dap_local"] is None
     assert ev["line_count"] == 2
     assert ev["period_label"] == "2026-Q2"
-    # Cost semantics note must mention DAP and landed_cost_usd
+    # Cost semantics note must mention DAP and SKU controlled cost (not DAP as cost).
     assert "DAP" in body["cost_semantics_note"]
-    assert "landed_cost_usd" in body["cost_semantics_note"]
+    assert "controlled_cost_amount" in body["cost_semantics_note"]
 
 
 def test_lineup_evidence_endpoint_returns_null_evidence_when_no_lineup_data():
@@ -619,7 +623,7 @@ def test_plan_readiness_reports_missing_defaults():
 
 
 def test_plan_readiness_flags_invalid_controlled_cost_when_sku_row_zero():
-    """SKU assumption present but landed_cost_usd <= 0 counts as invalid_controlled_cost (not missing_sku_assumption)."""
+    """SKU assumption present but controlled_cost_amount <= 0 counts as invalid_controlled_cost (not missing_sku_assumption)."""
     fake_plan = SimpleNamespace(id=1)
     fake_line = SimpleNamespace(
         id=11,
@@ -631,8 +635,8 @@ def test_plan_readiness_flags_invalid_controlled_cost_when_sku_row_zero():
     )
     bad_sku = SimpleNamespace(
         product_id=9,
-        landed_cost_usd=0.0,
-        fx_rate_to_usd=1.0,
+        controlled_cost_amount=0.0,
+        fx_plan_currency_per_cost_currency=1.0,
         vat_rate_pct=0.15,
         reserve_total_pct=0.1,
         promo_reserve_split_pct=0.5,
@@ -693,9 +697,10 @@ def test_list_sku_assumptions_filters_by_product_id():
     assumption = SimpleNamespace(
         id=10,
         product_id=5,
-        landed_cost_usd=120.0,
+        controlled_cost_amount=120.0,
+        controlled_cost_currency_code="USD",
         vat_rate_pct=0.15,
-        fx_rate_to_usd=18.0,
+        fx_plan_currency_per_cost_currency=18.0,
         reserve_total_pct=0.1,
         promo_reserve_split_pct=0.5,
     )
@@ -717,7 +722,7 @@ def test_list_sku_assumptions_filters_by_product_id():
     data = r.json()
     assert len(data) == 1
     assert data[0]["product_id"] == 5
-    assert data[0]["landed_cost_usd"] == 120.0
+    assert data[0]["controlled_cost_amount"] == 120.0
 
 
 def test_suggestions_batched_endpoint_returns_meta_structure():
@@ -789,21 +794,23 @@ def test_patch_plan_line_rejects_unknown_customer_id():
         launch_date=None,
         promo_start_date=None,
         notes=None,
+        economics_calc_currency_code="USD",
         override_customer_margin_pct=None,
         override_customer_rebate_pct=None,
         override_distributor_margin_pct=None,
-        override_landed_cost_usd=None,
+        override_controlled_cost_amount=None,
+        override_controlled_cost_currency_code=None,
         override_vat_rate_pct=None,
-        override_fx_rate_to_usd=None,
+        override_fx_plan_currency_per_cost_currency=None,
         override_reserve_total_pct=None,
         override_promo_reserve_split_pct=None,
-        calc_sell_in_price_usd=None,
-        calc_buy_price_usd=None,
-        calc_promo_reserve_usd=None,
-        calc_non_promo_reserve_usd=None,
-        calc_internal_gp_usd=None,
-        calc_customer_gp_pct=None,
-        calc_distributor_gp_pct=None,
+        calc_oem_sell_in_amount=None,
+        calc_distributor_net_amount=None,
+        calc_campaign_support_reserve_amount=None,
+        calc_non_campaign_reserve_amount=None,
+        calc_internal_gp_amount=None,
+        calc_customer_margin_input_pct=None,
+        calc_distributor_margin_input_pct=None,
         calc_flags=[],
         calc_explanation=None,
     )
@@ -843,11 +850,12 @@ def test_patch_plan_line_rejects_unknown_customer_id():
                 None,
                 None,
                 None,
+                0.15,
+                1.0,
+                0.10,
+                0.50,
                 None,
-                None,
-                None,
-                None,
-                None,
+                "USD",
             )
         )
         sess.execute = AsyncMock(return_value=join_res)
@@ -876,12 +884,12 @@ def test_product_specs_from_json_returns_nulls_without_invention():
     assert all(out[k] is None for k in out)
 
 
-def test_local_prices_from_usd_requires_positive_fx():
-    from app.services.commercial_planner.read_model import local_prices_from_usd
+def test_local_prices_from_economics_amounts_requires_positive_fx():
+    from app.services.commercial_planner.read_model import local_prices_from_economics_amounts
 
-    assert local_prices_from_usd(10.0, 8.0, None) == (None, None)
-    assert local_prices_from_usd(10.0, 8.0, 0.0) == (None, None)
-    a, b = local_prices_from_usd(10.0, 8.0, 18.5)
+    assert local_prices_from_economics_amounts(10.0, 8.0, None) == (None, None)
+    assert local_prices_from_economics_amounts(10.0, 8.0, 0.0) == (None, None)
+    a, b = local_prices_from_economics_amounts(10.0, 8.0, 18.5)
     assert a is not None and abs(a - 185.0) < 1e-6
     assert b is not None and abs(b - 148.0) < 1e-6
 
@@ -896,10 +904,12 @@ def test_effective_commercial_fields_flat_prefers_line_overrides():
         override_customer_rebate_pct=None,
         override_distributor_margin_pct=None,
         override_vat_rate_pct=None,
-        override_fx_rate_to_usd=None,
+        override_fx_plan_currency_per_cost_currency=None,
         override_reserve_total_pct=None,
         override_promo_reserve_split_pct=None,
-        override_landed_cost_usd=None,
+        override_controlled_cost_amount=None,
+        override_controlled_cost_currency_code=None,
+        economics_calc_currency_code="USD",
     )
     out = effective_commercial_fields_flat(
         line,
@@ -907,15 +917,17 @@ def test_effective_commercial_fields_flat_prefers_line_overrides():
         customer_rebate_pct=0.02,
         distributor_margin_pct=0.08,
         sku_vat_rate_pct=0.15,
-        sku_fx_rate_to_usd=18.0,
+        sku_fx_plan_currency_per_cost_currency=18.0,
         sku_reserve_total_pct=0.1,
         sku_promo_reserve_split_pct=0.5,
-        sku_landed_cost_usd=400.0,
+        sku_controlled_cost_amount=400.0,
+        sku_controlled_cost_currency_code="USD",
     )
     assert out["effective_customer_margin_pct"] == 0.2
     assert out["effective_customer_rebate_pct"] == 0.02
-    assert out["effective_fx_rate_to_usd"] == 18.0
-    assert out["effective_controlled_cost_usd_per_unit"] == 400.0
+    assert out["effective_fx_plan_currency_per_cost_currency"] == 18.0
+    assert out["effective_controlled_cost_amount"] == 400.0
+    assert out["effective_controlled_cost_currency_code"] == "USD"
 
 
 def test_plan_line_read_model_extensions_merges_specs_and_local_prices():
@@ -924,17 +936,19 @@ def test_plan_line_read_model_extensions_merges_specs_and_local_prices():
     from app.services.commercial_planner.read_model import plan_line_read_model_extensions
 
     line = SimpleNamespace(
-        calc_sell_in_price_usd=10.0,
-        calc_buy_price_usd=8.0,
+        calc_oem_sell_in_amount=10.0,
+        calc_distributor_net_amount=8.0,
         calc_flags=[],
+        economics_calc_currency_code="USD",
         override_customer_margin_pct=None,
         override_customer_rebate_pct=None,
         override_distributor_margin_pct=None,
         override_vat_rate_pct=None,
-        override_fx_rate_to_usd=None,
+        override_fx_plan_currency_per_cost_currency=None,
         override_reserve_total_pct=None,
         override_promo_reserve_split_pct=None,
-        override_landed_cost_usd=None,
+        override_controlled_cost_amount=None,
+        override_controlled_cost_currency_code=None,
     )
     ext = plan_line_read_model_extensions(
         line,
@@ -943,10 +957,11 @@ def test_plan_line_read_model_extensions_merges_specs_and_local_prices():
         customer_rebate_pct=0.02,
         distributor_margin_pct=0.08,
         sku_vat_rate_pct=0.15,
-        sku_fx_rate_to_usd=2.0,
+        sku_fx_plan_currency_per_cost_currency=2.0,
         sku_reserve_total_pct=0.1,
         sku_promo_reserve_split_pct=0.5,
-        sku_landed_cost_usd=100.0,
+        sku_controlled_cost_amount=100.0,
+        sku_controlled_cost_currency_code="USD",
         join_customer_term_present=True,
         join_distributor_term_present=True,
         join_sku_assumption_present=True,
@@ -955,7 +970,7 @@ def test_plan_line_read_model_extensions_merges_specs_and_local_prices():
     assert ext["product_spec_cpu"] == "i5"
     assert ext.get("product_spec_processor") is None
     assert ext["product_spec_ram"] == "16GB"
-    assert ext["effective_fx_rate_to_usd"] == 2.0
+    assert ext["effective_fx_plan_currency_per_cost_currency"] == 2.0
     assert ext["calc_sell_in_price_local"] == 20.0
     assert ext["calc_distributor_net_local"] == 16.0
     assert ext["economics_line_trust"] == "ok"
@@ -968,17 +983,19 @@ def test_plan_line_read_model_extensions_splits_processor_and_cpu_specs():
     from app.services.commercial_planner.read_model import plan_line_read_model_extensions
 
     line = SimpleNamespace(
-        calc_sell_in_price_usd=None,
-        calc_buy_price_usd=None,
+        calc_oem_sell_in_amount=None,
+        calc_distributor_net_amount=None,
         calc_flags=[],
+        economics_calc_currency_code="USD",
         override_customer_margin_pct=None,
         override_customer_rebate_pct=None,
         override_distributor_margin_pct=None,
         override_vat_rate_pct=None,
-        override_fx_rate_to_usd=None,
+        override_fx_plan_currency_per_cost_currency=None,
         override_reserve_total_pct=None,
         override_promo_reserve_split_pct=None,
-        override_landed_cost_usd=None,
+        override_controlled_cost_amount=None,
+        override_controlled_cost_currency_code=None,
     )
     ext = plan_line_read_model_extensions(
         line,
@@ -987,10 +1004,11 @@ def test_plan_line_read_model_extensions_splits_processor_and_cpu_specs():
         customer_rebate_pct=0.02,
         distributor_margin_pct=0.08,
         sku_vat_rate_pct=0.15,
-        sku_fx_rate_to_usd=1.0,
+        sku_fx_plan_currency_per_cost_currency=1.0,
         sku_reserve_total_pct=0.1,
         sku_promo_reserve_split_pct=0.5,
-        sku_landed_cost_usd=100.0,
+        sku_controlled_cost_amount=100.0,
+        sku_controlled_cost_currency_code="USD",
         join_customer_term_present=True,
         join_distributor_term_present=True,
         join_sku_assumption_present=True,
@@ -1998,7 +2016,7 @@ def test_sync_to_plan_does_not_write_dap_as_cost():
     # DAP evidence value (850.0) must NOT be in target_srp_local or any cost field
     assert created_plan_line.target_srp_local != 850.0
     # override_landed_cost_usd must not be set to DAP
-    assert getattr(created_plan_line, "override_landed_cost_usd", None) is None
+    assert getattr(created_plan_line, "override_controlled_cost_amount", None) is None
 
 
 def test_sync_preview_returns_counts():

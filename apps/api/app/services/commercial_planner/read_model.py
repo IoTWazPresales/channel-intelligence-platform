@@ -147,11 +147,12 @@ def effective_commercial_fields_flat(
     customer_rebate_pct: float | None,
     distributor_margin_pct: float | None,
     sku_vat_rate_pct: float | None,
-    sku_fx_rate_to_usd: float | None,
+    sku_fx_plan_currency_per_cost_currency: float | None,
     sku_reserve_total_pct: float | None,
     sku_promo_reserve_split_pct: float | None,
-    sku_landed_cost_usd: float | None,
-) -> dict[str, float | None]:
+    sku_controlled_cost_amount: float | None,
+    sku_controlled_cost_currency_code: str | None,
+) -> dict[str, float | str | None]:
     """Resolved inputs matching _resolve_terms_and_calc (null when no DB source and no line override)."""
     eff_cm = (
         float(line.override_customer_margin_pct)
@@ -174,9 +175,13 @@ def effective_commercial_fields_flat(
         else (float(sku_vat_rate_pct) if sku_vat_rate_pct is not None else None)
     )
     eff_fx = (
-        float(line.override_fx_rate_to_usd)
-        if line.override_fx_rate_to_usd is not None
-        else (float(sku_fx_rate_to_usd) if sku_fx_rate_to_usd is not None else None)
+        float(line.override_fx_plan_currency_per_cost_currency)
+        if line.override_fx_plan_currency_per_cost_currency is not None
+        else (
+            float(sku_fx_plan_currency_per_cost_currency)
+            if sku_fx_plan_currency_per_cost_currency is not None
+            else None
+        )
     )
     eff_res = (
         float(line.override_reserve_total_pct)
@@ -189,19 +194,28 @@ def effective_commercial_fields_flat(
         else (float(sku_promo_reserve_split_pct) if sku_promo_reserve_split_pct is not None else None)
     )
     eff_cc = (
-        float(line.override_landed_cost_usd)
-        if line.override_landed_cost_usd is not None
-        else (float(sku_landed_cost_usd) if sku_landed_cost_usd is not None else None)
+        float(line.override_controlled_cost_amount)
+        if line.override_controlled_cost_amount is not None
+        else (float(sku_controlled_cost_amount) if sku_controlled_cost_amount is not None else None)
     )
+    if line.override_controlled_cost_amount is not None:
+        eff_ccy = (line.override_controlled_cost_currency_code or "").strip() or (
+            (line.economics_calc_currency_code or "").strip() or "USD"
+        )
+    else:
+        eff_ccy = (sku_controlled_cost_currency_code or "").strip() or (
+            (line.economics_calc_currency_code or "").strip() or "USD"
+        )
     return {
         "effective_customer_margin_pct": eff_cm,
         "effective_customer_rebate_pct": eff_cr,
         "effective_distributor_margin_pct": eff_dm,
         "effective_vat_rate_pct": eff_vat,
-        "effective_fx_rate_to_usd": eff_fx,
+        "effective_fx_plan_currency_per_cost_currency": eff_fx,
         "effective_reserve_total_pct": eff_res,
         "effective_promo_reserve_split_pct": eff_pr_split,
-        "effective_controlled_cost_usd_per_unit": eff_cc,
+        "effective_controlled_cost_amount": eff_cc,
+        "effective_controlled_cost_currency_code": eff_ccy,
     }
 
 
@@ -260,8 +274,8 @@ def _field_provenance(
             sku_field=True,
             placeholder_flag="economics_placeholder_vat_without_sku",
         ),
-        "fx_rate_to_usd": prov_entry(
-            override_set=line.override_fx_rate_to_usd is not None,
+        "fx_plan_currency_per_cost_currency": prov_entry(
+            override_set=line.override_fx_plan_currency_per_cost_currency is not None,
             term_present=False,
             sku_field=True,
             placeholder_flag="economics_placeholder_fx_without_sku",
@@ -278,8 +292,8 @@ def _field_provenance(
             sku_field=True,
             placeholder_flag="economics_placeholder_reserves_without_sku",
         ),
-        "controlled_cost_usd_per_unit": prov_entry(
-            override_set=line.override_landed_cost_usd is not None,
+        "controlled_cost_amount": prov_entry(
+            override_set=line.override_controlled_cost_amount is not None,
             term_present=False,
             sku_field=True,
             placeholder_flag="missing_sku_assumption",
@@ -295,16 +309,17 @@ def plan_line_read_model_extensions(
     customer_rebate_pct: float | None,
     distributor_margin_pct: float | None,
     sku_vat_rate_pct: float | None,
-    sku_fx_rate_to_usd: float | None,
+    sku_fx_plan_currency_per_cost_currency: float | None,
     sku_reserve_total_pct: float | None,
     sku_promo_reserve_split_pct: float | None,
-    sku_landed_cost_usd: float | None,
+    sku_controlled_cost_amount: float | None,
+    sku_controlled_cost_currency_code: str | None,
     join_customer_term_present: bool = False,
     join_distributor_term_present: bool = False,
     join_sku_assumption_present: bool = False,
     distributor_code: str | None = None,
 ) -> dict[str, Any]:
-    """Specs + effective commercial snapshot + local USD-derived prices (same FX convention as calculator)."""
+    """Specs + effective commercial snapshot + plan-currency local amounts (same FX convention as calculator)."""
     specs = product_specs_from_json(specs_json)
     eff = effective_commercial_fields_flat(
         line,
@@ -312,14 +327,17 @@ def plan_line_read_model_extensions(
         customer_rebate_pct=customer_rebate_pct,
         distributor_margin_pct=distributor_margin_pct,
         sku_vat_rate_pct=sku_vat_rate_pct,
-        sku_fx_rate_to_usd=sku_fx_rate_to_usd,
+        sku_fx_plan_currency_per_cost_currency=sku_fx_plan_currency_per_cost_currency,
         sku_reserve_total_pct=sku_reserve_total_pct,
         sku_promo_reserve_split_pct=sku_promo_reserve_split_pct,
-        sku_landed_cost_usd=sku_landed_cost_usd,
+        sku_controlled_cost_amount=sku_controlled_cost_amount,
+        sku_controlled_cost_currency_code=sku_controlled_cost_currency_code,
     )
-    sell_usd = float(line.calc_sell_in_price_usd) if line.calc_sell_in_price_usd is not None else None
-    buy_usd = float(line.calc_buy_price_usd) if line.calc_buy_price_usd is not None else None
-    sell_l, buy_l = local_prices_from_usd(sell_usd, buy_usd, eff.get("effective_fx_rate_to_usd"))
+    sell_econ = float(line.calc_oem_sell_in_amount) if line.calc_oem_sell_in_amount is not None else None
+    buy_econ = float(line.calc_distributor_net_amount) if line.calc_distributor_net_amount is not None else None
+    sell_l, buy_l = local_prices_from_economics_amounts(
+        sell_econ, buy_econ, eff.get("effective_fx_plan_currency_per_cost_currency")
+    )
     flat_specs = specs_json_flat_string_map(specs_json if isinstance(specs_json, dict) else None)
     flags_for_trust = list(line.calc_flags or [])
     if distributor_code and distributor_code.strip().upper() == "UNASSIGNED":
@@ -345,19 +363,27 @@ def plan_line_read_model_extensions(
     return out
 
 
-def local_prices_from_usd(
-    sell_in_usd: float | None,
-    distributor_net_usd: float | None,
-    fx_rate_to_usd: float | None,
+def local_prices_from_economics_amounts(
+    sell_in_economics_ccy: float | None,
+    distributor_net_economics_ccy: float | None,
+    fx_plan_currency_per_cost_currency: float | None,
 ) -> tuple[float | None, float | None]:
-    """Convert USD model outputs to plan-currency local using the same FX convention as the calculator.
+    """Convert economics-currency amounts to plan-currency local using the same FX convention as the calculator.
 
-    Calculator: sell_in_usd = sell_in_local / max(fx_rate_to_usd, eps)
-    => sell_in_local = sell_in_usd * fx_rate_to_usd (local monetary units per 1 USD).
-    Same for distributor net USD.
+    Calculator: sell_in_econ = sell_in_local / max(fx_plan_currency_per_cost_currency, eps)
+    => sell_in_local = sell_in_econ * fx_plan_currency_per_cost_currency
+    (plan currency units per 1 unit of economics / cost currency).
     """
-    if fx_rate_to_usd is None or fx_rate_to_usd <= 0:
+    if fx_plan_currency_per_cost_currency is None or fx_plan_currency_per_cost_currency <= 0:
         return None, None
-    sell_l = round(float(sell_in_usd) * float(fx_rate_to_usd), 4) if sell_in_usd is not None else None
-    buy_l = round(float(distributor_net_usd) * float(fx_rate_to_usd), 4) if distributor_net_usd is not None else None
+    sell_l = (
+        round(float(sell_in_economics_ccy) * float(fx_plan_currency_per_cost_currency), 4)
+        if sell_in_economics_ccy is not None
+        else None
+    )
+    buy_l = (
+        round(float(distributor_net_economics_ccy) * float(fx_plan_currency_per_cost_currency), 4)
+        if distributor_net_economics_ccy is not None
+        else None
+    )
     return sell_l, buy_l

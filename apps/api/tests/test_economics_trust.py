@@ -11,6 +11,12 @@ def test_classify_blocked_when_missing_sku():
     assert "missing_sku_assumption" in reasons
 
 
+def test_classify_blocked_when_invalid_fx_plan_currency_per_cost_currency():
+    tier, reasons = classify_line_economics_trust(["invalid_fx_plan_currency_per_cost_currency"])
+    assert tier == "blocked"
+    assert "invalid_fx_plan_currency_per_cost_currency" in reasons
+
+
 def test_classify_warning_when_only_missing_terms():
     tier, reasons = classify_line_economics_trust(["missing_customer_term", "missing_distributor_term"])
     assert tier == "warning"
