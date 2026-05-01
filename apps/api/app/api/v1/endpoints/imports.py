@@ -2,7 +2,7 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -10,6 +10,12 @@ from sqlalchemy.orm import joinedload
 from app.api.deps import get_db
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
+from app.services.imports.dsi_mapping_workflow import (
+    dsi_mapping_gate_errors,
+    dsi_mapping_state_dict,
+    infer_dsi_job_sync,
+    merge_dsi_mapping_memory,
+)
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
 from app.storage.local import get_storage_backend
@@ -172,7 +178,7 @@ async def create_job(
 
     mode = (import_mode or "").strip().lower()
     if not mode:
-        mode = "validate" if tpl.slug == "product_master" else "apply"
+        mode = "validate" if tpl.slug in ("product_master", "distributor_inventory") else "apply"
     if mode not in ("validate", "apply"):
         raise HTTPException(status_code=400, detail="import_mode must be validate or apply")
 
@@ -217,11 +223,15 @@ async def create_job(
     await db.commit()
     await db.refresh(job)
 
-    # Product Master uses the constrained mapping workflow (/imports/product-master/jobs); never run legacy sync here.
-    effective_run_sync = bool(run_sync) and tpl.slug != "product_master"
+    # Product Master and DSI use constrained mapping workflows; never run legacy sync on create.
+    effective_run_sync = bool(run_sync) and tpl.slug not in ("product_master", "distributor_inventory")
     if effective_run_sync:
         with SessionLocal() as sync_db:
             process_import_job_sync(sync_db, job.id)
+        await db.refresh(job)
+    elif tpl.slug == "distributor_inventory":
+        with SessionLocal() as sync_db:
+            infer_dsi_job_sync(sync_db, job.id)
         await db.refresh(job)
 
     return {"id": job.id, "status": job.status, "stage": job.stage, "template_slug": job.template_slug, "import_mode": job.import_mode}
@@ -313,9 +323,87 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
         "error_summary": job.error_summary,
         "inferred_schema": job.inferred_schema,
         "field_mapping": job.field_mapping,
+        "file_headers": job.file_headers,
         "template_slug": job.template_slug,
         "import_mode": job.import_mode,
     }
+
+
+@router.get("/jobs/{job_id}/dsi-mapping-state")
+async def get_dsi_mapping_state(job_id: int, db: AsyncSession = Depends(get_db)):
+    job = await db.get(ImportJob, job_id)
+    if not job or job.template_slug != "distributor_inventory":
+        raise HTTPException(status_code=404, detail="DSI mapping state not found for this job")
+    return dsi_mapping_state_dict(job)
+
+
+@router.put("/jobs/{job_id}/dsi-field-mapping")
+async def put_dsi_field_mapping(job_id: int, body: dict[str, Any] = Body(...), db: AsyncSession = Depends(get_db)):
+    job = await db.get(ImportJob, job_id)
+    if not job or job.template_slug != "distributor_inventory":
+        raise HTTPException(status_code=404, detail="Job not found")
+    fm = body.get("field_mapping")
+    if not isinstance(fm, dict):
+        raise HTTPException(status_code=400, detail="field_mapping must be an object")
+    cleaned: dict[str, str] = {}
+    for k, v in fm.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            continue
+        if not v.strip():
+            continue
+        cleaned[k] = v.strip()
+    job.field_mapping = cleaned
+    if job.source_id is not None:
+        with SessionLocal() as sync_db:
+            merge_dsi_mapping_memory(sync_db, source_id=job.source_id, field_mapping=cleaned)
+            sync_db.commit()
+    await db.commit()
+    await db.refresh(job)
+    return dsi_mapping_state_dict(job)
+
+
+@router.post("/jobs/{job_id}/dsi-validate")
+async def post_dsi_validate(job_id: int, db: AsyncSession = Depends(get_db)):
+    job = await db.get(ImportJob, job_id)
+    if not job or job.template_slug != "distributor_inventory":
+        raise HTTPException(status_code=404, detail="Job not found")
+    gate = dsi_mapping_gate_errors(job.field_mapping or {})
+    if gate:
+        raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
+    job.import_mode = "validate"
+    await db.commit()
+    with SessionLocal() as sync_db:
+        process_import_job_sync(sync_db, job_id)
+    job2 = await db.get(ImportJob, job_id)
+    return dsi_mapping_state_dict(job2) if job2 else {}
+
+
+@router.post("/jobs/{job_id}/dsi-apply")
+async def post_dsi_apply(
+    job_id: int,
+    confirm_destructive: str = Form(default=""),
+    db: AsyncSession = Depends(get_db),
+):
+    job = await db.get(ImportJob, job_id)
+    if not job or job.template_slug != "distributor_inventory":
+        raise HTTPException(status_code=404, detail="Job not found")
+    tpl = await db.scalar(select(ImportTemplate).where(ImportTemplate.slug == job.template_slug))
+    if tpl and tpl.destructive_apply_requires_confirm:
+        ok = str(confirm_destructive).strip().lower() in ("1", "true", "yes", "on", "confirm")
+        if not ok:
+            raise HTTPException(
+                status_code=400,
+                detail="This import can change canonical facts; pass confirm_destructive=true.",
+            )
+    gate = dsi_mapping_gate_errors(job.field_mapping or {})
+    if gate:
+        raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
+    job.import_mode = "apply"
+    await db.commit()
+    with SessionLocal() as sync_db:
+        process_import_job_sync(sync_db, job_id)
+    job2 = await db.get(ImportJob, job_id)
+    return dsi_mapping_state_dict(job2) if job2 else {}
 
 
 @router.post("/jobs/{job_id}/process")

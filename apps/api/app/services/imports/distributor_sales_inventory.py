@@ -10,7 +10,8 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
@@ -77,6 +78,19 @@ def _col(mapping: dict[str, str], key: str) -> str | None:
     return None
 
 
+def _channel_raw_for_dsi(row: pd.Series, mapping: dict[str, str]) -> str | None:
+    """Prefer channel_key_token; fall back to channel_code-mapped column (alias collision with other templates)."""
+    c = _col(mapping, "channel_key_token")
+    if c:
+        v = _clean_str(row.get(c))
+        if v:
+            return v
+    c2 = _col(mapping, "channel_code")
+    if c2:
+        return _clean_str(row.get(c2))
+    return None
+
+
 def _clean_str(v: Any) -> str | None:
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return None
@@ -136,8 +150,8 @@ def _resolve_product(
 
 
 def _resolve_distributor(db: Session, raw: str | None) -> tuple[int | None, str | None]:
-    if not raw:
-        return None, "missing_distributor_token"
+    if not raw or not str(raw).strip():
+        return None, "missing_distributor_cell_value"
     token = raw.strip().lower()
     for d in db.scalars(select(DimDistributor)).all():
         if d.code.strip().lower() == token or d.name.strip().lower() == token:
@@ -146,7 +160,7 @@ def _resolve_distributor(db: Session, raw: str | None) -> tuple[int | None, str 
             # avoid loose substring false positives for very short tokens
             if len(token) >= 4:
                 return d.id, None
-    return None, "unresolved_distributor"
+    return None, "unresolved_distributor_token"
 
 
 def _open_channel_customer_id(db: Session) -> int | None:
@@ -290,7 +304,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 row_number=0,
                 severity="error",
                 code="missing_distributor_token_mapping",
-                message="Map a column to distributor_token (distributor account on the file).",
+                message="No source column is mapped to Distributor.",
             )
         )
         return 1
@@ -301,21 +315,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 row_number=0,
                 severity="error",
                 code="missing_product_identifier_mapping",
-                message="Map a column to product_identifier (SKU or catalog key).",
-            )
-        )
-        return 1
-
-    meta = job.staged_metadata or {}
-    dsi_meta = meta.get("distributor_si") or {}
-    if job.import_mode == "apply" and dsi_meta.get("applied"):
-        db.add(
-            ImportRowResult(
-                job_id=job.id,
-                row_number=0,
-                severity="error",
-                code="distributor_si_double_apply_blocked",
-                message="This import job was already applied. Create a new import to load again.",
+                message="No source column is mapped to a product identifier (SKU / catalog key).",
             )
         )
         return 1
@@ -341,6 +341,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
 
     blocking = 0
     warnings = 0
+    first_unresolved_dist_raw: str | None = None
 
     for idx, row in df.iterrows():
         rn = int(idx) + 1
@@ -351,7 +352,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         prod_raw = _clean_str(row.get(_col(mapping, "product_identifier"))) if _col(mapping, "product_identifier") else None
         cust_raw = _clean_str(row.get(_col(mapping, "customer_dealer_token"))) if _col(mapping, "customer_dealer_token") else None
         dg_raw = _clean_str(row.get(_col(mapping, "dealer_group_token"))) if _col(mapping, "dealer_group_token") else None
-        ch_raw = _clean_str(row.get(_col(mapping, "channel_key_token"))) if _col(mapping, "channel_key_token") else None
+        ch_raw = _channel_raw_for_dsi(row, mapping)
         open_raw = row.get(_col(mapping, "open_channel_evidence")) if _col(mapping, "open_channel_evidence") else None
 
         tx_date = _parse_date(row.get(_col(mapping, "transaction_date"))) if _col(mapping, "transaction_date") else None
@@ -544,11 +545,24 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         )
         db.add(cand)
 
+    if first_unresolved_dist_raw:
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="error",
+                code="unresolved_distributor_token",
+                message=(
+                    f"Distributor token '{first_unresolved_dist_raw}' could not be matched to an existing distributor."
+                ),
+            )
+        )
+
     eff_rev_note = ""
     if job.import_mode == "apply":
-        db.execute(delete(FactSalesSellout).where(FactSalesSellout.source_import_job_id == job.id))
-        db.execute(delete(FactInventoryDistributor).where(FactInventoryDistributor.source_import_job_id == job.id))
         db.flush()
+        sell_tbl = FactSalesSellout.__table__
+        inv_tbl = FactInventoryDistributor.__table__
         lines = db.scalars(
             select(ImportDistributorSiStagingLine)
             .where(ImportDistributorSiStagingLine.import_job_id == job.id)
@@ -572,22 +586,38 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                     eff = line.reported_revenue_amount
                 if eff is None:
                     eff = 0.0
-                fs = FactSalesSellout(
-                    product_id=line.resolved_product_id,
-                    customer_id=line.resolved_customer_id,
-                    distributor_id=line.resolved_distributor_id,
-                    period_start=line.transaction_date,
-                    units=line.quantity_sold,
-                    revenue=float(eff),
-                    unit_sellout_price_ex_tax_amount=line.unit_sellout_price_ex_tax_amount,
-                    reported_revenue_amount=line.reported_revenue_amount,
-                    computed_revenue_amount=line.computed_revenue_amount,
-                    currency_code=line.currency_code,
-                    source_import_job_id=job.id,
+                stmt = (
+                    pg_insert(sell_tbl)
+                    .values(
+                        product_id=line.resolved_product_id,
+                        customer_id=line.resolved_customer_id,
+                        distributor_id=line.resolved_distributor_id,
+                        channel_id=None,
+                        period_start=line.transaction_date,
+                        units=line.quantity_sold,
+                        revenue=float(eff),
+                        unit_sellout_price_ex_tax_amount=line.unit_sellout_price_ex_tax_amount,
+                        reported_revenue_amount=line.reported_revenue_amount,
+                        computed_revenue_amount=line.computed_revenue_amount,
+                        currency_code=line.currency_code,
+                        source_import_job_id=job.id,
+                    )
+                    .on_conflict_do_update(
+                        constraint="uq_fact_sales_sellout_dsi_v1",
+                        set_={
+                            "units": text("EXCLUDED.units"),
+                            "revenue": text("EXCLUDED.revenue"),
+                            "unit_sellout_price_ex_tax_amount": text("EXCLUDED.unit_sellout_price_ex_tax_amount"),
+                            "reported_revenue_amount": text("EXCLUDED.reported_revenue_amount"),
+                            "computed_revenue_amount": text("EXCLUDED.computed_revenue_amount"),
+                            "currency_code": text("EXCLUDED.currency_code"),
+                            "source_import_job_id": text("EXCLUDED.source_import_job_id"),
+                        },
+                    )
+                    .returning(sell_tbl.c.id)
                 )
-                db.add(fs)
-                db.flush()
-                line.fact_sellout_row_id = fs.id
+                rid = db.execute(stmt).scalar_one()
+                line.fact_sellout_row_id = int(rid) if rid is not None else None
                 applied_sell += 1
                 parts.append("sellout")
             if (
@@ -596,16 +626,26 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 and line.snapshot_date is not None
                 and line.stock_on_hand is not None
             ):
-                inv = FactInventoryDistributor(
-                    product_id=line.resolved_product_id,
-                    distributor_id=line.resolved_distributor_id,
-                    as_of_date=line.snapshot_date,
-                    on_hand_units=float(line.stock_on_hand),
-                    source_import_job_id=job.id,
+                inv_stmt = (
+                    pg_insert(inv_tbl)
+                    .values(
+                        product_id=line.resolved_product_id,
+                        distributor_id=line.resolved_distributor_id,
+                        as_of_date=line.snapshot_date,
+                        on_hand_units=float(line.stock_on_hand),
+                        source_import_job_id=job.id,
+                    )
+                    .on_conflict_do_update(
+                        constraint="uq_fact_inventory_distributor_dsi_v1",
+                        set_={
+                            "on_hand_units": text("EXCLUDED.on_hand_units"),
+                            "source_import_job_id": text("EXCLUDED.source_import_job_id"),
+                        },
+                    )
+                    .returning(inv_tbl.c.id)
                 )
-                db.add(inv)
-                db.flush()
-                line.fact_inventory_row_id = inv.id
+                iid = db.execute(inv_stmt).scalar_one()
+                line.fact_inventory_row_id = int(iid) if iid is not None else None
                 applied_inv += 1
                 parts.append("inventory")
             if parts:
@@ -618,7 +658,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             "inventory_rows": applied_inv,
         }
         job.staged_metadata = meta
-        eff_rev_note = f" Applied sell-out facts={applied_sell}, inventory facts={applied_inv}."
+        eff_rev_note = f" Applied sell-out facts={applied_sell}, inventory facts={applied_inv} (upsert by natural key)."
 
     summary = {
         "staging_rows": int(len(df)),

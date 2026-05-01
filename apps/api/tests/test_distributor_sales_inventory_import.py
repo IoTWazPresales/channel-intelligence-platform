@@ -1,12 +1,15 @@
-"""Distributor sales & inventory import: staging, candidates, facts, double-apply guard (sync pipeline)."""
+"""Distributor sales & inventory import: staging, candidates, facts, upsert apply (sync pipeline)."""
 
 from __future__ import annotations
+
+from datetime import date
 
 import pytest
 from sqlalchemy import func, inspect, select
 
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
+from app.services.imports.dsi_mapping_workflow import dsi_mapping_gate_errors
 from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct, DimRegion
 from app.models.facts import FactInboundShipment, FactInventoryDistributor, FactSalesSellout
 from app.models.import_distributor_si import (
@@ -178,16 +181,23 @@ def test_distributor_si_apply_sellout_and_inventory_and_double_apply(dsi_source_
         j = db.get(ImportJob, job_id)
         assert j and (j.staged_metadata or {}).get("distributor_si", {}).get("applied") is True
 
+    # Re-applying the same job is idempotent (upsert); must not double-count or hard-fail.
     with SessionLocal() as db:
         process_import_job_sync(db, job_id)
 
     with SessionLocal() as db:
+        fs2 = db.scalars(select(FactSalesSellout).where(FactSalesSellout.source_import_job_id == job_id)).all()
+        inv2 = db.scalars(
+            select(FactInventoryDistributor).where(FactInventoryDistributor.source_import_job_id == job_id)
+        ).all()
+        assert len(fs2) == 1
+        assert len(inv2) == 1
         double = db.scalars(
             select(ImportRowResult).where(
                 ImportRowResult.job_id == job_id, ImportRowResult.code == "distributor_si_double_apply_blocked"
             )
         ).first()
-        assert double is not None
+        assert double is None
 
 
 def test_distributor_si_approved_alias_resolves_customer(dsi_source_id: int) -> None:
@@ -226,7 +236,121 @@ def test_distributor_si_approved_alias_resolves_customer(dsi_source_id: int) -> 
         assert len(fs) == 1
 
 
-def test_list_distributor_si_mapping_candidates(dsi_source_id: int) -> None:
+def test_disti_header_maps_to_distributor_token(dsi_source_id: int) -> None:
+    csv = "DISTI,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-05-01,1,CUST-1001,1\n"
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_disti.csv")
+    with SessionLocal() as db:
+        j = db.get(ImportJob, job.id)
+        assert j and j.field_mapping
+        inv = {v: k for k, v in (j.field_mapping or {}).items()}
+        assert inv.get("distributor_token") == "DISTI"
+
+
+def test_dsi_mapping_gate_requires_date_and_quantity() -> None:
+    errs = dsi_mapping_gate_errors({"x": "distributor_token"})
+    codes = {e["code"] for e in errs}
+    assert "missing_column_mapping_product" in codes
+    assert "missing_column_mapping_date" in codes
+    assert "missing_column_mapping_quantity" in codes
+    errs2 = dsi_mapping_gate_errors(
+        {
+            "d": "distributor_token",
+            "p": "product_identifier",
+            "t": "transaction_date",
+        }
+    )
+    assert any(e["code"] == "missing_column_mapping_quantity" for e in errs2)
+
+
+def test_dsi_missing_mapping_message_vs_unresolved_distributor(dsi_source_id: int) -> None:
+    with SessionLocal() as db:
+        job = _run_dsi_job(
+            dsi_source_id,
+            _csv_bytes("sku,date,qty,customer_name,soh\nSKU-ALPHA-01,2024-06-01,1,CUST-1001,1\n"),
+            import_mode="validate",
+            filename="dsi_nom.csv",
+        )
+        miss = db.scalars(
+            select(ImportRowResult).where(
+                ImportRowResult.job_id == job.id, ImportRowResult.code == "missing_distributor_token_mapping"
+            )
+        ).first()
+        assert miss is not None
+        assert "No source column is mapped to Distributor" in (miss.message or "")
+
+    job2 = _run_dsi_job(
+        dsi_source_id,
+        _csv_bytes(
+            "distributor_code,sku,date,qty,customer_name,soh\n"
+            "NO-SUCH-DISTI,SKU-ALPHA-01,2024-06-02,1,CUST-1001,1\n"
+        ),
+        import_mode="validate",
+        filename="dsi_bad_dist.csv",
+    )
+    with SessionLocal() as db:
+        line = db.scalars(
+            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == job2.id)
+        ).first()
+        assert line is not None
+        assert "unresolved_distributor_token" in (line.diagnostic_codes or [])
+        unr = db.scalars(
+            select(ImportRowResult).where(
+                ImportRowResult.job_id == job2.id, ImportRowResult.code == "unresolved_distributor_token"
+            )
+        ).first()
+        if unr is not None:
+            assert "could not be matched" in (unr.message or "").lower()
+
+
+def test_dsi_amount_column_maps_to_unit_price_not_revenue_alias(dsi_source_id: int) -> None:
+    csv = "distributor_code,sku,date,qty,customer_name,soh,Amount,Revenue\nDIST-01,SKU-ALPHA-01,2024-07-01,1,CUST-1001,1,55.5,999\n"
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_amt.csv")
+    with SessionLocal() as db:
+        j = db.get(ImportJob, job.id)
+        inv = {v: k for k, v in (j.field_mapping or {}).items()}
+        assert inv.get("unit_sellout_price_ex_tax_amount") == "Amount"
+        assert inv.get("reported_revenue_amount") == "Revenue"
+
+
+def test_dsi_second_apply_same_job_idempotent(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,soh,channel\n"
+        "DIST-01,SKU-ALPHA-01,2024-08-01,2,CUST-1001,5,Open Channel\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_idem.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        n1 = int(db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == jid)) or 0)
+        assert n1 == 1
+        process_import_job_sync(db, jid)
+        n2 = int(db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == jid)) or 0)
+        assert n2 == 1
+
+
+def test_dsi_two_jobs_upsert_same_natural_key(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,soh,channel\n"
+        "DIST-01,SKU-ALPHA-01,2024-09-01,3,CUST-1001,7,Open Channel retail\n"
+    )
+    _ = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_a.csv")
+    job_b = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_b.csv")
+    with SessionLocal() as db:
+        prod_id = db.scalar(select(DimProduct.id).where(DimProduct.sku == "SKU-ALPHA-01"))
+        n = db.scalar(
+            select(func.count()).select_from(FactSalesSellout).where(
+                FactSalesSellout.product_id == prod_id,
+                FactSalesSellout.period_start == date(2024, 9, 1),
+            )
+        )
+        assert int(n or 0) == 1
+        row = db.scalars(
+            select(FactSalesSellout).where(
+                FactSalesSellout.product_id == prod_id,
+                FactSalesSellout.period_start == date(2024, 9, 1),
+            )
+        ).first()
+        assert row is not None
+        assert row.source_import_job_id == job_b.id
     csv = "distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-04-01,1,Unknown X,1\n"
     job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_cand.csv")
     job_id = job.id
