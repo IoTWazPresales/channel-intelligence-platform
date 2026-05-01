@@ -249,7 +249,12 @@ function describeTemplateBehavior(template: ImportTemplate | null, isPm: boolean
     case 'customer_master':
       return 'Validates customer master fields, then upserts dim_customer when mode is Apply.';
     case 'distributor_inventory':
-      return 'Validates SKU/on-hand snapshot rows against the product catalog; unmatched SKUs require mapping.';
+      return (
+        'Stages every row, resolves distributor and product against master data, and resolves customers via approved ' +
+        'aliases, exact master matches, or Open Channel evidence. Sell-out rows without a resolvable customer stay staged ' +
+        'and roll up into aggregated mapping candidates (not row-by-row queue spam). Apply writes resolved rows to ' +
+        'sell-out and distributor inventory facts.'
+      );
     default:
       return 'Runs the configured template pipeline for this import type.';
   }
@@ -511,6 +516,41 @@ function AdminImportsPageContent() {
     };
   }, [previewRows, selectedSlug]);
 
+  const distributorSiSummary = useMemo(() => {
+    if (selectedSlug !== 'distributor_inventory' || !previewRows?.length) return null;
+    const row = previewRows.find((r) => r.row_number === 0 && r.code === 'distributor_si_summary');
+    if (!row?.message) return null;
+    const raw = row.message;
+    const cut = raw.indexOf(' Applied sell-out');
+    const jsonPart = cut === -1 ? raw : raw.slice(0, cut);
+    try {
+      return JSON.parse(jsonPart) as {
+        staging_rows?: number;
+        blocking_rows?: number;
+        warning_rows?: number;
+        aggregated_candidates?: number;
+        import_mode?: string;
+      };
+    } catch {
+      return null;
+    }
+  }, [previewRows, selectedSlug]);
+
+  const { data: dsiCandidates } = useQuery({
+    queryKey: ['distributor-si-candidates', lastJobId],
+    queryFn: ({ signal }) =>
+      apiGet<
+        Array<{
+          id: number;
+          entity_type: string;
+          row_count: number;
+          normalized_key: string;
+          dealer_group_token: string | null;
+        }>
+      >(`/api/v1/mappings/import-jobs/${lastJobId}/distributor-si-candidates`, { signal }),
+    enabled: lastJobId != null && selectedSlug === 'distributor_inventory',
+  });
+
   // Derived data for the HL mapping review panel.
   const hlSheetDetail: HlSheetDetail | null =
     hlJobDetail?.inferred_schema?.selected_sheet_details?.[0] ?? null;
@@ -561,6 +601,7 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', data.id] });
       void qc.invalidateQueries({ queryKey: ['import-job', data.id] });
+      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', data.id] });
     },
   });
 
@@ -1081,6 +1122,34 @@ function AdminImportsPageContent() {
                 single header row near the top. Title/blank rows before the header are tolerated. Validation reports
                 detected sheet and header row using <code>historical_lineup_sheet_summary</code>.
               </Alert>
+            ) : null}
+            {selectedTemplate.slug === 'distributor_inventory' ? (
+              <Stack spacing={1}>
+                <Alert severity="info" data-testid="dsi-contract-copy">
+                  The system accepts different distributor column layouts, but values must map into the required business
+                  fields before apply. Map your file columns to canonical targets (for example distributor account, product
+                  identifier, dates, quantities).
+                </Alert>
+                <Alert severity="info" data-testid="dsi-unit-price-copy">
+                  <strong>Unit sell-out price</strong> fields are <strong>ex tax / ex VAT</strong> per unit where supplied.
+                  They are not the same as total line revenue — map revenue separately when both exist.
+                </Alert>
+                <Alert severity="warning" data-testid="dsi-shipping-copy">
+                  OTW/POD/shipping-like columns should be mapped to ignored shipping evidence only. They are preserved as raw
+                  payload but are not written to inbound shipments — use the Inbound shipments import for shipping history.
+                </Alert>
+                <Alert severity="info" data-testid="dsi-customer-copy">
+                  Distributor customer names may differ by source. Unresolved names are staged and surfaced as aggregated
+                  mapping candidates; they are <strong>not</strong> auto-created as customers. Recurring names can be mapped
+                  to existing customers or promoted through controlled mapping review.
+                </Alert>
+                <Typography variant="caption" color="text.secondary" component="div">
+                  <strong>Sell-out contract (per row):</strong> distributor + product + transaction date + quantity sold + a
+                  resolvable customer (or Open Channel evidence); optional unit price ex tax, reported revenue, currency,
+                  channel/region. <strong>Inventory snapshot:</strong> distributor + product + snapshot date + stock on hand.
+                  Rows may contribute to one or both contracts when both sets of fields validate.
+                </Typography>
+              </Stack>
             ) : null}
             {isPm ? (
               <Button startIcon={<DownloadOutlinedIcon />} variant="outlined" size="small" onClick={() => void downloadSample()}>
@@ -1822,6 +1891,34 @@ function AdminImportsPageContent() {
                 <Button size="small" onClick={() => void refetchPreview()}>
                   Refresh validation preview
                 </Button>
+              </Alert>
+            ) : null}
+            {upload.isSuccess &&
+            lastJobId != null &&
+            selectedTemplate?.slug === 'distributor_inventory' &&
+            distributorSiSummary ? (
+              <Alert severity="info" data-testid="dsi-preview-summary">
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  Import summary: {distributorSiSummary.staging_rows ?? '—'} rows processed;{' '}
+                  <strong>{distributorSiSummary.blocking_rows ?? 0}</strong> blocking;{' '}
+                  <strong>{distributorSiSummary.warning_rows ?? 0}</strong> warnings;{' '}
+                  <strong>{distributorSiSummary.aggregated_candidates ?? 0}</strong> aggregated mapping candidate groups.
+                </Typography>
+                {dsiCandidates != null && dsiCandidates.length > 0 ? (
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Review grouped tokens via{' '}
+                    <Link component={NextLink} href="/admin/mappings">
+                      Mapping queue
+                    </Link>{' '}
+                    ({dsiCandidates.length} group{dsiCandidates.length !== 1 ? 's' : ''} for this job).
+                  </Typography>
+                ) : null}
+                {distributorSiSummary.import_mode === 'apply' ? (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                    Apply finished for resolved rows. Rows that stayed staged remain in evidence for later mapping — create
+                    a new import after aliases are approved if you need to reload the same file.
+                  </Typography>
+                ) : null}
               </Alert>
             ) : null}
             {selectedTemplate?.slug === 'historical_lineup' && historicalValidatedJobId != null && hlSheetDetail ? (

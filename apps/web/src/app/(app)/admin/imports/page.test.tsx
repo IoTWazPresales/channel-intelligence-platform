@@ -36,6 +36,18 @@ const mockState = vi.hoisted(() => ({
       pipeline_ready: false,
       destructive_apply_requires_confirm: false,
     },
+    {
+      id: 30,
+      slug: 'distributor_inventory',
+      display_name: 'Distributor sales & inventory',
+      description: 'Distributor sell-out and inventory snapshots',
+      requires_provider: true,
+      accepted_file_types: ['.csv', '.xlsx'],
+      required_fields: ['distributor_token', 'product_identifier'],
+      optional_fields: ['quantity_sold', 'transaction_date'],
+      pipeline_ready: true,
+      destructive_apply_requires_confirm: true,
+    },
   ] as any[],
   historicalLineupTemplate: {
     id: 20,
@@ -72,6 +84,7 @@ const mockState = vi.hoisted(() => ({
   } as any,
   // Populated in Apply button tests' beforeEach so the ?source=100 URL param resolves
   hlSources: [] as any[],
+  dsiSources: [{ id: 5, code: 'distributor_inventory', name: 'Distributor feed', import_template_slug: 'distributor_inventory' }] as any[],
   // Row results for historical_lineup validate job (job 50) — override per test.
   hlValidateJobRows: [] as any[],
   // Lineup lines for apply jobs — override per test.
@@ -148,8 +161,8 @@ vi.mock('@/lib/api', () => ({
     if (url === '/api/v1/imports/templates') return mockState.templates;
     if (url === '/api/v1/imports/jobs') return [];
     if (url.startsWith('/api/v1/imports/sources')) {
-      // Return HL source when requested for historical_lineup so sourceId can be set via URL param
       if (url.includes('historical_lineup')) return mockState.hlSources ?? [];
+      if (url.includes('distributor_inventory')) return mockState.dsiSources ?? [];
       return [];
     }
     if (url === '/api/v1/imports/jobs/42') return mockState.jobDetail;
@@ -1129,5 +1142,52 @@ describe('AdminImportsPage Sub-pass A — loaded lineup records', () => {
     // Loaded lineup section must be present (lines exist) but no unresolved-token sub-section
     await screen.findByTestId('loaded-lineup-section');
     expect(screen.queryByTestId('lineup-unresolved-tokens')).not.toBeInTheDocument();
+  });
+});
+
+describe('AdminImportsPage distributor sales & inventory guidance', () => {
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <AdminImportsPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    searchString = '';
+    mockRouterReplace.mockReset();
+    if (!mockState.templates.some((t: { slug?: string }) => t.slug === 'distributor_inventory')) {
+      mockState.templates.push({
+        id: 30,
+        slug: 'distributor_inventory',
+        display_name: 'Distributor sales & inventory',
+        description: 'Distributor sell-out and inventory snapshots',
+        requires_provider: true,
+        accepted_file_types: ['.csv', '.xlsx'],
+        required_fields: ['distributor_token', 'product_identifier'],
+        optional_fields: ['quantity_sold', 'transaction_date'],
+        pipeline_ready: true,
+        destructive_apply_requires_confirm: true,
+      });
+    }
+  });
+
+  it('shows DSI contract, unit price ex VAT, shipping preservation, and customer staging copy', async () => {
+    const { user } = renderPage();
+    await user.click(await screen.findByText('Distributor sales & inventory'));
+    const prov = await screen.findByLabelText(/Data provider/i);
+    await user.click(prov);
+    await user.click(await screen.findByRole('option', { name: /Distributor feed/i }));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    expect(screen.getByTestId('dsi-contract-copy')).toBeInTheDocument();
+    expect(screen.getByTestId('dsi-unit-price-copy')).toHaveTextContent(/ex VAT/i);
+    expect(screen.getByTestId('dsi-shipping-copy')).toHaveTextContent(/Inbound shipments/i);
+    expect(screen.getByTestId('dsi-customer-copy')).toHaveTextContent(/not/i);
+    expect(screen.getByTestId('dsi-customer-copy')).toHaveTextContent(/auto-created/i);
   });
 });

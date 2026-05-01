@@ -42,18 +42,80 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     },
     {
         "slug": "distributor_inventory",
-        "display_name": "Distributor inventory",
-        "description": "On-hand / snapshot files from a distributor feed; validates SKUs against the product catalog.",
+        "display_name": "Distributor sales & inventory",
+        "description": (
+            "Distributor-reported sell-out (reseller/customer movement) and dated distributor stock snapshots. "
+            "Maps into canonical contracts before apply. Unit sell-out price columns are ex tax / ex VAT where "
+            "supplied and are not the same as total revenue. OTW/POD/shipping-like columns are preserved as raw "
+            "evidence only and are not applied to inbound shipments."
+        ),
         "enabled": True,
         "hidden": False,
         "admin_only": False,
         "requires_provider": True,
-        "pipeline_handler": "inventory_sku_gate",
-        "destructive_apply_requires_confirm": False,
+        "pipeline_handler": "distributor_sales_inventory",
+        "destructive_apply_requires_confirm": True,
         "accepted_file_types": [".csv", ".xlsx"],
         "expected_columns": {
-            "sku": {"aliases": ["item", "item_code", "product_sku"], "required": True},
-            "quantity": {"aliases": ["qty", "on_hand"], "required": True},
+            "distributor_token": {
+                "aliases": ["distributor", "distributor_code", "distributor_name", "disti_code", "disti_name"],
+                "required": True,
+            },
+            "product_identifier": {
+                "aliases": ["sku", "item", "item_code", "product_sku", "product_code", "model_code", "part_number"],
+                "required": True,
+            },
+            "transaction_date": {
+                "aliases": ["date", "transaction_date", "sale_date", "period_date", "report_date"],
+                "required": False,
+            },
+            "snapshot_date": {
+                "aliases": ["as_of_date", "stock_date", "inventory_date", "soh_date"],
+                "required": False,
+            },
+            "quantity_sold": {
+                "aliases": ["quantity", "qty", "units_sold", "sellout_qty", "sales_qty"],
+                "required": False,
+            },
+            "stock_on_hand": {
+                "aliases": ["soh", "on_hand", "stock", "inventory_qty", "qty_on_hand"],
+                "required": False,
+            },
+            "customer_dealer_token": {
+                "aliases": [
+                    "customer",
+                    "customer_name",
+                    "dealer",
+                    "dealer_name",
+                    "reseller",
+                    "account_name",
+                    "sold_to",
+                ],
+                "required": False,
+            },
+            "dealer_group_token": {
+                "aliases": ["dealer_group", "customer_group", "account_group", "chain"],
+                "required": False,
+            },
+            "unit_sellout_price_ex_tax_amount": {
+                "aliases": ["unit_price", "unit_sell_price", "sell_price", "price_ex_vat", "unit_net_price", "amount"],
+                "required": False,
+            },
+            "reported_revenue_amount": {
+                "aliases": ["revenue", "line_revenue", "total_revenue", "sales_value"],
+                "required": False,
+            },
+            "currency_code": {"aliases": ["currency", "curr", "iso_currency"], "required": False},
+            "channel_key_token": {"aliases": ["channel", "channel_key", "rtm", "route"], "required": False},
+            "region_or_province_token": {"aliases": ["region", "province", "state", "territory"], "required": False},
+            "open_channel_evidence": {
+                "aliases": ["open_channel", "is_open_channel", "channel_is_open"],
+                "required": False,
+            },
+            "ignored_shipping_evidence": {
+                "aliases": ["otw_shipped", "otw_unshipped", "pod_qty", "pod", "tender_remark"],
+                "required": False,
+            },
         },
     },
     {

@@ -17,6 +17,11 @@ class FactSalesSellout(Base, TimestampMixin):
     period_start: Mapped[date] = mapped_column(Date, nullable=False)
     units: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
     revenue: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+    unit_sellout_price_ex_tax_amount: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    reported_revenue_amount: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    computed_revenue_amount: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    currency_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    source_import_job_id: Mapped[int | None] = mapped_column(ForeignKey("import_job.id"), nullable=True)
 
 
 class FactSalesSellin(Base, TimestampMixin):
@@ -49,6 +54,7 @@ class FactInventoryDistributor(Base, TimestampMixin):
     distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id"), nullable=False)
     as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
     on_hand_units: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+    source_import_job_id: Mapped[int | None] = mapped_column(ForeignKey("import_job.id"), nullable=True)
 
 
 class FactInboundShipment(Base, TimestampMixin):

@@ -7,13 +7,15 @@ from typing import Any
 
 import pandas as pd
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.ingestion.infer import infer_schema, read_tabular
-from app.models.dimensions import DimChannel, DimProduct
+from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct, DimRegion
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
 from app.models.mapping import EntityMappingQueue
 from app.services.catalog.product_import_sync import sync_bulk_upsert_products_from_rows
+from app.services.imports.distributor_sales_inventory import process_distributor_sales_inventory
+from app.services.imports.historical_lineup import process_historical_lineup_import
 from app.storage.local import get_storage_backend
 
 
@@ -24,6 +26,9 @@ STAGE_MAPPED = "fields_mapped"
 STAGE_VALIDATED = "validated"
 STAGE_LOADED = "loaded"
 STAGE_FAILED = "failed"
+
+ALLOWED_CUSTOMER_STATUS = {"active", "inactive", "onboarding", "blocked"}
+ALLOWED_PARTNER_TIER = {"strategic", "tier_1", "tier_2", "tier_3", "core", "long_tail"}
 
 
 def effective_mapping_template(source: SourceDefinition | None) -> dict[str, Any]:
@@ -57,8 +62,57 @@ def default_field_mapping(inferred_columns: list[str], template: dict[str, Any] 
         if key in aliases:
             mapping[col] = aliases[key]
             continue
-        if "sku" in key or ("item" in key and "name" not in key):
+        if key in {
+            "customer_code",
+            "customer_name",
+            "distributor_code",
+            "distributor_name",
+            "customer_status",
+            "partner_tier",
+            "account_owner_internal",
+            "region_code",
+            "channel_code",
+            "preferred_distributor_code",
+            "notes_summary",
+        }:
+            mapping[col] = key
+            continue
+        if ("customer" in key and "code" in key) or key in {"account_code", "customer_id"}:
+            mapping[col] = "customer_code"
+        elif ("customer" in key and "name" in key) or key in {"account_name"}:
+            mapping[col] = "customer_name"
+        elif ("distributor" in key and "code" in key) or key in {"distributor_id"}:
+            mapping[col] = "distributor_code"
+        elif ("distributor" in key and "name" in key) or key in {"canonical_name"}:
+            mapping[col] = "distributor_name"
+        elif "customer_status" in key or key == "status":
+            mapping[col] = "customer_status"
+        elif "partner_tier" in key or key == "tier":
+            mapping[col] = "partner_tier"
+        elif "account_owner" in key:
+            mapping[col] = "account_owner_internal"
+        elif key == "region_code" or ("region" in key and "customer" not in key):
+            mapping[col] = "region_code"
+        elif key == "channel_code" or ("channel" in key and "customer" not in key):
+            mapping[col] = "channel_code"
+        elif "preferred_distributor" in key or key == "distributor_code":
+            mapping[col] = "preferred_distributor_code"
+        elif "notes" in key:
+            mapping[col] = "notes_summary"
+        elif "sku" in key or ("item" in key and "name" not in key):
             mapping[col] = "sku"
+        elif key in ("product_identifier", "product_id", "item_code"):
+            mapping[col] = "product_identifier"
+        elif key in ("distributor_token",):
+            mapping[col] = "distributor_token"
+        elif key in ("quantity_sold", "sellout_qty"):
+            mapping[col] = "quantity_sold"
+        elif key in ("stock_on_hand", "soh", "inventory_qty"):
+            mapping[col] = "stock_on_hand"
+        elif key in ("transaction_date", "snapshot_date"):
+            mapping[col] = key
+        elif key in ("customer_dealer_token", "dealer_group_token"):
+            mapping[col] = key
         elif "qty" in key or "quantity" in key or "on_hand" in key:
             mapping[col] = "quantity"
         elif "price" in key:
@@ -263,8 +317,385 @@ def _process_product_master(db: Session, job: ImportJob, df: pd.DataFrame, mappi
     return 0
 
 
+def _process_customer_master(db: Session, job: ImportJob, df: pd.DataFrame, mapping: dict[str, str]) -> int:
+    errors = 0
+    normalized_mapping = {col: ("customer_name" if target == "name" else target) for col, target in mapping.items()}
+    if "customer_code" not in mapping.values():
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="error",
+                code="missing_customer_code_mapping",
+                message="Could not infer customer_code column; expected customer_code/code/account_code.",
+            )
+        )
+        return 1
+    if "customer_name" not in normalized_mapping.values():
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="error",
+                code="missing_customer_name_mapping",
+                message="Could not infer customer_name column; expected customer_name/name/account_name.",
+            )
+        )
+        return 1
+
+    code_col = next(k for k, v in mapping.items() if v == "customer_code")
+    name_col = next(k for k, v in normalized_mapping.items() if v == "customer_name")
+    status_col = next((k for k, v in mapping.items() if v == "customer_status"), None)
+    tier_col = next((k for k, v in mapping.items() if v == "partner_tier"), None)
+    owner_col = next((k for k, v in mapping.items() if v == "account_owner_internal"), None)
+    notes_col = next((k for k, v in mapping.items() if v == "notes_summary"), None)
+    region_col = next((k for k, v in mapping.items() if v == "region_code"), None)
+    channel_col = next((k for k, v in mapping.items() if v == "channel_code"), None)
+    dist_col = next((k for k, v in mapping.items() if v == "preferred_distributor_code"), None)
+
+    regions = {r.code.strip().lower(): r.id for r in db.scalars(select(DimRegion)).all()}
+    channels = {c.code.strip().lower(): c.id for c in db.scalars(select(DimChannel)).all()}
+    distributors = {d.code.strip().lower(): d.id for d in db.scalars(select(DimDistributor)).all()}
+    existing = {c.code.strip().lower(): c for c in db.scalars(select(DimCustomer)).all()}
+    seen_codes: set[str] = set()
+    pending: list[dict[str, Any]] = []
+
+    for idx, row in df.iterrows():
+        row_number = int(idx) + 1
+        code = str(row.get(code_col, "")).strip()
+        name = str(row.get(name_col, "")).strip()
+        raw_payload = row.where(pd.notnull(row), None).to_dict()
+        if not code:
+            db.add(
+                ImportRowResult(
+                    job_id=job.id,
+                    row_number=row_number,
+                    severity="error",
+                    code="blank_customer_code",
+                    message="Blank customer_code in row",
+                    raw_payload=raw_payload,
+                )
+            )
+            errors += 1
+            continue
+        code_key = code.lower()
+        if code_key in seen_codes:
+            db.add(
+                ImportRowResult(
+                    job_id=job.id,
+                    row_number=row_number,
+                    severity="error",
+                    code="duplicate_customer_code_in_file",
+                    message=f"Duplicate customer_code in file: {code!r}",
+                    raw_payload=raw_payload,
+                )
+            )
+            errors += 1
+            continue
+        seen_codes.add(code_key)
+        if not name:
+            db.add(
+                ImportRowResult(
+                    job_id=job.id,
+                    row_number=row_number,
+                    severity="error",
+                    code="blank_customer_name",
+                    message="Blank customer_name in row",
+                    raw_payload=raw_payload,
+                )
+            )
+            errors += 1
+            continue
+
+        status = "active"
+        if status_col:
+            candidate = str(row.get(status_col, "")).strip().lower() or "active"
+            if candidate not in ALLOWED_CUSTOMER_STATUS:
+                db.add(
+                    ImportRowResult(
+                        job_id=job.id,
+                        row_number=row_number,
+                        severity="error",
+                        code="invalid_customer_status",
+                        message=f"Invalid customer_status {candidate!r}",
+                        raw_payload=raw_payload,
+                    )
+                )
+                errors += 1
+                continue
+            status = candidate
+
+        partner_tier = None
+        if tier_col:
+            candidate = str(row.get(tier_col, "")).strip().lower()
+            if candidate:
+                if candidate not in ALLOWED_PARTNER_TIER:
+                    db.add(
+                        ImportRowResult(
+                            job_id=job.id,
+                            row_number=row_number,
+                            severity="error",
+                            code="invalid_partner_tier",
+                            message=f"Invalid partner_tier {candidate!r}",
+                            raw_payload=raw_payload,
+                        )
+                    )
+                    errors += 1
+                    continue
+                partner_tier = candidate
+
+        region_id = None
+        if region_col:
+            candidate = str(row.get(region_col, "")).strip()
+            if candidate:
+                region_id = regions.get(candidate.lower())
+                if region_id is None:
+                    db.add(
+                        ImportRowResult(
+                            job_id=job.id,
+                            row_number=row_number,
+                            severity="error",
+                            code="unknown_region_code",
+                            message=f"Unknown region_code {candidate!r}",
+                            raw_payload=raw_payload,
+                        )
+                    )
+                    errors += 1
+                    continue
+
+        channel_id = None
+        if channel_col:
+            candidate = str(row.get(channel_col, "")).strip()
+            if candidate:
+                channel_id = channels.get(candidate.lower())
+                if channel_id is None:
+                    db.add(
+                        ImportRowResult(
+                            job_id=job.id,
+                            row_number=row_number,
+                            severity="error",
+                            code="unknown_channel_code",
+                            message=f"Unknown channel_code {candidate!r}",
+                            raw_payload=raw_payload,
+                        )
+                    )
+                    errors += 1
+                    continue
+
+        preferred_distributor_id = None
+        if dist_col:
+            candidate = str(row.get(dist_col, "")).strip()
+            if candidate:
+                preferred_distributor_id = distributors.get(candidate.lower())
+                if preferred_distributor_id is None:
+                    db.add(
+                        ImportRowResult(
+                            job_id=job.id,
+                            row_number=row_number,
+                            severity="error",
+                            code="unknown_preferred_distributor_code",
+                            message=f"Unknown preferred_distributor_code {candidate!r}",
+                            raw_payload=raw_payload,
+                        )
+                    )
+                    errors += 1
+                    continue
+
+        pending.append(
+            {
+                "code": code,
+                "name": name,
+                "customer_status": status,
+                "partner_tier": partner_tier,
+                "account_owner_internal": str(row.get(owner_col, "")).strip() or None if owner_col else None,
+                "notes_summary": str(row.get(notes_col, "")).strip() or None if notes_col else None,
+                "region_id": region_id,
+                "channel_id": channel_id,
+                "preferred_distributor_id": preferred_distributor_id,
+                "row_number": row_number,
+                "exists": code_key in existing,
+            }
+        )
+
+    if errors:
+        return errors
+
+    if job.import_mode == "apply":
+        created = 0
+        updated = 0
+        for item in pending:
+            current = existing.get(item["code"].lower())
+            if current:
+                current.name = item["name"]
+                current.customer_status = item["customer_status"]
+                current.partner_tier = item["partner_tier"]
+                current.account_owner_internal = item["account_owner_internal"]
+                current.notes_summary = item["notes_summary"]
+                current.region_id = item["region_id"]
+                current.channel_id = item["channel_id"]
+                current.preferred_distributor_id = item["preferred_distributor_id"]
+                updated += 1
+            else:
+                db.add(
+                    DimCustomer(
+                        code=item["code"],
+                        name=item["name"],
+                        customer_status=item["customer_status"],
+                        partner_tier=item["partner_tier"],
+                        account_owner_internal=item["account_owner_internal"],
+                        notes_summary=item["notes_summary"],
+                        region_id=item["region_id"],
+                        channel_id=item["channel_id"],
+                        preferred_distributor_id=item["preferred_distributor_id"],
+                    )
+                )
+                created += 1
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="info",
+                code="customer_master_applied",
+                message=f"Applied customer upsert: created={created}, updated={updated}, rows={len(pending)}.",
+            )
+        )
+        job.stage = STAGE_LOADED
+    else:
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="info",
+                code="customer_master_validated",
+                message=f"Validated {len(pending)} customer row(s); import_mode=validate — no writes performed.",
+            )
+        )
+    return 0
+
+
+def _process_distributor_master(db: Session, job: ImportJob, df: pd.DataFrame, mapping: dict[str, str]) -> int:
+    errors = 0
+    normalized_mapping = {col: ("distributor_name" if target == "name" else target) for col, target in mapping.items()}
+    if "distributor_code" not in normalized_mapping.values():
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="error",
+                code="missing_distributor_code_mapping",
+                message="Could not infer distributor_code column; expected distributor_code/code/distributor_id.",
+            )
+        )
+        return 1
+    if "distributor_name" not in normalized_mapping.values():
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="error",
+                code="missing_distributor_name_mapping",
+                message="Could not infer distributor_name column; expected distributor_name/name/canonical_name.",
+            )
+        )
+        return 1
+
+    code_col = next(k for k, v in normalized_mapping.items() if v == "distributor_code")
+    name_col = next(k for k, v in normalized_mapping.items() if v == "distributor_name")
+    existing = {d.code.strip().lower(): d for d in db.scalars(select(DimDistributor)).all()}
+    seen_codes: set[str] = set()
+    pending: list[dict[str, Any]] = []
+
+    for idx, row in df.iterrows():
+        row_number = int(idx) + 1
+        code = str(row.get(code_col, "")).strip()
+        name = str(row.get(name_col, "")).strip()
+        raw_payload = row.where(pd.notnull(row), None).to_dict()
+        if not code:
+            db.add(
+                ImportRowResult(
+                    job_id=job.id,
+                    row_number=row_number,
+                    severity="error",
+                    code="blank_distributor_code",
+                    message="Blank distributor_code in row",
+                    raw_payload=raw_payload,
+                )
+            )
+            errors += 1
+            continue
+        key = code.lower()
+        if key in seen_codes:
+            db.add(
+                ImportRowResult(
+                    job_id=job.id,
+                    row_number=row_number,
+                    severity="error",
+                    code="duplicate_distributor_code_in_file",
+                    message=f"Duplicate distributor_code in file: {code!r}",
+                    raw_payload=raw_payload,
+                )
+            )
+            errors += 1
+            continue
+        seen_codes.add(key)
+        if not name:
+            db.add(
+                ImportRowResult(
+                    job_id=job.id,
+                    row_number=row_number,
+                    severity="error",
+                    code="blank_distributor_name",
+                    message="Blank distributor_name in row",
+                    raw_payload=raw_payload,
+                )
+            )
+            errors += 1
+            continue
+        pending.append({"code": code, "name": name})
+
+    if errors:
+        return errors
+
+    if job.import_mode == "apply":
+        created = 0
+        updated = 0
+        for item in pending:
+            current = existing.get(item["code"].lower())
+            if current:
+                current.name = item["name"]
+                updated += 1
+            else:
+                db.add(DimDistributor(code=item["code"], name=item["name"]))
+                created += 1
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="info",
+                code="distributor_master_applied",
+                message=f"Applied distributor upsert: created={created}, updated={updated}, rows={len(pending)}.",
+            )
+        )
+        job.stage = STAGE_LOADED
+    else:
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="info",
+                code="distributor_master_validated",
+                message=f"Validated {len(pending)} distributor row(s); import_mode=validate — no writes performed.",
+            )
+        )
+    return 0
+
+
 def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
-    job = db.get(ImportJob, job_id)
+    job = db.scalar(
+        select(ImportJob)
+        .options(joinedload(ImportJob.source).joinedload(SourceDefinition.import_template))
+        .where(ImportJob.id == job_id)
+    )
     if not job:
         raise ValueError("job not found")
 
@@ -283,27 +714,73 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
         job.status = "running"
         db.flush()
 
+        source = job.source
+
+        tpl = source.import_template if source else None
+        fallback_handlers_by_slug = {
+            "distributor_master": "distributor_master_upsert",
+            "customer_master": "customer_master_upsert",
+            "product_master": "product_master_upsert",
+            "distributor_inventory": "distributor_sales_inventory",
+            "historical_lineup": "historical_lineup_workbook",
+        }
+        raw_handler = (tpl.pipeline_handler if tpl else None) or fallback_handlers_by_slug.get(
+            job.template_slug or "", "inventory_sku_gate"
+        )
+        handler = str(raw_handler or "").strip()
+        handler_aliases = {
+            "historical_lineup": "historical_lineup_workbook",
+        }
+        handler = handler_aliases.get(handler, handler)
+
+        if handler == "historical_lineup_workbook":
+            errors = process_historical_lineup_import(db, job, job.file_name, data)
+            job.stage = STAGE_VALIDATED
+            job.status = "completed_with_errors" if errors else "completed"
+            job.completed_at = datetime.now(timezone.utc)
+            job.error_summary = f"{errors} rows require attention" if errors else None
+            if not errors and job.import_mode == "apply":
+                job.stage = STAGE_LOADED
+            db.commit()
+            db.refresh(job)
+            return job
+
         df = read_tabular(job.file_name, data)
         schema = infer_schema(df)
         job.inferred_schema = schema
         job.stage = STAGE_INFERRED
 
         cols = [c["name"] for c in schema["columns"]]
-        source = job.source
         template = effective_mapping_template(source)
         mapping = job.field_mapping or default_field_mapping(cols, template)
         job.field_mapping = mapping
         job.stage = STAGE_MAPPED
 
-        tpl = source.import_template if source else None
-        handler = tpl.pipeline_handler if tpl else "inventory_sku_gate"
-
-        if handler == "stub_noop":
-            errors = _process_stub(db, job, df, mapping)
-        elif handler == "product_master_upsert":
-            errors = _process_product_master(db, job, df, mapping)
+        handlers = {
+            "stub_noop": _process_stub,
+            "distributor_master_upsert": _process_distributor_master,
+            "customer_master_upsert": _process_customer_master,
+            "product_master_upsert": _process_product_master,
+            "inventory_sku_gate": _process_inventory_sku_gate,
+            "distributor_sales_inventory": process_distributor_sales_inventory,
+            "historical_lineup_workbook": lambda _db, _job, _df, _mapping: process_historical_lineup_import(
+                _db, _job, _job.file_name, data
+            ),
+        }
+        processor = handlers.get(handler)
+        if processor is None:
+            db.add(
+                ImportRowResult(
+                    job_id=job.id,
+                    row_number=0,
+                    severity="error",
+                    code="unknown_pipeline_handler",
+                    message=f"Unrecognized pipeline handler {handler!r} for template {job.template_slug!r}.",
+                )
+            )
+            errors = 1
         else:
-            errors = _process_inventory_sku_gate(db, job, df, mapping)
+            errors = processor(db, job, df, mapping)
 
         job.stage = STAGE_VALIDATED
         job.status = "completed_with_errors" if errors else "completed"

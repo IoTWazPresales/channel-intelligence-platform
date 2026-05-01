@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
@@ -89,6 +89,21 @@ def _seed_import_core(session: Session) -> None:
             )
         )
     session.flush()
+    for row in IMPORT_TEMPLATE_ROWS:
+        tpl = session.scalar(select(ImportTemplate).where(ImportTemplate.slug == row["slug"]))
+        if not tpl:
+            continue
+        tpl.display_name = row["display_name"]
+        tpl.description = row["description"]
+        tpl.enabled = row["enabled"]
+        tpl.hidden = row["hidden"]
+        tpl.admin_only = row["admin_only"]
+        tpl.requires_provider = row["requires_provider"]
+        tpl.pipeline_handler = row["pipeline_handler"]
+        tpl.destructive_apply_requires_confirm = row["destructive_apply_requires_confirm"]
+        tpl.accepted_file_types = row["accepted_file_types"]
+        tpl.expected_columns = row["expected_columns"]
+    session.flush()
     by_slug = {t.slug: t.id for t in session.scalars(select(ImportTemplate)).all()}
     for code, name, slug, kind in DEFAULT_SOURCES:
         if session.execute(select(SourceDefinition).where(SourceDefinition.code == code)).scalar_one_or_none():
@@ -111,14 +126,15 @@ def _seed_import_core(session: Session) -> None:
                 code="distributor_inventory",
                 name="Distributor Inventory Snapshot",
                 source_kind="distributor_reports",
-                expected_template={
-                    "sku": {"aliases": ["item", "item_code", "product_sku"]},
-                    "quantity": {"aliases": ["qty", "on_hand"]},
-                },
+                expected_template=None,
                 parser_module="app.ingestion.parsers.distributor_inventory",
                 is_active=True,
             )
         )
+    session.flush()
+    disti_src = session.scalar(select(SourceDefinition).where(SourceDefinition.code == "distributor_inventory"))
+    if disti_src and disti_src.expected_template:
+        disti_src.expected_template = None
     session.flush()
 
     pc = session.scalar(
@@ -136,8 +152,14 @@ def _seed_import_core(session: Session) -> None:
 
 
 def _wipe_all(session: Session) -> None:
+    conn = session.connection()
+    try:
+        existing = set(inspect(conn).get_table_names())
+    except Exception:  # noqa: BLE001
+        existing = {t.name for t in Base.metadata.sorted_tables}
     for table in reversed(Base.metadata.sorted_tables):
-        session.execute(table.delete())
+        if table.name in existing:
+            session.execute(table.delete())
     session.flush()
 
 

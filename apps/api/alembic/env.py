@@ -46,6 +46,9 @@ from app.models import (  # noqa: F401
     FactSalesSellout,
     FactSupport,
     ForecastSummary,
+    CustomerSourceTokenAlias,
+    ImportDistributorSiStagingLine,
+    ImportEntityMappingCandidate,
     ImportJob,
     ImportRowResult,
     ImportTemplate,
@@ -71,7 +74,9 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    return sqlalchemy_sync_engine_url(get_settings().database_url_sync)
+    settings = get_settings()
+    sync_url = settings.database_url_sync_migrate or settings.database_url_sync
+    return sqlalchemy_sync_engine_url(sync_url)
 
 
 def run_migrations_offline() -> None:

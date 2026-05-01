@@ -38,6 +38,17 @@ async def list_sellout(db: AsyncSession = Depends(get_db)):
                 "revenue": float(s.revenue),
                 "distributor_id": s.distributor_id,
                 "distributor_code": dist.code if dist else None,
+                "unit_sellout_price_ex_tax_amount": float(s.unit_sellout_price_ex_tax_amount)
+                if s.unit_sellout_price_ex_tax_amount is not None
+                else None,
+                "reported_revenue_amount": float(s.reported_revenue_amount)
+                if s.reported_revenue_amount is not None
+                else None,
+                "computed_revenue_amount": float(s.computed_revenue_amount)
+                if s.computed_revenue_amount is not None
+                else None,
+                "currency_code": s.currency_code,
+                "source_import_job_id": s.source_import_job_id,
             }
         )
     return out
