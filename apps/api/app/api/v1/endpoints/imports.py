@@ -15,6 +15,7 @@ from app.services.imports.dsi_mapping_workflow import (
     dsi_mapping_state_dict,
     infer_dsi_job_sync,
     merge_dsi_mapping_memory,
+    sanitize_dsi_field_mapping,
 )
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
@@ -334,6 +335,13 @@ async def get_dsi_mapping_state(job_id: int, db: AsyncSession = Depends(get_db))
     job = await db.get(ImportJob, job_id)
     if not job or job.template_slug != "distributor_inventory":
         raise HTTPException(status_code=404, detail="DSI mapping state not found for this job")
+    headers = list(job.file_headers or [])
+    raw = dict(job.field_mapping or {})
+    clean, _ = sanitize_dsi_field_mapping(headers, raw)
+    if clean != raw:
+        job.field_mapping = clean
+        await db.commit()
+        await db.refresh(job)
     return dsi_mapping_state_dict(job)
 
 
@@ -345,13 +353,15 @@ async def put_dsi_field_mapping(job_id: int, body: dict[str, Any] = Body(...), d
     fm = body.get("field_mapping")
     if not isinstance(fm, dict):
         raise HTTPException(status_code=400, detail="field_mapping must be an object")
-    cleaned: dict[str, str] = {}
+    headers = list(job.file_headers or [])
+    cleaned_input: dict[str, str] = {}
     for k, v in fm.items():
         if not isinstance(k, str) or not isinstance(v, str):
             continue
         if not v.strip():
             continue
-        cleaned[k] = v.strip()
+        cleaned_input[k] = v.strip()
+    cleaned, _ = sanitize_dsi_field_mapping(headers, cleaned_input)
     job.field_mapping = cleaned
     if job.source_id is not None:
         with SessionLocal() as sync_db:
@@ -367,6 +377,11 @@ async def post_dsi_validate(job_id: int, db: AsyncSession = Depends(get_db)):
     job = await db.get(ImportJob, job_id)
     if not job or job.template_slug != "distributor_inventory":
         raise HTTPException(status_code=404, detail="Job not found")
+    headers = list(job.file_headers or [])
+    clean, _ = sanitize_dsi_field_mapping(headers, dict(job.field_mapping or {}))
+    job.field_mapping = clean
+    await db.commit()
+    await db.refresh(job)
     gate = dsi_mapping_gate_errors(job.field_mapping or {})
     if gate:
         raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
@@ -395,6 +410,11 @@ async def post_dsi_apply(
                 status_code=400,
                 detail="This import can change canonical facts; pass confirm_destructive=true.",
             )
+    headers = list(job.file_headers or [])
+    clean, _ = sanitize_dsi_field_mapping(headers, dict(job.field_mapping or {}))
+    job.field_mapping = clean
+    await db.commit()
+    await db.refresh(job)
     gate = dsi_mapping_gate_errors(job.field_mapping or {})
     if gate:
         raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})

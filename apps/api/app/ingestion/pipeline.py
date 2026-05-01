@@ -753,6 +753,10 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
         cols = [c["name"] for c in schema["columns"]]
         template = effective_mapping_template(source)
         mapping = job.field_mapping or default_field_mapping(cols, template)
+        if job.template_slug == "distributor_inventory":
+            from app.services.imports.dsi_mapping_workflow import sanitize_dsi_field_mapping
+
+            mapping, _ = sanitize_dsi_field_mapping(cols, mapping)
         job.field_mapping = mapping
         job.stage = STAGE_MAPPED
 

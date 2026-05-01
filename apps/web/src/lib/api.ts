@@ -32,6 +32,19 @@ export async function readFetchError(res: Response): Promise<string> {
       if (typeof d === 'string') return d;
       if (typeof d === 'object' && d !== null && !Array.isArray(d)) {
         const rec = d as Record<string, unknown>;
+        const bme = rec.blocking_mapping_errors;
+        if (Array.isArray(bme) && bme.length) {
+          const parts = bme
+            .map((x) => {
+              if (typeof x === 'object' && x !== null && 'message' in x) {
+                const m = (x as { message?: unknown }).message;
+                if (typeof m === 'string' && m.trim()) return m.trim();
+              }
+              return '';
+            })
+            .filter(Boolean);
+          if (parts.length) return parts.join(' ');
+        }
         const msg = rec.message;
         if (typeof msg === 'string' && msg.trim()) return msg.trim();
         const alt = rec.msg;

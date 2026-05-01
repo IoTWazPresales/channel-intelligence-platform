@@ -17,6 +17,151 @@ from app.storage.local import get_storage_backend
 # Targets persisted in column_mapping_memory (same JSON shape as PM: {target, confirmations}).
 DSI_MEMORY_TARGETS = frozenset(DSI_CANONICAL)
 
+# Legacy targets from shared default_field_mapping() / other importers — map to DSI when unambiguous.
+_LEGACY_TARGET_TO_DSI: dict[str, str] = {
+    "channel_code": "channel_key_token",
+    "sku": "product_identifier",
+    "customer_code": "customer_dealer_token",
+    "customer_name": "customer_dealer_token",
+    "distributor_code": "distributor_token",
+    "distributor_name": "distributor_token",
+    "region_code": "region_or_province_token",
+    "quantity": "quantity_sold",
+    "price": "unit_sellout_price_ex_tax_amount",
+    "preferred_distributor_code": "distributor_token",
+}
+
+
+def _header_customerish(header: str) -> bool:
+    nk = norm_header_key(str(header)) or ""
+    return any(
+        p in nk
+        for p in (
+            "customer",
+            "dealer",
+            "account",
+            "reseller",
+            "client",
+            "buyer",
+            "store",
+            "ship to",
+            "sold to",
+            "company",
+            "partner",
+        )
+    )
+
+
+def _header_productish(header: str) -> bool:
+    nk = norm_header_key(str(header)) or ""
+    if any(
+        p in nk
+        for p in (
+            "model",
+            "sku",
+            "part",
+            "product",
+            "item",
+            "mfg",
+            "device",
+            "variant",
+            "catalog",
+            "article",
+            "style",
+            "serial",
+            "material",
+            "description",
+        )
+    ):
+        return True
+    # Bare "name" / "title" from legacy heuristics: only treat as product if not clearly customer-oriented.
+    if nk in ("name", "title") and not _header_customerish(header):
+        return True
+    return False
+
+
+def sanitize_dsi_field_mapping(
+    headers: list[str],
+    mapping: dict[str, str],
+    *,
+    max_notices: int = 12,
+) -> tuple[dict[str, str], list[dict[str, str]]]:
+    """Strip or normalize targets that are not in DSI_CANONICAL (PM/customer-master bleed, legacy keys).
+
+    Returns (sanitized_mapping, notices) where notices use codes dsi_target_normalized / dsi_target_dropped.
+    """
+    header_set = set(headers)
+    notices: list[dict[str, str]] = []
+    out: dict[str, str] = {}
+
+    def _notice(code: str, message: str) -> None:
+        if len(notices) >= max_notices:
+            return
+        notices.append({"code": code, "message": message})
+
+    for src, tgt_raw in (mapping or {}).items():
+        if src not in header_set:
+            continue
+        tgt = str(tgt_raw).strip() if tgt_raw is not None else ""
+        if not tgt:
+            continue
+        if tgt in DSI_MEMORY_TARGETS:
+            out[src] = tgt
+            continue
+        if tgt in _LEGACY_TARGET_TO_DSI:
+            new_t = _LEGACY_TARGET_TO_DSI[tgt]
+            out[src] = new_t
+            _notice(
+                "dsi_target_normalized",
+                f"Column {src!r}: legacy target {tgt!r} was mapped to {new_t!r} for this import type.",
+            )
+            continue
+        if tgt == "name":
+            if _header_productish(src) and not _header_customerish(src):
+                out[src] = "product_identifier"
+                _notice(
+                    "dsi_target_normalized",
+                    f"Column {src!r}: legacy target 'name' was treated as product identifier for DSI.",
+                )
+            else:
+                _notice(
+                    "dsi_target_dropped",
+                    f"Column {src!r}: legacy target 'name' is not used for DSI (map explicitly to a DSI field).",
+                )
+            continue
+        _notice(
+            "dsi_target_dropped",
+            f"Column {src!r}: removed invalid DSI target {tgt!r}.",
+        )
+
+    return out, notices
+
+
+def column_samples_from_inferred(job: ImportJob) -> dict[str, list[str]]:
+    """2–5 short sample cell values per column from inferred_schema (no extra file read)."""
+    schema = job.inferred_schema or {}
+    out: dict[str, list[str]] = {}
+    for c in schema.get("columns") or []:
+        if not isinstance(c, dict):
+            continue
+        name = c.get("name")
+        if not name:
+            continue
+        raw = c.get("sample") or []
+        if not isinstance(raw, list):
+            continue
+        vals: list[str] = []
+        for x in raw[:5]:
+            if x is None:
+                continue
+            s = str(x).strip()
+            if not s or s.lower() == "nan":
+                continue
+            vals.append(s[:200])
+        if vals:
+            out[str(name)] = vals
+    return out
+
 
 def build_initial_dsi_field_mapping(
     db: Session,
@@ -38,7 +183,8 @@ def build_initial_dsi_field_mapping(
     for h, tgt in defaults.items():
         if h not in mapping:
             mapping[h] = tgt
-    return mapping
+    sanitized, _ = sanitize_dsi_field_mapping(headers, mapping)
+    return sanitized
 
 
 def dsi_mapping_gate_errors(mapping: dict[str, str]) -> list[dict[str, str]]:
@@ -49,14 +195,14 @@ def dsi_mapping_gate_errors(mapping: dict[str, str]) -> list[dict[str, str]]:
         errs.append(
             {
                 "code": "missing_column_mapping_distributor",
-                "message": "No source column is mapped to Distributor.",
+                "message": "Required column mapping missing: Distributor.",
             }
         )
     if "product_identifier" not in vals:
         errs.append(
             {
                 "code": "missing_column_mapping_product",
-                "message": "No source column is mapped to a product identifier (SKU / catalog key).",
+                "message": "Required column mapping missing: product identifier (SKU / part number / model / product code).",
             }
         )
     has_date = "transaction_date" in vals or "snapshot_date" in vals
@@ -64,7 +210,7 @@ def dsi_mapping_gate_errors(mapping: dict[str, str]) -> list[dict[str, str]]:
         errs.append(
             {
                 "code": "missing_column_mapping_date",
-                "message": "Map at least one date column to Transaction date or Snapshot / stock date.",
+                "message": "Required column mapping missing: map a date to Transaction / invoice date and/or Inventory snapshot date.",
             }
         )
     has_qty = "quantity_sold" in vals or "stock_on_hand" in vals
@@ -72,7 +218,7 @@ def dsi_mapping_gate_errors(mapping: dict[str, str]) -> list[dict[str, str]]:
         errs.append(
             {
                 "code": "missing_column_mapping_quantity",
-                "message": "Map at least one of Quantity sold or Stock on hand.",
+                "message": "Map at least one of Quantity sold or Stock on hand — the file must contribute sell-out and/or inventory rows.",
             }
         )
     return errs
@@ -140,9 +286,10 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
 
 def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
     """Serializable mapping UI payload."""
-    mapping = job.field_mapping or {}
-    gate = dsi_mapping_gate_errors(mapping)
     headers = list(job.file_headers or [])
+    raw_mapping = dict(job.field_mapping or {})
+    mapping, notices = sanitize_dsi_field_mapping(headers, raw_mapping)
+    gate = dsi_mapping_gate_errors(mapping)
     return {
         "id": job.id,
         "stage": job.stage,
@@ -152,4 +299,6 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
         "canonical_targets": sorted(DSI_MEMORY_TARGETS),
         "blocking_mapping_errors": gate,
         "mapping_valid": len(gate) == 0,
+        "column_samples": column_samples_from_inferred(job),
+        "mapping_adjustment_notices": notices,
     }

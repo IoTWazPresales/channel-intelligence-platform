@@ -304,7 +304,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 row_number=0,
                 severity="error",
                 code="missing_distributor_token_mapping",
-                message="No source column is mapped to Distributor.",
+                message="Required column mapping missing: Distributor.",
             )
         )
         return 1
@@ -315,7 +315,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 row_number=0,
                 severity="error",
                 code="missing_product_identifier_mapping",
-                message="No source column is mapped to a product identifier (SKU / catalog key).",
+                message="Required column mapping missing: product identifier (SKU / part number / model / product code).",
             )
         )
         return 1

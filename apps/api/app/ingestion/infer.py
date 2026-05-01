@@ -23,7 +23,7 @@ def infer_schema(df: pd.DataFrame) -> dict[str, Any]:
     for col in df.columns.astype(str).tolist():
         series = df[col]
         dtype = str(series.dtype)
-        raw_sample = series.dropna().head(3).tolist()
+        raw_sample = series.dropna().head(5).tolist()
         sample = [to_jsonable(x) for x in raw_sample]
         columns.append({"name": col, "dtype": dtype, "sample": sample})
     return {"row_count": int(len(df)), "columns": columns}

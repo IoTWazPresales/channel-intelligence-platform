@@ -9,7 +9,11 @@ from sqlalchemy import func, inspect, select
 
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
-from app.services.imports.dsi_mapping_workflow import dsi_mapping_gate_errors
+from app.services.imports.dsi_mapping_workflow import (
+    column_samples_from_inferred,
+    dsi_mapping_gate_errors,
+    sanitize_dsi_field_mapping,
+)
 from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct, DimRegion
 from app.models.facts import FactInboundShipment, FactInventoryDistributor, FactSalesSellout
 from app.models.import_distributor_si import (
@@ -246,12 +250,47 @@ def test_disti_header_maps_to_distributor_token(dsi_source_id: int) -> None:
         assert inv.get("distributor_token") == "DISTI"
 
 
-def test_dsi_mapping_gate_requires_date_and_quantity() -> None:
+def test_dsi_sanitize_channel_code_to_channel_key_token() -> None:
+    out, notes = sanitize_dsi_field_mapping(["Channel"], {"Channel": "channel_code"})
+    assert out == {"Channel": "channel_key_token"}
+    assert any(n["code"] == "dsi_target_normalized" for n in notes)
+
+
+def test_dsi_sanitize_name_to_product_when_productish_header() -> None:
+    out, _ = sanitize_dsi_field_mapping(["ModelName"], {"ModelName": "name"})
+    assert out == {"ModelName": "product_identifier"}
+
+
+def test_dsi_sanitize_name_dropped_for_customerish_header() -> None:
+    out, notes = sanitize_dsi_field_mapping(["Customer name"], {"Customer name": "name"})
+    assert "Customer name" not in out
+    assert any(n["code"] == "dsi_target_dropped" for n in notes)
+
+
+def test_dsi_sanitize_drops_unknown_targets() -> None:
+    out, notes = sanitize_dsi_field_mapping(["X"], {"X": "form_factor"})
+    assert "X" not in out
+    assert any("form_factor" in n["message"] for n in notes)
+
+
+def test_dsi_column_samples_from_inferred() -> None:
+    job = ImportJob()
+    job.inferred_schema = {
+        "columns": [
+            {"name": "sku", "dtype": "object", "sample": ["A", "B"]},
+        ]
+    }
+    s = column_samples_from_inferred(job)
+    assert s["sku"] == ["A", "B"]
+
+
+def test_dsi_mapping_gate_messages_include_required_wording() -> None:
     errs = dsi_mapping_gate_errors({"x": "distributor_token"})
     codes = {e["code"] for e in errs}
     assert "missing_column_mapping_product" in codes
     assert "missing_column_mapping_date" in codes
     assert "missing_column_mapping_quantity" in codes
+    assert any("Required column mapping missing" in e["message"] for e in errs)
     errs2 = dsi_mapping_gate_errors(
         {
             "d": "distributor_token",
@@ -276,7 +315,7 @@ def test_dsi_missing_mapping_message_vs_unresolved_distributor(dsi_source_id: in
             )
         ).first()
         assert miss is not None
-        assert "No source column is mapped to Distributor" in (miss.message or "")
+        assert "Required column mapping missing: Distributor" in (miss.message or "")
 
     job2 = _run_dsi_job(
         dsi_source_id,

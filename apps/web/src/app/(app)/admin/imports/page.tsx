@@ -49,6 +49,7 @@ import { apiGet, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
+import { dsiGateFromMapping, dsiSelectValue, dsiTargetLabel, formatDsiSamples } from './dsiStepUtils';
 import {
   initPmColumnDrafts,
   PM_GROUP_LABEL,
@@ -270,11 +271,6 @@ function describeTemplateBehavior(template: ImportTemplate | null, isPm: boolean
     default:
       return 'Runs the configured template pipeline for this import type.';
   }
-}
-
-function dsiTargetLabel(t: string): string {
-  if (t === 'ignored_shipping_evidence') return 'Ignored — shipping-like evidence (preserved only)';
-  return t.replace(/_/g, ' ');
 }
 
 function formatPmSamples(samples: unknown[] | undefined): string {
@@ -589,6 +585,8 @@ function AdminImportsPageContent() {
     canonical_targets: string[];
     blocking_mapping_errors: Array<{ code: string; message: string }>;
     mapping_valid: boolean;
+    column_samples?: Record<string, string[]>;
+    mapping_adjustment_notices?: Array<{ code: string; message: string }>;
   };
 
   const { data: dsiMappingState, refetch: refetchDsiMapping } = useQuery({
@@ -598,6 +596,21 @@ function AdminImportsPageContent() {
     enabled: Boolean(isDsi && lastJobId != null && activeStep >= 5),
   });
 
+  const dsiServerMappingGateOk = useMemo(
+    () => dsiGateFromMapping(dsiMappingState?.field_mapping ?? {}),
+    [dsiMappingState?.field_mapping]
+  );
+
+  const dsiCanonSet = useMemo(
+    () => new Set(dsiMappingState?.canonical_targets ?? []),
+    [dsiMappingState?.canonical_targets]
+  );
+
+  const dsiServerMappingKey = useMemo(
+    () => JSON.stringify(dsiMappingState?.field_mapping ?? {}),
+    [dsiMappingState?.field_mapping]
+  );
+
   useEffect(() => {
     if (!isDsi) return;
     setDsiMapDraft({});
@@ -605,11 +618,14 @@ function AdminImportsPageContent() {
 
   useEffect(() => {
     if (!isDsi || activeStep !== 5 || !dsiMappingState?.file_headers?.length) return;
-    setDsiMapDraft((prev) => {
-      if (Object.keys(prev).length > 0) return prev;
-      return { ...(dsiMappingState.field_mapping ?? {}) };
-    });
-  }, [isDsi, activeStep, dsiMappingState?.id, dsiMappingState?.file_headers, dsiMappingState?.field_mapping]);
+    const server = dsiMappingState.field_mapping ?? {};
+    const next: Record<string, string> = {};
+    for (const h of dsiMappingState.file_headers) {
+      const v = server[h];
+      if (v && dsiCanonSet.has(v)) next[h] = v;
+    }
+    setDsiMapDraft(next);
+  }, [isDsi, activeStep, dsiMappingState?.id, dsiServerMappingKey, dsiMappingState?.file_headers, dsiCanonSet]);
 
   const saveDsiMapping = useMutation({
     mutationFn: async () => {
@@ -641,8 +657,13 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
       void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
       void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', lastJobId] });
+      void refetchPreview();
     },
   });
+
+  useEffect(() => {
+    dsiValidate.reset();
+  }, [lastJobId]);
 
   const dsiApply = useMutation({
     mutationFn: async () => {
@@ -668,15 +689,7 @@ function AdminImportsPageContent() {
     },
   });
 
-  const dsiGateOk = useMemo(() => {
-    const vals = new Set(Object.values(dsiMapDraft));
-    return (
-      vals.has('distributor_token') &&
-      vals.has('product_identifier') &&
-      (vals.has('transaction_date') || vals.has('snapshot_date')) &&
-      (vals.has('quantity_sold') || vals.has('stock_on_hand'))
-    );
-  }, [dsiMapDraft]);
+  const dsiGateOk = useMemo(() => dsiGateFromMapping(dsiMapDraft), [dsiMapDraft]);
 
   // Derived data for the HL mapping review panel.
   const hlSheetDetail: HlSheetDetail | null =
@@ -2055,6 +2068,18 @@ function AdminImportsPageContent() {
                 ))}
               </Alert>
             ) : null}
+            {dsiMappingState?.mapping_adjustment_notices?.length ? (
+              <Alert severity="info" data-testid="dsi-mapping-adjustments">
+                <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                  Mapping adjustments
+                </Typography>
+                {dsiMappingState.mapping_adjustment_notices.map((n, i) => (
+                  <Typography key={`${n.code}-${i}`} variant="caption" display="block" color="text.secondary">
+                    {n.message}
+                  </Typography>
+                ))}
+              </Alert>
+            ) : null}
             <Table size="small" data-testid="dsi-mapping-table">
               <TableHead>
                 <TableRow>
@@ -2067,6 +2092,9 @@ function AdminImportsPageContent() {
                   <TableRow key={h}>
                     <TableCell>
                       <Typography fontWeight={600}>{h}</Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" data-testid={`dsi-samples-${h}`}>
+                        Examples: {formatDsiSamples(dsiMappingState?.column_samples?.[h])}
+                      </Typography>
                       <Typography variant="caption" color="text.secondary" display="block">
                         Auto: {dsiMappingState?.field_mapping?.[h] ? dsiTargetLabel(dsiMappingState.field_mapping[h]) : '—'}
                       </Typography>
@@ -2077,7 +2105,7 @@ function AdminImportsPageContent() {
                         <Select
                           labelId={`dsi-map-${h}`}
                           label="Target"
-                          value={dsiMapDraft[h] ?? ''}
+                          value={dsiSelectValue(dsiMapDraft[h], dsiCanonSet)}
                           displayEmpty
                           onChange={(e) => {
                             const v = e.target.value as string;
@@ -2133,12 +2161,29 @@ function AdminImportsPageContent() {
         {activeStep === 6 && isDsi && selectedTemplate ? (
           <Stack spacing={2}>
             <Typography variant="subtitle2">Validate (no fact writes)</Typography>
+            {!dsiServerMappingGateOk ? (
+              <Alert severity="warning" data-testid="dsi-validate-blocked">
+                Complete required column mappings on the previous step, then use <strong>Save mapping</strong> or{' '}
+                <strong>Save &amp; continue to validate</strong> before running validation.
+              </Alert>
+            ) : null}
             <Stack direction="row" spacing={1} alignItems="center">
-              <Button variant="contained" onClick={() => void dsiValidate.mutateAsync()} disabled={dsiValidate.isPending}>
+              <Button
+                variant="contained"
+                onClick={() => void dsiValidate.mutateAsync()}
+                disabled={dsiValidate.isPending || !dsiServerMappingGateOk}
+                data-testid="dsi-run-validation"
+              >
                 Run validation
               </Button>
             </Stack>
+            {dsiValidate.isPending ? <LinearProgress /> : null}
             {dsiValidate.isError ? <Alert severity="error">{safeDisplayError(dsiValidate.error)}</Alert> : null}
+            {dsiValidate.isSuccess ? (
+              <Alert severity="success" data-testid="dsi-validate-finished">
+                Validation finished. Review the summary and row diagnostics below.
+              </Alert>
+            ) : null}
             {lastJobId != null && distributorSiSummary ? (
               <Alert severity="info" data-testid="dsi-preview-summary">
                 <Typography variant="body2" sx={{ mb: 0.5 }}>

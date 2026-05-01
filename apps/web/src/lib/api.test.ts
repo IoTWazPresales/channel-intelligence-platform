@@ -40,6 +40,24 @@ describe('readFetchError', () => {
     await expect(readFetchError(res)).resolves.toBe('Product Master validation failed.');
   });
 
+  it('joins FastAPI blocking_mapping_errors messages for DSI-style 422 bodies', async () => {
+    const { readFetchError } = await import('./api');
+    const res = new Response(
+      JSON.stringify({
+        detail: {
+          blocking_mapping_errors: [
+            { code: 'missing_column_mapping_distributor', message: 'Required column mapping missing: Distributor.' },
+            { code: 'missing_column_mapping_product', message: 'Required column mapping missing: product identifier.' },
+          ],
+        },
+      }),
+      { status: 422 }
+    );
+    const msg = await readFetchError(res);
+    expect(msg).toContain('Distributor');
+    expect(msg).toContain('product identifier');
+  });
+
   it('replaces HTML error bodies with a short message', async () => {
     const { readFetchError } = await import('./api');
     const res = new Response('<!DOCTYPE html><html><body>500</body></html>', { status: 500 });
