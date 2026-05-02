@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { dsiGateFromMapping, dsiSelectValue, dsiTargetLabel } from './dsiStepUtils';
+import {
+  dsiContinueToApplyAllowed,
+  dsiGateFromMapping,
+  dsiSelectValue,
+  dsiTargetLabel,
+  parseDistributorSiSummaryFromRows,
+  stableFieldMappingJson,
+} from './dsiStepUtils';
 
 describe('dsiStepUtils', () => {
   it('uses friendly labels for key DSI targets', () => {
@@ -27,5 +34,38 @@ describe('dsiStepUtils', () => {
         d: 'quantity_sold',
       })
     ).toBe(true);
+  });
+
+  it('stableFieldMappingJson is order-independent', () => {
+    const a = stableFieldMappingJson({ b: 'x', a: 'y' });
+    const b = stableFieldMappingJson({ a: 'y', b: 'x' });
+    expect(a).toBe(b);
+  });
+
+  it('parseDistributorSiSummaryFromRows reads summary JSON before applied suffix', () => {
+    const rows = [
+      {
+        row_number: 0,
+        code: 'distributor_si_summary',
+        message: JSON.stringify({ staging_rows: 3, blocking_rows: 0, warning_rows: 1, aggregated_candidates: 0 }),
+      },
+    ];
+    expect(parseDistributorSiSummaryFromRows(rows)?.blocking_rows).toBe(0);
+  });
+
+  it('dsiContinueToApplyAllowed gates on job, mapping key, and blocking rows', () => {
+    const fm = { a: 'distributor_token' };
+    const key = `7::${stableFieldMappingJson(fm)}`;
+    const summary = { staging_rows: 1, blocking_rows: 0 };
+    expect(
+      dsiContinueToApplyAllowed(key, 7, fm, summary, { isValidating: false, hasServerGate: true })
+    ).toBe(true);
+    expect(
+      dsiContinueToApplyAllowed(key, 7, fm, { ...summary, blocking_rows: 2 }, { isValidating: false, hasServerGate: true })
+    ).toBe(false);
+    expect(dsiContinueToApplyAllowed(key, 7, { ...fm, b: 'x' }, summary, { isValidating: false, hasServerGate: true })).toBe(
+      false
+    );
+    expect(dsiContinueToApplyAllowed(key, 7, fm, summary, { isValidating: true, hasServerGate: true })).toBe(false);
   });
 });

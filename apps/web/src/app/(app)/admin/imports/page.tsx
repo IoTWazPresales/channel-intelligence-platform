@@ -39,7 +39,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
 import NextLink from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
@@ -49,7 +49,7 @@ import { apiGet, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
-import { dsiGateFromMapping, dsiSelectValue, dsiTargetLabel, formatDsiSamples } from './dsiStepUtils';
+import { dsiContinueToApplyAllowed, dsiGateFromMapping, dsiSelectValue, dsiTargetLabel, formatDsiSamples, parseDistributorSiSummaryFromRows, stableFieldMappingJson } from './dsiStepUtils';
 import {
   initPmColumnDrafts,
   PM_GROUP_LABEL,
@@ -542,23 +542,8 @@ function AdminImportsPageContent() {
   }, [previewRows, selectedSlug]);
 
   const distributorSiSummary = useMemo(() => {
-    if (selectedSlug !== 'distributor_inventory' || !previewRows?.length) return null;
-    const row = previewRows.find((r) => r.row_number === 0 && r.code === 'distributor_si_summary');
-    if (!row?.message) return null;
-    const raw = row.message;
-    const cut = raw.indexOf(' Applied sell-out');
-    const jsonPart = cut === -1 ? raw : raw.slice(0, cut);
-    try {
-      return JSON.parse(jsonPart) as {
-        staging_rows?: number;
-        blocking_rows?: number;
-        warning_rows?: number;
-        aggregated_candidates?: number;
-        import_mode?: string;
-      };
-    } catch {
-      return null;
-    }
+    if (selectedSlug !== 'distributor_inventory') return null;
+    return parseDistributorSiSummaryFromRows(previewRows);
   }, [previewRows, selectedSlug]);
 
   const { data: dsiCandidates } = useQuery({
@@ -608,14 +593,33 @@ function AdminImportsPageContent() {
   );
 
   const dsiServerMappingKey = useMemo(
-    () => JSON.stringify(dsiMappingState?.field_mapping ?? {}),
+    () => stableFieldMappingJson(dsiMappingState?.field_mapping),
     [dsiMappingState?.field_mapping]
   );
+
+  const [dsiContinueGateKey, setDsiContinueGateKey] = useState<string | null>(null);
+  const dsiMappingStateRef = useRef(dsiMappingState);
+  dsiMappingStateRef.current = dsiMappingState;
+  const lastJobIdRef = useRef(lastJobId);
+  lastJobIdRef.current = lastJobId;
 
   useEffect(() => {
     if (!isDsi) return;
     setDsiMapDraft({});
+    setDsiContinueGateKey(null);
   }, [isDsi, lastJobId]);
+
+  const dsiMappingDraftDirty = useMemo(() => {
+    if (!isDsi || !dsiMappingState?.file_headers?.length) return false;
+    const server = dsiMappingState.field_mapping ?? {};
+    for (const h of dsiMappingState.file_headers) {
+      if ((dsiMapDraft[h] ?? '') !== (server[h] ?? '')) return true;
+    }
+    for (const k of Object.keys(dsiMapDraft)) {
+      if (!dsiMappingState.file_headers.includes(k) && dsiMapDraft[k]) return true;
+    }
+    return false;
+  }, [isDsi, dsiMapDraft, dsiMappingState?.field_mapping, dsiMappingState?.file_headers]);
 
   useEffect(() => {
     if (!isDsi || activeStep !== 5 || !dsiMappingState?.file_headers?.length) return;
@@ -641,6 +645,7 @@ function AdminImportsPageContent() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
+      setDsiContinueGateKey(null);
     },
   });
 
@@ -654,13 +659,24 @@ function AdminImportsPageContent() {
       if (!res.ok) throw new Error(await readFetchError(res));
       return res.json() as Promise<DsiMappingState>;
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', lastJobId] });
-      void refetchPreview();
+    onSuccess: async () => {
+      const jid = lastJobIdRef.current;
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', jid] });
+      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', jid] });
+      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', jid] });
+      const { data: rows } = await refetchPreview();
+      await refetchDsiMapping();
+      const summ = parseDistributorSiSummaryFromRows(rows ?? undefined);
+      const fm = dsiMappingStateRef.current?.field_mapping ?? {};
+      const key = `${jid ?? ''}::${stableFieldMappingJson(fm)}`;
+      if (summ && (summ.blocking_rows ?? 0) === 0) {
+        setDsiContinueGateKey(key);
+      } else {
+        setDsiContinueGateKey(null);
+      }
     },
     onError: () => {
+      setDsiContinueGateKey(null);
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
       void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
@@ -699,6 +715,31 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
   });
+
+  const dsiCanContinueToApply = useMemo(
+    () =>
+      dsiContinueToApplyAllowed(dsiContinueGateKey, lastJobId, dsiMappingState?.field_mapping, distributorSiSummary, {
+        isValidating: dsiValidate.isPending,
+        hasServerGate: dsiServerMappingGateOk,
+      }),
+    [
+      dsiContinueGateKey,
+      lastJobId,
+      dsiMappingState?.field_mapping,
+      distributorSiSummary,
+      dsiValidate.isPending,
+      dsiServerMappingGateOk,
+    ]
+  );
+
+  const dsiHasValidateResult = Boolean(distributorSiSummary) || dsiValidate.isSuccess || dsiValidate.isError;
+
+  useEffect(() => {
+    if (!isDsi || !dsiMappingDraftDirty) return;
+    setDsiContinueGateKey(null);
+    dsiValidate.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when draft diverges from saved server mapping
+  }, [isDsi, dsiMappingDraftDirty]);
 
   const dsiGateOk = useMemo(() => dsiGateFromMapping(dsiMapDraft), [dsiMapDraft]);
 
@@ -2187,21 +2228,18 @@ function AdminImportsPageContent() {
                 <strong>Save &amp; continue to validate</strong> before running validation.
               </Alert>
             ) : null}
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Button
-                variant="contained"
-                onClick={() => void dsiValidate.mutateAsync()}
-                disabled={dsiValidate.isPending || !dsiServerMappingGateOk}
-                data-testid="dsi-run-validation"
-              >
-                Run validation
-              </Button>
-            </Stack>
             {dsiValidate.isPending ? <LinearProgress /> : null}
             {dsiValidate.isError ? <Alert severity="error">{safeDisplayError(dsiValidate.error)}</Alert> : null}
             {dsiValidate.isSuccess ? (
-              <Alert severity="success" data-testid="dsi-validate-finished">
-                Validation finished. Review the summary and row diagnostics below.
+              <Alert
+                severity={
+                  distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0 ? 'warning' : 'success'
+                }
+                data-testid="dsi-validate-finished"
+              >
+                {distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0
+                  ? 'Validation finished with blocking issues. Fix mappings or source data, then re-run validation before applying.'
+                  : 'Validation finished. Review the summary and row diagnostics below.'}
               </Alert>
             ) : null}
             {lastJobId != null && distributorSiSummary ? (
@@ -2245,11 +2283,34 @@ function AdminImportsPageContent() {
                 </TableBody>
               </Table>
             ) : null}
-            <Stack direction="row" spacing={1}>
-              <Button onClick={() => setActiveStep(5)}>Back</Button>
-              <Button variant="contained" onClick={() => setActiveStep(7)}>
-                Continue to apply
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+              <Button onClick={() => setActiveStep(5)} disabled={dsiValidate.isPending}>
+                Back
               </Button>
+              {dsiCanContinueToApply ? (
+                <>
+                  <Button
+                    variant="outlined"
+                    onClick={() => void dsiValidate.mutateAsync()}
+                    disabled={dsiValidate.isPending || !dsiServerMappingGateOk}
+                    data-testid="dsi-rerun-validation"
+                  >
+                    {dsiValidate.isPending ? 'Validating…' : 'Re-run validation'}
+                  </Button>
+                  <Button variant="contained" onClick={() => setActiveStep(7)} data-testid="dsi-continue-to-apply">
+                    Continue to apply
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="contained"
+                  onClick={() => void dsiValidate.mutateAsync()}
+                  disabled={dsiValidate.isPending || !dsiServerMappingGateOk}
+                  data-testid="dsi-run-validation"
+                >
+                  {dsiValidate.isPending ? 'Validating…' : dsiHasValidateResult ? 'Re-run validation' : 'Run validation'}
+                </Button>
+              )}
             </Stack>
           </Stack>
         ) : null}
