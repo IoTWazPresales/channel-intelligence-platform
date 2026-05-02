@@ -294,7 +294,7 @@ function AdminProductsPageContent() {
     (id: number) => {
       delProduct.mutate(id);
     },
-    [delProduct.mutate]
+    [delProduct]
   );
 
   const onCellValueChanged = useCallback(
@@ -494,7 +494,7 @@ function AdminProductsPageContent() {
     [gridApi, persistGridState]
   );
 
-  const rows = products?.items ?? [];
+  const rows = useMemo(() => products?.items ?? [], [products?.items]);
   const total = products?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const categories = useMemo(() => {

@@ -6,17 +6,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
-import CommercialPlannerPage, {
-  fmtMarginPct,
+import CommercialPlannerPage from './page';
+import {
+  economicsBlockingTooltip,
   fmtCurrency,
   fmtFlag,
   fmtIssueChipLabel,
+  fmtMarginPct,
   fmtModelSalesModel,
-  economicsBlockingTooltip,
   lineHasBlockingEconomicsFlags,
   roundPlannerUnits,
   sugTypeLabel,
-} from './page';
+} from '@/features/commercial-planner/plannerPageFormatters';
 
 const mockState = vi.hoisted(() => {
   /** Single mutable bag so defaultApiGetImpl always reads current lineupJobs / coverageLines / etc. */

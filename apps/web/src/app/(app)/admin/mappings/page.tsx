@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
-import { useCallback, useMemo, useState } from 'react';
+import { Suspense, useCallback, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
@@ -75,7 +75,7 @@ function adminBrowseHref(entityType: string): string | null {
   }
 }
 
-export default function AdminMappingsPage() {
+function AdminMappingsPageContent() {
   const searchParams = useSearchParams();
   const importJobIdParam = searchParams.get('import_job_id');
   const { jobId: importJobId, invalid: invalidJobIdParam } = useMemo(
@@ -381,5 +381,21 @@ export default function AdminMappingsPage() {
         </ModuleDataSection>
       </Paper>
     </>
+  );
+}
+
+export default function AdminMappingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <Box sx={{ p: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            Loading mappings…
+          </Typography>
+        </Box>
+      }
+    >
+      <AdminMappingsPageContent />
+    </Suspense>
   );
 }

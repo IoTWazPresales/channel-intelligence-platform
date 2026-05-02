@@ -1988,7 +1988,7 @@ export function CurrentLineupSection({
     enabled: activeCaseId != null && activePlanId != null && workingLinesUrl != null,
   });
 
-  const workingLines = workingLinesData?.lines ?? [];
+  const workingLines = useMemo(() => workingLinesData?.lines ?? [], [workingLinesData?.lines]);
   const workbenchCounts = workingLinesData?.workbench_counts;
 
   const showSyncWorkbenchCol = useMemo(
