@@ -1,11 +1,12 @@
 'use client';
 
 import { Alert, Box, Button, Paper, Stack, Typography } from '@mui/material';
+import type { GridOptions, RowClickedEvent } from 'ag-grid-community';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
@@ -14,6 +15,8 @@ import { PageHeader } from '@/components/PageHeader';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiGet, apiPost, apiUrl } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
+
+import { DsiCandidateStewardPanel } from './DsiCandidateStewardPanel';
 
 type LegacyRow = {
   id: number;
@@ -39,9 +42,9 @@ type DsiMappingCandidateRow = {
   match_reason: string | null;
   confidence_score: number | null;
   status: string;
-  context: unknown;
-  created_at: string | null;
-  updated_at: string | null;
+  context: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 function parseImportJobId(raw: string | null): { jobId: number | null; invalid: boolean } {
@@ -79,6 +82,8 @@ export default function AdminMappingsPage() {
     () => parseImportJobId(importJobIdParam),
     [importJobIdParam]
   );
+
+  const [dsiSelected, setDsiSelected] = useState<DsiMappingCandidateRow | null>(null);
 
   const qc = useQueryClient();
   const {
@@ -131,6 +136,18 @@ export default function AdminMappingsPage() {
   const clearAll = useMutation({
     mutationFn: () => apiPost<{ deleted: number }>('/api/v1/mappings/queue/clear-all', { confirm: true }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['mapping-queue'] }),
+  });
+  const revalidateJob = useMutation({
+    mutationFn: async () => {
+      if (importJobId == null) throw new Error('Missing import job');
+      return apiPost<{ ok: boolean }>(
+        `/api/v1/mappings/import-jobs/${importJobId}/revalidate-distributor-sales-inventory`
+      );
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: dsiQueryKey });
+      void refetchDsi();
+    },
   });
 
   const legacyColDefs: ColDef<LegacyRow>[] = useMemo(() => {
@@ -195,6 +212,17 @@ export default function AdminMappingsPage() {
       },
     ],
     []
+  );
+
+  const onDsiRowClicked = useCallback((e: RowClickedEvent<DsiMappingCandidateRow>) => {
+    if (e.data) setDsiSelected(e.data);
+  }, []);
+
+  const dsiGridOptions = useMemo<GridOptions<DsiMappingCandidateRow>>(
+    () => ({
+      onRowClicked: onDsiRowClicked,
+    }),
+    [onDsiRowClicked]
   );
 
   const legacyRows = legacyData ?? [];
@@ -305,23 +333,42 @@ export default function AdminMappingsPage() {
                   DSI grouped import candidates (ImportEntityMappingCandidate)
                 </Typography>
                 <Alert severity="info" sx={{ mb: 1 }}>
-                  Resolution actions (approve queue rows, alias APIs) for these aggregated groups are not fully wired in
-                  the UI yet — review counts and tokens here, then use{' '}
-                  <Button component={Link} href="/admin/imports" size="small" variant="text">
-                    Data &amp; imports
-                  </Button>{' '}
-                  and existing steward flows. Customer tokens can be approved via{' '}
-                  <code>POST /api/v1/mappings/customer-source-token-aliases</code> (existing master rows only).
+                  Customer/dealer names vary by source—saving a mapping creates an <strong>approved alias</strong> so
+                  future uploads resolve automatically. Use <strong>Revalidate import job</strong> after changes to
+                  refresh staging and candidate groups for this job.
                 </Alert>
                 {dsiIsError ? (
                   <Alert severity="error">Could not load DSI candidates for this job.</Alert>
                 ) : hasDsiGroups ? (
                   <>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }} data-testid="dsi-candidate-count">
-                      {dsiRows.length} grouped import candidate group{dsiRows.length !== 1 ? 's' : ''} need review for
-                      DSI job #{importJobId}.
-                    </Typography>
-                    <EnterpriseDataGrid rowData={dsiRows} columnDefs={dsiColDefs} height={420} />
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
+                      <Typography variant="body2" color="text.secondary" data-testid="dsi-candidate-count">
+                        {dsiRows.length} grouped import candidate group{dsiRows.length !== 1 ? 's' : ''} need review for
+                        DSI job #{importJobId}.
+                      </Typography>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={revalidateJob.isPending}
+                        onClick={() => void revalidateJob.mutateAsync()}
+                        data-testid="dsi-revalidate-job"
+                      >
+                        Revalidate import job
+                      </Button>
+                    </Stack>
+                    <EnterpriseDataGrid
+                      rowData={dsiRows}
+                      columnDefs={dsiColDefs}
+                      height={420}
+                      gridOptions={dsiGridOptions}
+                    />
+                    {importJobId != null ? (
+                      <DsiCandidateStewardPanel
+                        importJobId={importJobId}
+                        candidate={dsiSelected}
+                        onDone={() => void refetchDsi()}
+                      />
+                    ) : null}
                   </>
                 ) : dsiFetched ? (
                   <Typography variant="body2" color="text.secondary">

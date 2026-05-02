@@ -98,3 +98,26 @@ class CustomerSourceTokenAlias(Base, TimestampMixin):
     dealer_group_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="approved", nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_from_import_job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True
+    )
+    import_entity_mapping_candidate_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_entity_mapping_candidate.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class DistributorSourceTokenAlias(Base, TimestampMixin):
+    """Steward-approved mapping from a raw distributor-reported token to dim_distributor."""
+
+    __tablename__ = "distributor_source_token_alias"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id", ondelete="CASCADE"), nullable=False)
+    source_definition_id: Mapped[int | None] = mapped_column(ForeignKey("source_definition.id"), nullable=True)
+    raw_token: Mapped[str] = mapped_column(String(512), nullable=False)
+    normalized_token: Mapped[str] = mapped_column(String(512), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="approved", nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_from_import_job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True
+    )

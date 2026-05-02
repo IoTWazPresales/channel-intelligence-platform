@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from datetime import date
 
 import pytest
@@ -18,6 +19,7 @@ from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimPr
 from app.models.facts import FactInboundShipment, FactInventoryDistributor, FactSalesSellout
 from app.models.import_distributor_si import (
     CustomerSourceTokenAlias,
+    DistributorSourceTokenAlias,
     ImportDistributorSiStagingLine,
     ImportEntityMappingCandidate,
 )
@@ -483,6 +485,146 @@ def test_dsi_mapping_candidates_http_matches_db_and_job_scope(dsi_source_id: int
     # Windows + Starlette TestClient can leave asyncpg's transport attached to a closed loop; dispose the
     # async engine so the next test module's TestClient gets a clean pool (mirrors teardown concerns in
     # tests/test_historical_lineup_import.py).
+    import asyncio
+
+    from app.db import session as db_session
+
+    async def _dispose() -> None:
+        await db_session.engine.dispose()
+
+    asyncio.run(_dispose())
+
+
+def test_dsi_candidate_steward_map_customer_and_alias_persisted(dsi_source_id: int) -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with SessionLocal() as db:
+        if "distributor_source_token_alias" not in set(inspect(db.connection()).get_table_names()):
+            pytest.skip("Apply migration 20260430_0027 (distributor_source_token_alias).")
+    token = f"Steward Map Dealer {secrets.token_hex(4)}"
+    csv = f"distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-03-10,1,{token},1\n"
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_steward_cust.csv")
+    with SessionLocal() as db:
+        cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
+        assert cust is not None
+        cand = db.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == job.id,
+                ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+            )
+        ).first()
+        assert cand is not None
+        cand_id = cand.id
+        cust_id = cust.id
+    with TestClient(app) as client:
+        r = client.post(f"/api/v1/mappings/import-candidates/{cand_id}/map-customer", json={"customer_id": cust_id})
+        assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        cand2 = db.get(ImportEntityMappingCandidate, cand_id)
+        assert cand2 is not None
+        assert cand2.status == "resolved"
+        assert cand2.suggested_entity_id == cust_id
+        alias_n = db.scalar(
+            select(func.count()).select_from(CustomerSourceTokenAlias).where(
+                CustomerSourceTokenAlias.customer_id == cust_id,
+                CustomerSourceTokenAlias.import_entity_mapping_candidate_id == cand_id,
+            )
+        )
+        assert int(alias_n or 0) >= 1
+
+    import asyncio
+
+    from app.db import session as db_session
+
+    async def _dispose() -> None:
+        await db_session.engine.dispose()
+
+    asyncio.run(_dispose())
+
+
+def test_dsi_candidate_steward_distributor_alias_then_revalidate_resolves(dsi_source_id: int) -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with SessionLocal() as db:
+        if "distributor_source_token_alias" not in set(inspect(db.connection()).get_table_names()):
+            pytest.skip("Apply migration 20260430_0027 (distributor_source_token_alias).")
+    dist_code = f"NOVEL-DIST-{secrets.token_hex(4)}"
+    csv = f"distributor_code,sku,date,qty,customer_name,soh\n{dist_code},SKU-ALPHA-01,2024-03-12,1,CUST-1001,1\n"
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_steward_dist.csv")
+    with SessionLocal() as db:
+        cand = db.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == job.id,
+                ImportEntityMappingCandidate.entity_type == "distributor_token",
+            )
+        ).first()
+        assert cand is not None
+        cand_id = cand.id
+    with TestClient(app) as client:
+        r = client.post(
+            f"/api/v1/mappings/import-candidates/{cand_id}/create-provisional-distributor",
+            json={"display_name": f"Novel Disti {dist_code}", "confirm_for_suspicious_token": False},
+        )
+        assert r.status_code == 200, r.text
+        dist_id = r.json()["distributor_id"]
+    with SessionLocal() as db:
+        n_alias = db.scalar(select(func.count()).select_from(DistributorSourceTokenAlias))
+        assert int(n_alias or 0) >= 1
+    csv2 = f"distributor_code,sku,date,qty,customer_name,soh\n{dist_code},SKU-ALPHA-01,2024-03-13,1,CUST-1001,1\n"
+    job2 = _run_dsi_job(dsi_source_id, _csv_bytes(csv2), import_mode="validate", filename="dsi_steward_dist2.csv")
+    with SessionLocal() as db:
+        line = db.scalars(
+            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == job2.id)
+        ).first()
+        assert line is not None
+        assert line.resolved_distributor_id == dist_id
+
+    import asyncio
+
+    from app.db import session as db_session
+
+    async def _dispose() -> None:
+        await db_session.engine.dispose()
+
+    asyncio.run(_dispose())
+
+
+def test_dsi_candidate_open_channel_named_requires_confirm(dsi_source_id: int) -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with SessionLocal() as db:
+        if "distributor_source_token_alias" not in set(inspect(db.connection()).get_table_names()):
+            pytest.skip("Apply migration 20260430_0027 (distributor_source_token_alias).")
+    token = f"Named Dealer OC {secrets.token_hex(4)}"
+    csv = f"distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-03-14,1,{token},1\n"
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_steward_oc.csv")
+    with SessionLocal() as db:
+        cand = db.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == job.id,
+                ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+            )
+        ).first()
+        assert cand is not None
+        cand_id = cand.id
+    with TestClient(app) as client:
+        r = client.post(
+            f"/api/v1/mappings/import-candidates/{cand_id}/mark-open-channel",
+            json={"confirm_for_named_dealer": False, "confirm_for_strategic_channel_hint": False},
+        )
+        assert r.status_code == 400
+        r2 = client.post(
+            f"/api/v1/mappings/import-candidates/{cand_id}/mark-open-channel",
+            json={"confirm_for_named_dealer": True, "confirm_for_strategic_channel_hint": False},
+        )
+        assert r2.status_code == 200, r2.text
+
     import asyncio
 
     from app.db import session as db_session

@@ -18,6 +18,7 @@ from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactInventoryDistributor, FactSalesSellout
 from app.models.import_distributor_si import (
     CustomerSourceTokenAlias,
+    DistributorSourceTokenAlias,
     ImportDistributorSiStagingLine,
     ImportEntityMappingCandidate,
 )
@@ -61,6 +62,24 @@ SENTINEL_CUSTOMER_TOKENS = frozenset(
 )
 
 DEALER_GROUP_PLACEHOLDER_SUBSTRINGS = ("to be mapped", "tbd", "unknown", "pending mapping")
+
+# Channel / marketplace hints for steward review (generic; not region-specific).
+STRATEGIC_CHANNEL_HINT_SUBSTRINGS = (
+    "amazon",
+    "takealot",
+    "makro",
+    "massmart",
+    "game ",
+    " game",
+    "incredible connection",
+    "walmart",
+    "ebay",
+    "alibaba",
+    "shopify",
+    "marketplace",
+    "etail",
+    "e-tail",
+)
 
 
 def _norm_key(s: str | None) -> str:
@@ -149,10 +168,34 @@ def _resolve_product(
     return None, "unresolved_product"
 
 
-def _resolve_distributor(db: Session, raw: str | None) -> tuple[int | None, str | None]:
+def _alias_distributor_id(db: Session, source_id: int | None, normalized_token: str) -> int | None:
+    if not normalized_token:
+        return None
+    q = select(DistributorSourceTokenAlias.distributor_id).where(
+        DistributorSourceTokenAlias.normalized_token == normalized_token,
+        DistributorSourceTokenAlias.status == "approved",
+    )
+    if source_id is not None:
+        q = q.where(
+            or_(
+                DistributorSourceTokenAlias.source_definition_id.is_(None),
+                DistributorSourceTokenAlias.source_definition_id == source_id,
+            )
+        )
+    rows = list(dict.fromkeys(db.scalars(q).all()))
+    if len(rows) == 1:
+        return int(rows[0])
+    return None
+
+
+def _resolve_distributor(db: Session, raw: str | None, source_id: int | None = None) -> tuple[int | None, str | None]:
     if not raw or not str(raw).strip():
         return None, "missing_distributor_cell_value"
     token = raw.strip().lower()
+    nt = _norm_key(raw)
+    alias_id = _alias_distributor_id(db, source_id, nt)
+    if alias_id is not None:
+        return alias_id, None
     for d in db.scalars(select(DimDistributor)).all():
         if d.code.strip().lower() == token or d.name.strip().lower() == token:
             return d.id, None
@@ -337,6 +380,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             "total_units": Decimal(0),
             "total_value": Decimal(0),
             "samples": [],
+            "strategic_channel_hint": False,
         }
     )
 
@@ -386,7 +430,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         diag: list[str] = []
         sev = "info"
 
-        rdid, derr = _resolve_distributor(db, dist_raw)
+        rdid, derr = _resolve_distributor(db, dist_raw, source_def_id)
         if derr:
             diag.append(derr)
             sev = "error"
@@ -525,6 +569,9 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 a["total_value"] += abs(reported_rev)
             if len(a["samples"]) < 5:
                 a["samples"].append(cust_raw or "")
+            chv = (ch_raw or "").strip().lower()
+            if chv and any(h in chv for h in STRATEGIC_CHANNEL_HINT_SUBSTRINGS):
+                a["strategic_channel_hint"] = True
 
     for (etype, nkey), data in agg.items():
         dg = None
@@ -544,7 +591,12 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             total_reported_value=float(data["total_value"]) if data["total_value"] else None,
             sample_raw_values=to_jsonable(data["samples"][:5]),
             status="needs_review",
-            context=to_jsonable({"aggregated": True}),
+            context=to_jsonable(
+                {
+                    "aggregated": True,
+                    **({"strategic_channel_hint": True} if data.get("strategic_channel_hint") else {}),
+                }
+            ),
         )
         db.add(cand)
 
