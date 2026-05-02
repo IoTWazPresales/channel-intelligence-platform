@@ -31,17 +31,89 @@ class DimDistributor(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(256), nullable=False)
 
 
+class DistributorLocation(Base, TimestampMixin):
+    __tablename__ = "distributor_location"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id"), nullable=False, index=True)
+    location_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    location_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    location_type: Mapped[str] = mapped_column(String(32), nullable=False, default="branch")
+    country_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    address_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notes_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    distributor: Mapped["DimDistributor"] = relationship()
+
+
+class DistributorContact(Base, TimestampMixin):
+    __tablename__ = "distributor_contact"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id"), nullable=False, index=True)
+    contact_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    contact_role: Mapped[str] = mapped_column(String(32), nullable=False, default="general")
+    email: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notes_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    distributor: Mapped["DimDistributor"] = relationship()
+
+
 class DimCustomer(Base, TimestampMixin):
     __tablename__ = "dim_customer"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
+    customer_status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
+    partner_tier: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    account_owner_internal: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    notes_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)
     region_id: Mapped[int | None] = mapped_column(ForeignKey("dim_region.id"), nullable=True)
     channel_id: Mapped[int | None] = mapped_column(ForeignKey("dim_channel.id"), nullable=True)
+    preferred_distributor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_distributor.id"), nullable=True
+    )
 
     region: Mapped["DimRegion | None"] = relationship()
     channel: Mapped["DimChannel | None"] = relationship()
+    preferred_distributor: Mapped["DimDistributor | None"] = relationship()
+
+
+class CustomerLocation(Base, TimestampMixin):
+    __tablename__ = "customer_location"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False, index=True)
+    location_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    location_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    location_type: Mapped[str] = mapped_column(String(32), nullable=False, default="store")
+    region_id: Mapped[int | None] = mapped_column(ForeignKey("dim_region.id"), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notes_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    customer: Mapped["DimCustomer"] = relationship()
+    region: Mapped["DimRegion | None"] = relationship()
+
+
+class CustomerContact(Base, TimestampMixin):
+    __tablename__ = "customer_contact"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False, index=True)
+    contact_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    contact_role: Mapped[str] = mapped_column(String(32), nullable=False, default="general")
+    email: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notes_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    customer: Mapped["DimCustomer"] = relationship()
 
 
 class DimProduct(Base, TimestampMixin):
