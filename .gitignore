@@ -40,3 +40,13 @@ blob-report/
 # Alembic (optional local)
 # Turbo / pnpm
 .turbo/
+
+# Local IDE / tool churn (never commit)
+.specstory/
+
+# TypeScript incremental build cache (regenerated)
+**/tsconfig.tsbuildinfo
+
+# Accidental DB dumps / one-off scratch files
+*.dump
+queryex
