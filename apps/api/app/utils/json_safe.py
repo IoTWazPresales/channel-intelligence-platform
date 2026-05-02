@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -108,3 +109,17 @@ def to_jsonable(value: Any, *, _depth: int = 0) -> Any:
             return str(value)
 
     return str(value)
+
+
+def verify_json_serializable(label: str, payload: Any) -> None:
+    """Ensure ``payload`` is safe for PostgreSQL JSONB after ``to_jsonable`` (DSI staging / audit).
+
+    Raises ``ValueError`` with a user-safe message if serialization still fails.
+    """
+    try:
+        json.dumps(to_jsonable(payload), allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "Uploaded row contains a value that could not be converted for audit storage "
+            f"({label}): {exc}"
+        ) from exc

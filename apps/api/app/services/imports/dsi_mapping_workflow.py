@@ -294,6 +294,7 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
         "id": job.id,
         "stage": job.stage,
         "status": job.status,
+        "error_summary": job.error_summary,
         "file_headers": headers,
         "field_mapping": mapping,
         "canonical_targets": sorted(DSI_MEMORY_TARGETS),

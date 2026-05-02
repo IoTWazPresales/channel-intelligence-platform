@@ -390,6 +390,13 @@ async def post_dsi_validate(job_id: int, db: AsyncSession = Depends(get_db)):
     with SessionLocal() as sync_db:
         process_import_job_sync(sync_db, job_id)
     job2 = await db.get(ImportJob, job_id)
+    if job2 is not None:
+        await db.refresh(job2)
+    if job2 and job2.status == "failed":
+        raise HTTPException(
+            status_code=422,
+            detail=job2.error_summary or "Import job failed during validation.",
+        )
     return dsi_mapping_state_dict(job2) if job2 else {}
 
 
@@ -423,6 +430,13 @@ async def post_dsi_apply(
     with SessionLocal() as sync_db:
         process_import_job_sync(sync_db, job_id)
     job2 = await db.get(ImportJob, job_id)
+    if job2 is not None:
+        await db.refresh(job2)
+    if job2 and job2.status == "failed":
+        raise HTTPException(
+            status_code=422,
+            detail=job2.error_summary or "Import job failed during apply.",
+        )
     return dsi_mapping_state_dict(job2) if job2 else {}
 
 

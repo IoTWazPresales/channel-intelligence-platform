@@ -24,7 +24,7 @@ from app.models.import_distributor_si import (
 from app.models.ingestion import ImportJob, ImportRowResult
 from app.models.mapping import ProductAlias
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
-from app.utils.json_safe import to_jsonable
+from app.utils.json_safe import to_jsonable, verify_json_serializable
 
 CANONICAL = (
     "distributor_token",
@@ -277,19 +277,20 @@ def _build_mapped_canonical(
     mapping: dict[str, str],
     ignored_cols: list[str],
 ) -> dict[str, Any]:
+    """Build JSON-serializable canonical snapshot (Excel/pandas cells may be Timestamp, numpy, Decimal)."""
     out: dict[str, Any] = {}
     for src, tgt in mapping.items():
         if tgt in CANONICAL and tgt != "ignored_shipping_evidence":
             v = row.get(src)
             if v is not None and not (isinstance(v, float) and pd.isna(v)):
-                out[tgt] = v
+                out[tgt] = to_jsonable(v)
     if ignored_cols:
         ship: dict[str, Any] = {}
         for c in ignored_cols:
             if c in row.index:
                 v = row.get(c)
                 if v is not None and not (isinstance(v, float) and pd.isna(v)):
-                    ship[c] = v
+                    ship[str(c)] = to_jsonable(v)
         if ship:
             out["ignored_shipping_evidence"] = ship
     return out
@@ -347,6 +348,8 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         rn = int(idx) + 1
         raw_payload = {str(k): to_jsonable(row[k]) for k in row.index}
         mapped = _build_mapped_canonical(row, mapping, ignored_src_cols)
+        verify_json_serializable("raw_row_payload", raw_payload)
+        verify_json_serializable("mapped_canonical", mapped)
 
         dist_raw = _clean_str(row.get(_col(mapping, "distributor_token"))) if _col(mapping, "distributor_token") else None
         prod_raw = _clean_str(row.get(_col(mapping, "product_identifier"))) if _col(mapping, "product_identifier") else None
@@ -539,9 +542,9 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             row_count=int(data["row_count"]),
             total_units=float(data["total_units"]) if data["total_units"] else None,
             total_reported_value=float(data["total_value"]) if data["total_value"] else None,
-            sample_raw_values=data["samples"][:5],
+            sample_raw_values=to_jsonable(data["samples"][:5]),
             status="needs_review",
-            context={"aggregated": True},
+            context=to_jsonable({"aggregated": True}),
         )
         db.add(cand)
 
@@ -651,13 +654,15 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             if parts:
                 line.apply_status = "+".join(parts)
         meta = dict(job.staged_metadata or {})
-        meta["distributor_si"] = {
-            "applied": True,
-            "applied_at": datetime.now(timezone.utc).isoformat(),
-            "sellout_rows": applied_sell,
-            "inventory_rows": applied_inv,
-        }
-        job.staged_metadata = meta
+        meta["distributor_si"] = to_jsonable(
+            {
+                "applied": True,
+                "applied_at": datetime.now(timezone.utc).isoformat(),
+                "sellout_rows": applied_sell,
+                "inventory_rows": applied_inv,
+            }
+        )
+        job.staged_metadata = to_jsonable(meta)
         eff_rev_note = f" Applied sell-out facts={applied_sell}, inventory facts={applied_inv} (upsert by natural key)."
 
     summary = {

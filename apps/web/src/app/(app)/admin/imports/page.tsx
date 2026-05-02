@@ -580,6 +580,7 @@ function AdminImportsPageContent() {
     id: number;
     stage: string;
     status: string;
+    error_summary?: string | null;
     file_headers: string[];
     field_mapping: Record<string, string>;
     canonical_targets: string[];
@@ -659,6 +660,11 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', lastJobId] });
       void refetchPreview();
     },
+    onError: () => {
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    },
   });
 
   useEffect(() => {
@@ -687,9 +693,21 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', lastJobId] });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
+    onError: () => {
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    },
   });
 
   const dsiGateOk = useMemo(() => dsiGateFromMapping(dsiMapDraft), [dsiMapDraft]);
+
+  const dsiJobFailedAlert =
+    isDsi && dsiMappingState?.status === 'failed' && dsiMappingState.error_summary ? (
+      <Alert severity="error" data-testid="dsi-job-failed-banner">
+        Import job failed: {dsiMappingState.error_summary}
+      </Alert>
+    ) : null;
 
   // Derived data for the HL mapping review panel.
   const hlSheetDetail: HlSheetDetail | null =
@@ -2051,6 +2069,7 @@ function AdminImportsPageContent() {
         {activeStep === 5 && isDsi && selectedTemplate ? (
           <Stack spacing={2}>
             <Typography variant="subtitle2">Map file columns → business fields</Typography>
+            {dsiJobFailedAlert}
             <Alert severity="info" data-testid="dsi-mapping-missing-vs-unresolved">
               <strong>Missing mapping</strong> means no file column is linked to a required field.{' '}
               <strong>Unresolved value</strong> means a column is mapped but a token (for example a distributor name) is not
@@ -2161,6 +2180,7 @@ function AdminImportsPageContent() {
         {activeStep === 6 && isDsi && selectedTemplate ? (
           <Stack spacing={2}>
             <Typography variant="subtitle2">Validate (no fact writes)</Typography>
+            {dsiJobFailedAlert}
             {!dsiServerMappingGateOk ? (
               <Alert severity="warning" data-testid="dsi-validate-blocked">
                 Complete required column mappings on the previous step, then use <strong>Save mapping</strong> or{' '}
@@ -2237,6 +2257,7 @@ function AdminImportsPageContent() {
         {activeStep === 7 && isDsi && selectedTemplate ? (
           <Stack spacing={2}>
             <Typography variant="subtitle2">Apply to canonical facts (upsert)</Typography>
+            {dsiJobFailedAlert}
             <Alert severity="warning">
               Apply upserts sell-out and distributor inventory using natural keys (distributor + customer + product + period
               for sell-out; distributor + product + snapshot date for inventory). Re-uploading overlapping history updates
@@ -2249,6 +2270,7 @@ function AdminImportsPageContent() {
               />
             ) : null}
             {dsiApply.isError ? <Alert severity="error">{safeDisplayError(dsiApply.error)}</Alert> : null}
+            {dsiApply.isPending ? <LinearProgress /> : null}
             <Stack direction="row" spacing={1}>
               <Button onClick={() => setActiveStep(6)}>Back</Button>
               <Button

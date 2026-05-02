@@ -250,6 +250,41 @@ def test_disti_header_maps_to_distributor_token(dsi_source_id: int) -> None:
         assert inv.get("distributor_token") == "DISTI"
 
 
+def test_dsi_mapped_canonical_json_safe_pandas_timestamp_and_numpy() -> None:
+    import json
+
+    import numpy as np
+    import pandas as pd
+
+    from app.services.imports import distributor_sales_inventory as dsi
+
+    row = pd.Series(
+        {
+            "Date": pd.Timestamp("2024-06-01"),
+            "Qty": np.int64(4),
+            "Amt": np.float64(10.5),
+        }
+    )
+    mapping = {
+        "Date": "transaction_date",
+        "Qty": "quantity_sold",
+        "Amt": "unit_sellout_price_ex_tax_amount",
+    }
+    mapped = dsi._build_mapped_canonical(row, mapping, [])
+    json.dumps(mapped, allow_nan=False)
+    assert isinstance(mapped["transaction_date"], str)
+    assert mapped["quantity_sold"] == 4
+    assert mapped["unit_sellout_price_ex_tax_amount"] == 10.5
+
+
+def test_dsi_verify_json_serializable_preflight() -> None:
+    import pandas as pd
+
+    from app.utils.json_safe import verify_json_serializable
+
+    verify_json_serializable("probe", {"d": pd.Timestamp("2024-01-02")})
+
+
 def test_dsi_sanitize_channel_code_to_channel_key_token() -> None:
     out, notes = sanitize_dsi_field_mapping(["Channel"], {"Channel": "channel_code"})
     assert out == {"Channel": "channel_key_token"}
