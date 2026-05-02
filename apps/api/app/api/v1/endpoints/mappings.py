@@ -101,6 +101,7 @@ async def list_distributor_si_mapping_candidates(job_id: int, db: AsyncSession =
         {
             "id": r.id,
             "import_job_id": r.import_job_id,
+            "source_definition_id": r.source_definition_id,
             "entity_type": r.entity_type,
             "normalized_key": r.normalized_key,
             "dealer_group_token": r.dealer_group_token,
@@ -113,6 +114,8 @@ async def list_distributor_si_mapping_candidates(job_id: int, db: AsyncSession =
             "confidence_score": float(r.confidence_score) if r.confidence_score is not None else None,
             "status": r.status,
             "context": r.context,
+            "created_at": r.created_at.isoformat() if r.created_at is not None else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at is not None else None,
         }
         for r in rows
     ]

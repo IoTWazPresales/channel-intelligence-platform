@@ -436,3 +436,58 @@ def test_dsi_two_jobs_upsert_same_natural_key(dsi_source_id: int) -> None:
             .order_by(ImportEntityMappingCandidate.entity_type)
         ).all()
         assert any(r.entity_type == "customer_dealer_token" for r in rows)
+
+
+def test_dsi_mapping_candidates_http_matches_db_and_job_scope(dsi_source_id: int) -> None:
+    """GET /mappings/import-jobs/{id}/distributor-si-candidates matches DB rows and filters by job id."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,soh\n"
+        "DIST-01,SKU-ALPHA-01,2024-01-15,2,Mystery Dealer Zed,10\n"
+        "DIST-01,SKU-ALPHA-01,2024-01-15,1,Mystery Dealer Zed,5\n"
+    )
+    job_a = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_http_scope_a.csv")
+    csv_b = "distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-02-20,1,Other Dealer X,1\n"
+    job_b = _run_dsi_job(dsi_source_id, _csv_bytes(csv_b), import_mode="validate", filename="dsi_http_scope_b.csv")
+
+    with SessionLocal() as db:
+        db_a = list(
+            db.scalars(
+                select(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job_a.id)
+            ).all()
+        )
+        db_b = list(
+            db.scalars(
+                select(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job_b.id)
+            ).all()
+        )
+
+    # Single TestClient session avoids asyncpg / event-loop teardown races on Windows (see historical_lineup tests).
+    with TestClient(app) as client:
+        api_a = client.get(f"/api/v1/mappings/import-jobs/{job_a.id}/distributor-si-candidates").json()
+        api_b = client.get(f"/api/v1/mappings/import-jobs/{job_b.id}/distributor-si-candidates").json()
+
+    assert len(api_a) == len(db_a)
+    assert {row["import_job_id"] for row in api_a} == {job_a.id}
+    assert {row["import_job_id"] for row in api_b} == {job_b.id}
+    cust_a = next(x for x in api_a if x.get("entity_type") == "customer_dealer_token")
+    cust_b = next(x for x in api_b if x.get("entity_type") == "customer_dealer_token")
+    assert cust_a["normalized_key"] != cust_b["normalized_key"]
+    assert cust_a["row_count"] == 2
+    assert "created_at" in cust_a
+    assert "source_definition_id" in cust_a
+
+    # Windows + Starlette TestClient can leave asyncpg's transport attached to a closed loop; dispose the
+    # async engine so the next test module's TestClient gets a clean pool (mirrors teardown concerns in
+    # tests/test_historical_lineup_import.py).
+    import asyncio
+
+    from app.db import session as db_session
+
+    async def _dispose() -> None:
+        await db_session.engine.dispose()
+
+    asyncio.run(_dispose())

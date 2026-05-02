@@ -2253,7 +2253,7 @@ function AdminImportsPageContent() {
                 {dsiCandidates != null && dsiCandidates.length > 0 ? (
                   <Typography variant="caption" color="text.secondary" display="block">
                     Review grouped tokens via{' '}
-                    <Link component={NextLink} href="/admin/mappings">
+                    <Link component={NextLink} href={`/admin/mappings?import_job_id=${lastJobId}`}>
                       Mapping queue
                     </Link>{' '}
                     ({dsiCandidates.length} group{dsiCandidates.length !== 1 ? 's' : ''} for this job).
