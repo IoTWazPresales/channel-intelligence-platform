@@ -3,8 +3,13 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
+import * as apiLib from '@/lib/api';
 
 import AdminProductsPage from './page';
+
+const apiMockState = vi.hoisted(() => ({
+  deleteMode: 'ok' as 'ok' | 'dsi_conflict' | 'other_conflict',
+}));
 
 const replaceSpy = vi.fn();
 let searchString = 'page=1&page_size=50&sort_by=sku&sort_dir=asc';
@@ -89,57 +94,103 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
   },
 }));
 
-vi.mock('@/lib/api', () => ({
-  apiGet: vi.fn(async (url: string) => {
-    if (url.startsWith('/api/v1/commercial-planner/sku-assumptions?')) {
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  const mkDsiDetail = () => ({
+    product_id: 1,
+    sku: 'SKU-1',
+    maintenance_label: 'Admin maintenance / dev cleanup',
+    confirm_token: 'CLEAR_DISTRIBUTOR_INVENTORY_FOR_PRODUCT',
+    dependency_type: 'distributor_inventory',
+    blocks_product_delete: true,
+    counts: { fact_inventory_distributor: 2, fact_sales_sellout: 1, total_dsi_rows: 3 },
+    distributor_inventory: {
+      kind: 'distributor_inventory',
+      label: 'Distributor inventory',
+      count: 2,
+      sample_rows: [{ id: 10, as_of_date: '2024-01-01', distributor_code: 'D1' }],
+      clear_available: true,
+    },
+    sell_out: {
+      kind: 'sell_out',
+      label: 'Sell-out',
+      count: 1,
+      sample_rows: [{ id: 20, period_start: '2024-02-01', customer_code: 'C1' }],
+      clear_available: true,
+    },
+  });
+
+  return {
+    ...actual,
+    apiGet: vi.fn(async (url: string) => {
+      if (url.includes('/dependencies/distributor-inventory')) {
+        return mkDsiDetail();
+      }
+      if (url.startsWith('/api/v1/commercial-planner/sku-assumptions?')) {
+        return [];
+      }
+      if (url === '/api/v1/commercial-planner/plans') {
+        return [{ id: 1, currency_code: 'ZAR' }];
+      }
+      if (url.startsWith('/api/v1/products?')) {
+        return {
+          items: [
+            {
+              id: 1,
+              sku: 'SKU-1',
+              part_number: 'PN-1',
+              name: 'Product 1',
+              sales_model_name: 'Sales-1',
+              model_name: 'Model-1',
+              series_name: 'Series-1',
+              product_line: 'Line-1',
+              business_unit: 'BU-1',
+              category: 'Audio',
+              form_factor: 'Bar',
+              country_code: 'ZA',
+              ean: '1234567890123',
+              upc: '123456789012',
+              lifecycle_status: 'active',
+              launch_date: '2024-01-01',
+              retired_date: null,
+              is_active: true,
+              channel_id: 2,
+              channel_code: 'RET',
+              missing_required_fields: [],
+              last_import_date: '2026-01-01',
+            },
+          ],
+          page: 1,
+          page_size: 50,
+          total: 1,
+          sort_by: 'sku',
+          sort_dir: 'asc',
+        };
+      }
+      if (url === '/api/v1/catalog/channels') return [{ id: 2, code: 'RET', name: 'Retail' }];
       return [];
-    }
-    if (url === '/api/v1/commercial-planner/plans') {
-      return [{ id: 1, currency_code: 'ZAR' }];
-    }
-    if (url.startsWith('/api/v1/products?')) {
-      return {
-        items: [
-          {
-            id: 1,
-            sku: 'SKU-1',
-            part_number: 'PN-1',
-            name: 'Product 1',
-            sales_model_name: 'Sales-1',
-            model_name: 'Model-1',
-            series_name: 'Series-1',
-            product_line: 'Line-1',
-            business_unit: 'BU-1',
-            category: 'Audio',
-            form_factor: 'Bar',
-            country_code: 'ZA',
-            ean: '1234567890123',
-            upc: '123456789012',
-            lifecycle_status: 'active',
-            launch_date: '2024-01-01',
-            retired_date: null,
-            is_active: true,
-            channel_id: 2,
-            channel_code: 'RET',
-            missing_required_fields: [],
-            last_import_date: '2026-01-01',
-          },
-        ],
-        page: 1,
-        page_size: 50,
-        total: 1,
-        sort_by: 'sku',
-        sort_dir: 'asc',
-      };
-    }
-    if (url === '/api/v1/catalog/channels') return [{ id: 2, code: 'RET', name: 'Retail' }];
-    return [];
-  }),
-  apiPost: vi.fn(async () => ({})),
-  apiPatch: vi.fn(async () => ({})),
-  apiDelete: vi.fn(async () => ({})),
-  HttpConflictError: { is: () => false },
-}));
+    }),
+    apiPost: vi.fn(async () => ({})),
+    apiPatch: vi.fn(async () => ({})),
+    apiDelete: vi.fn(async () => {
+      if (apiMockState.deleteMode === 'dsi_conflict') {
+        throw new actual.HttpConflictError(
+          'Product is still referenced; remove or clear dependent rows first.',
+          [{ label: 'Distributor inventory', count: 4 }]
+        );
+      }
+      if (apiMockState.deleteMode === 'other_conflict') {
+        throw new actual.HttpConflictError('Product is still referenced.', [{ label: 'Lineup', count: 2 }]);
+      }
+    }),
+    apiDeleteJson: vi.fn(async () => ({
+      ok: true,
+      product_id: 1,
+      sku: 'SKU-1',
+      deleted: { fact_inventory_distributor_deleted: 2, fact_sales_sellout_deleted: 1 },
+    })),
+  };
+});
 
 vi.mock('@/lib/queryError', () => ({ toQueryError: () => null }));
 
@@ -154,6 +205,10 @@ describe('AdminProductsPage pass1 behaviors', () => {
   }
 
   beforeEach(() => {
+    apiMockState.deleteMode = 'ok';
+    vi.mocked(apiLib.apiDelete).mockClear();
+    vi.mocked(apiLib.apiGet).mockClear();
+    vi.mocked(apiLib.apiDeleteJson).mockClear();
     replaceSpy.mockReset();
     exportSpy.mockReset();
     setColumnsVisibleSpy.mockReset();
@@ -309,5 +364,81 @@ describe('AdminProductsPage pass1 behaviors', () => {
     expect(typeof col.valueGetter).toBe('function');
     const value = col.valueGetter({ data: { missing_required_fields: ['sku', 'category'] } });
     expect(value).toBe('sku, category');
+  });
+});
+
+describe('AdminProductsPage DSI delete maintenance', () => {
+  function renderPage() {
+    const qc = new QueryClient();
+    return renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <AdminProductsPage />
+      </QueryClientProvider>
+    );
+  }
+
+  beforeEach(() => {
+    apiMockState.deleteMode = 'ok';
+    vi.mocked(apiLib.apiDelete).mockClear();
+    vi.mocked(apiLib.apiGet).mockClear();
+    vi.mocked(apiLib.apiDeleteJson).mockClear();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    replaceSpy.mockReset();
+    exportSpy.mockReset();
+    setColumnsVisibleSpy.mockReset();
+    localStorageRemoveSpy.mockClear();
+    mockColumnState = [];
+    headerByField = {};
+    capturedColumnDefs.length = 0;
+    localStorage.clear();
+    searchString = 'page=1&page_size=50&sort_by=sku&sort_dir=asc';
+  });
+
+  it('shows DSI maintenance panel and clear affordance when delete is blocked on distributor inventory', async () => {
+    apiMockState.deleteMode = 'dsi_conflict';
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    expect(await screen.findByText(/Product is still referenced/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Distributor inventory \(4\)/)).toBeInTheDocument();
+    expect(await screen.findByText(/Admin maintenance \/ dev cleanup/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Distributor inventory facts:/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Clear distributor inventory facts for this product' })).toBeInTheDocument();
+    expect(apiLib.apiGet).toHaveBeenCalledWith(
+      '/api/v1/products/id/1/dependencies/distributor-inventory',
+      expect.anything()
+    );
+  });
+
+  it('does not show DSI clear maintenance when conflict references are outside DSI scope', async () => {
+    apiMockState.deleteMode = 'other_conflict';
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    expect(await screen.findByText(/Lineup \(2\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Admin maintenance \/ dev cleanup/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear distributor inventory facts for this product' })).not.toBeInTheDocument();
+  });
+
+  it('requires typed confirm token before calling clear endpoint', async () => {
+    apiMockState.deleteMode = 'dsi_conflict';
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear distributor inventory facts for this product' }));
+    expect(await screen.findByRole('dialog', { name: 'Confirm DSI fact removal' })).toBeInTheDocument();
+    const removeBtn = screen.getByRole('button', { name: 'Remove DSI facts' });
+    expect(removeBtn).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Confirmation token'), {
+      target: { value: 'CLEAR_DISTRIBUTOR_INVENTORY_FOR_PRODUCT' },
+    });
+    expect(removeBtn).not.toBeDisabled();
+    fireEvent.click(removeBtn);
+    await waitFor(() => {
+      expect(apiLib.apiDeleteJson).toHaveBeenCalledWith(
+        '/api/v1/products/id/1/dependencies/distributor-inventory',
+        { confirm: 'CLEAR_DISTRIBUTOR_INVENTORY_FOR_PRODUCT' }
+      );
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(/Admin maintenance \/ dev cleanup/i)).not.toBeInTheDocument();
+    });
   });
 });

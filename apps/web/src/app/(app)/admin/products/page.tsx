@@ -43,8 +43,34 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { ProductSkuEconomicsPanel } from '@/features/admin/ProductSkuEconomicsPanel';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
-import { apiDelete, apiGet, apiPatch, apiPost, HttpConflictError } from '@/lib/api';
+import { apiDelete, apiDeleteJson, apiGet, apiPatch, apiPost, HttpConflictError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
+
+const DSI_REFERENCE_LABELS = new Set(['Distributor inventory', 'Sell-out']);
+
+type DsiDependencyDetail = {
+  product_id: number;
+  sku: string;
+  maintenance_label: string;
+  confirm_token: string;
+  dependency_type: string;
+  blocks_product_delete: boolean;
+  counts: { fact_inventory_distributor: number; fact_sales_sellout: number; total_dsi_rows: number };
+  distributor_inventory: {
+    kind: string;
+    label: string;
+    count: number;
+    sample_rows: Array<Record<string, unknown>>;
+    clear_available: boolean;
+  };
+  sell_out: {
+    kind: string;
+    label: string;
+    count: number;
+    sample_rows: Array<Record<string, unknown>>;
+    clear_available: boolean;
+  };
+};
 
 type ProductRow = {
   id: number;
@@ -171,6 +197,9 @@ function AdminProductsPageContent() {
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState('');
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
+  const [blockedDeleteProductId, setBlockedDeleteProductId] = useState<number | null>(null);
+  const [dsiConfirmOpen, setDsiConfirmOpen] = useState(false);
+  const [dsiConfirmText, setDsiConfirmText] = useState('');
 
   const page = Number(searchParams.get('page') || '1') || 1;
   const pageSize = Number(searchParams.get('page_size') || `${DEFAULT_PAGE_SIZE}`) || DEFAULT_PAGE_SIZE;
@@ -288,7 +317,13 @@ function AdminProductsPageContent() {
 
   const delProduct = useMutation({
     mutationFn: (id: number) => apiDelete(`/api/v1/products/id/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-products'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-products'] });
+      setBlockedDeleteProductId(null);
+    },
+    onError: (err, productId) => {
+      if (HttpConflictError.is(err)) setBlockedDeleteProductId(productId);
+    },
   });
   const onDeleteProduct = useCallback(
     (id: number) => {
@@ -296,6 +331,42 @@ function AdminProductsPageContent() {
     },
     [delProduct]
   );
+
+  useEffect(() => {
+    if (!delProduct.isError) setBlockedDeleteProductId(null);
+  }, [delProduct.isError]);
+
+  const dsiConflictActive = Boolean(
+    delProduct.isError &&
+      HttpConflictError.is(delProduct.error) &&
+      blockedDeleteProductId != null &&
+      delProduct.error.references.some((r) => DSI_REFERENCE_LABELS.has(r.label))
+  );
+
+  const dsiDetailQuery = useQuery({
+    queryKey: ['admin-product-dsi-maintenance', blockedDeleteProductId],
+    enabled: dsiConflictActive && blockedDeleteProductId != null,
+    queryFn: ({ signal }) =>
+      apiGet<DsiDependencyDetail>(
+        `/api/v1/products/id/${blockedDeleteProductId!}/dependencies/distributor-inventory`,
+        { signal }
+      ),
+  });
+
+  const clearDsiFacts = useMutation({
+    mutationFn: async ({ productId, confirm }: { productId: number; confirm: string }) =>
+      apiDeleteJson<{
+        ok: boolean;
+        deleted: { fact_inventory_distributor_deleted: number; fact_sales_sellout_deleted: number };
+      }>(`/api/v1/products/id/${productId}/dependencies/distributor-inventory`, { confirm }),
+    onSuccess: async (_data, vars) => {
+      setDsiConfirmOpen(false);
+      setDsiConfirmText('');
+      await qc.invalidateQueries({ queryKey: ['admin-product-dsi-maintenance', vars.productId] });
+      delProduct.reset();
+      setBlockedDeleteProductId(null);
+    },
+  });
 
   const onCellValueChanged = useCallback(
     async (e: CellValueChangedEvent<ProductRow>) => {
@@ -466,7 +537,7 @@ function AdminProductsPageContent() {
     () => ({
       singleClickEdit: true,
       onCellValueChanged,
-      sideBar: 'columns',
+      // Column visibility uses the toolbar picker; no Enterprise sidebar.
       onGridReady,
       onColumnMoved: onColumnStateEvent,
       onColumnVisible: onColumnStateEvent,
@@ -540,6 +611,92 @@ function AdminProductsPageContent() {
                   reference counts.
                 </Typography>
               )}
+              {dsiConflictActive && blockedDeleteProductId != null ? (
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover' }}>
+                  <Typography variant="overline" color="text.secondary">
+                    Admin maintenance / dev cleanup
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ mt: 0.5 }}>
+                    Distributor sales &amp; inventory (DSI) facts
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    Recommended: keep the SKU and set <strong>Active</strong> to false, or re-import Product Master as an
+                    upsert. Clearing DSI facts removes imported sell-out and distributor inventory evidence rows for this
+                    product only — not normal day-to-day operations.
+                  </Typography>
+                  {dsiDetailQuery.isLoading ? (
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      Loading dependency details…
+                    </Typography>
+                  ) : dsiDetailQuery.isError ? (
+                    <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+                      {toQueryError(dsiDetailQuery.error)?.message ?? 'Failed to load dependency details.'}
+                    </Typography>
+                  ) : dsiDetailQuery.data ? (
+                    <Stack spacing={1} sx={{ mt: 1.5 }}>
+                      <Typography variant="body2">
+                        Distributor inventory facts:{' '}
+                        <strong>{dsiDetailQuery.data.distributor_inventory.count}</strong> rows
+                      </Typography>
+                      <Typography variant="body2">
+                        Sell-out facts: <strong>{dsiDetailQuery.data.sell_out.count}</strong> rows
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        This data was imported through <strong>Distributor sales &amp; inventory</strong> and is not yet
+                        managed on a full operational screen.
+                      </Typography>
+                      {dsiDetailQuery.data.distributor_inventory.sample_rows.length > 0 ? (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">
+                            Sample inventory rows (ids / dates / distributor):
+                          </Typography>
+                          <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                            {dsiDetailQuery.data.distributor_inventory.sample_rows.map((row) => (
+                              <Typography key={String(row.id)} component="li" variant="caption">
+                                id {String(row.id)} · as_of {String(row.as_of_date ?? '')} · dist{' '}
+                                {String(row.distributor_code ?? row.distributor_id ?? '')}
+                              </Typography>
+                            ))}
+                          </Box>
+                        </Box>
+                      ) : null}
+                      {dsiDetailQuery.data.sell_out.sample_rows.length > 0 ? (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">
+                            Sample sell-out rows:
+                          </Typography>
+                          <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                            {dsiDetailQuery.data.sell_out.sample_rows.map((row) => (
+                              <Typography key={String(row.id)} component="li" variant="caption">
+                                id {String(row.id)} · period {String(row.period_start ?? '')} · customer{' '}
+                                {String(row.customer_code ?? row.customer_id ?? '')}
+                              </Typography>
+                            ))}
+                          </Box>
+                        </Box>
+                      ) : null}
+                      {dsiDetailQuery.data.counts.total_dsi_rows > 0 ? (
+                        <Button
+                          size="small"
+                          color="warning"
+                          variant="contained"
+                          disabled={clearDsiFacts.isPending}
+                          onClick={() => {
+                            setDsiConfirmText('');
+                            setDsiConfirmOpen(true);
+                          }}
+                        >
+                          Clear distributor inventory facts for this product
+                        </Button>
+                      ) : (
+                        <Typography variant="body2" color="success.main">
+                          No DSI fact rows remain for this product in the maintenance scope.
+                        </Typography>
+                      )}
+                    </Stack>
+                  ) : null}
+                </Paper>
+              ) : null}
               <Typography variant="body2" color="text.secondary">
                 Clear or reassign the listed dependent rows on the relevant screens (or use Clear all where available),
                 or set <strong>Active</strong> to false instead of deleting.
@@ -791,6 +948,65 @@ function AdminProductsPageContent() {
           </Stack>
         </ModuleDataSection>
       </Paper>
+
+      <Dialog
+        open={dsiConfirmOpen}
+        onClose={() => !clearDsiFacts.isPending && setDsiConfirmOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Confirm DSI fact removal</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Second confirmation: this removes imported <strong>sell-out</strong> and{' '}
+            <strong>distributor inventory snapshot</strong> rows for this product only. It does{' '}
+            <strong>not</strong> delete the product row.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Type the token exactly (case-sensitive):
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 2, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+            {dsiDetailQuery.data?.confirm_token ?? ''}
+          </Typography>
+          <TextField
+            fullWidth
+            label="Confirmation token"
+            value={dsiConfirmText}
+            onChange={(e) => setDsiConfirmText(e.target.value)}
+            autoComplete="off"
+          />
+          {clearDsiFacts.isError ? (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {(clearDsiFacts.error as Error).message}
+            </Alert>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDsiConfirmOpen(false)} disabled={clearDsiFacts.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={
+              clearDsiFacts.isPending ||
+              !blockedDeleteProductId ||
+              !dsiDetailQuery.data ||
+              dsiConfirmText !== dsiDetailQuery.data.confirm_token
+            }
+            onClick={() => {
+              if (!blockedDeleteProductId || !dsiDetailQuery.data) return;
+              if (dsiConfirmText !== dsiDetailQuery.data.confirm_token) return;
+              clearDsiFacts.mutate({
+                productId: blockedDeleteProductId,
+                confirm: dsiConfirmText,
+              });
+            }}
+          >
+            Remove DSI facts
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={uploadOpen} onClose={() => !bulk.isPending && setUploadOpen(false)} fullWidth maxWidth="md">
         <DialogTitle>Paste product rows</DialogTitle>

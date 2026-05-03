@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import Date, and_, asc, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -9,6 +9,11 @@ from app.api.deps import get_db
 from app.models.dimensions import DimChannel, DimProduct
 from app.models.ingestion import ImportJob
 from app.models.product_catalog import CatalogProduct
+from app.services.product_dsi_maintenance import (
+    CLEAR_DISTRIBUTOR_INVENTORY_FOR_PRODUCT,
+    clear_dsi_facts_for_product,
+    dsi_dependency_detail_payload,
+)
 from app.services.product_usage import cleanup_soft_product_references, product_hard_reference_breakdown
 
 router = APIRouter()
@@ -230,6 +235,71 @@ async def get_product_refs_for_delete_ux(product_id: int, db: AsyncSession = Dep
     """Where this SKU is still referenced (for delete UX). Uses `/id/.../refs` so the path is never a single
     dynamic segment under `/products` (that collides with `PATCH /{product_id}` → GET returns 405)."""
     return await _product_references_bundle(db, product_id)
+
+
+def _require_admin_role(x_user_role: str | None = Header(default=None, alias="X-User-Role")) -> None:
+    if (x_user_role or "").strip().lower() != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "admin_required", "message": "Admin maintenance requires X-User-Role: admin"},
+        )
+
+
+@router.get("/id/{product_id}/dependencies/distributor-inventory")
+async def get_dsi_dependency_detail_for_product(
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(_require_admin_role),
+):
+    """Small sample + counts for DSI facts that block product delete (inventory snapshot + sell-out)."""
+    payload = await dsi_dependency_detail_payload(db, product_id)
+    if payload.get("error") == "product_not_found":
+        raise HTTPException(status_code=404, detail=payload)
+    return payload
+
+
+class ClearDistributorInventoryFactsBody(BaseModel):
+    confirm: str = Field(
+        ...,
+        description=f'Must be exactly "{CLEAR_DISTRIBUTOR_INVENTORY_FOR_PRODUCT}"',
+    )
+
+
+@router.delete("/id/{product_id}/dependencies/distributor-inventory")
+async def clear_dsi_dependency_facts_for_product(
+    product_id: int,
+    body: ClearDistributorInventoryFactsBody,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(_require_admin_role),
+):
+    """Admin maintenance: remove DSI ``fact_inventory_distributor`` + ``fact_sales_sellout`` rows for this product.
+
+    Does not delete ``dim_product``. Requires explicit confirm token (see GET detail response).
+    """
+    if body.confirm != CLEAR_DISTRIBUTOR_INVENTORY_FOR_PRODUCT:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "confirm_required",
+                "message": "Refusing delete without explicit maintenance confirm token.",
+                "expected_confirm": CLEAR_DISTRIBUTOR_INVENTORY_FOR_PRODUCT,
+            },
+        )
+    row = await db.get(DimProduct, product_id)
+    if not row:
+        raise HTTPException(status_code=404, detail={"error": "product_not_found", "product_id": product_id})
+    try:
+        out = await clear_dsi_facts_for_product(db, product_id)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return {
+        "ok": True,
+        "product_id": product_id,
+        "sku": row.sku,
+        "deleted": out,
+    }
 
 
 @router.patch("/{product_id}")

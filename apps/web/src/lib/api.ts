@@ -260,6 +260,23 @@ export async function apiDelete(path: string, init?: RequestInit): Promise<void>
   }
 }
 
+/** DELETE with JSON body (e.g. admin maintenance confirms). */
+export async function apiDeleteJson<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
+  const res = await fetch(apiUrl(path), {
+    method: 'DELETE',
+    ...init,
+    headers: defaultHeaders(init, true),
+    body: JSON.stringify(body ?? {}),
+    cache: 'no-store',
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(await readFetchError(res));
+  }
+  if (!text.trim()) return {} as T;
+  return JSON.parse(text) as T;
+}
+
 /**
  * Load `{ label, count }` breakdown for a product (delete-block UX).
  * Tries routes in order; returns [] if the running API has no breakdown endpoints (stale process).
