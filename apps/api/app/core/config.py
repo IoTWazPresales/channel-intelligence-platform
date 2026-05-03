@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     database_url: str = "postgresql+asyncpg://cip:cip@localhost:5432/cip"
     database_url_sync: str = "postgresql://cip:cip@localhost:5432/cip"
+    # Optional: sync URL used only by Alembic (see apps/api/alembic/env.py). When tables were created by
+    # another role (e.g. first migration run as `postgres`), set this to a superuser DSN for `pnpm local:db:migrate`
+    # only, then remove it so the app keeps using `database_url_sync` as the least-privileged role.
+    database_url_sync_migrate: str | None = None
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
