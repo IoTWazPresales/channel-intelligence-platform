@@ -466,7 +466,7 @@ function AdminProductsPageContent() {
     () => ({
       singleClickEdit: true,
       onCellValueChanged,
-      sideBar: 'columns',
+      // Column visibility is handled by the custom column picker above; AG Grid Community has no licensed sidebar.
       onGridReady,
       onColumnMoved: onColumnStateEvent,
       onColumnVisible: onColumnStateEvent,

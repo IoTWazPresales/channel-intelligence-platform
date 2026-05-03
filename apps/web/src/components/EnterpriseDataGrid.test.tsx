@@ -1,5 +1,7 @@
-import React from 'react';
+﻿import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
+
+import gridSource from './EnterpriseDataGrid.tsx?raw';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
@@ -16,6 +18,13 @@ import { EnterpriseDataGrid } from './EnterpriseDataGrid';
 type Row = { id: number; sku: string };
 
 describe('EnterpriseDataGrid', () => {
+  it('does not reference ag-grid-enterprise in source (Community-only)', () => {
+    expect(gridSource).not.toContain('ag-grid-enterprise');
+    expect(gridSource).not.toContain('SideBarModule');
+    expect(gridSource).not.toContain('ColumnsToolPanelModule');
+    expect(gridSource).toContain('AllCommunityModule');
+  });
+
   it('renders ag grid shell with mocked grid', () => {
     const cols: ColDef<Row>[] = [{ field: 'sku', headerName: 'SKU' }];
     const { getByTestId } = renderWithProviders(

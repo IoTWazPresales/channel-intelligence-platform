@@ -597,7 +597,7 @@ function AdminCustomersPageContent() {
     () => ({
       singleClickEdit: true,
       onCellValueChanged,
-      sideBar: 'columns',
+      // Column visibility uses the toolbar controls; no Enterprise columns tool panel / sidebar.
       onGridReady,
       onColumnMoved: onColumnStateEvent,
       onColumnVisible: onColumnStateEvent,
