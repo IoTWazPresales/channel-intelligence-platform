@@ -63,6 +63,45 @@ SENTINEL_CUSTOMER_TOKENS = frozenset(
 
 DEALER_GROUP_PLACEHOLDER_SUBSTRINGS = ("to be mapped", "tbd", "unknown", "pending mapping")
 
+CUSTOMER_TOKEN_PLACEHOLDER_SUBSTRINGS = DEALER_GROUP_PLACEHOLDER_SUBSTRINGS
+
+
+def _customer_token_is_placeholder(norm: str, raw: str | None) -> bool:
+    """True when the source customer/dealer cell is blank, a sentinel token, or a workbook placeholder."""
+    if not norm:
+        return True
+    if norm in SENTINEL_CUSTOMER_TOKENS:
+        return True
+    r = (raw or "").strip().lower()
+    return any(p in r for p in CUSTOMER_TOKEN_PLACEHOLDER_SUBSTRINGS)
+
+
+def _dealer_group_is_placeholder(dg_raw: str | None) -> bool:
+    dg = _clean_str(dg_raw)
+    if not dg:
+        return True
+    return any(x in dg.lower() for x in DEALER_GROUP_PLACEHOLDER_SUBSTRINGS)
+
+
+def effective_dsi_customer_resolution_raw(
+    customer_dealer_raw: str | None, dealer_group_raw: str | None
+) -> tuple[str | None, list[str]]:
+    """Pick the token used for customer resolution (aliases / dim / open-channel rules).
+
+    Historical RAW-style workbooks: prefer a real customer/dealer name; when that is blank or a placeholder,
+    fall back to **Dealer Name Group** when it is non-placeholder. Original columns remain on staging
+    (`raw_customer_dealer_token`, `raw_dealer_group_token`) and in `raw_row_payload`.
+    """
+    notes: list[str] = []
+    nt = _norm_key(customer_dealer_raw)
+    if not _customer_token_is_placeholder(nt, customer_dealer_raw):
+        return (_clean_str(customer_dealer_raw), notes)
+    if not _dealer_group_is_placeholder(dealer_group_raw):
+        notes.append("customer_token_source_dealer_group")
+        return (_clean_str(dealer_group_raw), notes)
+    return (None, notes)
+
+
 # Channel / marketplace hints for steward review (generic; not region-specific).
 STRATEGIC_CHANNEL_HINT_SUBSTRINGS = (
     "amazon",
@@ -261,10 +300,15 @@ def _resolve_customer(
     if dg and any(x in dg.lower() for x in DEALER_GROUP_PLACEHOLDER_SUBSTRINGS):
         diagnostics.append("dealer_group_placeholder")
 
-    alias_id = _alias_customer_id(db, source_id, distributor_id, nt, dg)
-    if alias_id is not None:
-        diagnostics.append("customer_resolved_alias")
-        return alias_id, diagnostics
+    alias_id: int | None = None
+    if not _customer_token_is_placeholder(nt, customer_raw):
+        alias_id = _alias_customer_id(db, source_id, distributor_id, nt, dg)
+        if alias_id is not None:
+            diagnostics.append("customer_resolved_alias")
+            return alias_id, diagnostics
+    elif nt or (customer_raw and str(customer_raw).strip()):
+        diagnostics.append("customer_token_placeholder")
+        nt = ""
 
     open_from_col = False
     if open_flag_raw is not None:
@@ -428,37 +472,81 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             computed_rev = qty_sold * unit_price
 
         diag: list[str] = []
-        sev = "info"
 
         rdid, derr = _resolve_distributor(db, dist_raw, source_def_id)
         if derr:
             diag.append(derr)
-            sev = "error"
 
         rpid, perr = _resolve_product(prod_raw, products, alias_map)
         if perr:
             diag.append(perr)
-            sev = "error"
 
         rdistributor_id = rdid
         rcustomer_id: int | None = None
-        sellout_attempt = qty_sold is not None and tx_date is not None
-        inv_attempt = soh is not None and snap_date is not None
+
+        sellout_attempt = (
+            qty_sold is not None and tx_date is not None and qty_sold != 0
+        )
+        inv_attempt = soh is not None
+
+        cust_res_raw: str | None = None
+        cust_res_notes: list[str] = []
+        if sellout_attempt:
+            cust_res_raw, cust_res_notes = effective_dsi_customer_resolution_raw(cust_raw, dg_raw)
 
         if sellout_attempt:
             rcustomer_id, cd = _resolve_customer(
                 db,
                 source_id=source_def_id,
                 distributor_id=rdistributor_id,
-                customer_raw=cust_raw,
+                customer_raw=cust_res_raw,
                 dealer_group_raw=dg_raw,
                 channel_raw=ch_raw,
                 open_flag_raw=open_raw,
             )
             diag.extend(cd)
-            if rcustomer_id is None:
-                sev = "error"
+            diag.extend(cust_res_notes)
+
+        hard_row = bool(derr or perr)
+        sellout_blocked_no_customer = bool(sellout_attempt and rcustomer_id is None)
+        sellout_blocked_no_tx = bool(
+            qty_sold is not None and qty_sold != 0 and tx_date is None
+        )
+        inv_ready = bool(inv_attempt and snap_date is not None and soh is not None)
+        inv_soft_fail = bool(inv_attempt and not inv_ready)
+        sellout_ready = bool(
+            sellout_attempt
+            and tx_date is not None
+            and rcustomer_id is not None
+            and qty_sold is not None
+        )
+
+        sev: str = "info"
+        if hard_row:
+            sev = "error"
+        elif (sellout_blocked_no_customer or sellout_blocked_no_tx) and inv_ready:
+            sev = "warning"
+            if sellout_blocked_no_customer:
                 diag.append("sellout_blocked_missing_customer")
+            if sellout_blocked_no_tx:
+                diag.append("sellout_blocked_missing_transaction_date")
+        elif inv_soft_fail and sellout_ready:
+            sev = "warning"
+            if snap_date is None:
+                diag.append("inventory_blocked_missing_snapshot_date")
+            if soh is None:
+                diag.append("inventory_blocked_missing_stock_on_hand")
+        elif sellout_blocked_no_customer or sellout_blocked_no_tx or inv_soft_fail:
+            sev = "error"
+            if sellout_blocked_no_customer:
+                diag.append("sellout_blocked_missing_customer")
+            if sellout_blocked_no_tx:
+                diag.append("sellout_blocked_missing_transaction_date")
+            if inv_soft_fail:
+                if snap_date is None:
+                    diag.append("inventory_blocked_missing_snapshot_date")
+                if soh is None:
+                    diag.append("inventory_blocked_missing_stock_on_hand")
 
         mismatch = False
         if reported_rev is not None and computed_rev is not None:
@@ -477,23 +565,17 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             if sev == "info":
                 sev = "warning"
 
-        if sellout_attempt and tx_date is None:
-            diag.append("missing_transaction_date")
-            sev = "error"
-        if inv_attempt and snap_date is None:
-            diag.append("missing_snapshot_date")
-            sev = "error"
-
         can_sellout = (
-            sev != "error"
+            not hard_row
             and bool(rdistributor_id)
             and bool(rpid)
-            and bool(rcustomer_id)
             and tx_date is not None
             and qty_sold is not None
+            and qty_sold != 0
+            and bool(rcustomer_id)
         )
         can_inv = (
-            sev != "error"
+            not hard_row
             and bool(rdistributor_id)
             and bool(rpid)
             and snap_date is not None
@@ -559,7 +641,8 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             if len(a["samples"]) < 5:
                 a["samples"].append(prod_raw)
         if sellout_attempt and rcustomer_id is None:
-            nk = f"{_norm_key(cust_raw) or '__blank__'}||{_norm_key(dg_raw)}"
+            eff_key = _norm_key(cust_res_raw) if cust_res_raw else "__blank__"
+            nk = f"{eff_key}||{_norm_key(dg_raw)}"
             k = ("customer_dealer_token", nk)
             a = agg[k]
             a["row_count"] += 1
@@ -568,7 +651,10 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             if reported_rev is not None:
                 a["total_value"] += abs(reported_rev)
             if len(a["samples"]) < 5:
-                a["samples"].append(cust_raw or "")
+                sample = cust_raw or ""
+                if dg_raw and dg_raw != sample:
+                    sample = f"{sample} | dealer_group={dg_raw}"
+                a["samples"].append(sample)
             chv = (ch_raw or "").strip().lower()
             if chv and any(h in chv for h in STRATEGIC_CHANNEL_HINT_SUBSTRINGS):
                 a["strategic_channel_hint"] = True
@@ -626,14 +712,18 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         applied_sell = 0
         applied_inv = 0
         for line in lines:
-            if line.severity == "error":
-                continue
-            parts: list[str] = []
+            parts = []
+            qs = line.quantity_sold
+            sellout_units_ok = (
+                qs is not None
+                and float(qs) != 0.0
+            )
             if (
                 line.resolved_distributor_id
                 and line.resolved_product_id
                 and line.transaction_date is not None
-                and line.quantity_sold is not None
+                and qs is not None
+                and sellout_units_ok
                 and line.resolved_customer_id
             ):
                 eff = line.computed_revenue_amount

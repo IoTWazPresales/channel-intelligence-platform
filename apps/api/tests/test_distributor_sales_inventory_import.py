@@ -147,7 +147,9 @@ def test_distributor_si_validate_staging_candidates_no_queue_spam(dsi_source_id:
             select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == job_id)
         ).all()
         assert len(lines) == 2
-        assert all(l.severity == "error" for l in lines)
+        assert all(l.severity == "warning" for l in lines)
+        assert all(l.resolution_status == "ready_inventory" for l in lines)
+        assert all("sellout_blocked_missing_customer" in (l.diagnostic_codes or []) for l in lines)
 
         summary = db.scalars(
             select(ImportRowResult).where(
@@ -308,6 +310,150 @@ def test_dsi_sanitize_drops_unknown_targets() -> None:
     out, notes = sanitize_dsi_field_mapping(["X"], {"X": "form_factor"})
     assert "X" not in out
     assert any("form_factor" in n["message"] for n in notes)
+
+
+def test_dsi_dealer_name_group_resolves_when_customer_blank_apply(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,Dealer Name Group,soh\n"
+        "DIST-01,SKU-ALPHA-01,2024-11-01,1,,Metro Market Group,2\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_dg_blank_cust.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        line = db.scalars(
+            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == jid)
+        ).first()
+        assert line is not None
+        assert "customer_token_source_dealer_group" in (line.diagnostic_codes or [])
+        assert line.raw_customer_dealer_token is None
+        assert line.raw_dealer_group_token == "Metro Market Group"
+        cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
+        assert cust is not None
+        assert line.resolved_customer_id == cust.id
+        n_sell = int(
+            db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == jid))
+            or 0
+        )
+        n_inv = int(
+            db.scalar(
+                select(func.count()).select_from(FactInventoryDistributor).where(
+                    FactInventoryDistributor.source_import_job_id == jid
+                )
+            )
+            or 0
+        )
+        assert n_sell == 1
+        assert n_inv == 1
+
+
+def test_dsi_placeholder_customer_column_uses_dealer_name_group_apply(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,Dealer Name Group,soh\n"
+        "DIST-01,SKU-ALPHA-01,2024-11-02,1,to be mapped,Metro Market Group,2\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_tbm_dg.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        line = db.scalars(
+            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == jid)
+        ).first()
+        assert line is not None
+        assert line.raw_customer_dealer_token == "to be mapped"
+        assert line.raw_dealer_group_token == "Metro Market Group"
+        cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
+        assert cust is not None
+        assert line.resolved_customer_id == cust.id
+
+
+def test_dsi_mixed_unresolved_sellout_inventory_still_applies_on_apply(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,soh\n"
+        "DIST-01,SKU-ALPHA-01,2024-12-15,3,Mystery Dealer Zed Unresolvable,99\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_mixed_inv.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        n_sell = int(
+            db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == jid))
+            or 0
+        )
+        n_inv = int(
+            db.scalar(
+                select(func.count()).select_from(FactInventoryDistributor).where(
+                    FactInventoryDistributor.source_import_job_id == jid
+                )
+            )
+            or 0
+        )
+        assert n_sell == 0
+        assert n_inv == 1
+
+
+def test_dsi_qty_zero_does_not_require_customer_inventory_applies(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,soh,channel\n"
+        "DIST-01,SKU-ALPHA-01,2024-12-20,0,,5,Makro retail\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_qty0.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        line = db.scalars(
+            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == jid)
+        ).first()
+        assert line is not None
+        assert line.resolved_customer_id is None
+        assert "sellout_blocked_missing_customer" not in (line.diagnostic_codes or [])
+        n_sell = int(
+            db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == jid))
+            or 0
+        )
+        n_inv = int(
+            db.scalar(
+                select(func.count()).select_from(FactInventoryDistributor).where(
+                    FactInventoryDistributor.source_import_job_id == jid
+                )
+            )
+            or 0
+        )
+        assert n_sell == 0
+        assert n_inv == 1
+
+
+def test_dsi_blank_customer_makro_channel_not_open_channel(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,soh,channel\n"
+        "DIST-01,SKU-ALPHA-01,2024-12-22,1,,5,Makro retail\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_blank_makro.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        line = db.scalars(
+            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == jid)
+        ).first()
+        assert line is not None
+        oc = db.scalars(select(DimCustomer).where(DimCustomer.code == "OPEN_CHANNEL")).first()
+        if oc is not None:
+            assert line.resolved_customer_id != oc.id
+        assert "customer_open_channel" not in (line.diagnostic_codes or [])
+        assert "sellout_blocked_missing_customer" in (line.diagnostic_codes or [])
+
+
+def test_dsi_ignored_shipping_evidence_in_mapped_canonical_only(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,soh,OTW Shipped\n"
+        "DIST-01,SKU-ALPHA-01,2024-12-23,1,CUST-1001,3,777\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_ship_raw.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        line = db.scalars(
+            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == jid)
+        ).first()
+        assert line is not None
+        mc = line.mapped_canonical or {}
+        ship = mc.get("ignored_shipping_evidence") or {}
+        assert "OTW Shipped" in ship
+        assert ship.get("OTW Shipped") == 777
 
 
 def test_dsi_column_samples_from_inferred() -> None:
