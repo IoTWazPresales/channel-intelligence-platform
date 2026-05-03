@@ -1,0 +1,51 @@
+---
+description: 
+alwaysApply: true
+---
+
+PROJECT OVERLAY — CHANNEL INTELLIGENCE / COMMERCIAL PLANNER
+
+This project is a production-oriented supply-chain intelligence platform.
+
+Primary priorities:
+1. Data correctness
+2. Import auditability
+3. Safe validation and apply/commit flows
+4. Idempotency and retry safety
+5. Clear user-facing error messages
+6. Minimal regressions across frontend, API, worker, and database
+
+Normal runtime:
+- API: pnpm dev:api
+- Web: pnpm dev:web
+- Do not use Docker unless explicitly requested.
+- Do not use pnpm --filter web start unless explicitly testing production-build behavior.
+
+Database:
+- The real local dev database is cip.
+- Do not mutate cip data unless explicitly approved.
+- Verify database identity before DB-affecting commands.
+- Tests must not write to cip unless explicitly allowed.
+- Do not run Alembic upgrade against cip unless explicitly requested.
+
+Domain rules:
+- Product Master is the product source unless a concrete issue proves otherwise.
+- Preserve audit history for imports, mappings, validations, apply/commit flows, retries, cleanup, and background jobs.
+- Do not silently coerce ambiguous SKU, product, customer, distributor, channel, pricing, stock, or sales mappings.
+- Prefer explicit confirmation and visible evidence for mappings.
+- Do not bypass validation to make imports pass.
+- Do not weaken validation rules without explaining business/data impact.
+- Cleanup/delete flows must show dependencies and require explicit action where data loss may occur.
+- DAP is commercial sell-in/evidence pricing, not PM bottom cost or landed cost.
+- PM bottom/controlled cost is an internal cost input and must not be confused with DAP.
+
+Import behavior:
+- Parser output, validation output, UI mapping state, API contracts, worker jobs, and database state must stay synchronized.
+- Apply/commit flows must be safe against refresh, retry, double-click, duplicate submission, stale jobs, and partial completion.
+- Previous jobs should remain inspectable where supported.
+- If adding retry, re-upload, resume, fix, cleanup, or delete behavior, preserve auditability.
+
+UI:
+- UI must make data state obvious: draft, mapped, validated, failed, queued, running, completed, applied/committed, blocked.
+- Error messages should tell the user what to do next.
+- Dependency/delete blockers should show where the data exists and offer safe cleanup paths where appropriate.
