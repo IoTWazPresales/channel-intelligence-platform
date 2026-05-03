@@ -36,16 +36,21 @@ import {
 } from '@mui/material';
 import Link from '@mui/material/Link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ColDef } from 'ag-grid-community';
+import type { ColDef, GridApi, GridOptions } from 'ag-grid-community';
 import NextLink from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { BulkSelectionToolbar } from '@/components/bulkTable/BulkSelectionToolbar';
+import {
+  ImportJobBulkDeleteImpactDialog,
+  type ImportJobBulkDeletePreview,
+} from '@/components/bulkTable/ImportJobBulkDeleteImpactDialog';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
-import { apiGet, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
+import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
@@ -345,6 +350,15 @@ function AdminImportsPageContent() {
   const [pmRowFilter, setPmRowFilter] = useState<'all' | 'unmapped' | 'mapped' | 'core'>('all');
   const [pmBulkSelected, setPmBulkSelected] = useState<Record<string, boolean>>({});
   const [dsiMapDraft, setDsiMapDraft] = useState<Record<string, string>>({});
+  const [jobsBulkSelectionMode, setJobsBulkSelectionMode] = useState<'normal' | 'selecting'>('normal');
+  const [jobsSelectedCount, setJobsSelectedCount] = useState(0);
+  const [jobsVisibleRowCount, setJobsVisibleRowCount] = useState(0);
+  const jobsGridApiRef = useRef<GridApi<Job> | null>(null);
+  const [importJobBulkDeleteOpen, setImportJobBulkDeleteOpen] = useState(false);
+  const [importJobBulkDeletePreview, setImportJobBulkDeletePreview] = useState<ImportJobBulkDeletePreview | null>(null);
+  const [importJobBulkDeleteBusy, setImportJobBulkDeleteBusy] = useState(false);
+  const [importJobDeleteSemanticArtifacts, setImportJobDeleteSemanticArtifacts] = useState(false);
+  const [importJobBulkDeleteAck, setImportJobBulkDeleteAck] = useState(false);
 
   const jobIdParam = useMemo(() => {
     const v = searchParams.get('job');
@@ -981,6 +995,89 @@ function AdminImportsPageContent() {
   );
 
   const jobsList = jobs ?? [];
+
+  useEffect(() => {
+    if (jobsBulkSelectionMode !== 'selecting') {
+      jobsGridApiRef.current?.deselectAll();
+      setJobsSelectedCount(0);
+    }
+  }, [jobsBulkSelectionMode]);
+
+  useEffect(() => {
+    setJobsVisibleRowCount(jobsList.length);
+  }, [jobsList.length]);
+
+  const jobsGridOptions = useMemo<GridOptions<Job>>(() => {
+    const base: GridOptions<Job> = {
+      onGridReady: (e) => {
+        jobsGridApiRef.current = e.api;
+        setJobsVisibleRowCount(e.api.getDisplayedRowCount());
+      },
+      onFilterChanged: (e) => {
+        if (jobsBulkSelectionMode === 'selecting') setJobsVisibleRowCount(e.api.getDisplayedRowCount());
+      },
+      onSortChanged: (e) => {
+        if (jobsBulkSelectionMode === 'selecting') setJobsVisibleRowCount(e.api.getDisplayedRowCount());
+      },
+    };
+    if (jobsBulkSelectionMode !== 'selecting') return base;
+    return {
+      ...base,
+      rowSelection: {
+        mode: 'multiRow',
+        checkboxes: true,
+        headerCheckbox: true,
+        enableClickSelection: false,
+      },
+      onSelectionChanged: (e) => {
+        setJobsSelectedCount(e.api.getSelectedRows().length);
+      },
+    };
+  }, [jobsBulkSelectionMode]);
+
+  const openImportJobBulkDeletePreview = useCallback(async () => {
+    const api = jobsGridApiRef.current;
+    if (!api) return;
+    const ids = api.getSelectedRows().map((r) => r.id);
+    if (!ids.length) return;
+    setImportJobBulkDeleteBusy(true);
+    setImportJobDeleteSemanticArtifacts(false);
+    setImportJobBulkDeleteAck(false);
+    try {
+      const data = await apiPost<ImportJobBulkDeletePreview>('/api/v1/imports/jobs/bulk-delete-preview', { job_ids: ids });
+      setImportJobBulkDeletePreview(data);
+      setImportJobBulkDeleteOpen(true);
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setImportJobBulkDeleteBusy(false);
+    }
+  }, []);
+
+  const closeImportJobBulkDeleteDialog = useCallback(() => {
+    if (importJobBulkDeleteBusy) return;
+    setImportJobBulkDeleteOpen(false);
+    setImportJobBulkDeletePreview(null);
+  }, [importJobBulkDeleteBusy]);
+
+  const confirmImportJobBulkDelete = useCallback(async () => {
+    if (!importJobBulkDeletePreview) return;
+    setImportJobBulkDeleteBusy(true);
+    try {
+      await apiPost('/api/v1/imports/jobs/bulk-delete-confirm', {
+        job_ids: importJobBulkDeletePreview.job_ids,
+        delete_semantic_artifacts: importJobDeleteSemanticArtifacts,
+      });
+      setImportJobBulkDeleteOpen(false);
+      setImportJobBulkDeletePreview(null);
+      setJobsBulkSelectionMode('normal');
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setImportJobBulkDeleteBusy(false);
+    }
+  }, [importJobBulkDeletePreview, importJobDeleteSemanticArtifacts, qc]);
 
   const canGoUploadGeneric =
     selectedSlug &&
@@ -2871,10 +2968,52 @@ function AdminImportsPageContent() {
             primary: { label: 'Mapping queue', href: '/admin/mappings' },
             secondary: { label: 'Getting started', href: '/getting-started' },
           }}
-          toolbar={<ModuleGridToolbar onRefresh={() => qc.invalidateQueries({ queryKey: ['import-jobs'] })} />}
+          toolbar={
+            <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" useFlexGap sx={{ mb: 2 }}>
+              <ModuleGridToolbar
+                sx={{ mb: 0 }}
+                onRefresh={() => void qc.invalidateQueries({ queryKey: ['import-jobs'] })}
+              />
+              <BulkSelectionToolbar
+                mode={jobsBulkSelectionMode}
+                selectedCount={jobsSelectedCount}
+                visibleRowCount={jobsVisibleRowCount}
+                onEnterSelectionMode={() => setJobsBulkSelectionMode('selecting')}
+                onExitSelectionMode={() => setJobsBulkSelectionMode('normal')}
+                onSelectAllVisible={() => {
+                  const api = jobsGridApiRef.current;
+                  if (!api) return;
+                  api.forEachNodeAfterFilterAndSort((node) => {
+                    if (node.data) node.setSelected(true);
+                  });
+                }}
+                onDeselectAll={() => jobsGridApiRef.current?.deselectAll()}
+                onPreviewDangerAction={() => void openImportJobBulkDeletePreview()}
+                previewDangerDisabled={importJobBulkDeleteBusy}
+                busy={importJobBulkDeleteBusy}
+              />
+            </Stack>
+          }
         >
-          <EnterpriseDataGrid rowData={jobsList} columnDefs={colDefs} height={420} />
+          <EnterpriseDataGrid
+            key={jobsBulkSelectionMode === 'selecting' ? 'jobs-bulk' : 'jobs-normal'}
+            rowData={jobsList}
+            columnDefs={colDefs}
+            height={420}
+            gridOptions={jobsGridOptions}
+          />
         </ModuleDataSection>
+        <ImportJobBulkDeleteImpactDialog
+          open={importJobBulkDeleteOpen}
+          busy={importJobBulkDeleteBusy}
+          preview={importJobBulkDeletePreview}
+          deleteSemanticArtifacts={importJobDeleteSemanticArtifacts}
+          onDeleteSemanticArtifactsChange={setImportJobDeleteSemanticArtifacts}
+          impactAcknowledged={importJobBulkDeleteAck}
+          onImpactAcknowledgedChange={setImportJobBulkDeleteAck}
+          onClose={closeImportJobBulkDeleteDialog}
+          onConfirm={() => void confirmImportJobBulkDelete()}
+        />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
           Line-up bulk upsert remains on the{' '}
           <Link component={NextLink} href="/lineup">

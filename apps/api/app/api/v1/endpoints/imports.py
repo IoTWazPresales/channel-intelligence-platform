@@ -1,8 +1,9 @@
 import json
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -20,6 +21,7 @@ from app.services.imports.dsi_mapping_workflow import (
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
 from app.storage.local import get_storage_backend
+from app.services.imports.import_job_bulk_delete import bulk_delete_import_jobs, normalize_job_ids, preview_import_job_bulk_delete
 from app.services.imports.template_definitions import product_master_sample_csv
 
 router = APIRouter()
@@ -27,6 +29,24 @@ router = APIRouter()
 
 def _is_admin(x_user_role: str | None) -> bool:
     return (x_user_role or "").strip().lower() == "admin"
+
+
+def _require_admin_import_maintenance(
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> None:
+    if not _is_admin(x_user_role):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "admin_required", "message": "Admin maintenance requires X-User-Role: admin"},
+        )
+
+
+class ImportJobBulkIdsBody(BaseModel):
+    job_ids: list[int] = Field(default_factory=list, max_length=200)
+
+
+class ImportJobBulkDeleteConfirmBody(ImportJobBulkIdsBody):
+    delete_semantic_artifacts: bool = False
 
 
 def _template_to_api(t: ImportTemplate) -> dict[str, Any]:
@@ -153,6 +173,67 @@ async def list_jobs(db: AsyncSession = Depends(get_db)):
         }
         for j in rows
     ]
+
+
+@router.post("/jobs/bulk-delete-preview")
+async def post_import_jobs_bulk_delete_preview(
+    body: ImportJobBulkIdsBody,
+    _admin: None = Depends(_require_admin_import_maintenance),
+):
+    """Return artifact counts for selected import jobs (admin maintenance; preview before delete)."""
+    if not normalize_job_ids(body.job_ids):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_job_ids", "message": "Provide at least one valid import job id."},
+        )
+    with SessionLocal() as db:
+        return preview_import_job_bulk_delete(db, body.job_ids)
+
+
+@router.post("/jobs/bulk-delete-confirm")
+async def post_import_jobs_bulk_delete_confirm(
+    body: ImportJobBulkDeleteConfirmBody,
+    _admin: None = Depends(_require_admin_import_maintenance),
+):
+    """Transactionally delete import jobs and directly linked ingestion artifacts (admin only)."""
+    if not normalize_job_ids(body.job_ids):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_job_ids", "message": "Provide at least one valid import job id."},
+        )
+    with SessionLocal() as db:
+        try:
+            out = bulk_delete_import_jobs(
+                db,
+                body.job_ids,
+                delete_semantic_artifacts=body.delete_semantic_artifacts,
+            )
+            db.commit()
+        except ValueError as exc:
+            db.rollback()
+            code = str(exc)
+            if code == "not_all_jobs_found":
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": code,
+                        "message": "One or more job ids no longer exist; refresh the list and try again.",
+                    },
+                )
+            if code == "semantic_artifacts_present":
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "error": code,
+                        "message": (
+                            "Steward aliases linked to these jobs still exist. "
+                            "Preview counts are in the risky section; either remove aliases elsewhere first, "
+                            "or confirm with delete_semantic_artifacts=true."
+                        ),
+                    },
+                )
+            raise HTTPException(status_code=400, detail={"error": code}) from exc
+    return out
 
 
 @router.post("/jobs")
