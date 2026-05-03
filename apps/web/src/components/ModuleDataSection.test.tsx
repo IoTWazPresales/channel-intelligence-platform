@@ -1,7 +1,9 @@
+import { Stack } from '@mui/material';
 import { describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 import userEvent from '@testing-library/user-event';
+import { screen } from '@testing-library/react';
 
 import { ModuleDataSection } from './ModuleDataSection';
 
@@ -40,5 +42,25 @@ describe('ModuleDataSection', () => {
       </ModuleDataSection>
     );
     expect(getByText('grid-body')).toBeInTheDocument();
+  });
+
+  it('wraps intro in a div so block intro content is not nested inside a paragraph', () => {
+    renderWithProviders(
+      <ModuleDataSection
+        introWhen="always"
+        intro={
+          <Stack spacing={1}>
+            <div>intro-block-child</div>
+          </Stack>
+        }
+        isEmpty
+        empty={emptyProps}
+      >
+        <div>hidden-when-empty</div>
+      </ModuleDataSection>
+    );
+    const introRoot = screen.getByTestId('module-data-section-intro');
+    expect(introRoot.tagName.toLowerCase()).toBe('div');
+    expect(screen.getByText('intro-block-child').closest('p')).toBeNull();
   });
 });
