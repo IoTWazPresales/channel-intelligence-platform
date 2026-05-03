@@ -12,8 +12,8 @@ Company policy may forbid **Docker Desktop** while still allowing **native** ins
 | API | `pnpm dev:api` (FastAPI in `apps/api/.venv`) |
 | API + web (no worker) | **`pnpm dev:api-web`** (one terminal) |
 | PostgreSQL | Local install (Windows service or manual `postgres`); create DB/user matching `.env` |
-| Redis | Optional: local [Redis for Windows](https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/install-redis-on-windows/) / Memurai / WSL `redis-server` **if approved** |
-| Celery worker | Optional: `pnpm dev:worker` when Redis is available |
+| Redis | Optional: local [Redis for Windows](https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/install-redis-on-windows/) / Memurai / WSL `redis-server` **if approved** — must accept TCP on the host/port in `CELERY_BROKER_URL` (default **127.0.0.1:6379**) |
+| Celery worker | Optional: `pnpm dev:worker` when Redis is available (script **preflights** broker TCP and uses **`--pool=solo` on Windows** unless you set `CIP_CELERY_WORKER_POOL`) |
 
 **Docker Compose files under `infra/docker/` are not removed.** They remain the reference for full-stack parity and for CI or teammates who still use containerized dependencies. This guide only adds a **supported path that does not require Docker Desktop**.
 
@@ -125,6 +125,27 @@ If port **3000** or **8001** is taken, use `pnpm dev:ports` and stop the conflic
 3. In a third terminal: `pnpm dev:worker`.
 
 This matches production behavior (separate worker process, broker-backed queue).
+
+### Reproducible no-Docker broker path (Windows)
+
+Docker is **not** required. For **real** Product Master commit (default `CIP_DEV_CELERY_DISPATCH=broker`), you need **Redis listening where `CELERY_BROKER_URL` points** (defaults use logical DB **1** on the same TCP port **6379** as DB 0/2 — one `redis-server` process covers all).
+
+1. **Install / start Redis** using an approved option (examples only — follow your IT policy):
+   - **Memurai** or **Redis for Windows** on the host, **or**
+   - **WSL** (e.g. Ubuntu): `sudo apt install redis-server` then start `redis-server` so it listens on `0.0.0.0:6379` or `127.0.0.1:6379` (WSL2 usually forwards **Windows `localhost:6379`** to the instance — verify with `Test-NetConnection 127.0.0.1 -Port 6379` from PowerShell or `redis-cli -h 127.0.0.1 ping`).
+2. **Verify broker TCP** before the worker: `pnpm dev:worker` runs a short TCP preflight to the host/port parsed from `CELERY_BROKER_URL`. If Redis is down, the script **exits with a clear error** (no silent hang in Celery).
+3. **Three processes** (separate terminals from repo root):
+   - `pnpm dev:api`
+   - `pnpm dev:web`
+   - `pnpm dev:worker`
+4. **Windows Celery pool:** `scripts/dev-worker.js` passes **`--pool=solo`** on Windows by default (prefork is unreliable there). To use another pool: set `CIP_CELERY_WORKER_POOL` (e.g. `prefork` on macOS/Linux overrides are rarely needed). **Do not** change production Linux workers unless you know your deployment needs a non-default pool.
+
+**Escape hatches (explicit only):**
+
+| Variable | Purpose |
+|----------|---------|
+| `CIP_SKIP_REDIS_PREFLIGHT=1` | Skip the TCP check (CI / exotic networking only — **not** normal dev). |
+| `CIP_REDIS_PREFLIGHT_TIMEOUT_MS` | Preflight timeout in ms (default `3000`). |
 
 ---
 
