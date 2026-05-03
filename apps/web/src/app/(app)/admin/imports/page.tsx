@@ -2233,13 +2233,37 @@ function AdminImportsPageContent() {
             {dsiValidate.isSuccess ? (
               <Alert
                 severity={
-                  distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0 ? 'warning' : 'success'
+                  distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0
+                    ? 'warning'
+                    : distributorSiSummary != null &&
+                        ((distributorSiSummary.warning_rows ?? 0) > 0 ||
+                          (distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0)
+                      ? 'warning'
+                      : 'success'
                 }
                 data-testid="dsi-validate-finished"
               >
-                {distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0
-                  ? 'Validation finished with blocking issues. Fix mappings or source data, then re-run validation before applying.'
-                  : 'Validation finished. Review the summary and row diagnostics below.'}
+                {distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0 ? (
+                  'Validation finished with blocking issues. Fix mappings or source data, then re-run validation before applying.'
+                ) : distributorSiSummary != null &&
+                  ((distributorSiSummary.warning_rows ?? 0) > 0 ||
+                    (distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0) ? (
+                  <>
+                    Validation finished without blocking distributor/product errors. Some rows still have warnings
+                    (including possible sell-out customer or transaction-date issues).{' '}
+                    {(distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0 ? (
+                      <>
+                        <strong>{distributorSiSummary.rows_inventory_ready_with_sellout_warnings}</strong> row(s) have
+                        valid distributor inventory (stock snapshot) but incomplete sell-out — applying may still upsert
+                        inventory facts while leaving sell-out unresolved for those rows unless you fix mappings or
+                        aliases first.{' '}
+                      </>
+                    ) : null}
+                    Review row diagnostics and mapping candidates before applying.
+                  </>
+                ) : (
+                  'Validation finished. Review the summary and row diagnostics below.'
+                )}
               </Alert>
             ) : null}
             {lastJobId != null && distributorSiSummary ? (
@@ -2257,6 +2281,13 @@ function AdminImportsPageContent() {
                       Mapping queue
                     </Link>{' '}
                     ({dsiCandidates.length} group{dsiCandidates.length !== 1 ? 's' : ''} for this job).
+                  </Typography>
+                ) : null}
+                {(distributorSiSummary.warning_rows ?? 0) > 0 ||
+                (distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0 ? (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                    Warnings do not block Continue to apply when there are zero blocking rows — inventory may still load
+                    where the file has valid stock snapshots even if some sell-out lines are incomplete.
                   </Typography>
                 ) : null}
               </Alert>
@@ -2324,6 +2355,21 @@ function AdminImportsPageContent() {
               for sell-out; distributor + product + snapshot date for inventory). Re-uploading overlapping history updates
               existing facts instead of duplicating them.
             </Alert>
+            {distributorSiSummary != null &&
+            ((distributorSiSummary.warning_rows ?? 0) > 0 ||
+              (distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0) ? (
+              <Alert severity="warning" data-testid="dsi-apply-sellout-warning-reminder">
+                This job&apos;s last validation reported warnings. Sell-out may be incomplete for some rows while
+                inventory may still apply where stock snapshots are valid. Confirm mappings and aliases before applying.
+                {(distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0 ? (
+                  <>
+                    {' '}
+                    <strong>{distributorSiSummary.rows_inventory_ready_with_sellout_warnings}</strong> row(s) matched the
+                    &quot;inventory ready but sell-out blocked&quot; pattern.
+                  </>
+                ) : null}
+              </Alert>
+            ) : null}
             {selectedTemplate.destructive_apply_requires_confirm ? (
               <FormControlLabel
                 control={<Checkbox checked={confirmDestructive} onChange={(_, c) => setConfirmDestructive(c)} />}

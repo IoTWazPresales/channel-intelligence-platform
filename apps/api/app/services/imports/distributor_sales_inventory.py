@@ -334,12 +334,6 @@ def _resolve_customer(
         diagnostics.append("customer_sentinel_unresolved")
         return None, diagnostics
 
-    oc_id = _open_channel_customer_id(db)
-    if open_from_col or open_from_channel:
-        if oc_id:
-            diagnostics.append("customer_open_channel")
-            return oc_id, diagnostics
-
     stmt = select(DimCustomer.id).where(func.lower(DimCustomer.code) == nt)
     cid = db.scalar(stmt)
     if cid:
@@ -354,6 +348,15 @@ def _resolve_customer(
     if len(ids) > 1:
         diagnostics.append("ambiguous_customer_name")
         return None, diagnostics
+
+    # Open Channel **evidence column** only: after dim/alias could not resolve a non-empty token,
+    # treat explicit workbook evidence as intent to post to OPEN_CHANNEL (report profile).
+    # Channel-key text alone must not override a named dealer/customer token (historical RAW rows).
+    if open_from_col:
+        oc_force = _open_channel_customer_id(db)
+        if oc_force:
+            diagnostics.append("customer_open_channel_evidence_override")
+            return int(oc_force), diagnostics
 
     diagnostics.append("customer_unresolved")
     return None, diagnostics
@@ -431,6 +434,8 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
     blocking = 0
     warnings = 0
     first_unresolved_dist_raw: str | None = None
+    dsi_sellout_issue_rows = 0
+    dsi_inv_ready_with_sellout_issue_rows = 0
 
     for idx, row in df.iterrows():
         rn = int(idx) + 1
@@ -520,6 +525,15 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             and rcustomer_id is not None
             and qty_sold is not None
         )
+
+        if sellout_blocked_no_customer or sellout_blocked_no_tx:
+            dsi_sellout_issue_rows += 1
+        if (
+            not hard_row
+            and inv_ready
+            and (sellout_blocked_no_customer or sellout_blocked_no_tx)
+        ):
+            dsi_inv_ready_with_sellout_issue_rows += 1
 
         sev: str = "info"
         if hard_row:
@@ -813,6 +827,8 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         "warning_rows": warnings,
         "aggregated_candidates": len(agg),
         "import_mode": job.import_mode,
+        "sellout_issue_rows": dsi_sellout_issue_rows,
+        "rows_inventory_ready_with_sellout_warnings": dsi_inv_ready_with_sellout_issue_rows,
     }
     db.add(
         ImportRowResult(

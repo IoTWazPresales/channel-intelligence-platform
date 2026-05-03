@@ -53,6 +53,26 @@ describe('dsiStepUtils', () => {
     expect(parseDistributorSiSummaryFromRows(rows)?.blocking_rows).toBe(0);
   });
 
+  it('parseDistributorSiSummaryFromRows reads extended DSI counters', () => {
+    const rows = [
+      {
+        row_number: 0,
+        code: 'distributor_si_summary',
+        message: JSON.stringify({
+          staging_rows: 2,
+          blocking_rows: 0,
+          warning_rows: 2,
+          aggregated_candidates: 1,
+          sellout_issue_rows: 2,
+          rows_inventory_ready_with_sellout_warnings: 2,
+        }),
+      },
+    ];
+    const s = parseDistributorSiSummaryFromRows(rows);
+    expect(s?.sellout_issue_rows).toBe(2);
+    expect(s?.rows_inventory_ready_with_sellout_warnings).toBe(2);
+  });
+
   it('dsiContinueToApplyAllowed gates on job, mapping key, and blocking rows', () => {
     const fm = { a: 'distributor_token' };
     const key = `7::${stableFieldMappingJson(fm)}`;

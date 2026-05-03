@@ -61,6 +61,10 @@ export type DistributorSiSummary = {
   warning_rows?: number;
   aggregated_candidates?: number;
   import_mode?: string;
+  /** Rows with sell-out blocked (missing customer or missing tx for non-zero qty), excluding hard distributor/product errors. */
+  sellout_issue_rows?: number;
+  /** Subset: inventory path is valid (SOH + snapshot) but sell-out still blocked — inventory may apply on apply. */
+  rows_inventory_ready_with_sellout_warnings?: number;
 };
 
 /** Parse distributor_si_summary row from import job preview rows (DSI validate). */
