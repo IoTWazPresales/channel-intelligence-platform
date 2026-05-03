@@ -1,9 +1,9 @@
 /**
- * Print listeners on common dev ports (3000 web, 8000 API) to debug stale processes.
+ * Print listeners on common dev ports (3000 web, 8001 API, plus stale 8000) to debug stale processes.
  */
 const { execSync } = require('child_process');
 
-const ports = [3000, 8000];
+const ports = [3000, 8001, 8000];
 
 for (const port of ports) {
   console.log(`\n=== Port ${port} ===`);

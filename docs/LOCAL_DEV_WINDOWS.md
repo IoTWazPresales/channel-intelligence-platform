@@ -47,6 +47,40 @@ pnpm local:db:migrate
 
 5. Create upload directory once: `apps/api/storage/uploads` (or set `LOCAL_STORAGE_PATH` in `.env`).
 
+### Migrations: `must be owner of table dim_customer` (or similar)
+
+PostgreSQL only allows the **table owner** (or a superuser) to run `ALTER TABLE ... ADD COLUMN`. The Customers Phase 1 revision `20260426_0012` alters `dim_customer`, so Alembic must connect as that owner.
+
+The initial revision `20260412_0001` uses `Base.metadata.create_all()`, which assigns **ownership of every created table to the database role used for that migration**. If that first upgrade was run as **`postgres`** (or you restored a dump owned by another role), later runs of `pnpm local:db:migrate` as **`cip`** can fail with `InsufficientPrivilege: must be owner of table dim_customer`.
+
+**Diagnose (any SQL client, connected to database `cip`):**
+
+```sql
+SELECT tablename, tableowner
+FROM pg_tables
+WHERE schemaname = 'public' AND tablename = 'dim_customer';
+```
+
+**Fix (pick one; lowest blast radius first):**
+
+1. **Reassign ownership to `cip`** (recommended when objects should be owned by the app role). Connect as a superuser (often `postgres`) to database `cip`, then:
+
+   ```sql
+   ALTER TABLE public.dim_customer OWNER TO cip;
+   ```
+
+   If many tables are owned by the wrong role, broader repair is appropriate for **local dev only**:
+
+   ```sql
+   REASSIGN OWNED BY postgres TO cip;
+   ```
+
+   (Replace `postgres` with whatever `tableowner` shows from the diagnostic query.)
+
+2. **Run migrations as a superuser only for Alembic** (optional; avoids changing table ownership). In `apps/api/.env`, set `DATABASE_URL_SYNC_MIGRATE` to a superuser sync URL (see `apps/api/.env.example`), run `pnpm local:db:migrate`, then **remove** `DATABASE_URL_SYNC_MIGRATE` so the API continues to use `DATABASE_URL_SYNC` as `cip`.
+
+**Do not** stamp Alembic to head without applying revisions, or otherwise bypass migration history.
+
 ---
 
 ## Recommended startup order
@@ -76,9 +110,9 @@ pnpm dev:web
 ```
 
 - Web: [http://localhost:3000](http://localhost:3000)
-- API: [http://localhost:8000/docs](http://localhost:8000/docs)
+- API: [http://localhost:8001/docs](http://localhost:8001/docs)
 
-If port **3000** or **8000** is taken, use `pnpm dev:ports` and stop the conflicting process.
+If port **3000** or **8001** is taken, use `pnpm dev:ports` and stop the conflicting process.
 
 ---
 
@@ -118,7 +152,7 @@ From repo root (uses `apps/api/.venv`):
 
 | Script | Command |
 |--------|---------|
-| Migrations | `pnpm local:db:migrate` |
+| Migrations | `pnpm local:db:migrate` (Alembic uses `DATABASE_URL_SYNC_MIGRATE` when set, else `DATABASE_URL_SYNC`) |
 | Wipe app tables | `pnpm local:db:wipe` |
 | Seed | `pnpm local:db:seed` |
 
@@ -128,10 +162,10 @@ These replace **`pnpm docker:db:wipe`** / **`pnpm docker:db:wipe:run`** when not
 
 ## End-to-end tests (Playwright)
 
-`pnpm docker:e2e` defaults the API URL to **:8010** (Docker host port). For native API on **8000**:
+`pnpm docker:e2e` defaults the API URL to **:8010** (Docker host port). For native API on **8001**:
 
 ```powershell
-$env:CIP_E2E_API_URL = "http://127.0.0.1:8000"
+$env:CIP_E2E_API_URL = "http://127.0.0.1:8001"
 pnpm test:e2e
 ```
 
@@ -156,6 +190,6 @@ pnpm test:e2e
 ## Manual / tribal knowledge (still required)
 
 - **Python 3.12** for `asyncpg` wheels; wrong version breaks `pip install`.
-- **Port hygiene:** `pnpm dev:ports` when :3000 / :8000 are busy; Docker app containers must be stopped if they bind those ports.
+- **Port hygiene:** `pnpm dev:ports` when :3000 / :8001 are busy (and also check stale :8000 listeners); Docker app containers must be stopped if they bind those ports.
 - **First-time DB:** create role/database to match `DATABASE_URL` (defaults assume user/db `cip`).
 - **Upload path:** `apps/api/storage/uploads` (or `LOCAL_STORAGE_PATH`) must exist for uploads.

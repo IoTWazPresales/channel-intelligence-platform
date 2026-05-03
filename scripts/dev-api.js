@@ -64,7 +64,7 @@ function preflightListenPort() {
     console.error('[cip-dev-api] skipping port/OpenAPI preflight (CIP_SKIP_API_PORT_PREFLIGHT=1)');
     return Promise.resolve(null);
   }
-  const port = Number(process.env.CIP_API_PORT || 8000);
+  const port = Number(process.env.CIP_API_PORT || 8001);
   const host = '127.0.0.1';
 
   return new Promise((resolve) => {
@@ -93,8 +93,8 @@ function preflightListenPort() {
           if (res.statusCode === 200 && text.includes(OPENAPI_MARKER)) {
             resolve(
               `[cip-dev-api] Port ${port} already serves an OpenAPI document that includes GET /api/v1/dev/database-wipe.\n` +
-                `Another Channel Intelligence API (or duplicate uvicorn) is bound there. Stop it first (e.g. pnpm docker:stop:app if you use Compose for app containers), or start this API on a different port:\n` +
-                `  CIP_API_PORT=8001 pnpm dev:api`
+                `Another Channel Intelligence API (or duplicate uvicorn) is bound there. Stop it first, or start this API on a different port:\n` +
+                `  CIP_API_PORT=8002 pnpm dev:api`
             );
             return;
           }
@@ -102,7 +102,7 @@ function preflightListenPort() {
             resolve(
               `[cip-dev-api] Port ${port} responds with OpenAPI JSON, but it does NOT list /api/v1/dev/database-wipe.\n` +
                 `That almost always means a stale or foreign Python process is still bound to this port.\n` +
-                `Stop the process (Task Manager / pnpm docker:stop:app / lsof) and run pnpm dev:api again.`
+                `Stop the process and run pnpm dev:api again.`
             );
             return;
           }
@@ -150,7 +150,7 @@ function preflightListenPort() {
       '--host',
       process.env.CIP_API_HOST || '0.0.0.0',
       '--port',
-      process.env.CIP_API_PORT || '8000',
+      process.env.CIP_API_PORT || '8001',
     ],
     { cwd: apiRoot, stdio: 'inherit', env: process.env }
   );
