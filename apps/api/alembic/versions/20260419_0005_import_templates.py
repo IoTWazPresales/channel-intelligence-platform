@@ -4,6 +4,9 @@ Revision ID: 20260419_0005
 Revises: 20260418_0004
 Create Date: 2026-04-19
 
+``import_template`` / ``import_job`` / ``source_definition`` may already match the ORM
+from 20260412_0001 ``create_all``. DDL here is guarded so a clean database upgrade does
+not fail on duplicate tables or columns; seed SQL remains idempotent where possible.
 """
 
 import json
@@ -12,6 +15,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from _alembic_revision_helpers import fk_exists, get_inspector, has_column, has_table
 from app.services.imports.template_definitions import DEFAULT_SOURCES, IMPORT_TEMPLATE_ROWS
 
 revision: str = "20260419_0005"
@@ -21,50 +25,62 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "import_template",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("slug", sa.String(length=64), nullable=False),
-        sa.Column("display_name", sa.String(length=256), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("hidden", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-        sa.Column("admin_only", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-        sa.Column("requires_provider", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("pipeline_handler", sa.String(length=64), nullable=False),
-        sa.Column(
-            "destructive_apply_requires_confirm",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.text("false"),
-        ),
-        sa.Column("accepted_file_types", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("expected_columns", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("slug"),
-    )
+    bind = op.get_bind()
+    insp = get_inspector(bind)
 
-    op.add_column("source_definition", sa.Column("import_template_id", sa.Integer(), nullable=True))
-    op.create_foreign_key(
-        "fk_source_definition_import_template",
-        "source_definition",
-        "import_template",
-        ["import_template_id"],
-        ["id"],
-    )
+    if not has_table(insp, "import_template"):
+        op.create_table(
+            "import_template",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("slug", sa.String(length=64), nullable=False),
+            sa.Column("display_name", sa.String(length=256), nullable=False),
+            sa.Column("description", sa.Text(), nullable=True),
+            sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+            sa.Column("hidden", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+            sa.Column("admin_only", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+            sa.Column("requires_provider", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+            sa.Column("pipeline_handler", sa.String(length=64), nullable=False),
+            sa.Column(
+                "destructive_apply_requires_confirm",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.text("false"),
+            ),
+            sa.Column("accepted_file_types", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+            sa.Column("expected_columns", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("slug"),
+        )
 
-    op.add_column(
-        "import_job",
-        sa.Column("import_mode", sa.String(length=32), nullable=False, server_default="apply"),
-    )
-    op.add_column("import_job", sa.Column("template_slug", sa.String(length=64), nullable=True))
+    insp = get_inspector(bind)
+    if not has_column(insp, "source_definition", "import_template_id"):
+        op.add_column("source_definition", sa.Column("import_template_id", sa.Integer(), nullable=True))
+    insp = get_inspector(bind)
+    if not fk_exists(insp, "source_definition", "fk_source_definition_import_template"):
+        op.create_foreign_key(
+            "fk_source_definition_import_template",
+            "source_definition",
+            "import_template",
+            ["import_template_id"],
+            ["id"],
+        )
+
+    insp = get_inspector(bind)
+    if not has_column(insp, "import_job", "import_mode"):
+        op.add_column(
+            "import_job",
+            sa.Column("import_mode", sa.String(length=32), nullable=False, server_default="apply"),
+        )
+    insp = get_inspector(bind)
+    if not has_column(insp, "import_job", "template_slug"):
+        op.add_column("import_job", sa.Column("template_slug", sa.String(length=64), nullable=True))
 
     conn = op.get_bind()
 
@@ -81,6 +97,7 @@ def upgrade() -> None:
                     :requires_provider, :pipeline_handler, :destructive,
                     CAST(:accepted AS jsonb), CAST(:expected AS jsonb)
                 )
+                ON CONFLICT (slug) DO NOTHING
                 """
             ),
             {
@@ -142,12 +159,32 @@ def upgrade() -> None:
         )
     )
 
-    op.alter_column("source_definition", "import_template_id", existing_type=sa.Integer(), nullable=False)
+    insp = get_inspector(bind)
+    it_id_col = next(
+        (c for c in insp.get_columns("source_definition") if c.get("name") == "import_template_id"),
+        None,
+    )
+    if it_id_col is not None and it_id_col.get("nullable", True):
+        op.alter_column("source_definition", "import_template_id", existing_type=sa.Integer(), nullable=False)
 
 
 def downgrade() -> None:
-    op.drop_column("import_job", "template_slug")
-    op.drop_column("import_job", "import_mode")
-    op.drop_constraint("fk_source_definition_import_template", "source_definition", type_="foreignkey")
-    op.drop_column("source_definition", "import_template_id")
-    op.drop_table("import_template")
+    bind = op.get_bind()
+    insp = get_inspector(bind)
+
+    if has_column(insp, "import_job", "template_slug"):
+        op.drop_column("import_job", "template_slug")
+    insp = get_inspector(bind)
+    if has_column(insp, "import_job", "import_mode"):
+        op.drop_column("import_job", "import_mode")
+
+    insp = get_inspector(bind)
+    if fk_exists(insp, "source_definition", "fk_source_definition_import_template"):
+        op.drop_constraint("fk_source_definition_import_template", "source_definition", type_="foreignkey")
+    insp = get_inspector(bind)
+    if has_column(insp, "source_definition", "import_template_id"):
+        op.drop_column("source_definition", "import_template_id")
+
+    insp = get_inspector(bind)
+    if has_table(insp, "import_template"):
+        op.drop_table("import_template")

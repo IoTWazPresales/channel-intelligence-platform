@@ -4,12 +4,16 @@ Revision ID: 20260421_0007
 Revises: 20260420_0006
 Create Date: 2026-04-21
 
+Catalog tables and ``source_definition.product_catalog_id`` may already exist from
+20260412_0001 ``create_all``; guarded DDL keeps empty-database upgrades from failing.
 """
 
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+
+from _alembic_revision_helpers import fk_exists, get_inspector, has_column, has_table
 
 revision: str = "20260421_0007"
 down_revision: Union[str, Sequence[str], None] = "20260420_0006"
@@ -18,122 +22,138 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "business_unit",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("code", sa.String(length=64), nullable=False),
-        sa.Column("name", sa.String(length=256), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.PrimaryKeyConstraint("id", name="pk_business_unit"),
-        sa.UniqueConstraint("code", name="uq_business_unit_code"),
-    )
+    bind = op.get_bind()
+    insp = get_inspector(bind)
 
-    op.create_table(
-        "product_catalog",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("business_unit_id", sa.Integer(), nullable=False),
-        sa.Column("code", sa.String(length=64), nullable=False),
-        sa.Column("name", sa.String(length=256), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["business_unit_id"],
-            ["business_unit.id"],
-            name="fk_pc_business_unit_id",
-        ),
-        sa.PrimaryKeyConstraint("id", name="pk_product_catalog"),
-        sa.UniqueConstraint("business_unit_id", "code", name="uq_product_catalog_bu_code"),
-    )
+    if not has_table(insp, "business_unit"):
+        op.create_table(
+            "business_unit",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("code", sa.String(length=64), nullable=False),
+            sa.Column("name", sa.String(length=256), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+            sa.PrimaryKeyConstraint("id", name="pk_business_unit"),
+            sa.UniqueConstraint("code", name="uq_business_unit_code"),
+        )
 
-    op.create_table(
-        "attribute_definition",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("namespace", sa.String(length=256), nullable=False),
-        sa.Column("catalog_id", sa.Integer(), nullable=True),
-        sa.Column("display_name", sa.String(length=256), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("data_type", sa.String(length=32), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["catalog_id"],
-            ["product_catalog.id"],
-            name="fk_attr_def_catalog_id",
-        ),
-        sa.PrimaryKeyConstraint("id", name="pk_attribute_definition"),
-        sa.UniqueConstraint("namespace", name="uq_attribute_definition_namespace"),
-    )
+    insp = get_inspector(bind)
+    if not has_table(insp, "product_catalog"):
+        op.create_table(
+            "product_catalog",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("business_unit_id", sa.Integer(), nullable=False),
+            sa.Column("code", sa.String(length=64), nullable=False),
+            sa.Column("name", sa.String(length=256), nullable=False),
+            sa.Column("description", sa.Text(), nullable=True),
+            sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(
+                ["business_unit_id"],
+                ["business_unit.id"],
+                name="fk_pc_business_unit_id",
+            ),
+            sa.PrimaryKeyConstraint("id", name="pk_product_catalog"),
+            sa.UniqueConstraint("business_unit_id", "code", name="uq_product_catalog_bu_code"),
+        )
 
-    op.create_table(
-        "catalog_product",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("catalog_id", sa.Integer(), nullable=False),
-        sa.Column("source_sku", sa.String(length=128), nullable=False),
-        sa.Column("display_name", sa.String(length=512), nullable=True),
-        sa.Column("canonical_product_id", sa.Integer(), nullable=True),
-        sa.Column("source_metadata_json", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("last_import_job_id", sa.Integer(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["catalog_id"],
-            ["product_catalog.id"],
-            name="fk_cat_prod_catalog_id",
-        ),
-        sa.ForeignKeyConstraint(
-            ["canonical_product_id"],
-            ["dim_product.id"],
-            name="fk_cat_prod_canonical_id",
-        ),
-        sa.ForeignKeyConstraint(
-            ["last_import_job_id"],
-            ["import_job.id"],
-            name="fk_cat_prod_import_job_id",
-        ),
-        sa.PrimaryKeyConstraint("id", name="pk_catalog_product"),
-        sa.UniqueConstraint("catalog_id", "source_sku", name="uq_catalog_product_catalog_sku"),
-    )
+    insp = get_inspector(bind)
+    if not has_table(insp, "attribute_definition"):
+        op.create_table(
+            "attribute_definition",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("namespace", sa.String(length=256), nullable=False),
+            sa.Column("catalog_id", sa.Integer(), nullable=True),
+            sa.Column("display_name", sa.String(length=256), nullable=False),
+            sa.Column("description", sa.Text(), nullable=True),
+            sa.Column("data_type", sa.String(length=32), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(
+                ["catalog_id"],
+                ["product_catalog.id"],
+                name="fk_attr_def_catalog_id",
+            ),
+            sa.PrimaryKeyConstraint("id", name="pk_attribute_definition"),
+            sa.UniqueConstraint("namespace", name="uq_attribute_definition_namespace"),
+        )
 
-    op.create_table(
-        "product_attribute_value",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("catalog_product_id", sa.Integer(), nullable=False),
-        sa.Column("attribute_definition_id", sa.Integer(), nullable=False),
-        sa.Column("value_json", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["attribute_definition_id"],
-            ["attribute_definition.id"],
-            name="fk_pav_attr_def_id",
-        ),
-        sa.ForeignKeyConstraint(
-            ["catalog_product_id"],
-            ["catalog_product.id"],
-            name="fk_pav_catalog_product_id",
-        ),
-        sa.PrimaryKeyConstraint("id", name="pk_product_attribute_value"),
-        sa.UniqueConstraint(
-            "catalog_product_id",
-            "attribute_definition_id",
-            name="uq_pav_catalog_product_attr",
-        ),
-    )
+    insp = get_inspector(bind)
+    if not has_table(insp, "catalog_product"):
+        op.create_table(
+            "catalog_product",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("catalog_id", sa.Integer(), nullable=False),
+            sa.Column("source_sku", sa.String(length=128), nullable=False),
+            sa.Column("display_name", sa.String(length=512), nullable=True),
+            sa.Column("canonical_product_id", sa.Integer(), nullable=True),
+            sa.Column("source_metadata_json", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+            sa.Column("last_import_job_id", sa.Integer(), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(
+                ["catalog_id"],
+                ["product_catalog.id"],
+                name="fk_cat_prod_catalog_id",
+            ),
+            sa.ForeignKeyConstraint(
+                ["canonical_product_id"],
+                ["dim_product.id"],
+                name="fk_cat_prod_canonical_id",
+            ),
+            sa.ForeignKeyConstraint(
+                ["last_import_job_id"],
+                ["import_job.id"],
+                name="fk_cat_prod_import_job_id",
+            ),
+            sa.PrimaryKeyConstraint("id", name="pk_catalog_product"),
+            sa.UniqueConstraint("catalog_id", "source_sku", name="uq_catalog_product_catalog_sku"),
+        )
 
-    op.add_column(
-        "source_definition",
-        sa.Column("product_catalog_id", sa.Integer(), nullable=True),
-    )
-    op.create_foreign_key(
-        "fk_sd_product_catalog_id",
-        "source_definition",
-        "product_catalog",
-        ["product_catalog_id"],
-        ["id"],
-    )
+    insp = get_inspector(bind)
+    if not has_table(insp, "product_attribute_value"):
+        op.create_table(
+            "product_attribute_value",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("catalog_product_id", sa.Integer(), nullable=False),
+            sa.Column("attribute_definition_id", sa.Integer(), nullable=False),
+            sa.Column("value_json", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(
+                ["attribute_definition_id"],
+                ["attribute_definition.id"],
+                name="fk_pav_attr_def_id",
+            ),
+            sa.ForeignKeyConstraint(
+                ["catalog_product_id"],
+                ["catalog_product.id"],
+                name="fk_pav_catalog_product_id",
+            ),
+            sa.PrimaryKeyConstraint("id", name="pk_product_attribute_value"),
+            sa.UniqueConstraint(
+                "catalog_product_id",
+                "attribute_definition_id",
+                name="uq_pav_catalog_product_attr",
+            ),
+        )
+
+    insp = get_inspector(bind)
+    if not has_column(insp, "source_definition", "product_catalog_id"):
+        op.add_column(
+            "source_definition",
+            sa.Column("product_catalog_id", sa.Integer(), nullable=True),
+        )
+    insp = get_inspector(bind)
+    if not fk_exists(insp, "source_definition", "fk_sd_product_catalog_id"):
+        op.create_foreign_key(
+            "fk_sd_product_catalog_id",
+            "source_definition",
+            "product_catalog",
+            ["product_catalog_id"],
+            ["id"],
+        )
 
     conn = op.get_bind()
     conn.execute(
@@ -161,15 +181,31 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "fk_sd_product_catalog_id",
-        "source_definition",
-        type_="foreignkey",
-    )
-    op.drop_column("source_definition", "product_catalog_id")
+    bind = op.get_bind()
+    insp = get_inspector(bind)
 
-    op.drop_table("product_attribute_value")
-    op.drop_table("catalog_product")
-    op.drop_table("attribute_definition")
-    op.drop_table("product_catalog")
-    op.drop_table("business_unit")
+    if fk_exists(insp, "source_definition", "fk_sd_product_catalog_id"):
+        op.drop_constraint(
+            "fk_sd_product_catalog_id",
+            "source_definition",
+            type_="foreignkey",
+        )
+    insp = get_inspector(bind)
+    if has_column(insp, "source_definition", "product_catalog_id"):
+        op.drop_column("source_definition", "product_catalog_id")
+
+    insp = get_inspector(bind)
+    if has_table(insp, "product_attribute_value"):
+        op.drop_table("product_attribute_value")
+    insp = get_inspector(bind)
+    if has_table(insp, "catalog_product"):
+        op.drop_table("catalog_product")
+    insp = get_inspector(bind)
+    if has_table(insp, "attribute_definition"):
+        op.drop_table("attribute_definition")
+    insp = get_inspector(bind)
+    if has_table(insp, "product_catalog"):
+        op.drop_table("product_catalog")
+    insp = get_inspector(bind)
+    if has_table(insp, "business_unit"):
+        op.drop_table("business_unit")

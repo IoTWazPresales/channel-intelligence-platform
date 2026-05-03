@@ -11,6 +11,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
+from _alembic_revision_helpers import get_inspector, unique_constraint_exists
+
 revision: str = "20260430_0025"
 down_revision: Union[str, Sequence[str], None] = "20260430_0024"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -18,6 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    insp = get_inspector(bind)
+
     # Remove duplicates so a stable natural-key unique constraint can be enforced (keep lowest id per key).
     op.execute(
         """
@@ -40,18 +45,27 @@ def upgrade() -> None:
           AND f.as_of_date = f2.as_of_date
         """
     )
-    op.create_unique_constraint(
-        "uq_fact_sales_sellout_dsi_v1",
-        "fact_sales_sellout",
-        ["distributor_id", "customer_id", "product_id", "period_start"],
-    )
-    op.create_unique_constraint(
-        "uq_fact_inventory_distributor_dsi_v1",
-        "fact_inventory_distributor",
-        ["distributor_id", "product_id", "as_of_date"],
-    )
+    if not unique_constraint_exists(insp, "fact_sales_sellout", "uq_fact_sales_sellout_dsi_v1"):
+        op.create_unique_constraint(
+            "uq_fact_sales_sellout_dsi_v1",
+            "fact_sales_sellout",
+            ["distributor_id", "customer_id", "product_id", "period_start"],
+        )
+    insp = get_inspector(bind)
+    if not unique_constraint_exists(insp, "fact_inventory_distributor", "uq_fact_inventory_distributor_dsi_v1"):
+        op.create_unique_constraint(
+            "uq_fact_inventory_distributor_dsi_v1",
+            "fact_inventory_distributor",
+            ["distributor_id", "product_id", "as_of_date"],
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint("uq_fact_inventory_distributor_dsi_v1", "fact_inventory_distributor", type_="unique")
-    op.drop_constraint("uq_fact_sales_sellout_dsi_v1", "fact_sales_sellout", type_="unique")
+    bind = op.get_bind()
+    insp = get_inspector(bind)
+
+    if unique_constraint_exists(insp, "fact_inventory_distributor", "uq_fact_inventory_distributor_dsi_v1"):
+        op.drop_constraint("uq_fact_inventory_distributor_dsi_v1", "fact_inventory_distributor", type_="unique")
+    insp = get_inspector(bind)
+    if unique_constraint_exists(insp, "fact_sales_sellout", "uq_fact_sales_sellout_dsi_v1"):
+        op.drop_constraint("uq_fact_sales_sellout_dsi_v1", "fact_sales_sellout", type_="unique")

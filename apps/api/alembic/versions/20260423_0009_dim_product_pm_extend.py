@@ -4,12 +4,16 @@ Revision ID: 20260423_0009
 Revises: 20260422_0008
 Create Date: 2026-04-23
 
+These columns and the wider ``sku`` type may already exist from 20260412_0001 ``create_all``.
+When they do, this revision becomes a no-op for DDL while remaining valid for legacy DBs.
 """
 
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+
+from _alembic_revision_helpers import get_inspector, has_column, has_index
 
 revision: str = "20260423_0009"
 down_revision: Union[str, Sequence[str], None] = "20260422_0008"
@@ -18,28 +22,48 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.alter_column("dim_product", "sku", existing_type=sa.String(length=64), type_=sa.String(length=128), existing_nullable=False)
+    bind = op.get_bind()
+    insp = get_inspector(bind)
 
-    op.add_column("dim_product", sa.Column("part_number", sa.String(length=128), nullable=True))
-    op.add_column("dim_product", sa.Column("sales_model_name", sa.String(length=512), nullable=True))
-    op.add_column("dim_product", sa.Column("model_name", sa.String(length=512), nullable=True))
-    op.add_column("dim_product", sa.Column("marketing_name", sa.String(length=512), nullable=True))
-    op.add_column("dim_product", sa.Column("series_name", sa.String(length=256), nullable=True))
-    op.add_column("dim_product", sa.Column("product_line", sa.String(length=256), nullable=True))
-    op.add_column("dim_product", sa.Column("ean", sa.String(length=32), nullable=True))
-    op.add_column("dim_product", sa.Column("upc", sa.String(length=32), nullable=True))
-    op.add_column("dim_product", sa.Column("business_unit", sa.String(length=128), nullable=True))
-    op.add_column("dim_product", sa.Column("lifecycle_status", sa.String(length=64), nullable=True))
-    op.add_column("dim_product", sa.Column("country_code", sa.String(length=8), nullable=True))
+    if not has_column(insp, "dim_product", "part_number"):
+        op.alter_column(
+            "dim_product",
+            "sku",
+            existing_type=sa.String(length=64),
+            type_=sa.String(length=128),
+            existing_nullable=False,
+        )
 
-    op.create_index("ix_dim_product_part_number", "dim_product", ["part_number"], unique=True)
+        op.add_column("dim_product", sa.Column("part_number", sa.String(length=128), nullable=True))
+        op.add_column("dim_product", sa.Column("sales_model_name", sa.String(length=512), nullable=True))
+        op.add_column("dim_product", sa.Column("model_name", sa.String(length=512), nullable=True))
+        op.add_column("dim_product", sa.Column("marketing_name", sa.String(length=512), nullable=True))
+        op.add_column("dim_product", sa.Column("series_name", sa.String(length=256), nullable=True))
+        op.add_column("dim_product", sa.Column("product_line", sa.String(length=256), nullable=True))
+        op.add_column("dim_product", sa.Column("ean", sa.String(length=32), nullable=True))
+        op.add_column("dim_product", sa.Column("upc", sa.String(length=32), nullable=True))
+        op.add_column("dim_product", sa.Column("business_unit", sa.String(length=128), nullable=True))
+        op.add_column("dim_product", sa.Column("lifecycle_status", sa.String(length=64), nullable=True))
+        op.add_column("dim_product", sa.Column("country_code", sa.String(length=8), nullable=True))
+
+    insp = get_inspector(bind)
+    if not has_index(insp, "dim_product", "ix_dim_product_part_number"):
+        op.create_index("ix_dim_product_part_number", "dim_product", ["part_number"], unique=True)
 
     conn = op.get_bind()
     conn.execute(sa.text("UPDATE dim_product SET part_number = sku WHERE part_number IS NULL"))
 
 
 def downgrade() -> None:
-    op.drop_index("ix_dim_product_part_number", table_name="dim_product")
+    bind = op.get_bind()
+    insp = get_inspector(bind)
+
+    if has_index(insp, "dim_product", "ix_dim_product_part_number"):
+        op.drop_index("ix_dim_product_part_number", table_name="dim_product")
+
+    insp = get_inspector(bind)
+    if not has_column(insp, "dim_product", "part_number"):
+        return
 
     for col in (
         "country_code",
@@ -54,6 +78,10 @@ def downgrade() -> None:
         "sales_model_name",
         "part_number",
     ):
-        op.drop_column("dim_product", col)
+        insp = get_inspector(bind)
+        if has_column(insp, "dim_product", col):
+            op.drop_column("dim_product", col)
 
-    op.alter_column("dim_product", "sku", existing_type=sa.String(length=128), type_=sa.String(length=64), existing_nullable=False)
+    op.alter_column(
+        "dim_product", "sku", existing_type=sa.String(length=128), type_=sa.String(length=64), existing_nullable=False
+    )

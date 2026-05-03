@@ -11,6 +11,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from _alembic_revision_helpers import get_inspector, has_index, has_table
 
 revision: str = "20260427_0019"
 down_revision: Union[str, Sequence[str], None] = "20260427_0018"
@@ -19,68 +20,82 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "historical_lineup_import_header",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("import_job_id", sa.Integer(), nullable=False),
-        sa.Column("source_id", sa.Integer(), nullable=False),
-        sa.Column("workbook_name", sa.String(length=512), nullable=False),
-        sa.Column("sheet_name", sa.String(length=256), nullable=False),
-        sa.Column("pm_domain", sa.String(length=64), nullable=True),
-        sa.Column("period_label", sa.String(length=64), nullable=True),
-        sa.Column("period_start", sa.Date(), nullable=True),
-        sa.Column("customer_id", sa.Integer(), nullable=True),
-        sa.Column("distributor_id", sa.Integer(), nullable=True),
-        sa.Column("channel_id", sa.Integer(), nullable=True),
-        sa.Column("country_code", sa.String(length=16), nullable=True),
-        sa.Column("currency_code", sa.String(length=16), nullable=True),
-        sa.Column("source_metadata", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["channel_id"], ["dim_channel.id"]),
-        sa.ForeignKeyConstraint(["customer_id"], ["dim_customer.id"]),
-        sa.ForeignKeyConstraint(["distributor_id"], ["dim_distributor.id"]),
-        sa.ForeignKeyConstraint(["import_job_id"], ["import_job.id"]),
-        sa.ForeignKeyConstraint(["source_id"], ["source_definition.id"]),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index("ix_historical_lineup_import_header_import_job_id", "historical_lineup_import_header", ["import_job_id"])
-    op.create_index("ix_historical_lineup_import_header_source_id", "historical_lineup_import_header", ["source_id"])
+    bind = op.get_bind()
+    insp = get_inspector(bind)
 
-    op.create_table(
-        "historical_lineup_import_line",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("header_id", sa.Integer(), nullable=False),
-        sa.Column("source_row_number", sa.Integer(), nullable=False),
-        sa.Column("product_id", sa.Integer(), nullable=True),
-        sa.Column("sku_raw", sa.String(length=128), nullable=True),
-        sa.Column("part_number_raw", sa.String(length=128), nullable=True),
-        sa.Column("model_raw", sa.String(length=512), nullable=True),
-        sa.Column("base_unit_raw", sa.String(length=128), nullable=True),
-        sa.Column("msrp_local", sa.Numeric(precision=18, scale=4), nullable=True),
-        sa.Column("promo_price_local", sa.Numeric(precision=18, scale=4), nullable=True),
-        sa.Column("quantity_units", sa.Numeric(precision=18, scale=4), nullable=True),
-        sa.Column("month_split_json", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("dap_local", sa.Numeric(precision=18, scale=4), nullable=True),
-        sa.Column("actual_dap_local", sa.Numeric(precision=18, scale=4), nullable=True),
-        sa.Column("disti_cost_local", sa.Numeric(precision=18, scale=4), nullable=True),
-        sa.Column("disti_margin_pct", sa.Numeric(precision=8, scale=4), nullable=True),
-        sa.Column("rebate_pct", sa.Numeric(precision=8, scale=4), nullable=True),
-        sa.Column("dealer_margin_pct", sa.Numeric(precision=8, scale=4), nullable=True),
-        sa.Column("vat_pct", sa.Numeric(precision=8, scale=4), nullable=True),
-        sa.Column("customer_feedback", sa.Text(), nullable=True),
-        sa.Column("workflow_notes", sa.Text(), nullable=True),
-        sa.Column("row_status", sa.String(length=32), nullable=False),
-        sa.Column("mapping_confidence", sa.Numeric(precision=6, scale=4), nullable=True),
-        sa.Column("diagnostic_codes", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("raw_row_payload", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["header_id"], ["historical_lineup_import_header.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["product_id"], ["dim_product.id"]),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index("ix_historical_lineup_import_line_header_id", "historical_lineup_import_line", ["header_id"])
+    if not has_table(insp, "historical_lineup_import_header"):
+        op.create_table(
+            "historical_lineup_import_header",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("import_job_id", sa.Integer(), nullable=False),
+            sa.Column("source_id", sa.Integer(), nullable=False),
+            sa.Column("workbook_name", sa.String(length=512), nullable=False),
+            sa.Column("sheet_name", sa.String(length=256), nullable=False),
+            sa.Column("pm_domain", sa.String(length=64), nullable=True),
+            sa.Column("period_label", sa.String(length=64), nullable=True),
+            sa.Column("period_start", sa.Date(), nullable=True),
+            sa.Column("customer_id", sa.Integer(), nullable=True),
+            sa.Column("distributor_id", sa.Integer(), nullable=True),
+            sa.Column("channel_id", sa.Integer(), nullable=True),
+            sa.Column("country_code", sa.String(length=16), nullable=True),
+            sa.Column("currency_code", sa.String(length=16), nullable=True),
+            sa.Column("source_metadata", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(["channel_id"], ["dim_channel.id"]),
+            sa.ForeignKeyConstraint(["customer_id"], ["dim_customer.id"]),
+            sa.ForeignKeyConstraint(["distributor_id"], ["dim_distributor.id"]),
+            sa.ForeignKeyConstraint(["import_job_id"], ["import_job.id"]),
+            sa.ForeignKeyConstraint(["source_id"], ["source_definition.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    insp = get_inspector(bind)
+    if not has_index(insp, "historical_lineup_import_header", "ix_historical_lineup_import_header_import_job_id"):
+        op.create_index(
+            "ix_historical_lineup_import_header_import_job_id", "historical_lineup_import_header", ["import_job_id"]
+        )
+    insp = get_inspector(bind)
+    if not has_index(insp, "historical_lineup_import_header", "ix_historical_lineup_import_header_source_id"):
+        op.create_index("ix_historical_lineup_import_header_source_id", "historical_lineup_import_header", ["source_id"])
+
+    insp = get_inspector(bind)
+    if not has_table(insp, "historical_lineup_import_line"):
+        op.create_table(
+            "historical_lineup_import_line",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("header_id", sa.Integer(), nullable=False),
+            sa.Column("source_row_number", sa.Integer(), nullable=False),
+            sa.Column("product_id", sa.Integer(), nullable=True),
+            sa.Column("sku_raw", sa.String(length=128), nullable=True),
+            sa.Column("part_number_raw", sa.String(length=128), nullable=True),
+            sa.Column("model_raw", sa.String(length=512), nullable=True),
+            sa.Column("base_unit_raw", sa.String(length=128), nullable=True),
+            sa.Column("msrp_local", sa.Numeric(precision=18, scale=4), nullable=True),
+            sa.Column("promo_price_local", sa.Numeric(precision=18, scale=4), nullable=True),
+            sa.Column("quantity_units", sa.Numeric(precision=18, scale=4), nullable=True),
+            sa.Column("month_split_json", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+            sa.Column("dap_local", sa.Numeric(precision=18, scale=4), nullable=True),
+            sa.Column("actual_dap_local", sa.Numeric(precision=18, scale=4), nullable=True),
+            sa.Column("disti_cost_local", sa.Numeric(precision=18, scale=4), nullable=True),
+            sa.Column("disti_margin_pct", sa.Numeric(precision=8, scale=4), nullable=True),
+            sa.Column("rebate_pct", sa.Numeric(precision=8, scale=4), nullable=True),
+            sa.Column("dealer_margin_pct", sa.Numeric(precision=8, scale=4), nullable=True),
+            sa.Column("vat_pct", sa.Numeric(precision=8, scale=4), nullable=True),
+            sa.Column("customer_feedback", sa.Text(), nullable=True),
+            sa.Column("workflow_notes", sa.Text(), nullable=True),
+            sa.Column("row_status", sa.String(length=32), nullable=False),
+            sa.Column("mapping_confidence", sa.Numeric(precision=6, scale=4), nullable=True),
+            sa.Column("diagnostic_codes", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+            sa.Column("raw_row_payload", sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(["header_id"], ["historical_lineup_import_header.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["product_id"], ["dim_product.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    insp = get_inspector(bind)
+    if not has_index(insp, "historical_lineup_import_line", "ix_historical_lineup_import_line_header_id"):
+        op.create_index("ix_historical_lineup_import_line_header_id", "historical_lineup_import_line", ["header_id"])
 
     conn = op.get_bind()
     expected_columns = {
@@ -136,11 +151,23 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    insp = get_inspector(bind)
+
     conn = op.get_bind()
     conn.execute(sa.text("DELETE FROM source_definition WHERE code = 'historical_lineup_default'"))
     conn.execute(sa.text("DELETE FROM import_template WHERE slug = 'historical_lineup'"))
-    op.drop_index("ix_historical_lineup_import_line_header_id", table_name="historical_lineup_import_line")
-    op.drop_table("historical_lineup_import_line")
-    op.drop_index("ix_historical_lineup_import_header_source_id", table_name="historical_lineup_import_header")
-    op.drop_index("ix_historical_lineup_import_header_import_job_id", table_name="historical_lineup_import_header")
-    op.drop_table("historical_lineup_import_header")
+    if has_index(insp, "historical_lineup_import_line", "ix_historical_lineup_import_line_header_id"):
+        op.drop_index("ix_historical_lineup_import_line_header_id", table_name="historical_lineup_import_line")
+    insp = get_inspector(bind)
+    if has_table(insp, "historical_lineup_import_line"):
+        op.drop_table("historical_lineup_import_line")
+    insp = get_inspector(bind)
+    if has_index(insp, "historical_lineup_import_header", "ix_historical_lineup_import_header_source_id"):
+        op.drop_index("ix_historical_lineup_import_header_source_id", table_name="historical_lineup_import_header")
+    insp = get_inspector(bind)
+    if has_index(insp, "historical_lineup_import_header", "ix_historical_lineup_import_header_import_job_id"):
+        op.drop_index("ix_historical_lineup_import_header_import_job_id", table_name="historical_lineup_import_header")
+    insp = get_inspector(bind)
+    if has_table(insp, "historical_lineup_import_header"):
+        op.drop_table("historical_lineup_import_header")
