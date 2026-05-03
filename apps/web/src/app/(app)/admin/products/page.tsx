@@ -34,7 +34,7 @@ import type {
   GridReadyEvent,
 } from 'ag-grid-community';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Suspense } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
@@ -95,6 +95,10 @@ type ProductRow = {
   channel_code: string | null;
   missing_required_fields: string[];
   last_import_date: string | null;
+  /** Top-level specs_json preview (small key cap on API). */
+  specs_preview?: Record<string, string>;
+  /** Flattened string map from Product Master / catalogue specs_json (bounded on API). */
+  specs_flat?: Record<string, string>;
 };
 
 type CodeRow = { id: number; code: string; name: string };
@@ -105,6 +109,8 @@ type ProductListResponse = {
   total: number;
   sort_by: string;
   sort_dir: 'asc' | 'desc';
+  /** Union of flattened specs_json keys for the current result page (grows client-side across pages). */
+  specs_field_keys?: string[];
 };
 
 const PRODUCT_GRID_STATE_KEY = 'cip.admin.products.gridState.v1';
@@ -136,13 +142,32 @@ const ALL_PRODUCT_COLUMN_FIELDS = [
   'last_import_date',
 ] as const;
 type ProductColumnField = (typeof ALL_PRODUCT_COLUMN_FIELDS)[number];
-const PRODUCT_COLUMN_GROUPS: { label: string; fields: ProductColumnField[] }[] = [
+
+/** ColDef `hide` on optional columns was resetting visibility when columnDefs refreshed (e.g. channels load). Defaults are applied once via column state in onGridReady instead. */
+const DEFAULT_INITIALLY_HIDDEN_FIELDS: readonly ProductColumnField[] = [
+  'part_number',
+  'sales_model_name',
+  'model_name',
+  'series_name',
+  'product_line',
+  'business_unit',
+  'country_code',
+  'ean',
+  'upc',
+];
+
+const STATIC_PRODUCT_COLUMN_GROUPS: { label: string; fields: ProductColumnField[] }[] = [
   { label: 'Core identity', fields: ['sku', 'name', 'category', 'channel_code', 'is_active'] },
   { label: 'Commercial naming', fields: ['part_number', 'sales_model_name', 'model_name', 'series_name'] },
   { label: 'Portfolio attributes', fields: ['product_line', 'business_unit', 'form_factor', 'country_code'] },
   { label: 'Lifecycle & compliance', fields: ['lifecycle_status', 'launch_date', 'retired_date'] },
   { label: 'Codes & diagnostics', fields: ['ean', 'upc', 'missing_required_fields', 'last_import_date'] },
 ];
+
+function specColIdFromRawKey(rawKey: string): string {
+  const safe = rawKey.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 96);
+  return `spec:${safe || 'key'}`;
+}
 type SavedView = {
   name: string;
   query: string;
@@ -197,6 +222,9 @@ function AdminProductsPageContent() {
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState('');
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
+  /** Union of flattened specs_json keys from any loaded list page (grows as you browse). */
+  const [accumulatedSpecKeys, setAccumulatedSpecKeys] = useState<string[]>([]);
+  const prevAccumulatedSpecKeysRef = useRef<string[]>([]);
   const [blockedDeleteProductId, setBlockedDeleteProductId] = useState<number | null>(null);
   const [dsiConfirmOpen, setDsiConfirmOpen] = useState(false);
   const [dsiConfirmText, setDsiConfirmText] = useState('');
@@ -299,6 +327,33 @@ function AdminProductsPageContent() {
       return apiGet<ProductListResponse>(`/api/v1/products?${sp.toString()}`, { signal });
     },
   });
+
+  const specsFieldKeysSig = useMemo(() => {
+    const keys = products?.specs_field_keys;
+    if (!keys?.length) return '';
+    return JSON.stringify([...keys].filter(Boolean).sort((a, b) => a.localeCompare(b)));
+  }, [products?.specs_field_keys]);
+
+  useEffect(() => {
+    if (!specsFieldKeysSig) return;
+    let incoming: string[] = [];
+    try {
+      incoming = JSON.parse(specsFieldKeysSig) as string[];
+    } catch {
+      return;
+    }
+    if (!incoming.length) return;
+    setAccumulatedSpecKeys((prev) => {
+      const s = new Set(prev);
+      for (const k of incoming) {
+        if (k) s.add(k);
+      }
+      const next = [...s].sort((a, b) => a.localeCompare(b));
+      if (next.length === prev.length && next.every((k, i) => k === prev[i])) return prev;
+      return next;
+    });
+  }, [specsFieldKeysSig]);
+
   const { data: channels } = useQuery({
     queryKey: ['catalog-channels'],
     queryFn: ({ signal }) => apiGet<CodeRow[]>('/api/v1/catalog/channels', { signal }),
@@ -402,21 +457,21 @@ function AdminProductsPageContent() {
     [channels, qc]
   );
 
-  const colDefs: ColDef<ProductRow>[] = useMemo(
-    () => [
+  const colDefs: ColDef<ProductRow>[] = useMemo(() => {
+    const staticCols: ColDef<ProductRow>[] = [
       { field: 'sku', headerName: 'SKU', pinned: 'left', minWidth: 140, editable: false },
       { field: 'name', headerName: 'Name', flex: 1, minWidth: 180, editable: true },
       { field: 'category', headerName: 'Category', minWidth: 120, editable: true },
-      { field: 'part_number', headerName: 'Part number', minWidth: 140, editable: false, hide: true },
-      { field: 'sales_model_name', headerName: 'Sales model', minWidth: 170, editable: false, hide: true },
-      { field: 'model_name', headerName: 'Model family', minWidth: 170, editable: false, hide: true },
-      { field: 'series_name', headerName: 'Series', minWidth: 150, editable: false, hide: true },
-      { field: 'product_line', headerName: 'Product line', minWidth: 160, editable: false, hide: true },
-      { field: 'business_unit', headerName: 'Business unit', minWidth: 150, editable: false, hide: true },
+      { field: 'part_number', headerName: 'Part number', minWidth: 140, editable: false },
+      { field: 'sales_model_name', headerName: 'Sales model', minWidth: 170, editable: false },
+      { field: 'model_name', headerName: 'Model family', minWidth: 170, editable: false },
+      { field: 'series_name', headerName: 'Series', minWidth: 150, editable: false },
+      { field: 'product_line', headerName: 'Product line', minWidth: 160, editable: false },
+      { field: 'business_unit', headerName: 'Business unit', minWidth: 150, editable: false },
       { field: 'form_factor', headerName: 'Form factor', minWidth: 120, editable: true },
-      { field: 'country_code', headerName: 'Country', minWidth: 120, editable: false, hide: true },
-      { field: 'ean', headerName: 'EAN', minWidth: 140, editable: false, hide: true },
-      { field: 'upc', headerName: 'UPC', minWidth: 140, editable: false, hide: true },
+      { field: 'country_code', headerName: 'Country', minWidth: 120, editable: false },
+      { field: 'ean', headerName: 'EAN', minWidth: 140, editable: false },
+      { field: 'upc', headerName: 'UPC', minWidth: 140, editable: false },
       { field: 'lifecycle_status', headerName: 'Lifecycle', minWidth: 120, editable: true },
       { field: 'launch_date', headerName: 'Launch date', minWidth: 130, editable: true },
       { field: 'retired_date', headerName: 'Retired date', minWidth: 130, editable: true },
@@ -446,6 +501,25 @@ function AdminProductsPageContent() {
         },
       },
       { field: 'last_import_date', headerName: 'Last import', minWidth: 130, editable: false },
+    ];
+    const specCols: ColDef<ProductRow>[] = accumulatedSpecKeys.map(
+      (rawKey) =>
+        ({
+          colId: specColIdFromRawKey(rawKey),
+          field: specColIdFromRawKey(rawKey),
+          headerName: rawKey,
+          minWidth: 140,
+          maxWidth: 280,
+          editable: false,
+          sortable: false,
+          filter: false,
+          resizable: true,
+          valueGetter: (p) => (p.data?.specs_flat?.[rawKey] as string | undefined) ?? '',
+        }) as ColDef<ProductRow>
+    );
+    return [
+      ...staticCols,
+      ...specCols,
       {
         headerName: 'Details',
         colId: '__detail',
@@ -456,19 +530,24 @@ function AdminProductsPageContent() {
         filter: false,
         resizable: false,
         cellRenderer: (p: { data: ProductRow }) => (
-          <Button size="small" variant="text" onClick={() => setSelectedRow(p.data)}>
+          <Button
+            size="small"
+            variant="text"
+            data-testid="admin-products-row-open"
+            onClick={() => setSelectedRow(p.data)}
+          >
             Open
           </Button>
         ),
       },
       gridDeleteColumn<ProductRow>((id) => onDeleteProduct(id), {
         busy: delProduct.isPending,
+        deleteButtonTestId: 'admin-products-row-delete',
         confirmMessage:
           'Delete this product from the global catalogue? Derived metrics and aliases are removed automatically. If sales, inventory, pricing, lineup, or other core facts still reference this SKU, the delete will be blocked.',
       }),
-    ],
-    [channelCodes, onDeleteProduct, delProduct.isPending]
-  );
+    ];
+  }, [channelCodes, onDeleteProduct, delProduct.isPending, accumulatedSpecKeys]);
 
   const columnLabelByField = useMemo(() => {
     const out: Record<string, string> = {};
@@ -493,9 +572,15 @@ function AdminProductsPageContent() {
       try {
         const visibility: Record<string, boolean> = {};
         for (const col of api.getColumns() ?? []) {
-          const field = col?.getColDef?.()?.field;
-          if (!field || !ALL_PRODUCT_COLUMN_FIELDS.includes(field as ProductColumnField)) continue;
-          visibility[field] = Boolean(col.isVisible?.());
+          const def = col?.getColDef?.();
+          const field = def?.field as string | undefined;
+          if (!field) continue;
+          if (
+            ALL_PRODUCT_COLUMN_FIELDS.includes(field as ProductColumnField) ||
+            field.startsWith('spec:')
+          ) {
+            visibility[field] = Boolean(col.isVisible?.());
+          }
         }
         if (Object.keys(visibility).length) setColumnVisibility(visibility);
       } catch {
@@ -511,6 +596,11 @@ function AdminProductsPageContent() {
         const raw = localStorage.getItem(PRODUCT_GRID_STATE_KEY);
         if (raw) {
           e.api.applyColumnState({ state: JSON.parse(raw), applyOrder: true });
+        } else {
+          e.api.applyColumnState({
+            state: DEFAULT_INITIALLY_HIDDEN_FIELDS.map((colId) => ({ colId, hide: true })),
+            applyOrder: true,
+          });
         }
       } catch {
         // no-op
@@ -546,24 +636,51 @@ function AdminProductsPageContent() {
     }),
     [onCellValueChanged, onGridReady, onColumnStateEvent]
   );
-  const groupedColumnOptions = useMemo(() => {
+  const groupedColumnPickerBlocks = useMemo((): { label: string; options: { id: string; label: string }[] }[] => {
     const query = columnSearch.trim().toLowerCase();
-    return PRODUCT_COLUMN_GROUPS.map((group) => {
-      const options = group.fields
-        .map((field) => ({ field, label: columnLabelByField[field] ?? field }))
-        .filter((opt) => !query || opt.label.toLowerCase().includes(query) || opt.field.toLowerCase().includes(query));
-      return { ...group, options };
-    }).filter((group) => group.options.length > 0);
-  }, [columnLabelByField, columnSearch]);
+    const blocks: { label: string; options: { id: string; label: string }[] }[] = STATIC_PRODUCT_COLUMN_GROUPS.map(
+      (group) => ({
+        label: group.label,
+        options: group.fields
+          .map((field) => ({ id: field, label: columnLabelByField[field] ?? field }))
+          .filter(
+            (opt) => !query || opt.label.toLowerCase().includes(query) || opt.id.toLowerCase().includes(query)
+          ),
+      })
+    ).filter((group) => group.options.length > 0);
+    const specOptions = accumulatedSpecKeys
+      .map((rawKey) => ({ id: specColIdFromRawKey(rawKey), label: `Spec: ${rawKey}` }))
+      .filter(
+        (opt) => !query || opt.label.toLowerCase().includes(query) || opt.id.toLowerCase().includes(query)
+      );
+    if (specOptions.length) {
+      blocks.push({
+        label: 'Discovered specs & metadata (flattened; union across browsed pages)',
+        options: specOptions,
+      });
+    }
+    return blocks;
+  }, [columnLabelByField, columnSearch, accumulatedSpecKeys]);
   const toggleColumnVisibility = useCallback(
-    (field: ProductColumnField, visible: boolean) => {
+    (columnId: string, visible: boolean) => {
       if (!gridApi?.setColumnsVisible) return;
-      gridApi.setColumnsVisible([field], visible);
+      gridApi.setColumnsVisible([columnId], visible);
       persistGridState(gridApi);
-      setColumnVisibility((prev) => ({ ...prev, [field]: visible }));
+      setColumnVisibility((prev) => ({ ...prev, [columnId]: visible }));
     },
     [gridApi, persistGridState]
   );
+
+  useEffect(() => {
+    if (!gridApi || !accumulatedSpecKeys.length) return;
+    const prev = new Set(prevAccumulatedSpecKeysRef.current);
+    const added = accumulatedSpecKeys.filter((k) => !prev.has(k));
+    prevAccumulatedSpecKeysRef.current = accumulatedSpecKeys;
+    if (!added.length) return;
+    const ids = added.map((k) => specColIdFromRawKey(k));
+    gridApi.setColumnsVisible(ids, false);
+    persistGridState(gridApi);
+  }, [accumulatedSpecKeys, gridApi, persistGridState]);
 
   const rows = useMemo(() => products?.items ?? [], [products?.items]);
   const total = products?.total ?? 0;
@@ -1055,7 +1172,7 @@ function AdminProductsPageContent() {
             {!gridApi ? (
               <Alert severity="info">Grid is still initializing. Column toggles become available in a moment.</Alert>
             ) : null}
-            {groupedColumnOptions.map((group) => (
+            {groupedColumnPickerBlocks.map((group) => (
               <Paper key={group.label} variant="outlined" sx={{ p: 1.25 }}>
                 <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
                   {group.label}
@@ -1063,11 +1180,11 @@ function AdminProductsPageContent() {
                 <Stack>
                   {group.options.map((opt) => (
                     <FormControlLabel
-                      key={opt.field}
+                      key={opt.id}
                       control={
                         <Checkbox
-                          checked={columnVisibility[opt.field] ?? false}
-                          onChange={(e) => toggleColumnVisibility(opt.field, e.target.checked)}
+                          checked={columnVisibility[opt.id] ?? false}
+                          onChange={(e) => toggleColumnVisibility(opt.id, e.target.checked)}
                           disabled={!gridApi}
                         />
                       }
@@ -1077,7 +1194,7 @@ function AdminProductsPageContent() {
                 </Stack>
               </Paper>
             ))}
-            {!groupedColumnOptions.length ? (
+            {!groupedColumnPickerBlocks.length ? (
               <Typography variant="body2" color="text.secondary">
                 No columns match the current search.
               </Typography>

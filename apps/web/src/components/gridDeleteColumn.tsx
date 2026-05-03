@@ -10,6 +10,8 @@ export type GridDeleteColumnOpts = {
   confirm?: boolean;
   /** Overrides the default confirm message. */
   confirmMessage?: string;
+  /** Optional stable selector for tests / automation. */
+  deleteButtonTestId?: string;
 };
 
 const DEFAULT_DELETE_CONFIRM = 'Delete this row? This cannot be undone.';
@@ -41,6 +43,7 @@ export function gridDeleteColumn<T extends { id: number }>(
           color="error"
           variant="text"
           disabled={busy}
+          data-testid={opts?.deleteButtonTestId}
           onClick={() => {
             if (!skipConfirm && !window.confirm(confirmMessage)) return;
             onDelete(id);
