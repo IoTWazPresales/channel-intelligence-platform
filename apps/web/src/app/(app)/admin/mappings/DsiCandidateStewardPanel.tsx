@@ -40,6 +40,19 @@ export type DsiCandidateRow = {
   context: Record<string, unknown> | null;
 };
 
+/** Same precedence as API ``raw_product_token_for_dsi_candidate`` — for steward UI defaults. */
+export function dsiRawProductTokenForCandidate(
+  candidate: Pick<DsiCandidateRow, 'sample_raw_values' | 'normalized_key'>
+): string {
+  const samples = candidate.sample_raw_values ?? [];
+  for (const s of samples) {
+    if (typeof s === 'string' && s.trim()) return s.trim().slice(0, 256);
+  }
+  const nk = (candidate.normalized_key || '').trim();
+  if (nk && nk !== '__blank__') return nk.slice(0, 256);
+  return '';
+}
+
 type RegionOpt = { id: number; code: string; name: string };
 type ChannelOpt = { id: number; code: string; name: string };
 type CustomerHit = { id: number; customer_code: string; customer_name: string };
@@ -343,7 +356,7 @@ export function DsiCandidateStewardPanel({
           size="small"
           disabled={isTerminal || candidate.entity_type !== 'product_identifier'}
           onClick={() => {
-            setProdQ('');
+            setProdQ(dsiRawProductTokenForCandidate(candidate));
             setPickProductId('');
             setConfirmIneligibleProduct(false);
             setProductAuditNote('');
@@ -622,13 +635,29 @@ export function DsiCandidateStewardPanel({
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2" color="text.secondary">
               Creates an approved <strong>ProductAlias</strong> for this import token, then mark this candidate resolved.
-              Run <strong>Revalidate import job</strong> from the mapping queue page so staging picks up the new alias.
+              Run <strong>Revalidate import job</strong> (here or on the mapping queue page) so staging picks up the new
+              alias.
             </Typography>
+            <Alert severity="info" data-testid="dsi-product-dialog-source-token">
+              <Typography variant="body2" component="div">
+                <strong>Source product token</strong> (used for the alias unless you override below):{' '}
+                <code>{dsiRawProductTokenForCandidate(candidate) || '—'}</code>
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                Normalized grouping key: <code>{candidate.normalized_key || '—'}</code>
+                {typeof ctx?.product_match_summary === 'string' && ctx.product_match_summary.trim() ? (
+                  <>
+                    <br />
+                    Match context: {String(ctx.product_match_summary)}
+                  </>
+                ) : null}
+              </Typography>
+            </Alert>
             <TextField
               label="Search products (SKU / model)"
               value={prodQ}
               onChange={(e) => setProdQ(e.target.value)}
-              helperText="Type at least 1 character"
+              helperText="Pre-filled from the file token above; edit to narrow Product Master search."
               fullWidth
             />
             <FormControl fullWidth>

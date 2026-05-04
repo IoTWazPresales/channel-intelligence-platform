@@ -316,6 +316,10 @@ class ProductResolutionIndex:
     upc_to_ids: dict[str, tuple[int, ...]]
     alias_value_to_ids: dict[str, tuple[int, ...]]
     products_by_id: dict[int, DimProduct]
+    #: Token key → product_id for steward-approved import aliases (``confidence == "steward_approved"``).
+    #: Applied before automatic tiers so explicit steward bindings survive inactive SKU collisions,
+    #: ambiguous identity tiers, and historical (inactive) Product Master targets.
+    steward_alias_by_key: dict[str, int]
 
 
 def _load_product_resolution_index(db: Session) -> ProductResolutionIndex:
@@ -352,10 +356,15 @@ def _load_product_resolution_index(db: Session) -> ProductResolutionIndex:
         if upc:
             upc_pairs.append((upc, int(p.id)))
     alias_pairs: list[tuple[str, int]] = []
+    steward_alias_by_key: dict[str, int] = {}
     for a in db.scalars(select(ProductAlias)).all():
         av = _product_token_key(a.alias_value)
         if av:
             alias_pairs.append((av, int(a.product_id)))
+            if (getattr(a, "confidence", None) or "") == "steward_approved":
+                pid_a = int(a.product_id)
+                if pid_a in products_by_id:
+                    steward_alias_by_key[av] = pid_a
     return ProductResolutionIndex(
         sku_to_id=sku_to_id,
         part_number_to_ids=_multimap_from_pairs(part_pairs),
@@ -366,6 +375,7 @@ def _load_product_resolution_index(db: Session) -> ProductResolutionIndex:
         upc_to_ids=_multimap_from_pairs(upc_pairs),
         alias_value_to_ids=_multimap_from_pairs(alias_pairs),
         products_by_id=products_by_id,
+        steward_alias_by_key=steward_alias_by_key,
     )
 
 
@@ -374,10 +384,16 @@ def _resolve_product(
 ) -> tuple[int | None, str | None, str | None, ProductResolutionEvidence | None]:
     """Resolve RAW product_identifier to dim_product.id with lifecycle-aware eligibility.
 
-    Tier order: SKU → part_number → sales_model_name → model_name → marketing_name → ean → upc
-    → ProductAlias. Within a tier: **only eligible** rows may auto-resolve; multiple eligible hits
-    are ambiguous (blocked). Ineligible-only hits at a tier are recorded and the walk **continues**
-    so a later tier (e.g. alias) can still resolve.
+    **Steward-approved aliases** (``ProductAlias.confidence == "steward_approved"``), keyed like other
+    lookups via ``_product_token_key``, are evaluated **first**. They bind distributor-reported tokens to
+    Product Master rows chosen by a human and must survive revalidation even when an inactive SKU or
+    ambiguous identity tier would otherwise block automatic resolution (including inactive targets for
+    historical DSI evidence).
+
+    Automatic tier order: SKU → part_number → sales_model_name → model_name → marketing_name → ean → upc
+    → non-steward ProductAlias. Within a tier: **only eligible** rows may auto-resolve; multiple eligible
+    hits defer ambiguity until lower tiers (e.g. a clarifying alias) are tried. Ineligible-only hits at a
+    tier are recorded and the walk **continues**.
 
     Returns ``(product_id, error_code, success_diagnostic, evidence)``. ``evidence`` is populated when
     returning ``ambiguous_product_match`` or ``unresolved_product_inactive_only`` for mapping-queue context.
@@ -385,6 +401,12 @@ def _resolve_product(
     key = _product_token_key(raw)
     if not key:
         return None, "missing_product_token", None, None
+
+    sid = idx.steward_alias_by_key.get(key)
+    if sid is not None:
+        p_st = idx.products_by_id.get(int(sid))
+        if p_st is not None:
+            return int(sid), None, "product_resolved_steward_alias", None
 
     def _eligible_ids(ids: tuple[int, ...]) -> list[int]:
         out: list[int] = []
@@ -407,14 +429,16 @@ def _resolve_product(
             snaps.append(s)
         return snaps
 
+    accumulated = ProductResolutionEvidence()
+    pending_ambiguous: ProductResolutionEvidence | None = None
+
     pid = idx.sku_to_id.get(key)
     if pid is not None:
         p0 = idx.products_by_id.get(int(pid))
         if p0 is not None and _product_eligible_for_dsi_auto(p0, evidence_date):
             return int(pid), None, "product_resolved_sku", None
         if p0 is not None:
-            ev = ProductResolutionEvidence(inactive_hits=_inactive_snapshots("sku", (pid,)))
-            return None, "unresolved_product_inactive_only", None, ev
+            accumulated.inactive_hits.extend(_inactive_snapshots("sku", (pid,)))
 
     tier_maps: tuple[tuple[dict[str, tuple[int, ...]], str], ...] = (
         (idx.part_number_to_ids, "part_number"),
@@ -432,7 +456,6 @@ def _resolve_product(
         "ean": "product_resolved_ean",
         "upc": "product_resolved_upc",
     }
-    accumulated = ProductResolutionEvidence()
     for mmap, tier in tier_maps:
         ids = mmap.get(key)
         if not ids:
@@ -447,7 +470,8 @@ def _resolve_product(
                 "product_ids": sorted(set(elig)),
                 "eligible_products": snaps[:12],
             }
-            return None, "ambiguous_product_match", None, ProductResolutionEvidence(ambiguous_eligible=amb)
+            pending_ambiguous = ProductResolutionEvidence(ambiguous_eligible=amb)
+            continue
         in_sn = _inactive_snapshots(tier, ids)
         accumulated.inactive_hits.extend(in_sn)
 
@@ -471,6 +495,8 @@ def _resolve_product(
         in_sn = _inactive_snapshots("product_alias", a_ids)
         accumulated.inactive_hits.extend(in_sn)
 
+    if pending_ambiguous is not None:
+        return None, "ambiguous_product_match", None, pending_ambiguous
     if accumulated.inactive_hits:
         return None, "unresolved_product_inactive_only", None, accumulated
     return None, "unresolved_product", None, None

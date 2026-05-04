@@ -50,6 +50,7 @@ def _idx(
     ean_to_ids: dict[str, tuple[int, ...]] | None = None,
     upc_to_ids: dict[str, tuple[int, ...]] | None = None,
     alias_value_to_ids: dict[str, tuple[int, ...]] | None = None,
+    steward_alias_by_key: dict[str, int] | None = None,
     products_by_id: dict[int, SimpleNamespace] | None = None,
 ) -> ProductResolutionIndex:
     sku_to_id = sku_to_id or {}
@@ -60,6 +61,7 @@ def _idx(
     ean_to_ids = ean_to_ids or {}
     upc_to_ids = upc_to_ids or {}
     alias_value_to_ids = alias_value_to_ids or {}
+    steward_alias_by_key = dict(steward_alias_by_key or {})
     if products_by_id is None:
         ids: set[int] = set()
         for v in sku_to_id.values():
@@ -75,6 +77,7 @@ def _idx(
         ):
             for t in m.values():
                 ids.update(int(x) for x in t)
+        ids.update(int(x) for x in steward_alias_by_key.values())
         products_by_id = {i: _p(i, sku=f"SKU-{i}") for i in ids}
     return ProductResolutionIndex(
         sku_to_id=sku_to_id,
@@ -86,6 +89,7 @@ def _idx(
         upc_to_ids=upc_to_ids,
         alias_value_to_ids=alias_value_to_ids,
         products_by_id=products_by_id,  # type: ignore[arg-type]
+        steward_alias_by_key=steward_alias_by_key,
     )
 
 
@@ -136,6 +140,60 @@ def test_ambiguous_two_active_same_tier() -> None:
     assert pid is None and err == "ambiguous_product_match" and tag is None
     assert ev is not None and ev.ambiguous_eligible is not None
     assert set(ev.ambiguous_eligible.get("product_ids", [])) == {1, 2}
+
+
+def test_inactive_sku_does_not_block_alias_tier() -> None:
+    idx = _idx(
+        sku_to_id={"tok": 1},
+        alias_value_to_ids={"tok": (10,)},
+        products_by_id={
+            1: _p(1, sku="tok", is_active=False),
+            10: _p(10, sku="ALIAS-SKU", is_active=True),
+        },
+    )
+    pid, err, tag, ev = _resolve_product("tok", idx, None)
+    assert ev is None and err is None and pid == 10 and tag == "product_resolved_alias"
+
+
+def test_ambiguous_sales_model_can_resolve_via_single_alias() -> None:
+    idx = _idx(
+        sales_model_name_to_ids={"tok": (1, 2)},
+        alias_value_to_ids={"tok": (10,)},
+        products_by_id={
+            1: _p(1, sku="S1", sales_model_name="tok"),
+            2: _p(2, sku="S2", sales_model_name="tok"),
+            10: _p(10, sku="ALIAS", is_active=True),
+        },
+    )
+    pid, err, tag, ev = _resolve_product("tok", idx, None)
+    assert ev is None and err is None and pid == 10 and tag == "product_resolved_alias"
+
+
+def test_steward_alias_resolves_inactive_target_and_wins_over_inactive_sku() -> None:
+    idx = _idx(
+        sku_to_id={"tok": 1},
+        steward_alias_by_key={"tok": 99},
+        products_by_id={
+            1: _p(1, sku="tok", is_active=False),
+            99: _p(99, sku="HIST", is_active=False),
+        },
+    )
+    pid, err, tag, ev = _resolve_product("tok", idx, None)
+    assert ev is None and err is None and pid == 99 and tag == "product_resolved_steward_alias"
+
+
+def test_steward_alias_wins_over_ambiguous_sales_model() -> None:
+    idx = _idx(
+        sales_model_name_to_ids={"tok": (1, 2)},
+        steward_alias_by_key={"tok": 10},
+        products_by_id={
+            1: _p(1, sku="S1", sales_model_name="tok"),
+            2: _p(2, sku="S2", sales_model_name="tok"),
+            10: _p(10, sku="PICKED", is_active=True),
+        },
+    )
+    pid, err, tag, ev = _resolve_product("tok", idx, None)
+    assert pid == 10 and tag == "product_resolved_steward_alias" and err is None
 
 
 def test_active_wins_when_duplicate_sales_model_one_inactive() -> None:
@@ -225,9 +283,11 @@ def test_load_product_resolution_index_builds_maps() -> None:
             self.retired_date = None
 
     class _A:
-        def __init__(self, product_id: int, alias_value: str):
+        def __init__(self, product_id: int, alias_value: str, confidence: str | None = None, alias_kind: str = "distributor_code"):
             self.product_id = product_id
             self.alias_value = alias_value
+            self.confidence = confidence
+            self.alias_kind = alias_kind
 
     class _Q:
         def __init__(self, items):
@@ -249,9 +309,10 @@ def test_load_product_resolution_index_builds_maps() -> None:
             return _Q(self._aliases)
 
     products = [_P(1, "SKU-MAIN", sales_model_name="MODEL-X")]
-    aliases = [_A(1, "DISTRO-CODE-Z")]
+    aliases = [_A(1, "DISTRO-CODE-Z"), _A(1, "STEWARD-TOK", confidence="steward_approved")]
     idx = _load_product_resolution_index(_S(products, aliases))  # type: ignore[arg-type]
     assert idx.sku_to_id["sku-main"] == 1
     assert idx.sales_model_name_to_ids["model-x"] == (1,)
     assert idx.alias_value_to_ids["distro-code-z"] == (1,)
+    assert idx.steward_alias_by_key.get("steward-tok") == 1
     assert idx.products_by_id[1].sku == "SKU-MAIN"

@@ -56,6 +56,10 @@ import { toQueryError } from '@/lib/queryError';
 
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
 import {
+  DsiCandidateStewardPanel,
+  type DsiCandidateRow,
+} from '../mappings/DsiCandidateStewardPanel';
+import {
   dsiContinueToApplyAllowed,
   dsiGateFromMapping,
   dsiSelectValue,
@@ -573,16 +577,36 @@ function AdminImportsPageContent() {
   const { data: dsiCandidates } = useQuery({
     queryKey: ['distributor-si-candidates', lastJobId],
     queryFn: ({ signal }) =>
-      apiGet<
-        Array<{
-          id: number;
-          entity_type: string;
-          row_count: number;
-          normalized_key: string;
-          dealer_group_token: string | null;
-        }>
-      >(`/api/v1/mappings/import-jobs/${lastJobId}/distributor-si-candidates`, { signal }),
+      apiGet<DsiCandidateRow[]>(`/api/v1/mappings/import-jobs/${lastJobId}/distributor-si-candidates`, { signal }),
     enabled: lastJobId != null && selectedSlug === 'distributor_inventory',
+  });
+
+  const [dsiImportStewardCandidateId, setDsiImportStewardCandidateId] = useState<number | null>(null);
+
+  const dsiImportSelectedCandidate = useMemo(() => {
+    if (lastJobId == null || !dsiCandidates?.length || dsiImportStewardCandidateId == null) return null;
+    return dsiCandidates.find((c) => c.id === dsiImportStewardCandidateId) ?? null;
+  }, [dsiCandidates, dsiImportStewardCandidateId, lastJobId]);
+
+  useEffect(() => {
+    setDsiImportStewardCandidateId(null);
+  }, [lastJobId]);
+
+  const dsiRevalidateFromServer = useMutation({
+    mutationFn: async () => {
+      if (lastJobId == null) throw new Error('No import job selected');
+      return apiPost<{ ok: boolean }>(
+        `/api/v1/mappings/import-jobs/${lastJobId}/revalidate-distributor-sales-inventory`,
+        {}
+      );
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['distributor-si-candidates', lastJobId] }),
+        qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] }),
+        qc.invalidateQueries({ queryKey: ['import-jobs'] }),
+      ]);
+    },
   });
 
   type DsiMappingState = {
@@ -2403,7 +2427,7 @@ function AdminImportsPageContent() {
                 </Typography>
                 {dsiCandidates != null && dsiCandidates.length > 0 ? (
                   <Typography variant="caption" color="text.secondary" display="block">
-                    Review grouped tokens via{' '}
+                    Resolve grouped tokens below on this page, or open the full grid in the global{' '}
                     <Link component={NextLink} href={`/admin/mappings?import_job_id=${lastJobId}`}>
                       Mapping queue
                     </Link>{' '}
@@ -2418,6 +2442,70 @@ function AdminImportsPageContent() {
                   </Typography>
                 ) : null}
               </Alert>
+            ) : null}
+            {lastJobId != null && dsiCandidates != null && dsiCandidates.length > 0 ? (
+              <Paper variant="outlined" sx={{ p: 2 }} data-testid="dsi-import-job-resolution">
+                <Stack spacing={2}>
+                  <Typography variant="subtitle2">Resolve blockers for this import</Typography>
+                  <Alert severity="info">
+                    <Typography variant="body2" component="div">
+                      <strong>Validate → Resolve → Revalidate → Apply</strong>: steward actions here call the same APIs
+                      as the global{' '}
+                      <Link component={NextLink} href={`/admin/mappings?import_job_id=${lastJobId}`}>
+                        Mapping queue
+                      </Link>
+                      . After saving aliases or customer/distributor mappings, use <strong>Re-run validation from server</strong>{' '}
+                      so this job&apos;s staging lines and candidate groups refresh from Product Master and approved
+                      aliases.
+                    </Typography>
+                  </Alert>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="dsi-import-pick-cand">Candidate group</InputLabel>
+                    <Select
+                      labelId="dsi-import-pick-cand"
+                      label="Candidate group"
+                      value={dsiImportStewardCandidateId === null ? '' : String(dsiImportStewardCandidateId)}
+                      onChange={(e) => {
+                        const v = e.target.value as string;
+                        setDsiImportStewardCandidateId(v === '' ? null : Number(v));
+                      }}
+                    >
+                      <MenuItem value="">
+                        <em>Select a grouped candidate…</em>
+                      </MenuItem>
+                      {dsiCandidates.map((c) => (
+                        <MenuItem key={c.id} value={String(c.id)}>
+                          {c.entity_type} · {(c.normalized_key || '').slice(0, 48)}
+                          {(c.normalized_key || '').length > 48 ? '…' : ''} · {c.status} · rows {c.row_count}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <DsiCandidateStewardPanel
+                    importJobId={lastJobId}
+                    candidate={dsiImportSelectedCandidate}
+                    onDone={() => {
+                      void refetchPreview();
+                      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', lastJobId] });
+                    }}
+                  />
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+                    <Button
+                      variant="outlined"
+                      disabled={dsiRevalidateFromServer.isPending}
+                      onClick={() => void dsiRevalidateFromServer.mutateAsync()}
+                      data-testid="dsi-import-revalidate-server"
+                    >
+                      {dsiRevalidateFromServer.isPending
+                        ? 'Re-running server validation…'
+                        : 'Re-run validation from server'}
+                    </Button>
+                  </Stack>
+                  {dsiRevalidateFromServer.isError ? (
+                    <Alert severity="error">{safeDisplayError(dsiRevalidateFromServer.error)}</Alert>
+                  ) : null}
+                </Stack>
+              </Paper>
             ) : null}
             {previewRows && previewRows.length > 0 ? (
               <Table size="small" data-testid="dsi-validate-rows">

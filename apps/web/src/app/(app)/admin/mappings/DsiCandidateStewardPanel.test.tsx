@@ -93,9 +93,12 @@ describe('DsiCandidateStewardPanel product steward', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/Map product token to Product Master/i)).toBeInTheDocument();
+    expect(within(dialog).getByTestId('dsi-product-dialog-source-token')).toHaveTextContent('Widget X');
 
     const search = within(dialog).getByLabelText(/Search products/i);
-    await user.type(search, 'x');
+    expect(search).toHaveValue('Widget X');
+    await user.clear(search);
+    await user.type(search, 'SKU');
 
     await waitFor(() => expect(within(dialog).getByRole('combobox', { name: /product/i })).toBeInTheDocument());
 
