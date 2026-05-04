@@ -4,23 +4,24 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
-from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimRegion
+from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct, DimRegion
 from app.models.import_distributor_si import (
     CustomerSourceTokenAlias,
     DistributorSourceTokenAlias,
     ImportEntityMappingCandidate,
 )
 from app.models.ingestion import ImportJob
-from app.models.mapping import EntityMappingQueue
+from app.models.mapping import EntityMappingQueue, ProductAlias
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
 from app.services.imports.distributor_sales_inventory import _norm_key
+from app.services.imports.dsi_product_steward import raw_product_token_for_dsi_candidate, validate_dsi_product_resolve
 
 router = APIRouter()
 
@@ -253,6 +254,109 @@ class CreateProvisionalDistributorBody(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=256)
     distributor_code: str | None = Field(default=None, max_length=32)
     confirm_for_suspicious_token: bool = False
+
+
+class ResolveProductCandidateBody(BaseModel):
+    """Steward: bind a DSI ``product_identifier`` candidate to an existing Product Master row via ``ProductAlias``."""
+
+    product_id: int = Field(..., ge=1)
+    raw_token: str | None = Field(default=None, max_length=256)
+    confirm_ineligible_product: bool = False
+    audit_note: str | None = Field(default=None, max_length=2000)
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+
+@router.post("/import-candidates/{candidate_id}/resolve-product", status_code=200)
+async def resolve_dsi_product_candidate(
+    candidate_id: int, body: ResolveProductCandidateBody, db: AsyncSession = Depends(get_db)
+):
+    cand = await _get_dsi_candidate_or_404(candidate_id, db)
+    if cand.entity_type != "product_identifier":
+        raise HTTPException(status_code=400, detail="Candidate entity_type is not product_identifier")
+    if cand.status in ("resolved", "ignored", "waived_open_channel"):
+        raise HTTPException(
+            status_code=409,
+            detail="Candidate is already in a terminal state; refresh the mapping queue.",
+        )
+    prod = await db.get(DimProduct, body.product_id)
+    if not prod:
+        raise HTTPException(status_code=400, detail="product_id not found")
+    ctx = cand.context if isinstance(cand.context, dict) else {}
+    raw = raw_product_token_for_dsi_candidate(
+        sample_raw_values=cand.sample_raw_values if isinstance(cand.sample_raw_values, list) else None,
+        normalized_key=cand.normalized_key or "",
+        raw_override=body.raw_token,
+    )
+    if not raw.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Could not determine raw product token for alias; pass raw_token or ensure sample_raw_values is populated.",
+        )
+    nt = _norm_key(raw)
+    if not nt:
+        raise HTTPException(status_code=400, detail="Token is empty after normalization")
+    raw_val = raw.strip()[:256]
+    try:
+        validate_dsi_product_resolve(
+            context=ctx,
+            selected_product_id=body.product_id,
+            selected_product=prod,
+            confirm_ineligible_product=body.confirm_ineligible_product,
+            audit_note=body.audit_note,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    existing = (
+        await db.execute(select(ProductAlias).where(func.lower(ProductAlias.alias_value) == raw_val.lower()))
+    ).scalars().first()
+    alias_row: ProductAlias
+    if existing is not None:
+        if int(existing.product_id) != int(body.product_id):
+            raise HTTPException(
+                status_code=409,
+                detail="This source token is already aliased to a different product; resolve the conflict in Product Master first.",
+            )
+        alias_row = existing
+    else:
+        alias_row = ProductAlias(
+            product_id=int(body.product_id),
+            alias_value=raw_val,
+            alias_kind="source_import_token",
+            confidence="steward_approved",
+        )
+        db.add(alias_row)
+    try:
+        await db.flush()
+        cand.status = "resolved"
+        cand.suggested_entity_id = int(body.product_id)
+        cand.match_reason = "steward_resolve_product_alias"
+        ctx2 = dict(ctx)
+        ctx2["steward_product_resolution"] = {
+            "product_id": int(body.product_id),
+            "product_alias_id": int(alias_row.id),
+            "raw_token_used": raw_val,
+            "normalized_token": nt[:512],
+            "import_job_id": int(cand.import_job_id),
+            "import_entity_mapping_candidate_id": int(cand.id),
+            "confirm_ineligible_product": bool(body.confirm_ineligible_product),
+            "audit_note": (body.audit_note or "").strip()[:2000] if body.confirm_ineligible_product else None,
+            "idempotency_key": (body.idempotency_key or "").strip()[:128] or None,
+        }
+        cand.context = ctx2
+        await db.commit()
+        await db.refresh(alias_row)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Could not create product alias (duplicate or constraint violation)"
+        )
+    return {
+        "ok": True,
+        "candidate_id": cand.id,
+        "product_id": int(body.product_id),
+        "product_alias_id": int(alias_row.id),
+    }
 
 
 @router.post("/import-candidates/{candidate_id}/map-customer", status_code=200)

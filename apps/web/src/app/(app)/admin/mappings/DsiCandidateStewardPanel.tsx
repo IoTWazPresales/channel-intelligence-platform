@@ -44,6 +44,7 @@ type RegionOpt = { id: number; code: string; name: string };
 type ChannelOpt = { id: number; code: string; name: string };
 type CustomerHit = { id: number; customer_code: string; customer_name: string };
 type DistributorHit = { id: number; distributor_code: string; distributor_name: string };
+type ProductHit = { id: number; sku: string; name: string; sales_model_name: string | null; is_active: boolean };
 
 function strategicHint(ctx: Record<string, unknown> | null | undefined): boolean {
   return Boolean(ctx && ctx.strategic_channel_hint === true);
@@ -68,12 +69,15 @@ export function DsiCandidateStewardPanel({
   const [createCustOpen, setCreateCustOpen] = useState(false);
   const [mapDistOpen, setMapDistOpen] = useState(false);
   const [createDistOpen, setCreateDistOpen] = useState(false);
+  const [mapProdOpen, setMapProdOpen] = useState(false);
   const [ocOpen, setOcOpen] = useState(false);
 
   const [custQ, setCustQ] = useState('');
   const [distQ, setDistQ] = useState('');
+  const [prodQ, setProdQ] = useState('');
   const [pickCustomerId, setPickCustomerId] = useState<number | ''>('');
   const [pickDistributorId, setPickDistributorId] = useState<number | ''>('');
+  const [pickProductId, setPickProductId] = useState<number | ''>('');
 
   const [displayName, setDisplayName] = useState('');
   const [regionId, setRegionId] = useState<number | ''>('');
@@ -82,6 +86,9 @@ export function DsiCandidateStewardPanel({
   const [distConfirmSuspicious, setDistConfirmSuspicious] = useState(false);
   const [ocNamedConfirm, setOcNamedConfirm] = useState(false);
   const [ocStrategicConfirm, setOcStrategicConfirm] = useState(false);
+  const [confirmIneligibleProduct, setConfirmIneligibleProduct] = useState(false);
+  const [productAuditNote, setProductAuditNote] = useState('');
+  const [productRawOverride, setProductRawOverride] = useState('');
 
   const { data: regions = [] } = useQuery({
     queryKey: ['catalog-regions'],
@@ -108,6 +115,14 @@ export function DsiCandidateStewardPanel({
         { signal }
       ),
     enabled: distQ.trim().length >= 1,
+    select: (r) => r.items ?? [],
+  });
+
+  const { data: prodHits = [] } = useQuery({
+    queryKey: ['products-search-dsi-steward', prodQ],
+    queryFn: ({ signal }) =>
+      apiGet<{ items: ProductHit[] }>(`/api/v1/products?q=${encodeURIComponent(prodQ)}&page_size=20`, { signal }),
+    enabled: prodQ.trim().length >= 1,
     select: (r) => r.items ?? [],
   });
 
@@ -174,6 +189,20 @@ export function DsiCandidateStewardPanel({
       ),
     onSuccess: () => {
       setCreateDistOpen(false);
+      invalidate();
+    },
+  });
+
+  const resolveProduct = useMutation({
+    mutationFn: (body: {
+      product_id: number;
+      raw_token?: string | null;
+      confirm_ineligible_product: boolean;
+      audit_note?: string | null;
+    }) =>
+      apiPost<{ ok: boolean }>(`/api/v1/mappings/import-candidates/${candidate?.id}/resolve-product`, body),
+    onSuccess: () => {
+      setMapProdOpen(false);
       invalidate();
     },
   });
@@ -311,6 +340,22 @@ export function DsiCandidateStewardPanel({
         </Button>
         <Button
           variant="outlined"
+          size="small"
+          disabled={isTerminal || candidate.entity_type !== 'product_identifier'}
+          onClick={() => {
+            setProdQ('');
+            setPickProductId('');
+            setConfirmIneligibleProduct(false);
+            setProductAuditNote('');
+            setProductRawOverride('');
+            setMapProdOpen(true);
+          }}
+          data-testid="dsi-action-resolve-product"
+        >
+          Map to Product Master (alias)
+        </Button>
+        <Button
+          variant="outlined"
           color="warning"
           size="small"
           disabled={isTerminal}
@@ -325,6 +370,7 @@ export function DsiCandidateStewardPanel({
         markOpenChannel.isError ||
         mapDistributor.isError ||
         createProvDistributor.isError ||
+        resolveProduct.isError ||
         ignoreCand.isError) && (
         <Alert severity="error">
           {toQueryError(
@@ -333,6 +379,7 @@ export function DsiCandidateStewardPanel({
               markOpenChannel.error ||
               mapDistributor.error ||
               createProvDistributor.error ||
+              resolveProduct.error ||
               ignoreCand.error
           )?.message ?? 'Action failed'}
         </Alert>
@@ -565,6 +612,86 @@ export function DsiCandidateStewardPanel({
             }
           >
             Create &amp; alias
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={mapProdOpen} onClose={() => setMapProdOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>Map product token to Product Master</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Creates an approved <strong>ProductAlias</strong> for this import token, then mark this candidate resolved.
+              Run <strong>Revalidate import job</strong> from the mapping queue page so staging picks up the new alias.
+            </Typography>
+            <TextField
+              label="Search products (SKU / model)"
+              value={prodQ}
+              onChange={(e) => setProdQ(e.target.value)}
+              helperText="Type at least 1 character"
+              fullWidth
+            />
+            <FormControl fullWidth>
+              <InputLabel id="pick-prod">Product</InputLabel>
+              <Select
+                labelId="pick-prod"
+                label="Product"
+                value={pickProductId === '' ? '' : String(pickProductId)}
+                onChange={(e) => setPickProductId(e.target.value === '' ? '' : Number(e.target.value))}
+              >
+                {prodHits.map((p) => (
+                  <MenuItem key={p.id} value={String(p.id)}>
+                    {p.sku} — {p.name}
+                    {p.sales_model_name ? ` (${p.sales_model_name})` : ''}
+                    {!p.is_active ? ' [inactive]' : ''}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Raw token override (optional)"
+              value={productRawOverride}
+              onChange={(e) => setProductRawOverride(e.target.value)}
+              helperText="Leave blank to use candidate samples / normalized token"
+              fullWidth
+            />
+            <label>
+              <input
+                type="checkbox"
+                checked={confirmIneligibleProduct}
+                onChange={(e) => setConfirmIneligibleProduct(e.target.checked)}
+                data-testid="dsi-product-ineligible-confirm"
+              />{' '}
+              Confirm mapping to an inactive / ineligible Product Master row (requires audit note)
+            </label>
+            <TextField
+              label="Audit note (required if confirming inactive/ineligible)"
+              value={productAuditNote}
+              onChange={(e) => setProductAuditNote(e.target.value)}
+              multiline
+              minRows={2}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMapProdOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={pickProductId === '' || resolveProduct.isPending}
+            onClick={() => {
+              if (pickProductId === '') return;
+              const rawTok = productRawOverride.trim() || undefined;
+              void resolveProduct.mutateAsync({
+                product_id: Number(pickProductId),
+                raw_token: rawTok,
+                confirm_ineligible_product: confirmIneligibleProduct,
+                audit_note: productAuditNote.trim() || undefined,
+              });
+            }}
+            data-testid="dsi-product-resolve-save"
+          >
+            Save ProductAlias &amp; resolve
           </Button>
         </DialogActions>
       </Dialog>
