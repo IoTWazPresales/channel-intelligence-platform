@@ -570,10 +570,27 @@ export function DsiCandidateStewardPanel({
       </Dialog>
 
       {candidate.entity_type === 'product_identifier' ? (
-        <Alert severity="warning" data-testid="dsi-product-guidance">
-          Product identifiers are governed through Product Master / ProductAlias. Map via Product Master workflows; this
-          screen does not create products or provisional SKUs.
-        </Alert>
+        <Stack spacing={1}>
+          <Alert severity="warning" data-testid="dsi-product-guidance">
+            Product identifiers are governed through Product Master / ProductAlias. Map via Product Master workflows; this
+            screen does not create products or provisional SKUs.
+          </Alert>
+          {typeof ctx?.product_match_summary === 'string' && ctx.product_match_summary.trim() ? (
+            <Alert severity="info" data-testid="dsi-product-match-summary">
+              <Typography variant="body2">{String(ctx.product_match_summary)}</Typography>
+              {ctx.product_match_status === 'ambiguous_eligible' && Array.isArray(ctx.product_ambiguous_eligible?.eligible_products) ? (
+                <Typography variant="caption" component="div" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
+                  {JSON.stringify(ctx.product_ambiguous_eligible, null, 2)}
+                </Typography>
+              ) : null}
+              {ctx.product_match_status === 'inactive_only' && Array.isArray(ctx.product_inactive_matches) ? (
+                <Typography variant="caption" component="div" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
+                  {JSON.stringify(ctx.product_inactive_matches, null, 2)}
+                </Typography>
+              ) : null}
+            </Alert>
+          ) : null}
+        </Stack>
       ) : null}
     </Stack>
   );

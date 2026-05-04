@@ -85,6 +85,13 @@ function dsiSourceCustomerNameCell(ctx: Record<string, unknown> | null | undefin
     .join('; ');
 }
 
+function dsiProductMatchSummaryCell(ctx: Record<string, unknown> | null | undefined): string {
+  if (!ctx) return '';
+  const sum = ctx.product_match_summary;
+  if (typeof sum === 'string' && sum.trim()) return sum.trim();
+  return '';
+}
+
 function AdminMappingsPageContent() {
   const searchParams = useSearchParams();
   const importJobIdParam = searchParams.get('import_job_id');
@@ -201,6 +208,11 @@ function AdminMappingsPageContent() {
         headerName: 'Source customer name',
         minWidth: 160,
         valueGetter: (p) => dsiSourceCustomerNameCell(p.data?.context ?? null),
+      },
+      {
+        headerName: 'Product match',
+        minWidth: 220,
+        valueGetter: (p) => dsiProductMatchSummaryCell(p.data?.context ?? null),
       },
       { field: 'suggested_entity_id', headerName: 'Suggested id', width: 120 },
       { field: 'match_reason', headerName: 'Match reason', minWidth: 120 },

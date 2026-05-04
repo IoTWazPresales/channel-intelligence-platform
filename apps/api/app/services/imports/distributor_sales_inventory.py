@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -209,6 +209,91 @@ def _product_token_key(raw: str | None) -> str:
     return t if t and t != "nan" else ""
 
 
+_LIFECYCLE_INELIGIBLE_EXACT = frozenset(
+    {
+        "inactive",
+        "disabled",
+        "cancelled",
+        "canceled",
+        "discarded",
+        "retired",
+        "eol",
+        "end of life",
+        "obsolete",
+        "discontinued",
+    }
+)
+
+
+def _product_eligible_for_dsi_auto(p: DimProduct, evidence_date: date | None) -> bool:
+    """Whether a Product Master row may receive **automatic** DSI resolution (never silent pick).
+
+    Inactive / clearly retired-lifecycle strings / outside launch–retire window for the evidence date
+    are ineligible. Empty ``lifecycle_status`` does not alone disqualify if ``is_active`` is true.
+    """
+    if not bool(getattr(p, "is_active", True)):
+        return False
+    ls = (getattr(p, "lifecycle_status", None) or "").strip().lower()
+    if ls:
+        if ls in _LIFECYCLE_INELIGIBLE_EXACT:
+            return False
+        for frag in ("cancel", "discard", "retire", "obsolete", "inactive", "disabled", "discontinued"):
+            if frag in ls:
+                return False
+    if evidence_date is not None:
+        rd = getattr(p, "retired_date", None)
+        if rd is not None and rd < evidence_date:
+            return False
+        ld = getattr(p, "launch_date", None)
+        if ld is not None and ld > evidence_date:
+            return False
+    return True
+
+
+def _product_snapshot_for_dsi_context(p: DimProduct) -> dict[str, Any]:
+    """Compact, JSON-safe row snapshot for mapping-queue / steward context."""
+    ld = getattr(p, "launch_date", None)
+    rd = getattr(p, "retired_date", None)
+    return {
+        "product_id": int(p.id),
+        "sku": (p.sku or "")[:128],
+        "part_number": (p.part_number or "")[:128] if p.part_number else None,
+        "sales_model_name": (p.sales_model_name or "")[:160] if p.sales_model_name else None,
+        "is_active": bool(p.is_active),
+        "lifecycle_status": (p.lifecycle_status or "")[:64] if p.lifecycle_status else None,
+        "launch_date": ld.isoformat() if ld else None,
+        "retired_date": rd.isoformat() if rd else None,
+    }
+
+
+@dataclass
+class ProductResolutionEvidence:
+    """Merged onto ``ImportEntityMappingCandidate.context`` for unresolved product tokens."""
+
+    ambiguous_eligible: dict[str, Any] | None = None
+    inactive_hits: list[dict[str, Any]] = field(default_factory=list)
+
+
+def _merge_product_resolution_evidence(bucket: dict[str, Any], ev: ProductResolutionEvidence | None) -> None:
+    """Accumulate per-token evidence across staging rows (same normalized product_identifier)."""
+    if ev is None or (not ev.inactive_hits and ev.ambiguous_eligible is None):
+        return
+    acc = bucket.setdefault("_pe_acc", {"inh": [], "amb": None, "seen": set()})
+    seen: set[tuple[str, int]] = acc["seen"]
+    if ev.ambiguous_eligible:
+        acc["amb"] = ev.ambiguous_eligible
+    for hit in ev.inactive_hits:
+        sid = (str(hit.get("tier") or ""), int(hit.get("product_id") or 0))
+        if sid[1] <= 0:
+            continue
+        if sid in seen:
+            continue
+        seen.add(sid)
+        acc["inh"].append(hit)
+        if len(acc["inh"]) >= 20:
+            break
+
+
 def _multimap_from_pairs(pairs: list[tuple[str, int]]) -> dict[str, tuple[int, ...]]:
     """Build key -> sorted unique product ids (empty keys dropped)."""
     buckets: dict[str, list[int]] = defaultdict(list)
@@ -230,11 +315,13 @@ class ProductResolutionIndex:
     ean_to_ids: dict[str, tuple[int, ...]]
     upc_to_ids: dict[str, tuple[int, ...]]
     alias_value_to_ids: dict[str, tuple[int, ...]]
+    products_by_id: dict[int, DimProduct]
 
 
 def _load_product_resolution_index(db: Session) -> ProductResolutionIndex:
     """Load Product Master identity fields + ProductAlias for DSI resolution (single pass per import job)."""
     products = list(db.scalars(select(DimProduct)).all())
+    products_by_id: dict[int, DimProduct] = {int(p.id): p for p in products}
     sku_to_id: dict[str, int] = {}
     part_pairs: list[tuple[str, int]] = []
     sm_pairs: list[tuple[str, int]] = []
@@ -278,47 +365,115 @@ def _load_product_resolution_index(db: Session) -> ProductResolutionIndex:
         ean_to_ids=_multimap_from_pairs(ean_pairs),
         upc_to_ids=_multimap_from_pairs(upc_pairs),
         alias_value_to_ids=_multimap_from_pairs(alias_pairs),
+        products_by_id=products_by_id,
     )
 
 
 def _resolve_product(
-    raw: str | None, idx: ProductResolutionIndex
-) -> tuple[int | None, str | None, str | None]:
-    """Resolve RAW product_identifier to dim_product.id.
+    raw: str | None, idx: ProductResolutionIndex, evidence_date: date | None = None
+) -> tuple[int | None, str | None, str | None, ProductResolutionEvidence | None]:
+    """Resolve RAW product_identifier to dim_product.id with lifecycle-aware eligibility.
 
-    Tier order (explicit, auditable): SKU → part_number → sales_model_name → model_name → marketing_name
-    → ean → upc → ProductAlias. Stops at first unique match; multiple hits in the same tier are ambiguous.
+    Tier order: SKU → part_number → sales_model_name → model_name → marketing_name → ean → upc
+    → ProductAlias. Within a tier: **only eligible** rows may auto-resolve; multiple eligible hits
+    are ambiguous (blocked). Ineligible-only hits at a tier are recorded and the walk **continues**
+    so a later tier (e.g. alias) can still resolve.
 
-    Returns ``(product_id, error_code, success_diagnostic)``. ``success_diagnostic`` is set when resolved
-    (e.g. ``product_resolved_sales_model_name``); ``error_code`` when unresolved or ambiguous.
+    Returns ``(product_id, error_code, success_diagnostic, evidence)``. ``evidence`` is populated when
+    returning ``ambiguous_product_match`` or ``unresolved_product_inactive_only`` for mapping-queue context.
     """
     key = _product_token_key(raw)
     if not key:
-        return None, "missing_product_token", None
+        return None, "missing_product_token", None, None
+
+    def _eligible_ids(ids: tuple[int, ...]) -> list[int]:
+        out: list[int] = []
+        for i in ids:
+            p = idx.products_by_id.get(int(i))
+            if p is not None and _product_eligible_for_dsi_auto(p, evidence_date):
+                out.append(int(i))
+        return out
+
+    def _inactive_snapshots(tier: str, ids: tuple[int, ...]) -> list[dict[str, Any]]:
+        snaps: list[dict[str, Any]] = []
+        for i in ids:
+            p = idx.products_by_id.get(int(i))
+            if p is None:
+                continue
+            if _product_eligible_for_dsi_auto(p, evidence_date):
+                continue
+            s = _product_snapshot_for_dsi_context(p)
+            s["tier"] = tier
+            snaps.append(s)
+        return snaps
+
     pid = idx.sku_to_id.get(key)
     if pid is not None:
-        return int(pid), None, "product_resolved_sku"
+        p0 = idx.products_by_id.get(int(pid))
+        if p0 is not None and _product_eligible_for_dsi_auto(p0, evidence_date):
+            return int(pid), None, "product_resolved_sku", None
+        if p0 is not None:
+            ev = ProductResolutionEvidence(inactive_hits=_inactive_snapshots("sku", (pid,)))
+            return None, "unresolved_product_inactive_only", None, ev
+
     tier_maps: tuple[tuple[dict[str, tuple[int, ...]], str], ...] = (
-        (idx.part_number_to_ids, "product_resolved_part_number"),
-        (idx.sales_model_name_to_ids, "product_resolved_sales_model_name"),
-        (idx.model_name_to_ids, "product_resolved_model_name"),
-        (idx.marketing_name_to_ids, "product_resolved_marketing_name"),
-        (idx.ean_to_ids, "product_resolved_ean"),
-        (idx.upc_to_ids, "product_resolved_upc"),
+        (idx.part_number_to_ids, "part_number"),
+        (idx.sales_model_name_to_ids, "sales_model_name"),
+        (idx.model_name_to_ids, "model_name"),
+        (idx.marketing_name_to_ids, "marketing_name"),
+        (idx.ean_to_ids, "ean"),
+        (idx.upc_to_ids, "upc"),
     )
-    for mmap, tag in tier_maps:
+    tag_for_tier = {
+        "part_number": "product_resolved_part_number",
+        "sales_model_name": "product_resolved_sales_model_name",
+        "model_name": "product_resolved_model_name",
+        "marketing_name": "product_resolved_marketing_name",
+        "ean": "product_resolved_ean",
+        "upc": "product_resolved_upc",
+    }
+    accumulated = ProductResolutionEvidence()
+    for mmap, tier in tier_maps:
         ids = mmap.get(key)
         if not ids:
             continue
-        if len(ids) > 1:
-            return None, "ambiguous_product_match", None
-        return int(ids[0]), None, tag
+        elig = _eligible_ids(ids)
+        if len(elig) == 1:
+            return int(elig[0]), None, tag_for_tier[tier], None
+        if len(elig) > 1:
+            snaps = [_product_snapshot_for_dsi_context(idx.products_by_id[i]) for i in sorted(set(elig))]
+            amb: dict[str, Any] = {
+                "tier": tier,
+                "product_ids": sorted(set(elig)),
+                "eligible_products": snaps[:12],
+            }
+            return None, "ambiguous_product_match", None, ProductResolutionEvidence(ambiguous_eligible=amb)
+        in_sn = _inactive_snapshots(tier, ids)
+        accumulated.inactive_hits.extend(in_sn)
+
     a_ids = idx.alias_value_to_ids.get(key)
     if a_ids:
-        if len(a_ids) > 1:
-            return None, "ambiguous_product_alias", None
-        return int(a_ids[0]), None, "product_resolved_alias"
-    return None, "unresolved_product", None
+        elig_a: list[int] = []
+        for aid in a_ids:
+            p = idx.products_by_id.get(int(aid))
+            if p is not None and _product_eligible_for_dsi_auto(p, evidence_date):
+                elig_a.append(int(aid))
+        if len(elig_a) == 1:
+            return int(elig_a[0]), None, "product_resolved_alias", None
+        if len(elig_a) > 1:
+            snaps = [_product_snapshot_for_dsi_context(idx.products_by_id[i]) for i in sorted(set(elig_a))]
+            amb = {
+                "tier": "product_alias",
+                "product_ids": sorted(set(elig_a)),
+                "eligible_products": snaps[:12],
+            }
+            return None, "ambiguous_product_alias", None, ProductResolutionEvidence(ambiguous_eligible=amb)
+        in_sn = _inactive_snapshots("product_alias", a_ids)
+        accumulated.inactive_hits.extend(in_sn)
+
+    if accumulated.inactive_hits:
+        return None, "unresolved_product_inactive_only", None, accumulated
+    return None, "unresolved_product", None, None
 
 
 def _alias_distributor_id(db: Session, source_id: int | None, normalized_token: str) -> int | None:
@@ -600,7 +755,8 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         if derr:
             diag.append(derr)
 
-        rpid, perr, presolve_tag = _resolve_product(prod_raw, prod_idx)
+        evidence_date = tx_date or snap_date
+        rpid, perr, presolve_tag, pev = _resolve_product(prod_raw, prod_idx, evidence_date)
         if perr:
             diag.append(perr)
         elif presolve_tag:
@@ -767,6 +923,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         if rpid is None and prod_raw:
             k = ("product_identifier", _norm_key(prod_raw))
             a = agg[k]
+            _merge_product_resolution_evidence(a, pev)
             a["row_count"] += 1
             if qty_sold is not None:
                 a["total_units"] += abs(qty_sold)
@@ -844,6 +1001,37 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                     dealer_token_col = dgr_store.strip()[:512]
                 elif nkey_clean and nkey_clean != "__blank__":
                     dealer_token_col = nkey_clean[:512]
+        if etype == "product_identifier":
+            acc = data.pop("_pe_acc", None)
+            if isinstance(acc, dict):
+                amb = acc.get("amb")
+                inh = [x for x in (acc.get("inh") or []) if isinstance(x, dict)]
+                if amb:
+                    ctx["product_match_status"] = "ambiguous_eligible"
+                    ctx["product_ambiguous_eligible"] = amb
+                    ids = amb.get("product_ids") or []
+                    tier = amb.get("tier") or ""
+                    ctx["product_match_summary"] = (
+                        f"Ambiguous: {len(ids)} eligible Product Master rows in tier "
+                        f"{tier}; auto-resolve blocked."
+                    )
+                elif inh:
+                    ctx["product_match_status"] = "inactive_only"
+                    ctx["product_inactive_matches"] = inh[:16]
+                    ctx["product_match_summary"] = (
+                        f"{len(inh)} inactive/ineligible Product Master row(s) matched this token "
+                        f"(see lifecycle fields below)."
+                    )
+                else:
+                    ctx["product_match_status"] = "no_match"
+                    ctx["product_match_summary"] = (
+                        "No Product Master or approved-alias match for this token."
+                    )
+            else:
+                ctx["product_match_status"] = "no_match"
+                ctx["product_match_summary"] = (
+                    "No Product Master or approved-alias match for this token."
+                )
         if data.get("strategic_channel_hint"):
             ctx["strategic_channel_hint"] = True
         cand = ImportEntityMappingCandidate(
