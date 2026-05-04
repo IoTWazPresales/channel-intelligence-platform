@@ -83,23 +83,40 @@ def _dealer_group_is_placeholder(dg_raw: str | None) -> bool:
     return any(x in dg.lower() for x in DEALER_GROUP_PLACEHOLDER_SUBSTRINGS)
 
 
-def effective_dsi_customer_resolution_raw(
+def effective_dsi_customer_primary_for_resolution(
     customer_dealer_raw: str | None, dealer_group_raw: str | None
 ) -> tuple[str | None, list[str]]:
-    """Pick the token used for customer resolution (aliases / dim / open-channel rules).
+    """Pick the token used for dim_customer / steward-alias resolution.
 
-    Historical RAW-style workbooks: prefer a real customer/dealer name; when that is blank or a placeholder,
-    fall back to **Dealer Name Group** when it is non-placeholder. Original columns remain on staging
-    (`raw_customer_dealer_token`, `raw_dealer_group_token`) and in `raw_row_payload`.
+    Business rule (RAW / DSI): **Dealer Name Group** is the primary account grouping. The customer/dealer
+    name column is alias/source evidence and is used for resolution only when the dealer group cell is
+    blank or a workbook placeholder. Original columns remain on staging (`raw_customer_dealer_token`,
+    `raw_dealer_group_token`) and in `raw_row_payload`.
     """
     notes: list[str] = []
-    nt = _norm_key(customer_dealer_raw)
-    if not _customer_token_is_placeholder(nt, customer_dealer_raw):
-        return (_clean_str(customer_dealer_raw), notes)
     if not _dealer_group_is_placeholder(dealer_group_raw):
-        notes.append("customer_token_source_dealer_group")
+        notes.append("customer_resolution_primary_dealer_name_group")
+        cu_nt = _norm_key(customer_dealer_raw)
+        if not _customer_token_is_placeholder(cu_nt, customer_dealer_raw):
+            notes.append("customer_name_evidence_for_group")
         return (_clean_str(dealer_group_raw), notes)
+    cu_nt = _norm_key(customer_dealer_raw)
+    if not _customer_token_is_placeholder(cu_nt, customer_dealer_raw):
+        return (_clean_str(customer_dealer_raw), notes)
     return (None, notes)
+
+
+def _customer_candidate_identity_norm(customer_dealer_raw: str | None, dealer_group_raw: str | None) -> str:
+    """Stable key for ``ImportEntityMappingCandidate`` rows: must match DB uniqueness (job + entity + normalized_key).
+
+    Dealer Name Group wins when present/non-placeholder; otherwise non-placeholder customer column; otherwise
+    a single blank bucket.
+    """
+    if not _dealer_group_is_placeholder(dealer_group_raw):
+        return _norm_key(dealer_group_raw)
+    if not _customer_token_is_placeholder(_norm_key(customer_dealer_raw), customer_dealer_raw):
+        return _norm_key(customer_dealer_raw)
+    return "__blank__"
 
 
 # Channel / marketplace hints for steward review (generic; not region-specific).
@@ -293,6 +310,7 @@ def _resolve_customer(
     open_flag_raw: Any,
 ) -> tuple[int | None, list[str]]:
     """Returns (customer_id, diagnostic_codes)."""
+    _ = channel_raw  # reserved; open-channel auto-assign uses explicit evidence column only
     diagnostics: list[str] = []
     nt = _norm_key(customer_raw)
     dg = _clean_str(dealer_group_raw)
@@ -315,10 +333,9 @@ def _resolve_customer(
         s = str(open_flag_raw).strip().lower()
         open_from_col = s in ("1", "true", "yes", "y", "x")
 
-    ch = (channel_raw or "").strip().lower()
-    open_from_channel = any(h in ch for h in CHANNEL_OPEN_SUBSTRINGS)
-
-    if (not nt) and (open_from_col or open_from_channel):
+    # Open Channel assignment requires **explicit** workbook evidence (`open_channel_evidence` column).
+    # Channel-key text alone must not imply OPEN_CHANNEL when the customer token is blank.
+    if (not nt) and open_from_col:
         oc = _open_channel_customer_id(db)
         if oc:
             diagnostics.append("customer_open_channel")
@@ -428,6 +445,8 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             "total_value": Decimal(0),
             "samples": [],
             "strategic_channel_hint": False,
+            "customer_evidence_norms": [],
+            "primary_source": None,
         }
     )
 
@@ -497,7 +516,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         cust_res_raw: str | None = None
         cust_res_notes: list[str] = []
         if sellout_attempt:
-            cust_res_raw, cust_res_notes = effective_dsi_customer_resolution_raw(cust_raw, dg_raw)
+            cust_res_raw, cust_res_notes = effective_dsi_customer_primary_for_resolution(cust_raw, dg_raw)
 
         if sellout_attempt:
             rcustomer_id, cd = _resolve_customer(
@@ -655,48 +674,72 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             if len(a["samples"]) < 5:
                 a["samples"].append(prod_raw)
         if sellout_attempt and rcustomer_id is None:
-            eff_key = _norm_key(cust_res_raw) if cust_res_raw else "__blank__"
-            nk = f"{eff_key}||{_norm_key(dg_raw)}"
-            k = ("customer_dealer_token", nk)
+            ckey = _customer_candidate_identity_norm(cust_raw, dg_raw)
+            k = ("customer_dealer_token", ckey)
             a = agg[k]
+            if a.get("primary_source") is None:
+                if not _dealer_group_is_placeholder(dg_raw):
+                    a["primary_source"] = "dealer_name_group"
+                elif not _customer_token_is_placeholder(_norm_key(cust_raw), cust_raw):
+                    a["primary_source"] = "customer_column"
+                else:
+                    a["primary_source"] = "blank"
             a["row_count"] += 1
             if qty_sold is not None:
                 a["total_units"] += abs(qty_sold)
             if reported_rev is not None:
                 a["total_value"] += abs(reported_rev)
+            cu_ev = (
+                _norm_key(cust_raw)
+                if cust_raw and not _customer_token_is_placeholder(_norm_key(cust_raw), cust_raw)
+                else None
+            )
+            if cu_ev:
+                lst = a["customer_evidence_norms"]
+                if cu_ev not in lst and len(lst) < 8:
+                    lst.append(cu_ev)
             if len(a["samples"]) < 5:
-                sample = cust_raw or ""
-                if dg_raw and dg_raw != sample:
-                    sample = f"{sample} | dealer_group={dg_raw}"
-                a["samples"].append(sample)
+                parts: list[str] = []
+                if cust_raw and not _customer_token_is_placeholder(_norm_key(cust_raw), cust_raw):
+                    parts.append(f"customer={cust_raw.strip()[:160]}")
+                if dg_raw and not _dealer_group_is_placeholder(dg_raw):
+                    parts.append(f"dealer_group={dg_raw.strip()[:160]}")
+                elif dg_raw:
+                    parts.append(f"dealer_group(raw)={dg_raw.strip()[:80]}")
+                sample = " | ".join(parts) if parts else (cust_raw or dg_raw or "").strip()[:200]
+                if sample:
+                    a["samples"].append(sample)
             chv = (ch_raw or "").strip().lower()
             if chv and any(h in chv for h in STRATEGIC_CHANNEL_HINT_SUBSTRINGS):
                 a["strategic_channel_hint"] = True
 
     for (etype, nkey), data in agg.items():
-        dg = None
-        if etype == "customer_dealer_token" and "||" in nkey:
-            parts = nkey.split("||", 1)
-            nkey_clean, dg = parts[0], parts[1] or None
-        else:
-            nkey_clean = nkey
+        ctx: dict[str, Any] = {"aggregated": True}
+        dealer_token_col: str | None = None
+        nkey_clean = nkey
+        if etype == "customer_dealer_token":
+            ps = data.get("primary_source")
+            if ps:
+                ctx["primary_source"] = ps
+            evs = data.get("customer_evidence_norms") or []
+            if evs:
+                ctx["customer_name_evidence_norms"] = evs[:8]
+            if ps == "dealer_name_group" and evs:
+                dealer_token_col = evs[0][:512]
+        if data.get("strategic_channel_hint"):
+            ctx["strategic_channel_hint"] = True
         cand = ImportEntityMappingCandidate(
             import_job_id=job.id,
             source_definition_id=source_def_id,
             entity_type=etype,
             normalized_key=nkey_clean[:512],
-            dealer_group_token=(dg[:512] if dg else None),
+            dealer_group_token=dealer_token_col if etype == "customer_dealer_token" else None,
             row_count=int(data["row_count"]),
             total_units=float(data["total_units"]) if data["total_units"] else None,
             total_reported_value=float(data["total_value"]) if data["total_value"] else None,
             sample_raw_values=to_jsonable(data["samples"][:5]),
             status="needs_review",
-            context=to_jsonable(
-                {
-                    "aggregated": True,
-                    **({"strategic_channel_hint": True} if data.get("strategic_channel_hint") else {}),
-                }
-            ),
+            context=to_jsonable(ctx),
         )
         db.add(cand)
 

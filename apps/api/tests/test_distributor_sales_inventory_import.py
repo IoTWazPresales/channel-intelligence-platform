@@ -324,7 +324,7 @@ def test_dsi_dealer_name_group_resolves_when_customer_blank_apply(dsi_source_id:
             select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == jid)
         ).first()
         assert line is not None
-        assert "customer_token_source_dealer_group" in (line.diagnostic_codes or [])
+        assert "customer_resolution_primary_dealer_name_group" in (line.diagnostic_codes or [])
         assert line.raw_customer_dealer_token is None
         assert line.raw_dealer_group_token == "Metro Market Group"
         cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
@@ -358,11 +358,39 @@ def test_dsi_placeholder_customer_column_uses_dealer_name_group_apply(dsi_source
             select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == jid)
         ).first()
         assert line is not None
+        assert "customer_resolution_primary_dealer_name_group" in (line.diagnostic_codes or [])
         assert line.raw_customer_dealer_token == "to be mapped"
         assert line.raw_dealer_group_token == "Metro Market Group"
         cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
         assert cust is not None
         assert line.resolved_customer_id == cust.id
+
+
+def test_dsi_unresolved_customer_single_candidate_merged_dealer_group_patterns(dsi_source_id: int) -> None:
+    """Same dealer group + unresolved sellout: customer vs placeholder customer must not double-insert candidates."""
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,Dealer Name Group,soh\n"
+        "DIST-01,SKU-ALPHA-01,2024-05-10,1,Wootware Zed Unres,Wootware Zed Unres Group,1\n"
+        "DIST-01,SKU-ALPHA-01,2024-05-11,1,to be mapped,Wootware Zed Unres Group,1\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_merge_cust_cand.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        cands = list(
+            db.scalars(
+                select(ImportEntityMappingCandidate).where(
+                    ImportEntityMappingCandidate.import_job_id == jid,
+                    ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+                )
+            ).all()
+        )
+        assert len(cands) == 1
+        assert cands[0].row_count == 2
+        assert float(cands[0].total_units or 0) == 2.0
+        assert cands[0].normalized_key == "wootware zed unres group"
+        ctx = cands[0].context or {}
+        assert ctx.get("primary_source") == "dealer_name_group"
+        assert "wootware zed unres" in (ctx.get("customer_name_evidence_norms") or [])
 
 
 def test_dsi_mixed_unresolved_sellout_inventory_still_applies_on_apply(dsi_source_id: int) -> None:
