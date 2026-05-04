@@ -26,9 +26,9 @@ export function dsiTargetLabel(t: string): string {
 export function dsiTargetDescription(t: string): string | undefined {
   const descriptions: Record<string, string> = {
     dealer_group_token:
-      'The customer account used for reporting, matching, and facts (e.g. Dealer Name Group on RAW workbooks).',
+      'Primary customer account for this import: rows roll up here for reporting, matching, and facts. On RAW workbooks map the Dealer Name Group column here—not the free-text customer name.',
     customer_dealer_token:
-      'The customer name as supplied in the source file. Stored as alias / evidence for matching (e.g. Customer name on RAW workbooks).',
+      'Secondary label from the file only: the raw customer / site name as printed (e.g. Customer name on RAW). Stored as alias and matching evidence under the Customer account, not as the rollup account.',
   };
   return descriptions[t];
 }

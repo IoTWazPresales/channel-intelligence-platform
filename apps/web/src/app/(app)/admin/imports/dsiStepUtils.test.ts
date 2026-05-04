@@ -22,8 +22,11 @@ describe('dsiStepUtils', () => {
 
   it('dsiTargetDescription clarifies customer account vs source name', () => {
     expect(dsiTargetDescription('dealer_group_token')).toMatch(/reporting/i);
+    expect(dsiTargetDescription('dealer_group_token')).toMatch(/matching/i);
+    expect(dsiTargetDescription('dealer_group_token')).toMatch(/roll up/i);
     expect(dsiTargetDescription('dealer_group_token')).toMatch(/Dealer Name Group/i);
     expect(dsiTargetDescription('customer_dealer_token')).toMatch(/alias/i);
+    expect(dsiTargetDescription('customer_dealer_token')).toMatch(/evidence/i);
     expect(dsiTargetDescription('customer_dealer_token')).toMatch(/Customer name/i);
     expect(dsiTargetDescription('distributor_token')).toBeUndefined();
   });

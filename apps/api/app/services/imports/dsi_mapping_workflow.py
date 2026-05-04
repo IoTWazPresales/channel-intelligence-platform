@@ -17,6 +17,63 @@ from app.storage.local import get_storage_backend
 # Targets persisted in column_mapping_memory (same JSON shape as PM: {target, confirmations}).
 DSI_MEMORY_TARGETS = frozenset(DSI_CANONICAL)
 
+
+def _norm_header_lower(h: str) -> str:
+    return (h or "").strip().lower()
+
+
+def _looks_like_dealer_name_group_column(header: str) -> bool:
+    """RAW-style account / rollup column (Dealer Name Group, dealer + group, etc.)."""
+    k = _norm_header_lower(header)
+    if not k:
+        return False
+    if k in ("dealer name group", "dealer_name_group", "dealer group", "dealer_group"):
+        return True
+    return "dealer" in k and "group" in k
+
+
+def _looks_like_raw_source_customer_name_column(header: str) -> bool:
+    """RAW-style source customer label column (Customer name); not the account rollup column."""
+    k = _norm_header_lower(header)
+    if not k or "to be mapped" in k:
+        return False
+    if _looks_like_dealer_name_group_column(header):
+        return False
+    if k in ("customer name", "customer_name"):
+        return True
+    if "customer" in k and "name" in k and "group" not in k and "dealer" not in k:
+        return True
+    return False
+
+
+def apply_dsi_customer_column_target_resolution(headers: list[str], mapping: dict[str, str]) -> dict[str, str]:
+    """Align RAW-style customer headers with DSI canonicals before sanitize.
+
+    - Dealer Name Group (and similar) → dealer_group_token (Customer account in UI).
+    - Customer name (and similar, excluding dealer+group headers) → customer_dealer_token (Source customer name).
+
+    Runs after template defaults + optional header memory so legacy swaps and the shared
+    ``name`` heuristic (``dealer name group`` contains ``name``) are corrected. Used on
+    initial DSI infer and on pipeline auto-mapping when the job has no saved ``field_mapping``;
+    saved job mappings from the admin UI are not reprocessed through this helper on validate/apply.
+    """
+    out = dict(mapping or {})
+    dealer_cols = [h for h in headers if _looks_like_dealer_name_group_column(h)]
+    cust_cols = [h for h in headers if _looks_like_raw_source_customer_name_column(h)]
+
+    if len(dealer_cols) == 1 and len(cust_cols) == 1 and dealer_cols[0] != cust_cols[0]:
+        out[dealer_cols[0]] = "dealer_group_token"
+        out[cust_cols[0]] = "customer_dealer_token"
+        return out
+
+    if len(dealer_cols) == 1:
+        out[dealer_cols[0]] = "dealer_group_token"
+    if len(cust_cols) == 1 and not (len(dealer_cols) == 1 and cust_cols[0] == dealer_cols[0]):
+        out[cust_cols[0]] = "customer_dealer_token"
+
+    return out
+
+
 # Legacy targets from shared default_field_mapping() / other importers — map to DSI when unambiguous.
 _LEGACY_TARGET_TO_DSI: dict[str, str] = {
     "channel_code": "channel_key_token",
@@ -183,6 +240,7 @@ def build_initial_dsi_field_mapping(
     for h, tgt in defaults.items():
         if h not in mapping:
             mapping[h] = tgt
+    mapping = apply_dsi_customer_column_target_resolution(headers, mapping)
     sanitized, _ = sanitize_dsi_field_mapping(headers, mapping)
     return sanitized
 
