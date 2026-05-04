@@ -20,6 +20,7 @@ import {
   InputAdornment,
   InputLabel,
   LinearProgress,
+  ListItemText,
   MenuItem,
   Paper,
   Select,
@@ -54,7 +55,16 @@ import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib
 import { toQueryError } from '@/lib/queryError';
 
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
-import { dsiContinueToApplyAllowed, dsiGateFromMapping, dsiSelectValue, dsiTargetLabel, formatDsiSamples, parseDistributorSiSummaryFromRows, stableFieldMappingJson } from './dsiStepUtils';
+import {
+  dsiContinueToApplyAllowed,
+  dsiGateFromMapping,
+  dsiSelectValue,
+  dsiTargetDescription,
+  dsiTargetLabel,
+  formatDsiSamples,
+  parseDistributorSiSummaryFromRows,
+  stableFieldMappingJson,
+} from './dsiStepUtils';
 import {
   initPmColumnDrafts,
   PM_GROUP_LABEL,
@@ -2207,6 +2217,16 @@ function AdminImportsPageContent() {
         {activeStep === 5 && isDsi && selectedTemplate ? (
           <Stack spacing={2}>
             <Typography variant="subtitle2">Map file columns → business fields</Typography>
+            <Alert severity="info" data-testid="dsi-customer-field-mapping-hint">
+              <Typography variant="body2" fontWeight={600} display="block" gutterBottom>
+                Customer fields (e.g. RAW workbooks)
+              </Typography>
+              <Typography variant="body2" display="block">
+                Map <strong>Dealer Name Group</strong> to <strong>Customer account</strong> — the account used for
+                reporting, matching, and facts. Map <strong>Customer name</strong> to <strong>Source customer name</strong>{' '}
+                — the name from the file, kept as alias / evidence for matching.
+              </Typography>
+            </Alert>
             {dsiJobFailedAlert}
             <Alert severity="info" data-testid="dsi-mapping-missing-vs-unresolved">
               <strong>Missing mapping</strong> means no file column is linked to a required field.{' '}
@@ -2264,6 +2284,11 @@ function AdminImportsPageContent() {
                           label="Target"
                           value={dsiSelectValue(dsiMapDraft[h], dsiCanonSet)}
                           displayEmpty
+                          renderValue={(selected) => {
+                            const v = String(selected ?? '');
+                            if (!v) return <em>— Unmapped —</em>;
+                            return dsiTargetLabel(v);
+                          }}
                           onChange={(e) => {
                             const v = e.target.value as string;
                             setDsiMapDraft((prev) => {
@@ -2278,8 +2303,13 @@ function AdminImportsPageContent() {
                             <em>— Unmapped —</em>
                           </MenuItem>
                           {(dsiMappingState?.canonical_targets ?? []).map((t) => (
-                            <MenuItem key={t} value={t}>
-                              {dsiTargetLabel(t)}
+                            <MenuItem key={t} value={t} sx={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
+                              <ListItemText
+                                primary={dsiTargetLabel(t)}
+                                secondary={dsiTargetDescription(t)}
+                                primaryTypographyProps={{ variant: 'body2' }}
+                                secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
+                              />
                             </MenuItem>
                           ))}
                         </Select>

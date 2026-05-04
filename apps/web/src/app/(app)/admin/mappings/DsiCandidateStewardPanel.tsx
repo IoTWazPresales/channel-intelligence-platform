@@ -217,7 +217,8 @@ export function DsiCandidateStewardPanel({
       ) : null}
       <Typography variant="body2">
         <strong>Selected:</strong> {candidate.entity_type} · {candidate.normalized_key}
-        {candidate.dealer_group_token ? ` · group: ${candidate.dealer_group_token}` : ''} · status {candidate.status}
+        {candidate.dealer_group_token ? ` · customer account: ${candidate.dealer_group_token}` : ''} · status{' '}
+        {candidate.status}
       </Typography>
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
         <Button

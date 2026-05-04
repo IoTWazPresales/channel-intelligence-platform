@@ -5,8 +5,8 @@ export function dsiTargetLabel(t: string): string {
     transaction_date: 'Transaction / invoice date',
     snapshot_date: 'Inventory snapshot date',
     distributor_token: 'Distributor',
-    customer_dealer_token: 'Customer / dealer / reseller',
-    dealer_group_token: 'Dealer / customer group',
+    dealer_group_token: 'Customer account',
+    customer_dealer_token: 'Source customer name',
     product_identifier: 'Product identifier (SKU / part # / model)',
     quantity_sold: 'Quantity sold',
     unit_sellout_price_ex_tax_amount: 'Unit sell-out price ex tax / ex VAT',
@@ -20,6 +20,17 @@ export function dsiTargetLabel(t: string): string {
   };
   if (labels[t]) return labels[t];
   return t.replace(/_/g, ' ');
+}
+
+/** Longer helper text for mapping UI (tooltips / secondary lines). Only defined where naming needs context. */
+export function dsiTargetDescription(t: string): string | undefined {
+  const descriptions: Record<string, string> = {
+    dealer_group_token:
+      'The customer account used for reporting, matching, and facts (e.g. Dealer Name Group on RAW workbooks).',
+    customer_dealer_token:
+      'The customer name as supplied in the source file. Stored as alias / evidence for matching (e.g. Customer name on RAW workbooks).',
+  };
+  return descriptions[t];
 }
 
 export function dsiGateFromMapping(m: Record<string, string>): boolean {

@@ -186,7 +186,7 @@ function AdminMappingsPageContent() {
         },
       },
       { field: 'normalized_key', headerName: 'Normalized token', minWidth: 160 },
-      { field: 'dealer_group_token', headerName: 'Dealer / group token', minWidth: 140 },
+      { field: 'dealer_group_token', headerName: 'Customer account', minWidth: 140 },
       { field: 'suggested_entity_id', headerName: 'Suggested id', width: 120 },
       { field: 'match_reason', headerName: 'Match reason', minWidth: 120 },
       { field: 'confidence_score', headerName: 'Confidence', width: 110 },
