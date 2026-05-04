@@ -46,6 +46,30 @@ def _looks_like_raw_source_customer_name_column(header: str) -> bool:
     return False
 
 
+def apply_exact_raw_customer_header_overrides(headers: list[str], mapping: dict[str, str]) -> dict[str, str]:
+    """Force canonical RAW workbook customer columns regardless of learned memory or generic heuristics.
+
+    Matches ``Customer name`` / ``Dealer Name Group`` (case- and norm-insensitive). Runs before fuzzy
+    :func:`apply_dsi_customer_column_target_resolution` so extra customer-like headers do not block
+    the primary RAW pair.
+    """
+    out = dict(mapping or {})
+    dealer_h: str | None = None
+    cust_h: str | None = None
+    for h in headers:
+        k = _norm_header_lower(h)
+        nh = norm_header_key(h)
+        if dealer_h is None and (nh == "dealer_name_group" or k in ("dealer name group", "dealer_name_group")):
+            dealer_h = h
+        if cust_h is None and (nh == "customer_name" or k in ("customer name", "customer_name")):
+            cust_h = h
+    if dealer_h is not None:
+        out[dealer_h] = "dealer_group_token"
+    if cust_h is not None:
+        out[cust_h] = "customer_dealer_token"
+    return out
+
+
 def apply_dsi_customer_column_target_resolution(headers: list[str], mapping: dict[str, str]) -> dict[str, str]:
     """Align RAW-style customer headers with DSI canonicals before sanitize.
 
@@ -194,9 +218,10 @@ def sanitize_dsi_field_mapping(
     return out, notices
 
 
-def column_samples_from_inferred(job: ImportJob) -> dict[str, list[str]]:
-    """2–5 short sample cell values per column from inferred_schema (no extra file read)."""
-    schema = job.inferred_schema or {}
+def column_samples_from_schema_dict(schema: dict[str, Any] | None) -> dict[str, list[str]]:
+    """Sample cell strings per column from an ``infer_schema`` payload (same shape as ``job.inferred_schema``)."""
+    if not schema:
+        return {}
     out: dict[str, list[str]] = {}
     for c in schema.get("columns") or []:
         if not isinstance(c, dict):
@@ -208,7 +233,7 @@ def column_samples_from_inferred(job: ImportJob) -> dict[str, list[str]]:
         if not isinstance(raw, list):
             continue
         vals: list[str] = []
-        for x in raw[:5]:
+        for x in raw[:8]:
             if x is None:
                 continue
             s = str(x).strip()
@@ -220,11 +245,118 @@ def column_samples_from_inferred(job: ImportJob) -> dict[str, list[str]]:
     return out
 
 
+def _samples_have_model_or_part_shape(samples: list[str]) -> bool:
+    """Heuristic: values look like model / part / technical id tokens (not short category codes)."""
+    for raw in samples[:12]:
+        s = str(raw).strip()
+        if not s or s.lower() in ("nan", "nat", "none", "<na>", "null", "#n/a", "n/a"):
+            continue
+        if len(s) >= 8 and any(ch.isdigit() for ch in s):
+            return True
+        if "-" in s and len(s) >= 6 and any(ch.isdigit() for ch in s):
+            return True
+        if len(s) >= 6 and any(ch.isdigit() for ch in s) and any(ch.isalpha() for ch in s):
+            return True
+        alnum = sum(1 for ch in s if ch.isalnum())
+        if len(s) >= 12 and alnum >= 10:
+            return True
+    return False
+
+
+def _bare_product_header_looks_like_category_samples(header: str, samples: list[str]) -> bool:
+    """True when header is bare ``PRODUCT`` and samples look like low-cardinality category codes (e.g. NB)."""
+    if norm_header_key(header) != "product":
+        return False
+    vals = [str(s).strip() for s in samples if s is not None and str(s).strip()]
+    if not vals:
+        return False
+    if _samples_have_model_or_part_shape(vals):
+        return False
+    uniq = {v.lower() for v in vals}
+    if len(uniq) > 8:
+        return False
+    if max(len(v) for v in uniq) > 6:
+        return False
+    return True
+
+
+def _product_identifier_column_score(header: str, samples: list[str]) -> float:
+    nk = norm_header_key(header)
+    score = 0.0
+    if nk in ("modelname", "model_name"):
+        score += 12.0
+    elif "model" in nk and "name" in nk:
+        score += 10.0
+    elif "model" in nk:
+        score += 6.0
+    if _samples_have_model_or_part_shape(samples):
+        score += 22.0
+    if nk == "product":
+        score -= 6.0
+        if _bare_product_header_looks_like_category_samples(header, samples):
+            score -= 40.0
+    return score
+
+
+def apply_dsi_product_identifier_sample_inference(
+    headers: list[str],
+    mapping: dict[str, str],
+    column_samples: dict[str, list[str]],
+) -> dict[str, str]:
+    """Adjust ``product_identifier`` auto-mapping using inferred column samples (mapping suggestions only).
+
+    - Demotes bare ``PRODUCT`` when samples look like short category codes (e.g. NB), not model/SKU tokens.
+    - When multiple columns map to ``product_identifier``, keeps the best-scoring column (prefers ModelName-style).
+    - If nothing maps to ``product_identifier`` after demotion, assigns an unmapped column that strongly
+      resembles a model/SKU column from header + samples.
+    """
+    out = dict(mapping or {})
+    for h in list(headers):
+        if out.get(h) != "product_identifier":
+            continue
+        samp = column_samples.get(h) or []
+        if _bare_product_header_looks_like_category_samples(h, samp):
+            del out[h]
+
+    pi_headers = [h for h in headers if out.get(h) == "product_identifier"]
+    if len(pi_headers) > 1:
+
+        def _sort_key(h: str) -> tuple[float, str]:
+            return (_product_identifier_column_score(h, column_samples.get(h) or []), h)
+
+        keep = max(pi_headers, key=_sort_key)
+        for h in pi_headers:
+            if h != keep:
+                del out[h]
+
+    if not any(out.get(h) == "product_identifier" for h in headers):
+        best: tuple[float, str] | None = None
+        for h in headers:
+            if out.get(h):
+                continue
+            sc = _product_identifier_column_score(h, column_samples.get(h) or [])
+            if sc >= 18.0:
+                cand = (sc, h)
+                if best is None or cand[0] > best[0] or (cand[0] == best[0] and cand[1] < best[1]):
+                    best = cand
+        if best is not None:
+            out[best[1]] = "product_identifier"
+
+    return out
+
+
+def column_samples_from_inferred(job: ImportJob) -> dict[str, list[str]]:
+    """Short sample cell values per column from inferred_schema (no extra file read)."""
+    return column_samples_from_schema_dict(job.inferred_schema)
+
+
 def build_initial_dsi_field_mapping(
     db: Session,
     headers: list[str],
     source: SourceDefinition | None,
     template: dict[str, Any],
+    *,
+    column_samples: dict[str, list[str]] | None = None,
 ) -> dict[str, str]:
     """Template + default_field_mapping, overlaid with saved per-header targets for this source."""
     memory = load_by_header_norm(source) if source else {}
@@ -240,7 +372,9 @@ def build_initial_dsi_field_mapping(
     for h, tgt in defaults.items():
         if h not in mapping:
             mapping[h] = tgt
+    mapping = apply_exact_raw_customer_header_overrides(headers, mapping)
     mapping = apply_dsi_customer_column_target_resolution(headers, mapping)
+    mapping = apply_dsi_product_identifier_sample_inference(headers, mapping, column_samples or {})
     sanitized, _ = sanitize_dsi_field_mapping(headers, mapping)
     return sanitized
 
@@ -329,7 +463,8 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
 
     source = job.source
     template = effective_mapping_template(source)
-    mapping = build_initial_dsi_field_mapping(db, cols, source, template)
+    samples = column_samples_from_schema_dict(schema)
+    mapping = build_initial_dsi_field_mapping(db, cols, source, template, column_samples=samples)
 
     job.inferred_schema = schema
     job.file_headers = cols
