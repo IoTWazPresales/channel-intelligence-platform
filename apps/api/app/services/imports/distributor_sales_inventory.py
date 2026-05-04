@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -200,28 +201,124 @@ def _parse_decimal(v: Any) -> Decimal | None:
         return None
 
 
-def _load_products(db: Session) -> tuple[dict[str, DimProduct], dict[str, int]]:
-    """sku_lower -> product, alias_lower -> product_id."""
-    products = {p.sku.strip().lower(): p for p in db.scalars(select(DimProduct)).all()}
-    alias_to_pid: dict[str, int] = {}
+def _product_token_key(raw: str | None) -> str:
+    """Normalize a distributor-reported product token for identity lookup (matches legacy SKU path: strip + lower)."""
+    if raw is None:
+        return ""
+    t = str(raw).strip().lower()
+    return t if t and t != "nan" else ""
+
+
+def _multimap_from_pairs(pairs: list[tuple[str, int]]) -> dict[str, tuple[int, ...]]:
+    """Build key -> sorted unique product ids (empty keys dropped)."""
+    buckets: dict[str, list[int]] = defaultdict(list)
+    for k, pid in pairs:
+        if k:
+            buckets[k].append(pid)
+    return {k: tuple(sorted(set(v))) for k, v in buckets.items()}
+
+
+@dataclass(frozen=True)
+class ProductResolutionIndex:
+    """Precomputed DSI product identity lookups (DimProduct + ProductAlias)."""
+
+    sku_to_id: dict[str, int]
+    part_number_to_ids: dict[str, tuple[int, ...]]
+    sales_model_name_to_ids: dict[str, tuple[int, ...]]
+    model_name_to_ids: dict[str, tuple[int, ...]]
+    marketing_name_to_ids: dict[str, tuple[int, ...]]
+    ean_to_ids: dict[str, tuple[int, ...]]
+    upc_to_ids: dict[str, tuple[int, ...]]
+    alias_value_to_ids: dict[str, tuple[int, ...]]
+
+
+def _load_product_resolution_index(db: Session) -> ProductResolutionIndex:
+    """Load Product Master identity fields + ProductAlias for DSI resolution (single pass per import job)."""
+    products = list(db.scalars(select(DimProduct)).all())
+    sku_to_id: dict[str, int] = {}
+    part_pairs: list[tuple[str, int]] = []
+    sm_pairs: list[tuple[str, int]] = []
+    model_pairs: list[tuple[str, int]] = []
+    mkt_pairs: list[tuple[str, int]] = []
+    ean_pairs: list[tuple[str, int]] = []
+    upc_pairs: list[tuple[str, int]] = []
+    for p in products:
+        sk = _product_token_key(p.sku)
+        if sk:
+            sku_to_id[sk] = int(p.id)
+        pk = _product_token_key(p.part_number)
+        if pk:
+            part_pairs.append((pk, int(p.id)))
+        sm = _product_token_key(p.sales_model_name)
+        if sm:
+            sm_pairs.append((sm, int(p.id)))
+        mn = _product_token_key(p.model_name)
+        if mn:
+            model_pairs.append((mn, int(p.id)))
+        mk = _product_token_key(p.marketing_name)
+        if mk:
+            mkt_pairs.append((mk, int(p.id)))
+        ean = _product_token_key(p.ean)
+        if ean:
+            ean_pairs.append((ean, int(p.id)))
+        upc = _product_token_key(p.upc)
+        if upc:
+            upc_pairs.append((upc, int(p.id)))
+    alias_pairs: list[tuple[str, int]] = []
     for a in db.scalars(select(ProductAlias)).all():
-        alias_to_pid[a.alias_value.strip().lower()] = a.product_id
-    return products, alias_to_pid
+        av = _product_token_key(a.alias_value)
+        if av:
+            alias_pairs.append((av, int(a.product_id)))
+    return ProductResolutionIndex(
+        sku_to_id=sku_to_id,
+        part_number_to_ids=_multimap_from_pairs(part_pairs),
+        sales_model_name_to_ids=_multimap_from_pairs(sm_pairs),
+        model_name_to_ids=_multimap_from_pairs(model_pairs),
+        marketing_name_to_ids=_multimap_from_pairs(mkt_pairs),
+        ean_to_ids=_multimap_from_pairs(ean_pairs),
+        upc_to_ids=_multimap_from_pairs(upc_pairs),
+        alias_value_to_ids=_multimap_from_pairs(alias_pairs),
+    )
 
 
 def _resolve_product(
-    raw: str | None, products: dict[str, DimProduct], alias_to_pid: dict[str, int]
-) -> tuple[int | None, str | None]:
-    if not raw:
-        return None, "missing_product_token"
-    key = raw.strip().lower()
-    p = products.get(key)
-    if p:
-        return p.id, None
-    pid = alias_to_pid.get(key)
-    if pid:
-        return pid, None
-    return None, "unresolved_product"
+    raw: str | None, idx: ProductResolutionIndex
+) -> tuple[int | None, str | None, str | None]:
+    """Resolve RAW product_identifier to dim_product.id.
+
+    Tier order (explicit, auditable): SKU → part_number → sales_model_name → model_name → marketing_name
+    → ean → upc → ProductAlias. Stops at first unique match; multiple hits in the same tier are ambiguous.
+
+    Returns ``(product_id, error_code, success_diagnostic)``. ``success_diagnostic`` is set when resolved
+    (e.g. ``product_resolved_sales_model_name``); ``error_code`` when unresolved or ambiguous.
+    """
+    key = _product_token_key(raw)
+    if not key:
+        return None, "missing_product_token", None
+    pid = idx.sku_to_id.get(key)
+    if pid is not None:
+        return int(pid), None, "product_resolved_sku"
+    tier_maps: tuple[tuple[dict[str, tuple[int, ...]], str], ...] = (
+        (idx.part_number_to_ids, "product_resolved_part_number"),
+        (idx.sales_model_name_to_ids, "product_resolved_sales_model_name"),
+        (idx.model_name_to_ids, "product_resolved_model_name"),
+        (idx.marketing_name_to_ids, "product_resolved_marketing_name"),
+        (idx.ean_to_ids, "product_resolved_ean"),
+        (idx.upc_to_ids, "product_resolved_upc"),
+    )
+    for mmap, tag in tier_maps:
+        ids = mmap.get(key)
+        if not ids:
+            continue
+        if len(ids) > 1:
+            return None, "ambiguous_product_match", None
+        return int(ids[0]), None, tag
+    a_ids = idx.alias_value_to_ids.get(key)
+    if a_ids:
+        if len(a_ids) > 1:
+            return None, "ambiguous_product_alias", None
+        return int(a_ids[0]), None, "product_resolved_alias"
+    return None, "unresolved_product", None
 
 
 def _alias_distributor_id(db: Session, source_id: int | None, normalized_token: str) -> int | None:
@@ -434,7 +531,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
 
     ignored_src_cols = [k for k, v in mapping.items() if v == "ignored_shipping_evidence"]
 
-    products, alias_map = _load_products(db)
+    prod_idx = _load_product_resolution_index(db)
     source = job.source
     source_def_id = source.id if source else None
 
@@ -503,9 +600,11 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         if derr:
             diag.append(derr)
 
-        rpid, perr = _resolve_product(prod_raw, products, alias_map)
+        rpid, perr, presolve_tag = _resolve_product(prod_raw, prod_idx)
         if perr:
             diag.append(perr)
+        elif presolve_tag:
+            diag.append(presolve_tag)
 
         rdistributor_id = rdid
         rcustomer_id: int | None = None
