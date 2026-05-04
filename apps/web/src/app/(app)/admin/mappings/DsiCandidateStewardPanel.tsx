@@ -184,10 +184,29 @@ export function DsiCandidateStewardPanel({
     onSuccess: () => invalidate(),
   });
 
-  const bestName = useMemo(() => {
-    if (!candidate) return '';
-    const s = candidate.sample_raw_values?.find((x) => x && String(x).trim());
-    return (s || candidate.normalized_key || '').toString();
+  /** Customer account (Dealer Name Group) vs source customer evidence — match DSI aggregation / mapping queue. */
+  const stewardLabels = useMemo(() => {
+    if (!candidate) {
+      return { customerAccount: '', sourceCustomer: '', distributorOrProductLabel: '' };
+    }
+    const sampleFirst =
+      candidate.sample_raw_values?.find((x) => x && String(x).trim()) || candidate.normalized_key || '';
+    if (candidate.entity_type !== 'customer_dealer_token') {
+      return { customerAccount: '', sourceCustomer: '', distributorOrProductLabel: String(sampleFirst) };
+    }
+    const c = (candidate.context ?? null) as Record<string, unknown> | null;
+    const raw =
+      typeof c?.dealer_group_account_raw === 'string' ? c.dealer_group_account_raw.trim() : '';
+    const customerAccount = (raw || candidate.dealer_group_token || candidate.normalized_key || '').toString();
+    const samples = c?.source_customer_name_raw_samples;
+    let sourceCustomer = '';
+    if (Array.isArray(samples)) {
+      const parts = samples
+        .filter((x) => typeof x === 'string' && x.trim())
+        .map((x) => String(x).trim());
+      if (parts.length) sourceCustomer = parts.join('; ');
+    }
+    return { customerAccount, sourceCustomer, distributorOrProductLabel: String(sampleFirst) };
   }, [candidate]);
 
   if (!candidate) {
@@ -216,8 +235,9 @@ export function DsiCandidateStewardPanel({
         </Alert>
       ) : null}
       <Typography variant="body2">
-        <strong>Selected:</strong> {candidate.entity_type} · {candidate.normalized_key}
-        {candidate.dealer_group_token ? ` · customer account: ${candidate.dealer_group_token}` : ''} · status{' '}
+        <strong>Selected:</strong> {candidate.entity_type} · normalized: {candidate.normalized_key}
+        {stewardLabels.customerAccount ? ` · customer account: ${stewardLabels.customerAccount}` : ''}
+        {stewardLabels.sourceCustomer ? ` · source customer: ${stewardLabels.sourceCustomer}` : ''} · status{' '}
         {candidate.status}
       </Typography>
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -226,7 +246,9 @@ export function DsiCandidateStewardPanel({
           size="small"
           disabled={isTerminal || candidate.entity_type !== 'customer_dealer_token'}
           onClick={() => {
-            setDisplayName(bestName);
+            setDisplayName(
+              stewardLabels.customerAccount || candidate.normalized_key || stewardLabels.distributorOrProductLabel
+            );
             if (regions[0]) setRegionId(regions[0].id);
             if (channels[0]) setChannelId(channels[0].id);
             setCreateCustOpen(true);
@@ -279,7 +301,7 @@ export function DsiCandidateStewardPanel({
           size="small"
           disabled={isTerminal || candidate.entity_type !== 'distributor_token'}
           onClick={() => {
-            setDistDisplayName(bestName);
+            setDistDisplayName(stewardLabels.distributorOrProductLabel);
             setDistConfirmSuspicious(false);
             setCreateDistOpen(true);
           }}

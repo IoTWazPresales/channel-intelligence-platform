@@ -447,6 +447,8 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             "strategic_channel_hint": False,
             "customer_evidence_norms": [],
             "primary_source": None,
+            "dealer_group_raw": None,
+            "source_customer_raw_samples": [],
         }
     )
 
@@ -698,6 +700,14 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 lst = a["customer_evidence_norms"]
                 if cu_ev not in lst and len(lst) < 8:
                     lst.append(cu_ev)
+            if dg_raw and not _dealer_group_is_placeholder(dg_raw):
+                if a.get("dealer_group_raw") is None:
+                    a["dealer_group_raw"] = dg_raw.strip()[:512]
+            if cust_raw and not _customer_token_is_placeholder(_norm_key(cust_raw), cust_raw):
+                scs: list[str] = a["source_customer_raw_samples"]
+                t = cust_raw.strip()[:512]
+                if t and t not in scs and len(scs) < 8:
+                    scs.append(t)
             if len(a["samples"]) < 5:
                 parts: list[str] = []
                 if cust_raw and not _customer_token_is_placeholder(_norm_key(cust_raw), cust_raw):
@@ -724,8 +734,17 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             evs = data.get("customer_evidence_norms") or []
             if evs:
                 ctx["customer_name_evidence_norms"] = evs[:8]
-            if ps == "dealer_name_group" and evs:
-                dealer_token_col = evs[0][:512]
+            dgr_store = data.get("dealer_group_raw")
+            if isinstance(dgr_store, str) and dgr_store.strip():
+                ctx["dealer_group_account_raw"] = dgr_store.strip()[:512]
+            src_raw = data.get("source_customer_raw_samples") or []
+            if src_raw:
+                ctx["source_customer_name_raw_samples"] = src_raw[:8]
+            if ps == "dealer_name_group":
+                if isinstance(dgr_store, str) and dgr_store.strip():
+                    dealer_token_col = dgr_store.strip()[:512]
+                elif nkey_clean and nkey_clean != "__blank__":
+                    dealer_token_col = nkey_clean[:512]
         if data.get("strategic_channel_hint"):
             ctx["strategic_channel_hint"] = True
         cand = ImportEntityMappingCandidate(

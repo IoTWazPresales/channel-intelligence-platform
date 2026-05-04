@@ -388,8 +388,12 @@ def test_dsi_unresolved_customer_single_candidate_merged_dealer_group_patterns(d
         assert cands[0].row_count == 2
         assert float(cands[0].total_units or 0) == 2.0
         assert cands[0].normalized_key == "wootware zed unres group"
+        assert cands[0].dealer_group_token == "Wootware Zed Unres Group"
         ctx = cands[0].context or {}
         assert ctx.get("primary_source") == "dealer_name_group"
+        assert ctx.get("dealer_group_account_raw") == "Wootware Zed Unres Group"
+        src = ctx.get("source_customer_name_raw_samples") or []
+        assert any("Wootware Zed Unres" in str(x) for x in src)
         assert "wootware zed unres" in (ctx.get("customer_name_evidence_norms") or [])
 
 
@@ -756,6 +760,63 @@ def test_dsi_candidate_steward_distributor_alias_then_revalidate_resolves(dsi_so
         ).first()
         assert line is not None
         assert line.resolved_distributor_id == dist_id
+
+    import asyncio
+
+    from app.db import session as db_session
+
+    async def _dispose() -> None:
+        await db_session.engine.dispose()
+
+    asyncio.run(_dispose())
+
+
+def test_dsi_candidate_steward_dealer_primary_alias_raw_is_source_customer_not_dealer_group(dsi_source_id: int) -> None:
+    """Map-customer alias raw_token must follow source customer evidence, not Dealer Name Group / composite sample."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with SessionLocal() as db:
+        if "distributor_source_token_alias" not in set(inspect(db.connection()).get_table_names()):
+            pytest.skip("Apply migration 20260430_0027 (distributor_source_token_alias).")
+    tok = secrets.token_hex(4)
+    source_shop = f"SourceShop {tok}"
+    dealer_group = f"Metro Reporting Group {tok}"
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,Dealer Name Group,soh\n"
+        f"DIST-01,SKU-ALPHA-01,2024-08-01,1,{source_shop},{dealer_group},1\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_steward_dg_primary.csv")
+    with SessionLocal() as db:
+        cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
+        assert cust is not None
+        cand = db.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == job.id,
+                ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+            )
+        ).first()
+        assert cand is not None
+        assert cand.dealer_group_token == dealer_group
+        ctx = cand.context or {}
+        assert ctx.get("dealer_group_account_raw") == dealer_group
+        assert source_shop in (ctx.get("source_customer_name_raw_samples") or [])
+        cand_id = cand.id
+        cust_id = cust.id
+    with TestClient(app) as client:
+        r = client.post(f"/api/v1/mappings/import-candidates/{cand_id}/map-customer", json={"customer_id": cust_id})
+        assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        alias = db.scalars(
+            select(CustomerSourceTokenAlias).where(
+                CustomerSourceTokenAlias.import_entity_mapping_candidate_id == cand_id,
+                CustomerSourceTokenAlias.customer_id == cust_id,
+            )
+        ).first()
+        assert alias is not None
+        assert alias.raw_token == source_shop
+        assert (alias.dealer_group_token or "") == dealer_group
 
     import asyncio
 

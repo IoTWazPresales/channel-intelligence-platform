@@ -144,6 +144,21 @@ def _first_sample_raw(candidate: ImportEntityMappingCandidate) -> str:
     return ""
 
 
+def _source_customer_alias_raw_for_dsi_candidate(candidate: ImportEntityMappingCandidate) -> str:
+    """Raw source customer name / dealer column evidence for CustomerSourceTokenAlias (not Dealer Name Group).
+
+    Prefer structured ``context.source_customer_name_raw_samples`` from DSI aggregation; fall back to
+    composite ``sample_raw_values`` / ``normalized_key`` only when needed.
+    """
+    ctx = candidate.context if isinstance(candidate.context, dict) else {}
+    samples = ctx.get("source_customer_name_raw_samples")
+    if isinstance(samples, list):
+        for s in samples:
+            if isinstance(s, str) and s.strip():
+                return s.strip()[:512]
+    return _first_sample_raw(candidate)
+
+
 def _blank_customer_normalized_key(norm: str) -> bool:
     t = (norm or "").strip().lower()
     return t in ("", "__blank__", "none", "n/a", "na", "unknown")
@@ -250,7 +265,7 @@ async def map_dsi_candidate_to_customer(
     cust = await db.get(DimCustomer, body.customer_id)
     if not cust:
         raise HTTPException(status_code=400, detail="customer_id not found")
-    raw = (body.raw_token or _first_sample_raw(cand)).strip()
+    raw = (body.raw_token or _source_customer_alias_raw_for_dsi_candidate(cand)).strip()
     if not raw:
         raise HTTPException(status_code=400, detail="raw_token is required (no samples on candidate)")
     nt = _norm_key(raw)
@@ -318,7 +333,7 @@ async def create_provisional_customer_from_dsi_candidate(
     )
     db.add(row)
     await db.flush()
-    raw = _first_sample_raw(cand)
+    raw = _source_customer_alias_raw_for_dsi_candidate(cand)
     if not raw:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Candidate has no usable raw token sample")
@@ -374,7 +389,7 @@ async def mark_dsi_candidate_open_channel(
             detail="Open Channel mapping for named dealer tokens requires confirm_for_named_dealer=true (or map/create a customer).",
         )
     oc_id = await _open_channel_customer_id(db)
-    raw = _first_sample_raw(cand)
+    raw = _source_customer_alias_raw_for_dsi_candidate(cand)
     if not raw:
         raw = cand.normalized_key or "open-channel"
     nt = _norm_key(raw)

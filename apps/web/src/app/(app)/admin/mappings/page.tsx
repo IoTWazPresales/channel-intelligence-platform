@@ -75,6 +75,16 @@ function adminBrowseHref(entityType: string): string | null {
   }
 }
 
+function dsiSourceCustomerNameCell(ctx: Record<string, unknown> | null | undefined): string {
+  if (!ctx) return '';
+  const s = ctx.source_customer_name_raw_samples;
+  if (!Array.isArray(s)) return '';
+  return s
+    .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+    .map((x) => x.trim())
+    .join('; ');
+}
+
 function AdminMappingsPageContent() {
   const searchParams = useSearchParams();
   const importJobIdParam = searchParams.get('import_job_id');
@@ -187,6 +197,11 @@ function AdminMappingsPageContent() {
       },
       { field: 'normalized_key', headerName: 'Normalized token', minWidth: 160 },
       { field: 'dealer_group_token', headerName: 'Customer account', minWidth: 140 },
+      {
+        headerName: 'Source customer name',
+        minWidth: 160,
+        valueGetter: (p) => dsiSourceCustomerNameCell(p.data?.context ?? null),
+      },
       { field: 'suggested_entity_id', headerName: 'Suggested id', width: 120 },
       { field: 'match_reason', headerName: 'Match reason', minWidth: 120 },
       { field: 'confidence_score', headerName: 'Confidence', width: 110 },
