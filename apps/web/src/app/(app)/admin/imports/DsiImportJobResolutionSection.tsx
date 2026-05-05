@@ -106,6 +106,8 @@ function bulkPreviewAliasEvidence(r: Record<string, unknown>): string {
 type PlanRowOverride = {
   action?: string;
   target_id?: number | null;
+  region_id?: number | null;
+  channel_id?: number | null;
   hold_for_manual_review?: boolean;
   ack_strategic_channel_hint?: boolean;
   confirm_for_suspicious_distributor_token?: boolean;
@@ -154,13 +156,54 @@ function customerAccountLine(c: DsiCandidateRow | undefined): string {
   return dg || '—';
 }
 
+function planProvisionalGeoSummary(r: Record<string, unknown>): string {
+  const rc = r.effective_region_code;
+  const rn = r.effective_region_name;
+  const cc = r.effective_channel_code;
+  const cn = r.effective_channel_name;
+  const rid = r.effective_region_id;
+  const cid = r.effective_channel_id;
+  const reg =
+    typeof rc === 'string' && rc.trim()
+      ? `${rc}${typeof rn === 'string' && rn.trim() ? ` — ${rn}` : ''}`
+      : rid == null || rid === ''
+        ? 'Region: unassigned'
+        : `Region id ${String(rid)}`;
+  const ch =
+    typeof cc === 'string' && cc.trim()
+      ? `${cc}${typeof cn === 'string' && cn.trim() ? ` — ${cn}` : ''}`
+      : cid == null || cid === ''
+        ? 'Channel: unassigned'
+        : `Channel id ${String(cid)}`;
+  return `${reg}; ${ch}`;
+}
+
+function dsiSourceRegionChannelLines(ctx: Record<string, unknown> | null | undefined): { region: string; channel: string } {
+  if (!ctx) return { region: '', channel: '' };
+  const rs = ctx.source_region_raw_samples;
+  const cs = ctx.source_channel_raw_samples;
+  const region =
+    Array.isArray(rs) && rs.length
+      ? rs.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).join('; ')
+      : '';
+  const channel =
+    Array.isArray(cs) && cs.length
+      ? cs.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).join('; ')
+      : '';
+  return { region, channel };
+}
+
 function planTargetSummary(
   action: string,
   targetId: unknown,
-  c: DsiCandidateRow | undefined
+  c: DsiCandidateRow | undefined,
+  planRow?: Record<string, unknown>
 ): string {
   if (targetId == null || targetId === '') {
-    if (action === 'create_provisional_customer' || action === 'create_provisional_distributor') {
+    if (action === 'create_provisional_customer') {
+      return planRow ? planProvisionalGeoSummary(planRow) : 'New provisional (per steward rules)';
+    }
+    if (action === 'create_provisional_distributor') {
       return 'New provisional (per steward rules)';
     }
     if (action === 'ignore') return '—';
@@ -258,8 +301,10 @@ export function DsiImportJobResolutionSection({
       base.audit_note = bulkAuditNote.trim() || null;
     }
     if (bulkAction === 'create_provisional_customer') {
-      base.region_id = Number(bulkRegionId);
-      base.channel_id = Number(bulkChannelId);
+      const r = bulkRegionId.trim();
+      const c = bulkChannelId.trim();
+      base.region_id = r !== '' && Number.isFinite(Number(r)) ? Number(r) : null;
+      base.channel_id = c !== '' && Number.isFinite(Number(c)) ? Number(c) : null;
       base.partner_tier = bulkPartnerTier.trim() || 'unmanaged';
       base.provisional_notes_summary = bulkProvisionalNotes.trim() || null;
       const pd = bulkPreferredDistributorId.trim();
@@ -306,8 +351,7 @@ export function DsiImportJobResolutionSection({
       return true;
     }
     if (bulkAction === 'create_provisional_customer') {
-      return bulkRegionId.trim() !== '' && Number.isFinite(Number(bulkRegionId)) &&
-        bulkChannelId.trim() !== '' && Number.isFinite(Number(bulkChannelId));
+      return true;
     }
     if (bulkAction === 'create_provisional_distributor') {
       return true;
@@ -588,18 +632,20 @@ export function DsiImportJobResolutionSection({
             Resolution plan (this import only, not saved)
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            <strong>1)</strong> Pick default region/channel for provisional <em>customer</em> rows. <strong>2)</strong>{' '}
-            <strong>Generate resolution plan</strong> (you can run it again any time). <strong>3)</strong> Open the plan dialog to
-            review business fields and adjust actions. <strong>4)</strong> Use <strong>Update plan after edits</strong> inside
-            the dialog (or wait briefly — edits debounce). <strong>5)</strong> Apply ready rows, then use{' '}
-            <strong>Re-run import validation (server)</strong> below (that is <em>not</em> the same as updating the plan).
+            <strong>1)</strong> Optional <strong>fallback</strong> region/channel when the file does not resolve to catalog
+            values (per-row source evidence from mapped region/province and channel/route-to-market columns is primary).{' '}
+            <strong>2)</strong> <strong>Generate resolution plan</strong> (you can run it again any time). <strong>3)</strong>{' '}
+            Open the plan dialog to review business fields and adjust actions. <strong>4)</strong> Use{' '}
+            <strong>Update plan after edits</strong> inside the dialog (or wait briefly — edits debounce).{' '}
+            <strong>5)</strong> Apply ready rows, then use <strong>Re-run import validation (server)</strong> below (that is{' '}
+            <em>not</em> the same as updating the plan).
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap>
             <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel id="dsi-plan-region">Default region (provisional customer)</InputLabel>
+              <InputLabel id="dsi-plan-region">Fallback region (provisional customer)</InputLabel>
               <Select
                 labelId="dsi-plan-region"
-                label="Default region (provisional customer)"
+                label="Fallback region (provisional customer)"
                 value={planRegionId}
                 onChange={(e) => setPlanRegionId(String(e.target.value))}
               >
@@ -614,10 +660,10 @@ export function DsiImportJobResolutionSection({
               </Select>
             </FormControl>
             <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel id="dsi-plan-channel">Default channel (provisional customer)</InputLabel>
+              <InputLabel id="dsi-plan-channel">Fallback channel (provisional customer)</InputLabel>
               <Select
                 labelId="dsi-plan-channel"
-                label="Default channel (provisional customer)"
+                label="Fallback channel (provisional customer)"
                 value={planChannelId}
                 onChange={(e) => setPlanChannelId(String(e.target.value))}
               >
@@ -781,17 +827,21 @@ export function DsiImportJobResolutionSection({
               <Stack spacing={1}>
                 <Alert severity="info" variant="outlined" data-testid="dsi-bulk-prov-customer-hint">
                   One new <strong>unverified</strong> customer account per selected row; display names follow dealer/source
-                  evidence. Choose region/channel for the whole batch (use catalog &quot;unknown&quot; / unassigned codes when
-                  the file does not justify a specific value).
+                  evidence. Region and channel default from each row&apos;s mapped source fields when possible; use the
+                  dropdowns only as batch <strong>fallback</strong> when the file leaves values blank or they do not match
+                  catalog codes/names.
                 </Alert>
                 <FormControl size="small" fullWidth>
-                  <InputLabel id="dsi-bulk-region">Region</InputLabel>
+                  <InputLabel id="dsi-bulk-region">Fallback region (optional)</InputLabel>
                   <Select
                     labelId="dsi-bulk-region"
-                    label="Region"
+                    label="Fallback region (optional)"
                     value={bulkRegionId}
                     onChange={(e) => setBulkRegionId(String(e.target.value))}
                   >
+                    <MenuItem value="">
+                      <em>None — use source + catalog resolution only</em>
+                    </MenuItem>
                     {regions.map((r) => (
                       <MenuItem key={r.id} value={String(r.id)}>
                         {r.code} — {r.name}
@@ -800,13 +850,16 @@ export function DsiImportJobResolutionSection({
                   </Select>
                 </FormControl>
                 <FormControl size="small" fullWidth>
-                  <InputLabel id="dsi-bulk-channel">Channel</InputLabel>
+                  <InputLabel id="dsi-bulk-channel">Fallback channel (optional)</InputLabel>
                   <Select
                     labelId="dsi-bulk-channel"
-                    label="Channel"
+                    label="Fallback channel (optional)"
                     value={bulkChannelId}
                     onChange={(e) => setBulkChannelId(String(e.target.value))}
                   >
+                    <MenuItem value="">
+                      <em>None — use source + catalog resolution only</em>
+                    </MenuItem>
                     {channels.map((c) => (
                       <MenuItem key={c.id} value={String(c.id)}>
                         {c.code} — {c.name}
@@ -1155,6 +1208,21 @@ export function DsiImportJobResolutionSection({
                                   <Typography variant="body2">
                                     {dsiSourceCustomerNameCell(cand?.context ?? null) || '—'}
                                   </Typography>
+                                  {(() => {
+                                    const { region, channel } = dsiSourceRegionChannelLines(cand?.context ?? null);
+                                    return (
+                                      <>
+                                        <Typography variant="caption" color="text.secondary">
+                                          Source region / province
+                                        </Typography>
+                                        <Typography variant="body2">{region || '—'}</Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                          Source channel / route-to-market
+                                        </Typography>
+                                        <Typography variant="body2">{channel || '—'}</Typography>
+                                      </>
+                                    );
+                                  })()}
                                 </>
                               ) : null}
                               {et === 'distributor_token' ? (
@@ -1196,7 +1264,7 @@ export function DsiImportJobResolutionSection({
                               Target
                             </Typography>
                             <Typography variant="body2">
-                              {planTargetSummary(actionEff, r.suggested_target_id, cand)}
+                              {planTargetSummary(actionEff, r.suggested_target_id, cand, r)}
                             </Typography>
                             {r.suggested_target_id != null && r.suggested_target_id !== '' ? (
                               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
@@ -1261,6 +1329,60 @@ export function DsiImportJobResolutionSection({
                                 }}
                                 inputProps={{ 'data-testid': `dsi-plan-target-${id}` }}
                               />
+                              {et === 'customer_dealer_token' && actionEff === 'create_provisional_customer' ? (
+                                <Stack spacing={1}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Provisional region/channel master ids (override — required when row is blocked for
+                                    conflicting source evidence)
+                                  </Typography>
+                                  <TextField
+                                    size="small"
+                                    fullWidth
+                                    type="number"
+                                    label="Region id (override)"
+                                    value={
+                                      planOverrideMap[id]?.region_id != null
+                                        ? String(planOverrideMap[id]?.region_id)
+                                        : r.effective_region_id != null && r.effective_region_id !== ''
+                                          ? String(r.effective_region_id)
+                                          : ''
+                                    }
+                                    onChange={(e) => {
+                                      const v = e.target.value.trim();
+                                      if (v === '') {
+                                        patchPlanOverride(id, { region_id: null });
+                                        return;
+                                      }
+                                      const n = Number(v);
+                                      patchPlanOverride(id, { region_id: Number.isFinite(n) ? n : null });
+                                    }}
+                                    inputProps={{ 'data-testid': `dsi-plan-region-override-${id}` }}
+                                  />
+                                  <TextField
+                                    size="small"
+                                    fullWidth
+                                    type="number"
+                                    label="Channel id (override)"
+                                    value={
+                                      planOverrideMap[id]?.channel_id != null
+                                        ? String(planOverrideMap[id]?.channel_id)
+                                        : r.effective_channel_id != null && r.effective_channel_id !== ''
+                                          ? String(r.effective_channel_id)
+                                          : ''
+                                    }
+                                    onChange={(e) => {
+                                      const v = e.target.value.trim();
+                                      if (v === '') {
+                                        patchPlanOverride(id, { channel_id: null });
+                                        return;
+                                      }
+                                      const n = Number(v);
+                                      patchPlanOverride(id, { channel_id: Number.isFinite(n) ? n : null });
+                                    }}
+                                    inputProps={{ 'data-testid': `dsi-plan-channel-override-${id}` }}
+                                  />
+                                </Stack>
+                              ) : null}
                               <FormControlLabel
                                 control={
                                   <Checkbox

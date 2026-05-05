@@ -450,8 +450,8 @@ async def preview_create_provisional_dsi_customer(
     cand: ImportEntityMappingCandidate,
     *,
     display_name_override: str | None,
-    region_id: int,
-    channel_id: int,
+    region_id: int | None,
+    channel_id: int | None,
     preferred_distributor_id: int | None,
     partner_tier: str | None,
     notes_summary: str | None,
@@ -487,12 +487,16 @@ async def preview_create_provisional_dsi_customer(
     if cand.status in ("resolved", "ignored", "waived_open_channel"):
         return {"ok": False, "skip_reason": "terminal_status", "detail": "Candidate already terminal"}
 
-    region = await db.get(DimRegion, region_id)
-    if not region:
-        return {"ok": False, "skip_reason": "invalid_region", "detail": "Invalid region_id"}
-    channel = await db.get(DimChannel, channel_id)
-    if not channel:
-        return {"ok": False, "skip_reason": "invalid_channel", "detail": "Invalid channel_id"}
+    region: DimRegion | None = None
+    channel: DimChannel | None = None
+    if region_id is not None:
+        region = await db.get(DimRegion, region_id)
+        if not region:
+            return {"ok": False, "skip_reason": "invalid_region", "detail": "Invalid region_id"}
+    if channel_id is not None:
+        channel = await db.get(DimChannel, channel_id)
+        if not channel:
+            return {"ok": False, "skip_reason": "invalid_channel", "detail": "Invalid channel_id"}
     if preferred_distributor_id is not None:
         pref = await db.get(DimDistributor, preferred_distributor_id)
         if not pref:
@@ -515,9 +519,9 @@ async def preview_create_provisional_dsi_customer(
         "source_customer_alias_evidence": raw_evidence[:512],
         "dealer_group_token": cand.dealer_group_token,
         "region_id": region_id,
-        "region_code": (region.code or "")[:64],
+        "region_code": (region.code or "")[:64] if region else None,
         "channel_id": channel_id,
-        "channel_code": (channel.code or "")[:64],
+        "channel_code": (channel.code or "")[:64] if channel else None,
         "preferred_distributor_id": preferred_distributor_id,
         "partner_tier": tier,
         "notes_summary_preview": ((notes_summary or "").strip()[:512]) if notes_summary else None,
@@ -529,8 +533,8 @@ async def execute_create_provisional_dsi_customer(
     cand: ImportEntityMappingCandidate,
     *,
     display_name_override: str | None,
-    region_id: int,
-    channel_id: int,
+    region_id: int | None,
+    channel_id: int | None,
     preferred_distributor_id: int | None,
     partner_tier: str | None,
     notes_summary: str | None,
@@ -567,9 +571,14 @@ async def execute_create_provisional_dsi_customer(
     if not pv.get("ok"):
         raise StewardOpError(pv.get("detail") or "preview failed", status_code=400)
 
-    region = await db.get(DimRegion, region_id)
-    channel = await db.get(DimChannel, channel_id)
-    assert region is not None and channel is not None
+    if region_id is not None:
+        region = await db.get(DimRegion, region_id)
+        if not region:
+            raise StewardOpError("Invalid region_id", status_code=400)
+    if channel_id is not None:
+        channel = await db.get(DimChannel, channel_id)
+        if not channel:
+            raise StewardOpError("Invalid channel_id", status_code=400)
     if preferred_distributor_id is not None:
         pref = await db.get(DimDistributor, preferred_distributor_id)
         if not pref:

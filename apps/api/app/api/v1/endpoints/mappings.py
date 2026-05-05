@@ -28,6 +28,7 @@ from app.services.imports.dsi_resolution_plan import (
     apply_dsi_resolution_plan_rows,
     build_dsi_resolution_plan_effective_sync,
     build_dsi_resolution_plan_sync,
+    derive_effective_provisional_customer_geo_sync,
 )
 from app.services.imports.dsi_steward_candidate_ops import (
     StewardOpError,
@@ -182,6 +183,28 @@ async def _get_dsi_candidate_or_404(candidate_id: int, db: AsyncSession) -> Impo
     return row
 
 
+async def _bulk_effective_provisional_geo(
+    db: AsyncSession,
+    cand: ImportEntityMappingCandidate,
+    fallback_region_id: int | None,
+    fallback_channel_id: int | None,
+) -> tuple[int | None, int | None]:
+    """Merge per-candidate DSI source region/channel evidence with optional batch fallback IDs."""
+
+    def work(sess: Session) -> tuple[int | None, int | None]:
+        g = derive_effective_provisional_customer_geo_sync(
+            sess,
+            cand,
+            default_region_id=fallback_region_id,
+            default_channel_id=fallback_channel_id,
+        )
+        er = g.get("effective_region_id")
+        ec = g.get("effective_channel_id")
+        return int(er) if er is not None else None, int(ec) if ec is not None else None
+
+    return await db.run_sync(work)
+
+
 class MapCustomerBody(BaseModel):
     customer_id: int = Field(..., ge=1)
     raw_token: str | None = Field(default=None, max_length=512)
@@ -189,8 +212,8 @@ class MapCustomerBody(BaseModel):
 
 class CreateProvisionalCustomerBody(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=256)
-    region_id: int = Field(..., ge=1)
-    channel_id: int = Field(..., ge=1)
+    region_id: int | None = Field(default=None, ge=1)
+    channel_id: int | None = Field(default=None, ge=1)
     preferred_distributor_id: int | None = None
     partner_tier: str | None = Field(default="unmanaged", max_length=32)
     notes_summary: str | None = Field(default=None, max_length=512)
@@ -265,13 +288,22 @@ async def create_provisional_customer_from_dsi_candidate(
     candidate_id: int, body: CreateProvisionalCustomerBody, db: AsyncSession = Depends(get_db)
 ):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
+
+    def _geo(sess: Session) -> dict[str, Any]:
+        return derive_effective_provisional_customer_geo_sync(
+            sess, cand, default_region_id=None, default_channel_id=None
+        )
+
     try:
+        g = await db.run_sync(_geo)
+        er = int(body.region_id) if body.region_id is not None else g.get("effective_region_id")
+        ec = int(body.channel_id) if body.channel_id is not None else g.get("effective_channel_id")
         return await execute_create_provisional_dsi_customer(
             db,
             cand,
             display_name_override=body.display_name,
-            region_id=body.region_id,
-            channel_id=body.channel_id,
+            region_id=int(er) if er is not None else None,
+            channel_id=int(ec) if ec is not None else None,
             preferred_distributor_id=body.preferred_distributor_id,
             partner_tier=body.partner_tier,
             notes_summary=body.notes_summary,
@@ -418,9 +450,6 @@ class DsiBulkStewardBody(BaseModel):
         elif self.action == "resolve_product":
             if self.product_id is None:
                 raise ValueError("product_id is required for resolve_product")
-        elif self.action == "create_provisional_customer":
-            if self.region_id is None or self.channel_id is None:
-                raise ValueError("region_id and channel_id are required for create_provisional_customer")
         return self
 
 
@@ -478,12 +507,15 @@ async def dsi_steward_bulk_preview(job_id: int, body: DsiBulkStewardBody, db: As
                 raw_token=body.raw_token,
             )
         elif body.action == "create_provisional_customer":
+            er, ec = await _bulk_effective_provisional_geo(
+                db, cand, body.region_id, body.channel_id
+            )
             pv = await preview_create_provisional_dsi_customer(
                 db,
                 cand,
                 display_name_override=None,
-                region_id=int(body.region_id or 0),
-                channel_id=int(body.channel_id or 0),
+                region_id=er,
+                channel_id=ec,
                 preferred_distributor_id=body.preferred_distributor_id,
                 partner_tier=body.partner_tier,
                 notes_summary=body.provisional_notes_summary,
@@ -568,12 +600,15 @@ async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: Asyn
                     raw_token=body.raw_token,
                 )
             elif body.action == "create_provisional_customer":
+                er, ec = await _bulk_effective_provisional_geo(
+                    db, cand, body.region_id, body.channel_id
+                )
                 out = await execute_create_provisional_dsi_customer(
                     db,
                     cand,
                     display_name_override=None,
-                    region_id=int(body.region_id or 0),
-                    channel_id=int(body.channel_id or 0),
+                    region_id=er,
+                    channel_id=ec,
                     preferred_distributor_id=body.preferred_distributor_id,
                     partner_tier=body.partner_tier,
                     notes_summary=body.provisional_notes_summary,
@@ -649,6 +684,8 @@ class DsiResolutionPlanRowOverrideBody(BaseModel):
     candidate_id: int = Field(..., ge=1)
     action: DsiResolutionPlanOverrideAction | None = None
     target_id: int | None = Field(default=None, ge=1)
+    region_id: int | None = Field(default=None, ge=1)
+    channel_id: int | None = Field(default=None, ge=1)
     hold_for_manual_review: bool = False
     ack_strategic_channel_hint: bool = False
     confirm_for_suspicious_distributor_token: bool = False

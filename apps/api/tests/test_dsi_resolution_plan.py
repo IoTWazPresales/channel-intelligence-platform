@@ -152,7 +152,7 @@ def test_plan_customer_maps_existing() -> None:
     assert out["suggested_target_id"] == 55
 
 
-def test_plan_customer_provisional_needs_defaults_without_region_channel() -> None:
+def test_plan_customer_provisional_ready_without_defaults_when_no_source_geo() -> None:
     sess = MagicMock()
     job = MagicMock()
     job.source.id = 9
@@ -173,8 +173,10 @@ def test_plan_customer_provisional_needs_defaults_without_region_channel() -> No
     ):
         out = plan_dsi_candidate_sync(sess, cand, job, prod_idx, default_region_id=None, default_channel_id=None)
     assert out["suggested_action"] == "create_provisional_customer"
-    assert out["ready"] is False
-    assert out["needs_defaults"] is True
+    assert out["ready"] is True
+    assert out["needs_defaults"] is False
+    assert out.get("effective_region_id") is None
+    assert out.get("effective_channel_id") is None
 
 
 def test_plan_customer_provisional_ready_with_defaults() -> None:
@@ -388,3 +390,130 @@ def test_merge_strategic_customer_provisional_ok_with_ack() -> None:
         global_confirm_suspicious_distributor=False,
     )
     assert m["effective_ready"] is True
+
+
+def test_plan_customer_provisional_resolves_geo_from_source_single_value() -> None:
+    sess = MagicMock()
+    mr = MagicMock()
+    mr.id = 101
+    mr.code = "NA-E"
+    mr.name = "North America East"
+    mc = MagicMock()
+    mc.id = 202
+    mc.code = "RET"
+    mc.name = "Retail"
+    sess.scalar = MagicMock(side_effect=[mr, mc])
+
+    def fake_get(_m: object, pk: object) -> MagicMock | None:
+        if int(pk) == 101:
+            return mr
+        if int(pk) == 202:
+            return mc
+        return None
+
+    sess.get = MagicMock(side_effect=fake_get)
+
+    job = MagicMock()
+    job.source.id = 9
+    prod_idx = MagicMock()
+    cand = _cand(
+        entity_type="customer_dealer_token",
+        context={
+            "source_customer_name_raw_samples": ["New Customer"],
+            "dealer_group_account_raw": "DGNEW",
+            "source_region_evidence_norms": ["na-e"],
+            "source_region_raw_samples": ["NA-E"],
+            "source_channel_evidence_norms": ["ret"],
+            "source_channel_raw_samples": ["RET"],
+        },
+    )
+    with patch(
+        "app.services.imports.dsi_resolution_plan.effective_dsi_customer_primary_for_resolution",
+        return_value=("New Customer", []),
+    ), patch(
+        "app.services.imports.dsi_resolution_plan._resolve_customer",
+        return_value=(None, ["nomatch"]),
+    ):
+        out = plan_dsi_candidate_sync(sess, cand, job, prod_idx, default_region_id=None, default_channel_id=None)
+    assert out["suggested_action"] == "create_provisional_customer"
+    assert out["ready"] is True
+    assert out.get("suggested_region_id") == 101
+    assert out.get("suggested_channel_id") == 202
+    assert out.get("effective_region_id") == 101
+    assert out.get("effective_channel_id") == 202
+
+
+def test_plan_customer_provisional_geo_conflict_not_ready() -> None:
+    sess = MagicMock()
+    job = MagicMock()
+    job.source.id = 9
+    prod_idx = MagicMock()
+    cand = _cand(
+        entity_type="customer_dealer_token",
+        context={
+            "source_customer_name_raw_samples": ["New Customer"],
+            "dealer_group_account_raw": "DGNEW",
+            "provisional_region_conflict": True,
+            "source_region_evidence_norms": ["a", "b"],
+        },
+    )
+    with patch(
+        "app.services.imports.dsi_resolution_plan.effective_dsi_customer_primary_for_resolution",
+        return_value=("New Customer", []),
+    ), patch(
+        "app.services.imports.dsi_resolution_plan._resolve_customer",
+        return_value=(None, ["nomatch"]),
+    ):
+        out = plan_dsi_candidate_sync(sess, cand, job, prod_idx, default_region_id=10, default_channel_id=20)
+    assert out["suggested_action"] == "create_provisional_customer"
+    assert out["ready"] is False
+    assert "Conflicting source evidence" in str(out.get("reason", ""))
+
+
+def test_merge_provisional_geo_conflict_requires_row_overrides() -> None:
+    cand = _cand(
+        entity_type="customer_dealer_token",
+        context={"provisional_region_conflict": True},
+    )
+    base = {
+        "suggested_action": "create_provisional_customer",
+        "suggested_target_id": None,
+        "ready": False,
+        "effective_region_id": 1,
+        "effective_channel_id": 2,
+    }
+    m = merge_resolution_plan_row_for_apply(
+        cand=cand,
+        base=base,
+        ov={"action": "create_provisional_customer"},
+        default_region_id=10,
+        default_channel_id=20,
+        global_confirm_suspicious_distributor=False,
+    )
+    assert m["effective_ready"] is False
+    assert "provisional_geo_conflict_requires_row_region_channel_override" in m["blockers"]
+
+
+def test_merge_provisional_geo_conflict_ok_when_row_sets_region_channel() -> None:
+    cand = _cand(
+        entity_type="customer_dealer_token",
+        context={"provisional_channel_conflict": True},
+    )
+    base = {
+        "suggested_action": "create_provisional_customer",
+        "suggested_target_id": None,
+        "ready": False,
+        "effective_region_id": 1,
+        "effective_channel_id": 2,
+    }
+    m = merge_resolution_plan_row_for_apply(
+        cand=cand,
+        base=base,
+        ov={"action": "create_provisional_customer", "region_id": 9, "channel_id": 8},
+        default_region_id=10,
+        default_channel_id=20,
+        global_confirm_suspicious_distributor=False,
+    )
+    assert m["effective_ready"] is True
+    assert m["effective_region_id"] == 9
+    assert m["effective_channel_id"] == 8

@@ -167,6 +167,44 @@ def _channel_raw_for_dsi(row: pd.Series, mapping: dict[str, str]) -> str | None:
     return None
 
 
+REGION_CHANNEL_EVIDENCE_SENTINELS = frozenset(
+    {
+        "unknown",
+        "n/a",
+        "na",
+        "tbd",
+        "pending",
+        "pending mapping",
+        "to be mapped",
+    }
+)
+
+
+def _region_channel_evidence_norm_usable(norm: str, raw: str | None) -> bool:
+    """True when a mapped region/channel cell is non-empty and not a workbook placeholder."""
+    if not norm:
+        return False
+    if norm in REGION_CHANNEL_EVIDENCE_SENTINELS:
+        return False
+    r = (raw or "").strip().lower()
+    if any(p in r for p in DEALER_GROUP_PLACEHOLDER_SUBSTRINGS):
+        return False
+    return True
+
+
+def _region_raw_for_dsi(row: pd.Series, mapping: dict[str, str]) -> str | None:
+    """Prefer region_or_province_token; fall back to region_code when mapped."""
+    c = _col(mapping, "region_or_province_token")
+    if c:
+        v = _clean_str(row.get(c))
+        if v:
+            return v
+    c2 = _col(mapping, "region_code")
+    if c2:
+        return _clean_str(row.get(c2))
+    return None
+
+
 def _clean_str(v: Any) -> str | None:
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return None
@@ -727,6 +765,12 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             "primary_source": None,
             "dealer_group_raw": None,
             "source_customer_raw_samples": [],
+            "source_region_raw_samples": [],
+            "source_channel_raw_samples": [],
+            "region_evidence_norms": [],
+            "channel_evidence_norms": [],
+            "provisional_region_conflict": False,
+            "provisional_channel_conflict": False,
         }
     )
 
@@ -748,6 +792,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         cust_raw = _clean_str(row.get(_col(mapping, "customer_dealer_token"))) if _col(mapping, "customer_dealer_token") else None
         dg_raw = _clean_str(row.get(_col(mapping, "dealer_group_token"))) if _col(mapping, "dealer_group_token") else None
         ch_raw = _channel_raw_for_dsi(row, mapping)
+        reg_raw = _region_raw_for_dsi(row, mapping)
         open_raw = row.get(_col(mapping, "open_channel_evidence")) if _col(mapping, "open_channel_evidence") else None
 
         tx_date = _parse_date(row.get(_col(mapping, "transaction_date"))) if _col(mapping, "transaction_date") else None
@@ -1005,6 +1050,31 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             if chv and any(h in chv for h in STRATEGIC_CHANNEL_HINT_SUBSTRINGS):
                 a["strategic_channel_hint"] = True
 
+            if reg_raw:
+                rn = _norm_key(reg_raw)
+                if _region_channel_evidence_norm_usable(rn, reg_raw):
+                    norms_r: list[str] = a["region_evidence_norms"]
+                    if rn not in norms_r and len(norms_r) < 8:
+                        norms_r.append(rn)
+                    if len(set(norms_r)) > 1:
+                        a["provisional_region_conflict"] = True
+                    srs: list[str] = a["source_region_raw_samples"]
+                    treg = reg_raw.strip()[:512]
+                    if treg and treg not in srs and len(srs) < 8:
+                        srs.append(treg)
+            if ch_raw:
+                cn = _norm_key(ch_raw)
+                if _region_channel_evidence_norm_usable(cn, ch_raw):
+                    norms_c: list[str] = a["channel_evidence_norms"]
+                    if cn not in norms_c and len(norms_c) < 8:
+                        norms_c.append(cn)
+                    if len(set(norms_c)) > 1:
+                        a["provisional_channel_conflict"] = True
+                    sch: list[str] = a["source_channel_raw_samples"]
+                    tch = ch_raw.strip()[:512]
+                    if tch and tch not in sch and len(sch) < 8:
+                        sch.append(tch)
+
     for (etype, nkey), data in agg.items():
         ctx: dict[str, Any] = {"aggregated": True}
         dealer_token_col: str | None = None
@@ -1022,6 +1092,22 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             src_raw = data.get("source_customer_raw_samples") or []
             if src_raw:
                 ctx["source_customer_name_raw_samples"] = src_raw[:8]
+            reg_samples = data.get("source_region_raw_samples") or []
+            if reg_samples:
+                ctx["source_region_raw_samples"] = reg_samples[:8]
+            ch_samples_ctx = data.get("source_channel_raw_samples") or []
+            if ch_samples_ctx:
+                ctx["source_channel_raw_samples"] = ch_samples_ctx[:8]
+            ren = data.get("region_evidence_norms") or []
+            if ren:
+                ctx["source_region_evidence_norms"] = ren[:8]
+            cen = data.get("channel_evidence_norms") or []
+            if cen:
+                ctx["source_channel_evidence_norms"] = cen[:8]
+            if data.get("provisional_region_conflict"):
+                ctx["provisional_region_conflict"] = True
+            if data.get("provisional_channel_conflict"):
+                ctx["provisional_channel_conflict"] = True
             if ps == "dealer_name_group":
                 if isinstance(dgr_store, str) and dgr_store.strip():
                     dealer_token_col = dgr_store.strip()[:512]

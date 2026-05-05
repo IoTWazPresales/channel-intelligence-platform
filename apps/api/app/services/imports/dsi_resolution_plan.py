@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
+
+from app.models.dimensions import DimChannel, DimRegion
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
 from app.services.imports.distributor_sales_inventory import (
@@ -46,6 +48,142 @@ SuggestedAction = Literal[
     "ignore",
     "none",
 ]
+
+def _resolve_dim_region_from_source(session: Session, raw: str | None) -> tuple[int | None, str | None]:
+    s = (raw or "").strip()
+    if not s:
+        return None, "blank"
+    row = session.scalar(select(DimRegion).where(func.lower(DimRegion.code) == s.lower()))
+    if row is not None:
+        return int(row.id), None
+    nk = _norm_key(s)
+    row = session.scalar(select(DimRegion).where(func.lower(DimRegion.name) == nk))
+    if row is not None:
+        return int(row.id), None
+    return None, "no_catalog_match"
+
+
+def _resolve_dim_channel_from_source(session: Session, raw: str | None) -> tuple[int | None, str | None]:
+    s = (raw or "").strip()
+    if not s:
+        return None, "blank"
+    row = session.scalar(select(DimChannel).where(func.lower(DimChannel.code) == s.lower()))
+    if row is not None:
+        return int(row.id), None
+    nk = _norm_key(s)
+    row = session.scalar(select(DimChannel).where(func.lower(DimChannel.name) == nk))
+    if row is not None:
+        return int(row.id), None
+    return None, "no_catalog_match"
+
+
+def _pick_raw_for_norm(samples: list[Any], norm: str) -> str | None:
+    for item in samples:
+        if isinstance(item, str) and _norm_key(item) == norm:
+            return item.strip()
+    return norm
+
+
+def _resolve_source_geo_from_ctx(session: Session, ctx: dict[str, Any]) -> dict[str, Any]:
+    """Derive catalog IDs from aggregated DSI source region/channel evidence (per candidate context)."""
+    reg_conflict = bool(ctx.get("provisional_region_conflict"))
+    ch_conflict = bool(ctx.get("provisional_channel_conflict"))
+    out: dict[str, Any] = {
+        "source_region_resolved_id": None,
+        "source_channel_resolved_id": None,
+        "provisional_region_conflict": reg_conflict,
+        "provisional_channel_conflict": ch_conflict,
+        "source_region_resolution_detail": None,
+        "source_channel_resolution_detail": None,
+    }
+    reg_norms = [n for n in (ctx.get("source_region_evidence_norms") or []) if isinstance(n, str) and n.strip()]
+    ch_norms = [n for n in (ctx.get("source_channel_evidence_norms") or []) if isinstance(n, str) and n.strip()]
+    reg_samples = ctx.get("source_region_raw_samples") or []
+    ch_samples = ctx.get("source_channel_raw_samples") or []
+
+    if reg_conflict:
+        out["source_region_resolution_detail"] = "conflicting_source_evidence"
+    else:
+        uniq_r = sorted(set(reg_norms))
+        if len(uniq_r) == 1:
+            raw_pick = _pick_raw_for_norm(reg_samples if isinstance(reg_samples, list) else [], uniq_r[0])
+            rid, reason = _resolve_dim_region_from_source(session, raw_pick)
+            out["source_region_resolved_id"] = rid
+            if rid is None:
+                out["source_region_resolution_detail"] = reason or "unresolved"
+        elif len(uniq_r) == 0:
+            out["source_region_resolution_detail"] = "missing_source_evidence"
+
+    if ch_conflict:
+        out["source_channel_resolution_detail"] = "conflicting_source_evidence"
+    else:
+        uniq_c = sorted(set(ch_norms))
+        if len(uniq_c) == 1:
+            raw_pick_c = _pick_raw_for_norm(ch_samples if isinstance(ch_samples, list) else [], uniq_c[0])
+            cid, reason_c = _resolve_dim_channel_from_source(session, raw_pick_c)
+            out["source_channel_resolved_id"] = cid
+            if cid is None:
+                out["source_channel_resolution_detail"] = reason_c or "unresolved"
+        elif len(uniq_c) == 0:
+            out["source_channel_resolution_detail"] = "missing_source_evidence"
+
+    return out
+
+
+def _dim_region_brief(session: Session, region_id: int | None) -> tuple[str | None, str | None]:
+    if region_id is None:
+        return None, None
+    row = session.get(DimRegion, int(region_id))
+    if not row:
+        return None, None
+    return (row.code or "")[:64], (row.name or "")[:256]
+
+
+def _dim_channel_brief(session: Session, channel_id: int | None) -> tuple[str | None, str | None]:
+    if channel_id is None:
+        return None, None
+    row = session.get(DimChannel, int(channel_id))
+    if not row:
+        return None, None
+    return (row.code or "")[:64], (row.name or "")[:256]
+
+
+def derive_effective_provisional_customer_geo_sync(
+    session: Session,
+    cand: ImportEntityMappingCandidate,
+    *,
+    default_region_id: int | None,
+    default_channel_id: int | None,
+) -> dict[str, Any]:
+    """Shared by resolution plan rows and bulk provisional customer preview/apply."""
+    ctx = cand.context if isinstance(cand.context, dict) else {}
+    geo = _resolve_source_geo_from_ctx(session, ctx)
+    src_r = geo.get("source_region_resolved_id")
+    src_c = geo.get("source_channel_resolved_id")
+    src_r = int(src_r) if src_r is not None else None
+    src_c = int(src_c) if src_c is not None else None
+    eff_r = src_r if src_r is not None else default_region_id
+    eff_c = src_c if src_c is not None else default_channel_id
+    rc, rn = _dim_region_brief(session, src_r)
+    cc, cn = _dim_channel_brief(session, src_c)
+    erc, ern = _dim_region_brief(session, eff_r)
+    ecc, ecn = _dim_channel_brief(session, eff_c)
+    return {
+        **geo,
+        "suggested_region_id": src_r,
+        "suggested_channel_id": src_c,
+        "effective_region_id": eff_r,
+        "effective_channel_id": eff_c,
+        "suggested_region_code": rc,
+        "suggested_region_name": rn,
+        "suggested_channel_code": cc,
+        "suggested_channel_name": cn,
+        "effective_region_code": erc,
+        "effective_region_name": ern,
+        "effective_channel_code": ecc,
+        "effective_channel_name": ecn,
+    }
+
 
 ALLOWED_OVERRIDE_ACTIONS: dict[str, frozenset[str]] = {
     "distributor_token": frozenset({"ignore", "map_distributor", "create_provisional_distributor"}),
@@ -211,6 +349,12 @@ def plan_dsi_candidate_sync(
     if cand.entity_type == "customer_dealer_token":
         ctx = cand.context if isinstance(cand.context, dict) else {}
         if ctx.get("strategic_channel_hint"):
+            geo_s = derive_effective_provisional_customer_geo_sync(
+                session,
+                cand,
+                default_region_id=default_region_id,
+                default_channel_id=default_channel_id,
+            )
             return {
                 **base,
                 "suggested_action": "create_provisional_customer",
@@ -221,6 +365,7 @@ def plan_dsi_candidate_sync(
                 "suggested_target_id": None,
                 "needs_defaults": False,
                 "needs_confirm_suspicious_distributor": False,
+                **{k: v for k, v in geo_s.items() if k not in ("provisional_region_conflict", "provisional_channel_conflict")},
             }
 
         samples = ctx.get("source_customer_name_raw_samples")
@@ -276,17 +421,56 @@ def plan_dsi_candidate_sync(
                 "needs_confirm_suspicious_distributor": False,
             }
 
-        prov_ready = bool(default_region_id and default_channel_id)
+        geo = derive_effective_provisional_customer_geo_sync(
+            session,
+            cand,
+            default_region_id=default_region_id,
+            default_channel_id=default_channel_id,
+        )
+        geo_conflict = bool(geo.get("provisional_region_conflict") or geo.get("provisional_channel_conflict"))
+        if geo_conflict:
+            which: list[str] = []
+            if geo.get("provisional_region_conflict"):
+                which.append("region/province")
+            if geo.get("provisional_channel_conflict"):
+                which.append("channel/route-to-market")
+            return {
+                **base,
+                "suggested_action": "create_provisional_customer",
+                "plan_status": "needs_review",
+                "ready": False,
+                "confidence": 0.35,
+                "reason": (
+                    "Conflicting source evidence for "
+                    + " and ".join(which)
+                    + " — set row region & channel overrides, change action, or map to an existing customer"
+                ),
+                "suggested_target_id": None,
+                "needs_defaults": False,
+                "needs_confirm_suspicious_distributor": False,
+                **{k: v for k, v in geo.items()},
+            }
+
+        detail_bits: list[str] = []
+        if geo.get("source_region_resolution_detail"):
+            detail_bits.append(f"region: {geo['source_region_resolution_detail']}")
+        if geo.get("source_channel_resolution_detail"):
+            detail_bits.append(f"channel: {geo['source_channel_resolution_detail']}")
+        reason = "No existing customer match — propose provisional account + source alias"
+        if detail_bits:
+            reason += " (" + "; ".join(detail_bits) + ")"
+
         return {
             **base,
             "suggested_action": "create_provisional_customer",
-            "plan_status": "needs_defaults" if not prov_ready else "ready",
-            "ready": prov_ready,
-            "confidence": 0.5,
-            "reason": "No existing customer match — propose provisional account + source alias",
+            "plan_status": "ready",
+            "ready": True,
+            "confidence": 0.55,
+            "reason": reason,
             "suggested_target_id": None,
-            "needs_defaults": not prov_ready,
+            "needs_defaults": False,
             "needs_confirm_suspicious_distributor": False,
+            **{k: v for k, v in geo.items()},
         }
 
     return {
@@ -379,6 +563,8 @@ def merge_resolution_plan_row_for_apply(
             "confirm_for_suspicious_distributor_token": False,
             "confirm_ineligible_product": False,
             "audit_note": None,
+            "effective_region_id": None,
+            "effective_channel_id": None,
         }
 
     entity = str(cand.entity_type)
@@ -414,6 +600,8 @@ def merge_resolution_plan_row_for_apply(
             "confirm_for_suspicious_distributor_token": confirm_suspicious,
             "confirm_ineligible_product": confirm_ineligible,
             "audit_note": audit_note,
+            "effective_region_id": None,
+            "effective_channel_id": None,
         }
 
     allowed = ALLOWED_OVERRIDE_ACTIONS.get(entity, frozenset())
@@ -427,9 +615,13 @@ def merge_resolution_plan_row_for_apply(
             "confirm_for_suspicious_distributor_token": confirm_suspicious,
             "confirm_ineligible_product": confirm_ineligible,
             "audit_note": audit_note,
+            "effective_region_id": None,
+            "effective_channel_id": None,
         }
 
     ctx = cand.context if isinstance(cand.context, dict) else {}
+    eff_r_apply: int | None = None
+    eff_c_apply: int | None = None
 
     if action in ("map_distributor", "map_customer", "resolve_product"):
         if target_id is None:
@@ -441,8 +633,19 @@ def merge_resolution_plan_row_for_apply(
                 blockers.append("inactive_or_ineligible_product_requires_confirm_and_audit_note")
 
     if action == "create_provisional_customer":
-        if not default_region_id or not default_channel_id:
-            blockers.append("region_and_channel_required")
+        br = base.get("effective_region_id")
+        eff_r_apply = int(br) if br is not None else None
+        bc = base.get("effective_channel_id")
+        eff_c_apply = int(bc) if bc is not None else None
+        if ov:
+            if ov.get("region_id") is not None:
+                eff_r_apply = int(ov["region_id"])
+            if ov.get("channel_id") is not None:
+                eff_c_apply = int(ov["channel_id"])
+        geo_conflict = bool(ctx.get("provisional_region_conflict") or ctx.get("provisional_channel_conflict"))
+        if geo_conflict:
+            if ov is None or ov.get("region_id") is None or ov.get("channel_id") is None:
+                blockers.append("provisional_geo_conflict_requires_row_region_channel_override")
         if ctx.get("strategic_channel_hint") and not (ov and ov.get("ack_strategic_channel_hint")):
             blockers.append("strategic_channel_hint_ack_required")
 
@@ -461,6 +664,8 @@ def merge_resolution_plan_row_for_apply(
         "confirm_for_suspicious_distributor_token": confirm_suspicious,
         "confirm_ineligible_product": confirm_ineligible,
         "audit_note": audit_note,
+        "effective_region_id": eff_r_apply,
+        "effective_channel_id": eff_c_apply,
     }
 
 
@@ -489,8 +694,6 @@ def _attach_effective_fields_to_row(
     out["ready"] = merged["effective_ready"]
     if merged["effective_ready"]:
         out["plan_status"] = "ready"
-    elif "region_and_channel_required" in merged["blockers"]:
-        out["plan_status"] = "needs_defaults"
     else:
         out["plan_status"] = "needs_review"
 
@@ -500,6 +703,8 @@ def _attach_effective_fields_to_row(
         and suspicious
         and not merged["confirm_for_suspicious_distributor_token"]
     )
+    out["effective_region_id"] = merged.get("effective_region_id")
+    out["effective_channel_id"] = merged.get("effective_channel_id")
     return out
 
 
@@ -695,14 +900,14 @@ async def apply_dsi_resolution_plan_rows(
                     raise StewardOpError("Plan missing customer target", status_code=400)
                 out = await execute_map_dsi_customer(db, cand, customer_id=int(tid), raw_token=None)
             elif action == "create_provisional_customer":
-                if default_region_id is None or default_channel_id is None:
-                    raise StewardOpError("region_id and channel_id required for provisional customer apply", status_code=400)
+                er = merged.get("effective_region_id")
+                ec = merged.get("effective_channel_id")
                 out = await execute_create_provisional_dsi_customer(
                     db,
                     cand,
                     display_name_override=None,
-                    region_id=int(default_region_id),
-                    channel_id=int(default_channel_id),
+                    region_id=int(er) if er is not None else None,
+                    channel_id=int(ec) if ec is not None else None,
                     preferred_distributor_id=None,
                     partner_tier=partner_tier,
                     notes_summary=provisional_notes_summary,
