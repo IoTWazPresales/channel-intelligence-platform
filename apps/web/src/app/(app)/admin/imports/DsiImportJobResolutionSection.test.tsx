@@ -211,4 +211,99 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
       );
     });
   });
+
+  it('shows raw sample text from candidates in the plan dialog', async () => {
+    const user = userEvent.setup();
+    renderPlanSection();
+    await user.click(screen.getByTestId('dsi-resolution-plan-generate'));
+    await waitFor(() => {
+      expect(screen.getByTestId('dsi-resolution-plan-dialog')).toBeVisible();
+    });
+    expect(screen.getByText('ACME RETAIL')).toBeTruthy();
+  });
+
+  it('generate button is clickable again after a failed plan request', async () => {
+    const user = userEvent.setup();
+    mockApiPost.mockReset();
+    let genN = 0;
+    const planRow = {
+      candidate_id: 101,
+      entity_type: 'customer_dealer_token',
+      candidate_status: 'open',
+      suggested_action: 'map_customer',
+      baseline_suggested_action: 'map_customer',
+      suggested_target_id: 55,
+      baseline_target_id: 55,
+      ready: true,
+      confidence: 0.9,
+      plan_status: 'ready',
+      reason: 'Matched',
+      row_count: 3,
+      total_units: 10,
+      total_reported_value: 100,
+      hold_for_manual_review: false,
+      resolution_blockers: [],
+    };
+    mockApiPost.mockImplementation(async (url: string) => {
+      if (url.includes('dsi-resolution-plan/apply')) {
+        return {
+          import_job_id: 7,
+          applied: 0,
+          failed: 0,
+          skipped_hold: 0,
+          skipped_not_ready: 0,
+          results: [],
+        };
+      }
+      if (url.includes('dsi-resolution-plan/effective')) {
+        return {
+          import_job_id: 7,
+          rows: [planRow],
+          summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
+          defaults_used: { region_id: null, channel_id: null },
+        };
+      }
+      if (url.includes('dsi-resolution-plan')) {
+        genN += 1;
+        if (genN === 1) throw new Error('network');
+        return {
+          import_job_id: 7,
+          rows: [planRow],
+          summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
+          defaults_used: { region_id: null, channel_id: null },
+        };
+      }
+      return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
+    });
+
+    renderPlanSection();
+    const btn = screen.getByTestId('dsi-resolution-plan-generate');
+    await user.click(btn);
+    await waitFor(() => expect(btn).not.toBeDisabled());
+    await user.click(btn);
+    await waitFor(() => {
+      expect(screen.getByTestId('dsi-resolution-plan-dialog')).toBeVisible();
+    });
+  });
+
+  it('calls effective endpoint after global distributor confirm is toggled', async () => {
+    const user = userEvent.setup();
+    renderPlanSection();
+    await user.click(screen.getByTestId('dsi-resolution-plan-generate'));
+    await waitFor(() => {
+      expect(screen.getByTestId('dsi-resolution-plan-dialog')).toBeVisible();
+    });
+    const before = mockApiPost.mock.calls.filter((c) => String(c[0]).includes('effective')).length;
+    await user.click(screen.getByTestId('dsi-plan-global-suspicious-confirm'));
+    await waitFor(
+      () => {
+        const after = mockApiPost.mock.calls.filter((c) => String(c[0]).includes('effective'));
+        expect(after.length).toBeGreaterThan(before);
+        expect(after[after.length - 1][1]).toEqual(
+          expect.objectContaining({ confirm_for_suspicious_distributor_token: true })
+        );
+      },
+      { timeout: 5000 }
+    );
+  });
 });

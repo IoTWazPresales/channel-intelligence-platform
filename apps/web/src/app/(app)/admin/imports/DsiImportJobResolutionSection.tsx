@@ -6,6 +6,7 @@ import NextLink from 'next/link';
 import Link from '@mui/material/Link';
 import {
   Alert,
+  Box,
   Button,
   Checkbox,
   Chip,
@@ -24,6 +25,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   TextField,
@@ -124,6 +126,56 @@ function allowedOverrideActions(entityType: string): string[] {
   return [];
 }
 
+function formatPlanActionLabel(action: string): string {
+  const m: Record<string, string> = {
+    ignore: 'Ignore',
+    map_distributor: 'Map to distributor',
+    create_provisional_distributor: 'Create provisional distributor',
+    map_customer: 'Map to customer',
+    create_provisional_customer: 'Create provisional customer',
+    resolve_product: 'Resolve product (alias)',
+    none: 'None',
+  };
+  return m[action] ?? action;
+}
+
+function rawSamplesLine(c: DsiCandidateRow | undefined): string {
+  if (!c?.sample_raw_values?.length) return '';
+  return c.sample_raw_values.filter(Boolean).join('; ');
+}
+
+function customerAccountLine(c: DsiCandidateRow | undefined): string {
+  if (!c) return '';
+  const ctx = c.context;
+  const dg =
+    (ctx && typeof ctx.dealer_group_account_raw === 'string' && ctx.dealer_group_account_raw.trim()) ||
+    (c.dealer_group_token && String(c.dealer_group_token).trim()) ||
+    '';
+  return dg || '—';
+}
+
+function planTargetSummary(
+  action: string,
+  targetId: unknown,
+  c: DsiCandidateRow | undefined
+): string {
+  if (targetId == null || targetId === '') {
+    if (action === 'create_provisional_customer' || action === 'create_provisional_distributor') {
+      return 'New provisional (per steward rules)';
+    }
+    if (action === 'ignore') return '—';
+    return 'Set target ID';
+  }
+  const id = String(targetId);
+  if (action === 'map_customer') return `Customer master · id ${id}`;
+  if (action === 'map_distributor') return `Distributor master · id ${id}`;
+  if (action === 'resolve_product') {
+    const pm = c ? dsiProductMatchSummaryCell(c.context) : '';
+    return pm ? `Product id ${id} · ${pm}` : `Product master · id ${id}`;
+  }
+  return `Id ${id}`;
+}
+
 export function DsiImportJobResolutionSection({
   importJobId,
   candidates,
@@ -166,6 +218,8 @@ export function DsiImportJobResolutionSection({
   const [planOverrideMap, setPlanOverrideMap] = useState<Record<number, PlanRowOverride>>({});
   const [planGlobalSuspicious, setPlanGlobalSuspicious] = useState(false);
   const planDebounceSkipRef = useRef(false);
+  /** Non-zero while a generated plan session is active (avoids effect deps on resolutionPlan object). */
+  const [planLoadToken, setPlanLoadToken] = useState(0);
 
   const { data: regions = [] } = useQuery({
     queryKey: ['catalog-regions'],
@@ -296,7 +350,7 @@ export function DsiImportJobResolutionSection({
     },
     onSuccess: (data) => {
       setBulkApplySummary(
-        `Bulk steward: applied ${data.applied}, failed ${data.failed}. Re-run validation from server when ready.`
+        `Bulk steward: applied ${data.applied}, failed ${data.failed}. Re-run import validation (server) when ready.`
       );
       setPreviewOpen(false);
       setPreviewData(null);
@@ -361,6 +415,7 @@ export function DsiImportJobResolutionSection({
       setResolutionPlan(data);
       setPlanDialogOpen(true);
       setBulkApplySummary(null);
+      setPlanLoadToken((n) => n + 1);
     },
   });
 
@@ -376,21 +431,26 @@ export function DsiImportJobResolutionSection({
     },
   });
 
+  const refreshEffectiveAsyncRef = useRef(refreshPlanEffective.mutateAsync);
+  refreshEffectiveAsyncRef.current = refreshPlanEffective.mutateAsync;
+
   useEffect(() => {
+    if (planLoadToken === 0) return;
     if (planDebounceSkipRef.current) {
       planDebounceSkipRef.current = false;
       return;
     }
-    const ovList = overridesPayload();
-    if (ovList.length === 0 && !planGlobalSuspicious) return;
+    const ovList = Object.entries(planOverrideMap).map(([cid, o]) => ({
+      candidate_id: Number(cid),
+      ...o,
+    }));
     const t = window.setTimeout(() => {
-      void refreshPlanEffective.mutateAsync({
-        overrides: ovList,
-        globalSuspicious: planGlobalSuspicious,
-      });
+      void refreshEffectiveAsyncRef
+        .current({ overrides: ovList, globalSuspicious: planGlobalSuspicious })
+        .catch(() => {});
     }, 450);
     return () => window.clearTimeout(t);
-  }, [planOverrideMap, planGlobalSuspicious, overridesPayload, refreshPlanEffective]);
+  }, [planOverrideMap, planGlobalSuspicious, planLoadToken]);
 
   const applyResolutionPlan = useMutation({
     mutationFn: async (args: {
@@ -412,12 +472,13 @@ export function DsiImportJobResolutionSection({
       const skippedHold = Number(data.skipped_hold ?? 0);
       const skippedNr = Number(data.skipped_not_ready ?? 0);
       setBulkApplySummary(
-        `Resolution plan: applied ${applied}, failed ${failed}, skipped (hold) ${skippedHold}, skipped (not ready) ${skippedNr}. Re-run validation from server when ready.`
+        `Resolution plan: applied ${applied}, failed ${failed}, skipped (hold) ${skippedHold}, skipped (not ready) ${skippedNr}. Re-run import validation (server) when ready.`
       );
       setPlanDialogOpen(false);
       setResolutionPlan(null);
       setPlanOverrideMap({});
       setPlanGlobalSuspicious(false);
+      setPlanLoadToken(0);
       void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', importJobId] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', importJobId] });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
@@ -442,6 +503,12 @@ export function DsiImportJobResolutionSection({
     const ready = new Set(readyPlanCandidateIds);
     return selectedIds.filter((id) => ready.has(id));
   }, [selectedIds, readyPlanCandidateIds]);
+
+  const candidatesById = useMemo(() => {
+    const m: Record<number, DsiCandidateRow> = {};
+    for (const c of candidates) m[c.id] = c;
+    return m;
+  }, [candidates]);
 
   const colDefs = useMemo<ColDef<DsiCandidateRow>[]>(
     () => [
@@ -511,18 +578,21 @@ export function DsiImportJobResolutionSection({
             . Click a row for single-row actions; use bulk mode for many candidates.{' '}
             <strong>Map to existing</strong> uses one target ID for all selected rows;{' '}
             <strong>Create provisional</strong> creates one new unverified master per candidate (names derived from the
-            same evidence as single-row steward). Preview before apply, then re-run validation from server.
+            same evidence as single-row steward). Preview before apply, then use <strong>Re-run import validation (server)</strong>{' '}
+            below when you need staging refreshed.
           </Typography>
         </Alert>
 
         <Alert severity="info" variant="outlined" data-testid="dsi-resolution-plan-panel">
           <Typography variant="subtitle2" gutterBottom>
-            Resolution plan (job-scoped, transient)
+            Resolution plan (this import only, not saved)
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Generate suggested steward actions per candidate (same rules as validation). Set region/channel so provisional
-            customer rows can be marked <strong>ready</strong> when appropriate. Preview the table, then apply all ready or
-            only ready rows you selected in the grid above.
+            <strong>1)</strong> Pick default region/channel for provisional <em>customer</em> rows. <strong>2)</strong>{' '}
+            <strong>Generate resolution plan</strong> (you can run it again any time). <strong>3)</strong> Open the plan dialog to
+            review business fields and adjust actions. <strong>4)</strong> Use <strong>Update plan after edits</strong> inside
+            the dialog (or wait briefly — edits debounce). <strong>5)</strong> Apply ready rows, then use{' '}
+            <strong>Re-run import validation (server)</strong> below (that is <em>not</em> the same as updating the plan).
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap>
             <FormControl size="small" sx={{ minWidth: 220 }}>
@@ -564,7 +634,9 @@ export function DsiImportJobResolutionSection({
             <Button
               variant="contained"
               disabled={generateResolutionPlan.isPending}
-              onClick={() => void generateResolutionPlan.mutateAsync()}
+              onClick={() => {
+                void generateResolutionPlan.mutateAsync().catch(() => {});
+              }}
               data-testid="dsi-resolution-plan-generate"
             >
               {generateResolutionPlan.isPending ? 'Generating…' : 'Generate resolution plan'}
@@ -863,10 +935,11 @@ export function DsiImportJobResolutionSection({
             onClick={() => void dsiRevalidateFromServer.mutateAsync()}
             data-testid="dsi-import-revalidate-server"
           >
-            {dsiRevalidateFromServer.isPending ? 'Re-running server validation…' : 'Re-run validation from server'}
+            {dsiRevalidateFromServer.isPending ? 'Re-running import validation…' : 'Re-run import validation (server)'}
           </Button>
-          <Typography variant="caption" color="text.secondary">
-            Run after bulk or single-row steward saves so staging refreshes.
+          <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 520 }}>
+            Runs the DSI import validator on the server so staging and blockers refresh. Use after steward saves (single-row,
+            bulk, or resolution plan apply) — different from <strong>Update plan after edits</strong> in the plan dialog.
           </Typography>
         </Stack>
         {dsiRevalidateFromServer.isError ? (
@@ -937,47 +1010,55 @@ export function DsiImportJobResolutionSection({
         open={planDialogOpen}
         onClose={() => setPlanDialogOpen(false)}
         fullWidth
-        maxWidth="xl"
+        maxWidth="lg"
         data-testid="dsi-resolution-plan-dialog"
       >
         <DialogTitle>
-          DSI resolution plan
+          Review resolution plan
           {resolutionPlan?.summary && typeof resolutionPlan.summary === 'object' ? (
             <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
               <Chip
                 size="small"
-                label={`Total ${String((resolutionPlan.summary as Record<string, unknown>).total ?? '—')}`}
+                label={`Candidates ${String((resolutionPlan.summary as Record<string, unknown>).total ?? '—')}`}
               />
               <Chip
                 size="small"
                 color="success"
                 variant="outlined"
-                label={`Ready ${String((resolutionPlan.summary as Record<string, unknown>).ready ?? '—')}`}
+                label={`Ready to apply ${String((resolutionPlan.summary as Record<string, unknown>).ready ?? '—')}`}
               />
               <Chip
                 size="small"
                 color="warning"
                 variant="outlined"
-                label={`Needs review / blocked ${String((resolutionPlan.summary as Record<string, unknown>).not_ready ?? '—')}`}
+                label={`Needs work ${String((resolutionPlan.summary as Record<string, unknown>).not_ready ?? '—')}`}
               />
               <Chip
                 size="small"
                 variant="outlined"
-                label={`Hold ${String((resolutionPlan.summary as Record<string, unknown>).hold ?? '—')}`}
+                label={`On hold ${String((resolutionPlan.summary as Record<string, unknown>).hold ?? '—')}`}
               />
             </Stack>
           ) : null}
         </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
+            <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
+              <Typography variant="body2">
+                <strong>Update plan after edits</strong> recalculates which rows are ready (merges your overrides with the
+                same rules as the server). Use <strong>Re-run import validation (server)</strong> in the main panel after you
+                apply, to refresh import staging — that step does not change this plan table.
+              </Typography>
+            </Alert>
             <Stack
               direction={{ xs: 'column', md: 'row' }}
               spacing={2}
-              alignItems={{ md: 'center' }}
+              alignItems={{ md: 'flex-start' }}
               useFlexGap
               flexWrap="wrap"
             >
               <FormControlLabel
+                sx={{ alignItems: 'flex-start', mr: 0, maxWidth: 420 }}
                 control={
                   <Checkbox
                     checked={planGlobalSuspicious}
@@ -985,207 +1066,293 @@ export function DsiImportJobResolutionSection({
                     data-testid="dsi-plan-global-suspicious-confirm"
                   />
                 }
-                label="Confirm placeholder-like distributor tokens (global, for provisional distributor creates)"
+                label={
+                  <Typography variant="body2" component="span">
+                    Allow provisional <strong>distributor</strong> creates for placeholder-like tokens (e.g. unknown, n/a)
+                    for <strong>all rows</strong> in this plan
+                  </Typography>
+                }
               />
               <Button
                 variant="outlined"
                 size="small"
-                disabled={refreshPlanEffective.isPending || !resolutionPlan}
+                disabled={refreshPlanEffective.isPending || planLoadToken === 0}
                 onClick={() =>
-                  void refreshPlanEffective.mutateAsync({
-                    overrides: overridesPayload(),
-                    globalSuspicious: planGlobalSuspicious,
-                  })
+                  void refreshPlanEffective
+                    .mutateAsync({
+                      overrides: overridesPayload(),
+                      globalSuspicious: planGlobalSuspicious,
+                    })
+                    .catch(() => {})
                 }
                 data-testid="dsi-resolution-plan-refresh-effective"
               >
-                {refreshPlanEffective.isPending ? 'Refreshing…' : 'Refresh readiness'}
+                {refreshPlanEffective.isPending ? 'Updating plan…' : 'Update plan after edits'}
               </Button>
             </Stack>
             {planTableRows.some((x) => x.needs_confirm_suspicious_distributor === true) ? (
               <Alert severity="warning" data-testid="dsi-plan-suspicious-hint">
-                Provisional distributor on placeholder-like tokens needs confirmation. Check per-row &quot;Dist confirm&quot; or
-                the global confirm, then refresh readiness.
+                Some rows need explicit permission before creating a provisional distributor from a placeholder-like token.
+                Use the row checkbox and/or the global option above, then click <strong>Update plan after edits</strong>.
               </Alert>
             ) : null}
             {refreshPlanEffective.isError ? (
               <Alert severity="error">{safeDisplayError(refreshPlanEffective.error)}</Alert>
             ) : null}
             {planTableRows.length ? (
-              <Table size="small" data-testid="dsi-resolution-plan-table" stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell align="right">Rows</TableCell>
-                    <TableCell align="right">Units</TableCell>
-                    <TableCell align="right">Value</TableCell>
-                    <TableCell>Auto action</TableCell>
-                    <TableCell sx={{ minWidth: 160 }}>Effective action</TableCell>
-                    <TableCell sx={{ minWidth: 100 }}>Target id</TableCell>
-                    <TableCell>Hold</TableCell>
-                    <TableCell>Dist ✓</TableCell>
-                    <TableCell>Product</TableCell>
-                    <TableCell>Strategic</TableCell>
-                    <TableCell align="right">Conf.</TableCell>
-                    <TableCell>Ready</TableCell>
-                    <TableCell sx={{ minWidth: 200 }}>Reason / blockers</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {planTableRows.map((r) => {
-                    const id = Number(r.candidate_id);
-                    const et = String(r.entity_type ?? '');
-                    const ready = r.ready === true;
-                    const actions = allowedOverrideActions(et);
-                    const strategicHint = String(r.reason ?? '').toLowerCase().includes('strategic');
-                    const blockers = Array.isArray(r.resolution_blockers)
-                      ? (r.resolution_blockers as string[]).join(', ')
-                      : '';
-                    return (
-                      <TableRow key={String(id)}>
-                        <TableCell>{String(id)}</TableCell>
-                        <TableCell>{et}</TableCell>
-                        <TableCell align="right">{String(r.row_count ?? '')}</TableCell>
-                        <TableCell align="right">{String(r.total_units ?? '')}</TableCell>
-                        <TableCell align="right">{String(r.total_reported_value ?? '')}</TableCell>
-                        <TableCell sx={{ maxWidth: 140, whiteSpace: 'normal', typography: 'caption' }}>
-                          {String(r.baseline_suggested_action ?? r.suggested_action ?? '')}
-                        </TableCell>
-                        <TableCell>
-                          {actions.length ? (
-                            <FormControl size="small" fullWidth>
-                              <Select
-                                value={String(r.suggested_action ?? '')}
-                                onChange={(e) => patchPlanOverride(id, { action: String(e.target.value) })}
-                                data-testid={`dsi-plan-action-${id}`}
-                              >
-                                {actions.map((a) => (
-                                  <MenuItem key={a} value={a}>
-                                    {a}
-                                  </MenuItem>
-                                ))}
-                              </Select>
-                            </FormControl>
-                          ) : (
-                            String(r.suggested_action ?? '')
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            type="number"
-                            value={r.suggested_target_id != null ? String(r.suggested_target_id) : ''}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              if (v === '') {
-                                patchPlanOverride(id, { target_id: null });
-                                return;
-                              }
-                              const n = Number(v);
-                              patchPlanOverride(id, { target_id: Number.isFinite(n) ? n : null });
-                            }}
-                            inputProps={{ 'data-testid': `dsi-plan-target-${id}` }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Checkbox
-                            size="small"
-                            checked={r.hold_for_manual_review === true}
-                            onChange={(e) => patchPlanOverride(id, { hold_for_manual_review: e.target.checked })}
-                            inputProps={{ 'data-testid': `dsi-plan-hold-${id}` }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {et === 'distributor_token' ? (
-                            <Checkbox
-                              size="small"
-                              checked={planOverrideMap[id]?.confirm_for_suspicious_distributor_token === true}
-                              onChange={(e) =>
-                                patchPlanOverride(id, {
-                                  confirm_for_suspicious_distributor_token: e.target.checked,
-                                })
-                              }
-                              inputProps={{ 'data-testid': `dsi-plan-dist-confirm-${id}` }}
-                            />
-                          ) : (
-                            '—'
-                          )}
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 140 }}>
-                          {et === 'product_identifier' ? (
+              <TableContainer sx={{ maxHeight: 520, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                <Table size="small" data-testid="dsi-resolution-plan-table" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ minWidth: 200, maxWidth: 280 }}>Candidate</TableCell>
+                      <TableCell sx={{ minWidth: 220, maxWidth: 300 }}>Source evidence</TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                        Impact
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 200, maxWidth: 260 }}>Suggestion</TableCell>
+                      <TableCell sx={{ minWidth: 120 }}>Status</TableCell>
+                      <TableCell sx={{ minWidth: 240, maxWidth: 300 }}>Your overrides</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {planTableRows.map((r) => {
+                      const id = Number(r.candidate_id);
+                      const cand = candidatesById[id];
+                      const et = String(r.entity_type ?? '');
+                      const ready = r.ready === true;
+                      const actions = allowedOverrideActions(et);
+                      const strategicHint = String(r.reason ?? '').toLowerCase().includes('strategic');
+                      const blockers = Array.isArray(r.resolution_blockers)
+                        ? (r.resolution_blockers as string[]).join(', ')
+                        : '';
+                      const actionEff = String(r.suggested_action ?? '');
+                      const baselineAct = String(r.baseline_suggested_action ?? actionEff);
+                      return (
+                        <TableRow key={String(id)}>
+                          <TableCell sx={{ verticalAlign: 'top', py: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              #{id}
+                            </Typography>
+                            <Typography variant="body2" fontWeight={600}>
+                              {et.replace(/_/g, ' ')}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={{ verticalAlign: 'top', py: 1.5 }}>
                             <Stack spacing={0.5}>
+                              <Typography variant="caption" color="text.secondary">
+                                Raw from file
+                              </Typography>
+                              <Typography variant="body2">{rawSamplesLine(cand) || '—'}</Typography>
+                              {et === 'customer_dealer_token' ? (
+                                <>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Customer account
+                                  </Typography>
+                                  <Typography variant="body2">{customerAccountLine(cand)}</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Source customer name
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    {dsiSourceCustomerNameCell(cand?.context ?? null) || '—'}
+                                  </Typography>
+                                </>
+                              ) : null}
+                              {et === 'distributor_token' ? (
+                                <Typography variant="caption" color="text.secondary">
+                                  Normalized key: {String(r.normalized_key ?? '')}
+                                </Typography>
+                              ) : null}
+                              {et === 'product_identifier' ? (
+                                <>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Product match summary
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    {dsiProductMatchSummaryCell(cand?.context ?? null) || '—'}
+                                  </Typography>
+                                </>
+                              ) : null}
+                            </Stack>
+                          </TableCell>
+                          <TableCell align="right" sx={{ verticalAlign: 'top', py: 1.5, whiteSpace: 'nowrap' }}>
+                            <Typography variant="body2">{String(r.row_count ?? '—')} rows</Typography>
+                            <Typography variant="caption" display="block" color="text.secondary">
+                              {String(r.total_units ?? '—')} units
+                            </Typography>
+                            <Typography variant="caption" display="block" color="text.secondary">
+                              {String(r.total_reported_value ?? '—')} value
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={{ verticalAlign: 'top', py: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              Auto
+                            </Typography>
+                            <Typography variant="body2">{formatPlanActionLabel(baselineAct)}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                              Effective
+                            </Typography>
+                            <Typography variant="body2">{formatPlanActionLabel(actionEff)}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                              Target
+                            </Typography>
+                            <Typography variant="body2">
+                              {planTargetSummary(actionEff, r.suggested_target_id, cand)}
+                            </Typography>
+                            {r.suggested_target_id != null && r.suggested_target_id !== '' ? (
+                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                                Master id: {String(r.suggested_target_id)}
+                              </Typography>
+                            ) : null}
+                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                              Why
+                            </Typography>
+                            <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                              {String(r.reason ?? '')}
+                              {blockers ? ` · ${blockers}` : ''}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={{ verticalAlign: 'top', py: 1.5 }}>
+                            {ready ? (
+                              <Chip size="small" color="success" label="Ready" data-testid="dsi-plan-row-ready" />
+                            ) : (
+                              <Chip size="small" color="default" label="Not ready" data-testid="dsi-plan-row-review" />
+                            )}
+                            {typeof r.confidence === 'number' ? (
+                              <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
+                                Confidence {r.confidence.toFixed(2)}
+                              </Typography>
+                            ) : null}
+                          </TableCell>
+                          <TableCell sx={{ verticalAlign: 'top', py: 1.5 }}>
+                            <Stack spacing={1.25} alignItems="stretch">
+                              {actions.length ? (
+                                <FormControl size="small" fullWidth>
+                                  <InputLabel id={`plan-act-${id}`}>Action</InputLabel>
+                                  <Select
+                                    labelId={`plan-act-${id}`}
+                                    label="Action"
+                                    value={actionEff}
+                                    onChange={(e) => patchPlanOverride(id, { action: String(e.target.value) })}
+                                    data-testid={`dsi-plan-action-${id}`}
+                                  >
+                                    {actions.map((a) => (
+                                      <MenuItem key={a} value={a}>
+                                        {formatPlanActionLabel(a)}
+                                      </MenuItem>
+                                    ))}
+                                  </Select>
+                                </FormControl>
+                              ) : null}
+                              <TextField
+                                size="small"
+                                fullWidth
+                                type="number"
+                                label="Map / resolve master id"
+                                helperText="Numeric id only; names show in Target when known from the grid"
+                                value={r.suggested_target_id != null ? String(r.suggested_target_id) : ''}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v === '') {
+                                    patchPlanOverride(id, { target_id: null });
+                                    return;
+                                  }
+                                  const n = Number(v);
+                                  patchPlanOverride(id, { target_id: Number.isFinite(n) ? n : null });
+                                }}
+                                inputProps={{ 'data-testid': `dsi-plan-target-${id}` }}
+                              />
                               <FormControlLabel
                                 control={
                                   <Checkbox
                                     size="small"
-                                    checked={planOverrideMap[id]?.confirm_ineligible_product === true}
+                                    checked={r.hold_for_manual_review === true}
                                     onChange={(e) =>
-                                      patchPlanOverride(id, { confirm_ineligible_product: e.target.checked })
+                                      patchPlanOverride(id, { hold_for_manual_review: e.target.checked })
                                     }
+                                    inputProps={{ 'data-testid': `dsi-plan-hold-${id}` }}
                                   />
                                 }
-                                label="Ineligible"
+                                label="Hold (skip in apply)"
                               />
-                              <TextField
-                                size="small"
-                                label="Audit note"
-                                value={planOverrideMap[id]?.audit_note ?? ''}
-                                onChange={(e) => patchPlanOverride(id, { audit_note: e.target.value })}
-                                data-testid={`dsi-plan-product-audit-${id}`}
-                              />
+                              {et === 'distributor_token' ? (
+                                <FormControlLabel
+                                  control={
+                                    <Checkbox
+                                      size="small"
+                                      checked={planOverrideMap[id]?.confirm_for_suspicious_distributor_token === true}
+                                      onChange={(e) =>
+                                        patchPlanOverride(id, {
+                                          confirm_for_suspicious_distributor_token: e.target.checked,
+                                        })
+                                      }
+                                      inputProps={{ 'data-testid': `dsi-plan-dist-confirm-${id}` }}
+                                    />
+                                  }
+                                  label="Confirm placeholder-like distributor token"
+                                />
+                              ) : null}
+                              {et === 'product_identifier' ? (
+                                <Stack spacing={1}>
+                                  <FormControlLabel
+                                    control={
+                                      <Checkbox
+                                        size="small"
+                                        checked={planOverrideMap[id]?.confirm_ineligible_product === true}
+                                        onChange={(e) =>
+                                          patchPlanOverride(id, { confirm_ineligible_product: e.target.checked })
+                                        }
+                                      />
+                                    }
+                                    label="Confirm inactive / ineligible product"
+                                  />
+                                  <TextField
+                                    size="small"
+                                    fullWidth
+                                    label="Audit note (≥8 chars if confirming)"
+                                    value={planOverrideMap[id]?.audit_note ?? ''}
+                                    onChange={(e) => patchPlanOverride(id, { audit_note: e.target.value })}
+                                    data-testid={`dsi-plan-product-audit-${id}`}
+                                  />
+                                </Stack>
+                              ) : null}
+                              {et === 'customer_dealer_token' && strategicHint ? (
+                                <FormControlLabel
+                                  control={
+                                    <Checkbox
+                                      size="small"
+                                      checked={planOverrideMap[id]?.ack_strategic_channel_hint === true}
+                                      onChange={(e) =>
+                                        patchPlanOverride(id, { ack_strategic_channel_hint: e.target.checked })
+                                      }
+                                      inputProps={{ 'data-testid': `dsi-plan-strategic-${id}` }}
+                                    />
+                                  }
+                                  label="Acknowledge strategic / marketplace evidence"
+                                />
+                              ) : null}
                             </Stack>
-                          ) : (
-                            '—'
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {et === 'customer_dealer_token' && strategicHint ? (
-                            <Checkbox
-                              size="small"
-                              checked={planOverrideMap[id]?.ack_strategic_channel_hint === true}
-                              onChange={(e) =>
-                                patchPlanOverride(id, { ack_strategic_channel_hint: e.target.checked })
-                              }
-                              inputProps={{ 'data-testid': `dsi-plan-strategic-${id}` }}
-                            />
-                          ) : (
-                            '—'
-                          )}
-                        </TableCell>
-                        <TableCell align="right">
-                          {typeof r.confidence === 'number' ? r.confidence.toFixed(2) : '—'}
-                        </TableCell>
-                        <TableCell>
-                          {ready ? (
-                            <Chip size="small" color="success" label="ready" data-testid="dsi-plan-row-ready" />
-                          ) : (
-                            <Chip size="small" color="default" label="review" data-testid="dsi-plan-row-review" />
-                          )}
-                        </TableCell>
-                        <TableCell sx={{ maxWidth: 280, whiteSpace: 'normal', typography: 'caption' }}>
-                          {String(r.reason ?? '')}
-                          {blockers ? ` · ${blockers}` : ''}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             ) : (
               <Typography variant="body2" color="text.secondary">
                 No plan rows. Generate a plan from the section above.
               </Typography>
             )}
             <Typography variant="caption" color="text.secondary" display="block">
-              Edits debounce to <strong>Refresh readiness</strong> (or wait briefly). Apply runs the same steward executors as
-              single-row and bulk flows. <strong>Apply selected ready</strong> uses grid checkboxes intersected with rows
-              marked ready.
+              After changing overrides, either wait a moment for an automatic update or click <strong>Update plan after edits</strong>.
+              Apply uses the same steward APIs as single-row and bulk. <strong>Apply selected ready</strong> uses grid
+              checkboxes with ready rows only.
             </Typography>
           </Stack>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
           <Button onClick={() => setPlanDialogOpen(false)}>Close</Button>
+          <Box sx={{ flexGrow: 1 }} />
           <Button
             variant="outlined"
             disabled={
@@ -1194,11 +1361,13 @@ export function DsiImportJobResolutionSection({
               refreshPlanEffective.isPending
             }
             onClick={() =>
-              void applyResolutionPlan.mutateAsync({
-                candidateIds: selectedReadyPlanIds,
-                overrides: overridesPayload(),
-                globalSuspicious: planGlobalSuspicious,
-              })
+              void applyResolutionPlan
+                .mutateAsync({
+                  candidateIds: selectedReadyPlanIds,
+                  overrides: overridesPayload(),
+                  globalSuspicious: planGlobalSuspicious,
+                })
+                .catch(() => {})
             }
             data-testid="dsi-resolution-plan-apply-selected"
           >
@@ -1212,11 +1381,13 @@ export function DsiImportJobResolutionSection({
               refreshPlanEffective.isPending
             }
             onClick={() =>
-              void applyResolutionPlan.mutateAsync({
-                candidateIds: readyPlanCandidateIds,
-                overrides: overridesPayload(),
-                globalSuspicious: planGlobalSuspicious,
-              })
+              void applyResolutionPlan
+                .mutateAsync({
+                  candidateIds: readyPlanCandidateIds,
+                  overrides: overridesPayload(),
+                  globalSuspicious: planGlobalSuspicious,
+                })
+                .catch(() => {})
             }
             data-testid="dsi-resolution-plan-apply-all"
           >
