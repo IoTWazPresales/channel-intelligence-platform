@@ -47,6 +47,18 @@ SuggestedAction = Literal[
     "none",
 ]
 
+ALLOWED_OVERRIDE_ACTIONS: dict[str, frozenset[str]] = {
+    "distributor_token": frozenset({"ignore", "map_distributor", "create_provisional_distributor"}),
+    "product_identifier": frozenset({"ignore", "resolve_product"}),
+    "customer_dealer_token": frozenset({"ignore", "map_customer", "create_provisional_customer"}),
+}
+
+
+def distributor_token_is_placeholder_like(cand: ImportEntityMappingCandidate) -> bool:
+    raw = dsi_first_sample(cand)
+    nt = _norm_key(raw or cand.normalized_key or "")
+    return nt in DISTRIBUTOR_PROVISIONAL_SUSPICIOUS
+
 
 def _terminal_candidate(cand: ImportEntityMappingCandidate) -> bool:
     return cand.status in ("resolved", "ignored", "waived_open_channel")
@@ -122,6 +134,10 @@ def plan_dsi_candidate_sync(
                 "suggested_target_id": None,
                 "needs_defaults": False,
                 "needs_confirm_suspicious_distributor": False,
+                "distributor_token_placeholder_like": True,
+                "alternate_action_with_confirm_note": (
+                    "Override to create provisional distributor only if you confirm placeholder-like token handling"
+                ),
             }
         return {
             **base,
@@ -133,6 +149,7 @@ def plan_dsi_candidate_sync(
             "suggested_target_id": None,
             "needs_defaults": False,
             "needs_confirm_suspicious_distributor": False,
+            "distributor_token_placeholder_like": False,
         }
 
     # --- product_identifier ---
@@ -285,6 +302,18 @@ def plan_dsi_candidate_sync(
     }
 
 
+def _baseline_annotate(row: dict[str, Any]) -> dict[str, Any]:
+    """Attach baseline_* copies for UI (generate path; same keys as effective merge)."""
+    return {
+        **row,
+        "baseline_suggested_action": row.get("suggested_action"),
+        "baseline_ready": row.get("ready"),
+        "baseline_target_id": row.get("suggested_target_id"),
+        "hold_for_manual_review": False,
+        "resolution_blockers": [],
+    }
+
+
 def build_dsi_resolution_plan_sync(
     session: Session,
     job_id: int,
@@ -302,7 +331,9 @@ def build_dsi_resolution_plan_sync(
     cands = list(session.scalars(q.order_by(ImportEntityMappingCandidate.entity_type, ImportEntityMappingCandidate.id)).all())
     prod_idx = _load_product_resolution_index(session)
     rows = [
-        plan_dsi_candidate_sync(session, c, job, prod_idx, default_region_id=default_region_id, default_channel_id=default_channel_id)
+        _baseline_annotate(
+            plan_dsi_candidate_sync(session, c, job, prod_idx, default_region_id=default_region_id, default_channel_id=default_channel_id)
+        )
         for c in cands
     ]
     ready_n = sum(1 for r in rows if r.get("ready"))
@@ -313,6 +344,216 @@ def build_dsi_resolution_plan_sync(
             "total": len(rows),
             "ready": ready_n,
             "not_ready": len(rows) - ready_n,
+            "hold": 0,
+        },
+        "defaults_used": {
+            "region_id": default_region_id,
+            "channel_id": default_channel_id,
+        },
+    }
+
+
+def _product_resolve_needs_ineligible_confirm(ctx: dict[str, Any]) -> bool:
+    return ctx.get("product_match_status") == "inactive_only" or bool(ctx.get("product_inactive_matches"))
+
+
+def merge_resolution_plan_row_for_apply(
+    *,
+    cand: ImportEntityMappingCandidate,
+    base: dict[str, Any],
+    ov: dict[str, Any] | None,
+    default_region_id: int | None,
+    default_channel_id: int | None,
+    global_confirm_suspicious_distributor: bool,
+) -> dict[str, Any]:
+    """Single source of truth for effective action + readiness (used by /effective and /apply)."""
+    blockers: list[str] = []
+    hold = bool(ov and ov.get("hold_for_manual_review"))
+    if hold:
+        return {
+            "hold_for_manual_review": True,
+            "effective_action": None,
+            "effective_target_id": None,
+            "effective_ready": False,
+            "blockers": ["hold_for_manual_review"],
+            "confirm_for_suspicious_distributor_token": False,
+            "confirm_ineligible_product": False,
+            "audit_note": None,
+        }
+
+    entity = str(cand.entity_type)
+    base_action = str(base.get("suggested_action") or "none")
+    action = base_action
+    target_id: int | None
+    bt = base.get("suggested_target_id")
+    target_id = int(bt) if bt is not None else None
+
+    if ov:
+        if "action" in ov and ov.get("action") is not None:
+            action = str(ov["action"])
+        if "target_id" in ov:
+            tid = ov.get("target_id")
+            target_id = int(tid) if tid is not None else None
+
+    confirm_suspicious = global_confirm_suspicious_distributor or bool(
+        ov and ov.get("confirm_for_suspicious_distributor_token")
+    )
+    confirm_ineligible = bool(ov and ov.get("confirm_ineligible_product"))
+    audit_note_raw = (ov.get("audit_note") if ov else None) or None
+    audit_note = str(audit_note_raw).strip() if audit_note_raw is not None else None
+    if audit_note == "":
+        audit_note = None
+
+    if action in ("none", ""):
+        return {
+            "hold_for_manual_review": False,
+            "effective_action": action,
+            "effective_target_id": target_id,
+            "effective_ready": False,
+            "blockers": ["no_action"],
+            "confirm_for_suspicious_distributor_token": confirm_suspicious,
+            "confirm_ineligible_product": confirm_ineligible,
+            "audit_note": audit_note,
+        }
+
+    allowed = ALLOWED_OVERRIDE_ACTIONS.get(entity, frozenset())
+    if action not in allowed:
+        return {
+            "hold_for_manual_review": False,
+            "effective_action": action,
+            "effective_target_id": target_id,
+            "effective_ready": False,
+            "blockers": [f"action_not_allowed_for_entity:{entity}"],
+            "confirm_for_suspicious_distributor_token": confirm_suspicious,
+            "confirm_ineligible_product": confirm_ineligible,
+            "audit_note": audit_note,
+        }
+
+    ctx = cand.context if isinstance(cand.context, dict) else {}
+
+    if action in ("map_distributor", "map_customer", "resolve_product"):
+        if target_id is None:
+            blockers.append("target_id_required")
+
+    if action == "resolve_product":
+        if _product_resolve_needs_ineligible_confirm(ctx):
+            if not confirm_ineligible or audit_note is None or len(audit_note) < 8:
+                blockers.append("inactive_or_ineligible_product_requires_confirm_and_audit_note")
+
+    if action == "create_provisional_customer":
+        if not default_region_id or not default_channel_id:
+            blockers.append("region_and_channel_required")
+        if ctx.get("strategic_channel_hint") and not (ov and ov.get("ack_strategic_channel_hint")):
+            blockers.append("strategic_channel_hint_ack_required")
+
+    if action == "create_provisional_distributor":
+        if distributor_token_is_placeholder_like(cand) and not confirm_suspicious:
+            blockers.append("placeholder_like_distributor_requires_confirm")
+
+    effective_ready = len(blockers) == 0
+
+    return {
+        "hold_for_manual_review": False,
+        "effective_action": action,
+        "effective_target_id": target_id,
+        "effective_ready": effective_ready,
+        "blockers": blockers,
+        "confirm_for_suspicious_distributor_token": confirm_suspicious,
+        "confirm_ineligible_product": confirm_ineligible,
+        "audit_note": audit_note,
+    }
+
+
+def _attach_effective_fields_to_row(
+    base: dict[str, Any],
+    cand: ImportEntityMappingCandidate,
+    merged: dict[str, Any],
+) -> dict[str, Any]:
+    """Augment a baseline plan row with baseline_* copies and merged effective fields for API/UI."""
+    out = {
+        **base,
+        "baseline_suggested_action": base.get("suggested_action"),
+        "baseline_ready": base.get("ready"),
+        "baseline_target_id": base.get("suggested_target_id"),
+        "hold_for_manual_review": merged["hold_for_manual_review"],
+        "resolution_blockers": list(merged["blockers"]),
+    }
+    if merged["hold_for_manual_review"]:
+        out["ready"] = False
+        out["plan_status"] = "needs_review"
+        out["needs_confirm_suspicious_distributor"] = False
+        return out
+
+    out["suggested_action"] = merged["effective_action"]
+    out["suggested_target_id"] = merged["effective_target_id"]
+    out["ready"] = merged["effective_ready"]
+    if merged["effective_ready"]:
+        out["plan_status"] = "ready"
+    elif "region_and_channel_required" in merged["blockers"]:
+        out["plan_status"] = "needs_defaults"
+    else:
+        out["plan_status"] = "needs_review"
+
+    suspicious = distributor_token_is_placeholder_like(cand)
+    out["needs_confirm_suspicious_distributor"] = bool(
+        merged["effective_action"] == "create_provisional_distributor"
+        and suspicious
+        and not merged["confirm_for_suspicious_distributor_token"]
+    )
+    return out
+
+
+def build_dsi_resolution_plan_effective_sync(
+    session: Session,
+    job_id: int,
+    *,
+    candidate_ids: list[int] | None,
+    default_region_id: int | None,
+    default_channel_id: int | None,
+    overrides: list[dict[str, Any]],
+    global_confirm_suspicious_distributor: bool,
+) -> dict[str, Any]:
+    """Baseline plan rows merged with per-candidate overrides (read-only)."""
+    job = session.get(ImportJob, job_id)
+    if not job:
+        raise ValueError("Import job not found")
+    by_cid: dict[int, dict[str, Any]] = {}
+    for o in overrides:
+        cid = int(o["candidate_id"])
+        rest = {k: v for k, v in o.items() if k != "candidate_id"}
+        by_cid[cid] = {**by_cid.get(cid, {}), **rest}
+    q = select(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job_id)
+    if candidate_ids:
+        q = q.where(ImportEntityMappingCandidate.id.in_(candidate_ids))
+    cands = list(
+        session.scalars(q.order_by(ImportEntityMappingCandidate.entity_type, ImportEntityMappingCandidate.id)).all()
+    )
+    prod_idx = _load_product_resolution_index(session)
+    rows: list[dict[str, Any]] = []
+    for c in cands:
+        base = plan_dsi_candidate_sync(
+            session, c, job, prod_idx, default_region_id=default_region_id, default_channel_id=default_channel_id
+        )
+        ov = by_cid.get(int(c.id))
+        merged = merge_resolution_plan_row_for_apply(
+            cand=c,
+            base=base,
+            ov=ov,
+            default_region_id=default_region_id,
+            default_channel_id=default_channel_id,
+            global_confirm_suspicious_distributor=global_confirm_suspicious_distributor,
+        )
+        rows.append(_attach_effective_fields_to_row(base, c, merged))
+    ready_n = sum(1 for r in rows if r.get("ready"))
+    hold_n = sum(1 for r in rows if r.get("hold_for_manual_review"))
+    return {
+        "import_job_id": job_id,
+        "rows": rows,
+        "summary": {
+            "total": len(rows),
+            "ready": ready_n,
+            "not_ready": len(rows) - ready_n,
+            "hold": hold_n,
         },
         "defaults_used": {
             "region_id": default_region_id,
@@ -343,8 +584,9 @@ async def apply_dsi_resolution_plan_rows(
     partner_tier: str | None,
     provisional_notes_summary: str | None,
     confirm_for_suspicious_distributor_token: bool,
+    overrides: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Recompute plan row per id with defaults; execute steward ops when ready (same rules as generate)."""
+    """Recompute baseline plan per id, merge overrides, then execute steward ops when effectively ready."""
 
     def _plan_sync(sess: Session, cid: int, jid: int, dr: int | None, dc: int | None) -> dict[str, Any] | None:
         job = sess.get(ImportJob, jid)
@@ -354,29 +596,88 @@ async def apply_dsi_resolution_plan_rows(
         prod_idx = _load_product_resolution_index(sess)
         return plan_dsi_candidate_sync(sess, cand, job, prod_idx, default_region_id=dr, default_channel_id=dc)
 
+    by_cid: dict[int, dict[str, Any]] = {}
+    if overrides:
+        for raw in overrides:
+            cid = int(raw["candidate_id"])
+            rest = {k: v for k, v in raw.items() if k != "candidate_id"}
+            by_cid[cid] = {**by_cid.get(cid, {}), **rest}
+
     results: list[dict[str, Any]] = []
+    applied_n = 0
+    failed_n = 0
+    skipped_hold_n = 0
+    skipped_not_ready_n = 0
+
     for cid in candidate_ids:
         row = await db.run_sync(
             lambda s, c=cid, j=job_id, dr=default_region_id, dc=default_channel_id: _plan_sync(s, c, j, dr, dc)
         )
         if row is None:
-            results.append({"candidate_id": cid, "ok": False, "detail": "Candidate not found for this job"})
-            continue
-        if not row.get("ready"):
-            results.append({"candidate_id": cid, "ok": False, "detail": "not_ready", "plan": row})
+            results.append(
+                {
+                    "candidate_id": cid,
+                    "status": "failed",
+                    "detail": "Candidate not found for this job",
+                }
+            )
+            failed_n += 1
             continue
 
         cand = await db.get(ImportEntityMappingCandidate, cid)
         if cand is None or cand.import_job_id != job_id:
-            results.append({"candidate_id": cid, "ok": False, "detail": "Candidate not found"})
+            results.append(
+                {
+                    "candidate_id": cid,
+                    "status": "failed",
+                    "detail": "Candidate not found",
+                }
+            )
+            failed_n += 1
             continue
 
-        action = row.get("suggested_action")
+        ov = by_cid.get(cid)
+        merged = merge_resolution_plan_row_for_apply(
+            cand=cand,
+            base=row,
+            ov=ov,
+            default_region_id=default_region_id,
+            default_channel_id=default_channel_id,
+            global_confirm_suspicious_distributor=confirm_for_suspicious_distributor_token,
+        )
+
+        if merged["hold_for_manual_review"]:
+            results.append(
+                {
+                    "candidate_id": cid,
+                    "status": "skipped_hold",
+                    "detail": "hold_for_manual_review",
+                    "plan": row,
+                    "merge": merged,
+                }
+            )
+            skipped_hold_n += 1
+            continue
+
+        if not merged["effective_ready"]:
+            results.append(
+                {
+                    "candidate_id": cid,
+                    "status": "skipped_not_ready",
+                    "detail": ",".join(merged["blockers"]) if merged["blockers"] else "not_ready",
+                    "plan": row,
+                    "merge": merged,
+                }
+            )
+            skipped_not_ready_n += 1
+            continue
+
+        action = merged["effective_action"]
         try:
             if action == "ignore":
                 out = await execute_ignore_dsi_candidate(db, cand, notes=None)
             elif action == "map_distributor":
-                tid = row.get("suggested_target_id")
+                tid = merged["effective_target_id"]
                 if tid is None:
                     raise StewardOpError("Plan missing distributor target", status_code=400)
                 out = await execute_map_dsi_distributor(db, cand, distributor_id=int(tid), raw_token=None)
@@ -386,10 +687,10 @@ async def apply_dsi_resolution_plan_rows(
                     cand,
                     display_name_override=None,
                     distributor_code_override=None,
-                    confirm_for_suspicious_token=confirm_for_suspicious_distributor_token,
+                    confirm_for_suspicious_token=bool(merged["confirm_for_suspicious_distributor_token"]),
                 )
             elif action == "map_customer":
-                tid = row.get("suggested_target_id")
+                tid = merged["effective_target_id"]
                 if tid is None:
                     raise StewardOpError("Plan missing customer target", status_code=400)
                 out = await execute_map_dsi_customer(db, cand, customer_id=int(tid), raw_token=None)
@@ -407,7 +708,7 @@ async def apply_dsi_resolution_plan_rows(
                     notes_summary=provisional_notes_summary,
                 )
             elif action == "resolve_product":
-                tid = row.get("suggested_target_id")
+                tid = merged["effective_target_id"]
                 if tid is None:
                     raise StewardOpError("Plan missing product target", status_code=400)
                 out = await execute_resolve_dsi_product(
@@ -415,24 +716,44 @@ async def apply_dsi_resolution_plan_rows(
                     cand,
                     product_id=int(tid),
                     raw_token=None,
-                    confirm_ineligible_product=False,
-                    audit_note=None,
+                    confirm_ineligible_product=bool(merged["confirm_ineligible_product"]),
+                    audit_note=merged["audit_note"],
                     idempotency_key=None,
                 )
             else:
                 results.append(
-                    {"candidate_id": cid, "ok": False, "detail": f"No executor for action {action}", "plan": row}
+                    {
+                        "candidate_id": cid,
+                        "status": "failed",
+                        "detail": f"No executor for action {action}",
+                        "plan": row,
+                        "merge": merged,
+                    }
                 )
+                failed_n += 1
                 continue
-            results.append({"candidate_id": cid, "ok": True, "result": out, "plan": row})
+            results.append(
+                {"candidate_id": cid, "status": "applied", "result": out, "plan": row, "merge": merged}
+            )
+            applied_n += 1
         except StewardOpError as exc:
-            results.append({"candidate_id": cid, "ok": False, "detail": exc.detail, "plan": row})
+            results.append(
+                {
+                    "candidate_id": cid,
+                    "status": "failed",
+                    "detail": exc.detail,
+                    "plan": row,
+                    "merge": merged,
+                }
+            )
+            failed_n += 1
 
-    ok_n = sum(1 for r in results if r.get("ok"))
     return {
         "import_job_id": job_id,
-        "applied": ok_n,
-        "failed": len(results) - ok_n,
+        "applied": applied_n,
+        "failed": failed_n,
+        "skipped_hold": skipped_hold_n,
+        "skipped_not_ready": skipped_not_ready_n,
         "results": results,
     }
 

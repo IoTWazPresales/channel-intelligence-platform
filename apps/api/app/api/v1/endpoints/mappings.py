@@ -26,6 +26,7 @@ from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_C
 from app.services.imports.distributor_sales_inventory import _norm_key
 from app.services.imports.dsi_resolution_plan import (
     apply_dsi_resolution_plan_rows,
+    build_dsi_resolution_plan_effective_sync,
     build_dsi_resolution_plan_sync,
 )
 from app.services.imports.dsi_steward_candidate_ops import (
@@ -634,6 +635,27 @@ class DsiResolutionPlanGenerateBody(BaseModel):
     default_channel_id: int | None = Field(default=None, ge=1)
 
 
+DsiResolutionPlanOverrideAction = Literal[
+    "ignore",
+    "map_distributor",
+    "create_provisional_distributor",
+    "map_customer",
+    "create_provisional_customer",
+    "resolve_product",
+]
+
+
+class DsiResolutionPlanRowOverrideBody(BaseModel):
+    candidate_id: int = Field(..., ge=1)
+    action: DsiResolutionPlanOverrideAction | None = None
+    target_id: int | None = Field(default=None, ge=1)
+    hold_for_manual_review: bool = False
+    ack_strategic_channel_hint: bool = False
+    confirm_for_suspicious_distributor_token: bool = False
+    confirm_ineligible_product: bool = False
+    audit_note: str | None = Field(default=None, max_length=2000)
+
+
 class DsiResolutionPlanApplyBody(BaseModel):
     candidate_ids: list[int] = Field(..., min_length=1, max_length=500)
     default_region_id: int | None = Field(default=None, ge=1)
@@ -641,6 +663,15 @@ class DsiResolutionPlanApplyBody(BaseModel):
     partner_tier: str | None = Field(default="unmanaged", max_length=32)
     provisional_notes_summary: str | None = Field(default=None, max_length=512)
     confirm_for_suspicious_distributor_token: bool = False
+    overrides: list[DsiResolutionPlanRowOverrideBody] | None = Field(default=None, max_length=500)
+
+
+class DsiResolutionPlanEffectiveBody(BaseModel):
+    candidate_ids: list[int] | None = Field(default=None, max_length=500)
+    default_region_id: int | None = Field(default=None, ge=1)
+    default_channel_id: int | None = Field(default=None, ge=1)
+    confirm_for_suspicious_distributor_token: bool = False
+    overrides: list[DsiResolutionPlanRowOverrideBody] = Field(default_factory=list, max_length=500)
 
 
 @router.post("/import-jobs/{job_id}/dsi-resolution-plan", status_code=200)
@@ -665,12 +696,37 @@ async def dsi_resolution_plan_generate(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.post("/import-jobs/{job_id}/dsi-resolution-plan/effective", status_code=200)
+async def dsi_resolution_plan_effective(
+    job_id: int, body: DsiResolutionPlanEffectiveBody, db: AsyncSession = Depends(get_db)
+):
+    """Baseline DSI plan merged with per-row overrides (read-only; refreshes ready/blocker state)."""
+    await _assert_dsi_import_job(db, job_id)
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return build_dsi_resolution_plan_effective_sync(
+            sess,
+            job_id,
+            candidate_ids=body.candidate_ids,
+            default_region_id=body.default_region_id,
+            default_channel_id=body.default_channel_id,
+            overrides=[o.model_dump(exclude_unset=True) for o in body.overrides],
+            global_confirm_suspicious_distributor=body.confirm_for_suspicious_distributor_token,
+        )
+
+    try:
+        return await db.run_sync(_work)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.post("/import-jobs/{job_id}/dsi-resolution-plan/apply", status_code=200)
 async def dsi_resolution_plan_apply_endpoint(
     job_id: int, body: DsiResolutionPlanApplyBody, db: AsyncSession = Depends(get_db)
 ):
-    """Apply steward actions for candidates that are still **ready** per regenerated plan (reuse execute_* ops)."""
+    """Apply steward actions for candidates that are **effectively ready** after baseline + overrides (reuse execute_* ops)."""
     await _assert_dsi_import_job(db, job_id)
+    ov_list = [o.model_dump(exclude_unset=True) for o in (body.overrides or [])]
     return await apply_dsi_resolution_plan_rows(
         db,
         job_id,
@@ -680,6 +736,7 @@ async def dsi_resolution_plan_apply_endpoint(
         partner_tier=body.partner_tier,
         provisional_notes_summary=body.provisional_notes_summary,
         confirm_for_suspicious_distributor_token=body.confirm_for_suspicious_distributor_token,
+        overrides=ov_list or None,
     )
 
 
