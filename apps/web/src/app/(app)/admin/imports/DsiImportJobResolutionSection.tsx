@@ -7,6 +7,7 @@ import Link from '@mui/material/Link';
 import {
   Alert,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -132,6 +133,11 @@ export function DsiImportJobResolutionSection({
   const [bulkProvisionalDistCode, setBulkProvisionalDistCode] = useState('');
 
   const [bulkApplySummary, setBulkApplySummary] = useState<string | null>(null);
+
+  const [planRegionId, setPlanRegionId] = useState('');
+  const [planChannelId, setPlanChannelId] = useState('');
+  const [resolutionPlan, setResolutionPlan] = useState<Record<string, unknown> | null>(null);
+  const [planDialogOpen, setPlanDialogOpen] = useState(false);
 
   const { data: regions = [] } = useQuery({
     queryKey: ['catalog-regions'],
@@ -291,6 +297,66 @@ export function DsiImportJobResolutionSection({
     },
   });
 
+  const generateResolutionPlan = useMutation({
+    mutationFn: async () =>
+      apiPost<Record<string, unknown>>(`/api/v1/mappings/import-jobs/${importJobId}/dsi-resolution-plan`, {
+        default_region_id:
+          planRegionId.trim() !== '' && Number.isFinite(Number(planRegionId)) ? Number(planRegionId) : null,
+        default_channel_id:
+          planChannelId.trim() !== '' && Number.isFinite(Number(planChannelId)) ? Number(planChannelId) : null,
+      }),
+    onSuccess: (data) => {
+      setResolutionPlan(data);
+      setPlanDialogOpen(true);
+      setBulkApplySummary(null);
+    },
+  });
+
+  const applyResolutionPlan = useMutation({
+    mutationFn: async (candidateIds: number[]) =>
+      apiPost<Record<string, unknown>>(`/api/v1/mappings/import-jobs/${importJobId}/dsi-resolution-plan/apply`, {
+        candidate_ids: candidateIds,
+        default_region_id:
+          planRegionId.trim() !== '' && Number.isFinite(Number(planRegionId)) ? Number(planRegionId) : null,
+        default_channel_id:
+          planChannelId.trim() !== '' && Number.isFinite(Number(planChannelId)) ? Number(planChannelId) : null,
+        partner_tier: 'unmanaged',
+        provisional_notes_summary: null,
+        confirm_for_suspicious_distributor_token: false,
+      }),
+    onSuccess: (data) => {
+      const applied = Number(data.applied ?? 0);
+      const failed = Number(data.failed ?? 0);
+      setBulkApplySummary(
+        `Resolution plan: applied ${applied}, skipped/failed ${failed}. Re-run validation from server when ready.`
+      );
+      setPlanDialogOpen(false);
+      setResolutionPlan(null);
+      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', importJobId] });
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', importJobId] });
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      onInvalidate();
+    },
+  });
+
+  const planTableRows = useMemo(() => {
+    const raw = resolutionPlan?.rows;
+    if (!raw || !Array.isArray(raw)) return [];
+    return raw as Array<Record<string, unknown>>;
+  }, [resolutionPlan]);
+
+  const readyPlanCandidateIds = useMemo(() => {
+    return planTableRows
+      .filter((r) => r.ready === true)
+      .map((r) => Number(r.candidate_id))
+      .filter((id) => Number.isFinite(id));
+  }, [planTableRows]);
+
+  const selectedReadyPlanIds = useMemo(() => {
+    const ready = new Set(readyPlanCandidateIds);
+    return selectedIds.filter((id) => ready.has(id));
+  }, [selectedIds, readyPlanCandidateIds]);
+
   const colDefs = useMemo<ColDef<DsiCandidateRow>[]>(
     () => [
       { field: 'entity_type', headerName: 'Entity type', minWidth: 160 },
@@ -363,6 +429,71 @@ export function DsiImportJobResolutionSection({
           </Typography>
         </Alert>
 
+        <Alert severity="info" variant="outlined" data-testid="dsi-resolution-plan-panel">
+          <Typography variant="subtitle2" gutterBottom>
+            Resolution plan (job-scoped, transient)
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Generate suggested steward actions per candidate (same rules as validation). Set region/channel so provisional
+            customer rows can be marked <strong>ready</strong> when appropriate. Preview the table, then apply all ready or
+            only ready rows you selected in the grid above.
+          </Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap>
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <InputLabel id="dsi-plan-region">Default region (provisional customer)</InputLabel>
+              <Select
+                labelId="dsi-plan-region"
+                label="Default region (provisional customer)"
+                value={planRegionId}
+                onChange={(e) => setPlanRegionId(String(e.target.value))}
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
+                {regions.map((r) => (
+                  <MenuItem key={r.id} value={String(r.id)}>
+                    {r.code} — {r.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <InputLabel id="dsi-plan-channel">Default channel (provisional customer)</InputLabel>
+              <Select
+                labelId="dsi-plan-channel"
+                label="Default channel (provisional customer)"
+                value={planChannelId}
+                onChange={(e) => setPlanChannelId(String(e.target.value))}
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
+                {channels.map((c) => (
+                  <MenuItem key={c.id} value={String(c.id)}>
+                    {c.code} — {c.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button
+              variant="contained"
+              disabled={generateResolutionPlan.isPending}
+              onClick={() => void generateResolutionPlan.mutateAsync()}
+              data-testid="dsi-resolution-plan-generate"
+            >
+              {generateResolutionPlan.isPending ? 'Generating…' : 'Generate resolution plan'}
+            </Button>
+            <Button
+              variant="outlined"
+              disabled={!resolutionPlan || planTableRows.length === 0}
+              onClick={() => setPlanDialogOpen(true)}
+              data-testid="dsi-resolution-plan-open-dialog"
+            >
+              Open plan preview
+            </Button>
+          </Stack>
+        </Alert>
+
         <EnterpriseDataGrid
           ref={gridRef}
           rowData={candidates}
@@ -388,7 +519,12 @@ export function DsiImportJobResolutionSection({
             gridRef.current?.api?.deselectAll();
             setSelectedIds([]);
           }}
-          busy={bulkPreview.isPending || bulkApply.isPending}
+          busy={
+            bulkPreview.isPending ||
+            bulkApply.isPending ||
+            generateResolutionPlan.isPending ||
+            applyResolutionPlan.isPending
+          }
           previewDangerLabel="Preview bulk steward"
           previewDangerDisabled={
             selectedIds.length === 0 || bulkPreview.isPending || !bulkFormReady
@@ -614,6 +750,12 @@ export function DsiImportJobResolutionSection({
             {bulkApplySummary}
           </Alert>
         ) : null}
+        {generateResolutionPlan.isError ? (
+          <Alert severity="error">{safeDisplayError(generateResolutionPlan.error)}</Alert>
+        ) : null}
+        {applyResolutionPlan.isError ? (
+          <Alert severity="error">{safeDisplayError(applyResolutionPlan.error)}</Alert>
+        ) : null}
 
         <Typography variant="caption" color="text.secondary">
           Single-row steward (selected grid row)
@@ -700,6 +842,115 @@ export function DsiImportJobResolutionSection({
             onClick={() => void bulkApply.mutateAsync()}
           >
             Apply
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={planDialogOpen}
+        onClose={() => setPlanDialogOpen(false)}
+        fullWidth
+        maxWidth="xl"
+        data-testid="dsi-resolution-plan-dialog"
+      >
+        <DialogTitle>
+          DSI resolution plan
+          {resolutionPlan?.summary && typeof resolutionPlan.summary === 'object' ? (
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
+              <Chip
+                size="small"
+                label={`Total ${String((resolutionPlan.summary as Record<string, unknown>).total ?? '—')}`}
+              />
+              <Chip
+                size="small"
+                color="success"
+                variant="outlined"
+                label={`Ready ${String((resolutionPlan.summary as Record<string, unknown>).ready ?? '—')}`}
+              />
+              <Chip
+                size="small"
+                color="warning"
+                variant="outlined"
+                label={`Needs review / blocked ${String((resolutionPlan.summary as Record<string, unknown>).not_ready ?? '—')}`}
+              />
+            </Stack>
+          ) : null}
+        </DialogTitle>
+        <DialogContent dividers>
+          {planTableRows.length ? (
+            <Table size="small" data-testid="dsi-resolution-plan-table" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell>ID</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Action</TableCell>
+                  <TableCell>Target</TableCell>
+                  <TableCell align="right">Conf.</TableCell>
+                  <TableCell>Plan</TableCell>
+                  <TableCell>Ready</TableCell>
+                  <TableCell sx={{ minWidth: 220 }}>Reason</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {planTableRows.map((r) => {
+                  const id = r.candidate_id;
+                  const ready = r.ready === true;
+                  return (
+                    <TableRow key={String(id)}>
+                      <TableCell>{String(id ?? '')}</TableCell>
+                      <TableCell>{String(r.entity_type ?? '')}</TableCell>
+                      <TableCell>{String(r.candidate_status ?? '')}</TableCell>
+                      <TableCell>{String(r.suggested_action ?? '')}</TableCell>
+                      <TableCell>
+                        {r.suggested_target_id != null && r.suggested_target_id !== ''
+                          ? String(r.suggested_target_id)
+                          : '—'}
+                      </TableCell>
+                      <TableCell align="right">
+                        {typeof r.confidence === 'number' ? r.confidence.toFixed(2) : '—'}
+                      </TableCell>
+                      <TableCell>{String(r.plan_status ?? '')}</TableCell>
+                      <TableCell>
+                        {ready ? (
+                          <Chip size="small" color="success" label="ready" data-testid="dsi-plan-row-ready" />
+                        ) : (
+                          <Chip size="small" color="default" label="review" data-testid="dsi-plan-row-review" />
+                        )}
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: 360, whiteSpace: 'normal' }}>{String(r.reason ?? '')}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              No plan rows. Generate a plan from the section above.
+            </Typography>
+          )}
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
+            <strong>Apply selected ready</strong> uses checkboxes in the grid: only ready plan rows whose candidate id is
+            selected are applied. <strong>Apply all ready</strong> sends every ready row from this plan.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPlanDialogOpen(false)}>Close</Button>
+          <Button
+            variant="outlined"
+            disabled={selectedReadyPlanIds.length === 0 || applyResolutionPlan.isPending}
+            onClick={() => void applyResolutionPlan.mutateAsync(selectedReadyPlanIds)}
+            data-testid="dsi-resolution-plan-apply-selected"
+          >
+            Apply selected ready ({selectedReadyPlanIds.length})
+          </Button>
+          <Button
+            variant="contained"
+            disabled={readyPlanCandidateIds.length === 0 || applyResolutionPlan.isPending}
+            onClick={() => void applyResolutionPlan.mutateAsync(readyPlanCandidateIds)}
+            data-testid="dsi-resolution-plan-apply-all"
+          >
+            {applyResolutionPlan.isPending ? 'Applying…' : `Apply all ready (${readyPlanCandidateIds.length})`}
           </Button>
         </DialogActions>
       </Dialog>

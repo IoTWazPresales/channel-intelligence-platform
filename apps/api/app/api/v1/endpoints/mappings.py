@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.db.session_sync import SessionLocal
@@ -23,6 +24,10 @@ from app.models.ingestion import ImportJob
 from app.models.mapping import EntityMappingQueue
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
 from app.services.imports.distributor_sales_inventory import _norm_key
+from app.services.imports.dsi_resolution_plan import (
+    apply_dsi_resolution_plan_rows,
+    build_dsi_resolution_plan_sync,
+)
 from app.services.imports.dsi_steward_candidate_ops import (
     StewardOpError,
     _first_sample_raw,
@@ -621,6 +626,61 @@ async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: Asyn
         "results": results,
         "totals": _dsi_bulk_totals_from_rows(results),
     }
+
+
+class DsiResolutionPlanGenerateBody(BaseModel):
+    candidate_ids: list[int] | None = Field(default=None, max_length=500)
+    default_region_id: int | None = Field(default=None, ge=1)
+    default_channel_id: int | None = Field(default=None, ge=1)
+
+
+class DsiResolutionPlanApplyBody(BaseModel):
+    candidate_ids: list[int] = Field(..., min_length=1, max_length=500)
+    default_region_id: int | None = Field(default=None, ge=1)
+    default_channel_id: int | None = Field(default=None, ge=1)
+    partner_tier: str | None = Field(default="unmanaged", max_length=32)
+    provisional_notes_summary: str | None = Field(default=None, max_length=512)
+    confirm_for_suspicious_distributor_token: bool = False
+
+
+@router.post("/import-jobs/{job_id}/dsi-resolution-plan", status_code=200)
+async def dsi_resolution_plan_generate(
+    job_id: int, body: DsiResolutionPlanGenerateBody, db: AsyncSession = Depends(get_db)
+):
+    """Transient steward resolution plan for DSI mapping candidates (same rules as validation/steward)."""
+    await _assert_dsi_import_job(db, job_id)
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return build_dsi_resolution_plan_sync(
+            sess,
+            job_id,
+            candidate_ids=body.candidate_ids,
+            default_region_id=body.default_region_id,
+            default_channel_id=body.default_channel_id,
+        )
+
+    try:
+        return await db.run_sync(_work)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/import-jobs/{job_id}/dsi-resolution-plan/apply", status_code=200)
+async def dsi_resolution_plan_apply_endpoint(
+    job_id: int, body: DsiResolutionPlanApplyBody, db: AsyncSession = Depends(get_db)
+):
+    """Apply steward actions for candidates that are still **ready** per regenerated plan (reuse execute_* ops)."""
+    await _assert_dsi_import_job(db, job_id)
+    return await apply_dsi_resolution_plan_rows(
+        db,
+        job_id,
+        body.candidate_ids,
+        default_region_id=body.default_region_id,
+        default_channel_id=body.default_channel_id,
+        partner_tier=body.partner_tier,
+        provisional_notes_summary=body.provisional_notes_summary,
+        confirm_for_suspicious_distributor_token=body.confirm_for_suspicious_distributor_token,
+    )
 
 
 @router.post("/import-jobs/{job_id}/revalidate-distributor-sales-inventory", status_code=200)
