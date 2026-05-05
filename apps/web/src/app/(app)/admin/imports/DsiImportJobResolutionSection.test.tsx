@@ -13,6 +13,7 @@ import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
 const mockApiPost = vi.fn();
 
 vi.mock('@/lib/api', () => ({
+  apiGet: vi.fn(async () => []),
   apiPost: (...args: unknown[]) => mockApiPost(...args),
   safeDisplayError: (e: unknown) => String(e),
 }));
@@ -22,7 +23,7 @@ const hoisted = vi.hoisted(() => {
     id: 101,
     import_job_id: 7,
     source_definition_id: null,
-    entity_type: 'customer_candidate',
+    entity_type: 'customer_dealer_token',
     normalized_key: 'acme_retail',
     dealer_group_token: null,
     row_count: 3,

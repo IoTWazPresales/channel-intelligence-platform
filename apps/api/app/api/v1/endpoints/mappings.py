@@ -1,6 +1,4 @@
 import asyncio
-import secrets
-from datetime import datetime, timezone
 
 from typing import Any, Literal
 
@@ -15,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
-from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimRegion
+from app.models.dimensions import DimCustomer
 from app.models.import_distributor_si import (
     CustomerSourceTokenAlias,
     DistributorSourceTokenAlias,
@@ -27,10 +25,16 @@ from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_C
 from app.services.imports.distributor_sales_inventory import _norm_key
 from app.services.imports.dsi_steward_candidate_ops import (
     StewardOpError,
+    _first_sample_raw,
+    _source_customer_alias_raw_for_dsi_candidate,
+    execute_create_provisional_dsi_customer,
+    execute_create_provisional_dsi_distributor,
     execute_ignore_dsi_candidate,
     execute_map_dsi_customer,
     execute_map_dsi_distributor,
     execute_resolve_dsi_product,
+    preview_create_provisional_dsi_customer,
+    preview_create_provisional_dsi_distributor,
     preview_ignore_dsi_candidate,
     preview_map_dsi_customer,
     preview_map_dsi_distributor,
@@ -149,71 +153,9 @@ async def list_distributor_si_mapping_candidates(job_id: int, db: AsyncSession =
     ]
 
 
-def _first_sample_raw(candidate: ImportEntityMappingCandidate) -> str:
-    samples = candidate.sample_raw_values or []
-    for s in samples:
-        if isinstance(s, str) and s.strip():
-            return s.strip()[:512]
-    if candidate.normalized_key and candidate.normalized_key != "__blank__":
-        return candidate.normalized_key[:512]
-    return ""
-
-
-def _source_customer_alias_raw_for_dsi_candidate(candidate: ImportEntityMappingCandidate) -> str:
-    """Raw source customer name / dealer column evidence for CustomerSourceTokenAlias (not Dealer Name Group).
-
-    Prefer structured ``context.source_customer_name_raw_samples`` from DSI aggregation; fall back to
-    composite ``sample_raw_values`` / ``normalized_key`` only when needed.
-    """
-    ctx = candidate.context if isinstance(candidate.context, dict) else {}
-    samples = ctx.get("source_customer_name_raw_samples")
-    if isinstance(samples, list):
-        for s in samples:
-            if isinstance(s, str) and s.strip():
-                return s.strip()[:512]
-    return _first_sample_raw(candidate)
-
-
 def _blank_customer_normalized_key(norm: str) -> bool:
     t = (norm or "").strip().lower()
     return t in ("", "__blank__", "none", "n/a", "na", "unknown")
-
-
-DISTRIBUTOR_PROVISIONAL_SUSPICIOUS = frozenset(
-    {
-        "open channel",
-        "open_channel",
-        "cash sale",
-        "internal",
-        "n/a",
-        "na",
-        "tbd",
-        "unknown",
-        "misc",
-        "blank",
-        "",
-    }
-)
-
-
-async def _generate_tmp_distributor_code(db: AsyncSession) -> str:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    for _ in range(8):
-        candidate = f"TMP-DIST-{stamp}-{secrets.token_hex(2).upper()}"
-        exists = await db.execute(select(DimDistributor.id).where(DimDistributor.code == candidate))
-        if exists.scalar_one_or_none() is None:
-            return candidate
-    raise HTTPException(status_code=503, detail="Unable to generate a temporary distributor code; retry.")
-
-
-async def _generate_tmp_customer_code(db: AsyncSession) -> str:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    for _ in range(8):
-        candidate = f"TMP-CUST-{stamp}-{secrets.token_hex(2).upper()}"
-        exists = await db.execute(select(DimCustomer.id).where(DimCustomer.code == candidate))
-        if exists.scalar_one_or_none() is None:
-            return candidate
-    raise HTTPException(status_code=503, detail="Unable to generate a temporary customer code; retry.")
 
 
 async def _open_channel_customer_id(db: AsyncSession) -> int:
@@ -317,73 +259,19 @@ async def create_provisional_customer_from_dsi_candidate(
     candidate_id: int, body: CreateProvisionalCustomerBody, db: AsyncSession = Depends(get_db)
 ):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
-    if cand.entity_type != "customer_dealer_token":
-        raise HTTPException(status_code=400, detail="Candidate entity_type is not customer_dealer_token")
-    region = await db.get(DimRegion, body.region_id)
-    if not region:
-        raise HTTPException(status_code=400, detail="Invalid region_id")
-    channel = await db.get(DimChannel, body.channel_id)
-    if not channel:
-        raise HTTPException(status_code=400, detail="Invalid channel_id")
-    pref = None
-    if body.preferred_distributor_id is not None:
-        pref = await db.get(DimDistributor, body.preferred_distributor_id)
-        if not pref:
-            raise HTTPException(status_code=400, detail="Invalid preferred_distributor_id")
-    code = await _generate_tmp_customer_code(db)
-    tier = (body.partner_tier or "unmanaged").strip().lower()
-    if tier not in {"strategic", "tier_1", "tier_2", "tier_3", "core", "long_tail", "unmanaged"}:
-        raise HTTPException(status_code=400, detail="Invalid partner_tier")
-    notes = (body.notes_summary or "").strip() or None
-    base_note = f"Provisional customer created from DSI import candidate {cand.id} (job {cand.import_job_id})."
-    merged_notes = f"{base_note} {notes}" if notes else base_note
-    row = DimCustomer(
-        code=code,
-        name=body.display_name.strip(),
-        customer_status="unverified",
-        partner_tier=tier,
-        notes_summary=merged_notes[:512],
-        region_id=body.region_id,
-        channel_id=body.channel_id,
-        preferred_distributor_id=body.preferred_distributor_id,
-    )
-    db.add(row)
-    await db.flush()
-    raw = _source_customer_alias_raw_for_dsi_candidate(cand)
-    if not raw:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Candidate has no usable raw token sample")
-    nt = _norm_key(raw)
-    alias = CustomerSourceTokenAlias(
-        customer_id=row.id,
-        raw_token=raw[:512],
-        normalized_token=nt[:512],
-        source_definition_id=cand.source_definition_id,
-        distributor_id=None,
-        dealer_group_token=cand.dealer_group_token,
-        status="approved",
-        notes=f"Alias from provisional customer create (candidate {cand.id})",
-        created_from_import_job_id=cand.import_job_id,
-        import_entity_mapping_candidate_id=cand.id,
-    )
-    db.add(alias)
     try:
-        cand.status = "resolved"
-        cand.suggested_entity_id = row.id
-        cand.match_reason = "steward_created_provisional_customer"
-        await db.commit()
-        await db.refresh(row)
-        await db.refresh(alias)
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=409, detail="Could not create customer or alias")
-    return {
-        "ok": True,
-        "customer_id": row.id,
-        "customer_code": row.code,
-        "alias_id": alias.id,
-        "candidate_id": cand.id,
-    }
+        return await execute_create_provisional_dsi_customer(
+            db,
+            cand,
+            display_name_override=body.display_name,
+            region_id=body.region_id,
+            channel_id=body.channel_id,
+            preferred_distributor_id=body.preferred_distributor_id,
+            partner_tier=body.partner_tier,
+            notes_summary=body.notes_summary,
+        )
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @router.post("/import-candidates/{candidate_id}/mark-open-channel", status_code=200)
@@ -463,47 +351,16 @@ async def create_provisional_distributor_from_dsi_candidate(
     candidate_id: int, body: CreateProvisionalDistributorBody, db: AsyncSession = Depends(get_db)
 ):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
-    if cand.entity_type != "distributor_token":
-        raise HTTPException(status_code=400, detail="Candidate entity_type is not distributor_token")
-    nt_check = _norm_key(_first_sample_raw(cand) or cand.normalized_key)
-    if nt_check in DISTRIBUTOR_PROVISIONAL_SUSPICIOUS and not body.confirm_for_suspicious_token:
-        raise HTTPException(
-            status_code=400,
-            detail="Token looks like a placeholder or internal label; set confirm_for_suspicious_token=true to create a provisional distributor anyway.",
-        )
-    code = (body.distributor_code or "").strip() or await _generate_tmp_distributor_code(db)
-    existing = await db.execute(select(DimDistributor.id).where(DimDistributor.code == code))
-    if existing.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=409, detail="distributor_code already exists; omit distributor_code to auto-generate")
-    row = DimDistributor(code=code[:32], name=body.display_name.strip()[:256])
-    db.add(row)
-    await db.flush()
-    raw = _first_sample_raw(cand)
-    if not raw:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Candidate has no usable raw token sample")
-    nt = _norm_key(raw)
-    alias = DistributorSourceTokenAlias(
-        distributor_id=row.id,
-        raw_token=raw[:512],
-        normalized_token=nt[:512],
-        source_definition_id=cand.source_definition_id,
-        status="approved",
-        notes=f"Provisional distributor from candidate {cand.id} (job {cand.import_job_id})",
-        created_from_import_job_id=cand.import_job_id,
-    )
-    db.add(alias)
     try:
-        cand.status = "resolved"
-        cand.suggested_entity_id = row.id
-        cand.match_reason = "steward_created_provisional_distributor"
-        await db.commit()
-        await db.refresh(row)
-        await db.refresh(alias)
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=409, detail="Could not create distributor or alias")
-    return {"ok": True, "distributor_id": row.id, "distributor_code": row.code, "alias_id": alias.id, "candidate_id": cand.id}
+        return await execute_create_provisional_dsi_distributor(
+            db,
+            cand,
+            display_name_override=body.display_name,
+            distributor_code_override=body.distributor_code,
+            confirm_for_suspicious_token=body.confirm_for_suspicious_token,
+        )
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 async def _assert_dsi_import_job(db: AsyncSession, job_id: int) -> ImportJob:
@@ -518,7 +375,14 @@ async def _assert_dsi_import_job(db: AsyncSession, job_id: int) -> ImportJob:
 class DsiBulkStewardBody(BaseModel):
     """Bulk steward preview/apply: same validation rules as single-row endpoints."""
 
-    action: Literal["ignore", "map_customer", "map_distributor", "resolve_product"]
+    action: Literal[
+        "ignore",
+        "map_customer",
+        "map_distributor",
+        "resolve_product",
+        "create_provisional_customer",
+        "create_provisional_distributor",
+    ]
     candidate_ids: list[int] = Field(..., min_length=1, max_length=200)
     notes: str | None = Field(default=None, max_length=2000)
     customer_id: int | None = Field(default=None, ge=1)
@@ -528,6 +392,14 @@ class DsiBulkStewardBody(BaseModel):
     confirm_ineligible_product: bool = False
     audit_note: str | None = Field(default=None, max_length=2000)
     idempotency_key: str | None = Field(default=None, max_length=128)
+    # Shared for bulk provisional customer (per candidate display name is derived — same as steward defaults).
+    region_id: int | None = Field(default=None, ge=1)
+    channel_id: int | None = Field(default=None, ge=1)
+    preferred_distributor_id: int | None = Field(default=None, ge=1)
+    partner_tier: str | None = Field(default="unmanaged", max_length=32)
+    provisional_notes_summary: str | None = Field(default=None, max_length=512)
+    confirm_for_suspicious_distributor_token: bool = False
+    provisional_distributor_code: str | None = Field(default=None, max_length=32)
 
     @model_validator(mode="after")
     def _payload_for_action(self) -> Self:
@@ -540,6 +412,9 @@ class DsiBulkStewardBody(BaseModel):
         elif self.action == "resolve_product":
             if self.product_id is None:
                 raise ValueError("product_id is required for resolve_product")
+        elif self.action == "create_provisional_customer":
+            if self.region_id is None or self.channel_id is None:
+                raise ValueError("region_id and channel_id are required for create_provisional_customer")
         return self
 
 
@@ -595,6 +470,25 @@ async def dsi_steward_bulk_preview(job_id: int, body: DsiBulkStewardBody, db: As
                 cand,
                 distributor_id=int(body.distributor_id or 0),
                 raw_token=body.raw_token,
+            )
+        elif body.action == "create_provisional_customer":
+            pv = await preview_create_provisional_dsi_customer(
+                db,
+                cand,
+                display_name_override=None,
+                region_id=int(body.region_id or 0),
+                channel_id=int(body.channel_id or 0),
+                preferred_distributor_id=body.preferred_distributor_id,
+                partner_tier=body.partner_tier,
+                notes_summary=body.provisional_notes_summary,
+            )
+        elif body.action == "create_provisional_distributor":
+            pv = await preview_create_provisional_dsi_distributor(
+                db,
+                cand,
+                display_name_override=None,
+                distributor_code_override=body.provisional_distributor_code,
+                confirm_for_suspicious_token=body.confirm_for_suspicious_distributor_token,
             )
         else:
             pv = await preview_resolve_dsi_product(
@@ -666,6 +560,25 @@ async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: Asyn
                     cand,
                     distributor_id=int(body.distributor_id or 0),
                     raw_token=body.raw_token,
+                )
+            elif body.action == "create_provisional_customer":
+                out = await execute_create_provisional_dsi_customer(
+                    db,
+                    cand,
+                    display_name_override=None,
+                    region_id=int(body.region_id or 0),
+                    channel_id=int(body.channel_id or 0),
+                    preferred_distributor_id=body.preferred_distributor_id,
+                    partner_tier=body.partner_tier,
+                    notes_summary=body.provisional_notes_summary,
+                )
+            elif body.action == "create_provisional_distributor":
+                out = await execute_create_provisional_dsi_distributor(
+                    db,
+                    cand,
+                    display_name_override=None,
+                    distributor_code_override=body.provisional_distributor_code,
+                    confirm_for_suspicious_token=body.confirm_for_suspicious_distributor_token,
                 )
             else:
                 out = await execute_resolve_dsi_product(

@@ -52,3 +52,35 @@ def test_dsi_bulk_body_resolve_with_payload() -> None:
         audit_note="steward bulk historical evidence ok",
     )
     assert b.product_id == 42
+
+
+def test_dsi_bulk_body_create_provisional_customer_requires_region_channel() -> None:
+    from app.api.v1.endpoints.mappings import DsiBulkStewardBody
+
+    with pytest.raises(ValidationError):
+        DsiBulkStewardBody(action="create_provisional_customer", candidate_ids=[1], region_id=10, channel_id=None)
+
+
+def test_dsi_bulk_body_create_provisional_customer_ok() -> None:
+    from app.api.v1.endpoints.mappings import DsiBulkStewardBody
+
+    b = DsiBulkStewardBody(
+        action="create_provisional_customer",
+        candidate_ids=[1, 2],
+        region_id=10,
+        channel_id=20,
+        provisional_notes_summary="batch note",
+    )
+    assert b.region_id == 10
+    assert b.provisional_notes_summary == "batch note"
+
+
+def test_dsi_bulk_body_create_provisional_distributor_ok() -> None:
+    from app.api.v1.endpoints.mappings import DsiBulkStewardBody
+
+    b = DsiBulkStewardBody(
+        action="create_provisional_distributor",
+        candidate_ids=[3],
+        confirm_for_suspicious_distributor_token=True,
+    )
+    assert b.confirm_for_suspicious_distributor_token is True
