@@ -8,7 +8,7 @@ import { Box } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { usePathname } from 'next/navigation';
 import type { CSSProperties } from 'react';
-import { useMemo } from 'react';
+import { forwardRef, useMemo } from 'react';
 
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-material.css';
@@ -22,7 +22,10 @@ type Props<T> = {
   gridOptions?: GridOptions<T>;
 };
 
-export function EnterpriseDataGrid<T>({ rowData, columnDefs, height = 480, gridOptions }: Props<T>) {
+export const EnterpriseDataGrid = forwardRef(function EnterpriseDataGrid<T>(
+  { rowData, columnDefs, height = 480, gridOptions }: Props<T>,
+  ref: React.ForwardedRef<AgGridReact<T>>
+) {
   const pathname = usePathname();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -86,6 +89,7 @@ export function EnterpriseDataGrid<T>({ rowData, columnDefs, height = 480, gridO
   return (
     <Box className={gridClass} sx={shellSx} style={agVarsInline}>
       <AgGridReact
+        ref={ref}
         key={pathname ?? '_'}
         rowData={rowData}
         columnDefs={columnDefs}
@@ -98,4 +102,4 @@ export function EnterpriseDataGrid<T>({ rowData, columnDefs, height = 480, gridO
       />
     </Box>
   );
-}
+});

@@ -2,26 +2,40 @@ import asyncio
 import secrets
 from datetime import datetime, timezone
 
+from typing import Any, Literal
+
+from typing_extensions import Self
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select
+from pydantic import BaseModel, Field, model_validator
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
-from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct, DimRegion
+from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimRegion
 from app.models.import_distributor_si import (
     CustomerSourceTokenAlias,
     DistributorSourceTokenAlias,
     ImportEntityMappingCandidate,
 )
 from app.models.ingestion import ImportJob
-from app.models.mapping import EntityMappingQueue, ProductAlias
+from app.models.mapping import EntityMappingQueue
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
 from app.services.imports.distributor_sales_inventory import _norm_key
-from app.services.imports.dsi_product_steward import raw_product_token_for_dsi_candidate, validate_dsi_product_resolve
+from app.services.imports.dsi_steward_candidate_ops import (
+    StewardOpError,
+    execute_ignore_dsi_candidate,
+    execute_map_dsi_customer,
+    execute_map_dsi_distributor,
+    execute_resolve_dsi_product,
+    preview_ignore_dsi_candidate,
+    preview_map_dsi_customer,
+    preview_map_dsi_distributor,
+    preview_resolve_dsi_product,
+)
 
 router = APIRouter()
 
@@ -271,92 +285,18 @@ async def resolve_dsi_product_candidate(
     candidate_id: int, body: ResolveProductCandidateBody, db: AsyncSession = Depends(get_db)
 ):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
-    if cand.entity_type != "product_identifier":
-        raise HTTPException(status_code=400, detail="Candidate entity_type is not product_identifier")
-    if cand.status in ("resolved", "ignored", "waived_open_channel"):
-        raise HTTPException(
-            status_code=409,
-            detail="Candidate is already in a terminal state; refresh the mapping queue.",
-        )
-    prod = await db.get(DimProduct, body.product_id)
-    if not prod:
-        raise HTTPException(status_code=400, detail="product_id not found")
-    ctx = cand.context if isinstance(cand.context, dict) else {}
-    raw = raw_product_token_for_dsi_candidate(
-        sample_raw_values=cand.sample_raw_values if isinstance(cand.sample_raw_values, list) else None,
-        normalized_key=cand.normalized_key or "",
-        raw_override=body.raw_token,
-    )
-    if not raw.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Could not determine raw product token for alias; pass raw_token or ensure sample_raw_values is populated.",
-        )
-    nt = _norm_key(raw)
-    if not nt:
-        raise HTTPException(status_code=400, detail="Token is empty after normalization")
-    raw_val = raw.strip()[:256]
     try:
-        validate_dsi_product_resolve(
-            context=ctx,
-            selected_product_id=body.product_id,
-            selected_product=prod,
+        return await execute_resolve_dsi_product(
+            db,
+            cand,
+            product_id=body.product_id,
+            raw_token=body.raw_token,
             confirm_ineligible_product=body.confirm_ineligible_product,
             audit_note=body.audit_note,
+            idempotency_key=body.idempotency_key,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    existing = (
-        await db.execute(select(ProductAlias).where(func.lower(ProductAlias.alias_value) == raw_val.lower()))
-    ).scalars().first()
-    alias_row: ProductAlias
-    if existing is not None:
-        if int(existing.product_id) != int(body.product_id):
-            raise HTTPException(
-                status_code=409,
-                detail="This source token is already aliased to a different product; resolve the conflict in Product Master first.",
-            )
-        alias_row = existing
-    else:
-        alias_row = ProductAlias(
-            product_id=int(body.product_id),
-            alias_value=raw_val,
-            alias_kind="source_import_token",
-            confidence="steward_approved",
-        )
-        db.add(alias_row)
-    try:
-        await db.flush()
-        cand.status = "resolved"
-        cand.suggested_entity_id = int(body.product_id)
-        cand.match_reason = "steward_resolve_product_alias"
-        ctx2 = dict(ctx)
-        ctx2["steward_product_resolution"] = {
-            "product_id": int(body.product_id),
-            "product_alias_id": int(alias_row.id),
-            "raw_token_used": raw_val,
-            "normalized_token": nt[:512],
-            "import_job_id": int(cand.import_job_id),
-            "import_entity_mapping_candidate_id": int(cand.id),
-            "confirm_ineligible_product": bool(body.confirm_ineligible_product),
-            "audit_note": (body.audit_note or "").strip()[:2000] if body.confirm_ineligible_product else None,
-            "idempotency_key": (body.idempotency_key or "").strip()[:128] or None,
-        }
-        cand.context = ctx2
-        await db.commit()
-        await db.refresh(alias_row)
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=409, detail="Could not create product alias (duplicate or constraint violation)"
-        )
-    return {
-        "ok": True,
-        "candidate_id": cand.id,
-        "product_id": int(body.product_id),
-        "product_alias_id": int(alias_row.id),
-    }
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @router.post("/import-candidates/{candidate_id}/map-customer", status_code=200)
@@ -364,40 +304,12 @@ async def map_dsi_candidate_to_customer(
     candidate_id: int, body: MapCustomerBody, db: AsyncSession = Depends(get_db)
 ):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
-    if cand.entity_type != "customer_dealer_token":
-        raise HTTPException(status_code=400, detail="Candidate entity_type is not customer_dealer_token")
-    cust = await db.get(DimCustomer, body.customer_id)
-    if not cust:
-        raise HTTPException(status_code=400, detail="customer_id not found")
-    raw = (body.raw_token or _source_customer_alias_raw_for_dsi_candidate(cand)).strip()
-    if not raw:
-        raise HTTPException(status_code=400, detail="raw_token is required (no samples on candidate)")
-    nt = _norm_key(raw)
-    if not nt:
-        raise HTTPException(status_code=400, detail="raw_token is empty after normalization")
-    alias = CustomerSourceTokenAlias(
-        customer_id=body.customer_id,
-        raw_token=raw[:512],
-        normalized_token=nt[:512],
-        source_definition_id=cand.source_definition_id,
-        distributor_id=None,
-        dealer_group_token=cand.dealer_group_token,
-        status="approved",
-        notes=f"Mapped from import candidate {cand.id} (job {cand.import_job_id})",
-        created_from_import_job_id=cand.import_job_id,
-        import_entity_mapping_candidate_id=cand.id,
-    )
-    db.add(alias)
     try:
-        cand.status = "resolved"
-        cand.suggested_entity_id = body.customer_id
-        cand.match_reason = "steward_map_existing_customer"
-        await db.commit()
-        await db.refresh(alias)
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=409, detail="Could not create alias (duplicate or invalid reference)")
-    return {"ok": True, "alias_id": alias.id, "customer_id": body.customer_id, "candidate_id": cand.id}
+        return await execute_map_dsi_customer(
+            db, cand, customer_id=body.customer_id, raw_token=body.raw_token
+        )
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @router.post("/import-candidates/{candidate_id}/create-provisional-customer", status_code=200)
@@ -527,15 +439,10 @@ async def mark_dsi_candidate_open_channel(
 @router.post("/import-candidates/{candidate_id}/ignore", status_code=200)
 async def ignore_dsi_candidate(candidate_id: int, body: IgnoreCandidateBody, db: AsyncSession = Depends(get_db)):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
-    if cand.entity_type not in {"customer_dealer_token", "distributor_token", "product_identifier"}:
-        raise HTTPException(status_code=400, detail="Unsupported candidate entity_type for ignore")
-    cand.status = "ignored"
-    if body.notes:
-        ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
-        ctx["steward_ignore_notes"] = body.notes[:2000]
-        cand.context = ctx
-    await db.commit()
-    return {"ok": True, "candidate_id": cand.id, "status": cand.status}
+    try:
+        return await execute_ignore_dsi_candidate(db, cand, notes=body.notes)
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @router.post("/import-candidates/{candidate_id}/map-distributor", status_code=200)
@@ -543,37 +450,12 @@ async def map_dsi_candidate_to_distributor(
     candidate_id: int, body: MapDistributorBody, db: AsyncSession = Depends(get_db)
 ):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
-    if cand.entity_type != "distributor_token":
-        raise HTTPException(status_code=400, detail="Candidate entity_type is not distributor_token")
-    dist = await db.get(DimDistributor, body.distributor_id)
-    if not dist:
-        raise HTTPException(status_code=400, detail="distributor_id not found")
-    raw = (body.raw_token or _first_sample_raw(cand)).strip()
-    if not raw:
-        raise HTTPException(status_code=400, detail="raw_token is required (no samples on candidate)")
-    nt = _norm_key(raw)
-    if not nt:
-        raise HTTPException(status_code=400, detail="raw_token is empty after normalization")
-    alias = DistributorSourceTokenAlias(
-        distributor_id=body.distributor_id,
-        raw_token=raw[:512],
-        normalized_token=nt[:512],
-        source_definition_id=cand.source_definition_id,
-        status="approved",
-        notes=f"Mapped from import candidate {cand.id} (job {cand.import_job_id})",
-        created_from_import_job_id=cand.import_job_id,
-    )
-    db.add(alias)
     try:
-        cand.status = "resolved"
-        cand.suggested_entity_id = body.distributor_id
-        cand.match_reason = "steward_map_existing_distributor"
-        await db.commit()
-        await db.refresh(alias)
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=409, detail="Could not create distributor alias")
-    return {"ok": True, "alias_id": alias.id, "distributor_id": body.distributor_id, "candidate_id": cand.id}
+        return await execute_map_dsi_distributor(
+            db, cand, distributor_id=body.distributor_id, raw_token=body.raw_token
+        )
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @router.post("/import-candidates/{candidate_id}/create-provisional-distributor", status_code=200)
@@ -624,13 +506,213 @@ async def create_provisional_distributor_from_dsi_candidate(
     return {"ok": True, "distributor_id": row.id, "distributor_code": row.code, "alias_id": alias.id, "candidate_id": cand.id}
 
 
-@router.post("/import-jobs/{job_id}/revalidate-distributor-sales-inventory", status_code=200)
-async def revalidate_dsi_import_job(job_id: int, db: AsyncSession = Depends(get_db)):
+async def _assert_dsi_import_job(db: AsyncSession, job_id: int) -> ImportJob:
     job = await db.get(ImportJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Import job not found")
     if (job.template_slug or "") != "distributor_inventory":
         raise HTTPException(status_code=400, detail="Job is not a distributor sales & inventory import")
+    return job
+
+
+class DsiBulkStewardBody(BaseModel):
+    """Bulk steward preview/apply: same validation rules as single-row endpoints."""
+
+    action: Literal["ignore", "map_customer", "map_distributor", "resolve_product"]
+    candidate_ids: list[int] = Field(..., min_length=1, max_length=200)
+    notes: str | None = Field(default=None, max_length=2000)
+    customer_id: int | None = Field(default=None, ge=1)
+    distributor_id: int | None = Field(default=None, ge=1)
+    product_id: int | None = Field(default=None, ge=1)
+    raw_token: str | None = Field(default=None, max_length=512)
+    confirm_ineligible_product: bool = False
+    audit_note: str | None = Field(default=None, max_length=2000)
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+    @model_validator(mode="after")
+    def _payload_for_action(self) -> Self:
+        if self.action == "map_customer":
+            if self.customer_id is None:
+                raise ValueError("customer_id is required for map_customer")
+        elif self.action == "map_distributor":
+            if self.distributor_id is None:
+                raise ValueError("distributor_id is required for map_distributor")
+        elif self.action == "resolve_product":
+            if self.product_id is None:
+                raise ValueError("product_id is required for resolve_product")
+        return self
+
+
+def _dsi_bulk_totals_from_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    ok_idx = [r for r in rows if r.get("ok")]
+    rows_affected = sum(int(r.get("row_count") or 0) for r in ok_idx)
+    units = sum(float(r.get("total_units") or 0) for r in ok_idx)
+    value = sum(float(r.get("total_reported_value") or 0) for r in ok_idx)
+    return {
+        "ok_count": len(ok_idx),
+        "not_ok_count": len(rows) - len(ok_idx),
+        "staging_rows_affected": rows_affected,
+        "total_units_affected": units,
+        "total_reported_value_affected": value,
+    }
+
+
+@router.post("/import-jobs/{job_id}/dsi-steward-bulk-preview", status_code=200)
+async def dsi_steward_bulk_preview(job_id: int, body: DsiBulkStewardBody, db: AsyncSession = Depends(get_db)):
+    await _assert_dsi_import_job(db, job_id)
+    res = await db.execute(
+        select(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.import_job_id == job_id,
+            ImportEntityMappingCandidate.id.in_(body.candidate_ids),
+        )
+    )
+    found = {c.id: c for c in res.scalars().all()}
+    results: list[dict[str, Any]] = []
+    for cid in body.candidate_ids:
+        if cid not in found:
+            results.append(
+                {
+                    "candidate_id": cid,
+                    "ok": False,
+                    "skip_reason": "not_found_or_wrong_job",
+                    "detail": "Candidate not found for this job",
+                }
+            )
+            continue
+        cand = found[cid]
+        if body.action == "ignore":
+            pv = await preview_ignore_dsi_candidate(cand, notes=body.notes)
+        elif body.action == "map_customer":
+            pv = await preview_map_dsi_customer(
+                db,
+                cand,
+                customer_id=int(body.customer_id or 0),
+                raw_token=body.raw_token,
+            )
+        elif body.action == "map_distributor":
+            pv = await preview_map_dsi_distributor(
+                db,
+                cand,
+                distributor_id=int(body.distributor_id or 0),
+                raw_token=body.raw_token,
+            )
+        else:
+            pv = await preview_resolve_dsi_product(
+                db,
+                cand,
+                product_id=int(body.product_id or 0),
+                raw_token=body.raw_token,
+                confirm_ineligible_product=body.confirm_ineligible_product,
+                audit_note=body.audit_note,
+            )
+        results.append(
+            {
+                "candidate_id": cand.id,
+                "entity_type": cand.entity_type,
+                "candidate_status": cand.status,
+                "row_count": cand.row_count,
+                "total_units": float(cand.total_units) if cand.total_units is not None else None,
+                "total_reported_value": float(cand.total_reported_value)
+                if cand.total_reported_value is not None
+                else None,
+                "sample_raw_preview": (cand.sample_raw_values or [])[:3]
+                if isinstance(cand.sample_raw_values, list)
+                else [],
+                **pv,
+            }
+        )
+    return {
+        "import_job_id": job_id,
+        "action": body.action,
+        "results": results,
+        "totals": _dsi_bulk_totals_from_rows(results),
+    }
+
+
+@router.post("/import-jobs/{job_id}/dsi-steward-bulk-apply", status_code=200)
+async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: AsyncSession = Depends(get_db)):
+    await _assert_dsi_import_job(db, job_id)
+    results: list[dict[str, Any]] = []
+    for cid in body.candidate_ids:
+        cand = await db.get(ImportEntityMappingCandidate, cid)
+        if cand is None or cand.import_job_id != job_id:
+            results.append(
+                {
+                    "candidate_id": cid,
+                    "ok": False,
+                    "detail": "Candidate not found for this job",
+                    "row_count": None,
+                    "total_units": None,
+                    "total_reported_value": None,
+                }
+            )
+            continue
+        rc = cand.row_count
+        tu = float(cand.total_units) if cand.total_units is not None else None
+        trv = float(cand.total_reported_value) if cand.total_reported_value is not None else None
+        try:
+            if body.action == "ignore":
+                out = await execute_ignore_dsi_candidate(db, cand, notes=body.notes)
+            elif body.action == "map_customer":
+                out = await execute_map_dsi_customer(
+                    db,
+                    cand,
+                    customer_id=int(body.customer_id or 0),
+                    raw_token=body.raw_token,
+                )
+            elif body.action == "map_distributor":
+                out = await execute_map_dsi_distributor(
+                    db,
+                    cand,
+                    distributor_id=int(body.distributor_id or 0),
+                    raw_token=body.raw_token,
+                )
+            else:
+                out = await execute_resolve_dsi_product(
+                    db,
+                    cand,
+                    product_id=int(body.product_id or 0),
+                    raw_token=body.raw_token,
+                    confirm_ineligible_product=body.confirm_ineligible_product,
+                    audit_note=body.audit_note,
+                    idempotency_key=body.idempotency_key,
+                )
+            results.append(
+                {
+                    "candidate_id": cid,
+                    "ok": True,
+                    "entity_type": cand.entity_type,
+                    "result": out,
+                    "row_count": rc,
+                    "total_units": tu,
+                    "total_reported_value": trv,
+                }
+            )
+        except StewardOpError as exc:
+            results.append(
+                {
+                    "candidate_id": cid,
+                    "ok": False,
+                    "detail": exc.detail,
+                    "row_count": rc,
+                    "total_units": tu,
+                    "total_reported_value": trv,
+                }
+            )
+    ok_n = sum(1 for r in results if r.get("ok"))
+    return {
+        "import_job_id": job_id,
+        "action": body.action,
+        "applied": ok_n,
+        "failed": len(results) - ok_n,
+        "results": results,
+        "totals": _dsi_bulk_totals_from_rows(results),
+    }
+
+
+@router.post("/import-jobs/{job_id}/revalidate-distributor-sales-inventory", status_code=200)
+async def revalidate_dsi_import_job(job_id: int, db: AsyncSession = Depends(get_db)):
+    await _assert_dsi_import_job(db, job_id)
 
     def _run() -> ImportJob:
         with SessionLocal() as s:
