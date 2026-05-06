@@ -8,12 +8,12 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.models.dimensions import DimChannel, DimRegion
-from app.models.import_distributor_si import ImportEntityMappingCandidate
+from app.models.import_distributor_si import ChannelSourceTokenAlias, ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
 from app.services.imports.distributor_sales_inventory import (
     ProductResolutionIndex,
@@ -63,17 +63,52 @@ def _resolve_dim_region_from_source(session: Session, raw: str | None) -> tuple[
     return None, "no_catalog_match"
 
 
-def _resolve_dim_channel_from_source(session: Session, raw: str | None) -> tuple[int | None, str | None]:
+def _alias_channel_id_for_dsi(session: Session, source_id: int | None, normalized_token: str) -> tuple[int | None, str | None]:
+    """Match distributor alias semantics: global + source-specific rows; exact normalized token only."""
+    nt = (normalized_token or "").strip()
+    if not nt:
+        return None, None
+    q = select(ChannelSourceTokenAlias.channel_id).where(
+        ChannelSourceTokenAlias.normalized_token == nt,
+        ChannelSourceTokenAlias.status == "approved",
+    )
+    if source_id is not None:
+        q = q.where(
+            or_(
+                ChannelSourceTokenAlias.source_definition_id.is_(None),
+                ChannelSourceTokenAlias.source_definition_id == source_id,
+            )
+        )
+    rows = list(dict.fromkeys(session.scalars(q).all()))
+    if len(rows) == 1:
+        return int(rows[0]), "source_channel_token_alias"
+    if len(rows) > 1:
+        return None, "conflicting_channel_token_aliases"
+    return None, None
+
+
+def _resolve_dim_channel_from_source(
+    session: Session,
+    raw: str | None,
+    *,
+    source_definition_id: int | None = None,
+) -> tuple[int | None, str | None]:
     s = (raw or "").strip()
     if not s:
         return None, "blank"
     row = session.scalar(select(DimChannel).where(func.lower(DimChannel.code) == s.lower()))
     if row is not None:
-        return int(row.id), None
+        return int(row.id), "catalog_match"
     nk = _norm_key(s)
     row = session.scalar(select(DimChannel).where(func.lower(DimChannel.name) == nk))
     if row is not None:
-        return int(row.id), None
+        return int(row.id), "catalog_match"
+
+    cid, alias_reason = _alias_channel_id_for_dsi(session, source_definition_id, nk)
+    if cid is not None:
+        return cid, alias_reason or "source_channel_token_alias"
+    if alias_reason == "conflicting_channel_token_aliases":
+        return None, alias_reason
     return None, "no_catalog_match"
 
 
@@ -101,15 +136,26 @@ def _provisional_geo_dimension_message(
     if detail == "no_catalog_match":
         tok = (raw_token or "").strip()[:160] or "(blank)"
         return (
-            f'Source {dim_short} "{tok}" does not match any catalog {dim_short} code or name — '
+            f'Source {dim_short} "{tok}" has no matching catalog code/name and no approved source-token mapping — '
             f"pick a catalog row, optional global fallback, or leave unassigned."
+        )
+    if detail == "conflicting_channel_token_aliases":
+        tok = (raw_token or "").strip()[:160] or "(token)"
+        return (
+            f'Source {dim_short} "{tok}" matches multiple approved channel token mappings — '
+            f"fix alias data or use a row override."
         )
     if detail == "blank":
         return f"Source {dim_short} cell was empty after normalization."
     return f"{dim_long}: {detail}"
 
 
-def _resolve_source_geo_from_ctx(session: Session, ctx: dict[str, Any]) -> dict[str, Any]:
+def _resolve_source_geo_from_ctx(
+    session: Session,
+    ctx: dict[str, Any],
+    *,
+    source_definition_id: int | None = None,
+) -> dict[str, Any]:
     """Derive catalog IDs from aggregated DSI source region/channel evidence (per candidate context)."""
     reg_conflict = bool(ctx.get("provisional_region_conflict"))
     ch_conflict = bool(ctx.get("provisional_channel_conflict"))
@@ -140,6 +186,8 @@ def _resolve_source_geo_from_ctx(session: Session, ctx: dict[str, Any]) -> dict[
             out["source_region_resolved_id"] = rid
             if rid is None:
                 out["source_region_resolution_detail"] = reason or "unresolved"
+            else:
+                out["source_region_resolution_detail"] = "catalog_match" if reason is None else reason
         elif len(uniq_r) == 0:
             out["source_region_resolution_detail"] = "missing_source_evidence"
 
@@ -151,10 +199,14 @@ def _resolve_source_geo_from_ctx(session: Session, ctx: dict[str, Any]) -> dict[
             raw_pick_c = _pick_raw_for_norm(ch_samples if isinstance(ch_samples, list) else [], uniq_c[0])
             if raw_pick_c:
                 out["source_channel_raw_token"] = str(raw_pick_c).strip()[:512]
-            cid, reason_c = _resolve_dim_channel_from_source(session, raw_pick_c)
+            cid, reason_c = _resolve_dim_channel_from_source(
+                session, raw_pick_c, source_definition_id=source_definition_id
+            )
             out["source_channel_resolved_id"] = cid
             if cid is None:
                 out["source_channel_resolution_detail"] = reason_c or "unresolved"
+            else:
+                out["source_channel_resolution_detail"] = reason_c or "catalog_match"
         elif len(uniq_c) == 0:
             out["source_channel_resolution_detail"] = "missing_source_evidence"
 
@@ -185,10 +237,12 @@ def derive_effective_provisional_customer_geo_sync(
     *,
     default_region_id: int | None,
     default_channel_id: int | None,
+    source_definition_id: int | None = None,
 ) -> dict[str, Any]:
     """Shared by resolution plan rows and bulk provisional customer preview/apply."""
     ctx = cand.context if isinstance(cand.context, dict) else {}
-    geo = _resolve_source_geo_from_ctx(session, ctx)
+    src_def = source_definition_id if source_definition_id is not None else cand.source_definition_id
+    geo = _resolve_source_geo_from_ctx(session, ctx, source_definition_id=src_def)
     src_r = geo.get("source_region_resolved_id")
     src_c = geo.get("source_channel_resolved_id")
     src_r = int(src_r) if src_r is not None else None
@@ -250,9 +304,15 @@ def derive_effective_provisional_customer_geo_sync(
             dim_long="channel / route-to-market",
         )
     elif src_c is not None:
-        source_channel_resolution_message = (
-            f"File → catalog channel: {cc or '?'}" + (f" — {cn}" if cn else "") + "."
-        )
+        ch_detail = geo.get("source_channel_resolution_detail")
+        if ch_detail == "source_channel_token_alias":
+            source_channel_resolution_message = (
+                f"Approved source channel token → catalog channel: {cc or '?'}" + (f" — {cn}" if cn else "") + "."
+            )
+        else:
+            source_channel_resolution_message = (
+                f"File → catalog channel: {cc or '?'}" + (f" — {cn}" if cn else "") + "."
+            )
     else:
         source_channel_resolution_message = _provisional_geo_dimension_message(
             detail=dc if isinstance(dc, str) else None,
@@ -451,6 +511,7 @@ def plan_dsi_candidate_sync(
                 cand,
                 default_region_id=default_region_id,
                 default_channel_id=default_channel_id,
+                source_definition_id=source_def_id,
             )
             return {
                 **base,
@@ -523,6 +584,7 @@ def plan_dsi_candidate_sync(
             cand,
             default_region_id=default_region_id,
             default_channel_id=default_channel_id,
+            source_definition_id=source_def_id,
         )
         geo_conflict = bool(geo.get("provisional_region_conflict") or geo.get("provisional_channel_conflict"))
         if geo_conflict:

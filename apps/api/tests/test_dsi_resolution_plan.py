@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.services.imports.dsi_resolution_plan import (
+    _resolve_dim_channel_from_source,
     derive_effective_provisional_customer_geo_sync,
     merge_resolution_plan_row_for_apply,
     plan_dsi_candidate_sync,
@@ -543,7 +544,7 @@ def test_plan_customer_provisional_unresolved_source_includes_raw_in_message() -
     assert out["suggested_action"] == "create_provisional_customer"
     msg = str(out.get("source_region_resolution_message") or "")
     assert "Eastern Cape" in msg
-    assert "no_catalog_match" in msg or "does not match" in msg
+    assert "no_catalog_match" in msg or "no approved source-token mapping" in msg or "has no matching catalog" in msg
 
 
 def test_plan_customer_provisional_geo_conflict_not_ready() -> None:
@@ -595,6 +596,110 @@ def test_merge_provisional_geo_conflict_requires_row_overrides() -> None:
     )
     assert m["effective_ready"] is False
     assert "provisional_geo_conflict_requires_row_region_channel_override" in m["blockers"]
+
+
+def test_resolve_dim_channel_prefers_catalog_before_alias() -> None:
+    ch = MagicMock()
+    ch.id = 404
+    sess = MagicMock()
+    sess.scalar = MagicMock(return_value=ch)
+    cid, reason = _resolve_dim_channel_from_source(sess, "RET", source_definition_id=1)
+    assert cid == 404
+    assert reason == "catalog_match"
+    sess.scalars.assert_not_called()
+
+
+def test_resolve_dim_channel_uses_approved_alias_when_catalog_misses() -> None:
+    sess = MagicMock()
+    sess.scalar = MagicMock(return_value=None)
+    sess.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[303])))
+    cid, reason = _resolve_dim_channel_from_source(sess, "Con_Open Channel", source_definition_id=9)
+    assert cid == 303
+    assert reason == "source_channel_token_alias"
+
+
+def test_resolve_dim_channel_conflict_when_multiple_alias_targets() -> None:
+    sess = MagicMock()
+    sess.scalar = MagicMock(return_value=None)
+    sess.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[303, 404])))
+    cid, reason = _resolve_dim_channel_from_source(sess, "Con_Open Channel", source_definition_id=9)
+    assert cid is None
+    assert reason == "conflicting_channel_token_aliases"
+
+
+def test_plan_customer_provisional_resolves_channel_via_token_alias() -> None:
+    sess = MagicMock()
+    sess.scalar = MagicMock(return_value=None)
+    sess.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[202])))
+    mc = MagicMock()
+    mc.id = 202
+    mc.code = "OPEN_CH"
+    mc.name = "Open Channel"
+
+    def fake_get(_m: object, pk: object) -> MagicMock | None:
+        if int(pk) == 202:
+            return mc
+        return None
+
+    sess.get = MagicMock(side_effect=fake_get)
+    job = MagicMock()
+    job.source.id = 9
+    prod_idx = MagicMock()
+    cand = _cand(
+        entity_type="customer_dealer_token",
+        context={
+            "source_customer_name_raw_samples": ["New Customer"],
+            "dealer_group_account_raw": "DGNEW",
+            "source_channel_evidence_norms": ["con_open channel"],
+            "source_channel_raw_samples": ["Con_Open Channel"],
+        },
+    )
+    with patch(
+        "app.services.imports.dsi_resolution_plan.effective_dsi_customer_primary_for_resolution",
+        return_value=("New Customer", []),
+    ), patch(
+        "app.services.imports.dsi_resolution_plan._resolve_customer",
+        return_value=(None, ["nomatch"]),
+    ):
+        out = plan_dsi_candidate_sync(sess, cand, job, prod_idx, default_region_id=None, default_channel_id=None)
+    assert out["suggested_action"] == "create_provisional_customer"
+    assert out.get("suggested_channel_id") == 202
+    assert out.get("effective_channel_id") == 202
+    msg = str(out.get("source_channel_resolution_message") or "")
+    assert "Approved source channel token" in msg or "OPEN_CH" in msg
+
+
+def test_plan_customer_provisional_channel_alias_conflict_not_ready() -> None:
+    sess = MagicMock()
+    sess.scalar = MagicMock(return_value=None)
+    sess.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[201, 202])))
+    job = MagicMock()
+    job.source.id = 9
+    prod_idx = MagicMock()
+    cand = _cand(
+        entity_type="customer_dealer_token",
+        context={
+            "source_customer_name_raw_samples": ["New Customer"],
+            "dealer_group_account_raw": "DGNEW",
+            "source_channel_evidence_norms": ["con_open channel"],
+            "source_channel_raw_samples": ["Con_Open Channel"],
+        },
+    )
+    with patch(
+        "app.services.imports.dsi_resolution_plan.effective_dsi_customer_primary_for_resolution",
+        return_value=("New Customer", []),
+    ), patch(
+        "app.services.imports.dsi_resolution_plan._resolve_customer",
+        return_value=(None, ["nomatch"]),
+    ):
+        out = plan_dsi_candidate_sync(sess, cand, job, prod_idx, default_region_id=10, default_channel_id=20)
+    assert out["suggested_action"] == "create_provisional_customer"
+    assert out["ready"] is True
+    assert out.get("suggested_channel_id") is None
+    assert out.get("used_global_fallback_channel") is True
+    assert int(out.get("effective_channel_id") or 0) == 20
+    det = str(out.get("source_channel_resolution_message") or "")
+    assert "multiple approved channel" in det.lower() or "alias" in det.lower()
 
 
 def test_merge_provisional_geo_conflict_ok_when_row_sets_region_channel() -> None:

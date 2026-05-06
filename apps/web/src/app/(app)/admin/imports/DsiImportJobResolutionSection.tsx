@@ -265,6 +265,69 @@ function dsiSourceRegionChannelLines(ctx: Record<string, unknown> | null | undef
   return { region, channel };
 }
 
+function planCatalogChannelCell(
+  r: Record<string, unknown> | undefined,
+  ctx: Record<string, unknown> | null | undefined
+): string {
+  if (!r) return '';
+  const sid = r.suggested_channel_id;
+  const cc = r.suggested_channel_code;
+  const cn = r.suggested_channel_name;
+  if (sid != null && sid !== '') {
+    if (typeof cc === 'string' && cc.trim())
+      return `${cc.trim()}${typeof cn === 'string' && cn.trim() ? ` — ${cn.trim()}` : ''}`;
+    return `id ${String(sid)}`;
+  }
+  const srcCh = dsiSourceRegionChannelLines(ctx ?? null).channel;
+  if (srcCh) return 'No catalog mapping';
+  return '';
+}
+
+function planGeoReadinessHint(
+  r: Record<string, unknown> | undefined,
+  ctx: Record<string, unknown> | null | undefined
+): string {
+  if (!r) return '';
+  const act = String(r.suggested_action ?? '');
+  if (act !== 'create_provisional_customer' || r.ready !== true) return '';
+  const { region: srcRg, channel: srcCh } = dsiSourceRegionChannelLines(ctx ?? null);
+  const er = r.effective_region_id;
+  const ec = r.effective_channel_id;
+  const resCh = r.suggested_channel_id != null && r.suggested_channel_id !== '';
+  const ufc = r.used_global_fallback_channel === true;
+  const ufr = r.used_global_fallback_region === true;
+  const parts: string[] = [];
+  if (er == null || er === '') {
+    parts.push(srcRg.trim() ? 'Rg unresolved' : 'Rg unassigned');
+  } else if (ufr) {
+    parts.push('Rg fallback');
+  }
+  if (ec == null || ec === '') {
+    parts.push(srcCh.trim() ? 'Ch unmapped' : 'Ch unassigned');
+  } else if (!resCh && ufc) {
+    parts.push('Ch fallback');
+  }
+  return parts.join(' · ');
+}
+
+function summarizeApplyAllReadyProvisional(rows: Array<Record<string, unknown>>): {
+  provisionalCustomerReady: number;
+  unassignedGeoReady: number;
+  fallbackGeoReady: number;
+} {
+  let provisionalCustomerReady = 0;
+  let unassignedGeoReady = 0;
+  let fallbackGeoReady = 0;
+  for (const r of rows) {
+    if (r.ready !== true) continue;
+    if (String(r.suggested_action ?? '') !== 'create_provisional_customer') continue;
+    provisionalCustomerReady += 1;
+    if (isProvisionalCustomerReadyWithUnassignedGeo(r)) unassignedGeoReady += 1;
+    if (r.used_global_fallback_channel === true || r.used_global_fallback_region === true) fallbackGeoReady += 1;
+  }
+  return { provisionalCustomerReady, unassignedGeoReady, fallbackGeoReady };
+}
+
 function planProvisionalGeoNarrative(r: Record<string, unknown>): ReactNode {
   const et = String(r.entity_type ?? '');
   const act = String(r.suggested_action ?? '');
@@ -448,6 +511,27 @@ function PlanDialogRowDetail({
           </Typography>
         ) : null}
         {planProvisionalGeoNarrative(r)}
+        {et === 'customer_dealer_token' ? (
+          <Stack spacing={0.5} sx={{ mt: 0.75 }}>
+            <Typography variant="caption" color="text.secondary">
+              Governed catalog channel (plan)
+            </Typography>
+            <Typography variant="body2">
+              {typeof r.suggested_channel_code === 'string' && r.suggested_channel_code.trim()
+                ? `${r.suggested_channel_code.trim()}${
+                    typeof r.suggested_channel_name === 'string' && r.suggested_channel_name.trim()
+                      ? ` — ${r.suggested_channel_name.trim()}`
+                      : ''
+                  }`
+                : '— (not resolved from source)'}
+            </Typography>
+            {typeof r.source_channel_resolution_detail === 'string' && r.source_channel_resolution_detail ? (
+              <Typography variant="caption" color="text.secondary" data-testid="dsi-plan-detail-channel-resolution-detail">
+                Resolution path: {r.source_channel_resolution_detail}
+              </Typography>
+            ) : null}
+          </Stack>
+        ) : null}
         <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
           Why
         </Typography>
@@ -706,6 +790,7 @@ export function DsiImportJobResolutionSection({
   /** Non-zero while a generated plan session is active (avoids effect deps on resolutionPlan object). */
   const [planLoadToken, setPlanLoadToken] = useState(0);
   const [planReviewFilter, setPlanReviewFilter] = useState<PlanReviewFilter>('all');
+  const [applyAllConfirmOpen, setApplyAllConfirmOpen] = useState(false);
 
   const { data: regions = [] } = useQuery({
     queryKey: ['catalog-regions'],
@@ -987,6 +1072,8 @@ export function DsiImportJobResolutionSection({
       void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', importJobId] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', importJobId] });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      gridRef.current?.api?.deselectAll();
+      setSelectedIds([]);
       onInvalidate();
     },
   });
@@ -996,6 +1083,11 @@ export function DsiImportJobResolutionSection({
     if (!raw || !Array.isArray(raw)) return [];
     return raw as Array<Record<string, unknown>>;
   }, [resolutionPlan]);
+
+  const applyAllProvisionalStats = useMemo(
+    () => summarizeApplyAllReadyProvisional(planTableRows),
+    [planTableRows]
+  );
 
   const filteredPlanCount = useMemo(() => {
     if (planTableRows.length === 0) return 0;
@@ -1140,13 +1232,13 @@ export function DsiImportJobResolutionSection({
         },
       },
       {
-        headerName: 'Geo',
+        headerName: 'Geo / defaults',
         colId: 'dsi_geo_hint',
-        minWidth: 100,
+        minWidth: 150,
         valueGetter: (p) => {
           const r = planByCandidateId.get(p.data?.id ?? -1);
           if (!r) return '';
-          return isProvisionalCustomerReadyWithUnassignedGeo(r) ? 'Unassigned' : '';
+          return planGeoReadinessHint(r, p.data?.context ?? null);
         },
       },
       {
@@ -1177,19 +1269,28 @@ export function DsiImportJobResolutionSection({
         valueGetter: (p) => dsiSourceCustomerNameCell(p.data?.context ?? null),
       },
       {
-        headerName: 'Src region',
-        minWidth: 120,
+        headerName: 'Source region (file)',
+        minWidth: 130,
         valueGetter: (p) => {
           if (p.data?.entity_type !== 'customer_dealer_token') return '';
           return dsiSourceRegionChannelLines(p.data?.context ?? null).region;
         },
       },
       {
-        headerName: 'Src channel',
-        minWidth: 120,
+        headerName: 'Source channel (file)',
+        minWidth: 140,
         valueGetter: (p) => {
           if (p.data?.entity_type !== 'customer_dealer_token') return '';
           return dsiSourceRegionChannelLines(p.data?.context ?? null).channel;
+        },
+      },
+      {
+        headerName: 'Catalog channel',
+        colId: 'dsi_catalog_channel',
+        minWidth: 150,
+        valueGetter: (p) => {
+          const r = planByCandidateId.get(p.data?.id ?? -1);
+          return planCatalogChannelCell(r, p.data?.context ?? null);
         },
       },
       {
@@ -1471,15 +1572,25 @@ export function DsiImportJobResolutionSection({
               disabled={
                 readyPlanCandidateIds.length === 0 || applyResolutionPlan.isPending || refreshPlanEffective.isPending
               }
-              onClick={() =>
+              onClick={() => {
+                const stats = applyAllProvisionalStats;
+                const needsDialog =
+                  stats.provisionalCustomerReady > 0 &&
+                  (stats.provisionalCustomerReady >= 5 ||
+                    stats.unassignedGeoReady > 0 ||
+                    stats.fallbackGeoReady > 0);
+                if (needsDialog) {
+                  setApplyAllConfirmOpen(true);
+                  return;
+                }
                 void applyResolutionPlan
                   .mutateAsync({
                     candidateIds: readyPlanCandidateIds,
                     overrides: overridesPayload(),
                     globalSuspicious: planGlobalSuspicious,
                   })
-                  .catch(() => {})
-              }
+                  .catch(() => {});
+              }}
               data-testid="dsi-resolution-plan-apply-all"
             >
               {applyResolutionPlan.isPending ? 'Applying…' : `Apply all ready (${readyPlanCandidateIds.length})`}
@@ -1848,6 +1959,52 @@ export function DsiImportJobResolutionSection({
             onClick={() => void bulkApply.mutateAsync()}
           >
             Apply
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={applyAllConfirmOpen} onClose={() => setApplyAllConfirmOpen(false)}>
+        <DialogTitle>Apply all ready rows?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            You are about to apply <strong>{readyPlanCandidateIds.length}</strong> ready candidate(s), including{' '}
+            <strong>{applyAllProvisionalStats.provisionalCustomerReady}</strong> provisional customer create(s).
+          </Typography>
+          {applyAllProvisionalStats.unassignedGeoReady > 0 ? (
+            <Alert severity="warning" sx={{ mb: 1 }}>
+              {applyAllProvisionalStats.unassignedGeoReady} ready provisional row(s) still have unassigned region and/or
+              channel on the plan — confirm that is intentional.
+            </Alert>
+          ) : null}
+          {applyAllProvisionalStats.fallbackGeoReady > 0 ? (
+            <Alert severity="info" variant="outlined" sx={{ mb: 1 }}>
+              {applyAllProvisionalStats.fallbackGeoReady} provisional row(s) use global fallback region/channel for at least
+              one dimension — source evidence did not fully resolve.
+            </Alert>
+          ) : null}
+          <Typography variant="caption" color="text.secondary">
+            Apply runs the same steward executors as the Mapping queue. Refresh suggestions after apply if you need an
+            updated grid.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setApplyAllConfirmOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={applyResolutionPlan.isPending}
+            onClick={() => {
+              setApplyAllConfirmOpen(false);
+              void applyResolutionPlan
+                .mutateAsync({
+                  candidateIds: readyPlanCandidateIds,
+                  overrides: overridesPayload(),
+                  globalSuspicious: planGlobalSuspicious,
+                })
+                .catch(() => {});
+            }}
+            data-testid="dsi-resolution-plan-apply-all-confirm"
+          >
+            Apply all ready
           </Button>
         </DialogActions>
       </Dialog>

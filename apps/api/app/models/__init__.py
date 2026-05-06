@@ -33,6 +33,7 @@ from app.models.dimensions import (
 from app.models.lineup import FactLineupPlanItem, LineupPlanItemEvent
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.import_distributor_si import (
+    ChannelSourceTokenAlias,
     CustomerSourceTokenAlias,
     DistributorSourceTokenAlias,
     ImportDistributorSiStagingLine,
@@ -158,6 +159,7 @@ __all__ = [
     "HistoricalLineupImportLine",
     "ImportDistributorSiStagingLine",
     "ImportEntityMappingCandidate",
+    "ChannelSourceTokenAlias",
     "CustomerSourceTokenAlias",
     "DistributorSourceTokenAlias",
     "CommercialLineupCase",

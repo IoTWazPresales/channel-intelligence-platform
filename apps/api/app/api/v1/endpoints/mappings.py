@@ -197,6 +197,7 @@ async def _bulk_effective_provisional_geo(
             cand,
             default_region_id=fallback_region_id,
             default_channel_id=fallback_channel_id,
+            source_definition_id=cand.source_definition_id,
         )
         er = g.get("effective_region_id")
         ec = g.get("effective_channel_id")
@@ -291,7 +292,11 @@ async def create_provisional_customer_from_dsi_candidate(
 
     def _geo(sess: Session) -> dict[str, Any]:
         return derive_effective_provisional_customer_geo_sync(
-            sess, cand, default_region_id=None, default_channel_id=None
+            sess,
+            cand,
+            default_region_id=None,
+            default_channel_id=None,
+            source_definition_id=cand.source_definition_id,
         )
 
     try:

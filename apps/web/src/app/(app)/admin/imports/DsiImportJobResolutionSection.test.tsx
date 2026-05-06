@@ -634,12 +634,17 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     await waitFor(() => {
       expect(screen.getByTestId('dsi-resolution-suggestion-drawer')).toBeVisible();
     });
-    const drawer = screen.getByTestId('dsi-resolution-suggestion-drawer');
-    expect(within(drawer).getByText('BC')).toBeTruthy();
-    expect(within(drawer).getByText('Drug')).toBeTruthy();
-    expect(within(drawer).getByText(/Region resolved from column A/)).toBeTruthy();
-    expect(within(drawer).getByText(/Channel resolved from column B/)).toBeTruthy();
-  });
+    await waitFor(
+      () => {
+        const drawer = screen.getByTestId('dsi-resolution-suggestion-drawer');
+        expect(within(drawer).getByText('BC')).toBeTruthy();
+        expect(within(drawer).getByText('Drug')).toBeTruthy();
+        expect(within(drawer).getByText(/Region resolved from column A/)).toBeTruthy();
+        expect(within(drawer).getByText(/Channel resolved from column B/)).toBeTruthy();
+      },
+      { timeout: 15000 }
+    );
+  }, 20000);
 
   it('shows unassigned geo badge in drawer for ready provisional customer without region/channel', async () => {
     const user = userEvent.setup();

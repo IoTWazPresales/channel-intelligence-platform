@@ -121,3 +121,20 @@ class DistributorSourceTokenAlias(Base, TimestampMixin):
     created_from_import_job_id: Mapped[int | None] = mapped_column(
         ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True
     )
+
+
+class ChannelSourceTokenAlias(Base, TimestampMixin):
+    """Steward-approved mapping from a normalized DSI route-to-market / channel token to dim_channel."""
+
+    __tablename__ = "channel_source_token_alias"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    channel_id: Mapped[int] = mapped_column(ForeignKey("dim_channel.id", ondelete="CASCADE"), nullable=False)
+    source_definition_id: Mapped[int | None] = mapped_column(ForeignKey("source_definition.id"), nullable=True)
+    raw_token: Mapped[str] = mapped_column(String(512), nullable=False)
+    normalized_token: Mapped[str] = mapped_column(String(512), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="approved", nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_from_import_job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True
+    )

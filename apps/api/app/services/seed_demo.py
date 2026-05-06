@@ -174,6 +174,7 @@ def run(session: Session, *, full_demo: bool = False) -> None:
     channels = [
         DimChannel(code="RET", name="Retail"),
         DimChannel(code="ECOM", name="eCommerce"),
+        DimChannel(code="OPEN_CH", name="Open Channel"),
     ]
     distributors = [
         DimDistributor(code="DIST-01", name="Summit Supply Co."),
