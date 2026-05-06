@@ -42,14 +42,45 @@ const hoisted = vi.hoisted(() => {
 vi.mock('@/components/EnterpriseDataGrid', () => {
   const React = require('react');
   return {
-    EnterpriseDataGrid: React.forwardRef((props: { gridOptions?: { onSelectionChanged?: (e: unknown) => void } }, _ref: unknown) => {
-      React.useEffect(() => {
-        props.gridOptions?.onSelectionChanged?.({
-          api: { getSelectedRows: () => [hoisted.candidateRow] },
-        });
-      }, [props.gridOptions]);
-      return React.createElement('div', { 'data-testid': 'mock-grid' });
-    }),
+    EnterpriseDataGrid: React.forwardRef(
+      (
+        props: {
+          rowData?: DsiCandidateRow[];
+          gridOptions?: {
+            onSelectionChanged?: (e: unknown) => void;
+            context?: { openSuggestionDetail?: (id: number) => void };
+          };
+        },
+        _ref: unknown
+      ) => {
+        React.useEffect(() => {
+          const rows = props.rowData?.length ? [props.rowData[0]] : [];
+          props.gridOptions?.onSelectionChanged?.({
+            api: { getSelectedRows: () => rows },
+          });
+        }, [props.gridOptions, props.rowData]);
+        return React.createElement(
+          'div',
+          { 'data-testid': 'mock-grid' },
+          (props.rowData ?? []).map((row: DsiCandidateRow) =>
+            React.createElement(
+              'div',
+              { key: row.id, 'data-testid': `mock-grid-row-${row.id}` },
+              React.createElement(
+                'button',
+                {
+                  type: 'button',
+                  'data-testid': `dsi-suggestion-open-${row.id}`,
+                  onClick: () => props.gridOptions?.context?.openSuggestionDetail?.(row.id),
+                },
+                'Open'
+              ),
+              row.sample_raw_values?.join('; ') ?? ''
+            )
+          )
+        );
+      }
+    ),
   };
 });
 
@@ -60,11 +91,21 @@ vi.mock('../mappings/DsiCandidateStewardPanel', () => ({
 describe('DsiImportJobResolutionSection bulk steward', () => {
   beforeEach(() => {
     mockApiPost.mockReset();
-    mockApiPost.mockResolvedValue({
-      import_job_id: 7,
-      action: 'ignore',
-      results: [],
-      totals: { ok_count: 0, staging_rows_affected: 0 },
+    mockApiPost.mockImplementation(async (url: string) => {
+      if (String(url).includes('dsi-resolution-plan')) {
+        return {
+          import_job_id: 7,
+          rows: [],
+          summary: { total: 0, ready: 0, not_ready: 0, hold: 0 },
+          defaults_used: { region_id: null, channel_id: null },
+        };
+      }
+      return {
+        import_job_id: 7,
+        action: 'ignore',
+        results: [],
+        totals: { ok_count: 0, staging_rows_affected: 0 },
+      };
     });
   });
 
@@ -174,30 +215,34 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     });
   });
 
-  function renderPlanSection() {
+  function renderPlanSection(cands: DsiCandidateRow[] = [hoisted.candidateRow]) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
     return renderWithProviders(
       <QueryClientProvider client={qc}>
-        <DsiImportJobResolutionSection importJobId={7} candidates={[hoisted.candidateRow]} onInvalidate={() => {}} />
+        <DsiImportJobResolutionSection importJobId={7} candidates={cands} onInvalidate={() => {}} />
       </QueryClientProvider>
     );
   }
 
-  it('posts apply with candidate ids and override keys after generate + apply all', async () => {
+  async function waitForSuggestionsPost() {
+    await waitFor(() => {
+      const gen = mockApiPost.mock.calls.filter(
+        (c) => String(c[0]).includes('/dsi-resolution-plan') && !String(c[0]).includes('/effective') && !String(c[0]).includes('/apply')
+      );
+      expect(gen.length).toBeGreaterThanOrEqual(1);
+    });
+  }
+
+  it('auto-loads suggestions when candidates are present (no generate click)', async () => {
+    renderPlanSection();
+    await waitForSuggestionsPost();
+    expect(screen.queryByTestId('dsi-resolution-plan-dialog')).toBeNull();
+  });
+
+  it('posts apply with candidate ids after suggestions load + apply all', async () => {
     const user = userEvent.setup();
     renderPlanSection();
-
-    await user.click(screen.getByTestId('dsi-resolution-plan-generate'));
-    await waitFor(() => {
-      expect(mockApiPost).toHaveBeenCalledWith(
-        '/api/v1/mappings/import-jobs/7/dsi-resolution-plan',
-        expect.any(Object)
-      );
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-dialog')).toBeVisible();
-    });
+    await waitForSuggestionsPost();
 
     await user.click(screen.getByTestId('dsi-resolution-plan-apply-all'));
     await waitFor(() => {
@@ -212,17 +257,13 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     });
   });
 
-  it('shows raw sample text from candidates in the plan dialog', async () => {
-    const user = userEvent.setup();
+  it('shows raw sample text in the in-page candidate grid after suggestions load', async () => {
     renderPlanSection();
-    await user.click(screen.getByTestId('dsi-resolution-plan-generate'));
-    await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-dialog')).toBeVisible();
-    });
+    await waitForSuggestionsPost();
     expect(screen.getByText('ACME RETAIL')).toBeTruthy();
   });
 
-  it('generate button is clickable again after a failed plan request', async () => {
+  it('Refresh suggestions is clickable again after a failed initial plan request', async () => {
     const user = userEvent.setup();
     mockApiPost.mockReset();
     let genN = 0;
@@ -277,22 +318,16 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     });
 
     renderPlanSection();
-    const btn = screen.getByTestId('dsi-resolution-plan-generate');
-    await user.click(btn);
+    const btn = screen.getByTestId('dsi-resolution-suggestions-refresh');
     await waitFor(() => expect(btn).not.toBeDisabled());
     await user.click(btn);
-    await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-dialog')).toBeVisible();
-    });
+    await waitForSuggestionsPost();
   });
 
   it('calls effective endpoint after global distributor confirm is toggled', async () => {
     const user = userEvent.setup();
     renderPlanSection();
-    await user.click(screen.getByTestId('dsi-resolution-plan-generate'));
-    await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-dialog')).toBeVisible();
-    });
+    await waitForSuggestionsPost();
     const before = mockApiPost.mock.calls.filter((c) => String(c[0]).includes('effective')).length;
     await user.click(screen.getByTestId('dsi-plan-global-suspicious-confirm'));
     await waitFor(
@@ -307,8 +342,7 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     );
   });
 
-  it('renders many plan rows as compact table rows (one header + N data rows)', async () => {
-    const user = userEvent.setup();
+  it('shows 12 grid row placeholders when plan has 12 candidates', async () => {
     const rows = Array.from({ length: 12 }, (_, i) => ({
       candidate_id: 200 + i,
       entity_type: 'distributor_token',
@@ -358,17 +392,35 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
       return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
     });
 
-    renderPlanSection();
-    await user.click(screen.getByTestId('dsi-resolution-plan-generate'));
+    const candidates: DsiCandidateRow[] = rows.map((r, i) => ({
+      id: 200 + i,
+      import_job_id: 7,
+      source_definition_id: null,
+      entity_type: 'distributor_token',
+      normalized_key: r.normalized_key as string,
+      dealer_group_token: null,
+      row_count: 1,
+      total_units: 1,
+      total_reported_value: 1,
+      sample_raw_values: [`T${i}`],
+      suggested_entity_id: null,
+      match_reason: null,
+      confidence_score: null,
+      status: 'open',
+      context: {},
+    }));
+
+    renderPlanSection(candidates);
+    await waitForSuggestionsPost();
     await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-dialog')).toBeVisible();
+      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Grid rows 12');
     });
-    const table = screen.getByTestId('dsi-resolution-plan-table');
-    const trs = within(table).getAllByRole('row');
-    expect(trs.length).toBe(13);
+    for (let i = 0; i < 12; i += 1) {
+      expect(screen.getByTestId(`mock-grid-row-${200 + i}`)).toBeTruthy();
+    }
   });
 
-  it('filters ready vs needs work and updates the visible row count', async () => {
+  it('filters ready vs needs work and updates the filter count', async () => {
     const user = userEvent.setup();
     const planRows = [
       {
@@ -438,17 +490,23 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
       return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
     });
 
-    renderPlanSection();
-    await user.click(screen.getByTestId('dsi-resolution-plan-generate'));
+    const two: DsiCandidateRow[] = [301, 302].map((id) => ({
+      ...hoisted.candidateRow,
+      id,
+      sample_raw_values: id === 301 ? ['A'] : ['B'],
+    }));
+
+    renderPlanSection(two);
+    await waitForSuggestionsPost();
     await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Showing 2 of 2 rows');
+      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Filter match 2 of 2');
     });
     await user.click(screen.getByTestId('dsi-plan-filter-needs_work'));
     await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Showing 1 of 2 rows');
+      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Filter match 1 of 2');
     });
-    const table = screen.getByTestId('dsi-resolution-plan-table');
-    expect(within(table).getAllByRole('row').length).toBe(2);
+    expect(screen.queryByTestId('mock-grid-row-301')).toBeNull();
+    expect(screen.getByTestId('mock-grid-row-302')).toBeTruthy();
   });
 
   it('entity and action filter chips narrow visible rows', async () => {
@@ -504,23 +562,25 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
       return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
     });
 
-    renderPlanSection();
-    await user.click(screen.getByTestId('dsi-resolution-plan-generate'));
-    await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-dialog')).toBeVisible();
-    });
+    const two: DsiCandidateRow[] = [
+      { ...hoisted.candidateRow, id: 401, entity_type: 'distributor_token', sample_raw_values: ['D'] },
+      { ...hoisted.candidateRow, id: 402, sample_raw_values: ['C'] },
+    ];
+
+    renderPlanSection(two);
+    await waitForSuggestionsPost();
     await user.click(screen.getByTestId('dsi-plan-filter-distributor'));
     await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Showing 1 of 2 rows');
+      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Filter match 1 of 2');
     });
     await user.click(screen.getByTestId('dsi-plan-filter-all'));
     await user.click(screen.getByTestId('dsi-plan-filter-ignore'));
     await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Showing 1 of 2 rows');
+      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Filter match 1 of 2');
     });
   });
 
-  it('detail panel shows full source evidence after selecting a row', async () => {
+  it('drawer shows full source evidence after Open', async () => {
     const user = userEvent.setup();
     const richCandidate: DsiCandidateRow = {
       ...hoisted.candidateRow,
@@ -569,23 +629,19 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
       </QueryClientProvider>
     );
 
-    await user.click(screen.getByTestId('dsi-resolution-plan-generate'));
+    await waitForSuggestionsPost();
+    await user.click(screen.getByTestId('dsi-suggestion-open-101'));
     await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-dialog')).toBeVisible();
+      expect(screen.getByTestId('dsi-resolution-suggestion-drawer')).toBeVisible();
     });
-    expect(screen.getByTestId('dsi-resolution-plan-detail-empty')).toBeVisible();
-    await user.click(screen.getByText('#101'));
-    await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-row-detail')).toBeVisible();
-    });
-    const panel = screen.getByTestId('dsi-resolution-plan-detail-panel');
-    expect(within(panel).getByText('BC')).toBeTruthy();
-    expect(within(panel).getByText('Drug')).toBeTruthy();
-    expect(within(panel).getByText(/Region resolved from column A/)).toBeTruthy();
-    expect(within(panel).getByText(/Channel resolved from column B/)).toBeTruthy();
+    const drawer = screen.getByTestId('dsi-resolution-suggestion-drawer');
+    expect(within(drawer).getByText('BC')).toBeTruthy();
+    expect(within(drawer).getByText('Drug')).toBeTruthy();
+    expect(within(drawer).getByText(/Region resolved from column A/)).toBeTruthy();
+    expect(within(drawer).getByText(/Channel resolved from column B/)).toBeTruthy();
   });
 
-  it('shows unassigned geo badge for ready provisional customer without region/channel', async () => {
+  it('shows unassigned geo badge in drawer for ready provisional customer without region/channel', async () => {
     const user = userEvent.setup();
     mockApiPost.mockImplementation(async (url: string) => {
       if (url.includes('dsi-resolution-plan/effective') || url.includes('dsi-resolution-plan')) {
@@ -621,17 +677,14 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     });
 
     renderPlanSection();
-    await user.click(screen.getByTestId('dsi-resolution-plan-generate'));
-    await waitFor(() => {
-      expect(screen.getByTestId('dsi-plan-row-unassigned-geo-101')).toBeVisible();
-    });
-    await user.click(screen.getByText('#101'));
+    await waitForSuggestionsPost();
+    await user.click(screen.getByTestId('dsi-suggestion-open-101'));
     await waitFor(() => {
       expect(screen.getByTestId('dsi-plan-unassigned-geo-badge')).toBeVisible();
     });
   });
 
-  it('apply selected ready uses plan table checkboxes, not main grid selection', async () => {
+  it('apply selected ready uses main grid selection when row is ready', async () => {
     const user = userEvent.setup();
     mockApiPost.mockImplementation(async (url: string) => {
       if (url.includes('dsi-resolution-plan/apply')) {
@@ -675,13 +728,8 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     });
 
     renderPlanSection();
-    await user.click(screen.getByTestId('dsi-resolution-plan-generate'));
-    await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-dialog')).toBeVisible();
-    });
+    await waitForSuggestionsPost();
     const applySel = screen.getByTestId('dsi-resolution-plan-apply-selected');
-    expect(applySel).toBeDisabled();
-    await user.click(screen.getByTestId('dsi-plan-row-select-101'));
     await waitFor(() => expect(applySel).not.toBeDisabled());
     await user.click(applySel);
     await waitFor(() => {
@@ -694,7 +742,7 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     });
   });
 
-  it('changing an override in the detail panel triggers effective refresh', async () => {
+  it('changing an override in the drawer triggers effective refresh', async () => {
     const user = userEvent.setup();
     mockApiPost.mockImplementation(async (url: string) => {
       if (url.includes('dsi-resolution-plan/effective') || url.includes('dsi-resolution-plan')) {
@@ -728,14 +776,11 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     });
 
     renderPlanSection();
-    await user.click(screen.getByTestId('dsi-resolution-plan-generate'));
-    await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-dialog')).toBeVisible();
-    });
+    await waitForSuggestionsPost();
     const before = mockApiPost.mock.calls.filter((c) => String(c[0]).includes('effective')).length;
-    await user.click(screen.getByText('#101'));
-    const panel = screen.getByTestId('dsi-resolution-plan-detail-panel');
-    const holdBox = await within(panel).findByRole('checkbox', { name: /hold \(skip in apply\)/i });
+    await user.click(screen.getByTestId('dsi-suggestion-open-101'));
+    const drawer = await screen.findByTestId('dsi-resolution-suggestion-drawer');
+    const holdBox = await within(drawer).findByRole('checkbox', { name: /hold \(skip in apply\)/i });
     expect(holdBox).toBeInTheDocument();
     await user.click(holdBox);
     await waitFor(
@@ -745,5 +790,11 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
       },
       { timeout: 5000 }
     );
+  });
+
+  it('exposes Refresh suggestions separately from server revalidation', () => {
+    renderPlanSection();
+    expect(screen.getByTestId('dsi-resolution-suggestions-refresh')).toBeTruthy();
+    expect(screen.getByTestId('dsi-import-revalidate-server')).toBeTruthy();
   });
 });

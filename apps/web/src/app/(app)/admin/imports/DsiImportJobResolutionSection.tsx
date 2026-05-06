@@ -1,8 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import type { GridOptions, RowClickedEvent } from 'ag-grid-community';
-import type { ColDef } from 'ag-grid-community';
+import type { ColDef, GridOptions, ICellRendererParams, RowClickedEvent } from 'ag-grid-community';
 import NextLink from 'next/link';
 import Link from '@mui/material/Link';
 import {
@@ -18,6 +17,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
+  Drawer,
   FormControl,
   FormControlLabel,
   InputLabel,
@@ -698,15 +699,13 @@ export function DsiImportJobResolutionSection({
   const [planRegionId, setPlanRegionId] = useState('');
   const [planChannelId, setPlanChannelId] = useState('');
   const [resolutionPlan, setResolutionPlan] = useState<Record<string, unknown> | null>(null);
-  const [planDialogOpen, setPlanDialogOpen] = useState(false);
+  const [suggestionDrawerId, setSuggestionDrawerId] = useState<number | null>(null);
   const [planOverrideMap, setPlanOverrideMap] = useState<Record<number, PlanRowOverride>>({});
   const [planGlobalSuspicious, setPlanGlobalSuspicious] = useState(false);
   const planDebounceSkipRef = useRef(false);
   /** Non-zero while a generated plan session is active (avoids effect deps on resolutionPlan object). */
   const [planLoadToken, setPlanLoadToken] = useState(0);
   const [planReviewFilter, setPlanReviewFilter] = useState<PlanReviewFilter>('all');
-  const [planReviewSelectedIds, setPlanReviewSelectedIds] = useState<number[]>([]);
-  const [planReviewDetailId, setPlanReviewDetailId] = useState<number | null>(null);
 
   const { data: regions = [] } = useQuery({
     queryKey: ['catalog-regions'],
@@ -849,6 +848,7 @@ export function DsiImportJobResolutionSection({
       qc.invalidateQueries({ queryKey: ['distributor-si-candidates', importJobId] });
       qc.invalidateQueries({ queryKey: ['import-job-rows', importJobId] });
       qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      void qc.invalidateQueries({ queryKey: ['dsi-resolution-suggestions', importJobId] });
       onInvalidate();
     },
   });
@@ -860,6 +860,7 @@ export function DsiImportJobResolutionSection({
         {}
       ),
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['dsi-resolution-suggestions', importJobId] });
       void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', importJobId] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', importJobId] });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
@@ -877,6 +878,36 @@ export function DsiImportJobResolutionSection({
     [planRegionId, planChannelId]
   );
 
+  const candidateIdsKey = useMemo(
+    () =>
+      [...candidates]
+        .map((c) => c.id)
+        .sort((a, b) => a - b)
+        .join(','),
+    [candidates]
+  );
+
+  const suggestionsQuery = useQuery({
+    queryKey: ['dsi-resolution-suggestions', importJobId, candidateIdsKey, planRegionId, planChannelId],
+    enabled: importJobId > 0 && candidates.length > 0,
+    refetchOnWindowFocus: false,
+    queryFn: ({ signal }) =>
+      apiPost<Record<string, unknown>>(
+        `/api/v1/mappings/import-jobs/${importJobId}/dsi-resolution-plan`,
+        planDefaultsBody(),
+        { signal }
+      ),
+  });
+
+  useEffect(() => {
+    if (!suggestionsQuery.data) return;
+    planDebounceSkipRef.current = true;
+    setPlanOverrideMap({});
+    setPlanGlobalSuspicious(false);
+    setResolutionPlan(suggestionsQuery.data);
+    setPlanLoadToken((n) => n + 1);
+  }, [suggestionsQuery.data]);
+
   const overridesPayload = useCallback((): Array<Record<string, unknown>> => {
     return Object.entries(planOverrideMap).map(([cid, o]) => ({
       candidate_id: Number(cid),
@@ -890,25 +921,6 @@ export function DsiImportJobResolutionSection({
       [candidateId]: { ...m[candidateId], ...patch },
     }));
   }, []);
-
-  const generateResolutionPlan = useMutation({
-    mutationFn: async () =>
-      apiPost<Record<string, unknown>>(`/api/v1/mappings/import-jobs/${importJobId}/dsi-resolution-plan`, {
-        ...planDefaultsBody(),
-      }),
-    onSuccess: (data) => {
-      planDebounceSkipRef.current = true;
-      setPlanOverrideMap({});
-      setPlanGlobalSuspicious(false);
-      setResolutionPlan(data);
-      setPlanDialogOpen(true);
-      setBulkApplySummary(null);
-      setPlanLoadToken((n) => n + 1);
-      setPlanReviewFilter('all');
-      setPlanReviewSelectedIds([]);
-      setPlanReviewDetailId(null);
-    },
-  });
 
   const refreshPlanEffective = useMutation({
     mutationFn: async (args: { overrides: Array<Record<string, unknown>>; globalSuspicious: boolean }) =>
@@ -965,14 +977,13 @@ export function DsiImportJobResolutionSection({
       setBulkApplySummary(
         `Resolution plan: applied ${applied}, failed ${failed}, skipped (hold) ${skippedHold}, skipped (not ready) ${skippedNr}. Re-run import validation (server) when ready.`
       );
-      setPlanDialogOpen(false);
+      setSuggestionDrawerId(null);
       setResolutionPlan(null);
       setPlanOverrideMap({});
       setPlanGlobalSuspicious(false);
       setPlanLoadToken(0);
       setPlanReviewFilter('all');
-      setPlanReviewSelectedIds([]);
-      setPlanReviewDetailId(null);
+      void qc.invalidateQueries({ queryKey: ['dsi-resolution-suggestions', importJobId] });
       void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', importJobId] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', importJobId] });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
@@ -980,22 +991,35 @@ export function DsiImportJobResolutionSection({
     },
   });
 
-  const closePlanDialog = useCallback(() => {
-    setPlanDialogOpen(false);
-    setPlanReviewFilter('all');
-    setPlanReviewSelectedIds([]);
-    setPlanReviewDetailId(null);
-  }, []);
-
   const planTableRows = useMemo(() => {
     const raw = resolutionPlan?.rows;
     if (!raw || !Array.isArray(raw)) return [];
     return raw as Array<Record<string, unknown>>;
   }, [resolutionPlan]);
 
-  const filteredPlanRows = useMemo(() => {
-    return planTableRows.filter((r) => planRowMatchesReviewFilter(r, planReviewFilter));
+  const filteredPlanCount = useMemo(() => {
+    if (planTableRows.length === 0) return 0;
+    return planTableRows.filter((r) => planRowMatchesReviewFilter(r, planReviewFilter)).length;
   }, [planTableRows, planReviewFilter]);
+
+  const planByCandidateId = useMemo(() => {
+    const m = new Map<number, Record<string, unknown>>();
+    for (const r of planTableRows) {
+      const id = Number(r.candidate_id);
+      if (Number.isFinite(id)) m.set(id, r);
+    }
+    return m;
+  }, [planTableRows]);
+
+  const displayedCandidates = useMemo(() => {
+    if (suggestionsQuery.isPending && planTableRows.length === 0) return candidates;
+    if (planReviewFilter === 'all') return candidates;
+    return candidates.filter((c) => {
+      const r = planByCandidateId.get(c.id);
+      if (!r) return false;
+      return planRowMatchesReviewFilter(r, planReviewFilter);
+    });
+  }, [candidates, planByCandidateId, planReviewFilter, planTableRows.length, suggestionsQuery.isPending]);
 
   const readyPlanCandidateIds = useMemo(() => {
     return planTableRows
@@ -1006,13 +1030,30 @@ export function DsiImportJobResolutionSection({
 
   const selectedReadyPlanIds = useMemo(() => {
     const ready = new Set(readyPlanCandidateIds);
-    return planReviewSelectedIds.filter((id) => ready.has(id));
-  }, [planReviewSelectedIds, readyPlanCandidateIds]);
+    return selectedIds.filter((id) => ready.has(id));
+  }, [selectedIds, readyPlanCandidateIds]);
 
-  const planDetailRow = useMemo(() => {
-    if (planReviewDetailId == null) return null;
-    return planTableRows.find((r) => Number(r.candidate_id) === planReviewDetailId) ?? null;
-  }, [planTableRows, planReviewDetailId]);
+  const planDrawerRow = useMemo(() => {
+    if (suggestionDrawerId == null) return null;
+    return planTableRows.find((r) => Number(r.candidate_id) === suggestionDrawerId) ?? null;
+  }, [planTableRows, suggestionDrawerId]);
+
+  const handleOpenSuggestionRow = useCallback((id: number | undefined) => {
+    if (id != null) setSuggestionDrawerId(id);
+  }, []);
+
+  const selectVisibleReadyInGrid = useCallback(() => {
+    const api = gridRef.current?.api;
+    if (!api) return;
+    api.deselectAll();
+    api.forEachNode((node) => {
+      const row = node.data as DsiCandidateRow | undefined;
+      const rid = row?.id;
+      if (rid == null) return;
+      const pr = planByCandidateId.get(rid);
+      if (pr?.ready === true) node.setSelected(true);
+    });
+  }, [planByCandidateId]);
 
   const candidatesById = useMemo(() => {
     const m: Record<number, DsiCandidateRow> = {};
@@ -1022,6 +1063,102 @@ export function DsiImportJobResolutionSection({
 
   const colDefs = useMemo<ColDef<DsiCandidateRow>[]>(
     () => [
+      {
+        headerName: 'Open',
+        colId: 'dsi_suggest_open',
+        width: 88,
+        sortable: false,
+        filter: false,
+        pinned: 'left',
+        cellRenderer: (p: ICellRendererParams<DsiCandidateRow, unknown, { openSuggestionDetail?: (id: number) => void }>) => (
+          <Button
+            size="small"
+            variant="outlined"
+            data-testid={`dsi-suggestion-open-${p.data?.id ?? 0}`}
+            onClick={() => {
+              const id = p.data?.id;
+              if (id != null) p.context?.openSuggestionDetail?.(id);
+            }}
+          >
+            Open
+          </Button>
+        ),
+      },
+      {
+        headerName: 'Suggestion',
+        colId: 'dsi_suggest_status',
+        minWidth: 110,
+        valueGetter: (p) => {
+          const r = planByCandidateId.get(p.data?.id ?? -1);
+          if (!r) return '—';
+          return r.ready === true ? 'Ready' : 'Needs work';
+        },
+      },
+      {
+        headerName: 'Auto action',
+        colId: 'dsi_auto_action',
+        minWidth: 130,
+        valueGetter: (p) => {
+          const r = planByCandidateId.get(p.data?.id ?? -1);
+          if (!r) return '';
+          const a = String(r.baseline_suggested_action ?? r.suggested_action ?? '');
+          return formatPlanActionLabel(a);
+        },
+      },
+      {
+        headerName: 'Effective',
+        colId: 'dsi_effective_action',
+        minWidth: 130,
+        valueGetter: (p) => {
+          const r = planByCandidateId.get(p.data?.id ?? -1);
+          if (!r) return '';
+          return formatPlanActionLabel(String(r.suggested_action ?? ''));
+        },
+      },
+      {
+        headerName: 'Proposed target',
+        colId: 'dsi_proposed_target',
+        minWidth: 160,
+        valueGetter: (p) => {
+          const r = planByCandidateId.get(p.data?.id ?? -1);
+          if (!r) return '';
+          const c = p.data ? candidatesById[p.data.id] : undefined;
+          return truncateEllipsis(
+            planTargetSummary(String(r.suggested_action ?? ''), r.suggested_target_id, c, r),
+            64
+          );
+        },
+      },
+      {
+        headerName: 'Reason',
+        colId: 'dsi_reason',
+        minWidth: 180,
+        valueGetter: (p) => {
+          const r = planByCandidateId.get(p.data?.id ?? -1);
+          if (!r) return '';
+          return truncateEllipsis(planReasonSummary(r), 80);
+        },
+      },
+      {
+        headerName: 'Geo',
+        colId: 'dsi_geo_hint',
+        minWidth: 100,
+        valueGetter: (p) => {
+          const r = planByCandidateId.get(p.data?.id ?? -1);
+          if (!r) return '';
+          return isProvisionalCustomerReadyWithUnassignedGeo(r) ? 'Unassigned' : '';
+        },
+      },
+      {
+        headerName: 'Conf.',
+        colId: 'dsi_plan_conf',
+        width: 72,
+        valueGetter: (p) => {
+          const r = planByCandidateId.get(p.data?.id ?? -1);
+          if (!r || typeof r.confidence !== 'number') return '';
+          return r.confidence.toFixed(2);
+        },
+      },
       { field: 'entity_type', headerName: 'Entity type', minWidth: 160 },
       {
         headerName: 'Raw samples',
@@ -1065,7 +1202,7 @@ export function DsiImportJobResolutionSection({
       { field: 'total_units', headerName: 'Units', width: 90 },
       { field: 'total_reported_value', headerName: 'Value', width: 90 },
     ],
-    []
+    [planByCandidateId, candidatesById]
   );
 
   const onRowClicked = useCallback((e: RowClickedEvent<DsiCandidateRow>) => {
@@ -1074,6 +1211,10 @@ export function DsiImportJobResolutionSection({
 
   const gridOptions = useMemo<GridOptions<DsiCandidateRow>>(
     () => ({
+      context: {
+        openSuggestionDetail: handleOpenSuggestionRow,
+      },
+      getRowId: (p) => String(p.data.id),
       rowSelection: {
         mode: 'multiRow',
         checkboxes: true,
@@ -1086,7 +1227,7 @@ export function DsiImportJobResolutionSection({
       },
       onRowClicked,
     }),
-    [onRowClicked]
+    [onRowClicked, handleOpenSuggestionRow]
   );
 
   const applyReady = previewApplyToken !== null && previewApplyToken === previewToken && previewData !== null;
@@ -1111,40 +1252,56 @@ export function DsiImportJobResolutionSection({
 
         <Alert severity="info" variant="outlined" data-testid="dsi-resolution-plan-panel">
           <Typography variant="subtitle2" gutterBottom>
-            Resolution plan (this import only, not saved)
+            Resolution suggestions (this import only, read-only until you apply)
           </Typography>
           <Alert severity="success" variant="outlined" sx={{ mb: 1.5 }} icon={false}>
             <Typography variant="body2">
               <strong>Source-first:</strong> after <strong>Re-run import validation (server)</strong>, each customer candidate
               gets region / province and channel / route-to-market from your <strong>mapped file columns</strong> (not from
-              the optional fallbacks below). <strong>Generate resolution plan</strong> without opening fallbacks when those
-              columns resolve to catalog codes or names.
+              optional fallbacks unless source values are missing, unresolved, or mixed).
             </Typography>
           </Alert>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            The plan preview shows <strong>raw source values</strong>, <strong>catalog matches</strong>, and any{' '}
-            <strong>unresolved or mixed</strong> messages per row. Use row overrides or optional global fallbacks only when
-            needed. Then <strong>Apply ready rows</strong> and revalidate.
+            Suggestions load automatically in the candidate grid. Use row <strong>Open</strong> for full evidence and
+            overrides — they stay read-only until you <strong>Apply selected ready</strong> or <strong>Apply all ready</strong>.
+            <strong> Refresh suggestions</strong> recomputes the steward plan on the server (read-only, does not re-run import
+            validation).
           </Typography>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap>
-            <Button
-              variant="contained"
-              disabled={generateResolutionPlan.isPending}
-              onClick={() => {
-                void generateResolutionPlan.mutateAsync().catch(() => {});
-              }}
-              data-testid="dsi-resolution-plan-generate"
-            >
-              {generateResolutionPlan.isPending ? 'Generating…' : 'Generate resolution plan'}
-            </Button>
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center" sx={{ mb: 1 }}>
             <Button
               variant="outlined"
-              disabled={!resolutionPlan || planTableRows.length === 0}
-              onClick={() => setPlanDialogOpen(true)}
-              data-testid="dsi-resolution-plan-open-dialog"
+              size="small"
+              disabled={candidates.length === 0 || suggestionsQuery.isFetching}
+              onClick={() => void suggestionsQuery.refetch().catch(() => {})}
+              data-testid="dsi-resolution-suggestions-refresh"
             >
-              Open plan preview
+              {suggestionsQuery.isFetching ? 'Refreshing…' : 'Refresh suggestions'}
             </Button>
+            {resolutionPlan?.summary && typeof resolutionPlan.summary === 'object' ? (
+              <>
+                <Chip
+                  size="small"
+                  label={`Candidates ${String((resolutionPlan.summary as Record<string, unknown>).total ?? '—')}`}
+                />
+                <Chip
+                  size="small"
+                  color="success"
+                  variant="outlined"
+                  label={`Ready ${String((resolutionPlan.summary as Record<string, unknown>).ready ?? '—')}`}
+                />
+                <Chip
+                  size="small"
+                  color="warning"
+                  variant="outlined"
+                  label={`Needs work ${String((resolutionPlan.summary as Record<string, unknown>).not_ready ?? '—')}`}
+                />
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={`On hold ${String((resolutionPlan.summary as Record<string, unknown>).hold ?? '—')}`}
+                />
+              </>
+            ) : null}
           </Stack>
           <Accordion
             disableGutters
@@ -1207,20 +1364,147 @@ export function DsiImportJobResolutionSection({
               </Stack>
             </AccordionDetails>
           </Accordion>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={2}
+            alignItems={{ md: 'flex-start' }}
+            useFlexGap
+            flexWrap="wrap"
+            sx={{ mt: 2 }}
+          >
+            <FormControlLabel
+              sx={{ alignItems: 'flex-start', mr: 0, maxWidth: 420 }}
+              control={
+                <Checkbox
+                  checked={planGlobalSuspicious}
+                  onChange={(e) => setPlanGlobalSuspicious(e.target.checked)}
+                  data-testid="dsi-plan-global-suspicious-confirm"
+                />
+              }
+              label={
+                <Typography variant="body2" component="span">
+                  Allow provisional <strong>distributor</strong> creates for placeholder-like tokens (e.g. unknown, n/a)
+                  for <strong>all rows</strong> in this plan
+                </Typography>
+              }
+            />
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={refreshPlanEffective.isPending || planLoadToken === 0}
+              onClick={() =>
+                void refreshPlanEffective
+                  .mutateAsync({
+                    overrides: overridesPayload(),
+                    globalSuspicious: planGlobalSuspicious,
+                  })
+                  .catch(() => {})
+              }
+              data-testid="dsi-resolution-plan-refresh-effective"
+            >
+              {refreshPlanEffective.isPending ? 'Updating plan…' : 'Update plan after edits'}
+            </Button>
+          </Stack>
+          {planTableRows.some((x) => x.needs_confirm_suspicious_distributor === true) ? (
+            <Alert severity="warning" data-testid="dsi-plan-suspicious-hint" sx={{ mt: 1.5 }}>
+              Some rows need explicit permission before creating a provisional distributor from a placeholder-like token. Use
+              the row override and/or the global option above, then click <strong>Update plan after edits</strong>.
+            </Alert>
+          ) : null}
+          {refreshPlanEffective.isError ? (
+            <Alert severity="error" sx={{ mt: 1 }}>
+              {safeDisplayError(refreshPlanEffective.error)}
+            </Alert>
+          ) : null}
         </Alert>
 
-        <EnterpriseDataGrid
-          ref={gridRef}
-          rowData={candidates}
-          columnDefs={colDefs}
-          height={360}
-          gridOptions={gridOptions}
-        />
+        <Stack spacing={1.5} data-testid="dsi-resolution-inpage-toolbar">
+          <Box data-testid="dsi-resolution-plan-filters" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+            {PLAN_REVIEW_FILTER_CHIPS.map(({ value, label }) => (
+              <Chip
+                key={value}
+                size="small"
+                label={label}
+                color={planReviewFilter === value ? 'primary' : 'default'}
+                variant={planReviewFilter === value ? 'filled' : 'outlined'}
+                onClick={() => setPlanReviewFilter(value)}
+                data-testid={`dsi-plan-filter-${value}`}
+              />
+            ))}
+          </Box>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Typography variant="caption" color="text.secondary" data-testid="dsi-resolution-plan-filter-count">
+              Filter match {filteredPlanCount} of {planTableRows.length} · Grid rows {displayedCandidates.length} · Ready{' '}
+              {readyPlanCandidateIds.length}
+            </Typography>
+            <Button
+              size="small"
+              disabled={!displayedCandidates.some((c) => planByCandidateId.get(c.id)?.ready === true)}
+              onClick={selectVisibleReadyInGrid}
+              data-testid="dsi-plan-select-visible-ready"
+            >
+              Select visible ready
+            </Button>
+            <Box sx={{ flexGrow: 1 }} />
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={
+                selectedReadyPlanIds.length === 0 || applyResolutionPlan.isPending || refreshPlanEffective.isPending
+              }
+              onClick={() =>
+                void applyResolutionPlan
+                  .mutateAsync({
+                    candidateIds: selectedReadyPlanIds,
+                    overrides: overridesPayload(),
+                    globalSuspicious: planGlobalSuspicious,
+                  })
+                  .catch(() => {})
+              }
+              data-testid="dsi-resolution-plan-apply-selected"
+            >
+              Apply selected ready ({selectedReadyPlanIds.length})
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              disabled={
+                readyPlanCandidateIds.length === 0 || applyResolutionPlan.isPending || refreshPlanEffective.isPending
+              }
+              onClick={() =>
+                void applyResolutionPlan
+                  .mutateAsync({
+                    candidateIds: readyPlanCandidateIds,
+                    overrides: overridesPayload(),
+                    globalSuspicious: planGlobalSuspicious,
+                  })
+                  .catch(() => {})
+              }
+              data-testid="dsi-resolution-plan-apply-all"
+            >
+              {applyResolutionPlan.isPending ? 'Applying…' : `Apply all ready (${readyPlanCandidateIds.length})`}
+            </Button>
+          </Stack>
+        </Stack>
+
+        {suggestionsQuery.isError ? (
+          <Alert severity="error">{safeDisplayError(suggestionsQuery.error)}</Alert>
+        ) : null}
+
+        <Box data-testid="dsi-resolution-candidate-grid">
+          <EnterpriseDataGrid
+            ref={gridRef}
+            rowData={displayedCandidates}
+            columnDefs={colDefs}
+            height={480}
+            gridOptions={gridOptions}
+          />
+        </Box>
 
         <BulkSelectionToolbar
           mode={bulkMode}
           selectedCount={selectedIds.length}
-          visibleRowCount={candidates.length}
+          visibleRowCount={displayedCandidates.length}
           onEnterSelectionMode={() => setBulkMode('selecting')}
           onExitSelectionMode={() => {
             setBulkMode('normal');
@@ -1237,7 +1521,6 @@ export function DsiImportJobResolutionSection({
           busy={
             bulkPreview.isPending ||
             bulkApply.isPending ||
-            generateResolutionPlan.isPending ||
             applyResolutionPlan.isPending ||
             refreshPlanEffective.isPending
           }
@@ -1473,9 +1756,6 @@ export function DsiImportJobResolutionSection({
             {bulkApplySummary}
           </Alert>
         ) : null}
-        {generateResolutionPlan.isError ? (
-          <Alert severity="error">{safeDisplayError(generateResolutionPlan.error)}</Alert>
-        ) : null}
         {applyResolutionPlan.isError ? (
           <Alert severity="error">{safeDisplayError(applyResolutionPlan.error)}</Alert>
         ) : null}
@@ -1488,6 +1768,7 @@ export function DsiImportJobResolutionSection({
           candidate={detailCandidate}
           onDone={() => {
             void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', importJobId] });
+            void qc.invalidateQueries({ queryKey: ['dsi-resolution-suggestions', importJobId] });
             onInvalidate();
           }}
         />
@@ -1503,7 +1784,8 @@ export function DsiImportJobResolutionSection({
           </Button>
           <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 520 }}>
             Runs the DSI import validator on the server so staging and blockers refresh. Use after steward saves (single-row,
-            bulk, or resolution plan apply) — different from <strong>Update plan after edits</strong> in the plan dialog.
+            bulk, or resolution plan apply). This is <strong>not</strong> the same as <strong>Refresh suggestions</strong>{' '}
+            (read-only plan recompute).
           </Typography>
         </Stack>
         {dsiRevalidateFromServer.isError ? (
@@ -1570,394 +1852,36 @@ export function DsiImportJobResolutionSection({
         </DialogActions>
       </Dialog>
 
-      <Dialog
-        open={planDialogOpen}
-        onClose={closePlanDialog}
-        fullWidth
-        maxWidth="xl"
-        data-testid="dsi-resolution-plan-dialog"
+      <Drawer
+        anchor="right"
+        open={suggestionDrawerId != null}
+        onClose={() => setSuggestionDrawerId(null)}
+        PaperProps={{ sx: { width: { xs: '100%', sm: 440 }, maxWidth: '100%' } }}
       >
-        <DialogTitle>
-          Review resolution plan
-          {resolutionPlan?.summary && typeof resolutionPlan.summary === 'object' ? (
-            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
-              <Chip
-                size="small"
-                label={`Candidates ${String((resolutionPlan.summary as Record<string, unknown>).total ?? '—')}`}
-              />
-              <Chip
-                size="small"
-                color="success"
-                variant="outlined"
-                label={`Ready to apply ${String((resolutionPlan.summary as Record<string, unknown>).ready ?? '—')}`}
-              />
-              <Chip
-                size="small"
-                color="warning"
-                variant="outlined"
-                label={`Needs work ${String((resolutionPlan.summary as Record<string, unknown>).not_ready ?? '—')}`}
-              />
-              <Chip
-                size="small"
-                variant="outlined"
-                label={`On hold ${String((resolutionPlan.summary as Record<string, unknown>).hold ?? '—')}`}
-              />
-            </Stack>
-          ) : null}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2}>
-            <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
-              <Typography variant="body2">
-                <strong>Update plan after edits</strong> recalculates which rows are ready (merges your overrides with the
-                same rules as the server). Use <strong>Re-run import validation (server)</strong> in the main panel after you
-                apply, to refresh import staging — that step does not change this plan table.
-              </Typography>
-            </Alert>
-            <Stack
-              direction={{ xs: 'column', md: 'row' }}
-              spacing={2}
-              alignItems={{ md: 'flex-start' }}
-              useFlexGap
-              flexWrap="wrap"
-            >
-              <FormControlLabel
-                sx={{ alignItems: 'flex-start', mr: 0, maxWidth: 420 }}
-                control={
-                  <Checkbox
-                    checked={planGlobalSuspicious}
-                    onChange={(e) => setPlanGlobalSuspicious(e.target.checked)}
-                    data-testid="dsi-plan-global-suspicious-confirm"
-                  />
-                }
-                label={
-                  <Typography variant="body2" component="span">
-                    Allow provisional <strong>distributor</strong> creates for placeholder-like tokens (e.g. unknown, n/a)
-                    for <strong>all rows</strong> in this plan
-                  </Typography>
-                }
-              />
-              <Button
-                variant="outlined"
-                size="small"
-                disabled={refreshPlanEffective.isPending || planLoadToken === 0}
-                onClick={() =>
-                  void refreshPlanEffective
-                    .mutateAsync({
-                      overrides: overridesPayload(),
-                      globalSuspicious: planGlobalSuspicious,
-                    })
-                    .catch(() => {})
-                }
-                data-testid="dsi-resolution-plan-refresh-effective"
-              >
-                {refreshPlanEffective.isPending ? 'Updating plan…' : 'Update plan after edits'}
-              </Button>
-            </Stack>
-            {planTableRows.some((x) => x.needs_confirm_suspicious_distributor === true) ? (
-              <Alert severity="warning" data-testid="dsi-plan-suspicious-hint">
-                Some rows need explicit permission before creating a provisional distributor from a placeholder-like token.
-                Use the row checkbox and/or the global option above, then click <strong>Update plan after edits</strong>.
-              </Alert>
-            ) : null}
-            {refreshPlanEffective.isError ? (
-              <Alert severity="error">{safeDisplayError(refreshPlanEffective.error)}</Alert>
-            ) : null}
-            {planTableRows.length ? (
-              <Stack spacing={1.5}>
-                <Box data-testid="dsi-resolution-plan-filters" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
-                  {PLAN_REVIEW_FILTER_CHIPS.map(({ value, label }) => (
-                    <Chip
-                      key={value}
-                      size="small"
-                      label={label}
-                      color={planReviewFilter === value ? 'primary' : 'default'}
-                      variant={planReviewFilter === value ? 'filled' : 'outlined'}
-                      onClick={() => setPlanReviewFilter(value)}
-                      data-testid={`dsi-plan-filter-${value}`}
-                    />
-                  ))}
-                </Box>
-                <Stack
-                  direction={{ xs: 'column', lg: 'row' }}
-                  spacing={2}
-                  alignItems={{ lg: 'stretch' }}
-                  useFlexGap
-                >
-                  <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                      <Typography variant="caption" color="text.secondary" data-testid="dsi-resolution-plan-filter-count">
-                        Showing {filteredPlanRows.length} of {planTableRows.length} rows · Ready in plan:{' '}
-                        {readyPlanCandidateIds.length}
-                      </Typography>
-                      <Button
-                        size="small"
-                        disabled={!filteredPlanRows.some((x) => x.ready === true)}
-                        onClick={() => {
-                          const ids = filteredPlanRows
-                            .filter((row) => row.ready === true)
-                            .map((row) => Number(row.candidate_id))
-                            .filter((n) => Number.isFinite(n));
-                          setPlanReviewSelectedIds(ids);
-                        }}
-                        data-testid="dsi-plan-select-visible-ready"
-                      >
-                        Select visible ready
-                      </Button>
-                    </Stack>
-                    <TableContainer sx={{ maxHeight: 420, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                      <Table size="small" data-testid="dsi-resolution-plan-table" stickyHeader>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell padding="checkbox" sx={{ width: 48 }} />
-                            <TableCell sx={{ whiteSpace: 'nowrap' }}>Candidate</TableCell>
-                            <TableCell>Entity</TableCell>
-                            <TableCell sx={{ minWidth: 100 }}>Auto</TableCell>
-                            <TableCell sx={{ minWidth: 100 }}>Effective</TableCell>
-                            <TableCell sx={{ maxWidth: 200 }}>Target</TableCell>
-                            <TableCell>Status</TableCell>
-                            <TableCell sx={{ maxWidth: 220 }}>Reason</TableCell>
-                            <TableCell align="right">Impact</TableCell>
-                            <TableCell align="right">Conf.</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {filteredPlanRows.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={10}>
-                                <Typography variant="body2" color="text.secondary">
-                                  No rows match this filter.
-                                </Typography>
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            filteredPlanRows.map((r) => {
-                              const id = Number(r.candidate_id);
-                              const cand = candidatesById[id];
-                              const et = String(r.entity_type ?? '');
-                              const ready = r.ready === true;
-                              const actionEff = String(r.suggested_action ?? '');
-                              const baselineAct = String(r.baseline_suggested_action ?? actionEff);
-                              const selected = planReviewSelectedIds.includes(id);
-                              const candidateSummary = truncateEllipsis(
-                                rawSamplesLine(cand) || customerAccountLine(cand) || String(r.normalized_key ?? ''),
-                                42
-                              );
-                              return (
-                                <TableRow
-                                  key={String(id)}
-                                  hover
-                                  selected={planReviewDetailId === id}
-                                  onClick={() => setPlanReviewDetailId(id)}
-                                  sx={{ cursor: 'pointer' }}
-                                >
-                                  <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                                    <Checkbox
-                                      size="small"
-                                      checked={selected}
-                                      disabled={!ready}
-                                      onChange={(_, checked) => {
-                                        setPlanReviewSelectedIds((prev) => {
-                                          const next = new Set(prev);
-                                          if (checked) next.add(id);
-                                          else next.delete(id);
-                                          return [...next];
-                                        });
-                                      }}
-                                      inputProps={{ 'data-testid': `dsi-plan-row-select-${id}` }}
-                                      title={ready ? 'Include in Apply selected ready' : 'Not ready — cannot select for apply'}
-                                    />
-                                  </TableCell>
-                                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                    <Typography variant="caption" color="text.secondary" display="block">
-                                      #{id}
-                                    </Typography>
-                                    <Typography variant="body2" noWrap title={candidateSummary}>
-                                      {candidateSummary || '—'}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography variant="body2" noWrap sx={{ textTransform: 'capitalize' }}>
-                                      {et.replace(/_/g, ' ')}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography variant="caption" noWrap title={formatPlanActionLabel(baselineAct)}>
-                                      {truncateEllipsis(formatPlanActionLabel(baselineAct), 22)}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography variant="caption" noWrap title={formatPlanActionLabel(actionEff)}>
-                                      {truncateEllipsis(formatPlanActionLabel(actionEff), 22)}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell sx={{ maxWidth: 200 }}>
-                                    <Typography
-                                      variant="caption"
-                                      noWrap
-                                      title={planTargetSummary(actionEff, r.suggested_target_id, cand, r)}
-                                    >
-                                      {truncateEllipsis(
-                                        planTargetSummary(actionEff, r.suggested_target_id, cand, r),
-                                        56
-                                      )}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Stack spacing={0.5}>
-                                      {ready ? (
-                                        <Chip
-                                          size="small"
-                                          color="success"
-                                          label="Ready"
-                                          data-testid="dsi-plan-row-ready"
-                                        />
-                                      ) : (
-                                        <Chip
-                                          size="small"
-                                          color="default"
-                                          label="Not ready"
-                                          data-testid="dsi-plan-row-review"
-                                        />
-                                      )}
-                                      {isProvisionalCustomerReadyWithUnassignedGeo(r) ? (
-                                        <Chip
-                                          size="small"
-                                          color="warning"
-                                          variant="outlined"
-                                          label="Unassigned geo"
-                                          data-testid={`dsi-plan-row-unassigned-geo-${id}`}
-                                        />
-                                      ) : null}
-                                    </Stack>
-                                  </TableCell>
-                                  <TableCell sx={{ maxWidth: 220 }}>
-                                    <Typography variant="caption" color="text.secondary" title={planReasonSummary(r)}>
-                                      {truncateEllipsis(planReasonSummary(r), 72)}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                                    <Typography variant="caption" component="div">
-                                      {String(r.row_count ?? '—')} r
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" component="div">
-                                      {String(r.total_units ?? '—')} u
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" component="div">
-                                      {String(r.total_reported_value ?? '—')} v
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell align="right">
-                                    {typeof r.confidence === 'number' ? (
-                                      <Typography variant="caption" noWrap>
-                                        {r.confidence.toFixed(2)}
-                                      </Typography>
-                                    ) : (
-                                      <Typography variant="caption" color="text.secondary">
-                                        —
-                                      </Typography>
-                                    )}
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })
-                          )}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Stack>
-                  <Box
-                    sx={{
-                      flex: { lg: 0.95 },
-                      minWidth: { xs: '100%', lg: 320 },
-                      maxHeight: { lg: 460 },
-                      overflow: 'auto',
-                      border: 1,
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                      p: 1.5,
-                    }}
-                    data-testid="dsi-resolution-plan-detail-panel"
-                  >
-                    {planDetailRow ? (
-                      <PlanDialogRowDetail
-                        r={planDetailRow}
-                        candidate={candidatesById[Number(planDetailRow.candidate_id)]}
-                        regions={regions}
-                        channels={channels}
-                        planOverrideMap={planOverrideMap}
-                        patchPlanOverride={patchPlanOverride}
-                      />
-                    ) : (
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        data-testid="dsi-resolution-plan-detail-empty"
-                      >
-                        Select a row to view full source evidence, region/channel context, and overrides.
-                      </Typography>
-                    )}
-                  </Box>
-                </Stack>
-              </Stack>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                No plan rows. Generate a plan from the section above.
-              </Typography>
-            )}
-            <Typography variant="caption" color="text.secondary" display="block">
-              After changing overrides, either wait a moment for an automatic update or click <strong>Update plan after edits</strong>.
-              Apply uses the same steward APIs as single-row and bulk. <strong>Apply all ready</strong> includes every ready row
-              in the full plan ({readyPlanCandidateIds.length}). <strong>Apply selected ready</strong> uses only ready rows
-              checked in this plan table ({selectedReadyPlanIds.length} selected).
-            </Typography>
+        <Box sx={{ p: 2 }} data-testid="dsi-resolution-suggestion-drawer">
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+            <Typography variant="subtitle1">Resolution detail</Typography>
+            <Button size="small" onClick={() => setSuggestionDrawerId(null)}>
+              Close
+            </Button>
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
-          <Button onClick={closePlanDialog}>Close</Button>
-          <Box sx={{ flexGrow: 1 }} />
-          <Button
-            variant="outlined"
-            disabled={
-              selectedReadyPlanIds.length === 0 ||
-              applyResolutionPlan.isPending ||
-              refreshPlanEffective.isPending
-            }
-            onClick={() =>
-              void applyResolutionPlan
-                .mutateAsync({
-                  candidateIds: selectedReadyPlanIds,
-                  overrides: overridesPayload(),
-                  globalSuspicious: planGlobalSuspicious,
-                })
-                .catch(() => {})
-            }
-            data-testid="dsi-resolution-plan-apply-selected"
-          >
-            Apply selected ready ({selectedReadyPlanIds.length})
-          </Button>
-          <Button
-            variant="contained"
-            disabled={
-              readyPlanCandidateIds.length === 0 ||
-              applyResolutionPlan.isPending ||
-              refreshPlanEffective.isPending
-            }
-            onClick={() =>
-              void applyResolutionPlan
-                .mutateAsync({
-                  candidateIds: readyPlanCandidateIds,
-                  overrides: overridesPayload(),
-                  globalSuspicious: planGlobalSuspicious,
-                })
-                .catch(() => {})
-            }
-            data-testid="dsi-resolution-plan-apply-all"
-          >
-            {applyResolutionPlan.isPending ? 'Applying…' : `Apply all ready (${readyPlanCandidateIds.length})`}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          <Divider sx={{ mb: 2 }} />
+          {planDrawerRow ? (
+            <PlanDialogRowDetail
+              r={planDrawerRow}
+              candidate={candidatesById[Number(planDrawerRow.candidate_id)]}
+              regions={regions}
+              channels={channels}
+              planOverrideMap={planOverrideMap}
+              patchPlanOverride={patchPlanOverride}
+            />
+          ) : (
+            <Typography variant="body2" color="text.secondary" data-testid="dsi-resolution-plan-detail-empty">
+              No suggestion row for this candidate.
+            </Typography>
+          )}
+        </Box>
+      </Drawer>
     </Paper>
   );
 }
