@@ -84,6 +84,31 @@ def _pick_raw_for_norm(samples: list[Any], norm: str) -> str | None:
     return norm
 
 
+def _provisional_geo_dimension_message(
+    *,
+    detail: str | None,
+    raw_token: str | None,
+    dim_short: str,
+    dim_long: str,
+) -> str | None:
+    """Stable, UI-safe explanation for a single region or channel dimension."""
+    if not detail:
+        return None
+    if detail == "missing_source_evidence":
+        return f"No {dim_long} value captured from the mapped file column for this customer candidate."
+    if detail == "conflicting_source_evidence":
+        return f"Multiple conflicting {dim_long} values in the file for this dealer group — pick catalog ids or a single fallback."
+    if detail == "no_catalog_match":
+        tok = (raw_token or "").strip()[:160] or "(blank)"
+        return (
+            f'Source {dim_short} "{tok}" does not match any catalog {dim_short} code or name — '
+            f"pick a catalog row, optional global fallback, or leave unassigned."
+        )
+    if detail == "blank":
+        return f"Source {dim_short} cell was empty after normalization."
+    return f"{dim_long}: {detail}"
+
+
 def _resolve_source_geo_from_ctx(session: Session, ctx: dict[str, Any]) -> dict[str, Any]:
     """Derive catalog IDs from aggregated DSI source region/channel evidence (per candidate context)."""
     reg_conflict = bool(ctx.get("provisional_region_conflict"))
@@ -95,6 +120,8 @@ def _resolve_source_geo_from_ctx(session: Session, ctx: dict[str, Any]) -> dict[
         "provisional_channel_conflict": ch_conflict,
         "source_region_resolution_detail": None,
         "source_channel_resolution_detail": None,
+        "source_region_raw_token": None,
+        "source_channel_raw_token": None,
     }
     reg_norms = [n for n in (ctx.get("source_region_evidence_norms") or []) if isinstance(n, str) and n.strip()]
     ch_norms = [n for n in (ctx.get("source_channel_evidence_norms") or []) if isinstance(n, str) and n.strip()]
@@ -107,6 +134,8 @@ def _resolve_source_geo_from_ctx(session: Session, ctx: dict[str, Any]) -> dict[
         uniq_r = sorted(set(reg_norms))
         if len(uniq_r) == 1:
             raw_pick = _pick_raw_for_norm(reg_samples if isinstance(reg_samples, list) else [], uniq_r[0])
+            if raw_pick:
+                out["source_region_raw_token"] = str(raw_pick).strip()[:512]
             rid, reason = _resolve_dim_region_from_source(session, raw_pick)
             out["source_region_resolved_id"] = rid
             if rid is None:
@@ -120,6 +149,8 @@ def _resolve_source_geo_from_ctx(session: Session, ctx: dict[str, Any]) -> dict[
         uniq_c = sorted(set(ch_norms))
         if len(uniq_c) == 1:
             raw_pick_c = _pick_raw_for_norm(ch_samples if isinstance(ch_samples, list) else [], uniq_c[0])
+            if raw_pick_c:
+                out["source_channel_raw_token"] = str(raw_pick_c).strip()[:512]
             cid, reason_c = _resolve_dim_channel_from_source(session, raw_pick_c)
             out["source_channel_resolved_id"] = cid
             if cid is None:
@@ -168,6 +199,68 @@ def derive_effective_provisional_customer_geo_sync(
     cc, cn = _dim_channel_brief(session, src_c)
     erc, ern = _dim_region_brief(session, eff_r)
     ecc, ecn = _dim_channel_brief(session, eff_c)
+
+    reg_conflict = bool(geo.get("provisional_region_conflict"))
+    ch_conflict = bool(geo.get("provisional_channel_conflict"))
+    dr = geo.get("source_region_resolution_detail")
+    dc = geo.get("source_channel_resolution_detail")
+    raw_rt = geo.get("source_region_raw_token")
+    raw_ct = geo.get("source_channel_raw_token")
+    used_global_fallback_region = bool(
+        not reg_conflict
+        and src_r is None
+        and default_region_id is not None
+        and eff_r is not None
+        and int(eff_r) == int(default_region_id)
+    )
+    used_global_fallback_channel = bool(
+        not ch_conflict
+        and src_c is None
+        and default_channel_id is not None
+        and eff_c is not None
+        and int(eff_c) == int(default_channel_id)
+    )
+
+    source_region_resolution_message: str | None
+    if reg_conflict:
+        source_region_resolution_message = _provisional_geo_dimension_message(
+            detail="conflicting_source_evidence",
+            raw_token=None,
+            dim_short="region",
+            dim_long="region / province",
+        )
+    elif src_r is not None:
+        source_region_resolution_message = (
+            f"File → catalog region: {rc or '?'}" + (f" — {rn}" if rn else "") + "."
+        )
+    else:
+        source_region_resolution_message = _provisional_geo_dimension_message(
+            detail=dr if isinstance(dr, str) else None,
+            raw_token=raw_rt if isinstance(raw_rt, str) else None,
+            dim_short="region",
+            dim_long="region / province",
+        )
+
+    source_channel_resolution_message: str | None
+    if ch_conflict:
+        source_channel_resolution_message = _provisional_geo_dimension_message(
+            detail="conflicting_source_evidence",
+            raw_token=None,
+            dim_short="channel",
+            dim_long="channel / route-to-market",
+        )
+    elif src_c is not None:
+        source_channel_resolution_message = (
+            f"File → catalog channel: {cc or '?'}" + (f" — {cn}" if cn else "") + "."
+        )
+    else:
+        source_channel_resolution_message = _provisional_geo_dimension_message(
+            detail=dc if isinstance(dc, str) else None,
+            raw_token=raw_ct if isinstance(raw_ct, str) else None,
+            dim_short="channel",
+            dim_long="channel / route-to-market",
+        )
+
     return {
         **geo,
         "suggested_region_id": src_r,
@@ -182,6 +275,10 @@ def derive_effective_provisional_customer_geo_sync(
         "effective_region_name": ern,
         "effective_channel_code": ecc,
         "effective_channel_name": ecn,
+        "used_global_fallback_region": used_global_fallback_region,
+        "used_global_fallback_channel": used_global_fallback_channel,
+        "source_region_resolution_message": source_region_resolution_message,
+        "source_channel_resolution_message": source_channel_resolution_message,
     }
 
 

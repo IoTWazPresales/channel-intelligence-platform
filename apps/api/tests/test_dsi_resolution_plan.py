@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.services.imports.dsi_resolution_plan import (
+    derive_effective_provisional_customer_geo_sync,
     merge_resolution_plan_row_for_apply,
     plan_dsi_candidate_sync,
     snapshot_product_plan_from_context,
@@ -441,6 +442,108 @@ def test_plan_customer_provisional_resolves_geo_from_source_single_value() -> No
     assert out.get("suggested_channel_id") == 202
     assert out.get("effective_region_id") == 101
     assert out.get("effective_channel_id") == 202
+    assert out.get("used_global_fallback_region") is False
+    assert out.get("used_global_fallback_channel") is False
+    assert "File → catalog region" in (out.get("source_region_resolution_message") or "")
+
+
+def test_plan_customer_provisional_marks_global_fallback_when_source_missing() -> None:
+    sess = MagicMock()
+    job = MagicMock()
+    job.source.id = 9
+    prod_idx = MagicMock()
+    cand = _cand(
+        entity_type="customer_dealer_token",
+        context={
+            "source_customer_name_raw_samples": ["New Customer"],
+            "dealer_group_account_raw": "DGNEW",
+        },
+    )
+    with patch(
+        "app.services.imports.dsi_resolution_plan.effective_dsi_customer_primary_for_resolution",
+        return_value=("New Customer", []),
+    ), patch(
+        "app.services.imports.dsi_resolution_plan._resolve_customer",
+        return_value=(None, ["nomatch"]),
+    ):
+        out = plan_dsi_candidate_sync(
+            sess, cand, job, prod_idx, default_region_id=99, default_channel_id=88
+        )
+    assert out["suggested_action"] == "create_provisional_customer"
+    assert out["ready"] is True
+    assert out.get("used_global_fallback_region") is True
+    assert out.get("used_global_fallback_channel") is True
+    assert int(out.get("effective_region_id") or 0) == 99
+    assert int(out.get("effective_channel_id") or 0) == 88
+
+
+def test_derive_geo_global_fallback_does_not_trigger_when_source_resolves() -> None:
+    """Effective ids prefer source; selecting global defaults must not mark fallback-used for resolved dims."""
+    sess = MagicMock()
+    mr = MagicMock()
+    mr.id = 101
+    mr.code = "WC"
+    mr.name = "Western Cape"
+    mc = MagicMock()
+    mc.id = 202
+    mc.code = "WHO"
+    mc.name = "Wholesale"
+    sess.scalar = MagicMock(side_effect=[mr, mc])
+
+    def fake_get(_m: object, pk: object) -> MagicMock | None:
+        if int(pk) == 101:
+            return mr
+        if int(pk) == 202:
+            return mc
+        return None
+
+    sess.get = MagicMock(side_effect=fake_get)
+    cand = _cand(
+        entity_type="customer_dealer_token",
+        context={
+            "source_region_evidence_norms": ["western cape"],
+            "source_region_raw_samples": ["Western Cape"],
+            "source_channel_evidence_norms": ["wholesale"],
+            "source_channel_raw_samples": ["Wholesale"],
+        },
+    )
+    g = derive_effective_provisional_customer_geo_sync(
+        sess, cand, default_region_id=999, default_channel_id=888
+    )
+    assert g["effective_region_id"] == 101
+    assert g["effective_channel_id"] == 202
+    assert g["used_global_fallback_region"] is False
+    assert g["used_global_fallback_channel"] is False
+
+
+def test_plan_customer_provisional_unresolved_source_includes_raw_in_message() -> None:
+    sess = MagicMock()
+    sess.scalar = MagicMock(return_value=None)
+    sess.get = MagicMock(return_value=None)
+    job = MagicMock()
+    job.source.id = 9
+    prod_idx = MagicMock()
+    cand = _cand(
+        entity_type="customer_dealer_token",
+        context={
+            "source_customer_name_raw_samples": ["New Customer"],
+            "dealer_group_account_raw": "DGNEW",
+            "source_region_evidence_norms": ["eastern cape"],
+            "source_region_raw_samples": ["Eastern Cape"],
+        },
+    )
+    with patch(
+        "app.services.imports.dsi_resolution_plan.effective_dsi_customer_primary_for_resolution",
+        return_value=("New Customer", []),
+    ), patch(
+        "app.services.imports.dsi_resolution_plan._resolve_customer",
+        return_value=(None, ["nomatch"]),
+    ):
+        out = plan_dsi_candidate_sync(sess, cand, job, prod_idx, default_region_id=None, default_channel_id=None)
+    assert out["suggested_action"] == "create_provisional_customer"
+    msg = str(out.get("source_region_resolution_message") or "")
+    assert "Eastern Cape" in msg
+    assert "no_catalog_match" in msg or "does not match" in msg
 
 
 def test_plan_customer_provisional_geo_conflict_not_ready() -> None:
