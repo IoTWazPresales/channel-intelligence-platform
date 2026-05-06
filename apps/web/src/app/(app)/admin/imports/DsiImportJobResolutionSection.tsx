@@ -146,6 +146,72 @@ function formatPlanActionLabel(action: string): string {
   return m[action] ?? action;
 }
 
+type PlanReviewFilter =
+  | 'all'
+  | 'ready'
+  | 'needs_work'
+  | 'customer'
+  | 'distributor'
+  | 'product'
+  | 'provisional'
+  | 'map_resolve'
+  | 'ignore'
+  | 'manual';
+
+function planRowMatchesReviewFilter(r: Record<string, unknown>, f: PlanReviewFilter): boolean {
+  const et = String(r.entity_type ?? '');
+  const act = String(r.suggested_action ?? '');
+  const ready = r.ready === true;
+  const hold = r.hold_for_manual_review === true;
+  const blockers = Array.isArray(r.resolution_blockers) ? (r.resolution_blockers as unknown[]).length > 0 : false;
+  switch (f) {
+    case 'all':
+      return true;
+    case 'ready':
+      return ready;
+    case 'needs_work':
+      return !ready;
+    case 'customer':
+      return et === 'customer_dealer_token';
+    case 'distributor':
+      return et === 'distributor_token';
+    case 'product':
+      return et === 'product_identifier';
+    case 'provisional':
+      return act === 'create_provisional_customer' || act === 'create_provisional_distributor';
+    case 'map_resolve':
+      return act === 'map_customer' || act === 'map_distributor' || act === 'resolve_product';
+    case 'ignore':
+      return act === 'ignore';
+    case 'manual':
+      return Boolean(hold) || blockers;
+    default:
+      return true;
+  }
+}
+
+function truncateEllipsis(s: string, max: number): string {
+  const t = s.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1))}…`;
+}
+
+function planReasonSummary(r: Record<string, unknown>): string {
+  const blockers = Array.isArray(r.resolution_blockers)
+    ? (r.resolution_blockers as string[]).join(', ')
+    : '';
+  const base = String(r.reason ?? '');
+  return blockers ? `${base} · ${blockers}` : base;
+}
+
+function isProvisionalCustomerReadyWithUnassignedGeo(r: Record<string, unknown>): boolean {
+  const act = String(r.suggested_action ?? '');
+  if (act !== 'create_provisional_customer' || r.ready !== true) return false;
+  const er = r.effective_region_id;
+  const ec = r.effective_channel_id;
+  return er == null || er === '' || ec == null || ec === '';
+}
+
 function rawSamplesLine(c: DsiCandidateRow | undefined): string {
   if (!c?.sample_raw_values?.length) return '';
   return c.sample_raw_values.filter(Boolean).join('; ');
@@ -259,6 +325,341 @@ function planTargetSummary(
   return `Id ${id}`;
 }
 
+type PlanDialogRowDetailProps = {
+  r: Record<string, unknown>;
+  candidate: DsiCandidateRow | undefined;
+  regions: CatalogOpt[];
+  channels: CatalogOpt[];
+  planOverrideMap: Record<number, PlanRowOverride>;
+  patchPlanOverride: (candidateId: number, patch: PlanRowOverride) => void;
+};
+
+function PlanDialogRowDetail({
+  r,
+  candidate: cand,
+  regions,
+  channels,
+  planOverrideMap,
+  patchPlanOverride,
+}: PlanDialogRowDetailProps) {
+  const id = Number(r.candidate_id);
+  const et = String(r.entity_type ?? '');
+  const actions = allowedOverrideActions(et);
+  const strategicHint = String(r.reason ?? '').toLowerCase().includes('strategic');
+  const blockers = Array.isArray(r.resolution_blockers)
+    ? (r.resolution_blockers as string[]).join(', ')
+    : '';
+  const actionEff = String(r.suggested_action ?? '');
+  const baselineAct = String(r.baseline_suggested_action ?? actionEff);
+  const ready = r.ready === true;
+
+  return (
+    <Stack spacing={2} data-testid="dsi-resolution-plan-row-detail">
+      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+        <Typography variant="subtitle2">Candidate #{id}</Typography>
+        {ready ? (
+          <Chip size="small" color="success" label="Ready" data-testid="dsi-plan-detail-ready" />
+        ) : (
+          <Chip size="small" color="default" label="Not ready" />
+        )}
+        {isProvisionalCustomerReadyWithUnassignedGeo(r) ? (
+          <Chip
+            size="small"
+            color="warning"
+            variant="outlined"
+            label="Ready with unassigned geo/channel"
+            data-testid="dsi-plan-unassigned-geo-badge"
+          />
+        ) : null}
+      </Stack>
+
+      <Stack spacing={1}>
+        <Typography variant="caption" color="text.secondary">
+          Source evidence
+        </Typography>
+        <Stack spacing={0.75}>
+          <Typography variant="caption" color="text.secondary">
+            Raw from file
+          </Typography>
+          <Typography variant="body2">{rawSamplesLine(cand) || '—'}</Typography>
+          {et === 'customer_dealer_token' ? (
+            <>
+              <Typography variant="caption" color="text.secondary">
+                Customer account
+              </Typography>
+              <Typography variant="body2">{customerAccountLine(cand)}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Source customer name
+              </Typography>
+              <Typography variant="body2">{dsiSourceCustomerNameCell(cand?.context ?? null) || '—'}</Typography>
+              {(() => {
+                const { region, channel } = dsiSourceRegionChannelLines(cand?.context ?? null);
+                return (
+                  <>
+                    <Typography variant="caption" color="text.secondary">
+                      Source region / province
+                    </Typography>
+                    <Typography variant="body2">{region || '—'}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Source channel / route-to-market
+                    </Typography>
+                    <Typography variant="body2">{channel || '—'}</Typography>
+                  </>
+                );
+              })()}
+            </>
+          ) : null}
+          {et === 'distributor_token' ? (
+            <Typography variant="caption" color="text.secondary">
+              Normalized key: {String(r.normalized_key ?? '')}
+            </Typography>
+          ) : null}
+          {et === 'product_identifier' ? (
+            <>
+              <Typography variant="caption" color="text.secondary">
+                Product match summary
+              </Typography>
+              <Typography variant="body2">{dsiProductMatchSummaryCell(cand?.context ?? null) || '—'}</Typography>
+            </>
+          ) : null}
+        </Stack>
+      </Stack>
+
+      <Stack spacing={0.75}>
+        <Typography variant="caption" color="text.secondary">
+          Plan suggestion
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Auto
+        </Typography>
+        <Typography variant="body2">{formatPlanActionLabel(baselineAct)}</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+          Effective
+        </Typography>
+        <Typography variant="body2">{formatPlanActionLabel(actionEff)}</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+          Target / proposed
+        </Typography>
+        <Typography variant="body2">{planTargetSummary(actionEff, r.suggested_target_id, cand, r)}</Typography>
+        {r.suggested_target_id != null && r.suggested_target_id !== '' ? (
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+            Master id: {String(r.suggested_target_id)}
+          </Typography>
+        ) : null}
+        {planProvisionalGeoNarrative(r)}
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+          Why
+        </Typography>
+        <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+          {String(r.reason ?? '')}
+          {blockers ? ` · ${blockers}` : ''}
+        </Typography>
+        {typeof r.confidence === 'number' ? (
+          <Typography variant="caption" color="text.secondary">
+            Confidence {r.confidence.toFixed(2)}
+          </Typography>
+        ) : null}
+      </Stack>
+
+      <Stack spacing={1.25} alignItems="stretch">
+        <Typography variant="subtitle2">Overrides</Typography>
+        {actions.length ? (
+          <FormControl size="small" fullWidth>
+            <InputLabel id={`plan-act-${id}`}>Action</InputLabel>
+            <Select
+              labelId={`plan-act-${id}`}
+              label="Action"
+              value={actionEff}
+              onChange={(e) => patchPlanOverride(id, { action: String(e.target.value) })}
+              data-testid={`dsi-plan-action-${id}`}
+            >
+              {actions.map((a) => (
+                <MenuItem key={a} value={a}>
+                  {formatPlanActionLabel(a)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        ) : null}
+        <TextField
+          size="small"
+          fullWidth
+          type="number"
+          label="Map / resolve master id"
+          helperText="Numeric id only; names show in Target when known from the grid"
+          value={r.suggested_target_id != null ? String(r.suggested_target_id) : ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === '') {
+              patchPlanOverride(id, { target_id: null });
+              return;
+            }
+            const n = Number(v);
+            patchPlanOverride(id, { target_id: Number.isFinite(n) ? n : null });
+          }}
+          inputProps={{ 'data-testid': `dsi-plan-target-${id}` }}
+        />
+        {et === 'customer_dealer_token' && actionEff === 'create_provisional_customer' ? (
+          <Stack spacing={1}>
+            <Typography variant="caption" color="text.secondary">
+              Catalog row override (optional — use when blocked for mixed source evidence or to pick a specific{' '}
+              <strong>dim_region</strong> / <strong>dim_channel</strong> for an unresolved file token)
+            </Typography>
+            <FormControl size="small" fullWidth>
+              <InputLabel id={`plan-or-r-${id}`}>Region override</InputLabel>
+              <Select
+                labelId={`plan-or-r-${id}`}
+                label="Region override"
+                value={planOverrideMap[id]?.region_id != null ? String(planOverrideMap[id].region_id) : ''}
+                displayEmpty
+                renderValue={(sel) => {
+                  if (sel === '') {
+                    const er = r.effective_region_id;
+                    const ec = r.effective_region_code;
+                    const en = r.effective_region_name;
+                    if (er != null && er !== '')
+                      return ec ? `${String(ec)}${en ? ` — ${String(en)}` : ''} (plan)` : `id ${String(er)} (plan)`;
+                    return 'Plan effective: unassigned';
+                  }
+                  const hit = regions.find((x) => String(x.id) === sel);
+                  return hit ? `${hit.code} — ${hit.name}` : String(sel);
+                }}
+                onChange={(e) => {
+                  const v = String(e.target.value);
+                  if (v === '') patchPlanOverride(id, { region_id: null });
+                  else patchPlanOverride(id, { region_id: Number(v) });
+                }}
+                inputProps={{ 'data-testid': `dsi-plan-region-override-${id}` }}
+              >
+                <MenuItem value="">
+                  <em>Use plan effective</em>
+                </MenuItem>
+                {regions.map((reg) => (
+                  <MenuItem key={reg.id} value={String(reg.id)}>
+                    {reg.code} — {reg.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+              <InputLabel id={`plan-or-c-${id}`}>Channel override</InputLabel>
+              <Select
+                labelId={`plan-or-c-${id}`}
+                label="Channel override"
+                value={planOverrideMap[id]?.channel_id != null ? String(planOverrideMap[id].channel_id) : ''}
+                displayEmpty
+                renderValue={(sel) => {
+                  if (sel === '') {
+                    const er = r.effective_channel_id;
+                    const ec = r.effective_channel_code;
+                    const en = r.effective_channel_name;
+                    if (er != null && er !== '')
+                      return ec ? `${String(ec)}${en ? ` — ${String(en)}` : ''} (plan)` : `id ${String(er)} (plan)`;
+                    return 'Plan effective: unassigned';
+                  }
+                  const hit = channels.find((x) => String(x.id) === sel);
+                  return hit ? `${hit.code} — ${hit.name}` : String(sel);
+                }}
+                onChange={(e) => {
+                  const v = String(e.target.value);
+                  if (v === '') patchPlanOverride(id, { channel_id: null });
+                  else patchPlanOverride(id, { channel_id: Number(v) });
+                }}
+                inputProps={{ 'data-testid': `dsi-plan-channel-override-${id}` }}
+              >
+                <MenuItem value="">
+                  <em>Use plan effective</em>
+                </MenuItem>
+                {channels.map((ch) => (
+                  <MenuItem key={ch.id} value={String(ch.id)}>
+                    {ch.code} — {ch.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+        ) : null}
+        <FormControlLabel
+          control={
+            <Checkbox
+              size="small"
+              checked={r.hold_for_manual_review === true}
+              onChange={(e) => patchPlanOverride(id, { hold_for_manual_review: e.target.checked })}
+              inputProps={{ 'data-testid': `dsi-plan-hold-${id}` }}
+            />
+          }
+          label="Hold (skip in apply)"
+        />
+        {et === 'distributor_token' ? (
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={planOverrideMap[id]?.confirm_for_suspicious_distributor_token === true}
+                onChange={(e) =>
+                  patchPlanOverride(id, {
+                    confirm_for_suspicious_distributor_token: e.target.checked,
+                  })
+                }
+                inputProps={{ 'data-testid': `dsi-plan-dist-confirm-${id}` }}
+              />
+            }
+            label="Confirm placeholder-like distributor token"
+          />
+        ) : null}
+        {et === 'product_identifier' ? (
+          <Stack spacing={1}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={planOverrideMap[id]?.confirm_ineligible_product === true}
+                  onChange={(e) => patchPlanOverride(id, { confirm_ineligible_product: e.target.checked })}
+                />
+              }
+              label="Confirm inactive / ineligible product"
+            />
+            <TextField
+              size="small"
+              fullWidth
+              label="Audit note (≥8 chars if confirming)"
+              value={planOverrideMap[id]?.audit_note ?? ''}
+              onChange={(e) => patchPlanOverride(id, { audit_note: e.target.value })}
+              data-testid={`dsi-plan-product-audit-${id}`}
+            />
+          </Stack>
+        ) : null}
+        {et === 'customer_dealer_token' && strategicHint ? (
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={planOverrideMap[id]?.ack_strategic_channel_hint === true}
+                onChange={(e) => patchPlanOverride(id, { ack_strategic_channel_hint: e.target.checked })}
+                inputProps={{ 'data-testid': `dsi-plan-strategic-${id}` }}
+              />
+            }
+            label="Acknowledge strategic / marketplace evidence"
+          />
+        ) : null}
+      </Stack>
+    </Stack>
+  );
+}
+
+const PLAN_REVIEW_FILTER_CHIPS: { value: PlanReviewFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'ready', label: 'Ready' },
+  { value: 'needs_work', label: 'Needs work' },
+  { value: 'customer', label: 'Customer' },
+  { value: 'distributor', label: 'Distributor' },
+  { value: 'product', label: 'Product' },
+  { value: 'provisional', label: 'Create provisional' },
+  { value: 'map_resolve', label: 'Map / resolve' },
+  { value: 'ignore', label: 'Ignore' },
+  { value: 'manual', label: 'Manual / blocked' },
+];
+
 export function DsiImportJobResolutionSection({
   importJobId,
   candidates,
@@ -303,6 +704,9 @@ export function DsiImportJobResolutionSection({
   const planDebounceSkipRef = useRef(false);
   /** Non-zero while a generated plan session is active (avoids effect deps on resolutionPlan object). */
   const [planLoadToken, setPlanLoadToken] = useState(0);
+  const [planReviewFilter, setPlanReviewFilter] = useState<PlanReviewFilter>('all');
+  const [planReviewSelectedIds, setPlanReviewSelectedIds] = useState<number[]>([]);
+  const [planReviewDetailId, setPlanReviewDetailId] = useState<number | null>(null);
 
   const { data: regions = [] } = useQuery({
     queryKey: ['catalog-regions'],
@@ -500,6 +904,9 @@ export function DsiImportJobResolutionSection({
       setPlanDialogOpen(true);
       setBulkApplySummary(null);
       setPlanLoadToken((n) => n + 1);
+      setPlanReviewFilter('all');
+      setPlanReviewSelectedIds([]);
+      setPlanReviewDetailId(null);
     },
   });
 
@@ -563,6 +970,9 @@ export function DsiImportJobResolutionSection({
       setPlanOverrideMap({});
       setPlanGlobalSuspicious(false);
       setPlanLoadToken(0);
+      setPlanReviewFilter('all');
+      setPlanReviewSelectedIds([]);
+      setPlanReviewDetailId(null);
       void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', importJobId] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', importJobId] });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
@@ -570,11 +980,22 @@ export function DsiImportJobResolutionSection({
     },
   });
 
+  const closePlanDialog = useCallback(() => {
+    setPlanDialogOpen(false);
+    setPlanReviewFilter('all');
+    setPlanReviewSelectedIds([]);
+    setPlanReviewDetailId(null);
+  }, []);
+
   const planTableRows = useMemo(() => {
     const raw = resolutionPlan?.rows;
     if (!raw || !Array.isArray(raw)) return [];
     return raw as Array<Record<string, unknown>>;
   }, [resolutionPlan]);
+
+  const filteredPlanRows = useMemo(() => {
+    return planTableRows.filter((r) => planRowMatchesReviewFilter(r, planReviewFilter));
+  }, [planTableRows, planReviewFilter]);
 
   const readyPlanCandidateIds = useMemo(() => {
     return planTableRows
@@ -585,8 +1006,13 @@ export function DsiImportJobResolutionSection({
 
   const selectedReadyPlanIds = useMemo(() => {
     const ready = new Set(readyPlanCandidateIds);
-    return selectedIds.filter((id) => ready.has(id));
-  }, [selectedIds, readyPlanCandidateIds]);
+    return planReviewSelectedIds.filter((id) => ready.has(id));
+  }, [planReviewSelectedIds, readyPlanCandidateIds]);
+
+  const planDetailRow = useMemo(() => {
+    if (planReviewDetailId == null) return null;
+    return planTableRows.find((r) => Number(r.candidate_id) === planReviewDetailId) ?? null;
+  }, [planTableRows, planReviewDetailId]);
 
   const candidatesById = useMemo(() => {
     const m: Record<number, DsiCandidateRow> = {};
@@ -1146,9 +1572,9 @@ export function DsiImportJobResolutionSection({
 
       <Dialog
         open={planDialogOpen}
-        onClose={() => setPlanDialogOpen(false)}
+        onClose={closePlanDialog}
         fullWidth
-        maxWidth="lg"
+        maxWidth="xl"
         data-testid="dsi-resolution-plan-dialog"
       >
         <DialogTitle>
@@ -1238,353 +1664,242 @@ export function DsiImportJobResolutionSection({
               <Alert severity="error">{safeDisplayError(refreshPlanEffective.error)}</Alert>
             ) : null}
             {planTableRows.length ? (
-              <TableContainer sx={{ maxHeight: 520, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                <Table size="small" data-testid="dsi-resolution-plan-table" stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ minWidth: 200, maxWidth: 280 }}>Candidate</TableCell>
-                      <TableCell sx={{ minWidth: 220, maxWidth: 300 }}>Source evidence</TableCell>
-                      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                        Impact
-                      </TableCell>
-                      <TableCell sx={{ minWidth: 200, maxWidth: 260 }}>Suggestion</TableCell>
-                      <TableCell sx={{ minWidth: 120 }}>Status</TableCell>
-                      <TableCell sx={{ minWidth: 240, maxWidth: 300 }}>Your overrides</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {planTableRows.map((r) => {
-                      const id = Number(r.candidate_id);
-                      const cand = candidatesById[id];
-                      const et = String(r.entity_type ?? '');
-                      const ready = r.ready === true;
-                      const actions = allowedOverrideActions(et);
-                      const strategicHint = String(r.reason ?? '').toLowerCase().includes('strategic');
-                      const blockers = Array.isArray(r.resolution_blockers)
-                        ? (r.resolution_blockers as string[]).join(', ')
-                        : '';
-                      const actionEff = String(r.suggested_action ?? '');
-                      const baselineAct = String(r.baseline_suggested_action ?? actionEff);
-                      return (
-                        <TableRow key={String(id)}>
-                          <TableCell sx={{ verticalAlign: 'top', py: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">
-                              #{id}
-                            </Typography>
-                            <Typography variant="body2" fontWeight={600}>
-                              {et.replace(/_/g, ' ')}
-                            </Typography>
-                          </TableCell>
-                          <TableCell sx={{ verticalAlign: 'top', py: 1.5 }}>
-                            <Stack spacing={0.5}>
-                              <Typography variant="caption" color="text.secondary">
-                                Raw from file
-                              </Typography>
-                              <Typography variant="body2">{rawSamplesLine(cand) || '—'}</Typography>
-                              {et === 'customer_dealer_token' ? (
-                                <>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Customer account
-                                  </Typography>
-                                  <Typography variant="body2">{customerAccountLine(cand)}</Typography>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Source customer name
-                                  </Typography>
-                                  <Typography variant="body2">
-                                    {dsiSourceCustomerNameCell(cand?.context ?? null) || '—'}
-                                  </Typography>
-                                  {(() => {
-                                    const { region, channel } = dsiSourceRegionChannelLines(cand?.context ?? null);
-                                    return (
-                                      <>
-                                        <Typography variant="caption" color="text.secondary">
-                                          Source region / province
-                                        </Typography>
-                                        <Typography variant="body2">{region || '—'}</Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                          Source channel / route-to-market
-                                        </Typography>
-                                        <Typography variant="body2">{channel || '—'}</Typography>
-                                      </>
-                                    );
-                                  })()}
-                                </>
-                              ) : null}
-                              {et === 'distributor_token' ? (
-                                <Typography variant="caption" color="text.secondary">
-                                  Normalized key: {String(r.normalized_key ?? '')}
+              <Stack spacing={1.5}>
+                <Box data-testid="dsi-resolution-plan-filters" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {PLAN_REVIEW_FILTER_CHIPS.map(({ value, label }) => (
+                    <Chip
+                      key={value}
+                      size="small"
+                      label={label}
+                      color={planReviewFilter === value ? 'primary' : 'default'}
+                      variant={planReviewFilter === value ? 'filled' : 'outlined'}
+                      onClick={() => setPlanReviewFilter(value)}
+                      data-testid={`dsi-plan-filter-${value}`}
+                    />
+                  ))}
+                </Box>
+                <Stack
+                  direction={{ xs: 'column', lg: 'row' }}
+                  spacing={2}
+                  alignItems={{ lg: 'stretch' }}
+                  useFlexGap
+                >
+                  <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                      <Typography variant="caption" color="text.secondary" data-testid="dsi-resolution-plan-filter-count">
+                        Showing {filteredPlanRows.length} of {planTableRows.length} rows · Ready in plan:{' '}
+                        {readyPlanCandidateIds.length}
+                      </Typography>
+                      <Button
+                        size="small"
+                        disabled={!filteredPlanRows.some((x) => x.ready === true)}
+                        onClick={() => {
+                          const ids = filteredPlanRows
+                            .filter((row) => row.ready === true)
+                            .map((row) => Number(row.candidate_id))
+                            .filter((n) => Number.isFinite(n));
+                          setPlanReviewSelectedIds(ids);
+                        }}
+                        data-testid="dsi-plan-select-visible-ready"
+                      >
+                        Select visible ready
+                      </Button>
+                    </Stack>
+                    <TableContainer sx={{ maxHeight: 420, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                      <Table size="small" data-testid="dsi-resolution-plan-table" stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell padding="checkbox" sx={{ width: 48 }} />
+                            <TableCell sx={{ whiteSpace: 'nowrap' }}>Candidate</TableCell>
+                            <TableCell>Entity</TableCell>
+                            <TableCell sx={{ minWidth: 100 }}>Auto</TableCell>
+                            <TableCell sx={{ minWidth: 100 }}>Effective</TableCell>
+                            <TableCell sx={{ maxWidth: 200 }}>Target</TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell sx={{ maxWidth: 220 }}>Reason</TableCell>
+                            <TableCell align="right">Impact</TableCell>
+                            <TableCell align="right">Conf.</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {filteredPlanRows.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={10}>
+                                <Typography variant="body2" color="text.secondary">
+                                  No rows match this filter.
                                 </Typography>
-                              ) : null}
-                              {et === 'product_identifier' ? (
-                                <>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Product match summary
-                                  </Typography>
-                                  <Typography variant="body2">
-                                    {dsiProductMatchSummaryCell(cand?.context ?? null) || '—'}
-                                  </Typography>
-                                </>
-                              ) : null}
-                            </Stack>
-                          </TableCell>
-                          <TableCell align="right" sx={{ verticalAlign: 'top', py: 1.5, whiteSpace: 'nowrap' }}>
-                            <Typography variant="body2">{String(r.row_count ?? '—')} rows</Typography>
-                            <Typography variant="caption" display="block" color="text.secondary">
-                              {String(r.total_units ?? '—')} units
-                            </Typography>
-                            <Typography variant="caption" display="block" color="text.secondary">
-                              {String(r.total_reported_value ?? '—')} value
-                            </Typography>
-                          </TableCell>
-                          <TableCell sx={{ verticalAlign: 'top', py: 1.5 }}>
-                            <Typography variant="caption" color="text.secondary">
-                              Auto
-                            </Typography>
-                            <Typography variant="body2">{formatPlanActionLabel(baselineAct)}</Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
-                              Effective
-                            </Typography>
-                            <Typography variant="body2">{formatPlanActionLabel(actionEff)}</Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
-                              Target
-                            </Typography>
-                            <Typography variant="body2">
-                              {planTargetSummary(actionEff, r.suggested_target_id, cand, r)}
-                            </Typography>
-                            {r.suggested_target_id != null && r.suggested_target_id !== '' ? (
-                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                                Master id: {String(r.suggested_target_id)}
-                              </Typography>
-                            ) : null}
-                            {planProvisionalGeoNarrative(r)}
-                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
-                              Why
-                            </Typography>
-                            <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                              {String(r.reason ?? '')}
-                              {blockers ? ` · ${blockers}` : ''}
-                            </Typography>
-                          </TableCell>
-                          <TableCell sx={{ verticalAlign: 'top', py: 1.5 }}>
-                            {ready ? (
-                              <Chip size="small" color="success" label="Ready" data-testid="dsi-plan-row-ready" />
-                            ) : (
-                              <Chip size="small" color="default" label="Not ready" data-testid="dsi-plan-row-review" />
-                            )}
-                            {typeof r.confidence === 'number' ? (
-                              <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
-                                Confidence {r.confidence.toFixed(2)}
-                              </Typography>
-                            ) : null}
-                          </TableCell>
-                          <TableCell sx={{ verticalAlign: 'top', py: 1.5 }}>
-                            <Stack spacing={1.25} alignItems="stretch">
-                              {actions.length ? (
-                                <FormControl size="small" fullWidth>
-                                  <InputLabel id={`plan-act-${id}`}>Action</InputLabel>
-                                  <Select
-                                    labelId={`plan-act-${id}`}
-                                    label="Action"
-                                    value={actionEff}
-                                    onChange={(e) => patchPlanOverride(id, { action: String(e.target.value) })}
-                                    data-testid={`dsi-plan-action-${id}`}
-                                  >
-                                    {actions.map((a) => (
-                                      <MenuItem key={a} value={a}>
-                                        {formatPlanActionLabel(a)}
-                                      </MenuItem>
-                                    ))}
-                                  </Select>
-                                </FormControl>
-                              ) : null}
-                              <TextField
-                                size="small"
-                                fullWidth
-                                type="number"
-                                label="Map / resolve master id"
-                                helperText="Numeric id only; names show in Target when known from the grid"
-                                value={r.suggested_target_id != null ? String(r.suggested_target_id) : ''}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  if (v === '') {
-                                    patchPlanOverride(id, { target_id: null });
-                                    return;
-                                  }
-                                  const n = Number(v);
-                                  patchPlanOverride(id, { target_id: Number.isFinite(n) ? n : null });
-                                }}
-                                inputProps={{ 'data-testid': `dsi-plan-target-${id}` }}
-                              />
-                              {et === 'customer_dealer_token' && actionEff === 'create_provisional_customer' ? (
-                                <Stack spacing={1}>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Catalog row override (optional — use when blocked for mixed source evidence or to pick a
-                                    specific <strong>dim_region</strong> / <strong>dim_channel</strong> for an unresolved
-                                    file token)
-                                  </Typography>
-                                  <FormControl size="small" fullWidth>
-                                    <InputLabel id={`plan-or-r-${id}`}>Region override</InputLabel>
-                                    <Select
-                                      labelId={`plan-or-r-${id}`}
-                                      label="Region override"
-                                      value={
-                                        planOverrideMap[id]?.region_id != null
-                                          ? String(planOverrideMap[id].region_id)
-                                          : ''
-                                      }
-                                      displayEmpty
-                                      renderValue={(sel) => {
-                                        if (sel === '') {
-                                          const er = r.effective_region_id;
-                                          const ec = r.effective_region_code;
-                                          const en = r.effective_region_name;
-                                          if (er != null && er !== '')
-                                            return ec
-                                              ? `${String(ec)}${en ? ` — ${String(en)}` : ''} (plan)`
-                                              : `id ${String(er)} (plan)`;
-                                          return 'Plan effective: unassigned';
-                                        }
-                                        const hit = regions.find((x) => String(x.id) === sel);
-                                        return hit ? `${hit.code} — ${hit.name}` : String(sel);
-                                      }}
-                                      onChange={(e) => {
-                                        const v = String(e.target.value);
-                                        if (v === '') patchPlanOverride(id, { region_id: null });
-                                        else patchPlanOverride(id, { region_id: Number(v) });
-                                      }}
-                                      inputProps={{ 'data-testid': `dsi-plan-region-override-${id}` }}
-                                    >
-                                      <MenuItem value="">
-                                        <em>Use plan effective</em>
-                                      </MenuItem>
-                                      {regions.map((reg) => (
-                                        <MenuItem key={reg.id} value={String(reg.id)}>
-                                          {reg.code} — {reg.name}
-                                        </MenuItem>
-                                      ))}
-                                    </Select>
-                                  </FormControl>
-                                  <FormControl size="small" fullWidth>
-                                    <InputLabel id={`plan-or-c-${id}`}>Channel override</InputLabel>
-                                    <Select
-                                      labelId={`plan-or-c-${id}`}
-                                      label="Channel override"
-                                      value={
-                                        planOverrideMap[id]?.channel_id != null
-                                          ? String(planOverrideMap[id].channel_id)
-                                          : ''
-                                      }
-                                      displayEmpty
-                                      renderValue={(sel) => {
-                                        if (sel === '') {
-                                          const er = r.effective_channel_id;
-                                          const ec = r.effective_channel_code;
-                                          const en = r.effective_channel_name;
-                                          if (er != null && er !== '')
-                                            return ec
-                                              ? `${String(ec)}${en ? ` — ${String(en)}` : ''} (plan)`
-                                              : `id ${String(er)} (plan)`;
-                                          return 'Plan effective: unassigned';
-                                        }
-                                        const hit = channels.find((x) => String(x.id) === sel);
-                                        return hit ? `${hit.code} — ${hit.name}` : String(sel);
-                                      }}
-                                      onChange={(e) => {
-                                        const v = String(e.target.value);
-                                        if (v === '') patchPlanOverride(id, { channel_id: null });
-                                        else patchPlanOverride(id, { channel_id: Number(v) });
-                                      }}
-                                      inputProps={{ 'data-testid': `dsi-plan-channel-override-${id}` }}
-                                    >
-                                      <MenuItem value="">
-                                        <em>Use plan effective</em>
-                                      </MenuItem>
-                                      {channels.map((ch) => (
-                                        <MenuItem key={ch.id} value={String(ch.id)}>
-                                          {ch.code} — {ch.name}
-                                        </MenuItem>
-                                      ))}
-                                    </Select>
-                                  </FormControl>
-                                </Stack>
-                              ) : null}
-                              <FormControlLabel
-                                control={
-                                  <Checkbox
-                                    size="small"
-                                    checked={r.hold_for_manual_review === true}
-                                    onChange={(e) =>
-                                      patchPlanOverride(id, { hold_for_manual_review: e.target.checked })
-                                    }
-                                    inputProps={{ 'data-testid': `dsi-plan-hold-${id}` }}
-                                  />
-                                }
-                                label="Hold (skip in apply)"
-                              />
-                              {et === 'distributor_token' ? (
-                                <FormControlLabel
-                                  control={
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredPlanRows.map((r) => {
+                              const id = Number(r.candidate_id);
+                              const cand = candidatesById[id];
+                              const et = String(r.entity_type ?? '');
+                              const ready = r.ready === true;
+                              const actionEff = String(r.suggested_action ?? '');
+                              const baselineAct = String(r.baseline_suggested_action ?? actionEff);
+                              const selected = planReviewSelectedIds.includes(id);
+                              const candidateSummary = truncateEllipsis(
+                                rawSamplesLine(cand) || customerAccountLine(cand) || String(r.normalized_key ?? ''),
+                                42
+                              );
+                              return (
+                                <TableRow
+                                  key={String(id)}
+                                  hover
+                                  selected={planReviewDetailId === id}
+                                  onClick={() => setPlanReviewDetailId(id)}
+                                  sx={{ cursor: 'pointer' }}
+                                >
+                                  <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
                                     <Checkbox
                                       size="small"
-                                      checked={planOverrideMap[id]?.confirm_for_suspicious_distributor_token === true}
-                                      onChange={(e) =>
-                                        patchPlanOverride(id, {
-                                          confirm_for_suspicious_distributor_token: e.target.checked,
-                                        })
-                                      }
-                                      inputProps={{ 'data-testid': `dsi-plan-dist-confirm-${id}` }}
+                                      checked={selected}
+                                      disabled={!ready}
+                                      onChange={(_, checked) => {
+                                        setPlanReviewSelectedIds((prev) => {
+                                          const next = new Set(prev);
+                                          if (checked) next.add(id);
+                                          else next.delete(id);
+                                          return [...next];
+                                        });
+                                      }}
+                                      inputProps={{ 'data-testid': `dsi-plan-row-select-${id}` }}
+                                      title={ready ? 'Include in Apply selected ready' : 'Not ready — cannot select for apply'}
                                     />
-                                  }
-                                  label="Confirm placeholder-like distributor token"
-                                />
-                              ) : null}
-                              {et === 'product_identifier' ? (
-                                <Stack spacing={1}>
-                                  <FormControlLabel
-                                    control={
-                                      <Checkbox
-                                        size="small"
-                                        checked={planOverrideMap[id]?.confirm_ineligible_product === true}
-                                        onChange={(e) =>
-                                          patchPlanOverride(id, { confirm_ineligible_product: e.target.checked })
-                                        }
-                                      />
-                                    }
-                                    label="Confirm inactive / ineligible product"
-                                  />
-                                  <TextField
-                                    size="small"
-                                    fullWidth
-                                    label="Audit note (≥8 chars if confirming)"
-                                    value={planOverrideMap[id]?.audit_note ?? ''}
-                                    onChange={(e) => patchPlanOverride(id, { audit_note: e.target.value })}
-                                    data-testid={`dsi-plan-product-audit-${id}`}
-                                  />
-                                </Stack>
-                              ) : null}
-                              {et === 'customer_dealer_token' && strategicHint ? (
-                                <FormControlLabel
-                                  control={
-                                    <Checkbox
-                                      size="small"
-                                      checked={planOverrideMap[id]?.ack_strategic_channel_hint === true}
-                                      onChange={(e) =>
-                                        patchPlanOverride(id, { ack_strategic_channel_hint: e.target.checked })
-                                      }
-                                      inputProps={{ 'data-testid': `dsi-plan-strategic-${id}` }}
-                                    />
-                                  }
-                                  label="Acknowledge strategic / marketplace evidence"
-                                />
-                              ) : null}
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                                  </TableCell>
+                                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                    <Typography variant="caption" color="text.secondary" display="block">
+                                      #{id}
+                                    </Typography>
+                                    <Typography variant="body2" noWrap title={candidateSummary}>
+                                      {candidateSummary || '—'}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Typography variant="body2" noWrap sx={{ textTransform: 'capitalize' }}>
+                                      {et.replace(/_/g, ' ')}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Typography variant="caption" noWrap title={formatPlanActionLabel(baselineAct)}>
+                                      {truncateEllipsis(formatPlanActionLabel(baselineAct), 22)}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Typography variant="caption" noWrap title={formatPlanActionLabel(actionEff)}>
+                                      {truncateEllipsis(formatPlanActionLabel(actionEff), 22)}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell sx={{ maxWidth: 200 }}>
+                                    <Typography
+                                      variant="caption"
+                                      noWrap
+                                      title={planTargetSummary(actionEff, r.suggested_target_id, cand, r)}
+                                    >
+                                      {truncateEllipsis(
+                                        planTargetSummary(actionEff, r.suggested_target_id, cand, r),
+                                        56
+                                      )}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Stack spacing={0.5}>
+                                      {ready ? (
+                                        <Chip
+                                          size="small"
+                                          color="success"
+                                          label="Ready"
+                                          data-testid="dsi-plan-row-ready"
+                                        />
+                                      ) : (
+                                        <Chip
+                                          size="small"
+                                          color="default"
+                                          label="Not ready"
+                                          data-testid="dsi-plan-row-review"
+                                        />
+                                      )}
+                                      {isProvisionalCustomerReadyWithUnassignedGeo(r) ? (
+                                        <Chip
+                                          size="small"
+                                          color="warning"
+                                          variant="outlined"
+                                          label="Unassigned geo"
+                                          data-testid={`dsi-plan-row-unassigned-geo-${id}`}
+                                        />
+                                      ) : null}
+                                    </Stack>
+                                  </TableCell>
+                                  <TableCell sx={{ maxWidth: 220 }}>
+                                    <Typography variant="caption" color="text.secondary" title={planReasonSummary(r)}>
+                                      {truncateEllipsis(planReasonSummary(r), 72)}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                                    <Typography variant="caption" component="div">
+                                      {String(r.row_count ?? '—')} r
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" component="div">
+                                      {String(r.total_units ?? '—')} u
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" component="div">
+                                      {String(r.total_reported_value ?? '—')} v
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    {typeof r.confidence === 'number' ? (
+                                      <Typography variant="caption" noWrap>
+                                        {r.confidence.toFixed(2)}
+                                      </Typography>
+                                    ) : (
+                                      <Typography variant="caption" color="text.secondary">
+                                        —
+                                      </Typography>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Stack>
+                  <Box
+                    sx={{
+                      flex: { lg: 0.95 },
+                      minWidth: { xs: '100%', lg: 320 },
+                      maxHeight: { lg: 460 },
+                      overflow: 'auto',
+                      border: 1,
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                      p: 1.5,
+                    }}
+                    data-testid="dsi-resolution-plan-detail-panel"
+                  >
+                    {planDetailRow ? (
+                      <PlanDialogRowDetail
+                        r={planDetailRow}
+                        candidate={candidatesById[Number(planDetailRow.candidate_id)]}
+                        regions={regions}
+                        channels={channels}
+                        planOverrideMap={planOverrideMap}
+                        patchPlanOverride={patchPlanOverride}
+                      />
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        data-testid="dsi-resolution-plan-detail-empty"
+                      >
+                        Select a row to view full source evidence, region/channel context, and overrides.
+                      </Typography>
+                    )}
+                  </Box>
+                </Stack>
+              </Stack>
             ) : (
               <Typography variant="body2" color="text.secondary">
                 No plan rows. Generate a plan from the section above.
@@ -1592,13 +1907,14 @@ export function DsiImportJobResolutionSection({
             )}
             <Typography variant="caption" color="text.secondary" display="block">
               After changing overrides, either wait a moment for an automatic update or click <strong>Update plan after edits</strong>.
-              Apply uses the same steward APIs as single-row and bulk. <strong>Apply selected ready</strong> uses grid
-              checkboxes with ready rows only.
+              Apply uses the same steward APIs as single-row and bulk. <strong>Apply all ready</strong> includes every ready row
+              in the full plan ({readyPlanCandidateIds.length}). <strong>Apply selected ready</strong> uses only ready rows
+              checked in this plan table ({selectedReadyPlanIds.length} selected).
             </Typography>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
-          <Button onClick={() => setPlanDialogOpen(false)}>Close</Button>
+          <Button onClick={closePlanDialog}>Close</Button>
           <Box sx={{ flexGrow: 1 }} />
           <Button
             variant="outlined"
