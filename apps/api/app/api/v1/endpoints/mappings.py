@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from typing_extensions import Self
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Response
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -28,7 +28,14 @@ from app.services.imports.dsi_resolution_plan import (
     apply_dsi_resolution_plan_rows,
     build_dsi_resolution_plan_effective_sync,
     build_dsi_resolution_plan_sync,
+    collect_dsi_job_unresolved_geo_tokens_sync,
     derive_effective_provisional_customer_geo_sync,
+)
+from app.services.imports.dsi_steward_geo_catalog import (
+    create_channel_source_token_alias_sync,
+    create_dim_channel_with_source_alias_sync,
+    create_dim_region_with_source_alias_sync,
+    create_region_source_token_alias_sync,
 )
 from app.services.imports.dsi_steward_candidate_ops import (
     StewardOpError,
@@ -49,6 +56,14 @@ from app.services.imports.dsi_steward_candidate_ops import (
 )
 
 router = APIRouter()
+
+
+def _require_admin_role(x_user_role: str | None = Header(default=None, alias="X-User-Role")) -> None:
+    if (x_user_role or "").strip().lower() != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "admin_required", "message": "Admin maintenance requires X-User-Role: admin"},
+        )
 
 
 class ClearConfirmBody(BaseModel):
@@ -807,6 +822,154 @@ async def revalidate_dsi_import_job(job_id: int, db: AsyncSession = Depends(get_
         "stage": updated.stage,
         "template_slug": updated.template_slug,
     }
+
+
+@router.get("/import-jobs/{job_id}/dsi-unresolved-geo-tokens", status_code=200)
+async def dsi_unresolved_geo_tokens(job_id: int, db: AsyncSession = Depends(get_db)):
+    await _assert_dsi_import_job(db, job_id)
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return collect_dsi_job_unresolved_geo_tokens_sync(sess, job_id)
+
+    try:
+        return await db.run_sync(_work)
+    except ValueError as exc:
+        msg = str(exc)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg) from exc
+        raise HTTPException(status_code=400, detail=msg) from exc
+
+
+class DsiGeoStewardChannelCreateBody(BaseModel):
+    channel_code: str = Field(..., min_length=1, max_length=32)
+    channel_name: str = Field(..., min_length=1, max_length=256)
+    raw_token: str = Field(..., min_length=1, max_length=512)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class DsiGeoStewardChannelAliasBody(BaseModel):
+    channel_id: int = Field(..., ge=1)
+    raw_token: str = Field(..., min_length=1, max_length=512)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class DsiGeoStewardRegionCreateBody(BaseModel):
+    region_code: str = Field(..., min_length=1, max_length=32)
+    region_name: str = Field(..., min_length=1, max_length=256)
+    raw_token: str = Field(..., min_length=1, max_length=512)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class DsiGeoStewardRegionAliasBody(BaseModel):
+    region_id: int = Field(..., ge=1)
+    raw_token: str = Field(..., min_length=1, max_length=512)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+@router.post("/import-jobs/{job_id}/dsi-geo-steward/channel-create", status_code=201)
+async def dsi_geo_steward_channel_create(
+    job_id: int,
+    body: DsiGeoStewardChannelCreateBody,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(_require_admin_role),
+):
+    await _assert_dsi_import_job(db, job_id)
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return create_dim_channel_with_source_alias_sync(
+            sess,
+            import_job_id=job_id,
+            channel_code=body.channel_code,
+            channel_name=body.channel_name,
+            raw_token=body.raw_token,
+            notes=body.notes,
+        )
+
+    try:
+        out = await db.run_sync(_work)
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    await db.commit()
+    return out
+
+
+@router.post("/import-jobs/{job_id}/dsi-geo-steward/channel-alias", status_code=201)
+async def dsi_geo_steward_channel_alias(
+    job_id: int,
+    body: DsiGeoStewardChannelAliasBody,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(_require_admin_role),
+):
+    await _assert_dsi_import_job(db, job_id)
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return create_channel_source_token_alias_sync(
+            sess,
+            import_job_id=job_id,
+            channel_id=body.channel_id,
+            raw_token=body.raw_token,
+            notes=body.notes,
+        )
+
+    try:
+        out = await db.run_sync(_work)
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    await db.commit()
+    return out
+
+
+@router.post("/import-jobs/{job_id}/dsi-geo-steward/region-create", status_code=201)
+async def dsi_geo_steward_region_create(
+    job_id: int,
+    body: DsiGeoStewardRegionCreateBody,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(_require_admin_role),
+):
+    await _assert_dsi_import_job(db, job_id)
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return create_dim_region_with_source_alias_sync(
+            sess,
+            import_job_id=job_id,
+            region_code=body.region_code,
+            region_name=body.region_name,
+            raw_token=body.raw_token,
+            notes=body.notes,
+        )
+
+    try:
+        out = await db.run_sync(_work)
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    await db.commit()
+    return out
+
+
+@router.post("/import-jobs/{job_id}/dsi-geo-steward/region-alias", status_code=201)
+async def dsi_geo_steward_region_alias(
+    job_id: int,
+    body: DsiGeoStewardRegionAliasBody,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(_require_admin_role),
+):
+    await _assert_dsi_import_job(db, job_id)
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return create_region_source_token_alias_sync(
+            sess,
+            import_job_id=job_id,
+            region_id=body.region_id,
+            raw_token=body.raw_token,
+            notes=body.notes,
+        )
+
+    try:
+        out = await db.run_sync(_work)
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    await db.commit()
+    return out
 
 
 class CustomerSourceTokenAliasCreate(BaseModel):

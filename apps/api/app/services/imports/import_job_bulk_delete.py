@@ -18,6 +18,7 @@ from app.models.import_distributor_si import (
     DistributorSourceTokenAlias,
     ImportDistributorSiStagingLine,
     ImportEntityMappingCandidate,
+    RegionSourceTokenAlias,
 )
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata
 from app.models.mapping import EntityMappingQueue
@@ -156,6 +157,14 @@ def preview_import_job_bulk_delete(db: Session, job_ids: list[int]) -> dict[str,
             )
             or 0
         ),
+        "region_source_token_aliases": int(
+            db.scalar(
+                select(func.count())
+                .select_from(RegionSourceTokenAlias)
+                .where(RegionSourceTokenAlias.created_from_import_job_id.in_(id_tuple))
+            )
+            or 0
+        ),
         "distributor_source_token_aliases": int(
             db.scalar(
                 select(func.count())
@@ -217,6 +226,14 @@ def bulk_delete_import_jobs(
         )
         or 0
     )
+    reg_alias_n = int(
+        db.scalar(
+            select(func.count())
+            .select_from(RegionSourceTokenAlias)
+            .where(RegionSourceTokenAlias.created_from_import_job_id.in_(id_tuple))
+        )
+        or 0
+    )
     dist_alias_n = int(
         db.scalar(
             select(func.count())
@@ -225,7 +242,7 @@ def bulk_delete_import_jobs(
         )
         or 0
     )
-    if not delete_semantic_artifacts and (cust_alias_n > 0 or dist_alias_n > 0 or ch_alias_n > 0):
+    if not delete_semantic_artifacts and (cust_alias_n > 0 or dist_alias_n > 0 or ch_alias_n > 0 or reg_alias_n > 0):
         raise ValueError("semantic_artifacts_present")
 
     deleted: dict[str, int] = {}
@@ -254,12 +271,17 @@ def bulk_delete_import_jobs(
         )
         deleted["channel_source_token_aliases_deleted"] = int(r.rowcount or 0)
         r = db.execute(
+            delete(RegionSourceTokenAlias).where(RegionSourceTokenAlias.created_from_import_job_id.in_(id_tuple))
+        )
+        deleted["region_source_token_aliases_deleted"] = int(r.rowcount or 0)
+        r = db.execute(
             delete(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.created_from_import_job_id.in_(id_tuple))
         )
         deleted["distributor_source_token_aliases_deleted"] = int(r.rowcount or 0)
     else:
         deleted["customer_source_token_aliases_deleted"] = 0
         deleted["channel_source_token_aliases_deleted"] = 0
+        deleted["region_source_token_aliases_deleted"] = 0
         deleted["distributor_source_token_aliases_deleted"] = 0
 
     r = db.execute(delete(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id.in_(id_tuple)))

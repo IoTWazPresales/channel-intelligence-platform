@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.models.dimensions import DimChannel, DimRegion
-from app.models.import_distributor_si import ChannelSourceTokenAlias, ImportEntityMappingCandidate
+from app.models.import_distributor_si import ChannelSourceTokenAlias, ImportEntityMappingCandidate, RegionSourceTokenAlias
 from app.models.ingestion import ImportJob
 from app.services.imports.distributor_sales_inventory import (
     ProductResolutionIndex,
@@ -49,7 +49,10 @@ SuggestedAction = Literal[
     "none",
 ]
 
-def _resolve_dim_region_from_source(session: Session, raw: str | None) -> tuple[int | None, str | None]:
+
+def _resolve_dim_region_from_source(
+    session: Session, raw: str | None, *, source_definition_id: int | None = None
+) -> tuple[int | None, str | None]:
     s = (raw or "").strip()
     if not s:
         return None, "blank"
@@ -60,6 +63,12 @@ def _resolve_dim_region_from_source(session: Session, raw: str | None) -> tuple[
     row = session.scalar(select(DimRegion).where(func.lower(DimRegion.name) == nk))
     if row is not None:
         return int(row.id), None
+
+    rid, alias_reason = _alias_region_id_for_dsi(session, source_definition_id, nk)
+    if rid is not None:
+        return rid, alias_reason or "source_region_token_alias"
+    if alias_reason == "conflicting_region_token_aliases":
+        return None, alias_reason
     return None, "no_catalog_match"
 
 
@@ -67,14 +76,14 @@ def dsi_geo_channel_alias_source_id(
     cand: ImportEntityMappingCandidate,
     import_job: ImportJob | None,
 ) -> int | None:
-    """SourceDefinition id used for ``channel_source_token_alias`` lookup (single policy for all DSI geo paths).
+    """SourceDefinition id used for ``channel_source_token_alias`` / ``region_source_token_alias`` lookups.
 
     Prefer ``cand.source_definition_id`` (persisted on the aggregate candidate when the import ran).
     If missing (older rows / repairs), fall back to ``import_job.source`` when the job is loaded.
 
     If both are missing, returns ``None``: the alias query considers **all** approved rows for the
-    normalized token regardless of ``source_definition_id``; multiple distinct ``channel_id`` values
-    yield ``conflicting_channel_token_aliases``.
+    normalized token regardless of ``source_definition_id``; multiple distinct dimension ids
+    yield conflicting alias resolution details.
     """
     sid = cand.source_definition_id
     if sid is not None:
@@ -82,6 +91,40 @@ def dsi_geo_channel_alias_source_id(
     if import_job is not None and import_job.source is not None:
         return int(import_job.source.id)
     return None
+
+
+def dsi_geo_region_alias_source_id(
+    cand: ImportEntityMappingCandidate,
+    import_job: ImportJob | None,
+) -> int | None:
+    """Same source-definition scope policy as ``dsi_geo_channel_alias_source_id`` (region aliases are parallel)."""
+
+    return dsi_geo_channel_alias_source_id(cand, import_job)
+
+
+def _alias_region_id_for_dsi(session: Session, source_id: int | None, normalized_token: str) -> tuple[int | None, str | None]:
+    """Approved region aliases: exact ``normalized_token`` match only (no fuzzy matching)."""
+
+    nt = (normalized_token or "").strip()
+    if not nt:
+        return None, None
+    q = select(RegionSourceTokenAlias.region_id).where(
+        RegionSourceTokenAlias.normalized_token == nt,
+        RegionSourceTokenAlias.status == "approved",
+    )
+    if source_id is not None:
+        q = q.where(
+            or_(
+                RegionSourceTokenAlias.source_definition_id.is_(None),
+                RegionSourceTokenAlias.source_definition_id == source_id,
+            )
+        )
+    rows = list(dict.fromkeys(session.scalars(q).all()))
+    if len(rows) == 1:
+        return int(rows[0]), "source_region_token_alias"
+    if len(rows) > 1:
+        return None, "conflicting_region_token_aliases"
+    return None, None
 
 
 def _alias_channel_id_for_dsi(session: Session, source_id: int | None, normalized_token: str) -> tuple[int | None, str | None]:
@@ -174,6 +217,12 @@ def _provisional_geo_dimension_message(
             f'Source {dim_short} "{tok}" matches multiple approved channel token mappings — '
             f"fix alias data or use a row override."
         )
+    if detail == "conflicting_region_token_aliases":
+        tok = (raw_token or "").strip()[:160] or "(token)"
+        return (
+            f'Source {dim_short} "{tok}" matches multiple approved region token mappings — '
+            f"fix alias data or use a row override."
+        )
     if detail == "blank":
         return f"Source {dim_short} cell was empty after normalization."
     return f"{dim_long}: {detail}"
@@ -211,7 +260,7 @@ def _resolve_source_geo_from_ctx(
             raw_pick = _pick_raw_for_norm(reg_samples if isinstance(reg_samples, list) else [], uniq_r[0])
             if raw_pick:
                 out["source_region_raw_token"] = str(raw_pick).strip()[:512]
-            rid, reason = _resolve_dim_region_from_source(session, raw_pick)
+            rid, reason = _resolve_dim_region_from_source(session, raw_pick, source_definition_id=source_definition_id)
             out["source_region_resolved_id"] = rid
             if rid is None:
                 out["source_region_resolution_detail"] = reason or "unresolved"
@@ -313,9 +362,15 @@ def derive_effective_provisional_customer_geo_sync(
             dim_long="region / province",
         )
     elif src_r is not None:
-        source_region_resolution_message = (
-            f"File → catalog region: {rc or '?'}" + (f" — {rn}" if rn else "") + "."
-        )
+        reg_detail = geo.get("source_region_resolution_detail")
+        if reg_detail == "source_region_token_alias":
+            source_region_resolution_message = (
+                f"Approved source region token → catalog region: {rc or '?'}" + (f" — {rn}" if rn else "") + "."
+            )
+        else:
+            source_region_resolution_message = (
+                f"File → catalog region: {rc or '?'}" + (f" — {rn}" if rn else "") + "."
+            )
     else:
         source_region_resolution_message = _provisional_geo_dimension_message(
             detail=dr if isinstance(dr, str) else None,
@@ -952,6 +1007,104 @@ def build_dsi_resolution_plan_effective_sync(
             "region_id": default_region_id,
             "channel_id": default_channel_id,
         },
+    }
+
+
+def collect_dsi_job_unresolved_geo_tokens_sync(session: Session, job_id: int) -> dict[str, Any]:
+    """Distinct source channel / region values from customer candidates that still need steward catalog work.
+
+    Uses the same resolution rules as the DSI plan (no fuzzy matching). Conflicting multi-value source
+    evidence per candidate is omitted here — those are handled via row overrides / file fixes.
+    """
+    job = session.get(ImportJob, int(job_id))
+    if not job:
+        raise ValueError("Import job not found")
+    if (job.template_slug or "") != "distributor_inventory":
+        raise ValueError("Job is not a distributor sales & inventory import")
+
+    ch_acc: dict[str, dict[str, Any]] = {}
+    reg_acc: dict[str, dict[str, Any]] = {}
+
+    cands = list(
+        session.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == int(job_id),
+                ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+            )
+        ).all()
+    )
+
+    for cand in cands:
+        ctx = cand.context if isinstance(cand.context, dict) else {}
+        sid = dsi_geo_channel_alias_source_id(cand, job)
+        geo = _resolve_source_geo_from_ctx(session, ctx, source_definition_id=sid)
+        rc = int(cand.row_count or 0)
+
+        if not geo.get("provisional_channel_conflict"):
+            ch_detail = geo.get("source_channel_resolution_detail")
+            ch_id = geo.get("source_channel_resolved_id")
+            raw_t = geo.get("source_channel_raw_token")
+            if ch_id is None and isinstance(raw_t, str) and raw_t.strip():
+                if ch_detail in ("no_catalog_match", "conflicting_channel_token_aliases"):
+                    nk = _norm_key(raw_t)
+                    key = f"ch:{nk}"
+                    ent = ch_acc.setdefault(
+                        key,
+                        {
+                            "dimension": "channel",
+                            "normalized_token": nk,
+                            "raw_token": str(raw_t).strip()[:512],
+                            "resolution_detail": ch_detail,
+                            "candidate_ids": [],
+                            "row_count": 0,
+                        },
+                    )
+                    ent["candidate_ids"].append(int(cand.id))
+                    ent["row_count"] += rc
+
+        if not geo.get("provisional_region_conflict"):
+            reg_detail = geo.get("source_region_resolution_detail")
+            rid = geo.get("source_region_resolved_id")
+            raw_r = geo.get("source_region_raw_token")
+            if rid is None and isinstance(raw_r, str) and raw_r.strip():
+                if reg_detail in ("no_catalog_match", "conflicting_region_token_aliases"):
+                    nk = _norm_key(raw_r)
+                    key = f"rg:{nk}"
+                    ent = reg_acc.setdefault(
+                        key,
+                        {
+                            "dimension": "region",
+                            "normalized_token": nk,
+                            "raw_token": str(raw_r).strip()[:512],
+                            "resolution_detail": reg_detail,
+                            "candidate_ids": [],
+                            "row_count": 0,
+                        },
+                    )
+                    ent["candidate_ids"].append(int(cand.id))
+                    ent["row_count"] += rc
+
+    def _finalize(rows: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+        out = []
+        for ent in rows.values():
+            ids = sorted(set(ent["candidate_ids"]))
+            out.append(
+                {
+                    "dimension": ent["dimension"],
+                    "normalized_token": ent["normalized_token"],
+                    "raw_token": ent["raw_token"],
+                    "resolution_detail": ent["resolution_detail"],
+                    "candidate_ids": ids,
+                    "row_count": int(ent["row_count"]),
+                }
+            )
+        out.sort(key=lambda x: (x["dimension"], x["normalized_token"]))
+        return out
+
+    return {
+        "import_job_id": int(job_id),
+        "channels": _finalize(ch_acc),
+        "regions": _finalize(reg_acc),
     }
 
 

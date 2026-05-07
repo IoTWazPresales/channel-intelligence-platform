@@ -138,3 +138,20 @@ class ChannelSourceTokenAlias(Base, TimestampMixin):
     created_from_import_job_id: Mapped[int | None] = mapped_column(
         ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True
     )
+
+
+class RegionSourceTokenAlias(Base, TimestampMixin):
+    """Steward-approved mapping from a normalized DSI region / province token to dim_region."""
+
+    __tablename__ = "region_source_token_alias"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    region_id: Mapped[int] = mapped_column(ForeignKey("dim_region.id", ondelete="CASCADE"), nullable=False)
+    source_definition_id: Mapped[int | None] = mapped_column(ForeignKey("source_definition.id"), nullable=True)
+    raw_token: Mapped[str] = mapped_column(String(512), nullable=False)
+    normalized_token: Mapped[str] = mapped_column(String(512), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="approved", nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_from_import_job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True
+    )

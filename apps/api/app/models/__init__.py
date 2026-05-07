@@ -38,6 +38,7 @@ from app.models.import_distributor_si import (
     DistributorSourceTokenAlias,
     ImportDistributorSiStagingLine,
     ImportEntityMappingCandidate,
+    RegionSourceTokenAlias,
 )
 from app.models.promo_export import PromoPlanExport, PromoPlanExportEvent
 from app.models.facts import (

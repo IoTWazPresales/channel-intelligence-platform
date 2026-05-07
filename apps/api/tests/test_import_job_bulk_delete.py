@@ -169,6 +169,7 @@ def test_bulk_delete_preview_and_confirm_round_trip() -> None:
         assert body["counts"]["fact_inventory_distributor_rows"] >= 1
         assert body["risky"]["customer_source_token_aliases"] == 0
         assert body["risky"]["channel_source_token_aliases"] == 0
+        assert body["risky"]["region_source_token_aliases"] == 0
 
         cr = client.post(
             "/api/v1/imports/jobs/bulk-delete-confirm",

@@ -13,7 +13,12 @@ import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
 const mockApiPost = vi.fn();
 
 vi.mock('@/lib/api', () => ({
-  apiGet: vi.fn(async () => []),
+  apiGet: vi.fn(async (path: string) => {
+    if (String(path).includes('dsi-unresolved-geo-tokens')) {
+      return { import_job_id: 7, channels: [], regions: [] };
+    }
+    return [];
+  }),
   apiPost: (...args: unknown[]) => mockApiPost(...args),
   safeDisplayError: (e: unknown) => String(e),
 }));
