@@ -63,8 +63,37 @@ def _resolve_dim_region_from_source(session: Session, raw: str | None) -> tuple[
     return None, "no_catalog_match"
 
 
+def dsi_geo_channel_alias_source_id(
+    cand: ImportEntityMappingCandidate,
+    import_job: ImportJob | None,
+) -> int | None:
+    """SourceDefinition id used for ``channel_source_token_alias`` lookup (single policy for all DSI geo paths).
+
+    Prefer ``cand.source_definition_id`` (persisted on the aggregate candidate when the import ran).
+    If missing (older rows / repairs), fall back to ``import_job.source`` when the job is loaded.
+
+    If both are missing, returns ``None``: the alias query considers **all** approved rows for the
+    normalized token regardless of ``source_definition_id``; multiple distinct ``channel_id`` values
+    yield ``conflicting_channel_token_aliases``.
+    """
+    sid = cand.source_definition_id
+    if sid is not None:
+        return int(sid)
+    if import_job is not None and import_job.source is not None:
+        return int(import_job.source.id)
+    return None
+
+
 def _alias_channel_id_for_dsi(session: Session, source_id: int | None, normalized_token: str) -> tuple[int | None, str | None]:
-    """Match distributor alias semantics: global + source-specific rows; exact normalized token only."""
+    """Approved channel aliases: exact ``normalized_token`` match only (no fuzzy matching).
+
+    When ``source_id`` is set: match rows where ``source_definition_id`` is NULL (global) or equals
+    ``source_id`` (source-scoped). Duplicate ``channel_id`` values dedupe; distinct channel ids conflict.
+
+    When ``source_id`` is None: no source filter — any approved row for the token matches (all sources
+    + global). Use only when both candidate and job source are unknown; prefer resolving source via
+    ``dsi_geo_channel_alias_source_id``.
+    """
     nt = (normalized_token or "").strip()
     if not nt:
         return None, None
@@ -237,11 +266,11 @@ def derive_effective_provisional_customer_geo_sync(
     *,
     default_region_id: int | None,
     default_channel_id: int | None,
-    source_definition_id: int | None = None,
+    import_job: ImportJob | None = None,
 ) -> dict[str, Any]:
     """Shared by resolution plan rows and bulk provisional customer preview/apply."""
     ctx = cand.context if isinstance(cand.context, dict) else {}
-    src_def = source_definition_id if source_definition_id is not None else cand.source_definition_id
+    src_def = dsi_geo_channel_alias_source_id(cand, import_job)
     geo = _resolve_source_geo_from_ctx(session, ctx, source_definition_id=src_def)
     src_r = geo.get("source_region_resolved_id")
     src_c = geo.get("source_channel_resolved_id")
@@ -511,7 +540,7 @@ def plan_dsi_candidate_sync(
                 cand,
                 default_region_id=default_region_id,
                 default_channel_id=default_channel_id,
-                source_definition_id=source_def_id,
+                import_job=job,
             )
             return {
                 **base,
@@ -584,7 +613,7 @@ def plan_dsi_candidate_sync(
             cand,
             default_region_id=default_region_id,
             default_channel_id=default_channel_id,
-            source_definition_id=source_def_id,
+            import_job=job,
         )
         geo_conflict = bool(geo.get("provisional_region_conflict") or geo.get("provisional_channel_conflict"))
         if geo_conflict:

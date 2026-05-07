@@ -13,7 +13,9 @@ from app.db.session_sync import SessionLocal
 from app.main import app
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactInventoryDistributor, FactSalesSellout
+from app.models.dimensions import DimChannel
 from app.models.import_distributor_si import (
+    ChannelSourceTokenAlias,
     CustomerSourceTokenAlias,
     DistributorSourceTokenAlias,
     ImportDistributorSiStagingLine,
@@ -49,6 +51,9 @@ def _skip_mutations_on_shared_cip() -> None:
             "Use DATABASE_URL / DATABASE_URL_SYNC pointing at a disposable DB (e.g. cip_test), "
             "or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database."
         )
+
+
+def _first_dims(session):
     c = session.scalar(select(DimCustomer).limit(1))
     p = session.scalar(select(DimProduct).limit(1))
     d = session.scalar(select(DimDistributor).limit(1))
@@ -163,6 +168,7 @@ def test_bulk_delete_preview_and_confirm_round_trip() -> None:
         assert body["counts"]["fact_sales_sellout_rows"] >= 1
         assert body["counts"]["fact_inventory_distributor_rows"] >= 1
         assert body["risky"]["customer_source_token_aliases"] == 0
+        assert body["risky"]["channel_source_token_aliases"] == 0
 
         cr = client.post(
             "/api/v1/imports/jobs/bulk-delete-confirm",
@@ -278,3 +284,57 @@ def test_bulk_delete_confirm_blocked_by_distributor_aliases() -> None:
         )
         assert ok.status_code == 200
         assert ok.json()["deleted"].get("distributor_source_token_aliases_deleted", 0) >= 1
+
+
+def test_bulk_delete_confirm_blocked_by_channel_aliases() -> None:
+    _skip_mutations_on_shared_cip()
+    with SessionLocal() as session:
+        _seed_import_core(session)
+        src = session.scalar(select(SourceDefinition).limit(1))
+        assert src is not None
+        ch = session.scalar(select(DimChannel).limit(1))
+        c, p, d = _first_dims(session)
+        if not (ch and c and p and d):
+            pytest.skip("Database needs dim_channel, dim_customer, dim_product, and dim_distributor rows.")
+
+        job = ImportJob(
+            source_id=src.id,
+            template_slug="distributor_inventory",
+            import_mode="validate",
+            status="completed",
+            stage="ch-alias-fixture",
+            file_name="ch-alias.csv",
+        )
+        session.add(job)
+        session.flush()
+        session.add(
+            ChannelSourceTokenAlias(
+                channel_id=ch.id,
+                raw_token=f"raw-ch-{job.id}",
+                normalized_token=f"norm-ch-{job.id}",
+                created_from_import_job_id=job.id,
+            )
+        )
+        session.commit()
+        job_id = job.id
+
+    admin = {"X-User-Role": "admin", "X-User-Id": "test"}
+    with TestClient(app) as client:
+        pr = client.post("/api/v1/imports/jobs/bulk-delete-preview", json={"job_ids": [job_id]}, headers=admin)
+        assert pr.status_code == 200
+        assert pr.json()["risky"]["channel_source_token_aliases"] >= 1
+
+        br = client.post(
+            "/api/v1/imports/jobs/bulk-delete-confirm",
+            json={"job_ids": [job_id], "delete_semantic_artifacts": False},
+            headers=admin,
+        )
+        assert br.status_code == 422
+
+        ok = client.post(
+            "/api/v1/imports/jobs/bulk-delete-confirm",
+            json={"job_ids": [job_id], "delete_semantic_artifacts": True},
+            headers=admin,
+        )
+        assert ok.status_code == 200
+        assert ok.json()["deleted"].get("channel_source_token_aliases_deleted", 0) >= 1

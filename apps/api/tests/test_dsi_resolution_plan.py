@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from app.services.imports.dsi_resolution_plan import (
     _resolve_dim_channel_from_source,
     derive_effective_provisional_customer_geo_sync,
+    dsi_geo_channel_alias_source_id,
     merge_resolution_plan_row_for_apply,
     plan_dsi_candidate_sync,
     snapshot_product_plan_from_context,
@@ -27,6 +28,8 @@ def _cand(**kwargs: object) -> MagicMock:
     c.total_units = kwargs.get("total_units")
     c.total_reported_value = kwargs.get("total_reported_value")
     c.dealer_group_token = kwargs.get("dealer_group_token")
+    c.source_definition_id = kwargs.get("source_definition_id")
+    c.import_job_id = kwargs.get("import_job_id")
     return c
 
 
@@ -509,7 +512,7 @@ def test_derive_geo_global_fallback_does_not_trigger_when_source_resolves() -> N
         },
     )
     g = derive_effective_provisional_customer_geo_sync(
-        sess, cand, default_region_id=999, default_channel_id=888
+        sess, cand, default_region_id=999, default_channel_id=888, import_job=None
     )
     assert g["effective_region_id"] == 101
     assert g["effective_channel_id"] == 202
@@ -725,3 +728,100 @@ def test_merge_provisional_geo_conflict_ok_when_row_sets_region_channel() -> Non
     assert m["effective_ready"] is True
     assert m["effective_region_id"] == 9
     assert m["effective_channel_id"] == 8
+
+
+def test_dsi_geo_channel_alias_source_id_prefers_candidate_definition() -> None:
+    cand = MagicMock()
+    cand.source_definition_id = 5
+    job = MagicMock()
+    job.source.id = 99
+    assert dsi_geo_channel_alias_source_id(cand, job) == 5
+
+
+def test_dsi_geo_channel_alias_source_id_falls_back_to_job() -> None:
+    cand = MagicMock()
+    cand.source_definition_id = None
+    job = MagicMock()
+    job.source.id = 88
+    assert dsi_geo_channel_alias_source_id(cand, job) == 88
+
+
+def test_dsi_geo_channel_alias_source_id_none_without_job_or_candidate_source() -> None:
+    cand = MagicMock()
+    cand.source_definition_id = None
+    assert dsi_geo_channel_alias_source_id(cand, None) is None
+
+
+def test_derive_effective_passes_candidate_source_definition_to_geo_resolution() -> None:
+    sess = MagicMock()
+    cand = _cand(source_definition_id=42, context={})
+    job = MagicMock()
+    job.source.id = 99
+    captured: dict[str, int | None] = {}
+
+    def fake_resolve(session, ctx, *, source_definition_id=None):
+        captured["source_definition_id"] = source_definition_id
+        return {
+            "source_region_resolved_id": None,
+            "source_channel_resolved_id": None,
+            "provisional_region_conflict": False,
+            "provisional_channel_conflict": False,
+            "source_region_resolution_detail": "missing_source_evidence",
+            "source_channel_resolution_detail": "missing_source_evidence",
+            "source_region_raw_token": None,
+            "source_channel_raw_token": None,
+        }
+
+    with patch(
+        "app.services.imports.dsi_resolution_plan._resolve_source_geo_from_ctx",
+        side_effect=fake_resolve,
+    ):
+        derive_effective_provisional_customer_geo_sync(
+            sess, cand, default_region_id=None, default_channel_id=None, import_job=job
+        )
+    assert captured.get("source_definition_id") == 42
+
+
+def test_derive_effective_falls_back_to_job_source_for_geo_resolution() -> None:
+    sess = MagicMock()
+    cand = _cand(source_definition_id=None, context={})
+    job = MagicMock()
+    job.source.id = 77
+    captured: dict[str, int | None] = {}
+
+    def fake_resolve(session, ctx, *, source_definition_id=None):
+        captured["source_definition_id"] = source_definition_id
+        return {
+            "source_region_resolved_id": None,
+            "source_channel_resolved_id": None,
+            "provisional_region_conflict": False,
+            "provisional_channel_conflict": False,
+            "source_region_resolution_detail": "missing_source_evidence",
+            "source_channel_resolution_detail": "missing_source_evidence",
+            "source_region_raw_token": None,
+            "source_channel_raw_token": None,
+        }
+
+    with patch(
+        "app.services.imports.dsi_resolution_plan._resolve_source_geo_from_ctx",
+        side_effect=fake_resolve,
+    ):
+        derive_effective_provisional_customer_geo_sync(
+            sess, cand, default_region_id=None, default_channel_id=None, import_job=job
+        )
+    assert captured.get("source_definition_id") == 77
+
+
+def test_resolve_dim_channel_duplicate_approved_alias_same_channel_dedupes() -> None:
+    sess = MagicMock()
+    sess.scalar = MagicMock(return_value=None)
+    sess.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[303, 303])))
+    cid, reason = _resolve_dim_channel_from_source(sess, "Con_Open Channel", source_definition_id=9)
+    assert cid == 303
+    assert reason == "source_channel_token_alias"
+
+
+def test_channel_source_token_alias_registered_in_sqlalchemy_metadata() -> None:
+    from app.db.base import Base
+
+    assert "channel_source_token_alias" in Base.metadata.tables

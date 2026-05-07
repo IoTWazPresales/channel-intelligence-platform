@@ -5,6 +5,11 @@ Revises: 20260430_0027
 Create Date: 2026-05-06
 
 Idempotent: safe if objects already exist from manual DDL.
+
+Uniqueness: no DB-level unique constraint on (normalized_token, source_definition_id, channel_id).
+Approved duplicates for the same token+channel+scope dedupe at resolution; same token mapping to
+different channel_ids is a conflict surfaced at resolution time. A hard unique index would block
+legitimate parallel source-scoped aliases and is deferred until governance rules are finalized.
 """
 
 from __future__ import annotations

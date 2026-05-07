@@ -1294,6 +1294,17 @@ export function DsiImportJobResolutionSection({
         },
       },
       {
+        headerName: 'Channel resolution',
+        colId: 'dsi_channel_resolution',
+        minWidth: 200,
+        valueGetter: (p) => {
+          if (p.data?.entity_type !== 'customer_dealer_token') return '';
+          const r = planByCandidateId.get(p.data?.id ?? -1);
+          const msg = r && typeof r.source_channel_resolution_message === 'string' ? r.source_channel_resolution_message.trim() : '';
+          return truncateEllipsis(msg, 100);
+        },
+      },
+      {
         headerName: 'Product match',
         minWidth: 160,
         valueGetter: (p) => dsiProductMatchSummaryCell(p.data?.context ?? null),

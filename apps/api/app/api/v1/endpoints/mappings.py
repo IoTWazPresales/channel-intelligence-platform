@@ -188,16 +188,19 @@ async def _bulk_effective_provisional_geo(
     cand: ImportEntityMappingCandidate,
     fallback_region_id: int | None,
     fallback_channel_id: int | None,
+    *,
+    import_job_id: int,
 ) -> tuple[int | None, int | None]:
     """Merge per-candidate DSI source region/channel evidence with optional batch fallback IDs."""
 
     def work(sess: Session) -> tuple[int | None, int | None]:
+        job = sess.get(ImportJob, import_job_id)
         g = derive_effective_provisional_customer_geo_sync(
             sess,
             cand,
             default_region_id=fallback_region_id,
             default_channel_id=fallback_channel_id,
-            source_definition_id=cand.source_definition_id,
+            import_job=job,
         )
         er = g.get("effective_region_id")
         ec = g.get("effective_channel_id")
@@ -291,12 +294,14 @@ async def create_provisional_customer_from_dsi_candidate(
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
 
     def _geo(sess: Session) -> dict[str, Any]:
+        jid = cand.import_job_id
+        job = sess.get(ImportJob, int(jid)) if jid is not None else None
         return derive_effective_provisional_customer_geo_sync(
             sess,
             cand,
             default_region_id=None,
             default_channel_id=None,
-            source_definition_id=cand.source_definition_id,
+            import_job=job,
         )
 
     try:
@@ -513,7 +518,7 @@ async def dsi_steward_bulk_preview(job_id: int, body: DsiBulkStewardBody, db: As
             )
         elif body.action == "create_provisional_customer":
             er, ec = await _bulk_effective_provisional_geo(
-                db, cand, body.region_id, body.channel_id
+                db, cand, body.region_id, body.channel_id, import_job_id=job_id
             )
             pv = await preview_create_provisional_dsi_customer(
                 db,
@@ -606,7 +611,7 @@ async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: Asyn
                 )
             elif body.action == "create_provisional_customer":
                 er, ec = await _bulk_effective_provisional_geo(
-                    db, cand, body.region_id, body.channel_id
+                    db, cand, body.region_id, body.channel_id, import_job_id=job_id
                 )
                 out = await execute_create_provisional_dsi_customer(
                     db,
