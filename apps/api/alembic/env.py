@@ -47,6 +47,7 @@ from app.models import (  # noqa: F401
     FactSupport,
     ForecastSummary,
     ChannelSourceTokenAlias,
+    RegionSourceTokenAlias,
     CustomerSourceTokenAlias,
     DistributorSourceTokenAlias,
     ImportDistributorSiStagingLine,

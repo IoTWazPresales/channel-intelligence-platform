@@ -121,7 +121,7 @@ def test_collect_unresolved_geo_merges_row_counts() -> None:
     assert payload["import_job_id"] == 99
     assert len(payload["channels"]) == 1
     ch0 = payload["channels"][0]
-    assert ch0["normalized_token"] == "bb_open"
+    assert ch0["normalized_token"] == "bb_open channel"
     assert ch0["row_count"] == 5
     assert sorted(ch0["candidate_ids"]) == [10, 11]
     assert len(payload["regions"]) == 1

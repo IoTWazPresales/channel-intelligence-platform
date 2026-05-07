@@ -22,6 +22,12 @@ from app.models.import_distributor_si import (
 )
 from app.models.ingestion import ImportJob
 from app.models.mapping import EntityMappingQueue
+from app.schemas.dsi_resolution_plan_requests import (
+    DsiResolutionPlanApplyBody,
+    DsiResolutionPlanEffectiveBody,
+    DsiResolutionPlanGenerateBody,
+    DsiResolutionPlanRowOverrideBody,
+)
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
 from app.services.imports.distributor_sales_inventory import _norm_key
 from app.services.imports.dsi_resolution_plan import (
@@ -687,53 +693,6 @@ async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: Asyn
         "results": results,
         "totals": _dsi_bulk_totals_from_rows(results),
     }
-
-
-class DsiResolutionPlanGenerateBody(BaseModel):
-    candidate_ids: list[int] | None = Field(default=None, max_length=500)
-    default_region_id: int | None = Field(default=None, ge=1)
-    default_channel_id: int | None = Field(default=None, ge=1)
-
-
-DsiResolutionPlanOverrideAction = Literal[
-    "ignore",
-    "map_distributor",
-    "create_provisional_distributor",
-    "map_customer",
-    "create_provisional_customer",
-    "resolve_product",
-]
-
-
-class DsiResolutionPlanRowOverrideBody(BaseModel):
-    candidate_id: int = Field(..., ge=1)
-    action: DsiResolutionPlanOverrideAction | None = None
-    target_id: int | None = Field(default=None, ge=1)
-    region_id: int | None = Field(default=None, ge=1)
-    channel_id: int | None = Field(default=None, ge=1)
-    hold_for_manual_review: bool = False
-    ack_strategic_channel_hint: bool = False
-    confirm_for_suspicious_distributor_token: bool = False
-    confirm_ineligible_product: bool = False
-    audit_note: str | None = Field(default=None, max_length=2000)
-
-
-class DsiResolutionPlanApplyBody(BaseModel):
-    candidate_ids: list[int] = Field(..., min_length=1, max_length=500)
-    default_region_id: int | None = Field(default=None, ge=1)
-    default_channel_id: int | None = Field(default=None, ge=1)
-    partner_tier: str | None = Field(default="unmanaged", max_length=32)
-    provisional_notes_summary: str | None = Field(default=None, max_length=512)
-    confirm_for_suspicious_distributor_token: bool = False
-    overrides: list[DsiResolutionPlanRowOverrideBody] | None = Field(default=None, max_length=500)
-
-
-class DsiResolutionPlanEffectiveBody(BaseModel):
-    candidate_ids: list[int] | None = Field(default=None, max_length=500)
-    default_region_id: int | None = Field(default=None, ge=1)
-    default_channel_id: int | None = Field(default=None, ge=1)
-    confirm_for_suspicious_distributor_token: bool = False
-    overrides: list[DsiResolutionPlanRowOverrideBody] = Field(default_factory=list, max_length=500)
 
 
 @router.post("/import-jobs/{job_id}/dsi-resolution-plan", status_code=200)

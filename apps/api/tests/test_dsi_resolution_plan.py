@@ -233,7 +233,7 @@ def test_plan_customer_ambiguous_name_manual() -> None:
 
 
 def test_dsi_resolution_plan_generate_body_defaults() -> None:
-    from app.api.v1.endpoints.mappings import DsiResolutionPlanGenerateBody
+    from app.schemas.dsi_resolution_plan_requests import DsiResolutionPlanGenerateBody
 
     b = DsiResolutionPlanGenerateBody()
     assert b.candidate_ids is None
@@ -241,7 +241,7 @@ def test_dsi_resolution_plan_generate_body_defaults() -> None:
 
 
 def test_dsi_resolution_plan_apply_body_requires_candidate_ids() -> None:
-    from app.api.v1.endpoints.mappings import DsiResolutionPlanApplyBody
+    from app.schemas.dsi_resolution_plan_requests import DsiResolutionPlanApplyBody
 
     with pytest.raises(ValidationError):
         DsiResolutionPlanApplyBody(candidate_ids=[])
@@ -251,7 +251,7 @@ def test_dsi_resolution_plan_apply_body_requires_candidate_ids() -> None:
 
 
 def test_dsi_resolution_plan_apply_body_accepts_overrides() -> None:
-    from app.api.v1.endpoints.mappings import DsiResolutionPlanApplyBody
+    from app.schemas.dsi_resolution_plan_requests import DsiResolutionPlanApplyBody
 
     b = DsiResolutionPlanApplyBody(
         candidate_ids=[1],
@@ -262,7 +262,7 @@ def test_dsi_resolution_plan_apply_body_accepts_overrides() -> None:
 
 
 def test_dsi_resolution_plan_effective_body_default_overrides() -> None:
-    from app.api.v1.endpoints.mappings import DsiResolutionPlanEffectiveBody
+    from app.schemas.dsi_resolution_plan_requests import DsiResolutionPlanEffectiveBody
 
     b = DsiResolutionPlanEffectiveBody()
     assert b.overrides == []

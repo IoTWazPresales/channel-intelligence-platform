@@ -161,6 +161,7 @@ __all__ = [
     "ImportDistributorSiStagingLine",
     "ImportEntityMappingCandidate",
     "ChannelSourceTokenAlias",
+    "RegionSourceTokenAlias",
     "CustomerSourceTokenAlias",
     "DistributorSourceTokenAlias",
     "CommercialLineupCase",

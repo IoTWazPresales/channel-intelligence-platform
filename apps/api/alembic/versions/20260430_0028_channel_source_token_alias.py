@@ -1,10 +1,13 @@
-"""Governed DSI route-to-market: channel_source_token_alias + Open Channel dim row.
+"""Governed DSI route-to-market: channel_source_token_alias table + index.
 
 Revision ID: 20260430_0028
 Revises: 20260430_0027
 Create Date: 2026-05-06
 
 Idempotent: safe if objects already exist from manual DDL.
+
+Business taxonomy (dim_channel rows) is not inserted here — use steward-approved catalog setup
+or the DSI import stewardship workflow, not silent migration seeds.
 
 Uniqueness: no DB-level unique constraint on (normalized_token, source_definition_id, channel_id).
 Approved duplicates for the same token+channel+scope dedupe at resolution; same token mapping to
@@ -18,7 +21,6 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy import text
 
 from _alembic_revision_helpers import get_inspector, has_index, has_table
 
@@ -63,20 +65,6 @@ def upgrade() -> None:
             ["normalized_token"],
         )
 
-    # Governed catalog concept for DSI open-channel / indirect retail routes (not a customer row).
-    op.execute(
-        text(
-            """
-            INSERT INTO dim_channel (code, name, created_at, updated_at)
-            SELECT CAST(:code AS VARCHAR(32)), CAST(:name AS VARCHAR(256)), NOW(), NOW()
-            WHERE NOT EXISTS (
-                SELECT 1 FROM dim_channel c WHERE c.code = CAST(:code AS VARCHAR(32))
-            )
-            """
-        ),
-        {"code": "OPEN_CH", "name": "Open Channel"},
-    )
-
 
 def downgrade() -> None:
     bind = op.get_bind()
@@ -87,5 +75,3 @@ def downgrade() -> None:
     insp = get_inspector(bind)
     if has_table(insp, "channel_source_token_alias"):
         op.drop_table("channel_source_token_alias")
-
-    # Do not remove dim_channel OPEN_CH — may be referenced by facts/customers.
