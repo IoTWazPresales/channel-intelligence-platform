@@ -63,6 +63,7 @@ from app.models import (  # noqa: F401
     PromoReadiness,
     RawFileMetadata,
     RoadmapRecommendation,
+    ShipmentEvidenceLine,
     SourceDefinition,
     StockHealth,
     StockRisk,

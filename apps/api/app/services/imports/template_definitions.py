@@ -302,16 +302,22 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     },
     {
         "slug": "inbound_shipments",
-        "display_name": "Inbound shipments",
-        "description": "Inbound PO / shipment tracking files (pipeline scaffold).",
+        "display_name": "Shipment / order evidence",
+        "description": (
+            "OEM shipment and open-order extracts (XXOMRPT0025/0027-style CSV, ACZA Shipped/Unship workbook). "
+            "Stages canonical evidence lines with raw row JSON; resolves product from Item/EAN/UPC/sales model "
+            "and distributor from Bill To / Ship To where deterministic."
+        ),
         "enabled": True,
-        "hidden": True,
+        "hidden": False,
         "admin_only": False,
         "requires_provider": True,
-        "pipeline_handler": "stub_noop",
+        "pipeline_handler": "shipment_evidence_import",
         "destructive_apply_requires_confirm": False,
-        "accepted_file_types": [".csv", ".xlsx"],
-        "expected_columns": {"sku": {"aliases": ["item"], "required": True}},
+        "accepted_file_types": [".csv", ".xlsx", ".xlsm"],
+        "expected_columns": {
+            "detected_headers": {"aliases": [], "required": False},
+        },
     },
     {
         "slug": "pricing_support",

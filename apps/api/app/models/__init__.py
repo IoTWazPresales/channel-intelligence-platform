@@ -40,6 +40,7 @@ from app.models.import_distributor_si import (
     ImportEntityMappingCandidate,
     RegionSourceTokenAlias,
 )
+from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.promo_export import PromoPlanExport, PromoPlanExportEvent
 from app.models.facts import (
     FactActivation,
@@ -166,4 +167,5 @@ __all__ = [
     "DistributorSourceTokenAlias",
     "CommercialLineupCase",
     "CommercialLineupLine",
+    "ShipmentEvidenceLine",
 ]

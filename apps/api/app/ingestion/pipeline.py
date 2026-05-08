@@ -15,6 +15,7 @@ from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, So
 from app.models.mapping import EntityMappingQueue
 from app.services.catalog.product_import_sync import sync_bulk_upsert_products_from_rows
 from app.services.imports.distributor_sales_inventory import process_distributor_sales_inventory
+from app.services.imports.shipment_evidence_import import process_shipment_evidence_import
 from app.services.imports.historical_lineup import process_historical_lineup_import
 from app.storage.local import get_storage_backend
 
@@ -723,6 +724,7 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
             "product_master": "product_master_upsert",
             "distributor_inventory": "distributor_sales_inventory",
             "historical_lineup": "historical_lineup_workbook",
+            "inbound_shipments": "shipment_evidence_import",
         }
         raw_handler = (tpl.pipeline_handler if tpl else None) or fallback_handlers_by_slug.get(
             job.template_slug or "", "inventory_sku_gate"
@@ -778,6 +780,7 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
             "product_master_upsert": _process_product_master,
             "inventory_sku_gate": _process_inventory_sku_gate,
             "distributor_sales_inventory": process_distributor_sales_inventory,
+            "shipment_evidence_import": process_shipment_evidence_import,
             "historical_lineup_workbook": lambda _db, _job, _df, _mapping: process_historical_lineup_import(
                 _db, _job, _job.file_name, data
             ),

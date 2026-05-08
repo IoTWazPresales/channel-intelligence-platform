@@ -20,6 +20,7 @@ from app.models.import_distributor_si import (
     ImportEntityMappingCandidate,
     RegionSourceTokenAlias,
 )
+from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata
 from app.models.mapping import EntityMappingQueue
 from app.models.product_catalog import CatalogProduct
@@ -87,6 +88,14 @@ def preview_import_job_bulk_delete(db: Session, job_ids: list[int]) -> dict[str,
                 select(func.count())
                 .select_from(ImportEntityMappingCandidate)
                 .where(ImportEntityMappingCandidate.import_job_id.in_(id_tuple))
+            )
+            or 0
+        ),
+        "shipment_evidence_line_rows": int(
+            db.scalar(
+                select(func.count())
+                .select_from(ShipmentEvidenceLine)
+                .where(ShipmentEvidenceLine.import_job_id.in_(id_tuple))
             )
             or 0
         ),
@@ -257,6 +266,9 @@ def bulk_delete_import_jobs(
 
     r = db.execute(delete(EntityMappingQueue).where(EntityMappingQueue.job_id.in_(id_tuple)))
     deleted["entity_mapping_queue_rows"] = int(r.rowcount or 0)
+
+    r = db.execute(delete(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id.in_(id_tuple)))
+    deleted["shipment_evidence_line_rows"] = int(r.rowcount or 0)
 
     r = db.execute(delete(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id.in_(id_tuple)))
     deleted["dsi_staging_rows"] = int(r.rowcount or 0)

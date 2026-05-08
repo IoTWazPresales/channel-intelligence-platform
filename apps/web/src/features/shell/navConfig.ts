@@ -18,6 +18,7 @@ export const navItems: NavItem[] = [
   { section: 'Finance', label: 'Budgets', href: '/budgets' },
   { section: 'Finance', label: 'Budget requests', href: '/budget-requests' },
   { section: 'Admin', label: 'Data & imports', href: '/admin/imports' },
+  { section: 'Admin', label: 'Shipment evidence', href: '/admin/shipment-evidence' },
   { section: 'Admin', label: 'Customers', href: '/admin/customers' },
   { section: 'Admin', label: 'Products', href: '/admin/products' },
   { section: 'Admin', label: 'Distributors & routing', href: '/admin/distributors' },
