@@ -31,6 +31,7 @@ import {
   SHIPMENT_EVIDENCE_OPTIONAL_FIELDS,
   ShipmentEvidenceColumnsDialog,
 } from './ShipmentEvidenceColumnsDialog';
+import { ShipmentDistributorStewardPanel } from './ShipmentDistributorStewardPanel';
 
 const LS_GRID = 'cip.admin.shipment-evidence.grid.v1';
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500, 1000] as const;
@@ -131,6 +132,8 @@ export default function ShipmentEvidenceAdminPage() {
   const [optionalFields, setOptionalFields] = useState<string[]>([]);
   const [rawKeys, setRawKeys] = useState<string[]>([]);
   const [persistReady, setPersistReady] = useState(false);
+  /** Import job id from the last grid row click (for raw catalog inference when filter is empty). */
+  const [contextImportJobId, setContextImportJobId] = useState<number | null>(null);
 
   const parsedJobId = useMemo(() => {
     const t = importJobId.trim();
@@ -205,22 +208,40 @@ export default function ShipmentEvidenceAdminPage() {
     enabled: detailId != null,
   });
 
+  const rawCatalogJobId = useMemo(() => {
+    if (parsedJobId != null) return parsedJobId;
+    if (contextImportJobId != null) return contextImportJobId;
+    const items = data?.items ?? [];
+    if (items.length === 0) return null;
+    const ids = new Set(items.map((r) => r.import_job_id));
+    return ids.size === 1 ? [...ids][0]! : null;
+  }, [parsedJobId, contextImportJobId, data?.items]);
+
+  const rawCatalogUnavailableHint = useMemo(() => {
+    if (rawCatalogJobId != null) return '';
+    const n = data?.items?.length ?? 0;
+    if (n === 0) {
+      return 'Load rows first, click a row so its import job is remembered, narrow filters so all visible rows share one import job, or type an Import job ID—then raw column names can load.';
+    }
+    return 'Several import jobs appear on the current page. Filter by Import job ID, click a row from the job you care about, or narrow the grid so all visible rows share one job—then raw column names can load.';
+  }, [rawCatalogJobId, data?.items?.length]);
+
   const rawKeysUrl =
-    parsedJobId != null ? `/api/v1/shipment-evidence/raw-column-keys?import_job_id=${parsedJobId}` : '';
+    rawCatalogJobId != null ? `/api/v1/shipment-evidence/raw-column-keys?import_job_id=${rawCatalogJobId}` : '';
 
   const { data: rawKeysData, isFetching: rawKeysFetching } = useQuery({
-    queryKey: ['shipment-evidence-raw-keys', parsedJobId],
+    queryKey: ['shipment-evidence-raw-keys', rawCatalogJobId],
     queryFn: ({ signal }) => apiGet<RawKeysResponse>(rawKeysUrl, { signal }),
-    enabled: parsedJobId != null,
+    enabled: rawCatalogJobId != null,
   });
 
   const catalogKeys = rawKeysData?.keys ?? [];
 
   useEffect(() => {
-    if (parsedJobId == null || rawKeysData == null) return;
+    if (rawCatalogJobId == null || rawKeysData == null) return;
     const allowed = new Set(rawKeysData.keys);
     setRawKeys((prev) => prev.filter((k) => allowed.has(k)));
-  }, [parsedJobId, rawKeysData]);
+  }, [rawCatalogJobId, rawKeysData]);
 
   const baseColDefs: ColDef<ShipmentEvidenceGridRow>[] = useMemo(
     () => [
@@ -274,7 +295,10 @@ export default function ShipmentEvidenceAdminPage() {
   );
 
   const onRowClicked = useCallback((e: RowClickedEvent<ShipmentEvidenceGridRow>) => {
-    if (e.data?.id != null) setDetailId(e.data.id);
+    if (e.data?.id != null) {
+      setDetailId(e.data.id);
+      if (e.data.import_job_id != null) setContextImportJobId(e.data.import_job_id);
+    }
   }, []);
 
   const gridOptions = useMemo(
@@ -417,9 +441,23 @@ export default function ShipmentEvidenceAdminPage() {
           />
         </Paper>
 
+        <Alert severity="warning" variant="outlined" sx={{ borderStyle: 'dashed' }}>
+          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+            Distributor resolution (this grid)
+          </Typography>
+          <Typography variant="body2">
+            <strong>resolved</strong> — Bill To (then Ship To) matched an approved source alias or exact distributor
+            code/name. <strong>unresolved</strong> — use stewardship below to map or create a provisional distributor and
+            approved alias. <strong>skipped_empty</strong> — no Bill To / Ship To text. Substring guessing is
+            intentionally not used for auto-match; aliases created here drive future imports.
+          </Typography>
+        </Alert>
+
+        <ShipmentDistributorStewardPanel importJobId={parsedJobId} />
+
         <ModuleDataSection
           title="Evidence lines"
-          description="Click a row to open raw source JSON and resolution tokens."
+          description="Click a row for raw JSON and tokens. Product resolution stays visible in the grid; distributor stewardship is above."
           isLoading={isLoading}
           isError={isError}
           error={toQueryError(error)}
@@ -463,9 +501,10 @@ export default function ShipmentEvidenceAdminPage() {
         onOptionalFieldsChange={setOptionalFields}
         rawKeys={rawKeys}
         onRawKeysChange={setRawKeys}
+        catalogJobId={rawCatalogJobId}
         catalogKeys={catalogKeys}
-        catalogLoading={parsedJobId != null && rawKeysFetching}
-        importJobIdFilter={importJobId}
+        catalogLoading={rawCatalogJobId != null && rawKeysFetching}
+        catalogUnavailableHint={rawCatalogUnavailableHint}
       />
 
       <Dialog open={detailId != null} onClose={() => setDetailId(null)} maxWidth="md" fullWidth>

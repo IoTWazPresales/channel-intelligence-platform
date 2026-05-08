@@ -578,6 +578,25 @@ def _resolve_distributor(db: Session, raw: str | None, source_id: int | None = N
     return None, "unresolved_distributor_token"
 
 
+def _resolve_distributor_strict(db: Session, raw: str | None, source_id: int | None = None) -> tuple[int | None, str | None]:
+    """Resolve distributor using **approved aliases** and **exact** code/name equality only.
+
+    Used by shipment evidence imports so steward-approved aliases drive resolution without
+    substring heuristics that can mis-bind tokens.
+    """
+    if not raw or not str(raw).strip():
+        return None, "missing_distributor_cell_value"
+    token = raw.strip().lower()
+    nt = _norm_key(raw)
+    alias_id = _alias_distributor_id(db, source_id, nt)
+    if alias_id is not None:
+        return alias_id, None
+    for d in db.scalars(select(DimDistributor)).all():
+        if d.code.strip().lower() == token or d.name.strip().lower() == token:
+            return d.id, None
+    return None, "unresolved_distributor_token"
+
+
 def _open_channel_customer_id(db: Session) -> int | None:
     return db.scalar(select(DimCustomer.id).where(DimCustomer.code == OPEN_CHANNEL_CUSTOMER_CODE))
 

@@ -23,9 +23,10 @@ from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.distributor_sales_inventory import (
     ProductResolutionIndex,
     _load_product_resolution_index,
-    _resolve_distributor,
+    _resolve_distributor_strict,
     _resolve_product,
 )
+from app.services.imports.shipment_evidence_text_normalize import normalize_shipment_cell_value
 from app.services.imports.shipment_evidence_report_detect import (
     LINE_OPEN_ORDER,
     LINE_SHIPPED,
@@ -77,6 +78,12 @@ def _row_dict(series: pd.Series) -> dict[str, Any]:
     return out
 
 
+def _normalized_identifier_cell(v: Any) -> Any:
+    """Prefer normalized string; fall back to original cell for numeric EAN/UPC cells."""
+    nu = normalize_shipment_cell_value(v)
+    return nu if nu is not None else v
+
+
 def _extract_common(row: pd.Series) -> dict[str, Any]:
     def col(*names: str) -> Any:
         for n in names:
@@ -88,23 +95,23 @@ def _extract_common(row: pd.Series) -> dict[str, Any]:
     ship = col("Ship To", "ship to")
     ou = col("Operating Unit", "OU NAME", "ou name")
     return {
-        "operating_unit": _cell_str(ou),
-        "bill_to_raw": _cell_str(bill),
-        "ship_to_raw": _cell_str(ship),
-        "order_no": _cell_str(col("Order No.", "Order No")),
-        "order_line": _cell_str(col("Order Line")),
-        "delivery_no": _cell_str(col("Delivery No")),
-        "invoice_line": _cell_str(col("Invoice Line")),
-        "item_code": _cell_str(col("Item")),
-        "sales_model_name": _cell_str(col("Sales Model Name")),
-        "customer_item": _cell_str(col("Customer Item")),
-        "ean_code": _ean_upc_str(col("EAN Code")),
-        "upc_code": _ean_upc_str(col("UPC Code")),
-        "mpor_item_no": _cell_str(col("MPOR Item No.")),
+        "operating_unit": normalize_shipment_cell_value(ou),
+        "bill_to_raw": normalize_shipment_cell_value(bill),
+        "ship_to_raw": normalize_shipment_cell_value(ship),
+        "order_no": normalize_shipment_cell_value(col("Order No.", "Order No")),
+        "order_line": normalize_shipment_cell_value(col("Order Line")),
+        "delivery_no": normalize_shipment_cell_value(col("Delivery No")),
+        "invoice_line": normalize_shipment_cell_value(col("Invoice Line")),
+        "item_code": normalize_shipment_cell_value(col("Item")),
+        "sales_model_name": normalize_shipment_cell_value(col("Sales Model Name")),
+        "customer_item": normalize_shipment_cell_value(col("Customer Item")),
+        "ean_code": _ean_upc_str(_normalized_identifier_cell(col("EAN Code"))),
+        "upc_code": _ean_upc_str(_normalized_identifier_cell(col("UPC Code"))),
+        "mpor_item_no": normalize_shipment_cell_value(col("MPOR Item No.")),
         "quantity": row.get("Qty") if "Qty" in row.index else row.get("Qty "),
         "unit_price": row.get("Unit Price") if "Unit Price" in row.index else None,
         "amount": row.get("Amount") if "Amount" in row.index else None,
-        "currency_code": _cell_str(col("Currency")),
+        "currency_code": normalize_shipment_cell_value(col("Currency")),
         "ship_confirm_date": _parse_date(col("Ship Confirm Date")),
         "schedule_ship_date": _parse_date(col("Schedule Ship Date")),
         "promise_date": _parse_date(col("Promise Date")),
@@ -169,13 +176,13 @@ def resolve_distributor_for_evidence(
     ship_to: str | None,
 ) -> tuple[int | None, str, str | None]:
     if bill_to:
-        did, err = _resolve_distributor(db, bill_to, source_id)
+        did, err = _resolve_distributor_strict(db, bill_to, source_id)
         if did is not None:
             return int(did), "resolved", bill_to
         if err:
             pass
     if ship_to:
-        did, err = _resolve_distributor(db, ship_to, source_id)
+        did, err = _resolve_distributor_strict(db, ship_to, source_id)
         if did is not None:
             return int(did), "resolved", ship_to
     if not (bill_to or ship_to):

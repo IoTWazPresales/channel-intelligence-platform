@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.db.session_sync import SessionLocal
 from app.models.dimensions import DimDistributor, DimProduct
 from app.models.ingestion import ImportJob
 from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_distributor_steward import (
+    create_provisional_distributor_for_shipment_party_token,
+    list_shipment_distributor_steward_tokens,
+    map_shipment_party_token_to_distributor,
+    reprocess_shipment_distributor_resolution,
+)
 
 router = APIRouter()
 
@@ -131,6 +139,101 @@ async def list_shipment_evidence_raw_column_keys(
     res = await db.execute(sql, {"import_job_id": import_job_id})
     keys = [str(row[0]) for row in res.fetchall() if row[0] is not None]
     return {"import_job_id": import_job_id, "keys": keys}
+
+
+class ShipmentDistStewardMapBody(BaseModel):
+    import_job_id: int = Field(ge=1)
+    party: Literal["bill_to", "ship_to"]
+    raw_token: str = Field(min_length=1, max_length=512)
+    distributor_id: int = Field(ge=1)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class ShipmentDistStewardProvisionalBody(BaseModel):
+    import_job_id: int = Field(ge=1)
+    party: Literal["bill_to", "ship_to"]
+    raw_token: str = Field(min_length=1, max_length=512)
+    display_name: str | None = Field(default=None, max_length=256)
+    distributor_code: str | None = Field(default=None, max_length=32)
+    confirm_for_suspicious_token: bool = False
+
+
+class ShipmentDistStewardReprocessBody(BaseModel):
+    import_job_id: int = Field(ge=1)
+
+
+def _http_from_steward_value_error(exc: ValueError) -> HTTPException:
+    msg = str(exc)
+    status = 409 if ("already maps" in msg or "already has an approved" in msg) else 400
+    return HTTPException(
+        status_code=status,
+        detail={"error": "steward_request_invalid", "message": msg},
+    )
+
+
+@router.get("/distributor-stewardship/tokens")
+async def list_shipment_distributor_stewardship_tokens(
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    import_job_id: int | None = Query(None, ge=1),
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    with SessionLocal() as s:
+        items = list_shipment_distributor_steward_tokens(s, import_job_id)
+    return {"items": items}
+
+
+@router.post("/distributor-stewardship/map-to-distributor")
+async def shipment_distributor_steward_map(
+    body: ShipmentDistStewardMapBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    try:
+        with SessionLocal() as s:
+            return map_shipment_party_token_to_distributor(
+                s,
+                import_job_id=body.import_job_id,
+                party=body.party,
+                raw_token=body.raw_token,
+                distributor_id=body.distributor_id,
+                notes=body.notes,
+            )
+    except ValueError as exc:
+        raise _http_from_steward_value_error(exc) from exc
+
+
+@router.post("/distributor-stewardship/create-provisional-distributor")
+async def shipment_distributor_steward_create_provisional(
+    body: ShipmentDistStewardProvisionalBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    try:
+        with SessionLocal() as s:
+            return create_provisional_distributor_for_shipment_party_token(
+                s,
+                import_job_id=body.import_job_id,
+                party=body.party,
+                raw_token=body.raw_token,
+                display_name=body.display_name,
+                distributor_code=body.distributor_code,
+                confirm_for_suspicious_token=body.confirm_for_suspicious_token,
+            )
+    except ValueError as exc:
+        raise _http_from_steward_value_error(exc) from exc
+
+
+@router.post("/distributor-stewardship/reprocess-resolution")
+async def shipment_distributor_steward_reprocess(
+    body: ShipmentDistStewardReprocessBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    try:
+        with SessionLocal() as s:
+            return reprocess_shipment_distributor_resolution(s, import_job_id=body.import_job_id)
+    except ValueError as exc:
+        raise _http_from_steward_value_error(exc) from exc
 
 
 @router.get("")

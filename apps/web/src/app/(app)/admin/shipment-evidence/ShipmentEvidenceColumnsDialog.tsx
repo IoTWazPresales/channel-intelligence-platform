@@ -51,10 +51,12 @@ export type ShipmentEvidenceColumnsDialogProps = {
   onOptionalFieldsChange: (fields: string[]) => void;
   rawKeys: string[];
   onRawKeysChange: (keys: string[]) => void;
-  /** Distinct keys from ``raw_source_row`` for the filtered import job (when set). */
+  /** Import job used to load distinct raw JSON keys (inferred from filter, row context, or single-job page). */
+  catalogJobId: number | null;
   catalogKeys: string[];
   catalogLoading: boolean;
-  importJobIdFilter: string;
+  /** Shown when ``catalogJobId`` is null — parent composes guidance. */
+  catalogUnavailableHint: string;
 };
 
 export function ShipmentEvidenceColumnsDialog({
@@ -64,14 +66,12 @@ export function ShipmentEvidenceColumnsDialog({
   onOptionalFieldsChange,
   rawKeys,
   onRawKeysChange,
+  catalogJobId,
   catalogKeys,
   catalogLoading,
-  importJobIdFilter,
+  catalogUnavailableHint,
 }: ShipmentEvidenceColumnsDialogProps) {
   const [q, setQ] = useState('');
-
-  const jobIdTrim = importJobIdFilter.trim();
-  const jobFilterSet = jobIdTrim.length > 0 && Number.isFinite(Number(jobIdTrim)) && Number(jobIdTrim) > 0;
 
   const optionalSet = useMemo(() => new Set(optionalFields), [optionalFields]);
   const rawSet = useMemo(() => new Set(rawKeys), [rawKeys]);
@@ -166,11 +166,8 @@ export function ShipmentEvidenceColumnsDialog({
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
               Raw import columns
             </Typography>
-            {!jobFilterSet ? (
-              <Alert severity="info">
-                Enter an <strong>Import job ID</strong> in the filters above to load distinct column names from the
-                uploaded file for this job.
-              </Alert>
+            {catalogJobId == null ? (
+              <Alert severity="info">{catalogUnavailableHint}</Alert>
             ) : catalogLoading ? (
               <Typography variant="body2">Loading column names…</Typography>
             ) : filteredRaw.length === 0 ? (
