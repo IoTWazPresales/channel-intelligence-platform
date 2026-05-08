@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
@@ -33,8 +33,9 @@ def _line_to_dict(
     *,
     product_sku: str | None,
     distributor_code: str | None,
+    include_raw_row: bool = False,
 ) -> dict[str, Any]:
-    return {
+    out: dict[str, Any] = {
         "id": row.id,
         "import_job_id": row.import_job_id,
         "source_sheet": row.source_sheet,
@@ -74,6 +75,9 @@ def _line_to_dict(
         "distributor_resolution_token": row.distributor_resolution_token,
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
+    if include_raw_row:
+        out["raw_source_row"] = row.raw_source_row
+    return out
 
 
 def _apply_filters(stmt: Any, **kwargs: Any) -> Any:
@@ -108,18 +112,40 @@ def _apply_filters(stmt: Any, **kwargs: Any) -> Any:
     return stmt
 
 
+@router.get("/raw-column-keys")
+async def list_shipment_evidence_raw_column_keys(
+    db: AsyncSession = Depends(get_db),
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    import_job_id: int = Query(..., ge=1),
+) -> dict[str, Any]:
+    """Distinct JSON keys present in ``raw_source_row`` for one import job (for admin column picker)."""
+    _require_admin(x_user_role)
+    sql = text(
+        """
+        SELECT DISTINCT jsonb_object_keys(raw_source_row) AS k
+        FROM shipment_evidence_line
+        WHERE import_job_id = :import_job_id
+        ORDER BY 1
+        """
+    )
+    res = await db.execute(sql, {"import_job_id": import_job_id})
+    keys = [str(row[0]) for row in res.fetchall() if row[0] is not None]
+    return {"import_job_id": import_job_id, "keys": keys}
+
+
 @router.get("")
 async def list_shipment_evidence(
     db: AsyncSession = Depends(get_db),
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=1000),
     import_job_id: int | None = None,
     line_state: str | None = None,
     report_type: str | None = None,
     product_resolution_status: str | None = None,
     distributor_resolution_status: str | None = None,
     search: str | None = None,
+    include_raw_row: bool = Query(False),
 ) -> dict[str, Any]:
     _require_admin(x_user_role)
     filt: dict[str, Any] = {
@@ -157,6 +183,7 @@ async def list_shipment_evidence(
             r,
             product_sku=products.get(int(r.product_id)) if r.product_id else None,
             distributor_code=distributors.get(int(r.distributor_id)) if r.distributor_id else None,
+            include_raw_row=include_raw_row,
         )
         for r in rows
     ]
@@ -186,8 +213,8 @@ async def get_shipment_evidence_line(
         row,
         product_sku=product_sku,
         distributor_code=distributor_code,
+        include_raw_row=True,
     )
-    out["raw_source_row"] = row.raw_source_row
     out["import_job_file_name"] = job.file_name if job else None
     out["import_job_status"] = job.status if job else None
     return out

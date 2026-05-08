@@ -1,5 +1,6 @@
 'use client';
 
+import ViewColumnIcon from '@mui/icons-material/ViewColumn';
 import {
   Alert,
   Box,
@@ -10,13 +11,14 @@ import {
   MenuItem,
   Paper,
   Stack,
+  TablePagination,
   TextField,
   Typography,
 } from '@mui/material';
-import type { ColDef, RowClickedEvent } from 'ag-grid-community';
+import type { ColDef, RowClickedEvent, ValueGetterParams } from 'ag-grid-community';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
@@ -25,41 +27,71 @@ import { PageHeader } from '@/components/PageHeader';
 import { apiGet } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
-type ShipmentEvidenceRow = {
+import {
+  SHIPMENT_EVIDENCE_OPTIONAL_FIELDS,
+  ShipmentEvidenceColumnsDialog,
+} from './ShipmentEvidenceColumnsDialog';
+
+const LS_GRID = 'cip.admin.shipment-evidence.grid.v1';
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500, 1000] as const;
+
+export type ShipmentEvidenceGridRow = {
   id: number;
   import_job_id: number;
   source_sheet: string | null;
   source_row_number: number;
   report_type: string;
   line_state: string;
+  operating_unit?: string | null;
   bill_to_raw: string | null;
-  ship_to_raw: string | null;
-  order_no: string | null;
+  ship_to_raw?: string | null;
+  order_no?: string | null;
+  order_line?: string | null;
   delivery_no: string | null;
+  invoice_line?: string | null;
   item_code: string | null;
   sales_model_name: string | null;
+  customer_item?: string | null;
+  ean_code?: string | null;
+  upc_code?: string | null;
+  mpor_item_no?: string | null;
   quantity: number | null;
+  unit_price?: number | null;
   amount: number | null;
   currency_code: string | null;
   ship_confirm_date: string | null;
-  product_id: number | null;
+  schedule_ship_date?: string | null;
+  promise_date?: string | null;
+  exwork_date?: string | null;
+  erd_date?: string | null;
+  product_id?: number | null;
   product_sku: string | null;
   product_resolution_status: string;
-  distributor_id: number | null;
+  product_resolution_token?: string | null;
+  product_resolution_detail?: string | null;
+  distributor_id?: number | null;
   distributor_code: string | null;
   distributor_resolution_status: string;
+  distributor_resolution_token?: string | null;
+  created_at?: string | null;
+  raw_source_row?: Record<string, unknown>;
 };
 
-type ListResponse = { total: number; skip: number; limit: number; items: ShipmentEvidenceRow[] };
+type ListResponse = { total: number; skip: number; limit: number; items: ShipmentEvidenceGridRow[] };
 
-type DetailResponse = ShipmentEvidenceRow & {
+type DetailResponse = ShipmentEvidenceGridRow & {
   raw_source_row: Record<string, unknown>;
   import_job_file_name: string | null;
   import_job_status: string | null;
-  product_resolution_token: string | null;
-  product_resolution_detail: string | null;
-  distributor_resolution_token: string | null;
 };
+
+type RawKeysResponse = { import_job_id: number; keys: string[] };
+
+function formatRawCell(v: unknown): string {
+  if (v == null) return '';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
 
 function buildListUrl(params: {
   skip: number;
@@ -70,6 +102,7 @@ function buildListUrl(params: {
   productStatus: string;
   distStatus: string;
   search: string;
+  includeRawRow: boolean;
 }): string {
   const q = new URLSearchParams();
   q.set('skip', String(params.skip));
@@ -80,12 +113,13 @@ function buildListUrl(params: {
   if (params.productStatus) q.set('product_resolution_status', params.productStatus);
   if (params.distStatus) q.set('distributor_resolution_status', params.distStatus);
   if (params.search.trim()) q.set('search', params.search.trim());
+  if (params.includeRawRow) q.set('include_raw_row', 'true');
   return `/api/v1/shipment-evidence?${q.toString()}`;
 }
 
 export default function ShipmentEvidenceAdminPage() {
   const [skip, setSkip] = useState(0);
-  const limit = 100;
+  const [limit, setLimit] = useState(100);
   const [importJobId, setImportJobId] = useState('');
   const [lineState, setLineState] = useState('');
   const [reportType, setReportType] = useState('');
@@ -93,10 +127,71 @@ export default function ShipmentEvidenceAdminPage() {
   const [distStatus, setDistStatus] = useState('');
   const [search, setSearch] = useState('');
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [colDialogOpen, setColDialogOpen] = useState(false);
+  const [optionalFields, setOptionalFields] = useState<string[]>([]);
+  const [rawKeys, setRawKeys] = useState<string[]>([]);
+  const [persistReady, setPersistReady] = useState(false);
+
+  const parsedJobId = useMemo(() => {
+    const t = importJobId.trim();
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [importJobId]);
+
+  const includeRawRow = rawKeys.length > 0;
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_GRID);
+      if (raw) {
+        const p = JSON.parse(raw) as {
+          version?: number;
+          optionalFields?: string[];
+          rawKeys?: string[];
+          pageSize?: number;
+        };
+        const allowed = new Set(SHIPMENT_EVIDENCE_OPTIONAL_FIELDS.map((c) => c.field));
+        if (Array.isArray(p.optionalFields)) {
+          setOptionalFields(p.optionalFields.filter((f) => allowed.has(f)));
+        }
+        if (Array.isArray(p.rawKeys)) setRawKeys(p.rawKeys);
+        if (typeof p.pageSize === 'number' && PAGE_SIZE_OPTIONS.includes(p.pageSize as (typeof PAGE_SIZE_OPTIONS)[number])) {
+          setLimit(p.pageSize);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    setPersistReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!persistReady) return;
+    try {
+      localStorage.setItem(
+        LS_GRID,
+        JSON.stringify({ version: 1, optionalFields, rawKeys, pageSize: limit })
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [optionalFields, rawKeys, limit, persistReady]);
 
   const listUrl = useMemo(
-    () => buildListUrl({ skip, limit, importJobId, lineState, reportType, productStatus, distStatus, search }),
-    [skip, importJobId, lineState, reportType, productStatus, distStatus, search]
+    () =>
+      buildListUrl({
+        skip,
+        limit,
+        importJobId,
+        lineState,
+        reportType,
+        productStatus,
+        distStatus,
+        search,
+        includeRawRow,
+      }),
+    [skip, limit, importJobId, lineState, reportType, productStatus, distStatus, search, includeRawRow]
   );
 
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -110,7 +205,24 @@ export default function ShipmentEvidenceAdminPage() {
     enabled: detailId != null,
   });
 
-  const colDefs: ColDef<ShipmentEvidenceRow>[] = useMemo(
+  const rawKeysUrl =
+    parsedJobId != null ? `/api/v1/shipment-evidence/raw-column-keys?import_job_id=${parsedJobId}` : '';
+
+  const { data: rawKeysData, isFetching: rawKeysFetching } = useQuery({
+    queryKey: ['shipment-evidence-raw-keys', parsedJobId],
+    queryFn: ({ signal }) => apiGet<RawKeysResponse>(rawKeysUrl, { signal }),
+    enabled: parsedJobId != null,
+  });
+
+  const catalogKeys = rawKeysData?.keys ?? [];
+
+  useEffect(() => {
+    if (parsedJobId == null || rawKeysData == null) return;
+    const allowed = new Set(rawKeysData.keys);
+    setRawKeys((prev) => prev.filter((k) => allowed.has(k)));
+  }, [parsedJobId, rawKeysData]);
+
+  const baseColDefs: ColDef<ShipmentEvidenceGridRow>[] = useMemo(
     () => [
       { field: 'id', headerName: 'ID', width: 90, pinned: 'left' },
       { field: 'import_job_id', headerName: 'Job', width: 90 },
@@ -133,15 +245,49 @@ export default function ShipmentEvidenceAdminPage() {
     []
   );
 
-  const onRowClicked = useCallback((e: RowClickedEvent<ShipmentEvidenceRow>) => {
+  const optionalColDefs = useMemo(() => {
+    return optionalFields.map((f) => {
+      const meta = SHIPMENT_EVIDENCE_OPTIONAL_FIELDS.find((x) => x.field === f);
+      const wide = f.includes('detail') || f.includes('token');
+      return {
+        field: f as keyof ShipmentEvidenceGridRow & string,
+        headerName: meta?.label ?? f,
+        minWidth: wide ? 220 : 130,
+      } satisfies ColDef<ShipmentEvidenceGridRow>;
+    });
+  }, [optionalFields]);
+
+  const rawColDefs = useMemo(() => {
+    return rawKeys.map((k) => ({
+      colId: `raw:${k}`,
+      headerName: k,
+      valueGetter: (p: ValueGetterParams<ShipmentEvidenceGridRow>) => formatRawCell(p.data?.raw_source_row?.[k]),
+      minWidth: 140,
+      sortable: true,
+      filter: true,
+    })) satisfies ColDef<ShipmentEvidenceGridRow>[];
+  }, [rawKeys]);
+
+  const colDefs = useMemo(
+    () => [...baseColDefs, ...optionalColDefs, ...rawColDefs],
+    [baseColDefs, optionalColDefs, rawColDefs]
+  );
+
+  const onRowClicked = useCallback((e: RowClickedEvent<ShipmentEvidenceGridRow>) => {
     if (e.data?.id != null) setDetailId(e.data.id);
   }, []);
 
-  const gridOptions = useMemo(() => ({ onRowClicked }), [onRowClicked]);
+  const gridOptions = useMemo(
+    () => ({
+      onRowClicked,
+      getRowId: (p: { data: ShipmentEvidenceGridRow }) => String(p.data.id),
+    }),
+    [onRowClicked]
+  );
 
   const total = data?.total ?? 0;
-  const canPrev = skip > 0;
-  const canNext = skip + limit < total;
+  const page = limit > 0 ? Math.floor(skip / limit) : 0;
+  const pageCount = Math.max(0, Math.ceil(total / limit) - 1);
 
   return (
     <Box sx={{ p: 2 }}>
@@ -253,17 +399,22 @@ export default function ShipmentEvidenceAdminPage() {
               <MenuItem value="skipped_empty">skipped_empty</MenuItem>
             </TextField>
           </Stack>
-          <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-            <Button size="small" disabled={!canPrev} onClick={() => setSkip((s) => Math.max(0, s - limit))}>
-              Previous
-            </Button>
-            <Button size="small" disabled={!canNext} onClick={() => setSkip((s) => s + limit)}>
-              Next
-            </Button>
-            <Typography variant="body2" sx={{ alignSelf: 'center', ml: 1 }}>
-              Showing {data?.items?.length ?? 0} of {total} (skip {skip})
-            </Typography>
-          </Stack>
+          <TablePagination
+            component="div"
+            count={total}
+            page={total === 0 ? 0 : Math.min(page, pageCount)}
+            onPageChange={(_, nextPage) => {
+              setSkip(nextPage * limit);
+            }}
+            rowsPerPage={limit}
+            onRowsPerPageChange={(e) => {
+              const next = Number(e.target.value);
+              setLimit(next);
+              setSkip(0);
+            }}
+            rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
+            labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`}
+          />
         </Paper>
 
         <ModuleDataSection
@@ -279,10 +430,21 @@ export default function ShipmentEvidenceAdminPage() {
             description: 'Run a Shipment / order evidence import job first.',
           }}
           toolbar={
-            <ModuleGridToolbar
-              importsHref="/admin/imports?template=inbound_shipments"
-              onRefresh={() => void refetch()}
-            />
+            <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<ViewColumnIcon />}
+                onClick={() => setColDialogOpen(true)}
+                data-testid="shipment-evidence-columns"
+              >
+                Additional columns
+              </Button>
+              <ModuleGridToolbar
+                importsHref="/admin/imports?template=inbound_shipments"
+                onRefresh={() => void refetch()}
+              />
+            </Stack>
           }
         >
           <EnterpriseDataGrid
@@ -293,6 +455,18 @@ export default function ShipmentEvidenceAdminPage() {
           />
         </ModuleDataSection>
       </Stack>
+
+      <ShipmentEvidenceColumnsDialog
+        open={colDialogOpen}
+        onClose={() => setColDialogOpen(false)}
+        optionalFields={optionalFields}
+        onOptionalFieldsChange={setOptionalFields}
+        rawKeys={rawKeys}
+        onRawKeysChange={setRawKeys}
+        catalogKeys={catalogKeys}
+        catalogLoading={parsedJobId != null && rawKeysFetching}
+        importJobIdFilter={importJobId}
+      />
 
       <Dialog open={detailId != null} onClose={() => setDetailId(null)} maxWidth="md" fullWidth>
         <DialogTitle>Evidence line {detailId}</DialogTitle>
