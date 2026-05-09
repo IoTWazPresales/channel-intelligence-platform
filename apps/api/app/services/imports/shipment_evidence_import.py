@@ -48,6 +48,7 @@ from app.services.imports.shipment_evidence_report_detect import (
     _ean_upc_str,
     detect_report_type,
 )
+from app.services.imports.shipment_evidence_text_normalize import normalize_shipment_cell_value
 from app.storage.local import get_storage_backend
 from app.utils.json_safe import to_jsonable
 
@@ -109,9 +110,13 @@ def _extract_common(row: pd.Series) -> dict[str, Any]:
         "operating_unit": normalize_shipment_cell_value(ou),
         "bill_to_raw": normalize_shipment_cell_value(bill),
         "ship_to_raw": normalize_shipment_cell_value(ship),
-        "order_no": normalize_shipment_cell_value(col("Order No.", "Order No")),
-        "order_line": normalize_shipment_cell_value(col("Order Line")),
-        "delivery_no": normalize_shipment_cell_value(col("Delivery No")),
+        "order_no": normalize_shipment_cell_value(
+            col("Order No.", "Order No", "order no.", "order no", "ORDER NO", "Order number")
+        ),
+        "order_line": normalize_shipment_cell_value(col("Order Line", "order line")),
+        "delivery_no": normalize_shipment_cell_value(
+            col("Delivery No", "delivery no", "DELIVERY NO", "Delivery no.", "Delivery Number", "delivery number")
+        ),
         "invoice_line": normalize_shipment_cell_value(col("Invoice Line")),
         "item_code": normalize_shipment_cell_value(col("Item")),
         "sales_model_name": normalize_shipment_cell_value(col("Sales Model Name")),

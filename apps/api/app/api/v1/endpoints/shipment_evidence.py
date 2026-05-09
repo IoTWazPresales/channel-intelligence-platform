@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.db.session_sync import SessionLocal
+from app.ingestion.pipeline import STAGE_LOADED, STAGE_VALIDATED
 from app.models.dimensions import DimDistributor, DimProduct
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
@@ -252,6 +253,46 @@ async def shipment_import_candidate_create_provisional_distributor(
             )
         except ShipmentStewardOpError as exc:
             raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
+
+
+@router.post("/jobs/{job_id}/apply")
+async def apply_shipment_import_job(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    """Mark an inbound_shipments job as fully applied (``loaded``) after pipeline validation. No re-import."""
+    _require_admin(x_user_role)
+    job = await db.get(ImportJob, job_id)
+    if not job or (job.template_slug or "") != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Shipment import job not found")
+    if job.stage == STAGE_LOADED:
+        return {
+            "id": job.id,
+            "status": job.status,
+            "stage": job.stage,
+            "template_slug": job.template_slug,
+            "import_mode": job.import_mode,
+        }
+    if job.stage != STAGE_VALIDATED:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_job_stage",
+                "message": f"Job must be at stage {STAGE_VALIDATED!r} to apply; current stage is {job.stage!r}.",
+            },
+        )
+    job.stage = STAGE_LOADED
+    job.status = "completed"
+    await db.commit()
+    await db.refresh(job)
+    return {
+        "id": job.id,
+        "status": job.status,
+        "stage": job.stage,
+        "template_slug": job.template_slug,
+        "import_mode": job.import_mode,
+    }
 
 
 @router.get("")

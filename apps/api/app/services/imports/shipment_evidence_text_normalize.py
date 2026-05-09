@@ -1,8 +1,9 @@
 """Normalize shipment / order evidence cell text for canonical columns.
 
-Source files may preserve Excel formulas as strings (e.g. ``=MID("SO123",2,5)``). We keep the
-original cell payload in ``raw_source_row``; canonical fields use extracted business literals where
-we can do so **without inventing** values (no evaluation of arbitrary sheet references).
+Source files may preserve Excel formulas as strings (e.g. ``=MID("SO123",2,5)`` or
+``=MID('SO123',2,5)``). We keep the original cell payload in ``raw_source_row``; canonical fields use
+extracted business literals where we can do so **without inventing** values (no evaluation of arbitrary
+sheet references).
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from typing import Any
 
 
 _RE_FIRST_DQ_LITERAL = re.compile(r'"((?:[^"]|"")*)"')
+_RE_FIRST_SQ_LITERAL = re.compile(r"'((?:[^']|'')*)'")
 
 
 def unwrap_excel_double_quoted_literal(text: str) -> str | None:
@@ -28,6 +30,18 @@ def unwrap_excel_double_quoted_literal(text: str) -> str | None:
     if not m:
         return None
     inner = m.group(1).replace('""', '"')
+    return inner if inner.strip() else None
+
+
+def unwrap_excel_single_quoted_literal(text: str) -> str | None:
+    """If ``text`` looks like an Excel formula, return the first single-quoted literal if any."""
+    t = text.strip()
+    if not t.startswith("="):
+        return None
+    m = _RE_FIRST_SQ_LITERAL.search(t)
+    if not m:
+        return None
+    inner = m.group(1).replace("''", "'")
     return inner if inner.strip() else None
 
 
@@ -49,6 +63,10 @@ def normalize_shipment_text_field(raw: str | None) -> str | None:
     lit = unwrap_excel_double_quoted_literal(s)
     if lit is not None:
         s = lit.strip()
+    else:
+        lit_sq = unwrap_excel_single_quoted_literal(s)
+        if lit_sq is not None:
+            s = lit_sq.strip()
     if not s:
         return None
     return s

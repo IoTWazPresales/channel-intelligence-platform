@@ -8,6 +8,7 @@ from app.services.imports.shipment_evidence_text_normalize import (
     normalize_shipment_cell_value,
     normalize_shipment_text_field,
     unwrap_excel_double_quoted_literal,
+    unwrap_excel_single_quoted_literal,
 )
 
 
@@ -37,6 +38,14 @@ def test_leading_apostrophe_text_preservation() -> None:
 
 def test_normalize_order_like_mid() -> None:
     assert normalize_shipment_text_field('=MID("PO-42",1,99)') == "PO-42"
+
+
+def test_unwrap_mid_single_quoted_literal() -> None:
+    assert unwrap_excel_single_quoted_literal("=MID('SO-88',1,6)") == "SO-88"
+
+
+def test_normalize_order_mid_single_quotes() -> None:
+    assert normalize_shipment_text_field("=MID('DEL-001',1,9)") == "DEL-001"
 
 
 def test_normalize_cell_int_preserves_digits() -> None:

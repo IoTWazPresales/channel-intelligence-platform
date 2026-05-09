@@ -13,18 +13,19 @@ import {
   Stack,
   TablePagination,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import type { ColDef, RowClickedEvent, ValueGetterParams } from 'ag-grid-community';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 import {
@@ -88,6 +89,16 @@ type DetailResponse = ShipmentEvidenceGridRow & {
 
 type RawKeysResponse = { import_job_id: number; keys: string[] };
 
+type ImportJobSummary = {
+  id: number;
+  status: string;
+  stage: string | null;
+  file_name: string | null;
+  template_slug: string | null;
+  import_mode: string | null;
+  error_summary?: string | null;
+};
+
 function formatRawCell(v: unknown): string {
   if (v == null) return '';
   if (typeof v === 'object') return JSON.stringify(v);
@@ -119,6 +130,7 @@ function buildListUrl(params: {
 }
 
 export default function ShipmentEvidenceAdminPage() {
+  const qc = useQueryClient();
   const [skip, setSkip] = useState(0);
   const [limit, setLimit] = useState(100);
   const [importJobId, setImportJobId] = useState('');
@@ -134,6 +146,7 @@ export default function ShipmentEvidenceAdminPage() {
   const [persistReady, setPersistReady] = useState(false);
   /** Import job id from the last grid row click (for raw catalog inference when filter is empty). */
   const [contextImportJobId, setContextImportJobId] = useState<number | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
 
   const parsedJobId = useMemo(() => {
     const t = importJobId.trim();
@@ -141,6 +154,18 @@ export default function ShipmentEvidenceAdminPage() {
     const n = Number(t);
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [importJobId]);
+
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+      const raw = q.get('importJobId') ?? q.get('job');
+      if (raw && /^\d+$/.test(raw.trim())) {
+        setImportJobId((prev) => (prev.trim() === '' ? raw.trim() : prev));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const includeRawRow = rawKeys.length > 0;
 
@@ -237,6 +262,39 @@ export default function ShipmentEvidenceAdminPage() {
 
   const catalogKeys = rawKeysData?.keys ?? [];
 
+  const {
+    data: trackedImportJob,
+    isFetching: importJobFetching,
+    isError: importJobIsError,
+    error: importJobQueryError,
+  } = useQuery({
+    queryKey: ['import-job', parsedJobId],
+    queryFn: ({ signal }) => apiGet<ImportJobSummary>(`/api/v1/imports/jobs/${parsedJobId}`, { signal }),
+    enabled: parsedJobId != null,
+    refetchInterval: (q) => {
+      const j = q.state.data;
+      if (!j) return 2000;
+      if (j.status === 'running') return 2000;
+      const st = (j.stage || '').trim();
+      if (st === 'validated' || st === 'loaded' || st === 'failed') return false;
+      return 2000;
+    },
+  });
+
+  const applyImportMut = useMutation({
+    mutationFn: async () => {
+      if (parsedJobId == null) throw new Error('No import job selected');
+      return apiPost<ImportJobSummary>(`/api/v1/shipment-evidence/jobs/${parsedJobId}/apply`, {});
+    },
+    onSuccess: () => {
+      setApplyError(null);
+      void qc.invalidateQueries({ queryKey: ['import-job', parsedJobId] });
+      void qc.invalidateQueries({ queryKey: ['shipment-evidence'] });
+      void qc.invalidateQueries({ queryKey: ['shipment-evidence-mapping-candidates', parsedJobId] });
+    },
+    onError: (e: Error) => setApplyError(e.message),
+  });
+
   useEffect(() => {
     if (rawCatalogJobId == null || rawKeysData == null) return;
     const allowed = new Set(rawKeysData.keys);
@@ -313,6 +371,9 @@ export default function ShipmentEvidenceAdminPage() {
   const page = limit > 0 ? Math.floor(skip / limit) : 0;
   const pageCount = Math.max(0, Math.ceil(total / limit) - 1);
 
+  const canApplyImport = trackedImportJob?.stage === 'validated';
+  const importApplied = trackedImportJob?.stage === 'loaded';
+
   return (
     <Box sx={{ p: 2 }}>
       <PageHeader
@@ -331,7 +392,11 @@ export default function ShipmentEvidenceAdminPage() {
         <Alert severity="info">
           Use{' '}
           <Link href="/admin/imports?template=inbound_shipments">Data imports → Shipment / order evidence</Link> to
-          load CSV or XLSX. This grid is read-only; re-run the import job to refresh rows.
+          load CSV or XLSX. After the job reaches stage <strong>validated</strong>, resolve distributors below, then
+          click <strong>Apply import</strong> to mark the job <strong>loaded</strong>. Re-run the import from Data
+          imports to refresh evidence lines. Open{' '}
+          <Link href="/admin/shipment-evidence?importJobId=">this page with <code>?importJobId=&lt;id&gt;</code></Link> to
+          pre-fill the job filter.
         </Alert>
 
         <Paper sx={{ p: 2 }}>
@@ -441,6 +506,82 @@ export default function ShipmentEvidenceAdminPage() {
           />
         </Paper>
 
+        {parsedJobId != null ? (
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Stack spacing={1.5}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={2}
+                alignItems={{ sm: 'center' }}
+                justifyContent="space-between"
+              >
+                <Box>
+                  <Typography variant="subtitle1">Shipment import job {parsedJobId}</Typography>
+                  {importJobIsError ? (
+                    <Alert severity="error" sx={{ mt: 1 }}>
+                      {importJobQueryError instanceof Error
+                        ? importJobQueryError.message
+                        : 'Could not load import job status.'}
+                    </Alert>
+                  ) : trackedImportJob ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      Stage:{' '}
+                      <Typography component="span" variant="body2" fontWeight={600}>
+                        {trackedImportJob.stage ?? '—'}
+                      </Typography>
+                      {' · '}
+                      Status:{' '}
+                      <Typography component="span" variant="body2" fontWeight={600}>
+                        {trackedImportJob.status}
+                      </Typography>
+                      {trackedImportJob.file_name ? ` · ${trackedImportJob.file_name}` : ''}
+                    </Typography>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {importJobFetching ? 'Loading job status…' : 'Fetching job…'}
+                    </Typography>
+                  )}
+                </Box>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  disabled={!canApplyImport || applyImportMut.isPending || importJobIsError}
+                  onClick={() => applyImportMut.mutate()}
+                >
+                  Apply import
+                </Button>
+              </Stack>
+              {applyError ? <Alert severity="error">{applyError}</Alert> : null}
+              {importApplied ? (
+                <Alert severity="success">
+                  Import marked complete (stage <strong>loaded</strong>). Evidence lines remain in the grid below.
+                </Alert>
+              ) : null}
+              {trackedImportJob &&
+              trackedImportJob.status === 'running' &&
+              trackedImportJob.stage !== 'validated' &&
+              trackedImportJob.stage !== 'loaded' ? (
+                <Alert severity="info">
+                  Pipeline is still running. Distributor stewardship and apply unlock when stage is{' '}
+                  <strong>validated</strong>.
+                </Alert>
+              ) : null}
+              {trackedImportJob &&
+              trackedImportJob.stage &&
+              trackedImportJob.stage !== 'validated' &&
+              trackedImportJob.stage !== 'loaded' &&
+              trackedImportJob.stage !== 'failed' &&
+              trackedImportJob.status !== 'running' ? (
+                <Alert severity="info">
+                  Current stage: <strong>{trackedImportJob.stage}</strong>. Apply is available only at{' '}
+                  <strong>validated</strong>.
+                </Alert>
+              ) : null}
+            </Stack>
+          </Paper>
+        ) : null}
+
         <Alert severity="warning" variant="outlined" sx={{ borderStyle: 'dashed' }}>
           <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
             Distributor resolution (this grid)
@@ -453,7 +594,25 @@ export default function ShipmentEvidenceAdminPage() {
           </Typography>
         </Alert>
 
-        <ShipmentDistributorStewardPanel importJobId={parsedJobId} />
+        {parsedJobId != null &&
+        trackedImportJob &&
+        (trackedImportJob.stage === 'validated' || trackedImportJob.stage === 'loaded') ? (
+          <>
+            <Alert severity="info" variant="outlined">
+              <Typography variant="body2">
+                <strong>Product resolution</strong> is evaluated per grid row on import. Use product-resolution filters
+                above for ambiguous or unmatched lines. <strong>Distributor stewardship</strong> uses aggregated
+                candidates below (not DSI).
+              </Typography>
+            </Alert>
+            <ShipmentDistributorStewardPanel importJobId={parsedJobId} />
+          </>
+        ) : parsedJobId != null && trackedImportJob && trackedImportJob.stage !== 'validated' && trackedImportJob.stage !== 'loaded' ? (
+          <Alert severity="info" variant="outlined">
+            Distributor stewardship appears after the import reaches stage <strong>validated</strong> (current:{' '}
+            <strong>{trackedImportJob.stage}</strong>).
+          </Alert>
+        ) : null}
 
         <ModuleDataSection
           title="Evidence lines"
@@ -468,16 +627,19 @@ export default function ShipmentEvidenceAdminPage() {
             description: 'Run a Shipment / order evidence import job first.',
           }}
           toolbar={
-            <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<ViewColumnIcon />}
-                onClick={() => setColDialogOpen(true)}
-                data-testid="shipment-evidence-columns"
-              >
-                Additional columns
-              </Button>
+            <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap alignItems="center">
+              <Tooltip title="Choose optional canonical fields and raw source columns for the grid">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<ViewColumnIcon />}
+                  onClick={() => setColDialogOpen(true)}
+                  data-testid="shipment-evidence-columns"
+                  sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+                >
+                  Additional columns
+                </Button>
+              </Tooltip>
               <ModuleGridToolbar
                 importsHref="/admin/imports?template=inbound_shipments"
                 onRefresh={() => void refetch()}

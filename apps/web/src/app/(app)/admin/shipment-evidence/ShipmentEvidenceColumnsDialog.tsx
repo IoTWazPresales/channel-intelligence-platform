@@ -1,5 +1,6 @@
 'use client';
 
+import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import {
   Alert,
@@ -10,14 +11,15 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   FormControlLabel,
+  IconButton,
   InputAdornment,
+  Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 /** Canonical API fields not shown in the default grid — user can add via this dialog. */
 export const SHIPMENT_EVIDENCE_OPTIONAL_FIELDS: { field: string; label: string }[] = [
@@ -59,6 +61,20 @@ export type ShipmentEvidenceColumnsDialogProps = {
   catalogUnavailableHint: string;
 };
 
+const checkboxLabelSx = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  m: 0,
+  py: 0.25,
+  '& .MuiCheckbox-root': { pt: 0.25 },
+  '& .MuiFormControlLabel-label': {
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    lineHeight: 1.35,
+    fontSize: '0.875rem',
+  },
+} as const;
+
 export function ShipmentEvidenceColumnsDialog({
   open,
   onClose,
@@ -72,6 +88,12 @@ export function ShipmentEvidenceColumnsDialog({
   catalogUnavailableHint,
 }: ShipmentEvidenceColumnsDialogProps) {
   const [q, setQ] = useState('');
+
+  useEffect(() => {
+    if (!open) {
+      setQ('');
+    }
+  }, [open]);
 
   const optionalSet = useMemo(() => new Set(optionalFields), [optionalFields]);
   const rawSet = useMemo(() => new Set(rawKeys), [rawKeys]);
@@ -111,13 +133,35 @@ export function ShipmentEvidenceColumnsDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth data-testid="shipment-evidence-column-dialog">
-      <DialogTitle>Additional columns</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      scroll="paper"
+      slotProps={{
+        paper: {
+          sx: { maxHeight: 'min(92vh, 820px)', display: 'flex', flexDirection: 'column' },
+        },
+      }}
+      data-testid="shipment-evidence-column-dialog"
+    >
+      <DialogTitle sx={{ pr: 6, flexShrink: 0 }}>
+        Additional columns
+        <IconButton
+          aria-label="Close"
+          onClick={onClose}
+          size="small"
+          sx={{ position: 'absolute', right: 8, top: 12, color: 'text.secondary' }}
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', px: 2.5 }}>
+        <Stack spacing={2.5} sx={{ flex: 1, minHeight: 0 }}>
           <Typography variant="body2" color="text.secondary">
-            Choose optional canonical fields and, when an import job is filtered, columns from the original file
-            (raw row). Large page sizes with many raw columns increase payload size.
+            Add optional canonical fields to the grid, and when an import job is in scope, pick columns from the
+            original file (raw JSON keys). Large page sizes with many raw columns increase payload size.
           </Typography>
           <TextField
             size="small"
@@ -128,27 +172,33 @@ export function ShipmentEvidenceColumnsDialog({
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
+                  <SearchIcon fontSize="small" color="action" />
                 </InputAdornment>
               ),
             }}
           />
-          <Box>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+
+          <Paper variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5, minHeight: 0 }}>
+            <Typography variant="subtitle1" fontWeight={600}>
               Canonical fields
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              API-backed columns; values match the evidence line record.
             </Typography>
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                gap: 0.5,
-                maxHeight: 220,
+                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                gap: 0.75,
+                maxHeight: { xs: 200, sm: 240 },
                 overflow: 'auto',
+                pr: 0.5,
               }}
             >
               {filteredOptional.map((c) => (
                 <FormControlLabel
                   key={c.field}
+                  sx={checkboxLabelSx}
                   control={
                     <Checkbox
                       size="small"
@@ -160,16 +210,23 @@ export function ShipmentEvidenceColumnsDialog({
                 />
               ))}
             </Box>
-          </Box>
-          <Divider />
-          <Box>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          </Paper>
+
+          <Paper variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1, minHeight: 0 }}>
+            <Typography variant="subtitle1" fontWeight={600}>
               Raw import columns
             </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Values read from <code style={{ fontSize: '0.75rem' }}>raw_source_row</code> for the catalog job.
+            </Typography>
             {catalogJobId == null ? (
-              <Alert severity="info">{catalogUnavailableHint}</Alert>
+              <Alert severity="info" sx={{ py: 1 }}>
+                {catalogUnavailableHint}
+              </Alert>
             ) : catalogLoading ? (
-              <Typography variant="body2">Loading column names…</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Loading column names…
+              </Typography>
             ) : filteredRaw.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
                 No raw keys found for this job (or no rows yet).
@@ -178,15 +235,19 @@ export function ShipmentEvidenceColumnsDialog({
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                  gap: 0.5,
-                  maxHeight: 260,
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                  gap: 0.75,
+                  flex: 1,
+                  minHeight: 160,
+                  maxHeight: { xs: 220, sm: 320 },
                   overflow: 'auto',
+                  pr: 0.5,
                 }}
               >
                 {filteredRaw.map((k) => (
                   <FormControlLabel
                     key={k}
+                    sx={checkboxLabelSx}
                     control={
                       <Checkbox
                         size="small"
@@ -194,19 +255,24 @@ export function ShipmentEvidenceColumnsDialog({
                         onChange={(e) => toggleRaw(k, e.target.checked)}
                       />
                     }
-                    label={k}
+                    label={
+                      <Typography component="span" variant="body2" title={k} sx={{ wordBreak: 'break-all' }}>
+                        {k}
+                      </Typography>
+                    }
                   />
                 ))}
               </Box>
             )}
-          </Box>
+          </Paper>
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onReset} color="inherit">
-          Reset
+      <DialogActions sx={{ px: 2.5, py: 2, flexShrink: 0, borderTop: 1, borderColor: 'divider' }}>
+        <Button onClick={onReset} color="inherit" size="medium">
+          Reset all
         </Button>
-        <Button onClick={onClose} variant="contained">
+        <Box sx={{ flex: 1 }} />
+        <Button onClick={onClose} variant="contained" color="primary" size="medium">
           Done
         </Button>
       </DialogActions>
