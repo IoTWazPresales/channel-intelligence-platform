@@ -3,7 +3,7 @@
 Auto-detects report shape from headers. Perserves each source row in ``raw_source_row``.
 Product resolution: strongest token first (Item → EAN → UPC → sales model), reusing DSI
 ``_resolve_product`` / ``ProductResolutionIndex``. Stops at first **ambiguous** outcome.
-Distributor: Bill To, then Ship To via existing ``_resolve_distributor`` (no DSI joins).
+Distributor: Bill To, then Ship To via ``_resolve_distributor_strict`` (alias + exact dim only).
 """
 
 from __future__ import annotations
@@ -15,18 +15,28 @@ from decimal import Decimal
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.distributor_sales_inventory import (
     ProductResolutionIndex,
     _load_product_resolution_index,
+    _norm_key,
     _resolve_distributor_strict,
     _resolve_product,
 )
-from app.services.imports.shipment_evidence_text_normalize import normalize_shipment_cell_value
+from app.services.imports.shipment_evidence_resolution_plan import (
+    SHIPMENT_DISTRIBUTOR_ENTITY,
+    enrich_shipment_distributor_candidates,
+)
+from app.services.imports.shipment_evidence_source_keys import (
+    ShipmentEvidenceSourceKeyError,
+    stable_source_key_for_row,
+)
 from app.services.imports.shipment_evidence_report_detect import (
     LINE_OPEN_ORDER,
     LINE_SHIPPED,
@@ -40,6 +50,7 @@ from app.services.imports.shipment_evidence_report_detect import (
 )
 from app.storage.local import get_storage_backend
 from app.utils.json_safe import to_jsonable
+
 
 def _norm_cols(cols: list[str]) -> set[str]:
     return {str(c).strip() for c in cols if c is not None}
@@ -190,6 +201,166 @@ def resolve_distributor_for_evidence(
     return None, "unresolved", bill_to or ship_to
 
 
+def _rebuild_shipment_distributor_candidates(db: Session, job: ImportJob) -> None:
+    """Replace ``shipment_distributor`` candidates for this job from unresolved evidence lines."""
+    jid = int(job.id)
+    sid = int(job.source_id) if job.source_id else None
+
+    db.execute(
+        delete(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.import_job_id == jid,
+            ImportEntityMappingCandidate.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY,
+        )
+    )
+    db.flush()
+
+    lines = list(db.scalars(select(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id == jid)).all())
+    buckets: dict[str, dict[str, Any]] = {}
+
+    for line in lines:
+        if line.distributor_id is not None:
+            continue
+        if (line.distributor_resolution_status or "") != "unresolved":
+            continue
+        raw: str | None = None
+        party: str | None = None
+        btr = line.bill_to_raw
+        strw = line.ship_to_raw
+        if btr and str(btr).strip():
+            raw = str(btr).strip()
+            party = "bill_to"
+        elif strw and str(strw).strip():
+            raw = str(strw).strip()
+            party = "ship_to"
+        else:
+            continue
+        nk = _norm_key(raw)
+        if not nk:
+            continue
+        bucket = buckets.setdefault(
+            nk,
+            {"line_ids": [], "samples": [], "parties": set(), "qty": Decimal(0), "amt": Decimal(0)},
+        )
+        bucket["line_ids"].append(int(line.id))
+        if party:
+            bucket["parties"].add(party)
+        if len(bucket["samples"]) < 5 and raw not in bucket["samples"]:
+            bucket["samples"].append(raw[:512])
+        if line.quantity is not None:
+            bucket["qty"] += Decimal(str(line.quantity))
+        if line.amount is not None:
+            bucket["amt"] += Decimal(str(line.amount))
+
+    for nk, bucket in buckets.items():
+        primary_party = "bill_to" if "bill_to" in bucket["parties"] else "ship_to"
+        cand = ImportEntityMappingCandidate(
+            import_job_id=jid,
+            source_definition_id=sid,
+            entity_type=SHIPMENT_DISTRIBUTOR_ENTITY,
+            normalized_key=nk[:512],
+            dealer_group_token=None,
+            row_count=len(bucket["line_ids"]),
+            total_units=float(bucket["qty"]) if bucket["qty"] else None,
+            total_reported_value=float(bucket["amt"]) if bucket["amt"] else None,
+            sample_raw_values=to_jsonable(bucket["samples"][:5]),
+            status="needs_review",
+            context=to_jsonable({"party": primary_party, "line_ids": bucket["line_ids"]}),
+        )
+        db.add(cand)
+    db.flush()
+    enrich_shipment_distributor_candidates(db, import_job_id=jid, source_definition_id=sid)
+
+
+def _execute_shipment_line_upsert(db: Session, values: dict[str, Any]) -> None:
+    """Insert or update one line keyed by (import_job_id, source_key).
+
+    On conflict, refreshes source-derived columns only; ``id``, ``created_at``, and all
+    product/distributor resolution columns on the existing row are left unchanged (see
+    post-loop ``_resolve_unresolved_shipment_lines_for_job`` for unresolved ids).
+    """
+    t = ShipmentEvidenceLine.__table__
+    ins = pg_insert(t).values(**values)
+    ex = ins.excluded
+    stmt = ins.on_conflict_do_update(
+        constraint="uq_shipment_evidence_line_import_job_source_key",
+        set_={
+            "source_sheet": ex.source_sheet,
+            "source_row_number": ex.source_row_number,
+            "report_type": ex.report_type,
+            "line_state": ex.line_state,
+            "raw_source_row": ex.raw_source_row,
+            "operating_unit": ex.operating_unit,
+            "bill_to_raw": ex.bill_to_raw,
+            "ship_to_raw": ex.ship_to_raw,
+            "order_no": ex.order_no,
+            "order_line": ex.order_line,
+            "delivery_no": ex.delivery_no,
+            "invoice_line": ex.invoice_line,
+            "item_code": ex.item_code,
+            "sales_model_name": ex.sales_model_name,
+            "customer_item": ex.customer_item,
+            "ean_code": ex.ean_code,
+            "upc_code": ex.upc_code,
+            "mpor_item_no": ex.mpor_item_no,
+            "quantity": ex.quantity,
+            "unit_price": ex.unit_price,
+            "amount": ex.amount,
+            "currency_code": ex.currency_code,
+            "ship_confirm_date": ex.ship_confirm_date,
+            "schedule_ship_date": ex.schedule_ship_date,
+            "promise_date": ex.promise_date,
+            "exwork_date": ex.exwork_date,
+            "erd_date": ex.erd_date,
+            "updated_at": func.now(),
+        },
+    )
+    db.execute(stmt)
+
+
+def _resolve_unresolved_shipment_lines_for_job(
+    db: Session,
+    job: ImportJob,
+    idx: ProductResolutionIndex,
+    source_id: int | None,
+) -> None:
+    """Re-run product and/or distributor resolution only where the corresponding id is still null."""
+    jid = int(job.id)
+    lines = list(
+        db.scalars(
+            select(ShipmentEvidenceLine).where(
+                ShipmentEvidenceLine.import_job_id == jid,
+                or_(ShipmentEvidenceLine.product_id.is_(None), ShipmentEvidenceLine.distributor_id.is_(None)),
+            )
+        ).all()
+    )
+    for line in lines:
+        if line.product_id is None:
+            pid, pstatus, ptoken, pdetail = resolve_product_for_evidence(
+                idx,
+                item_code=line.item_code,
+                ean_code=line.ean_code,
+                upc_code=line.upc_code,
+                sales_model_name=line.sales_model_name,
+            )
+            line.product_id = pid
+            line.product_resolution_status = pstatus
+            line.product_resolution_token = ptoken
+            line.product_resolution_detail = pdetail
+            db.add(line)
+        if line.distributor_id is None:
+            did, dstatus, dtoken = resolve_distributor_for_evidence(
+                db,
+                source_id,
+                bill_to=line.bill_to_raw,
+                ship_to=line.ship_to_raw,
+            )
+            line.distributor_id = did
+            line.distributor_resolution_status = dstatus
+            line.distributor_resolution_token = dtoken
+            db.add(line)
+    db.flush()
+
+
 def _load_frames_for_job(job: ImportJob, df_passed: pd.DataFrame, raw_bytes: bytes) -> list[tuple[str | None, pd.DataFrame, str, str]]:
     """List of (sheet_name, dataframe, report_type, line_state)."""
     fn = job.file_name or ""
@@ -240,9 +411,6 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
     raw_bytes = storage.read(raw_meta.storage_key)
     frames = _load_frames_for_job(job, df, raw_bytes)
 
-    db.execute(delete(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id == job.id))
-    db.flush()
-
     idx = _load_product_resolution_index(db)
     source_id = int(job.source_id) if job.source_id else None
 
@@ -263,6 +431,7 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
                 series = row if isinstance(row, pd.Series) else pd.Series(row, index=frame.columns)
                 raw_payload = _row_dict(series)
                 ex = _extract_common(series)
+                source_key = stable_source_key_for_row(report_type=report_type, sheet_name=sheet_name, ex=ex)
 
                 pid, pstatus, ptoken, pdetail = resolve_product_for_evidence(
                     idx,
@@ -279,44 +448,57 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
                 )
 
                 q_dec = _decimal_or_none(ex["quantity"])
-                line = ShipmentEvidenceLine(
-                    import_job_id=int(job.id),
-                    source_sheet=sheet_name,
-                    source_row_number=pos,
-                    report_type=report_type,
-                    line_state=line_state,
-                    raw_source_row=raw_payload,
-                    operating_unit=ex["operating_unit"],
-                    bill_to_raw=ex["bill_to_raw"],
-                    ship_to_raw=ex["ship_to_raw"],
-                    order_no=ex["order_no"],
-                    order_line=ex["order_line"],
-                    delivery_no=ex["delivery_no"],
-                    invoice_line=ex["invoice_line"],
-                    item_code=ex["item_code"],
-                    sales_model_name=ex["sales_model_name"],
-                    customer_item=ex["customer_item"],
-                    ean_code=ex["ean_code"],
-                    upc_code=ex["upc_code"],
-                    mpor_item_no=ex["mpor_item_no"],
-                    quantity=float(q_dec) if q_dec is not None else None,
-                    unit_price=float(v) if (v := _decimal_or_none(ex["unit_price"])) is not None else None,
-                    amount=float(v) if (v := _decimal_or_none(ex["amount"])) is not None else None,
-                    currency_code=ex["currency_code"],
-                    ship_confirm_date=ex["ship_confirm_date"],
-                    schedule_ship_date=ex["schedule_ship_date"],
-                    promise_date=ex["promise_date"],
-                    exwork_date=ex["exwork_date"],
-                    erd_date=ex["erd_date"],
-                    product_id=pid,
-                    product_resolution_status=pstatus,
-                    product_resolution_token=ptoken,
-                    product_resolution_detail=pdetail,
-                    distributor_id=did,
-                    distributor_resolution_status=dstatus,
-                    distributor_resolution_token=dtoken,
+                row_values: dict[str, Any] = {
+                    "import_job_id": int(job.id),
+                    "source_key": source_key,
+                    "source_sheet": sheet_name,
+                    "source_row_number": pos,
+                    "report_type": report_type,
+                    "line_state": line_state,
+                    "raw_source_row": raw_payload,
+                    "operating_unit": ex["operating_unit"],
+                    "bill_to_raw": ex["bill_to_raw"],
+                    "ship_to_raw": ex["ship_to_raw"],
+                    "order_no": ex["order_no"],
+                    "order_line": ex["order_line"],
+                    "delivery_no": ex["delivery_no"],
+                    "invoice_line": ex["invoice_line"],
+                    "item_code": ex["item_code"],
+                    "sales_model_name": ex["sales_model_name"],
+                    "customer_item": ex["customer_item"],
+                    "ean_code": ex["ean_code"],
+                    "upc_code": ex["upc_code"],
+                    "mpor_item_no": ex["mpor_item_no"],
+                    "quantity": float(q_dec) if q_dec is not None else None,
+                    "unit_price": float(v) if (v := _decimal_or_none(ex["unit_price"])) is not None else None,
+                    "amount": float(v) if (v := _decimal_or_none(ex["amount"])) is not None else None,
+                    "currency_code": ex["currency_code"],
+                    "ship_confirm_date": ex["ship_confirm_date"],
+                    "schedule_ship_date": ex["schedule_ship_date"],
+                    "promise_date": ex["promise_date"],
+                    "exwork_date": ex["exwork_date"],
+                    "erd_date": ex["erd_date"],
+                    "product_id": pid,
+                    "product_resolution_status": pstatus,
+                    "product_resolution_token": ptoken,
+                    "product_resolution_detail": pdetail,
+                    "distributor_id": did,
+                    "distributor_resolution_status": dstatus,
+                    "distributor_resolution_token": dtoken,
+                }
+                _execute_shipment_line_upsert(db, row_values)
+            except ShipmentEvidenceSourceKeyError as exc:
+                blocking += 1
+                db.add(
+                    ImportRowResult(
+                        job_id=job.id,
+                        row_number=global_row,
+                        severity="error",
+                        code="shipment_evidence_source_key",
+                        message=str(exc)[:2000],
+                        raw_payload={"sheet": sheet_name, "row_index": pos, "report_type": report_type},
+                    )
                 )
-                db.add(line)
             except Exception as exc:  # noqa: BLE001
                 blocking += 1
                 db.add(
@@ -330,6 +512,9 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
                     )
                 )
 
+    db.flush()
+    _resolve_unresolved_shipment_lines_for_job(db, job, idx, source_id)
+
     if unknown_reports == len(frames) and global_row == 0:
         blocking += 1
         db.add(
@@ -341,6 +526,9 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
                 message="Could not detect a supported shipment / order report from headers.",
             )
         )
+
+    db.flush()
+    _rebuild_shipment_distributor_candidates(db, job)
 
     meta = dict(job.staged_metadata or {})
     meta["shipment_evidence"] = to_jsonable(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, Text, Index
+from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, Text, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,8 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
 
     ``line_state`` distinguishes executed shipments vs open-order / pipeline rows.
     ``report_type`` records which extractor produced the row (source audit).
+    ``source_key`` is a stable per-job identifier from the row's business fields (see
+    ``shipment_evidence_source_keys``); re-import upserts on ``(import_job_id, source_key)``.
     """
 
     __tablename__ = "shipment_evidence_line"
@@ -24,6 +26,11 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
         Index("ix_shipment_evidence_line_line_state", "line_state"),
         Index("ix_shipment_evidence_line_report_type", "report_type"),
         Index("ix_shipment_evidence_line_product_status", "product_resolution_status"),
+        UniqueConstraint(
+            "import_job_id",
+            "source_key",
+            name="uq_shipment_evidence_line_import_job_source_key",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -35,6 +42,7 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
 
     report_type: Mapped[str] = mapped_column(String(64), nullable=False)
     line_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(256), nullable=False)
 
     raw_source_row: Mapped[dict] = mapped_column(JSONB, nullable=False)
 

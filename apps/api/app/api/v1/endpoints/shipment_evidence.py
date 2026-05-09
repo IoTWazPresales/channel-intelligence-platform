@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -12,13 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.db.session_sync import SessionLocal
 from app.models.dimensions import DimDistributor, DimProduct
+from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
 from app.models.shipment_evidence import ShipmentEvidenceLine
-from app.services.imports.shipment_evidence_distributor_steward import (
-    create_provisional_distributor_for_shipment_party_token,
-    list_shipment_distributor_steward_tokens,
-    map_shipment_party_token_to_distributor,
-    reprocess_shipment_distributor_resolution,
+from app.services.imports.shipment_evidence_resolution_plan import SHIPMENT_DISTRIBUTOR_ENTITY
+from app.services.imports.shipment_evidence_steward_ops import (
+    ShipmentStewardOpError,
+    execute_create_provisional_shipment_distributor,
+    execute_map_shipment_distributor,
 )
 
 router = APIRouter()
@@ -50,6 +51,7 @@ def _line_to_dict(
         "source_row_number": row.source_row_number,
         "report_type": row.report_type,
         "line_state": row.line_state,
+        "source_key": row.source_key,
         "operating_unit": row.operating_unit,
         "bill_to_raw": row.bill_to_raw,
         "ship_to_raw": row.ship_to_raw,
@@ -141,99 +143,115 @@ async def list_shipment_evidence_raw_column_keys(
     return {"import_job_id": import_job_id, "keys": keys}
 
 
-class ShipmentDistStewardMapBody(BaseModel):
-    import_job_id: int = Field(ge=1)
-    party: Literal["bill_to", "ship_to"]
-    raw_token: str = Field(min_length=1, max_length=512)
+@router.get("/import-jobs/{job_id}/mapping-candidates")
+async def list_shipment_import_job_mapping_candidates(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> list[dict[str, Any]]:
+    """``shipment_distributor`` candidates for an inbound_shipments import job (type-aware list)."""
+    _require_admin(x_user_role)
+    job = await db.get(ImportJob, job_id)
+    if not job or (job.template_slug or "") != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Shipment import job not found")
+    res = await db.execute(
+        select(ImportEntityMappingCandidate)
+        .where(
+            ImportEntityMappingCandidate.import_job_id == job_id,
+            ImportEntityMappingCandidate.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY,
+        )
+        .order_by(ImportEntityMappingCandidate.normalized_key)
+    )
+    rows = res.scalars().all()
+    sug_ids = [int(r.suggested_entity_id) for r in rows if r.suggested_entity_id is not None]
+    names: dict[int, dict[str, str]] = {}
+    if sug_ids:
+        dr = await db.execute(select(DimDistributor).where(DimDistributor.id.in_(sug_ids)))
+        for d in dr.scalars().all():
+            names[int(d.id)] = {"distributor_code": d.code or "", "distributor_name": d.name or ""}
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        sid = int(r.suggested_entity_id) if r.suggested_entity_id is not None else None
+        hint = names.get(sid) if sid is not None else None
+        ctx = r.context if isinstance(r.context, dict) else {}
+        out.append(
+            {
+                "id": r.id,
+                "import_job_id": r.import_job_id,
+                "source_definition_id": r.source_definition_id,
+                "entity_type": r.entity_type,
+                "normalized_key": r.normalized_key,
+                "dealer_group_token": r.dealer_group_token,
+                "row_count": r.row_count,
+                "total_units": float(r.total_units) if r.total_units is not None else None,
+                "total_reported_value": float(r.total_reported_value) if r.total_reported_value is not None else None,
+                "sample_raw_values": r.sample_raw_values,
+                "suggested_entity_id": r.suggested_entity_id,
+                "suggested_distributor_code": hint["distributor_code"] if hint else None,
+                "suggested_distributor_name": hint["distributor_name"] if hint else None,
+                "suggested_action": ctx.get("suggested_action"),
+                "match_reason": r.match_reason,
+                "confidence_score": float(r.confidence_score) if r.confidence_score is not None else None,
+                "status": r.status,
+                "context": r.context,
+                "created_at": r.created_at.isoformat() if r.created_at is not None else None,
+                "updated_at": r.updated_at.isoformat() if r.updated_at is not None else None,
+            }
+        )
+    return out
+
+
+class ShipmentMapDistributorBody(BaseModel):
     distributor_id: int = Field(ge=1)
-    notes: str | None = Field(default=None, max_length=2000)
+    raw_token: str | None = Field(default=None, max_length=512)
 
 
-class ShipmentDistStewardProvisionalBody(BaseModel):
-    import_job_id: int = Field(ge=1)
-    party: Literal["bill_to", "ship_to"]
-    raw_token: str = Field(min_length=1, max_length=512)
+class ShipmentCreateProvisionalDistributorBody(BaseModel):
     display_name: str | None = Field(default=None, max_length=256)
     distributor_code: str | None = Field(default=None, max_length=32)
     confirm_for_suspicious_token: bool = False
 
 
-class ShipmentDistStewardReprocessBody(BaseModel):
-    import_job_id: int = Field(ge=1)
-
-
-def _http_from_steward_value_error(exc: ValueError) -> HTTPException:
-    msg = str(exc)
-    status = 409 if ("already maps" in msg or "already has an approved" in msg) else 400
-    return HTTPException(
-        status_code=status,
-        detail={"error": "steward_request_invalid", "message": msg},
-    )
-
-
-@router.get("/distributor-stewardship/tokens")
-async def list_shipment_distributor_stewardship_tokens(
+@router.post("/import-candidates/{candidate_id}/map-distributor")
+async def shipment_import_candidate_map_distributor(
+    candidate_id: int,
+    body: ShipmentMapDistributorBody,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
-    import_job_id: int | None = Query(None, ge=1),
 ) -> dict[str, Any]:
     _require_admin(x_user_role)
     with SessionLocal() as s:
-        items = list_shipment_distributor_steward_tokens(s, import_job_id)
-    return {"items": items}
-
-
-@router.post("/distributor-stewardship/map-to-distributor")
-async def shipment_distributor_steward_map(
-    body: ShipmentDistStewardMapBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
-) -> dict[str, Any]:
-    _require_admin(x_user_role)
-    try:
-        with SessionLocal() as s:
-            return map_shipment_party_token_to_distributor(
-                s,
-                import_job_id=body.import_job_id,
-                party=body.party,
-                raw_token=body.raw_token,
-                distributor_id=body.distributor_id,
-                notes=body.notes,
+        cand = s.get(ImportEntityMappingCandidate, candidate_id)
+        if not cand or cand.entity_type != SHIPMENT_DISTRIBUTOR_ENTITY:
+            raise HTTPException(status_code=404, detail="Shipment distributor candidate not found")
+        try:
+            return execute_map_shipment_distributor(
+                s, cand, distributor_id=body.distributor_id, raw_token=body.raw_token
             )
-    except ValueError as exc:
-        raise _http_from_steward_value_error(exc) from exc
+        except ShipmentStewardOpError as exc:
+            raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
 
 
-@router.post("/distributor-stewardship/create-provisional-distributor")
-async def shipment_distributor_steward_create_provisional(
-    body: ShipmentDistStewardProvisionalBody,
+@router.post("/import-candidates/{candidate_id}/create-provisional-distributor")
+async def shipment_import_candidate_create_provisional_distributor(
+    candidate_id: int,
+    body: ShipmentCreateProvisionalDistributorBody,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
 ) -> dict[str, Any]:
     _require_admin(x_user_role)
-    try:
-        with SessionLocal() as s:
-            return create_provisional_distributor_for_shipment_party_token(
+    with SessionLocal() as s:
+        cand = s.get(ImportEntityMappingCandidate, candidate_id)
+        if not cand or cand.entity_type != SHIPMENT_DISTRIBUTOR_ENTITY:
+            raise HTTPException(status_code=404, detail="Shipment distributor candidate not found")
+        try:
+            return execute_create_provisional_shipment_distributor(
                 s,
-                import_job_id=body.import_job_id,
-                party=body.party,
-                raw_token=body.raw_token,
+                cand,
                 display_name=body.display_name,
                 distributor_code=body.distributor_code,
                 confirm_for_suspicious_token=body.confirm_for_suspicious_token,
             )
-    except ValueError as exc:
-        raise _http_from_steward_value_error(exc) from exc
-
-
-@router.post("/distributor-stewardship/reprocess-resolution")
-async def shipment_distributor_steward_reprocess(
-    body: ShipmentDistStewardReprocessBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
-) -> dict[str, Any]:
-    _require_admin(x_user_role)
-    try:
-        with SessionLocal() as s:
-            return reprocess_shipment_distributor_resolution(s, import_job_id=body.import_job_id)
-    except ValueError as exc:
-        raise _http_from_steward_value_error(exc) from exc
+        except ShipmentStewardOpError as exc:
+            raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
 
 
 @router.get("")

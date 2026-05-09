@@ -7,25 +7,29 @@ import { ShipmentDistributorStewardPanel } from './ShipmentDistributorStewardPan
 
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(async (path: string) => {
-    if (path.includes('distributor-stewardship/tokens')) {
-      return {
-        items: [
-          {
-            import_job_id: 9,
-            party: 'bill_to',
-            normalized_token: 'acme',
-            representative_raw_token: 'ACME Pty',
-            row_count: 2,
-            total_quantity: 4,
-            total_amount: 100,
-            sample_line_ids: [1, 2],
-            sample_source_row_numbers: [3, 4],
-            import_job_file_name: 'x.xlsx',
-          },
-        ],
-      };
+    if (path.includes('/import-jobs/9/mapping-candidates')) {
+      return [
+        {
+          id: 101,
+          import_job_id: 9,
+          entity_type: 'shipment_distributor',
+          normalized_key: 'acme',
+          row_count: 2,
+          total_units: 4,
+          total_reported_value: 100,
+          sample_raw_values: ['ACME Pty'],
+          suggested_entity_id: null,
+          suggested_distributor_code: null,
+          suggested_distributor_name: null,
+          suggested_action: 'create_provisional_distributor',
+          match_reason: 'no_alias_or_exact_dim_match',
+          confidence_score: 0.2,
+          status: 'needs_review',
+          context: { party: 'bill_to', line_ids: [1, 2] },
+        },
+      ];
     }
-    return { items: [] };
+    return [];
   }),
   apiPost: vi.fn(),
 }));
@@ -36,9 +40,10 @@ function wrap(ui: ReactElement) {
 }
 
 describe('ShipmentDistributorStewardPanel', () => {
-  it('renders unresolved token row', async () => {
+  it('renders mapping candidate row when import job is set', async () => {
     wrap(<ShipmentDistributorStewardPanel importJobId={9} />);
     expect(await screen.findByText('ACME Pty')).toBeTruthy();
     expect(screen.getByTestId('shipment-distributor-steward-panel')).toBeTruthy();
+    expect(screen.getByText('create_provisional_distributor')).toBeTruthy();
   });
 });
