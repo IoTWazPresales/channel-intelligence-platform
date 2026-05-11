@@ -260,7 +260,7 @@ async def create_job(
 
     mode = (import_mode or "").strip().lower()
     if not mode:
-        mode = "validate" if tpl.slug in ("product_master", "distributor_inventory") else "apply"
+        mode = "validate" if tpl.slug in ("product_master", "distributor_inventory", "inbound_shipments") else "apply"
     if mode not in ("validate", "apply"):
         raise HTTPException(status_code=400, detail="import_mode must be validate or apply")
 

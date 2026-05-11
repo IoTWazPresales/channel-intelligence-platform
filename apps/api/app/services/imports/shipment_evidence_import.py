@@ -10,17 +10,22 @@ from __future__ import annotations
 
 import io
 import json
+import re
+from collections import defaultdict
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
 import pandas as pd
+from openpyxl import load_workbook
+from psycopg.errors import DataError as PsycopgDataError
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.import_distributor_si import ImportEntityMappingCandidate
-from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata
+from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.distributor_sales_inventory import (
     ProductResolutionIndex,
@@ -29,8 +34,22 @@ from app.services.imports.distributor_sales_inventory import (
     _resolve_distributor_strict,
     _resolve_product,
 )
+from app.services.imports.shipment_evidence_candidate_names import suggested_name_for_distributor_token
+from app.services.imports.shipment_evidence_customer_remainder_merge import (
+    apply_intra_job_remainder_merge_pass,
+)
+from app.services.imports.shipment_evidence_customer_token_naming import (
+    CustomerTokenNamingResult,
+    annotate_shipment_customer_pending_duplicates,
+    detect_statistical_prefixes,
+    grouped_candidate_normalized_key,
+    plural_merge_canonical_display,
+    suggest_customer_token_name,
+)
 from app.services.imports.shipment_evidence_resolution_plan import (
+    SHIPMENT_CUSTOMER_ENTITY,
     SHIPMENT_DISTRIBUTOR_ENTITY,
+    enrich_shipment_customer_token_candidates,
     enrich_shipment_distributor_candidates,
 )
 from app.services.imports.shipment_evidence_source_keys import (
@@ -52,6 +71,10 @@ from app.services.imports.shipment_evidence_text_normalize import normalize_ship
 from app.storage.local import get_storage_backend
 from app.utils.json_safe import to_jsonable
 
+# Excel 9999-12-31 serial; above this is not a representable calendar date in Excel date space.
+_EXCEL_MAX_DATE_SERIAL = 2958465
+_RE_EXTREME_LEADING_YEAR_DATE_STR = re.compile(r"^\d{5,}-")
+
 
 def _norm_cols(cols: list[str]) -> set[str]:
     return {str(c).strip() for c in cols if c is not None}
@@ -69,18 +92,49 @@ def _cell_str(v: Any) -> str | None:
 
 
 def _parse_date(v: Any) -> date | None:
+    """Parse a cell to a date safe for PostgreSQL ``DATE``; None if invalid or out of range."""
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return None
+    if isinstance(v, str):
+        st = v.strip()
+        if not st:
+            return None
+        if _RE_EXTREME_LEADING_YEAR_DATE_STR.match(st):
+            return None
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        if isinstance(v, float) and pd.isna(v):
+            return None
+        try:
+            fv = float(v)
+        except (TypeError, ValueError):
+            pass
+        else:
+            if fv > float(_EXCEL_MAX_DATE_SERIAL):
+                return None
     if isinstance(v, datetime):
-        return v.date()
+        d = v.date()
+        if d.year < 1 or d.year > 9999:
+            return None
+        return d
     if isinstance(v, date):
+        if v.year < 1 or v.year > 9999:
+            return None
         return v
-    ts = pd.to_datetime(v, errors="coerce")
-    if pd.isna(ts):
+    try:
+        ts = pd.to_datetime(v, errors="coerce")
+        if pd.isna(ts):
+            return None
+        if not isinstance(ts, pd.Timestamp):
+            return None
+        try:
+            d = ts.date()
+        except (OverflowError, ValueError, OSError):
+            return None
+        if d.year < 1 or d.year > 9999:
+            return None
+        return d
+    except (ValueError, OverflowError, PsycopgDataError):
         return None
-    if isinstance(ts, pd.Timestamp):
-        return ts.date()
-    return None
 
 
 def _row_dict(series: pd.Series) -> dict[str, Any]:
@@ -133,6 +187,15 @@ def _extract_common(row: pd.Series) -> dict[str, Any]:
         "promise_date": _parse_date(col("Promise Date")),
         "exwork_date": _parse_date(col("Exwork Date")),
         "erd_date": _parse_date(col("ERD (Est Revenue Date)")),
+        "customer_token_raw": normalize_shipment_cell_value(
+            col(
+                "Customer Remarks",
+                "customer remarks",
+                "Customer Remark",
+                "customer remark",
+                "CUSTOMER REMARKS",
+            )
+        ),
     }
 
 
@@ -258,6 +321,8 @@ def _rebuild_shipment_distributor_candidates(db: Session, job: ImportJob) -> Non
 
     for nk, bucket in buckets.items():
         primary_party = "bill_to" if "bill_to" in bucket["parties"] else "ship_to"
+        sample0 = bucket["samples"][0] if bucket["samples"] else nk
+        dis_sug = suggested_name_for_distributor_token(str(sample0))
         cand = ImportEntityMappingCandidate(
             import_job_id=jid,
             source_definition_id=sid,
@@ -269,24 +334,289 @@ def _rebuild_shipment_distributor_candidates(db: Session, job: ImportJob) -> Non
             total_reported_value=float(bucket["amt"]) if bucket["amt"] else None,
             sample_raw_values=to_jsonable(bucket["samples"][:5]),
             status="needs_review",
-            context=to_jsonable({"party": primary_party, "line_ids": bucket["line_ids"]}),
+            context=to_jsonable(
+                {"party": primary_party, "line_ids": bucket["line_ids"], "suggested_name": dis_sug}
+            ),
         )
         db.add(cand)
     db.flush()
     enrich_shipment_distributor_candidates(db, import_job_id=jid, source_definition_id=sid)
 
 
-def _execute_shipment_line_upsert(db: Session, values: dict[str, Any]) -> None:
-    """Insert or update one line keyed by (import_job_id, source_key).
+def _shipment_customer_candidate_bucket_key(nr: CustomerTokenNamingResult) -> tuple[str, str | None]:
+    """Merge lines that share the same steward outcome (post all naming layers).
 
-    On conflict, refreshes source-derived columns only; ``id``, ``created_at``, and all
-    product/distributor resolution columns on the existing row are left unchanged (see
-    post-loop ``_resolve_unresolved_shipment_lines_for_job`` for unresolved ids).
+    Non-noise: bucket by normalised suggested display so two strings that ``_norm_key``
+    the same cannot produce duplicate ``normalized_key`` rows. ``noise_only`` /
+    ``internal_note``: keep buckets keyed by the per-row suggested display plus category.
     """
+    if nr.special_category == "noise_only":
+        return (nr.suggested_name, nr.special_category)
+    if nr.special_category == "internal_note":
+        return (nr.suggested_name, nr.special_category)
+    nsk = _norm_key(nr.suggested_name)
+    if nsk:
+        return (nsk, nr.special_category)
+    return ((nr.suggested_name or "").strip().lower(), nr.special_category)
+
+
+def _merge_pending_plural_customer_groups(pending: dict[str, dict[str, Any]]) -> None:
+    """Merge pending buckets whose displays differ only by a trailing plural ``s`` (guard: stem >= 4 chars)."""
+    sig_to_nks: dict[tuple[Any, ...], list[str]] = defaultdict(list)
+    for nk, pb in pending.items():
+        sug = (pb.get("display_suggested_name") or "").strip()
+        sc = pb.get("special_category")
+        if sc in ("noise_only", "internal_note"):
+            sig_to_nks[(nk, sc)].append(nk)
+        else:
+            canon = plural_merge_canonical_display(sug)
+            sig_to_nks[(_norm_key(canon), sc)].append(nk)
+
+    new_pending: dict[str, dict[str, Any]] = {}
+    for _sig, nk_list in sig_to_nks.items():
+        merged: dict[str, Any] | None = None
+        for nk in nk_list:
+            pb = pending.pop(nk)
+            if merged is None:
+                merged = {
+                    "line_ids": list(pb["line_ids"]),
+                    "samples": list(pb.get("samples", [])[:5]),
+                    "source_tokens": list(pb.get("source_tokens", [])),
+                    "qty": pb["qty"],
+                    "amt": pb["amt"],
+                    "needs_name_review": bool(pb.get("needs_name_review")),
+                    "display_suggested_name": (pb.get("display_suggested_name") or "").strip()[:256] or None,
+                    "special_category": pb.get("special_category"),
+                }
+            else:
+                merged["line_ids"].extend(pb["line_ids"])
+                merged["source_tokens"] = sorted(set(merged["source_tokens"]) | set(pb.get("source_tokens", [])))
+                merged["qty"] += pb["qty"]
+                merged["amt"] += pb["amt"]
+                merged["needs_name_review"] = bool(merged["needs_name_review"] or pb.get("needs_name_review"))
+                for s in pb.get("samples", []):
+                    if len(merged["samples"]) < 5 and s not in merged["samples"]:
+                        merged["samples"].append(s)
+                d2 = (pb.get("display_suggested_name") or "").strip()
+                if d2:
+                    cur = (merged.get("display_suggested_name") or "").strip()
+                    c2 = plural_merge_canonical_display(d2)
+                    if not cur or len(c2) < len(cur):
+                        merged["display_suggested_name"] = c2[:256]
+        if merged is None:
+            continue
+        sc = merged.get("special_category")
+        src_sorted = sorted(set(merged["source_tokens"]))
+        disp = (merged.get("display_suggested_name") or "").strip()
+        if sc not in ("noise_only", "internal_note") and disp:
+            disp = plural_merge_canonical_display(disp)[:256]
+        nk_new = grouped_candidate_normalized_key(
+            suggested_name=disp or (src_sorted[0] if src_sorted else ""),
+            source_tokens=src_sorted,
+            special_category=sc,
+        )[:512]
+        merged["display_suggested_name"] = disp[:256] if disp else merged.get("display_suggested_name")
+        merged["source_tokens"] = src_sorted
+        new_pending[nk_new] = merged
+
+    pending.clear()
+    pending.update(new_pending)
+
+
+def _distributor_suggested_display_names_for_job(db: Session, import_job_id: int) -> frozenset[str]:
+    """Suggested distributor display strings already persisted for this import job (customer merge hints)."""
+    rows = list(
+        db.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == int(import_job_id),
+                ImportEntityMappingCandidate.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY,
+            )
+        ).all()
+    )
+    out: set[str] = set()
+    for row in rows:
+        ctx = row.context if isinstance(row.context, dict) else {}
+        sn = ctx.get("suggested_name")
+        if isinstance(sn, str) and sn.strip():
+            out.add(sn.strip()[:256])
+    return frozenset(out)
+
+
+def _rebuild_shipment_customer_candidates(db: Session, job: ImportJob) -> None:
+    """Replace ``shipment_customer_token`` candidates from lines with a customer token that are not steward-resolved."""
+    jid = int(job.id)
+    sid = int(job.source_id) if job.source_id else None
+
+    db.execute(
+        delete(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.import_job_id == jid,
+            ImportEntityMappingCandidate.entity_type == SHIPMENT_CUSTOMER_ENTITY,
+        )
+    )
+    db.flush()
+
+    lines = list(db.scalars(select(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id == jid)).all())
+    line_refs: list[tuple[ShipmentEvidenceLine, str]] = []
+    for line in lines:
+        if (line.customer_resolution_status or "").strip() == "resolved":
+            continue
+        ctr = line.customer_token_raw
+        if not ctr or not str(ctr).strip():
+            continue
+        raw = str(ctr).strip()
+        if not _norm_key(raw):
+            continue
+        line_refs.append((line, raw))
+
+    if not line_refs:
+        db.flush()
+        return
+
+    distinct_raws = sorted({r for _, r in line_refs})
+    stat_prefixes, prefix_job_meta = detect_statistical_prefixes(distinct_raws)
+    source_def = db.get(SourceDefinition, int(sid)) if sid else None
+
+    naming_by_raw: dict[str, CustomerTokenNamingResult] = {}
+    for r in distinct_raws:
+        naming_by_raw[r] = suggest_customer_token_name(
+            r, statistical_prefixes_longest_first=stat_prefixes, source_def=source_def
+        )
+
+    # Group by post-layer outcome: non-noise merges on normalised suggested_name so
+    # ``grouped_candidate_normalized_key`` cannot collide across buckets.
+    groups: dict[tuple[str, str | None], dict[str, Any]] = defaultdict(
+        lambda: {
+            "line_ids": [],
+            "samples": [],
+            "source_tokens": set(),
+            "qty": Decimal(0),
+            "amt": Decimal(0),
+            "needs_name_review": False,
+            "display_suggested_name": None,
+        }
+    )
+    for line, raw in line_refs:
+        nr = naming_by_raw[raw]
+        gk = _shipment_customer_candidate_bucket_key(nr)
+        b = groups[gk]
+        if b["display_suggested_name"] is None and (nr.suggested_name or "").strip():
+            b["display_suggested_name"] = (nr.suggested_name or "").strip()[:256]
+        b["line_ids"].append(int(line.id))
+        b["source_tokens"].add(raw[:512])
+        if len(b["samples"]) < 5 and raw[:512] not in b["samples"]:
+            b["samples"].append(raw[:512])
+        if line.quantity is not None:
+            b["qty"] += Decimal(str(line.quantity))
+        if line.amount is not None:
+            b["amt"] += Decimal(str(line.amount))
+        if nr.needs_name_review:
+            b["needs_name_review"] = True
+
+    # Second pass: merge any buckets that still map to the same normalized_key (safety net).
+    pending: dict[str, dict[str, Any]] = {}
+    for merge_key, bucket in groups.items():
+        special_cat = merge_key[1]
+        sug_display = (bucket.get("display_suggested_name") or "").strip()
+        if not sug_display:
+            sug_display = merge_key[0] if special_cat == "noise_only" else (merge_key[0] or "").strip()
+        src_sorted = sorted(bucket["source_tokens"])
+        nk = grouped_candidate_normalized_key(
+            suggested_name=sug_display,
+            source_tokens=src_sorted,
+            special_category=special_cat,
+        )
+        nk = nk[:512]
+        if nk in pending:
+            p = pending[nk]
+            p["line_ids"].extend(bucket["line_ids"])
+            p["source_tokens"] = sorted(set(p["source_tokens"]) | set(src_sorted))
+            p["qty"] += bucket["qty"]
+            p["amt"] += bucket["amt"]
+            p["needs_name_review"] = bool(p["needs_name_review"] or bucket["needs_name_review"])
+            for s in bucket["samples"]:
+                if len(p["samples"]) < 5 and s not in p["samples"]:
+                    p["samples"].append(s)
+            if not (p.get("display_suggested_name") or "").strip() and sug_display:
+                p["display_suggested_name"] = sug_display[:256]
+        else:
+            pending[nk] = {
+                "line_ids": list(bucket["line_ids"]),
+                "samples": list(bucket["samples"][:5]),
+                "source_tokens": list(src_sorted),
+                "qty": bucket["qty"],
+                "amt": bucket["amt"],
+                "needs_name_review": bool(bucket["needs_name_review"]),
+                "display_suggested_name": sug_display[:256] if sug_display else None,
+                "special_category": special_cat,
+            }
+
+    _merge_pending_plural_customer_groups(pending)
+    annotate_shipment_customer_pending_duplicates(pending)
+    dist_names = _distributor_suggested_display_names_for_job(db, jid)
+    apply_intra_job_remainder_merge_pass(pending, distributor_suggested_names=dist_names)
+
+    for nk, pb in pending.items():
+        src_sorted = sorted(set(pb["source_tokens"]))
+        sug_out = (pb.get("display_suggested_name") or "").strip()
+        if not sug_out:
+            if nk.startswith("sc:") or nk.startswith("blank:") or nk.startswith("in:"):
+                sug_out = (src_sorted[0] if src_sorted else "")[:256]
+            else:
+                sug_out = nk[:256]
+        ctx: dict[str, Any] = {
+            "line_ids": pb["line_ids"],
+            "suggested_name": sug_out,
+            "source_tokens": src_sorted,
+            "needs_name_review": bool(pb["needs_name_review"]),
+            "statistical_prefixes_detected": prefix_job_meta,
+        }
+        sc = pb.get("special_category")
+        if sc:
+            ctx["special_category"] = sc
+        dup = pb.get("possible_duplicate_of")
+        if isinstance(dup, list) and dup:
+            ctx["possible_duplicate_of"] = dup
+        typo = pb.get("typo_suspected_of")
+        if isinstance(typo, list) and typo:
+            ctx["typo_suspected_of"] = typo
+        cand = ImportEntityMappingCandidate(
+            import_job_id=jid,
+            source_definition_id=sid,
+            entity_type=SHIPMENT_CUSTOMER_ENTITY,
+            normalized_key=nk[:512],
+            dealer_group_token=None,
+            row_count=len(pb["line_ids"]),
+            total_units=float(pb["qty"]) if pb["qty"] else None,
+            total_reported_value=float(pb["amt"]) if pb["amt"] else None,
+            sample_raw_values=to_jsonable(pb["samples"][:5]),
+            status="needs_review",
+            context=to_jsonable(ctx),
+        )
+        db.add(cand)
+    db.flush()
+    enrich_shipment_customer_token_candidates(db, import_job_id=jid, source_definition_id=sid)
+
+
+_SHIPMENT_LINE_DATE_COLS = (
+    "ship_confirm_date",
+    "schedule_ship_date",
+    "promise_date",
+    "exwork_date",
+    "erd_date",
+)
+
+
+def _is_psycopg_data_error(exc: BaseException) -> bool:
+    if isinstance(exc, PsycopgDataError):
+        return True
+    return isinstance(exc, DBAPIError) and isinstance(getattr(exc, "orig", None), PsycopgDataError)
+
+
+def _shipment_evidence_line_upsert_statement(values: dict[str, Any]):
     t = ShipmentEvidenceLine.__table__
     ins = pg_insert(t).values(**values)
     ex = ins.excluded
-    stmt = ins.on_conflict_do_update(
+    return ins.on_conflict_do_update(
         constraint="uq_shipment_evidence_line_import_job_source_key",
         set_={
             "source_sheet": ex.source_sheet,
@@ -316,10 +646,34 @@ def _execute_shipment_line_upsert(db: Session, values: dict[str, Any]) -> None:
             "promise_date": ex.promise_date,
             "exwork_date": ex.exwork_date,
             "erd_date": ex.erd_date,
+            "customer_token_raw": ex.customer_token_raw,
             "updated_at": func.now(),
         },
     )
-    db.execute(stmt)
+
+
+def _execute_shipment_line_upsert(db: Session, values: dict[str, Any]) -> None:
+    """Insert or update one line keyed by (import_job_id, source_key).
+
+    On conflict, refreshes source-derived columns only; ``id``, ``created_at``, and all
+    product/distributor/customer resolution columns on the existing row are left unchanged (see
+    post-loop ``_resolve_unresolved_shipment_lines_for_job`` for unresolved ids).
+
+    If PostgreSQL rejects a bound date (e.g. year > 9999 from Excel artifacts), clears
+    date columns and retries once inside a savepoint so the outer import transaction survives.
+    """
+    stmt = _shipment_evidence_line_upsert_statement(values)
+    try:
+        with db.begin_nested():
+            db.execute(stmt)
+    except Exception as exc:
+        if not _is_psycopg_data_error(exc):
+            raise
+        cleared = dict(values)
+        for k in _SHIPMENT_LINE_DATE_COLS:
+            cleared[k] = None
+        with db.begin_nested():
+            db.execute(_shipment_evidence_line_upsert_statement(cleared))
 
 
 def _resolve_unresolved_shipment_lines_for_job(
@@ -366,33 +720,59 @@ def _resolve_unresolved_shipment_lines_for_job(
     db.flush()
 
 
-def _load_frames_for_job(job: ImportJob, df_passed: pd.DataFrame, raw_bytes: bytes) -> list[tuple[str | None, pd.DataFrame, str, str]]:
-    """List of (sheet_name, dataframe, report_type, line_state)."""
+def _openpyxl_sheet_to_dataframe(ws: Any) -> pd.DataFrame:
+    """Build a DataFrame from a read-only worksheet (values_only, cached numbers when data_only workbook)."""
+    rows_iter = ws.iter_rows(values_only=True)
+    try:
+        header_row = next(rows_iter)
+    except StopIteration:
+        return pd.DataFrame()
+    if header_row is None:
+        return pd.DataFrame()
+    header = [str(c).strip() if c is not None else "" for c in header_row]
+    data_rows = list(rows_iter)
+    if not data_rows:
+        return pd.DataFrame(columns=header)
+    return pd.DataFrame(list(data_rows), columns=header, dtype=object)
+
+
+def _load_frames_for_job(job: ImportJob, _df_passed: pd.DataFrame, raw_bytes: bytes) -> list[tuple[str | None, pd.DataFrame, str, str]]:
+    """List of (sheet_name, dataframe, report_type, line_state).
+
+    Always reads from ``raw_bytes`` (CSV or XLSX). The pipeline ``df`` argument is ignored so
+    multi-sheet XLSX and ``data_only`` values stay consistent with storage.
+    """
     fn = job.file_name or ""
     lower = fn.lower()
     out: list[tuple[str | None, pd.DataFrame, str, str]] = []
 
     if lower.endswith(".csv"):
-        cols = _norm_cols(list(df_passed.columns))
+        df_csv = pd.read_csv(io.BytesIO(raw_bytes))
+        cols = _norm_cols(list(df_csv.columns))
         rt, ls = detect_report_type(cols, sheet_name=None, file_name=fn)
-        out.append((None, df_passed, rt, ls))
+        out.append((None, df_csv, rt, ls))
         return out
 
     if lower.endswith((".xlsx", ".xlsm")):
-        xl = pd.ExcelFile(io.BytesIO(raw_bytes), engine="openpyxl")
-        for sheet in xl.sheet_names:
-            sdf = pd.read_excel(io.BytesIO(raw_bytes), sheet_name=sheet, engine="openpyxl")
-            cols = _norm_cols(list(sdf.columns))
-            rt, ls = detect_report_type(cols, sheet_name=sheet, file_name=fn)
-            if rt == REPORT_UNKNOWN and sheet.lower() in ("shipped", "unship"):
-                rt = REPORT_ACZA_SHIPPED if sheet.lower() == "shipped" else REPORT_ACZA_UNSHIP
-                ls = LINE_SHIPPED if sheet.lower() == "shipped" else LINE_OPEN_ORDER
-            out.append((sheet, sdf, rt, ls))
+        wb = load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
+        try:
+            for sheet in wb.sheetnames:
+                ws = wb[sheet]
+                sdf = _openpyxl_sheet_to_dataframe(ws)
+                cols = _norm_cols(list(sdf.columns))
+                rt, ls = detect_report_type(cols, sheet_name=sheet, file_name=fn)
+                if rt == REPORT_UNKNOWN and sheet.lower() in ("shipped", "unship"):
+                    rt = REPORT_ACZA_SHIPPED if sheet.lower() == "shipped" else REPORT_ACZA_UNSHIP
+                    ls = LINE_SHIPPED if sheet.lower() == "shipped" else LINE_OPEN_ORDER
+                out.append((sheet, sdf, rt, ls))
+        finally:
+            wb.close()
         return out
 
-    cols = _norm_cols(list(df_passed.columns))
+    df_fallback = _df_passed if isinstance(_df_passed, pd.DataFrame) and not _df_passed.empty else pd.DataFrame()
+    cols = _norm_cols(list(df_fallback.columns))
     rt, ls = detect_report_type(cols, sheet_name=None, file_name=fn)
-    out.append((None, df_passed, rt, ls))
+    out.append((None, df_fallback, rt, ls))
     return out
 
 
@@ -483,6 +863,8 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
                     "promise_date": ex["promise_date"],
                     "exwork_date": ex["exwork_date"],
                     "erd_date": ex["erd_date"],
+                    "customer_token_raw": ex["customer_token_raw"],
+                    "customer_resolution_status": None,
                     "product_id": pid,
                     "product_resolution_status": pstatus,
                     "product_resolution_token": ptoken,
@@ -534,6 +916,7 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
 
     db.flush()
     _rebuild_shipment_distributor_candidates(db, job)
+    _rebuild_shipment_customer_candidates(db, job)
 
     meta = dict(job.staged_metadata or {})
     meta["shipment_evidence"] = to_jsonable(

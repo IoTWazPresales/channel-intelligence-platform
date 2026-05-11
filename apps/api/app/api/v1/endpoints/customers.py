@@ -3,7 +3,7 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, asc, desc, func, or_, select
+from sqlalchemy import and_, asc, case, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -175,6 +175,13 @@ async def list_customers(
     page_size: int = Query(default=50, ge=1, le=200),
     q: str | None = Query(default=None, description="Global search over customer identity"),
     customer_status: str | None = Query(default=None),
+    status: str | None = Query(default=None, description="Alias for customer_status (e.g. unverified)"),
+    job_id: int | None = Query(
+        default=None,
+        ge=1,
+        description="Restrict to customers whose notes reference this import job (e.g. provisionals from steward)",
+    ),
+    customer_id: int | None = Query(default=None, ge=1, description="When set, return at most this customer id"),
     partner_tier: str | None = Query(default=None),
     region_code: str | None = Query(default=None),
     channel_code: str | None = Query(default=None),
@@ -203,6 +210,7 @@ async def list_customers(
         "customer_status": DimCustomer.customer_status,
         "partner_tier": DimCustomer.partner_tier,
         "account_owner_internal": DimCustomer.account_owner_internal,
+        "created_at": DimCustomer.created_at,
         "updated_at": DimCustomer.updated_at,
         "region_code": DimRegion.code,
         "channel_code": DimChannel.code,
@@ -239,9 +247,15 @@ async def list_customers(
             )
         )
 
-    if customer_status and customer_status.strip():
-        cs = customer_status.strip().lower()
-        filters.append(DimCustomer.customer_status == cs)
+    eff_status = (customer_status or status or "").strip()
+    if eff_status:
+        filters.append(DimCustomer.customer_status == eff_status.lower())
+
+    if job_id is not None:
+        filters.append(DimCustomer.notes_summary.ilike(f"%(job {int(job_id)})%"))
+
+    if customer_id is not None:
+        filters.append(DimCustomer.id == int(customer_id))
 
     if partner_tier and partner_tier.strip():
         pt = partner_tier.strip().lower()
@@ -268,11 +282,18 @@ async def list_customers(
 
     total = int((await db.execute(count_stmt)).scalar_one())
     offset = (page - 1) * page_size
-    rows = (
-        await db.execute(
-            base.order_by(sort_fn(sort_col), asc(DimCustomer.id)).offset(offset).limit(page_size)
+    if job_id is not None and not (q and q.strip()):
+        order_parts = (desc(DimCustomer.created_at), asc(DimCustomer.id))
+    elif q and q.strip():
+        order_parts = (
+            case((DimCustomer.customer_status == "unverified", 0), else_=1).asc(),
+            desc(DimCustomer.updated_at),
+            sort_fn(sort_col),
+            asc(DimCustomer.id),
         )
-    ).all()
+    else:
+        order_parts = (sort_fn(sort_col), asc(DimCustomer.id))
+    rows = (await db.execute(base.order_by(*order_parts).offset(offset).limit(page_size))).all()
 
     items = []
     for c, region_code_out, channel_code_out, pref_code, pref_name, location_count, contact_count in rows:
@@ -282,6 +303,7 @@ async def list_customers(
                 "customer_code": c.code,
                 "customer_name": c.name,
                 "customer_status": c.customer_status,
+                "created_at": c.created_at.isoformat() if c.created_at is not None else None,
                 "partner_tier": c.partner_tier,
                 "account_owner_internal": c.account_owner_internal,
                 "notes_summary": c.notes_summary,

@@ -32,7 +32,7 @@ import {
   SHIPMENT_EVIDENCE_OPTIONAL_FIELDS,
   ShipmentEvidenceColumnsDialog,
 } from './ShipmentEvidenceColumnsDialog';
-import { ShipmentDistributorStewardPanel } from './ShipmentDistributorStewardPanel';
+import { ShipmentEntityStewardPanel } from './ShipmentEntityStewardPanel';
 
 const LS_GRID = 'cip.admin.shipment-evidence.grid.v1';
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500, 1000] as const;
@@ -97,6 +97,7 @@ type ImportJobSummary = {
   template_slug: string | null;
   import_mode: string | null;
   error_summary?: string | null;
+  unresolved_distributor_candidates?: number;
 };
 
 function formatRawCell(v: unknown): string {
@@ -147,6 +148,7 @@ export default function ShipmentEvidenceAdminPage() {
   /** Import job id from the last grid row click (for raw catalog inference when filter is empty). */
   const [contextImportJobId, setContextImportJobId] = useState<number | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
+  const [applyStewardWarning, setApplyStewardWarning] = useState<string | null>(null);
 
   const parsedJobId = useMemo(() => {
     const t = importJobId.trim();
@@ -286,13 +288,27 @@ export default function ShipmentEvidenceAdminPage() {
       if (parsedJobId == null) throw new Error('No import job selected');
       return apiPost<ImportJobSummary>(`/api/v1/shipment-evidence/jobs/${parsedJobId}/apply`, {});
     },
-    onSuccess: () => {
+    onMutate: () => {
+      setApplyStewardWarning(null);
+    },
+    onSuccess: (data) => {
       setApplyError(null);
+      const n = data.unresolved_distributor_candidates;
+      if (typeof n === 'number' && n > 0) {
+        setApplyStewardWarning(
+          `${n} distributor mapping candidate(s) are still in needs_review. You are not blocked — resolve them in the steward panel when ready.`
+        );
+      } else {
+        setApplyStewardWarning(null);
+      }
       void qc.invalidateQueries({ queryKey: ['import-job', parsedJobId] });
       void qc.invalidateQueries({ queryKey: ['shipment-evidence'] });
       void qc.invalidateQueries({ queryKey: ['shipment-evidence-mapping-candidates', parsedJobId] });
     },
-    onError: (e: Error) => setApplyError(e.message),
+    onError: (e: Error) => {
+      setApplyError(e.message);
+      setApplyStewardWarning(null);
+    },
   });
 
   useEffect(() => {
@@ -553,6 +569,11 @@ export default function ShipmentEvidenceAdminPage() {
                 </Button>
               </Stack>
               {applyError ? <Alert severity="error">{applyError}</Alert> : null}
+              {applyStewardWarning ? (
+                <Alert severity="warning" onClose={() => setApplyStewardWarning(null)}>
+                  {applyStewardWarning}
+                </Alert>
+              ) : null}
               {importApplied ? (
                 <Alert severity="success">
                   Import marked complete (stage <strong>loaded</strong>). Evidence lines remain in the grid below.
@@ -605,7 +626,7 @@ export default function ShipmentEvidenceAdminPage() {
                 candidates below (not DSI).
               </Typography>
             </Alert>
-            <ShipmentDistributorStewardPanel importJobId={parsedJobId} />
+            <ShipmentEntityStewardPanel importJobId={parsedJobId} />
           </>
         ) : parsedJobId != null && trackedImportJob && trackedImportJob.stage !== 'validated' && trackedImportJob.stage !== 'loaded' ? (
           <Alert severity="info" variant="outlined">

@@ -51,6 +51,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { ShipmentEntityStewardPanel } from '@/app/(app)/admin/shipment-evidence/ShipmentEntityStewardPanel';
 import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -240,6 +241,8 @@ const HL_APPLY_BLOCKING_CODES = new Set([
 
 const stepsDefault = ['Import type', 'Data provider', 'Template details', 'Import mode', 'Upload & preview'];
 
+const stepsShipmentEvidence = ['Import type', 'Data provider', 'Template details', 'Upload & preview'];
+
 const stepsPm = [
   'Import type',
   'Data provider',
@@ -285,6 +288,8 @@ function describeTemplateBehavior(template: ImportTemplate | null, isPm: boolean
       return 'Validates distributor_code/distributor_name, then upserts dim_distributor when mode is Apply.';
     case 'customer_master':
       return 'Validates customer master fields, then upserts dim_customer when mode is Apply.';
+    case 'inbound_shipments':
+      return 'Always runs in validate mode: writes evidence lines and stops at validated. Marking loaded uses the Shipment evidence admin apply action after steward review.';
     default:
       return 'Runs the configured template pipeline for this import type.';
   }
@@ -371,6 +376,7 @@ function AdminImportsPageContent() {
   const [importJobBulkDeleteBusy, setImportJobBulkDeleteBusy] = useState(false);
   const [importJobDeleteSemanticArtifacts, setImportJobDeleteSemanticArtifacts] = useState(false);
   const [importJobBulkDeleteAck, setImportJobBulkDeleteAck] = useState(false);
+  const [shipmentApplyWarning, setShipmentApplyWarning] = useState<string | null>(null);
 
   const jobIdParam = useMemo(() => {
     const v = searchParams.get('job');
@@ -379,7 +385,8 @@ function AdminImportsPageContent() {
 
   const isPm = selectedSlug === 'product_master';
   const isDsi = selectedSlug === 'distributor_inventory';
-  const steps = isPm ? stepsPm : isDsi ? stepsDsi : stepsDefault;
+  const isShipmentEvidence = selectedSlug === 'inbound_shipments';
+  const steps = isPm ? stepsPm : isDsi ? stepsDsi : isShipmentEvidence ? stepsShipmentEvidence : stepsDefault;
   const { data: templates } = useQuery({
     queryKey: ['import-templates'],
     queryFn: ({ signal }) => apiGet<ImportTemplate[]>('/api/v1/imports/templates', { signal }),
@@ -405,7 +412,8 @@ function AdminImportsPageContent() {
     setImportMode(
       forcedTemplate === 'product_master' ||
         forcedTemplate === 'historical_lineup' ||
-        forcedTemplate === 'distributor_inventory'
+        forcedTemplate === 'distributor_inventory' ||
+        forcedTemplate === 'inbound_shipments'
         ? 'validate'
         : 'apply'
     );
@@ -781,7 +789,10 @@ function AdminImportsPageContent() {
       if (selectedTemplate?.requires_provider && sourceId === '')
         throw new Error('Select a data provider before uploading.');
       const fd = new FormData();
-      const effectiveMode = modeOverride ?? importMode;
+      const effectiveMode =
+        selectedSlug === 'inbound_shipments'
+          ? 'validate'
+          : modeOverride ?? importMode;
       fd.append('source_id', String(sourceId));
       fd.append('file', file);
       fd.append('run_sync', selectedSlug === 'distributor_inventory' ? 'false' : 'true');
@@ -802,6 +813,9 @@ function AdminImportsPageContent() {
     },
     onSuccess: (data) => {
       setLastJobId(data.id);
+      if (selectedSlug === 'inbound_shipments') {
+        setShipmentApplyWarning(null);
+      }
       if (selectedSlug === 'historical_lineup' && data.import_mode === 'validate') {
         setHistoricalValidatedJobId(data.id);
         setHlMappingEdits({});
@@ -822,6 +836,55 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', data.id] });
       if (selectedSlug === 'distributor_inventory') {
         setActiveStep(5);
+      }
+    },
+  });
+
+  const { data: shipmentImportJob } = useQuery({
+    queryKey: ['import-job', lastJobId],
+    queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${lastJobId!}`, { signal }),
+    enabled: Boolean(isShipmentEvidence && lastJobId != null && upload.isSuccess),
+    refetchInterval: (q) => {
+      const j = q.state.data;
+      if (!j) return 1500;
+      const st = (j.stage || '').trim();
+      if (st === 'validated' || st === 'loaded' || st === 'failed') return false;
+      return 1500;
+    },
+  });
+
+  type ShipmentApplyResponse = {
+    id: number;
+    status: string;
+    stage: string | null;
+    template_slug?: string | null;
+    import_mode?: string | null;
+    unresolved_distributor_candidates?: number;
+    unresolved_customer_candidates?: number;
+  };
+
+  const shipmentApplyMut = useMutation({
+    mutationFn: async () => {
+      if (lastJobId == null) throw new Error('No import job');
+      return apiPost<ShipmentApplyResponse>(`/api/v1/shipment-evidence/jobs/${lastJobId}/apply`, {});
+    },
+    onMutate: () => {
+      setShipmentApplyWarning(null);
+    },
+    onSuccess: (data) => {
+      void qc.invalidateQueries({ queryKey: ['import-job', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['shipment-evidence-mapping-candidates', lastJobId] });
+      const nd = data.unresolved_distributor_candidates;
+      const nc = data.unresolved_customer_candidates;
+      const parts: string[] = [];
+      if (typeof nd === 'number' && nd > 0) {
+        parts.push(`${nd} distributor mapping candidate(s) are still in needs_review.`);
+      }
+      if (typeof nc === 'number' && nc > 0) {
+        parts.push(`${nc} channel partner mapping candidate(s) are still in needs_review.`);
+      }
+      if (parts.length > 0) {
+        setShipmentApplyWarning(`${parts.join(' ')} You are not blocked — resolve them in the steward panel when ready.`);
       }
     },
   });
@@ -965,7 +1028,11 @@ function AdminImportsPageContent() {
       setLastGenericFile(file);
       setHistoricalValidatedJobId(null);
       const modeOverride =
-        selectedSlug === 'historical_lineup' || selectedSlug === 'distributor_inventory' ? 'validate' : undefined;
+        selectedSlug === 'historical_lineup' ||
+        selectedSlug === 'distributor_inventory' ||
+        selectedSlug === 'inbound_shipments'
+          ? 'validate'
+          : undefined;
       upload.mutate({ file, modeOverride });
     },
     [isPm, pmUpload, selectedSlug, upload]
@@ -1337,7 +1404,8 @@ function AdminImportsPageContent() {
                       setImportMode(
                         t.slug === 'product_master' ||
                           t.slug === 'historical_lineup' ||
-                          t.slug === 'distributor_inventory'
+                          t.slug === 'distributor_inventory' ||
+                          t.slug === 'inbound_shipments'
                           ? 'validate'
                           : 'apply'
                       );
@@ -1476,7 +1544,7 @@ function AdminImportsPageContent() {
           </Stack>
         ) : null}
 
-        {activeStep === 3 && selectedTemplate && !isPm ? (
+        {activeStep === 3 && selectedTemplate && !isPm && !isShipmentEvidence ? (
           <Stack spacing={2}>
             <FormControl size="small" sx={{ maxWidth: 360 }}>
               <InputLabel id="mode-label">Import mode</InputLabel>
@@ -1484,7 +1552,11 @@ function AdminImportsPageContent() {
                 labelId="mode-label"
                 label="Import mode"
                 value={importMode}
-                disabled={selectedTemplate.slug === 'historical_lineup' || selectedTemplate.slug === 'distributor_inventory'}
+                disabled={
+                  selectedTemplate.slug === 'historical_lineup' ||
+                  selectedTemplate.slug === 'distributor_inventory' ||
+                  selectedTemplate.slug === 'inbound_shipments'
+                }
                 onChange={(e) => setImportMode(e.target.value as 'validate' | 'apply')}
               >
                 <MenuItem value="validate">Validate only (no catalog writes)</MenuItem>
@@ -2523,8 +2595,15 @@ function AdminImportsPageContent() {
           </Stack>
         ) : null}
 
-        {activeStep === 4 && !isPm && !isDsi ? (
+        {(activeStep === 4 && !isPm && !isDsi && !isShipmentEvidence) ||
+        (activeStep === 3 && isShipmentEvidence && !isPm && !isDsi) ? (
           <Stack spacing={2}>
+            {isShipmentEvidence ? (
+              <Alert severity="info">
+                This upload runs in validate mode only. After the job reaches validated, resolve distributors below then
+                click Apply import to set loaded.
+              </Alert>
+            ) : null}
             <Typography variant="body2">
               Upload for <strong>{selectedTemplate?.display_name}</strong> using provider{' '}
               <strong>{(sources ?? []).find((s) => s.id === sourceId)?.name ?? '—'}</strong>.
@@ -2593,6 +2672,30 @@ function AdminImportsPageContent() {
                 <Button size="small" onClick={() => void refetchPreview()}>
                   Refresh validation preview
                 </Button>
+              </Alert>
+            ) : null}
+            {isShipmentEvidence && lastJobId != null && upload.isSuccess && shipmentImportJob && ['validated', 'loaded'].includes((shipmentImportJob.stage || '').trim()) ? (
+              <ShipmentEntityStewardPanel importJobId={lastJobId} />
+            ) : null}
+            {isShipmentEvidence && lastJobId != null && upload.isSuccess && shipmentImportJob?.stage === 'validated' ? (
+              <Stack spacing={1}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  disabled={shipmentApplyMut.isPending}
+                  onClick={() => void shipmentApplyMut.mutateAsync()}
+                >
+                  Apply import
+                </Button>
+                {shipmentApplyMut.isError ? (
+                  <Alert severity="error">{safeDisplayError(shipmentApplyMut.error)}</Alert>
+                ) : null}
+              </Stack>
+            ) : null}
+            {isShipmentEvidence && shipmentApplyWarning ? (
+              <Alert severity="warning" onClose={() => setShipmentApplyWarning(null)}>
+                {shipmentApplyWarning}
               </Alert>
             ) : null}
             {selectedTemplate?.slug === 'historical_lineup' && historicalValidatedJobId != null && hlSheetDetail ? (
@@ -2956,7 +3059,7 @@ function AdminImportsPageContent() {
               </Table>
             ) : null}
             <Stack direction="row" spacing={1}>
-              <Button onClick={() => setActiveStep(3)}>Back</Button>
+              <Button onClick={() => setActiveStep(isShipmentEvidence ? 2 : 3)}>Back</Button>
               <Button
                 onClick={() => {
                   setActiveStep(0);

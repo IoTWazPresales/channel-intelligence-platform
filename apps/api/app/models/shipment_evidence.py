@@ -81,3 +81,6 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
     distributor_id: Mapped[int | None] = mapped_column(ForeignKey("dim_distributor.id"), nullable=True)
     distributor_resolution_status: Mapped[str] = mapped_column(String(64), nullable=False)
     distributor_resolution_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    customer_token_raw: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    customer_resolution_status: Mapped[str | None] = mapped_column(String(64), nullable=True)

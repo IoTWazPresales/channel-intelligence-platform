@@ -12,18 +12,102 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import STAGE_LOADED, STAGE_VALIDATED
-from app.models.dimensions import DimDistributor, DimProduct
+from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
 from app.models.shipment_evidence import ShipmentEvidenceLine
-from app.services.imports.shipment_evidence_resolution_plan import SHIPMENT_DISTRIBUTOR_ENTITY
+from app.services.imports.shipment_evidence_resolution_plan import (
+    SHIPMENT_CUSTOMER_ENTITY,
+    SHIPMENT_DISTRIBUTOR_ENTITY,
+)
 from app.services.imports.shipment_evidence_steward_ops import (
     ShipmentStewardOpError,
+    _re_enrich_open_shipment_customer_candidates,
+    execute_bulk_create_provisional_shipment_customers,
+    execute_create_provisional_shipment_customer,
     execute_create_provisional_shipment_distributor,
+    execute_map_shipment_customer,
     execute_map_shipment_distributor,
 )
 
 router = APIRouter()
+
+
+async def _unresolved_shipment_mapping_candidate_count(db: AsyncSession, job_id: int, entity_type: str) -> int:
+    stmt = (
+        select(func.count())
+        .select_from(ImportEntityMappingCandidate)
+        .where(
+            ImportEntityMappingCandidate.import_job_id == job_id,
+            ImportEntityMappingCandidate.entity_type == entity_type,
+            ImportEntityMappingCandidate.status == "needs_review",
+        )
+    )
+    raw = await db.scalar(stmt)
+    return int(raw or 0)
+
+
+def _shipment_candidate_eligible_for_apply_auto_map(cand: ImportEntityMappingCandidate) -> bool:
+    """Align with ``shipment_evidence_resolution_plan`` scoring for map paths.
+
+    ``map_distributor`` / ``map_customer`` are only emitted with ``confidence_score`` of **1.0** or **0.95**;
+    all other actions use lower scores. Require ``needs_review``, ``suggested_entity_id``, and entity/action match.
+    """
+    if cand.status != "needs_review":
+        return False
+    sc = cand.confidence_score
+    if sc is None:
+        return False
+    try:
+        score = float(sc)
+    except (TypeError, ValueError):
+        return False
+    if score < 0.95:
+        return False
+    ctx = cand.context if isinstance(cand.context, dict) else {}
+    action = (str(ctx.get("suggested_action") or "")).strip()
+    if cand.suggested_entity_id is None:
+        return False
+    if action == "map_distributor":
+        return cand.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY
+    if action == "map_customer":
+        return cand.entity_type == SHIPMENT_CUSTOMER_ENTITY
+    return False
+
+
+def _apply_high_confidence_shipment_mapping_candidates(import_job_id: int) -> int:
+    """Execute ``execute_map_shipment_*`` for each eligible candidate; executors commit per call."""
+    applied = 0
+    with SessionLocal() as s:
+        ids = [
+            int(x)
+            for x in s.scalars(
+                select(ImportEntityMappingCandidate.id).where(
+                    ImportEntityMappingCandidate.import_job_id == int(import_job_id),
+                    ImportEntityMappingCandidate.entity_type.in_(
+                        (SHIPMENT_DISTRIBUTOR_ENTITY, SHIPMENT_CUSTOMER_ENTITY)
+                    ),
+                    ImportEntityMappingCandidate.status == "needs_review",
+                ).order_by(ImportEntityMappingCandidate.id)
+            ).all()
+        ]
+        for cid in ids:
+            cand = s.get(ImportEntityMappingCandidate, cid)
+            if cand is None or not _shipment_candidate_eligible_for_apply_auto_map(cand):
+                continue
+            ctx = cand.context if isinstance(cand.context, dict) else {}
+            action = (str(ctx.get("suggested_action") or "")).strip()
+            eid = int(cand.suggested_entity_id)
+            try:
+                if action == "map_distributor":
+                    execute_map_shipment_distributor(s, cand, distributor_id=eid, raw_token=None)
+                    applied += 1
+                elif action == "map_customer":
+                    execute_map_shipment_customer(s, cand, customer_id=eid, raw_token=None)
+                    applied += 1
+            except ShipmentStewardOpError:
+                continue
+    return applied
 
 
 def _is_admin(x_user_role: str | None) -> bool:
@@ -75,6 +159,8 @@ def _line_to_dict(
         "promise_date": row.promise_date.isoformat() if row.promise_date else None,
         "exwork_date": row.exwork_date.isoformat() if row.exwork_date else None,
         "erd_date": row.erd_date.isoformat() if row.erd_date else None,
+        "customer_token_raw": row.customer_token_raw,
+        "customer_resolution_status": row.customer_resolution_status,
         "product_id": row.product_id,
         "product_sku": product_sku,
         "product_resolution_status": row.product_resolution_status,
@@ -150,7 +236,7 @@ async def list_shipment_import_job_mapping_candidates(
     db: AsyncSession = Depends(get_db),
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
 ) -> list[dict[str, Any]]:
-    """``shipment_distributor`` candidates for an inbound_shipments import job (type-aware list)."""
+    """``shipment_distributor`` and ``shipment_customer_token`` candidates for an inbound_shipments job."""
     _require_admin(x_user_role)
     job = await db.get(ImportJob, job_id)
     if not job or (job.template_slug or "") != "inbound_shipments":
@@ -159,21 +245,30 @@ async def list_shipment_import_job_mapping_candidates(
         select(ImportEntityMappingCandidate)
         .where(
             ImportEntityMappingCandidate.import_job_id == job_id,
-            ImportEntityMappingCandidate.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY,
+            ImportEntityMappingCandidate.entity_type.in_(
+                (SHIPMENT_DISTRIBUTOR_ENTITY, SHIPMENT_CUSTOMER_ENTITY)
+            ),
         )
-        .order_by(ImportEntityMappingCandidate.normalized_key)
+        .order_by(ImportEntityMappingCandidate.entity_type, ImportEntityMappingCandidate.normalized_key)
     )
     rows = res.scalars().all()
-    sug_ids = [int(r.suggested_entity_id) for r in rows if r.suggested_entity_id is not None]
-    names: dict[int, dict[str, str]] = {}
-    if sug_ids:
-        dr = await db.execute(select(DimDistributor).where(DimDistributor.id.in_(sug_ids)))
+    sug_dist_ids = [int(r.suggested_entity_id) for r in rows if r.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY and r.suggested_entity_id]
+    sug_cust_ids = [int(r.suggested_entity_id) for r in rows if r.entity_type == SHIPMENT_CUSTOMER_ENTITY and r.suggested_entity_id]
+    dist_names: dict[int, dict[str, str]] = {}
+    cust_names: dict[int, dict[str, str]] = {}
+    if sug_dist_ids:
+        dr = await db.execute(select(DimDistributor).where(DimDistributor.id.in_(sug_dist_ids)))
         for d in dr.scalars().all():
-            names[int(d.id)] = {"distributor_code": d.code or "", "distributor_name": d.name or ""}
+            dist_names[int(d.id)] = {"distributor_code": d.code or "", "distributor_name": d.name or ""}
+    if sug_cust_ids:
+        cr = await db.execute(select(DimCustomer).where(DimCustomer.id.in_(sug_cust_ids)))
+        for c in cr.scalars().all():
+            cust_names[int(c.id)] = {"customer_code": c.code or "", "customer_name": c.name or ""}
     out: list[dict[str, Any]] = []
     for r in rows:
         sid = int(r.suggested_entity_id) if r.suggested_entity_id is not None else None
-        hint = names.get(sid) if sid is not None else None
+        dh = dist_names.get(sid) if r.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY and sid is not None else None
+        ch = cust_names.get(sid) if r.entity_type == SHIPMENT_CUSTOMER_ENTITY and sid is not None else None
         ctx = r.context if isinstance(r.context, dict) else {}
         out.append(
             {
@@ -188,8 +283,10 @@ async def list_shipment_import_job_mapping_candidates(
                 "total_reported_value": float(r.total_reported_value) if r.total_reported_value is not None else None,
                 "sample_raw_values": r.sample_raw_values,
                 "suggested_entity_id": r.suggested_entity_id,
-                "suggested_distributor_code": hint["distributor_code"] if hint else None,
-                "suggested_distributor_name": hint["distributor_name"] if hint else None,
+                "suggested_distributor_code": dh["distributor_code"] if dh else None,
+                "suggested_distributor_name": dh["distributor_name"] if dh else None,
+                "suggested_customer_code": ch["customer_code"] if ch else None,
+                "suggested_customer_name": ch["customer_name"] if ch else None,
                 "suggested_action": ctx.get("suggested_action"),
                 "match_reason": r.match_reason,
                 "confidence_score": float(r.confidence_score) if r.confidence_score is not None else None,
@@ -211,6 +308,69 @@ class ShipmentCreateProvisionalDistributorBody(BaseModel):
     display_name: str | None = Field(default=None, max_length=256)
     distributor_code: str | None = Field(default=None, max_length=32)
     confirm_for_suspicious_token: bool = False
+
+
+class ShipmentMapCustomerBody(BaseModel):
+    customer_id: int = Field(ge=1)
+    raw_token: str | None = Field(default=None, max_length=512)
+
+
+class ShipmentCreateProvisionalCustomerBody(BaseModel):
+    display_name: str | None = Field(default=None, max_length=256)
+    region_id: int | None = Field(default=None, ge=1)
+    channel_id: int | None = Field(default=None, ge=1)
+    preferred_distributor_id: int | None = Field(default=None, ge=1)
+    partner_tier: str | None = Field(default="unmanaged", max_length=32)
+    notes_summary: str | None = Field(default=None, max_length=512)
+
+
+class ShipmentBulkProvisionalCustomersBody(BaseModel):
+    candidate_ids: list[int] = Field(..., min_length=1)
+    display_names: dict[str, str] | None = Field(default=None)
+    region_id: int | None = Field(default=None, ge=1)
+    channel_id: int | None = Field(default=None, ge=1)
+    preferred_distributor_id: int | None = Field(default=None, ge=1)
+    partner_tier: str | None = Field(default="unmanaged", max_length=32)
+    notes_summary: str | None = Field(default=None, max_length=512)
+
+
+class ShipmentBulkMapCustomerBody(BaseModel):
+    candidate_ids: list[int] = Field(..., min_length=1)
+    customer_id: int = Field(ge=1)
+
+
+@router.post("/import-candidates/bulk-map-customer")
+async def shipment_import_candidates_bulk_map_customer(
+    body: ShipmentBulkMapCustomerBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    """Map many shipment customer candidates to one existing customer; re-enriches the job once at the end."""
+    _require_admin(x_user_role)
+    mapped: list[int] = []
+    errors: list[dict[str, Any]] = []
+    with SessionLocal() as s:
+        job_id: int | None = None
+        for cid in body.candidate_ids:
+            cand = s.get(ImportEntityMappingCandidate, int(cid))
+            if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
+                errors.append({"candidate_id": int(cid), "reason": "candidate_not_found_or_wrong_entity"})
+                continue
+            if job_id is None:
+                job_id = int(cand.import_job_id)
+            elif int(cand.import_job_id) != job_id:
+                errors.append({"candidate_id": int(cid), "reason": "candidate_not_same_import_job"})
+                continue
+            try:
+                execute_map_shipment_customer(s, cand, customer_id=body.customer_id, raw_token=None)
+                mapped.append(int(cid))
+            except ShipmentStewardOpError as exc:
+                errors.append({"candidate_id": int(cid), "reason": str(exc.detail)})
+        if mapped:
+            any_cand = s.get(ImportEntityMappingCandidate, mapped[0])
+            if any_cand is not None:
+                _re_enrich_open_shipment_customer_candidates(s, any_cand)
+            s.commit()
+    return {"mapped": mapped, "errors": errors}
 
 
 @router.post("/import-candidates/{candidate_id}/map-distributor")
@@ -255,24 +415,107 @@ async def shipment_import_candidate_create_provisional_distributor(
             raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
 
 
+@router.post("/import-candidates/{candidate_id}/map-customer")
+async def shipment_import_candidate_map_customer(
+    candidate_id: int,
+    body: ShipmentMapCustomerBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    with SessionLocal() as s:
+        cand = s.get(ImportEntityMappingCandidate, candidate_id)
+        if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
+            raise HTTPException(status_code=404, detail="Shipment customer candidate not found")
+        try:
+            return execute_map_shipment_customer(
+                s, cand, customer_id=body.customer_id, raw_token=body.raw_token
+            )
+        except ShipmentStewardOpError as exc:
+            raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
+
+
+@router.post("/import-candidates/{candidate_id}/create-provisional-customer")
+async def shipment_import_candidate_create_provisional_customer(
+    candidate_id: int,
+    body: ShipmentCreateProvisionalCustomerBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    with SessionLocal() as s:
+        cand = s.get(ImportEntityMappingCandidate, candidate_id)
+        if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
+            raise HTTPException(status_code=404, detail="Shipment customer candidate not found")
+        try:
+            return execute_create_provisional_shipment_customer(
+                s,
+                cand,
+                display_name=body.display_name,
+                region_id=body.region_id,
+                channel_id=body.channel_id,
+                preferred_distributor_id=body.preferred_distributor_id,
+                partner_tier=body.partner_tier,
+                notes_summary=body.notes_summary,
+            )
+        except ShipmentStewardOpError as exc:
+            raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
+
+
+@router.post("/import-jobs/{job_id}/bulk-create-provisional-customers")
+async def shipment_import_job_bulk_create_provisional_customers(
+    job_id: int,
+    body: ShipmentBulkProvisionalCustomersBody,
+    db: AsyncSession = Depends(get_db),
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    job = await db.get(ImportJob, job_id)
+    if not job or (job.template_slug or "") != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Shipment import job not found")
+    per: dict[int, str] = {}
+    if body.display_names:
+        for k, v in body.display_names.items():
+            try:
+                per[int(k)] = v
+            except (TypeError, ValueError):
+                continue
+    with SessionLocal() as s:
+        out = execute_bulk_create_provisional_shipment_customers(
+            s,
+            job_id=job_id,
+            candidate_ids=body.candidate_ids,
+            per_candidate_display_name=per,
+            region_id=body.region_id,
+            channel_id=body.channel_id,
+            preferred_distributor_id=body.preferred_distributor_id,
+            partner_tier=body.partner_tier,
+            notes_summary=body.notes_summary,
+        )
+    return out
+
+
 @router.post("/jobs/{job_id}/apply")
 async def apply_shipment_import_job(
     job_id: int,
     db: AsyncSession = Depends(get_db),
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
 ) -> dict[str, Any]:
-    """Mark an inbound_shipments job as fully applied (``loaded``) after pipeline validation. No re-import."""
+    """Apply an inbound_shipments import job: auto-map planner-confident ``map_*`` candidates, then ``loaded``."""
     _require_admin(x_user_role)
     job = await db.get(ImportJob, job_id)
     if not job or (job.template_slug or "") != "inbound_shipments":
         raise HTTPException(status_code=404, detail="Shipment import job not found")
     if job.stage == STAGE_LOADED:
+        unresolved_d = await _unresolved_shipment_mapping_candidate_count(db, job_id, SHIPMENT_DISTRIBUTOR_ENTITY)
+        unresolved_c = await _unresolved_shipment_mapping_candidate_count(db, job_id, SHIPMENT_CUSTOMER_ENTITY)
         return {
             "id": job.id,
             "status": job.status,
             "stage": job.stage,
             "template_slug": job.template_slug,
             "import_mode": job.import_mode,
+            "unresolved_distributor_candidates": unresolved_d,
+            "unresolved_customer_candidates": unresolved_c,
+            "auto_applied_candidate_count": 0,
         }
     if job.stage != STAGE_VALIDATED:
         raise HTTPException(
@@ -282,16 +525,22 @@ async def apply_shipment_import_job(
                 "message": f"Job must be at stage {STAGE_VALIDATED!r} to apply; current stage is {job.stage!r}.",
             },
         )
+    auto_applied = _apply_high_confidence_shipment_mapping_candidates(job_id)
     job.stage = STAGE_LOADED
     job.status = "completed"
     await db.commit()
     await db.refresh(job)
+    unresolved_d = await _unresolved_shipment_mapping_candidate_count(db, job_id, SHIPMENT_DISTRIBUTOR_ENTITY)
+    unresolved_c = await _unresolved_shipment_mapping_candidate_count(db, job_id, SHIPMENT_CUSTOMER_ENTITY)
     return {
         "id": job.id,
         "status": job.status,
         "stage": job.stage,
         "template_slug": job.template_slug,
         "import_mode": job.import_mode,
+        "unresolved_distributor_candidates": unresolved_d,
+        "unresolved_customer_candidates": unresolved_c,
+        "auto_applied_candidate_count": auto_applied,
     }
 
 

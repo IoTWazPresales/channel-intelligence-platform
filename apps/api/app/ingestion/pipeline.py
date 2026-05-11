@@ -747,31 +747,37 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
             db.refresh(job)
             return job
 
-        df = read_tabular(job.file_name, data)
-        schema = infer_schema(df)
-        job.inferred_schema = schema
-        job.stage = STAGE_INFERRED
+        if (job.template_slug or "") == "inbound_shipments":
+            # Shipment evidence reads raw bytes in the processor (multi-sheet XLSX, data_only); skip infer/mapping.
+            df = pd.DataFrame()
+            mapping: dict[str, Any] = {}
+            job.stage = STAGE_MAPPED
+        else:
+            df = read_tabular(job.file_name, data)
+            schema = infer_schema(df)
+            job.inferred_schema = schema
+            job.stage = STAGE_INFERRED
 
-        cols = [c["name"] for c in schema["columns"]]
-        template = effective_mapping_template(source)
-        mapping = job.field_mapping or default_field_mapping(cols, template)
-        if job.template_slug == "distributor_inventory":
-            from app.services.imports.dsi_mapping_workflow import (
-                apply_exact_raw_customer_header_overrides,
-                apply_dsi_customer_column_target_resolution,
-                apply_dsi_product_identifier_sample_inference,
-                column_samples_from_schema_dict,
-                sanitize_dsi_field_mapping,
-            )
+            cols = [c["name"] for c in schema["columns"]]
+            template = effective_mapping_template(source)
+            mapping = job.field_mapping or default_field_mapping(cols, template)
+            if job.template_slug == "distributor_inventory":
+                from app.services.imports.dsi_mapping_workflow import (
+                    apply_exact_raw_customer_header_overrides,
+                    apply_dsi_customer_column_target_resolution,
+                    apply_dsi_product_identifier_sample_inference,
+                    column_samples_from_schema_dict,
+                    sanitize_dsi_field_mapping,
+                )
 
-            if not job.field_mapping:
-                samp = column_samples_from_schema_dict(schema)
-                mapping = apply_exact_raw_customer_header_overrides(cols, mapping)
-                mapping = apply_dsi_customer_column_target_resolution(cols, mapping)
-                mapping = apply_dsi_product_identifier_sample_inference(cols, mapping, samp)
-            mapping, _ = sanitize_dsi_field_mapping(cols, mapping)
-        job.field_mapping = mapping
-        job.stage = STAGE_MAPPED
+                if not job.field_mapping:
+                    samp = column_samples_from_schema_dict(schema)
+                    mapping = apply_exact_raw_customer_header_overrides(cols, mapping)
+                    mapping = apply_dsi_customer_column_target_resolution(cols, mapping)
+                    mapping = apply_dsi_product_identifier_sample_inference(cols, mapping, samp)
+                mapping, _ = sanitize_dsi_field_mapping(cols, mapping)
+            job.field_mapping = mapping
+            job.stage = STAGE_MAPPED
 
         handlers = {
             "stub_noop": _process_stub,
