@@ -18,6 +18,12 @@ from app.services.imports.dsi_mapping_workflow import (
     merge_dsi_mapping_memory,
     sanitize_dsi_field_mapping,
 )
+from app.services.imports.shipment_field_mapping import (
+    infer_shipment_import_job_sync,
+    sanitize_shipment_field_mapping,
+    shipment_mapping_gate_errors,
+    shipment_mapping_state_dict,
+)
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
 from app.storage.local import get_storage_backend
@@ -306,7 +312,7 @@ async def create_job(
     await db.refresh(job)
 
     # Product Master and DSI use constrained mapping workflows; never run legacy sync on create.
-    effective_run_sync = bool(run_sync) and tpl.slug not in ("product_master", "distributor_inventory")
+    effective_run_sync = bool(run_sync) and tpl.slug not in ("product_master", "distributor_inventory", "inbound_shipments")
     if effective_run_sync:
         with SessionLocal() as sync_db:
             process_import_job_sync(sync_db, job.id)
@@ -314,6 +320,10 @@ async def create_job(
     elif tpl.slug == "distributor_inventory":
         with SessionLocal() as sync_db:
             infer_dsi_job_sync(sync_db, job.id)
+        await db.refresh(job)
+    elif tpl.slug == "inbound_shipments":
+        with SessionLocal() as sync_db:
+            infer_shipment_import_job_sync(sync_db, job.id)
         await db.refresh(job)
 
     return {"id": job.id, "status": job.status, "stage": job.stage, "template_slug": job.template_slug, "import_mode": job.import_mode}
@@ -409,6 +419,66 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
         "template_slug": job.template_slug,
         "import_mode": job.import_mode,
     }
+
+
+@router.get("/jobs/{job_id}/shipment-mapping-state")
+async def get_shipment_mapping_state(job_id: int, db: AsyncSession = Depends(get_db)):
+    job = await db.get(ImportJob, job_id)
+    if not job or job.template_slug != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Shipment mapping state not found for this job")
+    headers = list(job.file_headers or [])
+    raw = dict(job.field_mapping or {})
+    clean, _ = sanitize_shipment_field_mapping(headers, raw)
+    if clean != raw:
+        job.field_mapping = clean
+        await db.commit()
+        await db.refresh(job)
+    return shipment_mapping_state_dict(job)
+
+
+@router.put("/jobs/{job_id}/shipment-field-mapping")
+async def put_shipment_field_mapping(job_id: int, body: dict[str, Any] = Body(...), db: AsyncSession = Depends(get_db)):
+    job = await db.get(ImportJob, job_id)
+    if not job or job.template_slug != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Job not found")
+    fm = body.get("field_mapping")
+    if not isinstance(fm, dict):
+        raise HTTPException(status_code=400, detail="field_mapping must be an object")
+    headers = list(job.file_headers or [])
+    cleaned_input: dict[str, str] = {}
+    for k, v in fm.items():
+        if isinstance(k, str) and isinstance(v, str) and v.strip():
+            cleaned_input[k] = v.strip()
+    cleaned, _ = sanitize_shipment_field_mapping(headers, cleaned_input)
+    job.field_mapping = cleaned
+    await db.commit()
+    await db.refresh(job)
+    return shipment_mapping_state_dict(job)
+
+
+@router.post("/jobs/{job_id}/shipment-validate")
+async def post_shipment_validate(job_id: int, db: AsyncSession = Depends(get_db)):
+    job = await db.get(ImportJob, job_id)
+    if not job or job.template_slug != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Job not found")
+    headers = list(job.file_headers or [])
+    clean, _ = sanitize_shipment_field_mapping(headers, dict(job.field_mapping or {}))
+    job.field_mapping = clean
+    await db.commit()
+    gate = shipment_mapping_gate_errors(clean)
+    if gate:
+        raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
+    with SessionLocal() as sync_db:
+        process_import_job_sync(sync_db, job_id)
+    job2 = await db.get(ImportJob, job_id)
+    if job2 is not None:
+        await db.refresh(job2)
+    if job2 and job2.status == "failed":
+        raise HTTPException(
+            status_code=422,
+            detail=job2.error_summary or "Import job failed during validation.",
+        )
+    return shipment_mapping_state_dict(job2) if job2 else {}
 
 
 @router.get("/jobs/{job_id}/dsi-mapping-state")

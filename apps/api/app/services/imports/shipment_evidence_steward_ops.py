@@ -1,8 +1,9 @@
 """Steward apply for shipment evidence mapping candidates (sync Session).
 
 Distributor apply updates ``ShipmentEvidenceLine`` rows in place (``distributor_id`` + resolution).
-Customer apply sets ``customer_resolution_status`` to ``resolved`` on scoped lines after alias creation
-(no ``customer_id`` FK); ``customer_token_raw`` is preserved for audit / upsert refresh.
+Customer apply sets ``customer_resolution_status`` to ``resolved`` and stamps ``customer_id`` on
+scoped lines after alias creation. ``customer_dealer_token`` is refreshed from import upserts
+without clearing steward resolution (upsert omits resolution columns).
 """
 
 from __future__ import annotations
@@ -22,9 +23,11 @@ from app.models.import_distributor_si import (
     ImportEntityMappingCandidate,
 )
 from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.utils.json_safe import to_jsonable
 from app.services.imports.distributor_sales_inventory import _norm_key
 from app.services.imports.dsi_steward_candidate_ops import DISTRIBUTOR_PROVISIONAL_SUSPICIOUS
 from app.services.imports.shipment_evidence_resolution_plan import (
+    SHIPMENT_CANDIDATE_TERMINAL_STATUSES,
     SHIPMENT_CUSTOMER_ENTITY,
     SHIPMENT_DISTRIBUTOR_ENTITY,
     enrich_shipment_customer_token_candidates,
@@ -267,7 +270,7 @@ def execute_map_shipment_distributor(
 ) -> dict[str, Any]:
     if cand.entity_type != SHIPMENT_DISTRIBUTOR_ENTITY:
         raise ShipmentStewardOpError("Not a shipment_distributor candidate", status_code=400)
-    if cand.status in ("resolved", "ignored", "waived_open_channel"):
+    if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
         raise ShipmentStewardOpError("Candidate already terminal", status_code=400)
     dist = db.get(DimDistributor, int(distributor_id))
     if not dist:
@@ -320,7 +323,7 @@ def execute_create_provisional_shipment_distributor(
 ) -> dict[str, Any]:
     if cand.entity_type != SHIPMENT_DISTRIBUTOR_ENTITY:
         raise ShipmentStewardOpError("Not a shipment_distributor candidate", status_code=400)
-    if cand.status in ("resolved", "ignored", "waived_open_channel"):
+    if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
         raise ShipmentStewardOpError("Candidate already terminal", status_code=400)
 
     raw = _first_sample_raw(cand)
@@ -400,13 +403,15 @@ def _re_enrich_open_shipment_customer_candidates(db: Session, cand: ImportEntity
     )
 
 
-def _mark_customer_lines_resolved(db: Session, line_ids: list[int]) -> int:
+def _mark_customer_lines_resolved(db: Session, line_ids: list[int], customer_id: int) -> int:
     n = 0
+    cid = int(customer_id)
     for lid in line_ids:
         line = db.get(ShipmentEvidenceLine, lid)
         if line is None:
             continue
         line.customer_resolution_status = "resolved"
+        line.customer_id = cid
         db.add(line)
         n += 1
     return n
@@ -421,7 +426,7 @@ def execute_map_shipment_customer(
 ) -> dict[str, Any]:
     if cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
         raise ShipmentStewardOpError("Not a shipment_customer_token candidate", status_code=400)
-    if cand.status in ("resolved", "ignored", "waived_open_channel"):
+    if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
         raise ShipmentStewardOpError("Candidate already terminal", status_code=400)
     if _special_category_from_context(cand) in ("noise_only", "internal_note"):
         raise ShipmentStewardOpError(
@@ -455,7 +460,7 @@ def execute_map_shipment_customer(
     if not alias_ids:
         raise ShipmentStewardOpError("No customer aliases were created (tokens normalised to empty)", status_code=400)
 
-    _mark_customer_lines_resolved(db, line_ids)
+    _mark_customer_lines_resolved(db, line_ids, int(customer_id))
     cand.status = "resolved"
     cand.suggested_entity_id = int(customer_id)
     cand.match_reason = "steward_map_existing_customer"
@@ -510,6 +515,8 @@ def execute_create_provisional_shipment_customer(
                 raw_tokens=tokens,
                 notes=notes,
             )
+            line_ids = _line_ids_from_context(cand)
+            n_stamp = _mark_customer_lines_resolved(db, line_ids, int(cust.id)) if line_ids else 0
             _re_enrich_open_shipment_customer_candidates(db, cand)
             db.commit()
             return {
@@ -520,10 +527,10 @@ def execute_create_provisional_shipment_customer(
                 "customer_code": cust.code,
                 "alias_id": int(alias_ids[0]) if alias_ids else None,
                 "alias_ids": alias_ids,
-                "lines_updated": 0,
+                "lines_updated": n_stamp,
             }
 
-    if cand.status in ("resolved", "ignored", "waived_open_channel"):
+    if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
         raise ShipmentStewardOpError("Candidate already terminal", status_code=400)
 
     tier = (partner_tier or "unmanaged").strip().lower()
@@ -587,7 +594,7 @@ def execute_create_provisional_shipment_customer(
         db.rollback()
         raise ShipmentStewardOpError("Could not create customer aliases for source tokens", status_code=409)
 
-    _mark_customer_lines_resolved(db, line_ids)
+    _mark_customer_lines_resolved(db, line_ids, int(row.id))
     cand.status = "resolved"
     cand.suggested_entity_id = int(row.id)
     cand.match_reason = "steward_created_provisional_customer"
@@ -604,6 +611,55 @@ def execute_create_provisional_shipment_customer(
         "candidate_id": int(cand.id),
         "lines_updated": len(line_ids),
     }
+
+
+ALLOWED_MANUAL_SPECIAL_CATEGORIES = frozenset({"noise_only", "internal_note"})
+
+
+def execute_manual_special_category_shipment_candidate(
+    db: Session,
+    cand: ImportEntityMappingCandidate,
+    *,
+    special_category: str,
+) -> dict[str, Any]:
+    """Steward: mark candidate as manual special category (no provisional); lines unchanged; terminal ``ignored``."""
+    if cand.entity_type not in (SHIPMENT_DISTRIBUTOR_ENTITY, SHIPMENT_CUSTOMER_ENTITY):
+        raise ShipmentStewardOpError("Unsupported entity type for shipment mapping candidate", status_code=400)
+    if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
+        raise ShipmentStewardOpError("Candidate already terminal", status_code=400)
+    sc = (special_category or "").strip()
+    if sc not in ALLOWED_MANUAL_SPECIAL_CATEGORIES:
+        raise ShipmentStewardOpError(
+            "special_category must be one of: noise_only, internal_note",
+            status_code=400,
+        )
+    ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
+    ctx["special_category"] = sc
+    ctx["steward_manual_special_category"] = True
+    cand.context = to_jsonable(ctx)
+    cand.match_reason = "steward_manual_special_category"
+    cand.status = "ignored"
+    db.add(cand)
+    db.commit()
+    return {
+        "ok": True,
+        "candidate_id": int(cand.id),
+        "status": cand.status,
+        "special_category": sc,
+    }
+
+
+def execute_reject_shipment_mapping_candidate(db: Session, cand: ImportEntityMappingCandidate) -> dict[str, Any]:
+    """Steward: reject candidate — no resolution, no auto-apply; evidence lines stay as-is."""
+    if cand.entity_type not in (SHIPMENT_DISTRIBUTOR_ENTITY, SHIPMENT_CUSTOMER_ENTITY):
+        raise ShipmentStewardOpError("Unsupported entity type for shipment mapping candidate", status_code=400)
+    if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
+        raise ShipmentStewardOpError("Candidate already terminal", status_code=400)
+    cand.status = "steward_rejected"
+    cand.match_reason = "steward_rejected"
+    db.add(cand)
+    db.commit()
+    return {"ok": True, "candidate_id": int(cand.id), "status": cand.status}
 
 
 def execute_bulk_create_provisional_shipment_customers(

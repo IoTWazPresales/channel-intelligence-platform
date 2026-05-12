@@ -267,6 +267,34 @@ const stepsDsi = [
 const defaultHeaders = { 'X-User-Role': 'admin', 'X-User-Id': 'demo-user' };
 const DEFERRED_TEMPLATE_SLUGS = new Set(['customer_channel_mapping']);
 
+/** Human labels for inbound shipment canonical mapping targets (imports column-mapping step). */
+const SHIPMENT_FIELD_LABELS: Record<string, string> = {
+  operating_unit: 'Operating unit',
+  bill_to_raw: 'Bill To (distributor token)',
+  ship_to_raw: 'Ship To (distributor token)',
+  distributor_token: 'Distributor',
+  order_no: 'Order no.',
+  order_line: 'Order line',
+  delivery_no: 'Delivery no.',
+  invoice_line: 'Invoice line',
+  item_code: 'Item / SKU code',
+  sales_model_name: 'Sales model name',
+  customer_item: 'Customer item',
+  ean_code: 'EAN',
+  upc_code: 'UPC',
+  mpor_item_no: 'MPOR item no.',
+  quantity: 'Quantity',
+  unit_price: 'Unit price',
+  amount: 'Amount',
+  currency_code: 'Currency',
+  ship_confirm_date: 'Ship confirm date',
+  schedule_ship_date: 'Schedule ship date',
+  promise_date: 'Promise date',
+  exwork_date: 'Ex-work date',
+  erd_date: 'ERD (est. revenue date)',
+  customer_dealer_token: 'Source customer name',
+};
+
 function describeTemplateBehavior(template: ImportTemplate | null, isPm: boolean, isDsi: boolean): string {
   if (!template) return 'Pipeline behavior is determined by the selected import type and provider.';
   if (isPm) {
@@ -289,7 +317,10 @@ function describeTemplateBehavior(template: ImportTemplate | null, isPm: boolean
     case 'customer_master':
       return 'Validates customer master fields, then upserts dim_customer when mode is Apply.';
     case 'inbound_shipments':
-      return 'Always runs in validate mode: writes evidence lines and stops at validated. Marking loaded uses the Shipment evidence admin apply action after steward review.';
+      return (
+        'Runs in validate mode: after upload, confirm column mapping (auto-suggested), then run validation to write ' +
+        'shipment evidence lines. Use Shipment evidence admin to steward entities and Apply when ready.'
+      );
     default:
       return 'Runs the configured template pipeline for this import type.';
   }
@@ -377,6 +408,7 @@ function AdminImportsPageContent() {
   const [importJobDeleteSemanticArtifacts, setImportJobDeleteSemanticArtifacts] = useState(false);
   const [importJobBulkDeleteAck, setImportJobBulkDeleteAck] = useState(false);
   const [shipmentApplyWarning, setShipmentApplyWarning] = useState<string | null>(null);
+  const [shipmentMapDraft, setShipmentMapDraft] = useState<Record<string, string>>({});
 
   const jobIdParam = useMemo(() => {
     const v = searchParams.get('job');
@@ -511,6 +543,8 @@ function AdminImportsPageContent() {
     if (jobDetail.template_slug !== 'product_master') {
       if (jobDetail.template_slug === 'distributor_inventory' && jobDetail.stage === 'dsi_mapping_ready') {
         setActiveStep(5);
+      } else if (jobDetail.template_slug === 'inbound_shipments') {
+        setActiveStep(3);
       } else {
         setActiveStep(4);
       }
@@ -832,6 +866,7 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', data.id] });
       void qc.invalidateQueries({ queryKey: ['import-job', data.id] });
+      void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', data.id] });
       void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', data.id] });
       void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', data.id] });
       if (selectedSlug === 'distributor_inventory') {
@@ -840,18 +875,146 @@ function AdminImportsPageContent() {
     },
   });
 
+  /** Inbound shipments job is identifiable from `?job=` detail before `lastJobId` sync (avoids race with `lastJobId`). */
+  const shipmentEvidenceUrlUnlock =
+    jobIdParam != null && jobDetail?.template_slug === 'inbound_shipments';
+
+  const shipmentEvidenceJobPollUnlocked = upload.isSuccess || shipmentEvidenceUrlUnlock;
+
+  /** Prefer post-upload `lastJobId` when it wins over a stale `?job=`; else URL id when detail confirms inbound; else wizard job. */
+  const shipmentEvidencePollJobId =
+    upload.isSuccess && isShipmentEvidence && lastJobId != null
+      ? lastJobId
+      : shipmentEvidenceUrlUnlock && jobIdParam != null
+        ? jobIdParam
+        : isShipmentEvidence && lastJobId != null
+          ? lastJobId
+          : null;
+
   const { data: shipmentImportJob } = useQuery({
-    queryKey: ['import-job', lastJobId],
-    queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${lastJobId!}`, { signal }),
-    enabled: Boolean(isShipmentEvidence && lastJobId != null && upload.isSuccess),
+    queryKey: ['import-job', shipmentEvidencePollJobId],
+    queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${shipmentEvidencePollJobId!}`, { signal }),
+    enabled: Boolean(shipmentEvidenceJobPollUnlocked && shipmentEvidencePollJobId != null),
     refetchInterval: (q) => {
       const j = q.state.data;
       if (!j) return 1500;
       const st = (j.stage || '').trim();
-      if (st === 'validated' || st === 'loaded' || st === 'failed') return false;
+      if (st === 'validated' || st === 'loaded' || st === 'failed' || st === 'shipment_mapping_ready') return false;
       return 1500;
     },
   });
+
+  /** Job id for shipment column mapping + validate (matches steward poll id). */
+  const shipmentMappingJobId: number | null = shipmentEvidencePollJobId ?? lastJobId ?? null;
+
+  type ShipmentMappingState = {
+    id: number;
+    stage: string;
+    status: string;
+    error_summary?: string | null;
+    file_headers: string[];
+    field_mapping: Record<string, string>;
+    canonical_targets: string[];
+    blocking_mapping_errors: Array<{ code: string; message: string }>;
+    mapping_valid: boolean;
+    mapping_adjustment_notices?: Array<{ code?: string; message?: string }>;
+    column_samples?: Record<string, string[]>;
+    field_target_descriptions?: Record<string, string>;
+  };
+
+  const {
+    data: shipmentMappingState,
+    isLoading: shipmentMappingStateLoading,
+    isError: shipmentMappingStateQueryError,
+    error: shipmentMappingStateQueryErr,
+  } = useQuery({
+    queryKey: ['shipment-mapping-state', shipmentMappingJobId],
+    queryFn: ({ signal }) =>
+      apiGet<ShipmentMappingState>(`/api/v1/imports/jobs/${shipmentMappingJobId}/shipment-mapping-state`, { signal }),
+    enabled: Boolean(
+      isShipmentEvidence &&
+        shipmentMappingJobId != null &&
+        shipmentImportJob &&
+        (shipmentImportJob.stage || '').trim() === 'shipment_mapping_ready'
+    ),
+  });
+
+  const shipmentCanonSet = useMemo(
+    () => new Set(shipmentMappingState?.canonical_targets ?? []),
+    [shipmentMappingState?.canonical_targets]
+  );
+
+  useEffect(() => {
+    if (!isShipmentEvidence) {
+      setShipmentMapDraft({});
+    }
+  }, [isShipmentEvidence, shipmentMappingJobId]);
+
+  useEffect(() => {
+    if (!isShipmentEvidence || !shipmentMappingState?.file_headers?.length) return;
+    const server = shipmentMappingState.field_mapping ?? {};
+    const next: Record<string, string> = {};
+    for (const h of shipmentMappingState.file_headers) {
+      const v = server[h];
+      if (v && shipmentCanonSet.has(v)) next[h] = v;
+    }
+    setShipmentMapDraft(next);
+  }, [
+    isShipmentEvidence,
+    shipmentMappingState?.id,
+    shipmentMappingState?.file_headers,
+    shipmentCanonSet,
+    shipmentMappingState?.field_mapping,
+  ]);
+
+  const saveShipmentMapping = useMutation({
+    mutationFn: async () => {
+      const jid = shipmentMappingJobId;
+      if (jid == null) throw new Error('No job');
+      const res = await fetch(apiUrl(`/api/v1/imports/jobs/${jid}/shipment-field-mapping`), {
+        method: 'PUT',
+        headers: { ...defaultHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field_mapping: shipmentMapDraft }),
+      });
+      if (!res.ok) throw new Error(await readFetchError(res));
+      const state = (await res.json()) as ShipmentMappingState;
+      return { state, jid };
+    },
+    onSuccess: ({ jid }) => {
+      void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', jid] });
+      void qc.invalidateQueries({ queryKey: ['import-job', jid] });
+    },
+  });
+
+  const shipmentValidateRun = useMutation({
+    mutationFn: async () => {
+      const jid = shipmentMappingJobId;
+      if (jid == null) throw new Error('No job');
+      const res = await fetch(apiUrl(`/api/v1/imports/jobs/${jid}/shipment-validate`), {
+        method: 'POST',
+        headers: defaultHeaders,
+      });
+      if (!res.ok) throw new Error(await readFetchError(res));
+      await res.json();
+      return { jid };
+    },
+    onSuccess: ({ jid }) => {
+      void qc.invalidateQueries({ queryKey: ['import-job', jid] });
+      void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', jid] });
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', jid] });
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      void refetchPreview();
+    },
+  });
+
+  const shipmentMappingDraftDirty = useMemo(() => {
+    if (!shipmentMappingState?.file_headers?.length) return false;
+    const server = shipmentMappingState.field_mapping ?? {};
+    for (const h of shipmentMappingState.file_headers) {
+      if ((shipmentMapDraft[h] ?? '') !== (server[h] ?? '')) return true;
+    }
+    return false;
+  }, [shipmentMappingState, shipmentMapDraft]);
 
   type ShipmentApplyResponse = {
     id: number;
@@ -865,15 +1028,17 @@ function AdminImportsPageContent() {
 
   const shipmentApplyMut = useMutation({
     mutationFn: async () => {
-      if (lastJobId == null) throw new Error('No import job');
-      return apiPost<ShipmentApplyResponse>(`/api/v1/shipment-evidence/jobs/${lastJobId}/apply`, {});
+      const id = shipmentEvidencePollJobId ?? lastJobId;
+      if (id == null) throw new Error('No import job');
+      return apiPost<ShipmentApplyResponse>(`/api/v1/shipment-evidence/jobs/${id}/apply`, {});
     },
     onMutate: () => {
       setShipmentApplyWarning(null);
     },
     onSuccess: (data) => {
-      void qc.invalidateQueries({ queryKey: ['import-job', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['shipment-evidence-mapping-candidates', lastJobId] });
+      const id = data.id;
+      void qc.invalidateQueries({ queryKey: ['import-job', id] });
+      void qc.invalidateQueries({ queryKey: ['shipment-evidence-mapping-candidates', id] });
       const nd = data.unresolved_distributor_candidates;
       const nc = data.unresolved_customer_candidates;
       const parts: string[] = [];
@@ -2600,8 +2765,8 @@ function AdminImportsPageContent() {
           <Stack spacing={2}>
             {isShipmentEvidence ? (
               <Alert severity="info">
-                This upload runs in validate mode only. After the job reaches validated, resolve distributors below then
-                click Apply import to set loaded.
+                This upload runs in validate mode only. When column mapping is ready, map file columns below, save, run
+                validation, then resolve distributors and click Apply import to set loaded.
               </Alert>
             ) : null}
             <Typography variant="body2">
@@ -2674,10 +2839,167 @@ function AdminImportsPageContent() {
                 </Button>
               </Alert>
             ) : null}
-            {isShipmentEvidence && lastJobId != null && upload.isSuccess && shipmentImportJob && ['validated', 'loaded'].includes((shipmentImportJob.stage || '').trim()) ? (
-              <ShipmentEntityStewardPanel importJobId={lastJobId} />
+            {(shipmentEvidenceUrlUnlock || isShipmentEvidence) &&
+            shipmentEvidencePollJobId != null &&
+            shipmentEvidenceJobPollUnlocked &&
+            shipmentImportJob &&
+            (shipmentImportJob.stage || '').trim() === 'shipment_mapping_ready' ? (
+              <Stack spacing={1.5} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2 }}>
+                <Typography variant="subtitle2" fontWeight={600}>
+                  Column mapping (required before validation)
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Map each file column to a canonical shipment field. Save your mapping, then run validation (same flow as
+                  distributor sales & inventory mapping).
+                </Typography>
+                {shipmentMappingStateQueryError ? (
+                  <Alert severity="error">{safeDisplayError(shipmentMappingStateQueryErr)}</Alert>
+                ) : null}
+                {shipmentMappingStateLoading ? <LinearProgress /> : null}
+                {!shipmentMappingStateLoading && shipmentMappingState?.file_headers?.length ? (
+                  <>
+                    {shipmentMappingState.blocking_mapping_errors?.length ? (
+                      <Alert severity="error">
+                        <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                          Fix mapping before validating
+                        </Typography>
+                        <Stack component="ul" sx={{ m: 0, pl: 2 }}>
+                          {shipmentMappingState.blocking_mapping_errors.map((e) => (
+                            <Typography key={e.code} component="li" variant="body2">
+                              {e.message}
+                            </Typography>
+                          ))}
+                        </Stack>
+                      </Alert>
+                    ) : null}
+                    {shipmentMappingState.mapping_adjustment_notices?.length ? (
+                      <Alert severity="info">
+                        {shipmentMappingState.mapping_adjustment_notices.map((n) => (
+                          <Typography key={n.code ?? n.message} variant="body2">
+                            {n.message}
+                          </Typography>
+                        ))}
+                      </Alert>
+                    ) : null}
+                    {shipmentMappingDraftDirty ? (
+                      <Alert severity="warning">You have unsaved mapping changes. Save before running validation.</Alert>
+                    ) : null}
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 600 }}>File column</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Maps to</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {shipmentMappingState.file_headers.map((h) => (
+                          <TableRow key={h}>
+                            <TableCell>
+                              <Typography fontWeight={600}>{h}</Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                display="block"
+                                data-testid={`shipment-samples-${h}`}
+                              >
+                                Examples: {formatDsiSamples(shipmentMappingState.column_samples?.[h])}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <FormControl size="small" fullWidth>
+                                <InputLabel id={`shipment-map-${h}`}>Target</InputLabel>
+                                <Select
+                                  labelId={`shipment-map-${h}`}
+                                  label="Target"
+                                  value={shipmentMapDraft[h] ?? ''}
+                                  displayEmpty
+                                  renderValue={(selected) => {
+                                    const v = String(selected ?? '');
+                                    if (!v) return <em>— Unmapped —</em>;
+                                    return SHIPMENT_FIELD_LABELS[v] ?? v;
+                                  }}
+                                  onChange={(e) => {
+                                    const v = e.target.value as string;
+                                    setShipmentMapDraft((prev) => {
+                                      const next = { ...prev };
+                                      if (!v) delete next[h];
+                                      else next[h] = v;
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  <MenuItem value="">
+                                    <em>— Unmapped —</em>
+                                  </MenuItem>
+                                  {(shipmentMappingState.canonical_targets ?? []).map((t) => (
+                                    <MenuItem key={t} value={t} sx={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
+                                      <ListItemText
+                                        primary={SHIPMENT_FIELD_LABELS[t] ?? t}
+                                        secondary={shipmentMappingState.field_target_descriptions?.[t]}
+                                        primaryTypographyProps={{ variant: 'body2' }}
+                                        secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
+                                      />
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+                      <Button
+                        variant="outlined"
+                        disabled={
+                          saveShipmentMapping.isPending ||
+                          !shipmentMappingState.file_headers.length ||
+                          isJobRevisitMode
+                        }
+                        onClick={() => void saveShipmentMapping.mutateAsync()}
+                      >
+                        {saveShipmentMapping.isPending ? 'Saving…' : 'Save mapping'}
+                      </Button>
+                      <Button
+                        variant="contained"
+                        disabled={
+                          shipmentValidateRun.isPending ||
+                          saveShipmentMapping.isPending ||
+                          !shipmentMappingState.file_headers.length ||
+                          shipmentMappingDraftDirty ||
+                          !shipmentMappingState.mapping_valid ||
+                          isJobRevisitMode
+                        }
+                        onClick={() => void shipmentValidateRun.mutateAsync()}
+                      >
+                        {shipmentValidateRun.isPending ? 'Validating…' : 'Run validation'}
+                      </Button>
+                    </Stack>
+                    {saveShipmentMapping.isError ? (
+                      <Alert severity="error">{safeDisplayError(saveShipmentMapping.error)}</Alert>
+                    ) : null}
+                    {shipmentValidateRun.isError ? (
+                      <Alert severity="error">{safeDisplayError(shipmentValidateRun.error)}</Alert>
+                    ) : null}
+                  </>
+                ) : !shipmentMappingStateLoading && !shipmentMappingStateQueryError ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Waiting for inferred columns…
+                  </Typography>
+                ) : null}
+              </Stack>
             ) : null}
-            {isShipmentEvidence && lastJobId != null && upload.isSuccess && shipmentImportJob?.stage === 'validated' ? (
+            {(shipmentEvidenceUrlUnlock || isShipmentEvidence) &&
+            shipmentEvidencePollJobId != null &&
+            shipmentEvidenceJobPollUnlocked &&
+            shipmentImportJob &&
+            ['validated', 'loaded'].includes((shipmentImportJob.stage || '').trim()) ? (
+              <ShipmentEntityStewardPanel importJobId={shipmentEvidencePollJobId} />
+            ) : null}
+            {(shipmentEvidenceUrlUnlock || isShipmentEvidence) &&
+            shipmentEvidencePollJobId != null &&
+            shipmentEvidenceJobPollUnlocked &&
+            shipmentImportJob?.stage === 'validated' ? (
               <Stack spacing={1}>
                 <Button
                   variant="contained"

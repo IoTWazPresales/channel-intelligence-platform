@@ -11,11 +11,15 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControl,
   FormControlLabel,
+  FormLabel,
   List,
   ListItemButton,
   MenuItem,
   Paper,
+  Radio,
+  RadioGroup,
   Stack,
   Switch,
   Table,
@@ -62,7 +66,7 @@ type CustomerHit = {
   created_at?: string | null;
 };
 
-const TERMINAL = new Set(['resolved', 'ignored', 'waived_open_channel']);
+const TERMINAL = new Set(['resolved', 'ignored', 'waived_open_channel', 'steward_rejected']);
 
 const ENTITY_DIST = 'shipment_distributor';
 const ENTITY_CUST = 'shipment_customer_token';
@@ -263,6 +267,9 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
   const [bulkMapOpen, setBulkMapOpen] = useState(false);
   const [bulkMapSearch, setBulkMapSearch] = useState('');
   const [bulkMapPickId, setBulkMapPickId] = useState<number | null>(null);
+  const [specialCatOpen, setSpecialCatOpen] = useState(false);
+  const [specialCatChoice, setSpecialCatChoice] = useState<'noise_only' | 'internal_note'>('noise_only');
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const candidatesUrl =
@@ -573,6 +580,35 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
     onError: (e: Error) => setActionError(e.message),
   });
 
+  const manualSpecialMut = useMutation({
+    mutationFn: (body: { candidate_id: number; special_category: 'noise_only' | 'internal_note' }) =>
+      apiPost<Record<string, unknown>>(
+        `/api/v1/shipment-evidence/import-candidates/${body.candidate_id}/manual-special-category`,
+        { special_category: body.special_category }
+      ),
+    onSuccess: () => {
+      setActionError(null);
+      setSpecialCatOpen(false);
+      setActive(null);
+      invalidate();
+      void refetch();
+    },
+    onError: (e: Error) => setActionError(e.message),
+  });
+
+  const rejectMut = useMutation({
+    mutationFn: (candidate_id: number) =>
+      apiPost<Record<string, unknown>>(`/api/v1/shipment-evidence/import-candidates/${candidate_id}/reject`),
+    onSuccess: () => {
+      setActionError(null);
+      setRejectOpen(false);
+      setActive(null);
+      invalidate();
+      void refetch();
+    },
+    onError: (e: Error) => setActionError(e.message),
+  });
+
   const toggleSelectCandidate = (id: number) => {
     setSelectedCandidateIds((prev) => {
       const n = new Set(prev);
@@ -619,6 +655,27 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
     setCustNotes('');
     setActionError(null);
     setProvOpen(true);
+  };
+
+  const openSpecialCat = (r: ShipmentMappingCandidateRow) => {
+    setMapOpen(false);
+    setProvOpen(false);
+    setBulkMapOpen(false);
+    setBulkProvOpen(false);
+    setActive(r);
+    setSpecialCatChoice('noise_only');
+    setActionError(null);
+    setSpecialCatOpen(true);
+  };
+
+  const openReject = (r: ShipmentMappingCandidateRow) => {
+    setMapOpen(false);
+    setProvOpen(false);
+    setBulkMapOpen(false);
+    setBulkProvOpen(false);
+    setActive(r);
+    setActionError(null);
+    setRejectOpen(true);
   };
 
   const actionChipColor = (a: string | null) => {
@@ -846,6 +903,28 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
                           Provisional…
                         </Button>
                       )}
+                      <Tooltip title="Mark as not a mappable partner (noise or internal note). Closes the candidate without creating a provisional.">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="warning"
+                          aria-label="Special category: noise or internal note"
+                          onClick={() => openSpecialCat(r)}
+                        >
+                          Special…
+                        </Button>
+                      </Tooltip>
+                      <Tooltip title="Reject this candidate: no mapping, no auto-apply on import apply; evidence lines stay unresolved.">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          aria-label="Reject candidate"
+                          onClick={() => openReject(r)}
+                        >
+                          Reject…
+                        </Button>
+                      </Tooltip>
                     </Stack>
                   </TableCell>
                 </TableRow>
@@ -1322,6 +1401,113 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
             }}
           >
             Map selected
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={specialCatOpen}
+        onClose={() => {
+          if (manualSpecialMut.isPending) return;
+          setSpecialCatOpen(false);
+          setActive(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Mark as special category</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Alert severity="warning">
+              This closes the candidate without creating a provisional. Apply and enrichment will skip it. Use for
+              noise-only or internal-note text that is not a mappable partner.
+            </Alert>
+            {active ? (
+              <Typography variant="body2" color="text.secondary">
+                Candidate #{active.id} · {sampleToken(active)}
+              </Typography>
+            ) : null}
+            <FormControl>
+              <FormLabel id="special-cat-label">Category</FormLabel>
+              <RadioGroup
+                aria-labelledby="special-cat-label"
+                value={specialCatChoice}
+                onChange={(e) => setSpecialCatChoice(e.target.value as 'noise_only' | 'internal_note')}
+              >
+                <FormControlLabel value="noise_only" control={<Radio />} label="Noise only" />
+                <FormControlLabel value="internal_note" control={<Radio />} label="Internal note" />
+              </RadioGroup>
+            </FormControl>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setSpecialCatOpen(false);
+              setActive(null);
+            }}
+            disabled={manualSpecialMut.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={active == null || manualSpecialMut.isPending}
+            onClick={() => {
+              if (active == null) return;
+              manualSpecialMut.mutate({ candidate_id: active.id, special_category: specialCatChoice });
+            }}
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={rejectOpen}
+        onClose={() => {
+          if (rejectMut.isPending) return;
+          setRejectOpen(false);
+          setActive(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Reject candidate</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Alert severity="error">
+              This is a destructive decision: the candidate will not be resolved and will not be auto-applied. Evidence
+              lines stay unresolved until you handle them elsewhere. This cannot be undone from this panel.
+            </Alert>
+            {active ? (
+              <Typography variant="body2" color="text.secondary">
+                Candidate #{active.id} · {sampleToken(active)}
+              </Typography>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setRejectOpen(false);
+              setActive(null);
+            }}
+            disabled={rejectMut.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={active == null || rejectMut.isPending}
+            onClick={() => {
+              if (active == null) return;
+              rejectMut.mutate(active.id);
+            }}
+          >
+            Reject candidate
           </Button>
         </DialogActions>
       </Dialog>

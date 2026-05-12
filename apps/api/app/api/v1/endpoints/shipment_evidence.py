@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -26,8 +26,10 @@ from app.services.imports.shipment_evidence_steward_ops import (
     execute_bulk_create_provisional_shipment_customers,
     execute_create_provisional_shipment_customer,
     execute_create_provisional_shipment_distributor,
+    execute_manual_special_category_shipment_candidate,
     execute_map_shipment_customer,
     execute_map_shipment_distributor,
+    execute_reject_shipment_mapping_candidate,
 )
 
 router = APIRouter()
@@ -159,7 +161,8 @@ def _line_to_dict(
         "promise_date": row.promise_date.isoformat() if row.promise_date else None,
         "exwork_date": row.exwork_date.isoformat() if row.exwork_date else None,
         "erd_date": row.erd_date.isoformat() if row.erd_date else None,
-        "customer_token_raw": row.customer_token_raw,
+        "customer_dealer_token": row.customer_dealer_token,
+        "customer_id": row.customer_id,
         "customer_resolution_status": row.customer_resolution_status,
         "product_id": row.product_id,
         "product_sku": product_sku,
@@ -200,6 +203,7 @@ def _apply_filters(stmt: Any, **kwargs: Any) -> Any:
             or_(
                 ShipmentEvidenceLine.bill_to_raw.ilike(term),
                 ShipmentEvidenceLine.ship_to_raw.ilike(term),
+                ShipmentEvidenceLine.customer_dealer_token.ilike(term),
                 ShipmentEvidenceLine.item_code.ilike(term),
                 ShipmentEvidenceLine.sales_model_name.ilike(term),
                 ShipmentEvidenceLine.order_no.ilike(term),
@@ -430,6 +434,45 @@ async def shipment_import_candidate_map_customer(
             return execute_map_shipment_customer(
                 s, cand, customer_id=body.customer_id, raw_token=body.raw_token
             )
+        except ShipmentStewardOpError as exc:
+            raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
+
+
+class ShipmentManualSpecialCategoryBody(BaseModel):
+    special_category: Literal["noise_only", "internal_note"]
+
+
+@router.post("/import-candidates/{candidate_id}/manual-special-category")
+async def shipment_import_candidate_manual_special_category(
+    candidate_id: int,
+    body: ShipmentManualSpecialCategoryBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    with SessionLocal() as s:
+        cand = s.get(ImportEntityMappingCandidate, candidate_id)
+        if not cand or cand.entity_type not in (SHIPMENT_DISTRIBUTOR_ENTITY, SHIPMENT_CUSTOMER_ENTITY):
+            raise HTTPException(status_code=404, detail="Shipment mapping candidate not found")
+        try:
+            return execute_manual_special_category_shipment_candidate(
+                s, cand, special_category=body.special_category
+            )
+        except ShipmentStewardOpError as exc:
+            raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
+
+
+@router.post("/import-candidates/{candidate_id}/reject")
+async def shipment_import_candidate_reject(
+    candidate_id: int,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    with SessionLocal() as s:
+        cand = s.get(ImportEntityMappingCandidate, candidate_id)
+        if not cand or cand.entity_type not in (SHIPMENT_DISTRIBUTOR_ENTITY, SHIPMENT_CUSTOMER_ENTITY):
+            raise HTTPException(status_code=404, detail="Shipment mapping candidate not found")
+        try:
+            return execute_reject_shipment_mapping_candidate(s, cand)
         except ShipmentStewardOpError as exc:
             raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
 

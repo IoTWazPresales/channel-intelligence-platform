@@ -22,6 +22,9 @@ from app.utils.json_safe import to_jsonable
 SHIPMENT_DISTRIBUTOR_ENTITY = "shipment_distributor"
 SHIPMENT_CUSTOMER_ENTITY = "shipment_customer_token"
 
+# Terminal / closed mapping candidates: do not re-score in enrich passes.
+SHIPMENT_CANDIDATE_TERMINAL_STATUSES = frozenset({"resolved", "ignored", "waived_open_channel", "steward_rejected"})
+
 
 def _alias_distributor_ids(db: Session, *, source_definition_id: int | None, normalized_token: str) -> list[int]:
     if not normalized_token:
@@ -264,7 +267,7 @@ def enrich_shipment_distributor_candidates(db: Session, *, import_job_id: int, s
         ).all()
     )
     for cand in rows:
-        if cand.status in ("resolved", "ignored", "waived_open_channel"):
+        if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
             continue
         plan = score_shipment_distributor_candidate(db, cand, source_definition_id=source_definition_id)
         cand.suggested_entity_id = plan.get("suggested_entity_id")
@@ -287,7 +290,7 @@ def enrich_shipment_customer_token_candidates(db: Session, *, import_job_id: int
         ).all()
     )
     for cand in rows:
-        if cand.status in ("resolved", "ignored", "waived_open_channel"):
+        if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
             continue
         plan = score_shipment_customer_token_candidate(db, cand, source_definition_id=source_definition_id)
         cand.suggested_entity_id = plan.get("suggested_entity_id")

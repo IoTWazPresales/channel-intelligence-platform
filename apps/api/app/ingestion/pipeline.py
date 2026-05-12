@@ -748,9 +748,8 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
             return job
 
         if (job.template_slug or "") == "inbound_shipments":
-            # Shipment evidence reads raw bytes in the processor (multi-sheet XLSX, data_only); skip infer/mapping.
             df = pd.DataFrame()
-            mapping: dict[str, Any] = {}
+            mapping = dict(job.field_mapping or {})
             job.stage = STAGE_MAPPED
         else:
             df = read_tabular(job.file_name, data)

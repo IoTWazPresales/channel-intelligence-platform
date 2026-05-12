@@ -69,5 +69,9 @@ describe('ShipmentEntityStewardPanel', () => {
     expect(screen.getByText('Q2 Takealot')).toBeTruthy();
     expect(screen.getByText('Distributor')).toBeTruthy();
     expect(screen.getByText('Channel partner')).toBeTruthy();
+    const specialButtons = screen.getAllByRole('button', { name: /special category/i });
+    expect(specialButtons.length).toBeGreaterThanOrEqual(2);
+    const rejectButtons = screen.getAllByRole('button', { name: /^reject candidate$/i });
+    expect(rejectButtons.length).toBeGreaterThanOrEqual(2);
   });
 });

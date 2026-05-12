@@ -150,45 +150,69 @@ def _normalized_identifier_cell(v: Any) -> Any:
     return nu if nu is not None else v
 
 
-def _extract_common(row: pd.Series) -> dict[str, Any]:
+def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None = None) -> dict[str, Any]:
+    """Extract canonical shipment fields. When ``header_by_canonical`` is set (canonical -> file header), use it first."""
+
+    def by_canon(canon: str) -> Any:
+        if header_by_canonical:
+            hdr = header_by_canonical.get(canon)
+            if hdr and hdr in row.index:
+                return row.get(hdr)
+        return None
+
     def col(*names: str) -> Any:
         for n in names:
             if n in row.index:
                 return row.get(n)
         return None
 
-    bill = col("Bill To", "bill to")
-    ship = col("Ship To", "ship to")
-    ou = col("Operating Unit", "OU NAME", "ou name")
+    has_distributor_token_header = bool(header_by_canonical and header_by_canonical.get("distributor_token"))
+    dist_cell = by_canon("distributor_token")
+    bill = by_canon("bill_to_raw") or col("Bill To", "bill to")
+    if has_distributor_token_header:
+        dist_norm = normalize_shipment_cell_value(dist_cell)
+        bill_norm = normalize_shipment_cell_value(bill)
+        bill_to_stored = dist_norm if dist_norm else bill_norm
+    else:
+        bill_to_stored = normalize_shipment_cell_value(bill)
+    ship = by_canon("ship_to_raw") or col("Ship To", "ship to")
+    ou = by_canon("operating_unit") or col("Operating Unit", "OU NAME", "ou name")
     return {
         "operating_unit": normalize_shipment_cell_value(ou),
-        "bill_to_raw": normalize_shipment_cell_value(bill),
+        "bill_to_raw": bill_to_stored,
         "ship_to_raw": normalize_shipment_cell_value(ship),
         "order_no": normalize_shipment_cell_value(
-            col("Order No.", "Order No", "order no.", "order no", "ORDER NO", "Order number")
+            by_canon("order_no")
+            or col("Order No.", "Order No", "order no.", "order no", "ORDER NO", "Order number")
         ),
-        "order_line": normalize_shipment_cell_value(col("Order Line", "order line")),
+        "order_line": normalize_shipment_cell_value(by_canon("order_line") or col("Order Line", "order line")),
         "delivery_no": normalize_shipment_cell_value(
-            col("Delivery No", "delivery no", "DELIVERY NO", "Delivery no.", "Delivery Number", "delivery number")
+            by_canon("delivery_no")
+            or col("Delivery No", "delivery no", "DELIVERY NO", "Delivery no.", "Delivery Number", "delivery number")
         ),
-        "invoice_line": normalize_shipment_cell_value(col("Invoice Line")),
-        "item_code": normalize_shipment_cell_value(col("Item")),
-        "sales_model_name": normalize_shipment_cell_value(col("Sales Model Name")),
-        "customer_item": normalize_shipment_cell_value(col("Customer Item")),
-        "ean_code": _ean_upc_str(_normalized_identifier_cell(col("EAN Code"))),
-        "upc_code": _ean_upc_str(_normalized_identifier_cell(col("UPC Code"))),
-        "mpor_item_no": normalize_shipment_cell_value(col("MPOR Item No.")),
-        "quantity": row.get("Qty") if "Qty" in row.index else row.get("Qty "),
-        "unit_price": row.get("Unit Price") if "Unit Price" in row.index else None,
-        "amount": row.get("Amount") if "Amount" in row.index else None,
-        "currency_code": normalize_shipment_cell_value(col("Currency")),
-        "ship_confirm_date": _parse_date(col("Ship Confirm Date")),
-        "schedule_ship_date": _parse_date(col("Schedule Ship Date")),
-        "promise_date": _parse_date(col("Promise Date")),
-        "exwork_date": _parse_date(col("Exwork Date")),
-        "erd_date": _parse_date(col("ERD (Est Revenue Date)")),
-        "customer_token_raw": normalize_shipment_cell_value(
-            col(
+        "invoice_line": normalize_shipment_cell_value(by_canon("invoice_line") or col("Invoice Line")),
+        "item_code": normalize_shipment_cell_value(by_canon("item_code") or col("Item")),
+        "sales_model_name": normalize_shipment_cell_value(by_canon("sales_model_name") or col("Sales Model Name")),
+        "customer_item": normalize_shipment_cell_value(by_canon("customer_item") or col("Customer Item")),
+        "ean_code": _ean_upc_str(
+            _normalized_identifier_cell(by_canon("ean_code") or col("EAN Code"))
+        ),
+        "upc_code": _ean_upc_str(
+            _normalized_identifier_cell(by_canon("upc_code") or col("UPC Code"))
+        ),
+        "mpor_item_no": normalize_shipment_cell_value(by_canon("mpor_item_no") or col("MPOR Item No.")),
+        "quantity": by_canon("quantity") if by_canon("quantity") is not None else (row.get("Qty") if "Qty" in row.index else row.get("Qty ")),
+        "unit_price": by_canon("unit_price") if by_canon("unit_price") is not None else (row.get("Unit Price") if "Unit Price" in row.index else None),
+        "amount": by_canon("amount") if by_canon("amount") is not None else (row.get("Amount") if "Amount" in row.index else None),
+        "currency_code": normalize_shipment_cell_value(by_canon("currency_code") or col("Currency")),
+        "ship_confirm_date": _parse_date(by_canon("ship_confirm_date") or col("Ship Confirm Date")),
+        "schedule_ship_date": _parse_date(by_canon("schedule_ship_date") or col("Schedule Ship Date")),
+        "promise_date": _parse_date(by_canon("promise_date") or col("Promise Date")),
+        "exwork_date": _parse_date(by_canon("exwork_date") or col("Exwork Date")),
+        "erd_date": _parse_date(by_canon("erd_date") or col("ERD (Est Revenue Date)")),
+        "customer_dealer_token": normalize_shipment_cell_value(
+            by_canon("customer_dealer_token")
+            or col(
                 "Customer Remarks",
                 "customer remarks",
                 "Customer Remark",
@@ -460,7 +484,7 @@ def _rebuild_shipment_customer_candidates(db: Session, job: ImportJob) -> None:
     for line in lines:
         if (line.customer_resolution_status or "").strip() == "resolved":
             continue
-        ctr = line.customer_token_raw
+        ctr = line.customer_dealer_token
         if not ctr or not str(ctr).strip():
             continue
         raw = str(ctr).strip()
@@ -646,7 +670,7 @@ def _shipment_evidence_line_upsert_statement(values: dict[str, Any]):
             "promise_date": ex.promise_date,
             "exwork_date": ex.exwork_date,
             "erd_date": ex.erd_date,
-            "customer_token_raw": ex.customer_token_raw,
+            "customer_dealer_token": ex.customer_dealer_token,
             "updated_at": func.now(),
         },
     )
@@ -776,9 +800,27 @@ def _load_frames_for_job(job: ImportJob, _df_passed: pd.DataFrame, raw_bytes: by
     return out
 
 
+def _src_to_canonical_rev(src_to_canon: dict[str, Any] | None) -> dict[str, str] | None:
+    """Invert file-header → canonical mapping to canonical → file header (first header wins per canonical)."""
+    if not src_to_canon:
+        return None
+    rev: dict[str, str] = {}
+    for src, can in src_to_canon.items():
+        if not isinstance(src, str) or not isinstance(can, str):
+            continue
+        s = src.strip()
+        c = can.strip()
+        if not s or not c:
+            continue
+        if c not in rev:
+            rev[c] = s
+    return rev or None
+
+
 def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFrame, mapping: dict[str, str]) -> int:
     """Parse file(s), write ``ShipmentEvidenceLine`` rows. Returns blocking error count."""
-    _ = mapping
+    effective_src_to_canon: dict[str, Any] = dict(job.field_mapping or mapping or {})
+    header_by_canonical = _src_to_canonical_rev(effective_src_to_canon)
     raw_meta = db.scalars(select(RawFileMetadata).where(RawFileMetadata.job_id == job.id)).first()
     if not raw_meta:
         db.add(
@@ -815,7 +857,7 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
             try:
                 series = row if isinstance(row, pd.Series) else pd.Series(row, index=frame.columns)
                 raw_payload = _row_dict(series)
-                ex = _extract_common(series)
+                ex = _extract_common(series, header_by_canonical)
                 source_key = stable_source_key_for_row(report_type=report_type, sheet_name=sheet_name, ex=ex)
 
                 pid, pstatus, ptoken, pdetail = resolve_product_for_evidence(
@@ -863,8 +905,9 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
                     "promise_date": ex["promise_date"],
                     "exwork_date": ex["exwork_date"],
                     "erd_date": ex["erd_date"],
-                    "customer_token_raw": ex["customer_token_raw"],
+                    "customer_dealer_token": ex["customer_dealer_token"],
                     "customer_resolution_status": None,
+                    "customer_id": None,
                     "product_id": pid,
                     "product_resolution_status": pstatus,
                     "product_resolution_token": ptoken,
