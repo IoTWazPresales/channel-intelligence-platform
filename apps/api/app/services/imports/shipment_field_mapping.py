@@ -51,6 +51,8 @@ SHIPMENT_CANONICAL_TARGETS: tuple[str, ...] = (
     "promise_date",
     "exwork_date",
     "erd_date",
+    "est_pod_date",
+    "pod_date",
     "customer_dealer_token",
 )
 
@@ -68,6 +70,13 @@ SHIPMENT_FIELD_TARGET_DESCRIPTIONS: dict[str, str] = {
     ),
     "item_code": "Manufacturer item / SKU code used as a primary product identifier for matching.",
     "sales_model_name": "Commercial sales model name used as an alternate product identifier for matching.",
+    "est_pod_date": (
+        "Estimated Proof of Delivery: the expected delivery date before the shipment is confirmed delivered "
+        "(null until known)."
+    ),
+    "pod_date": (
+        "Actual Proof of Delivery: the confirmed delivery date once the shipment is delivered (null until known)."
+    ),
 }
 
 
@@ -153,6 +162,24 @@ def build_initial_shipment_field_mapping(headers: list[str], source: SourceDefin
             mapping[col] = "exwork_date"
         elif "erd" in key and "revenue" in key:
             mapping[col] = "erd_date"
+        elif key in (
+            "est pod date",
+            "est_pod_date",
+            "estimated pod date",
+            "estimated proof of delivery",
+            "expected delivery date",
+            "expected delivery",
+        ):
+            mapping[col] = "est_pod_date"
+        elif key in (
+            "pod date",
+            "pod_date",
+            "proof of delivery",
+            "actual delivery date",
+            "actual delivery",
+            "delivery confirmed date",
+        ):
+            mapping[col] = "pod_date"
         elif key in (
             "customer remarks",
             "customer remark",

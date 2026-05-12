@@ -150,6 +150,15 @@ def _normalized_identifier_cell(v: Any) -> Any:
     return nu if nu is not None else v
 
 
+def _tabular_cell_scalar(v: Any) -> Any:
+    """Coerce pandas duplicate-label cell access to a scalar (truth tests and ``or`` chains are safe)."""
+    if isinstance(v, pd.Series):
+        if v.empty:
+            return None
+        return v.iloc[0]
+    return v
+
+
 def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None = None) -> dict[str, Any]:
     """Extract canonical shipment fields. When ``header_by_canonical`` is set (canonical -> file header), use it first."""
 
@@ -157,13 +166,13 @@ def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None =
         if header_by_canonical:
             hdr = header_by_canonical.get(canon)
             if hdr and hdr in row.index:
-                return row.get(hdr)
+                return _tabular_cell_scalar(row.get(hdr))
         return None
 
     def col(*names: str) -> Any:
         for n in names:
             if n in row.index:
-                return row.get(n)
+                return _tabular_cell_scalar(row.get(n))
         return None
 
     has_distributor_token_header = bool(header_by_canonical and header_by_canonical.get("distributor_token"))
@@ -201,15 +210,39 @@ def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None =
             _normalized_identifier_cell(by_canon("upc_code") or col("UPC Code"))
         ),
         "mpor_item_no": normalize_shipment_cell_value(by_canon("mpor_item_no") or col("MPOR Item No.")),
-        "quantity": by_canon("quantity") if by_canon("quantity") is not None else (row.get("Qty") if "Qty" in row.index else row.get("Qty ")),
-        "unit_price": by_canon("unit_price") if by_canon("unit_price") is not None else (row.get("Unit Price") if "Unit Price" in row.index else None),
-        "amount": by_canon("amount") if by_canon("amount") is not None else (row.get("Amount") if "Amount" in row.index else None),
+        "quantity": by_canon("quantity")
+        if by_canon("quantity") is not None
+        else _tabular_cell_scalar(row.get("Qty") if "Qty" in row.index else row.get("Qty ")),
+        "unit_price": by_canon("unit_price")
+        if by_canon("unit_price") is not None
+        else _tabular_cell_scalar(row.get("Unit Price") if "Unit Price" in row.index else None),
+        "amount": by_canon("amount")
+        if by_canon("amount") is not None
+        else _tabular_cell_scalar(row.get("Amount") if "Amount" in row.index else None),
         "currency_code": normalize_shipment_cell_value(by_canon("currency_code") or col("Currency")),
         "ship_confirm_date": _parse_date(by_canon("ship_confirm_date") or col("Ship Confirm Date")),
         "schedule_ship_date": _parse_date(by_canon("schedule_ship_date") or col("Schedule Ship Date")),
         "promise_date": _parse_date(by_canon("promise_date") or col("Promise Date")),
         "exwork_date": _parse_date(by_canon("exwork_date") or col("Exwork Date")),
         "erd_date": _parse_date(by_canon("erd_date") or col("ERD (Est Revenue Date)")),
+        "est_pod_date": _parse_date(
+            by_canon("est_pod_date")
+            or col(
+                "Est POD Date",
+                "Estimated POD Date",
+                "Estimated Proof of Delivery",
+                "Expected Delivery Date",
+            )
+        ),
+        "pod_date": _parse_date(
+            by_canon("pod_date")
+            or col(
+                "POD Date",
+                "Proof of Delivery",
+                "Actual Delivery Date",
+                "Delivery Confirmed Date",
+            )
+        ),
         "customer_dealer_token": normalize_shipment_cell_value(
             by_canon("customer_dealer_token")
             or col(
@@ -627,6 +660,8 @@ _SHIPMENT_LINE_DATE_COLS = (
     "promise_date",
     "exwork_date",
     "erd_date",
+    "est_pod_date",
+    "pod_date",
 )
 
 
@@ -670,6 +705,8 @@ def _shipment_evidence_line_upsert_statement(values: dict[str, Any]):
             "promise_date": ex.promise_date,
             "exwork_date": ex.exwork_date,
             "erd_date": ex.erd_date,
+            "est_pod_date": ex.est_pod_date,
+            "pod_date": ex.pod_date,
             "customer_dealer_token": ex.customer_dealer_token,
             "updated_at": func.now(),
         },
@@ -905,6 +942,8 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
                     "promise_date": ex["promise_date"],
                     "exwork_date": ex["exwork_date"],
                     "erd_date": ex["erd_date"],
+                    "est_pod_date": ex["est_pod_date"],
+                    "pod_date": ex["pod_date"],
                     "customer_dealer_token": ex["customer_dealer_token"],
                     "customer_resolution_status": None,
                     "customer_id": None,

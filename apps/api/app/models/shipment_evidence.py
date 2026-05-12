@@ -72,6 +72,8 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
     promise_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     exwork_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     erd_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    est_pod_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    pod_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     product_id: Mapped[int | None] = mapped_column(ForeignKey("dim_product.id"), nullable=True)
     product_resolution_status: Mapped[str] = mapped_column(String(64), nullable=False)

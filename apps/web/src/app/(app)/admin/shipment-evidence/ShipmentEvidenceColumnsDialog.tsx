@@ -38,6 +38,8 @@ export const SHIPMENT_EVIDENCE_OPTIONAL_FIELDS: { field: string; label: string }
   { field: 'promise_date', label: 'Promise date' },
   { field: 'exwork_date', label: 'Ex-work date' },
   { field: 'erd_date', label: 'ERD date' },
+  { field: 'est_pod_date', label: 'Est. POD date' },
+  { field: 'pod_date', label: 'POD date' },
   { field: 'product_id', label: 'Product ID' },
   { field: 'product_resolution_token', label: 'Product resolution token' },
   { field: 'product_resolution_detail', label: 'Product resolution detail' },

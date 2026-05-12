@@ -66,6 +66,8 @@ export type ShipmentEvidenceGridRow = {
   promise_date?: string | null;
   exwork_date?: string | null;
   erd_date?: string | null;
+  est_pod_date?: string | null;
+  pod_date?: string | null;
   product_id?: number | null;
   product_sku: string | null;
   product_resolution_status: string;

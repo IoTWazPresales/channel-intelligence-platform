@@ -161,6 +161,8 @@ def _line_to_dict(
         "promise_date": row.promise_date.isoformat() if row.promise_date else None,
         "exwork_date": row.exwork_date.isoformat() if row.exwork_date else None,
         "erd_date": row.erd_date.isoformat() if row.erd_date else None,
+        "est_pod_date": row.est_pod_date.isoformat() if row.est_pod_date else None,
+        "pod_date": row.pod_date.isoformat() if row.pod_date else None,
         "customer_dealer_token": row.customer_dealer_token,
         "customer_id": row.customer_id,
         "customer_resolution_status": row.customer_resolution_status,

@@ -365,6 +365,24 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
             "promise_date": {"aliases": ["Promise Date"], "required": False},
             "exwork_date": {"aliases": ["Exwork Date"], "required": False},
             "erd_date": {"aliases": ["ERD (Est Revenue Date)"], "required": False},
+            "est_pod_date": {
+                "aliases": [
+                    "Est POD Date",
+                    "Estimated POD Date",
+                    "Estimated Proof of Delivery",
+                    "Expected Delivery Date",
+                ],
+                "required": False,
+            },
+            "pod_date": {
+                "aliases": [
+                    "POD Date",
+                    "Proof of Delivery",
+                    "Actual Delivery Date",
+                    "Delivery Confirmed Date",
+                ],
+                "required": False,
+            },
             "customer_dealer_token": {
                 "aliases": ["Customer Remarks", "Customer Remark", "CUSTOMER REMARKS", "customer remarks"],
                 "required": False,

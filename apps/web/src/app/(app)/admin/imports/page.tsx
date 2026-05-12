@@ -292,6 +292,8 @@ const SHIPMENT_FIELD_LABELS: Record<string, string> = {
   promise_date: 'Promise date',
   exwork_date: 'Ex-work date',
   erd_date: 'ERD (est. revenue date)',
+  est_pod_date: 'Est. POD date (expected delivery)',
+  pod_date: 'POD date (actual delivery)',
   customer_dealer_token: 'Source customer name',
 };
 
