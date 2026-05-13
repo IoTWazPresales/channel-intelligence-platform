@@ -20,6 +20,7 @@ from app.services.imports.dsi_mapping_workflow import (
 )
 from app.services.imports.shipment_field_mapping import (
     infer_shipment_import_job_sync,
+    merge_shipment_mapping_memory,
     sanitize_shipment_field_mapping,
     shipment_mapping_gate_errors,
     shipment_mapping_state_dict,
@@ -453,6 +454,10 @@ async def put_shipment_field_mapping(job_id: int, body: dict[str, Any] = Body(..
     job.field_mapping = cleaned
     await db.commit()
     await db.refresh(job)
+    if job.source_id is not None:
+        with SessionLocal() as sync_db:
+            merge_shipment_mapping_memory(sync_db, source_id=int(job.source_id), field_mapping=cleaned)
+            sync_db.commit()
     return shipment_mapping_state_dict(job)
 
 

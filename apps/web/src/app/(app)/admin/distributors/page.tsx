@@ -50,6 +50,9 @@ type DistributorRow = {
   linkage_status: 'healthy' | 'partial' | 'unmapped' | 'no_fact_links';
   location_count?: number;
   contact_count?: number;
+  alias_count?: number;
+  last_import_at?: string | null;
+  alias_link_status?: string;
 };
 type DistributorListResponse = {
   items: DistributorRow[];
@@ -154,6 +157,8 @@ function AdminDistributorsPageContent() {
   const sortBy = searchParams.get('sort_by') ?? 'distributor_code';
   const sortDir = (searchParams.get('sort_dir') as 'asc' | 'desc' | null) ?? 'asc';
   const linkageFilter = searchParams.get('linkage_status') ?? '';
+  const minAliasCountFilter = searchParams.get('min_alias_count') ?? '';
+  const aliasLinkFilter = searchParams.get('alias_link') ?? '';
 
   const setParamState = useCallback(
     (changes: Record<string, string | null>, resetPage = false) => {
@@ -175,12 +180,21 @@ function AdminDistributorsPageContent() {
     error: distErr,
     refetch: refetchDist,
   } = useQuery({
-    queryKey: ['admin-distributors', page, pageSize, q, sortBy, sortDir, linkageFilter],
-    queryFn: ({ signal }) =>
-      apiGet<DistributorListResponse>(
-        `/api/v1/distributors?page=${page}&page_size=${pageSize}&q=${encodeURIComponent(q)}&sort_by=${encodeURIComponent(sortBy)}&sort_dir=${sortDir}&linkage_status=${encodeURIComponent(linkageFilter)}`,
-        { signal }
-      ),
+    queryKey: ['admin-distributors', page, pageSize, q, sortBy, sortDir, linkageFilter, minAliasCountFilter, aliasLinkFilter],
+    queryFn: ({ signal }) => {
+      const sp = new URLSearchParams();
+      sp.set('page', String(page));
+      sp.set('page_size', String(pageSize));
+      sp.set('q', q);
+      sp.set('sort_by', sortBy);
+      sp.set('sort_dir', sortDir);
+      if (linkageFilter) sp.set('linkage_status', linkageFilter);
+      const mac = minAliasCountFilter.trim();
+      if (mac !== '' && Number.isFinite(Number(mac))) sp.set('min_alias_count', String(Number(mac)));
+      const al = aliasLinkFilter.trim().toLowerCase();
+      if (al === 'linked' || al === 'unlinked') sp.set('alias_link', al);
+      return apiGet<DistributorListResponse>(`/api/v1/distributors?${sp.toString()}`, { signal });
+    },
   });
   const selectedDistributorId = drawerRow?.id ?? null;
   const { data: distributorLocations } = useQuery({
@@ -434,6 +448,40 @@ function AdminDistributorsPageContent() {
       { field: 'distributor_code', headerName: 'Code', pinned: 'left', minWidth: 140, editable: false },
       { field: 'distributor_name', headerName: 'Canonical name', flex: 1, minWidth: 220, editable: true },
       {
+        field: 'alias_count',
+        headerName: 'Alias #',
+        minWidth: 90,
+        type: 'numericColumn',
+        editable: false,
+      },
+      {
+        field: 'last_import_at',
+        headerName: 'Last import (alias)',
+        minWidth: 160,
+        editable: false,
+        valueFormatter: (p) => {
+          const v = p.value as string | null | undefined;
+          if (!v) return '—';
+          try {
+            return new Date(v).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+          } catch {
+            return v;
+          }
+        },
+      },
+      {
+        field: 'alias_link_status',
+        headerName: 'Alias link',
+        minWidth: 120,
+        editable: false,
+        cellRenderer: ({ value }: { value?: string }) =>
+          value === 'linked' ? (
+            <Chip size="small" color="success" label="Linked" variant="outlined" />
+          ) : (
+            <Chip size="small" color="default" label="Unlinked" variant="outlined" />
+          ),
+      },
+      {
         field: 'linkage_status',
         headerName: 'Linkage status',
         minWidth: 150,
@@ -609,6 +657,31 @@ function AdminDistributorsPageContent() {
                     <MenuItem value="no_fact_links">no fact links</MenuItem>
                   </Select>
                 </FormControl>
+                <TextField
+                  size="small"
+                  label="Min alias #"
+                  type="number"
+                  inputProps={{ min: 0 }}
+                  value={minAliasCountFilter}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setParamState({ min_alias_count: v.trim() === '' ? null : v }, true);
+                  }}
+                  sx={{ minWidth: 120 }}
+                />
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel id="dist-alias-link-label">Alias link</InputLabel>
+                  <Select
+                    labelId="dist-alias-link-label"
+                    label="Alias link"
+                    value={aliasLinkFilter}
+                    onChange={(e) => setParamState({ alias_link: String(e.target.value || '') }, true)}
+                  >
+                    <MenuItem value="">All</MenuItem>
+                    <MenuItem value="linked">Linked</MenuItem>
+                    <MenuItem value="unlinked">Unlinked</MenuItem>
+                  </Select>
+                </FormControl>
                 <FormControl size="small" sx={{ minWidth: 170 }}>
                   <InputLabel id="dist-sort-by-label">Sort by</InputLabel>
                   <Select
@@ -623,6 +696,8 @@ function AdminDistributorsPageContent() {
                     <MenuItem value="latest_inbound_eta_date">Latest inbound</MenuItem>
                     <MenuItem value="linked_sellout_rows">Sell-out linked</MenuItem>
                     <MenuItem value="linked_inbound_rows">Inbound linked</MenuItem>
+                    <MenuItem value="alias_count">Alias count</MenuItem>
+                    <MenuItem value="last_import_at">Last import (alias)</MenuItem>
                   </Select>
                 </FormControl>
                 <FormControl size="small" sx={{ minWidth: 130 }}>

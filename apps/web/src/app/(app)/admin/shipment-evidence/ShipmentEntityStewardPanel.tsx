@@ -2,10 +2,12 @@
 
 import {
   Alert,
+  Backdrop,
   Box,
   Button,
   Checkbox,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -107,6 +109,14 @@ function contextSpecialCategory(ctx: Record<string, unknown> | null): string | n
 function customerSpecialCategoryBlocksProvisional(ctx: Record<string, unknown> | null): boolean {
   const c = contextSpecialCategory(ctx);
   return c === 'noise_only' || c === 'internal_note';
+}
+
+function canClearSpecialCategory(r: ShipmentMappingCandidateRow): boolean {
+  if (contextSpecialCategory(r.context)) return true;
+  const st = (r.status || '').trim();
+  const mr = (r.match_reason || '').trim();
+  if (st === 'ignored' && mr === 'steward_manual_special_category') return true;
+  return false;
 }
 
 function contextPossibleDuplicateOf(ctx: Record<string, unknown> | null): string[] {
@@ -277,7 +287,7 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       ? `/api/v1/shipment-evidence/import-jobs/${importJobId}/mapping-candidates`
       : '';
 
-  const { data: rawRows, refetch, isLoading } = useQuery({
+  const { data: rawRows, refetch, isLoading, isFetching } = useQuery({
     queryKey: ['shipment-evidence-mapping-candidates', importJobId],
     queryFn: ({ signal }) => apiGet<ShipmentMappingCandidateRow[]>(candidatesUrl, { signal }),
     enabled: importJobId != null,
@@ -468,39 +478,30 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       for (const id of selectedCandidateIds) {
         const row = rows.find((r) => r.id === id);
         if (!row) continue;
-        const displayName = (bulkProvNamesById[id] ?? '').trim();
-        if (!displayName) continue;
+        if (row.entity_type === ENTITY_CUST && !(bulkProvNamesById[id] ?? '').trim()) {
+          failures.push({ id, kind: 'customer', message: 'Missing display name' });
+        }
+      }
 
-        if (row.entity_type === ENTITY_DIST) {
+      const custBulkIds = [...selectedCandidateIds].filter((id) => {
+        const row = rows.find((r) => r.id === id);
+        return Boolean(row && row.entity_type === ENTITY_CUST && (bulkProvNamesById[id] ?? '').trim());
+      });
+
+      if (custBulkIds.length) {
+        if (importJobId != null) {
           tasks.push(
             (async () => {
               try {
+                const display_names: Record<string, string> = {};
+                for (const cid of custBulkIds) {
+                  display_names[String(cid)] = (bulkProvNamesById[cid] ?? '').trim();
+                }
                 await apiPost<Record<string, unknown>>(
-                  `/api/v1/shipment-evidence/import-candidates/${id}/create-provisional-distributor`,
+                  `/api/v1/shipment-evidence/import-jobs/${importJobId}/bulk-create-provisional-customers`,
                   {
-                    display_name: displayName,
-                    distributor_code: null,
-                    confirm_for_suspicious_token: false,
-                  }
-                );
-                successes.push(id);
-              } catch (e) {
-                failures.push({
-                  id,
-                  kind: 'distributor',
-                  message: e instanceof Error ? e.message : String(e),
-                });
-              }
-            })()
-          );
-        } else if (row.entity_type === ENTITY_CUST) {
-          tasks.push(
-            (async () => {
-              try {
-                await apiPost<Record<string, unknown>>(
-                  `/api/v1/shipment-evidence/import-candidates/${id}/create-provisional-customer`,
-                  {
-                    display_name: displayName,
+                    candidate_ids: custBulkIds,
+                    display_names,
                     region_id: parseOptInt(custRegionId),
                     channel_id: parseOptInt(custChannelId),
                     preferred_distributor_id: parseOptInt(custPrefDistId),
@@ -508,17 +509,78 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
                     notes_summary: custNotes.trim() || null,
                   }
                 );
-                successes.push(id);
+                for (const cid of custBulkIds) successes.push(cid);
               } catch (e) {
-                failures.push({
-                  id,
-                  kind: 'customer',
-                  message: e instanceof Error ? e.message : String(e),
-                });
+                for (const cid of custBulkIds) {
+                  failures.push({
+                    id: cid,
+                    kind: 'customer',
+                    message: e instanceof Error ? e.message : String(e),
+                  });
+                }
               }
             })()
           );
+        } else {
+          for (const id of custBulkIds) {
+            const displayName = (bulkProvNamesById[id] ?? '').trim();
+            tasks.push(
+              (async () => {
+                try {
+                  await apiPost<Record<string, unknown>>(
+                    `/api/v1/shipment-evidence/import-candidates/${id}/create-provisional-customer`,
+                    {
+                      display_name: displayName,
+                      region_id: parseOptInt(custRegionId),
+                      channel_id: parseOptInt(custChannelId),
+                      preferred_distributor_id: parseOptInt(custPrefDistId),
+                      partner_tier: custPartnerTier,
+                      notes_summary: custNotes.trim() || null,
+                    }
+                  );
+                  successes.push(id);
+                } catch (e) {
+                  failures.push({
+                    id,
+                    kind: 'customer',
+                    message: e instanceof Error ? e.message : String(e),
+                  });
+                }
+              })()
+            );
+          }
         }
+      }
+
+      for (const id of selectedCandidateIds) {
+        const row = rows.find((r) => r.id === id);
+        if (!row || row.entity_type !== ENTITY_DIST) continue;
+        const displayName = (bulkProvNamesById[id] ?? '').trim();
+        if (!displayName) {
+          failures.push({ id, kind: 'distributor', message: 'Missing display name' });
+          continue;
+        }
+        tasks.push(
+          (async () => {
+            try {
+              await apiPost<Record<string, unknown>>(
+                `/api/v1/shipment-evidence/import-candidates/${id}/create-provisional-distributor`,
+                {
+                  display_name: displayName,
+                  distributor_code: null,
+                  confirm_for_suspicious_token: false,
+                }
+              );
+              successes.push(id);
+            } catch (e) {
+              failures.push({
+                id,
+                kind: 'distributor',
+                message: e instanceof Error ? e.message : String(e),
+              });
+            }
+          })()
+        );
       }
 
       await Promise.all(tasks);
@@ -608,6 +670,33 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
     },
     onError: (e: Error) => setActionError(e.message),
   });
+
+  const clearSpecialMut = useMutation({
+    mutationFn: (candidate_id: number) =>
+      apiPost<Record<string, unknown>>(
+        `/api/v1/shipment-evidence/import-candidates/${candidate_id}/clear-special-category`,
+        {}
+      ),
+    onSuccess: () => {
+      setActionError(null);
+      setActive(null);
+      invalidate();
+      void refetch();
+    },
+    onError: (e: Error) => setActionError(e.message),
+  });
+
+  const stewardTableBusy =
+    isFetching ||
+    isLoading ||
+    mapMut.isPending ||
+    provDistMut.isPending ||
+    provCustMut.isPending ||
+    unifiedBulkProvMut.isPending ||
+    bulkMapMut.isPending ||
+    manualSpecialMut.isPending ||
+    clearSpecialMut.isPending ||
+    rejectMut.isPending;
 
   const toggleSelectCandidate = (id: number) => {
     setSelectedCandidateIds((prev) => {
@@ -771,7 +860,14 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
             No open mapping candidates for this job.
           </Typography>
         ) : importJobId != null ? (
-          <Table size="small">
+          <Box sx={{ position: 'relative' }}>
+            <Backdrop
+              sx={{ color: 'text.secondary', position: 'absolute', zIndex: 1, borderRadius: 1 }}
+              open={stewardTableBusy && rows.length > 0}
+            >
+              <CircularProgress color="inherit" size={28} />
+            </Backdrop>
+            <Table size="small" sx={{ opacity: stewardTableBusy && rows.length > 0 ? 0.55 : 1 }}>
             <TableHead>
               <TableRow>
                 <TableCell padding="checkbox">
@@ -914,6 +1010,21 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
                           Special…
                         </Button>
                       </Tooltip>
+                      {canClearSpecialCategory(r) ? (
+                        <Tooltip title="Remove special category and return this candidate to needs review so it can be mapped or provisioned.">
+                          <span>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              aria-label="Clear special category"
+                              onClick={() => clearSpecialMut.mutate(r.id)}
+                              disabled={clearSpecialMut.isPending}
+                            >
+                              Clear
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      ) : null}
                       <Tooltip title="Reject this candidate: no mapping, no auto-apply on import apply; evidence lines stay unresolved.">
                         <Button
                           size="small"
@@ -931,6 +1042,7 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
               ))}
             </TableBody>
           </Table>
+          </Box>
         ) : null}
       </Stack>
 

@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.ingestion import ImportJob, RawFileMetadata, SourceDefinition
+from app.services.imports.pm_mapping_memory import MEMORY_SCHEMA_VERSION, load_by_header_norm, norm_header_key
 from app.storage.local import get_storage_backend
 
 
@@ -84,8 +85,36 @@ def _norm_header(h: str) -> str:
     return (h or "").strip().lower()
 
 
+def merge_shipment_mapping_memory(db: Session, *, source_id: int, field_mapping: dict[str, str]) -> None:
+    """Persist confirmed shipment column → canonical mappings on the source (by normalized header)."""
+    src = db.get(SourceDefinition, source_id)
+    if src is None:
+        return
+    allowed = set(SHIPMENT_CANONICAL_TARGETS)
+    root: dict[str, Any] = dict(src.column_mapping_memory or {})
+    bh: dict[str, Any] = dict(root.get("by_header_norm") or {})
+
+    for header, tgt in field_mapping.items():
+        nh = norm_header_key(str(header))
+        if not nh:
+            continue
+        if tgt not in allowed:
+            continue
+        prev = bh.get(nh) if isinstance(bh.get(nh), dict) else {}
+        bh[nh] = {
+            "target": tgt,
+            "confirmations": int(prev.get("confirmations", 0)) + 1,
+        }
+
+    root["by_header_norm"] = bh
+    root["schema_version"] = root.get("schema_version") or MEMORY_SCHEMA_VERSION
+    root["shipment_mapping"] = True
+    src.column_mapping_memory = root
+    db.add(src)
+
+
 def build_initial_shipment_field_mapping(headers: list[str], source: SourceDefinition | None) -> dict[str, str]:
-    """Map file header -> canonical shipment field using template aliases + light heuristics."""
+    """Map file header -> canonical shipment field using saved source memory, template aliases, and heuristics."""
     template = _effective_mapping_template(source)
     aliases: dict[str, str] = {}
     for canonical, meta in template.items():
@@ -97,9 +126,24 @@ def build_initial_shipment_field_mapping(headers: list[str], source: SourceDefin
             if isinstance(a, str) and a.strip():
                 aliases[_norm_header(a)] = canonical
 
+    allowed_targets = set(SHIPMENT_CANONICAL_TARGETS)
+    memory = load_by_header_norm(source) if source else {}
     mapping: dict[str, str] = {}
     for col in headers:
         if not isinstance(col, str) or not col.strip():
+            continue
+        nh = norm_header_key(col)
+        if nh:
+            entry = memory.get(nh)
+            if isinstance(entry, dict):
+                tgt = entry.get("target")
+                if tgt and str(tgt).strip() in allowed_targets:
+                    mapping[col] = str(tgt).strip()
+
+    for col in headers:
+        if not isinstance(col, str) or not col.strip():
+            continue
+        if col in mapping:
             continue
         key = _norm_header(col)
         if key in aliases:

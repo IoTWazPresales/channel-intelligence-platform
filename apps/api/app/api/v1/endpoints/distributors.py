@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.models.dimensions import DimDistributor, DistributorContact, DistributorLocation
 from app.models.facts import FactInboundShipment, FactSalesSellout
+from app.models.import_distributor_si import DistributorSourceTokenAlias
+from app.models.ingestion import ImportJob
 
 router = APIRouter()
 
@@ -91,6 +93,8 @@ async def list_distributors(
     page_size: int = Query(default=25, ge=1, le=200),
     q: str = Query(default=""),
     linkage_status: str = Query(default=""),
+    min_alias_count: int | None = Query(default=None, ge=0),
+    alias_link: str | None = Query(default=None, description="Filter: linked (≥1 alias) or unlinked (0 aliases)"),
     sort_by: str = Query(default="distributor_code"),
     sort_dir: str = Query(default="asc"),
 ):
@@ -145,6 +149,24 @@ async def list_distributors(
         .group_by(DistributorContact.distributor_id)
         .subquery()
     )
+    dist_alias_count_sq = (
+        select(func.count())
+        .select_from(DistributorSourceTokenAlias)
+        .where(
+            DistributorSourceTokenAlias.distributor_id == DimDistributor.id,
+            DistributorSourceTokenAlias.status == "approved",
+        )
+        .correlate(DimDistributor)
+        .scalar_subquery()
+    )
+    dist_last_import_sq = (
+        select(func.max(ImportJob.created_at))
+        .select_from(DistributorSourceTokenAlias)
+        .join(ImportJob, ImportJob.id == DistributorSourceTokenAlias.created_from_import_job_id)
+        .where(DistributorSourceTokenAlias.distributor_id == DimDistributor.id)
+        .correlate(DimDistributor)
+        .scalar_subquery()
+    )
 
     base = (
         select(
@@ -157,6 +179,8 @@ async def list_distributors(
             total_inbound_col.label("total_inbound_rows"),
             func.coalesce(location_count_subq.c.location_count, 0).label("location_count"),
             func.coalesce(contact_count_subq.c.contact_count, 0).label("contact_count"),
+            dist_alias_count_sq.label("alias_count"),
+            dist_last_import_sq.label("last_import_at"),
             sellout_agg.c.latest_sellout_period_start.label("latest_sellout_period_start"),
             inbound_agg.c.latest_inbound_eta_date.label("latest_inbound_eta_date"),
         )
@@ -184,6 +208,15 @@ async def list_distributors(
     if linkage_status in linkage_filters:
         base = base.where(linkage_filters[linkage_status])
 
+    if min_alias_count is not None:
+        base = base.where(dist_alias_count_sq >= int(min_alias_count))
+
+    al = (alias_link or "").strip().lower()
+    if al == "linked":
+        base = base.where(dist_alias_count_sq > 0)
+    elif al == "unlinked":
+        base = base.where(dist_alias_count_sq == 0)
+
     count_stmt = select(func.count()).select_from(base.subquery())
     total = (await db.execute(count_stmt)).scalar_one()
 
@@ -194,6 +227,8 @@ async def list_distributors(
         "latest_inbound_eta_date": inbound_agg.c.latest_inbound_eta_date,
         "linked_sellout_rows": linked_sellout_col,
         "linked_inbound_rows": linked_inbound_col,
+        "alias_count": dist_alias_count_sq,
+        "last_import_at": dist_last_import_sq,
     }
     order_col = sort_exprs.get(sort_by, DimDistributor.code)
     if sort_dir == "desc":
@@ -206,6 +241,8 @@ async def list_distributors(
     for r in rows:
         latest_sellout = r.latest_sellout_period_start.isoformat() if r.latest_sellout_period_start else None
         latest_inbound = r.latest_inbound_eta_date.isoformat() if r.latest_inbound_eta_date else None
+        n_aliases = int(r.alias_count or 0)
+        last_imp = r.last_import_at.isoformat() if r.last_import_at is not None else None
         items.append(
             {
                 "id": r.id,
@@ -217,6 +254,9 @@ async def list_distributors(
                 "total_inbound_rows": int(r.total_inbound_rows or 0),
                 "location_count": int(r.location_count or 0),
                 "contact_count": int(r.contact_count or 0),
+                "alias_count": n_aliases,
+                "last_import_at": last_imp,
+                "alias_link_status": "linked" if n_aliases > 0 else "unlinked",
                 "latest_sellout_period_start": latest_sellout,
                 "latest_inbound_eta_date": latest_inbound,
                 "linkage_status": _linkage_status(

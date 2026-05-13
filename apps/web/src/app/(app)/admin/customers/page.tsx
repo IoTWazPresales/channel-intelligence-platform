@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -59,6 +60,9 @@ type CustomerRow = {
   preferred_distributor_name: string | null;
   location_count?: number;
   contact_count?: number;
+  alias_count?: number;
+  last_import_at?: string | null;
+  alias_link_status?: string;
 };
 type CustomerLocationRow = {
   id: number;
@@ -191,6 +195,8 @@ function AdminCustomersPageContent() {
   const regionCodeFilter = searchParams.get('region_code') ?? '';
   const channelCodeFilter = searchParams.get('channel_code') ?? '';
   const preferredDistributorFilter = searchParams.get('preferred_distributor_code') ?? '';
+  const minAliasCountFilter = searchParams.get('min_alias_count') ?? '';
+  const aliasLinkFilter = searchParams.get('alias_link') ?? '';
   const sortBy = searchParams.get('sort_by') ?? DEFAULT_SORT_BY;
   const sortDir = (searchParams.get('sort_dir') as 'asc' | 'desc' | null) ?? DEFAULT_SORT_DIR;
 
@@ -242,6 +248,8 @@ function AdminCustomersPageContent() {
       regionCodeFilter,
       channelCodeFilter,
       preferredDistributorFilter,
+      minAliasCountFilter,
+      aliasLinkFilter,
       sortBy,
       sortDir,
     ],
@@ -257,6 +265,10 @@ function AdminCustomersPageContent() {
       if (regionCodeFilter) sp.set('region_code', regionCodeFilter);
       if (channelCodeFilter) sp.set('channel_code', channelCodeFilter);
       if (preferredDistributorFilter) sp.set('preferred_distributor_code', preferredDistributorFilter);
+      const mac = minAliasCountFilter.trim();
+      if (mac !== '' && Number.isFinite(Number(mac))) sp.set('min_alias_count', String(Number(mac)));
+      const al = aliasLinkFilter.trim().toLowerCase();
+      if (al === 'linked' || al === 'unlinked') sp.set('alias_link', al);
       return apiGet<CustomerListResponse>(`/api/v1/customers?${sp.toString()}`, { signal });
     },
   });
@@ -533,6 +545,40 @@ function AdminCustomersPageContent() {
         cellEditor: 'agSelectCellEditor',
         cellEditorParams: { values: distributorCodes },
       },
+      {
+        field: 'alias_count',
+        headerName: 'Alias #',
+        minWidth: 90,
+        type: 'numericColumn',
+        editable: false,
+      },
+      {
+        field: 'last_import_at',
+        headerName: 'Last import (alias)',
+        minWidth: 160,
+        editable: false,
+        valueFormatter: (p) => {
+          const v = p.value as string | null | undefined;
+          if (!v) return '—';
+          try {
+            return new Date(v).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+          } catch {
+            return v;
+          }
+        },
+      },
+      {
+        field: 'alias_link_status',
+        headerName: 'Alias link',
+        minWidth: 120,
+        editable: false,
+        cellRenderer: ({ value }: { value?: string }) =>
+          value === 'linked' ? (
+            <Chip size="small" color="success" label="Linked" variant="outlined" />
+          ) : (
+            <Chip size="small" color="default" label="Unlinked" variant="outlined" />
+          ),
+      },
       { field: 'account_owner_internal', headerName: 'Account owner', minWidth: 170, editable: true },
       {
         field: 'notes_summary',
@@ -745,6 +791,30 @@ function AdminCustomersPageContent() {
               ))}
             </Select>
           </FormControl>
+          <TextField
+            size="small"
+            label="Min alias #"
+            type="number"
+            inputProps={{ min: 0 }}
+            value={minAliasCountFilter}
+            onChange={(e) => {
+              const v = e.target.value;
+              setParamState({ min_alias_count: v.trim() === '' ? null : v }, true);
+            }}
+            sx={{ minWidth: 120 }}
+          />
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Alias link</InputLabel>
+            <Select
+              label="Alias link"
+              value={aliasLinkFilter}
+              onChange={(e) => setParamState({ alias_link: String(e.target.value || '') }, true)}
+            >
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="linked">Linked</MenuItem>
+              <MenuItem value="unlinked">Unlinked</MenuItem>
+            </Select>
+          </FormControl>
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Sort by</InputLabel>
             <Select
@@ -760,6 +830,8 @@ function AdminCustomersPageContent() {
               <MenuItem value="channel_code">Channel</MenuItem>
               <MenuItem value="account_owner_internal">Owner</MenuItem>
               <MenuItem value="preferred_distributor_code">Preferred distributor</MenuItem>
+              <MenuItem value="alias_count">Alias count</MenuItem>
+              <MenuItem value="last_import_at">Last import (alias)</MenuItem>
               <MenuItem value="updated_at">Updated</MenuItem>
             </Select>
           </FormControl>
@@ -785,6 +857,8 @@ function AdminCustomersPageContent() {
                   region_code: '',
                   channel_code: '',
                   preferred_distributor_code: '',
+                  min_alias_count: '',
+                  alias_link: '',
                   sort_by: DEFAULT_SORT_BY,
                   sort_dir: DEFAULT_SORT_DIR,
                 },

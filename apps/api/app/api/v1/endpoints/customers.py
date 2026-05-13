@@ -17,6 +17,8 @@ from app.models.dimensions import (
     DimDistributor,
     DimRegion,
 )
+from app.models.import_distributor_si import CustomerSourceTokenAlias
+from app.models.ingestion import ImportJob
 
 router = APIRouter()
 
@@ -186,6 +188,11 @@ async def list_customers(
     region_code: str | None = Query(default=None),
     channel_code: str | None = Query(default=None),
     preferred_distributor_code: str | None = Query(default=None),
+    min_alias_count: int | None = Query(default=None, ge=0, description="Minimum approved source-token alias count"),
+    alias_link: str | None = Query(
+        default=None,
+        description="Filter by alias linkage: linked (≥1 alias) or unlinked (0 aliases)",
+    ),
     sort_by: str = Query(default="code"),
     sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
 ):
@@ -204,6 +211,24 @@ async def list_customers(
         .correlate(DimCustomer)
         .scalar_subquery()
     )
+    alias_count_sq = (
+        select(func.count())
+        .select_from(CustomerSourceTokenAlias)
+        .where(
+            CustomerSourceTokenAlias.customer_id == DimCustomer.id,
+            CustomerSourceTokenAlias.status == "approved",
+        )
+        .correlate(DimCustomer)
+        .scalar_subquery()
+    )
+    last_import_from_alias_sq = (
+        select(func.max(ImportJob.created_at))
+        .select_from(CustomerSourceTokenAlias)
+        .join(ImportJob, ImportJob.id == CustomerSourceTokenAlias.created_from_import_job_id)
+        .where(CustomerSourceTokenAlias.customer_id == DimCustomer.id)
+        .correlate(DimCustomer)
+        .scalar_subquery()
+    )
     allowed_sort = {
         "code": DimCustomer.code,
         "name": DimCustomer.name,
@@ -215,6 +240,8 @@ async def list_customers(
         "region_code": DimRegion.code,
         "channel_code": DimChannel.code,
         "preferred_distributor_code": pref_dist.code,
+        "alias_count": alias_count_sq,
+        "last_import_at": last_import_from_alias_sq,
     }
     sort_col = allowed_sort.get(sort_by, DimCustomer.code)
     sort_fn = asc if sort_dir == "asc" else desc
@@ -228,12 +255,13 @@ async def list_customers(
             pref_dist.name.label("preferred_distributor_name"),
             location_count_sq.label("location_count"),
             contact_count_sq.label("contact_count"),
+            alias_count_sq.label("alias_count"),
+            last_import_from_alias_sq.label("last_import_at"),
         )
         .join(DimRegion, DimRegion.id == DimCustomer.region_id, isouter=True)
         .join(DimChannel, DimChannel.id == DimCustomer.channel_id, isouter=True)
         .join(pref_dist, pref_dist.id == DimCustomer.preferred_distributor_id, isouter=True)
     )
-    count_stmt = select(func.count()).select_from(DimCustomer)
 
     filters = []
     if q and q.strip():
@@ -264,23 +292,28 @@ async def list_customers(
     if region_code and region_code.strip():
         rc = region_code.strip()
         base = base.where(DimRegion.code == rc)
-        count_stmt = count_stmt.join(DimRegion, DimRegion.id == DimCustomer.region_id)
 
     if channel_code and channel_code.strip():
         cc = channel_code.strip()
         base = base.where(DimChannel.code == cc)
-        count_stmt = count_stmt.join(DimChannel, DimChannel.id == DimCustomer.channel_id)
 
     if preferred_distributor_code and preferred_distributor_code.strip():
         pdc = preferred_distributor_code.strip()
         base = base.where(pref_dist.code == pdc)
-        count_stmt = count_stmt.join(pref_dist, pref_dist.id == DimCustomer.preferred_distributor_id)
+
+    if min_alias_count is not None:
+        base = base.where(alias_count_sq >= int(min_alias_count))
+
+    al = (alias_link or "").strip().lower()
+    if al == "linked":
+        base = base.where(alias_count_sq > 0)
+    elif al == "unlinked":
+        base = base.where(alias_count_sq == 0)
 
     if filters:
         base = base.where(and_(*filters))
-        count_stmt = count_stmt.where(and_(*filters))
 
-    total = int((await db.execute(count_stmt)).scalar_one())
+    total = int((await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one())
     offset = (page - 1) * page_size
     if job_id is not None and not (q and q.strip()):
         order_parts = (desc(DimCustomer.created_at), asc(DimCustomer.id))
@@ -296,7 +329,19 @@ async def list_customers(
     rows = (await db.execute(base.order_by(*order_parts).offset(offset).limit(page_size))).all()
 
     items = []
-    for c, region_code_out, channel_code_out, pref_code, pref_name, location_count, contact_count in rows:
+    for row in rows:
+        (
+            c,
+            region_code_out,
+            channel_code_out,
+            pref_code,
+            pref_name,
+            location_count,
+            contact_count,
+            alias_count,
+            last_import_at,
+        ) = row
+        n_aliases = int(alias_count or 0)
         items.append(
             {
                 "id": c.id,
@@ -316,6 +361,9 @@ async def list_customers(
                 "preferred_distributor_name": pref_name,
                 "location_count": int(location_count or 0),
                 "contact_count": int(contact_count or 0),
+                "alias_count": n_aliases,
+                "last_import_at": last_import_at.isoformat() if last_import_at is not None else None,
+                "alias_link_status": "linked" if n_aliases > 0 else "unlinked",
             }
         )
     return {
