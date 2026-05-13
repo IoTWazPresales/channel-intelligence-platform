@@ -16,10 +16,21 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimRegion, CustomerContact, CustomerLocation
+from app.models.dimensions import (
+    CustomerContact,
+    CustomerLocation,
+    DimChannel,
+    DimCustomer,
+    DimDistributor,
+    DimRegion,
+    DistributorContact,
+    DistributorLocation,
+)
+from app.models.facts import FactInboundShipment, FactInventoryDistributor, FactSalesSellin, FactSalesSellout
 from app.models.import_distributor_si import (
     CustomerSourceTokenAlias,
     DistributorSourceTokenAlias,
+    ImportDistributorSiStagingLine,
     ImportEntityMappingCandidate,
 )
 from app.models.shipment_evidence import ShipmentEvidenceLine
@@ -946,5 +957,136 @@ def merge_duplicate_shipment_provisional_customers_by_display_name(
             db.flush()
     db.commit()
     out["deleted_customer_ids"] = deleted
+    out["skipped"] = skipped
+    return out
+
+
+def _repoint_distributor_id_references(db: Session, *, loser_id: int, keeper_id: int) -> None:
+    """Point foreign keys at ``keeper_id`` before deleting duplicate ``dim_distributor`` ``loser_id``."""
+    db.execute(
+        update(DimCustomer).where(DimCustomer.preferred_distributor_id == loser_id).values(preferred_distributor_id=keeper_id)
+    )
+    db.execute(
+        update(FactSalesSellout).where(FactSalesSellout.distributor_id == loser_id).values(distributor_id=keeper_id)
+    )
+    db.execute(
+        update(FactSalesSellin).where(FactSalesSellin.distributor_id == loser_id).values(distributor_id=keeper_id)
+    )
+    db.execute(
+        update(FactInventoryDistributor).where(FactInventoryDistributor.distributor_id == loser_id).values(distributor_id=keeper_id)
+    )
+    db.execute(
+        update(FactInboundShipment).where(FactInboundShipment.distributor_id == loser_id).values(distributor_id=keeper_id)
+    )
+    db.execute(
+        update(ImportDistributorSiStagingLine)
+        .where(ImportDistributorSiStagingLine.resolved_distributor_id == loser_id)
+        .values(resolved_distributor_id=keeper_id)
+    )
+
+
+def merge_duplicate_shipment_provisional_distributors_by_display_name(
+    db: Session,
+    *,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Merge ``TMP-DIST-%`` distributors that share the same normalised display ``name``.
+
+    For each duplicate group the lowest ``id`` is kept. Aliases and ``ShipmentEvidenceLine.distributor_id``
+    are moved to the survivor; common FK references are repointed; duplicate rows are deleted when they
+    have no distributor locations or contacts (otherwise that loser is skipped).
+
+    Intended for one-off cleanup after bulk provisional created duplicates. Call with ``dry_run=True``
+    first to inspect ``planned_merges``."""
+    from collections import defaultdict
+
+    rows = list(db.scalars(select(DimDistributor).where(DimDistributor.code.like("TMP-DIST-%"))).all())
+    groups: dict[str, list[DimDistributor]] = defaultdict(list)
+    for d in rows:
+        nk = _norm_key(d.name or "")
+        key = nk if nk else f"__noname_{int(d.id)}"
+        groups[key].append(d)
+
+    dup_groups = {k: v for k, v in groups.items() if len(v) > 1}
+    planned: list[dict[str, Any]] = []
+    for k, lst in sorted(dup_groups.items(), key=lambda kv: kv[0]):
+        lst.sort(key=lambda x: int(x.id))
+        keeper = lst[0]
+        losers = lst[1:]
+        planned.append(
+            {
+                "normalized_name_key": k,
+                "keeper_id": int(keeper.id),
+                "keeper_code": keeper.code,
+                "keeper_name": keeper.name,
+                "loser_ids": [int(x.id) for x in losers],
+            }
+        )
+
+    out: dict[str, Any] = {
+        "dry_run": dry_run,
+        "planned_merges": planned,
+        "merge_group_count": len(planned),
+    }
+    if dry_run:
+        return out
+
+    deleted: list[int] = []
+    skipped: list[dict[str, Any]] = []
+    for entry in planned:
+        kid = int(entry["keeper_id"])
+        for lid in entry["loser_ids"]:
+            n_loc = int(
+                db.scalar(
+                    select(func.count()).select_from(DistributorLocation).where(DistributorLocation.distributor_id == lid)
+                )
+                or 0
+            )
+            n_con = int(
+                db.scalar(
+                    select(func.count()).select_from(DistributorContact).where(DistributorContact.distributor_id == lid)
+                )
+                or 0
+            )
+            if n_loc > 0 or n_con > 0:
+                skipped.append({"distributor_id": lid, "reason": "has_locations_or_contacts"})
+                continue
+            _repoint_distributor_id_references(db, loser_id=lid, keeper_id=kid)
+            aliases = list(
+                db.scalars(select(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.distributor_id == lid)).all()
+            )
+            for al in aliases:
+                dup = db.scalars(
+                    select(DistributorSourceTokenAlias)
+                    .where(
+                        DistributorSourceTokenAlias.distributor_id == kid,
+                        DistributorSourceTokenAlias.normalized_token == al.normalized_token,
+                        DistributorSourceTokenAlias.raw_token == al.raw_token,
+                    )
+                    .limit(1)
+                ).first()
+                if dup is not None:
+                    db.delete(al)
+                else:
+                    al.distributor_id = kid
+                    db.add(al)
+            db.execute(
+                update(ShipmentEvidenceLine).where(ShipmentEvidenceLine.distributor_id == lid).values(distributor_id=kid)
+            )
+            db.execute(
+                update(ImportEntityMappingCandidate)
+                .where(
+                    ImportEntityMappingCandidate.suggested_entity_id == lid,
+                    ImportEntityMappingCandidate.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY,
+                )
+                .values(suggested_entity_id=kid)
+            )
+            loser_row = db.get(DimDistributor, lid)
+            if loser_row is not None:
+                db.delete(loser_row)
+            deleted.append(lid)
+            db.flush()
+    db.commit()
+    out["deleted_distributor_ids"] = deleted
     out["skipped"] = skipped
     return out

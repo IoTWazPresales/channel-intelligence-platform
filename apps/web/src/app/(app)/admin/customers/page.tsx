@@ -153,7 +153,6 @@ function AdminCustomersPageContent() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [paste, setPaste] = useState('');
-  const [gridApi, setGridApi] = useState<any | null>(null);
   const [selectedRow, setSelectedRow] = useState<CustomerRow | null>(null);
   const [createForm, setCreateForm] = useState<CreateCustomerBody>({
     customer_code: '',
@@ -617,7 +616,6 @@ function AdminCustomersPageContent() {
   }, []);
 
   const onGridReady = useCallback((e: GridReadyEvent<CustomerRow>) => {
-    setGridApi(e.api);
     try {
       const raw = localStorage.getItem(CUSTOMER_GRID_STATE_KEY);
       if (raw) e.api.applyColumnState({ state: JSON.parse(raw), applyOrder: true });
@@ -643,7 +641,6 @@ function AdminCustomersPageContent() {
     () => ({
       singleClickEdit: true,
       onCellValueChanged,
-      sideBar: 'columns',
       onGridReady,
       onColumnMoved: onColumnStateEvent,
       onColumnVisible: onColumnStateEvent,
@@ -682,9 +679,6 @@ function AdminCustomersPageContent() {
         </Button>
         <Button variant="contained" onClick={() => setUploadOpen(true)}>
           Quick paste CSV (legacy)
-        </Button>
-        <Button variant="outlined" disabled={!gridApi} onClick={() => gridApi?.openToolPanel('columns')}>
-          Columns
         </Button>
         <Button
           variant="outlined"

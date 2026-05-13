@@ -31,5 +31,13 @@ if (!pyArgs.length) {
   process.exit(1);
 }
 
-const r = spawnSync(py, pyArgs, { cwd: apiRoot, stdio: 'inherit', env: process.env, shell: false });
+const sep = path.delimiter;
+const env = { ...process.env };
+const prev = env.PYTHONPATH || '';
+const parts = prev.split(sep).filter(Boolean);
+if (!parts.includes(apiRoot)) {
+  env.PYTHONPATH = prev ? `${apiRoot}${sep}${prev}` : apiRoot;
+}
+
+const r = spawnSync(py, pyArgs, { cwd: apiRoot, stdio: 'inherit', env, shell: false });
 process.exit(r.status ?? 1);
