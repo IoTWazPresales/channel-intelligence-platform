@@ -77,6 +77,8 @@ class ImportJob(Base, TimestampMixin):
     pm_commit_meta: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Set when a terminal apply/commit succeeds (PM commit, distributor_master, customer_master).
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     source: Mapped["SourceDefinition"] = relationship()
     raw_files: Mapped[list["RawFileMetadata"]] = relationship(back_populates="job")

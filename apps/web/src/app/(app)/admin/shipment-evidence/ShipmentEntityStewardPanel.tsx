@@ -34,9 +34,18 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { apiGet, apiPost } from '@/lib/api';
+
+import {
+  defaultStewardCandidateFilterState,
+  filterStewardCandidates,
+  type StewardCandidateFilterState,
+  type StewardEntityFilter,
+  type StewardPartyFilter,
+  type StewardQueueFilter,
+} from './shipmentEntityStewardFilters';
 
 export type ShipmentMappingCandidateRow = {
   id: number;
@@ -281,6 +290,7 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
   const [specialCatChoice, setSpecialCatChoice] = useState<'noise_only' | 'internal_note'>('noise_only');
   const [rejectOpen, setRejectOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [candidateFilters, setCandidateFilters] = useState<StewardCandidateFilterState>(defaultStewardCandidateFilterState);
 
   const candidatesUrl =
     importJobId != null
@@ -298,28 +308,45 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
     [rawRows]
   );
 
+  const filteredRows = useMemo(
+    () => filterStewardCandidates(rows, candidateFilters),
+    [rows, candidateFilters]
+  );
+
   const customerRows = useMemo(() => rows.filter((r) => r.entity_type === ENTITY_CUST), [rows]);
   const distributorRows = useMemo(() => rows.filter((r) => r.entity_type === ENTITY_DIST), [rows]);
 
   const selectedCustomerIdsList = useMemo(
-    () => [...selectedCandidateIds].filter((id) => customerRows.some((r) => r.id === id)),
-    [selectedCandidateIds, customerRows]
+    () =>
+      [...selectedCandidateIds].filter((id) =>
+        filteredRows.some((r) => r.id === id && r.entity_type === ENTITY_CUST)
+      ),
+    [selectedCandidateIds, filteredRows]
   );
 
-  const visibleRowIds = useMemo(() => rows.map((r) => r.id), [rows]);
+  const visibleRowIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
+
+  useEffect(() => {
+    const visible = new Set(filteredRows.map((r) => r.id));
+    setSelectedCandidateIds((prev) => {
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      if (next.size === prev.size && [...prev].every((id) => next.has(id))) return prev;
+      return next;
+    });
+  }, [filteredRows]);
   const allVisibleSelected =
     visibleRowIds.length > 0 && visibleRowIds.every((id) => selectedCandidateIds.has(id));
   const someVisibleSelected = visibleRowIds.some((id) => selectedCandidateIds.has(id));
 
   const selectedIncludeSpecialCategory = useMemo(
     () =>
-      rows.some(
+      filteredRows.some(
         (r) =>
           r.entity_type === ENTITY_CUST &&
           selectedCandidateIds.has(r.id) &&
           customerSpecialCategoryBlocksProvisional(r.context)
       ),
-    [rows, selectedCandidateIds]
+    [filteredRows, selectedCandidateIds]
   );
 
   const { data: distHits = [] } = useQuery({
@@ -853,6 +880,172 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
             </Typography>
           </Stack>
         ) : null}
+        {importJobId != null && rows.length > 0 ? (
+          <Stack
+            spacing={1}
+            data-testid="shipment-steward-candidate-filters"
+            role="region"
+            aria-label="Filter mapping candidates"
+          >
+            <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
+              <Typography variant="subtitle2" color="text.secondary">
+                Filter candidates
+              </Typography>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="caption" color="text.secondary">
+                  Showing {filteredRows.length} of {rows.length}
+                </Typography>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => setCandidateFilters(defaultStewardCandidateFilterState())}
+                  disabled={
+                    candidateFilters.queue === 'all' &&
+                    candidateFilters.entity === 'all' &&
+                    candidateFilters.party === 'all' &&
+                    !candidateFilters.verifyNameOnly &&
+                    !candidateFilters.specialCategoryOnly &&
+                    !candidateFilters.possibleDuplicatesOnly
+                  }
+                >
+                  Clear filters
+                </Button>
+              </Stack>
+            </Stack>
+            <Stack spacing={0.75}>
+              <Typography variant="caption" color="text.secondary">
+                Plan / match
+              </Typography>
+              <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                {(
+                  [
+                    ['all', 'All'],
+                    ['needs_review', 'Needs review'],
+                    ['ready_to_map', 'Ready to map'],
+                    ['provisional', 'Provisional'],
+                    ['no_match', 'No match'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Chip
+                    key={value}
+                    size="small"
+                    label={label}
+                    variant={candidateFilters.queue === value ? 'filled' : 'outlined'}
+                    color={candidateFilters.queue === value ? 'primary' : 'default'}
+                    onClick={() =>
+                      setCandidateFilters((prev) => ({ ...prev, queue: value as StewardQueueFilter }))
+                    }
+                    sx={{ cursor: 'pointer' }}
+                  />
+                ))}
+              </Stack>
+            </Stack>
+            <Stack spacing={0.75}>
+              <Typography variant="caption" color="text.secondary">
+                Entity
+              </Typography>
+              <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                {(
+                  [
+                    ['all', 'All'],
+                    ['customer', 'Channel partner'],
+                    ['distributor', 'Distributor'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Chip
+                    key={value}
+                    size="small"
+                    label={label}
+                    variant={candidateFilters.entity === value ? 'filled' : 'outlined'}
+                    color={candidateFilters.entity === value ? 'primary' : 'default'}
+                    onClick={() =>
+                      setCandidateFilters((prev) => ({
+                        ...prev,
+                        entity: value as StewardEntityFilter,
+                        party: value === 'customer' ? 'all' : prev.party,
+                      }))
+                    }
+                    sx={{ cursor: 'pointer' }}
+                  />
+                ))}
+              </Stack>
+            </Stack>
+            <Stack spacing={0.75}>
+              <Typography variant="caption" color="text.secondary">
+                Party (distributor tokens only)
+              </Typography>
+              <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                {(
+                  [
+                    ['all', 'All'],
+                    ['bill_to', 'Bill To'],
+                    ['ship_to', 'Ship To'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Chip
+                    key={value}
+                    size="small"
+                    label={label}
+                    variant={candidateFilters.party === value ? 'filled' : 'outlined'}
+                    color={candidateFilters.party === value ? 'primary' : 'default'}
+                    onClick={() =>
+                      setCandidateFilters((prev) => ({
+                        ...prev,
+                        party: value as StewardPartyFilter,
+                        entity:
+                          value !== 'all' && prev.entity === 'customer' ? 'all' : prev.entity,
+                      }))
+                    }
+                    sx={{ cursor: 'pointer' }}
+                  />
+                ))}
+              </Stack>
+            </Stack>
+            <Stack spacing={0.75}>
+              <Typography variant="caption" color="text.secondary">
+                Refine (combine)
+              </Typography>
+              <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                <Chip
+                  size="small"
+                  label="Verify name"
+                  variant={candidateFilters.verifyNameOnly ? 'filled' : 'outlined'}
+                  color={candidateFilters.verifyNameOnly ? 'warning' : 'default'}
+                  onClick={() =>
+                    setCandidateFilters((prev) => ({ ...prev, verifyNameOnly: !prev.verifyNameOnly }))
+                  }
+                  sx={{ cursor: 'pointer' }}
+                />
+                <Chip
+                  size="small"
+                  label="Special category"
+                  variant={candidateFilters.specialCategoryOnly ? 'filled' : 'outlined'}
+                  color={candidateFilters.specialCategoryOnly ? 'secondary' : 'default'}
+                  onClick={() =>
+                    setCandidateFilters((prev) => ({
+                      ...prev,
+                      specialCategoryOnly: !prev.specialCategoryOnly,
+                    }))
+                  }
+                  sx={{ cursor: 'pointer' }}
+                />
+                <Chip
+                  size="small"
+                  label="Possible duplicates"
+                  variant={candidateFilters.possibleDuplicatesOnly ? 'filled' : 'outlined'}
+                  color={candidateFilters.possibleDuplicatesOnly ? 'info' : 'default'}
+                  onClick={() =>
+                    setCandidateFilters((prev) => ({
+                      ...prev,
+                      possibleDuplicatesOnly: !prev.possibleDuplicatesOnly,
+                    }))
+                  }
+                  sx={{ cursor: 'pointer' }}
+                />
+              </Stack>
+            </Stack>
+          </Stack>
+        ) : null}
         {importJobId != null && isLoading ? (
           <Typography variant="body2">Loading…</Typography>
         ) : importJobId != null && rows.length === 0 ? (
@@ -874,7 +1067,7 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
                   <Checkbox
                     size="small"
                     indeterminate={someVisibleSelected && !allVisibleSelected}
-                    checked={allVisibleSelected && rows.length > 0}
+                    checked={allVisibleSelected && filteredRows.length > 0}
                     onChange={toggleSelectAllVisible}
                     inputProps={{ 'aria-label': 'Select all visible candidates' }}
                   />
@@ -891,7 +1084,16 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
               </TableRow>
             </TableHead>
             <TableBody>
-              {rows.map((r) => (
+              {filteredRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={10}>
+                    <Typography variant="body2" color="text.secondary">
+                      No rows match the current filters. Clear filters or pick a different combination.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredRows.map((r) => (
                 <TableRow
                   key={r.id}
                   sx={
@@ -1039,7 +1241,8 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
                     </Stack>
                   </TableCell>
                 </TableRow>
-              ))}
+                ))
+              )}
             </TableBody>
           </Table>
           </Box>

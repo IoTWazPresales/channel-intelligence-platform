@@ -230,11 +230,15 @@ async def list_customers(
         .scalar_subquery()
     )
     allowed_sort = {
+        "id": DimCustomer.id,
         "code": DimCustomer.code,
         "name": DimCustomer.name,
         "customer_status": DimCustomer.customer_status,
         "partner_tier": DimCustomer.partner_tier,
         "account_owner_internal": DimCustomer.account_owner_internal,
+        "region_id": DimCustomer.region_id,
+        "channel_id": DimCustomer.channel_id,
+        "preferred_distributor_id": DimCustomer.preferred_distributor_id,
         "created_at": DimCustomer.created_at,
         "updated_at": DimCustomer.updated_at,
         "region_code": DimRegion.code,
@@ -242,6 +246,8 @@ async def list_customers(
         "preferred_distributor_code": pref_dist.code,
         "alias_count": alias_count_sq,
         "last_import_at": last_import_from_alias_sq,
+        "location_count": location_count_sq,
+        "contact_count": contact_count_sq,
     }
     sort_col = allowed_sort.get(sort_by, DimCustomer.code)
     sort_fn = asc if sort_dir == "asc" else desc
@@ -349,6 +355,7 @@ async def list_customers(
                 "customer_name": c.name,
                 "customer_status": c.customer_status,
                 "created_at": c.created_at.isoformat() if c.created_at is not None else None,
+                "updated_at": c.updated_at.isoformat() if c.updated_at is not None else None,
                 "partner_tier": c.partner_tier,
                 "account_owner_internal": c.account_owner_internal,
                 "notes_summary": c.notes_summary,

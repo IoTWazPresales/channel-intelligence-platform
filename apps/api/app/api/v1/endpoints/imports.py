@@ -162,8 +162,14 @@ async def list_sources(
 
 
 @router.get("/jobs")
-async def list_jobs(db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(ImportJob).order_by(ImportJob.id.desc()))
+async def list_jobs(
+    db: AsyncSession = Depends(get_db),
+    include_archived: bool = Query(default=False, description="When true, include jobs with archived_at set."),
+):
+    stmt = select(ImportJob).order_by(ImportJob.id.desc())
+    if not include_archived:
+        stmt = stmt.where(ImportJob.archived_at.is_(None))
+    res = await db.execute(stmt)
     rows = res.scalars().all()
     return [
         {
@@ -177,6 +183,7 @@ async def list_jobs(db: AsyncSession = Depends(get_db)):
             "error_summary": j.error_summary,
             "inferred_schema": j.inferred_schema,
             "field_mapping": j.field_mapping,
+            "archived_at": j.archived_at,
         }
         for j in rows
     ]
@@ -419,6 +426,7 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
         "file_headers": job.file_headers,
         "template_slug": job.template_slug,
         "import_mode": job.import_mode,
+        "archived_at": job.archived_at,
     }
 
 

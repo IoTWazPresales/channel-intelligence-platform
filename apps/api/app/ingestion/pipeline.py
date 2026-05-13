@@ -561,6 +561,7 @@ def _process_customer_master(db: Session, job: ImportJob, df: pd.DataFrame, mapp
             )
         )
         job.stage = STAGE_LOADED
+        job.archived_at = datetime.now(timezone.utc)
     else:
         db.add(
             ImportRowResult(
@@ -678,6 +679,7 @@ def _process_distributor_master(db: Session, job: ImportJob, df: pd.DataFrame, m
             )
         )
         job.stage = STAGE_LOADED
+        job.archived_at = datetime.now(timezone.utc)
     else:
         db.add(
             ImportRowResult(

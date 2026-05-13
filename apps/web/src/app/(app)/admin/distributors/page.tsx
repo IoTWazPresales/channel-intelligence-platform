@@ -24,7 +24,16 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CellValueChangedEvent, ColDef, GridOptions } from 'ag-grid-community';
+import type {
+  CellValueChangedEvent,
+  ColDef,
+  ColumnMovedEvent,
+  ColumnPinnedEvent,
+  ColumnResizedEvent,
+  ColumnVisibleEvent,
+  GridOptions,
+  GridReadyEvent,
+} from 'ag-grid-community';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, type ReactNode, useCallback, useMemo, useState } from 'react';
 
@@ -41,6 +50,8 @@ type DistributorRow = {
   id: number;
   distributor_code: string;
   distributor_name: string;
+  created_at?: string | null;
+  updated_at?: string | null;
   linked_sellout_rows: number;
   linked_inbound_rows: number;
   total_sellout_rows: number;
@@ -115,6 +126,58 @@ type InboundRow = {
 const DISTRIBUTOR_LOCATION_TYPE_OPTIONS = ['hq', 'branch', 'warehouse', 'office', 'store', 'other'];
 const DISTRIBUTOR_CONTACT_ROLE_OPTIONS = ['general', 'executive', 'sales', 'operations', 'finance', 'support', 'other'];
 
+function distGridShortDateTime(p: { value: unknown }): string {
+  const v = p.value as string | null | undefined;
+  if (!v) return '—';
+  try {
+    return new Date(v).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  } catch {
+    return String(v);
+  }
+}
+
+const DISTRIBUTOR_MASTER_GRID_STATE_KEY = 'cip.admin.distributors.master.gridState.v1';
+
+const ALL_DISTRIBUTOR_MASTER_COLUMN_FIELDS = [
+  'id',
+  'distributor_code',
+  'distributor_name',
+  'created_at',
+  'updated_at',
+  'location_count',
+  'contact_count',
+  'alias_count',
+  'last_import_at',
+  'alias_link_status',
+  'linkage_status',
+  'linked_sellout_rows',
+  'linked_inbound_rows',
+  'latest_sellout_period_start',
+  'latest_inbound_eta_date',
+] as const;
+type DistributorMasterColumnField = (typeof ALL_DISTRIBUTOR_MASTER_COLUMN_FIELDS)[number];
+
+const DEFAULT_INITIALLY_HIDDEN_DISTRIBUTOR_FIELDS: readonly DistributorMasterColumnField[] = [
+  'id',
+  'created_at',
+  'updated_at',
+  'location_count',
+  'contact_count',
+  'alias_count',
+  'last_import_at',
+  'alias_link_status',
+  'latest_sellout_period_start',
+  'latest_inbound_eta_date',
+];
+
+const STATIC_DISTRIBUTOR_MASTER_COLUMN_GROUPS: { label: string; fields: DistributorMasterColumnField[] }[] = [
+  { label: 'dim_distributor', fields: ['id', 'distributor_code', 'distributor_name', 'created_at', 'updated_at'] },
+  { label: 'Related counts', fields: ['location_count', 'contact_count'] },
+  { label: 'Import & alias linkage', fields: ['alias_count', 'last_import_at', 'alias_link_status'] },
+  { label: 'Fact linkage', fields: ['linkage_status', 'linked_sellout_rows', 'linked_inbound_rows'] },
+  { label: 'Recency (facts)', fields: ['latest_sellout_period_start', 'latest_inbound_eta_date'] },
+];
+
 function TabPanel({ value, index, children }: { value: number; index: number; children: ReactNode }) {
   if (value !== index) return null;
   return <Box sx={{ pt: 2 }}>{children}</Box>;
@@ -150,6 +213,10 @@ function AdminDistributorsPageContent() {
   });
   const [editingLocationId, setEditingLocationId] = useState<number | null>(null);
   const [editingContactId, setEditingContactId] = useState<number | null>(null);
+  const [distGridApi, setDistGridApi] = useState<any | null>(null);
+  const [distColumnsOpen, setDistColumnsOpen] = useState(false);
+  const [distColumnSearch, setDistColumnSearch] = useState('');
+  const [distColumnVisibility, setDistColumnVisibility] = useState<Record<string, boolean>>({});
 
   const page = Number(searchParams.get('page') || '1') || 1;
   const pageSize = Number(searchParams.get('page_size') || '25') || 25;
@@ -446,7 +513,43 @@ function AdminDistributorsPageContent() {
   const distCols: ColDef<DistributorRow>[] = useMemo(
     () => [
       { field: 'distributor_code', headerName: 'Code', pinned: 'left', minWidth: 140, editable: false },
+      {
+        field: 'id',
+        headerName: 'ID',
+        minWidth: 80,
+        maxWidth: 100,
+        type: 'numericColumn',
+        editable: false,
+      },
       { field: 'distributor_name', headerName: 'Canonical name', flex: 1, minWidth: 220, editable: true },
+      {
+        field: 'created_at',
+        headerName: 'Created',
+        minWidth: 160,
+        editable: false,
+        valueFormatter: distGridShortDateTime,
+      },
+      {
+        field: 'updated_at',
+        headerName: 'Updated',
+        minWidth: 160,
+        editable: false,
+        valueFormatter: distGridShortDateTime,
+      },
+      {
+        field: 'location_count',
+        headerName: 'Locations #',
+        minWidth: 110,
+        type: 'numericColumn',
+        editable: false,
+      },
+      {
+        field: 'contact_count',
+        headerName: 'Contacts #',
+        minWidth: 110,
+        type: 'numericColumn',
+        editable: false,
+      },
       {
         field: 'alias_count',
         headerName: 'Alias #',
@@ -459,15 +562,7 @@ function AdminDistributorsPageContent() {
         headerName: 'Last import (alias)',
         minWidth: 160,
         editable: false,
-        valueFormatter: (p) => {
-          const v = p.value as string | null | undefined;
-          if (!v) return '—';
-          try {
-            return new Date(v).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
-          } catch {
-            return v;
-          }
-        },
+        valueFormatter: distGridShortDateTime,
       },
       {
         field: 'alias_link_status',
@@ -498,6 +593,7 @@ function AdminDistributorsPageContent() {
       { field: 'latest_inbound_eta_date', headerName: 'Latest inbound', minWidth: 130, editable: false },
       {
         headerName: 'Details',
+        colId: '__detail',
         minWidth: 110,
         editable: false,
         cellRenderer: ({ data }: { data: DistributorRow }) =>
@@ -510,6 +606,97 @@ function AdminDistributorsPageContent() {
       gridDeleteColumn<DistributorRow>((id) => void delDist.mutate(id), { busy: delDist.isPending }),
     ],
     [delDist, delDist.isPending]
+  );
+
+  const distColumnLabelByField = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const col of distCols) {
+      if (!col.field) continue;
+      out[col.field] = (col.headerName as string) ?? col.field;
+    }
+    return out;
+  }, [distCols]);
+
+  const persistDistMasterGridState = useCallback((api: any) => {
+    try {
+      const state = api.getColumnState();
+      localStorage.setItem(DISTRIBUTOR_MASTER_GRID_STATE_KEY, JSON.stringify(state));
+    } catch {
+      // no-op
+    }
+  }, []);
+
+  const syncDistMasterColumnVisibility = useCallback((api: any) => {
+    if (!api?.getColumns) return;
+    try {
+      const visibility: Record<string, boolean> = {};
+      for (const col of api.getColumns() ?? []) {
+        const def = col?.getColDef?.();
+        const field = def?.field as string | undefined;
+        if (!field) continue;
+        if (ALL_DISTRIBUTOR_MASTER_COLUMN_FIELDS.includes(field as DistributorMasterColumnField)) {
+          visibility[field] = Boolean(col.isVisible?.());
+        }
+      }
+      if (Object.keys(visibility).length) setDistColumnVisibility(visibility);
+    } catch {
+      // no-op
+    }
+  }, []);
+
+  const onDistMasterGridReady = useCallback(
+    (e: GridReadyEvent<DistributorRow>) => {
+      setDistGridApi(e.api);
+      try {
+        const raw = localStorage.getItem(DISTRIBUTOR_MASTER_GRID_STATE_KEY);
+        if (raw) {
+          e.api.applyColumnState({ state: JSON.parse(raw), applyOrder: true });
+        } else {
+          e.api.applyColumnState({
+            state: DEFAULT_INITIALLY_HIDDEN_DISTRIBUTOR_FIELDS.map((colId) => ({ colId, hide: true })),
+            applyOrder: true,
+          });
+        }
+      } catch {
+        // no-op
+      }
+      syncDistMasterColumnVisibility(e.api);
+    },
+    [syncDistMasterColumnVisibility]
+  );
+
+  const onDistMasterColumnStateEvent = useCallback(
+    (
+      e:
+        | ColumnMovedEvent<DistributorRow>
+        | ColumnVisibleEvent<DistributorRow>
+        | ColumnPinnedEvent<DistributorRow>
+        | ColumnResizedEvent<DistributorRow>
+    ) => {
+      persistDistMasterGridState(e.api);
+      syncDistMasterColumnVisibility(e.api);
+    },
+    [persistDistMasterGridState, syncDistMasterColumnVisibility]
+  );
+
+  const groupedDistMasterColumnPickerBlocks = useMemo((): { label: string; options: { id: string; label: string }[] }[] => {
+    const query = distColumnSearch.trim().toLowerCase();
+    return STATIC_DISTRIBUTOR_MASTER_COLUMN_GROUPS.map((group) => ({
+      label: group.label,
+      options: group.fields
+        .map((field) => ({ id: field, label: distColumnLabelByField[field] ?? field }))
+        .filter((opt) => !query || opt.label.toLowerCase().includes(query) || opt.id.toLowerCase().includes(query)),
+    })).filter((group) => group.options.length > 0);
+  }, [distColumnLabelByField, distColumnSearch]);
+
+  const toggleDistMasterColumnVisibility = useCallback(
+    (columnId: string, visible: boolean) => {
+      if (!distGridApi?.setColumnsVisible) return;
+      distGridApi.setColumnsVisible([columnId], visible);
+      persistDistMasterGridState(distGridApi);
+      setDistColumnVisibility((prev) => ({ ...prev, [columnId]: visible }));
+    },
+    [distGridApi, persistDistMasterGridState]
   );
 
   const sellCols: ColDef<SelloutRow>[] = useMemo(
@@ -557,8 +744,16 @@ function AdminDistributorsPageContent() {
   );
 
   const distGrid: GridOptions<DistributorRow> = useMemo(
-    () => ({ singleClickEdit: true, onCellValueChanged: onDistCell }),
-    [onDistCell]
+    () => ({
+      singleClickEdit: true,
+      onCellValueChanged: onDistCell,
+      onGridReady: onDistMasterGridReady,
+      onColumnMoved: onDistMasterColumnStateEvent,
+      onColumnVisible: onDistMasterColumnStateEvent,
+      onColumnPinned: onDistMasterColumnStateEvent,
+      onColumnResized: onDistMasterColumnStateEvent,
+    }),
+    [onDistCell, onDistMasterGridReady, onDistMasterColumnStateEvent]
   );
   const sellGrid: GridOptions<SelloutRow> = useMemo(
     () => ({ singleClickEdit: true, onCellValueChanged: onSellCell }),
@@ -692,6 +887,11 @@ function AdminDistributorsPageContent() {
                   >
                     <MenuItem value="distributor_code">Code</MenuItem>
                     <MenuItem value="distributor_name">Name</MenuItem>
+                    <MenuItem value="id">ID</MenuItem>
+                    <MenuItem value="created_at">Created</MenuItem>
+                    <MenuItem value="updated_at">Updated</MenuItem>
+                    <MenuItem value="location_count">Locations #</MenuItem>
+                    <MenuItem value="contact_count">Contacts #</MenuItem>
                     <MenuItem value="latest_sellout_period_start">Latest sell-out</MenuItem>
                     <MenuItem value="latest_inbound_eta_date">Latest inbound</MenuItem>
                     <MenuItem value="linked_sellout_rows">Sell-out linked</MenuItem>
@@ -725,6 +925,30 @@ function AdminDistributorsPageContent() {
                     <MenuItem value="100">100</MenuItem>
                   </Select>
                 </FormControl>
+                <Button
+                  variant="outlined"
+                  disabled={!distGridApi}
+                  onClick={() => {
+                    setDistColumnSearch('');
+                    setDistColumnsOpen(true);
+                    if (distGridApi) syncDistMasterColumnVisibility(distGridApi);
+                  }}
+                >
+                  Columns
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    try {
+                      localStorage.removeItem(DISTRIBUTOR_MASTER_GRID_STATE_KEY);
+                      window.location.reload();
+                    } catch {
+                      // no-op
+                    }
+                  }}
+                >
+                  Reset column layout
+                </Button>
                 <ModuleGridToolbar
                   onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-distributors'] })}
                   importsHref={
@@ -762,6 +986,54 @@ function AdminDistributorsPageContent() {
           </ModuleDataSection>
         </Paper>
       </TabPanel>
+
+      <Dialog open={distColumnsOpen} onClose={() => setDistColumnsOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>Manage distributor columns</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <TextField
+              size="small"
+              label="Search columns"
+              placeholder="Find by label or field key"
+              value={distColumnSearch}
+              onChange={(e) => setDistColumnSearch(e.target.value)}
+            />
+            {!distGridApi ? (
+              <Alert severity="info">Grid is still initializing. Column toggles become available in a moment.</Alert>
+            ) : null}
+            {groupedDistMasterColumnPickerBlocks.map((group) => (
+              <Paper key={group.label} variant="outlined" sx={{ p: 1.25 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                  {group.label}
+                </Typography>
+                <Stack>
+                  {group.options.map((opt) => (
+                    <FormControlLabel
+                      key={opt.id}
+                      control={
+                        <Checkbox
+                          checked={distColumnVisibility[opt.id] ?? false}
+                          onChange={(e) => toggleDistMasterColumnVisibility(opt.id, e.target.checked)}
+                          disabled={!distGridApi}
+                        />
+                      }
+                      label={opt.label}
+                    />
+                  ))}
+                </Stack>
+              </Paper>
+            ))}
+            {!groupedDistMasterColumnPickerBlocks.length ? (
+              <Typography variant="body2" color="text.secondary">
+                No columns match the current search.
+              </Typography>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDistColumnsOpen(false)}>Done</Button>
+        </DialogActions>
+      </Dialog>
 
       <TabPanel value={tab} index={1}>
         <Paper sx={{ p: 2 }}>

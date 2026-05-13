@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -67,11 +67,25 @@ describe('ShipmentEntityStewardPanel', () => {
     expect(await screen.findByText('ACME Pty')).toBeTruthy();
     expect(screen.getByTestId('shipment-entity-steward-panel')).toBeTruthy();
     expect(screen.getByText('Q2 Takealot')).toBeTruthy();
-    expect(screen.getByText('Distributor')).toBeTruthy();
-    expect(screen.getByText('Channel partner')).toBeTruthy();
+    expect(screen.getAllByText('Distributor').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Channel partner').length).toBeGreaterThanOrEqual(2);
     const specialButtons = screen.getAllByRole('button', { name: /special category/i });
     expect(specialButtons.length).toBeGreaterThanOrEqual(2);
     const rejectButtons = screen.getAllByRole('button', { name: /^reject candidate$/i });
     expect(rejectButtons.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('filters candidate rows via chip strip without crashing', async () => {
+    wrap(<ShipmentEntityStewardPanel importJobId={9} />);
+    await screen.findByText('ACME Pty');
+    const filters = screen.getByTestId('shipment-steward-candidate-filters');
+    expect(within(filters).getByText('Showing 2 of 2')).toBeInTheDocument();
+    fireEvent.click(within(filters).getByText('Distributor'));
+    expect(screen.getByText('ACME Pty')).toBeInTheDocument();
+    expect(screen.queryByText('Q2 Takealot')).not.toBeInTheDocument();
+    expect(within(filters).getByText('Showing 1 of 2')).toBeInTheDocument();
+    fireEvent.click(within(filters).getByText('Clear filters'));
+    expect(await screen.findByText('Q2 Takealot')).toBeInTheDocument();
+    expect(within(filters).getByText('Showing 2 of 2')).toBeInTheDocument();
   });
 });

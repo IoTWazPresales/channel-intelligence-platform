@@ -25,6 +25,7 @@ import {
   Paper,
   Select,
   Stack,
+  Switch,
   Step,
   StepLabel,
   Stepper,
@@ -112,6 +113,7 @@ type Job = {
   error_summary: string | null;
   template_slug?: string | null;
   import_mode?: string | null;
+  archived_at?: string | null;
 };
 
 type RowResult = {
@@ -403,6 +405,7 @@ function AdminImportsPageContent() {
   const [jobsBulkSelectionMode, setJobsBulkSelectionMode] = useState<'normal' | 'selecting'>('normal');
   const [jobsSelectedCount, setJobsSelectedCount] = useState(0);
   const [jobsVisibleRowCount, setJobsVisibleRowCount] = useState(0);
+  const [showArchivedImportJobs, setShowArchivedImportJobs] = useState(false);
   const jobsGridApiRef = useRef<GridApi<Job> | null>(null);
   const [importJobBulkDeleteOpen, setImportJobBulkDeleteOpen] = useState(false);
   const [importJobBulkDeletePreview, setImportJobBulkDeletePreview] = useState<ImportJobBulkDeletePreview | null>(null);
@@ -482,8 +485,14 @@ function AdminImportsPageContent() {
     error: jobsErr,
     refetch: refetchJobs,
   } = useQuery({
-    queryKey: ['import-jobs'],
-    queryFn: ({ signal }) => apiGet<Job[]>('/api/v1/imports/jobs', { signal }),
+    queryKey: ['import-jobs', showArchivedImportJobs],
+    queryFn: ({ signal }) =>
+      apiGet<Job[]>(
+        showArchivedImportJobs
+          ? '/api/v1/imports/jobs?include_archived=true'
+          : '/api/v1/imports/jobs',
+        { signal },
+      ),
   });
 
   const { data: previewRows, refetch: refetchPreview } = useQuery({
@@ -1227,9 +1236,16 @@ function AdminImportsPageContent() {
       { field: 'file_name', headerName: 'File', flex: 1, minWidth: 160 },
       { field: 'status', headerName: 'Status' },
       { field: 'stage', headerName: 'Stage' },
+      {
+        field: 'archived_at',
+        headerName: 'Archived',
+        width: 170,
+        hide: !showArchivedImportJobs,
+        valueFormatter: (p) => (p.value != null ? String(p.value) : '—'),
+      },
       { field: 'error_summary', headerName: 'Notes', flex: 1, minWidth: 200 },
     ],
-    []
+    [showArchivedImportJobs],
   );
 
   const jobsList = jobs ?? [];
@@ -3428,6 +3444,16 @@ function AdminImportsPageContent() {
           }}
           toolbar={
             <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" useFlexGap sx={{ mb: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={showArchivedImportJobs}
+                    onChange={(_, v) => setShowArchivedImportJobs(v)}
+                    size="small"
+                  />
+                }
+                label="Show archived"
+              />
               <ModuleGridToolbar
                 sx={{ mb: 0 }}
                 onRefresh={() => void qc.invalidateQueries({ queryKey: ['import-jobs'] })}

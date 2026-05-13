@@ -173,6 +173,8 @@ async def list_distributors(
             DimDistributor.id.label("id"),
             DimDistributor.code.label("distributor_code"),
             DimDistributor.name.label("distributor_name"),
+            DimDistributor.created_at.label("dim_created_at"),
+            DimDistributor.updated_at.label("dim_updated_at"),
             linked_sellout_col.label("linked_sellout_rows"),
             linked_inbound_col.label("linked_inbound_rows"),
             total_sellout_col.label("total_sellout_rows"),
@@ -221,8 +223,13 @@ async def list_distributors(
     total = (await db.execute(count_stmt)).scalar_one()
 
     sort_exprs = {
+        "id": DimDistributor.id,
         "distributor_code": DimDistributor.code,
         "distributor_name": DimDistributor.name,
+        "created_at": DimDistributor.created_at,
+        "updated_at": DimDistributor.updated_at,
+        "location_count": func.coalesce(location_count_subq.c.location_count, 0),
+        "contact_count": func.coalesce(contact_count_subq.c.contact_count, 0),
         "latest_sellout_period_start": sellout_agg.c.latest_sellout_period_start,
         "latest_inbound_eta_date": inbound_agg.c.latest_inbound_eta_date,
         "linked_sellout_rows": linked_sellout_col,
@@ -243,11 +250,20 @@ async def list_distributors(
         latest_inbound = r.latest_inbound_eta_date.isoformat() if r.latest_inbound_eta_date else None
         n_aliases = int(r.alias_count or 0)
         last_imp = r.last_import_at.isoformat() if r.last_import_at is not None else None
+        m = getattr(r, "_mapping", None)
+        if m is not None:
+            dim_created = m.get("dim_created_at")
+            dim_updated = m.get("dim_updated_at")
+        else:
+            dim_created = getattr(r, "dim_created_at", None)
+            dim_updated = getattr(r, "dim_updated_at", None)
         items.append(
             {
                 "id": r.id,
                 "distributor_code": r.distributor_code,
                 "distributor_name": r.distributor_name,
+                "created_at": dim_created.isoformat() if dim_created is not None else None,
+                "updated_at": dim_updated.isoformat() if dim_updated is not None else None,
                 "linked_sellout_rows": int(r.linked_sellout_rows or 0),
                 "linked_inbound_rows": int(r.linked_inbound_rows or 0),
                 "total_sellout_rows": int(r.total_sellout_rows or 0),

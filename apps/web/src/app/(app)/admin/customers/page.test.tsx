@@ -9,6 +9,7 @@ import AdminCustomersPage from './page';
 const replaceSpy = vi.fn();
 const pushSpy = vi.fn();
 let searchString = 'page=1&page_size=50&sort_by=customer_code&sort_dir=asc';
+const setColumnsVisibleSpy = vi.fn();
 const mockState = vi.hoisted(() => ({
   apiPostMock: vi.fn(async () => ({})),
   apiPatchMock: vi.fn(async () => ({})),
@@ -102,6 +103,8 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
         api: {
           getColumnState: () => [],
           applyColumnState: () => undefined,
+          getColumns: () => [],
+          setColumnsVisible: setColumnsVisibleSpy,
         },
       });
     }, [gridOptions]);
@@ -162,6 +165,7 @@ describe('AdminCustomersPage phase1 behaviors', () => {
   beforeEach(() => {
     replaceSpy.mockReset();
     pushSpy.mockReset();
+    setColumnsVisibleSpy.mockReset();
     mockState.apiPostMock.mockClear();
     mockState.apiPatchMock.mockClear();
     mockState.apiDeleteMock.mockClear();
@@ -237,6 +241,14 @@ describe('AdminCustomersPage phase1 behaviors', () => {
     fireEvent.click(openBtn);
     expect(await screen.findByText('Customer details')).toBeInTheDocument();
     expect(await screen.findByText(/Customer code:/)).toBeInTheDocument();
+  });
+
+  it('opens column picker dialog from toolbar', async () => {
+    renderPage();
+    const columnsBtn = await screen.findByRole('button', { name: 'Columns' });
+    await waitFor(() => expect(columnsBtn).toBeEnabled());
+    fireEvent.click(columnsBtn);
+    expect(await screen.findByRole('dialog', { name: 'Manage customer columns' })).toBeInTheDocument();
   });
 
   it('opens add customer flow and enforces required fields', async () => {
