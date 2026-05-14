@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     database_url: str = "postgresql+asyncpg://cip:cip@localhost:5432/cip"
     database_url_sync: str = "postgresql://cip:cip@localhost:5432/cip"
+    database_url_sync_migrate: str | None = None
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
