@@ -1,6 +1,7 @@
 """Product Master dataframe hygiene: descriptor rows and null-like strings."""
 
 import pandas as pd
+import pytest
 
 from app.services.imports.pm_dataframe_sanitize import (
     normalize_scalar_for_pm,
@@ -52,6 +53,17 @@ def test_normalize_scalar_for_pm_string_nan() -> None:
     assert normalize_scalar_for_pm("nan") is None
     assert normalize_scalar_for_pm("NaT") is None
     assert normalize_scalar_for_pm(float("nan")) is None
+
+
+def test_normalize_scalar_for_pm_unwraps_flag_value_pairs() -> None:
+    assert normalize_scalar_for_pm((True, "  trimmed  ")) == "trimmed"
+    assert normalize_scalar_for_pm((False, "still_value")) == "still_value"
+
+
+def test_normalize_scalar_for_pm_unwraps_numpy_bool_flag() -> None:
+    np = pytest.importorskip("numpy")
+    assert normalize_scalar_for_pm((np.bool_(True), "sku-1")) == "sku-1"
+    assert normalize_scalar_for_pm((np.bool_(False), "sku-2")) == "sku-2"
 
 
 def test_scalar_to_clean_str_does_not_emit_nan_literal() -> None:

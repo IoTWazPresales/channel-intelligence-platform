@@ -10,6 +10,49 @@ import pandas as pd
 _SLUG = re.compile(r"[^a-z0-9]+")
 
 
+def _pm_tabular_pair_flag_first(x: Any) -> bool:
+    """True if ``x`` is the boolean tag in ``(tag, value)`` cells from Excel/pandas.
+
+    Uses ``type(x) is bool`` so plain ``int`` 0/1 is not treated as a tag. NumPy 2
+    exposes ``numpy.bool`` (``__name__ == \"bool\"``, ``__module__ == \"numpy\"``);
+    older releases used ``numpy.bool_`` / ``bool8``.
+    """
+    if type(x) is bool:
+        return True
+    if getattr(x, "__class__", type(x)).__module__ == "numpy" and type(x).__name__ == "bool":
+        return True
+    tn = type(x).__name__
+    return tn in ("bool_", "bool8")
+
+
+def coerce_pm_tabular_scalar(val: Any) -> Any:
+    """Normalize tabular cell shapes before PM string/date coercion.
+
+    - Recursively unwraps ``(flag, value)`` pairs when ``flag`` is a Python ``bool``
+      or NumPy boolean (see :func:`_pm_tabular_pair_flag_first`).
+    - Converts bare NumPy scalars to Python primitives (``.item()``) so downstream
+      code and DB drivers see ordinary scalars.
+
+    This is the canonical place to strip those shapes so they never reach
+    ``_row_payload_for_dim`` → ``sync_bulk_upsert_products_from_rows`` VALUES rows.
+    Recognizes NumPy 2 ``numpy.bool`` (type name ``bool``, module ``numpy``) as well as
+    legacy ``bool_`` / ``bool8``.
+    """
+    cur: Any = val
+    for _ in range(24):
+        if isinstance(cur, (tuple, list)) and len(cur) == 2 and _pm_tabular_pair_flag_first(cur[0]):
+            cur = cur[1]
+            continue
+        break
+    mod = getattr(cur, "__class__", type("_PmCoerceSentinel", (), {})).__module__
+    if mod == "numpy" and hasattr(cur, "item"):
+        try:
+            cur = cur.item()
+        except (ValueError, TypeError, AttributeError):
+            pass
+    return cur
+
+
 def slug_for_compare(s: str) -> str:
     return _SLUG.sub("_", (s or "").strip().lower()).strip("_")
 
@@ -48,6 +91,7 @@ _LABEL_NEEDLES: tuple[str, ...] = (
 
 def normalize_scalar_for_pm(val: Any) -> Any:
     """Coerce pandas/Excel nulls and stringified nulls to None; leave other scalars as-is."""
+    val = coerce_pm_tabular_scalar(val)
     if val is None:
         return None
     if isinstance(val, float) and pd.isna(val):

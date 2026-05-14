@@ -7,13 +7,14 @@ from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import Boolean, Date, Integer, String, case, func, literal_column, select, true
+from sqlalchemy import Boolean, case, cast, func, literal_column, select, true
 from sqlalchemy import values as sql_values
 from sqlalchemy import column as sql_column
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.dimensions import DimChannel, DimProduct
+from app.services.imports.pm_dataframe_sanitize import coerce_pm_tabular_scalar
 
 _STR_DIM_KEYS = (
     "part_number",
@@ -87,7 +88,7 @@ def _dedupe_rows_by_sku_last_wins(rows: list[dict[str, Any]]) -> list[dict[str, 
     """Keep one row per stripped SKU; last occurrence in `rows` wins."""
     out: OrderedDict[str, dict[str, Any]] = OrderedDict()
     for r in rows:
-        sku = _strip_optional(r.get("sku"))
+        sku = _strip_optional(coerce_pm_tabular_scalar(r.get("sku")))
         if not sku:
             continue
         out[sku] = r
@@ -103,10 +104,10 @@ def _staging_tuple(
     def take_str(key: str) -> tuple[str | None, bool]:
         if key not in r:
             return None, False
-        return _strip_optional(r.get(key)), True
+        return _strip_optional(coerce_pm_tabular_scalar(r.get(key))), True
 
-    sku = _strip_optional(r.get("sku"))
-    name = _strip_optional(r.get("name"))
+    sku = _strip_optional(coerce_pm_tabular_scalar(r.get("sku")))
+    name = _strip_optional(coerce_pm_tabular_scalar(r.get("name")))
     if not sku or not name:
         return None
     if len(sku) > 128:
@@ -132,26 +133,26 @@ def _staging_tuple(
     has_ch = False
     if "channel_code" in r:
         has_ch = True
-        ch_raw = _strip_optional(r.get("channel_code"))
+        ch_raw = _strip_optional(coerce_pm_tabular_scalar(r.get("channel_code")))
         if ch_raw:
             channel_id = channels.get(ch_raw.lower())
             if channel_id is None:
                 raise ValueError(f"Unknown channel_code {ch_raw!r} for SKU {sku!r}")
 
     has_ld = "launch_date" in r
-    launch_d = _parse_date_val(r.get("launch_date")) if has_ld else None
+    launch_d = _parse_date_val(coerce_pm_tabular_scalar(r.get("launch_date"))) if has_ld else None
     has_eol = "end_of_life_date" in r
-    eol_d = _parse_date_val(r.get("end_of_life_date")) if has_eol else None
+    eol_d = _parse_date_val(coerce_pm_tabular_scalar(r.get("end_of_life_date"))) if has_eol else None
 
-    str_dim_flags: list[tuple[bool, str | None]] = []
+    str_dim_parts: list[Any] = []
     for k in _STR_DIM_KEYS:
         if k == "part_number":
             continue
         if k in r:
-            v = _bounded_str(k, _strip_optional(r.get(k)), sku)
-            str_dim_flags.append((True, v))
+            v = _bounded_str(k, _strip_optional(coerce_pm_tabular_scalar(r.get(k))), sku)
+            str_dim_parts.extend((True, v))
         else:
-            str_dim_flags.append((False, None))
+            str_dim_parts.extend((False, None))
 
     return (
         sku,
@@ -170,49 +171,56 @@ def _staging_tuple(
         ff,
         has_pb,
         pb,
-        *str_dim_flags,
+        *str_dim_parts,
     )
 
 
 def _build_staging_values_clause():
-    """SQLAlchemy VALUES(...) construct for bulk upsert staging rows."""
+    """SQLAlchemy VALUES(...) for bulk upsert staging.
+
+    Per-column SQL types for ``dim_product`` fields are taken from
+    :attr:`DimProduct.__table__.c` so VARCHAR lengths, dates, FK integers, and
+    future ORM type tweaks stay aligned without duplicating literals here. Synthetic
+    ``has_*`` flags are plain booleans (not persisted on ``dim_product``).
+    """
+    t = DimProduct.__table__.c
     cols = [
-        sql_column("sku", String(128)),
-        sql_column("name", String(512)),
-        sql_column("has_pn", Boolean),
-        sql_column("part_number", String(128)),
-        sql_column("has_cat", Boolean),
-        sql_column("category", String(256)),
-        sql_column("has_ch", Boolean),
-        sql_column("channel_id", Integer),
-        sql_column("has_ld", Boolean),
-        sql_column("launch_date", Date),
-        sql_column("has_eol", Boolean),
-        sql_column("retired_date", Date),
-        sql_column("has_ff", Boolean),
-        sql_column("form_factor", String(128)),
-        sql_column("has_pb", Boolean),
-        sql_column("price_band", String(64)),
-        sql_column("has_sales_model_name", Boolean),
-        sql_column("sales_model_name", String(512)),
-        sql_column("has_model_name", Boolean),
-        sql_column("model_name", String(512)),
-        sql_column("has_marketing_name", Boolean),
-        sql_column("marketing_name", String(512)),
-        sql_column("has_series_name", Boolean),
-        sql_column("series_name", String(256)),
-        sql_column("has_product_line", Boolean),
-        sql_column("product_line", String(256)),
-        sql_column("has_ean", Boolean),
-        sql_column("ean", String(32)),
-        sql_column("has_upc", Boolean),
-        sql_column("upc", String(32)),
-        sql_column("has_business_unit", Boolean),
-        sql_column("business_unit", String(128)),
-        sql_column("has_lifecycle_status", Boolean),
-        sql_column("lifecycle_status", String(64)),
-        sql_column("has_country_code", Boolean),
-        sql_column("country_code", String(8)),
+        sql_column("sku", t.sku.type),
+        sql_column("name", t.name.type),
+        sql_column("has_pn", Boolean()),
+        sql_column("part_number", t.part_number.type),
+        sql_column("has_cat", Boolean()),
+        sql_column("category", t.category.type),
+        sql_column("has_ch", Boolean()),
+        sql_column("channel_id", t.channel_id.type),
+        sql_column("has_ld", Boolean()),
+        sql_column("launch_date", t.launch_date.type),
+        sql_column("has_eol", Boolean()),
+        sql_column("retired_date", t.retired_date.type),
+        sql_column("has_ff", Boolean()),
+        sql_column("form_factor", t.form_factor.type),
+        sql_column("has_pb", Boolean()),
+        sql_column("price_band", t.price_band.type),
+        sql_column("has_sales_model_name", Boolean()),
+        sql_column("sales_model_name", t.sales_model_name.type),
+        sql_column("has_model_name", Boolean()),
+        sql_column("model_name", t.model_name.type),
+        sql_column("has_marketing_name", Boolean()),
+        sql_column("marketing_name", t.marketing_name.type),
+        sql_column("has_series_name", Boolean()),
+        sql_column("series_name", t.series_name.type),
+        sql_column("has_product_line", Boolean()),
+        sql_column("product_line", t.product_line.type),
+        sql_column("has_ean", Boolean()),
+        sql_column("ean", t.ean.type),
+        sql_column("has_upc", Boolean()),
+        sql_column("upc", t.upc.type),
+        sql_column("has_business_unit", Boolean()),
+        sql_column("business_unit", t.business_unit.type),
+        sql_column("has_lifecycle_status", Boolean()),
+        sql_column("lifecycle_status", t.lifecycle_status.type),
+        sql_column("has_country_code", Boolean()),
+        sql_column("country_code", t.country_code.type),
     ]
     return sql_values(*cols, name="pm_stage")
 
@@ -249,7 +257,10 @@ def _merge_select(st, d):
         opt_str(st.c.has_ld, st.c.launch_date, d.c.launch_date).label("launch_date"),
         opt_str(st.c.has_eol, st.c.retired_date, d.c.retired_date).label("retired_date"),
         func.coalesce(d.c.is_active, true()).label("is_active"),
-        opt_str(st.c.has_ch, st.c.channel_id, d.c.channel_id).label("channel_id"),
+        case(
+            (st.c.has_ch, cast(st.c.channel_id, tbl.c.channel_id.type)),
+            else_=cast(d.c.channel_id, tbl.c.channel_id.type),
+        ).label("channel_id"),
         func.coalesce(d.c.created_at, func.now()).label("created_at"),
         func.now().label("updated_at"),
     ).select_from(st.outerjoin(d, d.c.sku == st.c.sku))
