@@ -332,14 +332,27 @@ def infer_shipment_import_job_sync(db: Session, job_id: int) -> ImportJob:
             except Exception:
                 tabular_column_infer = None
 
+    samples: dict[str, list[str]] = {}
+    if tabular_column_infer is not None:
+        samples = column_samples_from_schema_dict(tabular_column_infer)
+
+    from app.services.imports.shipment_column_mapping_intel import apply_high_confidence_shipment_automap
+
+    mapping, auto_applied = apply_high_confidence_shipment_automap(
+        headers, job.source, mapping, column_samples=samples or None
+    )
+    mapping, notices2 = sanitize_shipment_field_mapping(headers, mapping)
+    notices = [*notices, *notices2]
+
     inferred: dict[str, Any] = {
         "kind": "shipment_workbook",
         "sheets": meta_reports,
         "mapping_notices": notices,
+        "shipment_automap_applied": auto_applied,
     }
     if tabular_column_infer is not None:
         inferred["tabular_column_infer"] = tabular_column_infer
-        inferred["column_samples"] = column_samples_from_schema_dict(tabular_column_infer)
+        inferred["column_samples"] = samples
 
     job.file_headers = headers
     job.field_mapping = mapping
@@ -368,6 +381,11 @@ def shipment_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
     elif isinstance(inf.get("column_samples"), dict):
         raw_s = inf["column_samples"]
         samples = {str(k): list(v) for k, v in raw_s.items() if isinstance(k, str) and isinstance(v, list)}
+    from app.services.imports.shipment_column_mapping_intel import suggest_shipment_column_mapping
+
+    column_mapping_hints = suggest_shipment_column_mapping(
+        headers, job.source, column_samples=samples, current_field_mapping=mapping
+    )
     return {
         "id": job.id,
         "stage": job.stage,
@@ -375,6 +393,7 @@ def shipment_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
         "error_summary": job.error_summary,
         "file_headers": headers,
         "field_mapping": mapping,
+        "column_mapping_hints": column_mapping_hints,
         "canonical_targets": list(SHIPMENT_CANONICAL_TARGETS),
         "blocking_mapping_errors": gate,
         "mapping_valid": len(gate) == 0,

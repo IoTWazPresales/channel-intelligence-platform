@@ -52,6 +52,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { PageTaskBanner } from '@/features/backgroundTasks/PageTaskBanner';
 import { ShipmentEntityStewardPanel } from '@/app/(app)/admin/shipment-evidence/ShipmentEntityStewardPanel';
 import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -1536,6 +1537,7 @@ function AdminImportsPageContent() {
   return (
     <>
       <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Imports' }]} title="Data & imports" />
+      <PageTaskBanner importJobId={jobIdParam} mode="imports" />
       <Alert severity="info" sx={{ mb: 2 }}>
         <strong>Guided import:</strong> pick an <strong>import type</strong> first (what the file means), then a{' '}
         <strong>data provider</strong> (which feed or instance). Product Master uses a{' '}

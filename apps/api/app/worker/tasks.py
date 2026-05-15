@@ -56,3 +56,40 @@ def product_master_commit_task(self, job_id: int, confirm_destructive: bool) -> 
         confirm_destructive,
         celery_task_id=str(celery_id) if celery_id else None,
     )
+
+
+@celery_app.task(name="imports.shipment_evidence_product_reresolution", bind=True, ack_late=True)
+def shipment_evidence_reresolution_task(self, task_id: str, trigger: str) -> str:
+    """Re-run product resolution for all shipment evidence lines (catalog refresh)."""
+    from app.db.session_sync import SessionLocal
+    from app.services.background_tasks.store import BackgroundTaskStore
+    from app.services.imports.shipment_evidence_product_reresolution import (
+        rerun_shipment_product_resolution_all_lines,
+    )
+
+    store = BackgroundTaskStore()
+    if task_id:
+        store.update_task(task_id, status="running", trigger=trigger)
+
+    try:
+        with SessionLocal() as db:
+
+            def _cb(meta: dict) -> None:
+                if task_id:
+                    store.update_task(
+                        task_id,
+                        lines_total=meta.get("lines_total"),
+                        lines_processed=meta.get("lines_processed"),
+                        newly_resolved=meta.get("newly_resolved"),
+                        still_unresolved=meta.get("still_unresolved"),
+                    )
+
+            rerun_shipment_product_resolution_all_lines(db, on_progress=_cb)
+        if task_id:
+            store.update_task(task_id, status="completed")
+    except Exception:
+        logger.exception("shipment_evidence_reresolution_task failed trigger=%s", trigger)
+        if task_id:
+            store.update_task(task_id, status="failed", error_message="Re-resolution failed; see server logs.")
+        raise
+    return task_id or "ok"

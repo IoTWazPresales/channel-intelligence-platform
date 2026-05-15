@@ -25,6 +25,8 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { PageTaskBanner } from '@/features/backgroundTasks/PageTaskBanner';
+import { useBackgroundTasks } from '@/features/backgroundTasks/BackgroundTasksProvider';
 import { apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -134,6 +136,7 @@ function buildListUrl(params: {
 
 export default function ShipmentEvidenceAdminPage() {
   const qc = useQueryClient();
+  const { refresh: refreshBackgroundTasks } = useBackgroundTasks();
   const [skip, setSkip] = useState(0);
   const [limit, setLimit] = useState(100);
   const [importJobId, setImportJobId] = useState('');
@@ -285,6 +288,9 @@ export default function ShipmentEvidenceAdminPage() {
     },
   });
 
+  const [reresolveMsg, setReresolveMsg] = useState<string | null>(null);
+  const [globalResyncMsg, setGlobalResyncMsg] = useState<string | null>(null);
+
   const applyImportMut = useMutation({
     mutationFn: async () => {
       if (parsedJobId == null) throw new Error('No import job selected');
@@ -310,6 +316,43 @@ export default function ShipmentEvidenceAdminPage() {
     onError: (e: Error) => {
       setApplyError(e.message);
       setApplyStewardWarning(null);
+    },
+  });
+
+  const reresolveProductsMut = useMutation({
+    mutationFn: async () => {
+      if (parsedJobId == null) throw new Error('No import job selected');
+      return apiPost<{ task_id?: string | null; message?: string; outcome?: string }>(
+        `/api/v1/shipment-evidence/import-jobs/${parsedJobId}/reresolve-products`,
+        {},
+      );
+    },
+    onSuccess: (data) => {
+      setReresolveMsg(data.message ?? 'Re-resolution queued.');
+      void refreshBackgroundTasks();
+      void qc.invalidateQueries({ queryKey: ['shipment-evidence'] });
+    },
+    onError: (e: Error) => {
+      setReresolveMsg(e.message);
+    },
+  });
+
+  const globalResyncProductsMut = useMutation({
+    mutationFn: async () =>
+      apiPost<{ task_id?: string | null; message?: string; outcome?: string; lines_total?: number }>(
+        '/api/v1/shipment-evidence/reresolve-products',
+        {},
+      ),
+    onSuccess: (data) => {
+      setGlobalResyncMsg(
+        data.message ??
+          (data.outcome === 'skipped' ? 'No shipment evidence lines to process.' : 'Re-sync started.')
+      );
+      void refreshBackgroundTasks();
+      void qc.invalidateQueries({ queryKey: ['shipment-evidence'] });
+    },
+    onError: (e: Error) => {
+      setGlobalResyncMsg(e.message);
     },
   });
 
@@ -401,6 +444,7 @@ export default function ShipmentEvidenceAdminPage() {
         ]}
         title="Shipment & order evidence"
       />
+      <PageTaskBanner importJobId={parsedJobId} mode="shipment-evidence" />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
         Canonical lines from shipment / open-order imports (report auto-detect). Upload via Data imports using
         template &quot;Shipment / order evidence&quot;.
@@ -418,17 +462,37 @@ export default function ShipmentEvidenceAdminPage() {
         </Alert>
 
         <Paper sx={{ p: 2 }}>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap">
-            <TextField
-              size="small"
-              label="Search"
-              value={search}
-              onChange={(e) => {
-                setSkip(0);
-                setSearch(e.target.value);
-              }}
-              sx={{ minWidth: 220 }}
-            />
+          <Stack spacing={2}>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap" alignItems={{ md: 'center' }}>
+              <Tooltip
+                title={
+                  'Re-runs product resolution on every line in every inbound shipment import job that is stage loaded, using the current catalogue. Progress appears in the activity bell when Redis is available.'
+                }
+              >
+                <span>
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    disabled={globalResyncProductsMut.isPending}
+                    onClick={() => {
+                      setGlobalResyncMsg(null);
+                      globalResyncProductsMut.mutate();
+                    }}
+                  >
+                    Re-sync products
+                  </Button>
+                </span>
+              </Tooltip>
+              <TextField
+                size="small"
+                label="Search"
+                value={search}
+                onChange={(e) => {
+                  setSkip(0);
+                  setSearch(e.target.value);
+                }}
+                sx={{ minWidth: 220 }}
+              />
             <TextField
               size="small"
               label="Import job ID"
@@ -506,6 +570,11 @@ export default function ShipmentEvidenceAdminPage() {
               <MenuItem value="skipped_empty">skipped_empty</MenuItem>
             </TextField>
           </Stack>
+          {globalResyncMsg ? (
+            <Alert severity="info" onClose={() => setGlobalResyncMsg(null)}>
+              {globalResyncMsg}
+            </Alert>
+          ) : null}
           <TablePagination
             component="div"
             count={total}
@@ -522,6 +591,7 @@ export default function ShipmentEvidenceAdminPage() {
             rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
             labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`}
           />
+          </Stack>
         </Paper>
 
         {parsedJobId != null ? (
@@ -560,17 +630,40 @@ export default function ShipmentEvidenceAdminPage() {
                     </Typography>
                   )}
                 </Box>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  disabled={!canApplyImport || applyImportMut.isPending || importJobIsError}
-                  onClick={() => applyImportMut.mutate()}
-                >
-                  Apply import
-                </Button>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="large"
+                    disabled={!canApplyImport || applyImportMut.isPending || importJobIsError}
+                    onClick={() => applyImportMut.mutate()}
+                  >
+                    Apply import
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    disabled={
+                      !importApplied ||
+                      parsedJobId == null ||
+                      reresolveProductsMut.isPending ||
+                      importJobIsError
+                    }
+                    onClick={() => {
+                      setReresolveMsg(null);
+                      reresolveProductsMut.mutate();
+                    }}
+                  >
+                    Re-resolve this job
+                  </Button>
+                </Stack>
               </Stack>
               {applyError ? <Alert severity="error">{applyError}</Alert> : null}
+              {reresolveMsg ? (
+                <Alert severity="info" onClose={() => setReresolveMsg(null)}>
+                  {reresolveMsg}
+                </Alert>
+              ) : null}
               {applyStewardWarning ? (
                 <Alert severity="warning" onClose={() => setApplyStewardWarning(null)}>
                   {applyStewardWarning}

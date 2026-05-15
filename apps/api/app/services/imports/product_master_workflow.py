@@ -300,9 +300,44 @@ def run_pm_commit_worker(db: Session, job_id: int, *, confirm_destructive: bool,
     db.commit()
 
     try:
+        from app.services.background_tasks.store import BackgroundTaskStore
+
+        _pm_tid = BackgroundTaskStore.get_pm_linked_task_id(job_id)
+        if _pm_tid:
+            BackgroundTaskStore.update_task(
+                _pm_tid,
+                status="running",
+                commit_phase="running",
+                celery_task_id=celery_task_id,
+            )
+    except Exception:
+        logger.exception("pm background task link update failed (non-fatal) job_id=%s", job_id)
+
+    try:
         commit_product_master_sync(db, job_id, confirm_destructive=confirm_destructive, from_worker=True)
+        try:
+            from app.services.background_tasks.store import BackgroundTaskStore
+
+            _pm_ok = BackgroundTaskStore.get_pm_linked_task_id(job_id)
+            if _pm_ok:
+                BackgroundTaskStore.update_task(_pm_ok, status="completed", commit_phase="completed")
+        except Exception:
+            logger.exception("pm background task complete update failed (non-fatal) job_id=%s", job_id)
     except Exception as exc:
         logger.exception("run_pm_commit_worker: commit failed job_id=%s", job_id)
+        try:
+            from app.services.background_tasks.store import BackgroundTaskStore
+
+            _pm_fail = BackgroundTaskStore.get_pm_linked_task_id(job_id)
+            if _pm_fail:
+                BackgroundTaskStore.update_task(
+                    _pm_fail,
+                    status="failed",
+                    commit_phase="failed",
+                    error_message=str(exc)[:900],
+                )
+        except Exception:
+            logger.exception("pm background task failed update (non-fatal) job_id=%s", job_id)
         db.rollback()
         job2 = db.get(ImportJob, job_id)
         if job2:
@@ -944,4 +979,12 @@ def commit_product_master_sync(
             "See import row results for details."
         ) from exc
     db.refresh(job)
+    try:
+        from app.services.imports.shipment_reresolution_enqueue import (
+            enqueue_shipment_evidence_product_reresolution_after_pm_commit,
+        )
+
+        enqueue_shipment_evidence_product_reresolution_after_pm_commit()
+    except Exception:
+        logger.exception("post-PM shipment reresolution scheduling failed (non-fatal)")
     return job

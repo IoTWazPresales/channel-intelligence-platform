@@ -824,3 +824,39 @@ def suggest_pm_mapping(
         out[h] = base
 
     return out
+
+
+_PM_REASON_SUMMARY: dict[str, str] = {
+    _REASON_EXACT_HEADER: "The column header matches a canonical Product Master field name.",
+    _REASON_NEAR_EXACT_HEADER: "The normalized header closely matches a known Product Master field.",
+    _REASON_LEGACY_ALIAS_HEADER: "The header matches a legacy alias used in older feeds.",
+    _REASON_CURATED_ALIAS: "The header matches a curated alias from the template or synonym list.",
+    _REASON_TEMPLATE: "The import template lists this header as a hint for a specific field.",
+    _REASON_SOURCE_MEMORY: "This column was previously confirmed for the same feed (source memory).",
+    _REASON_LOW_CONFIDENCE: "Signals are weak or conflicting for this column.",
+    _REASON_CLOSE_RUNNER_UP: "A second field also fits; please confirm which is correct.",
+    _REASON_NO_CANONICAL_FIT: "No Product Master canonical field is a strong match.",
+    "target_already_used": "Another column is already mapped to this target.",
+    "identity_target_already_mapped": "An identity column is already mapped.",
+}
+
+
+def attach_pm_suggestion_summaries(suggested: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Add human-readable ``reason_summary`` from ``reasons`` codes (UI-friendly)."""
+    if not suggested or not isinstance(suggested, dict):
+        return suggested
+    out: dict[str, Any] = {}
+    for h, meta in suggested.items():
+        if not isinstance(meta, dict):
+            out[h] = meta
+            continue
+        m2 = dict(meta)
+        rs = m2.get("reasons")
+        if isinstance(rs, list) and rs:
+            parts: list[str] = []
+            for code in rs[:4]:
+                c = str(code)
+                parts.append(_PM_REASON_SUMMARY.get(c, c.replace("_", " ") + "."))
+            m2["reason_summary"] = " ".join(parts).strip()
+        out[h] = m2
+    return out

@@ -32,6 +32,9 @@ from app.services.imports.shipment_evidence_steward_ops import (
     execute_map_shipment_distributor,
     execute_reject_shipment_mapping_candidate,
 )
+from app.services.imports.shipment_reresolution_enqueue import (
+    enqueue_shipment_evidence_product_reresolution,
+)
 
 router = APIRouter()
 
@@ -604,6 +607,37 @@ async def apply_shipment_import_job(
         "unresolved_customer_candidates": unresolved_c,
         "auto_applied_candidate_count": auto_applied,
     }
+
+
+@router.post("/import-jobs/{job_id}/reresolve-products")
+async def post_shipment_import_job_reresolve_products(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    """Queue full-table product re-resolution (legacy URL; validates job only; not scoped to that job)."""
+    _require_admin(x_user_role)
+    job = await db.get(ImportJob, job_id)
+    if not job or (job.template_slug or "") != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Shipment import job not found")
+    jid = int(job_id)
+    out = enqueue_shipment_evidence_product_reresolution(
+        trigger="manual_shipment_admin_job",
+        title="Re-resolve shipment evidence products",
+    )
+    return {"import_job_id": jid, **out}
+
+
+@router.post("/reresolve-products")
+async def post_shipment_reresolve_products_global(
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    """Queue background product re-resolution for every row in ``shipment_evidence_line``."""
+    _require_admin(x_user_role)
+    return enqueue_shipment_evidence_product_reresolution(
+        trigger="admin_shipment_resync_all",
+        title="Re-sync products — all shipment evidence lines",
+    )
 
 
 @router.get("")

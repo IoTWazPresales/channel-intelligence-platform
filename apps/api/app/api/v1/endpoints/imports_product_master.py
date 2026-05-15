@@ -25,6 +25,7 @@ from app.services.imports.pm_field_catalog import (
     field_definitions_for_api,
     normalize_mapping_decisions,
 )
+from app.services.imports.pm_suggest_mapping import attach_pm_suggestion_summaries
 from app.services.imports.product_master_workflow import (
     STATUS_PM_COMMIT_QUEUED,
     build_pm_import_progress,
@@ -34,6 +35,7 @@ from app.services.imports.product_master_workflow import (
     try_enqueue_pm_commit_sync,
     validate_product_master_sync,
 )
+from app.services.background_tasks.store import BackgroundTaskStore
 from app.worker.tasks import product_master_commit_task, run_product_master_commit_job
 from app.storage.local import get_storage_backend
 
@@ -139,7 +141,9 @@ async def get_product_master_job_state(
     headers = job.file_headers or []
     suggestions = None
     if headers and job.source:
-        suggestions = suggest_mapping_decisions(headers, job.source, job.inferred_schema)
+        suggestions = attach_pm_suggestion_summaries(
+            suggest_mapping_decisions(headers, job.source, job.inferred_schema)
+        )
     md_norm = normalize_mapping_decisions(job.mapping_decisions) if job.mapping_decisions else None
     sev_result = await db.execute(
         select(ImportRowResult.severity, func.count(ImportRowResult.id))
@@ -242,6 +246,15 @@ async def post_product_master_commit(
         raise HTTPException(status_code=400, detail=out["message"])
 
     if oc == "enqueued":
+        tid = BackgroundTaskStore.create_task(
+            task_type="product_master_commit",
+            title="Product Master commit",
+            status="queued",
+            import_job_id=job_id,
+            extra={"commit_phase": "queued"},
+        )
+        if tid:
+            BackgroundTaskStore.link_pm_import_job(job_id, tid)
         settings = get_settings()
         if settings.cip_dev_celery_dispatch == "in_process_thread":
 

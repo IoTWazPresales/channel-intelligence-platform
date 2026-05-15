@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     auth,
+    background_tasks,
     budgets,
     buy_plans,
     commercial_planner,
@@ -57,6 +58,7 @@ api_router.include_router(
     prefix="/imports/product-master",
     tags=["imports-product-master"],
 )
+api_router.include_router(background_tasks.router, prefix="/background-tasks", tags=["background-tasks"])
 api_router.include_router(mappings.router, prefix="/mappings", tags=["mappings"])
 api_router.include_router(exceptions.router, prefix="/exceptions", tags=["exceptions"])
 api_router.include_router(dev_wipe.router, prefix="/dev", tags=["dev"])
