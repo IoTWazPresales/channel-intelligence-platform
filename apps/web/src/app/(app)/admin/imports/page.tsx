@@ -636,6 +636,8 @@ function AdminImportsPageContent() {
     id: number;
     stage: string;
     status: string;
+    import_mode?: string | null;
+    template_slug?: string | null;
     error_summary?: string | null;
     file_headers: string[];
     field_mapping: Record<string, string>;
@@ -644,6 +646,18 @@ function AdminImportsPageContent() {
     mapping_valid: boolean;
     column_samples?: Record<string, string[]>;
     mapping_adjustment_notices?: Array<{ code: string; message: string }>;
+    column_mapping_hints?: Record<
+      string,
+      {
+        suggested_target?: string | null;
+        confidence?: number;
+        reasons?: string[];
+        reason_summary?: string;
+        runner_up?: string | null;
+        sample_values?: string[];
+      }
+    >;
+    field_target_descriptions?: Record<string, string>;
   };
 
   const { data: dsiMappingState, refetch: refetchDsiMapping } = useQuery({
@@ -786,6 +800,37 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
   });
+
+  const dsiApplyComplete = useMutation({
+    mutationFn: async () => {
+      if (lastJobId == null) throw new Error('No job');
+      return apiPost<{
+        ok?: boolean;
+        stage?: string;
+        status?: string;
+        import_job_id?: number;
+        staging_rows?: number;
+      }>(`/api/v1/mappings/import-jobs/${lastJobId}/dsi-apply-complete`);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    },
+    onError: () => {
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    },
+  });
+
+  const dsiCanFinalizeToLoaded = useMemo(() => {
+    if (!isDsi || lastJobId == null) return false;
+    const st = (dsiMappingState?.stage ?? '').trim();
+    const mode = (dsiMappingState?.import_mode ?? '').trim();
+    return st === 'validated' && mode === 'apply';
+  }, [isDsi, lastJobId, dsiMappingState?.stage, dsiMappingState?.import_mode]);
 
   const dsiCanContinueToApply = useMemo(
     () =>
@@ -2511,6 +2556,7 @@ function AdminImportsPageContent() {
                 <TableRow>
                   <TableCell>File column</TableCell>
                   <TableCell sx={{ minWidth: 280 }}>Maps to</TableCell>
+                  <TableCell sx={{ minWidth: 220 }}>Why / confidence</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2555,7 +2601,11 @@ function AdminImportsPageContent() {
                             <MenuItem key={t} value={t} sx={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
                               <ListItemText
                                 primary={dsiTargetLabel(t)}
-                                secondary={dsiTargetDescription(t)}
+                                secondary={
+                                  dsiTargetDescription(t) ??
+                                  dsiMappingState?.field_target_descriptions?.[t] ??
+                                  undefined
+                                }
                                 primaryTypographyProps={{ variant: 'body2' }}
                                 secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
                               />
@@ -2563,6 +2613,29 @@ function AdminImportsPageContent() {
                           ))}
                         </Select>
                       </FormControl>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const hint = dsiMappingState?.column_mapping_hints?.[h];
+                        if (!hint) return <Typography variant="caption" color="text.secondary">—</Typography>;
+                        const conf = hint.confidence != null ? Math.round(Number(hint.confidence) * 100) : null;
+                        const sug = hint.suggested_target ? dsiTargetLabel(hint.suggested_target) : null;
+                        return (
+                          <Stack spacing={0.25}>
+                            <Typography variant="body2">{hint.reason_summary ?? '—'}</Typography>
+                            {sug ? (
+                              <Typography variant="caption" color="text.secondary">
+                                Suggested: {sug}
+                                {conf != null ? ` · ${conf}%` : ''}
+                              </Typography>
+                            ) : conf != null ? (
+                              <Typography variant="caption" color="text.secondary">
+                                Confidence: {conf}%
+                              </Typography>
+                            ) : null}
+                          </Stack>
+                        );
+                      })()}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -2760,21 +2833,43 @@ function AdminImportsPageContent() {
               />
             ) : null}
             {dsiApply.isError ? <Alert severity="error">{safeDisplayError(dsiApply.error)}</Alert> : null}
+            {dsiApplyComplete.isError ? (
+              <Alert severity="error">{safeDisplayError(dsiApplyComplete.error)}</Alert>
+            ) : null}
             {dsiApply.isPending ? <LinearProgress /> : null}
-            <Stack direction="row" spacing={1}>
+            {dsiApplyComplete.isPending ? <LinearProgress /> : null}
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Button onClick={() => setActiveStep(6)}>Back</Button>
               <Button
                 variant="contained"
                 color="primary"
                 disabled={
                   dsiApply.isPending ||
+                  dsiApplyComplete.isPending ||
                   (selectedTemplate.destructive_apply_requires_confirm && !confirmDestructive)
                 }
                 onClick={() => void dsiApply.mutateAsync()}
               >
                 Apply
               </Button>
+              {dsiCanFinalizeToLoaded ? (
+                <Button
+                  variant="outlined"
+                  color="success"
+                  disabled={dsiApply.isPending || dsiApplyComplete.isPending}
+                  onClick={() => void dsiApplyComplete.mutateAsync()}
+                  data-testid="dsi-apply-complete"
+                >
+                  Finalize to loaded
+                </Button>
+              ) : null}
             </Stack>
+            {dsiCanFinalizeToLoaded ? (
+              <Alert severity="info" data-testid="dsi-apply-complete-hint">
+                After stewards clear blocked staging lines and facts apply cleanly, use <strong>Finalize to loaded</strong>{' '}
+                to re-resolve rows, run fact upserts, and set the job to <strong>loaded</strong>.
+              </Alert>
+            ) : null}
           </Stack>
         ) : null}
 

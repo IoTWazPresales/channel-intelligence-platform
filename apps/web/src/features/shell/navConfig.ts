@@ -10,6 +10,7 @@ export const navItems: NavItem[] = [
   { section: 'Planning', label: 'Buy plans', href: '/buy-plans' },
   { section: 'Planning', label: 'Line-up planning', href: '/lineup' },
   { section: 'Planning', label: 'Commercial planner', href: '/commercial-planner' },
+  { section: 'Commercial', label: 'Shipping evidence', href: '/shipping' },
   { section: 'Commercial', label: 'Pricing', href: '/pricing' },
   { section: 'Commercial', label: 'Promotions', href: '/promotions' },
   { section: 'Market', label: 'Market', href: '/market' },

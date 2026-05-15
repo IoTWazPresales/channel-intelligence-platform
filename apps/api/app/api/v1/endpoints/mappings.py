@@ -30,6 +30,7 @@ from app.schemas.dsi_resolution_plan_requests import (
 )
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
 from app.services.imports.distributor_sales_inventory import _norm_key
+from app.services.imports.dsi_apply_completion import DsiApplyCompletionError, complete_dsi_import_job_to_loaded
 from app.services.imports.dsi_resolution_plan import (
     apply_dsi_resolution_plan_rows,
     build_dsi_resolution_plan_effective_sync,
@@ -759,6 +760,25 @@ async def dsi_resolution_plan_apply_endpoint(
         confirm_for_suspicious_distributor_token=body.confirm_for_suspicious_distributor_token,
         overrides=ov_list or None,
     )
+
+
+@router.post("/import-jobs/{job_id}/dsi-apply-complete", status_code=200)
+async def dsi_apply_complete_to_loaded(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(_require_admin_role),
+) -> dict[str, Any]:
+    """Refresh DSI staging resolutions, upsert facts, and promote job to ``loaded`` when rules pass."""
+    await _assert_dsi_import_job(db, job_id)
+
+    def _work() -> dict[str, Any]:
+        with SessionLocal() as s:
+            return complete_dsi_import_job_to_loaded(s, job_id)
+
+    try:
+        return await asyncio.to_thread(_work)
+    except DsiApplyCompletionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/import-jobs/{job_id}/revalidate-distributor-sales-inventory", status_code=200)

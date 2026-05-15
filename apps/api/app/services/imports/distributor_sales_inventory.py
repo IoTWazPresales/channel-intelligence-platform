@@ -26,6 +26,10 @@ from app.models.import_distributor_si import (
 from app.models.ingestion import ImportJob, ImportRowResult
 from app.models.mapping import ProductAlias
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
+from app.services.imports.dsi_shipment_corroboration import (
+    shipment_corroboration_for_customer,
+    shipment_corroboration_for_product,
+)
 from app.utils.json_safe import to_jsonable, verify_json_serializable
 
 CANONICAL = (
@@ -212,6 +216,26 @@ def _clean_str(v: Any) -> str | None:
     if not t or t.lower() == "nan":
         return None
     return t
+
+
+def _channel_raw_from_mapped(mapped: dict[str, Any] | None) -> str | None:
+    if not mapped or not isinstance(mapped, dict):
+        return None
+    for k in ("channel_key_token", "channel_code"):
+        v = _clean_str(mapped.get(k))
+        if v:
+            return v
+    return None
+
+
+def _region_raw_from_mapped(mapped: dict[str, Any] | None) -> str | None:
+    if not mapped or not isinstance(mapped, dict):
+        return None
+    for k in ("region_or_province_token", "region_code"):
+        v = _clean_str(mapped.get(k))
+        if v:
+            return v
+    return None
 
 
 def _parse_date(v: Any) -> date | None:
@@ -972,6 +996,18 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         else:
             res_status = "staged_only"
 
+        _append_shipment_corroboration_signals_dsi(
+            db,
+            diag,
+            rdistributor_id=rdistributor_id,
+            evidence_date=evidence_date,
+            prod_raw=prod_raw,
+            rpid=rpid,
+            cust_raw=cust_raw,
+            dg_raw=dg_raw,
+            rcustomer_id=rcustomer_id,
+        )
+
         line = ImportDistributorSiStagingLine(
             import_job_id=job.id,
             source_row_number=rn,
@@ -1021,6 +1057,17 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 a["total_value"] += abs(reported_rev)
             if len(a["samples"]) < 5:
                 a["samples"].append(prod_raw)
+            if rdistributor_id and evidence_date:
+                cp = shipment_corroboration_for_product(
+                    db,
+                    distributor_id=int(rdistributor_id),
+                    evidence_date=evidence_date,
+                    raw_product_token=prod_raw,
+                    resolved_product_id=None,
+                )
+                if cp:
+                    a["shipment_corr_hit"] = True
+                    a["shipment_corr_best"] = max(int(a.get("shipment_corr_best") or 0), int(cp.get("match_count") or 0))
         if sellout_attempt and rcustomer_id is None:
             ckey = _customer_candidate_identity_norm(cust_raw, dg_raw)
             k = ("customer_dealer_token", ckey)
@@ -1065,6 +1112,20 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 sample = " | ".join(parts) if parts else (cust_raw or dg_raw or "").strip()[:200]
                 if sample:
                     a["samples"].append(sample)
+            if rdistributor_id and evidence_date:
+                cc = shipment_corroboration_for_customer(
+                    db,
+                    distributor_id=int(rdistributor_id),
+                    evidence_date=evidence_date,
+                    customer_primary_raw=cust_raw,
+                    dealer_group_raw=dg_raw,
+                    resolved_customer_id=None,
+                )
+                if cc:
+                    a["shipment_cust_corr_hit"] = True
+                    a["shipment_cust_corr_best"] = max(
+                        int(a.get("shipment_cust_corr_best") or 0), int(cc.get("match_count") or 0)
+                    )
             chv = (ch_raw or "").strip().lower()
             if chv and any(h in chv for h in STRATEGIC_CHANNEL_HINT_SUBSTRINGS):
                 a["strategic_channel_hint"] = True
@@ -1165,6 +1226,20 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 )
         if data.get("strategic_channel_hint"):
             ctx["strategic_channel_hint"] = True
+        if etype == "product_identifier" and data.get("shipment_corr_hit"):
+            ctx["shipment_evidence_corroboration"] = {
+                "best_match_count": int(data.get("shipment_corr_best") or 0),
+                "signal_only": True,
+                "summary": "Resolved shipment evidence lines in the same calendar month may corroborate this token (no auto-resolve).",
+            }
+            ctx.setdefault("corroboration_markers", []).append("shipment_evidence_product")
+        if etype == "customer_dealer_token" and data.get("shipment_cust_corr_hit"):
+            ctx["shipment_evidence_corroboration"] = {
+                "best_match_count": int(data.get("shipment_cust_corr_best") or 0),
+                "signal_only": True,
+                "summary": "Resolved shipment evidence lines in the same calendar month may corroborate this bucket (no auto-resolve).",
+            }
+            ctx.setdefault("corroboration_markers", []).append("shipment_evidence_customer")
         cand = ImportEntityMappingCandidate(
             import_job_id=job.id,
             source_definition_id=source_def_id,
@@ -1196,35 +1271,287 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
     eff_rev_note = ""
     if job.import_mode == "apply":
         db.flush()
-        sell_tbl = FactSalesSellout.__table__
-        inv_tbl = FactInventoryDistributor.__table__
-        lines = db.scalars(
-            select(ImportDistributorSiStagingLine)
-            .where(ImportDistributorSiStagingLine.import_job_id == job.id)
-            .order_by(ImportDistributorSiStagingLine.source_row_number)
-        ).all()
-        applied_sell = 0
-        applied_inv = 0
-        for line in lines:
-            parts = []
-            qs = line.quantity_sold
-            sellout_units_ok = (
-                qs is not None
-                and float(qs) != 0.0
+        applied_sell, applied_inv, apply_errors = upsert_dsi_facts_for_staging_job(db, job)
+        if apply_errors:
+            db.add(
+                ImportRowResult(
+                    job_id=job.id,
+                    row_number=0,
+                    severity="error",
+                    code="distributor_si_fact_apply_errors",
+                    message=json.dumps(apply_errors)[:4000],
+                )
             )
-            if (
-                line.resolved_distributor_id
-                and line.resolved_product_id
-                and line.transaction_date is not None
-                and qs is not None
-                and sellout_units_ok
-                and line.resolved_customer_id
-            ):
-                eff = line.computed_revenue_amount
-                if eff is None and line.reported_revenue_amount is not None:
-                    eff = line.reported_revenue_amount
-                if eff is None:
-                    eff = 0.0
+        eff_rev_note = f" Applied sell-out facts={applied_sell}, inventory facts={applied_inv} (upsert by natural key)."
+
+    summary = {
+        "staging_rows": int(len(df)),
+        "blocking_rows": blocking,
+        "warning_rows": warnings,
+        "aggregated_candidates": len(agg),
+        "import_mode": job.import_mode,
+        "sellout_issue_rows": dsi_sellout_issue_rows,
+        "rows_inventory_ready_with_sellout_warnings": dsi_inv_ready_with_sellout_issue_rows,
+    }
+    db.add(
+        ImportRowResult(
+            job_id=job.id,
+            row_number=0,
+            severity="info" if blocking == 0 else "warning",
+            code="distributor_si_summary",
+            message=json.dumps(summary) + eff_rev_note,
+        )
+    )
+    return 1 if blocking else 0
+
+
+SHIP_CORR_JSON_PREFIX = "shipment_corroboration_json:"
+
+
+def _append_shipment_corroboration_signals_dsi(
+    db: Session,
+    diag: list[str],
+    *,
+    rdistributor_id: int | None,
+    evidence_date: date | None,
+    prod_raw: str | None,
+    rpid: int | None,
+    cust_raw: str | None,
+    dg_raw: str | None,
+    rcustomer_id: int | None,
+) -> None:
+    if not rdistributor_id or not evidence_date:
+        return
+    pc = shipment_corroboration_for_product(
+        db,
+        distributor_id=int(rdistributor_id),
+        evidence_date=evidence_date,
+        raw_product_token=prod_raw,
+        resolved_product_id=rpid,
+    )
+    if pc:
+        diag.append(SHIP_CORR_JSON_PREFIX + json.dumps(to_jsonable(pc))[:900])
+    cc = shipment_corroboration_for_customer(
+        db,
+        distributor_id=int(rdistributor_id),
+        evidence_date=evidence_date,
+        customer_primary_raw=cust_raw,
+        dealer_group_raw=dg_raw,
+        resolved_customer_id=rcustomer_id,
+    )
+    if cc:
+        diag.append(SHIP_CORR_JSON_PREFIX + json.dumps(to_jsonable(cc))[:900])
+
+
+def refresh_dsi_staging_line_resolution(
+    db: Session,
+    job: ImportJob,
+    line: ImportDistributorSiStagingLine,
+    prod_idx: ProductResolutionIndex,
+) -> None:
+    """Recompute resolution fields from persisted staging row (canonical JSON + raw tokens)."""
+    source = job.source
+    source_def_id = source.id if source else None
+    mapped = line.mapped_canonical if isinstance(line.mapped_canonical, dict) else {}
+    dist_raw = line.raw_distributor_token
+    prod_raw = line.raw_product_token
+    cust_raw = line.raw_customer_dealer_token
+    dg_raw = line.raw_dealer_group_token
+    ch_raw = _channel_raw_from_mapped(mapped)
+    reg_raw = _region_raw_from_mapped(mapped)
+    open_raw = mapped.get("open_channel_evidence")
+
+    tx_date = line.transaction_date
+    snap_date = line.snapshot_date
+    if tx_date is None and snap_date is not None:
+        tx_date = snap_date
+    if snap_date is None and tx_date is not None:
+        snap_date = tx_date
+
+    qty_sold = Decimal(str(line.quantity_sold)) if line.quantity_sold is not None else None
+    soh = Decimal(str(line.stock_on_hand)) if line.stock_on_hand is not None else None
+    unit_price = (
+        Decimal(str(line.unit_sellout_price_ex_tax_amount))
+        if line.unit_sellout_price_ex_tax_amount is not None
+        else None
+    )
+    reported_rev = (
+        Decimal(str(line.reported_revenue_amount)) if line.reported_revenue_amount is not None else None
+    )
+    cur = line.currency_code
+
+    computed_rev: Decimal | None = None
+    if qty_sold is not None and unit_price is not None:
+        computed_rev = qty_sold * unit_price
+
+    diag: list[str] = []
+
+    rdid, derr = _resolve_distributor(db, dist_raw, source_def_id)
+    if derr:
+        diag.append(derr)
+
+    evidence_date = tx_date or snap_date
+    rpid, perr, presolve_tag, pev = _resolve_product(prod_raw, prod_idx, evidence_date)
+    if perr:
+        diag.append(perr)
+    elif presolve_tag:
+        diag.append(presolve_tag)
+
+    rdistributor_id = rdid
+    rcustomer_id: int | None = None
+
+    sellout_attempt = bool(qty_sold is not None and tx_date is not None and qty_sold != 0)
+    inv_attempt = soh is not None
+
+    cust_res_raw: str | None = None
+    cust_res_notes: list[str] = []
+    if sellout_attempt:
+        cust_res_raw, cust_res_notes = effective_dsi_customer_primary_for_resolution(cust_raw, dg_raw)
+
+    if sellout_attempt:
+        rcustomer_id, cd = _resolve_customer(
+            db,
+            source_id=source_def_id,
+            distributor_id=rdistributor_id,
+            customer_raw=cust_res_raw,
+            dealer_group_raw=dg_raw,
+            channel_raw=ch_raw,
+            open_flag_raw=open_raw,
+        )
+        diag.extend(cd)
+        diag.extend(cust_res_notes)
+
+    hard_row = bool(derr or perr)
+    sellout_blocked_no_customer = bool(sellout_attempt and rcustomer_id is None)
+    sellout_blocked_no_tx = bool(qty_sold is not None and qty_sold != 0 and tx_date is None)
+    inv_ready = bool(inv_attempt and snap_date is not None and soh is not None)
+    inv_soft_fail = bool(inv_attempt and not inv_ready)
+    sellout_ready = bool(
+        sellout_attempt and tx_date is not None and rcustomer_id is not None and qty_sold is not None
+    )
+
+    sev: str = "info"
+    if hard_row:
+        sev = "error"
+    elif (sellout_blocked_no_customer or sellout_blocked_no_tx) and inv_ready:
+        sev = "warning"
+        if sellout_blocked_no_customer:
+            diag.append("sellout_blocked_missing_customer")
+        if sellout_blocked_no_tx:
+            diag.append("sellout_blocked_missing_transaction_date")
+    elif inv_soft_fail and sellout_ready:
+        sev = "warning"
+        if snap_date is None:
+            diag.append("inventory_blocked_missing_snapshot_date")
+        if soh is None:
+            diag.append("inventory_blocked_missing_stock_on_hand")
+    elif sellout_blocked_no_customer or sellout_blocked_no_tx or inv_soft_fail:
+        sev = "error"
+        if sellout_blocked_no_customer:
+            diag.append("sellout_blocked_missing_customer")
+        if sellout_blocked_no_tx:
+            diag.append("sellout_blocked_missing_transaction_date")
+        if inv_soft_fail:
+            if snap_date is None:
+                diag.append("inventory_blocked_missing_snapshot_date")
+            if soh is None:
+                diag.append("inventory_blocked_missing_stock_on_hand")
+
+    if reported_rev is not None and computed_rev is not None:
+        if abs(reported_rev - computed_rev) > Decimal("0.01") * max(Decimal(1), abs(reported_rev)):
+            diag.append("reported_vs_computed_revenue_mismatch")
+            if sev != "error":
+                sev = "warning"
+
+    if qty_sold is not None and qty_sold < 0:
+        diag.append("return_or_credit_suspected_qty")
+        if sev == "info":
+            sev = "warning"
+    if reported_rev is not None and reported_rev < 0:
+        diag.append("return_or_credit_suspected_revenue")
+        if sev == "info":
+            sev = "warning"
+
+    can_sellout = (
+        not hard_row
+        and bool(rdistributor_id)
+        and bool(rpid)
+        and tx_date is not None
+        and qty_sold is not None
+        and qty_sold != 0
+        and bool(rcustomer_id)
+    )
+    can_inv = (
+        not hard_row
+        and bool(rdistributor_id)
+        and bool(rpid)
+        and snap_date is not None
+        and soh is not None
+    )
+    if sev == "error":
+        res_status = "blocked"
+    elif can_sellout and can_inv:
+        res_status = "ready_both"
+    elif can_sellout:
+        res_status = "ready_sellout"
+    elif can_inv:
+        res_status = "ready_inventory"
+    else:
+        res_status = "staged_only"
+
+    _append_shipment_corroboration_signals_dsi(
+        db,
+        diag,
+        rdistributor_id=rdistributor_id,
+        evidence_date=evidence_date,
+        prod_raw=prod_raw,
+        rpid=rpid,
+        cust_raw=cust_raw,
+        dg_raw=dg_raw,
+        rcustomer_id=rcustomer_id,
+    )
+
+    line.resolved_distributor_id = rdistributor_id
+    line.resolved_customer_id = rcustomer_id
+    line.resolved_product_id = rpid
+    line.resolution_status = res_status
+    line.diagnostic_codes = diag
+    line.severity = sev
+    line.computed_revenue_amount = float(computed_rev) if computed_rev is not None else None
+    line.currency_code = (cur[:8] if cur else None)
+    db.add(line)
+
+
+def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, int, list[str]]:
+    """Apply sell-out / inventory fact upserts for all staging lines (import_mode apply). Returns counts and errors."""
+    errors: list[str] = []
+    sell_tbl = FactSalesSellout.__table__
+    inv_tbl = FactInventoryDistributor.__table__
+    lines = db.scalars(
+        select(ImportDistributorSiStagingLine)
+        .where(ImportDistributorSiStagingLine.import_job_id == job.id)
+        .order_by(ImportDistributorSiStagingLine.source_row_number)
+    ).all()
+    applied_sell = 0
+    applied_inv = 0
+    for line in lines:
+        parts: list[str] = []
+        qs = line.quantity_sold
+        sellout_units_ok = qs is not None and float(qs) != 0.0
+        if (
+            line.resolved_distributor_id
+            and line.resolved_product_id
+            and line.transaction_date is not None
+            and qs is not None
+            and sellout_units_ok
+            and line.resolved_customer_id
+        ):
+            eff = line.computed_revenue_amount
+            if eff is None and line.reported_revenue_amount is not None:
+                eff = line.reported_revenue_amount
+            if eff is None:
+                eff = 0.0
+            try:
                 stmt = (
                     pg_insert(sell_tbl)
                     .values(
@@ -1259,12 +1586,16 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 line.fact_sellout_row_id = int(rid) if rid is not None else None
                 applied_sell += 1
                 parts.append("sellout")
-            if (
-                line.resolved_distributor_id
-                and line.resolved_product_id
-                and line.snapshot_date is not None
-                and line.stock_on_hand is not None
-            ):
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"sellout row {line.source_row_number}: {exc}")
+
+        if (
+            line.resolved_distributor_id
+            and line.resolved_product_id
+            and line.snapshot_date is not None
+            and line.stock_on_hand is not None
+        ):
+            try:
                 inv_stmt = (
                     pg_insert(inv_tbl)
                     .values(
@@ -1287,37 +1618,23 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 line.fact_inventory_row_id = int(iid) if iid is not None else None
                 applied_inv += 1
                 parts.append("inventory")
-            if parts:
-                line.apply_status = "+".join(parts)
-        meta = dict(job.staged_metadata or {})
-        meta["distributor_si"] = to_jsonable(
-            {
-                "applied": True,
-                "applied_at": datetime.now(timezone.utc).isoformat(),
-                "sellout_rows": applied_sell,
-                "inventory_rows": applied_inv,
-            }
-        )
-        job.staged_metadata = to_jsonable(meta)
-        eff_rev_note = f" Applied sell-out facts={applied_sell}, inventory facts={applied_inv} (upsert by natural key)."
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"inventory row {line.source_row_number}: {exc}")
 
-    summary = {
-        "staging_rows": int(len(df)),
-        "blocking_rows": blocking,
-        "warning_rows": warnings,
-        "aggregated_candidates": len(agg),
-        "import_mode": job.import_mode,
-        "sellout_issue_rows": dsi_sellout_issue_rows,
-        "rows_inventory_ready_with_sellout_warnings": dsi_inv_ready_with_sellout_issue_rows,
-    }
-    db.add(
-        ImportRowResult(
-            job_id=job.id,
-            row_number=0,
-            severity="info" if blocking == 0 else "warning",
-            code="distributor_si_summary",
-            message=json.dumps(summary) + eff_rev_note,
-        )
+        if parts:
+            line.apply_status = "+".join(parts)
+        db.add(line)
+    meta = dict(job.staged_metadata or {})
+    meta["distributor_si"] = to_jsonable(
+        {
+            "applied": True,
+            "applied_at": datetime.now(timezone.utc).isoformat(),
+            "sellout_rows": applied_sell,
+            "inventory_rows": applied_inv,
+            "apply_errors": errors[:50],
+        }
     )
-    return 1 if blocking else 0
+    job.staged_metadata = to_jsonable(meta)
+    db.add(job)
+    return applied_sell, applied_inv, errors
 

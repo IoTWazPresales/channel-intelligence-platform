@@ -466,7 +466,11 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
     samples = column_samples_from_schema_dict(schema)
     mapping = build_initial_dsi_field_mapping(db, cols, source, template, column_samples=samples)
 
-    job.inferred_schema = schema
+    from app.services.imports.dsi_column_mapping_intel import apply_high_confidence_dsi_automap
+
+    mapping, auto_applied = apply_high_confidence_dsi_automap(cols, source, mapping, column_samples=samples)
+
+    job.inferred_schema = {**schema, "dsi_column_automap_applied": auto_applied}
     job.file_headers = cols
     job.field_mapping = mapping
     job.stage = "dsi_mapping_ready"
@@ -479,20 +483,33 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
 
 def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
     """Serializable mapping UI payload."""
+    from app.services.imports.dsi_column_mapping_intel import (
+        DSI_FIELD_TARGET_DESCRIPTIONS,
+        suggest_dsi_column_mapping,
+    )
+
     headers = list(job.file_headers or [])
     raw_mapping = dict(job.field_mapping or {})
     mapping, notices = sanitize_dsi_field_mapping(headers, raw_mapping)
     gate = dsi_mapping_gate_errors(mapping)
+    samples = column_samples_from_inferred(job)
+    column_mapping_hints = suggest_dsi_column_mapping(
+        headers, job.source, column_samples=samples, current_field_mapping=mapping
+    )
     return {
         "id": job.id,
         "stage": job.stage,
         "status": job.status,
+        "import_mode": job.import_mode,
+        "template_slug": job.template_slug,
         "error_summary": job.error_summary,
         "file_headers": headers,
         "field_mapping": mapping,
+        "column_mapping_hints": column_mapping_hints,
         "canonical_targets": sorted(DSI_MEMORY_TARGETS),
         "blocking_mapping_errors": gate,
         "mapping_valid": len(gate) == 0,
-        "column_samples": column_samples_from_inferred(job),
+        "column_samples": samples,
         "mapping_adjustment_notices": notices,
+        "field_target_descriptions": dict(DSI_FIELD_TARGET_DESCRIPTIONS),
     }

@@ -1,0 +1,85 @@
+"""DSI import: finalize apply — refresh staging resolutions, upsert facts, promote job to loaded."""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.ingestion.pipeline import STAGE_LOADED, STAGE_VALIDATED
+from app.models.import_distributor_si import ImportDistributorSiStagingLine
+from app.models.ingestion import ImportJob
+from app.services.imports.distributor_sales_inventory import (
+    _load_product_resolution_index,
+    refresh_dsi_staging_line_resolution,
+    upsert_dsi_facts_for_staging_job,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class DsiApplyCompletionError(ValueError):
+    """Business-rule failure for DSI apply completion."""
+
+
+def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any]:
+    """Re-resolve staging lines, upsert facts, set job to ``loaded`` when rules pass.
+
+    Completion rules:
+    - Template ``distributor_inventory``
+    - Stage ``validated``
+    - ``import_mode == apply``
+    - No staging line with ``resolution_status == blocked`` after refresh
+    - Fact upsert completes without recorded errors
+    """
+    job = db.get(ImportJob, int(job_id))
+    if not job:
+        raise DsiApplyCompletionError("Import job not found")
+    if (job.template_slug or "") != "distributor_inventory":
+        raise DsiApplyCompletionError("Job is not a distributor_inventory (DSI) import")
+    if (job.stage or "") != STAGE_VALIDATED:
+        raise DsiApplyCompletionError(f"Job stage must be {STAGE_VALIDATED!r}; current is {job.stage!r}")
+    if (job.import_mode or "") != "apply":
+        raise DsiApplyCompletionError("import_mode must be apply to complete DSI fact apply")
+
+    prod_idx = _load_product_resolution_index(db)
+    lines = list(
+        db.scalars(
+            select(ImportDistributorSiStagingLine)
+            .where(ImportDistributorSiStagingLine.import_job_id == job.id)
+            .order_by(ImportDistributorSiStagingLine.source_row_number)
+        ).all()
+    )
+    if not lines:
+        raise DsiApplyCompletionError("No DSI staging lines for this job")
+
+    for line in lines:
+        refresh_dsi_staging_line_resolution(db, job, line, prod_idx)
+
+    blocked = [ln for ln in lines if (ln.resolution_status or "") == "blocked"]
+    if blocked:
+        raise DsiApplyCompletionError(
+            f"{len(blocked)} staging line(s) still blocked after refresh (e.g. row {blocked[0].source_row_number})"
+        )
+
+    db.flush()
+    _sell, _inv, apply_errors = upsert_dsi_facts_for_staging_job(db, job)
+    if apply_errors:
+        msg = "; ".join(apply_errors[:12])
+        logger.warning("DSI fact apply reported errors job_id=%s: %s", job.id, msg)
+        raise DsiApplyCompletionError(f"Fact upsert errors: {msg}")
+
+    job.stage = STAGE_LOADED
+    job.status = "completed"
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return {
+        "ok": True,
+        "import_job_id": int(job.id),
+        "stage": job.stage,
+        "status": job.status,
+        "staging_rows": len(lines),
+    }

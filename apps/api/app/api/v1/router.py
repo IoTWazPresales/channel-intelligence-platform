@@ -27,6 +27,7 @@ from app.api.v1.endpoints import (
     roadmap,
     sellout,
     shipment_evidence,
+    shipping,
 )
 
 api_router = APIRouter()
@@ -39,6 +40,7 @@ api_router.include_router(distributors.router, prefix="/distributors", tags=["di
 api_router.include_router(sellout.router, prefix="/sellout", tags=["sellout"])
 api_router.include_router(inbound_shipments.router, prefix="/inbound-shipments", tags=["inbound-shipments"])
 api_router.include_router(shipment_evidence.router, prefix="/shipment-evidence", tags=["shipment-evidence"])
+api_router.include_router(shipping.router, prefix="/shipping", tags=["shipping"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(forecasts.router, prefix="/forecasts", tags=["forecasts"])
 api_router.include_router(buy_plans.router, prefix="/buy-plans", tags=["buy-plans"])
