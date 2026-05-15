@@ -9,7 +9,6 @@ from sqlalchemy import Date, and_, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.shipment_evidence import ShipmentEvidenceLine
-from app.services.imports.distributor_sales_inventory import _norm_key, _product_token_key
 
 
 def _same_calendar_month_as_evidence(evidence_date: date) -> Any:
@@ -50,6 +49,8 @@ def shipment_corroboration_for_product(
         )
         mode = "resolved_product_id"
     else:
+        from app.services.imports.distributor_sales_inventory import _product_token_key
+
         pk = _product_token_key(raw_product_token)
         if not pk:
             return None
@@ -101,6 +102,8 @@ def shipment_corroboration_for_customer(
         n = db.scalar(base.where(ShipmentEvidenceLine.customer_id == int(resolved_customer_id)))
         mode = "resolved_customer_id"
     else:
+        from app.services.imports.distributor_sales_inventory import _norm_key
+
         nk = _norm_key(customer_primary_raw or "")
         dg = (dealer_group_raw or "").strip()[:512].lower() if dealer_group_raw else ""
         if not nk and not dg:

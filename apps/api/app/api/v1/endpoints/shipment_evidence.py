@@ -16,6 +16,7 @@ from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
 from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_inbound_facts import upsert_inbound_shipment_facts_for_job
 from app.services.imports.shipment_evidence_resolution_plan import (
     SHIPMENT_CUSTOMER_ENTITY,
     SHIPMENT_DISTRIBUTOR_ENTITY,
@@ -588,6 +589,10 @@ async def apply_shipment_import_job(
             },
         )
     auto_applied = _apply_high_confidence_shipment_mapping_candidates(job_id)
+    with SessionLocal() as sync_sess:
+        upsert_inbound_shipment_facts_for_job(sync_sess, job_id)
+        sync_sess.commit()
+    await db.refresh(job)
     job.stage = STAGE_LOADED
     job.status = "completed"
     await db.commit()

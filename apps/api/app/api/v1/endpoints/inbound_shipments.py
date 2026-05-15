@@ -21,7 +21,7 @@ class ClearConfirmBody(BaseModel):
 
 @router.get("")
 async def list_inbound(db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(FactInboundShipment).order_by(FactInboundShipment.eta_date.desc()))
+    res = await db.execute(select(FactInboundShipment).order_by(FactInboundShipment.updated_at.desc()))
     rows = res.scalars().all()
     out = []
     for s in rows:
@@ -31,10 +31,13 @@ async def list_inbound(db: AsyncSession = Depends(get_db)):
             {
                 "id": s.id,
                 "product_sku": prod.sku if prod else None,
-                "eta_date": s.eta_date.isoformat(),
-                "quantity": float(s.quantity),
+                "eta_date": s.eta_date.isoformat() if s.eta_date else None,
+                "quantity": float(s.quantity) if s.quantity is not None else None,
                 "reference": s.reference,
                 "status": s.status,
+                "line_state": s.line_state,
+                "source_key": s.source_key,
+                "import_job_id": s.import_job_id,
                 "distributor_id": s.distributor_id,
                 "distributor_code": dist.code if dist else None,
             }
