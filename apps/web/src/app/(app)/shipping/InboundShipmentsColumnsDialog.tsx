@@ -4,6 +4,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import {
   Button,
   Checkbox,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -15,27 +16,15 @@ import {
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 
-/** Optional fact fields (resolution / lineage) hidden by default on the inbound shipments grid. */
-export const INBOUND_SHIPMENTS_OPTIONAL_FIELDS: { field: string; label: string }[] = [
-  { field: 'import_job_id', label: 'Import job ID' },
-  { field: 'source_key', label: 'Source key' },
-  { field: 'report_type', label: 'Report type' },
-  { field: 'product_resolution_status', label: 'Product resolution' },
-  { field: 'product_resolution_token', label: 'Product resolution token' },
-  { field: 'distributor_resolution_status', label: 'Distributor resolution' },
-  { field: 'distributor_resolution_token', label: 'Distributor resolution token' },
-  { field: 'customer_resolution_status', label: 'Customer resolution' },
-  { field: 'customer_dealer_token', label: 'Customer dealer token' },
-  { field: 'order_no', label: 'Order no.' },
-  { field: 'delivery_no', label: 'Delivery no.' },
-  { field: 'quantity', label: 'Quantity' },
-];
+export type OptionalColumnMeta = { field: string; label: string };
 
 export type InboundShipmentsColumnsDialogProps = {
   open: boolean;
   onClose: () => void;
   optionalFields: string[];
   onOptionalFieldsChange: (fields: string[]) => void;
+  columnOptions: OptionalColumnMeta[];
+  columnsLoading?: boolean;
 };
 
 export function InboundShipmentsColumnsDialog({
@@ -43,6 +32,8 @@ export function InboundShipmentsColumnsDialog({
   onClose,
   optionalFields,
   onOptionalFieldsChange,
+  columnOptions,
+  columnsLoading,
 }: InboundShipmentsColumnsDialogProps) {
   const [draft, setDraft] = useState<string[]>(optionalFields);
   const draftSet = useMemo(() => new Set(draft), [draft]);
@@ -62,36 +53,43 @@ export function InboundShipmentsColumnsDialog({
       <DialogContent dividers>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Default columns stay shipping-focused (distributor, product model + SKU, line/cargo state, key dates).
-          Enable extra audit fields below.
+          Every other column on <strong>fact_inbound_shipment</strong> can be toggled on below.
         </Typography>
-        <Stack spacing={0.5}>
-          {INBOUND_SHIPMENTS_OPTIONAL_FIELDS.map((c) => (
-            <FormControlLabel
-              key={c.field}
-              control={
-                <Checkbox
-                  size="small"
-                  checked={draftSet.has(c.field)}
-                  onChange={(e) => {
-                    const on = e.target.checked;
-                    setDraft((prev) => {
-                      const s = new Set(prev);
-                      if (on) s.add(c.field);
-                      else s.delete(c.field);
-                      return [...s];
-                    });
-                  }}
-                />
-              }
-              label={c.label}
-            />
-          ))}
-        </Stack>
+        {columnsLoading ? (
+          <Stack alignItems="center" py={2}>
+            <CircularProgress size={28} />
+          </Stack>
+        ) : (
+          <Stack spacing={0.5}>
+            {columnOptions.map((c) => (
+              <FormControlLabel
+                key={c.field}
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={draftSet.has(c.field)}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setDraft((prev) => {
+                        const s = new Set(prev);
+                        if (on) s.add(c.field);
+                        else s.delete(c.field);
+                        return [...s];
+                      });
+                    }}
+                  />
+                }
+                label={c.label}
+              />
+            ))}
+          </Stack>
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="contained"
+          disabled={columnsLoading}
           onClick={() => {
             onOptionalFieldsChange(draft);
             onClose();

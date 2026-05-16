@@ -28,12 +28,24 @@ import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/PageHeader';
 import { apiGet } from '@/lib/api';
 
-import {
-  INBOUND_SHIPMENTS_OPTIONAL_FIELDS,
-  InboundShipmentsColumnsDialog,
-} from './InboundShipmentsColumnsDialog';
+import { InboundShipmentsColumnsDialog, type OptionalColumnMeta } from './InboundShipmentsColumnsDialog';
 
 const LS_GRID = 'cip.commercial.inbound-shipments.grid.optional.v1';
+
+const DATE_FIELD_OPTIONS: { value: string; label: string }[] = [
+  { value: 'eta_date', label: 'ETA date' },
+  { value: 'promise_date', label: 'Promise date' },
+  { value: 'pod_date', label: 'POD date' },
+  { value: 'ship_confirm_date', label: 'Ship confirm date' },
+  { value: 'schedule_ship_date', label: 'Schedule ship date' },
+  { value: 'exwork_date', label: 'Ex-work date' },
+  { value: 'erd_date', label: 'ERD date' },
+  { value: 'est_pod_date', label: 'Est. POD date' },
+  { value: 'created_at', label: 'Created at (day, UTC)' },
+  { value: 'updated_at', label: 'Updated at (day, UTC)' },
+];
+
+type SmartPresetId = 'arriving_week' | 'overdue' | 'landed_week' | 'outstanding';
 
 type CountBucket = { key: string; count: number };
 
@@ -44,43 +56,59 @@ type ShippingSummary = {
   by_distributor: CountBucket[];
 };
 
-type ShippingLine = {
-  id: number;
-  import_job_id: number | null;
-  source_key: string;
-  line_state: string;
-  status: string;
-  report_type?: string | null;
-  sales_model_name?: string | null;
-  product_resolution_status?: string | null;
-  distributor_resolution_status?: string | null;
-  customer_resolution_status?: string | null;
-  product_sku?: string | null;
-  product_name?: string | null;
-  distributor_code?: string | null;
-  distributor_name?: string | null;
-  distributor_display?: string | null;
-  item_code?: string | null;
-  eta_date?: string | null;
-  promise_date?: string | null;
-  pod_date?: string | null;
-  product_resolution_token?: string | null;
-  distributor_resolution_token?: string | null;
-  customer_dealer_token?: string | null;
-  order_no?: string | null;
-  delivery_no?: string | null;
-  quantity?: number | null;
-};
+type ShippingLine = Record<string, unknown> & { id: number };
 
 type LinesResponse = { total: number; skip: number; limit: number; items: ShippingLine[] };
 
 type DistHit = { id: number; distributor_code: string; distributor_name: string };
 
+function localDateYMD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function startOfISOWeek(d: Date): Date {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dow = x.getDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  x.setDate(x.getDate() + diff);
+  return x;
+}
+
+function addDaysCal(d: Date, n: number): Date {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
 function fmtShortDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  if (Number.isNaN(d.getTime())) return String(iso);
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function fmtOptionalCell(value: unknown): string {
+  if (value == null || value === '') return '—';
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '—';
+    }
+  }
+  return String(value);
+}
+
+function fmtCellForKey(key: string, value: unknown): string {
+  if (value == null || value === '') return '—';
+  if (key.includes('date') || key.endsWith('_at')) {
+    const s = typeof value === 'string' ? value : String(value);
+    if (s && /^\d{4}-\d{2}-\d{2}/.test(s)) return fmtShortDate(s);
+  }
+  return fmtOptionalCell(value);
 }
 
 function CountTile({ title, buckets }: { title: string; buckets: CountBucket[] }) {
@@ -102,30 +130,39 @@ function CountTile({ title, buckets }: { title: string; buckets: CountBucket[] }
   );
 }
 
-function fmtOpt(v: string | number | null | undefined): string {
-  if (v == null || v === '') return '—';
-  return String(v);
-}
-
 export default function InboundShipmentsPage() {
   const [lineState, setLineState] = useState<string>('');
   const [cargoStatus, setCargoStatus] = useState<string>('');
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const [distQ, setDistQ] = useState('');
-  const [etaFrom, setEtaFrom] = useState('');
-  const [etaTo, setEtaTo] = useState('');
+  const [search, setSearch] = useState('');
+  const [dateField, setDateField] = useState('eta_date');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [productFamily, setProductFamily] = useState('');
+  const [productModel, setProductModel] = useState('');
+  const [currencyCode, setCurrencyCode] = useState('');
+  const [operatingUnit, setOperatingUnit] = useState('');
+  const [podDateFilter, setPodDateFilter] = useState<'' | 'true' | 'false'>('');
+  const [smartPreset, setSmartPreset] = useState<SmartPresetId | null>(null);
+
   const [colDialogOpen, setColDialogOpen] = useState(false);
   const [optionalFields, setOptionalFields] = useState<string[]>([]);
   const [persistReady, setPersistReady] = useState(false);
+
+  const { data: colMeta, isLoading: colMetaLoading } = useQuery({
+    queryKey: ['shipping-inbound-optional-columns'],
+    queryFn: ({ signal }) =>
+      apiGet<{ items: OptionalColumnMeta[] }>('/api/v1/shipping/inbound-optional-columns', { signal }),
+  });
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(LS_GRID);
       if (raw) {
         const p = JSON.parse(raw) as { optionalFields?: string[] };
-        const allowed = new Set(INBOUND_SHIPMENTS_OPTIONAL_FIELDS.map((c) => c.field));
         if (Array.isArray(p.optionalFields)) {
-          setOptionalFields(p.optionalFields.filter((f) => allowed.has(f)));
+          setOptionalFields(p.optionalFields);
         }
       }
     } catch {
@@ -133,6 +170,12 @@ export default function InboundShipmentsPage() {
     }
     setPersistReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!colMeta?.items?.length) return;
+    const allowed = new Set(colMeta.items.map((c) => c.field));
+    setOptionalFields((prev) => prev.filter((f) => allowed.has(f)));
+  }, [colMeta]);
 
   useEffect(() => {
     if (!persistReady) return;
@@ -144,15 +187,112 @@ export default function InboundShipmentsPage() {
   }, [optionalFields, persistReady]);
 
   const optionalSet = useMemo(() => new Set(optionalFields), [optionalFields]);
+  const allowedOptional = colMeta?.items ?? [];
+  const allowedSet = useMemo(() => new Set(allowedOptional.map((c) => c.field)), [allowedOptional]);
+  const columnLabels = useMemo(() => new Map(allowedOptional.map((c) => [c.field, c.label])), [allowedOptional]);
+  const displayOptionalFields = useMemo(
+    () => optionalFields.filter((f) => optionalSet.has(f) && allowedSet.has(f)),
+    [optionalFields, optionalSet, allowedSet]
+  );
+
+  const clearSmartPreset = () => {
+    setSmartPreset(null);
+    setLineState('');
+    setCargoStatus('');
+    setDateField('eta_date');
+    setDateFrom('');
+    setDateTo('');
+    setPodDateFilter('');
+  };
+
+  const applySmartPreset = (id: SmartPresetId) => {
+    if (smartPreset === id) {
+      clearSmartPreset();
+      return;
+    }
+    const today = new Date();
+    const w0 = startOfISOWeek(today);
+    const w6 = addDaysCal(w0, 6);
+    const yest = addDaysCal(today, -1);
+    setSmartPreset(id);
+    switch (id) {
+      case 'arriving_week':
+        setDateField('eta_date');
+        setDateFrom(localDateYMD(w0));
+        setDateTo(localDateYMD(w6));
+        setCargoStatus('scheduled');
+        setLineState('');
+        setPodDateFilter('');
+        break;
+      case 'overdue':
+        setDateField('promise_date');
+        setDateFrom('');
+        setDateTo(localDateYMD(yest));
+        setCargoStatus('scheduled');
+        setLineState('');
+        setPodDateFilter('true');
+        break;
+      case 'landed_week':
+        setDateField('pod_date');
+        setDateFrom(localDateYMD(w0));
+        setDateTo(localDateYMD(w6));
+        setCargoStatus('received');
+        setLineState('');
+        setPodDateFilter('false');
+        break;
+      case 'outstanding':
+        setLineState('open_order');
+        setDateField('eta_date');
+        setDateFrom('');
+        setDateTo('');
+        setCargoStatus('');
+        setPodDateFilter('');
+        break;
+      default:
+        break;
+    }
+  };
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['shipping-summary'],
     queryFn: ({ signal }) => apiGet<ShippingSummary>('/api/v1/shipping/summary', { signal }),
   });
 
+  const includeRawRow = displayOptionalFields.includes('raw_source_row');
+
   const queryKey = useMemo(
-    () => ['shipping-lines', lineState, cargoStatus, distributorPick?.id ?? null, etaFrom, etaTo] as const,
-    [lineState, cargoStatus, distributorPick?.id, etaFrom, etaTo]
+    () =>
+      [
+        'shipping-lines',
+        lineState,
+        cargoStatus,
+        distributorPick?.id ?? null,
+        search,
+        dateField,
+        dateFrom,
+        dateTo,
+        productFamily,
+        productModel,
+        currencyCode,
+        operatingUnit,
+        podDateFilter,
+        includeRawRow,
+      ] as const,
+    [
+      lineState,
+      cargoStatus,
+      distributorPick?.id,
+      search,
+      dateField,
+      dateFrom,
+      dateTo,
+      productFamily,
+      productModel,
+      currencyCode,
+      operatingUnit,
+      podDateFilter,
+      includeRawRow,
+    ]
   );
 
   const { data: lines, isLoading: linesLoading } = useQuery({
@@ -163,8 +303,17 @@ export default function InboundShipmentsPage() {
       if (lineState) params.set('line_state', lineState);
       if (cargoStatus) params.set('status', cargoStatus);
       if (distributorPick != null) params.set('distributor_id', String(distributorPick.id));
-      if (etaFrom.trim()) params.set('eta_from', etaFrom.trim());
-      if (etaTo.trim()) params.set('eta_to', etaTo.trim());
+      if (search.trim()) params.set('search', search.trim());
+      if (dateField) params.set('date_field', dateField);
+      if (dateFrom.trim()) params.set('date_from', dateFrom.trim());
+      if (dateTo.trim()) params.set('date_to', dateTo.trim());
+      if (productFamily.trim()) params.set('product_family', productFamily.trim());
+      if (productModel.trim()) params.set('product_model', productModel.trim());
+      if (currencyCode.trim()) params.set('currency_code', currencyCode.trim());
+      if (operatingUnit.trim()) params.set('operating_unit', operatingUnit.trim());
+      if (podDateFilter === 'true') params.set('pod_date_is_null', 'true');
+      if (podDateFilter === 'false') params.set('pod_date_is_null', 'false');
+      if (includeRawRow) params.set('include_raw_row', 'true');
       return apiGet<LinesResponse>(`/api/v1/shipping/lines?${params.toString()}`, { signal });
     },
   });
@@ -215,7 +364,57 @@ export default function InboundShipmentsPage() {
         </Stack>
       )}
 
+      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
+        Smart views
+      </Typography>
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }} alignItems="center">
+        <Chip
+          label="Arriving this week"
+          size="small"
+          variant={smartPreset === 'arriving_week' ? 'filled' : 'outlined'}
+          color={smartPreset === 'arriving_week' ? 'primary' : 'default'}
+          onClick={() => applySmartPreset('arriving_week')}
+        />
+        <Chip
+          label="Overdue (promise passed, not landed)"
+          size="small"
+          variant={smartPreset === 'overdue' ? 'filled' : 'outlined'}
+          color={smartPreset === 'overdue' ? 'primary' : 'default'}
+          onClick={() => applySmartPreset('overdue')}
+        />
+        <Chip
+          label="Landed this week"
+          size="small"
+          variant={smartPreset === 'landed_week' ? 'filled' : 'outlined'}
+          color={smartPreset === 'landed_week' ? 'primary' : 'default'}
+          onClick={() => applySmartPreset('landed_week')}
+        />
+        <Chip
+          label="Outstanding orders"
+          size="small"
+          variant={smartPreset === 'outstanding' ? 'filled' : 'outlined'}
+          color={smartPreset === 'outstanding' ? 'primary' : 'default'}
+          onClick={() => applySmartPreset('outstanding')}
+        />
+        {smartPreset ? (
+          <Button size="small" onClick={clearSmartPreset}>
+            Clear view
+          </Button>
+        ) : null}
+      </Stack>
+
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap alignItems="flex-start">
+        <TextField
+          size="small"
+          label="Search"
+          placeholder="Distributor, product, SKU, sales model, order #…"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setSmartPreset(null);
+          }}
+          sx={{ minWidth: 260, flex: 1 }}
+        />
         <Autocomplete
           sx={{ minWidth: 280, flex: 1 }}
           size="small"
@@ -223,6 +422,7 @@ export default function InboundShipmentsPage() {
           value={distributorPick}
           onChange={(_e, v) => {
             setDistributorPick(v);
+            setSmartPreset(null);
             if (!v) setDistQ('');
           }}
           inputValue={distQ}
@@ -237,7 +437,10 @@ export default function InboundShipmentsPage() {
             labelId="flt-line-state"
             label="Line state"
             value={lineState}
-            onChange={(e) => setLineState(String(e.target.value))}
+            onChange={(e) => {
+              setLineState(String(e.target.value));
+              setSmartPreset(null);
+            }}
           >
             <MenuItem value="">(any)</MenuItem>
             {(summary?.by_line_state ?? []).map((b) => (
@@ -253,7 +456,10 @@ export default function InboundShipmentsPage() {
             labelId="flt-cargo"
             label="Cargo status"
             value={cargoStatus}
-            onChange={(e) => setCargoStatus(String(e.target.value))}
+            onChange={(e) => {
+              setCargoStatus(String(e.target.value));
+              setSmartPreset(null);
+            }}
           >
             <MenuItem value="">(any)</MenuItem>
             {(summary?.by_status ?? []).map((b) => (
@@ -263,23 +469,90 @@ export default function InboundShipmentsPage() {
             ))}
           </Select>
         </FormControl>
+        <FormControl size="small" sx={{ minWidth: 180 }}>
+          <InputLabel id="flt-date-field">Date field</InputLabel>
+          <Select
+            labelId="flt-date-field"
+            label="Date field"
+            value={dateField}
+            onChange={(e) => {
+              setDateField(String(e.target.value));
+              setSmartPreset(null);
+            }}
+          >
+            {DATE_FIELD_OPTIONS.map((o) => (
+              <MenuItem key={o.value} value={o.value}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
         <TextField
           size="small"
-          label="ETA from"
+          label="Date from"
           type="date"
           InputLabelProps={{ shrink: true }}
-          value={etaFrom}
-          onChange={(e) => setEtaFrom(e.target.value)}
+          value={dateFrom}
+          onChange={(e) => {
+            setDateFrom(e.target.value);
+            setSmartPreset(null);
+          }}
           sx={{ width: 160 }}
         />
         <TextField
           size="small"
-          label="ETA to"
+          label="Date to"
           type="date"
           InputLabelProps={{ shrink: true }}
-          value={etaTo}
-          onChange={(e) => setEtaTo(e.target.value)}
+          value={dateTo}
+          onChange={(e) => {
+            setDateTo(e.target.value);
+            setSmartPreset(null);
+          }}
           sx={{ width: 160 }}
+        />
+        <TextField
+          size="small"
+          label="Product family"
+          placeholder="Category / line / series"
+          value={productFamily}
+          onChange={(e) => {
+            setProductFamily(e.target.value);
+            setSmartPreset(null);
+          }}
+          sx={{ minWidth: 160 }}
+        />
+        <TextField
+          size="small"
+          label="Product model"
+          placeholder="Model, marketing name, SKU…"
+          value={productModel}
+          onChange={(e) => {
+            setProductModel(e.target.value);
+            setSmartPreset(null);
+          }}
+          sx={{ minWidth: 160 }}
+        />
+        <TextField
+          size="small"
+          label="Currency"
+          placeholder="e.g. USD"
+          value={currencyCode}
+          onChange={(e) => {
+            setCurrencyCode(e.target.value);
+            setSmartPreset(null);
+          }}
+          sx={{ width: 100 }}
+        />
+        <TextField
+          size="small"
+          label="Operating unit"
+          value={operatingUnit}
+          onChange={(e) => {
+            setOperatingUnit(e.target.value);
+            setSmartPreset(null);
+          }}
+          sx={{ minWidth: 140 }}
         />
         <Button
           size="small"
@@ -306,8 +579,8 @@ export default function InboundShipmentsPage() {
                 <TableCell>ETA</TableCell>
                 <TableCell>Promise</TableCell>
                 <TableCell>POD</TableCell>
-                {INBOUND_SHIPMENTS_OPTIONAL_FIELDS.filter((c) => optionalSet.has(c.field)).map((c) => (
-                  <TableCell key={c.field}>{c.label}</TableCell>
+                {displayOptionalFields.map((f) => (
+                  <TableCell key={f}>{columnLabels.get(f) ?? f}</TableCell>
                 ))}
               </TableRow>
             </TableHead>
@@ -315,50 +588,35 @@ export default function InboundShipmentsPage() {
               {(lines?.items ?? []).map((row) => (
                 <TableRow key={row.id}>
                   <TableCell>
-                    <Typography variant="body2">{row.distributor_display ?? row.distributor_name ?? '—'}</Typography>
+                    <Typography variant="body2">
+                      {(row.distributor_display ?? row.distributor_name ?? '—') as string}
+                    </Typography>
                     {row.distributor_code && row.distributor_name ? (
                       <Typography variant="caption" color="text.secondary" display="block">
-                        {row.distributor_code}
+                        {String(row.distributor_code)}
                       </Typography>
                     ) : null}
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2">{row.sales_model_name ?? row.product_name ?? row.item_code ?? '—'}</Typography>
+                    <Typography variant="body2">
+                      {(row.sales_model_name ?? row.product_name ?? row.item_code ?? '—') as string}
+                    </Typography>
                     {row.product_sku ? (
                       <Typography variant="caption" color="text.secondary" display="block">
-                        SKU {row.product_sku}
+                        SKU {String(row.product_sku)}
                       </Typography>
                     ) : null}
                   </TableCell>
-                  <TableCell>{row.line_state}</TableCell>
-                  <TableCell>{row.status}</TableCell>
-                  <TableCell>{fmtShortDate(row.eta_date)}</TableCell>
-                  <TableCell>{fmtShortDate(row.promise_date)}</TableCell>
-                  <TableCell>{fmtShortDate(row.pod_date)}</TableCell>
-                  {optionalSet.has('import_job_id') ? <TableCell>{fmtOpt(row.import_job_id)}</TableCell> : null}
-                  {optionalSet.has('source_key') ? <TableCell sx={{ maxWidth: 220 }}>{fmtOpt(row.source_key)}</TableCell> : null}
-                  {optionalSet.has('report_type') ? <TableCell>{fmtOpt(row.report_type)}</TableCell> : null}
-                  {optionalSet.has('product_resolution_status') ? (
-                    <TableCell>{fmtOpt(row.product_resolution_status)}</TableCell>
-                  ) : null}
-                  {optionalSet.has('product_resolution_token') ? (
-                    <TableCell sx={{ maxWidth: 200 }}>{fmtOpt(row.product_resolution_token)}</TableCell>
-                  ) : null}
-                  {optionalSet.has('distributor_resolution_status') ? (
-                    <TableCell>{fmtOpt(row.distributor_resolution_status)}</TableCell>
-                  ) : null}
-                  {optionalSet.has('distributor_resolution_token') ? (
-                    <TableCell sx={{ maxWidth: 200 }}>{fmtOpt(row.distributor_resolution_token)}</TableCell>
-                  ) : null}
-                  {optionalSet.has('customer_resolution_status') ? (
-                    <TableCell>{fmtOpt(row.customer_resolution_status)}</TableCell>
-                  ) : null}
-                  {optionalSet.has('customer_dealer_token') ? (
-                    <TableCell sx={{ maxWidth: 200 }}>{fmtOpt(row.customer_dealer_token)}</TableCell>
-                  ) : null}
-                  {optionalSet.has('order_no') ? <TableCell>{fmtOpt(row.order_no)}</TableCell> : null}
-                  {optionalSet.has('delivery_no') ? <TableCell>{fmtOpt(row.delivery_no)}</TableCell> : null}
-                  {optionalSet.has('quantity') ? <TableCell>{row.quantity != null ? String(row.quantity) : '—'}</TableCell> : null}
+                  <TableCell>{String(row.line_state ?? '—')}</TableCell>
+                  <TableCell>{String(row.status ?? '—')}</TableCell>
+                  <TableCell>{fmtShortDate(row.eta_date as string | undefined)}</TableCell>
+                  <TableCell>{fmtShortDate(row.promise_date as string | undefined)}</TableCell>
+                  <TableCell>{fmtShortDate(row.pod_date as string | undefined)}</TableCell>
+                  {displayOptionalFields.map((f) => (
+                    <TableCell key={f} sx={{ maxWidth: 260, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {fmtCellForKey(f, row[f])}
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))}
             </TableBody>
@@ -376,6 +634,8 @@ export default function InboundShipmentsPage() {
         onClose={() => setColDialogOpen(false)}
         optionalFields={optionalFields}
         onOptionalFieldsChange={setOptionalFields}
+        columnOptions={allowedOptional}
+        columnsLoading={colMetaLoading}
       />
     </>
   );

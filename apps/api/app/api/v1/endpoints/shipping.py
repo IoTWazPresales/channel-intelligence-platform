@@ -2,18 +2,51 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, literal, or_, select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import Date as SA_Date, cast, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.inspection import inspect as sa_inspect
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.api.deps import get_db
 from app.models.dimensions import DimDistributor, DimProduct
 from app.models.facts import FactInboundShipment
 
 router = APIRouter()
+
+# Fact columns already shown as dedicated default grid cells (not offered as toggles).
+INBOUND_GRID_DEFAULT_FACT_KEYS: frozenset[str] = frozenset(
+    {
+        "line_state",
+        "status",
+        "eta_date",
+        "promise_date",
+        "pod_date",
+        "sales_model_name",
+        "item_code",
+        "bill_to_raw",
+        "ship_to_raw",
+    }
+)
+
+DATE_FIELD_MAP: dict[str, InstrumentedAttribute[Any]] = {
+    "eta_date": FactInboundShipment.eta_date,
+    "promise_date": FactInboundShipment.promise_date,
+    "pod_date": FactInboundShipment.pod_date,
+    "ship_confirm_date": FactInboundShipment.ship_confirm_date,
+    "schedule_ship_date": FactInboundShipment.schedule_ship_date,
+    "exwork_date": FactInboundShipment.exwork_date,
+    "erd_date": FactInboundShipment.erd_date,
+    "est_pod_date": FactInboundShipment.est_pod_date,
+    "created_at": FactInboundShipment.created_at,
+    "updated_at": FactInboundShipment.updated_at,
+}
+
+DATETIME_RANGE_KEYS: frozenset[str] = frozenset({"created_at", "updated_at"})
 
 
 def _parse_opt_date(raw: str | None) -> date | None:
@@ -23,6 +56,10 @@ def _parse_opt_date(raw: str | None) -> date | None:
         return date.fromisoformat(str(raw).strip()[:10])
     except ValueError:
         return None
+
+
+def _human_column_label(key: str) -> str:
+    return re.sub(r"_+", " ", key).strip().title()
 
 
 def _distributor_display(
@@ -48,7 +85,31 @@ def _distributor_display(
     return dc or "—"
 
 
-def _apply_fact_filters(stmt: Any, **kwargs: Any) -> Any:
+def _dim_join_flags(kwargs: dict[str, Any]) -> tuple[bool, bool]:
+    search = (kwargs.get("search") or "").strip()
+    pf = (kwargs.get("product_family") or "").strip()
+    pm = (kwargs.get("product_model") or "").strip()
+    # Product dimension joins are required for family filters and for model/SKU/name matches on dim.
+    need_product = bool(search or pf or pm)
+    need_distributor = bool(search)
+    return need_distributor, need_product
+
+
+def _apply_outer_joins(stmt: Any, need_dist: bool, need_product: bool) -> Any:
+    if need_dist:
+        stmt = stmt.outerjoin(DimDistributor, FactInboundShipment.distributor_id == DimDistributor.id)
+    if need_product:
+        stmt = stmt.outerjoin(DimProduct, FactInboundShipment.product_id == DimProduct.id)
+    return stmt
+
+
+def _apply_fact_where_clause(
+    stmt: Any,
+    *,
+    join_distributor: bool,
+    join_product: bool,
+    **kwargs: Any,
+) -> Any:
     import_job_id = kwargs.get("import_job_id")
     distributor_id = kwargs.get("distributor_id")
     line_state = kwargs.get("line_state")
@@ -56,10 +117,19 @@ def _apply_fact_filters(stmt: Any, **kwargs: Any) -> Any:
     product_resolution_status = kwargs.get("product_resolution_status")
     distributor_resolution_status = kwargs.get("distributor_resolution_status")
     customer_resolution_status = kwargs.get("customer_resolution_status")
-    status = kwargs.get("status")
+    status_v = kwargs.get("status")
     search = kwargs.get("search")
+    date_field = kwargs.get("date_field") or "eta_date"
+    date_from = kwargs.get("date_from")
+    date_to = kwargs.get("date_to")
     eta_from = kwargs.get("eta_from")
     eta_to = kwargs.get("eta_to")
+    pod_date_is_null = kwargs.get("pod_date_is_null")
+    currency_code = kwargs.get("currency_code")
+    operating_unit = kwargs.get("operating_unit")
+    product_family = kwargs.get("product_family")
+    product_model = kwargs.get("product_model")
+
     if import_job_id is not None:
         stmt = stmt.where(FactInboundShipment.import_job_id == import_job_id)
     if distributor_id is not None:
@@ -74,25 +144,98 @@ def _apply_fact_filters(stmt: Any, **kwargs: Any) -> Any:
         stmt = stmt.where(FactInboundShipment.distributor_resolution_status == distributor_resolution_status)
     if customer_resolution_status:
         stmt = stmt.where(FactInboundShipment.customer_resolution_status == customer_resolution_status)
-    if status:
-        stmt = stmt.where(FactInboundShipment.status == status)
-    if eta_from is not None:
-        stmt = stmt.where(FactInboundShipment.eta_date >= eta_from)
-    if eta_to is not None:
-        stmt = stmt.where(FactInboundShipment.eta_date <= eta_to)
-    if search and str(search).strip():
-        term = f"%{str(search).strip()}%"
+    if status_v:
+        stmt = stmt.where(FactInboundShipment.status == status_v)
+
+    if pod_date_is_null is True:
+        stmt = stmt.where(FactInboundShipment.pod_date.is_(None))
+    elif pod_date_is_null is False:
+        stmt = stmt.where(FactInboundShipment.pod_date.is_not(None))
+
+    if currency_code and str(currency_code).strip():
+        cc = str(currency_code).strip()
+        stmt = stmt.where(FactInboundShipment.currency_code.is_not(None))
+        stmt = stmt.where(FactInboundShipment.currency_code.ilike(cc))
+
+    if operating_unit and str(operating_unit).strip():
+        ou = f"%{str(operating_unit).strip()}%"
+        stmt = stmt.where(FactInboundShipment.operating_unit.ilike(ou))
+
+    d0 = date_from
+    d1 = date_to
+    field_key = str(date_field).strip() if date_field else "eta_date"
+    if field_key not in DATE_FIELD_MAP:
+        field_key = "eta_date"
+    if d0 is None and d1 is None and (eta_from is not None or eta_to is not None):
+        field_key = "eta_date"
+        d0 = eta_from
+        d1 = eta_to
+
+    if d0 is not None or d1 is not None:
+        raw_col = DATE_FIELD_MAP[field_key]
+        col: Any = cast(raw_col, SA_Date) if field_key in DATETIME_RANGE_KEYS else raw_col
+        if d0 is not None:
+            stmt = stmt.where(col >= d0)
+        if d1 is not None:
+            stmt = stmt.where(col <= d1)
+
+    if join_product and product_family and str(product_family).strip():
+        pf = f"%{str(product_family).strip()}%"
         stmt = stmt.where(
             or_(
-                FactInboundShipment.bill_to_raw.ilike(term),
-                FactInboundShipment.ship_to_raw.ilike(term),
-                FactInboundShipment.customer_dealer_token.ilike(term),
-                FactInboundShipment.item_code.ilike(term),
-                FactInboundShipment.sales_model_name.ilike(term),
-                FactInboundShipment.order_no.ilike(term),
-                FactInboundShipment.delivery_no.ilike(term),
+                DimProduct.category.ilike(pf),
+                DimProduct.product_line.ilike(pf),
+                DimProduct.series_name.ilike(pf),
             )
         )
+
+    if product_model and str(product_model).strip():
+        pm = f"%{str(product_model).strip()}%"
+        parts = [
+            FactInboundShipment.sales_model_name.ilike(pm),
+            FactInboundShipment.item_code.ilike(pm),
+        ]
+        if join_product:
+            parts.extend(
+                [
+                    DimProduct.model_name.ilike(pm),
+                    DimProduct.marketing_name.ilike(pm),
+                    DimProduct.sales_model_name.ilike(pm),
+                    DimProduct.part_number.ilike(pm),
+                    DimProduct.sku.ilike(pm),
+                ]
+            )
+        stmt = stmt.where(or_(*parts))
+
+    if search and str(search).strip():
+        term = f"%{str(search).strip()}%"
+        parts: list[Any] = [
+            FactInboundShipment.bill_to_raw.ilike(term),
+            FactInboundShipment.ship_to_raw.ilike(term),
+            FactInboundShipment.customer_dealer_token.ilike(term),
+            FactInboundShipment.item_code.ilike(term),
+            FactInboundShipment.sales_model_name.ilike(term),
+            FactInboundShipment.order_no.ilike(term),
+            FactInboundShipment.delivery_no.ilike(term),
+        ]
+        if join_distributor:
+            parts.extend(
+                [
+                    DimDistributor.name.ilike(term),
+                    DimDistributor.code.ilike(term),
+                ]
+            )
+        if join_product:
+            parts.extend(
+                [
+                    DimProduct.name.ilike(term),
+                    DimProduct.sku.ilike(term),
+                    DimProduct.sales_model_name.ilike(term),
+                    DimProduct.part_number.ilike(term),
+                ]
+            )
+        stmt = stmt.where(or_(*parts))
+
     return stmt
 
 
@@ -153,6 +296,7 @@ def _fact_to_dict(
         "product_name": product_name,
         "product_resolution_status": row.product_resolution_status,
         "product_resolution_token": row.product_resolution_token,
+        "product_resolution_detail": row.product_resolution_detail,
         "distributor_id": row.distributor_id,
         "distributor_code": distributor_code,
         "distributor_name": distributor_name,
@@ -168,6 +312,16 @@ def _fact_to_dict(
     if include_raw_row:
         out["raw_source_row"] = row.raw_source_row
     return out
+
+
+@router.get("/inbound-optional-columns")
+async def inbound_optional_columns() -> dict[str, Any]:
+    """Every ``fact_inbound_shipment`` column not covered by the default grid."""
+    mapper = sa_inspect(FactInboundShipment)
+    keys = sorted(
+        attr.key for attr in mapper.mapper.column_attrs if attr.key not in INBOUND_GRID_DEFAULT_FACT_KEYS
+    )
+    return {"items": [{"field": k, "label": _human_column_label(k)} for k in keys]}
 
 
 @router.get("/summary")
@@ -228,10 +382,25 @@ async def shipping_evidence_lines(
     search: str | None = None,
     eta_from: str | None = None,
     eta_to: str | None = None,
+    date_field: str = Query("eta_date"),
+    date_from: str | None = None,
+    date_to: str | None = None,
+    pod_date_is_null: bool | None = None,
+    currency_code: str | None = None,
+    operating_unit: str | None = None,
+    product_family: str | None = None,
+    product_model: str | None = None,
     include_raw_row: bool = Query(False),
 ) -> dict[str, Any]:
+    df = str(date_field or "eta_date").strip()
+    if df not in DATE_FIELD_MAP:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid date_field: {date_field!r}")
+
     eta_d0 = _parse_opt_date(eta_from)
     eta_d1 = _parse_opt_date(eta_to)
+    d0 = _parse_opt_date(date_from)
+    d1 = _parse_opt_date(date_to)
+
     filt: dict[str, Any] = {
         "import_job_id": import_job_id,
         "distributor_id": distributor_id,
@@ -244,13 +413,28 @@ async def shipping_evidence_lines(
         "search": search,
         "eta_from": eta_d0,
         "eta_to": eta_d1,
+        "date_field": df,
+        "date_from": d0,
+        "date_to": d1,
+        "pod_date_is_null": pod_date_is_null,
+        "currency_code": currency_code,
+        "operating_unit": operating_unit,
+        "product_family": product_family,
+        "product_model": product_model,
     }
-    count_stmt = select(func.count()).select_from(FactInboundShipment)
-    count_stmt = _apply_fact_filters(count_stmt, **filt)
+
+    need_dist, need_prod = _dim_join_flags(filt)
+
+    count_stmt = select(func.count(FactInboundShipment.id)).select_from(FactInboundShipment)
+    count_stmt = _apply_outer_joins(count_stmt, need_dist, need_prod)
+    count_stmt = _apply_fact_where_clause(
+        count_stmt, join_distributor=need_dist, join_product=need_prod, **filt
+    )
     total = int((await db.execute(count_stmt)).scalar_one())
 
     q = select(FactInboundShipment).order_by(FactInboundShipment.updated_at.desc())
-    q = _apply_fact_filters(q, **filt)
+    q = _apply_outer_joins(q, need_dist, need_prod)
+    q = _apply_fact_where_clause(q, join_distributor=need_dist, join_product=need_prod, **filt)
     res = await db.execute(q.offset(skip).limit(limit))
     rows = res.scalars().all()
 
