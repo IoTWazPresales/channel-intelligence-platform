@@ -290,6 +290,7 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
   const [specialCatChoice, setSpecialCatChoice] = useState<'noise_only' | 'internal_note'>('noise_only');
   const [rejectOpen, setRejectOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [applyPlanOpen, setApplyPlanOpen] = useState(false);
   const [candidateFilters, setCandidateFilters] = useState<StewardCandidateFilterState>(defaultStewardCandidateFilterState);
 
   const candidatesUrl =
@@ -300,6 +301,13 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
   const { data: rawRows, refetch, isLoading, isFetching } = useQuery({
     queryKey: ['shipment-evidence-mapping-candidates', importJobId],
     queryFn: ({ signal }) => apiGet<ShipmentMappingCandidateRow[]>(candidatesUrl, { signal }),
+    enabled: importJobId != null,
+  });
+
+  const { data: importJob } = useQuery({
+    queryKey: ['import-job', importJobId],
+    queryFn: ({ signal }) =>
+      apiGet<{ id: number; stage: string; status: string }>(`/api/v1/imports/jobs/${importJobId!}`, { signal }),
     enabled: importJobId != null,
   });
 
@@ -698,6 +706,41 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
     onError: (e: Error) => setActionError(e.message),
   });
 
+  const applyPlanBulkMut = useMutation({
+    mutationFn: (candidate_ids: number[]) =>
+      apiPost<{ applied: number[]; errors: { candidate_id: number; reason: string }[] }>(
+        `/api/v1/shipment-evidence/import-jobs/${importJobId}/bulk-apply-confirmed-plans`,
+        { candidate_ids }
+      ),
+    onSuccess: (data) => {
+      const n = data.applied?.length ?? 0;
+      const errs = data.errors ?? [];
+      if (errs.length && n > 0) {
+        setActionError(
+          `Partial success: ${n} applied. First errors: ${errs
+            .slice(0, 5)
+            .map((e) => `#${e.candidate_id}: ${e.reason}`)
+            .join('; ')}`
+        );
+      } else if (errs.length) {
+        setActionError(
+          `Apply with plan failed: ${errs
+            .slice(0, 6)
+            .map((e) => `#${e.candidate_id}: ${e.reason}`)
+            .join('; ')}`
+        );
+      } else {
+        setActionError(null);
+      }
+      setApplyPlanOpen(false);
+      setSelectedCandidateIds(new Set());
+      invalidate();
+      if (importJobId != null) void qc.invalidateQueries({ queryKey: ['import-job', importJobId] });
+      void refetch();
+    },
+    onError: (e: Error) => setActionError(e.message),
+  });
+
   const clearSpecialMut = useMutation({
     mutationFn: (candidate_id: number) =>
       apiPost<Record<string, unknown>>(
@@ -723,7 +766,8 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
     bulkMapMut.isPending ||
     manualSpecialMut.isPending ||
     clearSpecialMut.isPending ||
-    rejectMut.isPending;
+    rejectMut.isPending ||
+    applyPlanBulkMut.isPending;
 
   const toggleSelectCandidate = (id: number) => {
     setSelectedCandidateIds((prev) => {
@@ -871,6 +915,22 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
               }}
             >
               Bulk provisional…
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={
+                selectedCandidateIds.size === 0 ||
+                importJobId == null ||
+                (importJob?.stage || '').trim() !== 'loaded' ||
+                applyPlanBulkMut.isPending
+              }
+              onClick={() => {
+                setActionError(null);
+                setApplyPlanOpen(true);
+              }}
+            >
+              Apply with plan…
             </Button>
             <Typography variant="caption" color="text.secondary">
               {selectedCandidateIds.size} selected
@@ -1823,6 +1883,37 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
             }}
           >
             Reject candidate
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={applyPlanOpen} onClose={() => !applyPlanBulkMut.isPending && setApplyPlanOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Apply with plan</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Alert severity="info">
+              Executes the <strong>existing planner suggested_action</strong> for each selected candidate (map to
+              existing dim or create provisional distributor/customer), bypassing verify-name / special-category text
+              guards. Use only when you accept the current plan for every selected row.
+            </Alert>
+            <Typography variant="body2" color="text.secondary">
+              Selected: <strong>{selectedCandidateIds.size}</strong> candidate(s).
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setApplyPlanOpen(false)} disabled={applyPlanBulkMut.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={importJobId == null || selectedCandidateIds.size === 0 || applyPlanBulkMut.isPending}
+            onClick={() => {
+              if (importJobId == null) return;
+              applyPlanBulkMut.mutate([...selectedCandidateIds]);
+            }}
+          >
+            Confirm apply
           </Button>
         </DialogActions>
       </Dialog>

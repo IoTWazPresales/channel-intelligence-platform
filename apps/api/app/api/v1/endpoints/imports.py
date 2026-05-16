@@ -1,4 +1,6 @@
 import json
+import logging
+import threading
 import uuid
 from typing import Annotated, Any
 
@@ -9,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.api.deps import get_db
+from app.core.config import get_settings
+from app.core.dev_celery_logging import DEV_CELERY_LOGGER
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
 from app.services.imports.dsi_mapping_workflow import (
@@ -30,8 +34,10 @@ from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, Raw
 from app.storage.local import get_storage_backend
 from app.services.imports.import_job_bulk_delete import bulk_delete_import_jobs, normalize_job_ids, preview_import_job_bulk_delete
 from app.services.imports.template_definitions import product_master_sample_csv
+from app.worker.tasks import process_import_job_task
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _is_admin(x_user_role: str | None) -> bool:
@@ -481,11 +487,56 @@ async def post_shipment_validate(job_id: int, db: AsyncSession = Depends(get_db)
     gate = shipment_mapping_gate_errors(clean)
     if gate:
         raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
+
     with SessionLocal() as sync_db:
-        process_import_job_sync(sync_db, job_id)
+        j = sync_db.get(ImportJob, job_id)
+        if j is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        j.import_mode = "validate"
+        sync_db.commit()
+
+    settings = get_settings()
+    dispatched = False
+    if settings.cip_dev_celery_dispatch == "in_process_thread":
+
+        def _in_process_shipment_validate() -> None:
+            try:
+                with SessionLocal() as s2:
+                    process_import_job_sync(s2, job_id)
+            except Exception:
+                logger.exception(
+                    "shipment validate in-process thread failed job_id=%s (CIP_DEV_CELERY_DISPATCH=in_process_thread)",
+                    job_id,
+                )
+
+        DEV_CELERY_LOGGER.warning(
+            "ENQUEUE: shipment validate job_id=%s — CIP_DEV_CELERY_DISPATCH=in_process_thread (DEV ONLY).",
+            job_id,
+        )
+        threading.Thread(target=_in_process_shipment_validate, name=f"shipment-validate-{job_id}", daemon=True).start()
+        dispatched = True
+    else:
+        try:
+            process_import_job_task.delay(job_id)
+            dispatched = True
+        except Exception:
+            logger.exception("shipment validate Celery dispatch failed job_id=%s — falling back to sync", job_id)
+            with SessionLocal() as sync_fallback:
+                process_import_job_sync(sync_fallback, job_id)
+
     job2 = await db.get(ImportJob, job_id)
     if job2 is not None:
         await db.refresh(job2)
+
+    if dispatched:
+        return {
+            "async": True,
+            "id": job_id,
+            "status": job2.status if job2 else None,
+            "stage": job2.stage if job2 else None,
+            "message": "Validation started in the background worker.",
+        }
+
     if job2 and job2.status == "failed":
         raise HTTPException(
             status_code=422,

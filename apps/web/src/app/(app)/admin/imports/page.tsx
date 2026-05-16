@@ -414,6 +414,7 @@ function AdminImportsPageContent() {
   const [importJobBulkDeleteAck, setImportJobBulkDeleteAck] = useState(false);
   const [shipmentApplyWarning, setShipmentApplyWarning] = useState<string | null>(null);
   const [shipmentMapDraft, setShipmentMapDraft] = useState<Record<string, string>>({});
+  const [shipmentValidateAsync, setShipmentValidateAsync] = useState(false);
 
   const jobIdParam = useMemo(() => {
     const v = searchParams.get('job');
@@ -955,10 +956,19 @@ function AdminImportsPageContent() {
       const j = q.state.data;
       if (!j) return 1500;
       const st = (j.stage || '').trim();
-      if (st === 'validated' || st === 'loaded' || st === 'failed' || st === 'shipment_mapping_ready') return false;
+      const sts = (j.status || '').trim();
+      if (sts === 'running') return 1500;
+      if (st === 'validated' || st === 'loaded' || st === 'failed') return false;
+      if (st === 'shipment_mapping_ready') return false;
       return 1500;
     },
   });
+
+  useEffect(() => {
+    if (!isShipmentEvidence || !shipmentImportJob) return;
+    const st = (shipmentImportJob.stage || '').trim();
+    if (st === 'validated' || st === 'failed') setShipmentValidateAsync(false);
+  }, [isShipmentEvidence, shipmentImportJob?.stage]);
 
   /** Job id for shipment column mapping + validate (matches steward poll id). */
   const shipmentMappingJobId: number | null = shipmentEvidencePollJobId ?? lastJobId ?? null;
@@ -1051,13 +1061,14 @@ function AdminImportsPageContent() {
         headers: defaultHeaders,
       });
       if (!res.ok) throw new Error(await readFetchError(res));
-      await res.json();
-      return { jid };
+      const body = (await res.json()) as { async?: boolean };
+      return { jid, async: Boolean(body?.async) };
     },
-    onSuccess: ({ jid }) => {
-      void qc.invalidateQueries({ queryKey: ['import-job', jid] });
-      void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', jid] });
-      void qc.invalidateQueries({ queryKey: ['import-job-rows', jid] });
+    onSuccess: (data) => {
+      if (data.async) setShipmentValidateAsync(true);
+      void qc.invalidateQueries({ queryKey: ['import-job', data.jid] });
+      void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', data.jid] });
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', data.jid] });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
       void refetchPreview();
     },
@@ -3085,9 +3096,22 @@ function AdminImportsPageContent() {
                         }
                         onClick={() => void shipmentValidateRun.mutateAsync()}
                       >
-                        {shipmentValidateRun.isPending ? 'Validating…' : 'Run validation'}
+                        {shipmentValidateRun.isPending || shipmentValidateAsync ? 'Validating…' : 'Run validation'}
                       </Button>
                     </Stack>
+                    {(shipmentValidateRun.isPending ||
+                      shipmentValidateAsync ||
+                      (shipmentImportJob?.status || '').trim() === 'running') &&
+                    isShipmentEvidence &&
+                    (shipmentImportJob?.stage || '').trim() === 'shipment_mapping_ready' ? (
+                      <Stack spacing={1} sx={{ mt: 1 }}>
+                        <Alert severity="info">
+                          Inbound shipment validation is running in the background. This page keeps polling the import
+                          job until the stage advances to <strong>validated</strong> or <strong>failed</strong>.
+                        </Alert>
+                        <LinearProgress />
+                      </Stack>
+                    ) : null}
                     {saveShipmentMapping.isError ? (
                       <Alert severity="error">{safeDisplayError(saveShipmentMapping.error)}</Alert>
                     ) : null}

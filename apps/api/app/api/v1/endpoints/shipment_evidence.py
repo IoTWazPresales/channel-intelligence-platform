@@ -24,6 +24,7 @@ from app.services.imports.shipment_evidence_resolution_plan import (
 from app.services.imports.shipment_evidence_steward_ops import (
     ShipmentStewardOpError,
     _re_enrich_open_shipment_customer_candidates,
+    execute_bulk_apply_shipment_candidate_plans,
     execute_bulk_create_provisional_shipment_customers,
     execute_clear_special_category_shipment_candidate,
     execute_create_provisional_shipment_customer,
@@ -345,6 +346,29 @@ class ShipmentBulkProvisionalCustomersBody(BaseModel):
 class ShipmentBulkMapCustomerBody(BaseModel):
     candidate_ids: list[int] = Field(..., min_length=1)
     customer_id: int = Field(ge=1)
+
+
+class ShipmentBulkApplyPlansBody(BaseModel):
+    candidate_ids: list[int] = Field(..., min_length=1)
+
+
+@router.post("/import-jobs/{job_id}/bulk-apply-confirmed-plans")
+async def shipment_import_job_bulk_apply_confirmed_plans(
+    job_id: int,
+    body: ShipmentBulkApplyPlansBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    """Apply each candidate's persisted planner ``suggested_action`` (map / provisional create), bypassing partner-text guards."""
+    _require_admin(x_user_role)
+    with SessionLocal() as s:
+        job = s.get(ImportJob, job_id)
+        if not job or (job.template_slug or "") != "inbound_shipments":
+            raise HTTPException(status_code=404, detail="Shipment import job not found")
+        return execute_bulk_apply_shipment_candidate_plans(
+            s,
+            import_job_id=job_id,
+            candidate_ids=list(body.candidate_ids),
+        )
 
 
 @router.post("/import-candidates/bulk-map-customer")

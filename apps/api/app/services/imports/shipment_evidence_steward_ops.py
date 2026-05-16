@@ -332,6 +332,7 @@ def execute_create_provisional_shipment_distributor(
     display_name: str | None,
     distributor_code: str | None,
     confirm_for_suspicious_token: bool,
+    bypass_suspicious_token_gate: bool = False,
 ) -> dict[str, Any]:
     if cand.entity_type != SHIPMENT_DISTRIBUTOR_ENTITY:
         raise ShipmentStewardOpError("Not a shipment_distributor candidate", status_code=400)
@@ -342,7 +343,11 @@ def execute_create_provisional_shipment_distributor(
     nt = _norm_key(raw)
     if not nt:
         raise ShipmentStewardOpError("Token empty after normalization", status_code=400)
-    if nt in DISTRIBUTOR_PROVISIONAL_SUSPICIOUS and not confirm_for_suspicious_token:
+    if (
+        nt in DISTRIBUTOR_PROVISIONAL_SUSPICIOUS
+        and not confirm_for_suspicious_token
+        and not bypass_suspicious_token_gate
+    ):
         raise ShipmentStewardOpError(
             "suspicious_token_requires_confirm — set confirm_for_suspicious_token=true",
             status_code=400,
@@ -435,12 +440,16 @@ def execute_map_shipment_customer(
     *,
     customer_id: int,
     raw_token: str | None,
+    bypass_partner_text_guards: bool = False,
 ) -> dict[str, Any]:
     if cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
         raise ShipmentStewardOpError("Not a shipment_customer_token candidate", status_code=400)
     if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
         raise ShipmentStewardOpError("Candidate already terminal", status_code=400)
-    if _special_category_from_context(cand) in ("noise_only", "internal_note"):
+    if (
+        not bypass_partner_text_guards
+        and _special_category_from_context(cand) in ("noise_only", "internal_note")
+    ):
         raise ShipmentStewardOpError(
             "This candidate is a special category row (not a channel partner name); it cannot be mapped to a customer",
             status_code=400,
@@ -499,10 +508,14 @@ def execute_create_provisional_shipment_customer(
     preferred_distributor_id: int | None,
     partner_tier: str | None,
     notes_summary: str | None,
+    bypass_partner_text_guards: bool = False,
 ) -> dict[str, Any]:
     if cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
         raise ShipmentStewardOpError("Not a shipment_customer_token candidate", status_code=400)
-    if _special_category_from_context(cand) in ("noise_only", "internal_note"):
+    if (
+        not bypass_partner_text_guards
+        and _special_category_from_context(cand) in ("noise_only", "internal_note")
+    ):
         raise ShipmentStewardOpError(
             "This candidate is a special category row (for example retail, sample-only text, or an internal note). "
             "Create provisional customer is disabled until the source data represents a real partner name.",
@@ -782,6 +795,107 @@ def execute_reject_shipment_mapping_candidate(db: Session, cand: ImportEntityMap
     db.add(cand)
     db.commit()
     return {"ok": True, "candidate_id": int(cand.id), "status": cand.status}
+
+
+def execute_bulk_apply_shipment_candidate_plans(
+    db: Session,
+    *,
+    import_job_id: int,
+    candidate_ids: list[int],
+) -> dict[str, Any]:
+    """Apply persisted planner ``suggested_action`` for selected ``needs_review`` candidates.
+
+    Used after import apply when rows were blocked only by name-review / special-category heuristics:
+    partner-text guards are bypassed so the **existing** plan (map or provisional create) can execute.
+    """
+    applied: list[int] = []
+    errors: list[dict[str, Any]] = []
+    any_customer = False
+    any_distributor = False
+    for raw_id in candidate_ids:
+        cid = int(raw_id)
+        cand = db.get(ImportEntityMappingCandidate, cid)
+        if not cand or int(cand.import_job_id) != int(import_job_id):
+            errors.append({"candidate_id": cid, "reason": "not_found_or_wrong_job"})
+            continue
+        if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
+            errors.append({"candidate_id": cid, "reason": "terminal_status"})
+            continue
+        if cand.status != "needs_review":
+            errors.append({"candidate_id": cid, "reason": "status_not_needs_review"})
+            continue
+        ctx = cand.context if isinstance(cand.context, dict) else {}
+        action = (str(ctx.get("suggested_action") or "")).strip()
+        try:
+            if cand.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY:
+                any_distributor = True
+                if action == "map_distributor":
+                    eid = cand.suggested_entity_id
+                    if eid is None:
+                        raise ShipmentStewardOpError("plan missing suggested_entity_id", status_code=400)
+                    execute_map_shipment_distributor(db, cand, distributor_id=int(eid), raw_token=None)
+                    applied.append(cid)
+                elif action == "create_provisional_distributor":
+                    raw = _first_sample_raw(cand)
+                    dn = _display_name_from_context_or_sample(cand, None, raw)
+                    execute_create_provisional_shipment_distributor(
+                        db,
+                        cand,
+                        display_name=dn.strip() or None,
+                        distributor_code=None,
+                        confirm_for_suspicious_token=False,
+                        bypass_suspicious_token_gate=True,
+                    )
+                    applied.append(cid)
+                else:
+                    errors.append({"candidate_id": cid, "reason": f"unsupported_plan:{action or 'empty'}"})
+            elif cand.entity_type == SHIPMENT_CUSTOMER_ENTITY:
+                any_customer = True
+                if action == "map_customer":
+                    eid = cand.suggested_entity_id
+                    if eid is None:
+                        raise ShipmentStewardOpError("plan missing suggested_entity_id", status_code=400)
+                    execute_map_shipment_customer(
+                        db, cand, customer_id=int(eid), raw_token=None, bypass_partner_text_guards=True
+                    )
+                    applied.append(cid)
+                elif action == "create_provisional_customer":
+                    raw = _first_sample_raw(cand)
+                    dn = _display_name_from_context_or_sample(cand, None, raw)
+                    execute_create_provisional_shipment_customer(
+                        db,
+                        cand,
+                        display_name=dn.strip() or None,
+                        region_id=None,
+                        channel_id=None,
+                        preferred_distributor_id=None,
+                        partner_tier="unmanaged",
+                        notes_summary=None,
+                        bypass_partner_text_guards=True,
+                    )
+                    applied.append(cid)
+                else:
+                    errors.append({"candidate_id": cid, "reason": f"unsupported_plan:{action or 'empty'}"})
+            else:
+                errors.append({"candidate_id": cid, "reason": "unsupported_entity_type"})
+        except ShipmentStewardOpError as exc:
+            errors.append({"candidate_id": cid, "reason": str(exc.detail)})
+
+    if applied:
+        sid: int | None = None
+        for cid in reversed(applied):
+            c = db.get(ImportEntityMappingCandidate, cid)
+            if c is not None:
+                sid = int(c.source_definition_id) if c.source_definition_id is not None else None
+                break
+        if any_customer:
+            enrich_shipment_customer_token_candidates(db, import_job_id=int(import_job_id), source_definition_id=sid)
+            db.commit()
+        if any_distributor:
+            enrich_shipment_distributor_candidates(db, import_job_id=int(import_job_id), source_definition_id=sid)
+            db.commit()
+
+    return {"applied": applied, "errors": errors}
 
 
 def execute_bulk_create_provisional_shipment_customers(
