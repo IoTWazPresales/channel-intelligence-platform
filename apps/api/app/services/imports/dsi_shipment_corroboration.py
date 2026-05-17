@@ -35,6 +35,12 @@ def shipment_corroboration_for_product(
 
     Includes ``distinct_resolved_product_ids``: distinct ``ShipmentEvidenceLine.product_id`` values
     among matching **resolved_unique** lines in the evidence month (used to break DSI ambiguity).
+
+    For raw-token matching, rows are first limited to the DSI **distributor_id**. If that scope yields
+    no distinct product ids, the same token + month match is retried **across all distributors**; when
+    that broader set contains exactly one distinct ``product_id``, it is returned and
+    ``distinct_ids_scope`` is ``cross_distributor``. Otherwise ``distinct_ids_scope`` is
+    ``distributor_specific`` when the distributor-scoped set is non-empty.
     """
     if not distributor_id or evidence_date is None:
         return None
@@ -53,33 +59,75 @@ def shipment_corroboration_for_product(
             .where(*base_where, ShipmentEvidenceLine.product_id == int(resolved_product_id))
             .distinct()
         )
-    else:
-        from app.services.imports.distributor_sales_inventory import _product_token_key
-
-        pk = _product_token_key(raw_product_token)
-        if not pk:
+        cnt = int(n or 0)
+        if cnt <= 0:
             return None
-        token_match = or_(
-            func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.item_code, ""))) == literal(pk),
-            func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.ean_code, ""))) == literal(pk),
-            func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.upc_code, ""))) == literal(pk),
-            func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.sales_model_name, ""))) == literal(pk),
-        )
-        n = db.scalar(base_count.where(token_match))
-        mode = "raw_product_token_tiers"
-        ids_stmt = select(ShipmentEvidenceLine.product_id).where(*base_where, token_match).distinct()
-    cnt = int(n or 0)
-    if cnt <= 0:
+        raw_ids = list(db.scalars(ids_stmt).all())
+        distinct_ids = sorted({int(x) for x in raw_ids if x is not None})[:32]
+        return {
+            "kind": "shipment_evidence_product",
+            "match_count": cnt,
+            "mode": mode,
+            "distributor_id": int(distributor_id),
+            "evidence_month": evidence_date.isoformat()[:7],
+            "distinct_resolved_product_ids": distinct_ids,
+            "distinct_ids_scope": "distributor_specific",
+        }
+
+    from app.services.imports.distributor_sales_inventory import _product_token_key
+
+    pk = _product_token_key(raw_product_token)
+    if not pk:
         return None
-    raw_ids = list(db.scalars(ids_stmt).all())
-    distinct_ids = sorted({int(x) for x in raw_ids if x is not None})[:32]
+    token_match = or_(
+        func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.item_code, ""))) == literal(pk),
+        func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.ean_code, ""))) == literal(pk),
+        func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.upc_code, ""))) == literal(pk),
+        func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.sales_model_name, ""))) == literal(pk),
+    )
+    mode = "raw_product_token_tiers"
+
+    n_dist = db.scalar(base_count.where(token_match))
+    ids_dist_stmt = select(ShipmentEvidenceLine.product_id).where(*base_where, token_match).distinct()
+    distinct_dist: list[int] = []
+    if n_dist and int(n_dist) > 0:
+        raw_d = list(db.scalars(ids_dist_stmt).all())
+        distinct_dist = sorted({int(x) for x in raw_d if x is not None})[:32]
+
+    if distinct_dist:
+        return {
+            "kind": "shipment_evidence_product",
+            "match_count": int(n_dist or 0),
+            "mode": mode,
+            "distributor_id": int(distributor_id),
+            "evidence_month": evidence_date.isoformat()[:7],
+            "distinct_resolved_product_ids": distinct_dist,
+            "distinct_ids_scope": "distributor_specific",
+        }
+
+    cross_where = (
+        ShipmentEvidenceLine.product_resolution_status == "resolved_unique",
+        ShipmentEvidenceLine.product_id.isnot(None),
+        _same_calendar_month_as_evidence(evidence_date),
+        token_match,
+    )
+    cross_count = select(func.count()).select_from(ShipmentEvidenceLine).where(*cross_where)
+    n_cross = db.scalar(cross_count)
+    if not n_cross or int(n_cross) <= 0:
+        return None
+    ids_cross_stmt = select(ShipmentEvidenceLine.product_id).where(*cross_where).distinct()
+    raw_c = list(db.scalars(ids_cross_stmt).all())
+    distinct_cross = sorted({int(x) for x in raw_c if x is not None})[:32]
+    if len(distinct_cross) != 1:
+        return None
     return {
         "kind": "shipment_evidence_product",
-        "match_count": cnt,
+        "match_count": int(n_cross or 0),
         "mode": mode,
         "distributor_id": int(distributor_id),
         "evidence_month": evidence_date.isoformat()[:7],
-        "distinct_resolved_product_ids": distinct_ids,
+        "distinct_resolved_product_ids": distinct_cross,
+        "distinct_ids_scope": "cross_distributor",
     }
 
 

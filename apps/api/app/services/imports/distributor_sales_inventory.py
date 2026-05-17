@@ -353,9 +353,10 @@ def _product_eligible_for_dsi_auto(
     Inactive / clearly retired-lifecycle strings / outside launch–retire window for the evidence date
     are ineligible. Empty ``lifecycle_status`` does not alone disqualify if ``is_active`` is true.
 
-    When ``relax_inactive_for_historical_dsi`` is true (predominantly historical DSI file), inactive and
-    lifecycle-disabled rows remain eligible so long as launch/retire **dates** are consistent with the
-    evidence date.
+    When ``relax_inactive_for_historical_dsi`` is true (predominantly historical DSI file), any row
+    present in Product Master is treated as eligible for automatic resolution: inactive, lifecycle
+    strings, and launch/retire **date** windows are not applied (historical sell-out can predate
+    current master dates).
     """
     if not relax_inactive_for_historical_dsi:
         if not bool(getattr(p, "is_active", True)):
@@ -367,13 +368,13 @@ def _product_eligible_for_dsi_auto(
             for frag in ("cancel", "discard", "retire", "obsolete", "inactive", "disabled", "discontinued"):
                 if frag in ls:
                     return False
-    if evidence_date is not None:
-        rd = getattr(p, "retired_date", None)
-        if rd is not None and rd < evidence_date:
-            return False
-        ld = getattr(p, "launch_date", None)
-        if ld is not None and ld > evidence_date:
-            return False
+        if evidence_date is not None:
+            rd = getattr(p, "retired_date", None)
+            if rd is not None and rd < evidence_date:
+                return False
+            ld = getattr(p, "launch_date", None)
+            if ld is not None and ld > evidence_date:
+                return False
     return True
 
 
@@ -512,10 +513,14 @@ def _shipment_disambiguate_product_id(
     evidence_date: date | None,
     raw: str | None,
     candidate_ids: list[int],
-) -> int | None:
-    """If shipment evidence points at exactly one product in ``candidate_ids``, return that id."""
+) -> tuple[int | None, str | None]:
+    """If shipment evidence points at exactly one product in ``candidate_ids``, return (id, scope).
+
+    ``scope`` is ``distinct_ids_scope`` from :func:`shipment_corroboration_for_product` when a match
+    was used (``distributor_specific`` | ``cross_distributor``), else ``None``.
+    """
     if db is None or distributor_id is None or evidence_date is None or not candidate_ids:
-        return None
+        return None, None
     sc = shipment_corroboration_for_product(
         db,
         distributor_id=int(distributor_id),
@@ -524,15 +529,16 @@ def _shipment_disambiguate_product_id(
         resolved_product_id=None,
     )
     if not sc:
-        return None
+        return None, None
     dps = sc.get("distinct_resolved_product_ids")
     if not isinstance(dps, list) or not dps:
-        return None
+        return None, None
+    scope = sc.get("distinct_ids_scope") if isinstance(sc.get("distinct_ids_scope"), str) else None
     elig = {int(x) for x in candidate_ids if int(x) > 0}
     inter = elig & {int(x) for x in dps if x is not None}
     if len(inter) == 1:
-        return int(next(iter(inter)))
-    return None
+        return int(next(iter(inter))), scope
+    return None, None
 
 
 def _resolve_product(
@@ -640,9 +646,12 @@ def _resolve_product(
         if len(elig) == 1:
             return int(elig[0]), None, tag_for_tier[tier], None
         if len(elig) > 1:
-            pick = _shipment_disambiguate_product_id(db, distributor_id, evidence_date, raw, elig)
+            pick, ship_scope = _shipment_disambiguate_product_id(db, distributor_id, evidence_date, raw, elig)
             if pick is not None:
-                return int(pick), None, f"{tag_for_tier[tier]}_shipment_disambiguated", None
+                tag = f"{tag_for_tier[tier]}_shipment_disambiguated"
+                if ship_scope == "cross_distributor":
+                    tag = f"{tag}_cross_distributor"
+                return int(pick), None, tag, None
             snaps = [_product_snapshot_for_dsi_context(idx.products_by_id[i]) for i in sorted(set(elig))]
             amb: dict[str, Any] = {
                 "tier": tier,
@@ -668,9 +677,12 @@ def _resolve_product(
         if len(elig_a) == 1:
             return int(elig_a[0]), None, "product_resolved_alias", None
         if len(elig_a) > 1:
-            pick = _shipment_disambiguate_product_id(db, distributor_id, evidence_date, raw, elig_a)
+            pick, ship_scope = _shipment_disambiguate_product_id(db, distributor_id, evidence_date, raw, elig_a)
             if pick is not None:
-                return int(pick), None, "product_resolved_alias_shipment_disambiguated", None
+                tag = "product_resolved_alias_shipment_disambiguated"
+                if ship_scope == "cross_distributor":
+                    tag = f"{tag}_cross_distributor"
+                return int(pick), None, tag, None
             snaps = [_product_snapshot_for_dsi_context(idx.products_by_id[i]) for i in sorted(set(elig_a))]
             amb = {
                 "tier": "product_alias",
@@ -692,10 +704,13 @@ def _resolve_product(
             if v > 0:
                 pids.append(v)
         if len(pids) > 1:
-            pick = _shipment_disambiguate_product_id(db, distributor_id, evidence_date, raw, pids)
+            pick, ship_scope = _shipment_disambiguate_product_id(db, distributor_id, evidence_date, raw, pids)
             if pick is not None:
                 tier = str(amb.get("tier") or "unknown_tier")
-                return int(pick), None, f"product_resolved_{tier}_shipment_disambiguated", None
+                tag = f"product_resolved_{tier}_shipment_disambiguated"
+                if ship_scope == "cross_distributor":
+                    tag = f"{tag}_cross_distributor"
+                return int(pick), None, tag, None
         return None, "ambiguous_product_match", None, pending_ambiguous
     if accumulated.inactive_hits:
         return None, "unresolved_product_inactive_only", None, accumulated

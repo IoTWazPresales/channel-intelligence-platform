@@ -5,47 +5,305 @@ alwaysApply: true
 
 PROJECT OVERLAY — CHANNEL INTELLIGENCE / COMMERCIAL PLANNER
 
-This project is a production-oriented supply-chain intelligence platform.
+## How These Rules Work
 
-Primary priorities:
-1. Data correctness
-2. Import auditability
-3. Safe validation and apply/commit flows
-4. Idempotency and retry safety
-5. Clear user-facing error messages
-6. Minimal regressions across frontend, API, worker, and database
+These project-specific rules apply alongside the general engineering rules
+(`engineering-rules.mdc`). Both files apply simultaneously. When they conflict,
+the more specific rule wins. Always read both files before starting any task.
 
-Normal runtime:
-- API: pnpm dev:api
-- Web: pnpm dev:web
-- Do not use Docker unless explicitly requested.
-- Do not use pnpm --filter web start unless explicitly testing production-build behavior.
+---
 
-Database:
-- The real local dev database is cip.
-- Do not mutate cip data unless explicitly approved.
-- Verify database identity before DB-affecting commands.
-- Tests must not write to cip unless explicitly allowed.
-- Do not run Alembic upgrade against cip unless explicitly requested.
+## Platform Vision
 
-Domain rules:
-- Product Master is the product source unless a concrete issue proves otherwise.
-- Preserve audit history for imports, mappings, validations, apply/commit flows, retries, cleanup, and background jobs.
-- Do not silently coerce ambiguous SKU, product, customer, distributor, channel, pricing, stock, or sales mappings.
-- Prefer explicit confirmation and visible evidence for mappings.
-- Do not bypass validation to make imports pass.
-- Do not weaken validation rules without explaining business/data impact.
-- Cleanup/delete flows must show dependencies and require explicit action where data loss may occur.
-- DAP is commercial sell-in/evidence pricing, not PM bottom cost or landed cost.
-- PM bottom/controlled cost is an internal cost input and must not be confused with DAP.
+Channel Intelligence Platform tracks the full stock journey:
+**OEM → Distributor → Retailer → Consumer**
 
-Import behavior:
-- Parser output, validation output, UI mapping state, API contracts, worker jobs, and database state must stay synchronized.
-- Apply/commit flows must be safe against refresh, retry, double-click, duplicate submission, stale jobs, and partial completion.
-- Previous jobs should remain inspectable where supported.
-- If adding retry, re-upload, resume, fix, cleanup, or delete behavior, preserve auditability.
+It ingests messy commercial files (CSV/XLSX), standardises entities via steward
+workflows, and surfaces explainable recommendations across inventory, buy plans,
+pricing, promotions, competition, roadmap, and budgets.
 
-UI:
-- UI must make data state obvious: draft, mapped, validated, failed, queued, running, completed, applied/committed, blocked.
-- Error messages should tell the user what to do next.
-- Dependency/delete blockers should show where the data exists and offer safe cleanup paths where appropriate.
+Every module follows a common pattern:
+`upload → parse → map → validate → steward → apply/commit → derive`
+
+---
+
+## Architecture Overview
+apps/api/          FastAPI, SQLAlchemy 2 async, Alembic migrations, Celery/Redis
+apps/web/          Next.js 15 (App Router), React 19, MUI 6, AG Grid,
+TanStack Query, Zustand, Recharts
+packages/ui/       Shared MUI theme tokens and AppThemeProvider
+packages/types/    Shared TypeScript types (nav items, roles)
+infra/docker/      Docker Compose — Postgres 16, Redis 7, API, web, worker
+docs/              Architecture docs, data contracts, engineering notes
+
+### Runtime Ports (local dev)
+- Web: http://localhost:3000
+- API: http://localhost:8001 (host direct) or http://localhost:8010 (Docker)
+- Postgres: localhost:5432, database `cip`
+- Redis: localhost:6379
+
+---
+
+## Memory Palace
+
+Every task must check for and maintain the memory palace. Read `CONTEXT.md`
+in the repo root at the start of every task. After completing any significant
+task, update `CONTEXT.md` to reflect the current state. If `CONTEXT.md` does
+not exist — create it.
+
+`CONTEXT.md` contains: current branch, current Alembic head, what is working,
+what is in progress, what is next. It is dynamic and updated by agents.
+These rules are static and updated only when architecture decisions change.
+
+---
+
+## Database Safety Rules
+
+1. Never run migrations without confirmation. Always run `alembic current`
+   before generating or upgrading.
+2. Always verify `SELECT current_database() = 'cip'` before any DB-affecting
+   command.
+3. Never use `git add -A` or `git add .` — explicit path staging only.
+4. Tests must not write to `cip` unless `ALLOW_TESTS_ON_DEV_DB=1` is set.
+5. Do not run `alembic upgrade` against production without explicit instruction.
+6. Wipe scripts destroy all application data — use only in dev/demo contexts.
+7. Seed scripts with default args run destructive demo seed. Use
+   `--commercial-system-reference-only` to insert only reference dimensions.
+8. Before generating a new migration, always run `alembic current` to confirm
+   the current head and set `down_revision` correctly.
+
+---
+
+## Architecture Principles
+
+1. **Single source of truth per domain.** Product Master owns products.
+   Customer and Distributor masters are identity anchors. No shadow tables.
+   Import evidence is evidence — not master data.
+
+2. **No auto-create of master records without steward approval.** Import
+   pipelines flag unmapped entities for human review. Never silently create
+   dim_product, dim_distributor, or dim_customer from import evidence.
+
+3. **No weak joins or substring matching for entity resolution.** Entity
+   resolution uses explicit token-to-dim mappings with steward confirmation.
+   Ambiguous rows must remain reviewable — never auto-resolve ambiguity.
+
+4. **`source_key` as upsert key for all fact tables.** Every fact row has a
+   natural business key for idempotent re-import. Latest-job-wins for shipment
+   facts. Transaction-immutability for sell-out and customer sales facts.
+
+5. **Apply/commit flows must be idempotent.** Re-running the same import/apply
+   must produce the same result without duplicates or data corruption.
+
+6. **Explainability built in.** `RecommendationMixin` provides
+   `explanation_summary` and `explanation_factors` JSONB on derived entities.
+   Every calculator returns `calc_explanation` and `calc_flags` per line.
+
+7. **DAP is commercial sell-in/evidence pricing** — not PM bottom cost or
+   landed cost. PM bottom cost is `controlled_cost_amount`. Never conflate
+   these three distinct pricing concepts.
+
+8. **Handle missing tables gracefully.** API endpoints that depend on optional
+   fact tables return `data_unavailable: true` rather than 500 errors. Pages
+   render informative empty states, not crashes.
+
+9. **Never store calculated values as facts.** SOH is always derived from
+   upstream data. Reported SOH from retailer files is a validation checkpoint
+   only — not the source of truth.
+
+---
+
+## Domain Language
+
+| Term | Definition |
+|---|---|
+| `distributor_token` | Raw string from import file identifying a distributor before entity resolution |
+| `customer_dealer_token` | Raw string from import file identifying a customer/dealer before resolution |
+| `dealer_group_token` | Normalised group identifier for dealer entities across files |
+| `source_key` | Natural unique key for fact table upsert |
+| `provisional record` | Dimension record created with limited data, pending steward enrichment |
+| `strategic customer` | Customer flagged for priority treatment in planning and allocation |
+| `open channel` | Sales through unidentified end-customers; uses `OPEN_CHANNEL` dim_customer |
+| `corroboration signal` | Multiple independent data sources confirming the same entity mapping |
+| `historical import mode` | Bulk import with relaxed eligibility for past-period data |
+| `weekly import mode` | Incremental current-period upload with strict eligibility |
+| `controlled cost` | PM bottom / internal cost basis — not logistics-inclusive landed cost |
+| `economics trust tier` | ok / warning / blocked classification of line economics output quality |
+| `DAP` | Commercial sell-in evidence pricing — distinct from PM bottom and landed cost |
+
+---
+
+## Import Pipeline Pattern
+template_definitions.py   → Define expected columns and field types
+field_mapping.py          → Map source columns to target fields (auto + manual)
+import_service.py         → Parse file, apply mappings, validate rows, stage
+steward_ops.py            → Flag unmapped entities for human review
+apply path                → Upsert validated rows to fact tables via source_key
+
+The steward workflow is not optional. Every unmapped entity must go through
+steward review before being committed to master data. This is a governance
+boundary — not a performance optimisation.
+
+---
+
+## DSI Resolution Rules
+
+These are stable architectural decisions for the DSI pipeline. Do not change
+resolution order or eligibility logic without explicit instruction.
+
+**Product resolution tier order (strict — no skipping):**
+`item_code → EAN/UPC → sales_model_name → alias`
+
+**Corroboration rule:**
+Shipment evidence corroboration runs AFTER eligibility filtering.
+The corroboration function receives only eligible candidates — not the full
+ambiguous set. This is by design. Do not move corroboration before eligibility.
+
+**Distributor-specific before cross-distributor:**
+Corroboration first searches shipment evidence for the same distributor.
+Only if that returns zero results does it fall back to cross-distributor search.
+Cross-distributor fallback resolves only when exactly one distinct product_id
+is found across all distributors. If multiple product_ids are found
+cross-distributor — the row remains ambiguous.
+
+**Historical vs weekly mode:**
+- Historical mode (majority of transaction dates > 90 days old, or explicit
+  toggle): relaxes inactive product eligibility, skips Strategic/marketplace
+  classification gates, auto-applies candidates at confidence ≥ 0.55
+- Weekly mode: strict eligibility, steward exceptions only
+- The `dsi_historical_product_eligibility_relaxed` flag on
+  `import_job.staged_metadata` controls which path is active
+- Never merge these two modes or apply historical relaxation to weekly imports
+
+**Never:**
+- Auto-create dim_product, dim_distributor, or dim_customer from import evidence
+- Use substring matching for entity resolution
+- Skip the steward workflow for genuinely ambiguous candidates
+- Change the tier resolution order without explicit architectural approval
+
+---
+
+## Fact Table Design Principles
+
+- `source_key` uniqueness prevents duplicate rows across re-imports
+- Latest-job-wins for shipment facts (`fact_inbound_shipment`) — re-importing
+  updates existing rows via ON CONFLICT (source_key) DO UPDATE
+- Transaction-immutability for sell-out and customer sales — update only
+  resolution FKs (product_id, customer_id, store_id), never transaction data
+  (quantity, price, date)
+- `fact_inbound_shipment` — current truth layer for inbound shipments
+- `fact_sales_sellout` — current truth layer for distributor sell-out (DSI)
+- `fact_customer_sales` — current truth layer for retailer sell-out
+- All fact tables handle missing data gracefully — return `data_unavailable`
+  rather than errors when tables are empty or queries return null
+
+---
+
+## Known Gotchas
+
+| Issue | Context | Fix |
+|---|---|---|
+| `numpy.bool_` in PM upsert | Product Master commit produces numpy scalars that SQLAlchemy rejects | Cast to Python native `bool()` before persistence |
+| `MissingGreenlet` from lazy loads | Accessing relationships in async endpoints without eager loading raises `MissingGreenlet` | Always use `joinedload()` or `selectinload()` for relationships in async context |
+| Circular import — DSI corroboration | `dsi_shipment_corroboration.py` imports from `distributor_sales_inventory.py` which imports from it | Use lazy imports inside function bodies in `dsi_shipment_corroboration.py` |
+| `seed.py` syntax error on line 43 | Known issue in the seed script | Fix or bypass as needed |
+| ESLint 9 flat config | Next.js ESLint integration requires env var | Set `ESLINT_USE_FLAT_CONFIG=false` before running lint |
+| API tests need dev DB flag | Pytest suite refuses to run against `cip` without opt-in | Set `ALLOW_TESTS_ON_DEV_DB=1` in test environment |
+| Port preflight check | `dev-api.js` checks for stale processes on :8001 | Set `CIP_SKIP_API_PORT_PREFLIGHT=1` to bypass |
+| Python 3.13+ incompatible | `asyncpg` may not build on Python 3.13+ | Use Python 3.12.x |
+| str_dim_flags not flattened | Tuple arguments not flattened in PM bulk upsert SQL | Flatten before passing to SQL parameters |
+| `alembic upgrade` on wrong DB | Running migration against wrong database | Always verify `current_database()` first |
+| DSI eligibility before corroboration | Inactive candidates filtered before corroboration runs so cross-distributor fallback has no candidates to intersect | Apply historical eligibility relaxation before building the eligible candidate set passed to corroboration |
+
+---
+
+## Git Workflow
+
+1. Explicit path staging only — never `git add -A` or `git add .`
+2. Never commit: `.env`, database dumps, log files, `.specstory`,
+   `.cursor/rules` changes without approval
+3. Always work on a feature branch — never push directly to `main`
+4. Never push to `main` without explicit instruction ("promote to main"
+   or "merge to main") — main promotion is always a separate delivery task
+5. Commit messages: descriptive, prefixed with module name
+   (e.g., `dsi: fix cross-distributor corroboration fallback`)
+6. Before pushing: run `pnpm lint` and `pnpm test:web` at minimum
+7. A committed unit must work from a fresh checkout — no uncommitted
+   dependencies allowed
+
+---
+
+## Background Task Pattern
+
+- **Primary:** Celery + Redis
+- **Fallback:** Daemon thread (when `CIP_DEV_CELERY_DISPATCH=in_process_thread`)
+- Every background task must register with the activity feed via
+  `BackgroundTaskStore` — never run silent background tasks
+- Task progress emitted via `on_progress` callback to the store
+- Activity feed bell icon in nav shows real-time progress to the user
+
+---
+
+## Frontend Patterns
+
+**Stack:**
+- MUI 6 — layout, typography, form controls, dialogs, alerts
+- Recharts — bar, line, area charts
+- AG Grid Enterprise — data grids via `EnterpriseDataGrid` wrapper
+- TanStack Query — server state (queries + mutations with cache invalidation)
+- Zustand — UI state (`useUiStore` for drawer, snackbar, etc.)
+
+**Key patterns to follow:**
+- Steward panel: `ShipmentEntityStewardPanel.tsx` — entity resolution with
+  search, preview, bulk apply
+- Additional columns dialog: `ColumnSelectorModal.tsx` — grouped toggles
+  with presets and coverage counts
+- Smart view chips: one-click filter presets that populate existing filters
+- `ModuleDataSection` wrapper: standardised loading/error/empty state
+- `ModuleGridToolbar`: consistent toolbar with refresh and navigation
+- Activity feed integration: every background task shows progress in the
+  bell icon — never run silent background tasks
+- `data_unavailable` handling: check flag, show informative empty state,
+  never crash on missing data
+
+**localStorage conventions:**
+- Keys prefixed with `cip.` and versioned (e.g., `cip.commercial-planner.gridColumns.v4`)
+- Version migration logic in page components to carry forward user preferences
+
+---
+
+## API Patterns
+
+**Async vs sync sessions:**
+- `AsyncSession` (from `get_db`) for all read endpoints and most writes
+- Sync `Session` for steward operations and Celery background tasks
+- Always use `joinedload()` for relationships accessed in async context
+
+**Error handling:**
+- `try/except` with `data_unavailable: true` for optional table endpoints
+- `HTTPException` with structured detail (message + remediation)
+- Pydantic `BaseModel` for request validation with `field_validator`
+
+**Import endpoint pattern:**
+POST .../import-preview   → Parse + validate + return preview (no DB writes)
+POST .../import-apply     → Re-parse + validate + upsert (requires confirm=true)
+GET  .../import-template  → Download CSV template with expected columns
+
+**Read model pattern:**
+GET endpoints return enriched payloads via `*_read_model_extensions()` that
+compute derived fields without persisting them. Persisted `calc_*` fields are
+set only by explicit recalculate/apply actions.
+
+---
+
+## Stop Conditions — Project Specific
+
+Stop and report before proceeding when:
+- A migration would be needed but has not been explicitly approved
+- A change would touch the DSI resolution order or eligibility logic
+- A change would touch the steward workflow governance boundary
+- A change would auto-create master records from import evidence
+- The working tree has uncommitted changes from a previous task that could
+  conflict with the current task
+- `current_database()` returns anything other than `cip` before a DB write
+- The Alembic head in the code does not match `alembic current` on the DB
