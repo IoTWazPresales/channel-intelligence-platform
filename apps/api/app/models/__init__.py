@@ -87,6 +87,13 @@ from app.models.commercial_planner import (
     CommercialSkuAssumption,
 )
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
+from app.models.customer_sales import (
+    CustomerProductAlias,
+    DimRetailerListing,
+    DimStore,
+    FactCustomerSales,
+    FactPromotionProduct,
+)
 
 __all__ = [
     "DimProduct",
@@ -168,4 +175,9 @@ __all__ = [
     "CommercialLineupCase",
     "CommercialLineupLine",
     "ShipmentEvidenceLine",
+    "DimStore",
+    "CustomerProductAlias",
+    "FactCustomerSales",
+    "DimRetailerListing",
+    "FactPromotionProduct",
 ]
