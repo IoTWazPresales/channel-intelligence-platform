@@ -10,6 +10,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   Drawer,
   FormControl,
   FormControlLabel,
@@ -99,6 +100,17 @@ type DistributorContactRow = {
   is_primary: boolean;
   is_active: boolean;
   notes_summary: string | null;
+};
+
+type DistributorAliasRow = {
+  id: number;
+  distributor_id: number;
+  raw_token: string;
+  normalized_token: string;
+  status: string;
+  source_definition_id: number | null;
+  created_from_import_job_id: number | null;
+  created_at: string | null;
 };
 
 type SelloutRow = {
@@ -211,6 +223,7 @@ function AdminDistributorsPageContent() {
     is_active: true,
     notes_summary: '',
   });
+  const [distributorAliasDraft, setDistributorAliasDraft] = useState('');
   const [editingLocationId, setEditingLocationId] = useState<number | null>(null);
   const [editingContactId, setEditingContactId] = useState<number | null>(null);
   const [distGridApi, setDistGridApi] = useState<any | null>(null);
@@ -274,6 +287,12 @@ function AdminDistributorsPageContent() {
     queryKey: ['distributor-contacts', selectedDistributorId],
     queryFn: ({ signal }) =>
       apiGet<DistributorContactRow[]>(`/api/v1/distributors/${selectedDistributorId}/contacts`, { signal }),
+    enabled: selectedDistributorId != null,
+  });
+  const { data: distributorAliases, isLoading: distributorAliasesLoading } = useQuery({
+    queryKey: ['distributor-aliases', selectedDistributorId],
+    queryFn: ({ signal }) =>
+      apiGet<DistributorAliasRow[]>(`/api/v1/distributors/${selectedDistributorId}/aliases`, { signal }),
     enabled: selectedDistributorId != null,
   });
   const { data: templates } = useQuery({
@@ -458,6 +477,23 @@ function AdminDistributorsPageContent() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['distributor-contacts', selectedDistributorId] });
       qc.invalidateQueries({ queryKey: ['admin-distributors'] });
+    },
+  });
+  const createDistributorAlias = useMutation({
+    mutationFn: () =>
+      apiPost(`/api/v1/distributors/${selectedDistributorId}/aliases`, { raw_token: distributorAliasDraft.trim() }),
+    onSuccess: async () => {
+      setDistributorAliasDraft('');
+      await qc.invalidateQueries({ queryKey: ['distributor-aliases', selectedDistributorId] });
+      await qc.invalidateQueries({ queryKey: ['admin-distributors'] });
+    },
+  });
+  const deleteDistributorAlias = useMutation({
+    mutationFn: (aliasId: number) =>
+      apiDelete(`/api/v1/distributors/${selectedDistributorId}/aliases/${aliasId}`),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['distributor-aliases', selectedDistributorId] });
+      await qc.invalidateQueries({ queryKey: ['admin-distributors'] });
     },
   });
 
@@ -1461,6 +1497,58 @@ function AdminDistributorsPageContent() {
                       </Button>
                     )}
                   </Stack>
+                </Stack>
+              </Paper>
+              <Divider sx={{ my: 1 }} />
+              <Typography variant="subtitle2" sx={{ pt: 1 }}>
+                Source token aliases
+              </Typography>
+              {distributorAliasesLoading ? <Typography variant="body2">Loading aliases…</Typography> : null}
+              {(distributorAliases ?? []).length === 0 && !distributorAliasesLoading ? (
+                <Typography variant="body2" color="text.secondary">No aliases linked yet.</Typography>
+              ) : null}
+              {(distributorAliases ?? []).map((alias) => (
+                <Paper key={alias.id} variant="outlined" sx={{ p: 1 }}>
+                  <Typography variant="body2"><strong>Raw:</strong> {alias.raw_token}</Typography>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Normalized: {alias.normalized_token} · Status: {alias.status}
+                    {alias.source_definition_id ? ` · Source #${alias.source_definition_id}` : ''}
+                    {alias.created_from_import_job_id ? ` · Job #${alias.created_from_import_job_id}` : ''}
+                    {alias.created_at ? ` · ${new Date(alias.created_at).toLocaleDateString()}` : ''}
+                  </Typography>
+                  {alias.status === 'approved' ? (
+                    <Button
+                      size="small"
+                      color="error"
+                      sx={{ mt: 0.5 }}
+                      onClick={() => {
+                        if (window.confirm(`Remove alias "${alias.raw_token}"?`)) deleteDistributorAlias.mutate(alias.id);
+                      }}
+                      disabled={deleteDistributorAlias.isPending}
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
+                </Paper>
+              ))}
+              <Paper variant="outlined" sx={{ p: 1 }}>
+                <Stack spacing={1}>
+                  <Typography variant="body2" fontWeight={600}>Add alias</Typography>
+                  <TextField
+                    size="small"
+                    label="Raw token"
+                    placeholder="e.g. source-reported distributor name"
+                    value={distributorAliasDraft}
+                    onChange={(e) => setDistributorAliasDraft(e.target.value)}
+                  />
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={() => createDistributorAlias.mutate()}
+                    disabled={createDistributorAlias.isPending || !distributorAliasDraft.trim()}
+                  >
+                    Add alias
+                  </Button>
                 </Stack>
               </Paper>
               <Paper variant="outlined" sx={{ p: 1.25 }}>

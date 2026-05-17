@@ -91,6 +91,17 @@ type CustomerContactRow = {
   notes_summary: string | null;
 };
 
+type AliasRow = {
+  id: number;
+  customer_id: number;
+  raw_token: string;
+  normalized_token: string;
+  status: string;
+  source_definition_id: number | null;
+  created_from_import_job_id: number | null;
+  created_at: string | null;
+};
+
 type CodeRow = { id: number; code: string; name: string };
 type CreateCustomerBody = {
   customer_code: string;
@@ -255,6 +266,7 @@ function AdminCustomersPageContent() {
     is_active: true,
     notes_summary: '',
   });
+  const [aliasDraft, setAliasDraft] = useState('');
   const [editingLocationId, setEditingLocationId] = useState<number | null>(null);
   const [editingContactId, setEditingContactId] = useState<number | null>(null);
   const [gridApi, setGridApi] = useState<any | null>(null);
@@ -381,6 +393,12 @@ function AdminCustomersPageContent() {
     queryKey: ['customer-contacts', selectedRow?.id],
     queryFn: ({ signal }) =>
       apiGet<CustomerContactRow[]>(`/api/v1/customers/${selectedRow!.id}/contacts`, { signal }),
+    enabled: Boolean(selectedRow?.id),
+  });
+  const { data: aliases, isLoading: aliasesLoading } = useQuery({
+    queryKey: ['customer-aliases', selectedRow?.id],
+    queryFn: ({ signal }) =>
+      apiGet<AliasRow[]>(`/api/v1/customers/${selectedRow!.id}/aliases`, { signal }),
     enabled: Boolean(selectedRow?.id),
   });
 
@@ -530,6 +548,23 @@ function AdminCustomersPageContent() {
     mutationFn: (contactId: number) => apiDelete(`/api/v1/customers/${selectedRow!.id}/contacts/${contactId}`),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['customer-contacts', selectedRow?.id] });
+      await qc.invalidateQueries({ queryKey: ['admin-customers'] });
+    },
+  });
+  const createAlias = useMutation({
+    mutationFn: () =>
+      apiPost(`/api/v1/customers/${selectedRow!.id}/aliases`, { raw_token: aliasDraft.trim() }),
+    onSuccess: async () => {
+      setAliasDraft('');
+      await qc.invalidateQueries({ queryKey: ['customer-aliases', selectedRow?.id] });
+      await qc.invalidateQueries({ queryKey: ['admin-customers'] });
+    },
+  });
+  const deleteAlias = useMutation({
+    mutationFn: (aliasId: number) =>
+      apiDelete(`/api/v1/customers/${selectedRow!.id}/aliases/${aliasId}`),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['customer-aliases', selectedRow?.id] });
       await qc.invalidateQueries({ queryKey: ['admin-customers'] });
     },
   });
@@ -1635,6 +1670,58 @@ function AdminCustomersPageContent() {
                     disabled={createContact.isPending || !contactDraft.contact_name.trim()}
                   >
                     Add contact
+                  </Button>
+                </Stack>
+              </Paper>
+              <Divider sx={{ my: 1 }} />
+              <Typography variant="subtitle2" sx={{ pt: 1 }}>
+                Source token aliases
+              </Typography>
+              {aliasesLoading ? <Typography variant="body2">Loading aliases…</Typography> : null}
+              {(aliases ?? []).length === 0 && !aliasesLoading ? (
+                <Typography variant="body2" color="text.secondary">No aliases linked yet.</Typography>
+              ) : null}
+              {(aliases ?? []).map((alias) => (
+                <Paper key={alias.id} variant="outlined" sx={{ p: 1 }}>
+                  <Typography variant="body2"><strong>Raw:</strong> {alias.raw_token}</Typography>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Normalized: {alias.normalized_token} · Status: {alias.status}
+                    {alias.source_definition_id ? ` · Source #${alias.source_definition_id}` : ''}
+                    {alias.created_from_import_job_id ? ` · Job #${alias.created_from_import_job_id}` : ''}
+                    {alias.created_at ? ` · ${new Date(alias.created_at).toLocaleDateString()}` : ''}
+                  </Typography>
+                  {alias.status === 'approved' ? (
+                    <Button
+                      size="small"
+                      color="error"
+                      sx={{ mt: 0.5 }}
+                      onClick={() => {
+                        if (window.confirm(`Remove alias "${alias.raw_token}"?`)) deleteAlias.mutate(alias.id);
+                      }}
+                      disabled={deleteAlias.isPending}
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
+                </Paper>
+              ))}
+              <Paper variant="outlined" sx={{ p: 1 }}>
+                <Stack spacing={1}>
+                  <Typography variant="body2" fontWeight={600}>Add alias</Typography>
+                  <TextField
+                    size="small"
+                    label="Raw token"
+                    placeholder="e.g. distributor-reported customer name"
+                    value={aliasDraft}
+                    onChange={(e) => setAliasDraft(e.target.value)}
+                  />
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={() => createAlias.mutate()}
+                    disabled={createAlias.isPending || !aliasDraft.trim()}
+                  >
+                    Add alias
                   </Button>
                 </Stack>
               </Paper>
