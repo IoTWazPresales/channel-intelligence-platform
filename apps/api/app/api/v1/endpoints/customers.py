@@ -750,11 +750,83 @@ async def delete_customer_contact(customer_id: int, contact_id: int, db: AsyncSe
     return Response(status_code=204)
 
 
+class CustomerAliasCreate(BaseModel):
+    raw_token: str = Field(min_length=1, max_length=512)
+
+
+def _alias_to_api(row: CustomerSourceTokenAlias) -> dict:
+    return {
+        "id": row.id,
+        "customer_id": row.customer_id,
+        "source_definition_id": row.source_definition_id,
+        "distributor_id": row.distributor_id,
+        "raw_token": row.raw_token,
+        "normalized_token": row.normalized_token,
+        "dealer_group_token": row.dealer_group_token,
+        "status": row.status,
+        "notes": row.notes,
+        "created_from_import_job_id": row.created_from_import_job_id,
+        "import_entity_mapping_candidate_id": row.import_entity_mapping_candidate_id,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+@router.get("/{customer_id}/aliases")
+async def list_customer_aliases(customer_id: int, db: AsyncSession = Depends(get_db)):
+    customer = await db.get(DimCustomer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Not found")
+    rows = (
+        await db.execute(
+            select(CustomerSourceTokenAlias)
+            .where(CustomerSourceTokenAlias.customer_id == customer_id)
+            .order_by(desc(CustomerSourceTokenAlias.created_at), desc(CustomerSourceTokenAlias.id))
+        )
+    ).scalars().all()
+    return [_alias_to_api(row) for row in rows]
+
+
+@router.post("/{customer_id}/aliases", status_code=201)
+async def create_customer_alias(
+    customer_id: int, body: CustomerAliasCreate, db: AsyncSession = Depends(get_db)
+):
+    customer = await db.get(DimCustomer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Not found")
+    raw_token = body.raw_token
+    normalized_token = raw_token.strip().lower()
+    row = CustomerSourceTokenAlias(
+        customer_id=customer_id,
+        raw_token=raw_token,
+        normalized_token=normalized_token,
+        status="approved",
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return _alias_to_api(row)
+
+
+@router.delete("/{customer_id}/aliases/{alias_id}", status_code=204)
+async def delete_customer_alias(customer_id: int, alias_id: int, db: AsyncSession = Depends(get_db)):
+    row = await db.get(CustomerSourceTokenAlias, alias_id)
+    if not row or row.customer_id != customer_id or row.status != "approved":
+        raise HTTPException(status_code=404, detail="Not found")
+    await db.delete(row)
+    await db.commit()
+    return Response(status_code=204)
+
+
 @router.delete("/{customer_id}", status_code=204)
 async def delete_customer(customer_id: int, db: AsyncSession = Depends(get_db)):
     row = await db.get(DimCustomer, customer_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
+    aliases = (
+        await db.execute(select(CustomerSourceTokenAlias).where(CustomerSourceTokenAlias.customer_id == customer_id))
+    ).scalars().all()
+    for alias in aliases:
+        await db.delete(alias)
     locations = (
         await db.execute(select(CustomerLocation).where(CustomerLocation.customer_id == customer_id))
     ).scalars().all()

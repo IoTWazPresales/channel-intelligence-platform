@@ -658,3 +658,67 @@ async def delete_distributor_contact(
     await db.delete(rec)
     await db.commit()
     return Response(status_code=204)
+
+
+class DistributorAliasCreate(BaseModel):
+    raw_token: str = Field(min_length=1, max_length=512)
+
+
+def _dist_alias_to_api(row: DistributorSourceTokenAlias) -> dict:
+    return {
+        "id": row.id,
+        "distributor_id": row.distributor_id,
+        "source_definition_id": row.source_definition_id,
+        "raw_token": row.raw_token,
+        "normalized_token": row.normalized_token,
+        "status": row.status,
+        "notes": row.notes,
+        "created_from_import_job_id": row.created_from_import_job_id,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+@router.get("/{distributor_id}/aliases")
+async def list_distributor_aliases(distributor_id: int, db: AsyncSession = Depends(get_db)):
+    row = await db.get(DimDistributor, distributor_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    rows = (
+        await db.execute(
+            select(DistributorSourceTokenAlias)
+            .where(DistributorSourceTokenAlias.distributor_id == distributor_id)
+            .order_by(desc(DistributorSourceTokenAlias.created_at), desc(DistributorSourceTokenAlias.id))
+        )
+    ).scalars().all()
+    return [_dist_alias_to_api(r) for r in rows]
+
+
+@router.post("/{distributor_id}/aliases", status_code=201)
+async def create_distributor_alias(
+    distributor_id: int, body: DistributorAliasCreate, db: AsyncSession = Depends(get_db)
+):
+    row = await db.get(DimDistributor, distributor_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    raw_token = body.raw_token
+    normalized_token = raw_token.strip().lower()
+    rec = DistributorSourceTokenAlias(
+        distributor_id=distributor_id,
+        raw_token=raw_token,
+        normalized_token=normalized_token,
+        status="approved",
+    )
+    db.add(rec)
+    await db.commit()
+    await db.refresh(rec)
+    return _dist_alias_to_api(rec)
+
+
+@router.delete("/{distributor_id}/aliases/{alias_id}", status_code=204)
+async def delete_distributor_alias(distributor_id: int, alias_id: int, db: AsyncSession = Depends(get_db)):
+    rec = await db.get(DistributorSourceTokenAlias, alias_id)
+    if not rec or rec.distributor_id != distributor_id or rec.status != "approved":
+        raise HTTPException(status_code=404, detail="Not found")
+    await db.delete(rec)
+    await db.commit()
+    return Response(status_code=204)
