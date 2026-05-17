@@ -553,7 +553,7 @@ DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
     ),
     ("promotion_plan_default", "Default promotion plan feed", "promotion_plan", "promo_extract"),
     ("current_lineup_system", "Current working lineup (Commercial Planner upload)", "current_lineup", "planning_extract"),
-    ("customer_sales_default", "customer_sales", "Customer sales default source", "manual_upload"),
+    ("customer_sales_default", "Customer sales default source", "customer_sales", "manual_upload"),
 ]
 
 
