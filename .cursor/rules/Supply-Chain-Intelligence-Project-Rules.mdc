@@ -1,51 +1,184 @@
 ---
-description: 
+description: "Channel Intelligence Platform — supply chain intelligence project rules and patterns"
+globs: 
 alwaysApply: true
 ---
 
-PROJECT OVERLAY — CHANNEL INTELLIGENCE / COMMERCIAL PLANNER
+# Channel Intelligence Platform — Project Rules
 
-This project is a production-oriented supply-chain intelligence platform.
+## Platform Vision
 
-Primary priorities:
-1. Data correctness
-2. Import auditability
-3. Safe validation and apply/commit flows
-4. Idempotency and retry safety
-5. Clear user-facing error messages
-6. Minimal regressions across frontend, API, worker, and database
+Channel Intelligence Platform tracks the full stock journey: **OEM → Distributor → Retailer → Consumer**. It ingests messy commercial files (CSV/XLSX), standardizes entities via steward workflows, and surfaces explainable recommendations across inventory, buy plans, pricing, promos, competition, roadmap, and budgets. Every module follows a common pattern: upload → parse → map → validate → apply/commit → derive.
 
-Normal runtime:
-- API: pnpm dev:api
-- Web: pnpm dev:web
-- Do not use Docker unless explicitly requested.
-- Do not use pnpm --filter web start unless explicitly testing production-build behavior.
+## Architecture Overview
 
-Database:
-- The real local dev database is cip.
-- Do not mutate cip data unless explicitly approved.
-- Verify database identity before DB-affecting commands.
-- Tests must not write to cip unless explicitly allowed.
-- Do not run Alembic upgrade against cip unless explicitly requested.
+```
+apps/api/          FastAPI, SQLAlchemy 2 async, Alembic migrations, Celery/Redis
+apps/web/          Next.js 15 (App Router), React 19, MUI 6, AG Grid, TanStack Query, Zustand, Recharts
+packages/ui/       Shared MUI theme tokens and AppThemeProvider
+packages/types/    Shared TypeScript types (nav items, roles)
+infra/docker/      Docker Compose — Postgres 16, Redis 7, API, web, worker containers
+docs/              Architecture docs, data contracts, engineering notes
+```
 
-Domain rules:
-- Product Master is the product source unless a concrete issue proves otherwise.
-- Preserve audit history for imports, mappings, validations, apply/commit flows, retries, cleanup, and background jobs.
-- Do not silently coerce ambiguous SKU, product, customer, distributor, channel, pricing, stock, or sales mappings.
-- Prefer explicit confirmation and visible evidence for mappings.
-- Do not bypass validation to make imports pass.
-- Do not weaken validation rules without explaining business/data impact.
-- Cleanup/delete flows must show dependencies and require explicit action where data loss may occur.
-- DAP is commercial sell-in/evidence pricing, not PM bottom cost or landed cost.
-- PM bottom/controlled cost is an internal cost input and must not be confused with DAP.
+### Runtime Ports (local dev)
 
-Import behavior:
-- Parser output, validation output, UI mapping state, API contracts, worker jobs, and database state must stay synchronized.
-- Apply/commit flows must be safe against refresh, retry, double-click, duplicate submission, stale jobs, and partial completion.
-- Previous jobs should remain inspectable where supported.
-- If adding retry, re-upload, resume, fix, cleanup, or delete behavior, preserve auditability.
+- **Web:** http://localhost:3000
+- **API:** http://localhost:8001 (host direct) or http://localhost:8010 (Docker → container :8000)
+- **Postgres:** localhost:5432, database `cip`
+- **Redis:** localhost:6379
 
-UI:
-- UI must make data state obvious: draft, mapped, validated, failed, queued, running, completed, applied/committed, blocked.
-- Error messages should tell the user what to do next.
-- Dependency/delete blockers should show where the data exists and offer safe cleanup paths where appropriate.
+## Module Status Table
+
+| Module | Status | Frontend Location | API Location |
+|--------|--------|-------------------|--------------|
+| Dashboard / Control Tower | Built/Working | `(app)/dashboard/page.tsx` | `endpoints/dashboard.py` |
+| Getting Started | Built/Working | `(app)/getting-started/` | — |
+| Data Imports (Admin) | Built/Working | `(app)/admin/imports/` | `endpoints/imports.py` |
+| Field Mappings (Admin) | Built/Working | `(app)/admin/mappings/` | `endpoints/mappings.py` |
+| Product Master | Built/Working | `(app)/products/` | `endpoints/products.py` |
+| Customer Master | Built/Working | `(app)/admin/` (customer sub-routes) | `endpoints/customers.py` |
+| Distributor Master | Built/Working | `(app)/admin/` (distributor sub-routes) | `endpoints/distributors.py` |
+| Commercial Planner | Built/Working | `(app)/commercial-planner/page.tsx` | `endpoints/commercial_planner.py` |
+| Commercial Lineup (Current) | Built/Working | `features/commercial-planner/CurrentLineupSection.tsx` | `endpoints/commercial_planner.py` (lineup-case routes) |
+| Historical Lineup Import | Built/Working | `(app)/lineup/` | `endpoints/lineup.py` |
+| Exceptions Inbox | Built/Working | `(app)/exceptions/page.tsx` | `endpoints/exceptions.py` |
+| Inventory / SOH | Partial | `(app)/inventory/` | `endpoints/inventory.py` |
+| Shipping / Inbound | Partial | `(app)/shipping/` | `endpoints/shipments.py` |
+| Sell-out | Partial | `(app)/sell-out/` | `endpoints/sellout.py` |
+| Customer Sales | In Progress | `(app)/customer-sales/` | `endpoints/customer_sales.py` |
+| Pricing | Partial | `(app)/pricing/` | `endpoints/pricing.py` |
+| Promotions | Planned | `(app)/promotions/` | — |
+| Budget Requests | Partial | `(app)/budget-requests/` | `endpoints/budgets.py` |
+| Budgets | Partial | `(app)/budgets/` | — |
+| Buy Plans | Planned | `(app)/buy-plans/` | — |
+| Competition | Planned | `(app)/competition/` | — |
+| Forecasts | Planned | `(app)/forecasts/` | — |
+| Market Intelligence | Planned | `(app)/market/` | — |
+| Roadmap | Planned | `(app)/roadmap/` | — |
+| Settings | Built/Working | `(app)/settings/` | — |
+| Stock Journey | Planned | `(app)/stock-journey/` | — |
+
+## Database Safety Rules
+
+1. **Never run migrations without confirmation.** Always `alembic current` before generating or upgrading.
+2. **Always verify `current_database() = cip`** before DB-affecting commands.
+3. **Never use `git add -A` or `git add .`** — use explicit path staging only.
+4. **Always check `alembic current`** before generating new migrations.
+5. **Current Alembic head:** `20260517_0038` (customer_sales_retail_promotion_tables).
+6. **Tests must not write to `cip`** unless `ALLOW_TESTS_ON_DEV_DB=1` is set.
+7. **Do not run `alembic upgrade` against production** without explicit instruction.
+8. **Wipe scripts** (`wipe_database.py`) destroy all application data — use only in dev/demo contexts.
+9. **Seed scripts** (`seed.py` default) run destructive demo seed. Use `--commercial-system-reference-only` to insert only system reference dimensions without wiping.
+
+## Architecture Principles
+
+1. **Single source of truth per domain.** Product Master is the product source. Customer and Distributor masters are identity anchors. No shadow tables.
+2. **No auto-create of master records without steward approval.** Import pipelines flag unmapped entities for human review, not silent creation.
+3. **No weak joins or substring matching for entity resolution.** Entity resolution uses explicit token-to-dim mappings with steward confirmation.
+4. **`source_key` as upsert key for all fact tables.** Every fact row has a natural key for idempotent re-import.
+5. **Apply/commit flows must be idempotent.** Re-running the same import/apply must produce the same result without duplicates.
+6. **Explainability built in.** `RecommendationMixin` provides `explanation_summary`, `explanation_factors` JSONB on derived entities. Calculator returns `calc_explanation` and `calc_flags` on every line.
+7. **DAP is commercial sell-in/evidence pricing** — not PM bottom cost or landed cost. PM bottom/controlled cost is a separate input field (`controlled_cost_amount`).
+
+## Domain Language
+
+| Term | Definition |
+|------|-----------|
+| `distributor_token` | Raw string from import file identifying a distributor before entity resolution |
+| `customer_dealer_token` | Raw string from import file identifying a customer/dealer before resolution |
+| `dealer_group_token` | Normalized group identifier for dealer entities across files |
+| `source_key` | Natural unique key for fact table upsert (e.g., `{job_id}:{row_number}`) |
+| `provisional record` | Dimension record created with limited data, pending steward enrichment |
+| `strategic customer` | Customer flagged for priority treatment in planning and allocation |
+| `open channel` | Sales through unidentified end-customers; uses `OPEN_CHANNEL` dim_customer placeholder |
+| `corroboration signal` | Multiple independent data sources confirming the same entity mapping |
+| `historical import mode` | Bulk import of past-period lineup files for trend analysis |
+| `weekly import mode` | Incremental current-period lineup upload for active planning |
+| `controlled cost` | PM bottom / internal cost basis for SKU economics — not logistics-inclusive landed cost |
+| `economics trust tier` | ok / warning / blocked classification of whether line economics outputs are decision-grade |
+
+## Import Pipeline Pattern
+
+```
+template_definitions.py     Define expected columns and field types for each import template
+        ↓
+field_mapping.py            Map source columns to target fields (manual or auto-heuristic)
+        ↓
+import_service.py           Parse file, apply mappings, validate rows, stage results
+        ↓
+steward_ops.py              Flag unmapped entities for human review
+        ↓
+apply → fact table          Upsert validated rows to fact tables using source_key
+```
+
+## Fact Table Design Principles
+
+- **`source_key` uniqueness:** Every fact row has a unique natural key preventing duplicates.
+- **Latest-job-wins for shipment facts:** Re-importing a shipment file replaces the previous version.
+- **Transaction-immutability for sell-out and customer sales:** Individual transaction rows are append-only; corrections create new rows with updated source_keys.
+- **Handle missing tables with `data_unavailable` flag:** API endpoints that depend on optional fact tables (e.g., forecasts) return `data_unavailable: true` rather than 500 errors.
+
+## Known Gotchas
+
+| Issue | Context | Mitigation |
+|-------|---------|------------|
+| `numpy.bool_` in PM upsert | Product Master commit may produce numpy scalar types that SQLAlchemy rejects | Cast to Python native `bool()` before persistence |
+| `MissingGreenlet` from lazy loads | Accessing relationships in async endpoints without `joinedload` raises `MissingGreenlet` | Always use `joinedload()` or `selectinload()` for relationships in async context |
+| `seed.py` syntax error on line 43 | Known issue in the seed script | Fix or bypass as needed |
+| ESLint 9 flat config | Next.js ESLint integration requires `ESLINT_USE_FLAT_CONFIG=false` | Set env var before running lint |
+| API tests need dev DB flag | Pytest suite will refuse to run against `cip` without explicit opt-in | Set `ALLOW_TESTS_ON_DEV_DB=1` in test environment |
+| Port preflight check | `dev-api.js` checks for stale processes on :8001 before starting | Set `CIP_SKIP_API_PORT_PREFLIGHT=1` to bypass |
+| Python 3.13+ incompatible | `asyncpg` may not build on Python 3.13+ | Use Python 3.12.x |
+
+## Git Workflow
+
+1. **Explicit path staging only.** Never `git add -A` or `git add .`.
+2. **Never commit:** `.env`, database dumps, log files, `.cursor/rules` changes without approval.
+3. **Always work on a feature branch.** Never push directly to `main` without explicit instruction.
+4. **Commit messages:** Descriptive, prefixed with module name (e.g., `commercial-planner: add line override UI`).
+5. **Before pushing:** Run `pnpm lint` and `pnpm test:web` at minimum.
+
+## Frontend Patterns
+
+### Component Architecture
+- **MUI 6** for layout, typography, form controls, dialogs, alerts.
+- **Recharts** for chart visualizations (bar, line, area).
+- **AG Grid** (Enterprise) for data grids via `EnterpriseDataGrid` wrapper.
+- **TanStack Query** for server state (queries + mutations with cache invalidation).
+- **Zustand** for UI state (`useUiStore` for drawer, snackbar, etc.).
+
+### Key Patterns
+- **Steward panel pattern:** `ShipmentEntityStewardPanel.tsx` — entity resolution with search, preview, apply.
+- **Additional columns dialog:** `ColumnSelectorModal.tsx` — grouped toggles with presets, coverage counts, discovered keys.
+- **Smart view chips:** Provenance chips showing data source per field (e.g., "Line override", "SKU economics input").
+- **`data_unavailable` handling:** Components check for `data_unavailable` flag and show informative empty states rather than errors.
+- **`ModuleDataSection` wrapper:** Standardized loading/error/empty state handling for every module page.
+- **`ModuleGridToolbar`:** Consistent toolbar with refresh, clear-all, and navigation to imports.
+
+### localStorage Conventions
+- Keys prefixed with `cip.` and versioned (e.g., `cip.commercial-planner.gridColumns.v4`).
+- Version migration logic in page components to carry forward user preferences.
+
+## API Patterns
+
+### Async vs Sync Sessions
+- **`AsyncSession`** (from `get_db` dependency) for all read endpoints and most writes.
+- **Sync `Session`** for steward operations and Celery background tasks that need eager loading.
+- Always use **`joinedload`** for relationships in async context to avoid `MissingGreenlet`.
+
+### Error Handling
+- **`try/except` with `data_unavailable`** for endpoints that depend on optional tables.
+- **`HTTPException`** with structured detail messages (message + remediation text).
+- **Pydantic `BaseModel`** for request validation with `field_validator` for normalization.
+
+### Read Model Pattern
+- GET endpoints return enriched payloads via `*_read_model_extensions()` functions that compute derived fields (effective values, trust tiers, provenance) without persisting them.
+- Persisted `calc_*` fields are set only by explicit recalculate/apply actions.
+
+### Import Endpoint Pattern
+```python
+POST .../import-preview   → Parse + validate + return preview (no DB writes)
+POST .../import-apply     → Re-parse + validate + upsert (requires confirm=true)
+GET  .../import-template  → Download CSV template with expected columns
+```
