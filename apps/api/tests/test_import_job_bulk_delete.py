@@ -124,6 +124,8 @@ def _seed_job_with_artifacts(session) -> int:
     )
     session.add(
         FactSalesSellout(
+            source_key=f"bulk-delete-test-sellout-{p.id}-{c.id}-2024-01-01",
+            staging_line_id=None,
             product_id=p.id,
             customer_id=c.id,
             channel_id=None,

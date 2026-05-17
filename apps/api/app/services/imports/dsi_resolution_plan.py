@@ -17,13 +17,13 @@ from app.models.import_distributor_si import ChannelSourceTokenAlias, ImportEnti
 from app.models.ingestion import ImportJob
 from app.services.imports.distributor_sales_inventory import (
     ProductResolutionIndex,
-)
-from app.services.imports.distributor_sales_inventory import (
     _load_product_resolution_index,
     _norm_key,
     _resolve_customer,
     _resolve_distributor,
     _resolve_product,
+    dsi_historical_product_eligibility_relaxed_from_import_job,
+    dsi_historical_workflow_from_import_job,
     effective_dsi_customer_primary_for_resolution,
 )
 from app.services.imports.dsi_steward_candidate_ops import (
@@ -537,6 +537,33 @@ def plan_dsi_candidate_sync(
         raw = dsi_first_sample(cand)
         pstatus = ctx.get("product_match_status")
         if pstatus == "ambiguous_eligible":
+            dom = ctx.get("dominant_unresolved_distributor_id")
+            if dsi_historical_workflow_from_import_job(job) and dom is not None:
+                pid_h, perr_h, tag_h, _ev_h = _resolve_product(
+                    raw,
+                    prod_idx,
+                    None,
+                    relax_inactive_dim_product_for_historical_dsi=dsi_historical_product_eligibility_relaxed_from_import_job(
+                        job
+                    ),
+                    db=session,
+                    distributor_id=int(dom),
+                )
+                if pid_h is not None and perr_h is None:
+                    return {
+                        **base,
+                        "suggested_action": "resolve_product",
+                        "plan_status": "ready",
+                        "ready": True,
+                        "confidence": 0.65,
+                        "reason": (
+                            f"Historical workflow: single corroborated Product Master match ({tag_h or 'resolved'}) "
+                            f"after shipment/disambiguation — propose ProductAlias bind"
+                        ),
+                        "suggested_target_id": int(pid_h),
+                        "needs_defaults": False,
+                        "needs_confirm_suspicious_distributor": False,
+                    }
             return {
                 **base,
                 "suggested_action": "resolve_product",
@@ -549,6 +576,25 @@ def plan_dsi_candidate_sync(
                 "needs_confirm_suspicious_distributor": False,
             }
         if pstatus == "inactive_only" or ctx.get("product_inactive_matches"):
+            if dsi_historical_product_eligibility_relaxed_from_import_job(job):
+                pid_r, perr_r, tag_r, _ev_r = _resolve_product(
+                    raw,
+                    prod_idx,
+                    None,
+                    relax_inactive_dim_product_for_historical_dsi=True,
+                )
+                if pid_r is not None and perr_r is None:
+                    return {
+                        **base,
+                        "suggested_action": "resolve_product",
+                        "plan_status": "ready",
+                        "ready": True,
+                        "confidence": 0.88,
+                        "reason": f"Single Product Master match ({tag_r or 'resolved'}) — propose ProductAlias bind",
+                        "suggested_target_id": int(pid_r),
+                        "needs_defaults": False,
+                        "needs_confirm_suspicious_distributor": False,
+                    }
             return {
                 **base,
                 "suggested_action": "resolve_product",
@@ -561,7 +607,12 @@ def plan_dsi_candidate_sync(
                 "needs_confirm_suspicious_distributor": False,
             }
 
-        pid, perr, tag, _ev = _resolve_product(raw, prod_idx, None)
+        pid, perr, tag, _ev = _resolve_product(
+            raw,
+            prod_idx,
+            None,
+            relax_inactive_dim_product_for_historical_dsi=dsi_historical_product_eligibility_relaxed_from_import_job(job),
+        )
         if pid is not None and perr is None:
             return {
                 **base,
@@ -589,7 +640,7 @@ def plan_dsi_candidate_sync(
     # --- customer_dealer_token ---
     if cand.entity_type == "customer_dealer_token":
         ctx = cand.context if isinstance(cand.context, dict) else {}
-        if ctx.get("strategic_channel_hint"):
+        if ctx.get("strategic_channel_hint") and not dsi_historical_workflow_from_import_job(job):
             geo_s = derive_effective_provisional_customer_geo_sync(
                 session,
                 cand,
@@ -671,7 +722,7 @@ def plan_dsi_candidate_sync(
             import_job=job,
         )
         geo_conflict = bool(geo.get("provisional_region_conflict") or geo.get("provisional_channel_conflict"))
-        if geo_conflict:
+        if geo_conflict and not dsi_historical_workflow_from_import_job(job):
             which: list[str] = []
             if geo.get("provisional_region_conflict"):
                 which.append("region/province")
@@ -792,6 +843,7 @@ def merge_resolution_plan_row_for_apply(
     default_region_id: int | None,
     default_channel_id: int | None,
     global_confirm_suspicious_distributor: bool,
+    historical_dsi_workflow: bool = False,
 ) -> dict[str, Any]:
     """Single source of truth for effective action + readiness (used by /effective and /apply)."""
     blockers: list[str] = []
@@ -872,7 +924,11 @@ def merge_resolution_plan_row_for_apply(
 
     if action == "resolve_product":
         if _product_resolve_needs_ineligible_confirm(ctx):
-            if not confirm_ineligible or audit_note is None or len(audit_note) < 8:
+            if historical_dsi_workflow:
+                confirm_ineligible = True
+                if audit_note is None or len(audit_note) < 8:
+                    audit_note = "Historical DSI workflow: auto-confirmed ineligible product bind per policy."
+            elif not confirm_ineligible or audit_note is None or len(audit_note) < 8:
                 blockers.append("inactive_or_ineligible_product_requires_confirm_and_audit_note")
 
     if action == "create_provisional_customer":
@@ -886,14 +942,19 @@ def merge_resolution_plan_row_for_apply(
             if ov.get("channel_id") is not None:
                 eff_c_apply = int(ov["channel_id"])
         geo_conflict = bool(ctx.get("provisional_region_conflict") or ctx.get("provisional_channel_conflict"))
-        if geo_conflict:
-            if ov is None or ov.get("region_id") is None or ov.get("channel_id") is None:
-                blockers.append("provisional_geo_conflict_requires_row_region_channel_override")
-        if ctx.get("strategic_channel_hint") and not (ov and ov.get("ack_strategic_channel_hint")):
-            blockers.append("strategic_channel_hint_ack_required")
+        if not historical_dsi_workflow:
+            if geo_conflict:
+                if ov is None or ov.get("region_id") is None or ov.get("channel_id") is None:
+                    blockers.append("provisional_geo_conflict_requires_row_region_channel_override")
+            if ctx.get("strategic_channel_hint") and not (ov and ov.get("ack_strategic_channel_hint")):
+                blockers.append("strategic_channel_hint_ack_required")
 
     if action == "create_provisional_distributor":
-        if distributor_token_is_placeholder_like(cand) and not confirm_suspicious:
+        if (
+            not historical_dsi_workflow
+            and distributor_token_is_placeholder_like(cand)
+            and not confirm_suspicious
+        ):
             blockers.append("placeholder_like_distributor_requires_confirm")
 
     effective_ready = len(blockers) == 0
@@ -965,6 +1026,7 @@ def build_dsi_resolution_plan_effective_sync(
     job = session.get(ImportJob, job_id)
     if not job:
         raise ValueError("Import job not found")
+    historical_wf = dsi_historical_workflow_from_import_job(job)
     by_cid: dict[int, dict[str, Any]] = {}
     for o in overrides:
         cid = int(o["candidate_id"])
@@ -990,6 +1052,7 @@ def build_dsi_resolution_plan_effective_sync(
             default_region_id=default_region_id,
             default_channel_id=default_channel_id,
             global_confirm_suspicious_distributor=global_confirm_suspicious_distributor,
+            historical_dsi_workflow=historical_wf,
         )
         rows.append(_attach_effective_fields_to_row(base, c, merged))
     ready_n = sum(1 for r in rows if r.get("ready"))
@@ -1149,6 +1212,9 @@ async def apply_dsi_resolution_plan_rows(
             rest = {k: v for k, v in raw.items() if k != "candidate_id"}
             by_cid[cid] = {**by_cid.get(cid, {}), **rest}
 
+    job_hdr = await db.get(ImportJob, job_id)
+    historical_wf = dsi_historical_workflow_from_import_job(job_hdr) if job_hdr else False
+
     results: list[dict[str, Any]] = []
     applied_n = 0
     failed_n = 0
@@ -1190,6 +1256,7 @@ async def apply_dsi_resolution_plan_rows(
             default_region_id=default_region_id,
             default_channel_id=default_channel_id,
             global_confirm_suspicious_distributor=confirm_for_suspicious_distributor_token,
+            historical_dsi_workflow=historical_wf,
         )
 
         if merged["hold_for_manual_review"]:

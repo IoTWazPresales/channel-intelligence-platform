@@ -415,6 +415,7 @@ function AdminImportsPageContent() {
   const [shipmentApplyWarning, setShipmentApplyWarning] = useState<string | null>(null);
   const [shipmentMapDraft, setShipmentMapDraft] = useState<Record<string, string>>({});
   const [shipmentValidateAsync, setShipmentValidateAsync] = useState(false);
+  const [dsiWorkflowMode, setDsiWorkflowMode] = useState<'auto' | 'historical' | 'weekly'>('auto');
 
   const jobIdParam = useMemo(() => {
     const v = searchParams.get('job');
@@ -893,6 +894,9 @@ function AdminImportsPageContent() {
       }
       if (mappingOverride && Object.keys(mappingOverride).length > 0) {
         fd.append('mapping_override', JSON.stringify(mappingOverride));
+      }
+      if (selectedSlug === 'distributor_inventory') {
+        fd.append('dsi_workflow_mode', dsiWorkflowMode);
       }
       const res = await fetch(apiUrl('/api/v1/imports/jobs'), {
         method: 'POST',
@@ -2457,6 +2461,21 @@ function AdminImportsPageContent() {
               automatically; map them to business fields in the next step (you do not need to rename columns like DISTI in
               the file).
             </Typography>
+            <FormControl size="small" sx={{ maxWidth: 420 }}>
+              <InputLabel id="dsi-workflow-mode-label">DSI workflow mode</InputLabel>
+              <Select
+                labelId="dsi-workflow-mode-label"
+                label="DSI workflow mode"
+                value={dsiWorkflowMode}
+                onChange={(e) =>
+                  setDsiWorkflowMode(e.target.value as 'auto' | 'historical' | 'weekly')
+                }
+              >
+                <MenuItem value="auto">Auto — detect historical vs weekly from transaction dates</MenuItem>
+                <MenuItem value="historical">Historical import (relaxed steward + auto-apply after validate)</MenuItem>
+                <MenuItem value="weekly">Weekly import (strict steward)</MenuItem>
+              </Select>
+            </FormControl>
             {!canGoUpload ? <Alert severity="warning">Complete provider, mode, and confirmations before uploading.</Alert> : null}
             <Box
               onDragEnter={(e) => {

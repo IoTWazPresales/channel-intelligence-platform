@@ -6,7 +6,7 @@ import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -253,6 +253,61 @@ def _parse_date(v: Any) -> date | None:
     return None
 
 
+DSI_HISTORICAL_SELL_OUT_DAY_THRESHOLD = 90
+
+
+def dsi_historical_workflow_from_import_job(job: ImportJob) -> bool:
+    """True when this DSI job runs in **historical** workflow (relaxed steward gates, optional auto-apply)."""
+
+    sm = job.staged_metadata
+    if not isinstance(sm, dict):
+        return False
+    return str(sm.get("dsi_workflow_mode") or "").strip().lower() == "historical"
+
+
+def dsi_historical_product_eligibility_relaxed_from_import_job(job: ImportJob) -> bool:
+    """True when the last DSI validation run classified the job as historical workflow (or legacy relaxed flag).
+
+    Used by staging refresh and the steward resolution plan so inactive Product Master rows stay
+    auto-eligible for the same job session.
+    """
+    sm = job.staged_metadata
+    if not isinstance(sm, dict):
+        return False
+    if dsi_historical_workflow_from_import_job(job):
+        return True
+    return bool(sm.get("dsi_historical_product_eligibility_relaxed"))
+
+
+def _dsi_import_predominantly_historical_by_evidence_dates(
+    df: pd.DataFrame,
+    mapping: dict[str, str],
+    *,
+    day_threshold: int = DSI_HISTORICAL_SELL_OUT_DAY_THRESHOLD,
+) -> bool:
+    """Majority of rows with a parsed evidence date are older than ``today - day_threshold`` days."""
+    if df is None or df.empty:
+        return False
+    cutoff = date.today() - timedelta(days=max(0, int(day_threshold)))
+    dates: list[date] = []
+    tx_col = _col(mapping, "transaction_date")
+    snap_col = _col(mapping, "snapshot_date")
+    for _, row in df.iterrows():
+        tx_date = _parse_date(row.get(tx_col)) if tx_col else None
+        snap_date = _parse_date(row.get(snap_col)) if snap_col else None
+        if tx_date is None and snap_date is not None:
+            tx_date = snap_date
+        if snap_date is None and tx_date is not None:
+            snap_date = tx_date
+        ev = tx_date or snap_date
+        if ev is not None:
+            dates.append(ev)
+    if not dates:
+        return False
+    old_n = sum(1 for d in dates if d < cutoff)
+    return old_n * 2 >= len(dates)
+
+
 def _parse_decimal(v: Any) -> Decimal | None:
     s = _clean_str(v)
     if not s:
@@ -287,21 +342,31 @@ _LIFECYCLE_INELIGIBLE_EXACT = frozenset(
 )
 
 
-def _product_eligible_for_dsi_auto(p: DimProduct, evidence_date: date | None) -> bool:
+def _product_eligible_for_dsi_auto(
+    p: DimProduct,
+    evidence_date: date | None,
+    *,
+    relax_inactive_for_historical_dsi: bool = False,
+) -> bool:
     """Whether a Product Master row may receive **automatic** DSI resolution (never silent pick).
 
     Inactive / clearly retired-lifecycle strings / outside launch–retire window for the evidence date
     are ineligible. Empty ``lifecycle_status`` does not alone disqualify if ``is_active`` is true.
+
+    When ``relax_inactive_for_historical_dsi`` is true (predominantly historical DSI file), inactive and
+    lifecycle-disabled rows remain eligible so long as launch/retire **dates** are consistent with the
+    evidence date.
     """
-    if not bool(getattr(p, "is_active", True)):
-        return False
-    ls = (getattr(p, "lifecycle_status", None) or "").strip().lower()
-    if ls:
-        if ls in _LIFECYCLE_INELIGIBLE_EXACT:
+    if not relax_inactive_for_historical_dsi:
+        if not bool(getattr(p, "is_active", True)):
             return False
-        for frag in ("cancel", "discard", "retire", "obsolete", "inactive", "disabled", "discontinued"):
-            if frag in ls:
+        ls = (getattr(p, "lifecycle_status", None) or "").strip().lower()
+        if ls:
+            if ls in _LIFECYCLE_INELIGIBLE_EXACT:
                 return False
+            for frag in ("cancel", "discard", "retire", "obsolete", "inactive", "disabled", "discontinued"):
+                if frag in ls:
+                    return False
     if evidence_date is not None:
         rd = getattr(p, "retired_date", None)
         if rd is not None and rd < evidence_date:
@@ -441,8 +506,43 @@ def _load_product_resolution_index(db: Session) -> ProductResolutionIndex:
     )
 
 
+def _shipment_disambiguate_product_id(
+    db: Session | None,
+    distributor_id: int | None,
+    evidence_date: date | None,
+    raw: str | None,
+    candidate_ids: list[int],
+) -> int | None:
+    """If shipment evidence points at exactly one product in ``candidate_ids``, return that id."""
+    if db is None or distributor_id is None or evidence_date is None or not candidate_ids:
+        return None
+    sc = shipment_corroboration_for_product(
+        db,
+        distributor_id=int(distributor_id),
+        evidence_date=evidence_date,
+        raw_product_token=raw,
+        resolved_product_id=None,
+    )
+    if not sc:
+        return None
+    dps = sc.get("distinct_resolved_product_ids")
+    if not isinstance(dps, list) or not dps:
+        return None
+    elig = {int(x) for x in candidate_ids if int(x) > 0}
+    inter = elig & {int(x) for x in dps if x is not None}
+    if len(inter) == 1:
+        return int(next(iter(inter)))
+    return None
+
+
 def _resolve_product(
-    raw: str | None, idx: ProductResolutionIndex, evidence_date: date | None = None
+    raw: str | None,
+    idx: ProductResolutionIndex,
+    evidence_date: date | None = None,
+    *,
+    relax_inactive_dim_product_for_historical_dsi: bool = False,
+    db: Session | None = None,
+    distributor_id: int | None = None,
 ) -> tuple[int | None, str | None, str | None, ProductResolutionEvidence | None]:
     """Resolve RAW product_identifier to dim_product.id with lifecycle-aware eligibility.
 
@@ -454,8 +554,10 @@ def _resolve_product(
 
     Automatic tier order: SKU → part_number → sales_model_name → model_name → marketing_name → ean → upc
     → non-steward ProductAlias. Within a tier: **only eligible** rows may auto-resolve; multiple eligible
-    hits defer ambiguity until lower tiers (e.g. a clarifying alias) are tried. Ineligible-only hits at a
-    tier are recorded and the walk **continues**.
+    hits defer ambiguity until lower tiers (e.g. a clarifying alias) are tried. When multiple eligible
+    hits remain, **shipment evidence** (same distributor + calendar month, ``resolved_unique`` lines) may
+    disambiguate if exactly one distinct shipment ``product_id`` intersects the eligible id set.
+    Ineligible-only hits at a tier are recorded and the walk **continues**.
 
     Returns ``(product_id, error_code, success_diagnostic, evidence)``. ``evidence`` is populated when
     returning ``ambiguous_product_match`` or ``unresolved_product_inactive_only`` for mapping-queue context.
@@ -474,7 +576,11 @@ def _resolve_product(
         out: list[int] = []
         for i in ids:
             p = idx.products_by_id.get(int(i))
-            if p is not None and _product_eligible_for_dsi_auto(p, evidence_date):
+            if p is not None and _product_eligible_for_dsi_auto(
+                p,
+                evidence_date,
+                relax_inactive_for_historical_dsi=relax_inactive_dim_product_for_historical_dsi,
+            ):
                 out.append(int(i))
         return out
 
@@ -484,7 +590,11 @@ def _resolve_product(
             p = idx.products_by_id.get(int(i))
             if p is None:
                 continue
-            if _product_eligible_for_dsi_auto(p, evidence_date):
+            if _product_eligible_for_dsi_auto(
+                p,
+                evidence_date,
+                relax_inactive_for_historical_dsi=relax_inactive_dim_product_for_historical_dsi,
+            ):
                 continue
             s = _product_snapshot_for_dsi_context(p)
             s["tier"] = tier
@@ -497,7 +607,11 @@ def _resolve_product(
     pid = idx.sku_to_id.get(key)
     if pid is not None:
         p0 = idx.products_by_id.get(int(pid))
-        if p0 is not None and _product_eligible_for_dsi_auto(p0, evidence_date):
+        if p0 is not None and _product_eligible_for_dsi_auto(
+            p0,
+            evidence_date,
+            relax_inactive_for_historical_dsi=relax_inactive_dim_product_for_historical_dsi,
+        ):
             return int(pid), None, "product_resolved_sku", None
         if p0 is not None:
             accumulated.inactive_hits.extend(_inactive_snapshots("sku", (pid,)))
@@ -526,6 +640,9 @@ def _resolve_product(
         if len(elig) == 1:
             return int(elig[0]), None, tag_for_tier[tier], None
         if len(elig) > 1:
+            pick = _shipment_disambiguate_product_id(db, distributor_id, evidence_date, raw, elig)
+            if pick is not None:
+                return int(pick), None, f"{tag_for_tier[tier]}_shipment_disambiguated", None
             snaps = [_product_snapshot_for_dsi_context(idx.products_by_id[i]) for i in sorted(set(elig))]
             amb: dict[str, Any] = {
                 "tier": tier,
@@ -542,11 +659,18 @@ def _resolve_product(
         elig_a: list[int] = []
         for aid in a_ids:
             p = idx.products_by_id.get(int(aid))
-            if p is not None and _product_eligible_for_dsi_auto(p, evidence_date):
+            if p is not None and _product_eligible_for_dsi_auto(
+                p,
+                evidence_date,
+                relax_inactive_for_historical_dsi=relax_inactive_dim_product_for_historical_dsi,
+            ):
                 elig_a.append(int(aid))
         if len(elig_a) == 1:
             return int(elig_a[0]), None, "product_resolved_alias", None
         if len(elig_a) > 1:
+            pick = _shipment_disambiguate_product_id(db, distributor_id, evidence_date, raw, elig_a)
+            if pick is not None:
+                return int(pick), None, "product_resolved_alias_shipment_disambiguated", None
             snaps = [_product_snapshot_for_dsi_context(idx.products_by_id[i]) for i in sorted(set(elig_a))]
             amb = {
                 "tier": "product_alias",
@@ -557,7 +681,21 @@ def _resolve_product(
         in_sn = _inactive_snapshots("product_alias", a_ids)
         accumulated.inactive_hits.extend(in_sn)
 
-    if pending_ambiguous is not None:
+    if pending_ambiguous is not None and pending_ambiguous.ambiguous_eligible:
+        amb = pending_ambiguous.ambiguous_eligible
+        pids: list[int] = []
+        for x in (amb.get("product_ids") or []):
+            try:
+                v = int(x)
+            except (TypeError, ValueError):
+                continue
+            if v > 0:
+                pids.append(v)
+        if len(pids) > 1:
+            pick = _shipment_disambiguate_product_id(db, distributor_id, evidence_date, raw, pids)
+            if pick is not None:
+                tier = str(amb.get("tier") or "unknown_tier")
+                return int(pick), None, f"product_resolved_{tier}_shipment_disambiguated", None
         return None, "ambiguous_product_match", None, pending_ambiguous
     if accumulated.inactive_hits:
         return None, "unresolved_product_inactive_only", None, accumulated
@@ -791,6 +929,26 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
     db.execute(delete(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job.id))
     db.flush()
 
+    date_majority_historical = _dsi_import_predominantly_historical_by_evidence_dates(df, mapping)
+    meta = dict(job.staged_metadata or {})
+    explicit = str(meta.get("dsi_workflow_mode_explicit") or "auto").strip().lower()
+    if explicit not in ("auto", "historical", "weekly"):
+        explicit = "auto"
+    if explicit == "historical":
+        workflow_mode = "historical"
+    elif explicit == "weekly":
+        workflow_mode = "weekly"
+    else:
+        workflow_mode = "historical" if date_majority_historical else "weekly"
+    meta["dsi_workflow_mode"] = workflow_mode
+    meta["dsi_historical_product_eligibility_relaxed"] = workflow_mode == "historical"
+    meta["dsi_predominantly_old_sellout_dates"] = date_majority_historical
+    job.staged_metadata = to_jsonable(meta)
+    db.add(job)
+    db.flush()
+
+    historical_relaxed = dsi_historical_product_eligibility_relaxed_from_import_job(job)
+
     ignored_src_cols = [k for k, v in mapping.items() if v == "ignored_shipping_evidence"]
 
     prod_idx = _load_product_resolution_index(db)
@@ -870,7 +1028,14 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             diag.append(derr)
 
         evidence_date = tx_date or snap_date
-        rpid, perr, presolve_tag, pev = _resolve_product(prod_raw, prod_idx, evidence_date)
+        rpid, perr, presolve_tag, pev = _resolve_product(
+            prod_raw,
+            prod_idx,
+            evidence_date,
+            relax_inactive_dim_product_for_historical_dsi=historical_relaxed,
+            db=db,
+            distributor_id=rdid,
+        )
         if perr:
             diag.append(perr)
         elif presolve_tag:
@@ -1050,6 +1215,12 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
             k = ("product_identifier", _norm_key(prod_raw))
             a = agg[k]
             _merge_product_resolution_evidence(a, pev)
+            if rdistributor_id is not None:
+                ds = a.setdefault("_dist_ids_unresolved", set())
+                if not isinstance(ds, set):
+                    ds = set()
+                    a["_dist_ids_unresolved"] = ds
+                ds.add(int(rdistributor_id))
             a["row_count"] += 1
             if qty_sold is not None:
                 a["total_units"] += abs(qty_sold)
@@ -1194,6 +1365,9 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
                 elif nkey_clean and nkey_clean != "__blank__":
                     dealer_token_col = nkey_clean[:512]
         if etype == "product_identifier":
+            dist_unresolved = data.pop("_dist_ids_unresolved", None)
+            if isinstance(dist_unresolved, set) and len(dist_unresolved) == 1:
+                ctx["dominant_unresolved_distributor_id"] = int(next(iter(dist_unresolved)))
             acc = data.pop("_pe_acc", None)
             if isinstance(acc, dict):
                 amb = acc.get("amb")
@@ -1292,6 +1466,7 @@ def process_distributor_sales_inventory(db: Session, job: ImportJob, df: pd.Data
         "import_mode": job.import_mode,
         "sellout_issue_rows": dsi_sellout_issue_rows,
         "rows_inventory_ready_with_sellout_warnings": dsi_inv_ready_with_sellout_issue_rows,
+        "historical_product_eligibility_relaxed": historical_relaxed,
     }
     db.add(
         ImportRowResult(
@@ -1352,6 +1527,7 @@ def refresh_dsi_staging_line_resolution(
     """Recompute resolution fields from persisted staging row (canonical JSON + raw tokens)."""
     source = job.source
     source_def_id = source.id if source else None
+    historical_relaxed = dsi_historical_product_eligibility_relaxed_from_import_job(job)
     mapped = line.mapped_canonical if isinstance(line.mapped_canonical, dict) else {}
     dist_raw = line.raw_distributor_token
     prod_raw = line.raw_product_token
@@ -1391,7 +1567,14 @@ def refresh_dsi_staging_line_resolution(
         diag.append(derr)
 
     evidence_date = tx_date or snap_date
-    rpid, perr, presolve_tag, pev = _resolve_product(prod_raw, prod_idx, evidence_date)
+    rpid, perr, presolve_tag, pev = _resolve_product(
+        prod_raw,
+        prod_idx,
+        evidence_date,
+        relax_inactive_dim_product_for_historical_dsi=historical_relaxed,
+        db=db,
+        distributor_id=rdid,
+    )
     if perr:
         diag.append(perr)
     elif presolve_tag:
@@ -1522,6 +1705,32 @@ def refresh_dsi_staging_line_resolution(
     db.add(line)
 
 
+def refresh_dsi_staging_lines_for_job(db: Session, job: ImportJob) -> None:
+    """Re-resolve every DSI staging line for a job (after steward-side mapping changes)."""
+
+    prod_idx = _load_product_resolution_index(db)
+    lines = list(
+        db.scalars(
+            select(ImportDistributorSiStagingLine)
+            .where(ImportDistributorSiStagingLine.import_job_id == job.id)
+            .order_by(ImportDistributorSiStagingLine.source_row_number)
+        ).all()
+    )
+    for line in lines:
+        refresh_dsi_staging_line_resolution(db, job, line, prod_idx)
+
+
+def _dsi_fact_sellout_source_key(
+    *,
+    distributor_id: int | None,
+    customer_id: int,
+    product_id: int,
+    period_start: date,
+) -> str:
+    d = int(distributor_id) if distributor_id is not None else 0
+    return f"dsi-sellout:{d}:{int(customer_id)}:{int(product_id)}:{period_start.isoformat()}"
+
+
 def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, int, list[str]]:
     """Apply sell-out / inventory fact upserts for all staging lines (import_mode apply). Returns counts and errors."""
     errors: list[str] = []
@@ -1552,9 +1761,17 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
             if eff is None:
                 eff = 0.0
             try:
+                sk = _dsi_fact_sellout_source_key(
+                    distributor_id=line.resolved_distributor_id,
+                    customer_id=int(line.resolved_customer_id),
+                    product_id=int(line.resolved_product_id),
+                    period_start=line.transaction_date,
+                )
                 stmt = (
                     pg_insert(sell_tbl)
                     .values(
+                        source_key=sk,
+                        staging_line_id=int(line.id),
                         product_id=line.resolved_product_id,
                         customer_id=line.resolved_customer_id,
                         distributor_id=line.resolved_distributor_id,
@@ -1569,8 +1786,12 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
                         source_import_job_id=job.id,
                     )
                     .on_conflict_do_update(
-                        constraint="uq_fact_sales_sellout_dsi_v1",
+                        constraint="uq_fact_sales_sellout_source_key",
                         set_={
+                            "staging_line_id": text("EXCLUDED.staging_line_id"),
+                            "product_id": text("EXCLUDED.product_id"),
+                            "customer_id": text("EXCLUDED.customer_id"),
+                            "distributor_id": text("EXCLUDED.distributor_id"),
                             "units": text("EXCLUDED.units"),
                             "revenue": text("EXCLUDED.revenue"),
                             "unit_sellout_price_ex_tax_amount": text("EXCLUDED.unit_sellout_price_ex_tax_amount"),

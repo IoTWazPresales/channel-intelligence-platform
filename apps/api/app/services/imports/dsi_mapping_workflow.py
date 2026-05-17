@@ -512,4 +512,13 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
         "column_samples": samples,
         "mapping_adjustment_notices": notices,
         "field_target_descriptions": dict(DSI_FIELD_TARGET_DESCRIPTIONS),
+        "dsi_workflow_mode": (job.staged_metadata or {}).get("dsi_workflow_mode")
+        if isinstance(job.staged_metadata, dict)
+        else None,
+        "dsi_workflow_mode_explicit": (job.staged_metadata or {}).get("dsi_workflow_mode_explicit")
+        if isinstance(job.staged_metadata, dict)
+        else None,
+        "dsi_predominantly_old_sellout_dates": (job.staged_metadata or {}).get("dsi_predominantly_old_sellout_dates")
+        if isinstance(job.staged_metadata, dict)
+        else None,
     }

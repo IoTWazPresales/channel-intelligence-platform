@@ -9,10 +9,12 @@ import {
   AccordionDetails,
   AccordionSummary,
   Alert,
+  Backdrop,
   Box,
   Button,
   Checkbox,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -1025,13 +1027,16 @@ function PlanDialogRowDetail({
   );
 }
 
-const PLAN_REVIEW_FILTER_CHIPS: { value: PlanReviewFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'ready', label: 'Ready' },
-  { value: 'needs_work', label: 'Needs work' },
+const PLAN_ENTITY_FILTER_CHIPS: { value: PlanReviewFilter; label: string }[] = [
   { value: 'customer', label: 'Customer' },
   { value: 'distributor', label: 'Distributor' },
   { value: 'product', label: 'Product' },
+];
+
+const PLAN_STATUS_FILTER_CHIPS: { value: PlanReviewFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'ready', label: 'Ready' },
+  { value: 'needs_work', label: 'Needs work' },
   { value: 'provisional', label: 'Create provisional' },
   { value: 'map_resolve', label: 'Map / resolve' },
   { value: 'ignore', label: 'Ignore' },
@@ -1651,6 +1656,13 @@ export function DsiImportJobResolutionSection({
 
   const applyReady = previewApplyToken !== null && previewApplyToken === previewToken && previewData !== null;
 
+  const stewardOverlayBusy =
+    bulkPreview.isPending ||
+    bulkApply.isPending ||
+    applyResolutionPlan.isPending ||
+    refreshPlanEffective.isPending ||
+    dsiRevalidateFromServer.isPending;
+
   return (
     <Paper variant="outlined" sx={{ p: 2 }} data-testid="dsi-import-job-resolution">
       <Stack spacing={2}>
@@ -1868,25 +1880,58 @@ export function DsiImportJobResolutionSection({
           ) : null}
         </Alert>
 
-        <Stack spacing={1.5} data-testid="dsi-resolution-inpage-toolbar">
-          <Box data-testid="dsi-resolution-plan-filters" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
-            {PLAN_REVIEW_FILTER_CHIPS.map(({ value, label }) => (
-              <Chip
-                key={value}
-                size="small"
-                label={label}
-                color={planReviewFilter === value ? 'primary' : 'default'}
-                variant={planReviewFilter === value ? 'filled' : 'outlined'}
-                onClick={() => setPlanReviewFilter(value)}
-                data-testid={`dsi-plan-filter-${value}`}
-              />
-            ))}
-          </Box>
+        <Stack spacing={1.5} data-testid="dsi-resolution-inpage-toolbar" sx={{ mt: 1 }}>
+          <Stack spacing={0.75}>
+            <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 0.08 }}>
+              Entity type
+            </Typography>
+            <Box data-testid="dsi-resolution-plan-filters-entity" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+              {PLAN_ENTITY_FILTER_CHIPS.map(({ value, label }) => (
+                <Chip
+                  key={value}
+                  size="small"
+                  label={label}
+                  color={planReviewFilter === value ? 'primary' : 'default'}
+                  variant={planReviewFilter === value ? 'filled' : 'outlined'}
+                  onClick={() => setPlanReviewFilter(value)}
+                  data-testid={`dsi-plan-filter-${value}`}
+                />
+              ))}
+            </Box>
+          </Stack>
+          <Stack spacing={0.75}>
+            <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 0.08 }}>
+              Status and action
+            </Typography>
+            <Box data-testid="dsi-resolution-plan-filters" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+              {PLAN_STATUS_FILTER_CHIPS.map(({ value, label }) => (
+                <Chip
+                  key={value}
+                  size="small"
+                  label={label}
+                  color={planReviewFilter === value ? 'primary' : 'default'}
+                  variant={planReviewFilter === value ? 'filled' : 'outlined'}
+                  onClick={() => setPlanReviewFilter(value)}
+                  data-testid={`dsi-plan-filter-${value}`}
+                />
+              ))}
+            </Box>
+          </Stack>
+          <Divider flexItem sx={{ borderStyle: 'dashed' }} />
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
             <Typography variant="caption" color="text.secondary" data-testid="dsi-resolution-plan-filter-count">
               Filter match {filteredPlanCount} of {planTableRows.length} · Grid rows {displayedCandidates.length} · Ready{' '}
               {readyPlanCandidateIds.length}
             </Typography>
+            <Button
+              size="small"
+              variant="text"
+              disabled={planReviewFilter === 'all'}
+              onClick={() => setPlanReviewFilter('all')}
+              data-testid="dsi-plan-filter-clear"
+            >
+              Clear filters
+            </Button>
             <Button
               size="small"
               disabled={!displayedCandidates.some((c) => planByCandidateId.get(c.id)?.ready === true)}
@@ -2389,6 +2434,12 @@ export function DsiImportJobResolutionSection({
           )}
         </Box>
       </Drawer>
+      <Backdrop
+        open={stewardOverlayBusy}
+        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 2 }}
+      >
+        <CircularProgress color="inherit" />
+      </Backdrop>
     </Paper>
   );
 }

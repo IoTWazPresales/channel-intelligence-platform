@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException,
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_db
 from app.core.config import get_settings
@@ -34,10 +34,20 @@ from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, Raw
 from app.storage.local import get_storage_backend
 from app.services.imports.import_job_bulk_delete import bulk_delete_import_jobs, normalize_job_ids, preview_import_job_bulk_delete
 from app.services.imports.template_definitions import product_master_sample_csv
+from app.utils.json_safe import to_jsonable
 from app.worker.tasks import process_import_job_task
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+async def _async_import_job_with_source(db: AsyncSession, job_id: int) -> ImportJob | None:
+    """Load ``ImportJob`` with ``source`` + ``import_template`` eager (avoids lazy IO under ``AsyncSession``)."""
+    return await db.scalar(
+        select(ImportJob)
+        .options(joinedload(ImportJob.source).joinedload(SourceDefinition.import_template))
+        .where(ImportJob.id == job_id)
+    )
 
 
 def _is_admin(x_user_role: str | None) -> bool:
@@ -264,6 +274,7 @@ async def create_job(
     import_mode: str = Form(default=""),
     confirm_destructive: str = Form(default=""),
     mapping_override: str = Form(default=""),
+    dsi_workflow_mode: str = Form(default="auto"),
     db: AsyncSession = Depends(get_db),
 ):
     source = await db.scalar(
@@ -308,6 +319,15 @@ async def create_job(
     )
     db.add(job)
     await db.flush()
+
+    if tpl.slug == "distributor_inventory":
+        mode_explicit = (dsi_workflow_mode or "auto").strip().lower()
+        if mode_explicit not in ("auto", "historical", "weekly"):
+            mode_explicit = "auto"
+        sm = dict(job.staged_metadata or {})
+        sm["dsi_workflow_mode_explicit"] = mode_explicit
+        job.staged_metadata = to_jsonable(sm)
+        db.add(job)
 
     # Store column mapping override for historical_lineup before sync processing.
     # The service reads job.mapping_decisions and applies overrides during parsing.
@@ -547,7 +567,7 @@ async def post_shipment_validate(job_id: int, db: AsyncSession = Depends(get_db)
 
 @router.get("/jobs/{job_id}/dsi-mapping-state")
 async def get_dsi_mapping_state(job_id: int, db: AsyncSession = Depends(get_db)):
-    job = await db.get(ImportJob, job_id)
+    job = await _async_import_job_with_source(db, job_id)
     if not job or job.template_slug != "distributor_inventory":
         raise HTTPException(status_code=404, detail="DSI mapping state not found for this job")
     headers = list(job.file_headers or [])
@@ -556,13 +576,15 @@ async def get_dsi_mapping_state(job_id: int, db: AsyncSession = Depends(get_db))
     if clean != raw:
         job.field_mapping = clean
         await db.commit()
-        await db.refresh(job)
+        job = await _async_import_job_with_source(db, job_id)
+        if not job or job.template_slug != "distributor_inventory":
+            raise HTTPException(status_code=404, detail="DSI mapping state not found for this job")
     return dsi_mapping_state_dict(job)
 
 
 @router.put("/jobs/{job_id}/dsi-field-mapping")
 async def put_dsi_field_mapping(job_id: int, body: dict[str, Any] = Body(...), db: AsyncSession = Depends(get_db)):
-    job = await db.get(ImportJob, job_id)
+    job = await _async_import_job_with_source(db, job_id)
     if not job or job.template_slug != "distributor_inventory":
         raise HTTPException(status_code=404, detail="Job not found")
     fm = body.get("field_mapping")
@@ -583,7 +605,9 @@ async def put_dsi_field_mapping(job_id: int, body: dict[str, Any] = Body(...), d
             merge_dsi_mapping_memory(sync_db, source_id=job.source_id, field_mapping=cleaned)
             sync_db.commit()
     await db.commit()
-    await db.refresh(job)
+    job = await _async_import_job_with_source(db, job_id)
+    if not job or job.template_slug != "distributor_inventory":
+        raise HTTPException(status_code=404, detail="Job not found")
     return dsi_mapping_state_dict(job)
 
 
@@ -604,14 +628,52 @@ async def post_dsi_validate(job_id: int, db: AsyncSession = Depends(get_db)):
     await db.commit()
     with SessionLocal() as sync_db:
         process_import_job_sync(sync_db, job_id)
-    job2 = await db.get(ImportJob, job_id)
-    if job2 is not None:
-        await db.refresh(job2)
+    job2 = await _async_import_job_with_source(db, job_id)
     if job2 and job2.status == "failed":
         raise HTTPException(
             status_code=422,
             detail=job2.error_summary or "Import job failed during validation.",
         )
+
+    if job2 and job2.template_slug == "distributor_inventory":
+        from app.models.import_distributor_si import ImportEntityMappingCandidate
+        from app.services.imports.distributor_sales_inventory import (
+            dsi_historical_workflow_from_import_job,
+            refresh_dsi_staging_lines_for_job,
+        )
+        from app.services.imports.dsi_resolution_plan import apply_dsi_resolution_plan_rows
+
+        if dsi_historical_workflow_from_import_job(job2):
+            cand_rows = (
+                await db.execute(
+                    select(ImportEntityMappingCandidate.id).where(ImportEntityMappingCandidate.import_job_id == job_id)
+                )
+            ).all()
+            cand_ids = [int(r[0]) for r in cand_rows]
+            if cand_ids:
+                await apply_dsi_resolution_plan_rows(
+                    db,
+                    job_id,
+                    cand_ids,
+                    default_region_id=None,
+                    default_channel_id=None,
+                    partner_tier=None,
+                    provisional_notes_summary=(
+                        "Historical DSI workflow: auto-applied steward resolution immediately after validation."
+                    ),
+                    confirm_for_suspicious_distributor_token=True,
+                    overrides=None,
+                )
+
+            def _refresh_after_auto_apply(sess: Session) -> None:
+                j = sess.get(ImportJob, job_id)
+                if j:
+                    refresh_dsi_staging_lines_for_job(sess, j)
+                    sess.commit()
+
+            await db.run_sync(_refresh_after_auto_apply)
+            job2 = await _async_import_job_with_source(db, job_id)
+
     return dsi_mapping_state_dict(job2) if job2 else {}
 
 
@@ -644,9 +706,7 @@ async def post_dsi_apply(
     await db.commit()
     with SessionLocal() as sync_db:
         process_import_job_sync(sync_db, job_id)
-    job2 = await db.get(ImportJob, job_id)
-    if job2 is not None:
-        await db.refresh(job2)
+    job2 = await _async_import_job_with_source(db, job_id)
     if job2 and job2.status == "failed":
         raise HTTPException(
             status_code=422,

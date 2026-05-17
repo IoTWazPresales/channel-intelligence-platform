@@ -260,6 +260,8 @@ def run(session: Session, *, full_demo: bool = False) -> None:
         [
             ProductAlias(product_id=products[0].id, alias_value="APL-200-GL", alias_kind="distributor_code", confidence="high"),
             FactSalesSellout(
+                source_key=f"demo-seed-sellout-{products[0].id}-{customers[0].id}",
+                staging_line_id=None,
                 product_id=products[0].id,
                 customer_id=customers[0].id,
                 channel_id=channels[0].id,

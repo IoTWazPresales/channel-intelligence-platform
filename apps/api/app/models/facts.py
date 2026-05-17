@@ -9,8 +9,13 @@ from app.db.base import Base, TimestampMixin
 
 class FactSalesSellout(Base, TimestampMixin):
     __tablename__ = "fact_sales_sellout"
+    __table_args__ = (Index("ix_fact_sales_sellout_source_import_job_id", "source_import_job_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_key: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
+    staging_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_distributor_si_staging_line.id", ondelete="SET NULL"), nullable=True
+    )
     product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False)
     channel_id: Mapped[int | None] = mapped_column(ForeignKey("dim_channel.id"), nullable=True)

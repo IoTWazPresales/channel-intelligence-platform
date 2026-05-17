@@ -10,7 +10,6 @@ import {
   FormControl,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
   Stack,
   Table,
@@ -19,7 +18,6 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -29,6 +27,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { apiGet } from '@/lib/api';
 
 import { InboundShipmentsColumnsDialog, type OptionalColumnMeta } from './InboundShipmentsColumnsDialog';
+import { ShippingCommercialSummary } from './ShippingCommercialSummary';
 
 const LS_GRID = 'cip.commercial.inbound-shipments.grid.optional.v1';
 
@@ -61,6 +60,7 @@ type ShippingLine = Record<string, unknown> & { id: number };
 type LinesResponse = { total: number; skip: number; limit: number; items: ShippingLine[] };
 
 type DistHit = { id: number; distributor_code: string; distributor_name: string };
+type CustHit = { id: number; customer_code: string; customer_name: string };
 
 function localDateYMD(d: Date): string {
   const y = d.getFullYear();
@@ -111,30 +111,11 @@ function fmtCellForKey(key: string, value: unknown): string {
   return fmtOptionalCell(value);
 }
 
-function CountTile({ title, buckets }: { title: string; buckets: CountBucket[] }) {
-  if (!buckets.length) {
-    return (
-      <Typography variant="body2" color="text.secondary">
-        No rows in this bucket.
-      </Typography>
-    );
-  }
-  return (
-    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-      {buckets.map((b) => (
-        <Tooltip key={`${title}-${b.key}`} title={b.key.length > 96 ? b.key : ''} disableHoverListener={b.key.length <= 96}>
-          <Chip label={`${b.key.length > 40 ? `${b.key.slice(0, 40)}…` : b.key}: ${b.count}`} size="small" variant="outlined" />
-        </Tooltip>
-      ))}
-    </Stack>
-  );
-}
-
 export default function InboundShipmentsPage() {
   const [lineState, setLineState] = useState<string>('');
   const [cargoStatus, setCargoStatus] = useState<string>('');
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
-  const [distQ, setDistQ] = useState('');
+  const [customerPick, setCustomerPick] = useState<CustHit | null>(null);
   const [search, setSearch] = useState('');
   const [dateField, setDateField] = useState('eta_date');
   const [dateFrom, setDateFrom] = useState('');
@@ -253,10 +234,19 @@ export default function InboundShipmentsPage() {
     }
   };
 
-  const { data: summary, isLoading: summaryLoading } = useQuery({
+  const { data: summary } = useQuery({
     queryKey: ['shipping-summary'],
     queryFn: ({ signal }) => apiGet<ShippingSummary>('/api/v1/shipping/summary', { signal }),
   });
+
+  const { data: filterOptions } = useQuery({
+    queryKey: ['shipping-filter-options'],
+    queryFn: ({ signal }) =>
+      apiGet<{ distributors: DistHit[]; customers: CustHit[] }>('/api/v1/shipping/filter-options', { signal }),
+  });
+
+  const distOptions = filterOptions?.distributors ?? [];
+  const custOptions = filterOptions?.customers ?? [];
 
   const includeRawRow = displayOptionalFields.includes('raw_source_row');
 
@@ -267,6 +257,7 @@ export default function InboundShipmentsPage() {
         lineState,
         cargoStatus,
         distributorPick?.id ?? null,
+        customerPick?.id ?? null,
         search,
         dateField,
         dateFrom,
@@ -282,6 +273,7 @@ export default function InboundShipmentsPage() {
       lineState,
       cargoStatus,
       distributorPick?.id,
+      customerPick?.id,
       search,
       dateField,
       dateFrom,
@@ -303,6 +295,7 @@ export default function InboundShipmentsPage() {
       if (lineState) params.set('line_state', lineState);
       if (cargoStatus) params.set('status', cargoStatus);
       if (distributorPick != null) params.set('distributor_id', String(distributorPick.id));
+      if (customerPick != null) params.set('customer_id', String(customerPick.id));
       if (search.trim()) params.set('search', search.trim());
       if (dateField) params.set('date_field', dateField);
       if (dateFrom.trim()) params.set('date_from', dateFrom.trim());
@@ -318,14 +311,6 @@ export default function InboundShipmentsPage() {
     },
   });
 
-  const { data: distHits = [] } = useQuery({
-    queryKey: ['distributors-search-inbound-ship', distQ],
-    queryFn: ({ signal }) =>
-      apiGet<{ items: DistHit[] }>(`/api/v1/distributors?q=${encodeURIComponent(distQ)}&page_size=30`, { signal }),
-    enabled: distQ.trim().length >= 1,
-    select: (r) => r.items ?? [],
-  });
-
   return (
     <>
       <PageHeader crumbs={[{ label: 'Inbound shipments' }]} title="Inbound shipments" />
@@ -333,36 +318,7 @@ export default function InboundShipmentsPage() {
         Truth layer from <strong>fact_inbound_shipment</strong> (populated when an inbound import job is applied).
         Steward raw imports under <strong>Admin → Shipment evidence</strong>.
       </Alert>
-      {summaryLoading ? (
-        <Typography color="text.secondary">Loading summary…</Typography>
-      ) : (
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
-          <Paper sx={{ p: 2, flex: 1 }}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Total fact rows
-            </Typography>
-            <Typography variant="h5">{summary?.total_lines ?? '—'}</Typography>
-          </Paper>
-          <Paper sx={{ p: 2, flex: 2 }}>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              By line state
-            </Typography>
-            <CountTile title="line_state" buckets={summary?.by_line_state ?? []} />
-          </Paper>
-          <Paper sx={{ p: 2, flex: 2 }}>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              By cargo status
-            </Typography>
-            <CountTile title="status" buckets={summary?.by_status ?? []} />
-          </Paper>
-          <Paper sx={{ p: 2, flex: 2 }}>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              By distributor (canonical or source text)
-            </Typography>
-            <CountTile title="distributor" buckets={summary?.by_distributor ?? []} />
-          </Paper>
-        </Stack>
-      )}
+      <ShippingCommercialSummary />
 
       <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
         Smart views
@@ -407,7 +363,7 @@ export default function InboundShipmentsPage() {
         <TextField
           size="small"
           label="Search"
-          placeholder="Distributor, product, SKU, sales model, order #…"
+          placeholder="Distributor, product, SKU, sales model, order #, channel partner…"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -418,18 +374,34 @@ export default function InboundShipmentsPage() {
         <Autocomplete
           sx={{ minWidth: 280, flex: 1 }}
           size="small"
-          options={distHits}
+          loading={!filterOptions}
+          options={distOptions}
           value={distributorPick}
           onChange={(_e, v) => {
             setDistributorPick(v);
             setSmartPreset(null);
-            if (!v) setDistQ('');
           }}
-          inputValue={distQ}
-          onInputChange={(_e, v) => setDistQ(v)}
           getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
           isOptionEqualToValue={(a, b) => a.id === b.id}
-          renderInput={(params) => <TextField {...params} label="Distributor (canonical)" placeholder="Search…" />}
+          renderInput={(params) => (
+            <TextField {...params} label="Distributor (canonical)" placeholder="All distributors · type to filter" />
+          )}
+        />
+        <Autocomplete
+          sx={{ minWidth: 260, flex: 1 }}
+          size="small"
+          loading={!filterOptions}
+          options={custOptions}
+          value={customerPick}
+          onChange={(_e, v) => {
+            setCustomerPick(v);
+            setSmartPreset(null);
+          }}
+          getOptionLabel={(o) => `${o.customer_name} (${o.customer_code})`}
+          isOptionEqualToValue={(a, b) => a.id === b.id}
+          renderInput={(params) => (
+            <TextField {...params} label="Channel partner (customer)" placeholder="All customers · type to filter" />
+          )}
         />
         <FormControl size="small" sx={{ minWidth: 160 }}>
           <InputLabel id="flt-line-state">Line state</InputLabel>
@@ -573,6 +545,7 @@ export default function InboundShipmentsPage() {
             <TableHead>
               <TableRow>
                 <TableCell>Distributor</TableCell>
+                <TableCell>Channel partner</TableCell>
                 <TableCell>Product (sales model)</TableCell>
                 <TableCell>Line state</TableCell>
                 <TableCell>Cargo status</TableCell>
@@ -594,6 +567,16 @@ export default function InboundShipmentsPage() {
                     {row.distributor_code && row.distributor_name ? (
                       <Typography variant="caption" color="text.secondary" display="block">
                         {String(row.distributor_code)}
+                      </Typography>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">
+                      {(row.channel_partner_label ?? '—') as string}
+                    </Typography>
+                    {row.channel_partner_caption ? (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {String(row.channel_partner_caption)}
                       </Typography>
                     ) : null}
                   </TableCell>
