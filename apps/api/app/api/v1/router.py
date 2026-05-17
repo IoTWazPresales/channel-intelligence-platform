@@ -1,10 +1,12 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    analytics,
     auth,
     budgets,
     buy_plans,
     commercial_planner,
+    customer_sales,
     dev_wipe,
     catalog,
     competition,
@@ -24,10 +26,12 @@ from app.api.v1.endpoints import (
     products,
     promo_exports,
     promotions,
+    retailer_listings,
     roadmap,
     sellout,
     shipment_evidence,
     shipping,
+    soh,
 )
 
 api_router = APIRouter()
@@ -61,4 +65,8 @@ api_router.include_router(
 )
 api_router.include_router(mappings.router, prefix="/mappings", tags=["mappings"])
 api_router.include_router(exceptions.router, prefix="/exceptions", tags=["exceptions"])
+api_router.include_router(customer_sales.router, prefix="/customer-sales", tags=["customer-sales"])
+api_router.include_router(soh.router, prefix="/soh", tags=["soh"])
+api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+api_router.include_router(retailer_listings.router, prefix="/retailer-listings", tags=["retailer-listings"])
 api_router.include_router(dev_wipe.router, prefix="/dev", tags=["dev"])
