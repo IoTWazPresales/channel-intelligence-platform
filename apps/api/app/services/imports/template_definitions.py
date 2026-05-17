@@ -428,6 +428,107 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "accepted_file_types": [".csv", ".xlsx"],
         "expected_columns": {"sku": {"aliases": ["item"], "required": True}},
     },
+    {
+        "slug": "customer_sales",
+        "display_name": "Customer sales (retail sell-out)",
+        "description": (
+            "Customer-reported retail sell-out data (POS extracts, weekly sales reports). "
+            "Supports South African retail patterns with flexible date resolution "
+            "(week/year, period, or transaction date)."
+        ),
+        "enabled": True,
+        "hidden": False,
+        "admin_only": False,
+        "requires_provider": True,
+        "pipeline_handler": "customer_sales_import",
+        "destructive_apply_requires_confirm": True,
+        "accepted_file_types": [".csv", ".xlsx"],
+        "expected_columns": {
+            "report_week": {
+                "aliases": ["week", "wk", "week_no", "week_number", "week_num", "reporting_week", "sales_week", "wk_no"],
+                "required": False,
+            },
+            "report_year": {
+                "aliases": ["year", "yr", "reporting_year", "sales_year", "fiscal_year"],
+                "required": False,
+            },
+            "report_period": {
+                "aliases": ["period", "reporting_period", "sales_period", "week_period", "date_period", "wk_yr", "week_year"],
+                "required": False,
+            },
+            "transaction_date": {
+                "aliases": ["date", "transaction_date", "sale_date", "sales_date", "trans_date", "sold_date", "order_date"],
+                "required": False,
+            },
+            "product_identifier": {
+                "aliases": [
+                    "article", "article_code", "article_no", "article_number", "article_id",
+                    "sku", "sku_code", "product_code", "item_code", "item_no", "item_number",
+                    "part_number", "part_no", "pn", "barcode", "ean", "upc", "gtin",
+                    "retailer_sku", "retailer_code", "vendor_code", "vendor_sku",
+                    "product_id", "material", "material_code", "material_no",
+                ],
+                "required": True,
+            },
+            "quantity_sold": {
+                "aliases": [
+                    "qty_sold", "units_sold", "qty", "quantity", "units", "sales_qty",
+                    "sell_qty", "sellout_qty", "sell_out_qty", "sold_qty", "sold_units",
+                    "total_qty", "total_units", "volume",
+                ],
+                "required": True,
+            },
+            "quantity_returned": {
+                "aliases": [
+                    "qty_returned", "returns", "return_qty", "returned_qty", "returned_units",
+                    "units_returned", "return_units", "rtn_qty",
+                ],
+                "required": False,
+            },
+            "selling_price": {
+                "aliases": [
+                    "selling_price", "sell_price", "retail_price", "unit_price", "price",
+                    "sales_price", "rsp", "rrp", "srp", "asp", "avg_selling_price",
+                    "average_selling_price", "unit_sell_price",
+                ],
+                "required": False,
+            },
+            "cost_price": {
+                "aliases": [
+                    "cost_price", "cost", "unit_cost", "cogs", "cost_of_goods",
+                    "buy_price", "purchase_price", "landed_cost", "dlp",
+                ],
+                "required": False,
+            },
+            "currency_code": {
+                "aliases": ["currency", "currency_code", "curr", "ccy"],
+                "required": False,
+            },
+            "store_code": {
+                "aliases": [
+                    "store", "store_code", "store_id", "store_no", "store_number",
+                    "branch", "branch_code", "branch_no", "branch_id",
+                    "outlet", "outlet_code", "location", "location_code", "site", "site_code",
+                ],
+                "required": False,
+            },
+            "channel_type": {
+                "aliases": [
+                    "channel", "channel_type", "sales_channel", "channel_code",
+                    "online_offline", "store_type", "fulfilment_channel",
+                ],
+                "required": False,
+            },
+            "reported_soh": {
+                "aliases": [
+                    "soh", "stock_on_hand", "on_hand", "oh", "closing_stock",
+                    "ending_stock", "ending_inventory", "stock_balance",
+                    "inventory_on_hand", "available_stock", "closing_soh",
+                ],
+                "required": False,
+            },
+        },
+    },
 ]
 
 DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
@@ -452,6 +553,7 @@ DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
     ),
     ("promotion_plan_default", "Default promotion plan feed", "promotion_plan", "promo_extract"),
     ("current_lineup_system", "Current working lineup (Commercial Planner upload)", "current_lineup", "planning_extract"),
+    ("customer_sales_default", "customer_sales", "Customer sales default source", "manual_upload"),
 ]
 
 
