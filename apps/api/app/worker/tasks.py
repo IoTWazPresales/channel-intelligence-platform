@@ -7,6 +7,33 @@ from app.worker.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
+def _write_task_level_failure(job_id: int) -> None:
+    """Best-effort STAGE_FAILED writeback for exceptions that escape process_import_job_sync.
+
+    Called when an exception is raised outside the inner try/except in the pipeline (e.g.
+    RawFileMetadata not found, storage read failure, or post-processing hook failure). The inner
+    handler already covers exceptions inside the pipeline try block, so this is a safety net for
+    the edges that sit outside it.
+    """
+    from datetime import datetime, timezone
+
+    from app.db.session_sync import SessionLocal
+    from app.ingestion.pipeline import STAGE_FAILED
+    from app.models.ingestion import ImportJob
+
+    try:
+        with SessionLocal() as db:
+            job = db.get(ImportJob, job_id)
+            if job and job.stage != STAGE_FAILED:
+                job.status = "failed"
+                job.stage = STAGE_FAILED
+                job.error_summary = "Task-level failure; see worker log for exception detail."
+                job.completed_at = datetime.now(timezone.utc)
+                db.commit()
+    except Exception:
+        logger.exception("STAGE_FAILED writeback also failed job_id=%s", job_id)
+
+
 def run_product_master_commit_job(
     job_id: int,
     confirm_destructive: bool,
@@ -38,12 +65,43 @@ def run_product_master_commit_job(
     return job_id
 
 
-@celery_app.task(name="imports.process_job")
-def process_import_job_task(job_id: int) -> int:
+@celery_app.task(name="imports.process_job", bind=True)
+def process_import_job_task(self, job_id: int) -> int:
     from app.db.session_sync import SessionLocal
 
+    def _on_progress(phase: str, phase_label: str, current_row: int, total_rows: int) -> None:
+        try:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "phase": phase,
+                    "phase_label": phase_label,
+                    "current_row": current_row,
+                    "total_rows": total_rows,
+                    "pct": round(current_row / total_rows * 100) if total_rows else 0,
+                },
+            )
+        except Exception:
+            pass
+
+    try:
+        with SessionLocal() as db:
+            process_import_job_sync(db, job_id, on_progress=_on_progress)
+    except Exception:
+        logger.exception("process_import_job_task failed job_id=%s — writing STAGE_FAILED", job_id)
+        _write_task_level_failure(job_id)
+        raise
+    return job_id
+
+
+@celery_app.task(name="imports.infer_dsi")
+def infer_dsi_import_job_task(job_id: int) -> int:
+    """DSI upload infer (headers + initial field_mapping → ``dsi_mapping_ready``)."""
+    from app.db.session_sync import SessionLocal
+    from app.services.imports.dsi_mapping_workflow import infer_dsi_job_sync
+
     with SessionLocal() as db:
-        process_import_job_sync(db, job_id)
+        infer_dsi_job_sync(db, job_id)
     return job_id
 
 

@@ -58,6 +58,7 @@ import { toQueryError } from '@/lib/queryError';
 
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
+import { DsiValidateProgressPanel, type DsiValidateProgress } from './DsiValidateProgressPanel';
 import type { DsiCandidateRow } from '../mappings/DsiCandidateStewardPanel';
 import {
   dsiContinueToApplyAllowed,
@@ -114,6 +115,7 @@ type Job = {
   template_slug?: string | null;
   import_mode?: string | null;
   archived_at?: string | null;
+  staged_metadata?: Record<string, unknown> | null;
 };
 
 type RowResult = {
@@ -415,6 +417,7 @@ function AdminImportsPageContent() {
   const [shipmentApplyWarning, setShipmentApplyWarning] = useState<string | null>(null);
   const [shipmentMapDraft, setShipmentMapDraft] = useState<Record<string, string>>({});
   const [shipmentValidateAsync, setShipmentValidateAsync] = useState(false);
+  const [dsiValidateAsync, setDsiValidateAsync] = useState(false);
   const [dsiWorkflowMode, setDsiWorkflowMode] = useState<'auto' | 'historical' | 'weekly'>('auto');
 
   const jobIdParam = useMemo(() => {
@@ -744,10 +747,18 @@ function AdminImportsPageContent() {
         headers: defaultHeaders,
       });
       if (!res.ok) throw new Error(await readFetchError(res));
-      return res.json() as Promise<DsiMappingState>;
+      const json = (await res.json()) as DsiMappingState & { async?: boolean };
+      return { async: Boolean(json.async) };
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      if (data.async) {
+        setDsiValidateAsync(true);
+      } else {
+        setDsiValidateAsync(false);
+      }
       const jid = lastJobIdRef.current;
+      void qc.invalidateQueries({ queryKey: ['import-job', jid] });
+      void qc.invalidateQueries({ queryKey: ['dsi-async-validate-import-job', jid] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', jid] });
       void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', jid] });
       void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', jid] });
@@ -764,14 +775,61 @@ function AdminImportsPageContent() {
     },
     onError: () => {
       setDsiContinueGateKey(null);
+      setDsiValidateAsync(false);
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
       void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
   });
 
+  const { data: dsiValidatePollJob } = useQuery({
+    // Dedicated key so this poller is not merged with `['import-job', jobIdParam]` (revisit flow),
+    // which would drop `refetchInterval` and stop polling while stage is still `dsi_mapping_ready`.
+    queryKey: ['dsi-async-validate-import-job', lastJobId],
+    queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${lastJobId!}`, { signal }),
+    enabled: Boolean(isDsi && lastJobId != null && dsiValidateAsync),
+    refetchInterval: (q) => {
+      const j = q.state.data;
+      if (!j) return 1500;
+      const st = (j.stage || '').trim();
+      if (st === 'validated' || st === 'failed') return false;
+      return 1500;
+    },
+  });
+
+  // Polls real-time Celery task state (phase + row progress) while DSI validate is running.
+  const { data: dsiProgress } = useQuery({
+    queryKey: ['dsi-validate-progress', lastJobId],
+    queryFn: ({ signal }) =>
+      apiGet<DsiValidateProgress>(`/api/v1/imports/jobs/${lastJobId!}/dsi-progress`, { signal }),
+    enabled: Boolean(isDsi && lastJobId != null && dsiValidateAsync),
+    refetchInterval: (q) => {
+      const p = q.state.data;
+      if (!p) return 1500;
+      const phase = (p.phase || '').trim();
+      if (phase === 'complete' || phase === 'failed') return false;
+      return 1500;
+    },
+  });
+
+  useEffect(() => {
+    if (!dsiValidateAsync) return;
+    const j = dsiValidatePollJob;
+    if (!j) return;
+    const st = (j.stage || '').trim();
+    if (st === 'validated' || st === 'failed') {
+      setDsiValidateAsync(false);
+      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', j.id] });
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', j.id] });
+      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', j.id] });
+      void refetchDsiMapping();
+      void refetchPreview();
+    }
+  }, [dsiValidateAsync, dsiValidatePollJob, qc, refetchDsiMapping, refetchPreview]);
+
   useEffect(() => {
     dsiValidate.reset();
+    setDsiValidateAsync(false);
   }, [lastJobId]);
 
   const dsiApply = useMutation({
@@ -837,7 +895,7 @@ function AdminImportsPageContent() {
   const dsiCanContinueToApply = useMemo(
     () =>
       dsiContinueToApplyAllowed(dsiContinueGateKey, lastJobId, dsiMappingState?.field_mapping, distributorSiSummary, {
-        isValidating: dsiValidate.isPending,
+        isValidating: dsiValidate.isPending || dsiValidateAsync,
         hasServerGate: dsiServerMappingGateOk,
       }),
     [
@@ -846,6 +904,7 @@ function AdminImportsPageContent() {
       dsiMappingState?.field_mapping,
       distributorSiSummary,
       dsiValidate.isPending,
+      dsiValidateAsync,
       dsiServerMappingGateOk,
     ]
   );
@@ -855,6 +914,7 @@ function AdminImportsPageContent() {
   useEffect(() => {
     if (!isDsi || !dsiMappingDraftDirty) return;
     setDsiContinueGateKey(null);
+    setDsiValidateAsync(false);
     dsiValidate.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when draft diverges from saved server mapping
   }, [isDsi, dsiMappingDraftDirty]);
@@ -2707,7 +2767,22 @@ function AdminImportsPageContent() {
                 <strong>Save &amp; continue to validate</strong> before running validation.
               </Alert>
             ) : null}
-            {dsiValidate.isPending ? <LinearProgress /> : null}
+            {(dsiValidateAsync || (dsiValidatePollJob && (dsiValidatePollJob.status || '').trim() === 'running')) &&
+            (dsiValidatePollJob?.stage || '').trim() !== 'validated' &&
+            (dsiValidatePollJob?.stage || '').trim() !== 'failed' ? (
+              <DsiValidateProgressPanel
+                progress={dsiProgress}
+                isRunning={
+                  dsiValidateAsync ||
+                  (dsiValidate.isPending ?? false) ||
+                  ((dsiValidatePollJob?.status || '').trim() === 'running' &&
+                    (dsiValidatePollJob?.stage || '').trim() !== 'validated' &&
+                    (dsiValidatePollJob?.stage || '').trim() !== 'failed')
+                }
+              />
+            ) : dsiValidate.isPending ? (
+              <LinearProgress />
+            ) : null}
             {dsiValidate.isError ? <Alert severity="error">{safeDisplayError(dsiValidate.error)}</Alert> : null}
             {dsiValidate.isSuccess ? (
               <Alert
@@ -2801,7 +2876,7 @@ function AdminImportsPageContent() {
               </Table>
             ) : null}
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
-              <Button onClick={() => setActiveStep(5)} disabled={dsiValidate.isPending}>
+              <Button onClick={() => setActiveStep(5)} disabled={dsiValidate.isPending || dsiValidateAsync}>
                 Back
               </Button>
               {dsiCanContinueToApply ? (
@@ -2809,10 +2884,10 @@ function AdminImportsPageContent() {
                   <Button
                     variant="outlined"
                     onClick={() => void dsiValidate.mutateAsync()}
-                    disabled={dsiValidate.isPending || !dsiServerMappingGateOk}
+                    disabled={dsiValidate.isPending || dsiValidateAsync || !dsiServerMappingGateOk}
                     data-testid="dsi-rerun-validation"
                   >
-                    {dsiValidate.isPending ? 'Validating…' : 'Re-run validation'}
+                    {dsiValidate.isPending || dsiValidateAsync ? 'Validating…' : 'Re-run validation'}
                   </Button>
                   <Button variant="contained" onClick={() => setActiveStep(7)} data-testid="dsi-continue-to-apply">
                     Continue to apply
@@ -2822,10 +2897,14 @@ function AdminImportsPageContent() {
                 <Button
                   variant="contained"
                   onClick={() => void dsiValidate.mutateAsync()}
-                  disabled={dsiValidate.isPending || !dsiServerMappingGateOk}
+                  disabled={dsiValidate.isPending || dsiValidateAsync || !dsiServerMappingGateOk}
                   data-testid="dsi-run-validation"
                 >
-                  {dsiValidate.isPending ? 'Validating…' : dsiHasValidateResult ? 'Re-run validation' : 'Run validation'}
+                  {dsiValidate.isPending || dsiValidateAsync
+                    ? 'Validating…'
+                    : dsiHasValidateResult
+                      ? 'Re-run validation'
+                      : 'Run validation'}
                 </Button>
               )}
             </Stack>

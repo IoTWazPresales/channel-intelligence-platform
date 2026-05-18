@@ -10,6 +10,12 @@ celery_app = Celery(
     backend=settings.celery_result_backend,
 )
 
-celery_app.conf.task_routes = {"app.worker.tasks.*": {"queue": "default"}}
+# Tasks use explicit ``name=`` (e.g. ``imports.process_job``), not ``app.worker.tasks.*``.
+# Route them to the default worker queue (``celery worker`` without ``-Q`` consumes ``celery``).
+celery_app.conf.task_routes = {
+    "imports.process_job": {"queue": "celery"},
+    "imports.infer_dsi": {"queue": "celery"},
+    "imports.product_master_commit": {"queue": "celery"},
+}
 
 import app.worker.tasks  # noqa: E402, F401 — register tasks

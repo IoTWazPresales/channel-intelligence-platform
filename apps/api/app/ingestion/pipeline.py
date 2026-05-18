@@ -693,7 +693,7 @@ def _process_distributor_master(db: Session, job: ImportJob, df: pd.DataFrame, m
     return 0
 
 
-def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
+def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -> ImportJob:
     job = db.scalar(
         select(ImportJob)
         .options(joinedload(ImportJob.source).joinedload(SourceDefinition.import_template))
@@ -707,11 +707,11 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
         db.refresh(job)
         return job
 
-    storage = get_storage_backend()
-    raw = db.scalars(select(RawFileMetadata).where(RawFileMetadata.job_id == job_id)).one()
-    data = storage.read(raw.storage_key)
-
     try:
+        storage = get_storage_backend()
+        raw = db.scalars(select(RawFileMetadata).where(RawFileMetadata.job_id == job_id)).one()
+        data = storage.read(raw.storage_key)
+
         job.stage = STAGE_RAW_STORED
         job.started_at = datetime.now(timezone.utc)
         job.status = "running"
@@ -804,6 +804,8 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
                 )
             )
             errors = 1
+        elif handler == "distributor_sales_inventory" and on_progress is not None:
+            errors = processor(db, job, df, mapping, on_progress=on_progress)
         else:
             errors = processor(db, job, df, mapping)
 
@@ -813,7 +815,6 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
         job.error_summary = f"{errors} rows require attention" if errors else None
         db.commit()
         db.refresh(job)
-        return job
     except Exception as exc:  # noqa: BLE001
         db.rollback()
         job = db.get(ImportJob, job_id)
@@ -825,3 +826,11 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
             db.commit()
             db.refresh(job)
         return job
+
+    if (job.template_slug or "") == "distributor_inventory" and (job.import_mode or "").strip() == "validate":
+        from app.ingestion.dsi_validate_post_sync import run_dsi_validate_post_import_orchestration
+
+        run_dsi_validate_post_import_orchestration(db, job.id)
+        db.refresh(job)
+
+    return job

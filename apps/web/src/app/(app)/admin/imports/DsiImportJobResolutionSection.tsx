@@ -47,10 +47,7 @@ import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
-import {
-  DsiCandidateStewardPanel,
-  type DsiCandidateRow,
-} from '../mappings/DsiCandidateStewardPanel';
+import { DsiMappingStewardPanel, type DsiCandidateRow } from '@/features/import-steward/dsi-mapping-steward-panel';
 
 type BulkAction =
   | 'ignore'
@@ -2268,7 +2265,7 @@ export function DsiImportJobResolutionSection({
         <Typography variant="caption" color="text.secondary">
           Single-row steward (selected grid row)
         </Typography>
-        <DsiCandidateStewardPanel
+        <DsiMappingStewardPanel
           importJobId={importJobId}
           candidate={detailCandidate}
           onDone={() => {
