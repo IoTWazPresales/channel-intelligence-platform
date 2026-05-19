@@ -94,38 +94,42 @@ describe('AdminMappingsPage', () => {
     searchString = 'import_job_id=501';
     apiGetMock.mockImplementation(async (path: string) => {
       if (path === '/api/v1/mappings/queue') return [];
-      if (path === '/api/v1/mappings/import-jobs/501/distributor-si-candidates') {
-        return [
-          {
-            id: 1,
-            import_job_id: 501,
-            source_definition_id: 9,
-            entity_type: 'customer_dealer_token',
-            normalized_key: 'mystery dealer zed',
-            dealer_group_token: '__blank__',
-            row_count: 104,
-            total_units: 10,
-            total_reported_value: null,
-            sample_raw_values: ['Mystery Dealer Zed'],
-            suggested_entity_id: null,
-            match_reason: null,
-            confidence_score: null,
-            status: 'needs_review',
-            context: {},
-            created_at: '2026-01-01T00:00:00+00:00',
-            updated_at: '2026-01-01T00:00:00+00:00',
-          },
-        ];
+      if (path.startsWith('/api/v1/mappings/import-jobs/501/distributor-si-candidates')) {
+        return {
+          items: [
+            {
+              id: 1,
+              import_job_id: 501,
+              source_definition_id: 9,
+              entity_type: 'customer_dealer_token',
+              normalized_key: 'mystery dealer zed',
+              dealer_group_token: '__blank__',
+              row_count: 104,
+              total_units: 10,
+              total_reported_value: null,
+              sample_raw_values: ['Mystery Dealer Zed'],
+              suggested_entity_id: null,
+              match_reason: null,
+              confidence_score: null,
+              status: 'needs_review',
+              context: {},
+              created_at: '2026-01-01T00:00:00+00:00',
+              updated_at: '2026-01-01T00:00:00+00:00',
+            },
+          ],
+          total: 1,
+          skip: 0,
+          limit: 100,
+        };
       }
       throw new Error(`unexpected ${path}`);
     });
     renderPage();
     await waitFor(() => expect(screen.getByTestId('dsi-job-filter-banner')).toBeInTheDocument());
     await waitFor(() =>
-      expect(screen.getByTestId('dsi-candidate-count')).toHaveTextContent(/1 grouped import candidate group/)
+      expect(screen.getByTestId('dsi-candidate-count')).toHaveTextContent(/1 grouped mapping candidate/)
     );
-    expect(screen.getByTestId('grid')).toHaveTextContent('104');
-    expect(screen.getByText(/customer_dealer_token/i)).toBeInTheDocument();
+    expect(screen.getByTestId('dsi-open-import-resolution')).toHaveAttribute('href', '/admin/imports?job=501');
     expect(screen.queryByTestId('empty-title')).not.toBeInTheDocument();
   });
 });

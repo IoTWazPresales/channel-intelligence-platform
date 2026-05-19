@@ -1,22 +1,20 @@
 'use client';
 
 import { Alert, Box, Button, Paper, Stack, Typography } from '@mui/material';
-import type { GridOptions, RowClickedEvent } from 'ag-grid-community';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
-import { Suspense, useCallback, useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from '@/features/import-steward';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiGet, apiPost, apiUrl } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
-
-import { DsiCandidateStewardPanel } from './DsiCandidateStewardPanel';
 
 type LegacyRow = {
   id: number;
@@ -62,36 +60,6 @@ function parseImportJobId(raw: string | null): { jobId: number | null; invalid: 
   return { jobId: n, invalid: false };
 }
 
-function adminBrowseHref(entityType: string): string | null {
-  switch (entityType) {
-    case 'distributor_token':
-      return '/admin/distributors';
-    case 'product_identifier':
-      return '/admin/products';
-    case 'customer_dealer_token':
-      return '/admin/customers';
-    default:
-      return null;
-  }
-}
-
-function dsiSourceCustomerNameCell(ctx: Record<string, unknown> | null | undefined): string {
-  if (!ctx) return '';
-  const s = ctx.source_customer_name_raw_samples;
-  if (!Array.isArray(s)) return '';
-  return s
-    .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
-    .map((x) => x.trim())
-    .join('; ');
-}
-
-function dsiProductMatchSummaryCell(ctx: Record<string, unknown> | null | undefined): string {
-  if (!ctx) return '';
-  const sum = ctx.product_match_summary;
-  if (typeof sum === 'string' && sum.trim()) return sum.trim();
-  return '';
-}
-
 function AdminMappingsPageContent() {
   const searchParams = useSearchParams();
   const importJobIdParam = searchParams.get('import_job_id');
@@ -99,8 +67,6 @@ function AdminMappingsPageContent() {
     () => parseImportJobId(importJobIdParam),
     [importJobIdParam]
   );
-
-  const [dsiSelected, setDsiSelected] = useState<DsiMappingCandidateRow | null>(null);
 
   const qc = useQueryClient();
   const {
@@ -114,7 +80,8 @@ function AdminMappingsPageContent() {
     queryFn: ({ signal }) => apiGet<LegacyRow[]>('/api/v1/mappings/queue', { signal }),
   });
 
-  const dsiQueryKey = ['dsi-mapping-candidates', importJobId] as const;
+  const dsiQueryKey =
+    importJobId != null ? DSI_STEWARD_CONFIG.mappingCandidatesListQueryKey(importJobId) : (['dsi-mapping-candidates', null] as const);
   const {
     data: dsiData,
     isLoading: dsiLoading,
@@ -125,10 +92,10 @@ function AdminMappingsPageContent() {
   } = useQuery({
     queryKey: dsiQueryKey,
     queryFn: ({ signal }) =>
-      apiGet<DsiMappingCandidateRow[]>(
-        `/api/v1/mappings/import-jobs/${importJobId}/distributor-si-candidates`,
+      apiGet<{ items: DsiMappingCandidateRow[]; total: number }>(
+        `/api/v1/mappings/import-jobs/${importJobId}/distributor-si-candidates?limit=1000`,
         { signal }
-      ),
+      ).then((r) => r.items),
     enabled: importJobId != null,
   });
 
@@ -142,7 +109,9 @@ function AdminMappingsPageContent() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['mapping-queue'] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-candidates'] });
+      if (importJobId != null) {
+        invalidateDsiImportJobStewardQueries(qc, importJobId);
+      }
     },
   });
 
@@ -190,68 +159,6 @@ function AdminMappingsPageContent() {
     ];
   }, [approve, delRow, delRow.isPending, clearAll.isPending]);
 
-  const dsiColDefs: ColDef<DsiMappingCandidateRow>[] = useMemo(
-    () => [
-      { field: 'entity_type', headerName: 'Entity type', minWidth: 160 },
-      {
-        headerName: 'Raw samples',
-        minWidth: 180,
-        valueGetter: (p) => {
-          const s = p.data?.sample_raw_values;
-          if (s == null || !Array.isArray(s)) return '';
-          return s.filter(Boolean).join('; ');
-        },
-      },
-      { field: 'normalized_key', headerName: 'Normalized token', minWidth: 160 },
-      { field: 'dealer_group_token', headerName: 'Customer account', minWidth: 140 },
-      {
-        headerName: 'Source customer name',
-        minWidth: 160,
-        valueGetter: (p) => dsiSourceCustomerNameCell(p.data?.context ?? null),
-      },
-      {
-        headerName: 'Product match',
-        minWidth: 220,
-        valueGetter: (p) => dsiProductMatchSummaryCell(p.data?.context ?? null),
-      },
-      { field: 'suggested_entity_id', headerName: 'Suggested id', width: 120 },
-      { field: 'match_reason', headerName: 'Match reason', minWidth: 120 },
-      { field: 'confidence_score', headerName: 'Confidence', width: 110 },
-      { field: 'row_count', headerName: 'Rows', width: 90 },
-      { field: 'total_units', headerName: 'Total units', width: 110 },
-      { field: 'total_reported_value', headerName: 'Total value', width: 120 },
-      { field: 'status', headerName: 'Status', width: 120 },
-      { field: 'source_definition_id', headerName: 'Source id', width: 100 },
-      { field: 'created_at', headerName: 'First seen', minWidth: 160 },
-      { field: 'updated_at', headerName: 'Last seen', minWidth: 160 },
-      {
-        headerName: 'Browse master',
-        width: 160,
-        cellRenderer: (p: { data: DsiMappingCandidateRow }) => {
-          const href = adminBrowseHref(p.data.entity_type);
-          if (!href) return null;
-          return (
-            <Button component={Link} href={href} size="small" variant="text">
-              Open
-            </Button>
-          );
-        },
-      },
-    ],
-    []
-  );
-
-  const onDsiRowClicked = useCallback((e: RowClickedEvent<DsiMappingCandidateRow>) => {
-    if (e.data) setDsiSelected(e.data);
-  }, []);
-
-  const dsiGridOptions = useMemo<GridOptions<DsiMappingCandidateRow>>(
-    () => ({
-      onRowClicked: onDsiRowClicked,
-    }),
-    [onDsiRowClicked]
-  );
-
   const legacyRows = legacyData ?? [];
   const dsiRows = dsiData ?? [];
 
@@ -271,7 +178,7 @@ function AdminMappingsPageContent() {
         title: `No grouped import candidates for job #${importJobId}`,
         description:
           'This import job has no persisted DSI mapping candidate rows (they may have been cleared, or the job id does not match a distributor sales & inventory validation).',
-        primary: { label: 'Data & imports', href: '/admin/imports' },
+        primary: { label: 'Open import job workspace', href: `/admin/imports?job=${importJobId}` },
         secondary: { label: 'Clear job filter', href: '/admin/mappings' },
       } as const;
     }
@@ -357,22 +264,28 @@ function AdminMappingsPageContent() {
             {importJobId != null ? (
               <Box data-testid="dsi-candidates-section">
                 <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                  DSI grouped import candidates (ImportEntityMappingCandidate)
+                  DSI grouped import candidates
                 </Typography>
-                <Alert severity="info" sx={{ mb: 1 }}>
-                  Customer/dealer names vary by source—saving a mapping creates an <strong>approved alias</strong> so
-                  future uploads resolve automatically. Use <strong>Revalidate import job</strong> after changes to
-                  refresh staging and candidate groups for this job.
-                </Alert>
                 {dsiIsError ? (
                   <Alert severity="error">Could not load DSI candidates for this job.</Alert>
                 ) : hasDsiGroups ? (
-                  <>
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
-                      <Typography variant="body2" color="text.secondary" data-testid="dsi-candidate-count">
-                        {dsiRows.length} grouped import candidate group{dsiRows.length !== 1 ? 's' : ''} need review for
-                        DSI job #{importJobId}.
-                      </Typography>
+                  <Alert severity="info" data-testid="dsi-candidate-count">
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      <strong>{dsiRows.length}</strong> grouped mapping candidate
+                      {dsiRows.length !== 1 ? 's' : ''} for import job <strong>#{importJobId}</strong>. Steward
+                      resolution (filters, bulk actions, resolution plan, and single-row steward) lives on the import job
+                      workspace — not on this legacy mapping queue page.
+                    </Typography>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      <Button
+                        component={Link}
+                        href={`/admin/imports?job=${importJobId}`}
+                        variant="contained"
+                        size="small"
+                        data-testid="dsi-open-import-resolution"
+                      >
+                        Open DSI resolution workspace
+                      </Button>
                       <Button
                         size="small"
                         variant="outlined"
@@ -383,20 +296,7 @@ function AdminMappingsPageContent() {
                         Revalidate import job
                       </Button>
                     </Stack>
-                    <EnterpriseDataGrid
-                      rowData={dsiRows}
-                      columnDefs={dsiColDefs}
-                      height={420}
-                      gridOptions={dsiGridOptions}
-                    />
-                    {importJobId != null ? (
-                      <DsiCandidateStewardPanel
-                        importJobId={importJobId}
-                        candidate={dsiSelected}
-                        onDone={() => void refetchDsi()}
-                      />
-                    ) : null}
-                  </>
+                  </Alert>
                 ) : dsiFetched ? (
                   <Typography variant="body2" color="text.secondary">
                     No DSI grouped candidates for this job.

@@ -57,6 +57,8 @@ import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib
 import { toQueryError } from '@/lib/queryError';
 
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
+import { DSI_STEWARD_CONFIG } from '@/features/import-steward';
+
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
 import { DsiValidateProgressPanel, type DsiValidateProgress } from './DsiValidateProgressPanel';
 import type { DsiCandidateRow } from '../mappings/DsiCandidateStewardPanel';
@@ -630,12 +632,6 @@ function AdminImportsPageContent() {
     return parseDistributorSiSummaryFromRows(previewRows);
   }, [previewRows, selectedSlug]);
 
-  const { data: dsiCandidates } = useQuery({
-    queryKey: ['distributor-si-candidates', lastJobId],
-    queryFn: ({ signal }) =>
-      apiGet<DsiCandidateRow[]>(`/api/v1/mappings/import-jobs/${lastJobId}/distributor-si-candidates`, { signal }),
-    enabled: lastJobId != null && selectedSlug === 'distributor_inventory',
-  });
 
   type DsiMappingState = {
     id: number;
@@ -666,7 +662,7 @@ function AdminImportsPageContent() {
   };
 
   const { data: dsiMappingState, refetch: refetchDsiMapping } = useQuery({
-    queryKey: ['dsi-mapping-state', lastJobId],
+    queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId!),
     queryFn: ({ signal }) =>
       apiGet<DsiMappingState>(`/api/v1/imports/jobs/${lastJobId}/dsi-mapping-state`, { signal }),
     enabled: Boolean(isDsi && lastJobId != null && activeStep >= 5),
@@ -734,7 +730,7 @@ function AdminImportsPageContent() {
       return res.json() as Promise<DsiMappingState>;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       setDsiContinueGateKey(null);
     },
   });
@@ -760,8 +756,8 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['import-job', jid] });
       void qc.invalidateQueries({ queryKey: ['dsi-async-validate-import-job', jid] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', jid] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', jid] });
-      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', jid] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(jid) });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(jid) });
       const { data: rows } = await refetchPreview();
       await refetchDsiMapping();
       const summ = parseDistributorSiSummaryFromRows(rows ?? undefined);
@@ -777,7 +773,7 @@ function AdminImportsPageContent() {
       setDsiContinueGateKey(null);
       setDsiValidateAsync(false);
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
   });
@@ -819,9 +815,9 @@ function AdminImportsPageContent() {
     const st = (j.stage || '').trim();
     if (st === 'validated' || st === 'failed') {
       setDsiValidateAsync(false);
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', j.id] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(j.id) });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', j.id] });
-      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', j.id] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(j.id) });
       void refetchDsiMapping();
       void refetchPreview();
     }
@@ -850,13 +846,13 @@ function AdminImportsPageContent() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', lastJobId] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
     onError: () => {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
   });
@@ -874,13 +870,13 @@ function AdminImportsPageContent() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', lastJobId] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
     onError: () => {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
   });
@@ -988,8 +984,8 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', data.id] });
       void qc.invalidateQueries({ queryKey: ['import-job', data.id] });
       void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', data.id] });
-      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', data.id] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', data.id] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(data.id) });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(data.id) });
       if (selectedSlug === 'distributor_inventory') {
         setActiveStep(5);
       }
@@ -2828,13 +2824,14 @@ function AdminImportsPageContent() {
                   <strong>{distributorSiSummary.warning_rows ?? 0}</strong> warnings;{' '}
                   <strong>{distributorSiSummary.aggregated_candidates ?? 0}</strong> aggregated mapping candidate groups.
                 </Typography>
-                {dsiCandidates != null && dsiCandidates.length > 0 ? (
+                {(distributorSiSummary?.aggregated_candidates ?? 0) > 0 ? (
                   <Typography variant="caption" color="text.secondary" display="block">
-                    Resolve grouped tokens below on this page, or open the full grid in the global{' '}
+                    Resolve grouped tokens below on this page (paginated), or open the global{' '}
                     <Link component={NextLink} href={`/admin/mappings?import_job_id=${lastJobId}`}>
-                      Mapping queue
+                      Mapping queue (legacy)
                     </Link>{' '}
-                    ({dsiCandidates.length} group{dsiCandidates.length !== 1 ? 's' : ''} for this job).
+                    ({distributorSiSummary?.aggregated_candidates ?? 0} group
+                    {(distributorSiSummary?.aggregated_candidates ?? 0) !== 1 ? 's' : ''} for this job).
                   </Typography>
                 ) : null}
                 {(distributorSiSummary.warning_rows ?? 0) > 0 ||
@@ -2846,11 +2843,12 @@ function AdminImportsPageContent() {
                 ) : null}
               </Alert>
             ) : null}
-            {lastJobId != null && dsiCandidates != null && dsiCandidates.length > 0 ? (
+            {lastJobId != null && (distributorSiSummary?.aggregated_candidates ?? 0) > 0 ? (
               <DsiImportJobResolutionSection
                 importJobId={lastJobId}
-                candidates={dsiCandidates}
-                onInvalidate={() => void refetchPreview()}
+                onInvalidate={() => {
+                  void refetchPreview();
+                }}
               />
             ) : null}
             {previewRows && previewRows.length > 0 ? (

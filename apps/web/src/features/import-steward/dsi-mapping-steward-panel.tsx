@@ -3,7 +3,7 @@
 import {
   Alert,
   Box,
-  Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -20,6 +20,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 
 import { apiGet, apiPost } from '@/lib/api';
+
+import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
+import {
+  optimisticallyApplyStewardAction,
+  type DsiStewardRowAction,
+} from './dsiStewardCacheUpdates';
+import { DsiPendingButton } from './DsiPendingButton';
+import {
+  DsiEligibleProductPicker,
+  type DsiEligibleProductSnapshot,
+} from './DsiEligibleProductPicker';
 import { toQueryError } from '@/lib/queryError';
 
 export type DsiCandidateRow = {
@@ -72,13 +83,45 @@ function blankishCustomerKey(norm: string): boolean {
  * Shared DSI mapping-queue steward workspace (single selected candidate).
  * Shipment evidence steward remains in `ShipmentEntityStewardPanel` under admin/shipment-evidence.
  */
+type StewardMutationContext = { previous?: DsiCandidateRow[] };
+
+function buildStewardMutationLifecycle(
+  action: DsiStewardRowAction,
+  candidateId: number | undefined,
+  importJobId: number,
+  qc: ReturnType<typeof useQueryClient>,
+  onRowActionStart?: (candidateId: number) => void,
+  onRowActionEnd?: () => void
+) {
+  const cacheKey = DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId);
+  return {
+    onMutate: async () => {
+      if (candidateId == null) return undefined;
+      onRowActionStart?.(candidateId);
+      const previous = optimisticallyApplyStewardAction(qc, importJobId, candidateId, action);
+      return { previous } satisfies StewardMutationContext;
+    },
+    onError: (_err: unknown, _vars: unknown, ctx: StewardMutationContext | undefined) => {
+      if (ctx?.previous) qc.setQueryData(cacheKey, ctx.previous);
+      onRowActionEnd?.();
+    },
+    onSettled: () => {
+      onRowActionEnd?.();
+    },
+  };
+}
+
 export function DsiMappingStewardPanel({
   importJobId,
   candidate,
+  onRowActionStart,
+  onRowActionEnd,
   onDone,
 }: {
   importJobId: number;
   candidate: DsiCandidateRow | null;
+  onRowActionStart?: (candidateId: number) => void;
+  onRowActionEnd?: () => void;
   onDone: () => void;
 }) {
   const qc = useQueryClient();
@@ -106,13 +149,14 @@ export function DsiMappingStewardPanel({
   const [confirmIneligibleProduct, setConfirmIneligibleProduct] = useState(false);
   const [productAuditNote, setProductAuditNote] = useState('');
   const [productRawOverride, setProductRawOverride] = useState('');
+  const [lastSuccessLabel, setLastSuccessLabel] = useState<string | null>(null);
 
   const { data: regions = [] } = useQuery({
-    queryKey: ['catalog-regions'],
+    queryKey: DSI_STEWARD_CONFIG.catalogRegionsQueryKey(),
     queryFn: ({ signal }) => apiGet<RegionOpt[]>('/api/v1/catalog/regions', { signal }),
   });
   const { data: channels = [] } = useQuery({
-    queryKey: ['catalog-channels'],
+    queryKey: DSI_STEWARD_CONFIG.catalogChannelsQueryKey(),
     queryFn: ({ signal }) => apiGet<ChannelOpt[]>('/api/v1/catalog/channels', { signal }),
   });
 
@@ -144,15 +188,21 @@ export function DsiMappingStewardPanel({
   });
 
   const invalidate = useCallback(() => {
-    void qc.invalidateQueries({ queryKey: ['dsi-mapping-candidates', importJobId] });
+    invalidateDsiImportJobStewardQueries(qc, importJobId);
     onDone();
   }, [qc, importJobId, onDone]);
+
+  const candidateId = candidate?.id;
+  const stewardLife = (action: DsiStewardRowAction) =>
+    buildStewardMutationLifecycle(action, candidateId, importJobId, qc, onRowActionStart, onRowActionEnd);
 
   const mapCustomer = useMutation({
     mutationFn: (body: { customer_id: number }) =>
       apiPost<{ ok: boolean }>(`/api/v1/mappings/import-candidates/${candidate?.id}/map-customer`, body),
+    ...stewardLife('map_customer'),
     onSuccess: () => {
       setMapCustOpen(false);
+      setLastSuccessLabel('Customer mapped — row updated.');
       invalidate();
     },
   });
@@ -168,8 +218,10 @@ export function DsiMappingStewardPanel({
         `/api/v1/mappings/import-candidates/${candidate?.id}/create-provisional-customer`,
         body
       ),
+    ...stewardLife('create_provisional_customer'),
     onSuccess: () => {
       setCreateCustOpen(false);
+      setLastSuccessLabel('Provisional customer created — row updated.');
       invalidate();
     },
   });
@@ -177,8 +229,10 @@ export function DsiMappingStewardPanel({
   const markOpenChannel = useMutation({
     mutationFn: (body: { confirm_for_named_dealer: boolean; confirm_for_strategic_channel_hint: boolean }) =>
       apiPost<{ ok: boolean }>(`/api/v1/mappings/import-candidates/${candidate?.id}/mark-open-channel`, body),
+    ...stewardLife('mark_open_channel'),
     onSuccess: () => {
       setOcOpen(false);
+      setLastSuccessLabel('Marked Open Channel — row updated.');
       invalidate();
     },
   });
@@ -186,14 +240,20 @@ export function DsiMappingStewardPanel({
   const ignoreCand = useMutation({
     mutationFn: (body: { notes?: string | null }) =>
       apiPost<{ ok: boolean }>(`/api/v1/mappings/import-candidates/${candidate?.id}/ignore`, body),
-    onSuccess: () => invalidate(),
+    ...stewardLife('ignore'),
+    onSuccess: () => {
+      setLastSuccessLabel('Candidate ignored — row updated.');
+      invalidate();
+    },
   });
 
   const mapDistributor = useMutation({
     mutationFn: (body: { distributor_id: number }) =>
       apiPost<{ ok: boolean }>(`/api/v1/mappings/import-candidates/${candidate?.id}/map-distributor`, body),
+    ...stewardLife('map_distributor'),
     onSuccess: () => {
       setMapDistOpen(false);
+      setLastSuccessLabel('Distributor mapped — row updated.');
       invalidate();
     },
   });
@@ -204,8 +264,10 @@ export function DsiMappingStewardPanel({
         `/api/v1/mappings/import-candidates/${candidate?.id}/create-provisional-distributor`,
         body
       ),
+    ...stewardLife('create_provisional_distributor'),
     onSuccess: () => {
       setCreateDistOpen(false);
+      setLastSuccessLabel('Provisional distributor created — row updated.');
       invalidate();
     },
   });
@@ -218,8 +280,10 @@ export function DsiMappingStewardPanel({
       audit_note?: string | null;
     }) =>
       apiPost<{ ok: boolean }>(`/api/v1/mappings/import-candidates/${candidate?.id}/resolve-product`, body),
+    ...stewardLife('resolve_product'),
     onSuccess: () => {
       setMapProdOpen(false);
+      setLastSuccessLabel('Product resolved — row updated.');
       invalidate();
     },
   });
@@ -229,6 +293,15 @@ export function DsiMappingStewardPanel({
       apiPost<{ ok: boolean }>(`/api/v1/mappings/import-jobs/${importJobId}/revalidate-distributor-sales-inventory`),
     onSuccess: () => invalidate(),
   });
+
+  const actionBusy =
+    mapCustomer.isPending ||
+    createProvCustomer.isPending ||
+    markOpenChannel.isPending ||
+    ignoreCand.isPending ||
+    mapDistributor.isPending ||
+    createProvDistributor.isPending ||
+    resolveProduct.isPending;
 
   /** Customer account (Dealer Name Group) vs source customer evidence — match DSI aggregation / mapping queue. */
   const stewardLabels = useMemo(() => {
@@ -285,12 +358,25 @@ export function DsiMappingStewardPanel({
         {stewardLabels.customerAccount ? ` · customer account: ${stewardLabels.customerAccount}` : ''}
         {stewardLabels.sourceCustomer ? ` · source customer: ${stewardLabels.sourceCustomer}` : ''} · status{' '}
         {candidate.status}
+        {actionBusy ? (
+          <>
+            {' '}
+            <Chip size="small" color="info" label="Saving…" data-testid="dsi-steward-row-saving" />
+          </>
+        ) : null}
       </Typography>
+      {lastSuccessLabel && !actionBusy ? (
+        <Alert severity="success" onClose={() => setLastSuccessLabel(null)} data-testid="dsi-steward-row-success">
+          {lastSuccessLabel}
+        </Alert>
+      ) : null}
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        <Button
+        <DsiPendingButton
           variant="outlined"
           size="small"
-          disabled={isTerminal || candidate.entity_type !== 'customer_dealer_token'}
+          pending={createProvCustomer.isPending}
+          pendingLabel="Creating…"
+          disabled={isTerminal || candidate.entity_type !== 'customer_dealer_token' || actionBusy}
           onClick={() => {
             setDisplayName(
               stewardLabels.customerAccount || candidate.normalized_key || stewardLabels.distributorOrProductLabel
@@ -302,11 +388,13 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-create-provisional-customer"
         >
           Create provisional customer
-        </Button>
-        <Button
+        </DsiPendingButton>
+        <DsiPendingButton
           variant="outlined"
           size="small"
-          disabled={isTerminal || candidate.entity_type !== 'customer_dealer_token'}
+          pending={mapCustomer.isPending}
+          pendingLabel="Mapping…"
+          disabled={isTerminal || candidate.entity_type !== 'customer_dealer_token' || actionBusy}
           onClick={() => {
             setCustQ('');
             setPickCustomerId('');
@@ -315,11 +403,13 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-map-customer"
         >
           Map to existing customer
-        </Button>
-        <Button
+        </DsiPendingButton>
+        <DsiPendingButton
           variant="outlined"
           size="small"
-          disabled={isTerminal || candidate.entity_type !== 'customer_dealer_token'}
+          pending={markOpenChannel.isPending}
+          pendingLabel="Saving…"
+          disabled={isTerminal || candidate.entity_type !== 'customer_dealer_token' || actionBusy}
           onClick={() => {
             setOcNamedConfirm(false);
             setOcStrategicConfirm(false);
@@ -328,11 +418,13 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-open-channel"
         >
           Mark Open Channel (alias)
-        </Button>
-        <Button
+        </DsiPendingButton>
+        <DsiPendingButton
           variant="outlined"
           size="small"
-          disabled={isTerminal || candidate.entity_type !== 'distributor_token'}
+          pending={mapDistributor.isPending}
+          pendingLabel="Mapping…"
+          disabled={isTerminal || candidate.entity_type !== 'distributor_token' || actionBusy}
           onClick={() => {
             setDistQ('');
             setPickDistributorId('');
@@ -341,11 +433,13 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-map-distributor"
         >
           Map to existing distributor
-        </Button>
-        <Button
+        </DsiPendingButton>
+        <DsiPendingButton
           variant="outlined"
           size="small"
-          disabled={isTerminal || candidate.entity_type !== 'distributor_token'}
+          pending={createProvDistributor.isPending}
+          pendingLabel="Creating…"
+          disabled={isTerminal || candidate.entity_type !== 'distributor_token' || actionBusy}
           onClick={() => {
             setDistDisplayName(stewardLabels.distributorOrProductLabel);
             setDistConfirmSuspicious(false);
@@ -354,11 +448,13 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-create-provisional-distributor"
         >
           Create provisional distributor
-        </Button>
-        <Button
+        </DsiPendingButton>
+        <DsiPendingButton
           variant="outlined"
           size="small"
-          disabled={isTerminal || candidate.entity_type !== 'product_identifier'}
+          pending={resolveProduct.isPending}
+          pendingLabel="Resolving…"
+          disabled={isTerminal || candidate.entity_type !== 'product_identifier' || actionBusy}
           onClick={() => {
             setProdQ(dsiRawProductTokenForCandidate(candidate));
             setPickProductId('');
@@ -370,17 +466,19 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-resolve-product"
         >
           Map to Product Master (alias)
-        </Button>
-        <Button
+        </DsiPendingButton>
+        <DsiPendingButton
           variant="outlined"
           color="warning"
           size="small"
-          disabled={isTerminal}
-          onClick={() => void ignoreCand.mutateAsync({ notes: null })}
+          pending={ignoreCand.isPending}
+          pendingLabel="Ignoring…"
+          disabled={isTerminal || actionBusy}
+          onClick={() => void ignoreCand.mutateAsync({ notes: null }).catch(() => {})}
           data-testid="dsi-action-ignore"
         >
           Ignore candidate
-        </Button>
+        </DsiPendingButton>
       </Stack>
       {(mapCustomer.isError ||
         createProvCustomer.isError ||
@@ -431,17 +529,21 @@ export function DsiMappingStewardPanel({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setMapCustOpen(false)}>Cancel</Button>
-          <Button
+          <DsiPendingButton onClick={() => setMapCustOpen(false)} disabled={mapCustomer.isPending}>
+            Cancel
+          </DsiPendingButton>
+          <DsiPendingButton
             variant="contained"
-            disabled={pickCustomerId === '' || mapCustomer.isPending}
+            pending={mapCustomer.isPending}
+            pendingLabel="Saving…"
+            disabled={pickCustomerId === ''}
             onClick={() => {
               if (pickCustomerId === '') return;
-              void mapCustomer.mutateAsync({ customer_id: Number(pickCustomerId) });
+              void mapCustomer.mutateAsync({ customer_id: Number(pickCustomerId) }).catch(() => {});
             }}
           >
             Save alias
-          </Button>
+          </DsiPendingButton>
         </DialogActions>
       </Dialog>
 
@@ -483,25 +585,26 @@ export function DsiMappingStewardPanel({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateCustOpen(false)}>Cancel</Button>
-          <Button
+          <DsiPendingButton onClick={() => setCreateCustOpen(false)} disabled={createProvCustomer.isPending}>
+            Cancel
+          </DsiPendingButton>
+          <DsiPendingButton
             variant="contained"
-            disabled={
-              !displayName.trim() ||
-              regionId === '' ||
-              channelId === '' ||
-              createProvCustomer.isPending
-            }
+            pending={createProvCustomer.isPending}
+            pendingLabel="Creating…"
+            disabled={!displayName.trim() || regionId === '' || channelId === ''}
             onClick={() =>
-              void createProvCustomer.mutateAsync({
-                display_name: displayName.trim(),
-                region_id: Number(regionId),
-                channel_id: Number(channelId),
-              })
+              void createProvCustomer
+                .mutateAsync({
+                  display_name: displayName.trim(),
+                  region_id: Number(regionId),
+                  channel_id: Number(channelId),
+                })
+                .catch(() => {})
             }
           >
             Create &amp; alias
-          </Button>
+          </DsiPendingButton>
         </DialogActions>
       </Dialog>
 
@@ -538,23 +641,28 @@ export function DsiMappingStewardPanel({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOcOpen(false)}>Cancel</Button>
-          <Button
+          <DsiPendingButton onClick={() => setOcOpen(false)} disabled={markOpenChannel.isPending}>
+            Cancel
+          </DsiPendingButton>
+          <DsiPendingButton
             variant="contained"
+            pending={markOpenChannel.isPending}
+            pendingLabel="Saving…"
             disabled={
-              markOpenChannel.isPending ||
               (!blankishCustomerKey(candidate.normalized_key) && !ocNamedConfirm) ||
               (strat && !ocStrategicConfirm)
             }
             onClick={() =>
-              void markOpenChannel.mutateAsync({
-                confirm_for_named_dealer: !blankishCustomerKey(candidate.normalized_key) ? ocNamedConfirm : false,
-                confirm_for_strategic_channel_hint: strat ? ocStrategicConfirm : false,
-              })
+              void markOpenChannel
+                .mutateAsync({
+                  confirm_for_named_dealer: !blankishCustomerKey(candidate.normalized_key) ? ocNamedConfirm : false,
+                  confirm_for_strategic_channel_hint: strat ? ocStrategicConfirm : false,
+                })
+                .catch(() => {})
             }
           >
             Save Open Channel alias
-          </Button>
+          </DsiPendingButton>
         </DialogActions>
       </Dialog>
 
@@ -581,17 +689,21 @@ export function DsiMappingStewardPanel({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setMapDistOpen(false)}>Cancel</Button>
-          <Button
+          <DsiPendingButton onClick={() => setMapDistOpen(false)} disabled={mapDistributor.isPending}>
+            Cancel
+          </DsiPendingButton>
+          <DsiPendingButton
             variant="contained"
-            disabled={pickDistributorId === '' || mapDistributor.isPending}
+            pending={mapDistributor.isPending}
+            pendingLabel="Saving…"
+            disabled={pickDistributorId === ''}
             onClick={() => {
               if (pickDistributorId === '') return;
-              void mapDistributor.mutateAsync({ distributor_id: Number(pickDistributorId) });
+              void mapDistributor.mutateAsync({ distributor_id: Number(pickDistributorId) }).catch(() => {});
             }}
           >
             Save alias
-          </Button>
+          </DsiPendingButton>
         </DialogActions>
       </Dialog>
 
@@ -617,19 +729,25 @@ export function DsiMappingStewardPanel({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateDistOpen(false)}>Cancel</Button>
-          <Button
+          <DsiPendingButton onClick={() => setCreateDistOpen(false)} disabled={createProvDistributor.isPending}>
+            Cancel
+          </DsiPendingButton>
+          <DsiPendingButton
             variant="contained"
-            disabled={!distDisplayName.trim() || createProvDistributor.isPending}
+            pending={createProvDistributor.isPending}
+            pendingLabel="Creating…"
+            disabled={!distDisplayName.trim()}
             onClick={() =>
-              void createProvDistributor.mutateAsync({
-                display_name: distDisplayName.trim(),
-                confirm_for_suspicious_token: distConfirmSuspicious,
-              })
+              void createProvDistributor
+                .mutateAsync({
+                  display_name: distDisplayName.trim(),
+                  confirm_for_suspicious_token: distConfirmSuspicious,
+                })
+                .catch(() => {})
             }
           >
             Create &amp; alias
-          </Button>
+          </DsiPendingButton>
         </DialogActions>
       </Dialog>
 
@@ -708,24 +826,30 @@ export function DsiMappingStewardPanel({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setMapProdOpen(false)}>Cancel</Button>
-          <Button
+          <DsiPendingButton onClick={() => setMapProdOpen(false)} disabled={resolveProduct.isPending}>
+            Cancel
+          </DsiPendingButton>
+          <DsiPendingButton
             variant="contained"
-            disabled={pickProductId === '' || resolveProduct.isPending}
+            pending={resolveProduct.isPending}
+            pendingLabel="Saving…"
+            disabled={pickProductId === ''}
             onClick={() => {
               if (pickProductId === '') return;
               const rawTok = productRawOverride.trim() || undefined;
-              void resolveProduct.mutateAsync({
-                product_id: Number(pickProductId),
-                raw_token: rawTok,
-                confirm_ineligible_product: confirmIneligibleProduct,
-                audit_note: productAuditNote.trim() || undefined,
-              });
+              void resolveProduct
+                .mutateAsync({
+                  product_id: Number(pickProductId),
+                  raw_token: rawTok,
+                  confirm_ineligible_product: confirmIneligibleProduct,
+                  audit_note: productAuditNote.trim() || undefined,
+                })
+                .catch(() => {});
             }}
             data-testid="dsi-product-resolve-save"
           >
             Save ProductAlias &amp; resolve
-          </Button>
+          </DsiPendingButton>
         </DialogActions>
       </Dialog>
 
@@ -739,9 +863,20 @@ export function DsiMappingStewardPanel({
             <Alert severity="info" data-testid="dsi-product-match-summary">
               <Typography variant="body2">{String(ctx.product_match_summary)}</Typography>
               {ctx.product_match_status === 'ambiguous_eligible' && Array.isArray(ctx.product_ambiguous_eligible?.eligible_products) ? (
-                <Typography variant="caption" component="div" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
-                  {JSON.stringify(ctx.product_ambiguous_eligible, null, 2)}
-                </Typography>
+                <Box sx={{ mt: 1 }}>
+                  <DsiEligibleProductPicker
+                    tier={String((ctx.product_ambiguous_eligible as Record<string, unknown>).tier ?? '')}
+                    products={
+                      Array.isArray((ctx.product_ambiguous_eligible as Record<string, unknown>).eligible_products)
+                        ? ((ctx.product_ambiguous_eligible as Record<string, unknown>)
+                            .eligible_products as DsiEligibleProductSnapshot[])
+                        : []
+                    }
+                    selectedProductId={pickProductId}
+                    onSelectProductId={(id) => setPickProductId(id)}
+                    disabled={resolveProduct.isPending}
+                  />
+                </Box>
               ) : null}
               {ctx.product_match_status === 'inactive_only' && Array.isArray(ctx.product_inactive_matches) ? (
                 <Typography variant="caption" component="div" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>

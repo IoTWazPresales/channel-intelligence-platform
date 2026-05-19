@@ -650,11 +650,14 @@ def test_dsi_mapping_candidates_http_matches_db_and_job_scope(dsi_source_id: int
         api_a = client.get(f"/api/v1/mappings/import-jobs/{job_a.id}/distributor-si-candidates").json()
         api_b = client.get(f"/api/v1/mappings/import-jobs/{job_b.id}/distributor-si-candidates").json()
 
-    assert len(api_a) == len(db_a)
-    assert {row["import_job_id"] for row in api_a} == {job_a.id}
-    assert {row["import_job_id"] for row in api_b} == {job_b.id}
-    cust_a = next(x for x in api_a if x.get("entity_type") == "customer_dealer_token")
-    cust_b = next(x for x in api_b if x.get("entity_type") == "customer_dealer_token")
+    assert api_a["total"] == len(db_a)
+    assert api_b["total"] == len(db_b)
+    items_a = api_a["items"]
+    items_b = api_b["items"]
+    assert {row["import_job_id"] for row in items_a} == {job_a.id}
+    assert {row["import_job_id"] for row in items_b} == {job_b.id}
+    cust_a = next(x for x in items_a if x.get("entity_type") == "customer_dealer_token")
+    cust_b = next(x for x in items_b if x.get("entity_type") == "customer_dealer_token")
     assert cust_a["normalized_key"] != cust_b["normalized_key"]
     assert cust_a["row_count"] == 2
     assert "created_at" in cust_a

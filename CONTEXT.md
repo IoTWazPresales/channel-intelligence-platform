@@ -11,6 +11,10 @@
 - DSI validate: dispatches `imports.process_job` to Celery worker via Redis
 - Celery worker receives DSI validate tasks and now processes them end-to-end
 - Shipment evidence steward panel: entity resolution for inbound shipment imports
+- DSI import job resolution: `ImportStewardCandidateWorkspace` + extracted hooks (`useDsiResolutionPlan`, `useDsiBulkSteward`) and accordions (`DsiResolutionPlanAdvancedAccordion`, `DsiGeoStewardAccordion`, `DsiBulkStewardSection`); orchestration ~430 lines in `DsiImportJobResolutionSection.tsx`; `ShipmentEntityStewardPanel` unchanged
+- DSI steward query keys centralised on `DSI_STEWARD_CONFIG` + `invalidateDsiImportJobStewardQueries` / `invalidateDsiCatalogQueries`
+- Mappings queue (`/admin/mappings?import_job_id=`) deep-links to import job DSI workspace when candidates exist (no duplicate AG Grid steward)
+- Barrel fix: filter logic in `dsiStewardCandidateFilterLogic.ts` (avoids Windows case clash with `DsiStewardCandidateFilters.tsx`)
 - All other import flows (shipment evidence, product master, etc.)
 
 ## What Was Fixed This Session
@@ -59,8 +63,7 @@ After the corroboration fix, 6 per-row DB queries remained:
 - **No index on `shipment_evidence_line.distributor_id`**: migration ticket needed —
   `CREATE INDEX CONCURRENTLY ix_sel_distributor_id ON shipment_evidence_line(distributor_id)`.
   The caches eliminate per-row scans, but the cache pre-load itself does a full-table scan.
-- Customer corroboration always empty (no rows with `customer_resolution_status = 'resolved_unique'`).
-  Will populate when customer steward resolution is implemented.
+- Customer corroboration cache now includes steward-applied rows (`customer_resolution_status` `resolved` or `resolved_unique`).
 - DSI upload Celery dispatch (`imports.infer_dsi`) deferred — currently runs inline.
 
 ## Runtime (local dev, no Docker)
@@ -100,6 +103,31 @@ DSI validate now reports detailed progress to the frontend via Celery task state
 - `page.tsx`: New `dsiProgress` query polls `/dsi-progress` at 1500ms while `dsiValidateAsync`.
   Replaces the old plain `Alert + LinearProgress` in step 6 with `DsiValidateProgressPanel`.
   Falls back to `<LinearProgress />` for the brief `dsiValidate.isPending` window.
+
+## P2 DSI intelligence (this branch)
+- Duplicate bulk-apply alert removed from `DsiImportJobResolutionSection` (bulk summary only in `DsiBulkStewardSection`; plan apply summary in plan accordion).
+- Customer shipment corroboration: cache query accepts `resolved` + `resolved_unique` (steward sets `resolved`).
+- Plan rows expose `plan_why` (blockers, rule_path, corroboration_hits); workspace Match column shows shipment corroboration chip.
+- Ambiguous product steward uses `DsiEligibleProductPicker` instead of JSON dump.
+
+## P1 DSI Steward Componentisation (web, this branch)
+- Renamed `dsiStewardCandidateFilters.ts` → `dsiStewardCandidateFilterLogic.ts`
+- New: `dsiSteward.types.ts`, `dsiSteward.config.ts`, `useDsiResolutionPlan.ts`, `useDsiBulkSteward.ts`, `dsiResolutionPlanDisplay.tsx`, `dsiBulkStewardDisplay.ts`, `UnresolvedGeoStewardPanel.tsx`, `DsiGeoStewardAccordion.tsx`, `DsiResolutionPlanAdvancedAccordion.tsx`, `DsiBulkStewardSection.tsx`
+- Slimmed `DsiImportJobResolutionSection.tsx`; mappings page deep-link; tests updated (14 resolution section, 2 workspace, 2 mappings)
+
+## DSI resolution tabs + steward drawer (latest)
+
+- **Entity tabs:** Distributors → Customers → Products; lazy-loaded paginated candidates per tab; tab labels show open total + needs-review count; soft upstream nudge on Customers/Products.
+- **Steward drawer:** row click opens ~40% right panel (`DsiCandidateStewardDrawer`); bottom `DsiMappingStewardPanel` strip removed; table stays interactive on the left.
+- **Candidates API:** paginated `GET .../distributor-si-candidates` with `entity` filter per tab.
+- **Plan:** scoped to current tab page via `candidate_ids`; see `DSIPlanBuildContext` in `docs/DSI_RESOLUTION_PERFORMANCE.md`.
+
+## DSI resolution loading UX (prior)
+- Candidate table: skeleton rows while `distributor-si-candidates` loads; section mounts during fetch
+- Slow calls: `DsiStewardLoadingCallout` for resolution plan (~30s) and unresolved geo tokens (~15–30s)
+- Actions: `DsiPendingButton` + row-level pending spinner; optimistic candidate cache updates on steward/bulk/plan apply
+- Removed full-page `Backdrop` overlay; in-table overlay shows contextual busy message
+- Shared: `DsiPendingButton`, `DsiStewardLoadingCallout`, `ImportStewardCandidateWorkspaceSkeleton`, `dsiStewardCacheUpdates.ts`
 
 ## Files Changed This Session
 - `apps/api/app/services/imports/dsi_shipment_corroboration.py` — `ShipmentCorroborationCache`

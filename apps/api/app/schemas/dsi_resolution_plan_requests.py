@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 
 class DsiResolutionPlanGenerateBody(BaseModel):
-    candidate_ids: list[int] | None = Field(default=None, max_length=500)
+    candidate_ids: list[int] | None = Field(default=None, max_length=1000)
     default_region_id: int | None = Field(default=None, ge=1)
     default_channel_id: int | None = Field(default=None, ge=1)
 
@@ -37,7 +37,7 @@ class DsiResolutionPlanRowOverrideBody(BaseModel):
 
 
 class DsiResolutionPlanApplyBody(BaseModel):
-    candidate_ids: list[int] = Field(..., min_length=1, max_length=500)
+    candidate_ids: list[int] = Field(..., min_length=1, max_length=1000)
     default_region_id: int | None = Field(default=None, ge=1)
     default_channel_id: int | None = Field(default=None, ge=1)
     partner_tier: str | None = Field(default="unmanaged", max_length=32)
@@ -47,7 +47,7 @@ class DsiResolutionPlanApplyBody(BaseModel):
 
 
 class DsiResolutionPlanEffectiveBody(BaseModel):
-    candidate_ids: list[int] | None = Field(default=None, max_length=500)
+    candidate_ids: list[int] | None = Field(default=None, max_length=1000)
     default_region_id: int | None = Field(default=None, ge=1)
     default_channel_id: int | None = Field(default=None, ge=1)
     confirm_for_suspicious_distributor_token: bool = False

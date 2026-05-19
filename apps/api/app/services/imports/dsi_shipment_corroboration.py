@@ -30,6 +30,9 @@ from app.models.shipment_evidence import ShipmentEvidenceLine
 
 logger = logging.getLogger(__name__)
 
+# Steward apply sets ``resolved``; import-time product auto-resolve uses ``resolved_unique``.
+_CUSTOMER_CORROBORATION_STATUSES = ("resolved", "resolved_unique")
+
 
 # ---------------------------------------------------------------------------
 # Helpers shared by both DB-query path and in-memory cache path
@@ -155,7 +158,7 @@ class ShipmentCorroborationCache:
                     lower(coalesce(ship_to_raw,  '')) AS ship_to_lower
                 FROM shipment_evidence_line
                 WHERE customer_id IS NOT NULL
-                  AND customer_resolution_status = 'resolved_unique'
+                  AND customer_resolution_status IN ('resolved', 'resolved_unique')
                   AND distributor_id IS NOT NULL
                   AND COALESCE(ship_confirm_date, schedule_ship_date, promise_date) IS NOT NULL
             """)
@@ -431,7 +434,7 @@ def shipment_corroboration_for_customer(
         .where(
             ShipmentEvidenceLine.distributor_id == int(distributor_id),
             ShipmentEvidenceLine.customer_id.isnot(None),
-            ShipmentEvidenceLine.customer_resolution_status == "resolved_unique",
+            ShipmentEvidenceLine.customer_resolution_status.in_(_CUSTOMER_CORROBORATION_STATUSES),
             _same_calendar_month_as_evidence(evidence_date),
         )
     )

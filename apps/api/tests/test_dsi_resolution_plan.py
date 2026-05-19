@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from app.services.imports.dsi_resolution_plan import (
     _resolve_dim_channel_from_source,
+    build_plan_why_from_candidate,
     derive_effective_provisional_customer_geo_sync,
     dsi_geo_channel_alias_source_id,
     merge_resolution_plan_row_for_apply,
@@ -31,6 +32,30 @@ def _cand(**kwargs: object) -> MagicMock:
     c.source_definition_id = kwargs.get("source_definition_id")
     c.import_job_id = kwargs.get("import_job_id")
     return c
+
+
+def test_build_plan_why_includes_corroboration_and_blockers() -> None:
+    cand = _cand(
+        entity_type="product_identifier",
+        context={
+            "product_match_status": "ambiguous_eligible",
+            "corroboration_markers": ["shipment_evidence_product"],
+            "shipment_evidence_corroboration": {
+                "best_match_count": 3,
+                "summary": "Shipment lines in month",
+            },
+        },
+    )
+    row = {
+        "suggested_action": "resolve_product",
+        "ready": False,
+        "reason": "Multiple eligible Product Master matches",
+        "resolution_blockers": ["ambiguous_product"],
+    }
+    why = build_plan_why_from_candidate(cand, row)
+    assert why["rule_path"] == "product.ambiguous_eligible_manual"
+    assert "ambiguous_product" in why["blockers"]
+    assert len(why["corroboration_hits"]) >= 2
 
 
 def test_snapshot_product_ambiguous_is_manual_review() -> None:

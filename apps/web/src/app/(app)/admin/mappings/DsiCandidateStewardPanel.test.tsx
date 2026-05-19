@@ -34,7 +34,14 @@ const productCandidate: DsiCandidateRow = {
   context: {
     product_match_summary: 'Multiple eligible products matched sales_model_name.',
     product_match_status: 'ambiguous_eligible',
-    product_ambiguous_eligible: { product_ids: [10, 20], tier: 'sales_model_name', eligible_products: [] },
+    product_ambiguous_eligible: {
+      product_ids: [10, 20],
+      tier: 'sales_model_name',
+      eligible_products: [
+        { product_id: 10, sku: 'SKU-10', sales_model_name: 'M10', is_active: true },
+        { product_id: 20, sku: 'SKU-20', sales_model_name: 'M20', is_active: true },
+      ],
+    },
   },
 };
 
@@ -81,7 +88,8 @@ describe('DsiCandidateStewardPanel product steward', () => {
     renderPanel();
     await waitFor(() => expect(screen.getByTestId('dsi-product-match-summary')).toBeInTheDocument());
     expect(screen.getByTestId('dsi-product-match-summary')).toHaveTextContent(/Multiple eligible products/);
-    expect(screen.getByTestId('dsi-product-match-summary')).toHaveTextContent(/"product_ids"/);
+    expect(screen.getByTestId('dsi-eligible-product-picker')).toBeInTheDocument();
+    expect(screen.getByTestId('dsi-eligible-product-select')).toBeInTheDocument();
   });
 
   it('opens resolve-product dialog, searches products, and posts resolve-product', async () => {

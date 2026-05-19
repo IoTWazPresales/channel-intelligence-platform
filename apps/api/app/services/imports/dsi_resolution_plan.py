@@ -26,6 +26,13 @@ from app.services.imports.distributor_sales_inventory import (
     dsi_historical_workflow_from_import_job,
     effective_dsi_customer_primary_for_resolution,
 )
+from app.services.imports.dsi_plan_build_context import (
+    DSIPlanBuildContext,
+    build_dsi_plan_build_context,
+    derive_effective_provisional_customer_geo_for_plan,
+    resolve_customer_for_plan,
+    resolve_distributor_for_plan,
+)
 from app.services.imports.dsi_steward_candidate_ops import (
     DISTRIBUTOR_PROVISIONAL_SUSPICIOUS,
     StewardOpError,
@@ -466,6 +473,7 @@ def plan_dsi_candidate_sync(
     *,
     default_region_id: int | None,
     default_channel_id: int | None,
+    plan_ctx: DSIPlanBuildContext | None = None,
 ) -> dict[str, Any]:
     """Return one plan row dict for a candidate (sync Session)."""
     base = _plan_common(cand)
@@ -484,12 +492,16 @@ def plan_dsi_candidate_sync(
         return out
 
     source_def_id = job.source.id if job.source else None
+    idx = plan_ctx.prod_idx if plan_ctx is not None else prod_idx
 
     # --- distributor_token ---
     if cand.entity_type == "distributor_token":
         raw = dsi_first_sample(cand)
         nt = _norm_key(raw or cand.normalized_key or "")
-        did, err = _resolve_distributor(session, raw or cand.normalized_key, source_def_id)
+        if plan_ctx is not None:
+            did, err = resolve_distributor_for_plan(plan_ctx, raw or cand.normalized_key, source_def_id)
+        else:
+            did, err = _resolve_distributor(session, raw or cand.normalized_key, source_def_id)
         if did is not None:
             return {
                 **base,
@@ -537,11 +549,31 @@ def plan_dsi_candidate_sync(
         raw = dsi_first_sample(cand)
         pstatus = ctx.get("product_match_status")
         if pstatus == "ambiguous_eligible":
+            amb = ctx.get("product_ambiguous_eligible")
+            if isinstance(amb, dict):
+                eligible = amb.get("eligible_products")
+                if isinstance(eligible, list) and len(eligible) == 1:
+                    try:
+                        sole_pid = int(eligible[0].get("product_id"))
+                    except (TypeError, ValueError, AttributeError):
+                        sole_pid = 0
+                    if sole_pid > 0:
+                        return {
+                            **base,
+                            "suggested_action": "resolve_product",
+                            "plan_status": "ready",
+                            "ready": True,
+                            "confidence": 0.72,
+                            "reason": "Single eligible Product Master match from validation context — propose ProductAlias bind",
+                            "suggested_target_id": sole_pid,
+                            "needs_defaults": False,
+                            "needs_confirm_suspicious_distributor": False,
+                        }
             dom = ctx.get("dominant_unresolved_distributor_id")
-            if dsi_historical_workflow_from_import_job(job) and dom is not None:
+            if dsi_historical_workflow_from_import_job(job) and dom is not None and plan_ctx is None:
                 pid_h, perr_h, tag_h, _ev_h = _resolve_product(
                     raw,
-                    prod_idx,
+                    idx,
                     None,
                     relax_inactive_dim_product_for_historical_dsi=dsi_historical_product_eligibility_relaxed_from_import_job(
                         job
@@ -579,7 +611,7 @@ def plan_dsi_candidate_sync(
             if dsi_historical_product_eligibility_relaxed_from_import_job(job):
                 pid_r, perr_r, tag_r, _ev_r = _resolve_product(
                     raw,
-                    prod_idx,
+                    idx,
                     None,
                     relax_inactive_dim_product_for_historical_dsi=True,
                 )
@@ -609,7 +641,7 @@ def plan_dsi_candidate_sync(
 
         pid, perr, tag, _ev = _resolve_product(
             raw,
-            prod_idx,
+            idx,
             None,
             relax_inactive_dim_product_for_historical_dsi=dsi_historical_product_eligibility_relaxed_from_import_job(job),
         )
@@ -641,13 +673,22 @@ def plan_dsi_candidate_sync(
     if cand.entity_type == "customer_dealer_token":
         ctx = cand.context if isinstance(cand.context, dict) else {}
         if ctx.get("strategic_channel_hint") and not dsi_historical_workflow_from_import_job(job):
-            geo_s = derive_effective_provisional_customer_geo_sync(
-                session,
-                cand,
-                default_region_id=default_region_id,
-                default_channel_id=default_channel_id,
-                import_job=job,
-            )
+            if plan_ctx is not None:
+                geo_s = derive_effective_provisional_customer_geo_for_plan(
+                    plan_ctx,
+                    cand,
+                    default_region_id=default_region_id,
+                    default_channel_id=default_channel_id,
+                    import_job=job,
+                )
+            else:
+                geo_s = derive_effective_provisional_customer_geo_sync(
+                    session,
+                    cand,
+                    default_region_id=default_region_id,
+                    default_channel_id=default_channel_id,
+                    import_job=job,
+                )
             return {
                 **base,
                 "suggested_action": "create_provisional_customer",
@@ -668,15 +709,23 @@ def plan_dsi_candidate_sync(
             dg_raw = str(cand.dealer_group_token)
 
         primary, _notes = effective_dsi_customer_primary_for_resolution(cust_first, dg_raw)
-        rcid, diag = _resolve_customer(
-            session,
-            source_id=source_def_id,
-            distributor_id=None,
-            customer_raw=primary,
-            dealer_group_raw=dg_raw,
-            channel_raw=None,
-            open_flag_raw=None,
-        )
+        if plan_ctx is not None:
+            rcid, diag = resolve_customer_for_plan(
+                plan_ctx,
+                source_id=source_def_id,
+                customer_raw=primary,
+                dealer_group_raw=dg_raw,
+            )
+        else:
+            rcid, diag = _resolve_customer(
+                session,
+                source_id=source_def_id,
+                distributor_id=None,
+                customer_raw=primary,
+                dealer_group_raw=dg_raw,
+                channel_raw=None,
+                open_flag_raw=None,
+            )
         if rcid is not None:
             return {
                 **base,
@@ -714,13 +763,22 @@ def plan_dsi_candidate_sync(
                 "needs_confirm_suspicious_distributor": False,
             }
 
-        geo = derive_effective_provisional_customer_geo_sync(
-            session,
-            cand,
-            default_region_id=default_region_id,
-            default_channel_id=default_channel_id,
-            import_job=job,
-        )
+        if plan_ctx is not None:
+            geo = derive_effective_provisional_customer_geo_for_plan(
+                plan_ctx,
+                cand,
+                default_region_id=default_region_id,
+                default_channel_id=default_channel_id,
+                import_job=job,
+            )
+        else:
+            geo = derive_effective_provisional_customer_geo_sync(
+                session,
+                cand,
+                default_region_id=default_region_id,
+                default_channel_id=default_channel_id,
+                import_job=job,
+            )
         geo_conflict = bool(geo.get("provisional_region_conflict") or geo.get("provisional_channel_conflict"))
         if geo_conflict and not dsi_historical_workflow_from_import_job(job):
             which: list[str] = []
@@ -780,9 +838,91 @@ def plan_dsi_candidate_sync(
     }
 
 
-def _baseline_annotate(row: dict[str, Any]) -> dict[str, Any]:
-    """Attach baseline_* copies for UI (generate path; same keys as effective merge)."""
+def _infer_plan_rule_path(cand: ImportEntityMappingCandidate, row: dict[str, Any]) -> str:
+    """Stable rule identifier for plan explainability (not persisted)."""
+    entity = str(cand.entity_type or "")
+    action = str(row.get("suggested_action") or "")
+    ctx = cand.context if isinstance(cand.context, dict) else {}
+
+    if entity == "distributor_token":
+        if action == "map_distributor":
+            return "distributor.alias_or_dim_match"
+        if action == "ignore":
+            return "distributor.placeholder_token_ignore"
+        if action == "create_provisional_distributor":
+            return "distributor.no_match_provisional"
+        return "distributor.unsupported"
+
+    if entity == "product_identifier":
+        pstatus = ctx.get("product_match_status")
+        if action == "resolve_product" and row.get("ready") is True:
+            if "historical" in str(row.get("reason") or "").lower():
+                return "product.historical_single_match"
+            if pstatus == "ambiguous_eligible":
+                return "product.ambiguous_corroborated_single"
+            return "product.single_eligible_match"
+        if pstatus == "ambiguous_eligible":
+            return "product.ambiguous_eligible_manual"
+        if pstatus == "inactive_only":
+            return "product.inactive_only_confirm"
+        if pstatus == "no_match":
+            return "product.no_match"
+        return "product.needs_review"
+
+    if entity == "customer_dealer_token":
+        if ctx.get("strategic_channel_hint"):
+            return "customer.strategic_channel_review"
+        if action == "map_customer":
+            return "customer.alias_or_dim_match"
+        if action == "create_provisional_customer":
+            return "customer.no_match_provisional_geo"
+        if action == "ignore":
+            return "customer.ignore"
+        return "customer.needs_review"
+
+    return "unknown"
+
+
+def build_plan_why_from_candidate(
+    cand: ImportEntityMappingCandidate,
+    row: dict[str, Any],
+) -> dict[str, Any]:
+    """Structured explainability for plan rows (blockers, rule path, corroboration)."""
+    ctx = cand.context if isinstance(cand.context, dict) else {}
+    blockers = [str(b) for b in (row.get("resolution_blockers") or []) if b is not None and str(b).strip()]
+    rule_path = _infer_plan_rule_path(cand, row)
+
+    corroboration_hits: list[dict[str, Any]] = []
+    markers = ctx.get("corroboration_markers")
+    if isinstance(markers, list):
+        for m in markers:
+            if m is None:
+                continue
+            corroboration_hits.append({"marker": str(m)})
+
+    sec = ctx.get("shipment_evidence_corroboration")
+    if isinstance(sec, dict):
+        corroboration_hits.append(
+            {
+                "marker": "shipment_evidence_corroboration",
+                "kind": sec.get("kind"),
+                "match_count": sec.get("best_match_count"),
+                "mode": sec.get("mode"),
+                "summary": sec.get("summary"),
+            }
+        )
+
     return {
+        "blockers": blockers,
+        "rule_path": rule_path,
+        "corroboration_hits": corroboration_hits,
+        "narrative": str(row.get("reason") or "").strip(),
+    }
+
+
+def _baseline_annotate(row: dict[str, Any], cand: ImportEntityMappingCandidate) -> dict[str, Any]:
+    """Attach baseline_* copies for UI (generate path; same keys as effective merge)."""
+    base_row = {
         **row,
         "baseline_suggested_action": row.get("suggested_action"),
         "baseline_ready": row.get("ready"),
@@ -790,6 +930,8 @@ def _baseline_annotate(row: dict[str, Any]) -> dict[str, Any]:
         "hold_for_manual_review": False,
         "resolution_blockers": [],
     }
+    base_row["plan_why"] = build_plan_why_from_candidate(cand, base_row)
+    return base_row
 
 
 def build_dsi_resolution_plan_sync(
@@ -804,18 +946,31 @@ def build_dsi_resolution_plan_sync(
     if not job:
         raise ValueError("Import job not found")
     q = select(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job_id)
+    plan_truncated = False
     if candidate_ids:
         q = q.where(ImportEntityMappingCandidate.id.in_(candidate_ids))
+    else:
+        q = q.limit(100)
+        plan_truncated = True
     cands = list(session.scalars(q.order_by(ImportEntityMappingCandidate.entity_type, ImportEntityMappingCandidate.id)).all())
-    prod_idx = _load_product_resolution_index(session)
+    plan_ctx = build_dsi_plan_build_context(session)
     rows = [
         _baseline_annotate(
-            plan_dsi_candidate_sync(session, c, job, prod_idx, default_region_id=default_region_id, default_channel_id=default_channel_id)
+            plan_dsi_candidate_sync(
+                session,
+                c,
+                job,
+                plan_ctx.prod_idx,
+                default_region_id=default_region_id,
+                default_channel_id=default_channel_id,
+                plan_ctx=plan_ctx,
+            ),
+            c,
         )
         for c in cands
     ]
     ready_n = sum(1 for r in rows if r.get("ready"))
-    return {
+    out: dict[str, Any] = {
         "import_job_id": job_id,
         "rows": rows,
         "summary": {
@@ -829,6 +984,12 @@ def build_dsi_resolution_plan_sync(
             "channel_id": default_channel_id,
         },
     }
+    if plan_truncated:
+        out["plan_scope_note"] = (
+            "candidate_ids omitted — only the first 100 candidates were planned. "
+            "Pass candidate_ids (e.g. current table page) for scoped planning."
+        )
+    return out
 
 
 def _product_resolve_needs_ineligible_confirm(ctx: dict[str, Any]) -> bool:
@@ -1009,6 +1170,7 @@ def _attach_effective_fields_to_row(
     )
     out["effective_region_id"] = merged.get("effective_region_id")
     out["effective_channel_id"] = merged.get("effective_channel_id")
+    out["plan_why"] = build_plan_why_from_candidate(cand, out)
     return out
 
 
@@ -1035,14 +1197,24 @@ def build_dsi_resolution_plan_effective_sync(
     q = select(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job_id)
     if candidate_ids:
         q = q.where(ImportEntityMappingCandidate.id.in_(candidate_ids))
+    if candidate_ids:
+        pass
+    else:
+        q = q.limit(100)
     cands = list(
         session.scalars(q.order_by(ImportEntityMappingCandidate.entity_type, ImportEntityMappingCandidate.id)).all()
     )
-    prod_idx = _load_product_resolution_index(session)
+    plan_ctx = build_dsi_plan_build_context(session)
     rows: list[dict[str, Any]] = []
     for c in cands:
         base = plan_dsi_candidate_sync(
-            session, c, job, prod_idx, default_region_id=default_region_id, default_channel_id=default_channel_id
+            session,
+            c,
+            job,
+            plan_ctx.prod_idx,
+            default_region_id=default_region_id,
+            default_channel_id=default_channel_id,
+            plan_ctx=plan_ctx,
         )
         ov = by_cid.get(int(c.id))
         merged = merge_resolution_plan_row_for_apply(

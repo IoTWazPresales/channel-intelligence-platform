@@ -150,36 +150,37 @@ async def clear_mapping_queue(body: ClearConfirmBody, db: AsyncSession = Depends
 
 
 @router.get("/import-jobs/{job_id}/distributor-si-candidates")
-async def list_distributor_si_mapping_candidates(job_id: int, db: AsyncSession = Depends(get_db)):
-    """Aggregated unresolved distributor/product/customer tokens from a distributor sales & inventory import job."""
-    res = await db.execute(
-        select(ImportEntityMappingCandidate)
-        .where(ImportEntityMappingCandidate.import_job_id == job_id)
-        .order_by(ImportEntityMappingCandidate.entity_type, ImportEntityMappingCandidate.normalized_key)
+async def list_distributor_si_mapping_candidates(
+    job_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    entity: str = "all",
+    party: str = "all",
+    verify_name_only: bool = False,
+    special_category_only: bool = False,
+    possible_duplicates_only: bool = False,
+    status: str = "open",
+    db: AsyncSession = Depends(get_db),
+):
+    """Paginated aggregated DSI mapping candidates for an import job (default limit 100, max 1000)."""
+    from app.schemas.dsi_mapping_candidates import DsiMappingCandidatesListParams
+    from app.services.imports.dsi_mapping_candidates_list import list_dsi_mapping_candidates_sync
+
+    params = DsiMappingCandidatesListParams(
+        skip=skip,
+        limit=limit,
+        entity=entity,  # type: ignore[arg-type]
+        party=party,  # type: ignore[arg-type]
+        verify_name_only=verify_name_only,
+        special_category_only=special_category_only,
+        possible_duplicates_only=possible_duplicates_only,
+        status=status,  # type: ignore[arg-type]
     )
-    rows = res.scalars().all()
-    return [
-        {
-            "id": r.id,
-            "import_job_id": r.import_job_id,
-            "source_definition_id": r.source_definition_id,
-            "entity_type": r.entity_type,
-            "normalized_key": r.normalized_key,
-            "dealer_group_token": r.dealer_group_token,
-            "row_count": r.row_count,
-            "total_units": float(r.total_units) if r.total_units is not None else None,
-            "total_reported_value": float(r.total_reported_value) if r.total_reported_value is not None else None,
-            "sample_raw_values": r.sample_raw_values,
-            "suggested_entity_id": r.suggested_entity_id,
-            "match_reason": r.match_reason,
-            "confidence_score": float(r.confidence_score) if r.confidence_score is not None else None,
-            "status": r.status,
-            "context": r.context,
-            "created_at": r.created_at.isoformat() if r.created_at is not None else None,
-            "updated_at": r.updated_at.isoformat() if r.updated_at is not None else None,
-        }
-        for r in rows
-    ]
+
+    def _work(sess: Session) -> dict:
+        return list_dsi_mapping_candidates_sync(sess, job_id, params)
+
+    return await db.run_sync(_work)
 
 
 def _blank_customer_normalized_key(norm: str) -> bool:

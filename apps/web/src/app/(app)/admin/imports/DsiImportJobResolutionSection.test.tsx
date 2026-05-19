@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
-import type { DsiCandidateRow } from '../mappings/DsiCandidateStewardPanel';
+import type { DsiCandidateRow } from '@/features/import-steward';
 
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
 
@@ -44,53 +44,8 @@ const hoisted = vi.hoisted(() => {
   return { candidateRow };
 });
 
-vi.mock('@/components/EnterpriseDataGrid', () => {
-  const React = require('react');
-  return {
-    EnterpriseDataGrid: React.forwardRef(
-      (
-        props: {
-          rowData?: DsiCandidateRow[];
-          gridOptions?: {
-            onSelectionChanged?: (e: unknown) => void;
-            context?: { openSuggestionDetail?: (id: number) => void };
-          };
-        },
-        _ref: unknown
-      ) => {
-        React.useEffect(() => {
-          const rows = props.rowData?.length ? [props.rowData[0]] : [];
-          props.gridOptions?.onSelectionChanged?.({
-            api: { getSelectedRows: () => rows },
-          });
-        }, [props.gridOptions, props.rowData]);
-        return React.createElement(
-          'div',
-          { 'data-testid': 'mock-grid' },
-          (props.rowData ?? []).map((row: DsiCandidateRow) =>
-            React.createElement(
-              'div',
-              { key: row.id, 'data-testid': `mock-grid-row-${row.id}` },
-              React.createElement(
-                'button',
-                {
-                  type: 'button',
-                  'data-testid': `dsi-suggestion-open-${row.id}`,
-                  onClick: () => props.gridOptions?.context?.openSuggestionDetail?.(row.id),
-                },
-                'Open'
-              ),
-              row.sample_raw_values?.join('; ') ?? ''
-            )
-          )
-        );
-      }
-    ),
-  };
-});
-
-vi.mock('../mappings/DsiCandidateStewardPanel', () => ({
-  DsiCandidateStewardPanel: () => <div data-testid="dsi-steward-panel">steward</div>,
+vi.mock('@/features/import-steward/dsi-mapping-steward-panel', () => ({
+  DsiMappingStewardPanel: () => <div data-testid="dsi-steward-panel">steward</div>,
 }));
 
 describe('DsiImportJobResolutionSection bulk steward', () => {
@@ -128,6 +83,8 @@ describe('DsiImportJobResolutionSection bulk steward', () => {
     renderSection();
 
     await user.click(screen.getByRole('button', { name: /bulk actions/i }));
+    const bulkToolbar = await screen.findByTestId('bulk-selection-toolbar');
+    await user.click(within(bulkToolbar).getByRole('button', { name: /^Select visible$/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId('bulk-selection-count')).toHaveTextContent('1 selected');
@@ -238,6 +195,14 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     });
   }
 
+  async function waitForWorkspaceTable() {
+    const grid = screen.getByTestId('dsi-resolution-candidate-grid');
+    await waitFor(() => {
+      expect(within(grid).getByRole('table')).toBeInTheDocument();
+    });
+    return grid;
+  }
+
   it('auto-loads suggestions when candidates are present (no generate click)', async () => {
     renderPlanSection();
     await waitForSuggestionsPost();
@@ -250,6 +215,7 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     await waitForSuggestionsPost();
 
     await user.click(screen.getByTestId('dsi-resolution-plan-apply-all'));
+    await user.click(await screen.findByTestId('dsi-resolution-plan-apply-all-confirm'));
     await waitFor(() => {
       const applyCalls = mockApiPost.mock.calls.filter((c) => String(c[0]).includes('dsi-resolution-plan/apply'));
       expect(applyCalls.length).toBeGreaterThanOrEqual(1);
@@ -265,7 +231,8 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
   it('shows raw sample text in the in-page candidate grid after suggestions load', async () => {
     renderPlanSection();
     await waitForSuggestionsPost();
-    expect(screen.getByText('ACME RETAIL')).toBeTruthy();
+    const grid = await waitForWorkspaceTable();
+    expect(within(grid).getByTitle('ACME RETAIL')).toBeInTheDocument();
   });
 
   it('Refresh suggestions is clickable again after a failed initial plan request', async () => {
@@ -333,6 +300,7 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     const user = userEvent.setup();
     renderPlanSection();
     await waitForSuggestionsPost();
+    await user.click(screen.getByTestId('dsi-resolution-plan-advanced'));
     const before = mockApiPost.mock.calls.filter((c) => String(c[0]).includes('effective')).length;
     await user.click(screen.getByTestId('dsi-plan-global-suspicious-confirm'));
     await waitFor(
@@ -347,7 +315,7 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     );
   });
 
-  it('shows 12 grid row placeholders when plan has 12 candidates', async () => {
+  it('shows 12 candidates in the workspace when plan has 12 rows', async () => {
     const rows = Array.from({ length: 12 }, (_, i) => ({
       candidate_id: 200 + i,
       entity_type: 'distributor_token',
@@ -417,15 +385,17 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
 
     renderPlanSection(candidates);
     await waitForSuggestionsPost();
-    await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Grid rows 12');
-    });
+    expect(screen.getByTestId('dsi-import-job-resolution')).toBeTruthy();
+    expect(screen.getByTestId('dsi-resolution-candidate-grid')).toBeTruthy();
+    const filters = screen.getByTestId('dsi-steward-candidate-filters');
+    expect(within(filters).getByText(/Showing 12 of 12/)).toBeTruthy();
+    const grid = await waitForWorkspaceTable();
     for (let i = 0; i < 12; i += 1) {
-      expect(screen.getByTestId(`mock-grid-row-${200 + i}`)).toBeTruthy();
+      expect(within(grid).getByTitle(`T${i}`)).toBeInTheDocument();
     }
   });
 
-  it('filters ready vs needs work and updates the filter count', async () => {
+  it('queue filter chips narrow visible workspace rows', async () => {
     const user = userEvent.setup();
     const planRows = [
       {
@@ -503,15 +473,15 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
 
     renderPlanSection(two);
     await waitForSuggestionsPost();
+    const filters = screen.getByTestId('dsi-steward-candidate-filters');
+    expect(within(filters).getByText(/Showing 2 of 2/)).toBeTruthy();
+    const grid = await waitForWorkspaceTable();
+    await user.click(screen.getByTestId('dsi-filter-queue-ready_to_map'));
     await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Filter match 2 of 2');
+      expect(within(filters).getByText(/Showing 1 of 2/)).toBeTruthy();
     });
-    await user.click(screen.getByTestId('dsi-plan-filter-needs_work'));
-    await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Filter match 1 of 2');
-    });
-    expect(screen.queryByTestId('mock-grid-row-301')).toBeNull();
-    expect(screen.getByTestId('mock-grid-row-302')).toBeTruthy();
+    expect(within(grid).getByTitle('A')).toBeInTheDocument();
+    expect(within(grid).queryByTitle('B')).not.toBeInTheDocument();
   });
 
   it('entity and action filter chips narrow visible rows', async () => {
@@ -574,15 +544,21 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
 
     renderPlanSection(two);
     await waitForSuggestionsPost();
-    await user.click(screen.getByTestId('dsi-plan-filter-distributor'));
+    const filters = screen.getByTestId('dsi-steward-candidate-filters');
+    const grid = await waitForWorkspaceTable();
+    await user.click(screen.getByTestId('dsi-filter-entity-distributor'));
     await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Filter match 1 of 2');
+      expect(within(filters).getByText(/Showing 1 of 2/)).toBeTruthy();
     });
-    await user.click(screen.getByTestId('dsi-plan-filter-all'));
-    await user.click(screen.getByTestId('dsi-plan-filter-ignore'));
+    expect(within(grid).getByTitle('D')).toBeInTheDocument();
+    expect(within(grid).queryByTitle('C')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('dsi-filter-entity-all'));
+    await user.click(screen.getByTestId('dsi-filter-queue-ready_to_map'));
     await waitFor(() => {
-      expect(screen.getByTestId('dsi-resolution-plan-filter-count')).toHaveTextContent('Filter match 1 of 2');
+      expect(within(filters).getByText(/Showing 1 of 2/)).toBeTruthy();
     });
+    expect(within(grid).getByTitle('C')).toBeInTheDocument();
+    expect(within(grid).queryByTitle('D')).not.toBeInTheDocument();
   });
 
   it('drawer shows full source evidence after Open', async () => {
@@ -635,7 +611,8 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     );
 
     await waitForSuggestionsPost();
-    await user.click(screen.getByTestId('dsi-suggestion-open-101'));
+    await waitForWorkspaceTable();
+    await user.click(await screen.findByTestId('dsi-plan-cell-101'));
     await waitFor(() => {
       expect(screen.getByTestId('dsi-resolution-suggestion-drawer')).toBeVisible();
     });
@@ -688,7 +665,8 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
 
     renderPlanSection();
     await waitForSuggestionsPost();
-    await user.click(screen.getByTestId('dsi-suggestion-open-101'));
+    await waitForWorkspaceTable();
+    await user.click(await screen.findByTestId('dsi-plan-cell-101'));
     await waitFor(() => {
       expect(screen.getByTestId('dsi-plan-unassigned-geo-badge')).toBeVisible();
     });
@@ -739,6 +717,7 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
 
     renderPlanSection();
     await waitForSuggestionsPost();
+    await user.click(screen.getByTestId('dsi-plan-select-visible-ready'));
     const applySel = screen.getByTestId('dsi-resolution-plan-apply-selected');
     await waitFor(() => expect(applySel).not.toBeDisabled());
     await user.click(applySel);
@@ -787,8 +766,9 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
 
     renderPlanSection();
     await waitForSuggestionsPost();
+    await waitForWorkspaceTable();
     const before = mockApiPost.mock.calls.filter((c) => String(c[0]).includes('effective')).length;
-    await user.click(screen.getByTestId('dsi-suggestion-open-101'));
+    await user.click(await screen.findByTestId('dsi-plan-cell-101'));
     const drawer = await screen.findByTestId('dsi-resolution-suggestion-drawer');
     const holdBox = await within(drawer).findByRole('checkbox', { name: /hold \(skip in apply\)/i });
     expect(holdBox).toBeInTheDocument();
