@@ -11,7 +11,7 @@ const root = path.join(__dirname, '..');
 const env = {
   ...process.env,
   CIP_API_PORT: '8001',
-  CIP_API_PROXY_TARGET: 'http://127.0.0.1:8001',
+  CIP_API_INTERNAL_URL: 'http://127.0.0.1:8001',
 };
 
 // Prevent accidental cross-origin direct browser targeting in this mode.

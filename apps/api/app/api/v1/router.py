@@ -4,6 +4,7 @@ from app.api.v1.endpoints import (
     auth,
     budgets,
     buy_plans,
+    commercial_planner,
     dev_wipe,
     catalog,
     competition,
@@ -25,6 +26,8 @@ from app.api.v1.endpoints import (
     promotions,
     roadmap,
     sellout,
+    shipment_evidence,
+    shipping,
 )
 
 api_router = APIRouter()
@@ -36,9 +39,12 @@ api_router.include_router(customers.router, prefix="/customers", tags=["customer
 api_router.include_router(distributors.router, prefix="/distributors", tags=["distributors"])
 api_router.include_router(sellout.router, prefix="/sellout", tags=["sellout"])
 api_router.include_router(inbound_shipments.router, prefix="/inbound-shipments", tags=["inbound-shipments"])
+api_router.include_router(shipment_evidence.router, prefix="/shipment-evidence", tags=["shipment-evidence"])
+api_router.include_router(shipping.router, prefix="/shipping", tags=["shipping"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(forecasts.router, prefix="/forecasts", tags=["forecasts"])
 api_router.include_router(buy_plans.router, prefix="/buy-plans", tags=["buy-plans"])
+api_router.include_router(commercial_planner.router, prefix="/commercial-planner", tags=["commercial-planner"])
 api_router.include_router(pricing.router, prefix="/pricing", tags=["pricing"])
 api_router.include_router(promotions.router, prefix="/promotions", tags=["promotions"])
 api_router.include_router(promo_exports.router, prefix="/promotions", tags=["promotions"])

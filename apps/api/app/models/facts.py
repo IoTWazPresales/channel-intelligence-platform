@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -8,8 +9,13 @@ from app.db.base import Base, TimestampMixin
 
 class FactSalesSellout(Base, TimestampMixin):
     __tablename__ = "fact_sales_sellout"
+    __table_args__ = (Index("ix_fact_sales_sellout_source_import_job_id", "source_import_job_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_key: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
+    staging_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_distributor_si_staging_line.id", ondelete="SET NULL"), nullable=True
+    )
     product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False)
     channel_id: Mapped[int | None] = mapped_column(ForeignKey("dim_channel.id"), nullable=True)
@@ -58,13 +64,68 @@ class FactInventoryDistributor(Base, TimestampMixin):
 
 
 class FactInboundShipment(Base, TimestampMixin):
+    """Inbound shipment / order truth layer, fed from ``ShipmentEvidenceLine`` on apply (global ``source_key``)."""
+
     __tablename__ = "fact_inbound_shipment"
+    __table_args__ = (Index("ix_fact_inbound_shipment_import_job_id", "import_job_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
+
+    import_job_id: Mapped[int | None] = mapped_column(ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True)
+    source_key: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
+    shipment_evidence_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("shipment_evidence_line.id", ondelete="SET NULL"), nullable=True
+    )
+
+    source_sheet: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    source_row_number: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    report_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    line_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    raw_source_row: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+    operating_unit: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    bill_to_raw: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ship_to_raw: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    order_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    order_line: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    delivery_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    invoice_line: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    item_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    sales_model_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    customer_item: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    ean_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    upc_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    mpor_item_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    quantity: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    unit_price: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    amount: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    currency_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
+    ship_confirm_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    schedule_ship_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    promise_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    exwork_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    erd_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    est_pod_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    pod_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("dim_product.id"), nullable=True)
+    product_resolution_status: Mapped[str] = mapped_column(String(64), nullable=False)
+    product_resolution_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    product_resolution_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     distributor_id: Mapped[int | None] = mapped_column(ForeignKey("dim_distributor.id"), nullable=True)
-    eta_date: Mapped[date] = mapped_column(Date, nullable=False)
-    quantity: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+    distributor_resolution_status: Mapped[str] = mapped_column(String(64), nullable=False)
+    distributor_resolution_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    customer_dealer_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True)
+    customer_resolution_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    eta_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="scheduled", nullable=False)
 

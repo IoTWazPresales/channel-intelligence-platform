@@ -147,7 +147,9 @@ def test_distributor_si_validate_staging_candidates_no_queue_spam(dsi_source_id:
             select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == job_id)
         ).all()
         assert len(lines) == 2
-        assert all(l.severity == "error" for l in lines)
+        assert all(l.severity == "warning" for l in lines)
+        assert all(l.resolution_status == "ready_inventory" for l in lines)
+        assert all("sellout_blocked_missing_customer" in (l.diagnostic_codes or []) for l in lines)
 
         summary = db.scalars(
             select(ImportRowResult).where(
@@ -308,6 +310,182 @@ def test_dsi_sanitize_drops_unknown_targets() -> None:
     out, notes = sanitize_dsi_field_mapping(["X"], {"X": "form_factor"})
     assert "X" not in out
     assert any("form_factor" in n["message"] for n in notes)
+
+
+def test_dsi_dealer_name_group_resolves_when_customer_blank_apply(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,Dealer Name Group,soh\n"
+        "DIST-01,SKU-ALPHA-01,2024-11-01,1,,Metro Market Group,2\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_dg_blank_cust.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        line = db.scalars(
+            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == jid)
+        ).first()
+        assert line is not None
+        assert "customer_resolution_primary_dealer_name_group" in (line.diagnostic_codes or [])
+        assert line.raw_customer_dealer_token is None
+        assert line.raw_dealer_group_token == "Metro Market Group"
+        cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
+        assert cust is not None
+        assert line.resolved_customer_id == cust.id
+        n_sell = int(
+            db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == jid))
+            or 0
+        )
+        n_inv = int(
+            db.scalar(
+                select(func.count()).select_from(FactInventoryDistributor).where(
+                    FactInventoryDistributor.source_import_job_id == jid
+                )
+            )
+            or 0
+        )
+        assert n_sell == 1
+        assert n_inv == 1
+
+
+def test_dsi_placeholder_customer_column_uses_dealer_name_group_apply(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,Dealer Name Group,soh\n"
+        "DIST-01,SKU-ALPHA-01,2024-11-02,1,to be mapped,Metro Market Group,2\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_tbm_dg.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        line = db.scalars(
+            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == jid)
+        ).first()
+        assert line is not None
+        assert "customer_resolution_primary_dealer_name_group" in (line.diagnostic_codes or [])
+        assert line.raw_customer_dealer_token == "to be mapped"
+        assert line.raw_dealer_group_token == "Metro Market Group"
+        cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
+        assert cust is not None
+        assert line.resolved_customer_id == cust.id
+
+
+def test_dsi_unresolved_customer_single_candidate_merged_dealer_group_patterns(dsi_source_id: int) -> None:
+    """Same dealer group + unresolved sellout: customer vs placeholder customer must not double-insert candidates."""
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,Dealer Name Group,soh\n"
+        "DIST-01,SKU-ALPHA-01,2024-05-10,1,Wootware Zed Unres,Wootware Zed Unres Group,1\n"
+        "DIST-01,SKU-ALPHA-01,2024-05-11,1,to be mapped,Wootware Zed Unres Group,1\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_merge_cust_cand.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        cands = list(
+            db.scalars(
+                select(ImportEntityMappingCandidate).where(
+                    ImportEntityMappingCandidate.import_job_id == jid,
+                    ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+                )
+            ).all()
+        )
+        assert len(cands) == 1
+        assert cands[0].row_count == 2
+        assert float(cands[0].total_units or 0) == 2.0
+        assert cands[0].normalized_key == "wootware zed unres group"
+        assert cands[0].dealer_group_token == "Wootware Zed Unres Group"
+        ctx = cands[0].context or {}
+        assert ctx.get("primary_source") == "dealer_name_group"
+        assert ctx.get("dealer_group_account_raw") == "Wootware Zed Unres Group"
+        src = ctx.get("source_customer_name_raw_samples") or []
+        assert any("Wootware Zed Unres" in str(x) for x in src)
+        assert "wootware zed unres" in (ctx.get("customer_name_evidence_norms") or [])
+
+
+def test_dsi_mixed_unresolved_sellout_inventory_still_applies_on_apply(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,soh\n"
+        "DIST-01,SKU-ALPHA-01,2024-12-15,3,Mystery Dealer Zed Unresolvable,99\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_mixed_inv.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        n_sell = int(
+            db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == jid))
+            or 0
+        )
+        n_inv = int(
+            db.scalar(
+                select(func.count()).select_from(FactInventoryDistributor).where(
+                    FactInventoryDistributor.source_import_job_id == jid
+                )
+            )
+            or 0
+        )
+        assert n_sell == 0
+        assert n_inv == 1
+
+
+def test_dsi_qty_zero_does_not_require_customer_inventory_applies(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,soh,channel\n"
+        "DIST-01,SKU-ALPHA-01,2024-12-20,0,,5,Makro retail\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_qty0.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        line = db.scalars(
+            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == jid)
+        ).first()
+        assert line is not None
+        assert line.resolved_customer_id is None
+        assert "sellout_blocked_missing_customer" not in (line.diagnostic_codes or [])
+        n_sell = int(
+            db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == jid))
+            or 0
+        )
+        n_inv = int(
+            db.scalar(
+                select(func.count()).select_from(FactInventoryDistributor).where(
+                    FactInventoryDistributor.source_import_job_id == jid
+                )
+            )
+            or 0
+        )
+        assert n_sell == 0
+        assert n_inv == 1
+
+
+def test_dsi_blank_customer_makro_channel_not_open_channel(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,soh,channel\n"
+        "DIST-01,SKU-ALPHA-01,2024-12-22,1,,5,Makro retail\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_blank_makro.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        line = db.scalars(
+            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == jid)
+        ).first()
+        assert line is not None
+        oc = db.scalars(select(DimCustomer).where(DimCustomer.code == "OPEN_CHANNEL")).first()
+        if oc is not None:
+            assert line.resolved_customer_id != oc.id
+        assert "customer_open_channel" not in (line.diagnostic_codes or [])
+        assert "sellout_blocked_missing_customer" in (line.diagnostic_codes or [])
+
+
+def test_dsi_ignored_shipping_evidence_in_mapped_canonical_only(dsi_source_id: int) -> None:
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,soh,OTW Shipped\n"
+        "DIST-01,SKU-ALPHA-01,2024-12-23,1,CUST-1001,3,777\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_ship_raw.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        line = db.scalars(
+            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == jid)
+        ).first()
+        assert line is not None
+        mc = line.mapped_canonical or {}
+        ship = mc.get("ignored_shipping_evidence") or {}
+        assert "OTW Shipped" in ship
+        assert ship.get("OTW Shipped") == 777
 
 
 def test_dsi_column_samples_from_inferred() -> None:
@@ -472,11 +650,14 @@ def test_dsi_mapping_candidates_http_matches_db_and_job_scope(dsi_source_id: int
         api_a = client.get(f"/api/v1/mappings/import-jobs/{job_a.id}/distributor-si-candidates").json()
         api_b = client.get(f"/api/v1/mappings/import-jobs/{job_b.id}/distributor-si-candidates").json()
 
-    assert len(api_a) == len(db_a)
-    assert {row["import_job_id"] for row in api_a} == {job_a.id}
-    assert {row["import_job_id"] for row in api_b} == {job_b.id}
-    cust_a = next(x for x in api_a if x.get("entity_type") == "customer_dealer_token")
-    cust_b = next(x for x in api_b if x.get("entity_type") == "customer_dealer_token")
+    assert api_a["total"] == len(db_a)
+    assert api_b["total"] == len(db_b)
+    items_a = api_a["items"]
+    items_b = api_b["items"]
+    assert {row["import_job_id"] for row in items_a} == {job_a.id}
+    assert {row["import_job_id"] for row in items_b} == {job_b.id}
+    cust_a = next(x for x in items_a if x.get("entity_type") == "customer_dealer_token")
+    cust_b = next(x for x in items_b if x.get("entity_type") == "customer_dealer_token")
     assert cust_a["normalized_key"] != cust_b["normalized_key"]
     assert cust_a["row_count"] == 2
     assert "created_at" in cust_a
@@ -582,6 +763,63 @@ def test_dsi_candidate_steward_distributor_alias_then_revalidate_resolves(dsi_so
         ).first()
         assert line is not None
         assert line.resolved_distributor_id == dist_id
+
+    import asyncio
+
+    from app.db import session as db_session
+
+    async def _dispose() -> None:
+        await db_session.engine.dispose()
+
+    asyncio.run(_dispose())
+
+
+def test_dsi_candidate_steward_dealer_primary_alias_raw_is_source_customer_not_dealer_group(dsi_source_id: int) -> None:
+    """Map-customer alias raw_token must follow source customer evidence, not Dealer Name Group / composite sample."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with SessionLocal() as db:
+        if "distributor_source_token_alias" not in set(inspect(db.connection()).get_table_names()):
+            pytest.skip("Apply migration 20260430_0027 (distributor_source_token_alias).")
+    tok = secrets.token_hex(4)
+    source_shop = f"SourceShop {tok}"
+    dealer_group = f"Metro Reporting Group {tok}"
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,Dealer Name Group,soh\n"
+        f"DIST-01,SKU-ALPHA-01,2024-08-01,1,{source_shop},{dealer_group},1\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_steward_dg_primary.csv")
+    with SessionLocal() as db:
+        cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
+        assert cust is not None
+        cand = db.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == job.id,
+                ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+            )
+        ).first()
+        assert cand is not None
+        assert cand.dealer_group_token == dealer_group
+        ctx = cand.context or {}
+        assert ctx.get("dealer_group_account_raw") == dealer_group
+        assert source_shop in (ctx.get("source_customer_name_raw_samples") or [])
+        cand_id = cand.id
+        cust_id = cust.id
+    with TestClient(app) as client:
+        r = client.post(f"/api/v1/mappings/import-candidates/{cand_id}/map-customer", json={"customer_id": cust_id})
+        assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        alias = db.scalars(
+            select(CustomerSourceTokenAlias).where(
+                CustomerSourceTokenAlias.import_entity_mapping_candidate_id == cand_id,
+                CustomerSourceTokenAlias.customer_id == cust_id,
+            )
+        ).first()
+        assert alias is not None
+        assert alias.raw_token == source_shop
+        assert (alias.dealer_group_token or "") == dealer_group
 
     import asyncio
 

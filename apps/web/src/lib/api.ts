@@ -21,50 +21,60 @@ export function apiUrl(path: string): string {
   return b ? `${b}${p}` : p;
 }
 
+/** Extract a short user-facing message from a failed JSON API body (FastAPI ``detail`` shapes). */
+export function parseApiErrorDetailText(text: string): string {
+  const t = text.trim();
+  if (!t) return '';
+  if (!t.startsWith('{')) return t.length > 600 ? `${t.slice(0, 600)}…` : t;
+  try {
+    const j = JSON.parse(t) as { detail?: unknown };
+    const d = j.detail;
+    if (typeof d === 'string') return d;
+    if (typeof d === 'object' && d !== null && !Array.isArray(d)) {
+      const rec = d as Record<string, unknown>;
+      const bme = rec.blocking_mapping_errors;
+      if (Array.isArray(bme) && bme.length) {
+        const parts = bme
+          .map((x) => {
+            if (typeof x === 'object' && x !== null && 'message' in x) {
+              const m = (x as { message?: unknown }).message;
+              if (typeof m === 'string' && m.trim()) return m.trim();
+            }
+            return '';
+          })
+          .filter(Boolean);
+        if (parts.length) return parts.join(' ');
+      }
+      const msg = rec.message;
+      if (typeof msg === 'string' && msg.trim()) return msg.trim();
+      const alt = rec.msg;
+      if (typeof alt === 'string' && alt.trim()) return alt.trim();
+    }
+    if (Array.isArray(d)) {
+      const parts = d
+        .map((x) =>
+          typeof x === 'object' && x !== null && 'msg' in x ? String((x as { msg: string }).msg) : String(x)
+        )
+        .filter(Boolean);
+      if (parts.length) return parts.join('; ');
+    }
+  } catch {
+    /* fall through */
+  }
+  const lower = t.toLowerCase();
+  if (lower.includes('<!doctype') || lower.includes('<html')) {
+    return 'Server error. Check API logs or try again.';
+  }
+  return t.length > 600 ? `${t.slice(0, 600)}…` : t;
+}
+
 /** Parse a failed `fetch` body into a short, UI-safe message (avoids embedding HTML error pages). */
 export async function readFetchError(res: Response): Promise<string> {
   const text = (await res.text()).trim();
   if (!text) return `Request failed (${res.status})`;
-  if (text.startsWith('{')) {
-    try {
-      const j = JSON.parse(text) as { detail?: unknown };
-      const d = j.detail;
-      if (typeof d === 'string') return d;
-      if (typeof d === 'object' && d !== null && !Array.isArray(d)) {
-        const rec = d as Record<string, unknown>;
-        const bme = rec.blocking_mapping_errors;
-        if (Array.isArray(bme) && bme.length) {
-          const parts = bme
-            .map((x) => {
-              if (typeof x === 'object' && x !== null && 'message' in x) {
-                const m = (x as { message?: unknown }).message;
-                if (typeof m === 'string' && m.trim()) return m.trim();
-              }
-              return '';
-            })
-            .filter(Boolean);
-          if (parts.length) return parts.join(' ');
-        }
-        const msg = rec.message;
-        if (typeof msg === 'string' && msg.trim()) return msg.trim();
-        const alt = rec.msg;
-        if (typeof alt === 'string' && alt.trim()) return alt.trim();
-      }
-      if (Array.isArray(d)) {
-        const parts = d
-          .map((x) => (typeof x === 'object' && x !== null && 'msg' in x ? String((x as { msg: string }).msg) : String(x)))
-          .filter(Boolean);
-        if (parts.length) return parts.join('; ');
-      }
-    } catch {
-      /* fall through */
-    }
-  }
-  const lower = text.toLowerCase();
-  if (lower.includes('<!doctype') || lower.includes('<html')) {
-    return `Server error (${res.status}). Check API logs or try again.`;
-  }
-  return text.length > 600 ? `${text.slice(0, 600)}…` : text;
+  const parsed = parseApiErrorDetailText(text);
+  if (parsed) return parsed;
+  return `Request failed (${res.status})`;
 }
 
 /** Safe string for React alert children when displaying mutation errors. */
@@ -92,7 +102,7 @@ export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(`${res.status} ${await res.text()}`);
+    throw new Error(await readFetchError(res));
   }
   return res.json() as Promise<T>;
 }
@@ -106,7 +116,7 @@ export async function apiPost<T>(path: string, body?: unknown, init?: RequestIni
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(`${res.status} ${await res.text()}`);
+    throw new Error(await readFetchError(res));
   }
   return res.json() as Promise<T>;
 }
@@ -125,7 +135,7 @@ export async function apiPostFormData<T>(path: string, formData: FormData, init?
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(`${res.status} ${await readFetchError(res)}`);
+    throw new Error(await readFetchError(res));
   }
   return res.json() as Promise<T>;
 }
@@ -139,25 +149,15 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: RequestIn
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(`${res.status} ${await res.text()}`);
+    throw new Error(await readFetchError(res));
   }
   return res.json() as Promise<T>;
 }
 
 function errorMessageFromResponse(status: number, text: string): string {
-  try {
-    const j = JSON.parse(text) as { detail?: string | { msg?: string }[] };
-    if (typeof j.detail === 'string') return j.detail;
-    if (Array.isArray(j.detail)) {
-      const parts = j.detail
-        .map((e) => (typeof e === 'object' && e !== null && 'msg' in e ? String((e as { msg: string }).msg) : String(e)))
-        .filter(Boolean);
-      if (parts.length) return parts.join('; ');
-    }
-  } catch {
-    /* not JSON */
-  }
-  return `${status} ${text}`;
+  const parsed = parseApiErrorDetailText(text);
+  if (parsed.trim()) return parsed;
+  return `Request failed (${status})`;
 }
 
 /** 409 with structured `references` from APIs such as `DELETE /products/{id}`. */
@@ -271,7 +271,7 @@ export async function apiDeleteJson<T>(path: string, body: unknown, init?: Reque
   });
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(await readFetchError(res));
+    throw new Error(parseApiErrorDetailText(text) || `Request failed (${res.status})`);
   }
   if (!text.trim()) return {} as T;
   return JSON.parse(text) as T;

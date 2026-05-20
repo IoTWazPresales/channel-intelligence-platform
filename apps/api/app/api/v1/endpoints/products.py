@@ -9,6 +9,7 @@ from app.api.deps import get_db
 from app.models.dimensions import DimChannel, DimProduct
 from app.models.ingestion import ImportJob
 from app.models.product_catalog import CatalogProduct
+from app.services.commercial_planner.read_model import specs_json_flat_string_map
 from app.services.product_dsi_maintenance import (
     CLEAR_DISTRIBUTOR_INVENTORY_FOR_PRODUCT,
     clear_dsi_facts_for_product,
@@ -164,6 +165,7 @@ async def list_products(
     ).all()
 
     items = []
+    specs_field_keys: set[str] = set()
     for p, channel_code_out, last_import_date in rows:
         missing_required = []
         if not (p.sku or "").strip():
@@ -176,6 +178,8 @@ async def list_products(
             missing_required.append("lifecycle_status")
         if p.channel_id is None:
             missing_required.append("channel")
+        specs_flat = specs_json_flat_string_map(p.specs_json if isinstance(p.specs_json, dict) else None, max_keys=48)
+        specs_field_keys.update(specs_flat.keys())
         items.append(
             {
                 "id": p.id,
@@ -201,6 +205,7 @@ async def list_products(
                 "missing_required_fields": missing_required,
                 "last_import_date": last_import_date.isoformat() if last_import_date else None,
                 "specs_preview": _compact_specs_preview(p.specs_json),
+                "specs_flat": specs_flat,
             }
         )
     return {
@@ -210,6 +215,7 @@ async def list_products(
         "total": total,
         "sort_by": sort_by if sort_by in allowed_sort else "sku",
         "sort_dir": sort_dir,
+        "specs_field_keys": sorted(specs_field_keys),
     }
 
 

@@ -4,6 +4,7 @@ import {
   dsiContinueToApplyAllowed,
   dsiGateFromMapping,
   dsiSelectValue,
+  dsiTargetDescription,
   dsiTargetLabel,
   parseDistributorSiSummaryFromRows,
   stableFieldMappingJson,
@@ -15,6 +16,19 @@ describe('dsiStepUtils', () => {
     expect(dsiTargetLabel('product_identifier')).toMatch(/part/i);
     expect(dsiTargetLabel('distributor_token')).toBe('Distributor');
     expect(dsiTargetLabel('channel_key_token')).toMatch(/Channel/i);
+    expect(dsiTargetLabel('dealer_group_token')).toBe('Customer account');
+    expect(dsiTargetLabel('customer_dealer_token')).toBe('Source customer name');
+  });
+
+  it('dsiTargetDescription clarifies customer account vs source name', () => {
+    expect(dsiTargetDescription('dealer_group_token')).toMatch(/reporting/i);
+    expect(dsiTargetDescription('dealer_group_token')).toMatch(/matching/i);
+    expect(dsiTargetDescription('dealer_group_token')).toMatch(/roll up/i);
+    expect(dsiTargetDescription('dealer_group_token')).toMatch(/Dealer Name Group/i);
+    expect(dsiTargetDescription('customer_dealer_token')).toMatch(/alias/i);
+    expect(dsiTargetDescription('customer_dealer_token')).toMatch(/evidence/i);
+    expect(dsiTargetDescription('customer_dealer_token')).toMatch(/Customer name/i);
+    expect(dsiTargetDescription('distributor_token')).toBeUndefined();
   });
 
   it('dsiSelectValue never returns unknown canonical targets', () => {
@@ -51,6 +65,26 @@ describe('dsiStepUtils', () => {
       },
     ];
     expect(parseDistributorSiSummaryFromRows(rows)?.blocking_rows).toBe(0);
+  });
+
+  it('parseDistributorSiSummaryFromRows reads extended DSI counters', () => {
+    const rows = [
+      {
+        row_number: 0,
+        code: 'distributor_si_summary',
+        message: JSON.stringify({
+          staging_rows: 2,
+          blocking_rows: 0,
+          warning_rows: 2,
+          aggregated_candidates: 1,
+          sellout_issue_rows: 2,
+          rows_inventory_ready_with_sellout_warnings: 2,
+        }),
+      },
+    ];
+    const s = parseDistributorSiSummaryFromRows(rows);
+    expect(s?.sellout_issue_rows).toBe(2);
+    expect(s?.rows_inventory_ready_with_sellout_warnings).toBe(2);
   });
 
   it('dsiContinueToApplyAllowed gates on job, mapping key, and blocking rows', () => {

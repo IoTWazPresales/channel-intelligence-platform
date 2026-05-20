@@ -94,7 +94,13 @@ export function ModuleDataSection({
     <>
       {toolbar ? <>{toolbar}</> : null}
       {showIntro ? (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
+        <Typography
+          component="div"
+          variant="body2"
+          color="text.secondary"
+          sx={{ mb: 2, maxWidth: 900 }}
+          data-testid="module-data-section-intro"
+        >
           {intro}
         </Typography>
       ) : null}

@@ -15,6 +15,7 @@ from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, So
 from app.models.mapping import EntityMappingQueue
 from app.services.catalog.product_import_sync import sync_bulk_upsert_products_from_rows
 from app.services.imports.distributor_sales_inventory import process_distributor_sales_inventory
+from app.services.imports.shipment_evidence_import import process_shipment_evidence_import
 from app.services.imports.historical_lineup import process_historical_lineup_import
 from app.storage.local import get_storage_backend
 
@@ -560,6 +561,7 @@ def _process_customer_master(db: Session, job: ImportJob, df: pd.DataFrame, mapp
             )
         )
         job.stage = STAGE_LOADED
+        job.archived_at = datetime.now(timezone.utc)
     else:
         db.add(
             ImportRowResult(
@@ -677,6 +679,7 @@ def _process_distributor_master(db: Session, job: ImportJob, df: pd.DataFrame, m
             )
         )
         job.stage = STAGE_LOADED
+        job.archived_at = datetime.now(timezone.utc)
     else:
         db.add(
             ImportRowResult(
@@ -690,7 +693,7 @@ def _process_distributor_master(db: Session, job: ImportJob, df: pd.DataFrame, m
     return 0
 
 
-def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
+def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -> ImportJob:
     job = db.scalar(
         select(ImportJob)
         .options(joinedload(ImportJob.source).joinedload(SourceDefinition.import_template))
@@ -704,11 +707,11 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
         db.refresh(job)
         return job
 
-    storage = get_storage_backend()
-    raw = db.scalars(select(RawFileMetadata).where(RawFileMetadata.job_id == job_id)).one()
-    data = storage.read(raw.storage_key)
-
     try:
+        storage = get_storage_backend()
+        raw = db.scalars(select(RawFileMetadata).where(RawFileMetadata.job_id == job_id)).one()
+        data = storage.read(raw.storage_key)
+
         job.stage = STAGE_RAW_STORED
         job.started_at = datetime.now(timezone.utc)
         job.status = "running"
@@ -723,6 +726,7 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
             "product_master": "product_master_upsert",
             "distributor_inventory": "distributor_sales_inventory",
             "historical_lineup": "historical_lineup_workbook",
+            "inbound_shipments": "shipment_evidence_import",
         }
         raw_handler = (tpl.pipeline_handler if tpl else None) or fallback_handlers_by_slug.get(
             job.template_slug or "", "inventory_sku_gate"
@@ -745,20 +749,36 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
             db.refresh(job)
             return job
 
-        df = read_tabular(job.file_name, data)
-        schema = infer_schema(df)
-        job.inferred_schema = schema
-        job.stage = STAGE_INFERRED
+        if (job.template_slug or "") == "inbound_shipments":
+            df = pd.DataFrame()
+            mapping = dict(job.field_mapping or {})
+            job.stage = STAGE_MAPPED
+        else:
+            df = read_tabular(job.file_name, data)
+            schema = infer_schema(df)
+            job.inferred_schema = schema
+            job.stage = STAGE_INFERRED
 
-        cols = [c["name"] for c in schema["columns"]]
-        template = effective_mapping_template(source)
-        mapping = job.field_mapping or default_field_mapping(cols, template)
-        if job.template_slug == "distributor_inventory":
-            from app.services.imports.dsi_mapping_workflow import sanitize_dsi_field_mapping
+            cols = [c["name"] for c in schema["columns"]]
+            template = effective_mapping_template(source)
+            mapping = job.field_mapping or default_field_mapping(cols, template)
+            if job.template_slug == "distributor_inventory":
+                from app.services.imports.dsi_mapping_workflow import (
+                    apply_exact_raw_customer_header_overrides,
+                    apply_dsi_customer_column_target_resolution,
+                    apply_dsi_product_identifier_sample_inference,
+                    column_samples_from_schema_dict,
+                    sanitize_dsi_field_mapping,
+                )
 
-            mapping, _ = sanitize_dsi_field_mapping(cols, mapping)
-        job.field_mapping = mapping
-        job.stage = STAGE_MAPPED
+                if not job.field_mapping:
+                    samp = column_samples_from_schema_dict(schema)
+                    mapping = apply_exact_raw_customer_header_overrides(cols, mapping)
+                    mapping = apply_dsi_customer_column_target_resolution(cols, mapping)
+                    mapping = apply_dsi_product_identifier_sample_inference(cols, mapping, samp)
+                mapping, _ = sanitize_dsi_field_mapping(cols, mapping)
+            job.field_mapping = mapping
+            job.stage = STAGE_MAPPED
 
         handlers = {
             "stub_noop": _process_stub,
@@ -767,6 +787,7 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
             "product_master_upsert": _process_product_master,
             "inventory_sku_gate": _process_inventory_sku_gate,
             "distributor_sales_inventory": process_distributor_sales_inventory,
+            "shipment_evidence_import": process_shipment_evidence_import,
             "historical_lineup_workbook": lambda _db, _job, _df, _mapping: process_historical_lineup_import(
                 _db, _job, _job.file_name, data
             ),
@@ -783,6 +804,8 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
                 )
             )
             errors = 1
+        elif handler == "distributor_sales_inventory" and on_progress is not None:
+            errors = processor(db, job, df, mapping, on_progress=on_progress)
         else:
             errors = processor(db, job, df, mapping)
 
@@ -792,7 +815,6 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
         job.error_summary = f"{errors} rows require attention" if errors else None
         db.commit()
         db.refresh(job)
-        return job
     except Exception as exc:  # noqa: BLE001
         db.rollback()
         job = db.get(ImportJob, job_id)
@@ -804,3 +826,11 @@ def process_import_job_sync(db: Session, job_id: int) -> ImportJob:
             db.commit()
             db.refresh(job)
         return job
+
+    if (job.template_slug or "") == "distributor_inventory" and (job.import_mode or "").strip() == "validate":
+        from app.ingestion.dsi_validate_post_sync import run_dsi_validate_post_import_orchestration
+
+        run_dsi_validate_post_import_orchestration(db, job.id)
+        db.refresh(job)
+
+    return job

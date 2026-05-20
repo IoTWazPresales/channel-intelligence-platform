@@ -5,8 +5,8 @@ export function dsiTargetLabel(t: string): string {
     transaction_date: 'Transaction / invoice date',
     snapshot_date: 'Inventory snapshot date',
     distributor_token: 'Distributor',
-    customer_dealer_token: 'Customer / dealer / reseller',
-    dealer_group_token: 'Dealer / customer group',
+    dealer_group_token: 'Customer account',
+    customer_dealer_token: 'Source customer name',
     product_identifier: 'Product identifier (SKU / part # / model)',
     quantity_sold: 'Quantity sold',
     unit_sellout_price_ex_tax_amount: 'Unit sell-out price ex tax / ex VAT',
@@ -20,6 +20,17 @@ export function dsiTargetLabel(t: string): string {
   };
   if (labels[t]) return labels[t];
   return t.replace(/_/g, ' ');
+}
+
+/** Longer helper text for mapping UI (tooltips / secondary lines). Only defined where naming needs context. */
+export function dsiTargetDescription(t: string): string | undefined {
+  const descriptions: Record<string, string> = {
+    dealer_group_token:
+      'Primary customer account for this import: rows roll up here for reporting, matching, and facts. On RAW workbooks map the Dealer Name Group column here—not the free-text customer name.',
+    customer_dealer_token:
+      'Secondary label from the file only: the raw customer / site name as printed (e.g. Customer name on RAW). Stored as alias and matching evidence under the Customer account, not as the rollup account.',
+  };
+  return descriptions[t];
 }
 
 export function dsiGateFromMapping(m: Record<string, string>): boolean {
@@ -61,6 +72,10 @@ export type DistributorSiSummary = {
   warning_rows?: number;
   aggregated_candidates?: number;
   import_mode?: string;
+  /** Rows with sell-out blocked (missing customer or missing tx for non-zero qty), excluding hard distributor/product errors. */
+  sellout_issue_rows?: number;
+  /** Subset: inventory path is valid (SOH + snapshot) but sell-out still blocked — inventory may apply on apply. */
+  rows_inventory_ready_with_sellout_warnings?: number;
 };
 
 /** Parse distributor_si_summary row from import job preview rows (DSI validate). */

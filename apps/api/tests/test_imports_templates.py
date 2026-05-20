@@ -39,6 +39,8 @@ def test_imports_templates_and_sources() -> None:
         assert by_slug["historical_lineup"]["pipeline_ready"] is True
         assert by_slug["distributor_inventory"]["pipeline_handler"] == "distributor_sales_inventory"
         assert by_slug["distributor_inventory"]["pipeline_ready"] is True
+        assert by_slug["inbound_shipments"]["pipeline_handler"] == "shipment_evidence_import"
+        assert by_slug["inbound_shipments"]["pipeline_ready"] is True
 
         r2 = client.get(
             "/api/v1/imports/sources",

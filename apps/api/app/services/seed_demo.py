@@ -174,6 +174,7 @@ def run(session: Session, *, full_demo: bool = False) -> None:
     channels = [
         DimChannel(code="RET", name="Retail"),
         DimChannel(code="ECOM", name="eCommerce"),
+        DimChannel(code="OPEN_CH", name="Open Channel"),
     ]
     distributors = [
         DimDistributor(code="DIST-01", name="Summit Supply Co."),
@@ -259,6 +260,8 @@ def run(session: Session, *, full_demo: bool = False) -> None:
         [
             ProductAlias(product_id=products[0].id, alias_value="APL-200-GL", alias_kind="distributor_code", confidence="high"),
             FactSalesSellout(
+                source_key=f"demo-seed-sellout-{products[0].id}-{customers[0].id}",
+                staging_line_id=None,
                 product_id=products[0].id,
                 customer_id=customers[0].id,
                 channel_id=channels[0].id,
@@ -275,8 +278,18 @@ def run(session: Session, *, full_demo: bool = False) -> None:
                 on_order_units=60,
             ),
             FactInboundShipment(
+                source_key="demo:seed:inbound:po-77821",
+                import_job_id=None,
+                shipment_evidence_line_id=None,
+                source_sheet=None,
+                source_row_number=0,
+                report_type="demo",
+                line_state="demo",
+                raw_source_row={},
                 product_id=products[0].id,
                 distributor_id=distributors[0].id,
+                product_resolution_status="resolved_unique",
+                distributor_resolution_status="resolved_unique",
                 eta_date=date.today() + timedelta(days=10),
                 quantity=120,
                 reference="PO-77821",

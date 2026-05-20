@@ -77,7 +77,11 @@ def test_products_list_response_shape_and_pagination_contract():
         assert body["items"][0]["missing_required_fields"] == []
         assert body["items"][0]["last_import_date"] == "2026-01-10"
         assert body["items"][0]["specs_preview"] == {"CPU": "X1", "RAM": "16GB"}
+        assert body["items"][0]["specs_flat"]["CPU"] == "X1"
+        assert body["items"][0]["specs_flat"]["RAM"] == "16GB"
+        assert set(body["specs_field_keys"]) == {"CPU", "RAM"}
         assert body["items"][1]["specs_preview"] == {}
+        assert body["items"][1]["specs_flat"] == {}
         assert "category" in body["items"][1]["missing_required_fields"]
         assert "channel" in body["items"][1]["missing_required_fields"]
     finally:
@@ -104,5 +108,6 @@ def test_products_list_unknown_sort_falls_back_to_sku():
         assert body["sort_by"] == "sku"
         assert body["sort_dir"] == "desc"
         assert body["items"] == []
+        assert body["specs_field_keys"] == []
     finally:
         app.dependency_overrides.clear()

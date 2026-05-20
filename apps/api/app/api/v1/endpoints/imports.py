@@ -1,13 +1,18 @@
 import json
+import logging
+import threading
 import uuid
-from typing import Any
+from typing import Annotated, Any, Callable
 
 from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_db
+from app.core.config import get_settings
+from app.core.dev_celery_logging import DEV_CELERY_LOGGER
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
 from app.services.imports.dsi_mapping_workflow import (
@@ -17,16 +22,132 @@ from app.services.imports.dsi_mapping_workflow import (
     merge_dsi_mapping_memory,
     sanitize_dsi_field_mapping,
 )
+from app.services.imports.shipment_field_mapping import (
+    infer_shipment_import_job_sync,
+    merge_shipment_mapping_memory,
+    sanitize_shipment_field_mapping,
+    shipment_mapping_gate_errors,
+    shipment_mapping_state_dict,
+)
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
 from app.storage.local import get_storage_backend
+from app.services.imports.import_job_bulk_delete import bulk_delete_import_jobs, normalize_job_ids, preview_import_job_bulk_delete
 from app.services.imports.template_definitions import product_master_sample_csv
+from app.utils.json_safe import to_jsonable
+from app.worker.celery_app import celery_app
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+async def _async_import_job_with_source(db: AsyncSession, job_id: int) -> ImportJob | None:
+    """Load ``ImportJob`` with ``source`` + ``import_template`` eager (avoids lazy IO under ``AsyncSession``)."""
+    return await db.scalar(
+        select(ImportJob)
+        .options(joinedload(ImportJob.source).joinedload(SourceDefinition.import_template))
+        .where(ImportJob.id == job_id)
+    )
+
+
+def _wants_inline_import_processing(run_sync_raw: str) -> bool:
+    """Parse the multipart ``run_sync`` form value into a boolean.
+
+    Returns True when processing should run inline in the API process.
+    Returns False when the caller wants deferred/async processing.
+    """
+    s0 = str(run_sync_raw).strip()
+    if len(s0) >= 2 and s0[0] == s0[-1] and s0[0] in "'\"":
+        s0 = s0[1:-1].strip()
+    s = s0.lower()
+    if s in ("0", "false", "no", "off", "n"):
+        return False
+    if s in ("1", "true", "yes", "on", "y"):
+        return True
+    return True
+
+
+def _enqueue_import_worker_task(
+    job_id: int,
+    *,
+    task_name: str,
+    log_label: str,
+    in_process_thread_name: str,
+    sync_work: Callable[[Session, int], Any],
+) -> tuple[bool, str | None]:
+    """Publish ``task_name`` to the Celery broker; mirror upload/validate fallback semantics.
+
+    Uses ``celery_app.send_task`` so dispatch matches the worker-registered task name regardless
+    of import binding order. On broker failure: dev-only in-process thread when
+    ``CIP_DEV_CELERY_DISPATCH=in_process_thread``, otherwise run ``sync_work`` inline in this process.
+
+    Returns ``(dispatched, task_id)`` where dispatched is ``True`` when the HTTP layer should treat
+    the operation as async (broker accepted the message, or a dev thread was started), and
+    ``task_id`` is the Celery task ID when dispatched via the broker (``None`` otherwise).
+    """
+    settings = get_settings()
+    try:
+        result = celery_app.send_task(task_name, args=[job_id], ignore_result=True)
+        return True, result.id
+    except Exception:
+        logger.exception("%s: Celery enqueue failed job_id=%s task=%s", log_label, job_id, task_name)
+        if settings.cip_dev_celery_dispatch == "in_process_thread":
+
+            def _in_process() -> None:
+                try:
+                    with SessionLocal() as s2:
+                        sync_work(s2, job_id)
+                except Exception:
+                    logger.exception(
+                        "%s: in-process thread failed job_id=%s "
+                        "(CIP_DEV_CELERY_DISPATCH=in_process_thread after broker failure)",
+                        log_label,
+                        job_id,
+                    )
+
+            DEV_CELERY_LOGGER.warning(
+                "ENQUEUE: %s job_id=%s — in-process thread after broker failure (DEV ONLY).",
+                log_label,
+                job_id,
+            )
+            threading.Thread(target=_in_process, name=in_process_thread_name, daemon=True).start()
+            return True, None
+        with SessionLocal() as sync_fallback:
+            sync_work(sync_fallback, job_id)
+        return False, None
+
+
+def _enqueue_import_pipeline_job(job_id: int, *, log_label: str, in_process_thread_name: str) -> tuple[bool, str | None]:
+    """Enqueue full import pipeline (``imports.process_job``) — validate/apply processing."""
+    return _enqueue_import_worker_task(
+        job_id,
+        task_name="imports.process_job",
+        log_label=log_label,
+        in_process_thread_name=in_process_thread_name,
+        sync_work=process_import_job_sync,
+    )
 
 
 def _is_admin(x_user_role: str | None) -> bool:
     return (x_user_role or "").strip().lower() == "admin"
+
+
+def _require_admin_import_maintenance(
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> None:
+    if not _is_admin(x_user_role):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "admin_required", "message": "Admin maintenance requires X-User-Role: admin"},
+        )
+
+
+class ImportJobBulkIdsBody(BaseModel):
+    job_ids: list[int] = Field(default_factory=list, max_length=200)
+
+
+class ImportJobBulkDeleteConfirmBody(ImportJobBulkIdsBody):
+    delete_semantic_artifacts: bool = False
 
 
 def _template_to_api(t: ImportTemplate) -> dict[str, Any]:
@@ -135,8 +256,14 @@ async def list_sources(
 
 
 @router.get("/jobs")
-async def list_jobs(db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(ImportJob).order_by(ImportJob.id.desc()))
+async def list_jobs(
+    db: AsyncSession = Depends(get_db),
+    include_archived: bool = Query(default=False, description="When true, include jobs with archived_at set."),
+):
+    stmt = select(ImportJob).order_by(ImportJob.id.desc())
+    if not include_archived:
+        stmt = stmt.where(ImportJob.archived_at.is_(None))
+    res = await db.execute(stmt)
     rows = res.scalars().all()
     return [
         {
@@ -150,21 +277,85 @@ async def list_jobs(db: AsyncSession = Depends(get_db)):
             "error_summary": j.error_summary,
             "inferred_schema": j.inferred_schema,
             "field_mapping": j.field_mapping,
+            "archived_at": j.archived_at,
         }
         for j in rows
     ]
+
+
+@router.post("/jobs/bulk-delete-preview")
+async def post_import_jobs_bulk_delete_preview(
+    body: ImportJobBulkIdsBody,
+    _admin: None = Depends(_require_admin_import_maintenance),
+):
+    """Return artifact counts for selected import jobs (admin maintenance; preview before delete)."""
+    if not normalize_job_ids(body.job_ids):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_job_ids", "message": "Provide at least one valid import job id."},
+        )
+    with SessionLocal() as db:
+        return preview_import_job_bulk_delete(db, body.job_ids)
+
+
+@router.post("/jobs/bulk-delete-confirm")
+async def post_import_jobs_bulk_delete_confirm(
+    body: ImportJobBulkDeleteConfirmBody,
+    _admin: None = Depends(_require_admin_import_maintenance),
+):
+    """Transactionally delete import jobs and directly linked ingestion artifacts (admin only)."""
+    if not normalize_job_ids(body.job_ids):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_job_ids", "message": "Provide at least one valid import job id."},
+        )
+    with SessionLocal() as db:
+        try:
+            out = bulk_delete_import_jobs(
+                db,
+                body.job_ids,
+                delete_semantic_artifacts=body.delete_semantic_artifacts,
+            )
+            db.commit()
+        except ValueError as exc:
+            db.rollback()
+            code = str(exc)
+            if code == "not_all_jobs_found":
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": code,
+                        "message": "One or more job ids no longer exist; refresh the list and try again.",
+                    },
+                )
+            if code == "semantic_artifacts_present":
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "error": code,
+                        "message": (
+                            "Steward aliases linked to these jobs still exist. "
+                            "Preview counts are in the risky section; either remove aliases elsewhere first, "
+                            "or confirm with delete_semantic_artifacts=true."
+                        ),
+                    },
+                )
+            raise HTTPException(status_code=400, detail={"error": code}) from exc
+    return out
 
 
 @router.post("/jobs")
 async def create_job(
     source_id: int = Form(...),
     file: UploadFile = File(...),
-    run_sync: bool = Form(default=True),
+    run_sync: str = Form(default="true"),
     import_mode: str = Form(default=""),
     confirm_destructive: str = Form(default=""),
     mapping_override: str = Form(default=""),
+    dsi_workflow_mode: str = Form(default="auto"),
     db: AsyncSession = Depends(get_db),
 ):
+    run_inline = _wants_inline_import_processing(run_sync)
     source = await db.scalar(
         select(SourceDefinition)
         .options(joinedload(SourceDefinition.import_template))
@@ -179,7 +370,7 @@ async def create_job(
 
     mode = (import_mode or "").strip().lower()
     if not mode:
-        mode = "validate" if tpl.slug in ("product_master", "distributor_inventory") else "apply"
+        mode = "validate" if tpl.slug in ("product_master", "distributor_inventory", "inbound_shipments") else "apply"
     if mode not in ("validate", "apply"):
         raise HTTPException(status_code=400, detail="import_mode must be validate or apply")
 
@@ -208,6 +399,15 @@ async def create_job(
     db.add(job)
     await db.flush()
 
+    if tpl.slug == "distributor_inventory":
+        mode_explicit = (dsi_workflow_mode or "auto").strip().lower()
+        if mode_explicit not in ("auto", "historical", "weekly"):
+            mode_explicit = "auto"
+        sm = dict(job.staged_metadata or {})
+        sm["dsi_workflow_mode_explicit"] = mode_explicit
+        job.staged_metadata = to_jsonable(sm)
+        db.add(job)
+
     # Store column mapping override for historical_lineup before sync processing.
     # The service reads job.mapping_decisions and applies overrides during parsing.
     if mapping_override.strip() and tpl.slug == "historical_lineup":
@@ -225,14 +425,21 @@ async def create_job(
     await db.refresh(job)
 
     # Product Master and DSI use constrained mapping workflows; never run legacy sync on create.
-    effective_run_sync = bool(run_sync) and tpl.slug not in ("product_master", "distributor_inventory")
+    effective_run_sync = run_inline and tpl.slug not in ("product_master", "distributor_inventory", "inbound_shipments")
     if effective_run_sync:
         with SessionLocal() as sync_db:
             process_import_job_sync(sync_db, job.id)
         await db.refresh(job)
     elif tpl.slug == "distributor_inventory":
+        # Always infer inline — DSI infer is fast and the frontend has no polling for this step.
+        # Celery dispatch for DSI infer was removed because the worker path was unreliable and
+        # left jobs stuck at 'uploaded' with column mapping never loading.
         with SessionLocal() as sync_db:
             infer_dsi_job_sync(sync_db, job.id)
+        await db.refresh(job)
+    elif tpl.slug == "inbound_shipments":
+        with SessionLocal() as sync_db:
+            infer_shipment_import_job_sync(sync_db, job.id)
         await db.refresh(job)
 
     return {"id": job.id, "status": job.status, "stage": job.stage, "template_slug": job.template_slug, "import_mode": job.import_mode}
@@ -327,12 +534,168 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
         "file_headers": job.file_headers,
         "template_slug": job.template_slug,
         "import_mode": job.import_mode,
+        "archived_at": job.archived_at,
+        "staged_metadata": job.staged_metadata,
     }
+
+
+@router.get("/jobs/{job_id}/dsi-progress")
+async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
+    """Return real-time DSI validation progress from Celery task state (Redis).
+
+    Reads the Celery task ID stored in ``staged_metadata.celery_task_id`` (written at
+    dispatch time) and queries the Celery result backend for the current PROGRESS meta.
+    Falls back to stage/status from the job record when no task state is available.
+    """
+    import asyncio
+
+    from celery.result import AsyncResult
+
+    job = await db.get(ImportJob, job_id)
+    if not job or job.template_slug != "distributor_inventory":
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    stage = (job.stage or "").strip()
+    status = (job.status or "").strip()
+    meta = dict(job.staged_metadata or {})
+    task_id: str | None = meta.get("celery_task_id")
+    total_rows_from_meta: int = int(meta.get("dsi_validate_total_rows") or 0)
+
+    progress: dict[str, Any] = {
+        "job_id": job_id,
+        "stage": stage,
+        "status": status,
+        "phase": "idle",
+        "phase_label": "Idle",
+        "current_row": 0,
+        "total_rows": total_rows_from_meta,
+        "pct": 0,
+        "task_state": None,
+    }
+
+    if task_id:
+        try:
+            def _read_celery_state() -> tuple[str, Any]:
+                r = AsyncResult(task_id, app=celery_app)
+                return r.state, r.info
+
+            task_state, info = await asyncio.to_thread(_read_celery_state)
+            progress["task_state"] = task_state
+            if isinstance(info, dict):
+                progress["phase"] = info.get("phase", "processing_rows")
+                progress["phase_label"] = info.get("phase_label", "Processing rows")
+                progress["current_row"] = info.get("current_row", 0)
+                total_from_celery = info.get("total_rows", 0)
+                progress["total_rows"] = total_from_celery or total_rows_from_meta
+                progress["pct"] = info.get("pct", 0)
+        except Exception as exc:
+            logger.debug("get_dsi_job_progress: Celery read failed job_id=%s: %s", job_id, exc)
+
+    # Override with final states derived from DB job record
+    if stage == "validated":
+        progress["phase"] = "complete"
+        progress["phase_label"] = "Validation complete"
+        progress["pct"] = 100
+        progress["current_row"] = progress["total_rows"]
+    elif stage in ("failed", "stage_failed"):
+        progress["phase"] = "failed"
+        progress["phase_label"] = "Failed"
+    elif status == "running" and progress["phase"] == "idle":
+        progress["phase"] = "processing_rows"
+        progress["phase_label"] = "Processing rows"
+
+    return progress
+
+
+@router.get("/jobs/{job_id}/shipment-mapping-state")
+async def get_shipment_mapping_state(job_id: int, db: AsyncSession = Depends(get_db)):
+    job = await db.get(ImportJob, job_id)
+    if not job or job.template_slug != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Shipment mapping state not found for this job")
+    headers = list(job.file_headers or [])
+    raw = dict(job.field_mapping or {})
+    clean, _ = sanitize_shipment_field_mapping(headers, raw)
+    if clean != raw:
+        job.field_mapping = clean
+        await db.commit()
+        await db.refresh(job)
+    return shipment_mapping_state_dict(job)
+
+
+@router.put("/jobs/{job_id}/shipment-field-mapping")
+async def put_shipment_field_mapping(job_id: int, body: dict[str, Any] = Body(...), db: AsyncSession = Depends(get_db)):
+    job = await db.get(ImportJob, job_id)
+    if not job or job.template_slug != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Job not found")
+    fm = body.get("field_mapping")
+    if not isinstance(fm, dict):
+        raise HTTPException(status_code=400, detail="field_mapping must be an object")
+    headers = list(job.file_headers or [])
+    cleaned_input: dict[str, str] = {}
+    for k, v in fm.items():
+        if isinstance(k, str) and isinstance(v, str) and v.strip():
+            cleaned_input[k] = v.strip()
+    cleaned, _ = sanitize_shipment_field_mapping(headers, cleaned_input)
+    job.field_mapping = cleaned
+    await db.commit()
+    await db.refresh(job)
+    if job.source_id is not None:
+        with SessionLocal() as sync_db:
+            merge_shipment_mapping_memory(sync_db, source_id=int(job.source_id), field_mapping=cleaned)
+            sync_db.commit()
+    return shipment_mapping_state_dict(job)
+
+
+@router.post("/jobs/{job_id}/shipment-validate")
+async def post_shipment_validate(job_id: int, db: AsyncSession = Depends(get_db)):
+    job = await db.get(ImportJob, job_id)
+    if not job or job.template_slug != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Job not found")
+    headers = list(job.file_headers or [])
+    clean, _ = sanitize_shipment_field_mapping(headers, dict(job.field_mapping or {}))
+    job.field_mapping = clean
+    await db.commit()
+    gate = shipment_mapping_gate_errors(clean)
+    if gate:
+        raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
+
+    with SessionLocal() as sync_db:
+        j = sync_db.get(ImportJob, job_id)
+        if j is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        j.import_mode = "validate"
+        sync_db.commit()
+
+    dispatched, _ = _enqueue_import_pipeline_job(
+        job_id,
+        log_label="Shipment validate",
+        in_process_thread_name=f"shipment-validate-{job_id}",
+    )
+
+    job2 = await db.get(ImportJob, job_id)
+    if job2 is not None:
+        await db.refresh(job2)
+
+    if dispatched:
+        return {
+            "async": True,
+            "id": job_id,
+            "status": job2.status if job2 else None,
+            "stage": job2.stage if job2 else None,
+            "message": "Validation started in the background worker.",
+        }
+
+    if job2 and job2.status == "failed":
+        raise HTTPException(
+            status_code=422,
+            detail=job2.error_summary or "Import job failed during validation.",
+        )
+    return shipment_mapping_state_dict(job2) if job2 else {}
 
 
 @router.get("/jobs/{job_id}/dsi-mapping-state")
 async def get_dsi_mapping_state(job_id: int, db: AsyncSession = Depends(get_db)):
-    job = await db.get(ImportJob, job_id)
+    job = await _async_import_job_with_source(db, job_id)
     if not job or job.template_slug != "distributor_inventory":
         raise HTTPException(status_code=404, detail="DSI mapping state not found for this job")
     headers = list(job.file_headers or [])
@@ -341,13 +704,15 @@ async def get_dsi_mapping_state(job_id: int, db: AsyncSession = Depends(get_db))
     if clean != raw:
         job.field_mapping = clean
         await db.commit()
-        await db.refresh(job)
+        job = await _async_import_job_with_source(db, job_id)
+        if not job or job.template_slug != "distributor_inventory":
+            raise HTTPException(status_code=404, detail="DSI mapping state not found for this job")
     return dsi_mapping_state_dict(job)
 
 
 @router.put("/jobs/{job_id}/dsi-field-mapping")
 async def put_dsi_field_mapping(job_id: int, body: dict[str, Any] = Body(...), db: AsyncSession = Depends(get_db)):
-    job = await db.get(ImportJob, job_id)
+    job = await _async_import_job_with_source(db, job_id)
     if not job or job.template_slug != "distributor_inventory":
         raise HTTPException(status_code=404, detail="Job not found")
     fm = body.get("field_mapping")
@@ -368,7 +733,9 @@ async def put_dsi_field_mapping(job_id: int, body: dict[str, Any] = Body(...), d
             merge_dsi_mapping_memory(sync_db, source_id=job.source_id, field_mapping=cleaned)
             sync_db.commit()
     await db.commit()
-    await db.refresh(job)
+    job = await _async_import_job_with_source(db, job_id)
+    if not job or job.template_slug != "distributor_inventory":
+        raise HTTPException(status_code=404, detail="Job not found")
     return dsi_mapping_state_dict(job)
 
 
@@ -385,13 +752,44 @@ async def post_dsi_validate(job_id: int, db: AsyncSession = Depends(get_db)):
     gate = dsi_mapping_gate_errors(job.field_mapping or {})
     if gate:
         raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
-    job.import_mode = "validate"
-    await db.commit()
+
     with SessionLocal() as sync_db:
-        process_import_job_sync(sync_db, job_id)
-    job2 = await db.get(ImportJob, job_id)
+        j = sync_db.get(ImportJob, job_id)
+        if j is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        j.import_mode = "validate"
+        sync_db.commit()
+
+    dispatched, dsi_task_id = _enqueue_import_pipeline_job(
+        job_id,
+        log_label="DSI validate",
+        in_process_thread_name=f"dsi-validate-{job_id}",
+    )
+
+    # Persist the Celery task ID so the progress endpoint can read real-time worker state.
+    if dispatched and dsi_task_id:
+        with SessionLocal() as meta_db:
+            j_meta = meta_db.get(ImportJob, job_id)
+            if j_meta is not None:
+                m = dict(j_meta.staged_metadata or {})
+                m["celery_task_id"] = dsi_task_id
+                j_meta.staged_metadata = m
+                meta_db.commit()
+
+    job2 = await _async_import_job_with_source(db, job_id)
     if job2 is not None:
         await db.refresh(job2)
+
+    if dispatched:
+        return {
+            "async": True,
+            "job_id": job_id,
+            "id": job_id,
+            "status": job2.status if job2 else None,
+            "stage": job2.stage if job2 else None,
+            "message": "Validation started in the background worker.",
+        }
+
     if job2 and job2.status == "failed":
         raise HTTPException(
             status_code=422,
@@ -429,9 +827,7 @@ async def post_dsi_apply(
     await db.commit()
     with SessionLocal() as sync_db:
         process_import_job_sync(sync_db, job_id)
-    job2 = await db.get(ImportJob, job_id)
-    if job2 is not None:
-        await db.refresh(job2)
+    job2 = await _async_import_job_with_source(db, job_id)
     if job2 and job2.status == "failed":
         raise HTTPException(
             status_code=422,

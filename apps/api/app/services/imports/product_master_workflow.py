@@ -908,6 +908,7 @@ def commit_product_master_sync(
         job.stage = STAGE_PM_COMMITTED
         job.status = "completed"
         job.completed_at = datetime.now(timezone.utc)
+        job.archived_at = datetime.now(timezone.utc)
         job.import_mode = "apply"
         db.commit()
     except ValueError as exc:

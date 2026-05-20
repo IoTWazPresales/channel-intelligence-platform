@@ -4,6 +4,7 @@
 
 | Path | What it does | Classification |
 |------|----------------|----------------|
+| `scripts/dev-worker.js` (repo root) | Starts Celery worker via `apps/api/.venv`; **TCP preflight** to `CELERY_BROKER_URL` host/port; **Windows default `--pool=solo`** (override `CIP_CELERY_WORKER_POOL`). | **Dev ergonomics**; does not change production deploy. Fails fast if Redis is not listening. |
 | `app/worker/celery_app.py` | Instantiates Celery with `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` (Redis URLs). Imported whenever `app.worker.tasks` loads. | **Requires Redis** for any `.delay()` / worker consumption; app **starts** without connecting until tasks are sent (lazy broker). |
 | `app/worker/tasks.py` → `product_master_commit_task` | Celery task; runs `run_product_master_commit_job`. | **Requires Redis + worker** in normal (`broker`) dispatch. |
 | `app/worker/tasks.py` → `process_import_job_task` | Celery task wrapping `process_import_job_sync`. | **Registered only** — no `.delay()` / `send_task` in this repo. **Works natively** today via sync paths; **would require** Redis+worker if something enqueued it later. |

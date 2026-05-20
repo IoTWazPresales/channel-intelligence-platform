@@ -19,6 +19,7 @@ const setColumnsVisibleSpy = vi.fn();
 const localStorageRemoveSpy = vi.spyOn(Storage.prototype, 'removeItem');
 let mockColumnState: { colId: string; hide?: boolean }[] = [];
 let headerByField: Record<string, string> = {};
+let lastGridOptions: any = null;
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: replaceSpy }),
@@ -48,28 +49,48 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
     columnDefs: any[];
     gridOptions?: any;
   }) => {
+    lastGridOptions = gridOptions;
     capturedColumnDefs.length = 0;
     capturedColumnDefs.push(...columnDefs);
-    headerByField = {};
-    mockColumnState = columnDefs
-      .filter((c) => Boolean(c.field))
-      .map((c) => {
-        headerByField[String(c.field)] = c.headerName ?? String(c.field);
-        return { colId: String(c.field), hide: Boolean(c.hide) };
-      });
+    const columnDefsKey = columnDefs.map((c) => String(c.field ?? c.colId ?? '')).join('\0');
     useEffect(() => {
+      const DEFAULT_HIDDEN = new Set([
+        'part_number',
+        'sales_model_name',
+        'model_name',
+        'series_name',
+        'product_line',
+        'business_unit',
+        'country_code',
+        'ean',
+        'upc',
+      ]);
+      headerByField = {};
+      mockColumnState = columnDefs
+        .filter((c) => Boolean(c.field))
+        .map((c) => {
+          headerByField[String(c.field)] = c.headerName ?? String(c.field);
+          return { colId: String(c.field), hide: false };
+        });
       const gridReadyApi = {
         exportDataAsCsv: exportSpy,
         getColumnState: () => mockColumnState,
         applyColumnState: ({ state }: { state: { colId: string; hide?: boolean }[] }) => {
           if (!state?.length) return;
-          mockColumnState = state.map((x) => ({ ...x }));
+          for (const s of state) {
+            const idx = mockColumnState.findIndex((c) => c.colId === s.colId);
+            if (idx >= 0) mockColumnState[idx] = { ...mockColumnState[idx], ...s };
+            else mockColumnState.push({ colId: s.colId, hide: Boolean(s.hide) });
+          }
         },
         setColumnsVisible: (fields: string[], visible: boolean) => {
           setColumnsVisibleSpy(fields, visible);
           mockColumnState = mockColumnState.map((col) =>
             fields.includes(col.colId) ? { ...col, hide: !visible } : col
           );
+          queueMicrotask(() => {
+            lastGridOptions?.onColumnVisible?.({ api: gridReadyApi });
+          });
         },
         getColumns: () =>
           mockColumnState.map((col) => ({
@@ -78,7 +99,24 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
           })),
       };
       gridOptions?.onGridReady?.({ api: gridReadyApi });
-    }, [gridOptions]);
+      try {
+        const raw = localStorage.getItem('cip.admin.products.gridState.v1');
+        if (raw) {
+          const parsed = JSON.parse(raw) as { colId: string; hide?: boolean }[];
+          for (const s of parsed) {
+            const idx = mockColumnState.findIndex((c) => c.colId === s.colId);
+            if (idx >= 0) mockColumnState[idx] = { ...mockColumnState[idx], ...s };
+          }
+        } else {
+          mockColumnState = mockColumnState.map((c) => ({
+            ...c,
+            hide: DEFAULT_HIDDEN.has(c.colId) ? true : c.hide,
+          }));
+        }
+      } catch {
+        // no-op
+      }
+    }, [gridOptions, columnDefsKey]);
     return (
       <div>
         {rowData.map((row) => (
@@ -158,6 +196,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
               channel_code: 'RET',
               missing_required_fields: [],
               last_import_date: '2026-01-01',
+              specs_preview: { CPU: 'X1', RAM: '16GB' },
+              specs_flat: { CPU: 'X1', RAM: '16GB' },
             },
           ],
           page: 1,
@@ -165,6 +205,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
           total: 1,
           sort_by: 'sku',
           sort_dir: 'asc',
+          specs_field_keys: ['CPU', 'RAM'],
         };
       }
       if (url === '/api/v1/catalog/channels') return [{ id: 2, code: 'RET', name: 'Retail' }];
@@ -215,6 +256,7 @@ describe('AdminProductsPage pass1 behaviors', () => {
     localStorageRemoveSpy.mockClear();
     mockColumnState = [];
     headerByField = {};
+    lastGridOptions = null;
     capturedColumnDefs.length = 0;
     localStorage.clear();
     searchString = 'page=1&page_size=50&sort_by=sku&sort_dir=asc';
@@ -233,7 +275,8 @@ describe('AdminProductsPage pass1 behaviors', () => {
 
   it('opens row detail drawer from grid action', async () => {
     renderPage();
-    const openBtn = await screen.findByRole('button', { name: 'Open' });
+    await screen.findByText('SKU-1');
+    const openBtn = await screen.findByTestId('admin-products-row-open');
     fireEvent.click(openBtn);
     expect(await screen.findByText('Product details')).toBeInTheDocument();
     expect(await screen.findByText(/SKU:/)).toBeInTheDocument();
@@ -241,7 +284,8 @@ describe('AdminProductsPage pass1 behaviors', () => {
 
   it('shows SKU economics panel in product drawer with empty state and create action', async () => {
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    await screen.findByText('SKU-1');
+    fireEvent.click(await screen.findByTestId('admin-products-row-open'));
     const panel = await screen.findByTestId('product-sku-economics-panel');
     expect(await screen.findByTestId('product-sku-economics-empty')).toBeInTheDocument();
     expect(await screen.findByTestId('product-sku-economics-create')).toBeInTheDocument();
@@ -250,7 +294,8 @@ describe('AdminProductsPage pass1 behaviors', () => {
 
   it('SKU economics create dialog uses controlled cost currency select and FX helper text', async () => {
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    await screen.findByText('SKU-1');
+    fireEvent.click(await screen.findByTestId('admin-products-row-open'));
     fireEvent.click(await screen.findByTestId('product-sku-economics-create'));
     expect(await screen.findByTestId('product-sku-economics-ccy-select')).toBeInTheDocument();
     expect(await screen.findByText(/Example: if plan currency is ZAR and controlled cost is USD/i)).toBeInTheDocument();
@@ -283,6 +328,9 @@ describe('AdminProductsPage pass1 behaviors', () => {
     expect(toggle).not.toBeChecked();
     fireEvent.click(toggle);
     expect(setColumnsVisibleSpy).toHaveBeenCalledWith(['part_number'], true);
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Part number' })).toBeChecked();
+    });
   });
 
   it('persists chosen column layout across search/filter query changes', async () => {
@@ -348,11 +396,35 @@ describe('AdminProductsPage pass1 behaviors', () => {
     for (const field of hiddenFields) {
       const col = capturedColumnDefs.find((c) => c.field === field);
       expect(col).toBeTruthy();
-      expect(col.hide).toBe(true);
+      expect(col.hide).toBeUndefined();
     }
+    await waitFor(() => {
+      for (const field of hiddenFields) {
+        const st = mockColumnState.find((c) => c.colId === field);
+        expect(st?.hide).toBe(true);
+      }
+    });
     expect(capturedColumnDefs.find((c) => c.field === 'sku')?.hide ?? false).toBe(false);
     expect(capturedColumnDefs.find((c) => c.field === 'name')?.hide ?? false).toBe(false);
     expect(capturedColumnDefs.find((c) => c.field === 'category')?.hide ?? false).toBe(false);
+  });
+
+  it('lists discovered spec columns from API response and can show them', async () => {
+    renderPage();
+    await screen.findByText('SKU-1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Columns' }));
+    expect(await screen.findByText(/Discovered specs & metadata/i)).toBeInTheDocument();
+    const cpu = await screen.findByRole('checkbox', { name: 'Spec: CPU' });
+    expect(cpu).not.toBeChecked();
+    fireEvent.click(cpu);
+    expect(setColumnsVisibleSpy).toHaveBeenCalledWith(['spec:CPU'], true);
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Spec: CPU' })).toBeChecked();
+    });
+    const specCol = capturedColumnDefs.find((c) => c.field === 'spec:CPU');
+    expect(specCol).toBeTruthy();
+    expect(typeof specCol.valueGetter).toBe('function');
+    expect(specCol.valueGetter({ data: { specs_flat: { CPU: 'X1' } } })).toBe('X1');
   });
 
   it('normalizes missing_required_fields column away from object cell typing', async () => {
@@ -389,6 +461,7 @@ describe('AdminProductsPage DSI delete maintenance', () => {
     localStorageRemoveSpy.mockClear();
     mockColumnState = [];
     headerByField = {};
+    lastGridOptions = null;
     capturedColumnDefs.length = 0;
     localStorage.clear();
     searchString = 'page=1&page_size=50&sort_by=sku&sort_dir=asc';
@@ -397,7 +470,8 @@ describe('AdminProductsPage DSI delete maintenance', () => {
   it('shows DSI maintenance panel and clear affordance when delete is blocked on distributor inventory', async () => {
     apiMockState.deleteMode = 'dsi_conflict';
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await screen.findByText('SKU-1');
+    fireEvent.click(await screen.findByTestId('admin-products-row-delete'));
     expect(await screen.findByText(/Product is still referenced/i)).toBeInTheDocument();
     expect(await screen.findByText(/Distributor inventory \(4\)/)).toBeInTheDocument();
     expect(await screen.findByText(/Admin maintenance \/ dev cleanup/i)).toBeInTheDocument();
@@ -412,7 +486,8 @@ describe('AdminProductsPage DSI delete maintenance', () => {
   it('does not show DSI clear maintenance when conflict references are outside DSI scope', async () => {
     apiMockState.deleteMode = 'other_conflict';
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await screen.findByText('SKU-1');
+    fireEvent.click(await screen.findByTestId('admin-products-row-delete'));
     expect(await screen.findByText(/Lineup \(2\)/)).toBeInTheDocument();
     expect(screen.queryByText(/Admin maintenance \/ dev cleanup/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Clear distributor inventory facts for this product' })).not.toBeInTheDocument();
@@ -421,7 +496,8 @@ describe('AdminProductsPage DSI delete maintenance', () => {
   it('requires typed confirm token before calling clear endpoint', async () => {
     apiMockState.deleteMode = 'dsi_conflict';
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await screen.findByText('SKU-1');
+    fireEvent.click(await screen.findByTestId('admin-products-row-delete'));
     fireEvent.click(await screen.findByRole('button', { name: 'Clear distributor inventory facts for this product' }));
     expect(await screen.findByRole('dialog', { name: 'Confirm DSI fact removal' })).toBeInTheDocument();
     const removeBtn = screen.getByRole('button', { name: 'Remove DSI facts' });

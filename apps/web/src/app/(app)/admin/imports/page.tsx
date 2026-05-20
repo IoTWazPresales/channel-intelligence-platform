@@ -20,10 +20,12 @@ import {
   InputAdornment,
   InputLabel,
   LinearProgress,
+  ListItemText,
   MenuItem,
   Paper,
   Select,
   Stack,
+  Switch,
   Step,
   StepLabel,
   Stepper,
@@ -36,20 +38,40 @@ import {
 } from '@mui/material';
 import Link from '@mui/material/Link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ColDef } from 'ag-grid-community';
+import type { ColDef, GridApi, GridOptions } from 'ag-grid-community';
 import NextLink from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { BulkSelectionToolbar } from '@/components/bulkTable/BulkSelectionToolbar';
+import {
+  ImportJobBulkDeleteImpactDialog,
+  type ImportJobBulkDeletePreview,
+} from '@/components/bulkTable/ImportJobBulkDeleteImpactDialog';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
-import { apiGet, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
+import { ShipmentEntityStewardPanel } from '@/app/(app)/admin/shipment-evidence/ShipmentEntityStewardPanel';
+import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
-import { dsiContinueToApplyAllowed, dsiGateFromMapping, dsiSelectValue, dsiTargetLabel, formatDsiSamples, parseDistributorSiSummaryFromRows, stableFieldMappingJson } from './dsiStepUtils';
+import { DSI_STEWARD_CONFIG } from '@/features/import-steward';
+
+import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
+import { DsiValidateProgressPanel, type DsiValidateProgress } from './DsiValidateProgressPanel';
+import type { DsiCandidateRow } from '../mappings/DsiCandidateStewardPanel';
+import {
+  dsiContinueToApplyAllowed,
+  dsiGateFromMapping,
+  dsiSelectValue,
+  dsiTargetDescription,
+  dsiTargetLabel,
+  formatDsiSamples,
+  parseDistributorSiSummaryFromRows,
+  stableFieldMappingJson,
+} from './dsiStepUtils';
 import {
   initPmColumnDrafts,
   PM_GROUP_LABEL,
@@ -94,6 +116,8 @@ type Job = {
   error_summary: string | null;
   template_slug?: string | null;
   import_mode?: string | null;
+  archived_at?: string | null;
+  staged_metadata?: Record<string, unknown> | null;
 };
 
 type RowResult = {
@@ -223,6 +247,8 @@ const HL_APPLY_BLOCKING_CODES = new Set([
 
 const stepsDefault = ['Import type', 'Data provider', 'Template details', 'Import mode', 'Upload & preview'];
 
+const stepsShipmentEvidence = ['Import type', 'Data provider', 'Template details', 'Upload & preview'];
+
 const stepsPm = [
   'Import type',
   'Data provider',
@@ -247,6 +273,36 @@ const stepsDsi = [
 const defaultHeaders = { 'X-User-Role': 'admin', 'X-User-Id': 'demo-user' };
 const DEFERRED_TEMPLATE_SLUGS = new Set(['customer_channel_mapping']);
 
+/** Human labels for inbound shipment canonical mapping targets (imports column-mapping step). */
+const SHIPMENT_FIELD_LABELS: Record<string, string> = {
+  operating_unit: 'Operating unit',
+  bill_to_raw: 'Bill To (distributor token)',
+  ship_to_raw: 'Ship To (distributor token)',
+  distributor_token: 'Distributor',
+  order_no: 'Order no.',
+  order_line: 'Order line',
+  delivery_no: 'Delivery no.',
+  invoice_line: 'Invoice line',
+  item_code: 'Item / SKU code',
+  sales_model_name: 'Sales model name',
+  customer_item: 'Customer item',
+  ean_code: 'EAN',
+  upc_code: 'UPC',
+  mpor_item_no: 'MPOR item no.',
+  quantity: 'Quantity',
+  unit_price: 'Unit price',
+  amount: 'Amount',
+  currency_code: 'Currency',
+  ship_confirm_date: 'Ship confirm date',
+  schedule_ship_date: 'Schedule ship date',
+  promise_date: 'Promise date',
+  exwork_date: 'Ex-work date',
+  erd_date: 'ERD (est. revenue date)',
+  est_pod_date: 'Est. POD date (expected delivery)',
+  pod_date: 'POD date (actual delivery)',
+  customer_dealer_token: 'Source customer name',
+};
+
 function describeTemplateBehavior(template: ImportTemplate | null, isPm: boolean, isDsi: boolean): string {
   if (!template) return 'Pipeline behavior is determined by the selected import type and provider.';
   if (isPm) {
@@ -268,6 +324,11 @@ function describeTemplateBehavior(template: ImportTemplate | null, isPm: boolean
       return 'Validates distributor_code/distributor_name, then upserts dim_distributor when mode is Apply.';
     case 'customer_master':
       return 'Validates customer master fields, then upserts dim_customer when mode is Apply.';
+    case 'inbound_shipments':
+      return (
+        'Runs in validate mode: after upload, confirm column mapping (auto-suggested), then run validation to write ' +
+        'shipment evidence lines. Use Shipment evidence admin to steward entities and Apply when ready.'
+      );
     default:
       return 'Runs the configured template pipeline for this import type.';
   }
@@ -345,6 +406,21 @@ function AdminImportsPageContent() {
   const [pmRowFilter, setPmRowFilter] = useState<'all' | 'unmapped' | 'mapped' | 'core'>('all');
   const [pmBulkSelected, setPmBulkSelected] = useState<Record<string, boolean>>({});
   const [dsiMapDraft, setDsiMapDraft] = useState<Record<string, string>>({});
+  const [jobsBulkSelectionMode, setJobsBulkSelectionMode] = useState<'normal' | 'selecting'>('normal');
+  const [jobsSelectedCount, setJobsSelectedCount] = useState(0);
+  const [jobsVisibleRowCount, setJobsVisibleRowCount] = useState(0);
+  const [showArchivedImportJobs, setShowArchivedImportJobs] = useState(false);
+  const jobsGridApiRef = useRef<GridApi<Job> | null>(null);
+  const [importJobBulkDeleteOpen, setImportJobBulkDeleteOpen] = useState(false);
+  const [importJobBulkDeletePreview, setImportJobBulkDeletePreview] = useState<ImportJobBulkDeletePreview | null>(null);
+  const [importJobBulkDeleteBusy, setImportJobBulkDeleteBusy] = useState(false);
+  const [importJobDeleteSemanticArtifacts, setImportJobDeleteSemanticArtifacts] = useState(false);
+  const [importJobBulkDeleteAck, setImportJobBulkDeleteAck] = useState(false);
+  const [shipmentApplyWarning, setShipmentApplyWarning] = useState<string | null>(null);
+  const [shipmentMapDraft, setShipmentMapDraft] = useState<Record<string, string>>({});
+  const [shipmentValidateAsync, setShipmentValidateAsync] = useState(false);
+  const [dsiValidateAsync, setDsiValidateAsync] = useState(false);
+  const [dsiWorkflowMode, setDsiWorkflowMode] = useState<'auto' | 'historical' | 'weekly'>('auto');
 
   const jobIdParam = useMemo(() => {
     const v = searchParams.get('job');
@@ -353,7 +429,8 @@ function AdminImportsPageContent() {
 
   const isPm = selectedSlug === 'product_master';
   const isDsi = selectedSlug === 'distributor_inventory';
-  const steps = isPm ? stepsPm : isDsi ? stepsDsi : stepsDefault;
+  const isShipmentEvidence = selectedSlug === 'inbound_shipments';
+  const steps = isPm ? stepsPm : isDsi ? stepsDsi : isShipmentEvidence ? stepsShipmentEvidence : stepsDefault;
   const { data: templates } = useQuery({
     queryKey: ['import-templates'],
     queryFn: ({ signal }) => apiGet<ImportTemplate[]>('/api/v1/imports/templates', { signal }),
@@ -379,7 +456,8 @@ function AdminImportsPageContent() {
     setImportMode(
       forcedTemplate === 'product_master' ||
         forcedTemplate === 'historical_lineup' ||
-        forcedTemplate === 'distributor_inventory'
+        forcedTemplate === 'distributor_inventory' ||
+        forcedTemplate === 'inbound_shipments'
         ? 'validate'
         : 'apply'
     );
@@ -414,8 +492,14 @@ function AdminImportsPageContent() {
     error: jobsErr,
     refetch: refetchJobs,
   } = useQuery({
-    queryKey: ['import-jobs'],
-    queryFn: ({ signal }) => apiGet<Job[]>('/api/v1/imports/jobs', { signal }),
+    queryKey: ['import-jobs', showArchivedImportJobs],
+    queryFn: ({ signal }) =>
+      apiGet<Job[]>(
+        showArchivedImportJobs
+          ? '/api/v1/imports/jobs?include_archived=true'
+          : '/api/v1/imports/jobs',
+        { signal },
+      ),
   });
 
   const { data: previewRows, refetch: refetchPreview } = useQuery({
@@ -475,8 +559,17 @@ function AdminImportsPageContent() {
     setSelectedSlug(jobDetail.template_slug ?? null);
     setIsJobRevisitMode(true);
     if (jobDetail.template_slug !== 'product_master') {
-      if (jobDetail.template_slug === 'distributor_inventory' && jobDetail.stage === 'dsi_mapping_ready') {
-        setActiveStep(5);
+      if (jobDetail.template_slug === 'distributor_inventory') {
+        const stage = (jobDetail.stage || '').trim();
+        if (stage === 'dsi_mapping_ready') {
+          setActiveStep(5);
+        } else if (stage === 'validated' || stage === 'failed') {
+          setActiveStep(6);
+        } else {
+          setActiveStep(4);
+        }
+      } else if (jobDetail.template_slug === 'inbound_shipments') {
+        setActiveStep(3);
       } else {
         setActiveStep(4);
       }
@@ -546,25 +639,13 @@ function AdminImportsPageContent() {
     return parseDistributorSiSummaryFromRows(previewRows);
   }, [previewRows, selectedSlug]);
 
-  const { data: dsiCandidates } = useQuery({
-    queryKey: ['distributor-si-candidates', lastJobId],
-    queryFn: ({ signal }) =>
-      apiGet<
-        Array<{
-          id: number;
-          entity_type: string;
-          row_count: number;
-          normalized_key: string;
-          dealer_group_token: string | null;
-        }>
-      >(`/api/v1/mappings/import-jobs/${lastJobId}/distributor-si-candidates`, { signal }),
-    enabled: lastJobId != null && selectedSlug === 'distributor_inventory',
-  });
 
   type DsiMappingState = {
     id: number;
     stage: string;
     status: string;
+    import_mode?: string | null;
+    template_slug?: string | null;
     error_summary?: string | null;
     file_headers: string[];
     field_mapping: Record<string, string>;
@@ -573,10 +654,22 @@ function AdminImportsPageContent() {
     mapping_valid: boolean;
     column_samples?: Record<string, string[]>;
     mapping_adjustment_notices?: Array<{ code: string; message: string }>;
+    column_mapping_hints?: Record<
+      string,
+      {
+        suggested_target?: string | null;
+        confidence?: number;
+        reasons?: string[];
+        reason_summary?: string;
+        runner_up?: string | null;
+        sample_values?: string[];
+      }
+    >;
+    field_target_descriptions?: Record<string, string>;
   };
 
   const { data: dsiMappingState, refetch: refetchDsiMapping } = useQuery({
-    queryKey: ['dsi-mapping-state', lastJobId],
+    queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId!),
     queryFn: ({ signal }) =>
       apiGet<DsiMappingState>(`/api/v1/imports/jobs/${lastJobId}/dsi-mapping-state`, { signal }),
     enabled: Boolean(isDsi && lastJobId != null && activeStep >= 5),
@@ -644,7 +737,7 @@ function AdminImportsPageContent() {
       return res.json() as Promise<DsiMappingState>;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       setDsiContinueGateKey(null);
     },
   });
@@ -657,13 +750,21 @@ function AdminImportsPageContent() {
         headers: defaultHeaders,
       });
       if (!res.ok) throw new Error(await readFetchError(res));
-      return res.json() as Promise<DsiMappingState>;
+      const json = (await res.json()) as DsiMappingState & { async?: boolean };
+      return { async: Boolean(json.async) };
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      if (data.async) {
+        setDsiValidateAsync(true);
+      } else {
+        setDsiValidateAsync(false);
+      }
       const jid = lastJobIdRef.current;
+      void qc.invalidateQueries({ queryKey: ['import-job', jid] });
+      void qc.invalidateQueries({ queryKey: ['dsi-async-validate-import-job', jid] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', jid] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', jid] });
-      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', jid] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(jid) });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(jid) });
       const { data: rows } = await refetchPreview();
       await refetchDsiMapping();
       const summ = parseDistributorSiSummaryFromRows(rows ?? undefined);
@@ -677,14 +778,61 @@ function AdminImportsPageContent() {
     },
     onError: () => {
       setDsiContinueGateKey(null);
+      setDsiValidateAsync(false);
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
   });
 
+  const { data: dsiValidatePollJob } = useQuery({
+    // Dedicated key so this poller is not merged with `['import-job', jobIdParam]` (revisit flow),
+    // which would drop `refetchInterval` and stop polling while stage is still `dsi_mapping_ready`.
+    queryKey: ['dsi-async-validate-import-job', lastJobId],
+    queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${lastJobId!}`, { signal }),
+    enabled: Boolean(isDsi && lastJobId != null && dsiValidateAsync),
+    refetchInterval: (q) => {
+      const j = q.state.data;
+      if (!j) return 1500;
+      const st = (j.stage || '').trim();
+      if (st === 'validated' || st === 'failed') return false;
+      return 1500;
+    },
+  });
+
+  // Polls real-time Celery task state (phase + row progress) while DSI validate is running.
+  const { data: dsiProgress } = useQuery({
+    queryKey: ['dsi-validate-progress', lastJobId],
+    queryFn: ({ signal }) =>
+      apiGet<DsiValidateProgress>(`/api/v1/imports/jobs/${lastJobId!}/dsi-progress`, { signal }),
+    enabled: Boolean(isDsi && lastJobId != null && dsiValidateAsync),
+    refetchInterval: (q) => {
+      const p = q.state.data;
+      if (!p) return 1500;
+      const phase = (p.phase || '').trim();
+      if (phase === 'complete' || phase === 'failed') return false;
+      return 1500;
+    },
+  });
+
+  useEffect(() => {
+    if (!dsiValidateAsync) return;
+    const j = dsiValidatePollJob;
+    if (!j) return;
+    const st = (j.stage || '').trim();
+    if (st === 'validated' || st === 'failed') {
+      setDsiValidateAsync(false);
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(j.id) });
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', j.id] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(j.id) });
+      void refetchDsiMapping();
+      void refetchPreview();
+    }
+  }, [dsiValidateAsync, dsiValidatePollJob, qc, refetchDsiMapping, refetchPreview]);
+
   useEffect(() => {
     dsiValidate.reset();
+    setDsiValidateAsync(false);
   }, [lastJobId]);
 
   const dsiApply = useMutation({
@@ -705,21 +853,52 @@ function AdminImportsPageContent() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', lastJobId] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
     onError: () => {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', lastJobId] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
   });
 
+  const dsiApplyComplete = useMutation({
+    mutationFn: async () => {
+      if (lastJobId == null) throw new Error('No job');
+      return apiPost<{
+        ok?: boolean;
+        stage?: string;
+        status?: string;
+        import_job_id?: number;
+        staging_rows?: number;
+      }>(`/api/v1/mappings/import-jobs/${lastJobId}/dsi-apply-complete`);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(lastJobId) });
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    },
+    onError: () => {
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    },
+  });
+
+  const dsiCanFinalizeToLoaded = useMemo(() => {
+    if (!isDsi || lastJobId == null) return false;
+    const st = (dsiMappingState?.stage ?? '').trim();
+    const mode = (dsiMappingState?.import_mode ?? '').trim();
+    return st === 'validated' && mode === 'apply';
+  }, [isDsi, lastJobId, dsiMappingState?.stage, dsiMappingState?.import_mode]);
+
   const dsiCanContinueToApply = useMemo(
     () =>
       dsiContinueToApplyAllowed(dsiContinueGateKey, lastJobId, dsiMappingState?.field_mapping, distributorSiSummary, {
-        isValidating: dsiValidate.isPending,
+        isValidating: dsiValidate.isPending || dsiValidateAsync,
         hasServerGate: dsiServerMappingGateOk,
       }),
     [
@@ -728,6 +907,7 @@ function AdminImportsPageContent() {
       dsiMappingState?.field_mapping,
       distributorSiSummary,
       dsiValidate.isPending,
+      dsiValidateAsync,
       dsiServerMappingGateOk,
     ]
   );
@@ -737,6 +917,7 @@ function AdminImportsPageContent() {
   useEffect(() => {
     if (!isDsi || !dsiMappingDraftDirty) return;
     setDsiContinueGateKey(null);
+    setDsiValidateAsync(false);
     dsiValidate.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when draft diverges from saved server mapping
   }, [isDsi, dsiMappingDraftDirty]);
@@ -763,7 +944,10 @@ function AdminImportsPageContent() {
       if (selectedTemplate?.requires_provider && sourceId === '')
         throw new Error('Select a data provider before uploading.');
       const fd = new FormData();
-      const effectiveMode = modeOverride ?? importMode;
+      const effectiveMode =
+        selectedSlug === 'inbound_shipments'
+          ? 'validate'
+          : modeOverride ?? importMode;
       fd.append('source_id', String(sourceId));
       fd.append('file', file);
       fd.append('run_sync', selectedSlug === 'distributor_inventory' ? 'false' : 'true');
@@ -773,6 +957,9 @@ function AdminImportsPageContent() {
       }
       if (mappingOverride && Object.keys(mappingOverride).length > 0) {
         fd.append('mapping_override', JSON.stringify(mappingOverride));
+      }
+      if (selectedSlug === 'distributor_inventory') {
+        fd.append('dsi_workflow_mode', dsiWorkflowMode);
       }
       const res = await fetch(apiUrl('/api/v1/imports/jobs'), {
         method: 'POST',
@@ -784,6 +971,9 @@ function AdminImportsPageContent() {
     },
     onSuccess: (data) => {
       setLastJobId(data.id);
+      if (selectedSlug === 'inbound_shipments') {
+        setShipmentApplyWarning(null);
+      }
       if (selectedSlug === 'historical_lineup' && data.import_mode === 'validate') {
         setHistoricalValidatedJobId(data.id);
         setHlMappingEdits({});
@@ -800,10 +990,200 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', data.id] });
       void qc.invalidateQueries({ queryKey: ['import-job', data.id] });
-      void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', data.id] });
-      void qc.invalidateQueries({ queryKey: ['dsi-mapping-state', data.id] });
+      void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', data.id] });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(data.id) });
+      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(data.id) });
       if (selectedSlug === 'distributor_inventory') {
         setActiveStep(5);
+      }
+    },
+  });
+
+  /** Inbound shipments job is identifiable from `?job=` detail before `lastJobId` sync (avoids race with `lastJobId`). */
+  const shipmentEvidenceUrlUnlock =
+    jobIdParam != null && jobDetail?.template_slug === 'inbound_shipments';
+
+  const shipmentEvidenceJobPollUnlocked = upload.isSuccess || shipmentEvidenceUrlUnlock;
+
+  /** Prefer post-upload `lastJobId` when it wins over a stale `?job=`; else URL id when detail confirms inbound; else wizard job. */
+  const shipmentEvidencePollJobId =
+    upload.isSuccess && isShipmentEvidence && lastJobId != null
+      ? lastJobId
+      : shipmentEvidenceUrlUnlock && jobIdParam != null
+        ? jobIdParam
+        : isShipmentEvidence && lastJobId != null
+          ? lastJobId
+          : null;
+
+  const { data: shipmentImportJob } = useQuery({
+    queryKey: ['import-job', shipmentEvidencePollJobId],
+    queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${shipmentEvidencePollJobId!}`, { signal }),
+    enabled: Boolean(shipmentEvidenceJobPollUnlocked && shipmentEvidencePollJobId != null),
+    refetchInterval: (q) => {
+      const j = q.state.data;
+      if (!j) return 1500;
+      const st = (j.stage || '').trim();
+      const sts = (j.status || '').trim();
+      if (sts === 'running') return 1500;
+      if (st === 'validated' || st === 'loaded' || st === 'failed') return false;
+      if (st === 'shipment_mapping_ready') return false;
+      return 1500;
+    },
+  });
+
+  useEffect(() => {
+    if (!isShipmentEvidence || !shipmentImportJob) return;
+    const st = (shipmentImportJob.stage || '').trim();
+    if (st === 'validated' || st === 'failed') setShipmentValidateAsync(false);
+  }, [isShipmentEvidence, shipmentImportJob?.stage]);
+
+  /** Job id for shipment column mapping + validate (matches steward poll id). */
+  const shipmentMappingJobId: number | null = shipmentEvidencePollJobId ?? lastJobId ?? null;
+
+  type ShipmentMappingState = {
+    id: number;
+    stage: string;
+    status: string;
+    error_summary?: string | null;
+    file_headers: string[];
+    field_mapping: Record<string, string>;
+    canonical_targets: string[];
+    blocking_mapping_errors: Array<{ code: string; message: string }>;
+    mapping_valid: boolean;
+    mapping_adjustment_notices?: Array<{ code?: string; message?: string }>;
+    column_samples?: Record<string, string[]>;
+    field_target_descriptions?: Record<string, string>;
+  };
+
+  const {
+    data: shipmentMappingState,
+    isLoading: shipmentMappingStateLoading,
+    isError: shipmentMappingStateQueryError,
+    error: shipmentMappingStateQueryErr,
+  } = useQuery({
+    queryKey: ['shipment-mapping-state', shipmentMappingJobId],
+    queryFn: ({ signal }) =>
+      apiGet<ShipmentMappingState>(`/api/v1/imports/jobs/${shipmentMappingJobId}/shipment-mapping-state`, { signal }),
+    enabled: Boolean(
+      isShipmentEvidence &&
+        shipmentMappingJobId != null &&
+        shipmentImportJob &&
+        (shipmentImportJob.stage || '').trim() === 'shipment_mapping_ready'
+    ),
+  });
+
+  const shipmentCanonSet = useMemo(
+    () => new Set(shipmentMappingState?.canonical_targets ?? []),
+    [shipmentMappingState?.canonical_targets]
+  );
+
+  useEffect(() => {
+    if (!isShipmentEvidence) {
+      setShipmentMapDraft({});
+    }
+  }, [isShipmentEvidence, shipmentMappingJobId]);
+
+  useEffect(() => {
+    if (!isShipmentEvidence || !shipmentMappingState?.file_headers?.length) return;
+    const server = shipmentMappingState.field_mapping ?? {};
+    const next: Record<string, string> = {};
+    for (const h of shipmentMappingState.file_headers) {
+      const v = server[h];
+      if (v && shipmentCanonSet.has(v)) next[h] = v;
+    }
+    setShipmentMapDraft(next);
+  }, [
+    isShipmentEvidence,
+    shipmentMappingState?.id,
+    shipmentMappingState?.file_headers,
+    shipmentCanonSet,
+    shipmentMappingState?.field_mapping,
+  ]);
+
+  const saveShipmentMapping = useMutation({
+    mutationFn: async () => {
+      const jid = shipmentMappingJobId;
+      if (jid == null) throw new Error('No job');
+      const res = await fetch(apiUrl(`/api/v1/imports/jobs/${jid}/shipment-field-mapping`), {
+        method: 'PUT',
+        headers: { ...defaultHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field_mapping: shipmentMapDraft }),
+      });
+      if (!res.ok) throw new Error(await readFetchError(res));
+      const state = (await res.json()) as ShipmentMappingState;
+      return { state, jid };
+    },
+    onSuccess: ({ jid }) => {
+      void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', jid] });
+      void qc.invalidateQueries({ queryKey: ['import-job', jid] });
+    },
+  });
+
+  const shipmentValidateRun = useMutation({
+    mutationFn: async () => {
+      const jid = shipmentMappingJobId;
+      if (jid == null) throw new Error('No job');
+      const res = await fetch(apiUrl(`/api/v1/imports/jobs/${jid}/shipment-validate`), {
+        method: 'POST',
+        headers: defaultHeaders,
+      });
+      if (!res.ok) throw new Error(await readFetchError(res));
+      const body = (await res.json()) as { async?: boolean };
+      return { jid, async: Boolean(body?.async) };
+    },
+    onSuccess: (data) => {
+      if (data.async) setShipmentValidateAsync(true);
+      void qc.invalidateQueries({ queryKey: ['import-job', data.jid] });
+      void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', data.jid] });
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', data.jid] });
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      void refetchPreview();
+    },
+  });
+
+  const shipmentMappingDraftDirty = useMemo(() => {
+    if (!shipmentMappingState?.file_headers?.length) return false;
+    const server = shipmentMappingState.field_mapping ?? {};
+    for (const h of shipmentMappingState.file_headers) {
+      if ((shipmentMapDraft[h] ?? '') !== (server[h] ?? '')) return true;
+    }
+    return false;
+  }, [shipmentMappingState, shipmentMapDraft]);
+
+  type ShipmentApplyResponse = {
+    id: number;
+    status: string;
+    stage: string | null;
+    template_slug?: string | null;
+    import_mode?: string | null;
+    unresolved_distributor_candidates?: number;
+    unresolved_customer_candidates?: number;
+  };
+
+  const shipmentApplyMut = useMutation({
+    mutationFn: async () => {
+      const id = shipmentEvidencePollJobId ?? lastJobId;
+      if (id == null) throw new Error('No import job');
+      return apiPost<ShipmentApplyResponse>(`/api/v1/shipment-evidence/jobs/${id}/apply`, {});
+    },
+    onMutate: () => {
+      setShipmentApplyWarning(null);
+    },
+    onSuccess: (data) => {
+      const id = data.id;
+      void qc.invalidateQueries({ queryKey: ['import-job', id] });
+      void qc.invalidateQueries({ queryKey: ['shipment-evidence-mapping-candidates', id] });
+      const nd = data.unresolved_distributor_candidates;
+      const nc = data.unresolved_customer_candidates;
+      const parts: string[] = [];
+      if (typeof nd === 'number' && nd > 0) {
+        parts.push(`${nd} distributor mapping candidate(s) are still in needs_review.`);
+      }
+      if (typeof nc === 'number' && nc > 0) {
+        parts.push(`${nc} channel partner mapping candidate(s) are still in needs_review.`);
+      }
+      if (parts.length > 0) {
+        setShipmentApplyWarning(`${parts.join(' ')} You are not blocked — resolve them in the steward panel when ready.`);
       }
     },
   });
@@ -947,7 +1327,11 @@ function AdminImportsPageContent() {
       setLastGenericFile(file);
       setHistoricalValidatedJobId(null);
       const modeOverride =
-        selectedSlug === 'historical_lineup' || selectedSlug === 'distributor_inventory' ? 'validate' : undefined;
+        selectedSlug === 'historical_lineup' ||
+        selectedSlug === 'distributor_inventory' ||
+        selectedSlug === 'inbound_shipments'
+          ? 'validate'
+          : undefined;
       upload.mutate({ file, modeOverride });
     },
     [isPm, pmUpload, selectedSlug, upload]
@@ -975,12 +1359,102 @@ function AdminImportsPageContent() {
       { field: 'file_name', headerName: 'File', flex: 1, minWidth: 160 },
       { field: 'status', headerName: 'Status' },
       { field: 'stage', headerName: 'Stage' },
+      {
+        field: 'archived_at',
+        headerName: 'Archived',
+        width: 170,
+        hide: !showArchivedImportJobs,
+        valueFormatter: (p) => (p.value != null ? String(p.value) : '—'),
+      },
       { field: 'error_summary', headerName: 'Notes', flex: 1, minWidth: 200 },
     ],
-    []
+    [showArchivedImportJobs],
   );
 
   const jobsList = jobs ?? [];
+
+  useEffect(() => {
+    if (jobsBulkSelectionMode !== 'selecting') {
+      jobsGridApiRef.current?.deselectAll();
+      setJobsSelectedCount(0);
+    }
+  }, [jobsBulkSelectionMode]);
+
+  useEffect(() => {
+    setJobsVisibleRowCount(jobsList.length);
+  }, [jobsList.length]);
+
+  const jobsGridOptions = useMemo<GridOptions<Job>>(() => {
+    const base: GridOptions<Job> = {
+      onGridReady: (e) => {
+        jobsGridApiRef.current = e.api;
+        setJobsVisibleRowCount(e.api.getDisplayedRowCount());
+      },
+      onFilterChanged: (e) => {
+        if (jobsBulkSelectionMode === 'selecting') setJobsVisibleRowCount(e.api.getDisplayedRowCount());
+      },
+      onSortChanged: (e) => {
+        if (jobsBulkSelectionMode === 'selecting') setJobsVisibleRowCount(e.api.getDisplayedRowCount());
+      },
+    };
+    if (jobsBulkSelectionMode !== 'selecting') return base;
+    return {
+      ...base,
+      rowSelection: {
+        mode: 'multiRow',
+        checkboxes: true,
+        headerCheckbox: true,
+        enableClickSelection: false,
+      },
+      onSelectionChanged: (e) => {
+        setJobsSelectedCount(e.api.getSelectedRows().length);
+      },
+    };
+  }, [jobsBulkSelectionMode]);
+
+  const openImportJobBulkDeletePreview = useCallback(async () => {
+    const api = jobsGridApiRef.current;
+    if (!api) return;
+    const ids = api.getSelectedRows().map((r) => r.id);
+    if (!ids.length) return;
+    setImportJobBulkDeleteBusy(true);
+    setImportJobDeleteSemanticArtifacts(false);
+    setImportJobBulkDeleteAck(false);
+    try {
+      const data = await apiPost<ImportJobBulkDeletePreview>('/api/v1/imports/jobs/bulk-delete-preview', { job_ids: ids });
+      setImportJobBulkDeletePreview(data);
+      setImportJobBulkDeleteOpen(true);
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setImportJobBulkDeleteBusy(false);
+    }
+  }, []);
+
+  const closeImportJobBulkDeleteDialog = useCallback(() => {
+    if (importJobBulkDeleteBusy) return;
+    setImportJobBulkDeleteOpen(false);
+    setImportJobBulkDeletePreview(null);
+  }, [importJobBulkDeleteBusy]);
+
+  const confirmImportJobBulkDelete = useCallback(async () => {
+    if (!importJobBulkDeletePreview) return;
+    setImportJobBulkDeleteBusy(true);
+    try {
+      await apiPost('/api/v1/imports/jobs/bulk-delete-confirm', {
+        job_ids: importJobBulkDeletePreview.job_ids,
+        delete_semantic_artifacts: importJobDeleteSemanticArtifacts,
+      });
+      setImportJobBulkDeleteOpen(false);
+      setImportJobBulkDeletePreview(null);
+      setJobsBulkSelectionMode('normal');
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setImportJobBulkDeleteBusy(false);
+    }
+  }, [importJobBulkDeletePreview, importJobDeleteSemanticArtifacts, qc]);
 
   const canGoUploadGeneric =
     selectedSlug &&
@@ -1236,7 +1710,8 @@ function AdminImportsPageContent() {
                       setImportMode(
                         t.slug === 'product_master' ||
                           t.slug === 'historical_lineup' ||
-                          t.slug === 'distributor_inventory'
+                          t.slug === 'distributor_inventory' ||
+                          t.slug === 'inbound_shipments'
                           ? 'validate'
                           : 'apply'
                       );
@@ -1375,7 +1850,7 @@ function AdminImportsPageContent() {
           </Stack>
         ) : null}
 
-        {activeStep === 3 && selectedTemplate && !isPm ? (
+        {activeStep === 3 && selectedTemplate && !isPm && !isShipmentEvidence ? (
           <Stack spacing={2}>
             <FormControl size="small" sx={{ maxWidth: 360 }}>
               <InputLabel id="mode-label">Import mode</InputLabel>
@@ -1383,7 +1858,11 @@ function AdminImportsPageContent() {
                 labelId="mode-label"
                 label="Import mode"
                 value={importMode}
-                disabled={selectedTemplate.slug === 'historical_lineup' || selectedTemplate.slug === 'distributor_inventory'}
+                disabled={
+                  selectedTemplate.slug === 'historical_lineup' ||
+                  selectedTemplate.slug === 'distributor_inventory' ||
+                  selectedTemplate.slug === 'inbound_shipments'
+                }
                 onChange={(e) => setImportMode(e.target.value as 'validate' | 'apply')}
               >
                 <MenuItem value="validate">Validate only (no catalog writes)</MenuItem>
@@ -2045,6 +2524,21 @@ function AdminImportsPageContent() {
               automatically; map them to business fields in the next step (you do not need to rename columns like DISTI in
               the file).
             </Typography>
+            <FormControl size="small" sx={{ maxWidth: 420 }}>
+              <InputLabel id="dsi-workflow-mode-label">DSI workflow mode</InputLabel>
+              <Select
+                labelId="dsi-workflow-mode-label"
+                label="DSI workflow mode"
+                value={dsiWorkflowMode}
+                onChange={(e) =>
+                  setDsiWorkflowMode(e.target.value as 'auto' | 'historical' | 'weekly')
+                }
+              >
+                <MenuItem value="auto">Auto — detect historical vs weekly from transaction dates</MenuItem>
+                <MenuItem value="historical">Historical import (relaxed steward + auto-apply after validate)</MenuItem>
+                <MenuItem value="weekly">Weekly import (strict steward)</MenuItem>
+              </Select>
+            </FormControl>
             {!canGoUpload ? <Alert severity="warning">Complete provider, mode, and confirmations before uploading.</Alert> : null}
             <Box
               onDragEnter={(e) => {
@@ -2110,6 +2604,16 @@ function AdminImportsPageContent() {
         {activeStep === 5 && isDsi && selectedTemplate ? (
           <Stack spacing={2}>
             <Typography variant="subtitle2">Map file columns → business fields</Typography>
+            <Alert severity="info" data-testid="dsi-customer-field-mapping-hint">
+              <Typography variant="body2" fontWeight={600} display="block" gutterBottom>
+                Customer fields (e.g. RAW workbooks)
+              </Typography>
+              <Typography variant="body2" display="block">
+                Map <strong>Dealer Name Group</strong> to <strong>Customer account</strong> — the account used for
+                reporting, matching, and facts. Map <strong>Customer name</strong> to <strong>Source customer name</strong>{' '}
+                — the name from the file, kept as alias / evidence for matching.
+              </Typography>
+            </Alert>
             {dsiJobFailedAlert}
             <Alert severity="info" data-testid="dsi-mapping-missing-vs-unresolved">
               <strong>Missing mapping</strong> means no file column is linked to a required field.{' '}
@@ -2145,6 +2649,7 @@ function AdminImportsPageContent() {
                 <TableRow>
                   <TableCell>File column</TableCell>
                   <TableCell sx={{ minWidth: 280 }}>Maps to</TableCell>
+                  <TableCell sx={{ minWidth: 220 }}>Why / confidence</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2167,6 +2672,11 @@ function AdminImportsPageContent() {
                           label="Target"
                           value={dsiSelectValue(dsiMapDraft[h], dsiCanonSet)}
                           displayEmpty
+                          renderValue={(selected) => {
+                            const v = String(selected ?? '');
+                            if (!v) return <em>— Unmapped —</em>;
+                            return dsiTargetLabel(v);
+                          }}
                           onChange={(e) => {
                             const v = e.target.value as string;
                             setDsiMapDraft((prev) => {
@@ -2181,12 +2691,44 @@ function AdminImportsPageContent() {
                             <em>— Unmapped —</em>
                           </MenuItem>
                           {(dsiMappingState?.canonical_targets ?? []).map((t) => (
-                            <MenuItem key={t} value={t}>
-                              {dsiTargetLabel(t)}
+                            <MenuItem key={t} value={t} sx={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
+                              <ListItemText
+                                primary={dsiTargetLabel(t)}
+                                secondary={
+                                  dsiTargetDescription(t) ??
+                                  dsiMappingState?.field_target_descriptions?.[t] ??
+                                  undefined
+                                }
+                                primaryTypographyProps={{ variant: 'body2' }}
+                                secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
+                              />
                             </MenuItem>
                           ))}
                         </Select>
                       </FormControl>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const hint = dsiMappingState?.column_mapping_hints?.[h];
+                        if (!hint) return <Typography variant="caption" color="text.secondary">—</Typography>;
+                        const conf = hint.confidence != null ? Math.round(Number(hint.confidence) * 100) : null;
+                        const sug = hint.suggested_target ? dsiTargetLabel(hint.suggested_target) : null;
+                        return (
+                          <Stack spacing={0.25}>
+                            <Typography variant="body2">{hint.reason_summary ?? '—'}</Typography>
+                            {sug ? (
+                              <Typography variant="caption" color="text.secondary">
+                                Suggested: {sug}
+                                {conf != null ? ` · ${conf}%` : ''}
+                              </Typography>
+                            ) : conf != null ? (
+                              <Typography variant="caption" color="text.secondary">
+                                Confidence: {conf}%
+                              </Typography>
+                            ) : null}
+                          </Stack>
+                        );
+                      })()}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -2228,18 +2770,57 @@ function AdminImportsPageContent() {
                 <strong>Save &amp; continue to validate</strong> before running validation.
               </Alert>
             ) : null}
-            {dsiValidate.isPending ? <LinearProgress /> : null}
+            {(dsiValidateAsync || (dsiValidatePollJob && (dsiValidatePollJob.status || '').trim() === 'running')) &&
+            (dsiValidatePollJob?.stage || '').trim() !== 'validated' &&
+            (dsiValidatePollJob?.stage || '').trim() !== 'failed' ? (
+              <DsiValidateProgressPanel
+                progress={dsiProgress}
+                isRunning={
+                  dsiValidateAsync ||
+                  (dsiValidate.isPending ?? false) ||
+                  ((dsiValidatePollJob?.status || '').trim() === 'running' &&
+                    (dsiValidatePollJob?.stage || '').trim() !== 'validated' &&
+                    (dsiValidatePollJob?.stage || '').trim() !== 'failed')
+                }
+              />
+            ) : dsiValidate.isPending ? (
+              <LinearProgress />
+            ) : null}
             {dsiValidate.isError ? <Alert severity="error">{safeDisplayError(dsiValidate.error)}</Alert> : null}
             {dsiValidate.isSuccess ? (
               <Alert
                 severity={
-                  distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0 ? 'warning' : 'success'
+                  distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0
+                    ? 'warning'
+                    : distributorSiSummary != null &&
+                        ((distributorSiSummary.warning_rows ?? 0) > 0 ||
+                          (distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0)
+                      ? 'warning'
+                      : 'success'
                 }
                 data-testid="dsi-validate-finished"
               >
-                {distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0
-                  ? 'Validation finished with blocking issues. Fix mappings or source data, then re-run validation before applying.'
-                  : 'Validation finished. Review the summary and row diagnostics below.'}
+                {distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0 ? (
+                  'Validation finished with blocking issues. Fix mappings or source data, then re-run validation before applying.'
+                ) : distributorSiSummary != null &&
+                  ((distributorSiSummary.warning_rows ?? 0) > 0 ||
+                    (distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0) ? (
+                  <>
+                    Validation finished without blocking distributor/product errors. Some rows still have warnings
+                    (including possible sell-out customer or transaction-date issues).{' '}
+                    {(distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0 ? (
+                      <>
+                        <strong>{distributorSiSummary.rows_inventory_ready_with_sellout_warnings}</strong> row(s) have
+                        valid distributor inventory (stock snapshot) but incomplete sell-out — applying may still upsert
+                        inventory facts while leaving sell-out unresolved for those rows unless you fix mappings or
+                        aliases first.{' '}
+                      </>
+                    ) : null}
+                    Review row diagnostics and mapping candidates before applying.
+                  </>
+                ) : (
+                  'Validation finished. Review the summary and row diagnostics below.'
+                )}
               </Alert>
             ) : null}
             {lastJobId != null && distributorSiSummary ? (
@@ -2250,16 +2831,32 @@ function AdminImportsPageContent() {
                   <strong>{distributorSiSummary.warning_rows ?? 0}</strong> warnings;{' '}
                   <strong>{distributorSiSummary.aggregated_candidates ?? 0}</strong> aggregated mapping candidate groups.
                 </Typography>
-                {dsiCandidates != null && dsiCandidates.length > 0 ? (
+                {(distributorSiSummary?.aggregated_candidates ?? 0) > 0 ? (
                   <Typography variant="caption" color="text.secondary" display="block">
-                    Review grouped tokens via{' '}
+                    Resolve grouped tokens below on this page (paginated), or open the global{' '}
                     <Link component={NextLink} href={`/admin/mappings?import_job_id=${lastJobId}`}>
-                      Mapping queue
+                      Mapping queue (legacy)
                     </Link>{' '}
-                    ({dsiCandidates.length} group{dsiCandidates.length !== 1 ? 's' : ''} for this job).
+                    ({distributorSiSummary?.aggregated_candidates ?? 0} group
+                    {(distributorSiSummary?.aggregated_candidates ?? 0) !== 1 ? 's' : ''} for this job).
+                  </Typography>
+                ) : null}
+                {(distributorSiSummary.warning_rows ?? 0) > 0 ||
+                (distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0 ? (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                    Warnings do not block Continue to apply when there are zero blocking rows — inventory may still load
+                    where the file has valid stock snapshots even if some sell-out lines are incomplete.
                   </Typography>
                 ) : null}
               </Alert>
+            ) : null}
+            {lastJobId != null && (distributorSiSummary?.aggregated_candidates ?? 0) > 0 ? (
+              <DsiImportJobResolutionSection
+                importJobId={lastJobId}
+                onInvalidate={() => {
+                  void refetchPreview();
+                }}
+              />
             ) : null}
             {previewRows && previewRows.length > 0 ? (
               <Table size="small" data-testid="dsi-validate-rows">
@@ -2284,7 +2881,7 @@ function AdminImportsPageContent() {
               </Table>
             ) : null}
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
-              <Button onClick={() => setActiveStep(5)} disabled={dsiValidate.isPending}>
+              <Button onClick={() => setActiveStep(5)} disabled={dsiValidate.isPending || dsiValidateAsync}>
                 Back
               </Button>
               {dsiCanContinueToApply ? (
@@ -2292,10 +2889,10 @@ function AdminImportsPageContent() {
                   <Button
                     variant="outlined"
                     onClick={() => void dsiValidate.mutateAsync()}
-                    disabled={dsiValidate.isPending || !dsiServerMappingGateOk}
+                    disabled={dsiValidate.isPending || dsiValidateAsync || !dsiServerMappingGateOk}
                     data-testid="dsi-rerun-validation"
                   >
-                    {dsiValidate.isPending ? 'Validating…' : 'Re-run validation'}
+                    {dsiValidate.isPending || dsiValidateAsync ? 'Validating…' : 'Re-run validation'}
                   </Button>
                   <Button variant="contained" onClick={() => setActiveStep(7)} data-testid="dsi-continue-to-apply">
                     Continue to apply
@@ -2305,10 +2902,14 @@ function AdminImportsPageContent() {
                 <Button
                   variant="contained"
                   onClick={() => void dsiValidate.mutateAsync()}
-                  disabled={dsiValidate.isPending || !dsiServerMappingGateOk}
+                  disabled={dsiValidate.isPending || dsiValidateAsync || !dsiServerMappingGateOk}
                   data-testid="dsi-run-validation"
                 >
-                  {dsiValidate.isPending ? 'Validating…' : dsiHasValidateResult ? 'Re-run validation' : 'Run validation'}
+                  {dsiValidate.isPending || dsiValidateAsync
+                    ? 'Validating…'
+                    : dsiHasValidateResult
+                      ? 'Re-run validation'
+                      : 'Run validation'}
                 </Button>
               )}
             </Stack>
@@ -2324,6 +2925,21 @@ function AdminImportsPageContent() {
               for sell-out; distributor + product + snapshot date for inventory). Re-uploading overlapping history updates
               existing facts instead of duplicating them.
             </Alert>
+            {distributorSiSummary != null &&
+            ((distributorSiSummary.warning_rows ?? 0) > 0 ||
+              (distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0) ? (
+              <Alert severity="warning" data-testid="dsi-apply-sellout-warning-reminder">
+                This job&apos;s last validation reported warnings. Sell-out may be incomplete for some rows while
+                inventory may still apply where stock snapshots are valid. Confirm mappings and aliases before applying.
+                {(distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0 ? (
+                  <>
+                    {' '}
+                    <strong>{distributorSiSummary.rows_inventory_ready_with_sellout_warnings}</strong> row(s) matched the
+                    &quot;inventory ready but sell-out blocked&quot; pattern.
+                  </>
+                ) : null}
+              </Alert>
+            ) : null}
             {selectedTemplate.destructive_apply_requires_confirm ? (
               <FormControlLabel
                 control={<Checkbox checked={confirmDestructive} onChange={(_, c) => setConfirmDestructive(c)} />}
@@ -2331,26 +2947,55 @@ function AdminImportsPageContent() {
               />
             ) : null}
             {dsiApply.isError ? <Alert severity="error">{safeDisplayError(dsiApply.error)}</Alert> : null}
+            {dsiApplyComplete.isError ? (
+              <Alert severity="error">{safeDisplayError(dsiApplyComplete.error)}</Alert>
+            ) : null}
             {dsiApply.isPending ? <LinearProgress /> : null}
-            <Stack direction="row" spacing={1}>
+            {dsiApplyComplete.isPending ? <LinearProgress /> : null}
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Button onClick={() => setActiveStep(6)}>Back</Button>
               <Button
                 variant="contained"
                 color="primary"
                 disabled={
                   dsiApply.isPending ||
+                  dsiApplyComplete.isPending ||
                   (selectedTemplate.destructive_apply_requires_confirm && !confirmDestructive)
                 }
                 onClick={() => void dsiApply.mutateAsync()}
               >
                 Apply
               </Button>
+              {dsiCanFinalizeToLoaded ? (
+                <Button
+                  variant="outlined"
+                  color="success"
+                  disabled={dsiApply.isPending || dsiApplyComplete.isPending}
+                  onClick={() => void dsiApplyComplete.mutateAsync()}
+                  data-testid="dsi-apply-complete"
+                >
+                  Finalize to loaded
+                </Button>
+              ) : null}
             </Stack>
+            {dsiCanFinalizeToLoaded ? (
+              <Alert severity="info" data-testid="dsi-apply-complete-hint">
+                After stewards clear blocked staging lines and facts apply cleanly, use <strong>Finalize to loaded</strong>{' '}
+                to re-resolve rows, run fact upserts, and set the job to <strong>loaded</strong>.
+              </Alert>
+            ) : null}
           </Stack>
         ) : null}
 
-        {activeStep === 4 && !isPm && !isDsi ? (
+        {(activeStep === 4 && !isPm && !isDsi && !isShipmentEvidence) ||
+        (activeStep === 3 && isShipmentEvidence && !isPm && !isDsi) ? (
           <Stack spacing={2}>
+            {isShipmentEvidence ? (
+              <Alert severity="info">
+                This upload runs in validate mode only. When column mapping is ready, map file columns below, save, run
+                validation, then resolve distributors and click Apply import to set loaded.
+              </Alert>
+            ) : null}
             <Typography variant="body2">
               Upload for <strong>{selectedTemplate?.display_name}</strong> using provider{' '}
               <strong>{(sources ?? []).find((s) => s.id === sourceId)?.name ?? '—'}</strong>.
@@ -2419,6 +3064,200 @@ function AdminImportsPageContent() {
                 <Button size="small" onClick={() => void refetchPreview()}>
                   Refresh validation preview
                 </Button>
+              </Alert>
+            ) : null}
+            {(shipmentEvidenceUrlUnlock || isShipmentEvidence) &&
+            shipmentEvidencePollJobId != null &&
+            shipmentEvidenceJobPollUnlocked &&
+            shipmentImportJob &&
+            (shipmentImportJob.stage || '').trim() === 'shipment_mapping_ready' ? (
+              <Stack spacing={1.5} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2 }}>
+                <Typography variant="subtitle2" fontWeight={600}>
+                  Column mapping (required before validation)
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Map each file column to a canonical shipment field. Save your mapping, then run validation (same flow as
+                  distributor sales & inventory mapping).
+                </Typography>
+                {shipmentMappingStateQueryError ? (
+                  <Alert severity="error">{safeDisplayError(shipmentMappingStateQueryErr)}</Alert>
+                ) : null}
+                {shipmentMappingStateLoading ? <LinearProgress /> : null}
+                {!shipmentMappingStateLoading && shipmentMappingState?.file_headers?.length ? (
+                  <>
+                    {shipmentMappingState.blocking_mapping_errors?.length ? (
+                      <Alert severity="error">
+                        <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                          Fix mapping before validating
+                        </Typography>
+                        <Stack component="ul" sx={{ m: 0, pl: 2 }}>
+                          {shipmentMappingState.blocking_mapping_errors.map((e) => (
+                            <Typography key={e.code} component="li" variant="body2">
+                              {e.message}
+                            </Typography>
+                          ))}
+                        </Stack>
+                      </Alert>
+                    ) : null}
+                    {shipmentMappingState.mapping_adjustment_notices?.length ? (
+                      <Alert severity="info">
+                        {shipmentMappingState.mapping_adjustment_notices.map((n) => (
+                          <Typography key={n.code ?? n.message} variant="body2">
+                            {n.message}
+                          </Typography>
+                        ))}
+                      </Alert>
+                    ) : null}
+                    {shipmentMappingDraftDirty ? (
+                      <Alert severity="warning">You have unsaved mapping changes. Save before running validation.</Alert>
+                    ) : null}
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 600 }}>File column</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Maps to</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {shipmentMappingState.file_headers.map((h) => (
+                          <TableRow key={h}>
+                            <TableCell>
+                              <Typography fontWeight={600}>{h}</Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                display="block"
+                                data-testid={`shipment-samples-${h}`}
+                              >
+                                Examples: {formatDsiSamples(shipmentMappingState.column_samples?.[h])}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <FormControl size="small" fullWidth>
+                                <InputLabel id={`shipment-map-${h}`}>Target</InputLabel>
+                                <Select
+                                  labelId={`shipment-map-${h}`}
+                                  label="Target"
+                                  value={shipmentMapDraft[h] ?? ''}
+                                  displayEmpty
+                                  renderValue={(selected) => {
+                                    const v = String(selected ?? '');
+                                    if (!v) return <em>— Unmapped —</em>;
+                                    return SHIPMENT_FIELD_LABELS[v] ?? v;
+                                  }}
+                                  onChange={(e) => {
+                                    const v = e.target.value as string;
+                                    setShipmentMapDraft((prev) => {
+                                      const next = { ...prev };
+                                      if (!v) delete next[h];
+                                      else next[h] = v;
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  <MenuItem value="">
+                                    <em>— Unmapped —</em>
+                                  </MenuItem>
+                                  {(shipmentMappingState.canonical_targets ?? []).map((t) => (
+                                    <MenuItem key={t} value={t} sx={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
+                                      <ListItemText
+                                        primary={SHIPMENT_FIELD_LABELS[t] ?? t}
+                                        secondary={shipmentMappingState.field_target_descriptions?.[t]}
+                                        primaryTypographyProps={{ variant: 'body2' }}
+                                        secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
+                                      />
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+                      <Button
+                        variant="outlined"
+                        disabled={
+                          saveShipmentMapping.isPending ||
+                          !shipmentMappingState.file_headers.length ||
+                          isJobRevisitMode
+                        }
+                        onClick={() => void saveShipmentMapping.mutateAsync()}
+                      >
+                        {saveShipmentMapping.isPending ? 'Saving…' : 'Save mapping'}
+                      </Button>
+                      <Button
+                        variant="contained"
+                        disabled={
+                          shipmentValidateRun.isPending ||
+                          saveShipmentMapping.isPending ||
+                          !shipmentMappingState.file_headers.length ||
+                          shipmentMappingDraftDirty ||
+                          !shipmentMappingState.mapping_valid ||
+                          isJobRevisitMode
+                        }
+                        onClick={() => void shipmentValidateRun.mutateAsync()}
+                      >
+                        {shipmentValidateRun.isPending || shipmentValidateAsync ? 'Validating…' : 'Run validation'}
+                      </Button>
+                    </Stack>
+                    {(shipmentValidateRun.isPending ||
+                      shipmentValidateAsync ||
+                      (shipmentImportJob?.status || '').trim() === 'running') &&
+                    isShipmentEvidence &&
+                    (shipmentImportJob?.stage || '').trim() === 'shipment_mapping_ready' ? (
+                      <Stack spacing={1} sx={{ mt: 1 }}>
+                        <Alert severity="info">
+                          Inbound shipment validation is running in the background. This page keeps polling the import
+                          job until the stage advances to <strong>validated</strong> or <strong>failed</strong>.
+                        </Alert>
+                        <LinearProgress />
+                      </Stack>
+                    ) : null}
+                    {saveShipmentMapping.isError ? (
+                      <Alert severity="error">{safeDisplayError(saveShipmentMapping.error)}</Alert>
+                    ) : null}
+                    {shipmentValidateRun.isError ? (
+                      <Alert severity="error">{safeDisplayError(shipmentValidateRun.error)}</Alert>
+                    ) : null}
+                  </>
+                ) : !shipmentMappingStateLoading && !shipmentMappingStateQueryError ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Waiting for inferred columns…
+                  </Typography>
+                ) : null}
+              </Stack>
+            ) : null}
+            {(shipmentEvidenceUrlUnlock || isShipmentEvidence) &&
+            shipmentEvidencePollJobId != null &&
+            shipmentEvidenceJobPollUnlocked &&
+            shipmentImportJob &&
+            ['validated', 'loaded'].includes((shipmentImportJob.stage || '').trim()) ? (
+              <ShipmentEntityStewardPanel importJobId={shipmentEvidencePollJobId} />
+            ) : null}
+            {(shipmentEvidenceUrlUnlock || isShipmentEvidence) &&
+            shipmentEvidencePollJobId != null &&
+            shipmentEvidenceJobPollUnlocked &&
+            shipmentImportJob?.stage === 'validated' ? (
+              <Stack spacing={1}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  disabled={shipmentApplyMut.isPending}
+                  onClick={() => void shipmentApplyMut.mutateAsync()}
+                >
+                  Apply import
+                </Button>
+                {shipmentApplyMut.isError ? (
+                  <Alert severity="error">{safeDisplayError(shipmentApplyMut.error)}</Alert>
+                ) : null}
+              </Stack>
+            ) : null}
+            {isShipmentEvidence && shipmentApplyWarning ? (
+              <Alert severity="warning" onClose={() => setShipmentApplyWarning(null)}>
+                {shipmentApplyWarning}
               </Alert>
             ) : null}
             {selectedTemplate?.slug === 'historical_lineup' && historicalValidatedJobId != null && hlSheetDetail ? (
@@ -2782,7 +3621,7 @@ function AdminImportsPageContent() {
               </Table>
             ) : null}
             <Stack direction="row" spacing={1}>
-              <Button onClick={() => setActiveStep(3)}>Back</Button>
+              <Button onClick={() => setActiveStep(isShipmentEvidence ? 2 : 3)}>Back</Button>
               <Button
                 onClick={() => {
                   setActiveStep(0);
@@ -2825,10 +3664,62 @@ function AdminImportsPageContent() {
             primary: { label: 'Mapping queue', href: '/admin/mappings' },
             secondary: { label: 'Getting started', href: '/getting-started' },
           }}
-          toolbar={<ModuleGridToolbar onRefresh={() => qc.invalidateQueries({ queryKey: ['import-jobs'] })} />}
+          toolbar={
+            <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" useFlexGap sx={{ mb: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={showArchivedImportJobs}
+                    onChange={(_, v) => setShowArchivedImportJobs(v)}
+                    size="small"
+                  />
+                }
+                label="Show archived"
+              />
+              <ModuleGridToolbar
+                sx={{ mb: 0 }}
+                onRefresh={() => void qc.invalidateQueries({ queryKey: ['import-jobs'] })}
+              />
+              <BulkSelectionToolbar
+                mode={jobsBulkSelectionMode}
+                selectedCount={jobsSelectedCount}
+                visibleRowCount={jobsVisibleRowCount}
+                onEnterSelectionMode={() => setJobsBulkSelectionMode('selecting')}
+                onExitSelectionMode={() => setJobsBulkSelectionMode('normal')}
+                onSelectAllVisible={() => {
+                  const api = jobsGridApiRef.current;
+                  if (!api) return;
+                  api.forEachNodeAfterFilterAndSort((node) => {
+                    if (node.data) node.setSelected(true);
+                  });
+                }}
+                onDeselectAll={() => jobsGridApiRef.current?.deselectAll()}
+                onPreviewDangerAction={() => void openImportJobBulkDeletePreview()}
+                previewDangerDisabled={importJobBulkDeleteBusy}
+                busy={importJobBulkDeleteBusy}
+              />
+            </Stack>
+          }
         >
-          <EnterpriseDataGrid rowData={jobsList} columnDefs={colDefs} height={420} />
+          <EnterpriseDataGrid
+            key={jobsBulkSelectionMode === 'selecting' ? 'jobs-bulk' : 'jobs-normal'}
+            rowData={jobsList}
+            columnDefs={colDefs}
+            height={420}
+            gridOptions={jobsGridOptions}
+          />
         </ModuleDataSection>
+        <ImportJobBulkDeleteImpactDialog
+          open={importJobBulkDeleteOpen}
+          busy={importJobBulkDeleteBusy}
+          preview={importJobBulkDeletePreview}
+          deleteSemanticArtifacts={importJobDeleteSemanticArtifacts}
+          onDeleteSemanticArtifactsChange={setImportJobDeleteSemanticArtifacts}
+          impactAcknowledged={importJobBulkDeleteAck}
+          onImpactAcknowledgedChange={setImportJobBulkDeleteAck}
+          onClose={closeImportJobBulkDeleteDialog}
+          onConfirm={() => void confirmImportJobBulkDelete()}
+        />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
           Line-up bulk upsert remains on the{' '}
           <Link component={NextLink} href="/lineup">

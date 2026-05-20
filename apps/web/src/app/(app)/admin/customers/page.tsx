@@ -4,6 +4,8 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -11,6 +13,7 @@ import {
   Divider,
   Drawer,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Paper,
@@ -59,6 +62,11 @@ type CustomerRow = {
   preferred_distributor_name: string | null;
   location_count?: number;
   contact_count?: number;
+  alias_count?: number;
+  last_import_at?: string | null;
+  alias_link_status?: string;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 type CustomerLocationRow = {
   id: number;
@@ -108,10 +116,78 @@ const CUSTOMER_GRID_STATE_KEY = 'cip.admin.customers.gridState.v1';
 const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_SORT_BY = 'customer_code';
 const DEFAULT_SORT_DIR: 'asc' | 'desc' = 'asc';
+const ALL_CUSTOMER_COLUMN_FIELDS = [
+  'id',
+  'customer_code',
+  'customer_name',
+  'customer_status',
+  'region_id',
+  'channel_id',
+  'preferred_distributor_id',
+  'region_code',
+  'channel_code',
+  'preferred_distributor_code',
+  'partner_tier',
+  'account_owner_internal',
+  'notes_summary',
+  'location_count',
+  'contact_count',
+  'alias_count',
+  'last_import_at',
+  'alias_link_status',
+  'created_at',
+  'updated_at',
+] as const;
+type CustomerColumnField = (typeof ALL_CUSTOMER_COLUMN_FIELDS)[number];
+
+/** Defaults applied once via column state in onGridReady (avoids hide flapping when colDefs refresh). */
+const DEFAULT_INITIALLY_HIDDEN_CUSTOMER_FIELDS: readonly CustomerColumnField[] = [
+  'id',
+  'region_id',
+  'channel_id',
+  'preferred_distributor_id',
+  'partner_tier',
+  'alias_count',
+  'last_import_at',
+  'alias_link_status',
+  'account_owner_internal',
+  'notes_summary',
+  'location_count',
+  'contact_count',
+  'created_at',
+  'updated_at',
+];
+
+const STATIC_CUSTOMER_COLUMN_GROUPS: { label: string; fields: CustomerColumnField[] }[] = [
+  { label: 'dim_customer — identity', fields: ['id', 'customer_code', 'customer_name', 'customer_status'] },
+  { label: 'dim_customer — foreign keys', fields: ['region_id', 'channel_id', 'preferred_distributor_id'] },
+  { label: 'Resolved codes (joins)', fields: ['region_code', 'channel_code', 'preferred_distributor_code'] },
+  { label: 'dim_customer — classification & notes', fields: ['partner_tier', 'account_owner_internal', 'notes_summary'] },
+  { label: 'Related counts (not on dim row)', fields: ['location_count', 'contact_count'] },
+  { label: 'Import & alias linkage', fields: ['alias_count', 'last_import_at', 'alias_link_status'] },
+  { label: 'dim_customer — timestamps', fields: ['created_at', 'updated_at'] },
+];
 const STATUS_OPTIONS = ['', 'active', 'inactive', 'onboarding', 'blocked'];
 const PARTNER_TIER_OPTIONS = ['', 'strategic', 'tier_1', 'tier_2', 'tier_3', 'core', 'long_tail'];
 const LOCATION_TYPE_OPTIONS = ['hq', 'store', 'warehouse', 'branch', 'online', 'other'];
 const CONTACT_ROLE_OPTIONS = ['general', 'procurement', 'sales', 'operations', 'finance', 'support', 'executive'];
+
+function gridShortDateTime(p: { value: unknown }): string {
+  const v = p.value as string | null | undefined;
+  if (!v) return '—';
+  try {
+    return new Date(v).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  } catch {
+    return String(v);
+  }
+}
+
+/** Map URL / UI `sort_by` to list API query param (API uses `code` / `name` for dim columns). */
+function customerListSortByForApi(uiSortBy: string): string {
+  if (uiSortBy === 'customer_code') return 'code';
+  if (uiSortBy === 'customer_name') return 'name';
+  return uiSortBy;
+}
 
 function parseCustomerCsv(text: string): {
   code: string;
@@ -149,7 +225,6 @@ function AdminCustomersPageContent() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [paste, setPaste] = useState('');
-  const [gridApi, setGridApi] = useState<any | null>(null);
   const [selectedRow, setSelectedRow] = useState<CustomerRow | null>(null);
   const [createForm, setCreateForm] = useState<CreateCustomerBody>({
     customer_code: '',
@@ -182,6 +257,10 @@ function AdminCustomersPageContent() {
   });
   const [editingLocationId, setEditingLocationId] = useState<number | null>(null);
   const [editingContactId, setEditingContactId] = useState<number | null>(null);
+  const [gridApi, setGridApi] = useState<any | null>(null);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [columnSearch, setColumnSearch] = useState('');
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
 
   const page = Number(searchParams.get('page') || '1') || 1;
   const pageSize = Number(searchParams.get('page_size') || `${DEFAULT_PAGE_SIZE}`) || DEFAULT_PAGE_SIZE;
@@ -191,6 +270,8 @@ function AdminCustomersPageContent() {
   const regionCodeFilter = searchParams.get('region_code') ?? '';
   const channelCodeFilter = searchParams.get('channel_code') ?? '';
   const preferredDistributorFilter = searchParams.get('preferred_distributor_code') ?? '';
+  const minAliasCountFilter = searchParams.get('min_alias_count') ?? '';
+  const aliasLinkFilter = searchParams.get('alias_link') ?? '';
   const sortBy = searchParams.get('sort_by') ?? DEFAULT_SORT_BY;
   const sortDir = (searchParams.get('sort_dir') as 'asc' | 'desc' | null) ?? DEFAULT_SORT_DIR;
 
@@ -242,6 +323,8 @@ function AdminCustomersPageContent() {
       regionCodeFilter,
       channelCodeFilter,
       preferredDistributorFilter,
+      minAliasCountFilter,
+      aliasLinkFilter,
       sortBy,
       sortDir,
     ],
@@ -249,7 +332,7 @@ function AdminCustomersPageContent() {
       const sp = new URLSearchParams();
       sp.set('page', String(page));
       sp.set('page_size', String(pageSize));
-      sp.set('sort_by', sortBy === 'customer_code' ? 'code' : sortBy === 'customer_name' ? 'name' : sortBy);
+      sp.set('sort_by', customerListSortByForApi(sortBy));
       sp.set('sort_dir', sortDir);
       if (q.trim()) sp.set('q', q.trim());
       if (customerStatusFilter) sp.set('customer_status', customerStatusFilter);
@@ -257,6 +340,10 @@ function AdminCustomersPageContent() {
       if (regionCodeFilter) sp.set('region_code', regionCodeFilter);
       if (channelCodeFilter) sp.set('channel_code', channelCodeFilter);
       if (preferredDistributorFilter) sp.set('preferred_distributor_code', preferredDistributorFilter);
+      const mac = minAliasCountFilter.trim();
+      if (mac !== '' && Number.isFinite(Number(mac))) sp.set('min_alias_count', String(Number(mac)));
+      const al = aliasLinkFilter.trim().toLowerCase();
+      if (al === 'linked' || al === 'unlinked') sp.set('alias_link', al);
       return apiGet<CustomerListResponse>(`/api/v1/customers?${sp.toString()}`, { signal });
     },
   });
@@ -492,6 +579,14 @@ function AdminCustomersPageContent() {
   const colDefs: ColDef<CustomerRow>[] = useMemo(
     () => [
       { field: 'customer_code', headerName: 'Customer code', pinned: 'left', minWidth: 140, editable: false },
+      {
+        field: 'id',
+        headerName: 'ID',
+        minWidth: 80,
+        maxWidth: 100,
+        type: 'numericColumn',
+        editable: false,
+      },
       { field: 'customer_name', headerName: 'Customer name', flex: 1, minWidth: 190, editable: true },
       {
         field: 'customer_status',
@@ -533,13 +628,87 @@ function AdminCustomersPageContent() {
         cellEditor: 'agSelectCellEditor',
         cellEditorParams: { values: distributorCodes },
       },
+      {
+        field: 'region_id',
+        headerName: 'Region ID',
+        minWidth: 100,
+        type: 'numericColumn',
+        editable: false,
+      },
+      {
+        field: 'channel_id',
+        headerName: 'Channel ID',
+        minWidth: 100,
+        type: 'numericColumn',
+        editable: false,
+      },
+      {
+        field: 'preferred_distributor_id',
+        headerName: 'Preferred dist. ID',
+        minWidth: 130,
+        type: 'numericColumn',
+        editable: false,
+      },
+      {
+        field: 'location_count',
+        headerName: 'Locations #',
+        minWidth: 110,
+        type: 'numericColumn',
+        editable: false,
+      },
+      {
+        field: 'contact_count',
+        headerName: 'Contacts #',
+        minWidth: 110,
+        type: 'numericColumn',
+        editable: false,
+      },
+      {
+        field: 'alias_count',
+        headerName: 'Alias #',
+        minWidth: 90,
+        type: 'numericColumn',
+        editable: false,
+      },
+      {
+        field: 'last_import_at',
+        headerName: 'Last import (alias)',
+        minWidth: 160,
+        editable: false,
+        valueFormatter: gridShortDateTime,
+      },
+      {
+        field: 'alias_link_status',
+        headerName: 'Alias link',
+        minWidth: 120,
+        editable: false,
+        cellRenderer: ({ value }: { value?: string }) =>
+          value === 'linked' ? (
+            <Chip size="small" color="success" label="Linked" variant="outlined" />
+          ) : (
+            <Chip size="small" color="default" label="Unlinked" variant="outlined" />
+          ),
+      },
       { field: 'account_owner_internal', headerName: 'Account owner', minWidth: 170, editable: true },
       {
         field: 'notes_summary',
         headerName: 'Notes',
         minWidth: 180,
         editable: true,
-        hide: true,
+      },
+      {
+        field: 'created_at',
+        headerName: 'Created',
+        minWidth: 160,
+        editable: false,
+        valueFormatter: gridShortDateTime,
+      },
+      {
+        field: 'updated_at',
+        headerName: 'Updated',
+        minWidth: 160,
+        editable: false,
+        valueFormatter: gridShortDateTime,
       },
       {
         headerName: 'Details',
@@ -561,6 +730,15 @@ function AdminCustomersPageContent() {
     [channelCodes, distributorCodes, regionCodes, delCustomer, delCustomer.isPending]
   );
 
+  const columnLabelByField = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const col of colDefs) {
+      if (!col.field) continue;
+      out[col.field] = (col.headerName as string) ?? col.field;
+    }
+    return out;
+  }, [colDefs]);
+
   const persistGridState = useCallback((api: any) => {
     try {
       const state = api.getColumnState();
@@ -570,15 +748,44 @@ function AdminCustomersPageContent() {
     }
   }, []);
 
-  const onGridReady = useCallback((e: GridReadyEvent<CustomerRow>) => {
-    setGridApi(e.api);
+  const syncColumnVisibility = useCallback((api: any) => {
+    if (!api?.getColumns) return;
     try {
-      const raw = localStorage.getItem(CUSTOMER_GRID_STATE_KEY);
-      if (raw) e.api.applyColumnState({ state: JSON.parse(raw), applyOrder: true });
+      const visibility: Record<string, boolean> = {};
+      for (const col of api.getColumns() ?? []) {
+        const def = col?.getColDef?.();
+        const field = def?.field as string | undefined;
+        if (!field) continue;
+        if (ALL_CUSTOMER_COLUMN_FIELDS.includes(field as CustomerColumnField)) {
+          visibility[field] = Boolean(col.isVisible?.());
+        }
+      }
+      if (Object.keys(visibility).length) setColumnVisibility(visibility);
     } catch {
       // no-op
     }
   }, []);
+
+  const onGridReady = useCallback(
+    (e: GridReadyEvent<CustomerRow>) => {
+      setGridApi(e.api);
+      try {
+        const raw = localStorage.getItem(CUSTOMER_GRID_STATE_KEY);
+        if (raw) {
+          e.api.applyColumnState({ state: JSON.parse(raw), applyOrder: true });
+        } else {
+          e.api.applyColumnState({
+            state: DEFAULT_INITIALLY_HIDDEN_CUSTOMER_FIELDS.map((colId) => ({ colId, hide: true })),
+            applyOrder: true,
+          });
+        }
+      } catch {
+        // no-op
+      }
+      syncColumnVisibility(e.api);
+    },
+    [syncColumnVisibility]
+  );
 
   const onColumnStateEvent = useCallback(
     (
@@ -589,15 +796,36 @@ function AdminCustomersPageContent() {
         | ColumnResizedEvent<CustomerRow>
     ) => {
       persistGridState(e.api);
+      syncColumnVisibility(e.api);
     },
-    [persistGridState]
+    [persistGridState, syncColumnVisibility]
+  );
+
+  const groupedColumnPickerBlocks = useMemo((): { label: string; options: { id: string; label: string }[] }[] => {
+    const query = columnSearch.trim().toLowerCase();
+    return STATIC_CUSTOMER_COLUMN_GROUPS.map((group) => ({
+      label: group.label,
+      options: group.fields
+        .map((field) => ({ id: field, label: columnLabelByField[field] ?? field }))
+        .filter((opt) => !query || opt.label.toLowerCase().includes(query) || opt.id.toLowerCase().includes(query)),
+    })).filter((group) => group.options.length > 0);
+  }, [columnLabelByField, columnSearch]);
+
+  const toggleColumnVisibility = useCallback(
+    (columnId: string, visible: boolean) => {
+      if (!gridApi?.setColumnsVisible) return;
+      gridApi.setColumnsVisible([columnId], visible);
+      persistGridState(gridApi);
+      setColumnVisibility((prev) => ({ ...prev, [columnId]: visible }));
+    },
+    [gridApi, persistGridState]
   );
 
   const gridOptions: GridOptions<CustomerRow> = useMemo(
     () => ({
       singleClickEdit: true,
       onCellValueChanged,
-      sideBar: 'columns',
+      // Column visibility uses the toolbar picker (Product Master pattern); no Enterprise sidebar.
       onGridReady,
       onColumnMoved: onColumnStateEvent,
       onColumnVisible: onColumnStateEvent,
@@ -637,7 +865,15 @@ function AdminCustomersPageContent() {
         <Button variant="contained" onClick={() => setUploadOpen(true)}>
           Quick paste CSV (legacy)
         </Button>
-        <Button variant="outlined" disabled={!gridApi} onClick={() => gridApi?.openToolPanel('columns')}>
+        <Button
+          variant="outlined"
+          disabled={!gridApi}
+          onClick={() => {
+            setColumnSearch('');
+            setColumnsOpen(true);
+            if (gridApi) syncColumnVisibility(gridApi);
+          }}
+        >
           Columns
         </Button>
         <Button
@@ -745,6 +981,30 @@ function AdminCustomersPageContent() {
               ))}
             </Select>
           </FormControl>
+          <TextField
+            size="small"
+            label="Min alias #"
+            type="number"
+            inputProps={{ min: 0 }}
+            value={minAliasCountFilter}
+            onChange={(e) => {
+              const v = e.target.value;
+              setParamState({ min_alias_count: v.trim() === '' ? null : v }, true);
+            }}
+            sx={{ minWidth: 120 }}
+          />
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Alias link</InputLabel>
+            <Select
+              label="Alias link"
+              value={aliasLinkFilter}
+              onChange={(e) => setParamState({ alias_link: String(e.target.value || '') }, true)}
+            >
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="linked">Linked</MenuItem>
+              <MenuItem value="unlinked">Unlinked</MenuItem>
+            </Select>
+          </FormControl>
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Sort by</InputLabel>
             <Select
@@ -754,12 +1014,21 @@ function AdminCustomersPageContent() {
             >
               <MenuItem value="customer_code">Customer code</MenuItem>
               <MenuItem value="customer_name">Customer name</MenuItem>
+              <MenuItem value="id">ID</MenuItem>
               <MenuItem value="customer_status">Status</MenuItem>
               <MenuItem value="partner_tier">Partner tier</MenuItem>
+              <MenuItem value="region_id">Region ID</MenuItem>
+              <MenuItem value="channel_id">Channel ID</MenuItem>
+              <MenuItem value="preferred_distributor_id">Preferred distributor ID</MenuItem>
               <MenuItem value="region_code">Region</MenuItem>
               <MenuItem value="channel_code">Channel</MenuItem>
               <MenuItem value="account_owner_internal">Owner</MenuItem>
               <MenuItem value="preferred_distributor_code">Preferred distributor</MenuItem>
+              <MenuItem value="location_count">Locations #</MenuItem>
+              <MenuItem value="contact_count">Contacts #</MenuItem>
+              <MenuItem value="alias_count">Alias count</MenuItem>
+              <MenuItem value="last_import_at">Last import (alias)</MenuItem>
+              <MenuItem value="created_at">Created</MenuItem>
               <MenuItem value="updated_at">Updated</MenuItem>
             </Select>
           </FormControl>
@@ -785,6 +1054,8 @@ function AdminCustomersPageContent() {
                   region_code: '',
                   channel_code: '',
                   preferred_distributor_code: '',
+                  min_alias_count: '',
+                  alias_link: '',
                   sort_by: DEFAULT_SORT_BY,
                   sort_dir: DEFAULT_SORT_DIR,
                 },
@@ -839,6 +1110,54 @@ function AdminCustomersPageContent() {
           </Stack>
         </ModuleDataSection>
       </Paper>
+
+      <Dialog open={columnsOpen} onClose={() => setColumnsOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>Manage customer columns</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <TextField
+              size="small"
+              label="Search columns"
+              placeholder="Find by label or field key"
+              value={columnSearch}
+              onChange={(e) => setColumnSearch(e.target.value)}
+            />
+            {!gridApi ? (
+              <Alert severity="info">Grid is still initializing. Column toggles become available in a moment.</Alert>
+            ) : null}
+            {groupedColumnPickerBlocks.map((group) => (
+              <Paper key={group.label} variant="outlined" sx={{ p: 1.25 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                  {group.label}
+                </Typography>
+                <Stack>
+                  {group.options.map((opt) => (
+                    <FormControlLabel
+                      key={opt.id}
+                      control={
+                        <Checkbox
+                          checked={columnVisibility[opt.id] ?? false}
+                          onChange={(e) => toggleColumnVisibility(opt.id, e.target.checked)}
+                          disabled={!gridApi}
+                        />
+                      }
+                      label={opt.label}
+                    />
+                  ))}
+                </Stack>
+              </Paper>
+            ))}
+            {!groupedColumnPickerBlocks.length ? (
+              <Typography variant="body2" color="text.secondary">
+                No columns match the current search.
+              </Typography>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setColumnsOpen(false)}>Done</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={uploadOpen} onClose={() => !bulk.isPending && setUploadOpen(false)} fullWidth maxWidth="md">
         <DialogTitle>Paste customer rows</DialogTitle>

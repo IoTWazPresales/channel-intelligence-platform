@@ -12,8 +12,8 @@ Company policy may forbid **Docker Desktop** while still allowing **native** ins
 | API | `pnpm dev:api` (FastAPI in `apps/api/.venv`) |
 | API + web (no worker) | **`pnpm dev:api-web`** (one terminal) |
 | PostgreSQL | Local install (Windows service or manual `postgres`); create DB/user matching `.env` |
-| Redis | Optional: local [Redis for Windows](https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/install-redis-on-windows/) / Memurai / WSL `redis-server` **if approved** |
-| Celery worker | Optional: `pnpm dev:worker` when Redis is available |
+| Redis | Optional: local [Redis for Windows](https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/install-redis-on-windows/) / Memurai / WSL `redis-server` **if approved** — must accept TCP on the host/port in `CELERY_BROKER_URL` (default **127.0.0.1:6379**) |
+| Celery worker | Optional: `pnpm dev:worker` when Redis is available (script **preflights** broker TCP and uses **`--pool=solo` on Windows** unless you set `CIP_CELERY_WORKER_POOL`) |
 
 **Docker Compose files under `infra/docker/` are not removed.** They remain the reference for full-stack parity and for CI or teammates who still use containerized dependencies. This guide only adds a **supported path that does not require Docker Desktop**.
 
@@ -47,6 +47,40 @@ pnpm local:db:migrate
 
 5. Create upload directory once: `apps/api/storage/uploads` (or set `LOCAL_STORAGE_PATH` in `.env`).
 
+### Migrations: `must be owner of table dim_customer` (or similar)
+
+PostgreSQL only allows the **table owner** (or a superuser) to run `ALTER TABLE ... ADD COLUMN`. The Customers Phase 1 revision `20260426_0012` alters `dim_customer`, so Alembic must connect as that owner.
+
+The initial revision `20260412_0001` uses `Base.metadata.create_all()`, which assigns **ownership of every created table to the database role used for that migration**. If that first upgrade was run as **`postgres`** (or you restored a dump owned by another role), later runs of `pnpm local:db:migrate` as **`cip`** can fail with `InsufficientPrivilege: must be owner of table dim_customer`.
+
+**Diagnose (any SQL client, connected to database `cip`):**
+
+```sql
+SELECT tablename, tableowner
+FROM pg_tables
+WHERE schemaname = 'public' AND tablename = 'dim_customer';
+```
+
+**Fix (pick one; lowest blast radius first):**
+
+1. **Reassign ownership to `cip`** (recommended when objects should be owned by the app role). Connect as a superuser (often `postgres`) to database `cip`, then:
+
+   ```sql
+   ALTER TABLE public.dim_customer OWNER TO cip;
+   ```
+
+   If many tables are owned by the wrong role, broader repair is appropriate for **local dev only**:
+
+   ```sql
+   REASSIGN OWNED BY postgres TO cip;
+   ```
+
+   (Replace `postgres` with whatever `tableowner` shows from the diagnostic query.)
+
+2. **Run migrations as a superuser only for Alembic** (optional; avoids changing table ownership). In `apps/api/.env`, set `DATABASE_URL_SYNC_MIGRATE` to a superuser sync URL (see `apps/api/.env.example`), run `pnpm local:db:migrate`, then **remove** `DATABASE_URL_SYNC_MIGRATE` so the API continues to use `DATABASE_URL_SYNC` as `cip`.
+
+**Do not** stamp Alembic to head without applying revisions, or otherwise bypass migration history.
+
 ---
 
 ## Recommended startup order
@@ -76,9 +110,9 @@ pnpm dev:web
 ```
 
 - Web: [http://localhost:3000](http://localhost:3000)
-- API: [http://localhost:8000/docs](http://localhost:8000/docs)
+- API: [http://localhost:8001/docs](http://localhost:8001/docs)
 
-If port **3000** or **8000** is taken, use `pnpm dev:ports` and stop the conflicting process.
+If port **3000** or **8001** is taken, use `pnpm dev:ports` and stop the conflicting process.
 
 ---
 
@@ -91,6 +125,27 @@ If port **3000** or **8000** is taken, use `pnpm dev:ports` and stop the conflic
 3. In a third terminal: `pnpm dev:worker`.
 
 This matches production behavior (separate worker process, broker-backed queue).
+
+### Reproducible no-Docker broker path (Windows)
+
+Docker is **not** required. For **real** Product Master commit (default `CIP_DEV_CELERY_DISPATCH=broker`), you need **Redis listening where `CELERY_BROKER_URL` points** (defaults use logical DB **1** on the same TCP port **6379** as DB 0/2 — one `redis-server` process covers all).
+
+1. **Install / start Redis** using an approved option (examples only — follow your IT policy):
+   - **Memurai** or **Redis for Windows** on the host, **or**
+   - **WSL** (e.g. Ubuntu): `sudo apt install redis-server` then start `redis-server` so it listens on `0.0.0.0:6379` or `127.0.0.1:6379` (WSL2 usually forwards **Windows `localhost:6379`** to the instance — verify with `Test-NetConnection 127.0.0.1 -Port 6379` from PowerShell or `redis-cli -h 127.0.0.1 ping`).
+2. **Verify broker TCP** before the worker: `pnpm dev:worker` runs a short TCP preflight to the host/port parsed from `CELERY_BROKER_URL`. If Redis is down, the script **exits with a clear error** (no silent hang in Celery).
+3. **Three processes** (separate terminals from repo root):
+   - `pnpm dev:api`
+   - `pnpm dev:web`
+   - `pnpm dev:worker`
+4. **Windows Celery pool:** `scripts/dev-worker.js` passes **`--pool=solo`** on Windows by default (prefork is unreliable there). To use another pool: set `CIP_CELERY_WORKER_POOL` (e.g. `prefork` on macOS/Linux overrides are rarely needed). **Do not** change production Linux workers unless you know your deployment needs a non-default pool.
+
+**Escape hatches (explicit only):**
+
+| Variable | Purpose |
+|----------|---------|
+| `CIP_SKIP_REDIS_PREFLIGHT=1` | Skip the TCP check (CI / exotic networking only — **not** normal dev). |
+| `CIP_REDIS_PREFLIGHT_TIMEOUT_MS` | Preflight timeout in ms (default `3000`). |
 
 ---
 
@@ -118,7 +173,7 @@ From repo root (uses `apps/api/.venv`):
 
 | Script | Command |
 |--------|---------|
-| Migrations | `pnpm local:db:migrate` |
+| Migrations | `pnpm local:db:migrate` (Alembic uses `DATABASE_URL_SYNC_MIGRATE` when set, else `DATABASE_URL_SYNC`) |
 | Wipe app tables | `pnpm local:db:wipe` |
 | Seed | `pnpm local:db:seed` |
 
@@ -128,10 +183,10 @@ These replace **`pnpm docker:db:wipe`** / **`pnpm docker:db:wipe:run`** when not
 
 ## End-to-end tests (Playwright)
 
-`pnpm docker:e2e` defaults the API URL to **:8010** (Docker host port). For native API on **8000**:
+`pnpm docker:e2e` defaults the API URL to **:8010** (Docker host port). For native API on **8001**:
 
 ```powershell
-$env:CIP_E2E_API_URL = "http://127.0.0.1:8000"
+$env:CIP_E2E_API_URL = "http://127.0.0.1:8001"
 pnpm test:e2e
 ```
 
@@ -156,6 +211,6 @@ pnpm test:e2e
 ## Manual / tribal knowledge (still required)
 
 - **Python 3.12** for `asyncpg` wheels; wrong version breaks `pip install`.
-- **Port hygiene:** `pnpm dev:ports` when :3000 / :8000 are busy; Docker app containers must be stopped if they bind those ports.
+- **Port hygiene:** `pnpm dev:ports` when :3000 / :8001 are busy (and also check stale :8000 listeners); Docker app containers must be stopped if they bind those ports.
 - **First-time DB:** create role/database to match `DATABASE_URL` (defaults assume user/db `cip`).
 - **Upload path:** `apps/api/storage/uploads` (or `LOCAL_STORAGE_PATH`) must exist for uploads.

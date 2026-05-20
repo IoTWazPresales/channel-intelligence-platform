@@ -65,7 +65,7 @@ Equivalent: `docker compose -f infra/docker/docker-compose.yml up -d postgres re
 
 Optional: copy `apps/api/.env.example` to `apps/api/.env` or copy `infra/env.example` for a fuller template. Defaults in `app/core/config.py` point at `localhost:5432` and `localhost:6379`. Local dev contract for this repo is **web :3000** and **API :8001**.
 
-**Background jobs:** Product Master commit normally uses **Celery + Redis** (`pnpm dev:worker` with a broker). If you cannot run Redis, set **`CIP_DEV_CELERY_DISPATCH=in_process_thread`** in `apps/api/.env` (dev-only; see [docs/LOCAL_DEV_WINDOWS.md](docs/LOCAL_DEV_WINDOWS.md)).
+**Background jobs:** Product Master commit normally uses **Celery + Redis**. Run **`pnpm dev:worker`** after Redis is listening on the host/port in `CELERY_BROKER_URL` (default `localhost:6379`). The worker script **checks broker TCP first** and on **Windows** defaults Celery to **`--pool=solo`** (see `apps/api/.env.example`). If you cannot run Redis, set **`CIP_DEV_CELERY_DISPATCH=in_process_thread`** in `apps/api/.env` (dev-only; see [docs/LOCAL_DEV_WINDOWS.md](docs/LOCAL_DEV_WINDOWS.md)).
 
 ### 2. API (one terminal)
 
@@ -95,7 +95,7 @@ pnpm dev:web
 
 **API + web (no Redis):** `pnpm dev:api-web` — API on :8001, web on :3000, **no** Celery worker.
 
-**With Redis:** add **`pnpm dev:worker`** (third terminal, or run it alongside after Redis is up). Use **`pnpm dev:all`** only when you want API + web + worker in one command **and** Redis is running (script prints a reminder).
+**With Redis:** add **`pnpm dev:worker`** (third terminal, or run it alongside after Redis is up). The worker exits immediately with a **clear message** if the broker is unreachable. Use **`pnpm dev:all`** only when you want API + web + worker in one command **and** Redis is running (script prints a reminder).
 
 Optional: clear demo data after migrations — from repo root **`pnpm local:db:wipe`** (native venv), or from `apps/api` with venv active: `python scripts/wipe_database.py`. If you use Docker for Postgres only: **`pnpm docker:db:wipe:run`** (one-off `api` image; needs `pnpm docker:deps`).
 

@@ -19,7 +19,7 @@ Run **Postgres + Redis in Docker**, and run the **API + Next.js on your machine*
 | Port | Docker service | If you run locally |
 |------|----------------|-------------------|
 | **3000** | `web` container | `pnpm dev` / `pnpm dev:web` |
-| **8010** | `api` container (host → container `8000`) | `pnpm dev:api` (defaults to **8000** on the host) |
+| **8010** | `api` container (host → container `8000`) | `pnpm dev:api` (defaults to **8001** on the host) |
 
 You **cannot** bind two processes to the same port. If the Docker `web` container is up, **Next.js dev on the host will fail** (`EADDRINUSE`). The compose file publishes the API on **8010** so it does not fight a stale `uvicorn` (or Windows phantom listeners) that often still occupies **127.0.0.1:8000** on dev PCs. Use **`http://localhost:8010`** for API docs and curls when the stack is running in Docker.
 
@@ -71,11 +71,11 @@ pnpm dev:all
 ```
 
 - **Web:** [http://localhost:3000](http://localhost:3000) (hot reload)
-- **API:** [http://localhost:8000/docs](http://localhost:8000/docs) (`uvicorn --reload`)
+- **API:** [http://localhost:8001/docs](http://localhost:8001/docs) (`uvicorn --reload`)
 
 Or use two terminals: `pnpm dev:api` and `pnpm dev:web`.
 
-The browser still calls `http://localhost:8000` (your local Uvicorn), same as the all-Docker setup.
+The browser calls same-origin `/api/v1/...` on web `:3000`, and local proxy targets API `:8001` in native dev.
 
 ### Wipe the database (hybrid — API container not running)
 
@@ -184,8 +184,8 @@ Same as: `docker compose -f infra/docker/docker-compose.yml up -d postgres redis
 
 ## Troubleshooting
 
-- **Port already in use (3000 / 8000):** you likely still have Docker `web` / `api` up. Run `pnpm docker:stop:app` or change host ports in `docker-compose.yml` (e.g. `3001:3000` for web).
-- **Web cannot reach API:** ensure `NEXT_PUBLIC_API_URL` matches how you open the app (usually `http://localhost:8000`).
+- **Port already in use (3000 / 8001):** you likely still have Docker `web` / `api` up. Run `pnpm docker:stop:app` or change host ports in `docker-compose.yml` (e.g. `3001:3000` for web).
+- **Web cannot reach API in native dev:** ensure `CIP_API_INTERNAL_URL=http://127.0.0.1:8001` (or use `pnpm dev:web`, which sets it automatically).
 - **Migrations fail:** check Postgres is healthy (`docker compose -f infra/docker/docker-compose.yml ps`).
 - **Local API cannot connect to DB:** run `pnpm docker:deps` and wait until Postgres is healthy.
 - **`pip install` fails on `asyncpg` (compile errors):** install **Python 3.12**, remove `apps/api/.venv`, create the venv again with that interpreter (`py -3.12 -m venv .venv` on Windows if the launcher is available).
