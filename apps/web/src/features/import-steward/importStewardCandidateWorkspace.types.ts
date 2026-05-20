@@ -96,4 +96,6 @@ export type ImportStewardCandidateWorkspaceProps<TRow extends ImportStewardCandi
   onRowClick?: (row: TRow) => void;
   /** When true, omit the outer Paper wrapper (use inside another container). */
   embedded?: boolean;
+  /** Keep table chrome (and filter-empty row) when `openRows` is empty but filters are active. */
+  keepTableWhenFilterEmpty?: boolean;
 };

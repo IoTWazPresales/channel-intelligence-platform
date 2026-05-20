@@ -7,7 +7,6 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import { safeDisplayError } from '@/lib/api';
 
 import type { DsiCatalogOpt, DsiUnresolvedGeoRowDto } from './dsiSteward.types';
-import { DsiStewardLoadingCallout } from './DsiStewardLoadingCallout';
 import { UnresolvedGeoStewardPanel } from './UnresolvedGeoStewardPanel';
 
 export function DsiGeoStewardAccordion({
@@ -46,12 +45,10 @@ export function DsiGeoStewardAccordion({
             it is a true synonym. Leave unresolved if unclear — then use row overrides or fix the file.
           </Typography>
         </Alert>
-        {unresolvedGeoQuery.isPending && !unresolvedGeoQuery.data ? (
-          <DsiStewardLoadingCallout
-            message="Loading unresolved route-to-market and region tokens…"
-            detail="This scan can take 15–30 seconds on large imports."
-            testId="dsi-unresolved-geo-loading"
-          />
+        {unresolvedGeoQuery.fetchStatus === 'fetching' && !unresolvedGeoQuery.data ? (
+          <Alert severity="info" variant="outlined" data-testid="dsi-unresolved-geo-loading">
+            Loading unresolved route-to-market and region tokens…
+          </Alert>
         ) : null}
         {unresolvedGeoQuery.isError ? (
           <Alert severity="error" data-testid="dsi-unresolved-geo-error">

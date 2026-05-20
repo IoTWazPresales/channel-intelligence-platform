@@ -35,6 +35,7 @@ import {
   defaultDsiStewardFiltersForTab,
   dsiTabDependencyNudge,
   filterDsiStewardCandidates,
+  dsiStewardFiltersAreDefault,
   formatPlanActionLabel,
   invalidateDsiImportJobStewardQueries,
   useDsiBulkSteward,
@@ -259,7 +260,17 @@ export function DsiImportJobResolutionSection({
   ]);
 
   const planInitialLoading =
-    plan.suggestionsQuery.isPending && candidates.length > 0 && !plan.suggestionsQuery.data;
+    candidates.length > 0 &&
+    plan.suggestionsQuery.fetchStatus === 'fetching' &&
+    !plan.suggestionsQuery.data;
+
+  const showCandidateFilters =
+    candidatesTotal > 0 || !dsiStewardFiltersAreDefault(activeFilters) || candidatesLoading;
+
+  const keepTableWhenFilterEmpty =
+    showCandidateFilters &&
+    displayedCandidates.length === 0 &&
+    (candidates.length > 0 || !dsiStewardFiltersAreDefault(activeFilters));
 
   const effectiveDetailCandidate = useMemo(() => {
     if (detailCandidate == null) return null;
@@ -301,6 +312,7 @@ export function DsiImportJobResolutionSection({
   const candidateWorkspace = (
     <ImportStewardCandidateWorkspace<DsiCandidateRow>
       embedded
+      keepTableWhenFilterEmpty={keepTableWhenFilterEmpty}
       rootTestId="dsi-resolution-candidate-grid"
       listDomainId={DSI_STEWARD_CONFIG.listDomainId}
       importJobId={importJobId}
@@ -330,12 +342,12 @@ export function DsiImportJobResolutionSection({
         ) : undefined
       }
       filtersSlot={
-        candidates.length > 0 || candidatesTotal > 0 ? (
+        showCandidateFilters ? (
           <DsiStewardCandidateFilters
             filters={activeFilters}
             onChange={setActiveFilters}
             visibleCount={displayedCandidates.length}
-            totalCount={candidatesTotal}
+            totalCount={Math.max(candidatesTotal, candidates.length)}
             hideEntityFilter={tabbedMode}
             hidePartyFilter={tabbedMode && activeTab !== 'distributor'}
           />
@@ -473,8 +485,6 @@ export function DsiImportJobResolutionSection({
         refreshPlanEffective={plan.refreshPlanEffective}
         overridesPayload={plan.overridesPayload}
         onInvalidate={plan.invalidateGeoAndPlan}
-        planApplySummary={planApplySummary}
-        onClearPlanApplySummary={() => setPlanApplySummary(null)}
       />
 
       {planInitialLoading ? (
@@ -507,6 +517,23 @@ export function DsiImportJobResolutionSection({
         }}
       >
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          {planApplySummary ? (
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              flexWrap="wrap"
+              useFlexGap
+              data-testid="dsi-plan-apply-summary"
+            >
+              <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }}>
+                {planApplySummary}
+              </Typography>
+              <Button size="small" variant="text" onClick={() => setPlanApplySummary(null)}>
+                Dismiss
+              </Button>
+            </Stack>
+          ) : null}
           {candidateWorkspace}
 
           {tabbedMode ? (

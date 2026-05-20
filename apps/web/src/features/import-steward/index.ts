@@ -11,6 +11,7 @@ export {
 } from './dsiSteward.config';
 export {
   defaultDsiStewardCandidateFilterState,
+  dsiStewardFiltersAreDefault,
   filterDsiStewardCandidates,
   dsiEffectiveSuggestedAction,
   DSI_ENTITY_CUSTOMER,

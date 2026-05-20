@@ -22,9 +22,9 @@ import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import { safeDisplayError } from '@/lib/api';
 
 import { DsiGeoStewardAccordion } from './DsiGeoStewardAccordion';
-import { DsiStewardLoadingCallout } from './DsiStewardLoadingCallout';
 import { DsiPendingButton } from './DsiPendingButton';
 import type { DsiCatalogOpt, DsiUnresolvedGeoRowDto } from './dsiSteward.types';
+import { countUnresolvedGeoTokens } from './dsiUnresolvedGeoCount';
 
 type PlanHookSlice = {
   importJobId: number;
@@ -53,8 +53,6 @@ type PlanHookSlice = {
   >;
   overridesPayload: () => Array<Record<string, unknown>>;
   onInvalidate: () => void;
-  planApplySummary?: string | null;
-  onClearPlanApplySummary?: () => void;
 };
 
 export function DsiResolutionPlanAdvancedAccordion(plan: PlanHookSlice) {
@@ -77,9 +75,19 @@ export function DsiResolutionPlanAdvancedAccordion(plan: PlanHookSlice) {
     refreshPlanEffective,
     overridesPayload,
     onInvalidate,
-    planApplySummary,
-    onClearPlanApplySummary,
   } = plan;
+
+  const unresolvedGeoCount = unresolvedGeoQuery.isSuccess
+    ? countUnresolvedGeoTokens(unresolvedGeoQuery.data)
+    : null;
+  const showGeoSteward = unresolvedGeoCount != null && unresolvedGeoCount > 0;
+
+  if (unresolvedGeoQuery.isSuccess && unresolvedGeoCount === 0 && candidatesCount === 0) {
+    return null;
+  }
+
+  const planComputing =
+    candidatesCount > 0 && suggestionsQuery.fetchStatus === 'fetching' && !suggestionsQuery.data;
 
   return (
     <Accordion
@@ -96,21 +104,10 @@ export function DsiResolutionPlanAdvancedAccordion(plan: PlanHookSlice) {
       </AccordionSummary>
       <AccordionDetails>
         <Stack spacing={2} data-testid="dsi-resolution-plan-panel">
-          {planApplySummary ? (
-            <Alert
-              severity="success"
-              data-testid="dsi-plan-apply-summary"
-              onClose={onClearPlanApplySummary}
-            >
-              {planApplySummary}
+          {planComputing ? (
+            <Alert severity="info" variant="outlined" data-testid="dsi-resolution-plan-panel-loading">
+              Computing resolution plan…
             </Alert>
-          ) : null}
-          {suggestionsQuery.isPending && !suggestionsQuery.data ? (
-            <DsiStewardLoadingCallout
-              message="Computing resolution plan…"
-              detail="Large imports can take 30+ seconds. Plan chips and row hints appear when this finishes."
-              testId="dsi-resolution-plan-panel-loading"
-            />
           ) : null}
           {suggestionsQuery.isFetching && suggestionsQuery.data ? (
             <Alert severity="info" variant="outlined" data-testid="dsi-resolution-plan-refreshing">
@@ -125,13 +122,15 @@ export function DsiResolutionPlanAdvancedAccordion(plan: PlanHookSlice) {
             validation has run. Use <strong>Plan…</strong> on a row for overrides. Refresh suggestions recomputes the plan
             without re-running import validation.
           </Typography>
-          <DsiGeoStewardAccordion
-            importJobId={importJobId}
-            unresolvedGeoQuery={unresolvedGeoQuery}
-            catalogChannels={channels}
-            catalogRegions={regions}
-            onInvalidate={onInvalidate}
-          />
+          {showGeoSteward ? (
+            <DsiGeoStewardAccordion
+              importJobId={importJobId}
+              unresolvedGeoQuery={unresolvedGeoQuery}
+              catalogChannels={channels}
+              catalogRegions={regions}
+              onInvalidate={onInvalidate}
+            />
+          ) : null}
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center" sx={{ mb: 1 }}>
             <DsiPendingButton
               variant="outlined"

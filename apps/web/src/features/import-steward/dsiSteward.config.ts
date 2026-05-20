@@ -12,8 +12,7 @@ const dsiListShellCopy = {
   description:
     'Channel partner, distributor, and product identifier tokens from this DSI import. Suggested plan actions are hints until you apply the resolution plan or run single-row steward actions below.',
   emptyOpenListMessage: 'No DSI mapping candidates for this import job.',
-  emptyFilteredMessage:
-    'No rows match the current filters. Clear filters or pick a different combination.',
+  emptyFilteredMessage: 'No candidates match this filter. Clear filters or pick a different combination.',
   loadingLabel: 'Loading…',
   loadingMessage: 'Loading mapping candidates for this import job…',
 } satisfies ImportStewardListCopy;

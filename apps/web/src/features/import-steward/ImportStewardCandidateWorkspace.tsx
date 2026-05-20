@@ -42,9 +42,12 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
   filtersRegionAriaLabel,
   onRowClick,
   embedded = false,
+  keepTableWhenFilterEmpty = false,
 }: ImportStewardCandidateWorkspaceProps<TRow>) {
-  const showEmptyOpen = importJobId != null && !isLoading && openRows.length === 0;
-  const showTable = importJobId != null && !isLoading && openRows.length > 0;
+  const showEmptyOpen =
+    importJobId != null && !isLoading && openRows.length === 0 && !keepTableWhenFilterEmpty;
+  const showTable =
+    importJobId != null && !isLoading && (openRows.length > 0 || keepTableWhenFilterEmpty);
   const showFilteredEmptyInsideTable = showTable && filteredRows.length === 0;
 
   const headerChecked =

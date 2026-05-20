@@ -21,6 +21,7 @@ export function DsiStewardCandidateFilters({
   /** Hide Bill To / Ship To when not on the Distributors tab. */
   hidePartyFilter?: boolean;
 }) {
+  /** Hide only when the tab/job has no open candidates at all — not when filters narrow to zero visible rows. */
   if (totalCount === 0) return null;
 
   return (

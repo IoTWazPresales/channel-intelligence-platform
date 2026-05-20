@@ -559,8 +559,15 @@ function AdminImportsPageContent() {
     setSelectedSlug(jobDetail.template_slug ?? null);
     setIsJobRevisitMode(true);
     if (jobDetail.template_slug !== 'product_master') {
-      if (jobDetail.template_slug === 'distributor_inventory' && jobDetail.stage === 'dsi_mapping_ready') {
-        setActiveStep(5);
+      if (jobDetail.template_slug === 'distributor_inventory') {
+        const stage = (jobDetail.stage || '').trim();
+        if (stage === 'dsi_mapping_ready') {
+          setActiveStep(5);
+        } else if (stage === 'validated' || stage === 'failed') {
+          setActiveStep(6);
+        } else {
+          setActiveStep(4);
+        }
       } else if (jobDetail.template_slug === 'inbound_shipments') {
         setActiveStep(3);
       } else {

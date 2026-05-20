@@ -118,9 +118,19 @@ DSI validate now reports detailed progress to the frontend via Celery task state
 ## DSI resolution tabs + steward drawer (latest)
 
 - **Entity tabs:** Distributors → Customers → Products; lazy-loaded paginated candidates per tab; tab labels show open total + needs-review count; soft upstream nudge on Customers/Products.
-- **Steward drawer:** row click opens ~40% right panel (`DsiCandidateStewardDrawer`); bottom `DsiMappingStewardPanel` strip removed; table stays interactive on the left.
+- **Steward drawer:** row click toggles selection (shift-click range); Actions column Map/Open/Resolve opens drawer; bottom `DsiMappingStewardPanel` strip removed.
 - **Candidates API:** paginated `GET .../distributor-si-candidates` with `entity` filter per tab.
 - **Plan:** scoped to current tab page via `candidate_ids`; see `DSIPlanBuildContext` in `docs/DSI_RESOLUTION_PERFORMANCE.md`.
+
+## DSI steward UX fixes (uncommitted on branch)
+
+- **Revisit deep-link:** validated/failed DSI jobs open wizard step 6 (Validate) when using `?job=` — not step 4 upload.
+
+- **Filter chips:** stay visible when tab has candidates, non-default filters active, or fetch in flight; empty filter shows “No candidates match this filter…” inside table shell (`keepTableWhenFilterEmpty`).
+- **Loading spinners:** plan/geo use `fetchStatus === 'fetching'` (not bare `isPending`) so disabled queries do not stick loading.
+- **Plan/geo accordion:** hidden only when both `unresolvedGeoCount === 0` and `candidatesCount === 0`; geo sub-accordion hidden when no unresolved tokens; plan apply summary inline above table (`dsi-plan-apply-summary`).
+- **Helper:** `dsiUnresolvedGeoCount.ts` — `countUnresolvedGeoTokens()`; `dsiStewardFiltersAreDefault` exported from barrel.
+- **Tests:** `DsiImportJobResolutionSection.test.tsx` — 14/14 pass.
 
 ## DSI resolution loading UX (prior)
 - Candidate table: skeleton rows while `distributor-si-candidates` loads; section mounts during fetch
