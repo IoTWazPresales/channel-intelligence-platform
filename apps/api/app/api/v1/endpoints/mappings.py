@@ -1,5 +1,7 @@
 import asyncio
-
+import logging
+import threading
+import uuid
 from typing import Any, Literal
 
 from typing_extensions import Self
@@ -12,7 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.core.config import get_settings
+from app.core.dev_celery_logging import DEV_CELERY_LOGGER
 from app.db.session_sync import SessionLocal
+from app.worker.celery_app import celery_app
 from app.ingestion.pipeline import process_import_job_sync
 from app.models.dimensions import DimCustomer
 from app.models.import_distributor_si import (
@@ -42,8 +47,11 @@ from app.services.imports.dsi_steward_geo_catalog import (
     create_channel_source_token_alias_sync,
     create_dim_channel_with_source_alias_sync,
     create_dim_region_with_source_alias_sync,
+    register_region_from_geographic_hint_sync,
+    suggest_geo_create_prefill_sync,
     create_region_source_token_alias_sync,
 )
+from app.services.imports.dsi_bulk_provisional_customers_sync import run_dsi_bulk_provisional_customers_sync
 from app.services.imports.dsi_steward_candidate_ops import (
     StewardOpError,
     _first_sample_raw,
@@ -63,6 +71,10 @@ from app.services.imports.dsi_steward_candidate_ops import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# Dev-only in-process bulk provisional task results (when broker unavailable).
+_dev_dsi_bulk_provisional_results: dict[str, dict[str, Any]] = {}
 
 
 def _require_admin_role(x_user_role: str | None = Header(default=None, alias="X-User-Role")) -> None:
@@ -594,9 +606,186 @@ async def dsi_steward_bulk_preview(job_id: int, body: DsiBulkStewardBody, db: As
     }
 
 
+def _dsi_bulk_provisional_payload_from_body(body: DsiBulkStewardBody) -> dict[str, Any]:
+    return {
+        "candidate_ids": list(body.candidate_ids),
+        "region_id": body.region_id,
+        "channel_id": body.channel_id,
+        "preferred_distributor_id": body.preferred_distributor_id,
+        "partner_tier": body.partner_tier,
+        "provisional_notes_summary": body.provisional_notes_summary,
+    }
+
+
+def _enqueue_dsi_bulk_provisional_customers(
+    job_id: int,
+    payload: dict[str, Any],
+) -> tuple[str, bool]:
+    """Return (task_id, async_poll_required). When async_poll_required is False, result is already in dev store."""
+    settings = get_settings()
+    task_name = "imports.dsi_bulk_provisional_customers"
+
+    def _run_sync() -> dict[str, Any]:
+        with SessionLocal() as session:
+            return run_dsi_bulk_provisional_customers_sync(session, job_id, payload)
+
+    try:
+        result = celery_app.send_task(task_name, args=[job_id, payload])
+        return str(result.id), True
+    except Exception:
+        logger.exception(
+            "dsi_bulk_provisional: Celery enqueue failed job_id=%s task=%s", job_id, task_name
+        )
+        if settings.cip_dev_celery_dispatch == "in_process_thread":
+            task_id = f"dev-bulk-prov-{uuid.uuid4().hex}"
+
+            def _in_process() -> None:
+                try:
+                    out = _run_sync()
+                    _dev_dsi_bulk_provisional_results[task_id] = {
+                        "state": "SUCCESS",
+                        "result": out,
+                    }
+                except Exception as exc:
+                    logger.exception(
+                        "dsi_bulk_provisional in-process thread failed job_id=%s task_id=%s",
+                        job_id,
+                        task_id,
+                    )
+                    _dev_dsi_bulk_provisional_results[task_id] = {
+                        "state": "FAILURE",
+                        "error": str(exc)[:800],
+                    }
+
+            DEV_CELERY_LOGGER.warning(
+                "ENQUEUE: dsi_bulk_provisional job_id=%s — in-process thread (DEV ONLY).",
+                job_id,
+            )
+            threading.Thread(
+                target=_in_process,
+                name=f"dsi-bulk-prov-{job_id}",
+                daemon=True,
+            ).start()
+            return task_id, True
+
+        out = _run_sync()
+        task_id = f"sync-bulk-prov-{uuid.uuid4().hex}"
+        _dev_dsi_bulk_provisional_results[task_id] = {"state": "SUCCESS", "result": out}
+        return task_id, False
+
+
+@router.post("/import-jobs/{job_id}/dsi-steward-bulk-provisional-customers/apply-async", status_code=202)
+async def dsi_steward_bulk_provisional_apply_async(
+    job_id: int, body: DsiBulkStewardBody, db: AsyncSession = Depends(get_db)
+):
+    """Enqueue batch provisional customer creation (single DB commit; poll task for completion)."""
+    await _assert_dsi_import_job(db, job_id)
+    if body.action != "create_provisional_customer":
+        raise HTTPException(
+            status_code=400,
+            detail="action must be create_provisional_customer for this endpoint",
+        )
+    payload = _dsi_bulk_provisional_payload_from_body(body)
+    task_id, async_poll = _enqueue_dsi_bulk_provisional_customers(job_id, payload)
+    job = await db.get(ImportJob, job_id)
+    if job:
+        from datetime import datetime, timezone
+
+        from app.utils.json_safe import to_jsonable
+
+        m = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+        m["dsi_bulk_task"] = {
+            "task_id": task_id,
+            "kind": "dsi_bulk_provisional_customers",
+            "queued_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job.staged_metadata = to_jsonable(m)
+        await db.commit()
+    return {
+        "import_job_id": job_id,
+        "task_id": task_id,
+        "async_poll": async_poll,
+        "action": body.action,
+    }
+
+
+@router.get("/import-jobs/{job_id}/dsi-steward-bulk-task/{task_id}", status_code=200)
+async def dsi_steward_bulk_task_status(job_id: int, task_id: str) -> dict[str, Any]:
+    """Poll Celery (or dev in-process) bulk steward task state and result."""
+    dev_hit = _dev_dsi_bulk_provisional_results.get(task_id)
+    if dev_hit is not None:
+        state = dev_hit.get("state", "SUCCESS")
+        if state in ("SUCCESS", "FAILURE"):
+            _dev_dsi_bulk_provisional_results.pop(task_id, None)
+        out: dict[str, Any] = {
+            "import_job_id": job_id,
+            "task_id": task_id,
+            "state": state,
+        }
+        if state == "SUCCESS":
+            out["result"] = dev_hit.get("result")
+        else:
+            out["error"] = dev_hit.get("error")
+        return out
+
+    from celery.result import AsyncResult
+
+    def _read() -> tuple[str, Any]:
+        r = AsyncResult(task_id, app=celery_app)
+        return r.state, r.info
+
+    task_state, info = await asyncio.to_thread(_read)
+    progress: dict[str, Any] = {
+        "import_job_id": job_id,
+        "task_id": task_id,
+        "state": task_state,
+    }
+    if task_state == "PROGRESS" and isinstance(info, dict):
+        progress["phase"] = info.get("phase")
+        progress["phase_label"] = info.get("phase_label")
+        progress["current_row"] = info.get("current_row", 0)
+        progress["total_rows"] = info.get("total_rows", 0)
+        progress["pct"] = info.get("pct", 0)
+    elif task_state == "SUCCESS":
+        from celery.result import AsyncResult as _AR
+
+        raw_result = await asyncio.to_thread(lambda: _AR(task_id, app=celery_app).result)
+        progress["result"] = raw_result if isinstance(raw_result, dict) else None
+    elif task_state == "FAILURE":
+        progress["error"] = str(info)[:800] if info is not None else "Task failed"
+
+    if task_state in ("SUCCESS", "FAILURE", "REVOKED"):
+
+        def _clear_bulk_meta() -> None:
+            from app.services.imports.import_job_background_metadata import (
+                clear_background_task_metadata_on_job,
+            )
+
+            with SessionLocal() as sess:
+                job = sess.get(ImportJob, job_id)
+                if job and clear_background_task_metadata_on_job(job):
+                    sess.commit()
+
+        await asyncio.to_thread(_clear_bulk_meta)
+
+    return progress
+
+
 @router.post("/import-jobs/{job_id}/dsi-steward-bulk-apply", status_code=200)
 async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: AsyncSession = Depends(get_db)):
     await _assert_dsi_import_job(db, job_id)
+    if body.action == "create_provisional_customer":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": (
+                    "Bulk provisional customer apply must use "
+                    "POST .../dsi-steward-bulk-provisional-customers/apply-async and poll "
+                    ".../dsi-steward-bulk-task/{task_id}."
+                ),
+                "code": "use_async_bulk_provisional",
+            },
+        )
     results: list[dict[str, Any]] = []
     for cid in body.candidate_ids:
         cand = await db.get(ImportEntityMappingCandidate, cid)
@@ -782,26 +971,83 @@ async def dsi_apply_complete_to_loaded(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.post("/import-jobs/{job_id}/revalidate-distributor-sales-inventory", status_code=200)
+@router.post("/import-jobs/{job_id}/revalidate-distributor-sales-inventory")
 async def revalidate_dsi_import_job(job_id: int, db: AsyncSession = Depends(get_db)):
+    """Re-run DSI import validation via Celery (same pipeline as validate)."""
     await _assert_dsi_import_job(db, job_id)
 
-    def _run() -> ImportJob:
-        with SessionLocal() as s:
-            return process_import_job_sync(s, job_id)
+    from app.api.v1.endpoints.imports import _enqueue_import_pipeline_job
 
-    try:
-        updated = await asyncio.to_thread(_run)
-    except Exception as exc:  # pragma: no cover - surfaced to client
-        raise HTTPException(status_code=500, detail=f"Revalidation failed: {exc}") from exc
+    with SessionLocal() as sync_db:
+        j = sync_db.get(ImportJob, job_id)
+        if j is None:
+            raise HTTPException(status_code=404, detail="Import job not found")
+        j.import_mode = "validate"
+        sync_db.commit()
+
+    dispatched, dsi_task_id = _enqueue_import_pipeline_job(
+        job_id,
+        log_label="DSI revalidate",
+        in_process_thread_name=f"dsi-revalidate-{job_id}",
+    )
+
+    if dispatched and dsi_task_id:
+        with SessionLocal() as meta_db:
+            j_meta = meta_db.get(ImportJob, job_id)
+            if j_meta is not None:
+                m = dict(j_meta.staged_metadata or {})
+                m["celery_task_id"] = dsi_task_id
+                j_meta.staged_metadata = m
+                meta_db.commit()
+
+    job = await db.get(ImportJob, job_id)
+    if dispatched:
+        return {
+            "async": True,
+            "ok": True,
+            "import_job_id": job_id,
+            "task_id": dsi_task_id,
+            "status": job.status if job else None,
+            "stage": job.stage if job else None,
+            "template_slug": job.template_slug if job else "distributor_inventory",
+            "message": "Revalidation started in the background worker.",
+        }
+
+    if job and job.status == "failed":
+        raise HTTPException(
+            status_code=422,
+            detail=job.error_summary or "Import job failed during revalidation.",
+        )
 
     return {
+        "async": False,
         "ok": True,
-        "import_job_id": updated.id,
-        "status": updated.status,
-        "stage": updated.stage,
-        "template_slug": updated.template_slug,
+        "import_job_id": job_id,
+        "status": job.status if job else None,
+        "stage": job.stage if job else None,
+        "template_slug": job.template_slug if job else "distributor_inventory",
     }
+
+
+@router.get("/import-jobs/{job_id}/dsi-channel-geographic-evidence", status_code=200)
+async def dsi_channel_geographic_evidence(job_id: int, db: AsyncSession = Depends(get_db)):
+    """Channel file values that look like countries/regions (hint evidence, not RTM mapping)."""
+    await _assert_dsi_import_job(db, job_id)
+
+    from app.services.imports.dsi_channel_geographic_evidence import (
+        collect_dsi_channel_geographic_evidence_sync,
+    )
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return collect_dsi_channel_geographic_evidence_sync(sess, job_id)
+
+    try:
+        return await db.run_sync(_work)
+    except ValueError as exc:
+        msg = str(exc)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg) from exc
+        raise HTTPException(status_code=400, detail=msg) from exc
 
 
 @router.get("/import-jobs/{job_id}/dsi-unresolved-geo-tokens", status_code=200)
@@ -941,6 +1187,67 @@ async def dsi_geo_steward_region_alias(
             import_job_id=job_id,
             region_id=body.region_id,
             raw_token=body.raw_token,
+            notes=body.notes,
+        )
+
+    try:
+        out = await db.run_sync(_work)
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    await db.commit()
+    return out
+
+
+class DsiGeoRegisterRegionHintBody(BaseModel):
+    raw_token: str = Field(..., min_length=1, max_length=512)
+    iso_alpha2: str | None = Field(default=None, min_length=2, max_length=2)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+@router.get("/import-jobs/{job_id}/dsi-geo-steward/create-prefill", status_code=200)
+async def dsi_geo_steward_create_prefill(
+    job_id: int,
+    raw_token: str = Query(..., min_length=1),
+    dimension: str = Query(..., pattern="^(region|channel)$"),
+    normalized_token: str | None = Query(default=None, max_length=512),
+    db: AsyncSession = Depends(get_db),
+):
+    await _assert_dsi_import_job(db, job_id)
+    dim = (dimension or "region").strip().lower()
+    if dim not in ("region", "channel"):
+        raise HTTPException(status_code=400, detail="dimension must be region or channel")
+
+    def _work(_sess: Session) -> dict[str, str]:
+        pre = suggest_geo_create_prefill_sync(
+            raw_token=raw_token,
+            dimension=dim,
+            normalized_token=normalized_token,
+        )
+        return {
+            "suggested_code": pre["code"],
+            "suggested_name": pre["name"],
+            "prefill_source": pre["prefill_source"],
+        }
+
+    return await db.run_sync(_work)
+
+
+@router.post("/import-jobs/{job_id}/dsi-geo-steward/region-register-from-hint", status_code=201)
+async def dsi_geo_steward_region_register_from_hint(
+    job_id: int,
+    body: DsiGeoRegisterRegionHintBody,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(_require_admin_role),
+):
+    """Create or resolve ISO region and alias a file token (channel geographic hint — not channel→region mapping)."""
+    await _assert_dsi_import_job(db, job_id)
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return register_region_from_geographic_hint_sync(
+            sess,
+            import_job_id=job_id,
+            raw_token=body.raw_token,
+            iso_alpha2=body.iso_alpha2,
             notes=body.notes,
         )
 

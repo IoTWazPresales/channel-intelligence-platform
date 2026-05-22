@@ -4,7 +4,10 @@ export type DsiBulkAction =
   | 'map_distributor'
   | 'resolve_product'
   | 'create_provisional_customer'
-  | 'create_provisional_distributor';
+  | 'create_provisional_distributor'
+  | 'set_plan_fallback_region'
+  | 'set_plan_fallback_channel'
+  | 'apply_suggested_region';
 
 export type DsiCatalogOpt = { id: number; code: string; name: string };
 
@@ -15,6 +18,20 @@ export type DsiUnresolvedGeoRowDto = {
   resolution_detail: string;
   candidate_ids: number[];
   row_count: number;
+  geographic_hint?: {
+    guessed_region_code: string;
+    matched_catalog: boolean;
+    region_id: number | null;
+  };
+};
+
+export type DsiRegionEvidenceDto = {
+  suggested_region_id: number | null;
+  confidence: number;
+  explanation_summary: string;
+  explanation_factors: Array<Record<string, unknown>>;
+  channel_geographic_hints: Array<Record<string, unknown>>;
+  province_evidence: Record<string, unknown>;
 };
 
 export type DsiBulkPreviewResponse = {
@@ -31,6 +48,26 @@ export type DsiBulkApplyResponse = {
   failed: number;
   results: Array<Record<string, unknown>>;
   totals: Record<string, unknown>;
+};
+
+export type DsiBulkProvisionalAsyncEnqueueResponse = {
+  import_job_id: number;
+  task_id: string;
+  async_poll: boolean;
+  action: DsiBulkAction;
+};
+
+export type DsiBulkTaskStatusResponse = {
+  import_job_id: number;
+  task_id: string;
+  state: string;
+  phase?: string;
+  phase_label?: string;
+  current_row?: number;
+  total_rows?: number;
+  pct?: number;
+  result?: DsiBulkApplyResponse;
+  error?: string;
 };
 
 export type DsiPlanRowOverride = {

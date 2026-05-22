@@ -84,6 +84,8 @@ export type ImportStewardCandidateWorkspaceProps<TRow extends ImportStewardCandi
   /** Rendered after list title/description — e.g. entity tabs that filter the table below. */
   tabsSlot?: ReactNode;
   filtersSlot?: ReactNode;
+  /** Rendered directly under toolbar and above filters (e.g. bulk steward form). */
+  bulkFormSlot?: ReactNode;
   toolbarSlot?: ReactNode;
   actionFeedback?: ImportStewardActionFeedback | null;
   getRowSx?: (row: TRow) => SxProps<Theme> | undefined;
@@ -98,4 +100,6 @@ export type ImportStewardCandidateWorkspaceProps<TRow extends ImportStewardCandi
   embedded?: boolean;
   /** Keep table chrome (and filter-empty row) when `openRows` is empty but filters are active. */
   keepTableWhenFilterEmpty?: boolean;
+  /** When set, replaces the candidate table (e.g. Region & channel catalog stewardship tab). */
+  mainContentSlot?: ReactNode;
 };

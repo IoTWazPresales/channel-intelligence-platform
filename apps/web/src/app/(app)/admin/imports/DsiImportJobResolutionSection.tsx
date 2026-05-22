@@ -14,15 +14,20 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent } from 'react';
-import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
+import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 
 import {
+  DsiBulkActionInlineForm,
   DsiBulkStewardSection,
   DsiCandidateStewardDrawer,
   DsiCandidatesPagination,
   DsiEntityTabsBar,
   DsiPendingButton,
-  DsiResolutionPlanAdvancedAccordion,
+  DsiCountryRegionFallback,
+  DsiRegionChannelTabPanel,
+  DsiResolutionPlanToolbar,
+  isDsiEntityCandidateTab,
+  type DsiRegionEvidenceDto,
   DsiStewardCandidateFilters,
   DsiStewardLoadingCallout,
   DSI_STEWARD_CONFIG,
@@ -35,11 +40,11 @@ import {
   defaultDsiStewardFiltersForTab,
   dsiTabDependencyNudge,
   filterDsiStewardCandidates,
-  dsiStewardFiltersAreDefault,
   formatPlanActionLabel,
   invalidateDsiImportJobStewardQueries,
   useDsiBulkSteward,
   useDsiResolutionPlan,
+  type DsiBulkAction,
   type DsiCandidateRow,
   type DsiEntityTabId,
   type DsiStewardCandidateFilterState,
@@ -71,6 +76,7 @@ export function DsiImportJobResolutionSection({
     distributor: defaultDsiStewardFiltersForTab('distributor'),
     customer: defaultDsiStewardFiltersForTab('customer'),
     product: defaultDsiStewardFiltersForTab('product'),
+    region_channel: defaultDsiStewardFiltersForTab('region_channel'),
   }));
 
   const [detailCandidate, setDetailCandidate] = useState<DsiCandidateRow | null>(null);
@@ -82,6 +88,14 @@ export function DsiImportJobResolutionSection({
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [planApplySummary, setPlanApplySummary] = useState<string | null>(null);
   const selectionAnchorIdRef = useRef<number | null>(null);
+  const workspaceToolbarRef = useRef<HTMLDivElement | null>(null);
+
+  const focusWorkspaceToolbar = useCallback(() => {
+    const el = workspaceToolbarRef.current?.querySelector<HTMLElement>(
+      'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+    );
+    el?.focus();
+  }, []);
 
   const activeFilters = tabbedMode ? filtersByTab[activeTab] : candidateFilters;
   const setActiveFilters = useCallback(
@@ -97,8 +111,10 @@ export function DsiImportJobResolutionSection({
 
   const { counts: tabCounts, openByTab } = useDsiEntityTabCounts(importJobId, tabbedMode);
 
+  const isCandidateTab = isDsiEntityCandidateTab(activeTab);
+
   const candidatesPage = useDsiCandidatesPage(importJobId, activeFilters, {
-    enabled: tabbedMode && visitedTabs.has(activeTab),
+    enabled: tabbedMode && visitedTabs.has(activeTab) && isCandidateTab,
   });
 
   const candidates = candidatesOverride ?? candidatesPage.candidates;
@@ -133,11 +149,50 @@ export function DsiImportJobResolutionSection({
     setSelectedIds,
     setBulkMode,
     onInvalidate,
+    onBulkClosed: focusWorkspaceToolbar,
+    onApplyPlanFallback: async ({ action, regionId, channelId }) => {
+      if (action === 'set_plan_fallback_channel') {
+        plan.setPlanChannelId(channelId);
+        await plan.suggestionsQuery.refetch();
+      }
+    },
+    applySuggestedRegion: async ({ candidateIds }) => {
+      for (const id of candidateIds) {
+        const row = plan.planByCandidateId.get(id);
+        const ev = row?.region_evidence as DsiRegionEvidenceDto | undefined;
+        const rid = ev?.suggested_region_id;
+        if (rid != null && Number.isFinite(Number(rid))) {
+          plan.patchPlanOverride(id, { region_id: Number(rid) });
+        }
+      }
+      await plan.refreshPlanEffective.mutateAsync({
+        overrides: plan.overridesPayload(),
+        globalSuspicious: plan.planGlobalSuspicious,
+      });
+    },
   });
+
+  const closeBulkForm = useCallback(() => {
+    setBulkMode('normal');
+    setSelectedIds([]);
+    bulk.setPreviewOpen(false);
+    focusWorkspaceToolbar();
+  }, [bulk, focusWorkspaceToolbar]);
 
   const displayedCandidates = useMemo(
     () => filterDsiStewardCandidates(candidates, activeFilters, plan.planByCandidateId),
     [candidates, activeFilters, plan.planByCandidateId]
+  );
+
+  const openBulkWorkflow = useCallback(
+    (action: DsiBulkAction) => {
+      bulk.setBulkAction(action);
+      setBulkMode('selecting');
+      if (selectedIds.length === 0 && displayedCandidates.length > 0) {
+        setSelectedIds(displayedCandidates.map((c) => c.id));
+      }
+    },
+    [bulk, displayedCandidates, selectedIds.length]
   );
 
   const selectedReadyPlanIds = useMemo(() => {
@@ -235,7 +290,9 @@ export function DsiImportJobResolutionSection({
     setActiveTab(tab);
   }, []);
 
-  const dependencyNudge = tabbedMode ? dsiTabDependencyNudge(activeTab, openByTab) : null;
+  const dependencyNudge = tabbedMode
+    ? dsiTabDependencyNudge(activeTab, openByTab, openByTab.region_channel)
+    : null;
 
   const stewardOverlayBusy =
     bulk.bulkPreview.isPending ||
@@ -264,13 +321,11 @@ export function DsiImportJobResolutionSection({
     plan.suggestionsQuery.fetchStatus === 'fetching' &&
     !plan.suggestionsQuery.data;
 
-  const showCandidateFilters =
-    candidatesTotal > 0 || !dsiStewardFiltersAreDefault(activeFilters) || candidatesLoading;
+  const isRegionChannelTab = activeTab === 'region_channel';
 
+  /** Keep table shell whenever the job workspace is shown so chips + empty state stay aligned. */
   const keepTableWhenFilterEmpty =
-    showCandidateFilters &&
-    displayedCandidates.length === 0 &&
-    (candidates.length > 0 || !dsiStewardFiltersAreDefault(activeFilters));
+    importJobId != null && !candidatesLoading && isCandidateTab;
 
   const effectiveDetailCandidate = useMemo(() => {
     if (detailCandidate == null) return null;
@@ -317,9 +372,8 @@ export function DsiImportJobResolutionSection({
       listDomainId={DSI_STEWARD_CONFIG.listDomainId}
       importJobId={importJobId}
       copy={DSI_STEWARD_CONFIG.listShellCopy}
-      openRows={candidates}
-      filteredRows={displayedCandidates}
-      isLoading={candidatesLoading}
+      openRows={isRegionChannelTab ? [] : candidates}
+      filteredRows={isRegionChannelTab ? [] : displayedCandidates}
       busy={stewardOverlayBusy}
       busyOverlay={stewardBusyMessage ? { message: stewardBusyMessage } : null}
       columns={workspaceColumns}
@@ -342,7 +396,7 @@ export function DsiImportJobResolutionSection({
         ) : undefined
       }
       filtersSlot={
-        showCandidateFilters ? (
+        isRegionChannelTab ? null : (
           <DsiStewardCandidateFilters
             filters={activeFilters}
             onChange={setActiveFilters}
@@ -351,79 +405,164 @@ export function DsiImportJobResolutionSection({
             hideEntityFilter={tabbedMode}
             hidePartyFilter={tabbedMode && activeTab !== 'distributor'}
           />
-        ) : null
+        )
       }
+      mainContentSlot={
+        isRegionChannelTab ? (
+          <DsiRegionChannelTabPanel
+            importJobId={importJobId}
+            unresolvedGeoQuery={plan.unresolvedGeoQuery}
+            catalogChannels={plan.channels}
+            catalogRegions={plan.regions}
+            onInvalidate={plan.invalidateGeoAndPlan}
+          />
+        ) : undefined
+      }
+      isLoading={isRegionChannelTab ? plan.unresolvedGeoQuery.isLoading : candidatesLoading}
       toolbarSlot={
-        candidates.length > 0 ? (
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+        <Stack ref={workspaceToolbarRef} direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            {bulkMode === 'selecting' ? (
+              <BulkSelectionToolbar
+                mode={bulkMode}
+                selectedCount={selectedIds.length}
+                visibleRowCount={displayedCandidates.length}
+                onEnterSelectionMode={() => setBulkMode('selecting')}
+                onExitSelectionMode={closeBulkForm}
+                onSelectAllVisible={() => setSelectedIds(displayedCandidates.map((c) => c.id))}
+                onDeselectAll={() => setSelectedIds([])}
+                busy={
+                  bulk.bulkPreview.isPending ||
+                  bulk.bulkApply.isPending ||
+                  plan.applyResolutionPlan.isPending ||
+                  plan.refreshPlanEffective.isPending
+                }
+                previewDangerLabel="Preview bulk steward"
+                previewDangerDisabled={
+                  selectedIds.length === 0 || bulk.bulkPreview.isPending || !bulk.bulkFormReady
+                }
+                onPreviewDangerAction={() => void bulk.bulkPreview.mutateAsync()}
+              />
+            ) : isRegionChannelTab ? (
+              <>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => openBulkWorkflow('set_plan_fallback_channel')}
+                  data-testid="dsi-bulk-channel-open"
+                >
+                  Plan fallback channel…
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  Plan fallbacks only — map file tokens in the panel below.
+                </Typography>
+              </>
+            ) : (
+              <>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={displayedCandidates.length === 0 && selectedIds.length === 0}
+                  onClick={() => openBulkWorkflow('map_customer')}
+                  data-testid="dsi-bulk-map-open"
+                >
+                  Bulk map…
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={displayedCandidates.length === 0 && selectedIds.length === 0}
+                  onClick={() => openBulkWorkflow('create_provisional_customer')}
+                  data-testid="dsi-bulk-provisional-open"
+                >
+                  Bulk provisional…
+                </Button>
             <Button
               size="small"
               variant="outlined"
+              onClick={() => openBulkWorkflow('apply_suggested_region')}
               disabled={selectedIds.length === 0}
-              onClick={() => setBulkMode('selecting')}
+              data-testid="dsi-bulk-apply-suggested-region"
             >
-              Bulk map…
+              Apply suggested region…
             </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={selectedIds.length === 0}
-              onClick={() => setBulkMode('selecting')}
-            >
-              Bulk provisional…
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={!displayedCandidates.some((c) => plan.planByCandidateId.get(c.id)?.ready === true)}
-              onClick={selectVisibleReadyInGrid}
-              data-testid="dsi-plan-select-visible-ready"
-            >
-              Select visible ready
-            </Button>
-            <Typography variant="caption" color="text.secondary">
-              {selectedIds.length} selected · Ready {plan.readyPlanCandidateIds.length}
-            </Typography>
-            <Box sx={{ flexGrow: 1 }} />
-            <DsiPendingButton
-              variant="outlined"
-              size="small"
-              pending={plan.applyResolutionPlan.isPending}
-              pendingLabel="Applying…"
-              disabled={
-                selectedReadyPlanIds.length === 0 ||
-                plan.refreshPlanEffective.isPending ||
-                stewardOverlayBusy
-              }
-              onClick={() =>
-                void plan.applyResolutionPlan
-                  .mutateAsync({
-                    candidateIds: selectedReadyPlanIds,
-                    overrides: plan.overridesPayload(),
-                    globalSuspicious: plan.planGlobalSuspicious,
-                  })
-                  .catch(() => {})
-              }
-              data-testid="dsi-resolution-plan-apply-selected"
-            >
-              Apply selected ready ({selectedReadyPlanIds.length})
-            </DsiPendingButton>
-            <DsiPendingButton
-              variant="contained"
-              size="small"
-              pending={plan.applyResolutionPlan.isPending}
-              pendingLabel="Applying…"
-              disabled={
-                plan.readyPlanCandidateIds.length === 0 ||
-                plan.refreshPlanEffective.isPending ||
-                stewardOverlayBusy
-              }
-              onClick={() => plan.setApplyAllConfirmOpen(true)}
-              data-testid="dsi-resolution-plan-apply-all"
-            >
-              Apply all ready ({plan.readyPlanCandidateIds.length})
-            </DsiPendingButton>
+              </>
+            )}
+            {activeTab === 'customer' && bulkMode !== 'selecting' ? (
+              <DsiCountryRegionFallback
+                importJobId={importJobId}
+                enabled={plan.planRegionFallbackEnabled}
+                onEnabledChange={plan.setPlanRegionFallbackEnabled}
+                onRegionIdChange={plan.setPlanRegionId}
+                disabled={stewardOverlayBusy}
+              />
+            ) : null}
+            {!isRegionChannelTab ? (
+              <>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={!displayedCandidates.some((c) => plan.planByCandidateId.get(c.id)?.ready === true)}
+                  onClick={selectVisibleReadyInGrid}
+                  data-testid="dsi-plan-select-visible-ready"
+                >
+                  Select visible ready
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  {selectedIds.length} selected · Ready {plan.readyPlanCandidateIds.length}
+                </Typography>
+                <Box sx={{ flexGrow: 1 }} />
+                <DsiPendingButton
+                  variant="outlined"
+                  size="small"
+                  pending={plan.applyResolutionPlan.isPending}
+                  pendingLabel="Applying…"
+                  disabled={
+                    selectedReadyPlanIds.length === 0 ||
+                    plan.refreshPlanEffective.isPending ||
+                    stewardOverlayBusy
+                  }
+                  onClick={() =>
+                    void plan.applyResolutionPlan
+                      .mutateAsync({
+                        candidateIds: selectedReadyPlanIds,
+                        overrides: plan.overridesPayload(),
+                        globalSuspicious: plan.planGlobalSuspicious,
+                      })
+                      .catch(() => {})
+                  }
+                  data-testid="dsi-resolution-plan-apply-selected"
+                >
+                  Apply selected ready ({selectedReadyPlanIds.length})
+                </DsiPendingButton>
+                <DsiPendingButton
+                  variant="contained"
+                  size="small"
+                  pending={plan.applyResolutionPlan.isPending}
+                  pendingLabel="Applying…"
+                  disabled={
+                    plan.readyPlanCandidateIds.length === 0 ||
+                    plan.refreshPlanEffective.isPending ||
+                    stewardOverlayBusy
+                  }
+                  onClick={() => plan.setApplyAllConfirmOpen(true)}
+                  data-testid="dsi-resolution-plan-apply-all"
+                >
+                  Apply all ready ({plan.readyPlanCandidateIds.length})
+                </DsiPendingButton>
+              </>
+            ) : (
+              <Box sx={{ flexGrow: 1 }} />
+            )}
           </Stack>
+      }
+      bulkFormSlot={
+        bulkMode === 'selecting' ? (
+          <DsiBulkActionInlineForm
+            bulk={bulk}
+            regions={plan.regions}
+            channels={plan.channels}
+            onCancel={closeBulkForm}
+          />
         ) : null
       }
       getRowSx={(row) => {
@@ -452,9 +591,8 @@ export function DsiImportJobResolutionSection({
       <Typography variant="subtitle2">Resolve blockers for this import</Typography>
       <Alert severity="info">
         <Typography variant="body2" component="motion.div">
-          <strong>Validate → Resolve → Revalidate → Apply</strong>: click rows to select (Shift+click for a range); use Map,
-          Open, or Resolve in the Actions column to open the steward drawer. Bulk and plan apply sit above the candidate
-          table.{' '}
+          <strong>Validate → Resolve → Revalidate → Apply</strong>. Use entity tabs for distributors, customers, and
+          products; use <strong>Region &amp; channel</strong> when file geography does not match the catalog.{' '}
           <Link component={NextLink} href={`/admin/imports?job=${importJobId}`}>
             Import job workspace
           </Link>{' '}
@@ -466,16 +604,8 @@ export function DsiImportJobResolutionSection({
         </Typography>
       </Alert>
 
-      <DsiResolutionPlanAdvancedAccordion
-        importJobId={importJobId}
+      <DsiResolutionPlanToolbar
         candidatesCount={candidatesTotal}
-        regions={plan.regions}
-        channels={plan.channels}
-        unresolvedGeoQuery={plan.unresolvedGeoQuery}
-        planRegionId={plan.planRegionId}
-        setPlanRegionId={plan.setPlanRegionId}
-        planChannelId={plan.planChannelId}
-        setPlanChannelId={plan.setPlanChannelId}
         resolutionPlan={plan.resolutionPlan}
         planGlobalSuspicious={plan.planGlobalSuspicious}
         setPlanGlobalSuspicious={plan.setPlanGlobalSuspicious}
@@ -484,7 +614,6 @@ export function DsiImportJobResolutionSection({
         suggestionsQuery={plan.suggestionsQuery}
         refreshPlanEffective={plan.refreshPlanEffective}
         overridesPayload={plan.overridesPayload}
-        onInvalidate={plan.invalidateGeoAndPlan}
       />
 
       {planInitialLoading ? (
@@ -536,7 +665,7 @@ export function DsiImportJobResolutionSection({
           ) : null}
           {candidateWorkspace}
 
-          {tabbedMode ? (
+          {tabbedMode && isCandidateTab ? (
             <DsiCandidatesPagination
               page={candidatesPage.page}
               pageCount={candidatesPage.pageCount}
@@ -551,10 +680,11 @@ export function DsiImportJobResolutionSection({
           ) : null}
         </Box>
 
-        {effectiveDetailCandidate ? (
+        {effectiveDetailCandidate && isCandidateTab ? (
           <DsiCandidateStewardDrawer
             importJobId={importJobId}
             candidate={effectiveDetailCandidate}
+            planRow={plan.planByCandidateId.get(effectiveDetailCandidate.id) ?? null}
             onClose={() => setDetailCandidate(null)}
             onRowActionStart={(candidateId) => setRowActionPendingId(candidateId)}
             onRowActionEnd={() => setRowActionPendingId(null)}

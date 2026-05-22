@@ -115,8 +115,14 @@ def test_collect_unresolved_geo_merges_row_counts() -> None:
         }
         return out
 
-    with patch("app.services.imports.dsi_resolution_plan._resolve_source_geo_from_ctx", side_effect=fake_geo):
-        payload = collect_dsi_job_unresolved_geo_tokens_sync(sess, 99)
+    with patch(
+        "app.services.imports.dsi_geo_resolution_cache.resolve_source_geo_from_ctx_cached",
+        side_effect=fake_geo,
+    ):
+        with patch("app.services.imports.dsi_geo_resolution_cache.DSIGeoResolutionCache") as mock_cache_cls:
+            mock_cache_cls.build.return_value = MagicMock()
+            mock_cache_cls.build.return_value.preload_aliases = MagicMock()
+            payload = collect_dsi_job_unresolved_geo_tokens_sync(sess, 99)
 
     assert payload["import_job_id"] == 99
     assert len(payload["channels"]) == 1

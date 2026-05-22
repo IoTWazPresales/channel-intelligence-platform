@@ -21,9 +21,6 @@ export function DsiStewardCandidateFilters({
   /** Hide Bill To / Ship To when not on the Distributors tab. */
   hidePartyFilter?: boolean;
 }) {
-  /** Hide only when the tab/job has no open candidates at all — not when filters narrow to zero visible rows. */
-  if (totalCount === 0) return null;
-
   return (
     <Stack spacing={1} data-testid="dsi-steward-candidate-filters" role="region" aria-label="Filter mapping candidates">
       <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
@@ -32,7 +29,9 @@ export function DsiStewardCandidateFilters({
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography variant="caption" color="text.secondary">
-            Showing {visibleCount} of {totalCount}
+            {totalCount === 0
+              ? 'No open candidates on this tab'
+              : `Showing ${visibleCount} of ${totalCount}`}
           </Typography>
           <Button
             size="small"

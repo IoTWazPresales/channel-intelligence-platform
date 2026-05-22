@@ -22,6 +22,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { apiGet, apiPost } from '@/lib/api';
 
 import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
+import { contextPossibleDuplicateOf } from './dsiStewardCandidateFilterLogic';
 import {
   optimisticallyApplyStewardAction,
   type DsiStewardRowAction,
@@ -114,12 +115,14 @@ function buildStewardMutationLifecycle(
 export function DsiMappingStewardPanel({
   importJobId,
   candidate,
+  planRow,
   onRowActionStart,
   onRowActionEnd,
   onDone,
 }: {
   importJobId: number;
   candidate: DsiCandidateRow | null;
+  planRow?: Record<string, unknown> | null;
   onRowActionStart?: (candidateId: number) => void;
   onRowActionEnd?: () => void;
   onDone: () => void;
@@ -289,8 +292,16 @@ export function DsiMappingStewardPanel({
   });
 
   const revalidate = useMutation({
-    mutationFn: () =>
-      apiPost<{ ok: boolean }>(`/api/v1/mappings/import-jobs/${importJobId}/revalidate-distributor-sales-inventory`),
+    mutationFn: async () => {
+      const res = await apiPost<{ ok: boolean; async?: boolean }>(
+        `/api/v1/mappings/import-jobs/${importJobId}/revalidate-distributor-sales-inventory`
+      );
+      if (res.async) {
+        const { pollDsiImportPipelineUntilDone } = await import('./dsiImportPipelinePoll');
+        await pollDsiImportPipelineUntilDone(importJobId);
+      }
+      return res;
+    },
     onSuccess: () => invalidate(),
   });
 
@@ -338,6 +349,11 @@ export function DsiMappingStewardPanel({
 
   const ctx = (candidate.context ?? null) as Record<string, unknown> | null;
   const strat = strategicHint(ctx);
+  const dupHints = contextPossibleDuplicateOf(ctx);
+  const histRes =
+    planRow && typeof planRow.historical_resolution === 'object' && planRow.historical_resolution !== null
+      ? (planRow.historical_resolution as Record<string, unknown>)
+      : null;
   const isTerminal = ['resolved', 'ignored', 'waived_open_channel'].includes(candidate.status);
 
   return (
@@ -351,6 +367,35 @@ export function DsiMappingStewardPanel({
         <Alert severity="warning" data-testid="dsi-strategic-hint-alert">
           Channel evidence resembles a strategic marketplace or major retail chain. Do not assume Open Channel—map or
           create a customer, or confirm explicitly if Open Channel is correct.
+        </Alert>
+      ) : null}
+      {dupHints.length > 0 ? (
+        <Alert severity="info" variant="outlined" data-testid="dsi-possible-duplicates">
+          <Typography variant="body2" component="div">
+            <strong>Possible duplicates</strong> (same import job, name similarity after normalisation):
+            <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+              {dupHints.map((d) => (
+                <li key={d.normalized_key}>
+                  <code>{d.normalized_key}</code>
+                  {d.similarity_score != null
+                    ? ` — ${Math.round(d.similarity_score * 100)}% similar`
+                    : ''}
+                </li>
+              ))}
+            </ul>
+          </Typography>
+        </Alert>
+      ) : null}
+      {histRes ? (
+        <Alert severity="warning" variant="outlined" data-testid="dsi-historical-resolution">
+          <Typography variant="body2">
+            <strong>Previously resolved</strong> on import job {String(histRes.import_job_id ?? '—')} → customer{' '}
+            {String(histRes.customer_id ?? '—')}
+            {typeof histRes.confidence === 'number'
+              ? ` (${Math.round(Number(histRes.confidence) * 100)}% confidence)`
+              : ''}
+            . Confirm mapping — not auto-applied.
+          </Typography>
         </Alert>
       ) : null}
       <Typography variant="body2">

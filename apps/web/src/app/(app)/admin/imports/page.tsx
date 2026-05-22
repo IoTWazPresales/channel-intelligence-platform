@@ -59,8 +59,11 @@ import { toQueryError } from '@/lib/queryError';
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
 import { DSI_STEWARD_CONFIG } from '@/features/import-steward';
 
+import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
+
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
-import { DsiValidateProgressPanel, type DsiValidateProgress } from './DsiValidateProgressPanel';
+import { DsiValidateProgressPanel } from './DsiValidateProgressPanel';
+import type { DsiValidateProgress } from './DsiValidateProgressPanel';
 import type { DsiCandidateRow } from '../mappings/DsiCandidateStewardPanel';
 import {
   dsiContinueToApplyAllowed,
@@ -119,6 +122,18 @@ type Job = {
   archived_at?: string | null;
   staged_metadata?: Record<string, unknown> | null;
 };
+
+type ImportJobsListResponse = {
+  items: Job[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+function normalizeImportJobsList(payload: ImportJobsListResponse | Job[]): Job[] {
+  return Array.isArray(payload) ? payload : payload.items;
+}
 
 type RowResult = {
   id: number;
@@ -493,13 +508,13 @@ function AdminImportsPageContent() {
     refetch: refetchJobs,
   } = useQuery({
     queryKey: ['import-jobs', showArchivedImportJobs],
-    queryFn: ({ signal }) =>
-      apiGet<Job[]>(
-        showArchivedImportJobs
-          ? '/api/v1/imports/jobs?include_archived=true'
-          : '/api/v1/imports/jobs',
-        { signal },
-      ),
+    queryFn: async ({ signal }) => {
+      const url = showArchivedImportJobs
+        ? '/api/v1/imports/jobs?include_archived=true&limit=100'
+        : '/api/v1/imports/jobs?limit=100';
+      const payload = await apiGet<ImportJobsListResponse | Job[]>(url, { signal });
+      return normalizeImportJobsList(payload);
+    },
   });
 
   const { data: previewRows, refetch: refetchPreview } = useQuery({
@@ -756,6 +771,7 @@ function AdminImportsPageContent() {
     onSuccess: async (data) => {
       if (data.async) {
         setDsiValidateAsync(true);
+        void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
       } else {
         setDsiValidateAsync(false);
       }
@@ -800,19 +816,8 @@ function AdminImportsPageContent() {
     },
   });
 
-  // Polls real-time Celery task state (phase + row progress) while DSI validate is running.
-  const { data: dsiProgress } = useQuery({
-    queryKey: ['dsi-validate-progress', lastJobId],
-    queryFn: ({ signal }) =>
-      apiGet<DsiValidateProgress>(`/api/v1/imports/jobs/${lastJobId!}/dsi-progress`, { signal }),
+  const { data: dsiProgress } = useImportJobProgressQuery(lastJobId ?? undefined, {
     enabled: Boolean(isDsi && lastJobId != null && dsiValidateAsync),
-    refetchInterval: (q) => {
-      const p = q.state.data;
-      if (!p) return 1500;
-      const phase = (p.phase || '').trim();
-      if (phase === 'complete' || phase === 'failed') return false;
-      return 1500;
-    },
   });
 
   useEffect(() => {

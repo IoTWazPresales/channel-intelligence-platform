@@ -159,7 +159,13 @@ vi.mock('./pmMappingTargetOptions', () => ({
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(async (url: string) => {
     if (url === '/api/v1/imports/templates') return mockState.templates;
-    if (url === '/api/v1/imports/jobs' || url === '/api/v1/imports/jobs?include_archived=true') return [];
+    if (
+      url === '/api/v1/imports/jobs' ||
+      url === '/api/v1/imports/jobs?limit=100' ||
+      url === '/api/v1/imports/jobs?include_archived=true&limit=100'
+    ) {
+      return { items: [], total: 0, limit: 100, offset: 0, has_more: false };
+    }
     if (url.startsWith('/api/v1/imports/sources')) {
       if (url.includes('historical_lineup')) return mockState.hlSources ?? [];
       if (url.includes('distributor_inventory')) return mockState.dsiSources ?? [];

@@ -1,10 +1,18 @@
 # Channel Intelligence Platform — Current Context
 
 ## Branch
-`feature/shipment-evidence-source-key-steward`
+`main`
 
 ## Alembic Head
 `20260517_0037`
+
+## What Is Working (latest)
+- **DSI revalidate** (`POST .../revalidate-distributor-sales-inventory`): dispatches `imports.process_job` to Celery (same as validate); stores `celery_task_id` in `staged_metadata`; frontend polls `/api/v1/imports/jobs/{id}/dsi-progress` via `pollDsiImportPipelineUntilDone` — no 300s HTTP block.
+- **DSI steward UX (Option A)**: slim `DsiResolutionPlanToolbar` (refresh, summary chips, plan options ⋮ menu); fourth tab **Region & channel** with flat `DsiRegionChannelTabPanel` (no nested accordions); geo count on tab badge; entity tabs unchanged for distributor/customer/product.
+- **DSI region evidence + ISO fallback (D→A→B→C→E)**: `region_evidence` on resolution-plan rows (`dsi_customer_region_evidence.py`); channel values are geographic **hints only** (no channel→region FK); `GET /api/v1/reference/countries` + `POST .../regions/ensure-from-country`; Customers tab **Operating region fallback** (`DsiCountryRegionFallback`, default off); geo tab prefill + register-from-hint; bulk **Apply suggested region** (plan overrides); `docs/DSI_REGION_EVIDENCE_AND_FALLBACK_PLAN.md`.
+- **Region & channel tab UX**: `GeoStewardRegisterFromFile` (prefilled code/name from normalized token, one-click register); `DsiChannelGeographicEvidenceSection` (job-level channel→geo hint table with row counts); plan drawer lists per-customer channel hint tokens.
+- **Global background tasks** (nav bell): `GET /api/v1/imports/background-tasks` returns only Celery `PENDING`/`STARTED`/`PROGRESS`; terminal states clear `celery_task_id` / `dsi_bulk_task` from `staged_metadata` (pipeline + poll path); `useGlobalBackgroundTasks` stops polling when task list empty; shared progress fetchers for DSI/shipment/bulk.
+- **Import jobs list**: `GET /api/v1/imports/jobs` paginated (`items`, `total`, `limit`, `offset`, `has_more`), default `limit=50`, column projection only — no `inferred_schema` / `field_mapping` / `staged_metadata` JSONB.
 
 ## What Is Working
 - DSI upload: jobs reach `dsi_mapping_ready` with column headers (runs `infer_dsi_job_sync` inline)
@@ -122,11 +130,19 @@ DSI validate now reports detailed progress to the frontend via Celery task state
 - **Candidates API:** paginated `GET .../distributor-si-candidates` with `entity` filter per tab.
 - **Plan:** scoped to current tab page via `candidate_ids`; see `DSIPlanBuildContext` in `docs/DSI_RESOLUTION_PERFORMANCE.md`.
 
-## DSI steward UX fixes (uncommitted on branch)
+## DSI steward UX + intelligence (main, uncommitted)
 
+- **Bulk form inline:** toolbar → `DsiBulkActionInlineForm` → filters → table; Bulk map/provisional preset action; cancel/apply returns focus to toolbar.
+- **Customer name normalisation:** `dsi_customer_name_normalization.py` at validate; evidence norms use cleaned tokens.
+- **Duplicate hints:** text similarity (not embeddings) — see `docs/DSI_RESOLUTION_PERFORMANCE.md` flagged section.
+- **Historical + distributor-scoped resolution:** `dsi_customer_intelligence.py` + plan build preload; previously resolved → `needs_review` / not auto-applied.
+
+## DSI steward UX + performance (main, uncommitted)
+
+- **Filter chips:** always visible in resolution workspace (`filtersSlot` no longer gated on `candidatesTotal` / default filters); table shows rows or empty-filter message (`keepTableWhenFilterEmpty`).
+- **Bulk provisional customers:** Celery task `imports.dsi_bulk_provisional_customers` — single commit batch; `POST .../dsi-steward-bulk-provisional-customers/apply-async` + poll `GET .../dsi-steward-bulk-task/{task_id}`; sync `dsi-steward-bulk-apply` rejects `create_provisional_customer`; frontend polls then one steward invalidation.
+- **Unresolved geo tokens:** `DSIGeoResolutionCache` preloads dim catalogs + batch alias lookups; see `docs/DSI_RESOLUTION_PERFORMANCE.md` for index recommendations (no migration run).
 - **Revisit deep-link:** validated/failed DSI jobs open wizard step 6 (Validate) when using `?job=` — not step 4 upload.
-
-- **Filter chips:** stay visible when tab has candidates, non-default filters active, or fetch in flight; empty filter shows “No candidates match this filter…” inside table shell (`keepTableWhenFilterEmpty`).
 - **Loading spinners:** plan/geo use `fetchStatus === 'fetching'` (not bare `isPending`) so disabled queries do not stick loading.
 - **Plan/geo accordion:** hidden only when both `unresolvedGeoCount === 0` and `candidatesCount === 0`; geo sub-accordion hidden when no unresolved tokens; plan apply summary inline above table (`dsi-plan-apply-summary`).
 - **Helper:** `dsiUnresolvedGeoCount.ts` — `countUnresolvedGeoTokens()`; `dsiStewardFiltersAreDefault` exported from barrel.

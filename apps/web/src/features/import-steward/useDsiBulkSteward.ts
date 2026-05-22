@@ -6,6 +6,9 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { apiPost } from '@/lib/api';
 
+import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
+import { pollDsiBulkProvisionalTask } from './dsiBulkProvisionalPoll';
+
 import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
 import {
   bulkActionToStewardAction,
@@ -13,7 +16,12 @@ import {
   type DsiStewardRowAction,
 } from './dsiStewardCacheUpdates';
 import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
-import type { DsiBulkAction, DsiBulkApplyResponse, DsiBulkPreviewResponse } from './dsiSteward.types';
+import type {
+  DsiBulkAction,
+  DsiBulkApplyResponse,
+  DsiBulkPreviewResponse,
+  DsiBulkProvisionalAsyncEnqueueResponse,
+} from './dsiSteward.types';
 
 export function useDsiBulkSteward({
   importJobId,
@@ -21,12 +29,24 @@ export function useDsiBulkSteward({
   setSelectedIds,
   setBulkMode,
   onInvalidate,
+  onBulkClosed,
+  onApplyPlanFallback,
+  applySuggestedRegion,
 }: {
   importJobId: number;
   selectedIds: number[];
   setSelectedIds: (ids: number[] | ((prev: number[]) => number[])) => void;
   setBulkMode: (mode: BulkTableSelectionMode) => void;
   onInvalidate: () => void;
+  /** Called after successful apply or explicit cancel — return focus to toolbar. */
+  onBulkClosed?: () => void;
+  /** Client-only plan defaults (resolution suggestions), not steward API. */
+  onApplyPlanFallback?: (args: {
+    action: 'set_plan_fallback_region' | 'set_plan_fallback_channel';
+    regionId: string;
+    channelId: string;
+  }) => Promise<void>;
+  applySuggestedRegion?: (args: { candidateIds: number[] }) => Promise<void>;
 }) {
   const qc = useQueryClient();
 
@@ -125,6 +145,8 @@ export function useDsiBulkSteward({
     }
     if (bulkAction === 'create_provisional_customer') return true;
     if (bulkAction === 'create_provisional_distributor') return true;
+    if (bulkAction === 'set_plan_fallback_region' || bulkAction === 'set_plan_fallback_channel') return true;
+    if (bulkAction === 'apply_suggested_region') return selectedIds.length > 0;
     return false;
   }, [
     bulkAction,
@@ -139,6 +161,18 @@ export function useDsiBulkSteward({
 
   const bulkPreview = useMutation({
     mutationFn: async () => {
+      if (
+        bulkAction === 'set_plan_fallback_region' ||
+        bulkAction === 'set_plan_fallback_channel' ||
+        bulkAction === 'apply_suggested_region'
+      ) {
+        return {
+          import_job_id: importJobId,
+          action: bulkAction,
+          results: selectedIds.map((id) => ({ candidate_id: id })),
+          totals: { plan_only: true },
+        } satisfies DsiBulkPreviewResponse;
+      }
       const body = buildBulkBody();
       return apiPost<DsiBulkPreviewResponse>(
         `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-preview`,
@@ -155,13 +189,62 @@ export function useDsiBulkSteward({
 
   const bulkApply = useMutation({
     mutationFn: async () => {
+      if (bulkAction === 'apply_suggested_region' && applySuggestedRegion) {
+        await applySuggestedRegion({ candidateIds: [...selectedIds] });
+        return {
+          import_job_id: importJobId,
+          action: bulkAction,
+          applied: selectedIds.length,
+          failed: 0,
+          results: [],
+        } satisfies DsiBulkApplyResponse;
+      }
+      if (
+        (bulkAction === 'set_plan_fallback_region' || bulkAction === 'set_plan_fallback_channel') &&
+        onApplyPlanFallback
+      ) {
+        await onApplyPlanFallback({
+          action: bulkAction,
+          regionId: bulkRegionId,
+          channelId: bulkChannelId,
+        });
+        return {
+          import_job_id: importJobId,
+          action: bulkAction,
+          applied: 0,
+          failed: 0,
+          results: [],
+        } satisfies DsiBulkApplyResponse;
+      }
       const body = buildBulkBody();
+      if (bulkAction === 'create_provisional_customer') {
+        const enqueued = await apiPost<DsiBulkProvisionalAsyncEnqueueResponse>(
+          `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-provisional-customers/apply-async`,
+          body
+        );
+        registerClientBackgroundTask({
+          taskId: enqueued.task_id,
+          importJobId,
+          kind: 'dsi_bulk_provisional',
+          label: `Creating provisional customers (DSI job ${importJobId})`,
+        });
+        void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+        return pollDsiBulkProvisionalTask(importJobId, enqueued.task_id);
+      }
       return apiPost<DsiBulkApplyResponse>(
         `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-apply`,
         body
       );
     },
     onMutate: async () => {
+      if (
+        bulkAction === 'create_provisional_customer' ||
+        bulkAction === 'set_plan_fallback_region' ||
+        bulkAction === 'set_plan_fallback_channel' ||
+        bulkAction === 'apply_suggested_region'
+      ) {
+        return undefined;
+      }
       const stewardAction = bulkActionToStewardAction(bulkAction);
       if (!stewardAction || selectedIds.length === 0) return undefined;
       const previous = optimisticallyApplyStewardBulk(qc, importJobId, selectedIds, stewardAction);
@@ -176,8 +259,16 @@ export function useDsiBulkSteward({
       }
     },
     onSuccess: (data) => {
+      const planOnly =
+        bulkAction === 'set_plan_fallback_region' ||
+        bulkAction === 'set_plan_fallback_channel' ||
+        bulkAction === 'apply_suggested_region';
       setBulkApplySummary(
-        `Bulk steward: applied ${data.applied}, failed ${data.failed}. Re-run import validation (server) when ready.`
+        planOnly
+          ? bulkAction === 'apply_suggested_region'
+            ? 'Suggested region overrides applied to the plan — review effective geo, then Apply selected ready when ready.'
+            : 'Plan fallback updated — refresh suggestions if the grid does not update automatically.'
+          : `Bulk steward: applied ${data.applied}, failed ${data.failed}. Re-run import validation (server) when ready.`
       );
       setPreviewOpen(false);
       setPreviewData(null);
@@ -186,6 +277,7 @@ export function useDsiBulkSteward({
       setSelectedIds([]);
       invalidateDsiImportJobStewardQueries(qc, importJobId, { includeImportJobsList: true });
       onInvalidate();
+      onBulkClosed?.();
     },
   });
 

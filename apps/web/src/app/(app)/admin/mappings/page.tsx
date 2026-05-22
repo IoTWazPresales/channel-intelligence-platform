@@ -126,9 +126,16 @@ function AdminMappingsPageContent() {
   const revalidateJob = useMutation({
     mutationFn: async () => {
       if (importJobId == null) throw new Error('Missing import job');
-      return apiPost<{ ok: boolean }>(
+      const res = await apiPost<{ ok: boolean; async?: boolean }>(
         `/api/v1/mappings/import-jobs/${importJobId}/revalidate-distributor-sales-inventory`
       );
+      if (res.async) {
+        const { pollDsiImportPipelineUntilDone } = await import(
+          '@/features/import-steward/dsiImportPipelinePoll'
+        );
+        await pollDsiImportPipelineUntilDone(importJobId);
+      }
+      return res;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: dsiQueryKey });

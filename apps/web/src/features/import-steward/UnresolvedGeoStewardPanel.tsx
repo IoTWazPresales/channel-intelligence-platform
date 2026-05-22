@@ -19,6 +19,7 @@ import { apiPost, safeDisplayError } from "@/lib/api";
 
 import { DSI_STEWARD_CONFIG, invalidateDsiCatalogQueries, invalidateDsiImportJobStewardQueries } from "./dsiSteward.config";
 import { DsiPendingButton } from "./DsiPendingButton";
+import { GeoStewardRegisterFromFile } from "./GeoStewardRegisterFromFile";
 import type { DsiCatalogOpt, DsiUnresolvedGeoRowDto } from "./dsiSteward.types";
 
 export function UnresolvedGeoStewardPanel({
@@ -39,11 +40,7 @@ export function UnresolvedGeoStewardPanel({
   const qc = useQueryClient();
   const [msg, setMsg] = useState<string | null>(null);
   const [chMapId, setChMapId] = useState<Record<string, string>>({});
-  const [chNewCode, setChNewCode] = useState<Record<string, string>>({});
-  const [chNewName, setChNewName] = useState<Record<string, string>>({});
   const [rgMapId, setRgMapId] = useState<Record<string, string>>({});
-  const [rgNewCode, setRgNewCode] = useState<Record<string, string>>({});
-  const [rgNewName, setRgNewName] = useState<Record<string, string>>({});
 
   const invalidateGeo = useCallback(() => {
     invalidateDsiImportJobStewardQueries(qc, importJobId);
@@ -105,8 +102,25 @@ export function UnresolvedGeoStewardPanel({
     },
   });
 
+  const hintRegionMut = useMutation({
+    mutationFn: async (args: { raw_token: string; iso_alpha2?: string }) =>
+      apiPost(`/api/v1/mappings/import-jobs/${importJobId}/dsi-geo-steward/region-register-from-hint`, {
+        raw_token: args.raw_token,
+        iso_alpha2: args.iso_alpha2 ?? null,
+        notes: null,
+      }),
+    onSuccess: () => {
+      setMsg('Region registered from geographic hint (not channel→region mapping). Revalidate when ready.');
+      invalidateGeo();
+    },
+  });
+
   const geoBusy =
-    chAliasMut.isPending || chCreateMut.isPending || rgAliasMut.isPending || rgCreateMut.isPending;
+    chAliasMut.isPending ||
+    chCreateMut.isPending ||
+    rgAliasMut.isPending ||
+    rgCreateMut.isPending ||
+    hintRegionMut.isPending;
 
   if (channels.length === 0 && regions.length === 0) {
     return (
@@ -141,6 +155,34 @@ export function UnresolvedGeoStewardPanel({
                 <Typography variant="caption" color="text.secondary" display="block">
                   Detail: {row.resolution_detail} · rows in file (candidates): {row.row_count}
                 </Typography>
+                {row.geographic_hint ? (
+                  <Alert severity="info" variant="outlined" sx={{ mt: 1 }}>
+                    Geographic hint (not RTM): {row.geographic_hint.guessed_region_code ?? '—'}
+                    {row.geographic_hint.matched_catalog ? ' · catalog match' : ' · no catalog match yet'}
+                  </Alert>
+                ) : null}
+                {row.geographic_hint ? (
+                  <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} flexWrap="wrap" useFlexGap>
+                    <DsiPendingButton
+                      size="small"
+                      variant="contained"
+                      pending={hintRegionMut.isPending}
+                      pendingLabel="Registering…"
+                      disabled={geoBusy && !hintRegionMut.isPending}
+                      onClick={() =>
+                        void hintRegionMut
+                          .mutateAsync({
+                            raw_token: row.raw_token,
+                            iso_alpha2: row.geographic_hint?.guessed_region_code ?? undefined,
+                          })
+                          .catch(() => {})
+                      }
+                      data-testid={`dsi-geo-hint-region-${row.normalized_token}`}
+                    >
+                      Register ISO region from hint
+                    </DsiPendingButton>
+                  </Stack>
+                ) : null}
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }} alignItems={{ sm: 'center' }}>
                   <FormControl size="small" sx={{ minWidth: 200 }}>
                     <InputLabel id={`${k}-map`}>Map to existing channel</InputLabel>
@@ -176,49 +218,20 @@ export function UnresolvedGeoStewardPanel({
                     Save alias
                   </DsiPendingButton>
                 </Stack>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="caption" color="text.secondary">
-                  Or create a new governed channel (distinct RTM stays distinct)
-                </Typography>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 0.75 }}>
-                  <TextField
-                    size="small"
-                    label="New channel code"
-                    value={chNewCode[k] ?? ''}
-                    onChange={(e) => setChNewCode((m) => ({ ...m, [k]: e.target.value }))}
-                    inputProps={{ 'data-testid': `dsi-geo-ch-code-${row.normalized_token}` }}
-                  />
-                  <TextField
-                    size="small"
-                    label="New channel name"
-                    value={chNewName[k] ?? ''}
-                    onChange={(e) => setChNewName((m) => ({ ...m, [k]: e.target.value }))}
-                    inputProps={{ 'data-testid': `dsi-geo-ch-name-${row.normalized_token}` }}
-                  />
-                  <DsiPendingButton
-                    size="small"
-                    variant="contained"
-                    pending={chCreateMut.isPending}
-                    pendingLabel="Creating…"
-                    disabled={
-                      (geoBusy && !chCreateMut.isPending) ||
-                      !(chNewCode[k] || '').trim() ||
-                      !(chNewName[k] || '').trim()
-                    }
-                    onClick={() =>
-                      void chCreateMut
-                        .mutateAsync({
-                          raw_token: row.raw_token,
-                          channel_code: (chNewCode[k] || '').trim(),
-                          channel_name: (chNewName[k] || '').trim(),
-                        })
-                        .catch(() => {})
-                    }
-                    data-testid={`dsi-geo-ch-create-${row.normalized_token}`}
-                  >
-                    Create + map
-                  </DsiPendingButton>
-                </Stack>
+                <GeoStewardRegisterFromFile
+                  row={row}
+                  dimension="channel"
+                  pending={chCreateMut.isPending}
+                  geoBusy={geoBusy}
+                  testIdPrefix={`dsi-geo-ch-${row.normalized_token}`}
+                  onRegister={async ({ raw_token, code, name }) => {
+                    await chCreateMut.mutateAsync({
+                      raw_token,
+                      channel_code: code,
+                      channel_name: name,
+                    });
+                  }}
+                />
               </Paper>
             );
           })}
@@ -272,49 +285,20 @@ export function UnresolvedGeoStewardPanel({
                     Save alias
                   </DsiPendingButton>
                 </Stack>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="caption" color="text.secondary">
-                  Or create a new governed region
-                </Typography>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 0.75 }}>
-                  <TextField
-                    size="small"
-                    label="New region code"
-                    value={rgNewCode[k] ?? ''}
-                    onChange={(e) => setRgNewCode((m) => ({ ...m, [k]: e.target.value }))}
-                    inputProps={{ 'data-testid': `dsi-geo-rg-code-${row.normalized_token}` }}
-                  />
-                  <TextField
-                    size="small"
-                    label="New region name"
-                    value={rgNewName[k] ?? ''}
-                    onChange={(e) => setRgNewName((m) => ({ ...m, [k]: e.target.value }))}
-                    inputProps={{ 'data-testid': `dsi-geo-rg-name-${row.normalized_token}` }}
-                  />
-                  <DsiPendingButton
-                    size="small"
-                    variant="contained"
-                    pending={rgCreateMut.isPending}
-                    pendingLabel="Creating…"
-                    disabled={
-                      (geoBusy && !rgCreateMut.isPending) ||
-                      !(rgNewCode[k] || '').trim() ||
-                      !(rgNewName[k] || '').trim()
-                    }
-                    onClick={() =>
-                      void rgCreateMut
-                        .mutateAsync({
-                          raw_token: row.raw_token,
-                          region_code: (rgNewCode[k] || '').trim(),
-                          region_name: (rgNewName[k] || '').trim(),
-                        })
-                        .catch(() => {})
-                    }
-                    data-testid={`dsi-geo-rg-create-${row.normalized_token}`}
-                  >
-                    Create + map
-                  </DsiPendingButton>
-                </Stack>
+                <GeoStewardRegisterFromFile
+                  row={row}
+                  dimension="region"
+                  pending={rgCreateMut.isPending}
+                  geoBusy={geoBusy}
+                  testIdPrefix={`dsi-geo-rg-${row.normalized_token}`}
+                  onRegister={async ({ raw_token, code, name }) => {
+                    await rgCreateMut.mutateAsync({
+                      raw_token,
+                      region_code: code,
+                      region_name: name,
+                    });
+                  }}
+                />
               </Paper>
             );
           })}

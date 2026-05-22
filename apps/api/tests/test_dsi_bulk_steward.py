@@ -54,11 +54,12 @@ def test_dsi_bulk_body_resolve_with_payload() -> None:
     assert b.product_id == 42
 
 
-def test_dsi_bulk_body_create_provisional_customer_requires_region_channel() -> None:
+def test_dsi_bulk_body_create_provisional_customer_allows_optional_geo() -> None:
     from app.api.v1.endpoints.mappings import DsiBulkStewardBody
 
-    with pytest.raises(ValidationError):
-        DsiBulkStewardBody(action="create_provisional_customer", candidate_ids=[1], region_id=10, channel_id=None)
+    b = DsiBulkStewardBody(action="create_provisional_customer", candidate_ids=[1], region_id=10, channel_id=None)
+    assert b.region_id == 10
+    assert b.channel_id is None
 
 
 def test_dsi_bulk_body_create_provisional_customer_ok() -> None:
@@ -73,6 +74,25 @@ def test_dsi_bulk_body_create_provisional_customer_ok() -> None:
     )
     assert b.region_id == 10
     assert b.provisional_notes_summary == "batch note"
+
+
+def test_dsi_bulk_provisional_payload_from_body() -> None:
+    from app.api.v1.endpoints.mappings import DsiBulkStewardBody, _dsi_bulk_provisional_payload_from_body
+
+    b = DsiBulkStewardBody(
+        action="create_provisional_customer",
+        candidate_ids=[1, 2],
+        region_id=10,
+        channel_id=20,
+        partner_tier="tier_1",
+        provisional_notes_summary="note",
+    )
+    p = _dsi_bulk_provisional_payload_from_body(b)
+    assert p["candidate_ids"] == [1, 2]
+    assert p["region_id"] == 10
+    assert p["channel_id"] == 20
+    assert p["partner_tier"] == "tier_1"
+    assert p["provisional_notes_summary"] == "note"
 
 
 def test_dsi_bulk_body_create_provisional_distributor_ok() -> None:

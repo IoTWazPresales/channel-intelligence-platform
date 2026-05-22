@@ -44,7 +44,20 @@ export {
 export { useInboundEvidenceMappingCandidatesListModel } from './useInboundEvidenceMappingCandidatesListModel';
 
 export { DsiGeoStewardAccordion } from './DsiGeoStewardAccordion';
-export { DsiResolutionPlanAdvancedAccordion } from './DsiResolutionPlanAdvancedAccordion';
+export { DsiResolutionPlanToolbar } from './DsiResolutionPlanToolbar';
+export { DsiRegionChannelTabPanel } from './DsiRegionChannelTabPanel';
+export { DsiCountryRegionFallback } from './DsiCountryRegionFallback';
+export {
+  DsiResolutionPlanAdvancedAccordion,
+  DsiResolutionSuggestionsBar,
+  DsiUnresolvedGeoStewardBlock,
+} from './DsiResolutionPlanAdvancedAccordion';
+export {
+  DSI_ENTITY_CANDIDATE_TABS,
+  isDsiEntityCandidateTab,
+} from './dsiEntityTabs';
+export { pollDsiImportPipelineUntilDone } from './dsiImportPipelinePoll';
+export { DsiBulkActionInlineForm } from './DsiBulkActionInlineForm';
 export { DsiBulkStewardSection } from './DsiBulkStewardSection';
 export { UnresolvedGeoStewardPanel } from './UnresolvedGeoStewardPanel';
 export { useDsiResolutionPlan } from './useDsiResolutionPlan';
@@ -54,6 +67,11 @@ export {
   formatPlanActionLabel,
   summarizeApplyAllReadyProvisional,
 } from './dsiResolutionPlanDisplay';
+export {
+  formatDsiRegionEvidenceDisplay,
+  formatDsiRegionEvidenceTitle,
+  REGION_EVIDENCE_SOURCE_LABELS,
+} from './dsiRegionEvidenceDisplay';
 export { DsiEligibleProductPicker, type DsiEligibleProductSnapshot } from './DsiEligibleProductPicker';
 export { DsiCandidatesPagination } from './DsiCandidatesPagination';
 export { DsiCandidateStewardDrawer } from './DsiCandidateStewardDrawer';

@@ -82,20 +82,10 @@ describe('DsiImportJobResolutionSection bulk steward', () => {
     const user = userEvent.setup();
     renderSection();
 
-    await user.click(screen.getByRole('button', { name: /bulk actions/i }));
-    const bulkToolbar = await screen.findByTestId('bulk-selection-toolbar');
-    await user.click(within(bulkToolbar).getByRole('button', { name: /^Select visible$/i }));
+    await user.click(screen.getByTestId('dsi-bulk-map-open'));
+    await screen.findByTestId('dsi-bulk-action-form');
 
-    await waitFor(() => {
-      expect(screen.getByTestId('bulk-selection-count')).toHaveTextContent('1 selected');
-    });
-
-    const previewBtn = screen.getByTestId('bulk-preview-danger');
-    await waitFor(() => expect(previewBtn).not.toBeDisabled());
-
-    await user.click(screen.getByLabelText(/bulk action/i));
-    await user.click(await screen.findByRole('option', { name: /map to existing customer/i }));
-
+    const previewBtn = screen.getByTestId('dsi-bulk-preview-inline');
     await waitFor(() => expect(previewBtn).toBeDisabled());
 
     const customerField = await screen.findByRole('spinbutton', { name: /customer id/i });
@@ -300,8 +290,9 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     const user = userEvent.setup();
     renderPlanSection();
     await waitForSuggestionsPost();
-    await user.click(screen.getByTestId('dsi-resolution-plan-advanced'));
+    await screen.findByTestId('dsi-resolution-plan-toolbar');
     const before = mockApiPost.mock.calls.filter((c) => String(c[0]).includes('effective')).length;
+    await user.click(screen.getByTestId('dsi-plan-options-open'));
     await user.click(screen.getByTestId('dsi-plan-global-suspicious-confirm'));
     await waitFor(
       () => {
@@ -393,6 +384,17 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
     for (let i = 0; i < 12; i += 1) {
       expect(within(grid).getByTitle(`T${i}`)).toBeInTheDocument();
     }
+  });
+
+  it('shows filter chips and empty table message when there are zero candidates', async () => {
+    renderPlanSection([]);
+    const filters = await screen.findByTestId('dsi-steward-candidate-filters');
+    expect(within(filters).getByTestId('dsi-filter-queue-all')).toBeInTheDocument();
+    expect(within(filters).getByText(/No open candidates on this tab/)).toBeInTheDocument();
+    const grid = screen.getByTestId('dsi-resolution-candidate-grid');
+    expect(
+      within(grid).getByText(/No DSI mapping candidates for this import job/i)
+    ).toBeInTheDocument();
   });
 
   it('queue filter chips narrow visible workspace rows', async () => {

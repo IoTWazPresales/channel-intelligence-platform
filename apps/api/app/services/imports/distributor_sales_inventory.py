@@ -30,6 +30,8 @@ from app.models.import_distributor_si import (
 from app.models.ingestion import ImportJob, ImportRowResult
 from app.models.mapping import ProductAlias
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
+from app.services.imports.dsi_customer_intelligence import annotate_dsi_customer_candidate_duplicates
+from app.services.imports.dsi_customer_name_normalization import normalize_customer_name_token
 from app.services.imports.dsi_shipment_corroboration import (
     shipment_corroboration_for_customer,
     shipment_corroboration_for_product,
@@ -1557,18 +1559,24 @@ def process_distributor_sales_inventory(
                 a["total_units"] += abs(qty_sold)
             if reported_rev is not None:
                 a["total_value"] += abs(reported_rev)
-            cu_ev = (
-                _norm_key(cust_raw)
-                if cust_raw and not _customer_token_is_placeholder(_norm_key(cust_raw), cust_raw)
-                else None
-            )
-            if cu_ev:
-                lst = a["customer_evidence_norms"]
-                if cu_ev not in lst and len(lst) < 8:
-                    lst.append(cu_ev)
+            if cust_raw and not _customer_token_is_placeholder(_norm_key(cust_raw), cust_raw):
+                cu_ev = normalize_customer_name_token(cust_raw)
+                if cu_ev:
+                    lst = a["customer_evidence_norms"]
+                    if cu_ev not in lst and len(lst) < 8:
+                        lst.append(cu_ev)
+            if rdistributor_id is not None:
+                dist_set = a.setdefault("sellout_distributor_ids", set())
+                if isinstance(dist_set, set):
+                    dist_set.add(int(rdistributor_id))
             if dg_raw and not _dealer_group_is_placeholder(dg_raw):
                 if a.get("dealer_group_raw") is None:
                     a["dealer_group_raw"] = dg_raw.strip()[:512]
+                dg_norm = normalize_customer_name_token(dg_raw)
+                if dg_norm:
+                    lst_dg = a["customer_evidence_norms"]
+                    if dg_norm not in lst_dg and len(lst_dg) < 8:
+                        lst_dg.append(dg_norm)
             if cust_raw and not _customer_token_is_placeholder(_norm_key(cust_raw), cust_raw):
                 scs: list[str] = a["source_customer_raw_samples"]
                 t = cust_raw.strip()[:512]
@@ -1630,6 +1638,8 @@ def process_distributor_sales_inventory(
     if on_progress is not None:
         on_progress("building_candidates", "Building candidates", total_rows, total_rows)
 
+    annotate_dsi_customer_candidate_duplicates(agg)
+
     for (etype, nkey), data in agg.items():
         ctx: dict[str, Any] = {"aggregated": True}
         dealer_token_col: str | None = None
@@ -1641,6 +1651,14 @@ def process_distributor_sales_inventory(
             evs = data.get("customer_evidence_norms") or []
             if evs:
                 ctx["customer_name_evidence_norms"] = evs[:8]
+            dup_hints = data.get("possible_duplicate_of")
+            if isinstance(dup_hints, list) and dup_hints:
+                ctx["possible_duplicate_of"] = dup_hints[:16]
+            dist_ids = data.get("sellout_distributor_ids")
+            if isinstance(dist_ids, set) and len(dist_ids) == 1:
+                ctx["dominant_distributor_id"] = int(next(iter(dist_ids)))
+            elif isinstance(dist_ids, set) and len(dist_ids) > 1:
+                ctx["sellout_distributor_ids"] = sorted(int(x) for x in dist_ids)[:8]
             dgr_store = data.get("dealer_group_raw")
             if isinstance(dgr_store, str) and dgr_store.strip():
                 ctx["dealer_group_account_raw"] = dgr_store.strip()[:512]

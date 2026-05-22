@@ -34,6 +34,7 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
   selection,
   tabsSlot,
   filtersSlot,
+  bulkFormSlot,
   toolbarSlot,
   actionFeedback,
   getRowSx,
@@ -43,6 +44,7 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
   onRowClick,
   embedded = false,
   keepTableWhenFilterEmpty = false,
+  mainContentSlot,
 }: ImportStewardCandidateWorkspaceProps<TRow>) {
   const showEmptyOpen =
     importJobId != null && !isLoading && openRows.length === 0 && !keepTableWhenFilterEmpty;
@@ -83,7 +85,8 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
             {actionFeedback.message}
           </Alert>
         ) : null}
-        {toolbarSlot ? <Box>{toolbarSlot}</Box> : null}
+        {toolbarSlot ? <Box data-testid="import-steward-candidate-workspace-toolbar">{toolbarSlot}</Box> : null}
+        {bulkFormSlot ? <Box data-testid="import-steward-candidate-workspace-bulk-form">{bulkFormSlot}</Box> : null}
         {filtersSlot ? (
           <Box
             data-testid={filtersRegionTestId}
@@ -93,7 +96,10 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
             {filtersSlot}
           </Box>
         ) : null}
-        {importJobId != null && isLoading ? (
+        {mainContentSlot ? (
+          <Box data-testid="import-steward-candidate-workspace-main-content">{mainContentSlot}</Box>
+        ) : null}
+        {mainContentSlot == null && importJobId != null && isLoading ? (
           <Stack spacing={1.5} data-testid="import-steward-candidate-workspace-loading">
             {copy.loadingMessage ? (
               <Typography variant="body2" color="text.secondary">
@@ -111,12 +117,12 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
             />
           </Stack>
         ) : null}
-        {showEmptyOpen ? (
+        {mainContentSlot == null && showEmptyOpen ? (
           <Typography variant="body2" color="text.secondary">
             {copy.emptyOpenListMessage ?? 'No open mapping candidates for this job.'}
           </Typography>
         ) : null}
-        {showTable ? (
+        {mainContentSlot == null && showTable ? (
           <Box sx={{ position: 'relative' }}>
             <Backdrop
               sx={{
@@ -163,8 +169,11 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
                   <TableRow>
                     <TableCell colSpan={colSpan}>
                       <Typography variant="body2" color="text.secondary">
-                        {copy.emptyFilteredMessage ??
-                          'No rows match the current filters. Clear filters or pick a different combination.'}
+                        {openRows.length === 0
+                          ? (copy.emptyOpenListMessage ??
+                            'No open mapping candidates for this import job.')
+                          : (copy.emptyFilteredMessage ??
+                            'No rows match the current filters. Clear filters or pick a different combination.')}
                       </Typography>
                     </TableCell>
                   </TableRow>

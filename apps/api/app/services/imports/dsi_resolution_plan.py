@@ -323,11 +323,17 @@ def derive_effective_provisional_customer_geo_sync(
     default_region_id: int | None,
     default_channel_id: int | None,
     import_job: ImportJob | None = None,
+    geo_cache: Any | None = None,
 ) -> dict[str, Any]:
     """Shared by resolution plan rows and bulk provisional customer preview/apply."""
     ctx = cand.context if isinstance(cand.context, dict) else {}
     src_def = dsi_geo_channel_alias_source_id(cand, import_job)
-    geo = _resolve_source_geo_from_ctx(session, ctx, source_definition_id=src_def)
+    if geo_cache is not None:
+        from app.services.imports.dsi_geo_resolution_cache import resolve_source_geo_from_ctx_cached
+
+        geo = resolve_source_geo_from_ctx_cached(geo_cache, ctx, source_definition_id=src_def)
+    else:
+        geo = _resolve_source_geo_from_ctx(session, ctx, source_definition_id=src_def)
     src_r = geo.get("source_region_resolved_id")
     src_c = geo.get("source_channel_resolved_id")
     src_r = int(src_r) if src_r is not None else None
@@ -709,7 +715,70 @@ def plan_dsi_candidate_sync(
             dg_raw = str(cand.dealer_group_token)
 
         primary, _notes = effective_dsi_customer_primary_for_resolution(cust_first, dg_raw)
+        dist_id: int | None = None
+        dom = ctx.get("dominant_distributor_id")
+        if dom is not None:
+            try:
+                dist_id = int(dom)
+            except (TypeError, ValueError):
+                dist_id = None
+
         if plan_ctx is not None:
+            from app.services.imports.dsi_customer_intelligence import (
+                lookup_historical_customer_resolution,
+                resolve_customer_id_distributor_scoped_alias,
+            )
+
+            hist = lookup_historical_customer_resolution(
+                plan_ctx.historical_customers,
+                distributor_id=dist_id,
+                normalized_key=str(cand.normalized_key or ""),
+                customer_raw=primary,
+                dealer_group_raw=dg_raw,
+            )
+            if hist is not None:
+                return {
+                    **base,
+                    "suggested_action": "map_customer",
+                    "plan_status": "needs_review",
+                    "ready": False,
+                    "confidence": float(hist.confidence),
+                    "reason": (
+                        f"Previously resolved on import job {hist.import_job_id} "
+                        f"({hist.resolution_kind}) — confirm before applying"
+                    ),
+                    "suggested_target_id": int(hist.customer_id),
+                    "needs_defaults": False,
+                    "needs_confirm_suspicious_distributor": False,
+                    "historical_resolution": {
+                        "label": "previously_resolved",
+                        "import_job_id": hist.import_job_id,
+                        "customer_id": hist.customer_id,
+                        "match_reason": hist.match_reason,
+                        "resolution_kind": hist.resolution_kind,
+                        "confidence": float(hist.confidence),
+                    },
+                }
+            if dist_id is not None and primary:
+                scoped_cid = resolve_customer_id_distributor_scoped_alias(
+                    plan_ctx.res_cache,
+                    source_id=source_def_id,
+                    distributor_id=dist_id,
+                    normalized_customer=_norm_key(primary),
+                )
+                if scoped_cid is not None:
+                    return {
+                        **base,
+                        "suggested_action": "map_customer",
+                        "plan_status": "ready",
+                        "ready": True,
+                        "confidence": 0.93,
+                        "reason": "Matched approved customer alias for this distributor (stronger than generic alias)",
+                        "suggested_target_id": int(scoped_cid),
+                        "needs_defaults": False,
+                        "needs_confirm_suspicious_distributor": False,
+                        "resolution_signal": "distributor_scoped_alias",
+                    }
             rcid, diag = resolve_customer_for_plan(
                 plan_ctx,
                 source_id=source_def_id,
@@ -953,9 +1022,19 @@ def build_dsi_resolution_plan_sync(
         q = q.limit(100)
         plan_truncated = True
     cands = list(session.scalars(q.order_by(ImportEntityMappingCandidate.entity_type, ImportEntityMappingCandidate.id)).all())
-    plan_ctx = build_dsi_plan_build_context(session)
-    rows = [
-        _baseline_annotate(
+    plan_ctx = build_dsi_plan_build_context(session, current_job_id=job_id)
+    from app.services.imports.dsi_customer_region_evidence import build_job_region_evidence_batch
+
+    region_evidence_by_id = build_job_region_evidence_batch(
+        session,
+        job,
+        cands,
+        plan_ctx=plan_ctx,
+        default_region_id=default_region_id,
+    )
+    rows = []
+    for c in cands:
+        base_row = _baseline_annotate(
             plan_dsi_candidate_sync(
                 session,
                 c,
@@ -967,8 +1046,10 @@ def build_dsi_resolution_plan_sync(
             ),
             c,
         )
-        for c in cands
-    ]
+        ev = region_evidence_by_id.get(int(c.id))
+        if ev is not None:
+            base_row["region_evidence"] = ev
+        rows.append(base_row)
     ready_n = sum(1 for r in rows if r.get("ready"))
     out: dict[str, Any] = {
         "import_job_id": job_id,
@@ -1204,7 +1285,16 @@ def build_dsi_resolution_plan_effective_sync(
     cands = list(
         session.scalars(q.order_by(ImportEntityMappingCandidate.entity_type, ImportEntityMappingCandidate.id)).all()
     )
-    plan_ctx = build_dsi_plan_build_context(session)
+    plan_ctx = build_dsi_plan_build_context(session, current_job_id=job_id)
+    from app.services.imports.dsi_customer_region_evidence import build_job_region_evidence_batch
+
+    region_evidence_by_id = build_job_region_evidence_batch(
+        session,
+        job,
+        cands,
+        plan_ctx=plan_ctx,
+        default_region_id=default_region_id,
+    )
     rows: list[dict[str, Any]] = []
     for c in cands:
         base = plan_dsi_candidate_sync(
@@ -1216,6 +1306,9 @@ def build_dsi_resolution_plan_effective_sync(
             default_channel_id=default_channel_id,
             plan_ctx=plan_ctx,
         )
+        ev = region_evidence_by_id.get(int(c.id))
+        if ev is not None:
+            base["region_evidence"] = ev
         ov = by_cid.get(int(c.id))
         merged = merge_resolution_plan_row_for_apply(
             cand=c,
@@ -1269,10 +1362,19 @@ def collect_dsi_job_unresolved_geo_tokens_sync(session: Session, job_id: int) ->
         ).all()
     )
 
+    from app.services.imports.dsi_geo_resolution_cache import (
+        DSIGeoResolutionCache,
+        collect_geo_tokens_from_candidates,
+        resolve_source_geo_from_ctx_cached,
+    )
+
+    geo_cache = DSIGeoResolutionCache.build(session)
+    geo_cache.preload_aliases(collect_geo_tokens_from_candidates(cands, job))
+
     for cand in cands:
         ctx = cand.context if isinstance(cand.context, dict) else {}
         sid = dsi_geo_channel_alias_source_id(cand, job)
-        geo = _resolve_source_geo_from_ctx(session, ctx, source_definition_id=sid)
+        geo = resolve_source_geo_from_ctx_cached(geo_cache, ctx, source_definition_id=sid)
         rc = int(cand.row_count or 0)
 
         if not geo.get("provisional_channel_conflict"):
@@ -1320,19 +1422,35 @@ def collect_dsi_job_unresolved_geo_tokens_sync(session: Session, job_id: int) ->
                     ent["row_count"] += rc
 
     def _finalize(rows: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+        from app.reference.iso3166_countries import resolve_alpha2_from_token
+
+        region_code_lower: dict[str, int] = {}
+        for r in session.scalars(select(DimRegion)).all():
+            ck = (r.code or "").strip().lower()
+            if ck:
+                region_code_lower[ck] = int(r.id)
+
         out = []
         for ent in rows.values():
             ids = sorted(set(ent["candidate_ids"]))
-            out.append(
-                {
-                    "dimension": ent["dimension"],
-                    "normalized_token": ent["normalized_token"],
-                    "raw_token": ent["raw_token"],
-                    "resolution_detail": ent["resolution_detail"],
-                    "candidate_ids": ids,
-                    "row_count": int(ent["row_count"]),
-                }
-            )
+            item: dict[str, Any] = {
+                "dimension": ent["dimension"],
+                "normalized_token": ent["normalized_token"],
+                "raw_token": ent["raw_token"],
+                "resolution_detail": ent["resolution_detail"],
+                "candidate_ids": ids,
+                "row_count": int(ent["row_count"]),
+            }
+            if ent["dimension"] == "channel":
+                iso = resolve_alpha2_from_token(str(ent["raw_token"]))
+                if iso:
+                    rid = region_code_lower.get(iso.lower())
+                    item["geographic_hint"] = {
+                        "guessed_region_code": iso,
+                        "matched_catalog": rid is not None,
+                        "region_id": rid,
+                    }
+            out.append(item)
         out.sort(key=lambda x: (x["dimension"], x["normalized_token"]))
         return out
 

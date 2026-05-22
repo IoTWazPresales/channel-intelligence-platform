@@ -1,0 +1,55 @@
+/** Shared progress shapes for import-job Celery tasks (DSI pipeline, bulk provisional, etc.). */
+
+export type ImportJobPipelineProgress = {
+  job_id?: number;
+  stage?: string;
+  status?: string;
+  phase?: string;
+  phase_label?: string;
+  current_row?: number;
+  total_rows?: number;
+  pct?: number;
+  task_state?: string | null;
+};
+
+export type BulkProvisionalTaskProgress = {
+  import_job_id: number;
+  task_id: string;
+  state: string;
+  phase?: string;
+  phase_label?: string;
+  current_row?: number;
+  total_rows?: number;
+  pct?: number;
+  error?: string;
+};
+
+export type BackgroundTaskKind =
+  | 'dsi_pipeline'
+  | 'dsi_bulk_provisional'
+  | 'shipment_import'
+  | 'product_master_commit';
+
+export type BackgroundTaskStatus = 'running' | 'succeeded' | 'failed';
+
+export type BackgroundTaskRecord = {
+  task_id: string;
+  import_job_id: number;
+  kind: BackgroundTaskKind;
+  label: string;
+  status: BackgroundTaskStatus;
+  template_slug?: string | null;
+  file_name?: string | null;
+  phase?: string;
+  phase_label?: string;
+  current_row?: number;
+  total_rows?: number;
+  pct?: number;
+  task_state?: string | null;
+  polled_at?: string;
+};
+
+export type BackgroundTasksListResponse = {
+  tasks: BackgroundTaskRecord[];
+  count: number;
+};

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiGet, apiPost } from '@/lib/api';
 
+import { pollDsiImportPipelineUntilDone } from './dsiImportPipelinePoll';
 import { DSI_STEWARD_CONFIG, invalidateDsiCatalogQueries, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
 import { patchDsiCandidatesCache } from './dsiStewardCacheUpdates';
 import type { DsiCatalogOpt, DsiPlanRowOverride, DsiUnresolvedGeoRowDto } from './dsiSteward.types';
@@ -26,6 +27,7 @@ export function useDsiResolutionPlan({
 }) {
   const qc = useQueryClient();
 
+  const [planRegionFallbackEnabled, setPlanRegionFallbackEnabled] = useState(false);
   const [planRegionId, setPlanRegionId] = useState('');
   const [planChannelId, setPlanChannelId] = useState('');
   const [resolutionPlan, setResolutionPlan] = useState<Record<string, unknown> | null>(null);
@@ -56,14 +58,20 @@ export function useDsiResolutionPlan({
       ),
   });
 
+  const planRegionFallbackKey = planRegionFallbackEnabled && planRegionId.trim() !== '' ? planRegionId : '';
+
   const planDefaultsBody = useCallback(
     () => ({
       default_region_id:
-        planRegionId.trim() !== '' && Number.isFinite(Number(planRegionId)) ? Number(planRegionId) : null,
+        planRegionFallbackEnabled &&
+        planRegionId.trim() !== '' &&
+        Number.isFinite(Number(planRegionId))
+          ? Number(planRegionId)
+          : null,
       default_channel_id:
         planChannelId.trim() !== '' && Number.isFinite(Number(planChannelId)) ? Number(planChannelId) : null,
     }),
-    [planRegionId, planChannelId]
+    [planRegionFallbackEnabled, planRegionId, planChannelId]
   );
 
   const pageCandidateIds = useMemo(() => candidates.map((c) => c.id), [candidates]);
@@ -77,7 +85,7 @@ export function useDsiResolutionPlan({
     queryKey: DSI_STEWARD_CONFIG.resolutionSuggestionsQueryKey(
       importJobId,
       candidateIdsKey,
-      planRegionId,
+      planRegionFallbackKey,
       planChannelId
     ),
     enabled: importJobId > 0 && pageCandidateIds.length > 0,
@@ -193,13 +201,25 @@ export function useDsiResolutionPlan({
   });
 
   const dsiRevalidateFromServer = useMutation({
-    mutationFn: async () =>
-      apiPost<{ ok: boolean }>(
+    mutationFn: async () => {
+      const res = await apiPost<{
+        ok: boolean;
+        async?: boolean;
+        import_job_id?: number;
+        message?: string;
+      }>(
         `/api/v1/mappings/import-jobs/${importJobId}/revalidate-distributor-sales-inventory`,
         {}
-      ),
+      );
+      if (res.async) {
+        void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+        await pollDsiImportPipelineUntilDone(importJobId);
+      }
+      return res;
+    },
     onSuccess: () => {
       invalidateDsiImportJobStewardQueries(qc, importJobId, { includeImportJobsList: true });
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
       onInvalidate();
     },
   });
@@ -250,6 +270,8 @@ export function useDsiResolutionPlan({
     regions,
     channels,
     unresolvedGeoQuery,
+    planRegionFallbackEnabled,
+    setPlanRegionFallbackEnabled,
     planRegionId,
     setPlanRegionId,
     planChannelId,

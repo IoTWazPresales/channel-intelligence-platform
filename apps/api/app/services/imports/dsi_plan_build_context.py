@@ -12,6 +12,12 @@ from app.models.dimensions import DimChannel, DimRegion
 from app.models.import_distributor_si import ChannelSourceTokenAlias, RegionSourceTokenAlias
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
+from app.services.imports.dsi_customer_intelligence import (
+    HistoricalCustomerResolution,
+    load_historical_customer_resolutions,
+    lookup_historical_customer_resolution,
+    resolve_customer_id_distributor_scoped_alias,
+)
 from app.services.imports.distributor_sales_inventory import (
     DSIResolutionCache,
     ProductResolutionIndex,
@@ -37,9 +43,10 @@ class DSIPlanBuildContext:
     channel_name_lower: dict[str, int]
     region_aliases: tuple[RegionSourceTokenAlias, ...]
     channel_aliases: tuple[ChannelSourceTokenAlias, ...]
+    historical_customers: dict[tuple[int | None, str], HistoricalCustomerResolution]
 
 
-def build_dsi_plan_build_context(session: Session) -> DSIPlanBuildContext:
+def build_dsi_plan_build_context(session: Session, *, current_job_id: int | None = None) -> DSIPlanBuildContext:
     res_cache = _build_resolution_cache(session, None)
     prod_idx = _load_product_resolution_index(session)
 
@@ -75,6 +82,25 @@ def build_dsi_plan_build_context(session: Session) -> DSIPlanBuildContext:
         session.scalars(select(ChannelSourceTokenAlias).where(ChannelSourceTokenAlias.status == "approved")).all()
     )
 
+    source_def_id: int | None = None
+    if current_job_id is not None:
+        source_def_id = session.scalar(
+            select(ImportEntityMappingCandidate.source_definition_id)
+            .where(ImportEntityMappingCandidate.import_job_id == int(current_job_id))
+            .limit(1)
+        )
+        if source_def_id is not None:
+            source_def_id = int(source_def_id)
+    historical_customers = (
+        load_historical_customer_resolutions(
+            session,
+            source_definition_id=source_def_id,
+            current_job_id=int(current_job_id),
+        )
+        if current_job_id is not None and source_def_id is not None
+        else {}
+    )
+
     return DSIPlanBuildContext(
         res_cache=res_cache,
         prod_idx=prod_idx,
@@ -86,6 +112,7 @@ def build_dsi_plan_build_context(session: Session) -> DSIPlanBuildContext:
         channel_name_lower=channel_name_lower,
         region_aliases=region_aliases,
         channel_aliases=channel_aliases,
+        historical_customers=historical_customers,
     )
 
 

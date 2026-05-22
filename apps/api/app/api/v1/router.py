@@ -24,6 +24,7 @@ from app.api.v1.endpoints import (
     products,
     promo_exports,
     promotions,
+    reference,
     roadmap,
     sellout,
     shipment_evidence,
@@ -34,6 +35,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(catalog.router, prefix="/catalog", tags=["catalog"])
+api_router.include_router(reference.router, prefix="/reference", tags=["reference"])
 api_router.include_router(products.router, prefix="/products", tags=["products"])
 api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
 api_router.include_router(distributors.router, prefix="/distributors", tags=["distributors"])

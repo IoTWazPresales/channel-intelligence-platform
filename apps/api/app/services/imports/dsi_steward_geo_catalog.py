@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 from app.models.dimensions import DimChannel, DimRegion
 from app.models.import_distributor_si import ChannelSourceTokenAlias, RegionSourceTokenAlias
 from app.models.ingestion import ImportJob
+from app.reference.iso3166_countries import alpha2_name_index, resolve_alpha2_from_token
 from app.services.imports.distributor_sales_inventory import _norm_key
+from app.services.imports.dsi_region_catalog import ensure_dim_region_from_iso_sync
 from app.services.imports.dsi_steward_candidate_ops import StewardOpError
 
 
@@ -296,3 +298,61 @@ def create_region_source_token_alias_sync(
         "normalized_token": nt,
         "raw_token": rt[:512],
     }
+
+
+def _title_from_normalized_token(normalized_token: str, *, fallback: str) -> str:
+    nk = (normalized_token or "").strip()
+    if not nk:
+        return fallback[:256]
+    return nk.replace("_", " ").strip().title()[:256]
+
+
+def suggest_geo_create_prefill_sync(
+    *,
+    raw_token: str,
+    dimension: str,
+    normalized_token: str | None = None,
+) -> dict[str, str]:
+    """Prefill steward create forms from file evidence (region or channel)."""
+    rt = (raw_token or "").strip()
+    nk = (normalized_token or "").strip() or rt
+    if dimension == "region":
+        iso = resolve_alpha2_from_token(rt)
+        if iso:
+            return {
+                "code": iso,
+                "name": alpha2_name_index()[iso],
+                "prefill_source": "iso_geographic_hint",
+            }
+        code = nk.upper().replace(" ", "_")[:32]
+        return {
+            "code": code,
+            "name": _title_from_normalized_token(nk, fallback=rt),
+            "prefill_source": "normalized_token",
+        }
+    code = nk.upper().replace(" ", "_")[:32]
+    name = _title_from_normalized_token(nk, fallback=rt)
+    return {"code": code, "name": name, "prefill_source": "normalized_token"}
+
+
+def register_region_from_geographic_hint_sync(
+    sess: Session,
+    *,
+    import_job_id: int,
+    raw_token: str,
+    iso_alpha2: str | None = None,
+    notes: str | None,
+) -> dict[str, object]:
+    """Ensure ISO region exists and alias file channel/region token — hint only, not channel→region FK."""
+    iso = (iso_alpha2 or "").strip().upper() or resolve_alpha2_from_token(raw_token)
+    if not iso:
+        raise StewardOpError("Could not infer ISO country from token", status_code=400)
+    ensured = ensure_dim_region_from_iso_sync(sess, iso_alpha2=iso)
+    alias_out = create_region_source_token_alias_sync(
+        sess,
+        import_job_id=import_job_id,
+        region_id=int(ensured["region_id"]),
+        raw_token=raw_token,
+        notes=notes or "Registered from geographic channel hint (evidence only).",
+    )
+    return {**ensured, **alias_out, "iso_alpha2": iso}

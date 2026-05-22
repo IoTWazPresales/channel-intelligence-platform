@@ -16,6 +16,11 @@ import {
   type DsiPlanWhy,
 } from '@/features/import-steward/dsiPlanExplainabilityDisplay';
 import {
+  formatDsiRegionEvidenceDisplay,
+  formatDsiRegionEvidenceTitle,
+} from '@/features/import-steward/dsiRegionEvidenceDisplay';
+import type { DsiRegionEvidenceDto } from '@/features/import-steward/dsiSteward.types';
+import {
   inboundEvidenceContextNeedsNameReview,
   inboundEvidenceContextParty,
   inboundEvidenceContextPossibleDuplicateOf,
@@ -301,6 +306,27 @@ export function buildDsiResolutionWorkspaceColumns(
                 {planWhy!.blockers!.join(', ')}
               </Typography>
             ) : null}
+            {(() => {
+              if (r.entity_type !== DSI_ENTITY_CUSTOMER || !pr?.region_evidence) return null;
+              const regionDisplay = formatDsiRegionEvidenceDisplay(
+                pr.region_evidence as DsiRegionEvidenceDto
+              );
+              if (!regionDisplay) return null;
+              return (
+                <Stack spacing={0} data-testid={`dsi-region-evidence-${r.id}`}>
+                  <Typography
+                    variant="caption"
+                    color={regionDisplay.kind === 'fallback' ? 'text.secondary' : 'info.main'}
+                    title={formatDsiRegionEvidenceTitle(pr.region_evidence as DsiRegionEvidenceDto)}
+                  >
+                    {regionDisplay.line}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {regionDisplay.sourceLabel}
+                  </Typography>
+                </Stack>
+              );
+            })()}
           </Stack>
         );
       },

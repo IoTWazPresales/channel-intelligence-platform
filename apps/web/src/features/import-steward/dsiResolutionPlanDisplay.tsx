@@ -14,7 +14,11 @@ import {
   Typography,
 } from "@mui/material";
 
-import type { DsiCatalogOpt, DsiPlanRowOverride } from "./dsiSteward.types";
+import {
+  formatDsiRegionEvidenceDisplay,
+  formatDsiRegionEvidenceTitle,
+} from "./dsiRegionEvidenceDisplay";
+import type { DsiCatalogOpt, DsiPlanRowOverride, DsiRegionEvidenceDto } from "./dsiSteward.types";
 import type { DsiCandidateRow } from "./dsi-mapping-steward-panel";
 import {
   DsiPlanWhyPanel,
@@ -353,6 +357,45 @@ export function PlanDialogRowDetail({
                       Source channel / route-to-market
                     </Typography>
                     <Typography variant="body2">{channel || '—'}</Typography>
+                  </>
+                );
+              })()}
+              {(() => {
+                const regionDisplay = formatDsiRegionEvidenceDisplay(
+                  r.region_evidence as DsiRegionEvidenceDto | undefined
+                );
+                if (!regionDisplay) return null;
+                return (
+                  <>
+                    <Typography variant="caption" color="text.secondary">
+                      {regionDisplay.kind === 'fallback' ? 'Fallback region' : 'Suggested region'}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      data-testid="dsi-plan-detail-region-evidence"
+                      title={formatDsiRegionEvidenceTitle(r.region_evidence as DsiRegionEvidenceDto)}
+                    >
+                      {regionDisplay.line}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Source: {regionDisplay.sourceLabel}
+                    </Typography>
+                    {Array.isArray((r.region_evidence as DsiRegionEvidenceDto).channel_geographic_hints) &&
+                    (r.region_evidence as DsiRegionEvidenceDto).channel_geographic_hints.length > 0 ? (
+                      <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Channel tokens detected as geography
+                        </Typography>
+                        {(r.region_evidence as DsiRegionEvidenceDto).channel_geographic_hints.map((h, i) => (
+                          <Typography key={i} variant="body2" component="div">
+                            {String(h.raw_token ?? '—')} → {String(h.guessed_region_code ?? '?')}
+                            {typeof h.row_count === 'number'
+                              ? ` · ${h.row_count.toLocaleString()} row(s) on this customer`
+                              : ''}
+                          </Typography>
+                        ))}
+                      </Stack>
+                    ) : null}
                   </>
                 );
               })()}

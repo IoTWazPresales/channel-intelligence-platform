@@ -6,7 +6,7 @@ from typing import Annotated, Any, Callable
 
 from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, joinedload
 
@@ -259,28 +259,56 @@ async def list_sources(
 async def list_jobs(
     db: AsyncSession = Depends(get_db),
     include_archived: bool = Query(default=False, description="When true, include jobs with archived_at set."),
+    limit: int = Query(default=50, ge=1, le=200, description="Max jobs returned (newest first)."),
+    offset: int = Query(default=0, ge=0, description="Pagination offset."),
 ):
-    stmt = select(ImportJob).order_by(ImportJob.id.desc())
-    if not include_archived:
-        stmt = stmt.where(ImportJob.archived_at.is_(None))
-    res = await db.execute(stmt)
-    rows = res.scalars().all()
-    return [
+    """Lightweight job list — omits large JSONB blobs (inferred_schema, field_mapping, staged_metadata)."""
+    filters = [] if include_archived else [ImportJob.archived_at.is_(None)]
+
+    count_stmt = select(func.count()).select_from(ImportJob)
+    if filters:
+        count_stmt = count_stmt.where(*filters)
+    total = int((await db.execute(count_stmt)).scalar_one() or 0)
+
+    list_cols = (
+        ImportJob.id,
+        ImportJob.source_id,
+        ImportJob.template_slug,
+        ImportJob.import_mode,
+        ImportJob.status,
+        ImportJob.stage,
+        ImportJob.file_name,
+        ImportJob.error_summary,
+        ImportJob.archived_at,
+        ImportJob.created_at,
+    )
+    stmt = select(*list_cols).order_by(ImportJob.id.desc()).limit(limit).offset(offset)
+    if filters:
+        stmt = stmt.where(*filters)
+
+    rows = (await db.execute(stmt)).all()
+    items = [
         {
-            "id": j.id,
-            "source_id": j.source_id,
-            "template_slug": j.template_slug,
-            "import_mode": j.import_mode,
-            "status": j.status,
-            "stage": j.stage,
-            "file_name": j.file_name,
-            "error_summary": j.error_summary,
-            "inferred_schema": j.inferred_schema,
-            "field_mapping": j.field_mapping,
-            "archived_at": j.archived_at,
+            "id": r.id,
+            "source_id": r.source_id,
+            "template_slug": r.template_slug,
+            "import_mode": r.import_mode,
+            "status": r.status,
+            "stage": r.stage,
+            "file_name": r.file_name,
+            "error_summary": r.error_summary,
+            "archived_at": r.archived_at,
+            "created_at": r.created_at,
         }
-        for j in rows
+        for r in rows
     ]
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(items) < total,
+    }
 
 
 @router.post("/jobs/bulk-delete-preview")
@@ -541,7 +569,7 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/jobs/{job_id}/dsi-progress")
 async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
-    """Return real-time DSI validation progress from Celery task state (Redis).
+    """Return real-time import pipeline progress from Celery task state (Redis).
 
     Reads the Celery task ID stored in ``staged_metadata.celery_task_id`` (written at
     dispatch time) and queries the Celery result backend for the current PROGRESS meta.
@@ -552,7 +580,7 @@ async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
     from celery.result import AsyncResult
 
     job = await db.get(ImportJob, job_id)
-    if not job or job.template_slug != "distributor_inventory":
+    if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
     stage = (job.stage or "").strip()
@@ -605,6 +633,17 @@ async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
         progress["phase_label"] = "Processing rows"
 
     return progress
+
+
+@router.get("/background-tasks")
+async def list_background_tasks(
+    limit: int = Query(default=40, ge=1, le=80),
+):
+    """Active Celery-backed import work for global nav progress (DSI validate, shipment import, bulk steward, etc.)."""
+    from app.services.imports.background_tasks import list_active_import_background_tasks
+
+    tasks = await list_active_import_background_tasks(limit=limit)
+    return {"tasks": tasks, "count": len(tasks)}
 
 
 @router.get("/jobs/{job_id}/shipment-mapping-state")
@@ -666,11 +705,20 @@ async def post_shipment_validate(job_id: int, db: AsyncSession = Depends(get_db)
         j.import_mode = "validate"
         sync_db.commit()
 
-    dispatched, _ = _enqueue_import_pipeline_job(
+    dispatched, shipment_task_id = _enqueue_import_pipeline_job(
         job_id,
         log_label="Shipment validate",
         in_process_thread_name=f"shipment-validate-{job_id}",
     )
+
+    if dispatched and shipment_task_id:
+        with SessionLocal() as meta_db:
+            j_meta = meta_db.get(ImportJob, job_id)
+            if j_meta is not None:
+                m = dict(j_meta.staged_metadata or {})
+                m["celery_task_id"] = shipment_task_id
+                j_meta.staged_metadata = m
+                meta_db.commit()
 
     job2 = await db.get(ImportJob, job_id)
     if job2 is not None:

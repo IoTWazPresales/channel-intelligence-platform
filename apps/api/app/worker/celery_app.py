@@ -16,6 +16,7 @@ celery_app.conf.task_routes = {
     "imports.process_job": {"queue": "celery"},
     "imports.infer_dsi": {"queue": "celery"},
     "imports.product_master_commit": {"queue": "celery"},
+    "imports.dsi_bulk_provisional_customers": {"queue": "celery"},
 }
 
 import app.worker.tasks  # noqa: E402, F401 — register tasks

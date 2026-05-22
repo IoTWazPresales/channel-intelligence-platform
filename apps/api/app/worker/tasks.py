@@ -105,6 +105,37 @@ def infer_dsi_import_job_task(job_id: int) -> int:
     return job_id
 
 
+@celery_app.task(name="imports.dsi_bulk_provisional_customers", bind=True, ack_late=True)
+def dsi_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dict:
+    """Batch provisional customer creates for DSI bulk steward (single commit, one replan on client)."""
+    from app.db.session_sync import SessionLocal
+    from app.services.imports.dsi_bulk_provisional_customers_sync import run_dsi_bulk_provisional_customers_sync
+
+    def _on_progress(current: int, total: int) -> None:
+        try:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "phase": "creating_provisional_customers",
+                    "phase_label": "Creating provisional customers",
+                    "current_row": current,
+                    "total_rows": total,
+                    "pct": round(current / total * 100) if total else 0,
+                },
+            )
+        except Exception:
+            pass
+
+    try:
+        with SessionLocal() as db:
+            return run_dsi_bulk_provisional_customers_sync(
+                db, job_id, payload, on_progress=_on_progress
+            )
+    except Exception:
+        logger.exception("dsi_bulk_provisional_customers failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.product_master_commit", bind=True, ack_late=True)
 def product_master_commit_task(self, job_id: int, confirm_destructive: bool) -> int:
     """Background Product Master apply: must be enqueued via try_enqueue_pm_commit_sync first."""

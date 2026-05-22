@@ -24,6 +24,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 
+import { GlobalBackgroundTasksIndicator } from '@/features/background-tasks/GlobalBackgroundTasksIndicator';
 import { navItems } from '@/features/shell/navConfig';
 import { useUiStore } from '@/stores/uiStore';
 
@@ -106,6 +107,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
           <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600, textAlign: { xs: 'left', md: 'left' } }}>
             {title}
           </Typography>
+          <GlobalBackgroundTasksIndicator />
           <Tooltip title="Getting started & how data flows">
             <IconButton color="inherit" component={Link} href="/getting-started" aria-label="Getting started">
               <HelpOutlineOutlinedIcon />

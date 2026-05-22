@@ -42,11 +42,30 @@ function contextSpecialCategory(ctx: Record<string, unknown> | null): string | n
   return t || null;
 }
 
-function contextPossibleDuplicateOf(ctx: Record<string, unknown> | null): string[] {
+export type DsiPossibleDuplicateHint = {
+  normalized_key: string;
+  similarity_score?: number;
+};
+
+export function contextPossibleDuplicateOf(ctx: Record<string, unknown> | null): DsiPossibleDuplicateHint[] {
   if (!ctx || !Array.isArray(ctx.possible_duplicate_of)) return [];
-  return ctx.possible_duplicate_of
-    .filter((x): x is string => typeof x === 'string' && Boolean(x.trim()))
-    .slice(0, 8);
+  const out: DsiPossibleDuplicateHint[] = [];
+  for (const x of ctx.possible_duplicate_of) {
+    if (typeof x === 'string' && x.trim()) {
+      out.push({ normalized_key: x.trim() });
+      continue;
+    }
+    if (x && typeof x === 'object' && 'normalized_key' in x) {
+      const nk = String((x as { normalized_key?: unknown }).normalized_key ?? '').trim();
+      if (!nk) continue;
+      const score = (x as { similarity_score?: unknown }).similarity_score;
+      out.push({
+        normalized_key: nk,
+        similarity_score: typeof score === 'number' ? score : undefined,
+      });
+    }
+  }
+  return out.slice(0, 8);
 }
 
 function contextPartyRaw(ctx: Record<string, unknown> | null): string | null {

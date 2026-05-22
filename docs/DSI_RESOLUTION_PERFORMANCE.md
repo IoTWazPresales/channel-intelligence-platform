@@ -1,67 +1,66 @@
-# DSI resolution performance notes
+# DSI resolution steward — performance and intelligence notes
 
-## Root cause (plan slowness at ~5k candidates)
+## Embedding-based duplicate detection (not implemented)
 
-`POST /mappings/import-jobs/{id}/dsi-resolution-plan` called `build_dsi_resolution_plan_sync` with **`candidate_ids` omitted**, so the service loaded **every** `import_entity_mapping_candidate` for the job and ran `plan_dsi_candidate_sync` once per row.
+**Flagged — stopped before implementation.**
 
-Per candidate, the uncached path performed multiple SQL round-trips:
+True embedding similarity would require a new dependency (e.g. `sentence-transformers`, OpenAI embeddings API) and likely a persistence layer (vector column or side table + migration) to avoid recomputing vectors on every validate.
 
-- `_resolve_distributor` — full `DimDistributor` scan + alias query
-- `_resolve_customer` — alias + code/name lookups
-- `derive_effective_provisional_customer_geo_sync` — region/channel catalog + alias queries via `session.get`
-- Product historical disambiguation — optional `db=session` shipment corroboration queries
+**Current approach:** text similarity after legal-suffix normalisation (`dsi_customer_name_normalization.py`) and pairwise `difflib.SequenceMatcher` within the import job (`annotate_dsi_customer_candidate_duplicates` in `dsi_customer_intelligence.py`). Scores are stored on candidate context as:
 
-With **5,337 candidates**, that is tens of thousands of queries (27–37s observed).
-
-## Root cause (UI freeze on load)
-
-`GET /mappings/import-jobs/{id}/distributor-si-candidates` returned **all** rows; the web app rendered the full list and keyed the resolution-plan query on every id.
-
-## Fixes implemented (no migration applied)
-
-### Candidates API
-
-- Paginated `GET` with `skip`, `limit` (default 100, max 1000), `total` in response.
-- Server-side filters: `entity`, `party`, `verify_name_only`, `special_category_only`, `possible_duplicates_only`, `status`.
-
-### Plan API
-
-- `DSIPlanBuildContext`: one-time preload of product index, `DSIResolutionCache`, regions/channels, geo aliases.
-- Plan path uses in-memory distributor/customer/geo resolution (no per-row table scans).
-- Ambiguous product with a single `eligible_products` entry resolves from **context** (no corroboration DB).
-- Frontend sends **`candidate_ids` for the current page only** (max 1000).
-- If `candidate_ids` is omitted, server plans at most **100** rows and returns `plan_scope_note`.
-
-### Frontend
-
-- TanStack Query page state, pagination controls, rows-per-page 100/250/500/1000.
-- Queue filter chips remain **client-side on the current page** (depend on plan rows).
-
-## Recommended index (migration not run — flag for approval)
-
-Existing: `import_job_id` index, unique `(import_job_id, entity_type, normalized_key)`.
-
-Suggested for large jobs (list + filter by job + entity + status):
-
-```sql
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_iemc_job_entity_status
-  ON import_entity_mapping_candidate (import_job_id, entity_type, status);
+```json
+"possible_duplicate_of": [{ "normalized_key": "…", "similarity_score": 0.87 }]
 ```
 
-Optional JSONB party filter (if used heavily):
+Threshold default: `0.82` (aligned with shipment evidence steward heuristics).
 
-```sql
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_iemc_context_party
-  ON import_entity_mapping_candidate ((context->>'party'))
-  WHERE entity_type = 'distributor_token';
-```
+---
 
-Do **not** run against `cip` without explicit approval.
+# DSI resolution steward — performance notes
 
-## Further optimizations (after this change)
+## `GET/POST …/dsi-unresolved-geo-tokens` (~31s observed)
 
-1. **Materialized plan snapshot** — store plan rows on validate completion; GET plan becomes read-only.
-2. **Background plan job** — Celery task for “plan all open candidates” with progress UI (like DSI validate).
-3. **Server-side queue filter** — persist `suggested_action` on candidate at validate time to filter without full replan.
-4. **Geo token endpoint** — paginate `dsi-unresolved-geo-tokens` if slow on large jobs.
-5. **Virtualized table** — `@tanstack/react-virtual` if row height grows with many columns.
+### Root cause
+
+`collect_dsi_job_unresolved_geo_tokens_sync` loaded every `customer_dealer_token` candidate for the job, then for **each** candidate called `_resolve_source_geo_from_ctx`, which issued multiple SQL lookups:
+
+- `DimChannel` / `DimRegion` by code or normalized name (per evidence token)
+- `ChannelSourceTokenAlias` / `RegionSourceTokenAlias` by `normalized_token` (per token)
+
+For jobs with thousands of customer candidates (e.g. ~4,600+), this became **O(candidates × queries)** with no catalog or alias batching.
+
+### Fix (code)
+
+`app/services/imports/dsi_geo_resolution_cache.py`:
+
+- Preload all `DimChannel` and `DimRegion` rows into in-memory maps once per request.
+- Collect normalized evidence tokens from all candidates, then **one** `IN (...)` query per alias table.
+- `collect_dsi_job_unresolved_geo_tokens_sync` uses `DSIGeoResolutionCache` instead of per-row DB resolution.
+
+The same cache is used for bulk provisional customer geo derivation (`derive_effective_provisional_customer_geo_sync` with `geo_cache=`).
+
+### Recommended indexes (not applied in this change — review before migration)
+
+| Table | Suggested index | Rationale |
+|-------|-----------------|-----------|
+| `import_entity_mapping_candidate` | `(import_job_id, entity_type)` | Geo collection filters on both; today often only `import_job_id` is indexed. |
+| `channel_source_token_alias` | `(normalized_token)` WHERE `status = 'approved'` (or composite `(normalized_token, status)`) | Batch alias preload uses `normalized_token IN (...)` + `status`. |
+| `region_source_token_alias` | Same as channel | Same pattern. |
+
+Verify existing indexes with `EXPLAIN (ANALYZE, BUFFERS)` on a representative job before adding migrations.
+
+---
+
+## Bulk provisional customer creation
+
+### Root cause
+
+`dsi-steward-bulk-apply` with `create_provisional_customer` looped `execute_create_provisional_dsi_customer`, which **`await db.commit()` per candidate**. Each commit was expensive; the UI then invalidated steward queries (including resolution plan), which could refetch heavy plan payloads repeatedly during long applies.
+
+### Fix (code)
+
+- `run_dsi_bulk_provisional_customers_sync`: one transaction, **single commit** after all creates.
+- Celery task `imports.dsi_bulk_provisional_customers` with progress meta.
+- `POST …/dsi-steward-bulk-provisional-customers/apply-async` + `GET …/dsi-steward-bulk-task/{task_id}`.
+- Sync `dsi-steward-bulk-apply` rejects `create_provisional_customer` (use async path).
+- Frontend: one enqueue + poll, **one** `invalidateDsiImportJobStewardQueries` on success (no optimistic cache update during provisional bulk).

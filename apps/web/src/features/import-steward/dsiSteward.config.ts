@@ -58,9 +58,10 @@ export const DSI_STEWARD_CONFIG = {
   resolutionSuggestionsQueryKey: (
     importJobId: number,
     candidateIdsKey: string,
-    planRegionId: string,
+    planRegionFallbackKey: string,
     planChannelId: string
-  ) => ['dsi-resolution-suggestions', importJobId, candidateIdsKey, planRegionId, planChannelId] as const,
+  ) => ['dsi-resolution-suggestions', importJobId, candidateIdsKey, planRegionFallbackKey, planChannelId] as const,
+  referenceCountriesQueryKey: () => ['reference-countries'] as const,
   unresolvedGeoTokensQueryKey: (importJobId: number) => ['dsi-unresolved-geo-tokens', importJobId] as const,
   catalogRegionsQueryKey: () => ['catalog-regions'] as const,
   catalogChannelsQueryKey: () => ['catalog-channels'] as const,

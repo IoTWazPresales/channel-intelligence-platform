@@ -8,6 +8,7 @@ import { DsiMappingStewardPanel, type DsiCandidateRow } from './dsi-mapping-stew
 export function DsiCandidateStewardDrawer({
   importJobId,
   candidate,
+  planRow,
   onClose,
   onRowActionStart,
   onRowActionEnd,
@@ -15,6 +16,7 @@ export function DsiCandidateStewardDrawer({
 }: {
   importJobId: number;
   candidate: DsiCandidateRow;
+  planRow?: Record<string, unknown> | null;
   onClose: () => void;
   onRowActionStart: (candidateId: number) => void;
   onRowActionEnd: () => void;
@@ -62,6 +64,7 @@ export function DsiCandidateStewardDrawer({
         <DsiMappingStewardPanel
           importJobId={importJobId}
           candidate={candidate}
+          planRow={planRow}
           onRowActionStart={onRowActionStart}
           onRowActionEnd={onRowActionEnd}
           onDone={onDone}

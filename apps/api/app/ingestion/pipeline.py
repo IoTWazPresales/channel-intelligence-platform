@@ -15,6 +15,7 @@ from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, So
 from app.models.mapping import EntityMappingQueue
 from app.services.catalog.product_import_sync import sync_bulk_upsert_products_from_rows
 from app.services.imports.distributor_sales_inventory import process_distributor_sales_inventory
+from app.services.imports.import_job_background_metadata import persist_clear_background_task_metadata
 from app.services.imports.shipment_evidence_import import process_shipment_evidence_import
 from app.services.imports.historical_lineup import process_historical_lineup_import
 from app.storage.local import get_storage_backend
@@ -745,6 +746,7 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
             job.error_summary = f"{errors} rows require attention" if errors else None
             if not errors and job.import_mode == "apply":
                 job.stage = STAGE_LOADED
+            persist_clear_background_task_metadata(db, job)
             db.commit()
             db.refresh(job)
             return job
@@ -813,6 +815,7 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
         job.status = "completed_with_errors" if errors else "completed"
         job.completed_at = datetime.now(timezone.utc)
         job.error_summary = f"{errors} rows require attention" if errors else None
+        persist_clear_background_task_metadata(db, job)
         db.commit()
         db.refresh(job)
     except Exception as exc:  # noqa: BLE001
@@ -823,6 +826,7 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
             job.stage = STAGE_FAILED
             job.error_summary = str(exc)
             job.completed_at = datetime.now(timezone.utc)
+            persist_clear_background_task_metadata(db, job)
             db.commit()
             db.refresh(job)
         return job
