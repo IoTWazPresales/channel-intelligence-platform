@@ -17,12 +17,22 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { apiGet, apiPost } from '@/lib/api';
 
+import { notifyDsiAsyncPipelineStarted } from './dsiAsyncPipelineRun';
 import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
-import { contextPossibleDuplicateOf } from './dsiStewardCandidateFilterLogic';
+import { DsiDuplicatePeerCompare } from './dsiDuplicatePeerCompare';
+import {
+  classifyDuplicateSameEntityCase,
+  contextDistributorMasterCollision,
+  contextPossibleDuplicateOf,
+  duplicateReviewDecision,
+  hasUnresolvedDuplicateReview,
+  suggestedCustomerIdForDuplicateSameEntity,
+  type DuplicateSameEntityCase,
+} from './dsiStewardCandidateFilterLogic';
 import {
   optimisticallyApplyStewardAction,
   type DsiStewardRowAction,
@@ -112,6 +122,8 @@ function buildStewardMutationLifecycle(
   };
 }
 
+const DSI_STEWARD_TERMINAL_STATUSES = new Set(['resolved', 'ignored', 'waived_open_channel']);
+
 export function DsiMappingStewardPanel({
   importJobId,
   candidate,
@@ -119,6 +131,9 @@ export function DsiMappingStewardPanel({
   onRowActionStart,
   onRowActionEnd,
   onDone,
+  onPlanRefresh,
+  lookupPeerCandidate,
+  onOpenPeerByNormalizedKey,
 }: {
   importJobId: number;
   candidate: DsiCandidateRow | null;
@@ -126,8 +141,15 @@ export function DsiMappingStewardPanel({
   onRowActionStart?: (candidateId: number) => void;
   onRowActionEnd?: () => void;
   onDone: () => void;
+  /** Local resolution-plan refresh only — never full DSI revalidate. */
+  onPlanRefresh?: () => void | Promise<void>;
+  /** Resolve peer row on current candidates page for inline compare (no scroll jump). */
+  lookupPeerCandidate?: (normalizedKey: string) => DsiCandidateRow | null;
+  /** Optional: open peer in full steward drawer (replaces selection). */
+  onOpenPeerByNormalizedKey?: (normalizedKey: string) => void;
 }) {
   const qc = useQueryClient();
+  const [expandedDuplicatePeerKey, setExpandedDuplicatePeerKey] = useState<string | null>(null);
   const [mapCustOpen, setMapCustOpen] = useState(false);
   const [createCustOpen, setCreateCustOpen] = useState(false);
   const [mapDistOpen, setMapDistOpen] = useState(false);
@@ -153,6 +175,19 @@ export function DsiMappingStewardPanel({
   const [productAuditNote, setProductAuditNote] = useState('');
   const [productRawOverride, setProductRawOverride] = useState('');
   const [lastSuccessLabel, setLastSuccessLabel] = useState<string | null>(null);
+  const [dupSameOpen, setDupSameOpen] = useState(false);
+  const [dupSameCase, setDupSameCase] = useState<DuplicateSameEntityCase | null>(null);
+  const [dupPeerKey, setDupPeerKey] = useState('');
+  const [dupSamePeerKeyError, setDupSamePeerKeyError] = useState<string | null>(null);
+  const [dupAuditNote, setDupAuditNote] = useState('');
+
+  useEffect(() => {
+    setDupSamePeerKeyError(null);
+    setDupPeerKey('');
+    setDupSameOpen(false);
+    setExpandedDuplicatePeerKey(null);
+    setDupAuditNote('');
+  }, [candidate?.id]);
 
   const { data: regions = [] } = useQuery({
     queryKey: DSI_STEWARD_CONFIG.catalogRegionsQueryKey(),
@@ -195,9 +230,56 @@ export function DsiMappingStewardPanel({
     onDone();
   }, [qc, importJobId, onDone]);
 
+  const afterDuplicateAction = useCallback(async () => {
+    invalidateDsiImportJobStewardQueries(qc, importJobId);
+    onDone();
+    if (onPlanRefresh) await onPlanRefresh();
+  }, [qc, importJobId, onDone, onPlanRefresh]);
+
   const candidateId = candidate?.id;
   const stewardLife = (action: DsiStewardRowAction) =>
     buildStewardMutationLifecycle(action, candidateId, importJobId, qc, onRowActionStart, onRowActionEnd);
+
+  const duplicateRowLifecycle = {
+    onMutate: async () => {
+      if (candidateId != null) onRowActionStart?.(candidateId);
+      return undefined;
+    },
+    onSettled: () => {
+      onRowActionEnd?.();
+    },
+  };
+
+  const duplicateDifferentEntity = useMutation({
+    mutationFn: (body: { peer_normalized_key: string; audit_note?: string }) =>
+      apiPost<{ ok: boolean }>(
+        `/api/v1/mappings/import-candidates/${candidate?.id}/duplicate-review/different-entity`,
+        body
+      ),
+    ...duplicateRowLifecycle,
+    onSuccess: async () => {
+      setLastSuccessLabel('Confirmed different entity — duplicate review recorded.');
+      await afterDuplicateAction();
+    },
+  });
+
+  const duplicateSameEntity = useMutation({
+    mutationFn: (body: {
+      peer_normalized_key: string;
+      customer_id?: number;
+      audit_note?: string;
+    }) =>
+      apiPost<{ ok: boolean }>(
+        `/api/v1/mappings/import-candidates/${candidate?.id}/duplicate-review/same-entity`,
+        body
+      ),
+    ...duplicateRowLifecycle,
+    onSuccess: async () => {
+      setDupSameOpen(false);
+      setLastSuccessLabel('Same entity — both tokens mapped to the selected customer.');
+      await afterDuplicateAction();
+    },
+  });
 
   const mapCustomer = useMutation({
     mutationFn: (body: { customer_id: number }) =>
@@ -293,16 +375,18 @@ export function DsiMappingStewardPanel({
 
   const revalidate = useMutation({
     mutationFn: async () => {
-      const res = await apiPost<{ ok: boolean; async?: boolean }>(
+      const res = await apiPost<{ ok: boolean; async?: boolean; task_id?: string | null }>(
         `/api/v1/mappings/import-jobs/${importJobId}/revalidate-distributor-sales-inventory`
       );
       if (res.async) {
-        const { pollDsiImportPipelineUntilDone } = await import('./dsiImportPipelinePoll');
-        await pollDsiImportPipelineUntilDone(importJobId);
+        notifyDsiAsyncPipelineStarted(qc, importJobId, { taskId: res.task_id });
       }
       return res;
     },
-    onSuccess: () => invalidate(),
+    onSuccess: (res) => {
+      if (!res.async) invalidate();
+      else void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+    },
   });
 
   const actionBusy =
@@ -349,12 +433,36 @@ export function DsiMappingStewardPanel({
 
   const ctx = (candidate.context ?? null) as Record<string, unknown> | null;
   const strat = strategicHint(ctx);
+  const distCollision = contextDistributorMasterCollision(ctx);
   const dupHints = contextPossibleDuplicateOf(ctx);
   const histRes =
     planRow && typeof planRow.historical_resolution === 'object' && planRow.historical_resolution !== null
       ? (planRow.historical_resolution as Record<string, unknown>)
       : null;
-  const isTerminal = ['resolved', 'ignored', 'waived_open_channel'].includes(candidate.status);
+  const dupDecision = duplicateReviewDecision(ctx);
+  const dupUnresolved =
+    candidate.entity_type === 'customer_dealer_token' && hasUnresolvedDuplicateReview(ctx);
+  const isTerminal = DSI_STEWARD_TERMINAL_STATUSES.has((candidate.status || '').trim());
+  const planDuplicateBlocked = planRow?.duplicate_review_required === true;
+  const dupPeerHintsExcludingSelf = useMemo(() => {
+    const own = (candidate.normalized_key || '').trim();
+    return dupHints.filter((h) => h.normalized_key.trim() !== own);
+  }, [dupHints, candidate.normalized_key]);
+  const dupPeerKeyDefault = dupPeerHintsExcludingSelf[0]?.normalized_key ?? '';
+  const dupPeerForSameEntity = useMemo(
+    () => (dupPeerKeyDefault && lookupPeerCandidate ? lookupPeerCandidate(dupPeerKeyDefault) : null),
+    [dupPeerKeyDefault, lookupPeerCandidate]
+  );
+  const dupSameEntityCaseLive = useMemo(
+    () =>
+      classifyDuplicateSameEntityCase(
+        candidate.suggested_entity_id,
+        dupPeerForSameEntity?.suggested_entity_id,
+        planRow?.suggested_target_id
+      ),
+    [candidate.suggested_entity_id, dupPeerForSameEntity?.suggested_entity_id, planRow?.suggested_target_id]
+  );
+  const dupSameEntityConflict = dupUnresolved && !isTerminal && dupSameEntityCaseLive === 'conflict';
 
   return (
     <Stack spacing={2} sx={{ mt: 2 }} data-testid="dsi-steward-panel">
@@ -369,8 +477,22 @@ export function DsiMappingStewardPanel({
           create a customer, or confirm explicitly if Open Channel is correct.
         </Alert>
       ) : null}
+      {distCollision ? (
+        <Alert severity="info" variant="outlined" data-testid="dsi-inter-disti-hint">
+          <Typography variant="body2">
+            This token matches distributor master <strong>{distCollision.distributor_name}</strong>. On this file it is
+            a <strong>sell-out counterparty</strong> (often inter-distributor transfer). You may still map as{' '}
+            <strong>customer</strong> for analysis on the selling distributor&apos;s file. It does{' '}
+            <strong>not</strong> update the buyer&apos;s inventory SOH — that comes from their own DSI inventory import.
+          </Typography>
+        </Alert>
+      ) : null}
       {dupHints.length > 0 ? (
-        <Alert severity="info" variant="outlined" data-testid="dsi-possible-duplicates">
+        <Alert
+          severity={dupUnresolved ? 'warning' : 'info'}
+          variant="outlined"
+          data-testid="dsi-possible-duplicates"
+        >
           <Typography variant="body2" component="div">
             <strong>Possible duplicates</strong> (same import job, name similarity after normalisation):
             <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
@@ -380,9 +502,119 @@ export function DsiMappingStewardPanel({
                   {d.similarity_score != null
                     ? ` — ${Math.round(d.similarity_score * 100)}% similar`
                     : ''}
+                  {lookupPeerCandidate || onOpenPeerByNormalizedKey ? (
+                    <>
+                      {' '}
+                      <Typography
+                        component="button"
+                        type="button"
+                        variant="caption"
+                        sx={{
+                          border: 0,
+                          bgcolor: 'transparent',
+                          color: 'primary.main',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          p: 0,
+                        }}
+                        onClick={() =>
+                          setExpandedDuplicatePeerKey((k) =>
+                            k === d.normalized_key ? null : d.normalized_key
+                          )
+                        }
+                        data-testid="dsi-duplicate-peer-compare-toggle"
+                      >
+                        {expandedDuplicatePeerKey === d.normalized_key ? 'Hide compare' : 'Compare'}
+                      </Typography>
+                    </>
+                  ) : null}
+                  {expandedDuplicatePeerKey === d.normalized_key ? (
+                    <DsiDuplicatePeerCompare
+                      normalizedKey={d.normalized_key}
+                      lookupPeerCandidate={lookupPeerCandidate}
+                      onOpenFullSteward={onOpenPeerByNormalizedKey}
+                    />
+                  ) : null}
                 </li>
               ))}
             </ul>
+            {dupDecision ? (
+              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                Steward decision: <strong>{dupDecision.replace(/_/g, ' ')}</strong>
+              </Typography>
+            ) : null}
+            {dupSameEntityConflict ? (
+              <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 1 }}>
+                These tokens have conflicting customer suggestions. Resolve each separately.
+              </Typography>
+            ) : null}
+            {dupUnresolved && !isTerminal ? (
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
+                <DsiPendingButton
+                  size="small"
+                  variant="contained"
+                  pending={duplicateSameEntity.isPending}
+                  pendingLabel="Mapping…"
+                  disabled={
+                    actionBusy ||
+                    duplicateDifferentEntity.isPending ||
+                    dupSameEntityConflict ||
+                    dupPeerHintsExcludingSelf.length === 0
+                  }
+                  onClick={() => {
+                    const peerKey = dupPeerHintsExcludingSelf[0]?.normalized_key ?? '';
+                    const peerRow = lookupPeerCandidate?.(peerKey) ?? null;
+                    const caseKind = classifyDuplicateSameEntityCase(
+                      candidate.suggested_entity_id,
+                      peerRow?.suggested_entity_id,
+                      planRow?.suggested_target_id
+                    );
+                    if (caseKind === 'conflict') return;
+                    setDupPeerKey(peerKey);
+                    setDupSamePeerKeyError(null);
+                    setDupSameCase(caseKind);
+                    setDupAuditNote('');
+                    if (caseKind === 'greenfield') {
+                      setPickCustomerId('');
+                      setCustQ('');
+                    } else {
+                      const sug = suggestedCustomerIdForDuplicateSameEntity(
+                        candidate.suggested_entity_id,
+                        peerRow?.suggested_entity_id,
+                        planRow?.suggested_target_id
+                      );
+                      setPickCustomerId(sug ?? '');
+                      setCustQ('');
+                    }
+                    setDupSameOpen(true);
+                  }}
+                  data-testid="dsi-duplicate-same-entity"
+                >
+                  Same entity (map both)
+                </DsiPendingButton>
+                <DsiPendingButton
+                  size="small"
+                  variant="outlined"
+                  pending={duplicateDifferentEntity.isPending}
+                  pendingLabel="Saving…"
+                  disabled={actionBusy || duplicateSameEntity.isPending || !dupHints[0]?.normalized_key}
+                  onClick={() =>
+                    void duplicateDifferentEntity.mutateAsync({
+                      peer_normalized_key: dupHints[0].normalized_key,
+                      audit_note: dupAuditNote.trim() || undefined,
+                    })
+                  }
+                  data-testid="dsi-duplicate-different-entity"
+                >
+                  Different entity
+                </DsiPendingButton>
+              </Stack>
+            ) : null}
+            {planDuplicateBlocked ? (
+              <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 1 }}>
+                Resolution plan is blocked until duplicate review is complete.
+              </Typography>
+            ) : null}
           </Typography>
         </Alert>
       ) : null}
@@ -531,7 +763,8 @@ export function DsiMappingStewardPanel({
         mapDistributor.isError ||
         createProvDistributor.isError ||
         resolveProduct.isError ||
-        ignoreCand.isError) && (
+        ignoreCand.isError ||
+        duplicateSameEntity.isError) && (
         <Alert severity="error">
           {toQueryError(
             mapCustomer.error ||
@@ -540,7 +773,8 @@ export function DsiMappingStewardPanel({
               mapDistributor.error ||
               createProvDistributor.error ||
               resolveProduct.error ||
-              ignoreCand.error
+              ignoreCand.error ||
+              duplicateSameEntity.error
           )?.message ?? 'Action failed'}
         </Alert>
       )}
@@ -588,6 +822,99 @@ export function DsiMappingStewardPanel({
             }}
           >
             Save alias
+          </DsiPendingButton>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={dupSameOpen} onClose={() => setDupSameOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Same entity — map both tokens</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Peer token: <code>{dupPeerKey || '—'}</code>
+            </Typography>
+            {dupSameCase === 'greenfield' ? (
+              <Typography variant="body2" data-testid="dsi-duplicate-same-entity-greenfield-msg">
+                Neither token has an existing customer. A provisional customer will be created from the
+                primary token and both will be mapped to it.
+              </Typography>
+            ) : null}
+            {dupSamePeerKeyError ? (
+              <Typography variant="body2" color="error" data-testid="dsi-duplicate-same-entity-peer-error">
+                {dupSamePeerKeyError}
+              </Typography>
+            ) : null}
+            <TextField
+              label="Audit note (optional)"
+              value={dupAuditNote}
+              onChange={(e) => setDupAuditNote(e.target.value)}
+              fullWidth
+              multiline
+              minRows={2}
+            />
+            {dupSameCase === 'suggested' ? (
+              <>
+                <TextField
+                  label="Search customers"
+                  value={custQ}
+                  onChange={(e) => setCustQ(e.target.value)}
+                  helperText="Type at least 2 characters to change the suggested customer"
+                  fullWidth
+                />
+                <FormControl fullWidth>
+                  <InputLabel id="pick-cust-dup">Customer</InputLabel>
+                  <Select
+                    labelId="pick-cust-dup"
+                    label="Customer"
+                    value={pickCustomerId === '' ? '' : String(pickCustomerId)}
+                    onChange={(e) => setPickCustomerId(e.target.value === '' ? '' : Number(e.target.value))}
+                  >
+                    {custHits.map((c) => (
+                      <MenuItem key={c.id} value={String(c.id)}>
+                        {c.customer_code} — {c.customer_name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <DsiPendingButton onClick={() => setDupSameOpen(false)} disabled={duplicateSameEntity.isPending}>
+            Cancel
+          </DsiPendingButton>
+          <DsiPendingButton
+            variant="contained"
+            pending={duplicateSameEntity.isPending}
+            pendingLabel="Mapping…"
+            disabled={
+              !dupPeerKey.trim() || (dupSameCase === 'suggested' && pickCustomerId === '')
+            }
+            onClick={() => {
+              if (!dupPeerKey.trim()) return;
+              if (dupPeerKey.trim() === (candidate.normalized_key || '').trim()) {
+                setDupSamePeerKeyError('Peer token must differ from this candidate');
+                return;
+              }
+              setDupSamePeerKeyError(null);
+              if (dupSameCase === 'suggested' && pickCustomerId === '') return;
+              const body: {
+                peer_normalized_key: string;
+                customer_id?: number;
+                audit_note?: string;
+              } = {
+                peer_normalized_key: dupPeerKey.trim(),
+                audit_note: dupAuditNote.trim() || undefined,
+              };
+              if (dupSameCase === 'suggested' && pickCustomerId !== '') {
+                body.customer_id = Number(pickCustomerId);
+              }
+              void duplicateSameEntity.mutateAsync(body).catch(() => {});
+            }}
+            data-testid="dsi-duplicate-same-entity-submit"
+          >
+            Map both to customer
           </DsiPendingButton>
         </DialogActions>
       </Dialog>

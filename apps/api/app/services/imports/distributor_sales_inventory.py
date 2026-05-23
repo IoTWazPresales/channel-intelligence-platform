@@ -30,7 +30,10 @@ from app.models.import_distributor_si import (
 from app.models.ingestion import ImportJob, ImportRowResult
 from app.models.mapping import ProductAlias
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
-from app.services.imports.dsi_customer_intelligence import annotate_dsi_customer_candidate_duplicates
+from app.services.imports.dsi_customer_intelligence import (
+    annotate_dsi_customer_candidate_duplicates,
+    annotate_dsi_customer_distributor_name_collisions,
+)
 from app.services.imports.dsi_customer_name_normalization import normalize_customer_name_token
 from app.services.imports.dsi_shipment_corroboration import (
     shipment_corroboration_for_customer,
@@ -1169,6 +1172,19 @@ def process_distributor_sales_inventory(
         )
         return 1
 
+    preserved_candidate_steward: dict[tuple[str, str], dict[str, Any]] = {}
+    for existing in db.scalars(
+        select(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job.id)
+    ).all():
+        ex_ctx = existing.context if isinstance(existing.context, dict) else {}
+        preserved: dict[str, Any] = {}
+        if isinstance(ex_ctx.get("duplicate_review"), dict):
+            preserved["duplicate_review"] = dict(ex_ctx["duplicate_review"])
+        if (existing.status or "").strip() == "acknowledged_unique":
+            preserved["status"] = "acknowledged_unique"
+        if preserved:
+            preserved_candidate_steward[(existing.entity_type, existing.normalized_key)] = preserved
+
     db.execute(delete(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == job.id))
     db.execute(delete(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job.id))
     db.flush()
@@ -1639,6 +1655,7 @@ def process_distributor_sales_inventory(
         on_progress("building_candidates", "Building candidates", total_rows, total_rows)
 
     annotate_dsi_customer_candidate_duplicates(agg)
+    annotate_dsi_customer_distributor_name_collisions(agg, res_cache.all_distributors)
 
     for (etype, nkey), data in agg.items():
         ctx: dict[str, Any] = {"aggregated": True}
@@ -1654,6 +1671,12 @@ def process_distributor_sales_inventory(
             dup_hints = data.get("possible_duplicate_of")
             if isinstance(dup_hints, list) and dup_hints:
                 ctx["possible_duplicate_of"] = dup_hints[:16]
+            dist_collision = data.get("distributor_master_collision")
+            if isinstance(dist_collision, dict) and dist_collision.get("distributor_id"):
+                ctx["distributor_master_collision"] = {
+                    "distributor_id": int(dist_collision["distributor_id"]),
+                    "distributor_name": str(dist_collision.get("distributor_name") or "")[:256],
+                }
             dist_ids = data.get("sellout_distributor_ids")
             if isinstance(dist_ids, set) and len(dist_ids) == 1:
                 ctx["dominant_distributor_id"] = int(next(iter(dist_ids)))
@@ -1736,6 +1759,13 @@ def process_distributor_sales_inventory(
                 "summary": "Resolved shipment evidence lines in the same calendar month may corroborate this bucket (no auto-resolve).",
             }
             ctx.setdefault("corroboration_markers", []).append("shipment_evidence_customer")
+        cand_status = "needs_review"
+        pres = preserved_candidate_steward.get((etype, nkey_clean[:512]))
+        if pres:
+            if isinstance(pres.get("duplicate_review"), dict):
+                ctx["duplicate_review"] = pres["duplicate_review"]
+            if pres.get("status") == "acknowledged_unique":
+                cand_status = "acknowledged_unique"
         cand = ImportEntityMappingCandidate(
             import_job_id=job.id,
             source_definition_id=source_def_id,
@@ -1746,7 +1776,7 @@ def process_distributor_sales_inventory(
             total_units=float(data["total_units"]) if data["total_units"] else None,
             total_reported_value=float(data["total_value"]) if data["total_value"] else None,
             sample_raw_values=to_jsonable(data["samples"][:5]),
-            status="needs_review",
+            status=cand_status,
             context=to_jsonable(ctx),
         )
         db.add(cand)

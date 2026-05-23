@@ -482,6 +482,11 @@ def plan_dsi_candidate_sync(
     plan_ctx: DSIPlanBuildContext | None = None,
 ) -> dict[str, Any]:
     """Return one plan row dict for a candidate (sync Session)."""
+    from app.services.imports.dsi_customer_intelligence import gate_dsi_plan_row_duplicate_review
+
+    def _fin(row: dict[str, Any]) -> dict[str, Any]:
+        return gate_dsi_plan_row_duplicate_review(cand, row)
+
     base = _plan_common(cand)
     if _terminal_candidate(cand):
         out = {
@@ -695,7 +700,7 @@ def plan_dsi_candidate_sync(
                     default_channel_id=default_channel_id,
                     import_job=job,
                 )
-            return {
+            return _fin({
                 **base,
                 "suggested_action": "create_provisional_customer",
                 "plan_status": "needs_review",
@@ -706,7 +711,7 @@ def plan_dsi_candidate_sync(
                 "needs_defaults": False,
                 "needs_confirm_suspicious_distributor": False,
                 **{k: v for k, v in geo_s.items() if k not in ("provisional_region_conflict", "provisional_channel_conflict")},
-            }
+            })
 
         samples = ctx.get("source_customer_name_raw_samples")
         cust_first = samples[0] if isinstance(samples, list) and samples and isinstance(samples[0], str) else None
@@ -737,7 +742,7 @@ def plan_dsi_candidate_sync(
                 dealer_group_raw=dg_raw,
             )
             if hist is not None:
-                return {
+                return _fin({
                     **base,
                     "suggested_action": "map_customer",
                     "plan_status": "needs_review",
@@ -758,7 +763,7 @@ def plan_dsi_candidate_sync(
                         "resolution_kind": hist.resolution_kind,
                         "confidence": float(hist.confidence),
                     },
-                }
+                })
             if dist_id is not None and primary:
                 scoped_cid = resolve_customer_id_distributor_scoped_alias(
                     plan_ctx.res_cache,
@@ -767,7 +772,7 @@ def plan_dsi_candidate_sync(
                     normalized_customer=_norm_key(primary),
                 )
                 if scoped_cid is not None:
-                    return {
+                    return _fin({
                         **base,
                         "suggested_action": "map_customer",
                         "plan_status": "ready",
@@ -778,7 +783,7 @@ def plan_dsi_candidate_sync(
                         "needs_defaults": False,
                         "needs_confirm_suspicious_distributor": False,
                         "resolution_signal": "distributor_scoped_alias",
-                    }
+                    })
             rcid, diag = resolve_customer_for_plan(
                 plan_ctx,
                 source_id=source_def_id,
@@ -796,7 +801,7 @@ def plan_dsi_candidate_sync(
                 open_flag_raw=None,
             )
         if rcid is not None:
-            return {
+            return _fin({
                 **base,
                 "suggested_action": "map_customer",
                 "plan_status": "ready",
@@ -806,9 +811,9 @@ def plan_dsi_candidate_sync(
                 "suggested_target_id": int(rcid),
                 "needs_defaults": False,
                 "needs_confirm_suspicious_distributor": False,
-            }
+            })
         if "ambiguous_customer_name" in diag:
-            return {
+            return _fin({
                 **base,
                 "suggested_action": "map_customer",
                 "plan_status": "needs_review",
@@ -818,9 +823,9 @@ def plan_dsi_candidate_sync(
                 "suggested_target_id": None,
                 "needs_defaults": False,
                 "needs_confirm_suspicious_distributor": False,
-            }
+            })
         if "customer_token_placeholder" in diag or "missing_customer_token" in diag:
-            return {
+            return _fin({
                 **base,
                 "suggested_action": "ignore",
                 "plan_status": "ready",
@@ -830,7 +835,7 @@ def plan_dsi_candidate_sync(
                 "suggested_target_id": None,
                 "needs_defaults": False,
                 "needs_confirm_suspicious_distributor": False,
-            }
+            })
 
         if plan_ctx is not None:
             geo = derive_effective_provisional_customer_geo_for_plan(
@@ -855,7 +860,7 @@ def plan_dsi_candidate_sync(
                 which.append("region/province")
             if geo.get("provisional_channel_conflict"):
                 which.append("channel/route-to-market")
-            return {
+            return _fin({
                 **base,
                 "suggested_action": "create_provisional_customer",
                 "plan_status": "needs_review",
@@ -870,7 +875,7 @@ def plan_dsi_candidate_sync(
                 "needs_defaults": False,
                 "needs_confirm_suspicious_distributor": False,
                 **{k: v for k, v in geo.items()},
-            }
+            })
 
         detail_bits: list[str] = []
         if geo.get("source_region_resolution_detail"):
@@ -881,7 +886,7 @@ def plan_dsi_candidate_sync(
         if detail_bits:
             reason += " (" + "; ".join(detail_bits) + ")"
 
-        return {
+        return _fin({
             **base,
             "suggested_action": "create_provisional_customer",
             "plan_status": "ready",
@@ -892,7 +897,7 @@ def plan_dsi_candidate_sync(
             "needs_defaults": False,
             "needs_confirm_suspicious_distributor": False,
             **{k: v for k, v in geo.items()},
-        }
+        })
 
     return {
         **base,
@@ -1198,6 +1203,11 @@ def merge_resolution_plan_row_for_apply(
             and not confirm_suspicious
         ):
             blockers.append("placeholder_like_distributor_requires_confirm")
+
+    from app.services.imports.dsi_customer_intelligence import dsi_candidate_duplicate_review_unresolved
+
+    if dsi_candidate_duplicate_review_unresolved(cand):
+        blockers.append("duplicate_review_required")
 
     effective_ready = len(blockers) == 0
 

@@ -32,6 +32,7 @@ export function useDsiCandidatesPage(
       verifyNameOnly: stewardFilters.verifyNameOnly,
       specialCategoryOnly: stewardFilters.specialCategoryOnly,
       possibleDuplicatesOnly: stewardFilters.possibleDuplicatesOnly,
+      duplicateUnresolvedOnly: stewardFilters.duplicateUnresolvedOnly,
     }),
     [
       stewardFilters.entity,
@@ -39,12 +40,20 @@ export function useDsiCandidatesPage(
       stewardFilters.verifyNameOnly,
       stewardFilters.specialCategoryOnly,
       stewardFilters.possibleDuplicatesOnly,
+      stewardFilters.duplicateUnresolvedOnly,
     ]
   );
 
   useEffect(() => {
     setPage(0);
-  }, [serverFilterSlice.entity, serverFilterSlice.party, serverFilterSlice.verifyNameOnly, serverFilterSlice.specialCategoryOnly, serverFilterSlice.possibleDuplicatesOnly]);
+  }, [
+    serverFilterSlice.entity,
+    serverFilterSlice.party,
+    serverFilterSlice.verifyNameOnly,
+    serverFilterSlice.specialCategoryOnly,
+    serverFilterSlice.possibleDuplicatesOnly,
+    serverFilterSlice.duplicateUnresolvedOnly,
+  ]);
 
   const queryKey = useMemo(
     () => DSI_STEWARD_CONFIG.candidatesPageQueryKey(importJobId, skip, pageSize, serverFilterSlice),

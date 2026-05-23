@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct, DimRegion
+from app.models.ingestion import ImportJob
 from app.models.import_distributor_si import (
     CustomerSourceTokenAlias,
     DistributorSourceTokenAlias,
@@ -45,6 +46,19 @@ class StewardOpError(Exception):
         super().__init__(detail)
         self.detail = detail
         self.status_code = status_code
+
+
+_DSI_STEWARD_TERMINAL_STATUSES = frozenset({"resolved", "ignored", "waived_open_channel"})
+
+
+def _is_dsi_steward_terminal_status(status: str | None) -> bool:
+    return (status or "").strip() in _DSI_STEWARD_TERMINAL_STATUSES
+
+
+def _merge_duplicate_review_context(cand: ImportEntityMappingCandidate, review: dict[str, Any]) -> None:
+    ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
+    ctx["duplicate_review"] = review
+    cand.context = ctx
 
 
 def _first_sample_raw(candidate: ImportEntityMappingCandidate) -> str:
@@ -113,7 +127,7 @@ async def preview_resolve_dsi_product(
             "skip_reason": "wrong_entity_type",
             "detail": "Candidate is not product_identifier",
         }
-    if cand.status in ("resolved", "ignored", "waived_open_channel"):
+    if _is_dsi_steward_terminal_status(cand.status):
         return {
             "ok": False,
             "skip_reason": "terminal_status",
@@ -261,7 +275,7 @@ async def preview_map_dsi_customer(
 ) -> dict[str, Any]:
     if cand.entity_type != "customer_dealer_token":
         return {"ok": False, "skip_reason": "wrong_entity_type", "detail": "Not customer_dealer_token"}
-    if cand.status in ("resolved", "ignored", "waived_open_channel"):
+    if _is_dsi_steward_terminal_status(cand.status):
         return {"ok": False, "skip_reason": "terminal_status", "detail": "Candidate already terminal"}
     cust = await db.get(DimCustomer, customer_id)
     if not cust:
@@ -282,18 +296,17 @@ async def preview_map_dsi_customer(
     }
 
 
-async def execute_map_dsi_customer(
+async def _apply_map_dsi_customer_without_commit(
     db: AsyncSession,
     cand: ImportEntityMappingCandidate,
     *,
     customer_id: int,
     raw_token: str | None,
 ) -> dict[str, Any]:
+    """Map candidate to customer in the current session; caller must commit."""
     pv = await preview_map_dsi_customer(db, cand, customer_id=customer_id, raw_token=raw_token)
     if not pv.get("ok"):
         raise StewardOpError(pv.get("detail") or "preview failed", status_code=400)
-    cust = await db.get(DimCustomer, customer_id)
-    assert cust is not None
     raw = (raw_token or _source_customer_alias_raw_for_dsi_candidate(cand)).strip()
     nt = _norm_key(raw)
     alias = CustomerSourceTokenAlias(
@@ -309,16 +322,30 @@ async def execute_map_dsi_customer(
         import_entity_mapping_candidate_id=cand.id,
     )
     db.add(alias)
+    await db.flush()
+    cand.status = "resolved"
+    cand.suggested_entity_id = customer_id
+    cand.match_reason = "steward_map_existing_customer"
+    return {"ok": True, "alias_id": alias.id, "customer_id": customer_id, "candidate_id": cand.id}
+
+
+async def execute_map_dsi_customer(
+    db: AsyncSession,
+    cand: ImportEntityMappingCandidate,
+    *,
+    customer_id: int,
+    raw_token: str | None,
+) -> dict[str, Any]:
+    out = await _apply_map_dsi_customer_without_commit(
+        db, cand, customer_id=customer_id, raw_token=raw_token
+    )
     try:
-        cand.status = "resolved"
-        cand.suggested_entity_id = customer_id
-        cand.match_reason = "steward_map_existing_customer"
         await db.commit()
-        await db.refresh(alias)
+        await db.refresh(cand)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError("Could not create alias (duplicate or invalid reference)", status_code=409) from None
-    return {"ok": True, "alias_id": alias.id, "customer_id": customer_id, "candidate_id": cand.id}
+    return out
 
 
 async def preview_map_dsi_distributor(
@@ -330,7 +357,7 @@ async def preview_map_dsi_distributor(
 ) -> dict[str, Any]:
     if cand.entity_type != "distributor_token":
         return {"ok": False, "skip_reason": "wrong_entity_type", "detail": "Not distributor_token"}
-    if cand.status in ("resolved", "ignored", "waived_open_channel"):
+    if _is_dsi_steward_terminal_status(cand.status):
         return {"ok": False, "skip_reason": "terminal_status", "detail": "Candidate already terminal"}
     dist = await db.get(DimDistributor, distributor_id)
     if not dist:
@@ -391,7 +418,7 @@ async def preview_ignore_dsi_candidate(
 ) -> dict[str, Any]:
     if cand.entity_type not in {"customer_dealer_token", "distributor_token", "product_identifier"}:
         return {"ok": False, "skip_reason": "wrong_entity_type", "detail": "Unsupported entity_type for ignore"}
-    if cand.status in ("resolved", "ignored", "waived_open_channel"):
+    if _is_dsi_steward_terminal_status(cand.status):
         return {"ok": False, "skip_reason": "terminal_status", "detail": "Candidate already terminal"}
     return {"ok": True, "detail": "Would set status ignored", "notes": notes}
 
@@ -484,7 +511,7 @@ async def preview_create_provisional_dsi_customer(
                 "channel_id": cust.channel_id,
             }
 
-    if cand.status in ("resolved", "ignored", "waived_open_channel"):
+    if _is_dsi_steward_terminal_status(cand.status):
         return {"ok": False, "skip_reason": "terminal_status", "detail": "Candidate already terminal"}
 
     region: DimRegion | None = None
@@ -673,7 +700,7 @@ async def preview_create_provisional_dsi_distributor(
                 "alias_raw_preview": ((ar.raw_token if ar else "")[:160]),
             }
 
-    if cand.status in ("resolved", "ignored", "waived_open_channel"):
+    if _is_dsi_steward_terminal_status(cand.status):
         return {"ok": False, "skip_reason": "terminal_status", "detail": "Candidate already terminal"}
 
     nt_check = _norm_key(_first_sample_raw(cand) or cand.normalized_key or "")
@@ -793,5 +820,287 @@ async def execute_create_provisional_dsi_distributor(
         "distributor_code": row.code,
         "alias_id": alias.id,
         "candidate_id": cand.id,
+    }
+
+
+async def _get_dsi_customer_peer_candidate(
+    db: AsyncSession,
+    cand: ImportEntityMappingCandidate,
+    peer_normalized_key: str,
+) -> ImportEntityMappingCandidate | None:
+    nk = (peer_normalized_key or "").strip()[:512]
+    if not nk:
+        return None
+    return await db.scalar(
+        select(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.import_job_id == cand.import_job_id,
+            ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+            ImportEntityMappingCandidate.normalized_key == nk,
+        )
+    )
+
+
+async def execute_acknowledge_dsi_duplicate_different_entity(
+    db: AsyncSession,
+    cand: ImportEntityMappingCandidate,
+    *,
+    peer_normalized_key: str,
+    audit_note: str | None,
+) -> dict[str, Any]:
+    if cand.entity_type != "customer_dealer_token":
+        raise StewardOpError("Not customer_dealer_token", status_code=400)
+    if _is_dsi_steward_terminal_status(cand.status):
+        raise StewardOpError("Candidate already terminal", status_code=400)
+    from app.services.imports.dsi_customer_intelligence import (
+        build_duplicate_review_record,
+        dsi_candidate_duplicate_review_unresolved,
+        similarity_score_for_duplicate_peer,
+    )
+
+    if not dsi_candidate_duplicate_review_unresolved(cand):
+        raise StewardOpError("Duplicate review already recorded for this candidate", status_code=400)
+    peer = await _get_dsi_customer_peer_candidate(db, cand, peer_normalized_key)
+    if peer is None:
+        raise StewardOpError("Peer candidate not found for this import job", status_code=404)
+    ctx = cand.context if isinstance(cand.context, dict) else {}
+    score = similarity_score_for_duplicate_peer(ctx, peer_normalized_key)
+    review = build_duplicate_review_record(
+        decision="different_entity",
+        paired_normalized_key=peer.normalized_key,
+        similarity_score=score,
+        audit_note=audit_note,
+        hints_snapshot=ctx.get("possible_duplicate_of") if isinstance(ctx.get("possible_duplicate_of"), list) else [],
+    )
+    _merge_duplicate_review_context(cand, review)
+    cand.status = "acknowledged_unique"
+    cand.match_reason = "steward_acknowledged_unique_duplicate"
+    await db.commit()
+    await db.refresh(cand)
+    return {
+        "ok": True,
+        "candidate_id": cand.id,
+        "status": cand.status,
+        "peer_candidate_id": peer.id,
+        "duplicate_review": review,
+    }
+
+
+def _optional_suggested_entity_id(value: int | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        iv = int(value)
+    except (TypeError, ValueError):
+        return None
+    return iv if iv >= 1 else None
+
+
+def resolve_duplicate_same_entity_customer_id(
+    *,
+    customer_id: int | None,
+    primary_suggested_entity_id: int | None,
+    peer_suggested_entity_id: int | None,
+) -> tuple[int, bool]:
+    """
+    Resolve target dim_customer for same-entity duplicate review.
+
+    Returns (customer_id, needs_provisional_create).
+    Raises StewardOpError 409 when both suggestions differ.
+    """
+    explicit = _optional_suggested_entity_id(customer_id)
+    if explicit is not None:
+        return explicit, False
+
+    primary_sug = _optional_suggested_entity_id(primary_suggested_entity_id)
+    peer_sug = _optional_suggested_entity_id(peer_suggested_entity_id)
+
+    if primary_sug is not None and peer_sug is not None and primary_sug != peer_sug:
+        raise StewardOpError(
+            "Conflicting customer suggestions on primary and peer candidates — resolve each separately.",
+            status_code=409,
+        )
+    if primary_sug is not None:
+        return primary_sug, False
+    if peer_sug is not None:
+        return peer_sug, False
+    return 0, True
+
+
+async def _derive_provisional_geo_for_same_entity(
+    db: AsyncSession,
+    cand: ImportEntityMappingCandidate,
+) -> tuple[int | None, int | None]:
+    from app.services.imports.dsi_resolution_plan import derive_effective_provisional_customer_geo_sync
+
+    def _geo(sess: Any) -> dict[str, Any]:
+        jid = cand.import_job_id
+        job = sess.get(ImportJob, int(jid)) if jid is not None else None
+        return derive_effective_provisional_customer_geo_sync(
+            sess,
+            cand,
+            default_region_id=None,
+            default_channel_id=None,
+            import_job=job,
+        )
+
+    g = await db.run_sync(_geo)
+    if bool(g.get("provisional_region_conflict")):
+        raise StewardOpError(
+            str(g.get("source_region_resolution_message") or "Conflicting region evidence on primary token."),
+            status_code=400,
+        )
+    if bool(g.get("provisional_channel_conflict")):
+        raise StewardOpError(
+            str(g.get("source_channel_resolution_message") or "Conflicting channel evidence on primary token."),
+            status_code=400,
+        )
+    er = g.get("effective_region_id")
+    ec = g.get("effective_channel_id")
+    region_id = int(er) if er is not None else None
+    channel_id = int(ec) if ec is not None else None
+    return region_id, channel_id
+
+
+async def _create_provisional_dim_customer_for_same_entity(
+    db: AsyncSession,
+    cand: ImportEntityMappingCandidate,
+) -> int:
+    """Create unverified dim_customer from primary token evidence; does not resolve the candidate."""
+    pv = await preview_create_provisional_dsi_customer(
+        db,
+        cand,
+        display_name_override=None,
+        region_id=None,
+        channel_id=None,
+        preferred_distributor_id=None,
+        partner_tier=None,
+        notes_summary=None,
+    )
+    if not pv.get("ok"):
+        raise StewardOpError(pv.get("detail") or "preview failed", status_code=400)
+
+    region_id, channel_id = await _derive_provisional_geo_for_same_entity(db, cand)
+    tier = "unmanaged"
+    proposal = _resolved_provisional_display_name(None, cand)
+    base_note = (
+        f"Provisional customer created for same-entity duplicate review "
+        f"(candidate {cand.id}, job {cand.import_job_id})."
+    )
+    code = await generate_tmp_customer_code(db)
+    row = DimCustomer(
+        code=code,
+        name=proposal.strip()[:256],
+        customer_status="unverified",
+        partner_tier=tier,
+        notes_summary=base_note[:512],
+        region_id=region_id,
+        channel_id=channel_id,
+        preferred_distributor_id=None,
+    )
+    db.add(row)
+    await db.flush()
+    return int(row.id)
+
+
+async def execute_dsi_duplicate_same_entity(
+    db: AsyncSession,
+    cand: ImportEntityMappingCandidate,
+    *,
+    peer_normalized_key: str,
+    customer_id: int | None,
+    raw_token: str | None,
+    audit_note: str | None,
+) -> dict[str, Any]:
+    if cand.entity_type != "customer_dealer_token":
+        raise StewardOpError("Not customer_dealer_token", status_code=400)
+    if _is_dsi_steward_terminal_status(cand.status):
+        raise StewardOpError("Candidate already terminal", status_code=400)
+    from app.services.imports.dsi_customer_intelligence import (
+        build_duplicate_review_record,
+        dsi_candidate_duplicate_review_unresolved,
+        duplicate_review_decision,
+        similarity_score_for_duplicate_peer,
+    )
+
+    if duplicate_review_decision(cand.context if isinstance(cand.context, dict) else {}):
+        raise StewardOpError("Duplicate review already recorded for this candidate", status_code=400)
+    if not dsi_candidate_duplicate_review_unresolved(cand):
+        raise StewardOpError("No unresolved duplicate hints on this candidate", status_code=400)
+    peer = await _get_dsi_customer_peer_candidate(db, cand, peer_normalized_key)
+    if peer is None:
+        raise StewardOpError("Peer candidate not found for this import job", status_code=404)
+    if peer.id == cand.id:
+        raise StewardOpError(
+            "peer_normalized_key must differ from this candidate",
+            status_code=400,
+        )
+
+    target_id, needs_provisional = resolve_duplicate_same_entity_customer_id(
+        customer_id=customer_id,
+        primary_suggested_entity_id=cand.suggested_entity_id,
+        peer_suggested_entity_id=peer.suggested_entity_id,
+    )
+    created_provisional: dict[str, Any] | None = None
+
+    try:
+        if needs_provisional:
+            new_cid = await _create_provisional_dim_customer_for_same_entity(db, cand)
+            target_id = new_cid
+            created_provisional = {"customer_id": new_cid}
+
+        primary_out = await _apply_map_dsi_customer_without_commit(
+            db, cand, customer_id=target_id, raw_token=raw_token
+        )
+        peer_out: dict[str, Any] | None = None
+        if not _is_dsi_steward_terminal_status(peer.status):
+            peer_out = await _apply_map_dsi_customer_without_commit(
+                db, peer, customer_id=target_id, raw_token=None
+            )
+
+        ctx_p = cand.context if isinstance(cand.context, dict) else {}
+        peer_nk = (peer.normalized_key or "").strip()
+        primary_nk = (cand.normalized_key or "").strip()
+        score = similarity_score_for_duplicate_peer(ctx_p, peer_nk)
+        hints = ctx_p.get("possible_duplicate_of") if isinstance(ctx_p.get("possible_duplicate_of"), list) else []
+        review_primary = build_duplicate_review_record(
+            decision="same_entity",
+            paired_normalized_key=peer_nk,
+            similarity_score=score,
+            customer_id=target_id,
+            audit_note=audit_note,
+            hints_snapshot=hints,
+        )
+        peer_ctx = peer.context if isinstance(peer.context, dict) else {}
+        review_peer = build_duplicate_review_record(
+            decision="same_entity",
+            paired_normalized_key=primary_nk,
+            similarity_score=score,
+            customer_id=target_id,
+            audit_note=audit_note,
+            hints_snapshot=peer_ctx.get("possible_duplicate_of")
+            if isinstance(peer_ctx.get("possible_duplicate_of"), list)
+            else [],
+        )
+        _merge_duplicate_review_context(cand, review_primary)
+        _merge_duplicate_review_context(peer, review_peer)
+        await db.commit()
+        await db.refresh(cand)
+        await db.refresh(peer)
+    except IntegrityError:
+        await db.rollback()
+        raise StewardOpError("Could not complete same-entity mapping (duplicate or invalid reference)", status_code=409) from None
+    except Exception:
+        await db.rollback()
+        raise
+
+    return {
+        "ok": True,
+        "candidate_id": cand.id,
+        "peer_candidate_id": peer.id,
+        "customer_id": target_id,
+        "created_provisional": created_provisional,
+        "primary_map": primary_out,
+        "peer_map": peer_out,
+        "duplicate_review": review_primary,
     }
 

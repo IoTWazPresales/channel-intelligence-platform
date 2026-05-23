@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from difflib import SequenceMatcher
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 
 from app.models.import_distributor_si import CustomerSourceTokenAlias, ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
-from app.services.imports.dsi_customer_name_normalization import normalize_customer_name_for_similarity
+from app.services.imports.dsi_customer_name_normalization import (
+    DSI_DUPLICATE_FULL_STRING_THRESHOLD,
+    dsi_duplicate_similarity_score,
+    normalize_customer_name_for_similarity,
+    normalize_customer_name_token,
+)
 
 
 def _norm_key(s: str | None) -> str:
@@ -22,9 +27,8 @@ def _norm_key(s: str | None) -> str:
     t = re.sub(r"\s+", " ", t)
     return t
 
-# Text similarity threshold for within-job duplicate hints (difflib ratio on normalised names).
-DSI_DUPLICATE_SIMILARITY_THRESHOLD: float = 0.82
-_MIN_COMPARE_LEN: int = 4
+# Default full-string threshold (distinctive stem must pass first — see ``dsi_duplicate_similarity_score``).
+DSI_DUPLICATE_SIMILARITY_THRESHOLD: float = DSI_DUPLICATE_FULL_STRING_THRESHOLD
 
 _STEWARD_RESOLVED_REASONS = frozenset(
     {
@@ -43,6 +47,68 @@ class HistoricalCustomerResolution:
     resolution_kind: str  # historical_steward | historical_alias
 
 
+def _sellout_distributor_id_set(data: dict[str, Any]) -> set[int]:
+    raw = data.get("sellout_distributor_ids")
+    if isinstance(raw, set):
+        return {int(x) for x in raw}
+    if isinstance(raw, (list, tuple)):
+        return {int(x) for x in raw}
+    return set()
+
+
+def _duplicate_distributor_scope_allows_compare(da: dict[str, Any], db: dict[str, Any]) -> bool:
+    """Only flag duplicates when sell-out distributor scope overlaps (reduces cross-distributor false positives)."""
+    ids_a = _sellout_distributor_id_set(da)
+    ids_b = _sellout_distributor_id_set(db)
+    if not ids_a and not ids_b:
+        return True
+    if not ids_a or not ids_b:
+        return False
+    return bool(ids_a & ids_b)
+
+
+def duplicate_review_decision(ctx: dict[str, Any] | None) -> str | None:
+    if not isinstance(ctx, dict):
+        return None
+    dr = ctx.get("duplicate_review")
+    if not isinstance(dr, dict):
+        return None
+    dec = dr.get("decision")
+    return str(dec).strip() if dec is not None and str(dec).strip() else None
+
+
+def dsi_candidate_duplicate_review_unresolved(cand: ImportEntityMappingCandidate) -> bool:
+    ctx = cand.context if isinstance(cand.context, dict) else {}
+    hints = ctx.get("possible_duplicate_of")
+    if not isinstance(hints, list) or len(hints) == 0:
+        return False
+    return duplicate_review_decision(ctx) is None
+
+
+def gate_dsi_plan_row_duplicate_review(
+    cand: ImportEntityMappingCandidate, row: dict[str, Any]
+) -> dict[str, Any]:
+    if cand.entity_type != "customer_dealer_token":
+        return row
+    if not dsi_candidate_duplicate_review_unresolved(cand):
+        return row
+    blockers = [str(b) for b in (row.get("resolution_blockers") or []) if b]
+    if "duplicate_review_required" not in blockers:
+        blockers.append("duplicate_review_required")
+    return {
+        **row,
+        "ready": False,
+        "plan_status": "needs_review",
+        "resolution_blockers": blockers,
+        "duplicate_review_required": True,
+        "reason": (
+            str(row.get("reason") or "")
+            + (" — " if row.get("reason") else "")
+            + "Possible duplicate name match in this job — confirm same or different entity before applying"
+        ).strip(),
+    }
+
+
 def _display_name_for_customer_agg(data: dict[str, Any]) -> str:
     dg = (data.get("dealer_group_raw") or "").strip()
     if dg:
@@ -53,6 +119,42 @@ def _display_name_for_customer_agg(data: dict[str, Any]) -> str:
             if isinstance(s, str) and s.strip():
                 return s.strip()
     return ""
+
+
+def annotate_dsi_customer_distributor_name_collisions(
+    agg: dict[tuple[str, str], dict[str, Any]],
+    distributors: list[Any],
+) -> None:
+    """Flag customer tokens whose normalised name matches a ``dim_distributor`` (inter-disti counterparty hint)."""
+    by_norm: dict[str, dict[str, Any]] = {}
+    for dist in distributors:
+        dist_id = int(getattr(dist, "id", 0) or 0)
+        dist_name = str(getattr(dist, "name", "") or "").strip()
+        if not dist_id or not dist_name:
+            continue
+        for raw in (dist_name, str(getattr(dist, "code", "") or "")):
+            norm = normalize_customer_name_for_similarity(raw)
+            if len(norm) < 4:
+                continue
+            if norm not in by_norm:
+                by_norm[norm] = {"distributor_id": dist_id, "distributor_name": dist_name}
+
+    for (etype, nkey), data in agg.items():
+        if etype != "customer_dealer_token":
+            continue
+        keys_to_try: list[str] = []
+        nk = (nkey or "").strip().lower()
+        if nk and nk != "__blank__":
+            keys_to_try.append(nk)
+        display = _display_name_for_customer_agg(data)
+        dn = normalize_customer_name_token(display)
+        if dn and dn not in keys_to_try:
+            keys_to_try.append(dn)
+        for k in keys_to_try:
+            hit = by_norm.get(k)
+            if hit:
+                data["distributor_master_collision"] = dict(hit)
+                break
 
 
 def annotate_dsi_customer_candidate_duplicates(
@@ -68,20 +170,57 @@ def annotate_dsi_customer_candidate_duplicates(
     ]
     for i, (nk_a, da) in enumerate(items):
         name_a = _display_name_for_customer_agg(da)
-        norm_a = normalize_customer_name_for_similarity(name_a)
-        if len(norm_a) < _MIN_COMPARE_LEN:
+        if not name_a.strip():
             continue
         for nk_b, db in items[i + 1 :]:
+            if not _duplicate_distributor_scope_allows_compare(da, db):
+                continue
             name_b = _display_name_for_customer_agg(db)
-            norm_b = normalize_customer_name_for_similarity(name_b)
-            if len(norm_b) < _MIN_COMPARE_LEN:
+            if not name_b.strip():
                 continue
-            ratio = SequenceMatcher(None, norm_a, norm_b).ratio()
-            if ratio < similarity_threshold:
+            score = dsi_duplicate_similarity_score(
+                name_a,
+                name_b,
+                full_string_threshold=similarity_threshold,
+            )
+            if score is None:
                 continue
-            score = round(float(ratio), 4)
             _append_duplicate_hint(da, nk_b, score)
             _append_duplicate_hint(db, nk_a, score)
+
+
+def build_duplicate_review_record(
+    *,
+    decision: str,
+    paired_normalized_key: str,
+    similarity_score: float | None,
+    customer_id: int | None = None,
+    audit_note: str | None = None,
+    hints_snapshot: list[Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "decision": decision,
+        "paired_normalized_key": paired_normalized_key,
+        "similarity_score": similarity_score,
+        "customer_id": customer_id,
+        "audit_note": (audit_note or "").strip()[:2000] or None,
+        "decided_at": datetime.now(timezone.utc).isoformat(),
+        "hints_at_decision": list(hints_snapshot or [])[:16],
+    }
+
+
+def similarity_score_for_duplicate_peer(ctx: dict[str, Any], peer_normalized_key: str) -> float | None:
+    hints = ctx.get("possible_duplicate_of")
+    if not isinstance(hints, list):
+        return None
+    nk = (peer_normalized_key or "").strip()
+    for h in hints:
+        if isinstance(h, dict) and str(h.get("normalized_key") or "").strip() == nk:
+            try:
+                return float(h.get("similarity_score"))
+            except (TypeError, ValueError):
+                return None
+    return None
 
 
 def _append_duplicate_hint(bucket: dict[str, Any], other_normalized_key: str, score: float) -> None:

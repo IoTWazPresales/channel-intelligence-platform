@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from app.services.imports.background_tasks import list_active_import_background_tasks_sync
 from app.services.imports.import_job_background_metadata import (
     ACTIVE_CELERY_STATES,
+    TERMINAL_CELERY_STATES,
     clear_background_task_metadata,
 )
 
@@ -65,3 +66,57 @@ def test_terminal_celery_clears_metadata_and_is_not_listed() -> None:
 def test_progress_celery_state_is_active() -> None:
     assert "PROGRESS" in ACTIVE_CELERY_STATES
     assert "SUCCESS" not in ACTIVE_CELERY_STATES
+    assert "SUCCESS" in TERMINAL_CELERY_STATES
+
+
+def test_running_revalidate_on_validated_job_lists_active_task() -> None:
+    mock_session = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = 733
+    mock_job.status = "running"
+    mock_job.stage = "validated"
+    mock_job.template_slug = "distributor_inventory"
+    mock_job.import_mode = "validate"
+    mock_job.file_name = "test.csv"
+    mock_job.staged_metadata = {"celery_task_id": "task-live", "dsi_validate_total_rows": 100}
+
+    mock_session.scalars.return_value.all.return_value = [mock_job]
+
+    with (
+        patch("app.services.imports.background_tasks.SessionLocal") as mock_local,
+        patch(
+            "app.services.imports.background_tasks._read_celery_safe",
+            return_value=("PROGRESS", {"phase": "processing_rows", "pct": 10, "current_row": 10, "total_rows": 100}),
+        ),
+    ):
+        mock_local.return_value.__enter__.return_value = mock_session
+        out = list_active_import_background_tasks_sync(limit=10)
+
+    assert len(out) == 1
+    assert out[0]["import_job_id"] == 733
+    assert out[0]["pct"] == 10
+
+
+def test_validated_job_clears_metadata_when_celery_still_pending() -> None:
+    mock_session = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = 99
+    mock_job.status = "completed_with_errors"
+    mock_job.stage = "validated"
+    mock_job.template_slug = "distributor_inventory"
+    mock_job.import_mode = "validate"
+    mock_job.file_name = "test.csv"
+    mock_job.staged_metadata = {"celery_task_id": "task-stale", "dsi_validate_total_rows": 100}
+
+    mock_session.scalars.return_value.all.return_value = [mock_job]
+
+    with (
+        patch("app.services.imports.background_tasks.SessionLocal") as mock_local,
+        patch("app.services.imports.background_tasks._read_celery", return_value=("PENDING", {})),
+    ):
+        mock_local.return_value.__enter__.return_value = mock_session
+        out = list_active_import_background_tasks_sync(limit=10)
+
+    assert out == []
+    assert mock_job.staged_metadata == {"dsi_validate_total_rows": 100}
+    mock_session.commit.assert_called_once()

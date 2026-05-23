@@ -47,9 +47,23 @@ export type BackgroundTaskRecord = {
   pct?: number;
   task_state?: string | null;
   polled_at?: string;
+  can_retry?: boolean;
 };
 
 export type BackgroundTasksListResponse = {
   tasks: BackgroundTaskRecord[];
   count: number;
+  active_count?: number;
+};
+
+export type CancelImportJobResponse = {
+  cancelled: boolean;
+  job_id: number;
+  previous_status: string;
+};
+
+export type RetryImportJobResponse = {
+  queued: boolean;
+  job_id: number;
+  task_id: string | null;
 };

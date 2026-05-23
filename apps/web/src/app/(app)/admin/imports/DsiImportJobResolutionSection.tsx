@@ -59,6 +59,8 @@ export function DsiImportJobResolutionSection({
   candidatesLoading: candidatesLoadingOverride,
   candidatesError: candidatesErrorOverride,
   onInvalidate,
+  dsiPipelineRunning = false,
+  onAsyncPipelineStarted,
 }: {
   importJobId: number;
   /** Test / story override — skips paginated fetch when provided. */
@@ -66,6 +68,9 @@ export function DsiImportJobResolutionSection({
   candidatesLoading?: boolean;
   candidatesError?: unknown;
   onInvalidate: () => void;
+  /** True while validate/revalidate Celery pipeline is in flight (imports page). */
+  dsiPipelineRunning?: boolean;
+  onAsyncPipelineStarted?: (args: { importJobId: number; taskId?: string | null }) => void;
 }) {
   const qc = useQueryClient();
   const tabbedMode = candidatesOverride == null;
@@ -139,6 +144,7 @@ export function DsiImportJobResolutionSection({
     importJobId,
     candidates,
     onInvalidate,
+    onAsyncPipelineStarted,
     setSelectedIds,
     setPlanApplySummary,
   });
@@ -294,26 +300,29 @@ export function DsiImportJobResolutionSection({
     ? dsiTabDependencyNudge(activeTab, openByTab, openByTab.region_channel)
     : null;
 
+  const revalidatePipelineBusy =
+    dsiPipelineRunning || plan.dsiRevalidateFromServer.isPending;
+
   const stewardOverlayBusy =
     bulk.bulkPreview.isPending ||
     bulk.bulkApply.isPending ||
     plan.applyResolutionPlan.isPending ||
     plan.refreshPlanEffective.isPending ||
-    plan.dsiRevalidateFromServer.isPending;
+    revalidatePipelineBusy;
 
   const stewardBusyMessage = useMemo(() => {
     if (bulk.bulkApply.isPending) return 'Applying bulk steward actions…';
     if (bulk.bulkPreview.isPending) return 'Building bulk steward preview…';
     if (plan.applyResolutionPlan.isPending) return 'Applying resolution plan…';
     if (plan.refreshPlanEffective.isPending) return 'Updating resolution plan after your edits…';
-    if (plan.dsiRevalidateFromServer.isPending) return 'Re-running import validation on the server…';
+    if (revalidatePipelineBusy) return 'Re-running import validation on the server…';
     return undefined;
   }, [
     bulk.bulkApply.isPending,
     bulk.bulkPreview.isPending,
     plan.applyResolutionPlan.isPending,
     plan.refreshPlanEffective.isPending,
-    plan.dsiRevalidateFromServer.isPending,
+    revalidatePipelineBusy,
   ]);
 
   const planInitialLoading =
@@ -359,10 +368,35 @@ export function DsiImportJobResolutionSection({
     ]
   );
 
+  const refreshResolutionPlanEffective = useCallback(async () => {
+    if (plan.planLoadToken === 0) return;
+    await plan.refreshPlanEffective.mutateAsync({
+      overrides: plan.overridesPayload(),
+      globalSuspicious: plan.planGlobalSuspicious,
+    });
+  }, [plan]);
+
   const stewardDone = useCallback(() => {
     invalidateDsiImportJobStewardQueries(qc, importJobId, { includeImportJobsList: true });
     onInvalidate();
   }, [qc, importJobId, onInvalidate]);
+
+  const lookupPeerCandidateByNormalizedKey = useCallback(
+    (normalizedKey: string) =>
+      candidates.find(
+        (c) =>
+          c.entity_type === 'customer_dealer_token' && c.normalized_key === normalizedKey
+      ) ?? null,
+    [candidates]
+  );
+
+  const openPeerCandidateByNormalizedKey = useCallback(
+    (normalizedKey: string) => {
+      const peer = lookupPeerCandidateByNormalizedKey(normalizedKey);
+      if (peer) setDetailCandidate(peer);
+    },
+    [lookupPeerCandidateByNormalizedKey]
+  );
 
   const candidateWorkspace = (
     <ImportStewardCandidateWorkspace<DsiCandidateRow>
@@ -689,6 +723,9 @@ export function DsiImportJobResolutionSection({
             onRowActionStart={(candidateId) => setRowActionPendingId(candidateId)}
             onRowActionEnd={() => setRowActionPendingId(null)}
             onDone={stewardDone}
+            onPlanRefresh={refreshResolutionPlanEffective}
+            lookupPeerCandidate={lookupPeerCandidateByNormalizedKey}
+            onOpenPeerByNormalizedKey={openPeerCandidateByNormalizedKey}
           />
         ) : null}
       </Box>
@@ -709,9 +746,9 @@ export function DsiImportJobResolutionSection({
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
         <DsiPendingButton
           variant="outlined"
-          pending={plan.dsiRevalidateFromServer.isPending}
+          pending={revalidatePipelineBusy}
           pendingLabel="Re-running import validation…"
-          disabled={stewardOverlayBusy && !plan.dsiRevalidateFromServer.isPending}
+          disabled={stewardOverlayBusy && !revalidatePipelineBusy}
           onClick={() => void plan.dsiRevalidateFromServer.mutateAsync().catch(() => {})}
           data-testid="dsi-import-revalidate-server"
         >

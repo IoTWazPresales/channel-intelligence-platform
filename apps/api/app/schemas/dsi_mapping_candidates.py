@@ -20,6 +20,7 @@ class DsiMappingCandidatesListParams(BaseModel):
     verify_name_only: bool = False
     special_category_only: bool = False
     possible_duplicates_only: bool = False
+    duplicate_unresolved_only: bool = False
     status: DsiCandidateStatusFilter = "open"
 
 

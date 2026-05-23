@@ -78,6 +78,12 @@ def _apply_list_filters(q, params: DsiMappingCandidatesListParams):
     if params.possible_duplicates_only:
         q = q.where(ImportEntityMappingCandidate.context["possible_duplicate_of"].isnot(None))
 
+    if params.duplicate_unresolved_only:
+        q = q.where(
+            ImportEntityMappingCandidate.context["possible_duplicate_of"].isnot(None),
+            ImportEntityMappingCandidate.context["duplicate_review"]["decision"].astext.is_(None),
+        )
+
     return q
 
 

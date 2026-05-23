@@ -16,6 +16,7 @@ export type DsiStewardCandidateFilterState = {
   verifyNameOnly: boolean;
   specialCategoryOnly: boolean;
   possibleDuplicatesOnly: boolean;
+  duplicateUnresolvedOnly: boolean;
 };
 
 export const defaultDsiStewardCandidateFilterState = (): DsiStewardCandidateFilterState => ({
@@ -25,6 +26,7 @@ export const defaultDsiStewardCandidateFilterState = (): DsiStewardCandidateFilt
   verifyNameOnly: false,
   specialCategoryOnly: false,
   possibleDuplicatesOnly: false,
+  duplicateUnresolvedOnly: false,
 });
 
 type FilterSlice = Pick<
@@ -46,6 +48,78 @@ export type DsiPossibleDuplicateHint = {
   normalized_key: string;
   similarity_score?: number;
 };
+
+export function contextDuplicateReview(
+  ctx: Record<string, unknown> | null
+): Record<string, unknown> | null {
+  if (!ctx || typeof ctx.duplicate_review !== 'object' || ctx.duplicate_review === null) return null;
+  return ctx.duplicate_review as Record<string, unknown>;
+}
+
+export function duplicateReviewDecision(ctx: Record<string, unknown> | null): string | null {
+  const dr = contextDuplicateReview(ctx);
+  if (!dr) return null;
+  const d = dr.decision;
+  return typeof d === 'string' && d.trim() ? d.trim() : null;
+}
+
+export function hasUnresolvedDuplicateReview(ctx: Record<string, unknown> | null): boolean {
+  return contextPossibleDuplicateOf(ctx).length > 0 && duplicateReviewDecision(ctx) == null;
+}
+
+export type DuplicateSameEntityCase = 'greenfield' | 'suggested' | 'conflict';
+
+function normalizeSuggestedCustomerId(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 1 ? n : null;
+}
+
+/** Classify same-entity duplicate flow before opening the steward dialog. */
+export function classifyDuplicateSameEntityCase(
+  primarySuggestedEntityId: number | null | undefined,
+  peerSuggestedEntityId: number | null | undefined,
+  planSuggestedTargetId?: unknown
+): DuplicateSameEntityCase {
+  const primarySug =
+    normalizeSuggestedCustomerId(primarySuggestedEntityId) ??
+    normalizeSuggestedCustomerId(planSuggestedTargetId);
+  const peerSug = normalizeSuggestedCustomerId(peerSuggestedEntityId);
+  if (primarySug != null && peerSug != null && primarySug !== peerSug) return 'conflict';
+  if (primarySug == null && peerSug == null) return 'greenfield';
+  return 'suggested';
+}
+
+export function suggestedCustomerIdForDuplicateSameEntity(
+  primarySuggestedEntityId: number | null | undefined,
+  peerSuggestedEntityId: number | null | undefined,
+  planSuggestedTargetId?: unknown
+): number | null {
+  const primarySug =
+    normalizeSuggestedCustomerId(primarySuggestedEntityId) ??
+    normalizeSuggestedCustomerId(planSuggestedTargetId);
+  const peerSug = normalizeSuggestedCustomerId(peerSuggestedEntityId);
+  return primarySug ?? peerSug ?? null;
+}
+
+export type DsiDistributorMasterCollision = {
+  distributor_id: number;
+  distributor_name: string;
+};
+
+/** Inter-disti hint: customer token normalised name matches ``dim_distributor`` (validate-time). */
+export function contextDistributorMasterCollision(
+  ctx: Record<string, unknown> | null
+): DsiDistributorMasterCollision | null {
+  if (!ctx || typeof ctx.distributor_master_collision !== 'object' || ctx.distributor_master_collision === null) {
+    return null;
+  }
+  const raw = ctx.distributor_master_collision as Record<string, unknown>;
+  const distributor_id = Number(raw.distributor_id);
+  const distributor_name = String(raw.distributor_name ?? '').trim();
+  if (!Number.isFinite(distributor_id) || !distributor_name) return null;
+  return { distributor_id, distributor_name };
+}
 
 export function contextPossibleDuplicateOf(ctx: Record<string, unknown> | null): DsiPossibleDuplicateHint[] {
   if (!ctx || !Array.isArray(ctx.possible_duplicate_of)) return [];
@@ -153,6 +227,7 @@ function matchesToggles(r: FilterSlice, s: DsiStewardCandidateFilterState): bool
   }
   if (s.specialCategoryOnly && !contextSpecialCategory(r.context)) return false;
   if (s.possibleDuplicatesOnly && contextPossibleDuplicateOf(r.context).length === 0) return false;
+  if (s.duplicateUnresolvedOnly && !hasUnresolvedDuplicateReview(r.context)) return false;
   return true;
 }
 
@@ -178,6 +253,7 @@ export function dsiStewardFiltersAreDefault(filters: DsiStewardCandidateFilterSt
     filters.party === 'all' &&
     !filters.verifyNameOnly &&
     !filters.specialCategoryOnly &&
-    !filters.possibleDuplicatesOnly
+    !filters.possibleDuplicatesOnly &&
+    !filters.duplicateUnresolvedOnly
   );
 }

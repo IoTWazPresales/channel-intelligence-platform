@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiGet, apiPost } from '@/lib/api';
 
-import { pollDsiImportPipelineUntilDone } from './dsiImportPipelinePoll';
+import { notifyDsiAsyncPipelineStarted } from './dsiAsyncPipelineRun';
 import { DSI_STEWARD_CONFIG, invalidateDsiCatalogQueries, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
 import { patchDsiCandidatesCache } from './dsiStewardCacheUpdates';
 import type { DsiCatalogOpt, DsiPlanRowOverride, DsiUnresolvedGeoRowDto } from './dsiSteward.types';
@@ -16,12 +16,15 @@ export function useDsiResolutionPlan({
   importJobId,
   candidates,
   onInvalidate,
+  onAsyncPipelineStarted,
   setSelectedIds,
   setPlanApplySummary,
 }: {
   importJobId: number;
   candidates: DsiCandidateRow[];
   onInvalidate: () => void;
+  /** Parent imports page: show validate-step progress panel + poll job/dsi-progress. */
+  onAsyncPipelineStarted?: (args: { importJobId: number; taskId?: string | null }) => void;
   setSelectedIds: (ids: number[] | ((prev: number[]) => number[])) => void;
   setPlanApplySummary: (msg: string | null) => void;
 }) {
@@ -206,21 +209,27 @@ export function useDsiResolutionPlan({
         ok: boolean;
         async?: boolean;
         import_job_id?: number;
+        task_id?: string | null;
         message?: string;
       }>(
         `/api/v1/mappings/import-jobs/${importJobId}/revalidate-distributor-sales-inventory`,
         {}
       );
       if (res.async) {
-        void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
-        await pollDsiImportPipelineUntilDone(importJobId);
+        if (onAsyncPipelineStarted) {
+          onAsyncPipelineStarted({ importJobId, taskId: res.task_id });
+        } else {
+          notifyDsiAsyncPipelineStarted(qc, importJobId, { taskId: res.task_id });
+        }
       }
       return res;
     },
-    onSuccess: () => {
-      invalidateDsiImportJobStewardQueries(qc, importJobId, { includeImportJobsList: true });
+    onSuccess: (res) => {
+      if (!res.async) {
+        invalidateDsiImportJobStewardQueries(qc, importJobId, { includeImportJobsList: true });
+        onInvalidate();
+      }
       void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
-      onInvalidate();
     },
   });
 
@@ -246,7 +255,13 @@ export function useDsiResolutionPlan({
 
   const readyPlanCandidateIds = useMemo(() => {
     return planTableRows
-      .filter((r) => r.ready === true)
+      .filter(
+        (r) =>
+          r.ready === true &&
+          r.duplicate_review_required !== true &&
+          !(Array.isArray(r.resolution_blockers) &&
+            (r.resolution_blockers as unknown[]).includes('duplicate_review_required'))
+      )
       .map((r) => Number(r.candidate_id))
       .filter((id) => Number.isFinite(id));
   }, [planTableRows]);

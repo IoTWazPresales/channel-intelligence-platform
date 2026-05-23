@@ -57,7 +57,7 @@ import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib
 import { toQueryError } from '@/lib/queryError';
 
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
-import { DSI_STEWARD_CONFIG } from '@/features/import-steward';
+import { DSI_STEWARD_CONFIG, notifyDsiAsyncPipelineStarted } from '@/features/import-steward';
 
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 
@@ -765,13 +765,20 @@ function AdminImportsPageContent() {
         headers: defaultHeaders,
       });
       if (!res.ok) throw new Error(await readFetchError(res));
-      const json = (await res.json()) as DsiMappingState & { async?: boolean };
-      return { async: Boolean(json.async) };
+      const json = (await res.json()) as DsiMappingState & { async?: boolean; task_id?: string | null };
+      return { async: Boolean(json.async), taskId: json.task_id ?? null };
     },
     onSuccess: async (data) => {
       if (data.async) {
-        setDsiValidateAsync(true);
-        void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+        const jid = lastJobIdRef.current;
+        if (jid != null) {
+          notifyDsiAsyncPipelineStarted(qc, jid, {
+            taskId: data.taskId,
+            onSetAsync: setDsiValidateAsync,
+          });
+        } else {
+          setDsiValidateAsync(true);
+        }
       } else {
         setDsiValidateAsync(false);
       }
@@ -810,6 +817,8 @@ function AdminImportsPageContent() {
     refetchInterval: (q) => {
       const j = q.state.data;
       if (!j) return 1500;
+      const status = (j.status || '').trim().toLowerCase();
+      if (status === 'running') return 1500;
       const st = (j.stage || '').trim();
       if (st === 'validated' || st === 'failed') return false;
       return 1500;
@@ -824,16 +833,48 @@ function AdminImportsPageContent() {
     if (!dsiValidateAsync) return;
     const j = dsiValidatePollJob;
     if (!j) return;
+    const status = (j.status || '').trim().toLowerCase();
+    if (status === 'running') return;
     const st = (j.stage || '').trim();
-    if (st === 'validated' || st === 'failed') {
+    const progressPhase = String(dsiProgress?.phase ?? '').trim();
+    if (progressPhase === 'failed' || st === 'failed') {
+      setDsiValidateAsync(false);
+      return;
+    }
+    if (
+      progressPhase === 'complete' ||
+      st === 'validated' ||
+      status === 'completed' ||
+      status === 'completed_with_errors'
+    ) {
       setDsiValidateAsync(false);
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(j.id) });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', j.id] });
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(j.id) });
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
       void refetchDsiMapping();
       void refetchPreview();
     }
-  }, [dsiValidateAsync, dsiValidatePollJob, qc, refetchDsiMapping, refetchPreview]);
+  }, [dsiValidateAsync, dsiValidatePollJob, dsiProgress?.phase, qc, refetchDsiMapping, refetchPreview]);
+
+  const handleDsiAsyncPipelineStarted = useCallback(
+    (args: { importJobId: number; taskId?: string | null }) => {
+      if (args.importJobId !== lastJobId) return;
+      notifyDsiAsyncPipelineStarted(qc, args.importJobId, {
+        taskId: args.taskId,
+        onSetAsync: setDsiValidateAsync,
+      });
+    },
+    [lastJobId, qc]
+  );
+
+  const dsiPipelineInFlight = useMemo(() => {
+    if (dsiValidateAsync) return true;
+    const j = dsiValidatePollJob;
+    if (!j) return false;
+    return (j.status || '').trim().toLowerCase() === 'running';
+  }, [dsiValidateAsync, dsiValidatePollJob]);
 
   useEffect(() => {
     dsiValidate.reset();
@@ -903,7 +944,7 @@ function AdminImportsPageContent() {
   const dsiCanContinueToApply = useMemo(
     () =>
       dsiContinueToApplyAllowed(dsiContinueGateKey, lastJobId, dsiMappingState?.field_mapping, distributorSiSummary, {
-        isValidating: dsiValidate.isPending || dsiValidateAsync,
+        isValidating: dsiValidate.isPending || dsiPipelineInFlight,
         hasServerGate: dsiServerMappingGateOk,
       }),
     [
@@ -912,12 +953,20 @@ function AdminImportsPageContent() {
       dsiMappingState?.field_mapping,
       distributorSiSummary,
       dsiValidate.isPending,
-      dsiValidateAsync,
+      dsiPipelineInFlight,
       dsiServerMappingGateOk,
     ]
   );
 
-  const dsiHasValidateResult = Boolean(distributorSiSummary) || dsiValidate.isSuccess || dsiValidate.isError;
+  const dsiValidateStage = useMemo(() => {
+    const polled = (dsiValidatePollJob?.stage || '').trim();
+    if (polled) return polled;
+    return (dsiMappingState?.stage || '').trim();
+  }, [dsiValidatePollJob?.stage, dsiMappingState?.stage]);
+
+  const dsiValidationComplete = dsiValidateStage === 'validated' || dsiValidateStage === 'failed';
+
+  const dsiHasValidateResult = dsiValidationComplete || Boolean(distributorSiSummary);
 
   useEffect(() => {
     if (!isDsi || !dsiMappingDraftDirty) return;
@@ -2775,24 +2824,16 @@ function AdminImportsPageContent() {
                 <strong>Save &amp; continue to validate</strong> before running validation.
               </Alert>
             ) : null}
-            {(dsiValidateAsync || (dsiValidatePollJob && (dsiValidatePollJob.status || '').trim() === 'running')) &&
-            (dsiValidatePollJob?.stage || '').trim() !== 'validated' &&
-            (dsiValidatePollJob?.stage || '').trim() !== 'failed' ? (
+            {dsiPipelineInFlight ? (
               <DsiValidateProgressPanel
                 progress={dsiProgress}
-                isRunning={
-                  dsiValidateAsync ||
-                  (dsiValidate.isPending ?? false) ||
-                  ((dsiValidatePollJob?.status || '').trim() === 'running' &&
-                    (dsiValidatePollJob?.stage || '').trim() !== 'validated' &&
-                    (dsiValidatePollJob?.stage || '').trim() !== 'failed')
-                }
+                isRunning={dsiPipelineInFlight || (dsiValidate.isPending ?? false)}
               />
             ) : dsiValidate.isPending ? (
               <LinearProgress />
             ) : null}
             {dsiValidate.isError ? <Alert severity="error">{safeDisplayError(dsiValidate.error)}</Alert> : null}
-            {dsiValidate.isSuccess ? (
+            {dsiValidationComplete && !dsiPipelineInFlight ? (
               <Alert
                 severity={
                   distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0
@@ -2855,9 +2896,11 @@ function AdminImportsPageContent() {
                 ) : null}
               </Alert>
             ) : null}
-            {lastJobId != null && (distributorSiSummary?.aggregated_candidates ?? 0) > 0 ? (
+            {lastJobId != null && dsiValidationComplete ? (
               <DsiImportJobResolutionSection
                 importJobId={lastJobId}
+                dsiPipelineRunning={dsiPipelineInFlight}
+                onAsyncPipelineStarted={handleDsiAsyncPipelineStarted}
                 onInvalidate={() => {
                   void refetchPreview();
                 }}
@@ -2886,7 +2929,7 @@ function AdminImportsPageContent() {
               </Table>
             ) : null}
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
-              <Button onClick={() => setActiveStep(5)} disabled={dsiValidate.isPending || dsiValidateAsync}>
+              <Button onClick={() => setActiveStep(5)} disabled={dsiValidate.isPending || dsiPipelineInFlight}>
                 Back
               </Button>
               {dsiCanContinueToApply ? (
@@ -2894,10 +2937,10 @@ function AdminImportsPageContent() {
                   <Button
                     variant="outlined"
                     onClick={() => void dsiValidate.mutateAsync()}
-                    disabled={dsiValidate.isPending || dsiValidateAsync || !dsiServerMappingGateOk}
+                    disabled={dsiValidate.isPending || dsiPipelineInFlight || !dsiServerMappingGateOk}
                     data-testid="dsi-rerun-validation"
                   >
-                    {dsiValidate.isPending || dsiValidateAsync ? 'Validating…' : 'Re-run validation'}
+                    {dsiValidate.isPending || dsiPipelineInFlight ? 'Validating…' : 'Re-run validation'}
                   </Button>
                   <Button variant="contained" onClick={() => setActiveStep(7)} data-testid="dsi-continue-to-apply">
                     Continue to apply
@@ -2907,10 +2950,10 @@ function AdminImportsPageContent() {
                 <Button
                   variant="contained"
                   onClick={() => void dsiValidate.mutateAsync()}
-                  disabled={dsiValidate.isPending || dsiValidateAsync || !dsiServerMappingGateOk}
+                  disabled={dsiValidate.isPending || dsiPipelineInFlight || !dsiServerMappingGateOk}
                   data-testid="dsi-run-validation"
                 >
-                  {dsiValidate.isPending || dsiValidateAsync
+                  {dsiValidate.isPending || dsiPipelineInFlight
                     ? 'Validating…'
                     : dsiHasValidateResult
                       ? 'Re-run validation'

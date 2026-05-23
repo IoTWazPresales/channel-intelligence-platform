@@ -59,6 +59,8 @@ from app.services.imports.dsi_steward_candidate_ops import (
     execute_create_provisional_dsi_customer,
     execute_create_provisional_dsi_distributor,
     execute_ignore_dsi_candidate,
+    execute_acknowledge_dsi_duplicate_different_entity,
+    execute_dsi_duplicate_same_entity,
     execute_map_dsi_customer,
     execute_map_dsi_distributor,
     execute_resolve_dsi_product,
@@ -171,6 +173,7 @@ async def list_distributor_si_mapping_candidates(
     verify_name_only: bool = False,
     special_category_only: bool = False,
     possible_duplicates_only: bool = False,
+    duplicate_unresolved_only: bool = False,
     status: str = "open",
     db: AsyncSession = Depends(get_db),
 ):
@@ -186,6 +189,7 @@ async def list_distributor_si_mapping_candidates(
         verify_name_only=verify_name_only,
         special_category_only=special_category_only,
         possible_duplicates_only=possible_duplicates_only,
+        duplicate_unresolved_only=duplicate_unresolved_only,
         status=status,  # type: ignore[arg-type]
     )
 
@@ -317,6 +321,50 @@ async def map_dsi_candidate_to_customer(
     try:
         return await execute_map_dsi_customer(
             db, cand, customer_id=body.customer_id, raw_token=body.raw_token
+        )
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+class DsiDuplicateReviewPeerBody(BaseModel):
+    peer_normalized_key: str = Field(..., min_length=1, max_length=512)
+    audit_note: str | None = Field(default=None, max_length=2000)
+
+
+class DsiDuplicateSameEntityBody(DsiDuplicateReviewPeerBody):
+    customer_id: int | None = Field(default=None, ge=1)
+    raw_token: str | None = Field(default=None, max_length=512)
+
+
+@router.post("/import-candidates/{candidate_id}/duplicate-review/different-entity", status_code=200)
+async def acknowledge_dsi_duplicate_different_entity(
+    candidate_id: int, body: DsiDuplicateReviewPeerBody, db: AsyncSession = Depends(get_db)
+):
+    cand = await _get_dsi_candidate_or_404(candidate_id, db)
+    try:
+        return await execute_acknowledge_dsi_duplicate_different_entity(
+            db,
+            cand,
+            peer_normalized_key=body.peer_normalized_key,
+            audit_note=body.audit_note,
+        )
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.post("/import-candidates/{candidate_id}/duplicate-review/same-entity", status_code=200)
+async def resolve_dsi_duplicate_same_entity(
+    candidate_id: int, body: DsiDuplicateSameEntityBody, db: AsyncSession = Depends(get_db)
+):
+    cand = await _get_dsi_candidate_or_404(candidate_id, db)
+    try:
+        return await execute_dsi_duplicate_same_entity(
+            db,
+            cand,
+            peer_normalized_key=body.peer_normalized_key,
+            customer_id=body.customer_id,
+            raw_token=body.raw_token,
+            audit_note=body.audit_note,
         )
     except StewardOpError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
@@ -976,14 +1024,13 @@ async def revalidate_dsi_import_job(job_id: int, db: AsyncSession = Depends(get_
     """Re-run DSI import validation via Celery (same pipeline as validate)."""
     await _assert_dsi_import_job(db, job_id)
 
-    from app.api.v1.endpoints.imports import _enqueue_import_pipeline_job
+    from app.api.v1.endpoints.imports import (
+        _enqueue_import_pipeline_job,
+        _persist_pipeline_celery_task_id,
+        _prepare_dsi_pipeline_dispatch,
+    )
 
-    with SessionLocal() as sync_db:
-        j = sync_db.get(ImportJob, job_id)
-        if j is None:
-            raise HTTPException(status_code=404, detail="Import job not found")
-        j.import_mode = "validate"
-        sync_db.commit()
+    _prepare_dsi_pipeline_dispatch(job_id)
 
     dispatched, dsi_task_id = _enqueue_import_pipeline_job(
         job_id,
@@ -992,13 +1039,7 @@ async def revalidate_dsi_import_job(job_id: int, db: AsyncSession = Depends(get_
     )
 
     if dispatched and dsi_task_id:
-        with SessionLocal() as meta_db:
-            j_meta = meta_db.get(ImportJob, job_id)
-            if j_meta is not None:
-                m = dict(j_meta.staged_metadata or {})
-                m["celery_task_id"] = dsi_task_id
-                j_meta.staged_metadata = m
-                meta_db.commit()
+        _persist_pipeline_celery_task_id(job_id, dsi_task_id)
 
     job = await db.get(ImportJob, job_id)
     if dispatched:
@@ -1007,7 +1048,7 @@ async def revalidate_dsi_import_job(job_id: int, db: AsyncSession = Depends(get_
             "ok": True,
             "import_job_id": job_id,
             "task_id": dsi_task_id,
-            "status": job.status if job else None,
+            "status": job.status if job else "running",
             "stage": job.stage if job else None,
             "template_slug": job.template_slug if job else "distributor_inventory",
             "message": "Revalidation started in the background worker.",

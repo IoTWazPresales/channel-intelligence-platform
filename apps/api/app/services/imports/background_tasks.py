@@ -4,14 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import and_, or_, select
 
 from app.db.session_sync import SessionLocal
 from app.models.ingestion import ImportJob
-from app.services.imports.import_job_background_metadata import ACTIVE_CELERY_STATES
+from app.services.imports.import_job_background_metadata import (
+    ACTIVE_CELERY_STATES,
+    TERMINAL_CELERY_STATES,
+    job_db_indicates_pipeline_finished,
+)
 from app.utils.json_safe import to_jsonable
 from app.worker.celery_app import celery_app
 
@@ -35,13 +40,49 @@ def _task_label(job: ImportJob, *, kind: str) -> str:
     return f"Import job {jid}"
 
 
+def _normalize_celery_state(state: str | None) -> str:
+    return (state or "PENDING").strip().upper()
+
+
 def _read_celery(task_id: str) -> tuple[str, dict[str, Any]]:
     from celery.result import AsyncResult
 
     r = AsyncResult(task_id, app=celery_app)
-    state = str(r.state or "PENDING")
+    state = _normalize_celery_state(str(r.state or "PENDING"))
     info = r.info if isinstance(r.info, dict) else {}
     return state, info
+
+
+def read_celery_with_timeout(task_id: str, *, timeout_s: float = 3.0) -> tuple[str, dict[str, Any]]:
+    """Read Celery result backend with a hard timeout (avoids blocking the API event loop)."""
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        fut = pool.submit(_read_celery, task_id)
+        try:
+            return fut.result(timeout=timeout_s)
+        except FuturesTimeoutError as exc:
+            raise TimeoutError(f"Celery read timed out for task {task_id}") from exc
+
+
+def _read_celery_safe(task_id: str, *, timeout_s: float = 3.0) -> tuple[str, dict[str, Any]]:
+    try:
+        return read_celery_with_timeout(task_id, timeout_s=timeout_s)
+    except TimeoutError:
+        logger.warning("background_tasks: celery read timed out task=%s", task_id)
+        return "PENDING", {}
+    except Exception as exc:
+        logger.debug("background_tasks: celery read failed task=%s: %s", task_id, exc)
+        return "PENDING", {}
+
+
+def _job_db_indicates_background_work_finished(job: ImportJob) -> bool:
+    return job_db_indicates_pipeline_finished(job)
+
+
+def _clear_task_slot_metadata(meta: dict[str, Any], slot: str) -> None:
+    if slot == "main":
+        meta.pop("celery_task_id", None)
+    else:
+        meta.pop("dsi_bulk_task", None)
 
 
 def _progress_from_celery(
@@ -130,18 +171,26 @@ def _build_background_task_records(
             continue
 
         for slot, task_id, kind, label in descriptors:
+            if _job_db_indicates_background_work_finished(job):
+                _clear_task_slot_metadata(meta, slot)
+                job.staged_metadata = to_jsonable(meta) if meta else None
+                session.add(job)
+                dirty = True
+                continue
+
             task_state = "PENDING"
             info: dict[str, Any] = {}
-            try:
-                task_state, info = _read_celery(task_id)
-            except Exception as exc:
-                logger.debug("background_tasks: celery read failed job=%s task=%s: %s", job.id, task_id, exc)
+            task_state, info = _read_celery_safe(task_id)
+
+            if task_state in TERMINAL_CELERY_STATES:
+                _clear_task_slot_metadata(meta, slot)
+                job.staged_metadata = to_jsonable(meta) if meta else None
+                session.add(job)
+                dirty = True
+                continue
 
             if task_state not in ACTIVE_CELERY_STATES:
-                if slot == "main":
-                    meta.pop("celery_task_id", None)
-                else:
-                    meta.pop("dsi_bulk_task", None)
+                _clear_task_slot_metadata(meta, slot)
                 job.staged_metadata = to_jsonable(meta) if meta else None
                 session.add(job)
                 dirty = True
@@ -165,5 +214,61 @@ def _build_background_task_records(
     return out, dirty
 
 
+def list_recent_failed_import_background_tasks_sync(*, limit: int = 10) -> list[dict[str, Any]]:
+    """Recent failed jobs for global indicator retry affordance (no active Celery task)."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=60)
+    now = datetime.now(timezone.utc).isoformat()
+    with SessionLocal() as session:
+        rows = list(
+            session.scalars(
+                select(ImportJob)
+                .where(ImportJob.archived_at.is_(None))
+                .where(ImportJob.status == "failed")
+                .where(ImportJob.updated_at >= cutoff)
+                .order_by(ImportJob.id.desc())
+                .limit(limit)
+            ).all()
+        )
+        out: list[dict[str, Any]] = []
+        for job in rows:
+            meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+            if meta.get("celery_task_id") or meta.get("dsi_bulk_task"):
+                continue
+            kind = "dsi_pipeline"
+            if (job.template_slug or "") == "inbound_shipments":
+                kind = "shipment_import"
+            elif (job.template_slug or "") == "product_master":
+                kind = "product_master_commit"
+            out.append(
+                {
+                    "task_id": f"failed-job-{job.id}",
+                    "import_job_id": int(job.id),
+                    "kind": kind,
+                    "label": _task_label(job, kind=kind),
+                    "status": "failed",
+                    "template_slug": job.template_slug,
+                    "file_name": job.file_name,
+                    "phase": "failed",
+                    "phase_label": (job.error_summary or "Failed")[:120],
+                    "current_row": 0,
+                    "total_rows": 0,
+                    "pct": 0,
+                    "task_state": "FAILURE",
+                    "polled_at": now,
+                    "can_retry": True,
+                }
+            )
+        return out
+
+
 async def list_active_import_background_tasks(*, limit: int = 40) -> list[dict[str, Any]]:
     return await asyncio.to_thread(list_active_import_background_tasks_sync, limit=limit)
+
+
+async def list_import_background_tasks_for_ui(*, limit: int = 40, failed_limit: int = 10) -> dict[str, Any]:
+    active = await list_active_import_background_tasks(limit=limit)
+    failed = await asyncio.to_thread(list_recent_failed_import_background_tasks_sync, limit=failed_limit)
+    active_ids = {t["import_job_id"] for t in active}
+    failed_deduped = [t for t in failed if t["import_job_id"] not in active_ids]
+    tasks = active + failed_deduped
+    return {"tasks": tasks, "count": len(tasks), "active_count": len(active)}

@@ -128,6 +128,46 @@ def _enqueue_import_pipeline_job(job_id: int, *, log_label: str, in_process_thre
     )
 
 
+def _raise_if_import_pipeline_busy(job: ImportJob) -> None:
+    """Reject a second validate/revalidate while Celery work is still active."""
+    from app.services.imports.import_job_background_metadata import (
+        ACTIVE_CELERY_STATES,
+        pipeline_dispatch_conflict_message,
+        read_main_celery_state,
+    )
+
+    if (job.status or "").strip().lower() != "running":
+        return
+    state = read_main_celery_state(job)
+    if state is not None and state in ACTIVE_CELERY_STATES:
+        raise HTTPException(status_code=409, detail=pipeline_dispatch_conflict_message(int(job.id)))
+
+
+def _prepare_dsi_pipeline_dispatch(job_id: int) -> None:
+    """Mark job running before broker dispatch so progress/background UI stay accurate."""
+    with SessionLocal() as sync_db:
+        j = sync_db.get(ImportJob, job_id)
+        if j is None:
+            raise HTTPException(status_code=404, detail="Import job not found")
+        _raise_if_import_pipeline_busy(j)
+        j.import_mode = "validate"
+        j.status = "running"
+        sync_db.commit()
+
+
+def _persist_pipeline_celery_task_id(job_id: int, task_id: str | None) -> None:
+    if not task_id:
+        return
+    with SessionLocal() as meta_db:
+        j_meta = meta_db.get(ImportJob, job_id)
+        if j_meta is None:
+            return
+        m = dict(j_meta.staged_metadata or {})
+        m["celery_task_id"] = task_id
+        j_meta.staged_metadata = m
+        meta_db.commit()
+
+
 def _is_admin(x_user_role: str | None) -> bool:
     return (x_user_role or "").strip().lower() == "admin"
 
@@ -577,14 +617,14 @@ async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
     """
     import asyncio
 
-    from celery.result import AsyncResult
-
     job = await db.get(ImportJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
     stage = (job.stage or "").strip()
     status = (job.status or "").strip()
+    stage_l = stage.lower()
+    status_l = status.lower()
     meta = dict(job.staged_metadata or {})
     task_id: str | None = meta.get("celery_task_id")
     total_rows_from_meta: int = int(meta.get("dsi_validate_total_rows") or 0)
@@ -601,34 +641,48 @@ async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
         "task_state": None,
     }
 
+    from app.services.imports.background_tasks import read_celery_with_timeout
+    from app.services.imports.import_job_background_metadata import (
+        ACTIVE_CELERY_STATES,
+        job_db_indicates_pipeline_finished,
+    )
+
+    # Trust DB when pipeline finished — do not read Celery (stale PROGRESS after completion).
+    if job_db_indicates_pipeline_finished(job):
+        progress["phase"] = "complete"
+        progress["status"] = "complete"
+        progress["phase_label"] = "Validation complete"
+        progress["pct"] = 100
+        progress["current_row"] = total_rows_from_meta
+        return progress
+
     if task_id:
         try:
+
             def _read_celery_state() -> tuple[str, Any]:
-                r = AsyncResult(task_id, app=celery_app)
-                return r.state, r.info
+                return read_celery_with_timeout(task_id, timeout_s=3.0)
 
             task_state, info = await asyncio.to_thread(_read_celery_state)
             progress["task_state"] = task_state
-            if isinstance(info, dict):
+            state_u = (str(task_state or "PENDING")).strip().upper()
+            if isinstance(info, dict) and state_u in ACTIVE_CELERY_STATES:
                 progress["phase"] = info.get("phase", "processing_rows")
                 progress["phase_label"] = info.get("phase_label", "Processing rows")
                 progress["current_row"] = info.get("current_row", 0)
                 total_from_celery = info.get("total_rows", 0)
                 progress["total_rows"] = total_from_celery or total_rows_from_meta
                 progress["pct"] = info.get("pct", 0)
+                if state_u in ("PENDING", "STARTED") and not info:
+                    progress["phase"] = "queued"
+                    progress["phase_label"] = "Queued"
+                return progress
         except Exception as exc:
             logger.debug("get_dsi_job_progress: Celery read failed job_id=%s: %s", job_id, exc)
 
-    # Override with final states derived from DB job record
-    if stage == "validated":
-        progress["phase"] = "complete"
-        progress["phase_label"] = "Validation complete"
-        progress["pct"] = 100
-        progress["current_row"] = progress["total_rows"]
-    elif stage in ("failed", "stage_failed"):
+    if stage_l in ("failed", "stage_failed") or status_l == "failed":
         progress["phase"] = "failed"
         progress["phase_label"] = "Failed"
-    elif status == "running" and progress["phase"] == "idle":
+    elif status_l == "running" or progress["phase"] == "idle":
         progress["phase"] = "processing_rows"
         progress["phase_label"] = "Processing rows"
 
@@ -640,10 +694,80 @@ async def list_background_tasks(
     limit: int = Query(default=40, ge=1, le=80),
 ):
     """Active Celery-backed import work for global nav progress (DSI validate, shipment import, bulk steward, etc.)."""
-    from app.services.imports.background_tasks import list_active_import_background_tasks
+    from app.services.imports.background_tasks import list_import_background_tasks_for_ui
 
-    tasks = await list_active_import_background_tasks(limit=limit)
-    return {"tasks": tasks, "count": len(tasks)}
+    return await list_import_background_tasks_for_ui(limit=limit)
+
+
+@router.post("/jobs/{job_id}/cancel")
+async def post_cancel_import_job(job_id: int, db: AsyncSession = Depends(get_db)):
+    """Revoke Celery work, clear task metadata, mark job failed (works for stale queued refs too)."""
+    import asyncio
+
+    from app.services.imports.import_job_task_control import cancel_import_job_sync
+
+    job = await db.get(ImportJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    def _cancel() -> dict[str, Any]:
+        with SessionLocal() as session:
+            return cancel_import_job_sync(session, job_id)
+
+    try:
+        return await asyncio.to_thread(_cancel)
+    except ValueError as exc:
+        if str(exc) == "job_not_found":
+            raise HTTPException(status_code=404, detail="Job not found") from exc
+        raise
+
+
+@router.post("/jobs/{job_id}/retry")
+async def post_retry_import_job(job_id: int, db: AsyncSession = Depends(get_db)):
+    """Re-enqueue ``imports.process_job`` for a failed job (same pattern as validate/revalidate)."""
+    import asyncio
+
+    from app.services.imports.import_job_task_control import prepare_import_job_retry_sync
+
+    job = await db.get(ImportJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if str(job.status or "").strip() != "failed":
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "job_not_failed", "message": "Retry is only available when job status is failed."},
+        )
+
+    def _work() -> dict[str, Any]:
+        with SessionLocal() as session:
+            prepare_import_job_retry_sync(session, job_id)
+        dispatched, task_id = _enqueue_import_pipeline_job(
+            job_id,
+            log_label="Import job retry",
+            in_process_thread_name=f"import-retry-{job_id}",
+        )
+        if dispatched and task_id:
+            with SessionLocal() as meta_db:
+                j_meta = meta_db.get(ImportJob, job_id)
+                if j_meta is not None:
+                    m = dict(j_meta.staged_metadata or {})
+                    m["celery_task_id"] = task_id
+                    j_meta.staged_metadata = m
+                    meta_db.commit()
+        if not dispatched:
+            raise RuntimeError("Failed to enqueue import job retry")
+        return {"queued": True, "job_id": job_id, "task_id": task_id}
+
+    try:
+        return await asyncio.to_thread(_work)
+    except ValueError as exc:
+        if str(exc) == "job_not_found":
+            raise HTTPException(status_code=404, detail="Job not found") from exc
+        if str(exc) == "job_not_failed":
+            raise HTTPException(status_code=409, detail="Job is not in failed status") from exc
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/jobs/{job_id}/shipment-mapping-state")
@@ -801,12 +925,7 @@ async def post_dsi_validate(job_id: int, db: AsyncSession = Depends(get_db)):
     if gate:
         raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
 
-    with SessionLocal() as sync_db:
-        j = sync_db.get(ImportJob, job_id)
-        if j is None:
-            raise HTTPException(status_code=404, detail="Job not found")
-        j.import_mode = "validate"
-        sync_db.commit()
+    _prepare_dsi_pipeline_dispatch(job_id)
 
     dispatched, dsi_task_id = _enqueue_import_pipeline_job(
         job_id,
@@ -814,15 +933,8 @@ async def post_dsi_validate(job_id: int, db: AsyncSession = Depends(get_db)):
         in_process_thread_name=f"dsi-validate-{job_id}",
     )
 
-    # Persist the Celery task ID so the progress endpoint can read real-time worker state.
     if dispatched and dsi_task_id:
-        with SessionLocal() as meta_db:
-            j_meta = meta_db.get(ImportJob, job_id)
-            if j_meta is not None:
-                m = dict(j_meta.staged_metadata or {})
-                m["celery_task_id"] = dsi_task_id
-                j_meta.staged_metadata = m
-                meta_db.commit()
+        _persist_pipeline_celery_task_id(job_id, dsi_task_id)
 
     job2 = await _async_import_job_with_source(db, job_id)
     if job2 is not None:
@@ -833,7 +945,8 @@ async def post_dsi_validate(job_id: int, db: AsyncSession = Depends(get_db)):
             "async": True,
             "job_id": job_id,
             "id": job_id,
-            "status": job2.status if job2 else None,
+            "task_id": dsi_task_id,
+            "status": job2.status if job2 else "running",
             "stage": job2.stage if job2 else None,
             "message": "Validation started in the background worker.",
         }

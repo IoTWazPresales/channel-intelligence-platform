@@ -173,6 +173,17 @@ export function DsiStewardCandidateFilters({
             sx={{ cursor: 'pointer' }}
             data-testid="dsi-filter-possible-duplicates"
           />
+          <Chip
+            size="small"
+            label="Duplicate review needed"
+            variant={filters.duplicateUnresolvedOnly ? 'filled' : 'outlined'}
+            color={filters.duplicateUnresolvedOnly ? 'warning' : 'default'}
+            onClick={() =>
+              onChange({ ...filters, duplicateUnresolvedOnly: !filters.duplicateUnresolvedOnly })
+            }
+            sx={{ cursor: 'pointer' }}
+            data-testid="dsi-filter-duplicate-unresolved"
+          />
         </Stack>
       </Stack>
     </Stack>

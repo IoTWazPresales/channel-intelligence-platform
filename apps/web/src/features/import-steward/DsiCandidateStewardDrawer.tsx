@@ -13,6 +13,9 @@ export function DsiCandidateStewardDrawer({
   onRowActionStart,
   onRowActionEnd,
   onDone,
+  onPlanRefresh,
+  lookupPeerCandidate,
+  onOpenPeerByNormalizedKey,
 }: {
   importJobId: number;
   candidate: DsiCandidateRow;
@@ -21,6 +24,9 @@ export function DsiCandidateStewardDrawer({
   onRowActionStart: (candidateId: number) => void;
   onRowActionEnd: () => void;
   onDone: () => void;
+  onPlanRefresh?: () => void | Promise<void>;
+  lookupPeerCandidate?: (normalizedKey: string) => DsiCandidateRow | null;
+  onOpenPeerByNormalizedKey?: (normalizedKey: string) => void;
 }) {
   const title =
     candidate.entity_type === 'distributor_token'
@@ -68,6 +74,9 @@ export function DsiCandidateStewardDrawer({
           onRowActionStart={onRowActionStart}
           onRowActionEnd={onRowActionEnd}
           onDone={onDone}
+          onPlanRefresh={onPlanRefresh}
+          lookupPeerCandidate={lookupPeerCandidate}
+          onOpenPeerByNormalizedKey={onOpenPeerByNormalizedKey}
         />
       </Box>
     </Box>

@@ -126,20 +126,21 @@ function AdminMappingsPageContent() {
   const revalidateJob = useMutation({
     mutationFn: async () => {
       if (importJobId == null) throw new Error('Missing import job');
-      const res = await apiPost<{ ok: boolean; async?: boolean }>(
+      const res = await apiPost<{ ok: boolean; async?: boolean; task_id?: string | null }>(
         `/api/v1/mappings/import-jobs/${importJobId}/revalidate-distributor-sales-inventory`
       );
       if (res.async) {
-        const { pollDsiImportPipelineUntilDone } = await import(
-          '@/features/import-steward/dsiImportPipelinePoll'
-        );
-        await pollDsiImportPipelineUntilDone(importJobId);
+        const { notifyDsiAsyncPipelineStarted } = await import('@/features/import-steward/dsiAsyncPipelineRun');
+        notifyDsiAsyncPipelineStarted(qc, importJobId, { taskId: res.task_id });
       }
       return res;
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: dsiQueryKey });
-      void refetchDsi();
+    onSuccess: (res) => {
+      if (!res.async) {
+        void qc.invalidateQueries({ queryKey: dsiQueryKey });
+        void refetchDsi();
+      }
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
     },
   });
 
