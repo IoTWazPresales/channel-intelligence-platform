@@ -15,6 +15,53 @@ def test_split_distinctive_and_generic() -> None:
     assert gen == "technologies"
 
 
+def test_split_distinctive_and_generic() -> None:
+    dist, gen = split_distinctive_and_generic_tokens("aeonic technologies")
+    assert dist == "aeonic"
+    assert gen == "technologies"
+    dist_bcs, gen_bcs = split_distinctive_and_generic_tokens("bcs computers")
+    assert dist_bcs == "bcs"
+    assert gen_bcs == "computers"
+
+
+def test_bcs_vs_rbs_no_dealer_group_similarity() -> None:
+    assert dsi_duplicate_similarity_score("BCS Computers", "RBS Computers") is None
+
+
+def test_bcs_vs_sbc_no_dealer_group_similarity() -> None:
+    assert dsi_duplicate_similarity_score("BCS Computers", "SBC Computers") is None
+
+
+def test_bcs_vs_rbs_prior_branch_was_full_string_on_shared_tail() -> None:
+    """Regression: before generic ``computers`` + short-lead gate, score was ~0.9231 via full_ratio."""
+    from difflib import SequenceMatcher
+
+    from app.services.imports.dsi_customer_name_normalization import (
+        _normalize_for_duplicate_compare,
+        split_distinctive_and_generic_tokens,
+    )
+
+    na = _normalize_for_duplicate_compare("BCS Computers")
+    nb = _normalize_for_duplicate_compare("RBS Computers")
+    da, _ = split_distinctive_and_generic_tokens(na)
+    db, _ = split_distinctive_and_generic_tokens(nb)
+    assert da == "bcs" and db == "rbs"
+    assert SequenceMatcher(None, na, nb).ratio() >= 0.88
+    assert dsi_duplicate_similarity_score("BCS Computers", "RBS Computers") is None
+
+
+def test_bcs_computers_vs_bcs_computer_still_hints() -> None:
+    score = dsi_duplicate_similarity_score("BCS Computers", "BCS Computer")
+    assert score is not None
+    assert score >= 0.88
+
+
+def test_spaced_acronym_bcs_vs_bcs_still_hints() -> None:
+    score = dsi_duplicate_similarity_score("B C S Computers", "BCS Computers")
+    assert score is not None
+    assert score >= 0.88
+
+
 def test_aeonic_benric_omni_not_duplicates() -> None:
     assert dsi_duplicate_similarity_score("Aeonic Technologies (Pty) Ltd", "benric technologies") is None
     assert dsi_duplicate_similarity_score("Aeonic Technologies (Pty) Ltd", "omni technologies (pty) ltd") is None

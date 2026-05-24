@@ -10,6 +10,7 @@ from app.services.imports.dsi_customer_intelligence import (
     gate_dsi_plan_row_duplicate_review,
 )
 from app.services.imports.dsi_customer_name_normalization import (
+    dsi_duplicate_similarity_score,
     evaluate_dealer_group_duplicate,
     normalize_customer_name_for_similarity,
 )
@@ -105,6 +106,55 @@ def test_tb_pair_hints_via_source_customer_not_dealer_group() -> None:
     hints = agg[("customer_dealer_token", "tb_comp")].get("possible_duplicate_of")
     assert isinstance(hints, list) and len(hints) == 1
     assert hints[0]["match_basis"] == "source_customer_exact"
+
+
+def test_pc_world_vs_pc_direct_no_short_stem_dealer_hint() -> None:
+    assert evaluate_dealer_group_duplicate("PC World", "PC Direct") is None
+
+
+def test_bcs_computers_vs_rbs_computers_no_dealer_group_hint() -> None:
+    assert evaluate_dealer_group_duplicate("BCS Computers", "RBS Computers") is None
+
+
+def test_bcs_computers_vs_sbc_computers_no_dealer_group_hint() -> None:
+    assert evaluate_dealer_group_duplicate("BCS Computers", "SBC Computers") is None
+
+
+def test_bcs_computers_vs_bcs_computer_still_dealer_group_hint() -> None:
+    ev = evaluate_dealer_group_duplicate("BCS Computers", "BCS Computer")
+    assert ev is not None
+    assert ev.match_basis in ("dealer_group_exact", "dealer_group_similar")
+    assert ev.score >= 0.88
+
+
+def test_spaced_acronym_bcs_vs_bcs_computers_still_hints() -> None:
+    ev = evaluate_dealer_group_duplicate("B C S Computers", "BCS Computers")
+    assert ev is not None
+    assert ev.score >= 0.88
+
+
+def test_bcs_vs_sbc_same_source_customer_source_exact_only() -> None:
+    shared = normalize_customer_name_for_similarity("Outlet 99 Main Road")
+    agg = {
+        ("customer_dealer_token", "bcs"): _customer_bucket(
+            "bcs",
+            dealer_group_raw="BCS Computers",
+            source_norms=[shared],
+            source_samples=["Outlet 99 Main Road"],
+        ),
+        ("customer_dealer_token", "sbc"): _customer_bucket(
+            "sbc",
+            dealer_group_raw="SBC Computers",
+            source_norms=[shared],
+            source_samples=["Outlet 99 Main Road"],
+        ),
+    }
+    annotate_dsi_customer_candidate_duplicates(agg, distributors=[])
+    hints = agg[("customer_dealer_token", "bcs")].get("possible_duplicate_of")
+    assert isinstance(hints, list) and len(hints) == 1
+    assert hints[0]["normalized_key"] == "sbc"
+    assert hints[0]["match_basis"] == "source_customer_exact"
+    assert hints[0]["similarity_score"] == 1.0
 
 
 def test_generic_source_customer_no_hint() -> None:

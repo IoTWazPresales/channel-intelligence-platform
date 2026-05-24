@@ -84,6 +84,8 @@ _GENERIC_NAME_TOKENS: frozenset[str] = frozenset(
         "logistics",
         "supply",
         "supplies",
+        "computers",
+        "computer",
         "trading",
         "company",
         "co",
@@ -203,6 +205,33 @@ def _leading_distinctive_token_variant(dist_a: str, dist_b: str) -> bool:
     return abs(len(ta[1]) - len(tb[1])) <= 1 and min(len(ta[1]), len(tb[1])) >= 2
 
 
+def _collapse_spaced_acronym_tokens(normalized: str) -> str:
+    """Join runs of single-letter tokens (``b c s`` → ``bcs``) for acronym-style dealer names."""
+    tokens = (normalized or "").split()
+    if not tokens:
+        return ""
+    out: list[str] = []
+    i = 0
+    while i < len(tokens):
+        t = tokens[i]
+        if len(t) == 1 and t.isalpha():
+            buf = [t]
+            j = i + 1
+            while j < len(tokens) and len(tokens[j]) == 1 and tokens[j].isalpha():
+                buf.append(tokens[j])
+                j += 1
+            out.append("".join(buf) if len(buf) >= 2 else t)
+            i = j
+        else:
+            out.append(t)
+            i += 1
+    return " ".join(out)
+
+
+def _normalize_for_duplicate_compare(raw: str | None) -> str:
+    return _collapse_spaced_acronym_tokens(normalize_customer_name_for_similarity(raw))
+
+
 def split_distinctive_and_generic_tokens(normalized: str) -> tuple[str, str]:
     """Split normalised display name into distinctive stem vs generic/industry tail tokens."""
     tokens = (normalized or "").split()
@@ -247,8 +276,8 @@ def evaluate_dealer_group_duplicate(
     )
     if score is None:
         return None
-    norm_a = normalize_customer_name_for_similarity(name_a)
-    norm_b = normalize_customer_name_for_similarity(name_b)
+    norm_a = _normalize_for_duplicate_compare(name_a)
+    norm_b = _normalize_for_duplicate_compare(name_b)
     basis = "dealer_group_exact" if norm_a == norm_b else "dealer_group_similar"
     return DealerGroupDuplicateEvaluation(score=score, match_basis=basis)
 
@@ -264,8 +293,8 @@ def dsi_duplicate_similarity_score(
 
     Returns ``None`` when the pair must not be flagged (e.g. only generic words match).
   """
-    norm_a = normalize_customer_name_for_similarity(name_a)
-    norm_b = normalize_customer_name_for_similarity(name_b)
+    norm_a = _normalize_for_duplicate_compare(name_a)
+    norm_b = _normalize_for_duplicate_compare(name_b)
     if not norm_a or not norm_b:
         return None
     if norm_a == norm_b:
@@ -277,23 +306,29 @@ def dsi_duplicate_similarity_score(
     lead_b = _leading_distinctive_token(norm_b)
     if not lead_a or not lead_b:
         return None
-    short_prefix_pair = len(lead_a) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN or len(
-        lead_b
-    ) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN
-    if short_prefix_pair:
-        if lead_a != lead_b:
-            return None
+    # Short leading acronyms (≤3 chars): order-sensitive — must match exactly; generic tail cannot rescue.
+    if (
+        len(lead_a) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN
+        and len(lead_b) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN
+        and lead_a != lead_b
+    ):
+        return None
 
     dist_a, _gen_a = split_distinctive_and_generic_tokens(norm_a)
     dist_b, _gen_b = split_distinctive_and_generic_tokens(norm_b)
-    if not short_prefix_pair:
+    if len(lead_a) >= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN and len(lead_b) >= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN:
         if len(dist_a) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN or len(dist_b) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN:
             return None
 
     if _distinctive_short_token_flip_should_suppress(dist_a, dist_b):
         return None
 
-    if _distinctive_stem_is_short_only(dist_a) and _distinctive_stem_is_short_only(dist_b):
+    # Same short stem with different tails (e.g. TB Computers vs TB Solutions) — do not hint on stem alone.
+    if (
+        dist_a != dist_b
+        and _distinctive_stem_is_short_only(dist_a)
+        and _distinctive_stem_is_short_only(dist_b)
+    ):
         return None
 
     dist_ratio = SequenceMatcher(None, dist_a, dist_b).ratio()
@@ -314,6 +349,10 @@ def dsi_duplicate_similarity_score(
         if full_ratio >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
             return round(float(full_ratio), 4)
         if dist_a == dist_b:
+            if _distinctive_stem_is_short_only(dist_a):
+                if full_ratio >= full_string_threshold:
+                    return round(float(full_ratio), 4)
+                return None
             combined = max(full_ratio, dist_ratio * 0.95)
             if combined >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
                 return round(float(combined), 4)
