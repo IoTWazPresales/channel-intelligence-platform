@@ -900,6 +900,7 @@ def resolve_duplicate_same_entity_customer_id(
     customer_id: int | None,
     primary_suggested_entity_id: int | None,
     peer_suggested_entity_id: int | None,
+    plan_suggested_target_id: int | None = None,
 ) -> tuple[int, bool]:
     """
     Resolve target dim_customer for same-entity duplicate review.
@@ -923,6 +924,9 @@ def resolve_duplicate_same_entity_customer_id(
         return primary_sug, False
     if peer_sug is not None:
         return peer_sug, False
+    plan_sug = _optional_suggested_entity_id(plan_suggested_target_id)
+    if plan_sug is not None:
+        return plan_sug, False
     return 0, True
 
 
@@ -964,12 +968,14 @@ async def _derive_provisional_geo_for_same_entity(
 async def _create_provisional_dim_customer_for_same_entity(
     db: AsyncSession,
     cand: ImportEntityMappingCandidate,
+    *,
+    display_name_override: str | None = None,
 ) -> int:
     """Create unverified dim_customer from primary token evidence; does not resolve the candidate."""
     pv = await preview_create_provisional_dsi_customer(
         db,
         cand,
-        display_name_override=None,
+        display_name_override=display_name_override,
         region_id=None,
         channel_id=None,
         preferred_distributor_id=None,
@@ -981,7 +987,7 @@ async def _create_provisional_dim_customer_for_same_entity(
 
     region_id, channel_id = await _derive_provisional_geo_for_same_entity(db, cand)
     tier = "unmanaged"
-    proposal = _resolved_provisional_display_name(None, cand)
+    proposal = _resolved_provisional_display_name(display_name_override, cand)
     base_note = (
         f"Provisional customer created for same-entity duplicate review "
         f"(candidate {cand.id}, job {cand.import_job_id})."
@@ -1008,6 +1014,8 @@ async def execute_dsi_duplicate_same_entity(
     *,
     peer_normalized_key: str,
     customer_id: int | None,
+    display_name: str | None = None,
+    plan_suggested_target_id: int | None = None,
     raw_token: str | None,
     audit_note: str | None,
 ) -> dict[str, Any]:
@@ -1035,18 +1043,31 @@ async def execute_dsi_duplicate_same_entity(
             status_code=400,
         )
 
-    target_id, needs_provisional = resolve_duplicate_same_entity_customer_id(
-        customer_id=customer_id,
-        primary_suggested_entity_id=cand.suggested_entity_id,
-        peer_suggested_entity_id=peer.suggested_entity_id,
-    )
+    display_override = (display_name or "").strip() or None
+    explicit_customer = _optional_suggested_entity_id(customer_id)
+
+    if explicit_customer is not None:
+        target_id, needs_provisional = explicit_customer, False
+    elif display_override is not None:
+        target_id, needs_provisional = 0, True
+    else:
+        target_id, needs_provisional = resolve_duplicate_same_entity_customer_id(
+            customer_id=None,
+            primary_suggested_entity_id=cand.suggested_entity_id,
+            peer_suggested_entity_id=peer.suggested_entity_id,
+            plan_suggested_target_id=plan_suggested_target_id,
+        )
     created_provisional: dict[str, Any] | None = None
 
     try:
         if needs_provisional:
-            new_cid = await _create_provisional_dim_customer_for_same_entity(db, cand)
+            new_cid = await _create_provisional_dim_customer_for_same_entity(
+                db, cand, display_name_override=display_override
+            )
             target_id = new_cid
             created_provisional = {"customer_id": new_cid}
+            if display_override is not None:
+                created_provisional["display_name"] = display_override
 
         primary_out = await _apply_map_dsi_customer_without_commit(
             db, cand, customer_id=target_id, raw_token=raw_token
@@ -1102,5 +1123,132 @@ async def execute_dsi_duplicate_same_entity(
         "primary_map": primary_out,
         "peer_map": peer_out,
         "duplicate_review": review_primary,
+    }
+
+
+async def execute_dsi_duplicate_cluster_same_entity(
+    db: AsyncSession,
+    import_job_id: int,
+    *,
+    normalized_keys: list[str],
+    customer_id: int | None,
+    display_name: str | None,
+    plan_suggested_target_id: int | None,
+    audit_note: str | None,
+) -> dict[str, Any]:
+    """Map every token in a steward-confirmed cluster to one ``dim_customer`` in one transaction."""
+    keys = sorted({(k or "").strip() for k in normalized_keys if (k or "").strip()})
+    if len(keys) < 2:
+        raise StewardOpError("At least two normalized_keys required for cluster same-entity", status_code=400)
+
+    cands = list(
+        await db.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == int(import_job_id),
+                ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+                ImportEntityMappingCandidate.normalized_key.in_(keys),
+            )
+        )
+    )
+    found = {(c.normalized_key or "").strip() for c in cands}
+    missing = [k for k in keys if k not in found]
+    if missing:
+        raise StewardOpError(
+            f"Token(s) not found on import job: {', '.join(missing[:8])}",
+            status_code=404,
+        )
+
+    active = [c for c in cands if not _is_dsi_steward_terminal_status(c.status)]
+    if not active:
+        raise StewardOpError("All cluster tokens are already in a terminal steward state", status_code=400)
+
+    leader = min(active, key=lambda c: (c.normalized_key or "").strip())
+    leader_nk = (leader.normalized_key or "").strip()
+
+    display_override = (display_name or "").strip() or None
+    explicit_customer = _optional_suggested_entity_id(customer_id)
+
+    suggestions: list[int] = []
+    for c in active:
+        sid = _optional_suggested_entity_id(c.suggested_entity_id)
+        if sid is not None:
+            suggestions.append(sid)
+    unique_sug = list(dict.fromkeys(suggestions))
+    if len(unique_sug) > 1:
+        raise StewardOpError(
+            "Conflicting customer suggestions across cluster tokens — resolve individually first.",
+            status_code=409,
+        )
+
+    if explicit_customer is not None:
+        target_id, needs_provisional = explicit_customer, False
+    elif display_override is not None:
+        target_id, needs_provisional = 0, True
+    else:
+        target_id, needs_provisional = resolve_duplicate_same_entity_customer_id(
+            customer_id=None,
+            primary_suggested_entity_id=leader.suggested_entity_id,
+            peer_suggested_entity_id=unique_sug[0] if unique_sug else None,
+            plan_suggested_target_id=plan_suggested_target_id,
+        )
+
+    from app.services.imports.dsi_customer_intelligence import build_duplicate_review_record
+
+    created_provisional: dict[str, Any] | None = None
+    maps: list[dict[str, Any]] = []
+    try:
+        if needs_provisional:
+            new_cid = await _create_provisional_dim_customer_for_same_entity(
+                db, leader, display_name_override=display_override
+            )
+            target_id = new_cid
+            created_provisional = {"customer_id": new_cid}
+            if display_override is not None:
+                created_provisional["display_name"] = display_override
+
+        for cand in active:
+            raw = None
+            if cand.id == leader.id:
+                raw = None
+            out = await _apply_map_dsi_customer_without_commit(
+                db, cand, customer_id=target_id, raw_token=raw
+            )
+            maps.append({"candidate_id": cand.id, "normalized_key": cand.normalized_key, "map": out})
+
+        for cand in active:
+            ctx = cand.context if isinstance(cand.context, dict) else {}
+            hints = ctx.get("possible_duplicate_of") if isinstance(ctx.get("possible_duplicate_of"), list) else []
+            review = build_duplicate_review_record(
+                decision="same_entity",
+                paired_normalized_key=leader_nk,
+                similarity_score=None,
+                customer_id=target_id,
+                audit_note=audit_note,
+                hints_snapshot=hints,
+            )
+            _merge_duplicate_review_context(cand, review)
+
+        await db.commit()
+        for cand in active:
+            await db.refresh(cand)
+    except IntegrityError:
+        await db.rollback()
+        raise StewardOpError(
+            "Could not complete cluster same-entity mapping (duplicate or invalid reference)",
+            status_code=409,
+        ) from None
+    except Exception:
+        await db.rollback()
+        raise
+
+    return {
+        "ok": True,
+        "import_job_id": int(import_job_id),
+        "leader_normalized_key": leader_nk,
+        "customer_id": target_id,
+        "mapped_count": len(active),
+        "normalized_keys": keys,
+        "created_provisional": created_provisional,
+        "maps": maps,
     }
 

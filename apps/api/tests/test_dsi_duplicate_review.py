@@ -158,6 +158,157 @@ def test_resolve_same_entity_customer_id_single_suggestion() -> None:
     assert prov is False
 
 
+def test_resolve_same_entity_customer_id_plan_suggestion() -> None:
+    cid, prov = resolve_duplicate_same_entity_customer_id(
+        customer_id=None,
+        primary_suggested_entity_id=None,
+        peer_suggested_entity_id=None,
+        plan_suggested_target_id=88,
+    )
+    assert cid == 88
+    assert prov is False
+
+
+def test_same_entity_display_name_forces_provisional_create() -> None:
+    asyncio.run(_run_same_entity_display_name_forces_provisional_create())
+
+
+async def _run_same_entity_display_name_forces_provisional_create() -> None:
+    ctx = {"possible_duplicate_of": [{"normalized_key": "acme2", "similarity_score": 0.91}]}
+    primary = _customer_cand(ctx=ctx, cand_id=1, normalized_key="acme")
+    peer = _customer_cand(
+        ctx={"possible_duplicate_of": [{"normalized_key": "acme", "similarity_score": 0.91}]},
+        cand_id=2,
+        normalized_key="acme2",
+        suggested_entity_id=55,
+    )
+    db = AsyncMock()
+    db.scalar = AsyncMock(return_value=peer)
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    db.rollback = AsyncMock()
+
+    with (
+        patch(
+            "app.services.imports.dsi_steward_candidate_ops._create_provisional_dim_customer_for_same_entity",
+            new_callable=AsyncMock,
+            return_value=601,
+        ) as create_prov,
+        patch(
+            "app.services.imports.dsi_steward_candidate_ops._apply_map_dsi_customer_without_commit",
+            new_callable=AsyncMock,
+            side_effect=[
+                {"ok": True, "alias_id": 1, "customer_id": 601, "candidate_id": 1},
+                {"ok": True, "alias_id": 2, "customer_id": 601, "candidate_id": 2},
+            ],
+        ) as map_apply,
+    ):
+        out = await execute_dsi_duplicate_same_entity(
+            db,
+            primary,
+            peer_normalized_key="acme2",
+            customer_id=None,
+            display_name="Rectron Cape Town",
+            plan_suggested_target_id=55,
+            raw_token=None,
+            audit_note="grouped",
+        )
+
+    create_prov.assert_awaited_once()
+    assert create_prov.await_args.kwargs["display_name_override"] == "Rectron Cape Town"
+    map_apply.assert_awaited()
+    assert out["customer_id"] == 601
+    assert out["created_provisional"]["display_name"] == "Rectron Cape Town"
+
+
+def test_same_entity_display_name_null_uses_default_resolution() -> None:
+    asyncio.run(_run_same_entity_display_name_null_uses_default_resolution())
+
+
+async def _run_same_entity_display_name_null_uses_default_resolution() -> None:
+    ctx = {"possible_duplicate_of": [{"normalized_key": "acme2", "similarity_score": 0.91}]}
+    primary = _customer_cand(ctx=ctx, cand_id=1)
+    peer = _customer_cand(ctx={}, cand_id=2, normalized_key="acme2")
+    db = AsyncMock()
+    db.scalar = AsyncMock(return_value=peer)
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    db.rollback = AsyncMock()
+
+    with (
+        patch(
+            "app.services.imports.dsi_steward_candidate_ops._create_provisional_dim_customer_for_same_entity",
+            new_callable=AsyncMock,
+            return_value=501,
+        ) as create_prov,
+        patch(
+            "app.services.imports.dsi_steward_candidate_ops._apply_map_dsi_customer_without_commit",
+            new_callable=AsyncMock,
+            side_effect=[
+                {"ok": True, "alias_id": 1, "customer_id": 501, "candidate_id": 1},
+                {"ok": True, "alias_id": 2, "customer_id": 501, "candidate_id": 2},
+            ],
+        ),
+    ):
+        await execute_dsi_duplicate_same_entity(
+            db,
+            primary,
+            peer_normalized_key="acme2",
+            customer_id=None,
+            display_name=None,
+            plan_suggested_target_id=None,
+            raw_token=None,
+            audit_note=None,
+        )
+
+    create_prov.assert_awaited_once()
+    assert create_prov.await_args.kwargs["display_name_override"] is None
+
+
+def test_same_entity_plan_target_without_explicit_customer_id() -> None:
+    asyncio.run(_run_same_entity_plan_target_without_explicit_customer_id())
+
+
+async def _run_same_entity_plan_target_without_explicit_customer_id() -> None:
+    ctx = {"possible_duplicate_of": [{"normalized_key": "acme2", "similarity_score": 0.91}]}
+    primary = _customer_cand(ctx=ctx, cand_id=1)
+    peer = _customer_cand(ctx={}, cand_id=2, normalized_key="acme2")
+    db = AsyncMock()
+    db.scalar = AsyncMock(return_value=peer)
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    db.rollback = AsyncMock()
+
+    with (
+        patch(
+            "app.services.imports.dsi_steward_candidate_ops._create_provisional_dim_customer_for_same_entity",
+            new_callable=AsyncMock,
+        ) as create_prov,
+        patch(
+            "app.services.imports.dsi_steward_candidate_ops._apply_map_dsi_customer_without_commit",
+            new_callable=AsyncMock,
+            side_effect=[
+                {"ok": True, "alias_id": 1, "customer_id": 88, "candidate_id": 1},
+                {"ok": True, "alias_id": 2, "customer_id": 88, "candidate_id": 2},
+            ],
+        ),
+    ):
+        out = await execute_dsi_duplicate_same_entity(
+            db,
+            primary,
+            peer_normalized_key="acme2",
+            customer_id=None,
+            display_name=None,
+            plan_suggested_target_id=88,
+            raw_token=None,
+            audit_note=None,
+        )
+
+    create_prov.assert_not_awaited()
+    assert out["customer_id"] == 88
+    assert duplicate_review_decision(primary.context) == "same_entity"
+
+
 def test_same_entity_greenfield_creates_provisional_and_maps_both() -> None:
     asyncio.run(_run_same_entity_greenfield_creates_provisional_and_maps_both())
 

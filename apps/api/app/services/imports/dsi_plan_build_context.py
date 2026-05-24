@@ -14,6 +14,8 @@ from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
 from app.services.imports.dsi_customer_intelligence import (
     HistoricalCustomerResolution,
+    JobCustomerSiblingMapping,
+    build_job_customer_sibling_index,
     load_historical_customer_resolutions,
     lookup_historical_customer_resolution,
     resolve_customer_id_distributor_scoped_alias,
@@ -44,6 +46,7 @@ class DSIPlanBuildContext:
     region_aliases: tuple[RegionSourceTokenAlias, ...]
     channel_aliases: tuple[ChannelSourceTokenAlias, ...]
     historical_customers: dict[tuple[int | None, str], HistoricalCustomerResolution]
+    job_customer_siblings_by_dealer_group: dict[str, tuple[JobCustomerSiblingMapping, ...]]
 
 
 def build_dsi_plan_build_context(session: Session, *, current_job_id: int | None = None) -> DSIPlanBuildContext:
@@ -101,6 +104,18 @@ def build_dsi_plan_build_context(session: Session, *, current_job_id: int | None
         else {}
     )
 
+    job_siblings: dict[str, tuple[JobCustomerSiblingMapping, ...]] = {}
+    if current_job_id is not None:
+        job_cands = list(
+            session.scalars(
+                select(ImportEntityMappingCandidate).where(
+                    ImportEntityMappingCandidate.import_job_id == int(current_job_id),
+                    ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+                )
+            ).all()
+        )
+        job_siblings = build_job_customer_sibling_index(job_cands)
+
     return DSIPlanBuildContext(
         res_cache=res_cache,
         prod_idx=prod_idx,
@@ -113,6 +128,7 @@ def build_dsi_plan_build_context(session: Session, *, current_job_id: int | None
         region_aliases=region_aliases,
         channel_aliases=channel_aliases,
         historical_customers=historical_customers,
+        job_customer_siblings_by_dealer_group=job_siblings,
     )
 
 

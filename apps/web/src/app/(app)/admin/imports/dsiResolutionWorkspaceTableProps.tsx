@@ -16,6 +16,10 @@ import {
   type DsiPlanWhy,
 } from '@/features/import-steward/dsiPlanExplainabilityDisplay';
 import {
+  formatDsiPlanFileChannelLabel,
+  formatDsiPlanFileRegionLabel,
+} from '@/features/import-steward/dsiPlanFileGeoDisplay';
+import {
   formatDsiRegionEvidenceDisplay,
   formatDsiRegionEvidenceTitle,
 } from '@/features/import-steward/dsiRegionEvidenceDisplay';
@@ -203,6 +207,33 @@ export function buildDsiResolutionWorkspaceColumns(
           </>
         );
       },
+    },
+    {
+      id: 'region_file',
+      header: 'Region (file)',
+      cellSx: { maxWidth: 160 },
+      cell: (r) => (
+        <Typography variant="caption" color="text.secondary" data-testid={`dsi-region-file-${r.id}`}>
+          {r.entity_type === DSI_ENTITY_CUSTOMER
+            ? formatDsiPlanFileRegionLabel(planByCandidateId.get(r.id))
+            : '—'}
+        </Typography>
+      ),
+    },
+    {
+      id: 'channel_file',
+      header: 'Channel (file)',
+      cellSx: { maxWidth: 160 },
+      cell: (r) => (
+        <Typography variant="caption" color="text.secondary" data-testid={`dsi-channel-file-${r.id}`}>
+          {r.entity_type === DSI_ENTITY_CUSTOMER
+            ? formatDsiPlanFileChannelLabel(
+                planByCandidateId.get(r.id),
+                (r.context ?? null) as Record<string, unknown> | null
+              )
+            : '—'}
+        </Typography>
+      ),
     },
     {
       id: 'rows',

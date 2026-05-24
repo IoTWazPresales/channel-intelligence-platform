@@ -4,19 +4,24 @@
 export const DSI_MATCH_BASIS_DEALER_GROUP_EXACT = 'dealer_group_exact' as const;
 export const DSI_MATCH_BASIS_DEALER_GROUP_SIMILAR = 'dealer_group_similar' as const;
 export const DSI_MATCH_BASIS_SOURCE_CUSTOMER_EXACT = 'source_customer_exact' as const;
+export const DSI_MATCH_BASIS_SOURCE_CUSTOMER_SIMILAR = 'source_customer_similar' as const;
+export const DSI_MATCH_BASIS_DEALER_GROUP_PREFIX_STEM = 'dealer_group_prefix_stem' as const;
+export const DSI_MATCH_BASIS_DEALER_GROUP_SHARED_LABEL =
+  'dealer_group_shared_label_different_counterparty' as const;
 
 /** Reserved — parse-safe only; not emitted by current API annotate path. */
-export const DSI_MATCH_BASIS_SOURCE_CUSTOMER_SIMILAR = 'source_customer_similar' as const;
 export const DSI_MATCH_BASIS_TEMPORAL_SAME_DISTI = 'temporal_same_disti' as const;
 export const DSI_MATCH_BASIS_CROSS_DISTI = 'cross_disti' as const;
 
 export type DsiDuplicateMatchBasisActive =
   | typeof DSI_MATCH_BASIS_DEALER_GROUP_EXACT
   | typeof DSI_MATCH_BASIS_DEALER_GROUP_SIMILAR
-  | typeof DSI_MATCH_BASIS_SOURCE_CUSTOMER_EXACT;
+  | typeof DSI_MATCH_BASIS_SOURCE_CUSTOMER_EXACT
+  | typeof DSI_MATCH_BASIS_SOURCE_CUSTOMER_SIMILAR
+  | typeof DSI_MATCH_BASIS_DEALER_GROUP_PREFIX_STEM
+  | typeof DSI_MATCH_BASIS_DEALER_GROUP_SHARED_LABEL;
 
 export type DsiDuplicateMatchBasisReserved =
-  | typeof DSI_MATCH_BASIS_SOURCE_CUSTOMER_SIMILAR
   | typeof DSI_MATCH_BASIS_TEMPORAL_SAME_DISTI
   | typeof DSI_MATCH_BASIS_CROSS_DISTI;
 
@@ -27,6 +32,8 @@ const KNOWN_MATCH_BASES: ReadonlySet<string> = new Set([
   DSI_MATCH_BASIS_DEALER_GROUP_SIMILAR,
   DSI_MATCH_BASIS_SOURCE_CUSTOMER_EXACT,
   DSI_MATCH_BASIS_SOURCE_CUSTOMER_SIMILAR,
+  DSI_MATCH_BASIS_DEALER_GROUP_PREFIX_STEM,
+  DSI_MATCH_BASIS_DEALER_GROUP_SHARED_LABEL,
   DSI_MATCH_BASIS_TEMPORAL_SAME_DISTI,
   DSI_MATCH_BASIS_CROSS_DISTI,
 ]);
@@ -101,9 +108,5 @@ export function parseDsiPossibleDuplicateHint(raw: unknown): DsiPossibleDuplicat
 export function isReservedDsiDuplicateMatchBasis(
   basis: string | undefined
 ): basis is DsiDuplicateMatchBasisReserved {
-  return (
-    basis === DSI_MATCH_BASIS_SOURCE_CUSTOMER_SIMILAR ||
-    basis === DSI_MATCH_BASIS_TEMPORAL_SAME_DISTI ||
-    basis === DSI_MATCH_BASIS_CROSS_DISTI
-  );
+  return basis === DSI_MATCH_BASIS_TEMPORAL_SAME_DISTI || basis === DSI_MATCH_BASIS_CROSS_DISTI;
 }

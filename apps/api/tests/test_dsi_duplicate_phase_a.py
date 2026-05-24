@@ -195,7 +195,8 @@ def test_source_customer_matching_distributor_name_no_hint() -> None:
     assert not agg[("customer_dealer_token", "a")].get("possible_duplicate_of")
 
 
-def test_same_dealer_group_different_source_customers_no_hint() -> None:
+def test_same_dealer_group_different_source_customers_shared_label_hint() -> None:
+    """Same dealer-group label, different counterparty strings — steward must confirm (not auto-suppress)."""
     dg = "Acme Parent Group"
     agg = {
         ("customer_dealer_token", "branch_a"): _customer_bucket(
@@ -212,7 +213,9 @@ def test_same_dealer_group_different_source_customers_no_hint() -> None:
         ),
     }
     annotate_dsi_customer_candidate_duplicates(agg, distributors=[])
-    assert not agg[("customer_dealer_token", "branch_a")].get("possible_duplicate_of")
+    hints = agg[("customer_dealer_token", "branch_a")].get("possible_duplicate_of")
+    assert isinstance(hints, list) and len(hints) == 1
+    assert hints[0]["match_basis"] == "dealer_group_shared_label_different_counterparty"
 
 
 def test_duplicate_review_required_still_gates_plan() -> None:

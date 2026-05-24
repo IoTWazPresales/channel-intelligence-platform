@@ -257,7 +257,63 @@ def _distinctive_stem_is_short_only(distinctive: str) -> bool:
 @dataclass(frozen=True)
 class DealerGroupDuplicateEvaluation:
     score: float
-    match_basis: str  # dealer_group_exact | dealer_group_similar
+    match_basis: str  # dealer_group_exact | dealer_group_similar | dealer_group_prefix_stem | ...
+
+
+DSI_DUPLICATE_PREFIX_STEM_MIN_LEN: int = 8
+DSI_DUPLICATE_PREFIX_STEM_MIN_TOKENS: int = 2
+
+
+def _distinctive_stem_for_prefix_compare(normalized: str) -> str:
+    dist, _gen = split_distinctive_and_generic_tokens(normalized)
+    return dist or normalized
+
+
+def evaluate_company_stem_duplicate(
+    name_a: str | None,
+    name_b: str | None,
+) -> DealerGroupDuplicateEvaluation | None:
+    """Flag when one normalised company stem is a high-confidence prefix extension of the other (e.g. Adriane + t/a tail)."""
+    norm_a = _normalize_for_duplicate_compare(name_a)
+    norm_b = _normalize_for_duplicate_compare(name_b)
+    if not norm_a or not norm_b or norm_a == norm_b:
+        return None
+    stem_a = _distinctive_stem_for_prefix_compare(norm_a)
+    stem_b = _distinctive_stem_for_prefix_compare(norm_b)
+    if not stem_a or not stem_b or stem_a == stem_b:
+        return None
+    shorter, longer = (stem_a, stem_b) if len(stem_a) <= len(stem_b) else (stem_b, stem_a)
+    if len(shorter) < DSI_DUPLICATE_PREFIX_STEM_MIN_LEN:
+        return None
+    if not longer.startswith(shorter):
+        return None
+    if len(longer) > len(shorter) and longer[len(shorter)] != " ":
+        return None
+    short_tokens = shorter.split()
+    long_tokens = longer.split()
+    if len(short_tokens) < DSI_DUPLICATE_PREFIX_STEM_MIN_TOKENS:
+        return None
+    lead_s = _leading_distinctive_token(shorter)
+    lead_l = _leading_distinctive_token(longer)
+    if not lead_s or not lead_l:
+        return None
+    if (
+        len(lead_s) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN
+        and len(lead_l) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN
+        and lead_s != lead_l
+    ):
+        return None
+    if _distinctive_short_token_flip_should_suppress(stem_a, stem_b):
+        return None
+    if (
+        stem_a != stem_b
+        and _distinctive_stem_is_short_only(stem_a)
+        and _distinctive_stem_is_short_only(stem_b)
+    ):
+        return None
+    full_ratio = SequenceMatcher(None, norm_a, norm_b).ratio()
+    score = max(full_ratio, 0.88)
+    return DealerGroupDuplicateEvaluation(score=round(float(score), 4), match_basis="dealer_group_prefix_stem")
 
 
 def evaluate_dealer_group_duplicate(

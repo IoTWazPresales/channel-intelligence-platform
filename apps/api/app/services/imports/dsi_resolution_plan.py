@@ -734,6 +734,13 @@ def plan_dsi_candidate_sync(
                 resolve_customer_id_distributor_scoped_alias,
             )
 
+            from app.services.imports.dsi_customer_intelligence import (
+                lookup_job_customer_sibling_mapping,
+            )
+            from app.services.imports.dsi_customer_name_normalization import (
+                normalize_customer_name_for_similarity,
+            )
+
             hist = lookup_historical_customer_resolution(
                 plan_ctx.historical_customers,
                 distributor_id=dist_id,
@@ -784,6 +791,32 @@ def plan_dsi_candidate_sync(
                         "needs_confirm_suspicious_distributor": False,
                         "resolution_signal": "distributor_scoped_alias",
                     })
+            dg_norm = normalize_customer_name_for_similarity(dg_raw) if dg_raw else ""
+            sibling = lookup_job_customer_sibling_mapping(
+                plan_ctx.job_customer_siblings_by_dealer_group,
+                dealer_group_norm=dg_norm,
+                exclude_normalized_key=str(cand.normalized_key or ""),
+            )
+            if sibling is not None:
+                return _fin({
+                    **base,
+                    "suggested_action": "map_customer",
+                    "plan_status": "needs_review",
+                    "ready": False,
+                    "confidence": 0.82,
+                    "reason": (
+                        f"Another token on this import job ({sibling.normalized_key}) already maps to "
+                        f"customer {sibling.customer_id} — confirm before applying"
+                    ),
+                    "suggested_target_id": int(sibling.customer_id),
+                    "needs_defaults": False,
+                    "needs_confirm_suspicious_distributor": False,
+                    "sibling_mapping_hint": {
+                        "normalized_key": sibling.normalized_key,
+                        "customer_id": int(sibling.customer_id),
+                        "match_reason": sibling.match_reason,
+                    },
+                })
             rcid, diag = resolve_customer_for_plan(
                 plan_ctx,
                 source_id=source_def_id,

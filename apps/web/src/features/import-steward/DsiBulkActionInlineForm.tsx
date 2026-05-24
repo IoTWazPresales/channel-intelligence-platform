@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   Alert,
   Button,
@@ -15,6 +16,7 @@ import {
 
 import { safeDisplayError } from '@/lib/api';
 
+import { DsiCustomerSearchFields } from './DsiCustomerSearchFields';
 import { DsiPendingButton } from './DsiPendingButton';
 import type { useDsiBulkSteward } from './useDsiBulkSteward';
 import type { DsiBulkAction, DsiCatalogOpt } from './dsiSteward.types';
@@ -68,6 +70,8 @@ export function DsiBulkActionInlineForm({
     bulkFormReady,
     applyReady,
   } = bulk;
+
+  const [bulkCustQ, setBulkCustQ] = useState('');
 
   return (
     <Stack
@@ -123,14 +127,13 @@ export function DsiBulkActionInlineForm({
         />
       ) : null}
       {bulkAction === 'map_customer' ? (
-        <TextField
-          label="Customer id"
-          value={bulkCustomerId}
-          onChange={(e) => setBulkCustomerId(e.target.value)}
-          type="number"
-          required
-          fullWidth
-          size="small"
+        <DsiCustomerSearchFields
+          searchQuery={bulkCustQ}
+          onSearchQueryChange={setBulkCustQ}
+          customerId={bulkCustomerId === '' ? '' : Number(bulkCustomerId)}
+          onCustomerIdChange={(id) => setBulkCustomerId(id === '' ? '' : String(id))}
+          searchTestId="dsi-bulk-customer-search"
+          selectTestId="dsi-bulk-customer-select"
         />
       ) : null}
       {bulkAction === 'map_distributor' ? (

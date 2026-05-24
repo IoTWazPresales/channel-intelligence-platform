@@ -25,14 +25,14 @@ import { notifyDsiAsyncPipelineStarted } from './dsiAsyncPipelineRun';
 import { detectSuffixTokenFamily } from './dsiDuplicateCluster';
 import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries, isDsiStewardRowActionBlocked } from './dsiSteward.config';
 import { DsiDuplicatePeerCompare } from './dsiDuplicatePeerCompare';
+import { DsiDuplicateClusterSameEntityDialog } from './DsiDuplicateClusterSameEntityDialog';
+import { DsiDuplicateSameEntityDialog } from './DsiDuplicateSameEntityDialog';
 import {
   classifyDuplicateSameEntityCase,
   contextDistributorMasterCollision,
   contextPossibleDuplicateOf,
   duplicateReviewDecision,
   hasUnresolvedDuplicateReview,
-  suggestedCustomerIdForDuplicateSameEntity,
-  type DuplicateSameEntityCase,
 } from './dsiStewardCandidateFilterLogic';
 import {
   optimisticallyApplyStewardAction,
@@ -183,18 +183,15 @@ export function DsiMappingStewardPanel({
   const [productRawOverride, setProductRawOverride] = useState('');
   const [lastSuccessLabel, setLastSuccessLabel] = useState<string | null>(null);
   const [dupSameOpen, setDupSameOpen] = useState(false);
-  const [dupSameCase, setDupSameCase] = useState<DuplicateSameEntityCase | null>(null);
+  const [dupClusterOpen, setDupClusterOpen] = useState(false);
   const [dupPeerKey, setDupPeerKey] = useState('');
-  const [dupSamePeerKeyError, setDupSamePeerKeyError] = useState<string | null>(null);
-  const [dupAuditNote, setDupAuditNote] = useState('');
   const [dupDifferentPeerKey, setDupDifferentPeerKey] = useState('');
 
   useEffect(() => {
-    setDupSamePeerKeyError(null);
     setDupPeerKey('');
     setDupSameOpen(false);
+    setDupClusterOpen(false);
     setExpandedDuplicatePeerKey(null);
-    setDupAuditNote('');
     setDupDifferentPeerKey('');
   }, [candidate?.id]);
 
@@ -276,6 +273,8 @@ export function DsiMappingStewardPanel({
     mutationFn: (body: {
       peer_normalized_key: string;
       customer_id?: number;
+      display_name?: string;
+      plan_suggested_target_id?: number;
       audit_note?: string;
     }) =>
       apiPost<{ ok: boolean }>(
@@ -286,6 +285,27 @@ export function DsiMappingStewardPanel({
     onSuccess: async () => {
       setDupSameOpen(false);
       setLastSuccessLabel('Same entity — both tokens mapped to the selected customer.');
+      await afterDuplicateAction();
+    },
+  });
+
+  const duplicateClusterSameEntity = useMutation({
+    mutationFn: (body: {
+      normalized_keys: string[];
+      customer_id?: number;
+      display_name?: string;
+      plan_suggested_target_id?: number;
+      audit_note?: string;
+    }) =>
+      apiPost<{ ok: boolean; mapped_count?: number }>(
+        `/api/v1/mappings/import-jobs/${importJobId}/duplicate-review/cluster-same-entity`,
+        body
+      ),
+    ...duplicateRowLifecycle,
+    onSuccess: async (data) => {
+      setDupClusterOpen(false);
+      const n = data?.mapped_count ?? 0;
+      setLastSuccessLabel(`Cluster mapped — ${n} token(s) linked to one customer.`);
       await afterDuplicateAction();
     },
   });
@@ -530,7 +550,7 @@ export function DsiMappingStewardPanel({
       ) : null}
       {clusterPeersExcludingSelf.length > 0 ? (
         <Alert severity="info" variant="outlined" data-testid="dsi-duplicate-cluster">
-          <Typography variant="body2">
+          <Typography variant="body2" component="div">
             <strong>Duplicate cluster on this page</strong> ({clusterPeersExcludingSelf.length + 1} tokens linked by
             hints):{' '}
             <code>{candidate.normalized_key}</code>
@@ -540,8 +560,21 @@ export function DsiMappingStewardPanel({
                 <code>{k}</code>
               </span>
             ))}
-            . Open each row to confirm Same/Different — pairwise review is still required.
+            . Confirm pairwise Same/Different, or map the whole cluster to one customer when you are sure they are the
+            same legal entity.
           </Typography>
+          {dupUnresolved && !isTerminal ? (
+            <Box sx={{ mt: 1 }}>
+              <DsiPendingButton
+                size="small"
+                variant="outlined"
+                data-testid="dsi-duplicate-cluster-map"
+                onClick={() => setDupClusterOpen(true)}
+              >
+                Map cluster to one customer…
+              </DsiPendingButton>
+            </Box>
+          ) : null}
         </Alert>
       ) : null}
       {dupHints.length > 0 ? (
@@ -628,21 +661,6 @@ export function DsiMappingStewardPanel({
                     );
                     if (caseKind === 'conflict') return;
                     setDupPeerKey(peerKey);
-                    setDupSamePeerKeyError(null);
-                    setDupSameCase(caseKind);
-                    setDupAuditNote('');
-                    if (caseKind === 'greenfield') {
-                      setPickCustomerId('');
-                      setCustQ('');
-                    } else {
-                      const sug = suggestedCustomerIdForDuplicateSameEntity(
-                        candidate.suggested_entity_id,
-                        peerRow?.suggested_entity_id,
-                        planRow?.suggested_target_id
-                      );
-                      setPickCustomerId(sug ?? '');
-                      setCustQ('');
-                    }
                     setDupSameOpen(true);
                   }}
                   data-testid="dsi-duplicate-same-entity"
@@ -660,7 +678,6 @@ export function DsiMappingStewardPanel({
                   onClick={() =>
                     void duplicateDifferentEntity.mutateAsync({
                       peer_normalized_key: dupDifferentPeerKey.trim(),
-                      audit_note: dupAuditNote.trim() || undefined,
                     })
                   }
                   data-testid="dsi-duplicate-different-entity"
@@ -891,98 +908,31 @@ export function DsiMappingStewardPanel({
         </DialogActions>
       </Dialog>
 
-      <Dialog open={dupSameOpen} onClose={() => setDupSameOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Same entity — map both tokens</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Peer token: <code>{dupPeerKey || '—'}</code>
-            </Typography>
-            {dupSameCase === 'greenfield' ? (
-              <Typography variant="body2" data-testid="dsi-duplicate-same-entity-greenfield-msg">
-                Neither token has an existing customer. A provisional customer will be created from the
-                primary token and both will be mapped to it.
-              </Typography>
-            ) : null}
-            {dupSamePeerKeyError ? (
-              <Typography variant="body2" color="error" data-testid="dsi-duplicate-same-entity-peer-error">
-                {dupSamePeerKeyError}
-              </Typography>
-            ) : null}
-            <TextField
-              label="Audit note (optional)"
-              value={dupAuditNote}
-              onChange={(e) => setDupAuditNote(e.target.value)}
-              fullWidth
-              multiline
-              minRows={2}
-            />
-            {dupSameCase === 'suggested' ? (
-              <>
-                <TextField
-                  label="Search customers"
-                  value={custQ}
-                  onChange={(e) => setCustQ(e.target.value)}
-                  helperText="Type at least 2 characters to change the suggested customer"
-                  fullWidth
-                />
-                <FormControl fullWidth>
-                  <InputLabel id="pick-cust-dup">Customer</InputLabel>
-                  <Select
-                    labelId="pick-cust-dup"
-                    label="Customer"
-                    value={pickCustomerId === '' ? '' : String(pickCustomerId)}
-                    onChange={(e) => setPickCustomerId(e.target.value === '' ? '' : Number(e.target.value))}
-                  >
-                    {custHits.map((c) => (
-                      <MenuItem key={c.id} value={String(c.id)}>
-                        {c.customer_code} — {c.customer_name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </>
-            ) : null}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <DsiPendingButton onClick={() => setDupSameOpen(false)} disabled={duplicateSameEntity.isPending}>
-            Cancel
-          </DsiPendingButton>
-          <DsiPendingButton
-            variant="contained"
-            pending={duplicateSameEntity.isPending}
-            pendingLabel="Mapping…"
-            disabled={
-              !dupPeerKey.trim() || (dupSameCase === 'suggested' && pickCustomerId === '')
-            }
-            onClick={() => {
-              if (!dupPeerKey.trim()) return;
-              if (dupPeerKey.trim() === (candidate.normalized_key || '').trim()) {
-                setDupSamePeerKeyError('Peer token must differ from this candidate');
-                return;
-              }
-              setDupSamePeerKeyError(null);
-              if (dupSameCase === 'suggested' && pickCustomerId === '') return;
-              const body: {
-                peer_normalized_key: string;
-                customer_id?: number;
-                audit_note?: string;
-              } = {
-                peer_normalized_key: dupPeerKey.trim(),
-                audit_note: dupAuditNote.trim() || undefined,
-              };
-              if (dupSameCase === 'suggested' && pickCustomerId !== '') {
-                body.customer_id = Number(pickCustomerId);
-              }
-              void duplicateSameEntity.mutateAsync(body).catch(() => {});
-            }}
-            data-testid="dsi-duplicate-same-entity-submit"
-          >
-            Map both to customer
-          </DsiPendingButton>
-        </DialogActions>
-      </Dialog>
+      <DsiDuplicateSameEntityDialog
+        open={dupSameOpen}
+        onClose={() => setDupSameOpen(false)}
+        pending={duplicateSameEntity.isPending}
+        primaryCandidate={candidate}
+        peerNormalizedKey={dupPeerKey}
+        peerCandidate={lookupPeerCandidate?.(dupPeerKey) ?? null}
+        planRow={planRow}
+        onSubmit={(body) => {
+          void duplicateSameEntity.mutateAsync(body).catch(() => {});
+        }}
+      />
+
+      <DsiDuplicateClusterSameEntityDialog
+        open={dupClusterOpen}
+        onClose={() => setDupClusterOpen(false)}
+        pending={duplicateClusterSameEntity.isPending}
+        importJobId={importJobId}
+        primaryCandidate={candidate}
+        clusterNormalizedKeys={duplicateClusterMembers ?? [candidate.normalized_key]}
+        planRow={planRow}
+        onSubmit={(body) => {
+          void duplicateClusterSameEntity.mutateAsync(body).catch(() => {});
+        }}
+      />
 
       <Dialog open={createCustOpen} onClose={() => setCreateCustOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Create provisional customer</DialogTitle>

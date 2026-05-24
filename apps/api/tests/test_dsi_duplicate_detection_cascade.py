@@ -5,14 +5,9 @@ from __future__ import annotations
 from app.services.imports.dsi_customer_intelligence import annotate_dsi_customer_candidate_duplicates
 from app.services.imports.dsi_customer_name_normalization import (
     dsi_duplicate_similarity_score,
+    evaluate_company_stem_duplicate,
     split_distinctive_and_generic_tokens,
 )
-
-
-def test_split_distinctive_and_generic() -> None:
-    dist, gen = split_distinctive_and_generic_tokens("aeonic technologies")
-    assert dist == "aeonic"
-    assert gen == "technologies"
 
 
 def test_split_distinctive_and_generic() -> None:
@@ -147,6 +142,72 @@ def test_tb_computers_vs_tb_solutions_no_short_stem_dealer_hint() -> None:
 
 def test_pc_world_vs_pc_direct_no_short_stem_dealer_hint() -> None:
     assert dsi_duplicate_similarity_score("PC World", "PC Direct") is None
+
+
+def test_adriane_stem_prefix_duplicate() -> None:
+    ev = evaluate_company_stem_duplicate(
+        "adriane investments (pty) ltd",
+        "adriane investments (pty)ltd a/t klinsta",
+    )
+    assert ev is not None
+    assert ev.match_basis == "dealer_group_prefix_stem"
+
+
+def test_annotate_adriane_pair_gets_stem_hint() -> None:
+    dist = {5}
+    agg = {
+        ("customer_dealer_token", "adriane investments (pty) ltd"): {
+            "dealer_group_raw": "adriane investments (pty) ltd",
+            "source_customer_raw_samples": ["adriane investments (pty) ltd"],
+            "sellout_distributor_ids": set(dist),
+            "row_count": 1,
+            "total_units": 0,
+            "total_value": 0,
+            "samples": [],
+        },
+        ("customer_dealer_token", "adriane investments (pty)ltd a/t klinsta"): {
+            "dealer_group_raw": "adriane investments (pty)ltd a/t klinsta",
+            "source_customer_raw_samples": ["adriane investments (pty)ltd a/t klinsta"],
+            "sellout_distributor_ids": set(dist),
+            "row_count": 1,
+            "total_units": 0,
+            "total_value": 0,
+            "samples": [],
+        },
+    }
+    annotate_dsi_customer_candidate_duplicates(agg)
+    hints = agg[("customer_dealer_token", "adriane investments (pty) ltd")].get("possible_duplicate_of")
+    assert isinstance(hints, list) and len(hints) == 1
+    assert hints[0]["match_basis"] == "dealer_group_prefix_stem"
+
+
+def test_annotate_shared_dealer_group_different_source_gets_shared_label_hint() -> None:
+    dist = {1}
+    dg = "Afrihost (Pty) Ltd"
+    agg = {
+        ("customer_dealer_token", "afrihost branch a"): {
+            "dealer_group_raw": dg,
+            "source_customer_raw_samples": ["Afrihost Branch A"],
+            "sellout_distributor_ids": set(dist),
+            "row_count": 1,
+            "total_units": 0,
+            "total_value": 0,
+            "samples": [],
+        },
+        ("customer_dealer_token", "afrihost branch b"): {
+            "dealer_group_raw": dg,
+            "source_customer_raw_samples": ["Afrihost Branch B"],
+            "sellout_distributor_ids": set(dist),
+            "row_count": 1,
+            "total_units": 0,
+            "total_value": 0,
+            "samples": [],
+        },
+    }
+    annotate_dsi_customer_candidate_duplicates(agg)
+    hints = agg[("customer_dealer_token", "afrihost branch a")].get("possible_duplicate_of")
+    assert isinstance(hints, list) and len(hints) == 1
+    assert hints[0]["match_basis"] == "dealer_group_shared_label_different_counterparty"
 
 
 def test_annotate_job_keeps_true_acme_duplicates() -> None:

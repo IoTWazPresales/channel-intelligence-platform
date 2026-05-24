@@ -14,7 +14,9 @@ from app.models.import_distributor_si import CustomerSourceTokenAlias, ImportEnt
 from app.models.ingestion import ImportJob
 from app.services.imports.dsi_customer_name_normalization import (
     DSI_DUPLICATE_FULL_STRING_THRESHOLD,
+    evaluate_company_stem_duplicate,
     evaluate_dealer_group_duplicate,
+    dsi_duplicate_similarity_score,
     normalize_customer_name_for_similarity,
     normalize_customer_name_token,
 )
@@ -45,6 +47,13 @@ class HistoricalCustomerResolution:
     match_reason: str | None
     confidence: float
     resolution_kind: str  # historical_steward | historical_alias
+
+
+@dataclass(frozen=True)
+class JobCustomerSiblingMapping:
+    normalized_key: str
+    customer_id: int
+    match_reason: str | None
 
 
 def _sellout_distributor_id_set(data: dict[str, Any]) -> set[int]:
@@ -190,17 +199,37 @@ def _build_distributor_name_norm_index(distributors: list[Any]) -> frozenset[str
     return frozenset(norms)
 
 
-def _dealer_group_blocks_duplicate_pair(da: dict[str, Any], db: dict[str, Any]) -> bool:
-    """Same dealer group label with different source-customer evidence — branch/location, not duplicate."""
+def _dealer_group_shared_label_different_counterparty(
+    da: dict[str, Any], db: dict[str, Any]
+) -> tuple[float, str, str] | None:
+    """Same dealer-group label in file with different source-customer strings — steward must confirm."""
     dg_a = _dealer_group_display_norm(da)
     dg_b = _dealer_group_display_norm(db)
     if not dg_a or dg_a != dg_b:
-        return False
+        return None
     sa = _source_customer_evidence_norm_set(da)
     sb = _source_customer_evidence_norm_set(db)
-    if not sa or not sb:
-        return False
-    return sa != sb
+    if not sa or not sb or sa == sb:
+        return None
+    return (
+        0.92,
+        dg_a,
+        "Same dealer-group label with different counterparty strings in file — confirm same legal entity or branch",
+    )
+
+
+def _best_source_customer_similar_score(sa: set[str], sb: set[str]) -> float | None:
+    best: float | None = None
+    for a in sa:
+        for b in sb:
+            if a == b:
+                continue
+            score = dsi_duplicate_similarity_score(a, b)
+            if score is None:
+                continue
+            if best is None or score > best:
+                best = score
+    return best
 
 
 def _shared_source_customer_exact_norm(
@@ -278,7 +307,28 @@ def annotate_dsi_customer_candidate_duplicates(
             name_b = _display_name_for_customer_agg(db)
             if not name_b.strip():
                 continue
-            if _dealer_group_blocks_duplicate_pair(da, db):
+            scope = sorted(_sellout_distributor_id_set(da) | _sellout_distributor_id_set(db)) or None
+            shared_label = _dealer_group_shared_label_different_counterparty(da, db)
+            if shared_label is not None:
+                score, dg_norm, reason = shared_label
+                _append_duplicate_hint(
+                    da,
+                    nk_b,
+                    score,
+                    match_basis="dealer_group_shared_label_different_counterparty",
+                    dealer_group_norm=dg_norm,
+                    distributor_scope=scope,
+                    evidence_reason=reason,
+                )
+                _append_duplicate_hint(
+                    db,
+                    nk_a,
+                    score,
+                    match_basis="dealer_group_shared_label_different_counterparty",
+                    dealer_group_norm=dg_norm,
+                    distributor_scope=scope,
+                    evidence_reason=reason,
+                )
                 continue
             dealer_eval = evaluate_dealer_group_duplicate(
                 name_a,
@@ -291,31 +341,76 @@ def annotate_dsi_customer_candidate_duplicates(
                     nk_b,
                     dealer_eval.score,
                     match_basis=dealer_eval.match_basis,
+                    distributor_scope=scope,
                 )
                 _append_duplicate_hint(
                     db,
                     nk_a,
                     dealer_eval.score,
                     match_basis=dealer_eval.match_basis,
+                    distributor_scope=scope,
+                )
+                continue
+            stem_eval = evaluate_company_stem_duplicate(name_a, name_b)
+            if stem_eval is not None:
+                _append_duplicate_hint(
+                    da,
+                    nk_b,
+                    stem_eval.score,
+                    match_basis=stem_eval.match_basis,
+                    distributor_scope=scope,
+                    evidence_reason="Company stem prefix match — confirm same legal entity",
+                )
+                _append_duplicate_hint(
+                    db,
+                    nk_a,
+                    stem_eval.score,
+                    match_basis=stem_eval.match_basis,
+                    distributor_scope=scope,
+                    evidence_reason="Company stem prefix match — confirm same legal entity",
                 )
                 continue
             shared_customer = _shared_source_customer_exact_norm(
                 da, db, distributor_norms=distributor_norms
             )
-            if shared_customer is None:
+            if shared_customer is not None:
+                _append_duplicate_hint(
+                    da,
+                    nk_b,
+                    1.0,
+                    match_basis="source_customer_exact",
+                    source_customer_norm=shared_customer,
+                    distributor_scope=scope,
+                )
+                _append_duplicate_hint(
+                    db,
+                    nk_a,
+                    1.0,
+                    match_basis="source_customer_exact",
+                    source_customer_norm=shared_customer,
+                    distributor_scope=scope,
+                )
                 continue
-            _append_duplicate_hint(
-                da,
-                nk_b,
-                1.0,
-                match_basis="source_customer_exact",
-            )
-            _append_duplicate_hint(
-                db,
-                nk_a,
-                1.0,
-                match_basis="source_customer_exact",
-            )
+            sa = _source_customer_evidence_norm_set(da)
+            sb = _source_customer_evidence_norm_set(db)
+            sim_score = _best_source_customer_similar_score(sa, sb) if sa and sb else None
+            if sim_score is not None:
+                _append_duplicate_hint(
+                    da,
+                    nk_b,
+                    sim_score,
+                    match_basis="source_customer_similar",
+                    distributor_scope=scope,
+                    evidence_reason="Similar source-customer counterparty strings — confirm same or different entity",
+                )
+                _append_duplicate_hint(
+                    db,
+                    nk_a,
+                    sim_score,
+                    match_basis="source_customer_similar",
+                    distributor_scope=scope,
+                    evidence_reason="Similar source-customer counterparty strings — confirm same or different entity",
+                )
 
 
 def build_duplicate_review_record(
@@ -479,6 +574,67 @@ def load_historical_customer_resolutions(
         )
 
     return out
+
+
+def _dealer_group_norm_from_candidate_context(ctx: dict[str, Any], dealer_group_token: str | None) -> str:
+    dg_raw = ctx.get("dealer_group_account_raw") if isinstance(ctx.get("dealer_group_account_raw"), str) else None
+    if not dg_raw and dealer_group_token:
+        dg_raw = str(dealer_group_token).strip()
+    if not dg_raw:
+        return ""
+    return normalize_customer_name_for_similarity(dg_raw)
+
+
+def build_job_customer_sibling_index(
+    candidates: list[ImportEntityMappingCandidate],
+) -> dict[str, tuple[JobCustomerSiblingMapping, ...]]:
+    """In-job mappings keyed by normalised dealer-group label (plan suggestion only)."""
+    buckets: dict[str, list[JobCustomerSiblingMapping]] = {}
+    for cand in candidates:
+        if cand.entity_type != "customer_dealer_token":
+            continue
+        ctx = cand.context if isinstance(cand.context, dict) else {}
+        dg_norm = _dealer_group_norm_from_candidate_context(ctx, cand.dealer_group_token)
+        if not dg_norm:
+            continue
+        cid: int | None = None
+        reason: str | None = None
+        if cand.suggested_entity_id is not None:
+            cid = int(cand.suggested_entity_id)
+            reason = (cand.match_reason or "").strip() or "suggested_entity_on_job"
+        else:
+            dr = ctx.get("duplicate_review")
+            if isinstance(dr, dict) and str(dr.get("decision") or "").strip() == "same_entity":
+                try:
+                    cid = int(dr.get("customer_id")) if dr.get("customer_id") is not None else None
+                except (TypeError, ValueError):
+                    cid = None
+                reason = "duplicate_review_same_entity"
+        if cid is None:
+            continue
+        nk = (cand.normalized_key or "").strip()
+        if not nk:
+            continue
+        buckets.setdefault(dg_norm, []).append(
+            JobCustomerSiblingMapping(normalized_key=nk, customer_id=cid, match_reason=reason)
+        )
+    return {k: tuple(v) for k, v in buckets.items()}
+
+
+def lookup_job_customer_sibling_mapping(
+    index: dict[str, tuple[JobCustomerSiblingMapping, ...]],
+    *,
+    dealer_group_norm: str,
+    exclude_normalized_key: str,
+) -> JobCustomerSiblingMapping | None:
+    entries = index.get((dealer_group_norm or "").strip())
+    if not entries:
+        return None
+    ex = (exclude_normalized_key or "").strip()
+    for entry in entries:
+        if entry.normalized_key != ex:
+            return entry
+    return None
 
 
 def lookup_historical_customer_resolution(

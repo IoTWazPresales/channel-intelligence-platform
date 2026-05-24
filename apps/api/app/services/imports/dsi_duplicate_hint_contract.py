@@ -9,27 +9,31 @@ from __future__ import annotations
 
 from typing import Any
 
-# --- Active Phase A match bases (may be written by annotate_dsi_customer_candidate_duplicates) ---
+# --- Active match bases (may be written by annotate_dsi_customer_candidate_duplicates) ---
 MATCH_BASIS_DEALER_GROUP_EXACT = "dealer_group_exact"
 MATCH_BASIS_DEALER_GROUP_SIMILAR = "dealer_group_similar"
 MATCH_BASIS_SOURCE_CUSTOMER_EXACT = "source_customer_exact"
+MATCH_BASIS_SOURCE_CUSTOMER_SIMILAR = "source_customer_similar"
+MATCH_BASIS_DEALER_GROUP_PREFIX_STEM = "dealer_group_prefix_stem"
+MATCH_BASIS_DEALER_GROUP_SHARED_LABEL = "dealer_group_shared_label_different_counterparty"
 
 MATCH_BASIS_ACTIVE: frozenset[str] = frozenset(
     {
         MATCH_BASIS_DEALER_GROUP_EXACT,
         MATCH_BASIS_DEALER_GROUP_SIMILAR,
         MATCH_BASIS_SOURCE_CUSTOMER_EXACT,
+        MATCH_BASIS_SOURCE_CUSTOMER_SIMILAR,
+        MATCH_BASIS_DEALER_GROUP_PREFIX_STEM,
+        MATCH_BASIS_DEALER_GROUP_SHARED_LABEL,
     }
 )
 
 # --- Reserved for future phases (parse-safe; not emitted by current annotate path) ---
-MATCH_BASIS_SOURCE_CUSTOMER_SIMILAR = "source_customer_similar"
 MATCH_BASIS_TEMPORAL_SAME_DISTI = "temporal_same_disti"
 MATCH_BASIS_CROSS_DISTI = "cross_disti"
 
 MATCH_BASIS_RESERVED: frozenset[str] = frozenset(
     {
-        MATCH_BASIS_SOURCE_CUSTOMER_SIMILAR,
         MATCH_BASIS_TEMPORAL_SAME_DISTI,
         MATCH_BASIS_CROSS_DISTI,
     }

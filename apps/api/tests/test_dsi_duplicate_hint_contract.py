@@ -5,8 +5,11 @@ from __future__ import annotations
 from app.services.imports.dsi_duplicate_hint_contract import (
     MATCH_BASIS_ACTIVE,
     MATCH_BASIS_CROSS_DISTI,
+    MATCH_BASIS_DEALER_GROUP_PREFIX_STEM,
+    MATCH_BASIS_DEALER_GROUP_SHARED_LABEL,
     MATCH_BASIS_RESERVED,
     MATCH_BASIS_SOURCE_CUSTOMER_EXACT,
+    MATCH_BASIS_SOURCE_CUSTOMER_SIMILAR,
     MATCH_BASIS_TEMPORAL_SAME_DISTI,
     build_duplicate_hint_entry,
     is_known_match_basis,
@@ -19,6 +22,9 @@ def test_active_match_bases_are_known_not_reserved() -> None:
     for basis in MATCH_BASIS_ACTIVE:
         assert is_known_match_basis(basis)
         assert not is_reserved_match_basis(basis)
+    assert MATCH_BASIS_SOURCE_CUSTOMER_SIMILAR in MATCH_BASIS_ACTIVE
+    assert MATCH_BASIS_DEALER_GROUP_PREFIX_STEM in MATCH_BASIS_ACTIVE
+    assert MATCH_BASIS_DEALER_GROUP_SHARED_LABEL in MATCH_BASIS_ACTIVE
 
 
 def test_reserved_match_bases_parse_without_loss() -> None:

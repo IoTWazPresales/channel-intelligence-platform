@@ -61,6 +61,7 @@ from app.services.imports.dsi_steward_candidate_ops import (
     execute_ignore_dsi_candidate,
     execute_acknowledge_dsi_duplicate_different_entity,
     execute_dsi_duplicate_same_entity,
+    execute_dsi_duplicate_cluster_same_entity,
     execute_map_dsi_customer,
     execute_map_dsi_distributor,
     execute_resolve_dsi_product,
@@ -333,7 +334,17 @@ class DsiDuplicateReviewPeerBody(BaseModel):
 
 class DsiDuplicateSameEntityBody(DsiDuplicateReviewPeerBody):
     customer_id: int | None = Field(default=None, ge=1)
+    display_name: str | None = Field(default=None, max_length=256)
+    plan_suggested_target_id: int | None = Field(default=None, ge=1)
     raw_token: str | None = Field(default=None, max_length=512)
+
+
+class DsiDuplicateClusterSameEntityBody(BaseModel):
+    normalized_keys: list[str] = Field(..., min_length=2, max_length=32)
+    customer_id: int | None = Field(default=None, ge=1)
+    display_name: str | None = Field(default=None, max_length=256)
+    plan_suggested_target_id: int | None = Field(default=None, ge=1)
+    audit_note: str | None = Field(default=None, max_length=2000)
 
 
 @router.post("/import-candidates/{candidate_id}/duplicate-review/different-entity", status_code=200)
@@ -363,7 +374,27 @@ async def resolve_dsi_duplicate_same_entity(
             cand,
             peer_normalized_key=body.peer_normalized_key,
             customer_id=body.customer_id,
+            display_name=body.display_name,
+            plan_suggested_target_id=body.plan_suggested_target_id,
             raw_token=body.raw_token,
+            audit_note=body.audit_note,
+        )
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.post("/import-jobs/{job_id}/duplicate-review/cluster-same-entity", status_code=200)
+async def resolve_dsi_duplicate_cluster_same_entity(
+    job_id: int, body: DsiDuplicateClusterSameEntityBody, db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await execute_dsi_duplicate_cluster_same_entity(
+            db,
+            job_id,
+            normalized_keys=body.normalized_keys,
+            customer_id=body.customer_id,
+            display_name=body.display_name,
+            plan_suggested_target_id=body.plan_suggested_target_id,
             audit_note=body.audit_note,
         )
     except StewardOpError as exc:
