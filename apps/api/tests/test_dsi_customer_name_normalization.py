@@ -40,6 +40,7 @@ def test_duplicate_annotation_within_job() -> None:
     assert isinstance(hints_a, list) and len(hints_a) >= 1
     assert hints_a[0]["normalized_key"] == "acme2"
     assert float(hints_a[0]["similarity_score"]) >= 0.88
+    assert hints_a[0].get("match_basis") in ("dealer_group_exact", "dealer_group_similar")
 
 
 def test_duplicate_annotation_skips_non_overlapping_distributors() -> None:

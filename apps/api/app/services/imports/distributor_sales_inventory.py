@@ -64,6 +64,8 @@ CHANNEL_OPEN_SUBSTRINGS = ("open channel", "open_channel", "open-channel")
 SENTINEL_CUSTOMER_TOKENS = frozenset(
     {
         "cash sale",
+        "end user",
+        "consumer",
         "walk-in",
         "walk in",
         "unknown",
@@ -1267,6 +1269,7 @@ def process_distributor_sales_inventory(
             "samples": [],
             "strategic_channel_hint": False,
             "customer_evidence_norms": [],
+            "source_customer_evidence_norms": [],
             "primary_source": None,
             "dealer_group_raw": None,
             "source_customer_raw_samples": [],
@@ -1581,6 +1584,9 @@ def process_distributor_sales_inventory(
                     lst = a["customer_evidence_norms"]
                     if cu_ev not in lst and len(lst) < 8:
                         lst.append(cu_ev)
+                    src_lst = a["source_customer_evidence_norms"]
+                    if cu_ev not in src_lst and len(src_lst) < 8:
+                        src_lst.append(cu_ev)
             if rdistributor_id is not None:
                 dist_set = a.setdefault("sellout_distributor_ids", set())
                 if isinstance(dist_set, set):
@@ -1654,7 +1660,7 @@ def process_distributor_sales_inventory(
     if on_progress is not None:
         on_progress("building_candidates", "Building candidates", total_rows, total_rows)
 
-    annotate_dsi_customer_candidate_duplicates(agg)
+    annotate_dsi_customer_candidate_duplicates(agg, distributors=res_cache.all_distributors)
     annotate_dsi_customer_distributor_name_collisions(agg, res_cache.all_distributors)
 
     for (etype, nkey), data in agg.items():
@@ -1668,6 +1674,9 @@ def process_distributor_sales_inventory(
             evs = data.get("customer_evidence_norms") or []
             if evs:
                 ctx["customer_name_evidence_norms"] = evs[:8]
+            src_evs = data.get("source_customer_evidence_norms") or []
+            if src_evs:
+                ctx["source_customer_name_evidence_norms"] = src_evs[:8]
             dup_hints = data.get("possible_duplicate_of")
             if isinstance(dup_hints, list) and dup_hints:
                 ctx["possible_duplicate_of"] = dup_hints[:16]

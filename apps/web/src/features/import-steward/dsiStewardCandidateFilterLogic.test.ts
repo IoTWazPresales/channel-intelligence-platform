@@ -31,7 +31,18 @@ describe('contextPossibleDuplicateOf', () => {
     const hints = contextPossibleDuplicateOf({
       possible_duplicate_of: [{ normalized_key: 'acme2', similarity_score: 0.91 }],
     });
-    expect(hints).toEqual([{ normalized_key: 'acme2', similarity_score: 0.91 }]);
+    expect(hints).toEqual([
+      { normalized_key: 'acme2', similarity_score: 0.91, match_basis: undefined },
+    ]);
+  });
+
+  it('parses match_basis when present', () => {
+    const hints = contextPossibleDuplicateOf({
+      possible_duplicate_of: [
+        { normalized_key: 'peer', similarity_score: 1.0, match_basis: 'source_customer_exact' },
+      ],
+    });
+    expect(hints[0]?.match_basis).toBe('source_customer_exact');
   });
 });
 

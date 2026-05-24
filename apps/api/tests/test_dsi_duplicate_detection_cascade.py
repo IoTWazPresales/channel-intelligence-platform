@@ -93,14 +93,13 @@ def test_ft_vs_tb_computers_not_duplicate() -> None:
     assert dsi_duplicate_similarity_score("FT Computers", "TB Computers") is None
 
 
-def test_tb_computers_vs_tb_solutions_same_short_prefix() -> None:
-    score = dsi_duplicate_similarity_score("TB Computers", "TB Solutions")
-    assert score is not None
+def test_tb_computers_vs_tb_solutions_no_short_stem_dealer_hint() -> None:
+    """Unsafe prior behaviour: same 2-char stem ``tb`` forced a dealer-group hint."""
+    assert dsi_duplicate_similarity_score("TB Computers", "TB Solutions") is None
 
 
-def test_pc_world_vs_pc_direct_same_short_prefix() -> None:
-    score = dsi_duplicate_similarity_score("PC World", "PC Direct")
-    assert score is not None
+def test_pc_world_vs_pc_direct_no_short_stem_dealer_hint() -> None:
+    assert dsi_duplicate_similarity_score("PC World", "PC Direct") is None
 
 
 def test_annotate_job_keeps_true_acme_duplicates() -> None:
@@ -129,3 +128,4 @@ def test_annotate_job_keeps_true_acme_duplicates() -> None:
     hints = agg[("customer_dealer_token", "acme")].get("possible_duplicate_of")
     assert isinstance(hints, list) and len(hints) == 1
     assert hints[0]["normalized_key"] == "acme2"
+    assert hints[0].get("match_basis") in ("dealer_group_exact", "dealer_group_similar")

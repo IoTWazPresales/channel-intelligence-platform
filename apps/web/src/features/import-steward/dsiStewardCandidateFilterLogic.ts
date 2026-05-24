@@ -1,4 +1,5 @@
 import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
+import { parseDsiPossibleDuplicateHint, type DsiPossibleDuplicateHint } from './dsiDuplicateHintContract';
 
 /** DSI mapping candidate entity types (import job resolution). */
 export const DSI_ENTITY_CUSTOMER = 'customer_dealer_token' as const;
@@ -44,10 +45,7 @@ function contextSpecialCategory(ctx: Record<string, unknown> | null): string | n
   return t || null;
 }
 
-export type DsiPossibleDuplicateHint = {
-  normalized_key: string;
-  similarity_score?: number;
-};
+export type { DsiPossibleDuplicateHint } from './dsiDuplicateHintContract';
 
 export function contextDuplicateReview(
   ctx: Record<string, unknown> | null
@@ -125,19 +123,8 @@ export function contextPossibleDuplicateOf(ctx: Record<string, unknown> | null):
   if (!ctx || !Array.isArray(ctx.possible_duplicate_of)) return [];
   const out: DsiPossibleDuplicateHint[] = [];
   for (const x of ctx.possible_duplicate_of) {
-    if (typeof x === 'string' && x.trim()) {
-      out.push({ normalized_key: x.trim() });
-      continue;
-    }
-    if (x && typeof x === 'object' && 'normalized_key' in x) {
-      const nk = String((x as { normalized_key?: unknown }).normalized_key ?? '').trim();
-      if (!nk) continue;
-      const score = (x as { similarity_score?: unknown }).similarity_score;
-      out.push({
-        normalized_key: nk,
-        similarity_score: typeof score === 'number' ? score : undefined,
-      });
-    }
+    const parsed = parseDsiPossibleDuplicateHint(x);
+    if (parsed) out.push(parsed);
   }
   return out.slice(0, 8);
 }

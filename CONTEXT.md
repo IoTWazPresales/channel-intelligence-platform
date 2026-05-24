@@ -9,6 +9,8 @@
 ## What Is Working (latest)
 
 ### DSI steward finalize (duplicate + async validate)
+- **Duplicate detection Phase A** (in working tree, post-`9d1d3da`): dealer-group cascade unchanged for long names; **short distinctive stem only (≤3 chars) no longer fuzzy-hints alone** (fixes TB/TB Computers vs TB Solutions, PC World vs PC Direct on dealer path); **`match_basis`** on hints (`dealer_group_exact`, `dealer_group_similar`, `source_customer_exact`); **source customer secondary path** via `source_customer_evidence_norms` (not mixed with dealer group); branch guard (same dealer group label + different source customers → no hint). Revalidate job after deploy to refresh persisted hints.
+- **Duplicate hint contract Phase A.5** (types/parsing only): `dsi_duplicate_hint_contract.py` + `dsiDuplicateHintContract.ts` — reserved parse-safe bases (`temporal_same_disti`, `cross_disti`, `source_customer_similar`); optional JSONB evidence keys (`matched_value`, `matched_field`, `dealer_group_norm`, `source_customer_norm`, `distributor_scope`, `evidence_reason`) without migration; annotate still emits Phase A bases only.
 - **Duplicate detection Phase 1 + 1.5**: distinctive stem gate (≥ 0.90) then full-string (≥ 0.88 / relaxed 0.72); generic-only suffix matches suppressed; **short-token single-edit suppress** (e.g. NRC vs NGR); distributor-scoped overlap for hints.
 - **Duplicate steward review**: `context.duplicate_review`; `acknowledged_unique`; plan gate `duplicate_review_required`; **Same entity** / **Different entity**; local plan refresh only (not full revalidate). **Same entity greenfield**: optional `customer_id` on POST — both peers null → provisional `dim_customer` from primary evidence + map both in one transaction; conflicting `suggested_entity_id` → 409. **Same entity guard**: self `peer_normalized_key` → 400; UI filters self from duplicate hints; `paired_normalized_key` stored from DB canonical keys.
 - **Inline duplicate compare**: **Compare** / **Hide compare** under each peer in steward drawer (no scroll-to-top); optional **Open full steward for peer**; peer-not-on-page message when off current grid page.
@@ -29,7 +31,7 @@
 
 | Topic | Policy |
 |--------|--------|
-| **Duplicates** | Hints are name-similarity only; steward must confirm Same/Different before plan apply when unresolved. |
+| **Duplicates** | Hints are review-required only (dealer group and/or source customer basis); steward must confirm Same/Different before plan apply when unresolved. |
 | **Region** | Prefer **one `dim_customer`**, multiple regions via **`customer_location`** / region evidence — do **not** auto-split customers by region in duplicate logic. |
 | **Inter-disti in customer column** | Map as **sell-out counterparty** on seller’s file; link to distributor master when useful; **does not** write buyer’s `fact_inventory_distributor`. |
 | **Revalidate** | After steward bulk/plan/single-row map: optional **Re-run import validation (server)**; duplicate Same/Different uses **local plan refresh** only. |
@@ -57,6 +59,7 @@
 | Area | Path |
 |------|------|
 | Duplicate cascade | `apps/api/app/services/imports/dsi_customer_name_normalization.py` |
+| Duplicate hint contract | `apps/api/app/services/imports/dsi_duplicate_hint_contract.py`, `apps/web/src/features/import-steward/dsiDuplicateHintContract.ts` |
 | Duplicate + inter-disti annotate | `apps/api/app/services/imports/dsi_customer_intelligence.py` |
 | Steward duplicate ops | `apps/api/app/services/imports/dsi_steward_candidate_ops.py` |
 | Async dispatch / progress | `apps/api/app/api/v1/endpoints/imports.py`, `import_job_background_metadata.py` |
@@ -65,6 +68,8 @@
 
 ## Tests (safe — no DB)
 - `apps/api/tests/test_dsi_duplicate_detection_cascade.py`
+- `apps/api/tests/test_dsi_duplicate_hint_contract.py`
+- `apps/api/tests/test_dsi_duplicate_phase_a.py`
 - `apps/api/tests/test_dsi_distributor_name_collision.py`
 - `apps/api/tests/test_dsi_duplicate_review.py` (if pure unit — verify before run)
 - `apps/api/tests/test_dsi_job_progress.py`, `test_background_tasks.py`

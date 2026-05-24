@@ -14,7 +14,7 @@ from app.models.import_distributor_si import CustomerSourceTokenAlias, ImportEnt
 from app.models.ingestion import ImportJob
 from app.services.imports.dsi_customer_name_normalization import (
     DSI_DUPLICATE_FULL_STRING_THRESHOLD,
-    dsi_duplicate_similarity_score,
+    evaluate_dealer_group_duplicate,
     normalize_customer_name_for_similarity,
     normalize_customer_name_token,
 )
@@ -121,6 +121,104 @@ def _display_name_for_customer_agg(data: dict[str, Any]) -> str:
     return ""
 
 
+# Source-customer duplicate path — aligned with ``SENTINEL_CUSTOMER_TOKENS`` in distributor_sales_inventory.
+_SOURCE_CUSTOMER_DUPLICATE_PLACEHOLDER_SUBSTRINGS = (
+    "to be mapped",
+    "tbd",
+    "unknown",
+    "pending mapping",
+)
+_SOURCE_CUSTOMER_DUPLICATE_SENTINELS = frozenset(
+    {
+        "cash sale",
+        "end user",
+        "consumer",
+        "walk-in",
+        "walk in",
+        "unknown",
+        "dealer",
+        "misc",
+        "n/a",
+        "na",
+        "tbd",
+        "__blank__",
+    }
+)
+
+
+def _source_customer_norm_is_placeholder(norm: str, raw: str | None = None) -> bool:
+    if not norm or norm in _SOURCE_CUSTOMER_DUPLICATE_SENTINELS:
+        return True
+    r = (raw or "").strip().lower()
+    return any(p in r for p in _SOURCE_CUSTOMER_DUPLICATE_PLACEHOLDER_SUBSTRINGS)
+
+
+def _source_customer_evidence_norm_set(data: dict[str, Any]) -> set[str]:
+    norms: set[str] = set()
+    for item in data.get("source_customer_evidence_norms") or []:
+        if not isinstance(item, str) or not item.strip():
+            continue
+        norm = item.strip()
+        if not _source_customer_norm_is_placeholder(norm):
+            norms.add(norm)
+    for raw in data.get("source_customer_raw_samples") or []:
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        norm = normalize_customer_name_token(raw)
+        if norm and not _source_customer_norm_is_placeholder(norm, raw):
+            norms.add(norm)
+    return norms
+
+
+def _dealer_group_display_norm(data: dict[str, Any]) -> str:
+    dg = (data.get("dealer_group_raw") or "").strip()
+    if not dg:
+        return ""
+    return normalize_customer_name_for_similarity(dg)
+
+
+def _build_distributor_name_norm_index(distributors: list[Any]) -> frozenset[str]:
+    norms: set[str] = set()
+    for dist in distributors:
+        dist_name = str(getattr(dist, "name", "") or "").strip()
+        if not dist_name:
+            continue
+        for raw in (dist_name, str(getattr(dist, "code", "") or "")):
+            norm = normalize_customer_name_for_similarity(raw)
+            if len(norm) >= 4:
+                norms.add(norm)
+    return frozenset(norms)
+
+
+def _dealer_group_blocks_duplicate_pair(da: dict[str, Any], db: dict[str, Any]) -> bool:
+    """Same dealer group label with different source-customer evidence — branch/location, not duplicate."""
+    dg_a = _dealer_group_display_norm(da)
+    dg_b = _dealer_group_display_norm(db)
+    if not dg_a or dg_a != dg_b:
+        return False
+    sa = _source_customer_evidence_norm_set(da)
+    sb = _source_customer_evidence_norm_set(db)
+    if not sa or not sb:
+        return False
+    return sa != sb
+
+
+def _shared_source_customer_exact_norm(
+    da: dict[str, Any], db: dict[str, Any], *, distributor_norms: frozenset[str]
+) -> str | None:
+    sa = _source_customer_evidence_norm_set(da)
+    sb = _source_customer_evidence_norm_set(db)
+    if not sa or not sb:
+        return None
+    shared = sa & sb
+    if len(shared) != 1:
+        return None
+    norm = next(iter(shared))
+    if norm in distributor_norms:
+        return None
+    return norm
+
+
 def annotate_dsi_customer_distributor_name_collisions(
     agg: dict[tuple[str, str], dict[str, Any]],
     distributors: list[Any],
@@ -161,8 +259,10 @@ def annotate_dsi_customer_candidate_duplicates(
     agg: dict[tuple[str, str], dict[str, Any]],
     *,
     similarity_threshold: float = DSI_DUPLICATE_SIMILARITY_THRESHOLD,
+    distributors: list[Any] | None = None,
 ) -> None:
     """Set ``possible_duplicate_of`` on customer_dealer_token buckets (pre-persist)."""
+    distributor_norms = _build_distributor_name_norm_index(distributors or [])
     items = [
         (nk, data)
         for (etype, nk), data in agg.items()
@@ -178,15 +278,44 @@ def annotate_dsi_customer_candidate_duplicates(
             name_b = _display_name_for_customer_agg(db)
             if not name_b.strip():
                 continue
-            score = dsi_duplicate_similarity_score(
+            if _dealer_group_blocks_duplicate_pair(da, db):
+                continue
+            dealer_eval = evaluate_dealer_group_duplicate(
                 name_a,
                 name_b,
                 full_string_threshold=similarity_threshold,
             )
-            if score is None:
+            if dealer_eval is not None:
+                _append_duplicate_hint(
+                    da,
+                    nk_b,
+                    dealer_eval.score,
+                    match_basis=dealer_eval.match_basis,
+                )
+                _append_duplicate_hint(
+                    db,
+                    nk_a,
+                    dealer_eval.score,
+                    match_basis=dealer_eval.match_basis,
+                )
                 continue
-            _append_duplicate_hint(da, nk_b, score)
-            _append_duplicate_hint(db, nk_a, score)
+            shared_customer = _shared_source_customer_exact_norm(
+                da, db, distributor_norms=distributor_norms
+            )
+            if shared_customer is None:
+                continue
+            _append_duplicate_hint(
+                da,
+                nk_b,
+                1.0,
+                match_basis="source_customer_exact",
+            )
+            _append_duplicate_hint(
+                db,
+                nk_a,
+                1.0,
+                match_basis="source_customer_exact",
+            )
 
 
 def build_duplicate_review_record(
@@ -223,17 +352,53 @@ def similarity_score_for_duplicate_peer(ctx: dict[str, Any], peer_normalized_key
     return None
 
 
-def _append_duplicate_hint(bucket: dict[str, Any], other_normalized_key: str, score: float) -> None:
+def _append_duplicate_hint(
+    bucket: dict[str, Any],
+    other_normalized_key: str,
+    score: float,
+    *,
+    match_basis: str | None = None,
+    matched_value: str | None = None,
+    matched_field: str | None = None,
+    dealer_group_norm: str | None = None,
+    source_customer_norm: str | None = None,
+    distributor_scope: list[int] | None = None,
+    evidence_reason: str | None = None,
+) -> None:
+    from app.services.imports.dsi_duplicate_hint_contract import (
+        DUPLICATE_HINT_OPTIONAL_EVIDENCE_KEYS,
+        build_duplicate_hint_entry,
+    )
+
     hints: list[dict[str, Any]] = bucket.setdefault("possible_duplicate_of", [])
     if not isinstance(hints, list):
         hints = []
         bucket["possible_duplicate_of"] = hints
+    entry = build_duplicate_hint_entry(
+        normalized_key=other_normalized_key,
+        similarity_score=score,
+        match_basis=match_basis,
+        matched_value=matched_value,
+        matched_field=matched_field,
+        dealer_group_norm=dealer_group_norm,
+        source_customer_norm=source_customer_norm,
+        distributor_scope=distributor_scope,
+        evidence_reason=evidence_reason,
+    )
+    basis = entry.get("match_basis")
     for h in hints:
         if isinstance(h, dict) and h.get("normalized_key") == other_normalized_key:
             if float(h.get("similarity_score") or 0) < score:
-                h["similarity_score"] = score
+                h["similarity_score"] = entry["similarity_score"]
+                if basis:
+                    h["match_basis"] = basis
+            elif basis and not h.get("match_basis"):
+                h["match_basis"] = basis
+            for key in DUPLICATE_HINT_OPTIONAL_EVIDENCE_KEYS:
+                if key in entry and key not in h:
+                    h[key] = entry[key]
             return
-    hints.append({"normalized_key": other_normalized_key, "similarity_score": score})
+    hints.append(entry)
 
 
 def load_historical_customer_resolutions(

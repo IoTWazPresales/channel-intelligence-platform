@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 # Legal / trading suffixes and noise (order: longer phrases first).
@@ -218,6 +219,40 @@ def _leading_distinctive_token(normalized: str) -> str:
     return ""
 
 
+def _distinctive_stem_is_short_only(distinctive: str) -> bool:
+    """True when every distinctive token is at most 3 characters (e.g. stem ``tb`` only)."""
+    tokens = [t for t in (distinctive or "").split() if t]
+    return bool(tokens) and all(len(t) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN for t in tokens)
+
+
+@dataclass(frozen=True)
+class DealerGroupDuplicateEvaluation:
+    score: float
+    match_basis: str  # dealer_group_exact | dealer_group_similar
+
+
+def evaluate_dealer_group_duplicate(
+    name_a: str | None,
+    name_b: str | None,
+    *,
+    full_string_threshold: float = DSI_DUPLICATE_FULL_STRING_THRESHOLD,
+    distinctive_threshold: float = DSI_DUPLICATE_DISTINCTIVE_THRESHOLD,
+) -> DealerGroupDuplicateEvaluation | None:
+    """Score dealer-group display names for within-job duplicate hints."""
+    score = dsi_duplicate_similarity_score(
+        name_a,
+        name_b,
+        full_string_threshold=full_string_threshold,
+        distinctive_threshold=distinctive_threshold,
+    )
+    if score is None:
+        return None
+    norm_a = normalize_customer_name_for_similarity(name_a)
+    norm_b = normalize_customer_name_for_similarity(name_b)
+    basis = "dealer_group_exact" if norm_a == norm_b else "dealer_group_similar"
+    return DealerGroupDuplicateEvaluation(score=score, match_basis=basis)
+
+
 def dsi_duplicate_similarity_score(
     name_a: str | None,
     name_b: str | None,
@@ -231,6 +266,10 @@ def dsi_duplicate_similarity_score(
   """
     norm_a = normalize_customer_name_for_similarity(name_a)
     norm_b = normalize_customer_name_for_similarity(name_b)
+    if not norm_a or not norm_b:
+        return None
+    if norm_a == norm_b:
+        return 1.0
     if len(norm_a) < DSI_DUPLICATE_MIN_NORMALIZED_LEN or len(norm_b) < DSI_DUPLICATE_MIN_NORMALIZED_LEN:
         return None
 
@@ -254,9 +293,10 @@ def dsi_duplicate_similarity_score(
     if _distinctive_short_token_flip_should_suppress(dist_a, dist_b):
         return None
 
+    if _distinctive_stem_is_short_only(dist_a) and _distinctive_stem_is_short_only(dist_b):
+        return None
+
     dist_ratio = SequenceMatcher(None, dist_a, dist_b).ratio()
-    if short_prefix_pair:
-        dist_ratio = max(dist_ratio, distinctive_threshold)
     if dist_ratio < distinctive_threshold:
         if _leading_distinctive_token_variant(dist_a, dist_b):
             ta = dist_a.split()
@@ -277,12 +317,8 @@ def dsi_duplicate_similarity_score(
             combined = max(full_ratio, dist_ratio * 0.95)
             if combined >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
                 return round(float(combined), 4)
-        if short_prefix_pair:
-            return round(float(max(full_ratio, distinctive_threshold)), 4)
         return None
 
     if full_ratio >= full_string_threshold:
         return round(float(full_ratio), 4)
-    if short_prefix_pair and dist_ratio >= distinctive_threshold:
-        return round(float(max(full_ratio, distinctive_threshold)), 4)
     return None
