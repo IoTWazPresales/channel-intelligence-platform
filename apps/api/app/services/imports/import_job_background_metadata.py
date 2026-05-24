@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -58,6 +59,26 @@ def pipeline_dispatch_conflict_message(job_id: int) -> str:
     return f"Import validation is already running for job {job_id}. Wait for completion or cancel the job."
 
 
+def persist_pipeline_queued_at(session: Session, job: ImportJob) -> None:
+    """Record HTTP dispatch time before the worker picks up the Celery task."""
+    m = dict(job.staged_metadata or {})
+    now = datetime.now(timezone.utc).isoformat()
+    m["pipeline_queued_at"] = now
+    m.pop("pipeline_started_at", None)
+    job.staged_metadata = to_jsonable(m)
+    session.add(job)
+
+
+def persist_pipeline_worker_started_at(session: Session, job: ImportJob) -> None:
+    """Record first worker execution (once per dispatch)."""
+    m = dict(job.staged_metadata or {})
+    if m.get("pipeline_started_at"):
+        return
+    m["pipeline_started_at"] = datetime.now(timezone.utc).isoformat()
+    job.staged_metadata = to_jsonable(m)
+    session.add(job)
+
+
 def clear_background_task_metadata(meta: dict[str, Any] | None) -> dict[str, Any] | None:
     """Return staged_metadata without background-task keys (or None if empty)."""
     if not isinstance(meta, dict):
@@ -65,6 +86,8 @@ def clear_background_task_metadata(meta: dict[str, Any] | None) -> dict[str, Any
     m = dict(meta)
     m.pop("celery_task_id", None)
     m.pop("dsi_bulk_task", None)
+    m.pop("pipeline_queued_at", None)
+    m.pop("pipeline_started_at", None)
     return to_jsonable(m) if m else None
 
 

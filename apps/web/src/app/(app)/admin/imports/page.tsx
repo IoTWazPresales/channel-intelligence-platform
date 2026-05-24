@@ -57,7 +57,11 @@ import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib
 import { toQueryError } from '@/lib/queryError';
 
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
-import { DSI_STEWARD_CONFIG, notifyDsiAsyncPipelineStarted } from '@/features/import-steward';
+import {
+  DSI_STEWARD_CONFIG,
+  notifyDsiAsyncPipelineStarted,
+  refetchDsiImportJobStewardQueries,
+} from '@/features/import-steward';
 
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 
@@ -848,13 +852,12 @@ function AdminImportsPageContent() {
       status === 'completed_with_errors'
     ) {
       setDsiValidateAsync(false);
-      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(j.id) });
-      void qc.invalidateQueries({ queryKey: ['import-job-rows', j.id] });
-      void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(j.id) });
-      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
-      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
-      void refetchDsiMapping();
-      void refetchPreview();
+      void (async () => {
+        await refetchDsiImportJobStewardQueries(qc, j.id, { includeImportJobsList: true });
+        void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+        await refetchDsiMapping();
+        await refetchPreview();
+      })();
     }
   }, [dsiValidateAsync, dsiValidatePollJob, dsiProgress?.phase, qc, refetchDsiMapping, refetchPreview]);
 

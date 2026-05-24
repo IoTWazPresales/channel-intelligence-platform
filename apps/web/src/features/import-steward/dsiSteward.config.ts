@@ -5,7 +5,20 @@ import type { ImportStewardListCopy } from './importStewardCandidateWorkspace.ty
 /** Terminal candidate statuses — aligned with `DsiMappingStewardPanel` single-row steward. */
 export const DSI_STEWARD_TERMINAL_STATUSES = ['resolved', 'ignored', 'waived_open_channel'] as const;
 
+/** Duplicate review complete — block further single-row steward mapping actions. */
+export const DSI_STEWARD_ACKNOWLEDGED_UNIQUE_STATUS = 'acknowledged_unique' as const;
+
 const dsiTerminalStatusSet = new Set<string>(DSI_STEWARD_TERMINAL_STATUSES);
+
+const dsiStewardRowActionBlockedStatuses = new Set<string>([
+  ...DSI_STEWARD_TERMINAL_STATUSES,
+  DSI_STEWARD_ACKNOWLEDGED_UNIQUE_STATUS,
+]);
+
+/** True when single-row steward actions (map, provisional, ignore) must be disabled. */
+export function isDsiStewardRowActionBlocked(status: string | null | undefined): boolean {
+  return dsiStewardRowActionBlockedStatuses.has((status || '').trim());
+}
 
 const dsiListShellCopy = {
   title: 'DSI mapping candidates (import job)',
@@ -86,9 +99,32 @@ export function invalidateDsiImportJobStewardQueries(
   void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', importJobId] });
   void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.importJobRowsQueryKey(importJobId) });
   void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.mappingCandidatesListQueryKey(importJobId) });
+  void qc.invalidateQueries({ queryKey: ['import-job-pipeline-progress', importJobId] });
   if (options?.includeImportJobsList) {
     void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.importJobsQueryKey() });
   }
+}
+
+/** Await steward + job list refetch after pipeline complete (stronger than invalidate-only). */
+export async function refetchDsiImportJobStewardQueries(
+  qc: QueryClient,
+  importJobId: number,
+  options?: { includeImportJobsList?: boolean }
+) {
+  const tasks = [
+    qc.refetchQueries({ queryKey: DSI_STEWARD_CONFIG.resolutionSuggestionsQueryKeyPrefix(importJobId) }),
+    qc.refetchQueries({ queryKey: DSI_STEWARD_CONFIG.unresolvedGeoTokensQueryKey(importJobId) }),
+    qc.refetchQueries({ queryKey: ['distributor-si-candidates', importJobId] }),
+    qc.refetchQueries({ queryKey: DSI_STEWARD_CONFIG.importJobRowsQueryKey(importJobId) }),
+    qc.refetchQueries({ queryKey: DSI_STEWARD_CONFIG.mappingCandidatesListQueryKey(importJobId) }),
+    qc.refetchQueries({ queryKey: ['import-job-pipeline-progress', importJobId] }),
+    qc.refetchQueries({ queryKey: ['dsi-async-validate-import-job', importJobId] }),
+    qc.refetchQueries({ queryKey: ['import-job', importJobId] }),
+  ];
+  if (options?.includeImportJobsList) {
+    tasks.push(qc.refetchQueries({ queryKey: DSI_STEWARD_CONFIG.importJobsQueryKey() }));
+  }
+  await Promise.all(tasks);
 }
 
 export function invalidateDsiCatalogQueries(qc: QueryClient) {

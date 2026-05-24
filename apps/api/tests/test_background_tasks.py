@@ -13,7 +13,13 @@ from app.services.imports.import_job_background_metadata import (
 
 
 def test_clear_background_task_metadata_strips_keys() -> None:
-    meta = {"celery_task_id": "abc", "dsi_bulk_task": {"task_id": "x"}, "dsi_validate_total_rows": 10}
+    meta = {
+        "celery_task_id": "abc",
+        "dsi_bulk_task": {"task_id": "x"},
+        "dsi_validate_total_rows": 10,
+        "pipeline_queued_at": "2026-01-01T00:00:00+00:00",
+        "pipeline_started_at": "2026-01-01T00:00:01+00:00",
+    }
     cleared = clear_background_task_metadata(meta)
     assert cleared == {"dsi_validate_total_rows": 10}
 

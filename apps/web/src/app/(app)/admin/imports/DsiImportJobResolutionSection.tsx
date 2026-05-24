@@ -51,6 +51,11 @@ import {
 } from '@/features/import-steward';
 import { safeDisplayError } from '@/lib/api';
 
+import {
+  buildDuplicateClusterIndex,
+  duplicateClusterMembersForKey,
+} from '@/features/import-steward/dsiDuplicateCluster';
+
 import { buildDsiResolutionWorkspaceColumns } from './dsiResolutionWorkspaceTableProps';
 
 export function DsiImportJobResolutionSection({
@@ -341,6 +346,27 @@ export function DsiImportJobResolutionSection({
     return candidates.find((c) => c.id === detailCandidate.id) ?? detailCandidate;
   }, [detailCandidate, candidates]);
 
+  const duplicateClusterIndex = useMemo(() => buildDuplicateClusterIndex(candidates), [candidates]);
+
+  const customerNormalizedKeysOnPage = useMemo(
+    () =>
+      candidates
+        .filter((c) => c.entity_type === 'customer_dealer_token')
+        .map((c) => c.normalized_key)
+        .filter(Boolean),
+    [candidates]
+  );
+
+  const duplicateClusterMembersForSelection = useMemo(() => {
+    if (!effectiveDetailCandidate) return [];
+    return [
+      ...duplicateClusterMembersForKey(
+        duplicateClusterIndex,
+        effectiveDetailCandidate.normalized_key
+      ),
+    ];
+  }, [duplicateClusterIndex, effectiveDetailCandidate]);
+
   useEffect(() => {
     if (rowActionPendingId == null) return;
     const row = candidates.find((c) => c.id === rowActionPendingId);
@@ -379,6 +405,7 @@ export function DsiImportJobResolutionSection({
   const stewardDone = useCallback(() => {
     invalidateDsiImportJobStewardQueries(qc, importJobId, { includeImportJobsList: true });
     onInvalidate();
+    setDetailCandidate(null);
   }, [qc, importJobId, onInvalidate]);
 
   const lookupPeerCandidateByNormalizedKey = useCallback(
@@ -679,7 +706,17 @@ export function DsiImportJobResolutionSection({
           minHeight: 360,
         }}
       >
-        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1.5,
+            maxHeight: { md: 'calc(100vh - 120px)' },
+            overflow: { md: 'auto' },
+          }}
+        >
           {planApplySummary ? (
             <Stack
               direction="row"
@@ -726,6 +763,8 @@ export function DsiImportJobResolutionSection({
             onPlanRefresh={refreshResolutionPlanEffective}
             lookupPeerCandidate={lookupPeerCandidateByNormalizedKey}
             onOpenPeerByNormalizedKey={openPeerCandidateByNormalizedKey}
+            customerNormalizedKeysOnPage={customerNormalizedKeysOnPage}
+            duplicateClusterMembers={duplicateClusterMembersForSelection}
           />
         ) : null}
       </Box>

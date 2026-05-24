@@ -716,6 +716,9 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
         job.stage = STAGE_RAW_STORED
         job.started_at = datetime.now(timezone.utc)
         job.status = "running"
+        from app.services.imports.import_job_background_metadata import persist_pipeline_worker_started_at
+
+        persist_pipeline_worker_started_at(db, job)
         db.flush()
 
         source = job.source

@@ -8,6 +8,8 @@ export {
   DSI_STEWARD_TERMINAL_STATUSES,
   invalidateDsiCatalogQueries,
   invalidateDsiImportJobStewardQueries,
+  refetchDsiImportJobStewardQueries,
+  isDsiStewardRowActionBlocked,
 } from './dsiSteward.config';
 export {
   defaultDsiStewardCandidateFilterState,

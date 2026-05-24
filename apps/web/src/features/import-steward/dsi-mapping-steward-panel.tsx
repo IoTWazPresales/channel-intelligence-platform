@@ -22,7 +22,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet, apiPost } from '@/lib/api';
 
 import { notifyDsiAsyncPipelineStarted } from './dsiAsyncPipelineRun';
-import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
+import { detectSuffixTokenFamily } from './dsiDuplicateCluster';
+import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries, isDsiStewardRowActionBlocked } from './dsiSteward.config';
 import { DsiDuplicatePeerCompare } from './dsiDuplicatePeerCompare';
 import {
   classifyDuplicateSameEntityCase,
@@ -134,6 +135,8 @@ export function DsiMappingStewardPanel({
   onPlanRefresh,
   lookupPeerCandidate,
   onOpenPeerByNormalizedKey,
+  customerNormalizedKeysOnPage,
+  duplicateClusterMembers,
 }: {
   importJobId: number;
   candidate: DsiCandidateRow | null;
@@ -147,6 +150,10 @@ export function DsiMappingStewardPanel({
   lookupPeerCandidate?: (normalizedKey: string) => DsiCandidateRow | null;
   /** Optional: open peer in full steward drawer (replaces selection). */
   onOpenPeerByNormalizedKey?: (normalizedKey: string) => void;
+  /** Customer token keys on the current candidates page (suffix-family display). */
+  customerNormalizedKeysOnPage?: readonly string[];
+  /** Connected duplicate cluster for the selected row (display only; from page candidates). */
+  duplicateClusterMembers?: readonly string[];
 }) {
   const qc = useQueryClient();
   const [expandedDuplicatePeerKey, setExpandedDuplicatePeerKey] = useState<string | null>(null);
@@ -180,6 +187,7 @@ export function DsiMappingStewardPanel({
   const [dupPeerKey, setDupPeerKey] = useState('');
   const [dupSamePeerKeyError, setDupSamePeerKeyError] = useState<string | null>(null);
   const [dupAuditNote, setDupAuditNote] = useState('');
+  const [dupDifferentPeerKey, setDupDifferentPeerKey] = useState('');
 
   useEffect(() => {
     setDupSamePeerKeyError(null);
@@ -187,6 +195,7 @@ export function DsiMappingStewardPanel({
     setDupSameOpen(false);
     setExpandedDuplicatePeerKey(null);
     setDupAuditNote('');
+    setDupDifferentPeerKey('');
   }, [candidate?.id]);
 
   const { data: regions = [] } = useQuery({
@@ -443,6 +452,8 @@ export function DsiMappingStewardPanel({
   const dupUnresolved =
     candidate.entity_type === 'customer_dealer_token' && hasUnresolvedDuplicateReview(ctx);
   const isTerminal = DSI_STEWARD_TERMINAL_STATUSES.has((candidate.status || '').trim());
+  const rowActionsBlocked = isDsiStewardRowActionBlocked(candidate.status);
+  const stewardActionsDisabled = isTerminal || rowActionsBlocked || actionBusy;
   const planDuplicateBlocked = planRow?.duplicate_review_required === true;
   const dupPeerHintsExcludingSelf = useMemo(() => {
     const own = (candidate.normalized_key || '').trim();
@@ -463,6 +474,23 @@ export function DsiMappingStewardPanel({
     [candidate.suggested_entity_id, dupPeerForSameEntity?.suggested_entity_id, planRow?.suggested_target_id]
   );
   const dupSameEntityConflict = dupUnresolved && !isTerminal && dupSameEntityCaseLive === 'conflict';
+  const suffixTokenFamily = useMemo(
+    () =>
+      candidate.entity_type === 'customer_dealer_token' && customerNormalizedKeysOnPage?.length
+        ? detectSuffixTokenFamily(candidate.normalized_key, customerNormalizedKeysOnPage)
+        : null,
+    [candidate.entity_type, candidate.normalized_key, customerNormalizedKeysOnPage]
+  );
+  const clusterPeersExcludingSelf = useMemo(() => {
+    const own = (candidate.normalized_key || '').trim();
+    const members = duplicateClusterMembers ?? [];
+    return members.filter((k) => k.trim() !== own);
+  }, [duplicateClusterMembers, candidate.normalized_key]);
+
+  useEffect(() => {
+    const first = dupPeerHintsExcludingSelf[0]?.normalized_key ?? '';
+    setDupDifferentPeerKey(first);
+  }, [candidate.id, dupPeerHintsExcludingSelf]);
 
   return (
     <Stack spacing={2} sx={{ mt: 2 }} data-testid="dsi-steward-panel">
@@ -484,6 +512,35 @@ export function DsiMappingStewardPanel({
             a <strong>sell-out counterparty</strong> (often inter-distributor transfer). You may still map as{' '}
             <strong>customer</strong> for analysis on the selling distributor&apos;s file. It does{' '}
             <strong>not</strong> update the buyer&apos;s inventory SOH — that comes from their own DSI inventory import.
+          </Typography>
+        </Alert>
+      ) : null}
+      {suffixTokenFamily && suffixTokenFamily.length >= 3 ? (
+        <Alert severity="info" variant="outlined" data-testid="dsi-suffix-token-family">
+          <Typography variant="body2">
+            <strong>Suffix token family</strong> (informational — not auto-duplicates):{' '}
+            {suffixTokenFamily.map((k) => (
+              <code key={k} style={{ marginRight: 6 }}>
+                {k}
+              </code>
+            ))}
+            . Review each token separately; only scored pairs appear under possible duplicates.
+          </Typography>
+        </Alert>
+      ) : null}
+      {clusterPeersExcludingSelf.length > 0 ? (
+        <Alert severity="info" variant="outlined" data-testid="dsi-duplicate-cluster">
+          <Typography variant="body2">
+            <strong>Duplicate cluster on this page</strong> ({clusterPeersExcludingSelf.length + 1} tokens linked by
+            hints):{' '}
+            <code>{candidate.normalized_key}</code>
+            {clusterPeersExcludingSelf.map((k) => (
+              <span key={k}>
+                {', '}
+                <code>{k}</code>
+              </span>
+            ))}
+            . Open each row to confirm Same/Different — pairwise review is still required.
           </Typography>
         </Alert>
       ) : null}
@@ -597,10 +654,12 @@ export function DsiMappingStewardPanel({
                   variant="outlined"
                   pending={duplicateDifferentEntity.isPending}
                   pendingLabel="Saving…"
-                  disabled={actionBusy || duplicateSameEntity.isPending || !dupHints[0]?.normalized_key}
+                  disabled={
+                    actionBusy || duplicateSameEntity.isPending || !dupDifferentPeerKey.trim()
+                  }
                   onClick={() =>
                     void duplicateDifferentEntity.mutateAsync({
-                      peer_normalized_key: dupHints[0].normalized_key,
+                      peer_normalized_key: dupDifferentPeerKey.trim(),
                       audit_note: dupAuditNote.trim() || undefined,
                     })
                   }
@@ -642,6 +701,12 @@ export function DsiMappingStewardPanel({
           </>
         ) : null}
       </Typography>
+      {rowActionsBlocked && !isTerminal ? (
+        <Alert severity="info" data-testid="dsi-steward-row-actions-blocked">
+          Duplicate review recorded for this row — mapping actions are disabled. Select another token or close the
+          steward panel.
+        </Alert>
+      ) : null}
       {lastSuccessLabel && !actionBusy ? (
         <Alert severity="success" onClose={() => setLastSuccessLabel(null)} data-testid="dsi-steward-row-success">
           {lastSuccessLabel}
@@ -653,7 +718,7 @@ export function DsiMappingStewardPanel({
           size="small"
           pending={createProvCustomer.isPending}
           pendingLabel="Creating…"
-          disabled={isTerminal || candidate.entity_type !== 'customer_dealer_token' || actionBusy}
+          disabled={stewardActionsDisabled || candidate.entity_type !== 'customer_dealer_token'}
           onClick={() => {
             setDisplayName(
               stewardLabels.customerAccount || candidate.normalized_key || stewardLabels.distributorOrProductLabel
@@ -671,7 +736,7 @@ export function DsiMappingStewardPanel({
           size="small"
           pending={mapCustomer.isPending}
           pendingLabel="Mapping…"
-          disabled={isTerminal || candidate.entity_type !== 'customer_dealer_token' || actionBusy}
+          disabled={stewardActionsDisabled || candidate.entity_type !== 'customer_dealer_token'}
           onClick={() => {
             setCustQ('');
             setPickCustomerId('');
@@ -686,7 +751,7 @@ export function DsiMappingStewardPanel({
           size="small"
           pending={markOpenChannel.isPending}
           pendingLabel="Saving…"
-          disabled={isTerminal || candidate.entity_type !== 'customer_dealer_token' || actionBusy}
+          disabled={stewardActionsDisabled || candidate.entity_type !== 'customer_dealer_token'}
           onClick={() => {
             setOcNamedConfirm(false);
             setOcStrategicConfirm(false);
@@ -701,7 +766,7 @@ export function DsiMappingStewardPanel({
           size="small"
           pending={mapDistributor.isPending}
           pendingLabel="Mapping…"
-          disabled={isTerminal || candidate.entity_type !== 'distributor_token' || actionBusy}
+          disabled={stewardActionsDisabled || candidate.entity_type !== 'distributor_token'}
           onClick={() => {
             setDistQ('');
             setPickDistributorId('');
@@ -716,7 +781,7 @@ export function DsiMappingStewardPanel({
           size="small"
           pending={createProvDistributor.isPending}
           pendingLabel="Creating…"
-          disabled={isTerminal || candidate.entity_type !== 'distributor_token' || actionBusy}
+          disabled={stewardActionsDisabled || candidate.entity_type !== 'distributor_token'}
           onClick={() => {
             setDistDisplayName(stewardLabels.distributorOrProductLabel);
             setDistConfirmSuspicious(false);
@@ -731,7 +796,7 @@ export function DsiMappingStewardPanel({
           size="small"
           pending={resolveProduct.isPending}
           pendingLabel="Resolving…"
-          disabled={isTerminal || candidate.entity_type !== 'product_identifier' || actionBusy}
+          disabled={stewardActionsDisabled || candidate.entity_type !== 'product_identifier'}
           onClick={() => {
             setProdQ(dsiRawProductTokenForCandidate(candidate));
             setPickProductId('');
@@ -750,7 +815,7 @@ export function DsiMappingStewardPanel({
           size="small"
           pending={ignoreCand.isPending}
           pendingLabel="Ignoring…"
-          disabled={isTerminal || actionBusy}
+          disabled={stewardActionsDisabled}
           onClick={() => void ignoreCand.mutateAsync({ notes: null }).catch(() => {})}
           data-testid="dsi-action-ignore"
         >

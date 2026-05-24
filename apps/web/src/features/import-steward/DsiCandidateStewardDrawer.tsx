@@ -16,6 +16,8 @@ export function DsiCandidateStewardDrawer({
   onPlanRefresh,
   lookupPeerCandidate,
   onOpenPeerByNormalizedKey,
+  customerNormalizedKeysOnPage,
+  duplicateClusterMembers,
 }: {
   importJobId: number;
   candidate: DsiCandidateRow;
@@ -27,6 +29,8 @@ export function DsiCandidateStewardDrawer({
   onPlanRefresh?: () => void | Promise<void>;
   lookupPeerCandidate?: (normalizedKey: string) => DsiCandidateRow | null;
   onOpenPeerByNormalizedKey?: (normalizedKey: string) => void;
+  customerNormalizedKeysOnPage?: readonly string[];
+  duplicateClusterMembers?: readonly string[];
 }) {
   const title =
     candidate.entity_type === 'distributor_token'
@@ -51,8 +55,11 @@ export function DsiCandidateStewardDrawer({
         bgcolor: 'background.paper',
         display: 'flex',
         flexDirection: 'column',
-        maxHeight: { xs: 'none', md: '72vh' },
+        maxHeight: { xs: 'none', md: 'min(72vh, calc(100vh - 96px))' },
         overflow: 'hidden',
+        position: { md: 'sticky' },
+        top: { md: 80 },
+        alignSelf: { md: 'flex-start' },
       }}
     >
       <Stack
@@ -77,6 +84,8 @@ export function DsiCandidateStewardDrawer({
           onPlanRefresh={onPlanRefresh}
           lookupPeerCandidate={lookupPeerCandidate}
           onOpenPeerByNormalizedKey={onOpenPeerByNormalizedKey}
+          customerNormalizedKeysOnPage={customerNormalizedKeysOnPage}
+          duplicateClusterMembers={duplicateClusterMembers}
         />
       </Box>
     </Box>

@@ -145,6 +145,8 @@ def _raise_if_import_pipeline_busy(job: ImportJob) -> None:
 
 def _prepare_dsi_pipeline_dispatch(job_id: int) -> None:
     """Mark job running before broker dispatch so progress/background UI stay accurate."""
+    from app.services.imports.import_job_background_metadata import persist_pipeline_queued_at
+
     with SessionLocal() as sync_db:
         j = sync_db.get(ImportJob, job_id)
         if j is None:
@@ -152,6 +154,7 @@ def _prepare_dsi_pipeline_dispatch(job_id: int) -> None:
         _raise_if_import_pipeline_busy(j)
         j.import_mode = "validate"
         j.status = "running"
+        persist_pipeline_queued_at(sync_db, j)
         sync_db.commit()
 
 
@@ -639,6 +642,8 @@ async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
         "total_rows": total_rows_from_meta,
         "pct": 0,
         "task_state": None,
+        "pipeline_queued_at": meta.get("pipeline_queued_at"),
+        "pipeline_started_at": meta.get("pipeline_started_at"),
     }
 
     from app.services.imports.background_tasks import read_celery_with_timeout

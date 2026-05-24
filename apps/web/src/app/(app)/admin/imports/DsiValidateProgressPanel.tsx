@@ -24,6 +24,8 @@ export type DsiValidateProgress = {
   total_rows?: number;
   pct?: number;
   task_state?: string | null;
+  pipeline_queued_at?: string | null;
+  pipeline_started_at?: string | null;
 };
 
 const DSI_PROGRESS_PHASES = [
@@ -93,6 +95,15 @@ export function DsiValidateProgressPanel({ progress, isRunning }: DsiValidatePro
 
   const currentPhaseIndex = PHASE_ORDER.indexOf(rawPhase as PhaseId);
 
+  const queuedAt = progress?.pipeline_queued_at;
+  const startedAt = progress?.pipeline_started_at;
+  const queueWaitLabel =
+    queuedAt && !startedAt && rawPhase === 'queued'
+      ? 'Waiting for worker to pick up the task…'
+      : queuedAt && startedAt
+        ? null
+        : null;
+
   const phaseDescription =
     rawPhase === 'loading_caches'
       ? 'Pre-loading entity resolution caches (distributors, products, customers). This is a one-time cost per job.'
@@ -147,6 +158,11 @@ export function DsiValidateProgressPanel({ progress, isRunning }: DsiValidatePro
             {elapsedSec != null ? (
               <Typography variant="caption" color="text.secondary">
                 Elapsed {formatElapsed(elapsedSec)}
+              </Typography>
+            ) : null}
+            {queueWaitLabel ? (
+              <Typography variant="caption" color="text.secondary">
+                {queueWaitLabel}
               </Typography>
             ) : null}
           </Stack>
