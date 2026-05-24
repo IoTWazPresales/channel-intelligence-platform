@@ -66,8 +66,6 @@ _GENERIC_NAME_TOKENS: frozenset[str] = frozenset(
         "system",
         "electronics",
         "electronic",
-        "computers",
-        "computer",
         "holdings",
         "holding",
         "group",
@@ -220,83 +218,6 @@ def _leading_distinctive_token(normalized: str) -> str:
     return ""
 
 
-def _remainder_after_short_leading_prefix(normalized: str, lead_token: str) -> str:
-    """Drop the short leading distinctive token, then generic tokens from the tail."""
-    tokens = (normalized or "").split()
-    if not tokens or tokens[0] != lead_token:
-        return ""
-    tail = [t for t in tokens[1:] if t not in _GENERIC_NAME_TOKENS]
-    return " ".join(tail)
-
-
-def _token_prefix_extension_score(
-    left: str,
-    right: str,
-    *,
-    min_short_len: int,
-    full_string_threshold: float,
-) -> float | None:
-    """Score when the shorter string is a whole-token prefix of the longer (e.g. barak / barakah)."""
-    short, long = (left, right) if len(left) <= len(right) else (right, left)
-    if len(short) < min_short_len:
-        return None
-    if short != long and not long.startswith(short):
-        return None
-    ratio = SequenceMatcher(None, left, right).ratio()
-    if ratio >= full_string_threshold:
-        return round(float(ratio), 4)
-    if long.startswith(short + " ") and ratio >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
-        return round(float(max(ratio, full_string_threshold)), 4)
-    if long.startswith(short) and len(short) >= 4 and ratio >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
-        return round(float(max(ratio, full_string_threshold)), 4)
-    return None
-
-
-def _duplicate_score_from_remainders(
-    rem_a: str,
-    rem_b: str,
-    *,
-    full_string_threshold: float,
-    distinctive_threshold: float,
-) -> float | None:
-    """Similarity cascade on post-prefix remainders (no short-prefix boost)."""
-    if len(rem_a) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN or len(rem_b) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN:
-        return None
-    if _distinctive_short_token_flip_should_suppress(rem_a, rem_b):
-        return None
-    prefix_score = _token_prefix_extension_score(
-        rem_a,
-        rem_b,
-        min_short_len=DSI_DUPLICATE_MIN_DISTINCTIVE_LEN,
-        full_string_threshold=full_string_threshold,
-    )
-    if prefix_score is not None:
-        return prefix_score
-    dist_ratio = SequenceMatcher(None, rem_a, rem_b).ratio()
-    if dist_ratio < distinctive_threshold:
-        if _leading_distinctive_token_variant(rem_a, rem_b):
-            ta = rem_a.split()
-            tb = rem_b.split()
-            head_a = " ".join(ta[:2])
-            head_b = " ".join(tb[:2])
-            head_ratio = SequenceMatcher(None, head_a, head_b).ratio()
-            if head_ratio >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
-                return round(float(head_ratio), 4)
-        return None
-    full_ratio = SequenceMatcher(None, rem_a, rem_b).ratio()
-    if dist_ratio >= DSI_DUPLICATE_DISTINCTIVE_EXACT_CUTOFF:
-        if full_ratio >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
-            return round(float(full_ratio), 4)
-        if rem_a == rem_b:
-            combined = max(full_ratio, dist_ratio * 0.95)
-            if combined >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
-                return round(float(combined), 4)
-        return None
-    if full_ratio >= full_string_threshold:
-        return round(float(full_ratio), 4)
-    return None
-
-
 def dsi_duplicate_similarity_score(
     name_a: str | None,
     name_b: str | None,
@@ -321,26 +242,21 @@ def dsi_duplicate_similarity_score(
         lead_b
     ) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN
     if short_prefix_pair:
-        rem_a = _remainder_after_short_leading_prefix(norm_a, lead_a)
-        rem_b = _remainder_after_short_leading_prefix(norm_b, lead_b)
-        if not rem_a or not rem_b:
+        if lead_a != lead_b:
             return None
-        return _duplicate_score_from_remainders(
-            rem_a,
-            rem_b,
-            full_string_threshold=full_string_threshold,
-            distinctive_threshold=distinctive_threshold,
-        )
 
     dist_a, _gen_a = split_distinctive_and_generic_tokens(norm_a)
     dist_b, _gen_b = split_distinctive_and_generic_tokens(norm_b)
-    if len(dist_a) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN or len(dist_b) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN:
-        return None
+    if not short_prefix_pair:
+        if len(dist_a) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN or len(dist_b) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN:
+            return None
 
     if _distinctive_short_token_flip_should_suppress(dist_a, dist_b):
         return None
 
     dist_ratio = SequenceMatcher(None, dist_a, dist_b).ratio()
+    if short_prefix_pair:
+        dist_ratio = max(dist_ratio, distinctive_threshold)
     if dist_ratio < distinctive_threshold:
         if _leading_distinctive_token_variant(dist_a, dist_b):
             ta = dist_a.split()
@@ -350,14 +266,6 @@ def dsi_duplicate_similarity_score(
             head_ratio = SequenceMatcher(None, head_a, head_b).ratio()
             if head_ratio >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
                 return round(float(head_ratio), 4)
-        norm_prefix_score = _token_prefix_extension_score(
-            norm_a,
-            norm_b,
-            min_short_len=DSI_DUPLICATE_MIN_NORMALIZED_LEN,
-            full_string_threshold=full_string_threshold,
-        )
-        if norm_prefix_score is not None:
-            return norm_prefix_score
         return None
 
     full_ratio = SequenceMatcher(None, norm_a, norm_b).ratio()
@@ -369,8 +277,12 @@ def dsi_duplicate_similarity_score(
             combined = max(full_ratio, dist_ratio * 0.95)
             if combined >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
                 return round(float(combined), 4)
+        if short_prefix_pair:
+            return round(float(max(full_ratio, distinctive_threshold)), 4)
         return None
 
     if full_ratio >= full_string_threshold:
         return round(float(full_ratio), 4)
+    if short_prefix_pair and dist_ratio >= distinctive_threshold:
+        return round(float(max(full_ratio, distinctive_threshold)), 4)
     return None
