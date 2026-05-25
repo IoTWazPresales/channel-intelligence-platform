@@ -31,7 +31,6 @@ export function useDsiCandidatesPage(
       party: stewardFilters.party,
       verifyNameOnly: stewardFilters.verifyNameOnly,
       specialCategoryOnly: stewardFilters.specialCategoryOnly,
-      possibleDuplicatesOnly: stewardFilters.possibleDuplicatesOnly,
       duplicateUnresolvedOnly: stewardFilters.duplicateUnresolvedOnly,
     }),
     [
@@ -39,7 +38,6 @@ export function useDsiCandidatesPage(
       stewardFilters.party,
       stewardFilters.verifyNameOnly,
       stewardFilters.specialCategoryOnly,
-      stewardFilters.possibleDuplicatesOnly,
       stewardFilters.duplicateUnresolvedOnly,
     ]
   );
@@ -51,7 +49,6 @@ export function useDsiCandidatesPage(
     serverFilterSlice.party,
     serverFilterSlice.verifyNameOnly,
     serverFilterSlice.specialCategoryOnly,
-    serverFilterSlice.possibleDuplicatesOnly,
     serverFilterSlice.duplicateUnresolvedOnly,
   ]);
 

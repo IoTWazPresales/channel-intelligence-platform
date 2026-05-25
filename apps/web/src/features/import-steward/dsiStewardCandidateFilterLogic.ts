@@ -16,7 +16,6 @@ export type DsiStewardCandidateFilterState = {
   party: DsiStewardPartyFilter;
   verifyNameOnly: boolean;
   specialCategoryOnly: boolean;
-  possibleDuplicatesOnly: boolean;
   duplicateUnresolvedOnly: boolean;
 };
 
@@ -26,7 +25,6 @@ export const defaultDsiStewardCandidateFilterState = (): DsiStewardCandidateFilt
   party: 'all',
   verifyNameOnly: false,
   specialCategoryOnly: false,
-  possibleDuplicatesOnly: false,
   duplicateUnresolvedOnly: false,
 });
 
@@ -213,7 +211,6 @@ function matchesToggles(r: FilterSlice, s: DsiStewardCandidateFilterState): bool
     if (!ok) return false;
   }
   if (s.specialCategoryOnly && !contextSpecialCategory(r.context)) return false;
-  if (s.possibleDuplicatesOnly && contextPossibleDuplicateOf(r.context).length === 0) return false;
   if (s.duplicateUnresolvedOnly && !hasUnresolvedDuplicateReview(r.context)) return false;
   return true;
 }
@@ -240,7 +237,6 @@ export function dsiStewardFiltersAreDefault(filters: DsiStewardCandidateFilterSt
     filters.party === 'all' &&
     !filters.verifyNameOnly &&
     !filters.specialCategoryOnly &&
-    !filters.possibleDuplicatesOnly &&
     !filters.duplicateUnresolvedOnly
   );
 }

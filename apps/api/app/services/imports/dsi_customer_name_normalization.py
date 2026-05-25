@@ -23,15 +23,23 @@ _LEGAL_SUFFIX_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
         r"\binc\.?\b",
         r"\bltd\.?\b",
         r"\bllc\.?\b",
+        r"\bstate\s+owned\s+company\s+ltd\.?",
+        r"\bstate\s+owned\s+company\b",
+        r"\bsoc\s+ltd\.?",
+        r"\brf\b",
         r"\bnpc\b",
         r"\bcc\b",
+        r"\bsoc\b",
     )
 )
 
-_TRADING_AS = re.compile(
-    r"\b(?:t/a|a/t|trading\s+as|ta:)\s+",
+# Trading-as markers: parenthetical, inline (prefix/mid), and trailing suffix.
+_TRADING_AS_PAREN = re.compile(r"\(\s*(?:t/a|a/t|ta:)\s*\)", re.IGNORECASE)
+_TRADING_AS_INLINE = re.compile(
+    r"\b(?:t/a|a/t|trading\s+as|trading-as|ta:)\s*",
     re.IGNORECASE,
 )
+_TRADING_AS_SUFFIX = re.compile(r"\s+(?:t/a|a/t)\s*$", re.IGNORECASE)
 
 
 def normalize_customer_name_for_similarity(raw: str | None) -> str:
@@ -39,9 +47,12 @@ def normalize_customer_name_for_similarity(raw: str | None) -> str:
     s = (raw or "").strip()
     if not s:
         return ""
-    s = _TRADING_AS.sub(" ", s)
+    s = _TRADING_AS_PAREN.sub(" ", s)
+    s = _TRADING_AS_INLINE.sub(" ", s)
+    s = _TRADING_AS_SUFFIX.sub(" ", s)
     for pat in _LEGAL_SUFFIX_PATTERNS:
         s = pat.sub(" ", s)
+    s = re.sub(r"\s*&\s*", " and ", s)
     s = re.sub(r"[,;]+", " ", s)
     s = re.sub(r"[.()]+", " ", s)
     s = re.sub(r"\s+", " ", s).strip().lower()

@@ -35,9 +35,6 @@ export function serverFilterParamsFromStewardState(
   if (filters.specialCategoryOnly) {
     params.special_category_only = true;
   }
-  if (filters.possibleDuplicatesOnly) {
-    params.possible_duplicates_only = true;
-  }
   if (filters.duplicateUnresolvedOnly) {
     params.duplicate_unresolved_only = true;
   }
