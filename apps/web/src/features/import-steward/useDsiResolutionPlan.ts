@@ -5,9 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiGet, apiPost } from '@/lib/api';
 
+import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
+
 import { notifyDsiAsyncPipelineStarted } from './dsiAsyncPipelineRun';
+import { pollDsiResolutionPlanApplyTask } from './dsiResolutionPlanApplyPoll';
 import { DSI_STEWARD_CONFIG, invalidateDsiCatalogQueries, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
-import { patchDsiCandidatesCache } from './dsiStewardCacheUpdates';
 import type { DsiCatalogOpt, DsiPlanRowOverride, DsiUnresolvedGeoRowDto } from './dsiSteward.types';
 import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
 import { summarizeApplyAllReadyProvisional } from './dsiResolutionPlanDisplay';
@@ -163,26 +165,28 @@ export function useDsiResolutionPlan({
       candidateIds: number[];
       overrides: Array<Record<string, unknown>>;
       globalSuspicious: boolean;
-    }) =>
-      apiPost<Record<string, unknown>>(`/api/v1/mappings/import-jobs/${importJobId}/dsi-resolution-plan/apply`, {
+    }) => {
+      const body = {
         candidate_ids: args.candidateIds,
         ...planDefaultsBody(),
         partner_tier: 'unmanaged',
         provisional_notes_summary: null,
         confirm_for_suspicious_distributor_token: args.globalSuspicious,
         overrides: args.overrides.length ? args.overrides : null,
-      }),
-    onMutate: async (args) => {
-      const idSet = new Set(args.candidateIds);
-      const previous = patchDsiCandidatesCache(qc, importJobId, (rows) =>
-        rows.map((c) => (idSet.has(c.id) ? { ...c, status: 'resolved' } : c))
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) {
-        qc.setQueryData(DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId), ctx.previous);
-      }
+      };
+      const enqueued = await apiPost<{
+        import_job_id: number;
+        task_id: string;
+        async_poll?: boolean;
+      }>(`/api/v1/mappings/import-jobs/${importJobId}/dsi-resolution-plan/apply-async`, body);
+      registerClientBackgroundTask({
+        taskId: enqueued.task_id,
+        importJobId,
+        kind: 'dsi_resolution_plan_apply',
+        label: `Applying resolution plan (DSI job ${importJobId})`,
+      });
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+      return pollDsiResolutionPlanApplyTask(importJobId, enqueued.task_id);
     },
     onSuccess: (data) => {
       const applied = Number(data.applied ?? 0);

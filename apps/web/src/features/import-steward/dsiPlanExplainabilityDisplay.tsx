@@ -72,14 +72,31 @@ export function DsiPlanWhyPanel({ planWhy }: { planWhy: DsiPlanWhy | null | unde
 
 export function dsiCandidateCorroborationChipLabel(ctx: Record<string, unknown> | null | undefined): string | null {
   if (!ctx) return null;
+  const tie = ctx.shipment_product_tiebreak;
+  if (tie && typeof tie === 'object' && !Array.isArray(tie) && (tie as Record<string, unknown>).resolved_product_id) {
+    return 'Shipment tie-break (1 product)';
+  }
   const markers = ctx.corroboration_markers;
   if (Array.isArray(markers) && markers.length > 0) {
-    if (markers.includes('shipment_evidence_product')) return 'Shipment corroborated';
-    if (markers.includes('shipment_evidence_customer')) return 'Shipment corroborated';
+    const sec = ctx.shipment_evidence_corroboration;
+    const signalOnly =
+      sec && typeof sec === 'object' && !Array.isArray(sec) && (sec as Record<string, unknown>).signal_only === true;
+    if (markers.includes('shipment_evidence_product') || markers.includes('shipment_evidence_customer')) {
+      if (signalOnly) {
+        const n = (sec as Record<string, unknown>).best_match_count;
+        if (typeof n === 'number' && n > 0) return `Shipment lines found (${n})`;
+        return 'Shipment lines found';
+      }
+      return 'Shipment corroborated';
+    }
   }
-  const sec = ctx.shipment_evidence_corroboration;
-  if (sec && typeof sec === 'object' && !Array.isArray(sec)) {
-    const n = (sec as Record<string, unknown>).best_match_count;
+  const secOnly = ctx.shipment_evidence_corroboration;
+  if (secOnly && typeof secOnly === 'object' && !Array.isArray(secOnly)) {
+    const n = (secOnly as Record<string, unknown>).best_match_count;
+    if ((secOnly as Record<string, unknown>).signal_only === true) {
+      if (typeof n === 'number' && n > 0) return `Shipment lines found (${n})`;
+      return 'Shipment lines found';
+    }
     if (typeof n === 'number' && n > 0) return `Shipment corroborated (${n})`;
     return 'Shipment corroborated';
   }

@@ -52,6 +52,8 @@ from app.services.imports.dsi_steward_geo_catalog import (
     create_region_source_token_alias_sync,
 )
 from app.services.imports.dsi_bulk_provisional_customers_sync import run_dsi_bulk_provisional_customers_sync
+from app.services.imports.dsi_resolution_plan_apply_sync import run_dsi_resolution_plan_apply_sync
+from app.services.imports.dsi_steward_task_dispatch import assert_dsi_steward_background_dispatch_allowed
 from app.services.imports.dsi_steward_candidate_ops import (
     StewardOpError,
     _first_sample_raw,
@@ -76,8 +78,9 @@ from app.services.imports.dsi_steward_candidate_ops import (
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Dev-only in-process bulk provisional task results (when broker unavailable).
-_dev_dsi_bulk_provisional_results: dict[str, dict[str, Any]] = {}
+# Dev-only in-process DSI bulk steward task results (provisional batch, resolution-plan apply).
+_dev_dsi_bulk_task_results: dict[str, dict[str, Any]] = {}
+_dev_dsi_bulk_provisional_results = _dev_dsi_bulk_task_results
 
 
 def _require_admin_role(x_user_role: str | None = Header(default=None, alias="X-User-Role")) -> None:
@@ -721,7 +724,7 @@ def _enqueue_dsi_bulk_provisional_customers(
             def _in_process() -> None:
                 try:
                     out = _run_sync()
-                    _dev_dsi_bulk_provisional_results[task_id] = {
+                    _dev_dsi_bulk_task_results[task_id] = {
                         "state": "SUCCESS",
                         "result": out,
                     }
@@ -731,7 +734,7 @@ def _enqueue_dsi_bulk_provisional_customers(
                         job_id,
                         task_id,
                     )
-                    _dev_dsi_bulk_provisional_results[task_id] = {
+                    _dev_dsi_bulk_task_results[task_id] = {
                         "state": "FAILURE",
                         "error": str(exc)[:800],
                     }
@@ -749,7 +752,7 @@ def _enqueue_dsi_bulk_provisional_customers(
 
         out = _run_sync()
         task_id = f"sync-bulk-prov-{uuid.uuid4().hex}"
-        _dev_dsi_bulk_provisional_results[task_id] = {"state": "SUCCESS", "result": out}
+        _dev_dsi_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
         return task_id, False
 
 
@@ -791,11 +794,11 @@ async def dsi_steward_bulk_provisional_apply_async(
 @router.get("/import-jobs/{job_id}/dsi-steward-bulk-task/{task_id}", status_code=200)
 async def dsi_steward_bulk_task_status(job_id: int, task_id: str) -> dict[str, Any]:
     """Poll Celery (or dev in-process) bulk steward task state and result."""
-    dev_hit = _dev_dsi_bulk_provisional_results.get(task_id)
+    dev_hit = _dev_dsi_bulk_task_results.get(task_id)
     if dev_hit is not None:
         state = dev_hit.get("state", "SUCCESS")
         if state in ("SUCCESS", "FAILURE"):
-            _dev_dsi_bulk_provisional_results.pop(task_id, None)
+            _dev_dsi_bulk_task_results.pop(task_id, None)
         out: dict[str, Any] = {
             "import_job_id": job_id,
             "task_id": task_id,
@@ -1011,13 +1014,150 @@ async def dsi_resolution_plan_effective(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+def _dsi_resolution_plan_apply_payload_from_body(body: DsiResolutionPlanApplyBody) -> dict[str, Any]:
+    ov_list = [o.model_dump(exclude_unset=True) for o in (body.overrides or [])]
+    return {
+        "candidate_ids": list(body.candidate_ids),
+        "default_region_id": body.default_region_id,
+        "default_channel_id": body.default_channel_id,
+        "partner_tier": body.partner_tier,
+        "provisional_notes_summary": body.provisional_notes_summary,
+        "confirm_for_suspicious_distributor_token": body.confirm_for_suspicious_distributor_token,
+        "overrides": ov_list or None,
+    }
+
+
+def _enqueue_dsi_resolution_plan_apply(
+    job_id: int,
+    payload: dict[str, Any],
+) -> tuple[str, bool]:
+    """Return (task_id, async_poll_required)."""
+    settings = get_settings()
+    task_name = "imports.dsi_resolution_plan_apply"
+
+    def _run_sync() -> dict[str, Any]:
+        return run_dsi_resolution_plan_apply_sync(job_id, payload)
+
+    try:
+        result = celery_app.send_task(task_name, args=[job_id, payload])
+        return str(result.id), True
+    except Exception:
+        logger.exception(
+            "dsi_resolution_plan_apply: Celery enqueue failed job_id=%s task=%s", job_id, task_name
+        )
+        if settings.cip_dev_celery_dispatch == "in_process_thread":
+            task_id = f"dev-plan-apply-{uuid.uuid4().hex}"
+
+            def _in_process() -> None:
+                try:
+                    out = _run_sync()
+                    _dev_dsi_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
+                except Exception as exc:
+                    logger.exception(
+                        "dsi_resolution_plan_apply in-process failed job_id=%s task_id=%s",
+                        job_id,
+                        task_id,
+                    )
+                    _dev_dsi_bulk_task_results[task_id] = {
+                        "state": "FAILURE",
+                        "error": str(exc)[:800],
+                    }
+
+            DEV_CELERY_LOGGER.warning(
+                "ENQUEUE: dsi_resolution_plan_apply job_id=%s — in-process thread (DEV ONLY).",
+                job_id,
+            )
+            threading.Thread(
+                target=_in_process,
+                name=f"dsi-plan-apply-{job_id}",
+                daemon=True,
+            ).start()
+            return task_id, True
+
+        out = _run_sync()
+        task_id = f"sync-plan-apply-{uuid.uuid4().hex}"
+        _dev_dsi_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
+        return task_id, False
+
+
+@router.post("/import-jobs/{job_id}/dsi-resolution-plan/apply-async", status_code=202)
+async def dsi_resolution_plan_apply_async(
+    job_id: int, body: DsiResolutionPlanApplyBody, db: AsyncSession = Depends(get_db)
+):
+    """Enqueue resolution-plan apply (Celery); poll dsi-steward-bulk-task/{task_id} for progress."""
+    await _assert_dsi_import_job(db, job_id)
+    job = await db.get(ImportJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Import job not found")
+
+    def _assert_allowed(sess: Session) -> None:
+        j = sess.get(ImportJob, job_id)
+        if j is None:
+            raise ValueError("Import job not found")
+        assert_dsi_steward_background_dispatch_allowed(sess, j)
+
+    try:
+        await db.run_sync(_assert_allowed)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    payload = _dsi_resolution_plan_apply_payload_from_body(body)
+    task_id, async_poll = _enqueue_dsi_resolution_plan_apply(job_id, payload)
+    from datetime import datetime, timezone
+
+    from app.utils.json_safe import to_jsonable
+
+    m = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    m["dsi_bulk_task"] = {
+        "task_id": task_id,
+        "kind": "dsi_resolution_plan_apply",
+        "queued_at": datetime.now(timezone.utc).isoformat(),
+        "candidate_count": len(body.candidate_ids),
+    }
+    job.staged_metadata = to_jsonable(m)
+    await db.commit()
+    return {
+        "import_job_id": job_id,
+        "task_id": task_id,
+        "async_poll": async_poll,
+    }
+
+
 @router.post("/import-jobs/{job_id}/dsi-resolution-plan/apply", status_code=200)
 async def dsi_resolution_plan_apply_endpoint(
     job_id: int, body: DsiResolutionPlanApplyBody, db: AsyncSession = Depends(get_db)
 ):
-    """Apply steward actions for candidates that are **effectively ready** after baseline + overrides (reuse execute_* ops)."""
+    """Apply steward actions synchronously (small batches only; prefer apply-async for bulk)."""
     await _assert_dsi_import_job(db, job_id)
+    if len(body.candidate_ids) > 50:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": (
+                    "More than 50 candidates — use POST .../dsi-resolution-plan/apply-async "
+                    "and poll .../dsi-steward-bulk-task/{task_id}."
+                ),
+                "code": "use_async_resolution_plan_apply",
+            },
+        )
+    job = await db.get(ImportJob, job_id)
+    if job:
+
+        def _assert_allowed(sess: Session) -> None:
+            j = sess.get(ImportJob, job_id)
+            if j is None:
+                raise ValueError("Import job not found")
+            assert_dsi_steward_background_dispatch_allowed(sess, j)
+
+        try:
+            await db.run_sync(_assert_allowed)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    from app.services.imports.distributor_sales_inventory import _load_product_resolution_index
+
     ov_list = [o.model_dump(exclude_unset=True) for o in (body.overrides or [])]
+    prod_idx = await db.run_sync(_load_product_resolution_index)
     return await apply_dsi_resolution_plan_rows(
         db,
         job_id,
@@ -1028,6 +1168,7 @@ async def dsi_resolution_plan_apply_endpoint(
         provisional_notes_summary=body.provisional_notes_summary,
         confirm_for_suspicious_distributor_token=body.confirm_for_suspicious_distributor_token,
         overrides=ov_list or None,
+        product_index=prod_idx,
     )
 
 

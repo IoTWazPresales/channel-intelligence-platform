@@ -710,11 +710,12 @@ export function DsiImportJobResolutionSection({
           sx={{
             flex: 1,
             minWidth: 0,
+            minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
             gap: 1.5,
             maxHeight: { md: 'calc(100vh - 120px)' },
-            overflow: { md: 'auto' },
+            overflow: { md: 'hidden' },
           }}
         >
           {planApplySummary ? (

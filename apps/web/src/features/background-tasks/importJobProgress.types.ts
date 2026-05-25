@@ -29,6 +29,7 @@ export type BulkProvisionalTaskProgress = {
 export type BackgroundTaskKind =
   | 'dsi_pipeline'
   | 'dsi_bulk_provisional'
+  | 'dsi_resolution_plan_apply'
   | 'shipment_import'
   | 'product_master_commit';
 

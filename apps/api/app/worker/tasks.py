@@ -136,6 +136,33 @@ def dsi_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dic
         raise
 
 
+@celery_app.task(name="imports.dsi_resolution_plan_apply", bind=True, ack_late=True)
+def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
+    """Apply DSI resolution-plan rows (steward map/provisional/product) with progress updates."""
+    from app.services.imports.dsi_resolution_plan_apply_sync import run_dsi_resolution_plan_apply_sync
+
+    def _on_progress(current: int, total: int) -> None:
+        try:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "phase": "applying_resolution_plan",
+                    "phase_label": "Applying resolution plan",
+                    "current_row": current,
+                    "total_rows": total,
+                    "pct": round(current / total * 100) if total else 0,
+                },
+            )
+        except Exception:
+            pass
+
+    try:
+        return run_dsi_resolution_plan_apply_sync(job_id, payload, on_progress=_on_progress)
+    except Exception:
+        logger.exception("dsi_resolution_plan_apply failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.product_master_commit", bind=True, ack_late=True)
 def product_master_commit_task(self, job_id: int, confirm_destructive: bool) -> int:
     """Background Product Master apply: must be enqueued via try_enqueue_pm_commit_sync first."""

@@ -580,12 +580,73 @@ def plan_dsi_candidate_sync(
                             "needs_defaults": False,
                             "needs_confirm_suspicious_distributor": False,
                         }
+                elig_ids: list[int] = []
+                for ep in eligible or []:
+                    if not isinstance(ep, dict):
+                        continue
+                    try:
+                        v = int(ep.get("product_id"))
+                    except (TypeError, ValueError):
+                        continue
+                    if v > 0:
+                        elig_ids.append(v)
+                if not elig_ids:
+                    for x in amb.get("product_ids") or []:
+                        try:
+                            v = int(x)
+                        except (TypeError, ValueError):
+                            continue
+                        if v > 0:
+                            elig_ids.append(v)
+                from app.services.imports.dsi_product_shipment_tiebreak import (
+                    evidence_date_from_month,
+                    parse_candidate_shipment_evidence,
+                    try_shipment_tiebreak_product_id,
+                )
+
+                ship_ev = parse_candidate_shipment_evidence(ctx)
+                dom = ctx.get("dominant_unresolved_distributor_id")
+                try:
+                    dist_id = int(dom) if dom is not None else ship_ev.dominant_unresolved_distributor_id
+                except (TypeError, ValueError):
+                    dist_id = ship_ev.dominant_unresolved_distributor_id
+                ev_date = evidence_date_from_month(ship_ev.dominant_evidence_month)
+                pick, tie_src = try_shipment_tiebreak_product_id(
+                    session,
+                    eligible_product_ids=elig_ids,
+                    raw_token=raw,
+                    distributor_id=dist_id,
+                    evidence_date=ev_date,
+                    stored_distinct_product_ids=ship_ev.stored_distinct_product_ids,
+                )
+                if pick is not None:
+                    return {
+                        **base,
+                        "suggested_action": "resolve_product",
+                        "plan_status": "ready",
+                        "ready": True,
+                        "confidence": 0.78,
+                        "reason": (
+                            f"Shipment evidence tie-break ({tie_src or 'shipment'}) — single Product Master "
+                            f"match among eligible rows — propose ProductAlias bind"
+                        ),
+                        "suggested_target_id": int(pick),
+                        "needs_defaults": False,
+                        "needs_confirm_suspicious_distributor": False,
+                    }
             dom = ctx.get("dominant_unresolved_distributor_id")
+            from app.services.imports.dsi_product_shipment_tiebreak import (
+                evidence_date_from_month,
+                parse_candidate_shipment_evidence,
+            )
+
+            ship_ev = parse_candidate_shipment_evidence(ctx)
+            ev_date_plan = evidence_date_from_month(ship_ev.dominant_evidence_month)
             if dsi_historical_workflow_from_import_job(job) and dom is not None and plan_ctx is None:
                 pid_h, perr_h, tag_h, _ev_h = _resolve_product(
                     raw,
                     idx,
-                    None,
+                    ev_date_plan,
                     relax_inactive_dim_product_for_historical_dsi=dsi_historical_product_eligibility_relaxed_from_import_job(
                         job
                     ),
@@ -1108,6 +1169,9 @@ def build_dsi_resolution_plan_sync(
             "candidate_ids omitted — only the first 100 candidates were planned. "
             "Pass candidate_ids (e.g. current table page) for scoped planning."
         )
+    from app.services.imports.dsi_plan_target_labels import enrich_plan_rows_with_target_labels
+
+    out["rows"] = enrich_plan_rows_with_target_labels(session, rows)
     return out
 
 
@@ -1365,6 +1429,9 @@ def build_dsi_resolution_plan_effective_sync(
         rows.append(_attach_effective_fields_to_row(base, c, merged))
     ready_n = sum(1 for r in rows if r.get("ready"))
     hold_n = sum(1 for r in rows if r.get("hold_for_manual_review"))
+    from app.services.imports.dsi_plan_target_labels import enrich_plan_rows_with_target_labels
+
+    rows = enrich_plan_rows_with_target_labels(session, rows)
     return {
         "import_job_id": job_id,
         "rows": rows,
@@ -1527,16 +1594,22 @@ async def apply_dsi_resolution_plan_rows(
     provisional_notes_summary: str | None,
     confirm_for_suspicious_distributor_token: bool,
     overrides: list[dict[str, Any]] | None = None,
+    product_index: ProductResolutionIndex | None = None,
 ) -> dict[str, Any]:
     """Recompute baseline plan per id, merge overrides, then execute steward ops when effectively ready."""
+
+    if product_index is None:
+        product_index = await db.run_sync(_load_product_resolution_index)
+    shared_prod_idx = product_index
 
     def _plan_sync(sess: Session, cid: int, jid: int, dr: int | None, dc: int | None) -> dict[str, Any] | None:
         job = sess.get(ImportJob, jid)
         cand = sess.get(ImportEntityMappingCandidate, cid)
         if not job or not cand or cand.import_job_id != jid:
             return None
-        prod_idx = _load_product_resolution_index(sess)
-        return plan_dsi_candidate_sync(sess, cand, job, prod_idx, default_region_id=dr, default_channel_id=dc)
+        return plan_dsi_candidate_sync(
+            sess, cand, job, shared_prod_idx, default_region_id=dr, default_channel_id=dc
+        )
 
     by_cid: dict[int, dict[str, Any]] = {}
     if overrides:

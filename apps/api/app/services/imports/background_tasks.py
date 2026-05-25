@@ -29,6 +29,8 @@ def _task_label(job: ImportJob, *, kind: str) -> str:
     mode = (job.import_mode or "").strip().lower()
     if kind == "dsi_bulk_provisional":
         return f"Creating provisional customers (DSI job {jid})"
+    if kind == "dsi_resolution_plan_apply":
+        return f"Applying resolution plan (DSI job {jid})"
     if slug == "distributor_inventory":
         if mode == "validate":
             return f"Validating DSI import {jid}"
@@ -162,9 +164,17 @@ def _build_background_task_records(
         bulk = meta.get("dsi_bulk_task")
         if isinstance(bulk, dict):
             btid = bulk.get("task_id")
+            bulk_kind = bulk.get("kind")
             if isinstance(btid, str) and btid.strip():
+                kind_key = (
+                    str(bulk_kind).strip()
+                    if isinstance(bulk_kind, str) and bulk_kind.strip()
+                    else "dsi_bulk_provisional"
+                )
+                if kind_key not in ("dsi_bulk_provisional", "dsi_resolution_plan_apply"):
+                    kind_key = "dsi_bulk_provisional"
                 descriptors.append(
-                    ("bulk", btid.strip(), "dsi_bulk_provisional", _task_label(job, kind="dsi_bulk_provisional"))
+                    ("bulk", btid.strip(), kind_key, _task_label(job, kind=kind_key))
                 )
 
         if not descriptors:

@@ -269,13 +269,22 @@ export function planTargetSummary(
     return 'Set target ID';
   }
   const id = String(targetId);
-  if (action === 'map_customer') return `Customer master · id ${id}`;
-  if (action === 'map_distributor') return `Distributor master · id ${id}`;
+  const planLabel =
+    planRow && typeof planRow.suggested_target_label === 'string'
+      ? String(planRow.suggested_target_label).trim()
+      : '';
+  if (action === 'map_customer') {
+    return planLabel ? `${planLabel} (id ${id})` : `Customer master · id ${id}`;
+  }
+  if (action === 'map_distributor') {
+    return planLabel ? `${planLabel} (id ${id})` : `Distributor master · id ${id}`;
+  }
   if (action === 'resolve_product') {
+    if (planLabel) return `${planLabel} (id ${id})`;
     const pm = c ? dsiProductMatchSummaryCell(c.context) : '';
     return pm ? `Product id ${id} · ${pm}` : `Product master · id ${id}`;
   }
-  return `Id ${id}`;
+  return planLabel ? `${planLabel} (id ${id})` : `Id ${id}`;
 }
 
 export type PlanDialogRowDetailProps = {

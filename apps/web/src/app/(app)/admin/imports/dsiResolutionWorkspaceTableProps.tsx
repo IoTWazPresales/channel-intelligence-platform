@@ -322,6 +322,18 @@ export function buildDsiResolutionWorkspaceColumns(
             ) : pr?.ready === true ? (
               <Chip size="small" label="Ready" color="success" variant="outlined" />
             ) : null}
+            {typeof pr?.suggested_target_label === 'string' && pr.suggested_target_label.trim() ? (
+              <Typography
+                variant="caption"
+                color="text.primary"
+                data-testid={`dsi-plan-target-label-${r.id}`}
+                sx={{ maxWidth: 280 }}
+                noWrap
+                title={pr.suggested_target_label.trim()}
+              >
+                → {pr.suggested_target_label.trim()}
+              </Typography>
+            ) : null}
             {conf != null ? (
               <Typography variant="caption" color="text.secondary">
                 score {conf.toFixed(2)}
@@ -397,8 +409,6 @@ function DsiRowActions({
   pending?: boolean;
   onFocusRow: (row: DsiCandidateRow) => void;
 }) {
-  const isProduct = row.entity_type === DSI_ENTITY_PRODUCT;
-  const isCustomer = row.entity_type === DSI_ENTITY_CUSTOMER;
   const stop = (fn: () => void) => (ev: MouseEvent) => {
     ev.stopPropagation();
     fn();
@@ -417,34 +427,14 @@ function DsiRowActions({
 
   return (
     <Stack direction="row" spacing={0.5} justifyContent="flex-end" flexWrap="wrap" useFlexGap>
-      <DsiPendingButton size="small" variant="outlined" disabled={terminal} onClick={stop(() => onFocusRow(row))}>
-        {isProduct ? 'Resolve…' : 'Map…'}
-      </DsiPendingButton>
-      {!isProduct ? (
-        <DsiPendingButton size="small" variant="outlined" disabled={terminal} onClick={stop(() => onFocusRow(row))}>
-          Provisional…
-        </DsiPendingButton>
-      ) : null}
-      {isCustomer ? (
-        <DsiPendingButton
-          size="small"
-          variant="outlined"
-          color="warning"
-          disabled={terminal}
-          onClick={stop(() => onFocusRow(row))}
-          data-testid={`dsi-action-open-channel-inline-${row.id}`}
-        >
-          Open…
-        </DsiPendingButton>
-      ) : null}
       <DsiPendingButton
         size="small"
         variant="outlined"
-        color="error"
         disabled={terminal}
         onClick={stop(() => onFocusRow(row))}
+        data-testid={`dsi-action-review-${row.id}`}
       >
-        Reject…
+        Review…
       </DsiPendingButton>
     </Stack>
   );

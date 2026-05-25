@@ -1562,6 +1562,21 @@ def process_distributor_sales_inventory(
                 if cp:
                     a["shipment_corr_hit"] = True
                     a["shipment_corr_best"] = max(int(a.get("shipment_corr_best") or 0), int(cp.get("match_count") or 0))
+                    dps = cp.get("distinct_resolved_product_ids")
+                    if isinstance(dps, list):
+                        sid_set = a.setdefault("shipment_distinct_product_ids", set())
+                        if not isinstance(sid_set, set):
+                            sid_set = set()
+                            a["shipment_distinct_product_ids"] = sid_set
+                        for x in dps:
+                            try:
+                                sid_set.add(int(x))
+                            except (TypeError, ValueError):
+                                pass
+                    em = evidence_date.strftime("%Y-%m")
+                    mc = a.setdefault("shipment_evidence_month_counts", {})
+                    if isinstance(mc, dict):
+                        mc[em] = int(mc.get(em) or 0) + 1
         if sellout_attempt and rcustomer_id is None:
             ckey = _customer_candidate_identity_norm(cust_raw, dg_raw)
             k = ("customer_dealer_token", ckey)
@@ -1722,6 +1737,14 @@ def process_distributor_sales_inventory(
             dist_unresolved = data.pop("_dist_ids_unresolved", None)
             if isinstance(dist_unresolved, set) and len(dist_unresolved) == 1:
                 ctx["dominant_unresolved_distributor_id"] = int(next(iter(dist_unresolved)))
+            ship_ids = data.pop("shipment_distinct_product_ids", None)
+            if isinstance(ship_ids, set) and ship_ids:
+                ctx["shipment_distinct_product_ids"] = sorted(int(x) for x in ship_ids if int(x) > 0)[:32]
+            month_counts = data.pop("shipment_evidence_month_counts", None)
+            if isinstance(month_counts, dict) and month_counts:
+                dom_month = max(month_counts.items(), key=lambda kv: int(kv[1] or 0))[0]
+                if isinstance(dom_month, str) and dom_month.strip():
+                    ctx["dominant_evidence_month"] = dom_month.strip()[:7]
             acc = data.pop("_pe_acc", None)
             if isinstance(acc, dict):
                 amb = acc.get("amb")
