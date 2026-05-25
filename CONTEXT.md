@@ -104,7 +104,11 @@ GET http://localhost:3000/api/v1/imports/jobs/733/dsi-progress
 ### Tests (no DB)
 `.\.venv\Scripts\python.exe -m pytest tests/test_dsi_duplicate_*.py -q` from `apps/api`
 
-### Final duplicate pass (May 2026 — uncommitted on `main`)
+### Root identity scorer (May 2026 — uncommitted on `main`)
+- **Implemented:** `extract_root_identity`, `compare_root_identities`, root-based `evaluate_dealer_group_duplicate` / `dsi_duplicate_similarity_score`; prefix-stem annotate path removed; tests in `test_dsi_root_identity_duplicate.py` (81 duplicate tests pass).
+- **Revalidate job 733** required for hints to reflect new scorer.
+
+### Final duplicate pass (May 2026 — committed `98e5960`)
 - **Normalization:** SA suffixes `rf`/`soc`/`soc ltd`/state-owned phrases; `&` → `and`; t/a fixes for `(t/a)`, `trading-as`, trailing `t/a`/`a/t`. `cc`/`npc` already stripped; safe vs BCS acronym gate (`\bcc\b` word-boundary).
 - **Filter:** `possible_duplicates_only` now excludes rows with `duplicate_review.decision` set (same SQL as `duplicate_unresolved_only`).
 - **UI:** Both duplicate chips are **identical** after filter fix — **do not rename/remove** until user decides (was “Possible duplicates” vs “Duplicate review needed”).

@@ -14,7 +14,6 @@ from app.models.import_distributor_si import CustomerSourceTokenAlias, ImportEnt
 from app.models.ingestion import ImportJob
 from app.services.imports.dsi_customer_name_normalization import (
     DSI_DUPLICATE_FULL_STRING_THRESHOLD,
-    evaluate_company_stem_duplicate,
     evaluate_dealer_group_duplicate,
     dsi_duplicate_similarity_score,
     normalize_customer_name_for_similarity,
@@ -349,25 +348,6 @@ def annotate_dsi_customer_candidate_duplicates(
                     dealer_eval.score,
                     match_basis=dealer_eval.match_basis,
                     distributor_scope=scope,
-                )
-                continue
-            stem_eval = evaluate_company_stem_duplicate(name_a, name_b)
-            if stem_eval is not None:
-                _append_duplicate_hint(
-                    da,
-                    nk_b,
-                    stem_eval.score,
-                    match_basis=stem_eval.match_basis,
-                    distributor_scope=scope,
-                    evidence_reason="Company stem prefix match — confirm same legal entity",
-                )
-                _append_duplicate_hint(
-                    db,
-                    nk_a,
-                    stem_eval.score,
-                    match_basis=stem_eval.match_basis,
-                    distributor_scope=scope,
-                    evidence_reason="Company stem prefix match — confirm same legal entity",
                 )
                 continue
             shared_customer = _shared_source_customer_exact_norm(

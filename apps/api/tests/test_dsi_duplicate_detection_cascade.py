@@ -5,7 +5,6 @@ from __future__ import annotations
 from app.services.imports.dsi_customer_intelligence import annotate_dsi_customer_candidate_duplicates
 from app.services.imports.dsi_customer_name_normalization import (
     dsi_duplicate_similarity_score,
-    evaluate_company_stem_duplicate,
     split_distinctive_and_generic_tokens,
 )
 
@@ -144,16 +143,18 @@ def test_pc_world_vs_pc_direct_no_short_stem_dealer_hint() -> None:
     assert dsi_duplicate_similarity_score("PC World", "PC Direct") is None
 
 
-def test_adriane_stem_prefix_duplicate() -> None:
-    ev = evaluate_company_stem_duplicate(
+def test_adriane_root_duplicate_not_prefix_stem() -> None:
+    from app.services.imports.dsi_customer_name_normalization import evaluate_dealer_group_duplicate
+
+    ev = evaluate_dealer_group_duplicate(
         "adriane investments (pty) ltd",
         "adriane investments (pty)ltd a/t klinsta",
     )
     assert ev is not None
-    assert ev.match_basis == "dealer_group_prefix_stem"
+    assert ev.match_basis in ("dealer_group_exact", "dealer_group_similar")
 
 
-def test_annotate_adriane_pair_gets_stem_hint() -> None:
+def test_annotate_adriane_pair_gets_root_hint() -> None:
     dist = {5}
     agg = {
         ("customer_dealer_token", "adriane investments (pty) ltd"): {
@@ -178,7 +179,7 @@ def test_annotate_adriane_pair_gets_stem_hint() -> None:
     annotate_dsi_customer_candidate_duplicates(agg)
     hints = agg[("customer_dealer_token", "adriane investments (pty) ltd")].get("possible_duplicate_of")
     assert isinstance(hints, list) and len(hints) == 1
-    assert hints[0]["match_basis"] == "dealer_group_prefix_stem"
+    assert hints[0]["match_basis"] in ("dealer_group_exact", "dealer_group_similar")
 
 
 def test_annotate_shared_dealer_group_different_source_gets_shared_label_hint() -> None:

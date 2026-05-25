@@ -115,13 +115,60 @@ _GENERIC_NAME_TOKENS: frozenset[str] = frozenset(
     }
 )
 
-# Cascade thresholds (see ``dsi_duplicate_similarity_score``).
-DSI_DUPLICATE_DISTINCTIVE_THRESHOLD: float = 0.90
-DSI_DUPLICATE_DISTINCTIVE_EXACT_CUTOFF: float = 0.98
+# Dealer-group duplicate scoring (root identity).
 DSI_DUPLICATE_FULL_STRING_THRESHOLD: float = 0.88
-DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD: float = 0.72
 DSI_DUPLICATE_MIN_NORMALIZED_LEN: int = 4
 DSI_DUPLICATE_MIN_DISTINCTIVE_LEN: int = 3
+DSI_ROOT_FUZZY_RATIO_THRESHOLD: float = 0.92
+DSI_ROOT_MIN_TOKEN_LEN: int = 2
+
+# Right-peel only — never includes ``trading`` (part of registered name when present).
+_ROOT_DESCRIPTOR_TAIL_TOKENS: frozenset[str] = frozenset(
+    {
+        "services",
+        "service",
+        "solutions",
+        "solution",
+        "technologies",
+        "technology",
+        "tech",
+        "computers",
+        "computer",
+        "systems",
+        "system",
+        "electronics",
+        "electronic",
+        "holdings",
+        "holding",
+        "group",
+        "international",
+        "global",
+        "distribution",
+        "distributor",
+        "distributors",
+        "enterprises",
+        "enterprise",
+        "industries",
+        "industry",
+        "wholesale",
+        "retail",
+        "logistics",
+        "supply",
+        "supplies",
+        "home",
+        "connect",
+        "connection",
+        "support",
+        "world",
+        "direct",
+        "big",
+    }
+)
+
+# Two-character product-line tails when a longer head token precedes them.
+_ROOT_SHORT_DESCRIPTOR_TAILS: frozenset[str] = frozenset({"sp"})
+
+_COMPUTER_TAIL_FAMILY: frozenset[str] = frozenset({"computer", "computers"})
 
 # Single-token edits (nrc vs ngr) with short shared prefix — suppress unless prefix >= 2 chars.
 _DUPLICATE_SUPPRESS_MAX_TOKEN_LEN: int = 4
@@ -243,6 +290,154 @@ def _normalize_for_duplicate_compare(raw: str | None) -> str:
     return _collapse_spaced_acronym_tokens(normalize_customer_name_for_similarity(raw))
 
 
+def _root_lead_token(root: str) -> str:
+    tokens = (root or "").split()
+    return tokens[0] if tokens else ""
+
+
+def _is_descriptor_tail_token(token: str, *, tokens_before: int) -> bool:
+    if token in _ROOT_DESCRIPTOR_TAIL_TOKENS:
+        return True
+    if token in _ROOT_SHORT_DESCRIPTOR_TAILS and tokens_before >= 1:
+        return True
+    return False
+
+
+def _peel_trading_alias_tail(tokens: list[str]) -> list[str]:
+    """Remove one trailing alias word after t/a normalization (e.g. counterparty name), not core identity."""
+    if len(tokens) < 3:
+        return tokens
+    last = tokens[-1]
+    if _is_descriptor_tail_token(last, tokens_before=len(tokens) - 1):
+        return tokens
+    prior = tokens[-2]
+    # Require a substantial preceding token so short initials + company name (e.g. ``b and a computronics``) are kept.
+    if len(prior) < 8 and prior not in _ROOT_DESCRIPTOR_TAIL_TOKENS:
+        return tokens
+    if len(last) >= 4 and last.isalpha():
+        return tokens[:-1]
+    return tokens
+
+
+def extract_root_identity(normalized: str) -> str:
+    """Extract core business root from a normalized name (right-peel descriptors only)."""
+    tokens = [t for t in (normalized or "").split() if t]
+    if not tokens:
+        return ""
+    tokens = _peel_trading_alias_tail(tokens)
+    while len(tokens) > 1:
+        if _is_descriptor_tail_token(tokens[-1], tokens_before=len(tokens) - 1):
+            tokens.pop()
+        else:
+            break
+    if not tokens:
+        return ""
+    return " ".join(tokens)
+
+
+def extract_root_identity_from_raw(raw: str | None) -> str:
+    return extract_root_identity(_normalize_for_duplicate_compare(raw))
+
+
+def _tails_compatible(tail_a: list[str], tail_b: list[str]) -> bool:
+    if tail_a == tail_b:
+        return True
+    if tail_a and tail_b and all(t in _COMPUTER_TAIL_FAMILY for t in tail_a) and all(t in _COMPUTER_TAIL_FAMILY for t in tail_b):
+        return True
+    joined_a = " ".join(tail_a)
+    joined_b = " ".join(tail_b)
+    if not joined_a or not joined_b:
+        return False
+    return SequenceMatcher(None, joined_a, joined_b).ratio() >= 0.85
+
+
+def _short_lead_same_root_different_line(norm_a: str, norm_b: str, root_a: str, root_b: str) -> bool:
+    """Block TB Computers vs TB Solutions style matches when roots collapse to the same short token."""
+    if root_a != root_b:
+        return False
+    lead = _root_lead_token(root_a)
+    if len(lead) > DSI_DUPLICATE_MIN_DISTINCTIVE_LEN:
+        return False
+    if norm_a == norm_b:
+        return False
+    tokens_a = norm_a.split()
+    tokens_b = norm_b.split()
+    tail_a = tokens_a[1:]
+    tail_b = tokens_b[1:]
+    if not tail_a or not tail_b:
+        return False
+    if _tails_compatible(tail_a, tail_b):
+        return False
+    return True
+
+
+def _root_it_its_variant(root_a: str, root_b: str) -> bool:
+    ta = root_a.split()
+    tb = root_b.split()
+    if len(ta) < 2 or len(tb) < 2 or ta[0] != tb[0]:
+        return False
+    if not _one_edit_apart(ta[1], tb[1]):
+        return False
+    return abs(len(ta[1]) - len(tb[1])) <= 1 and min(len(ta[1]), len(tb[1])) >= 2
+
+
+def compare_root_identities(root_a: str, root_b: str, *, norm_a: str = "", norm_b: str = "") -> float | None:
+    """Return similarity score when roots match (exact or fuzzy); ``None`` when not duplicates."""
+    ra = (root_a or "").strip()
+    rb = (root_b or "").strip()
+    if not ra or not rb:
+        return None
+    if len(ra) < DSI_ROOT_MIN_TOKEN_LEN or len(rb) < DSI_ROOT_MIN_TOKEN_LEN:
+        return None
+
+    lead_a = _root_lead_token(ra)
+    lead_b = _root_lead_token(rb)
+    if not lead_a or not lead_b:
+        return None
+    if (
+        len(lead_a) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN
+        and len(lead_b) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN
+        and lead_a != lead_b
+    ):
+        return None
+
+    if norm_a and norm_b and _short_lead_same_root_different_line(norm_a, norm_b, ra, rb):
+        return None
+
+    if _distinctive_short_token_flip_should_suppress(ra, rb):
+        return None
+
+    if ra == rb:
+        return 1.0
+
+    if len(lead_a) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN or len(lead_b) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN:
+        return None
+
+    ratio = SequenceMatcher(None, ra, rb).ratio()
+    if _root_it_its_variant(ra, rb):
+        return round(max(DSI_DUPLICATE_FULL_STRING_THRESHOLD, ratio), 4)
+
+    if ratio < DSI_ROOT_FUZZY_RATIO_THRESHOLD:
+        return None
+
+    return round(max(DSI_DUPLICATE_FULL_STRING_THRESHOLD, ratio), 4)
+
+
+def compare_root_identities_from_raw(name_a: str | None, name_b: str | None) -> float | None:
+    norm_a = _normalize_for_duplicate_compare(name_a)
+    norm_b = _normalize_for_duplicate_compare(name_b)
+    if not norm_a or not norm_b:
+        return None
+    if norm_a == norm_b:
+        return 1.0
+    return compare_root_identities(
+        extract_root_identity(norm_a),
+        extract_root_identity(norm_b),
+        norm_a=norm_a,
+        norm_b=norm_b,
+    )
+
+
 def split_distinctive_and_generic_tokens(normalized: str) -> tuple[str, str]:
     """Split normalised display name into distinctive stem vs generic/industry tail tokens."""
     tokens = (normalized or "").split()
@@ -271,60 +466,12 @@ class DealerGroupDuplicateEvaluation:
     match_basis: str  # dealer_group_exact | dealer_group_similar | dealer_group_prefix_stem | ...
 
 
-DSI_DUPLICATE_PREFIX_STEM_MIN_LEN: int = 8
-DSI_DUPLICATE_PREFIX_STEM_MIN_TOKENS: int = 2
-
-
-def _distinctive_stem_for_prefix_compare(normalized: str) -> str:
-    dist, _gen = split_distinctive_and_generic_tokens(normalized)
-    return dist or normalized
-
-
 def evaluate_company_stem_duplicate(
     name_a: str | None,
     name_b: str | None,
 ) -> DealerGroupDuplicateEvaluation | None:
-    """Flag when one normalised company stem is a high-confidence prefix extension of the other (e.g. Adriane + t/a tail)."""
-    norm_a = _normalize_for_duplicate_compare(name_a)
-    norm_b = _normalize_for_duplicate_compare(name_b)
-    if not norm_a or not norm_b or norm_a == norm_b:
-        return None
-    stem_a = _distinctive_stem_for_prefix_compare(norm_a)
-    stem_b = _distinctive_stem_for_prefix_compare(norm_b)
-    if not stem_a or not stem_b or stem_a == stem_b:
-        return None
-    shorter, longer = (stem_a, stem_b) if len(stem_a) <= len(stem_b) else (stem_b, stem_a)
-    if len(shorter) < DSI_DUPLICATE_PREFIX_STEM_MIN_LEN:
-        return None
-    if not longer.startswith(shorter):
-        return None
-    if len(longer) > len(shorter) and longer[len(shorter)] != " ":
-        return None
-    short_tokens = shorter.split()
-    long_tokens = longer.split()
-    if len(short_tokens) < DSI_DUPLICATE_PREFIX_STEM_MIN_TOKENS:
-        return None
-    lead_s = _leading_distinctive_token(shorter)
-    lead_l = _leading_distinctive_token(longer)
-    if not lead_s or not lead_l:
-        return None
-    if (
-        len(lead_s) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN
-        and len(lead_l) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN
-        and lead_s != lead_l
-    ):
-        return None
-    if _distinctive_short_token_flip_should_suppress(stem_a, stem_b):
-        return None
-    if (
-        stem_a != stem_b
-        and _distinctive_stem_is_short_only(stem_a)
-        and _distinctive_stem_is_short_only(stem_b)
-    ):
-        return None
-    full_ratio = SequenceMatcher(None, norm_a, norm_b).ratio()
-    score = max(full_ratio, 0.88)
-    return DealerGroupDuplicateEvaluation(score=round(float(score), 4), match_basis="dealer_group_prefix_stem")
+    """Retired — prefix-stem path removed; roots must match via ``evaluate_dealer_group_duplicate``."""
+    return None
 
 
 def evaluate_dealer_group_duplicate(
@@ -332,20 +479,25 @@ def evaluate_dealer_group_duplicate(
     name_b: str | None,
     *,
     full_string_threshold: float = DSI_DUPLICATE_FULL_STRING_THRESHOLD,
-    distinctive_threshold: float = DSI_DUPLICATE_DISTINCTIVE_THRESHOLD,
+    distinctive_threshold: float | None = None,
 ) -> DealerGroupDuplicateEvaluation | None:
-    """Score dealer-group display names for within-job duplicate hints."""
-    score = dsi_duplicate_similarity_score(
-        name_a,
-        name_b,
-        full_string_threshold=full_string_threshold,
-        distinctive_threshold=distinctive_threshold,
-    )
-    if score is None:
-        return None
+    """Score dealer-group display names using root identity comparison."""
+    del distinctive_threshold, full_string_threshold
     norm_a = _normalize_for_duplicate_compare(name_a)
     norm_b = _normalize_for_duplicate_compare(name_b)
-    basis = "dealer_group_exact" if norm_a == norm_b else "dealer_group_similar"
+    if not norm_a or not norm_b:
+        return None
+    if len(norm_a) < DSI_DUPLICATE_MIN_NORMALIZED_LEN or len(norm_b) < DSI_DUPLICATE_MIN_NORMALIZED_LEN:
+        return None
+    root_a = extract_root_identity(norm_a)
+    root_b = extract_root_identity(norm_b)
+    score = compare_root_identities(root_a, root_b, norm_a=norm_a, norm_b=norm_b)
+    if score is None:
+        return None
+    if root_a == root_b:
+        basis = "dealer_group_exact"
+    else:
+        basis = "dealer_group_similar"
     return DealerGroupDuplicateEvaluation(score=score, match_basis=basis)
 
 
@@ -354,77 +506,8 @@ def dsi_duplicate_similarity_score(
     name_b: str | None,
     *,
     full_string_threshold: float = DSI_DUPLICATE_FULL_STRING_THRESHOLD,
-    distinctive_threshold: float = DSI_DUPLICATE_DISTINCTIVE_THRESHOLD,
+    distinctive_threshold: float | None = None,
 ) -> float | None:
-    """Cascade duplicate score: distinctive stem gate, then full-string similarity.
-
-    Returns ``None`` when the pair must not be flagged (e.g. only generic words match).
-  """
-    norm_a = _normalize_for_duplicate_compare(name_a)
-    norm_b = _normalize_for_duplicate_compare(name_b)
-    if not norm_a or not norm_b:
-        return None
-    if norm_a == norm_b:
-        return 1.0
-    if len(norm_a) < DSI_DUPLICATE_MIN_NORMALIZED_LEN or len(norm_b) < DSI_DUPLICATE_MIN_NORMALIZED_LEN:
-        return None
-
-    lead_a = _leading_distinctive_token(norm_a)
-    lead_b = _leading_distinctive_token(norm_b)
-    if not lead_a or not lead_b:
-        return None
-    # Short leading acronyms (≤3 chars): order-sensitive — must match exactly; generic tail cannot rescue.
-    if (
-        len(lead_a) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN
-        and len(lead_b) <= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN
-        and lead_a != lead_b
-    ):
-        return None
-
-    dist_a, _gen_a = split_distinctive_and_generic_tokens(norm_a)
-    dist_b, _gen_b = split_distinctive_and_generic_tokens(norm_b)
-    if len(lead_a) >= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN and len(lead_b) >= DSI_DUPLICATE_MIN_DISTINCTIVE_LEN:
-        if len(dist_a) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN or len(dist_b) < DSI_DUPLICATE_MIN_DISTINCTIVE_LEN:
-            return None
-
-    if _distinctive_short_token_flip_should_suppress(dist_a, dist_b):
-        return None
-
-    # Same short stem with different tails (e.g. TB Computers vs TB Solutions) — do not hint on stem alone.
-    if (
-        dist_a != dist_b
-        and _distinctive_stem_is_short_only(dist_a)
-        and _distinctive_stem_is_short_only(dist_b)
-    ):
-        return None
-
-    dist_ratio = SequenceMatcher(None, dist_a, dist_b).ratio()
-    if dist_ratio < distinctive_threshold:
-        if _leading_distinctive_token_variant(dist_a, dist_b):
-            ta = dist_a.split()
-            tb = dist_b.split()
-            head_a = " ".join(ta[:2])
-            head_b = " ".join(tb[:2])
-            head_ratio = SequenceMatcher(None, head_a, head_b).ratio()
-            if head_ratio >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
-                return round(float(head_ratio), 4)
-        return None
-
-    full_ratio = SequenceMatcher(None, norm_a, norm_b).ratio()
-
-    if dist_ratio >= DSI_DUPLICATE_DISTINCTIVE_EXACT_CUTOFF:
-        if full_ratio >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
-            return round(float(full_ratio), 4)
-        if dist_a == dist_b:
-            if _distinctive_stem_is_short_only(dist_a):
-                if full_ratio >= full_string_threshold:
-                    return round(float(full_ratio), 4)
-                return None
-            combined = max(full_ratio, dist_ratio * 0.95)
-            if combined >= DSI_DUPLICATE_FULL_STRING_RELAXED_THRESHOLD:
-                return round(float(combined), 4)
-        return None
-
-    if full_ratio >= full_string_threshold:
-        return round(float(full_ratio), 4)
-    return None
+    """Root-identity duplicate score for dealer-group and source-customer name pairs."""
+    del full_string_threshold, distinctive_threshold
+    return compare_root_identities_from_raw(name_a, name_b)
