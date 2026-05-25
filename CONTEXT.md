@@ -1,127 +1,47 @@
 # Channel Intelligence Platform — Current Context
 
 ## Branch
-`main` — ahead of `origin/main` (not pushed unless user asks)
-
-## Recent commits (DSI steward / duplicates)
-| Commit | Summary |
-|--------|---------|
-| `c774616` | **Shipped:** Phase A/B same-entity dialog, bulk customer search, Region/Channel columns; extended duplicate hints (prefix stem, shared-label, source_customer_similar); plan `sibling_mapping_hint`; cluster same-entity API + UI |
-| `afb682f` | Sticky steward, cluster/suffix display (info only), pipeline timestamps |
-| `26d38e8` | BCS/RBS short-acronym guards |
+`dsi/async-apply-steward-ux-product-tiebreak` — based on `main` @ `0503aaf` (root-identity duplicate scorer pushed)
 
 ## Alembic Head
-`20260517_0037` — no migration for duplicate work
+`20260517_0037` — no migration in this workstream
 
 ---
 
-## HANDOVER — new chat should start here (May 2026)
+## Latest work (May 2026) — DSI steward scale + product shipment tie-break
 
-### Goal of the workstream
-Finish DSI customer duplicate detection + steward UX so obvious pairs (e.g. **Adriane** + t/a tail) get **review-required hints**, steward can **Same entity** / **Different entity** / **cluster map**, and plan suggests siblings — **without** auto-creating `dim_customer` or weakening BCS/TB guards.
+### Shipped on feature branch (`ca4ca57`)
+| Area | What changed |
+|------|----------------|
+| **P0 async apply** | `POST .../dsi-resolution-plan/apply-async` → Celery `imports.dsi_resolution_plan_apply`; poll `.../dsi-steward-bulk-task/{task_id}`; activity bell kind `dsi_resolution_plan_apply` |
+| **Apply perf** | Product resolution index loaded **once** per task; chunks of 25 candidates; sync `/apply` capped at 50 ids |
+| **409 lock** | `dsi_steward_task_dispatch.py` blocks apply when pipeline or `dsi_bulk_task` active |
+| **P1 product tie-break** | `dsi_product_shipment_tiebreak.py` — uses `shipment_distinct_product_ids` + `dominant_evidence_month` on candidate context (set on **next revalidate**) |
+| **P1 plan labels** | `suggested_target_label` on plan rows (customer/distributor/product names) |
+| **P1/P2 UX** | Single **Review…** row action; plan column shows target label; corroboration chip → **Shipment lines found** vs tie-break; resolution panel **one scroll parent** |
 
-User approved full plan (0 + A/B + Phase 1 + revalidate + Phase 2 + Phase 3). **Code is committed** (`c774616`). **E2E on job 733 is incomplete** due to revalidate crash.
+### Not changed
+- Shipment evidence import module (read-only corroboration only)
+- DSI eligibility / corroboration tier order
+- Duplicate detection logic
 
-### What is implemented (code — do not re-implement)
-1. **Detection (validate-time only)** — `annotate_dsi_customer_candidate_duplicates` in `dsi_customer_intelligence.py`:
-   - `dealer_group_prefix_stem`, `dealer_group_shared_label_different_counterparty`, `source_customer_similar`
-   - BCS/RBS/TB guards unchanged in `dsi_customer_name_normalization.py`
-2. **Steward UX** — `DsiDuplicateSameEntityDialog`, `DsiCustomerSearchFields`, bulk map search, Region/Channel grid cols
-3. **Plan** — `sibling_mapping_hint` via `build_job_customer_sibling_index` in plan context
-4. **Cluster** — `POST /api/v1/mappings/import-jobs/{job_id}/duplicate-review/cluster-same-entity`; UI **Map cluster to one customer…** when unresolved cluster on page
+### Job 733 note
+- Existing candidates lack new context fields until **revalidate**. Tie-break at plan time uses stored ids when present; else live `_shipment_disambiguate_product_id`.
+- Async apply needs **Redis + worker** (or `CIP_DEV_CELERY_DISPATCH=in_process_thread` when Celery enqueue fails). Stale `dsi_bulk_task` in metadata blocks sync apply until cleared or task completes.
 
-### Job 733 baseline (before revalidate completed)
-- **4511** open customer candidates; **~4494** needs work (mostly provisional plan)
-- **`possible_duplicates_only=1` → total 16** (old hints only; pre-new-bases)
-- **`duplicate_unresolved_only=1` → total 0** (all 16 pairs already had `duplicate_review`, mostly `different_entity`)
-- **Adriane** (`adriane investments (pty) ltd` vs `adriane investments (pty)ltd a/t klinsta`): **`possible_duplicate_of` empty** until revalidate finishes with new code
-- Example reviewed pair: `aeon computer technologies` ↔ `aeon solutions (pty) ltd` — `dealer_group_similar`, decision `different_entity`
+### Validation run
+- API: 57 tests (`test_dsi_resolution_plan`, bulk steward, tiebreak)
+- Web: 39 tests (`import-steward` features)
+- API smoke: `apply-async` 202 + 409 lock; sync apply 1 customer ~5s
+- Browser E2E job 733: blocked by Next.js dev overlay on imports grid (manual open job still OK)
 
-### Revalidate — COMPLETE (May 2026 session)
-- **Task:** `083bb3f0-191f-46d2-884b-7e0ff1c74522` finished ~09:36 local; `dsi-progress`: `status=complete`, `phase=complete`
-- **Post-revalidate counts:** `possible_duplicates_only=53` (was 16); `duplicate_unresolved_only=37` (was 0)
-- **New `match_basis` in samples:** `dealer_group_prefix_stem`, `dealer_group_similar`, `source_customer_similar`
-- **BCS/RBS/TB:** no false-positive hints in duplicate set (guard OK)
-- **Adriane pair:** still **no** hints — `dominant_distributor_id` 66 vs 58; `_duplicate_distributor_scope_allows_compare` requires overlapping sell-out distributor IDs (by design, not stem bug)
-- **Browser E2E (job 733):** Duplicate review needed grid; Region (file) column visible; steward on Afrika Tikkun cluster shows **Map cluster (2 tokens)**, **Same entity** dialog (search + provisional radios), **Compare**, **Different entity** — all open OK (cancelled without commit)
-- **UX note:** `building_candidates` at 100% can sit ~10–15 min with no new phase until persist finishes; bell/`background-tasks` clears when done
-
-### E2E verification checklist (after revalidate complete)
-| # | Check | Pass criteria |
-|---|--------|----------------|
-| 1 | `possible_duplicates_only=1` count | **>> 16** (exact TBD); sample rows show new `match_basis` values |
-| 2 | Adriane pair | Both keys have hint; expect `dealer_group_prefix_stem` |
-| 3 | BCS/RBS, TB Computers/TB Solutions | Still **no** hints |
-| 4 | Unresolved duplicates | `duplicate_unresolved_only=1` > 0 for steward UI tests |
-| 5 | Steward drawer | **Same entity (map both)** dialog: search + chips + provisional name |
-| 6 | Cluster | 2+ linked tokens on **same page**, unresolved → **Map cluster…** works |
-| 7 | Plan sibling | Map token A → customer X; plan for token B (same DG) shows `sibling_mapping_hint` |
-| 8 | Region/Channel columns | Visible in customer grid |
-
-**API quick checks (PowerShell-safe):**
-```text
-GET http://localhost:3000/api/v1/mappings/import-jobs/733/distributor-si-candidates?status=open&entity=customer&possible_duplicates_only=1&limit=5
-GET ...&q=adriane&limit=5
-GET http://localhost:3000/api/v1/imports/jobs/733/dsi-progress
-```
-
-### What was tested before crash
-- Unit: 63× `test_dsi_duplicate_*`, 15× web steward logic tests (at commit time)
-- Browser/API smoke: job 733 UI loads; Possible duplicates filter = 16; Region column visible; steward Compare works; cluster API returns validation errors (route exists)
-- **Not completed:** post-revalidate hint counts, Adriane, Same entity / cluster dialogs on unresolved rows
-
-### Risks / watch items for revalidate on 733
-- **Runtime & memory:** Full job revalidate + pairwise duplicate annotate over ~4.5k customer buckets can be **heavy** (O(n²) pairs within distributor scope). May stress worker — monitor memory, run off-hours
-- **Steward decisions:** Existing `duplicate_review` on 16 rows should **persist**; hints refresh but decisions are not wiped by revalidate (verify if unexpected)
-- **Agent testing:** Do **not** block shell poll >2–3 min; use UI progress or `dsi-progress` every 30s with timeout
-
-### Do not change without explicit approval
-- DSI eligibility / corroboration / resolution tier order
-- Auto-create `dim_customer` from detection
-- Alembic migrations
-- Lowering global duplicate thresholds
+### Next
+- Merge feature branch after review
+- Revalidate job 733 to populate `shipment_distinct_product_ids` / `dominant_evidence_month` on product candidates
+- Optional: clear stale `dsi_bulk_task` when Celery task orphaned (PENDING + no worker)
 
 ---
 
-## What Is Working (reference)
-
-### DSI duplicate + steward (code on `main`)
-- Extended hint bases + contract; steward Phase A/B; cluster API; sibling plan signal
-- Phase 1–3 UX (`afb682f`): sticky steward, cluster info alert, pipeline timestamps
-- Duplicate review gates; inter-disti hint; async validate UX
-
-### Key paths
-| Area | Path |
-|------|------|
-| Duplicate cascade + stem | `apps/api/app/services/imports/dsi_customer_name_normalization.py` |
-| Hint contract | `apps/api/app/services/imports/dsi_duplicate_hint_contract.py`, `apps/web/.../dsiDuplicateHintContract.ts` |
-| Annotate + sibling index | `apps/api/app/services/imports/dsi_customer_intelligence.py` |
-| Plan sibling | `apps/api/app/services/imports/dsi_plan_build_context.py`, `dsi_resolution_plan.py` |
-| Steward + cluster ops | `dsi_steward_candidate_ops.py`, `apps/api/app/api/v1/endpoints/mappings.py` |
-| Revalidate endpoint | `POST .../revalidate-distributor-sales-inventory` in `mappings.py` |
-| Progress poll | `GET /api/v1/imports/jobs/{id}/dsi-progress` |
-
-### Tests (no DB)
-`.\.venv\Scripts\python.exe -m pytest tests/test_dsi_duplicate_*.py -q` from `apps/api`
-
-### Root identity scorer (May 2026 — uncommitted on `main`)
-- **Implemented:** `extract_root_identity`, `compare_root_identities`, root-based `evaluate_dealer_group_duplicate` / `dsi_duplicate_similarity_score`; prefix-stem annotate path removed; tests in `test_dsi_root_identity_duplicate.py` (81 duplicate tests pass).
-- **Revalidate job 733** required for hints to reflect new scorer.
-
-### Final duplicate pass (May 2026 — committed `98e5960`)
-- **Normalization:** SA suffixes `rf`/`soc`/`soc ltd`/state-owned phrases; `&` → `and`; t/a fixes for `(t/a)`, `trading-as`, trailing `t/a`/`a/t`. `cc`/`npc` already stripped; safe vs BCS acronym gate (`\bcc\b` word-boundary).
-- **Filter:** `possible_duplicates_only` now excludes rows with `duplicate_review.decision` set (same SQL as `duplicate_unresolved_only`).
-- **UI:** Both duplicate chips are **identical** after filter fix — **do not rename/remove** until user decides (was “Possible duplicates” vs “Duplicate review needed”).
-- **Next:** User revalidates job **733** as definitive final duplicate pass; then weekly uploads.
-
-## Runtime (local dev, no Docker)
-- Web: http://localhost:3000 — `pnpm dev:web`
-- API: http://localhost:8001 — `pnpm dev:api`
-- Worker: `pnpm dev:worker` (Redis :6379)
-- DB: `cip` on localhost:5432
-
-## Scoped for later
-- Server-side `duplicate_cluster_id` on validate; customer master merge (Phase E); VAT/phonetic; open peer cross-page
-
-## Prior chat
-Full arc: duplicate steward on job 733, commit `c774616`, revalidate started then environment crash — see agent transcript if needed.
+## Prior work (on `main`)
+- Root-identity duplicate scorer (`0503aaf`)
+- Steward same-entity UX, cluster map (`c774616`)
