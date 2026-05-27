@@ -1,0 +1,48 @@
+{
+  "scenario_1": {
+    "job_id": 740,
+    "pass": true,
+    "intel_tier": "automatic",
+    "prior_count_db": 97,
+    "no_baseline_banner": false,
+    "expected_no_baseline": false,
+    "banner_messages": [
+      "Shipment data unavailable. SOH reconciliation inactive.",
+      "CPOR not loaded. Price variance detection inactive."
+    ],
+    "ui_url": "http://localhost:3000/admin/imports?job=740"
+  },
+  "scenario_2": {
+    "status": "skipped",
+    "reason": "source 50 has 97 prior applied jobs (need exactly 1 for supervised tier)",
+    "pass": null
+  },
+  "scenario_3": {
+    "status": "run",
+    "pass": true,
+    "auto_resolution_tier": "automatic",
+    "plan_error": null,
+    "conflict_candidates": 0,
+    "ready_customer_candidates": 0,
+    "job_id": 740
+  },
+  "scenario_4": {
+    "job_id": 741,
+    "stage": "loaded",
+    "status": "completed",
+    "dsi_soh_reconcile_task": {
+      "kind": "dsi_soh_reconciliation",
+      "label": "Reconciling inventory\u2026",
+      "task_id": "3efeffd6-3c51-49ef-9ffa-cbfb6d2bca81",
+      "queued_at": "2026-05-27T12:11:17.290606+00:00",
+      "async_poll": true
+    },
+    "distributor_id": null,
+    "period_end": null,
+    "bell_label": null,
+    "inventory_sample": [],
+    "rows_with_calculated_soh_in_sample": 0,
+    "pass": false,
+    "ui_url": "http://localhost:3000/admin/imports?job=741"
+  }
+}
