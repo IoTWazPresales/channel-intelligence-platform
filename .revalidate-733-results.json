@@ -1,0 +1,47 @@
+﻿{
+    "bcs_hints":  null,
+    "adriane":  [
+                    {
+                        "status":  "needs_review",
+                        "key":  "adriane investments (pty) ltd",
+                        "hint_bases":  [
+
+                                       ]
+                    },
+                    {
+                        "status":  "needs_review",
+                        "key":  "adriane investments (pty)ltd a/t klinsta",
+                        "hint_bases":  [
+
+                                       ]
+                    }
+                ],
+    "errors":  [
+
+               ],
+    "dsi_progress":  {
+                         "job_id":  733,
+                         "stage":  "validated",
+                         "status":  "complete",
+                         "phase":  "complete",
+                         "phase_label":  "Validation complete",
+                         "current_row":  168839,
+                         "total_rows":  168839,
+                         "pct":  100,
+                         "task_state":  null,
+                         "pipeline_queued_at":  null,
+                         "pipeline_started_at":  null
+                     },
+    "sample_match_bases":  [
+                               "dealer_group_similar",
+                               "dealer_group_prefix_stem",
+                               "source_customer_similar"
+                           ],
+    "possible_duplicates_total":  53,
+    "polled_at":  "2026-05-25T08:42:01.8464195Z",
+    "tb_hints":  null,
+    "duplicate_unresolved_total":  37,
+    "background_task":  {
+
+                        }
+}
