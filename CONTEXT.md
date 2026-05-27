@@ -4,7 +4,7 @@
 `main`
 
 ## Head commit
-`2dbb95b` — `dsi: Phase 1 weekly intelligence state, auto-resolution, and SOH reconciliation`
+`1c89ab9` — `dsi: fix intelligence_state persistence and post-apply SOH completion`
 
 ## Alembic Head
 `20260518_0041` — `fact_inventory_reconciliation` + `source_key` upsert grain. Applied on **`cip`** and **`cip_alembic_smoke`**.
@@ -36,6 +36,10 @@
 - `reconcile_distributor_soh` updates `fact_inventory_distributor` + upserts customer-allocated / open-channel reconciliation rows.
 - Post-apply dispatch: `dsi_soh_reconciliation_enqueue.py` → Celery `imports.dsi_soh_reconciliation` (detached thread fallback).
 - Activity bell: `dsi_soh_reconcile_task`, kind `dsi_soh_reconciliation`.
+
+### Bug fixes (May 2026)
+- **intelligence_state JSONB persistence:** `flag_modified` on `staged_metadata` writes and re-persist at end of validate so Celery validate commits retain `intelligence_state` (`dsi_import_state_awareness.py`, `distributor_sales_inventory.py`).
+- **Post-apply loaded + SOH dispatch:** `POST /jobs/{id}/dsi-apply` calls `complete_dsi_import_job_to_loaded` so jobs reach `loaded` and `dsi_soh_reconciliation` dispatches (`imports.py` → `dsi_apply_completion.py`).
 
 ### Validation (May 2026)
 - `cip_alembic_smoke`: `alembic upgrade head` → `20260518_0041` (clean).
