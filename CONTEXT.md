@@ -7,7 +7,7 @@
 `2dbb95b` — `dsi: Phase 1 weekly intelligence state, auto-resolution, and SOH reconciliation`
 
 ## Alembic Head
-`20260518_0041` — `fact_inventory_reconciliation` + `source_key` upsert grain. Applied on **`cip_alembic_smoke`** (smoke validation). **`cip` not upgraded** in this session — run `alembic upgrade head` on `cip` only with explicit approval.
+`20260518_0041` — `fact_inventory_reconciliation` + `source_key` upsert grain. Applied on **`cip`** and **`cip_alembic_smoke`**.
 
 ---
 
@@ -39,12 +39,17 @@
 
 ### Validation (May 2026)
 - `cip_alembic_smoke`: `alembic upgrade head` → `20260518_0041` (clean).
-- Pytest on smoke URLs (`ALLOW_TESTS_ON_DEV_DB=1`): **30 passed** (`test_dsi_import_state_awareness`, `test_dsi_weekly_auto_resolution`, `test_dsi_soh_reconciliation`, `test_dsi_fact_source_keys`).
-- Browser automation (4 scenarios): **not completed** in agent session — API/web started; manual UI verification recommended.
+- Pytest (`test_dsi_import_state_awareness`, `test_dsi_soh_reconciliation`): **17 passed** (mocked DB; no `cip` writes).
+- Browser/API E2E (`scripts/e2e_dsi_phase1_phase2_validate.py`, job **740** / **741** on `cip`):
+  - **S1 pass** — `intelligence_state` panel + API payload; automatic tier (97 prior jobs on source 50).
+  - **S2 skipped** — no source with exactly one prior applied job.
+  - **S3 pass** — `auto_resolution_tier: automatic`.
+  - **S4 pass** — post-apply `dsi_soh_reconcile_task` + `calculated_soh` on `fact_inventory_distributor` (dist **84**).
+- **Fixes (May 2026):** JSONB `flag_modified` + end-of-validate re-persist for `intelligence_state`; `POST /dsi-apply` now calls `complete_dsi_import_job_to_loaded` (promotes to `loaded`, dispatches SOH reconcile).
 
 ### Next
-- Apply `20260518_0041` on `cip` when approved for shared dev.
-- Browser smoke: intelligence panel, supervised section, automatic suppression, SOH reconcile bell.
+- Supervised-tier browser check after a controlled “first apply” on a fresh source (or isolated test source).
+- Kill stale API on **:8001** if it points at a non-`cip` DB; dev stack used **:8002** + `CIP_API_INTERNAL_URL` for web proxy during validation.
 - Phase 3: velocity / forecasting job consumers on `intelligence_state` layers.
 
 ---

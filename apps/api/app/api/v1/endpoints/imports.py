@@ -993,6 +993,24 @@ async def post_dsi_apply(
     await db.commit()
     with SessionLocal() as sync_db:
         process_import_job_sync(sync_db, job_id)
+    with SessionLocal() as sync_db:
+        from app.ingestion.pipeline import STAGE_VALIDATED
+        from app.services.imports.dsi_apply_completion import (
+            DsiApplyCompletionError,
+            complete_dsi_import_job_to_loaded,
+        )
+
+        sync_job = sync_db.get(ImportJob, job_id)
+        if (
+            sync_job
+            and (sync_job.template_slug or "") == "distributor_inventory"
+            and (sync_job.stage or "") == STAGE_VALIDATED
+            and (sync_job.import_mode or "") == "apply"
+        ):
+            try:
+                complete_dsi_import_job_to_loaded(sync_db, job_id)
+            except DsiApplyCompletionError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
     job2 = await _async_import_job_with_source(db, job_id)
     if job2 and job2.status == "failed":
         raise HTTPException(

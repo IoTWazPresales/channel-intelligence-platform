@@ -327,9 +327,13 @@ def persist_intelligence_state_on_job(
     job: ImportJob,
     state: DsiImportIntelligenceState,
 ) -> None:
+    from sqlalchemy.orm.attributes import flag_modified
+
     meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
     meta["intelligence_state"] = state.to_metadata_dict()
     job.staged_metadata = to_jsonable(meta)
+    if hasattr(job, "_sa_instance_state"):
+        flag_modified(job, "staged_metadata")
     session.add(job)
 
 

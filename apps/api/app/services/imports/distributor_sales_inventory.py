@@ -1213,7 +1213,10 @@ def process_distributor_sales_inventory(
     meta["dsi_historical_product_eligibility_relaxed"] = workflow_mode == "historical"
     meta["dsi_predominantly_old_sellout_dates"] = date_majority_historical
     meta["dsi_validate_total_rows"] = len(df)
+    from sqlalchemy.orm.attributes import flag_modified
+
     job.staged_metadata = to_jsonable(meta)
+    flag_modified(job, "staged_metadata")
     db.add(job)
     db.flush()
 
@@ -1988,6 +1991,9 @@ def process_distributor_sales_inventory(
             message=json.dumps(summary) + eff_rev_note,
         )
     )
+    # Re-persist after row loop so JSONB metadata survives pipeline commit/clear.
+    intel_state = check_dsi_import_state(db, job.id, primary_dist_id)
+    persist_intelligence_state_on_job(db, job, intel_state)
     return 1 if blocking else 0
 
 
