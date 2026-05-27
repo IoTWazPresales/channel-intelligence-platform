@@ -19,6 +19,8 @@ celery_app.conf.task_routes = {
     "imports.dsi_bulk_provisional_customers": {"queue": "celery"},
     "imports.dsi_resolution_plan_apply": {"queue": "celery"},
     "imports.dsi_soh_reconciliation": {"queue": "celery"},
+    "imports.dsi_velocity_compute": {"queue": "celery"},
+    "imports.dsi_forecasting": {"queue": "celery"},
 }
 
 import app.worker.tasks  # noqa: E402, F401 — register tasks

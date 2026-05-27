@@ -33,6 +33,10 @@ def _task_label(job: ImportJob, *, kind: str) -> str:
         return f"Applying resolution plan (DSI job {jid})"
     if kind == "dsi_soh_reconciliation":
         return f"Reconciling inventory (DSI job {jid})"
+    if kind == "dsi_velocity_compute":
+        return f"Computing sell-out velocity (DSI job {jid})"
+    if kind == "dsi_forecasting":
+        return f"Generating forecasts (DSI job {jid})"
     if slug == "distributor_inventory":
         if mode == "validate":
             return f"Validating DSI import {jid}"
@@ -87,6 +91,10 @@ def _clear_task_slot_metadata(meta: dict[str, Any], slot: str) -> None:
         meta.pop("celery_task_id", None)
     elif slot == "soh":
         meta.pop("dsi_soh_reconcile_task", None)
+    elif slot == "velocity":
+        meta.pop("dsi_velocity_compute_task", None)
+    elif slot == "forecasting":
+        meta.pop("dsi_forecasting_task", None)
     else:
         meta.pop("dsi_bulk_task", None)
 
@@ -191,6 +199,32 @@ def _build_background_task_records(
                         stid.strip(),
                         "dsi_soh_reconciliation",
                         str(soh_task.get("label") or "Reconciling inventory…"),
+                    )
+                )
+
+        velocity_task = meta.get("dsi_velocity_compute_task")
+        if isinstance(velocity_task, dict):
+            vtid = velocity_task.get("task_id")
+            if isinstance(vtid, str) and vtid.strip():
+                descriptors.append(
+                    (
+                        "velocity",
+                        vtid.strip(),
+                        "dsi_velocity_compute",
+                        str(velocity_task.get("label") or "Computing sell-out velocity…"),
+                    )
+                )
+
+        forecasting_task = meta.get("dsi_forecasting_task")
+        if isinstance(forecasting_task, dict):
+            ftid = forecasting_task.get("task_id")
+            if isinstance(ftid, str) and ftid.strip():
+                descriptors.append(
+                    (
+                        "forecasting",
+                        ftid.strip(),
+                        "dsi_forecasting",
+                        str(forecasting_task.get("label") or "Generating forecasts…"),
                     )
                 )
 

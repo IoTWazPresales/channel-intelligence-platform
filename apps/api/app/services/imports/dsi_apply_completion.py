@@ -109,6 +109,9 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
             distributor_id=int(dist_id),
             period_end_date=period_end if isinstance(period_end, date) else period_end,
         )
+        from app.services.imports.dsi_velocity_enqueue import dispatch_dsi_velocity_after_apply
+
+        dispatch_dsi_velocity_after_apply(db, job, int(dist_id))
         db.commit()
         db.refresh(job)
 

@@ -175,6 +175,30 @@ def dsi_soh_reconciliation_task(self, job_id: int, payload: dict) -> dict:
         raise
 
 
+@celery_app.task(name="imports.dsi_velocity_compute", bind=True, ack_late=True)
+def dsi_velocity_compute_task(self, job_id: int, payload: dict) -> dict:
+    """Background sell-out velocity compute after DSI apply."""
+    from app.services.imports.dsi_velocity_sync import run_dsi_velocity_compute_sync
+
+    try:
+        return run_dsi_velocity_compute_sync(job_id, payload)
+    except Exception:
+        logger.exception("dsi_velocity_compute failed job_id=%s", job_id)
+        raise
+
+
+@celery_app.task(name="imports.dsi_forecasting", bind=True, ack_late=True)
+def dsi_forecasting_task(self, job_id: int, payload: dict) -> dict:
+    """Background DSI forecasting after velocity compute."""
+    from app.services.imports.dsi_forecasting_sync import run_dsi_forecasting_sync
+
+    try:
+        return run_dsi_forecasting_sync(job_id, payload)
+    except Exception:
+        logger.exception("dsi_forecasting failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.product_master_commit", bind=True, ack_late=True)
 def product_master_commit_task(self, job_id: int, confirm_destructive: bool) -> int:
     """Background Product Master apply: must be enqueued via try_enqueue_pm_commit_sync first."""
