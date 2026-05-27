@@ -11,7 +11,7 @@ export const navItems: NavItem[] = [
   { section: 'Planning', label: 'Line-up planning', href: '/lineup' },
   { section: 'Planning', label: 'Commercial planner', href: '/commercial-planner' },
   { section: 'Commercial', label: 'Inbound shipments', href: '/shipping' },
-  { section: 'Commercial', label: 'Sell-out', href: '/sell-out' },
+  { section: 'Commercial', label: 'Channel Operations', href: '/sell-out' },
   { section: 'Commercial', label: 'Pricing', href: '/pricing' },
   { section: 'Commercial', label: 'Promotions', href: '/promotions' },
   { section: 'Market', label: 'Market', href: '/market' },
