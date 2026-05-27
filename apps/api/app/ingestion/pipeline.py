@@ -838,6 +838,7 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
         from app.ingestion.dsi_validate_post_sync import run_dsi_validate_post_import_orchestration
 
         run_dsi_validate_post_import_orchestration(db, job.id)
+        db.commit()
         db.refresh(job)
 
     return job

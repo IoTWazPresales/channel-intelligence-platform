@@ -61,6 +61,7 @@ from app.models.facts import (
     FactPromotionPerformance,
     FactPromotionPlan,
     FactSalesSellin,
+    FactReturns,
     FactSalesSellout,
     FactSupport,
 )
@@ -104,6 +105,7 @@ __all__ = [
     "DimCompetitorBrand",
     "DimCompetitorProduct",
     "DimBudgetOwner",
+    "FactReturns",
     "FactSalesSellout",
     "FactSalesSellin",
     "FactInventoryCustomer",

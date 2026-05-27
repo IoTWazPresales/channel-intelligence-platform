@@ -21,6 +21,8 @@ class FactSalesSellout(Base, TimestampMixin):
     channel_id: Mapped[int | None] = mapped_column(ForeignKey("dim_channel.id"), nullable=True)
     distributor_id: Mapped[int | None] = mapped_column(ForeignKey("dim_distributor.id"), nullable=True)
     period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    transaction_date: Mapped[date] = mapped_column(Date, nullable=False)
+    invoice_no: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     units: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
     revenue: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
     unit_sellout_price_ex_tax_amount: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
@@ -41,6 +43,27 @@ class FactSalesSellin(Base, TimestampMixin):
     revenue: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
 
 
+class FactReturns(Base, TimestampMixin):
+    """Distributor-reported returns/credits (negative sell-out quantities on apply)."""
+
+    __tablename__ = "fact_returns"
+    __table_args__ = (Index("ix_fact_returns_import_job_id", "import_job_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_key: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
+    staging_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_distributor_si_staging_line.id", ondelete="SET NULL"), nullable=True
+    )
+    distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id"), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False)
+    transaction_date: Mapped[date] = mapped_column(Date, nullable=False)
+    invoice_no: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    return_quantity: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+    unit_price: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    import_job_id: Mapped[int | None] = mapped_column(ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True)
+
+
 class FactInventoryCustomer(Base, TimestampMixin):
     __tablename__ = "fact_inventory_customer"
 
@@ -54,12 +77,18 @@ class FactInventoryCustomer(Base, TimestampMixin):
 
 class FactInventoryDistributor(Base, TimestampMixin):
     __tablename__ = "fact_inventory_distributor"
+    __table_args__ = (Index("ix_fact_inventory_distributor_source_import_job_id", "source_import_job_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_key: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
     distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id"), nullable=False)
     as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
     on_hand_units: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+    calculated_soh: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    soh_variance: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    reconciliation_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reconciliation_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     source_import_job_id: Mapped[int | None] = mapped_column(ForeignKey("import_job.id"), nullable=True)
 
 

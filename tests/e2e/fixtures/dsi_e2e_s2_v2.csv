@@ -1,0 +1,3 @@
+distributor_code,sku,date,qty,customer_name,Dealer Name Group,soh,invoice_no
+DIST-01,SKU-ALPHA-01,2024-09-01,7,,Metro Market Group,10,INV-E2E-001
+DIST-01,SKU-ALPHA-01,2024-09-02,-3,,Metro Market Group,10,INV-E2E-002

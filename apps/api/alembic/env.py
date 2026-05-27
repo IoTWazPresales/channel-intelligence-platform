@@ -43,6 +43,7 @@ from app.models import (  # noqa: F401
     FactPromotionPerformance,
     FactPromotionPlan,
     FactSalesSellin,
+    FactReturns,
     FactSalesSellout,
     FactSupport,
     ForecastSummary,

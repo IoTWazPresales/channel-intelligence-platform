@@ -65,7 +65,7 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
         )
 
     db.flush()
-    _sell, _inv, apply_errors = upsert_dsi_facts_for_staging_job(db, job)
+    _sell, _inv, _ret, apply_errors = upsert_dsi_facts_for_staging_job(db, job)
     if apply_errors:
         msg = "; ".join(apply_errors[:12])
         logger.warning("DSI fact apply reported errors job_id=%s: %s", job.id, msg)

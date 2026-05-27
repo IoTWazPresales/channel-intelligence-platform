@@ -2592,7 +2592,7 @@ function AdminImportsPageContent() {
                 }
               >
                 <MenuItem value="auto">Auto — detect historical vs weekly from transaction dates</MenuItem>
-                <MenuItem value="historical">Historical import (relaxed steward + auto-apply after validate)</MenuItem>
+                <MenuItem value="historical">Historical import (relaxed steward + auto-applies ready candidates after validate)</MenuItem>
                 <MenuItem value="weekly">Weekly import (strict steward)</MenuItem>
               </Select>
             </FormControl>

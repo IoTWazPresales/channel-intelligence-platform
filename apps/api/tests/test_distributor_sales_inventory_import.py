@@ -16,7 +16,8 @@ from app.services.imports.dsi_mapping_workflow import (
     sanitize_dsi_field_mapping,
 )
 from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct, DimRegion
-from app.models.facts import FactInboundShipment, FactInventoryDistributor, FactSalesSellout
+from app.models.facts import FactInboundShipment, FactInventoryDistributor, FactReturns, FactSalesSellout
+from app.services.imports.dsi_fact_source_keys import dsi_sellout_source_key
 from app.models.import_distributor_si import (
     CustomerSourceTokenAlias,
     DistributorSourceTokenAlias,
@@ -87,9 +88,19 @@ def _csv_bytes(content: str) -> bytes:
     return content.encode("utf-8")
 
 
-def _run_dsi_job(source_id: int, csv_bytes: bytes, *, import_mode: str, filename: str = "dsi.csv") -> ImportJob:
+def _run_dsi_job(
+    source_id: int,
+    csv_bytes: bytes,
+    *,
+    import_mode: str,
+    filename: str = "dsi.csv",
+    dsi_workflow_mode_explicit: str | None = None,
+) -> ImportJob:
     storage = get_storage_backend()
     with SessionLocal() as db:
+        staged_meta = None
+        if dsi_workflow_mode_explicit:
+            staged_meta = {"dsi_workflow_mode_explicit": dsi_workflow_mode_explicit}
         job = ImportJob(
             source_id=source_id,
             template_slug="distributor_inventory",
@@ -98,6 +109,7 @@ def _run_dsi_job(source_id: int, csv_bytes: bytes, *, import_mode: str, filename
             stage="uploaded",
             file_name=filename,
             content_type="text/csv",
+            staged_metadata=staged_meta,
         )
         db.add(job)
         db.flush()
@@ -871,3 +883,218 @@ def test_dsi_candidate_open_channel_named_requires_confirm(dsi_source_id: int) -
         await db_session.engine.dispose()
 
     asyncio.run(_dispose())
+
+
+def _require_dsi_phase0_schema(db) -> None:
+    names = set(inspect(db.connection()).get_table_names())
+    if "fact_returns" not in names:
+        pytest.skip("Apply Alembic revisions 20260518_0038–0040 (fact_returns).")
+    cols = {c["name"] for c in inspect(db.connection()).get_columns("import_distributor_si_staging_line")}
+    if "invoice_no" not in cols:
+        pytest.skip("Apply Alembic revision 20260518_0038 (staging invoice_no).")
+    sell_cols = {c["name"] for c in inspect(db.connection()).get_columns("fact_sales_sellout")}
+    if "transaction_date" not in sell_cols:
+        pytest.skip("Apply Alembic revision 20260518_0038 (sellout transaction_date).")
+
+
+def test_dsi_sellout_two_invoices_same_day_distinct_source_keys(dsi_source_id: int) -> None:
+    with SessionLocal() as db:
+        _require_dsi_phase0_schema(db)
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,invoice_no,soh\n"
+        "DIST-01,SKU-ALPHA-01,2024-07-01,2,CUST-1001,INV-A,1\n"
+        "DIST-01,SKU-ALPHA-01,2024-07-01,3,CUST-1001,INV-B,1\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_two_inv.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        n = int(
+            db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == jid))
+            or 0
+        )
+        assert n == 2
+        rows = list(db.scalars(select(FactSalesSellout).where(FactSalesSellout.source_import_job_id == jid)).all())
+        assert len({r.source_key for r in rows}) == 2
+        assert rows[0].transaction_date == date(2024, 7, 1)
+        assert rows[0].period_start == date(2024, 7, 1)
+
+
+def test_dsi_sellout_reupload_updates_units_not_identity(dsi_source_id: int) -> None:
+    with SessionLocal() as db:
+        _require_dsi_phase0_schema(db)
+        cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
+        dist = db.scalars(select(DimDistributor).where(DimDistributor.code == "DIST-01")).first()
+        prod = db.scalars(select(DimProduct).where(DimProduct.sku == "SKU-ALPHA-01")).first()
+        assert cust and dist and prod
+        cust_id, dist_id, prod_id = int(cust.id), int(dist.id), int(prod.id)
+    csv1 = "distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-07-02,5,CUST-1001,1\n"
+    _run_dsi_job(dsi_source_id, _csv_bytes(csv1), import_mode="apply", filename="dsi_reup1.csv")
+    csv2 = "distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-07-02,9,CUST-1001,1\n"
+    _run_dsi_job(dsi_source_id, _csv_bytes(csv2), import_mode="apply", filename="dsi_reup2.csv")
+    sk = dsi_sellout_source_key(
+        distributor_id=dist_id,
+        product_id=prod_id,
+        customer_id=cust_id,
+        transaction_date=date(2024, 7, 2),
+        invoice_no="",
+    )
+    with SessionLocal() as db:
+        row = db.scalar(select(FactSalesSellout).where(FactSalesSellout.source_key == sk))
+        assert row is not None
+        assert float(row.units) == 9.0
+        assert int(db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_key == sk)) or 0) == 1
+
+
+def test_dsi_negative_qty_routes_to_returns_not_sellout(dsi_source_id: int) -> None:
+    with SessionLocal() as db:
+        _require_dsi_phase0_schema(db)
+    csv = (
+        "distributor_code,sku,date,qty,customer_name,Dealer Name Group,soh,invoice_no\n"
+        "DIST-01,SKU-ALPHA-01,2024-07-13,-4,,Metro Market Group,1,INV-NEG-TEST-01\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_neg.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        assert int(db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == jid)) or 0) == 0
+        assert int(db.scalar(select(func.count()).select_from(FactSalesSellout)) or 0) >= 0
+        ret = db.scalar(
+            select(FactReturns).where(FactReturns.invoice_no == "INV-NEG-TEST-01")
+        )
+        assert ret is not None
+        assert float(ret.return_quantity) == 4.0
+        assert ret.source_key.startswith("dsi-return:")
+        assert (
+            int(
+                db.scalar(
+                    select(func.count()).select_from(FactSalesSellout).where(
+                        FactSalesSellout.invoice_no == "INV-NEG-TEST-01"
+                    )
+                )
+                or 0
+            )
+            == 0
+        )
+
+
+def test_dsi_zero_qty_skips_sellout_and_returns(dsi_source_id: int) -> None:
+    with SessionLocal() as db:
+        _require_dsi_phase0_schema(db)
+    csv = "distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-07-04,0,CUST-1001,2\n"
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_zero.csv")
+    jid = job.id
+    with SessionLocal() as db:
+        assert int(db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == jid)) or 0) == 0
+        assert int(db.scalar(select(func.count()).select_from(FactReturns).where(FactReturns.import_job_id == jid)) or 0) == 0
+        assert int(
+            db.scalar(
+                select(func.count()).select_from(FactInventoryDistributor).where(
+                    FactInventoryDistributor.source_import_job_id == jid
+                )
+            )
+            or 0
+        ) == 1
+
+
+def test_dsi_inventory_upserts_by_source_key(dsi_source_id: int) -> None:
+    with SessionLocal() as db:
+        _require_dsi_phase0_schema(db)
+        inv_cols = {c["name"] for c in inspect(db.connection()).get_columns("fact_inventory_distributor")}
+        if "source_key" not in inv_cols:
+            pytest.skip("Apply Alembic revision 20260518_0040 (inventory source_key).")
+    csv1 = "distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-07-05,0,,10\n"
+    csv2 = "distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-07-05,0,,22\n"
+    _run_dsi_job(dsi_source_id, _csv_bytes(csv1), import_mode="apply", filename="dsi_inv1.csv")
+    _run_dsi_job(dsi_source_id, _csv_bytes(csv2), import_mode="apply", filename="dsi_inv2.csv")
+    with SessionLocal() as db:
+        dist = db.scalars(select(DimDistributor).where(DimDistributor.code == "DIST-01")).first()
+        prod = db.scalars(select(DimProduct).where(DimProduct.sku == "SKU-ALPHA-01")).first()
+        assert dist and prod
+        n = int(
+            db.scalar(
+                select(func.count())
+                .select_from(FactInventoryDistributor)
+                .where(
+                    FactInventoryDistributor.distributor_id == dist.id,
+                    FactInventoryDistributor.product_id == prod.id,
+                    FactInventoryDistributor.as_of_date == date(2024, 7, 5),
+                )
+            )
+            or 0
+        )
+        assert n == 1
+        row = db.scalars(
+            select(FactInventoryDistributor).where(
+                FactInventoryDistributor.distributor_id == dist.id,
+                FactInventoryDistributor.product_id == prod.id,
+                FactInventoryDistributor.as_of_date == date(2024, 7, 5),
+            )
+        ).first()
+        assert row is not None
+        assert float(row.on_hand_units) == 22.0
+        assert row.source_key == f"dsi-soh:{dist.id}:{prod.id}:2024-07-05"
+        assert row.calculated_soh is None
+        assert row.reconciliation_status is None
+
+
+def test_dsi_weekly_validate_skips_post_validate_auto_apply(dsi_source_id: int, monkeypatch) -> None:
+    calls: list = []
+
+    def _fake_enqueue(*args, **kwargs):  # type: ignore[no-untyped-def]
+        calls.append(1)
+        return "task-x", True
+
+    monkeypatch.setattr(
+        "app.ingestion.dsi_validate_post_sync.enqueue_dsi_resolution_plan_apply",
+        _fake_enqueue,
+    )
+    csv = "distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-07-06,1,CUST-1001,1\n"
+    _run_dsi_job(
+        dsi_source_id,
+        _csv_bytes(csv),
+        import_mode="validate",
+        filename="dsi_weekly_pv.csv",
+        dsi_workflow_mode_explicit="weekly",
+    )
+    assert calls == []
+
+
+def test_dsi_historical_validate_enqueues_ready_candidates_only(dsi_source_id: int, monkeypatch) -> None:
+    captured: list[tuple] = []
+
+    def _fake_enqueue(job_id, payload, **kwargs):  # type: ignore[no-untyped-def]
+        captured.append((job_id, payload, kwargs))
+        return "task-hist", True
+
+    def _fake_plan(session, job_id, **kwargs):  # type: ignore[no-untyped-def]
+        return {
+            "rows": [
+                {"candidate_id": 99, "plan_status": "ready", "hold_for_manual_review": False},
+                {"candidate_id": 100, "plan_status": "needs_review", "hold_for_manual_review": False},
+                {"candidate_id": 101, "plan_status": "ready", "hold_for_manual_review": True},
+            ]
+        }
+
+    monkeypatch.setattr(
+        "app.ingestion.dsi_validate_post_sync.enqueue_dsi_resolution_plan_apply",
+        _fake_enqueue,
+    )
+    monkeypatch.setattr(
+        "app.ingestion.dsi_validate_post_sync.build_dsi_resolution_plan_sync",
+        _fake_plan,
+    )
+    csv = "distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-07-07,1,CUST-1001,1\n"
+    job = _run_dsi_job(
+        dsi_source_id,
+        _csv_bytes(csv),
+        import_mode="validate",
+        filename="dsi_hist_pv.csv",
+        dsi_workflow_mode_explicit="historical",
+    )
+    assert len(captured) == 1
+    assert captured[0][1]["candidate_ids"] == [99]
+    assert captured[0][2].get("detach_from_caller") is True
+    with SessionLocal() as db:
+        j = db.get(ImportJob, job.id)
+        assert j is not None
+        meta = j.staged_metadata or {}
+        assert meta.get("dsi_post_validate_auto_apply", {}).get("candidate_count") == 1

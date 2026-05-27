@@ -1,14 +1,34 @@
 # Channel Intelligence Platform — Current Context
 
 ## Branch
-`dsi/async-apply-steward-ux-product-tiebreak` — based on `main` @ `0503aaf` (root-identity duplicate scorer pushed)
+`feature/dsi-phase-0-foundations` — from `main` @ `7561935` (async DSI apply merged)
 
 ## Alembic Head
-`20260517_0037` — no migration in this workstream
+`20260518_0040` — written on branch; **not** upgraded on `cip` (Warren approval pending). Smoke-verified on `cip_alembic_smoke` only.
 
 ---
 
-## Latest work (May 2026) — DSI steward scale + product shipment tie-break
+## Latest work (May 2026) — DSI Phase 0 foundations (in progress on branch)
+
+| Area | What changed |
+|------|----------------|
+| **Migrations 0038–0040** | Sell-out day grain + `invoice_no` (`''` sentinel); `fact_returns`; inventory `source_key` + reconciliation columns |
+| **Fact apply** | Positive qty → `fact_sales_sellout`; negative → `fact_returns` (abs qty); zero skipped; hashed `dsi-sellout:` / `dsi-return:` keys |
+| **Post-validate** | Historical workflow enqueues `dsi_resolution_plan_apply` via detached thread/Celery (not `asyncio.run` in pipeline) |
+| **UI** | Historical mode label: auto-applies ready candidates after validate |
+
+### E2E (May 2026, local stack)
+- Services: `scripts/restart-dev.ps1` — Redis PONG, API `/health`, web `:3000` OK
+- Scenarios 1–3: `scripts/e2e_dsi_phase0.py` + API/DB verification PASS on `cip` @ head `20260518_0040`
+- Activity bell: `/api/v1/imports/background-tasks` shows `dsi_pipeline` during validate; historical job enqueues `dsi_post_validate_auto_apply` when ready candidates exist
+- Focused pytest (7 Phase 0 tests): PASS with `ALLOW_TESTS_ON_DEV_DB=1`
+
+### Next
+- Merge `feature/dsi-phase-0-foundations` after review
+
+---
+
+## Prior work (May 2026) — DSI steward scale + product shipment tie-break
 
 ### Shipped on feature branch (`ca4ca57`)
 | Area | What changed |

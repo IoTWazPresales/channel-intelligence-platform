@@ -33,6 +33,7 @@ class ImportDistributorSiStagingLine(Base, TimestampMixin):
     resolved_product_id: Mapped[int | None] = mapped_column(ForeignKey("dim_product.id"), nullable=True)
 
     transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    invoice_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
     snapshot_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     quantity_sold: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     stock_on_hand: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)

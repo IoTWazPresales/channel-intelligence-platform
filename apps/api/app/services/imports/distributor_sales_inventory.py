@@ -20,7 +20,13 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
-from app.models.facts import FactInventoryDistributor, FactSalesSellout
+from app.models.facts import FactInventoryDistributor, FactReturns, FactSalesSellout
+from app.services.imports.dsi_fact_source_keys import (
+    dsi_inventory_source_key,
+    dsi_return_source_key,
+    dsi_sellout_source_key,
+    normalize_dsi_invoice_no,
+)
 from app.models.import_distributor_si import (
     CustomerSourceTokenAlias,
     DistributorSourceTokenAlias,
@@ -45,6 +51,7 @@ CANONICAL = (
     "distributor_token",
     "product_identifier",
     "transaction_date",
+    "invoice_no",
     "snapshot_date",
     "quantity_sold",
     "stock_on_hand",
@@ -1254,6 +1261,7 @@ def process_distributor_sales_inventory(
     _c_dg = _col(mapping, "dealer_group_token")
     _c_open = _col(mapping, "open_channel_evidence")
     _c_tx = _col(mapping, "transaction_date")
+    _c_inv = _col(mapping, "invoice_no")
     _c_snap = _col(mapping, "snapshot_date")
     _c_qty = _col(mapping, "quantity_sold")
     _c_soh = _col(mapping, "stock_on_hand")
@@ -1338,6 +1346,8 @@ def process_distributor_sales_inventory(
             else None
         )
         cur = _clean_str(row.get(_c_cur)) if _c_cur else None
+        inv_raw = _clean_str(row.get(_c_inv)) if _c_inv else None
+        invoice_no_val = normalize_dsi_invoice_no(inv_raw)
 
         computed_rev: Decimal | None = None
         if qty_sold is not None and unit_price is not None:
@@ -1367,17 +1377,18 @@ def process_distributor_sales_inventory(
         rdistributor_id = rdid
         rcustomer_id: int | None = None
 
-        sellout_attempt = (
-            qty_sold is not None and tx_date is not None and qty_sold != 0
-        )
+        qty_f = float(qty_sold) if qty_sold is not None else None
+        sellout_attempt = qty_f is not None and tx_date is not None and qty_f > 0
+        return_attempt = qty_f is not None and tx_date is not None and qty_f < 0
+        sellout_or_return_attempt = sellout_attempt or return_attempt
         inv_attempt = soh is not None
 
         cust_res_raw: str | None = None
         cust_res_notes: list[str] = []
-        if sellout_attempt:
+        if sellout_or_return_attempt:
             cust_res_raw, cust_res_notes = effective_dsi_customer_primary_for_resolution(cust_raw, dg_raw)
 
-        if sellout_attempt:
+        if sellout_or_return_attempt:
             rcustomer_id, cd = _resolve_customer_from_cache(
                 source_id=source_def_id,
                 distributor_id=rdistributor_id,
@@ -1391,9 +1402,9 @@ def process_distributor_sales_inventory(
             diag.extend(cust_res_notes)
 
         hard_row = bool(derr or perr)
-        sellout_blocked_no_customer = bool(sellout_attempt and rcustomer_id is None)
+        sellout_blocked_no_customer = bool(sellout_or_return_attempt and rcustomer_id is None)
         sellout_blocked_no_tx = bool(
-            qty_sold is not None and qty_sold != 0 and tx_date is None
+            qty_f is not None and qty_f != 0 and tx_date is None
         )
         inv_ready = bool(inv_attempt and snap_date is not None and soh is not None)
         inv_soft_fail = bool(inv_attempt and not inv_ready)
@@ -1462,8 +1473,17 @@ def process_distributor_sales_inventory(
             and bool(rdistributor_id)
             and bool(rpid)
             and tx_date is not None
-            and qty_sold is not None
-            and qty_sold != 0
+            and qty_f is not None
+            and qty_f > 0
+            and bool(rcustomer_id)
+        )
+        can_return = (
+            not hard_row
+            and bool(rdistributor_id)
+            and bool(rpid)
+            and tx_date is not None
+            and qty_f is not None
+            and qty_f < 0
             and bool(rcustomer_id)
         )
         can_inv = (
@@ -1475,9 +1495,9 @@ def process_distributor_sales_inventory(
         )
         if sev == "error":
             res_status = "blocked"
-        elif can_sellout and can_inv:
+        elif (can_sellout or can_return) and can_inv:
             res_status = "ready_both"
-        elif can_sellout:
+        elif can_sellout or can_return:
             res_status = "ready_sellout"
         elif can_inv:
             res_status = "ready_inventory"
@@ -1510,6 +1530,7 @@ def process_distributor_sales_inventory(
             resolved_customer_id=rcustomer_id,
             resolved_product_id=rpid,
             transaction_date=tx_date,
+            invoice_no=invoice_no_val,
             snapshot_date=snap_date,
             quantity_sold=float(qty_sold) if qty_sold is not None else None,
             stock_on_hand=float(soh) if soh is not None else None,
@@ -1838,7 +1859,7 @@ def process_distributor_sales_inventory(
     eff_rev_note = ""
     if job.import_mode == "apply":
         db.flush()
-        applied_sell, applied_inv, apply_errors = upsert_dsi_facts_for_staging_job(db, job)
+        applied_sell, applied_inv, applied_ret, apply_errors = upsert_dsi_facts_for_staging_job(db, job)
         if apply_errors:
             db.add(
                 ImportRowResult(
@@ -1849,7 +1870,10 @@ def process_distributor_sales_inventory(
                     message=json.dumps(apply_errors)[:4000],
                 )
             )
-        eff_rev_note = f" Applied sell-out facts={applied_sell}, inventory facts={applied_inv} (upsert by natural key)."
+        eff_rev_note = (
+            f" Applied sell-out facts={applied_sell}, return facts={applied_ret}, "
+            f"inventory facts={applied_inv} (upsert by source_key)."
+        )
 
     summary = {
         "staging_rows": int(len(df)),
@@ -2135,21 +2159,18 @@ def refresh_dsi_staging_lines_for_job(db: Session, job: ImportJob) -> None:
         refresh_dsi_staging_line_resolution(db, job, line, prod_idx)
 
 
-def _dsi_fact_sellout_source_key(
-    *,
-    distributor_id: int | None,
-    customer_id: int,
-    product_id: int,
-    period_start: date,
-) -> str:
-    d = int(distributor_id) if distributor_id is not None else 0
-    return f"dsi-sellout:{d}:{int(customer_id)}:{int(product_id)}:{period_start.isoformat()}"
+def _invoice_no_for_staging_line(line: ImportDistributorSiStagingLine) -> str:
+    if line.invoice_no is not None and str(line.invoice_no).strip():
+        return normalize_dsi_invoice_no(line.invoice_no)
+    mapped = line.mapped_canonical if isinstance(line.mapped_canonical, dict) else {}
+    return normalize_dsi_invoice_no(mapped.get("invoice_no"))
 
 
-def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, int, list[str]]:
-    """Apply sell-out / inventory fact upserts for all staging lines (import_mode apply). Returns counts and errors."""
+def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, int, int, list[str]]:
+    """Apply sell-out / returns / inventory fact upserts for staging lines (import_mode apply)."""
     errors: list[str] = []
     sell_tbl = FactSalesSellout.__table__
+    ret_tbl = FactReturns.__table__
     inv_tbl = FactInventoryDistributor.__table__
     lines = db.scalars(
         select(ImportDistributorSiStagingLine)
@@ -2158,16 +2179,20 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
     ).all()
     applied_sell = 0
     applied_inv = 0
+    applied_ret = 0
     for line in lines:
         parts: list[str] = []
         qs = line.quantity_sold
-        sellout_units_ok = qs is not None and float(qs) != 0.0
+        qty_f = float(qs) if qs is not None else None
+        inv_no = _invoice_no_for_staging_line(line)
+        tx = line.transaction_date
+
         if (
             line.resolved_distributor_id
             and line.resolved_product_id
-            and line.transaction_date is not None
-            and qs is not None
-            and sellout_units_ok
+            and tx is not None
+            and qty_f is not None
+            and qty_f > 0
             and line.resolved_customer_id
         ):
             eff = line.computed_revenue_amount
@@ -2176,23 +2201,29 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
             if eff is None:
                 eff = 0.0
             try:
-                sk = _dsi_fact_sellout_source_key(
-                    distributor_id=line.resolved_distributor_id,
-                    customer_id=int(line.resolved_customer_id),
-                    product_id=int(line.resolved_product_id),
-                    period_start=line.transaction_date,
+                dist_id = int(line.resolved_distributor_id)
+                cust_id = int(line.resolved_customer_id)
+                prod_id = int(line.resolved_product_id)
+                sk = dsi_sellout_source_key(
+                    distributor_id=dist_id,
+                    customer_id=cust_id,
+                    product_id=prod_id,
+                    transaction_date=tx,
+                    invoice_no=inv_no,
                 )
                 stmt = (
                     pg_insert(sell_tbl)
                     .values(
                         source_key=sk,
                         staging_line_id=int(line.id),
-                        product_id=line.resolved_product_id,
-                        customer_id=line.resolved_customer_id,
-                        distributor_id=line.resolved_distributor_id,
+                        product_id=prod_id,
+                        customer_id=cust_id,
+                        distributor_id=dist_id,
                         channel_id=None,
-                        period_start=line.transaction_date,
-                        units=line.quantity_sold,
+                        period_start=tx,
+                        transaction_date=tx,
+                        invoice_no=inv_no,
+                        units=qty_f,
                         revenue=float(eff),
                         unit_sellout_price_ex_tax_amount=line.unit_sellout_price_ex_tax_amount,
                         reported_revenue_amount=line.reported_revenue_amount,
@@ -2204,16 +2235,16 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
                         constraint="uq_fact_sales_sellout_source_key",
                         set_={
                             "staging_line_id": text("EXCLUDED.staging_line_id"),
-                            "product_id": text("EXCLUDED.product_id"),
-                            "customer_id": text("EXCLUDED.customer_id"),
-                            "distributor_id": text("EXCLUDED.distributor_id"),
                             "units": text("EXCLUDED.units"),
                             "revenue": text("EXCLUDED.revenue"),
-                            "unit_sellout_price_ex_tax_amount": text("EXCLUDED.unit_sellout_price_ex_tax_amount"),
+                            "unit_sellout_price_ex_tax_amount": text(
+                                "EXCLUDED.unit_sellout_price_ex_tax_amount"
+                            ),
                             "reported_revenue_amount": text("EXCLUDED.reported_revenue_amount"),
                             "computed_revenue_amount": text("EXCLUDED.computed_revenue_amount"),
                             "currency_code": text("EXCLUDED.currency_code"),
                             "source_import_job_id": text("EXCLUDED.source_import_job_id"),
+                            "updated_at": text("now()"),
                         },
                     )
                     .returning(sell_tbl.c.id)
@@ -2225,6 +2256,58 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"sellout row {line.source_row_number}: {exc}")
 
+        elif (
+            line.resolved_distributor_id
+            and line.resolved_product_id
+            and tx is not None
+            and qty_f is not None
+            and qty_f < 0
+            and line.resolved_customer_id
+        ):
+            unit_px = line.unit_sellout_price_ex_tax_amount
+            if unit_px is None and line.reported_revenue_amount is not None and qty_f != 0:
+                unit_px = abs(float(line.reported_revenue_amount) / qty_f)
+            try:
+                dist_id = int(line.resolved_distributor_id)
+                cust_id = int(line.resolved_customer_id)
+                prod_id = int(line.resolved_product_id)
+                sk = dsi_return_source_key(
+                    distributor_id=dist_id,
+                    customer_id=cust_id,
+                    product_id=prod_id,
+                    transaction_date=tx,
+                    invoice_no=inv_no,
+                )
+                ret_stmt = (
+                    pg_insert(ret_tbl)
+                    .values(
+                        source_key=sk,
+                        staging_line_id=int(line.id),
+                        distributor_id=dist_id,
+                        product_id=prod_id,
+                        customer_id=cust_id,
+                        transaction_date=tx,
+                        invoice_no=inv_no,
+                        return_quantity=abs(qty_f),
+                        unit_price=unit_px,
+                        import_job_id=job.id,
+                    )
+                    .on_conflict_do_update(
+                        constraint="uq_fact_returns_source_key",
+                        set_={
+                            "return_quantity": text("EXCLUDED.return_quantity"),
+                            "unit_price": text("EXCLUDED.unit_price"),
+                            "updated_at": text("now()"),
+                        },
+                    )
+                    .returning(ret_tbl.c.id)
+                )
+                db.execute(ret_stmt).scalar_one()
+                applied_ret += 1
+                parts.append("return")
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"return row {line.source_row_number}: {exc}")
+
         if (
             line.resolved_distributor_id
             and line.resolved_product_id
@@ -2232,20 +2315,30 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
             and line.stock_on_hand is not None
         ):
             try:
+                dist_id = int(line.resolved_distributor_id)
+                prod_id = int(line.resolved_product_id)
+                snap = line.snapshot_date
+                inv_sk = dsi_inventory_source_key(
+                    distributor_id=dist_id,
+                    product_id=prod_id,
+                    as_of_date=snap,
+                )
                 inv_stmt = (
                     pg_insert(inv_tbl)
                     .values(
-                        product_id=line.resolved_product_id,
-                        distributor_id=line.resolved_distributor_id,
-                        as_of_date=line.snapshot_date,
+                        source_key=inv_sk,
+                        product_id=prod_id,
+                        distributor_id=dist_id,
+                        as_of_date=snap,
                         on_hand_units=float(line.stock_on_hand),
                         source_import_job_id=job.id,
                     )
                     .on_conflict_do_update(
-                        constraint="uq_fact_inventory_distributor_dsi_v1",
+                        constraint="uq_fact_inventory_distributor_source_key",
                         set_={
                             "on_hand_units": text("EXCLUDED.on_hand_units"),
                             "source_import_job_id": text("EXCLUDED.source_import_job_id"),
+                            "updated_at": text("now()"),
                         },
                     )
                     .returning(inv_tbl.c.id)
@@ -2266,11 +2359,12 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
             "applied": True,
             "applied_at": datetime.now(timezone.utc).isoformat(),
             "sellout_rows": applied_sell,
+            "return_rows": applied_ret,
             "inventory_rows": applied_inv,
             "apply_errors": errors[:50],
         }
     )
     job.staged_metadata = to_jsonable(meta)
     db.add(job)
-    return applied_sell, applied_inv, errors
+    return applied_sell, applied_inv, applied_ret, errors
 

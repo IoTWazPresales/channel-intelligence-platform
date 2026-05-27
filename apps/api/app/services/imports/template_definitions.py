@@ -100,6 +100,18 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                 ],
                 "required": False,
             },
+            "invoice_no": {
+                "aliases": [
+                    "invoice",
+                    "invoice no",
+                    "invoice_no",
+                    "invoice number",
+                    "invoice_number",
+                    "inv_no",
+                    "inv no",
+                ],
+                "required": False,
+            },
             "snapshot_date": {
                 "aliases": ["as_of_date", "stock_date", "inventory_date", "soh_date"],
                 "required": False,
