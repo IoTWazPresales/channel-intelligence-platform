@@ -9,6 +9,67 @@
 ## Alembic Head
 `20260518_0041` — `fact_inventory_reconciliation` + `source_key` upsert grain. Applied on **`cip`** and **`cip_alembic_smoke`**.
 
+## Current State
+- API .env confirmed pointing to cip (verified May 27, 2026)
+
+---
+
+## Latest work (May 2026) — DSI Phase 3 + Phase 4
+
+### Phase 3 — Velocity learning
+- Migration 20260518_0042: fact_customer_velocity
+  Grain: (distributor_id, product_id, customer_id) —
+  one current row per combination, updated each apply.
+  computed_through_date = max(transaction_date) from
+  fact_sales_sellout — exact source date, no rounding.
+  Windows: velocity_4wk (28d), velocity_13wk (91d),
+  velocity_52wk (364d). model_confidence: high/medium/low
+  based on distinct weeks of history.
+  seasonal_index = 1.0 when < 2 calendar years available.
+  is_promotional_period always False until CPOR module built.
+- dsi_velocity_intelligence.py: compute_distributor_velocity
+- dsi_velocity_sync.py: run_dsi_velocity_compute_sync
+  chains to dsi_forecasting_enqueue on completion
+- dsi_velocity_enqueue.py: mirrors soh enqueue pattern
+  Celery task: imports.dsi_velocity_compute
+  Activity bell kind: dsi_velocity_compute
+  Payload: { distributor_id } — no date, computes from max
+- Dispatch: dsi_apply_completion.py dispatches SOH and
+  velocity in parallel after apply completion
+- dsi_import_state_awareness.py: fixed week_start_date →
+  COUNT(DISTINCT DATE_TRUNC('week', computed_through_date))
+- Tests: tests/test_dsi_velocity_intelligence.py — 9 passed
+
+### Phase 4 — DSI forecasting
+- Migration 20260518_0043: fact_dsi_forecast (new table)
+  DO NOT confuse with fact_forecast (Commercial Planner)
+  Grain: (distributor_id, product_id, forecast_date)
+  forecast_date = future date being forecast, not a period.
+  Formula: velocity_52wk * seasonal_index
+  Confidence band from 4wk/52wk variance ratio.
+  lower_band floored at 0.
+  Only medium/high confidence velocity rows feed forecasts.
+  Skips products with null or zero velocity_52wk.
+- dsi_forecasting.py: generate_distributor_forecasts
+  weeks_ahead=13 default
+- dsi_forecasting_sync.py: run_dsi_forecasting_sync
+- dsi_forecasting_enqueue.py: mirrors soh enqueue pattern
+  Celery task: imports.dsi_forecasting
+  Activity bell kind: dsi_forecasting
+  Payload: { distributor_id }
+- Chained from velocity sync after velocity commits
+- Tests: tests/test_dsi_forecasting.py — 7 passed
+
+### Migrations applied
+- 20260518_0042 + 20260518_0043 applied on cip_alembic_smoke
+- NOT yet applied on cip — pending approval
+
+### Task chain (post-apply)
+  dsi_apply_completion
+    → Task 2: imports.dsi_soh_reconciliation (parallel)
+    → Task 3: imports.dsi_velocity_compute (parallel)
+      → Task 4: imports.dsi_forecasting (chained from Task 3)
+
 ---
 
 ## Latest work (May 2026) — DSI Phase 1 + Phase 2 (weekly uploads)

@@ -132,7 +132,7 @@ def _velocity_weeks_available(session: Session, distributor_id: int | None) -> i
         row = session.execute(
             text(
                 """
-                SELECT COUNT(DISTINCT week_start_date)::int
+                SELECT COUNT(DISTINCT DATE_TRUNC('week', computed_through_date))::int
                 FROM fact_customer_velocity
                 WHERE distributor_id = :dist_id
                 """

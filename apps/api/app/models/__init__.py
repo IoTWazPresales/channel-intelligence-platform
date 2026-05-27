@@ -42,6 +42,8 @@ from app.models.import_distributor_si import (
 )
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.promo_export import PromoPlanExport, PromoPlanExportEvent
+from app.models.fact_customer_velocity import FactCustomerVelocity
+from app.models.fact_dsi_forecast import FactDsiForecast
 from app.models.facts import (
     FactActivation,
     FactBudgetActual,
@@ -112,6 +114,8 @@ __all__ = [
     "FactInventoryCustomer",
     "FactInventoryDistributor",
     "FactInventoryReconciliation",
+    "FactCustomerVelocity",
+    "FactDsiForecast",
     "FactInboundShipment",
     "FactPricing",
     "FactSupport",
