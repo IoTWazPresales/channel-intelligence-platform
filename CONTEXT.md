@@ -1,30 +1,53 @@
 # Channel Intelligence Platform — Current Context
 
 ## Branch
-`feature/dsi-phase-0-foundations` — from `main` @ `7561935` (async DSI apply merged)
+`main`
+
+## Head commit
+`45cf9bc` — `dsi: Phase 0 foundations for sell-out grain, returns, and historical auto-apply` (merged from `feature/dsi-phase-0-foundations`)
 
 ## Alembic Head
-`20260518_0040` — written on branch; **not** upgraded on `cip` (Warren approval pending). Smoke-verified on `cip_alembic_smoke` only.
+`20260518_0040` — applied on both `cip` and `cip_alembic_smoke`. Clean.
 
 ---
 
-## Latest work (May 2026) — DSI Phase 0 foundations (in progress on branch)
+## Latest work (May 2026) — DSI Phase 0 foundations (shipped on `main`)
 
-| Area | What changed |
-|------|----------------|
-| **Migrations 0038–0040** | Sell-out day grain + `invoice_no` (`''` sentinel); `fact_returns`; inventory `source_key` + reconciliation columns |
-| **Fact apply** | Positive qty → `fact_sales_sellout`; negative → `fact_returns` (abs qty); zero skipped; hashed `dsi-sellout:` / `dsi-return:` keys |
-| **Post-validate** | Historical workflow enqueues `dsi_resolution_plan_apply` via detached thread/Celery (not `asyncio.run` in pipeline) |
-| **UI** | Historical mode label: auto-applies ready candidates after validate |
+### What was built and why
 
-### E2E (May 2026, local stack)
-- Services: `scripts/restart-dev.ps1` — Redis PONG, API `/health`, web `:3000` OK
-- Scenarios 1–3: `scripts/e2e_dsi_phase0.py` + API/DB verification PASS on `cip` @ head `20260518_0040`
-- Activity bell: `/api/v1/imports/background-tasks` shows `dsi_pipeline` during validate; historical job enqueues `dsi_post_validate_auto_apply` when ready candidates exist
+Phase 0 establishes the **fact-layer foundations** for weekly DSI intelligence. Before this work, sell-out upserts used a month-level natural key, negative quantities landed in `fact_sales_sellout`, and inventory had no `source_key`. Returns had no home. Historical imports could not safely auto-apply after validate because `asyncio.run` inside the pipeline Celery task hung on Windows.
+
+| Deliverable | Why |
+|-------------|-----|
+| **Migrations 0038–0040** | Day-level sell-out grain with `invoice_no` (`''` sentinel, not NULL — stable hash input); new `fact_returns`; inventory `source_key` + reconciliation placeholder columns |
+| **Hashed `source_key` builders** (`dsi_fact_source_keys.py`) | Deterministic idempotent upsert: `dsi-sellout:` / `dsi-return:` / `dsi-soh:` prefixes |
+| **Quantity routing on apply** | Positive → sell-out; negative → returns (abs qty); zero → skip both — matches commercial semantics |
+| **Post-validate historical auto-apply** | Enqueues `dsi_resolution_plan_apply` via Celery or detached daemon thread — never inline `asyncio.run` on the validate thread |
+| **Shared enqueue module** (`dsi_resolution_plan_enqueue.py`) | Steward apply-async and post-validate use the same dispatch path |
+
+`period_start` and `transaction_date` are both populated from the staging transaction date on write (sell-out API still reads `period_start`; Phase 1 can unify).
+
+### E2E results (local stack, May 2026)
+
+- Services: `scripts/restart-dev.ps1` — Redis PONG, worker, API `/health`, web `:3000`
+- **Scenario 1:** negative qty → `fact_returns` (by `invoice_no`); not in `fact_sales_sellout` — PASS
+- **Scenario 2:** re-upload idempotent; qty update on same `source_key` only — PASS
+- **Scenario 3:** historical validate enqueues `dsi_post_validate_auto_apply`; weekly does not; activity bell shows `dsi_pipeline` during validate — PASS
 - Focused pytest (7 Phase 0 tests): PASS with `ALLOW_TESTS_ON_DEV_DB=1`
+- Fixtures: `tests/e2e/fixtures/dsi_e2e_*.csv`
+
+### Architectural decisions locked in Phase 0
+
+1. **Invoice grain:** `distributor_id + product_id + customer_id + transaction_date + invoice_no` (empty string `''` when absent — never NULL in keys).
+2. **Returns conflict:** update `return_quantity` and `unit_price` only; `import_job_id` owned by first job (audit record).
+3. **Sell-out conflict:** update measures and `source_import_job_id` only — not identity columns.
+4. **Inventory:** upsert on `source_key`; drop `uq_fact_inventory_distributor_dsi_v1`; reconciliation columns null until reconciliation jobs run.
+5. **Post-validate:** historical workflow only; ready candidates only; excludes `hold_for_manual_review` and `needs_review`.
+6. **DSI resolution order / steward governance / corroboration tier order:** unchanged.
 
 ### Next
-- Merge `feature/dsi-phase-0-foundations` after review
+
+**Phase 1 — weekly DSI uploads** (velocity, SOH reconciliation, forecasting layers on top of this fact grain).
 
 ---
 
