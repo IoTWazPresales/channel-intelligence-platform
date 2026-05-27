@@ -1251,6 +1251,27 @@ def process_distributor_sales_inventory(
     res_cache = _build_resolution_cache(db, source_def_id)
     # -------------------------------------------------------------------------
 
+    from app.services.imports.dsi_import_state_awareness import (
+        check_dsi_import_state,
+        persist_intelligence_state_on_job,
+        resolve_primary_distributor_id_from_dataframe,
+    )
+
+    primary_dist_id = resolve_primary_distributor_id_from_dataframe(db, df, mapping, source_def_id)
+    intel_state = check_dsi_import_state(db, job.id, primary_dist_id)
+    persist_intelligence_state_on_job(db, job, intel_state)
+    db.flush()
+
+    weekly_historical_customers: dict[tuple[int | None, str], Any] = {}
+    if not dsi_historical_workflow_from_import_job(job) and source_def_id is not None:
+        from app.services.imports.dsi_customer_intelligence import load_historical_customer_resolutions
+
+        weekly_historical_customers = load_historical_customer_resolutions(
+            db,
+            source_definition_id=int(source_def_id),
+            current_job_id=int(job.id),
+        )
+
     if on_progress is not None:
         on_progress("processing_rows", "Processing rows", 0, len(df))
 
@@ -1354,10 +1375,26 @@ def process_distributor_sales_inventory(
             computed_rev = qty_sold * unit_price
 
         diag: list[str] = []
+        customer_auto_conflict: dict[str, Any] | None = None
 
         rdid, derr = _resolve_distributor_from_cache(dist_raw, source_def_id, res_cache)
         if derr:
             diag.append(derr)
+        if rdid is None and dist_raw:
+            from app.services.imports.dsi_weekly_auto_resolution import (
+                check_distributor_auto_resolution_at_validate,
+            )
+
+            dist_auto = check_distributor_auto_resolution_at_validate(
+                db,
+                job=job,
+                source_definition_id=source_def_id,
+                normalized_key=_norm_key(dist_raw),
+                resolved_distributor_id=rdid,
+            )
+            if dist_auto.outcome == "resolved" and dist_auto.entity_id is not None:
+                rdid = int(dist_auto.entity_id)
+                diag.append("distributor_resolved_weekly_auto")
 
         evidence_date = tx_date or snap_date
         rpid, perr, presolve_tag, pev = _resolve_product(
@@ -1373,6 +1410,25 @@ def process_distributor_sales_inventory(
             diag.append(perr)
         elif presolve_tag:
             diag.append(presolve_tag)
+        if rpid is None and prod_raw:
+            from app.services.imports.dsi_weekly_auto_resolution import (
+                check_product_auto_resolution_at_validate,
+            )
+
+            prod_auto = check_product_auto_resolution_at_validate(
+                db,
+                job=job,
+                source_definition_id=source_def_id,
+                distributor_id=rdid,
+                normalized_key=_norm_key(prod_raw),
+            )
+            if prod_auto.outcome == "resolved" and prod_auto.entity_id is not None:
+                rpid = int(prod_auto.entity_id)
+                diag.append("product_resolved_weekly_auto")
+            elif prod_auto.outcome == "conflict":
+                pev = pev or {}
+                pev["weekly_auto_conflict"] = True
+                pev["prior_resolution_conflict"] = prod_auto.conflict_prior
 
         rdistributor_id = rdid
         rcustomer_id: int | None = None
@@ -1399,6 +1455,30 @@ def process_distributor_sales_inventory(
                 res_cache=res_cache,
             )
             diag.extend(cd)
+            if rcustomer_id is None:
+                from app.services.imports.dsi_weekly_auto_resolution import (
+                    check_customer_auto_resolution_at_validate,
+                )
+
+                ckey_probe = _customer_candidate_identity_norm(cust_raw, dg_raw)
+                cust_auto = check_customer_auto_resolution_at_validate(
+                    db,
+                    job=job,
+                    source_definition_id=source_def_id,
+                    distributor_id=rdistributor_id,
+                    normalized_key=ckey_probe,
+                    customer_raw=cust_res_raw,
+                    dealer_group_raw=dg_raw,
+                    historical_index=weekly_historical_customers or None,
+                )
+                if cust_auto.outcome == "resolved" and cust_auto.entity_id is not None:
+                    rcustomer_id = int(cust_auto.entity_id)
+                    diag.append("customer_resolved_weekly_auto")
+                elif cust_auto.outcome == "conflict":
+                    customer_auto_conflict = {
+                        "conflict_flag": True,
+                        "prior_resolution_conflict": cust_auto.conflict_prior,
+                    }
             diag.extend(cust_res_notes)
 
         hard_row = bool(derr or perr)
@@ -1573,6 +1653,9 @@ def process_distributor_sales_inventory(
                 a["total_value"] += abs(reported_rev)
             if len(a["samples"]) < 5:
                 a["samples"].append(prod_raw)
+            if isinstance(pev, dict) and pev.get("weekly_auto_conflict"):
+                a["conflict_flag"] = True
+                a["prior_resolution_conflict"] = pev.get("prior_resolution_conflict")
             if rdistributor_id and evidence_date:
                 cp = corr_cache.product_corroboration(
                     int(rdistributor_id),
@@ -1598,10 +1681,13 @@ def process_distributor_sales_inventory(
                     mc = a.setdefault("shipment_evidence_month_counts", {})
                     if isinstance(mc, dict):
                         mc[em] = int(mc.get(em) or 0) + 1
-        if sellout_attempt and rcustomer_id is None:
+        if sellout_or_return_attempt and rcustomer_id is None:
             ckey = _customer_candidate_identity_norm(cust_raw, dg_raw)
             k = ("customer_dealer_token", ckey)
             a = agg[k]
+            if customer_auto_conflict:
+                a["conflict_flag"] = True
+                a["prior_resolution_conflict"] = customer_auto_conflict.get("prior_resolution_conflict")
             if a.get("primary_source") is None:
                 if not _dealer_group_is_placeholder(dg_raw):
                     a["primary_source"] = "dealer_name_group"
@@ -1749,12 +1835,20 @@ def process_distributor_sales_inventory(
                 ctx["provisional_region_conflict"] = True
             if data.get("provisional_channel_conflict"):
                 ctx["provisional_channel_conflict"] = True
+            if data.get("conflict_flag"):
+                ctx["conflict_flag"] = True
+                if data.get("prior_resolution_conflict") is not None:
+                    ctx["prior_resolution_conflict"] = data.get("prior_resolution_conflict")
             if ps == "dealer_name_group":
                 if isinstance(dgr_store, str) and dgr_store.strip():
                     dealer_token_col = dgr_store.strip()[:512]
                 elif nkey_clean and nkey_clean != "__blank__":
                     dealer_token_col = nkey_clean[:512]
         if etype == "product_identifier":
+            if data.get("conflict_flag"):
+                ctx["conflict_flag"] = True
+                if data.get("prior_resolution_conflict") is not None:
+                    ctx["prior_resolution_conflict"] = data.get("prior_resolution_conflict")
             dist_unresolved = data.pop("_dist_ids_unresolved", None)
             if isinstance(dist_unresolved, set) and len(dist_unresolved) == 1:
                 ctx["dominant_unresolved_distributor_id"] = int(next(iter(dist_unresolved)))

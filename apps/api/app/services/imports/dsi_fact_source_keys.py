@@ -82,3 +82,17 @@ def dsi_inventory_source_key(
     as_of_date: date,
 ) -> str:
     return f"dsi-soh:{int(distributor_id)}:{int(product_id)}:{as_of_date.isoformat()}"
+
+
+def dsi_reconciliation_source_key(
+    *,
+    distributor_id: int,
+    product_id: int,
+    customer_id: int | None,
+    period_end_date: date,
+) -> str:
+    """Natural key for ``fact_inventory_reconciliation`` (customer id ``0`` = open channel bucket)."""
+    cid = int(customer_id) if customer_id is not None else 0
+    return (
+        f"dsi-recon:{int(distributor_id)}:{int(product_id)}:{cid}:{period_end_date.isoformat()}"
+    )

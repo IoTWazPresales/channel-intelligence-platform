@@ -4,14 +4,52 @@
 `main`
 
 ## Head commit
-`45cf9bc` — `dsi: Phase 0 foundations for sell-out grain, returns, and historical auto-apply` (merged from `feature/dsi-phase-0-foundations`)
+`f29a772` — `dsi: Phase 1 weekly intelligence state, auto-resolution, and SOH reconciliation`
 
 ## Alembic Head
-`20260518_0040` — applied on both `cip` and `cip_alembic_smoke`. Clean.
+`20260518_0041` — `fact_inventory_reconciliation` + `source_key` upsert grain. Applied on **`cip_alembic_smoke`** (smoke validation). **`cip` not upgraded** in this session — run `alembic upgrade head` on `cip` only with explicit approval.
 
 ---
 
-## Latest work (May 2026) — DSI Phase 0 foundations (shipped on `main`)
+## Latest work (May 2026) — DSI Phase 1 + Phase 2 (weekly uploads)
+
+### Phase 1A — import state awareness
+- `dsi_import_state_awareness.py`: `check_dsi_import_state(db, job_id, distributor_id)` → `intelligence_state` on `import_job.staged_metadata` (read-only; never blocks validate).
+- Layers: `token_auto_resolution`, `soh_reconciliation`, `velocity_learning`, `pricing_intelligence`, `forecasting` with `active` / `degraded` / `initialising` / `inactive`.
+- Auto-resolution tier from prior applied DSI jobs on same source: `none` (0) · `supervised` (1) · `automatic` (2+).
+- Optional tables: `fact_customer_velocity` — missing → 0 weeks; **CPOR:** `_has_cpor_data` always `False` until a real CPOR import module exists (no proxy).
+- Wired at end of validate cache load in `process_distributor_sales_inventory`.
+- Tests: `tests/test_dsi_import_state_awareness.py` (14 tests, mocked DB).
+
+### Phase 1B — weekly token auto-resolution
+- `dsi_weekly_auto_resolution.py`: validate-time auto-resolve for **automatic** tier; plan-time **supervised** ready rows (`auto_resolved_supervised`).
+- `load_historical_customer_resolutions`: steward rows keyed `(distributor_id, normalized_key)` with `(None, key)` fallback.
+- Historical workflow unchanged; weekly-only tier logic in `plan_dsi_candidate_sync` and validate row loop.
+- Tests: `tests/test_dsi_weekly_auto_resolution.py` (10 tests).
+
+### Phase 1C — frontend
+- `DsiIntelligenceStatusPanel.tsx` on validate step (reads `staged_metadata.intelligence_state`).
+- Supervised review callout in `DsiImportJobResolutionSection` (`dsi-supervised-auto-resolve-section`).
+
+### Phase 2 — SOH reconciliation
+- Migration `20260518_0041`: `fact_inventory_reconciliation` with unique `source_key` (`dsi-recon:{distributor}:{product}:{customer_id|0}:{period_end}`).
+- `reconcile_distributor_soh` updates `fact_inventory_distributor` + upserts customer-allocated / open-channel reconciliation rows.
+- Post-apply dispatch: `dsi_soh_reconciliation_enqueue.py` → Celery `imports.dsi_soh_reconciliation` (detached thread fallback).
+- Activity bell: `dsi_soh_reconcile_task`, kind `dsi_soh_reconciliation`.
+
+### Validation (May 2026)
+- `cip_alembic_smoke`: `alembic upgrade head` → `20260518_0041` (clean).
+- Pytest on smoke URLs (`ALLOW_TESTS_ON_DEV_DB=1`): **30 passed** (`test_dsi_import_state_awareness`, `test_dsi_weekly_auto_resolution`, `test_dsi_soh_reconciliation`, `test_dsi_fact_source_keys`).
+- Browser automation (4 scenarios): **not completed** in agent session — API/web started; manual UI verification recommended.
+
+### Next
+- Apply `20260518_0041` on `cip` when approved for shared dev.
+- Browser smoke: intelligence panel, supervised section, automatic suppression, SOH reconcile bell.
+- Phase 3: velocity / forecasting job consumers on `intelligence_state` layers.
+
+---
+
+## Prior work (May 2026) — DSI Phase 0 foundations (shipped on `main`)
 
 ### What was built and why
 
@@ -44,10 +82,6 @@ Phase 0 establishes the **fact-layer foundations** for weekly DSI intelligence. 
 4. **Inventory:** upsert on `source_key`; drop `uq_fact_inventory_distributor_dsi_v1`; reconciliation columns null until reconciliation jobs run.
 5. **Post-validate:** historical workflow only; ready candidates only; excludes `hold_for_manual_review` and `needs_review`.
 6. **DSI resolution order / steward governance / corroboration tier order:** unchanged.
-
-### Next
-
-**Phase 1 — weekly DSI uploads** (velocity, SOH reconciliation, forecasting layers on top of this fact grain).
 
 ---
 

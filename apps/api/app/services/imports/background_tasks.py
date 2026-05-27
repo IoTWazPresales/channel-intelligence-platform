@@ -31,6 +31,8 @@ def _task_label(job: ImportJob, *, kind: str) -> str:
         return f"Creating provisional customers (DSI job {jid})"
     if kind == "dsi_resolution_plan_apply":
         return f"Applying resolution plan (DSI job {jid})"
+    if kind == "dsi_soh_reconciliation":
+        return f"Reconciling inventory (DSI job {jid})"
     if slug == "distributor_inventory":
         if mode == "validate":
             return f"Validating DSI import {jid}"
@@ -83,6 +85,8 @@ def _job_db_indicates_background_work_finished(job: ImportJob) -> bool:
 def _clear_task_slot_metadata(meta: dict[str, Any], slot: str) -> None:
     if slot == "main":
         meta.pop("celery_task_id", None)
+    elif slot == "soh":
+        meta.pop("dsi_soh_reconcile_task", None)
     else:
         meta.pop("dsi_bulk_task", None)
 
@@ -175,6 +179,19 @@ def _build_background_task_records(
                     kind_key = "dsi_bulk_provisional"
                 descriptors.append(
                     ("bulk", btid.strip(), kind_key, _task_label(job, kind=kind_key))
+                )
+
+        soh_task = meta.get("dsi_soh_reconcile_task")
+        if isinstance(soh_task, dict):
+            stid = soh_task.get("task_id")
+            if isinstance(stid, str) and stid.strip():
+                descriptors.append(
+                    (
+                        "soh",
+                        stid.strip(),
+                        "dsi_soh_reconciliation",
+                        str(soh_task.get("label") or "Reconciling inventory…"),
+                    )
                 )
 
         if not descriptors:

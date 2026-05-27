@@ -211,6 +211,15 @@ export function DsiImportJobResolutionSection({
     return selectedIds.filter((id) => ready.has(id));
   }, [selectedIds, plan.readyPlanCandidateIds]);
 
+  const supervisedAutoResolvedRows = useMemo(() => {
+    const raw = plan.resolutionPlan?.rows;
+    if (!Array.isArray(raw)) return [] as Array<Record<string, unknown>>;
+    return raw.filter((row) => {
+      const r = row as Record<string, unknown>;
+      return r.auto_resolved_supervised === true;
+    }) as Array<Record<string, unknown>>;
+  }, [plan.resolutionPlan]);
+
   const selectVisibleReadyInGrid = useCallback(() => {
     setSelectedIds(
       displayedCandidates
@@ -676,6 +685,26 @@ export function DsiImportJobResolutionSection({
         refreshPlanEffective={plan.refreshPlanEffective}
         overridesPayload={plan.overridesPayload}
       />
+
+      {supervisedAutoResolvedRows.length > 0 ? (
+        <Alert severity="info" data-testid="dsi-supervised-auto-resolve-section">
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Auto-resolved from prior decisions — review before apply
+          </Typography>
+          <Typography variant="body2" component="div">
+            {supervisedAutoResolvedRows.map((row) => {
+              const cid = row.candidate_id;
+              const label = row.suggested_target_label ?? row.suggested_target_id ?? '—';
+              const nk = row.normalized_key ?? '';
+              return (
+                <Box key={String(cid)} sx={{ mb: 0.5 }}>
+                  <strong>{String(nk)}</strong> → {String(label)} (ready — supervised auto-resolution)
+                </Box>
+              );
+            })}
+          </Typography>
+        </Alert>
+      ) : null}
 
       {planInitialLoading ? (
         <DsiStewardLoadingCallout

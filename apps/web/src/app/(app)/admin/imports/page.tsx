@@ -66,6 +66,7 @@ import {
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
+import { DsiIntelligenceStatusPanel, type DsiIntelligenceState } from './DsiIntelligenceStatusPanel';
 import { DsiValidateProgressPanel } from './DsiValidateProgressPanel';
 import type { DsiValidateProgress } from './DsiValidateProgressPanel';
 import type { DsiCandidateRow } from '../mappings/DsiCandidateStewardPanel';
@@ -968,6 +969,22 @@ function AdminImportsPageContent() {
   }, [dsiValidatePollJob?.stage, dsiMappingState?.stage]);
 
   const dsiValidationComplete = dsiValidateStage === 'validated' || dsiValidateStage === 'failed';
+
+  const { data: dsiJobIntelligence } = useQuery({
+    queryKey: ['dsi-job-intelligence', lastJobId],
+    queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${lastJobId!}`, { signal }),
+    enabled: Boolean(isDsi && lastJobId != null && dsiValidationComplete),
+  });
+
+  const dsiIntelligenceState = useMemo((): DsiIntelligenceState | null => {
+    const meta =
+      dsiValidatePollJob?.staged_metadata ??
+      dsiJobIntelligence?.staged_metadata ??
+      null;
+    if (!meta || typeof meta !== 'object') return null;
+    const intel = (meta as Record<string, unknown>).intelligence_state;
+    return intel && typeof intel === 'object' ? (intel as DsiIntelligenceState) : null;
+  }, [dsiValidatePollJob?.staged_metadata, dsiJobIntelligence?.staged_metadata]);
 
   const dsiHasValidateResult = dsiValidationComplete || Boolean(distributorSiSummary);
 
@@ -2836,6 +2853,9 @@ function AdminImportsPageContent() {
               <LinearProgress />
             ) : null}
             {dsiValidate.isError ? <Alert severity="error">{safeDisplayError(dsiValidate.error)}</Alert> : null}
+            {dsiIntelligenceState ? (
+              <DsiIntelligenceStatusPanel intelligenceState={dsiIntelligenceState} />
+            ) : null}
             {dsiValidationComplete && !dsiPipelineInFlight ? (
               <Alert
                 severity={

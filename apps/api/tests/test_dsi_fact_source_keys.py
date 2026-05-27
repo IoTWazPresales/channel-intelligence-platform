@@ -6,6 +6,7 @@ from datetime import date
 
 from app.services.imports.dsi_fact_source_keys import (
     dsi_inventory_source_key,
+    dsi_reconciliation_source_key,
     dsi_return_source_key,
     dsi_sellout_source_key,
     normalize_dsi_invoice_no,
@@ -82,3 +83,13 @@ def test_inventory_source_key_format() -> None:
     assert dsi_inventory_source_key(distributor_id=5, product_id=9, as_of_date=date(2024, 1, 15)) == (
         "dsi-soh:5:9:2024-01-15"
     )
+
+
+def test_reconciliation_source_key_customer_and_open_channel() -> None:
+    pe = date(2024, 6, 30)
+    assert dsi_reconciliation_source_key(
+        distributor_id=1, product_id=2, customer_id=42, period_end_date=pe
+    ) == "dsi-recon:1:2:42:2024-06-30"
+    assert dsi_reconciliation_source_key(
+        distributor_id=1, product_id=2, customer_id=None, period_end_date=pe
+    ) == "dsi-recon:1:2:0:2024-06-30"

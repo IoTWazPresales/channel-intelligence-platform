@@ -487,6 +487,7 @@ def load_historical_customer_resolutions(
     if source_definition_id is None:
         return out
 
+    dom_col = ImportEntityMappingCandidate.context["dominant_distributor_id"].astext
     cand_rows = session.execute(
         select(
             ImportEntityMappingCandidate.normalized_key,
@@ -494,6 +495,7 @@ def load_historical_customer_resolutions(
             ImportEntityMappingCandidate.match_reason,
             ImportEntityMappingCandidate.import_job_id,
             ImportJob.completed_at,
+            dom_col,
         )
         .join(ImportJob, ImportJob.id == ImportEntityMappingCandidate.import_job_id)
         .where(
@@ -507,16 +509,29 @@ def load_historical_customer_resolutions(
         .limit(5000)
     ).all()
 
-    for nk, cid, reason, jid, _completed in cand_rows:
+    for nk, cid, reason, jid, _completed, dom_raw in cand_rows:
         key = nk if isinstance(nk, str) else str(nk or "")
         if not key or cid is None:
             continue
-        dist_key: int | None = None  # steward rows are source-scoped; distributor from alias pass
-        slot = (dist_key, _norm_key(key))
-        if slot in out:
+        dist_key: int | None = None
+        if dom_raw is not None and str(dom_raw).strip().isdigit():
+            dist_key = int(str(dom_raw).strip())
+        nk_norm = _norm_key(key)
+        slot_scoped = (dist_key, nk_norm)
+        if dist_key is not None and slot_scoped not in out:
+            mr = (reason or "").strip()
+            out[slot_scoped] = HistoricalCustomerResolution(
+                customer_id=int(cid),
+                import_job_id=int(jid),
+                match_reason=mr or None,
+                confidence=0.94 if mr in _STEWARD_RESOLVED_REASONS else 0.88,
+                resolution_kind="historical_steward",
+            )
+        slot_global = (None, nk_norm)
+        if slot_global in out:
             continue
         mr = (reason or "").strip()
-        out[slot] = HistoricalCustomerResolution(
+        out[slot_global] = HistoricalCustomerResolution(
             customer_id=int(cid),
             import_job_id=int(jid),
             match_reason=mr or None,

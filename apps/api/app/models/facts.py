@@ -92,6 +92,34 @@ class FactInventoryDistributor(Base, TimestampMixin):
     source_import_job_id: Mapped[int | None] = mapped_column(ForeignKey("import_job.id"), nullable=True)
 
 
+class FactInventoryReconciliation(Base, TimestampMixin):
+    """Customer-allocated or open-channel SOH reconciliation rows (post-apply background job)."""
+
+    __tablename__ = "fact_inventory_reconciliation"
+    __table_args__ = (
+        Index("ix_fact_inventory_reconciliation_dist_period", "distributor_id", "period_end_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_key: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
+    distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id"), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True
+    )
+    period_end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    allocation_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    calculated_units: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+    reported_units: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    variance_units: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    variance_pct: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    reconciliation_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    import_job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True
+    )
+
+
 class FactInboundShipment(Base, TimestampMixin):
     """Inbound shipment / order truth layer, fed from ``ShipmentEvidenceLine`` on apply (global ``source_key``)."""
 

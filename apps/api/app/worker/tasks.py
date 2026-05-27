@@ -163,6 +163,18 @@ def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
         raise
 
 
+@celery_app.task(name="imports.dsi_soh_reconciliation", bind=True, ack_late=True)
+def dsi_soh_reconciliation_task(self, job_id: int, payload: dict) -> dict:
+    """Background SOH reconciliation after DSI apply."""
+    from app.services.imports.dsi_soh_reconciliation_sync import run_dsi_soh_reconciliation_sync
+
+    try:
+        return run_dsi_soh_reconciliation_sync(job_id, payload)
+    except Exception:
+        logger.exception("dsi_soh_reconciliation failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.product_master_commit", bind=True, ack_late=True)
 def product_master_commit_task(self, job_id: int, confirm_destructive: bool) -> int:
     """Background Product Master apply: must be enqueued via try_enqueue_pm_commit_sync first."""

@@ -810,6 +810,61 @@ def plan_dsi_candidate_sync(
                 dealer_group_raw=dg_raw,
             )
             if hist is not None:
+                ctx_hist = cand.context if isinstance(cand.context, dict) else {}
+                if ctx_hist.get("conflict_flag"):
+                    return _fin({
+                        **base,
+                        "suggested_action": "map_customer",
+                        "plan_status": "needs_review",
+                        "ready": False,
+                        "confidence": 0.15,
+                        "reason": (
+                            "Prior steward resolutions disagree for this token — "
+                            "choose the correct customer manually"
+                        ),
+                        "suggested_target_id": None,
+                        "needs_defaults": False,
+                        "needs_confirm_suspicious_distributor": False,
+                        "conflict_flag": True,
+                        "prior_resolution_conflict": ctx_hist.get("prior_resolution_conflict"),
+                    })
+                tier = "none"
+                sm = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+                intel = sm.get("intelligence_state")
+                if isinstance(intel, dict):
+                    tier = str(intel.get("auto_resolution_tier") or "none").strip().lower()
+                weekly_mode = not dsi_historical_workflow_from_import_job(job)
+                if weekly_mode and tier == "supervised":
+                    from app.models.dimensions import DimCustomer
+
+                    label_row = session.get(DimCustomer, int(hist.customer_id))
+                    target_label = None
+                    if label_row is not None:
+                        target_label = (label_row.name or label_row.code or "")[:256] or None
+                    return _fin({
+                        **base,
+                        "suggested_action": "map_customer",
+                        "plan_status": "ready",
+                        "ready": True,
+                        "confidence": float(hist.confidence),
+                        "reason": (
+                            f"Previously resolved on import job {hist.import_job_id} "
+                            f"({hist.resolution_kind}) — review before apply (supervised auto-resolution)"
+                        ),
+                        "suggested_target_id": int(hist.customer_id),
+                        "suggested_target_label": target_label,
+                        "auto_resolved_supervised": True,
+                        "needs_defaults": False,
+                        "needs_confirm_suspicious_distributor": False,
+                        "historical_resolution": {
+                            "label": "previously_resolved_supervised",
+                            "import_job_id": hist.import_job_id,
+                            "customer_id": hist.customer_id,
+                            "match_reason": hist.match_reason,
+                            "resolution_kind": hist.resolution_kind,
+                            "confidence": float(hist.confidence),
+                        },
+                    })
                 return _fin({
                     **base,
                     "suggested_action": "map_customer",

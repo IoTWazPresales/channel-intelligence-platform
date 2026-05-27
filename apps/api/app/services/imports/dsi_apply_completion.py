@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import select
+from datetime import date
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ingestion.pipeline import STAGE_LOADED, STAGE_VALIDATED
@@ -76,6 +78,40 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
     db.add(job)
     db.commit()
     db.refresh(job)
+
+    dist_id = db.scalar(
+        select(func.max(ImportDistributorSiStagingLine.resolved_distributor_id)).where(
+            ImportDistributorSiStagingLine.import_job_id == job.id,
+            ImportDistributorSiStagingLine.resolved_distributor_id.isnot(None),
+        )
+    )
+    period_end = db.scalar(
+        select(func.max(ImportDistributorSiStagingLine.snapshot_date)).where(
+            ImportDistributorSiStagingLine.import_job_id == job.id,
+            ImportDistributorSiStagingLine.snapshot_date.isnot(None),
+        )
+    )
+    if period_end is None:
+        period_end = db.scalar(
+            select(func.max(ImportDistributorSiStagingLine.transaction_date)).where(
+                ImportDistributorSiStagingLine.import_job_id == job.id,
+                ImportDistributorSiStagingLine.transaction_date.isnot(None),
+            )
+        )
+    if dist_id is not None and period_end is not None:
+        from app.services.imports.dsi_soh_reconciliation_enqueue import (
+            dispatch_dsi_soh_reconciliation_after_apply,
+        )
+
+        dispatch_dsi_soh_reconciliation_after_apply(
+            db,
+            job,
+            distributor_id=int(dist_id),
+            period_end_date=period_end if isinstance(period_end, date) else period_end,
+        )
+        db.commit()
+        db.refresh(job)
+
     return {
         "ok": True,
         "import_job_id": int(job.id),

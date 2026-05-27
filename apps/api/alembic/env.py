@@ -37,6 +37,7 @@ from app.models import (  # noqa: F401
     FactInboundShipment,
     FactInventoryCustomer,
     FactInventoryDistributor,
+    FactInventoryReconciliation,
     FactMarketShare,
     FactPricing,
     FactProductRoadmap,
