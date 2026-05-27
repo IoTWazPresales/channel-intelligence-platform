@@ -4,7 +4,7 @@
 `main`
 
 ## Head commit
-`f29a772` — `dsi: Phase 1 weekly intelligence state, auto-resolution, and SOH reconciliation`
+`2dbb95b` — `dsi: Phase 1 weekly intelligence state, auto-resolution, and SOH reconciliation`
 
 ## Alembic Head
 `20260518_0041` — `fact_inventory_reconciliation` + `source_key` upsert grain. Applied on **`cip_alembic_smoke`** (smoke validation). **`cip` not upgraded** in this session — run `alembic upgrade head` on `cip` only with explicit approval.
