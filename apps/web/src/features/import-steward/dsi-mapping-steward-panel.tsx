@@ -706,7 +706,7 @@ export function DsiMappingStewardPanel({
           </Typography>
         </Alert>
       ) : null}
-      <Typography variant="body2">
+      <Typography variant="body2" component="div">
         <strong>Selected:</strong> {candidate.entity_type} · normalized: {candidate.normalized_key}
         {stewardLabels.customerAccount ? ` · customer account: ${stewardLabels.customerAccount}` : ''}
         {stewardLabels.sourceCustomer ? ` · source customer: ${stewardLabels.sourceCustomer}` : ''} · status{' '}

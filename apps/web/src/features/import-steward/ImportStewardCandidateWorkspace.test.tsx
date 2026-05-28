@@ -58,4 +58,27 @@ describe('ImportStewardCandidateWorkspace', () => {
     );
     expect(screen.getByText('7')).toBeInTheDocument();
   });
+
+  it('renders scroll region when embeddedScrollableTable is set', () => {
+    const r = baseRow(7);
+    render(
+      <ImportStewardCandidateWorkspace<Row>
+        listDomainId="unit-test"
+        importJobId={42}
+        copy={{ title: 'T', description: 'D' }}
+        openRows={[r]}
+        filteredRows={[r]}
+        isLoading={false}
+        busy={false}
+        embedded
+        embeddedScrollableTable
+        columns={[{ id: 'id', header: 'ID', cell: (row) => String(row.id) }]}
+      />
+    );
+    expect(screen.getByTestId('import-steward-candidate-workspace-table-scroll')).toBeInTheDocument();
+    const tableContainer = screen.getByTestId('import-steward-candidate-workspace-table-scroll').querySelector(
+      '.MuiTableContainer-root'
+    );
+    expect(tableContainer).toBeTruthy();
+  });
 });

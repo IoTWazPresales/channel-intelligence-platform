@@ -98,6 +98,11 @@ export type ImportStewardCandidateWorkspaceProps<TRow extends ImportStewardCandi
   onRowClick?: (row: TRow) => void;
   /** When true, omit the outer Paper wrapper (use inside another container). */
   embedded?: boolean;
+  /**
+   * When true with `embedded`, tabs/filters/toolbar stay fixed and the candidate table scrolls
+   * inside a flex child (`flex: 1`, `overflow: auto`). Use inside height-capped steward layouts.
+   */
+  embeddedScrollableTable?: boolean;
   /** Keep table chrome (and filter-empty row) when `openRows` is empty but filters are active. */
   keepTableWhenFilterEmpty?: boolean;
   /** When set, replaces the candidate table (e.g. Region & channel catalog stewardship tab). */

@@ -1245,10 +1245,32 @@ def process_distributor_sales_inventory(
         sorted(_evidence_months),
     )
 
+    total_rows = len(df)
+    month_count = len(_evidence_months)
+
     if on_progress is not None:
-        on_progress("loading_caches", "Loading resolution caches", 0, len(df))
+        on_progress(
+            "loading_caches",
+            f"Loading shipment corroboration ({month_count} months, {total_rows:,} rows)…",
+            0,
+            total_rows,
+        )
 
     corr_cache = ShipmentCorroborationCache.load(db, _evidence_months)
+
+    if on_progress is not None:
+        prod_evidence = sum(len(v) for v in corr_cache._prod.values())
+        cust_evidence = sum(len(v) for v in corr_cache._cust.values())
+        on_progress(
+            "loading_caches",
+            (
+                f"Loaded corroboration evidence "
+                f"({prod_evidence:,} product / {cust_evidence:,} customer entries); "
+                f"loading distributor & customer masters…"
+            ),
+            0,
+            total_rows,
+        )
 
     # Pre-load distributor + customer master data (eliminates 4–6 per-row DB round-trips)
     res_cache = _build_resolution_cache(db, source_def_id)
@@ -1276,7 +1298,12 @@ def process_distributor_sales_inventory(
         )
 
     if on_progress is not None:
-        on_progress("processing_rows", "Processing rows", 0, len(df))
+        on_progress(
+            "processing_rows",
+            f"Processing rows (0 / {total_rows:,})",
+            0,
+            total_rows,
+        )
 
     # Pre-compute reverse column lookups (mapping is immutable over the loop)
     _c_dist = _col(mapping, "distributor_token")
@@ -1320,7 +1347,6 @@ def process_distributor_sales_inventory(
     dsi_sellout_issue_rows = 0
     dsi_inv_ready_with_sellout_issue_rows = 0
 
-    total_rows = len(df)
     _progress_next = time.monotonic()  # fire immediately on first eligible check
     _PROGRESS_INTERVAL = 3.0
 
@@ -1335,7 +1361,13 @@ def process_distributor_sales_inventory(
             )
         _now = time.monotonic()
         if on_progress is not None and _now >= _progress_next:
-            on_progress("processing_rows", "Processing rows", rn, total_rows)
+            pct = round(rn / total_rows * 100) if total_rows else 0
+            on_progress(
+                "processing_rows",
+                f"Processing rows ({rn:,} / {total_rows:,}, {pct}%)",
+                rn,
+                total_rows,
+            )
             _progress_next = _now + _PROGRESS_INTERVAL
         raw_payload = {str(k): to_jsonable(row[k]) for k in row.index}
         mapped = _build_mapped_canonical(row, mapping, ignored_src_cols)
@@ -1783,7 +1815,12 @@ def process_distributor_sales_inventory(
                         sch.append(tch)
 
     if on_progress is not None:
-        on_progress("building_candidates", "Building candidates", total_rows, total_rows)
+        on_progress(
+            "building_candidates",
+            f"Building steward candidates ({len(agg):,} token groups)…",
+            total_rows,
+            total_rows,
+        )
 
     annotate_dsi_customer_candidate_duplicates(agg, distributors=res_cache.all_distributors)
     annotate_dsi_customer_distributor_name_collisions(agg, res_cache.all_distributors)

@@ -17,6 +17,8 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
+import { themedScrollbarSx } from '@cip/ui';
+
 import type { ImportStewardCandidateRowBase, ImportStewardCandidateWorkspaceProps } from './importStewardCandidateWorkspace.types';
 import { ImportStewardCandidateWorkspaceSkeleton } from './ImportStewardCandidateWorkspaceSkeleton';
 
@@ -43,6 +45,7 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
   filtersRegionAriaLabel,
   onRowClick,
   embedded = false,
+  embeddedScrollableTable = false,
   keepTableWhenFilterEmpty = false,
   mainContentSlot,
 }: ImportStewardCandidateWorkspaceProps<TRow>) {
@@ -63,35 +66,65 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
   const colSpan = (selection ? 1 : 0) + columns.length;
 
   const shell = (
-      <Stack spacing={2}>
-        {copy.title ? (
+      <Stack
+        spacing={embeddedScrollableTable ? 1 : 2}
+        sx={
+          embedded && embeddedScrollableTable
+            ? { flex: '1 1 0px', minHeight: 0, overflow: 'hidden' }
+            : undefined
+        }
+      >
+        {copy.title && !embeddedScrollableTable ? (
           <Typography variant="h6" component="div">
             {copy.title}
           </Typography>
         ) : null}
-        {copy.description ? (
+        {copy.description && !embeddedScrollableTable ? (
           <Typography variant="body2" color="text.secondary">
             {copy.description}
           </Typography>
         ) : null}
         {importJobId == null && copy.missingJobPrompt ? <Box>{copy.missingJobPrompt}</Box> : null}
-        {tabsSlot ? <Box data-testid="import-steward-candidate-workspace-tabs">{tabsSlot}</Box> : null}
+        {tabsSlot ? (
+          <Box
+            data-testid="import-steward-candidate-workspace-tabs"
+            sx={embeddedScrollableTable ? { flexShrink: 0 } : undefined}
+          >
+            {tabsSlot}
+          </Box>
+        ) : null}
         {actionFeedback ? (
           <Alert
             severity={actionFeedback.severity}
             onClose={actionFeedback.onDismiss}
             data-testid="import-steward-candidate-workspace-action-feedback"
+            sx={embeddedScrollableTable ? { flexShrink: 0 } : undefined}
           >
             {actionFeedback.message}
           </Alert>
         ) : null}
-        {toolbarSlot ? <Box data-testid="import-steward-candidate-workspace-toolbar">{toolbarSlot}</Box> : null}
-        {bulkFormSlot ? <Box data-testid="import-steward-candidate-workspace-bulk-form">{bulkFormSlot}</Box> : null}
+        {toolbarSlot ? (
+          <Box
+            data-testid="import-steward-candidate-workspace-toolbar"
+            sx={embeddedScrollableTable ? { flexShrink: 0 } : undefined}
+          >
+            {toolbarSlot}
+          </Box>
+        ) : null}
+        {bulkFormSlot ? (
+          <Box
+            data-testid="import-steward-candidate-workspace-bulk-form"
+            sx={embeddedScrollableTable ? { flexShrink: 0 } : undefined}
+          >
+            {bulkFormSlot}
+          </Box>
+        ) : null}
         {filtersSlot ? (
           <Box
             data-testid={filtersRegionTestId}
             role="region"
             aria-label={filtersRegionAriaLabel ?? 'Filter mapping candidates'}
+            sx={embeddedScrollableTable ? { flexShrink: 0 } : undefined}
           >
             {filtersSlot}
           </Box>
@@ -123,12 +156,26 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
           </Typography>
         ) : null}
         {mainContentSlot == null && showTable ? (
-          <Box sx={{ position: 'relative' }}>
+          <Box
+            data-testid="import-steward-candidate-workspace-table-scroll"
+            sx={{
+              position: 'relative',
+              ...(embeddedScrollableTable
+                ? {
+                    flex: '1 1 0px',
+                    minHeight: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                  }
+                : {}),
+            }}
+          >
             <Backdrop
               sx={{
                 color: 'text.primary',
                 position: 'absolute',
-                zIndex: 1,
+                zIndex: 2,
                 borderRadius: 1,
                 flexDirection: 'column',
                 gap: 1,
@@ -142,8 +189,49 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
                 </Typography>
               ) : null}
             </Backdrop>
-            <TableContainer sx={{ maxWidth: '100%' }}>
-            <Table size="small" sx={{ opacity: busy && openRows.length > 0 ? 0.55 : 1 }}>
+            <TableContainer
+              sx={[
+                { maxWidth: '100%' },
+                embeddedScrollableTable
+                  ? (theme) => ({
+                      flex: '1 1 0px',
+                      minHeight: 0,
+                      overflow: 'auto',
+                      scrollbarGutter: 'stable',
+                      backgroundColor: theme.palette.background.paper,
+                      border: `1px solid ${theme.palette.divider}`,
+                      borderRadius: 1,
+                      ...themedScrollbarSx()(theme),
+                      '& .MuiTableCell-stickyHeader': {
+                        backgroundColor: theme.palette.background.paper,
+                        backgroundImage: 'none',
+                        zIndex: 3,
+                      },
+                      '& .MuiTableHead-root .MuiTableCell-root': {
+                        backgroundColor: theme.palette.background.paper,
+                        color: theme.palette.text.secondary,
+                        fontWeight: 600,
+                        borderBottom: `1px solid ${theme.palette.divider}`,
+                        boxShadow: `0 2px 4px ${theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.08)'}`,
+                      },
+                    })
+                  : {},
+              ]}
+            >
+            <Table
+              size="small"
+              stickyHeader={embeddedScrollableTable}
+              sx={{
+                opacity: busy && openRows.length > 0 ? 0.55 : 1,
+                ...(embeddedScrollableTable
+                  ? (theme) => ({
+                      '& .MuiTableBody-root .MuiTableCell-root': {
+                        backgroundColor: theme.palette.background.paper,
+                      },
+                    })
+                  : {}),
+              }}
+            >
               <TableHead>
                 <TableRow>
                   {selection ? (
@@ -234,7 +322,22 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
 
   if (embedded) {
     return (
-      <Box data-testid={rootTestId} data-list-domain={listDomainId}>
+      <Box
+        data-testid={rootTestId}
+        data-list-domain={listDomainId}
+        sx={
+          embeddedScrollableTable
+            ? {
+                flex: '1 1 0px',
+                minHeight: 0,
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }
+            : undefined
+        }
+      >
         {shell}
       </Box>
     );
