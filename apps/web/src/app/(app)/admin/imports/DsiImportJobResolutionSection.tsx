@@ -437,6 +437,7 @@ export function DsiImportJobResolutionSection({
   const candidateWorkspace = (
     <ImportStewardCandidateWorkspace<DsiCandidateRow>
       embedded
+      embeddedScrollableTable
       keepTableWhenFilterEmpty={keepTableWhenFilterEmpty}
       rootTestId="dsi-resolution-candidate-grid"
       listDomainId={DSI_STEWARD_CONFIG.listDomainId}
@@ -660,7 +661,7 @@ export function DsiImportJobResolutionSection({
     <Stack spacing={2} data-testid="dsi-import-job-resolution">
       <Typography variant="subtitle2">Resolve blockers for this import</Typography>
       <Alert severity="info">
-        <Typography variant="body2" component="motion.div">
+        <Typography variant="body2" component="div">
           <strong>Validate → Resolve → Revalidate → Apply</strong>. Use entity tabs for distributors, customers, and
           products; use <strong>Region &amp; channel</strong> when file geography does not match the catalog.{' '}
           <Link component={NextLink} href={`/admin/imports?job=${importJobId}`}>
@@ -732,19 +733,23 @@ export function DsiImportJobResolutionSection({
           flexDirection: { xs: 'column', md: 'row' },
           alignItems: 'stretch',
           gap: 0,
-          minHeight: 360,
+          minHeight: { xs: 440, md: 400 },
+          height: { md: 'min(82vh, calc(100vh - 108px))' },
+          maxHeight: { md: 'min(82vh, calc(100vh - 108px))' },
+          overflow: 'hidden',
         }}
+        data-testid="dsi-resolution-workspace-split"
       >
         <Box
           sx={{
-            flex: 1,
+            flex: '1 1 0px',
             minWidth: 0,
             minHeight: 0,
+            height: { md: '100%' },
             display: 'flex',
             flexDirection: 'column',
-            gap: 1.5,
-            maxHeight: { md: 'calc(100vh - 120px)' },
-            overflow: { md: 'hidden' },
+            gap: 1,
+            overflow: 'hidden',
           }}
         >
           {planApplySummary ? (
@@ -755,6 +760,7 @@ export function DsiImportJobResolutionSection({
               flexWrap="wrap"
               useFlexGap
               data-testid="dsi-plan-apply-summary"
+              sx={{ flexShrink: 0 }}
             >
               <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }}>
                 {planApplySummary}
@@ -764,20 +770,42 @@ export function DsiImportJobResolutionSection({
               </Button>
             </Stack>
           ) : null}
-          {candidateWorkspace}
+          <Box
+            sx={{
+              flex: '1 1 0px',
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+            data-testid="dsi-resolution-candidate-pane"
+          >
+            {candidateWorkspace}
+          </Box>
 
           {tabbedMode && isCandidateTab ? (
-            <DsiCandidatesPagination
-              page={candidatesPage.page}
-              pageCount={candidatesPage.pageCount}
-              pageSize={candidatesPage.pageSize}
-              total={candidatesPage.total}
-              skip={candidatesPage.skip}
-              pageItemCount={candidates.length}
-              busy={candidatesPage.query.isFetching || stewardOverlayBusy}
-              onPageChange={candidatesPage.setPage}
-              onPageSizeChange={candidatesPage.setPageSize}
-            />
+            <Box
+              sx={{
+                flexShrink: 0,
+                pt: 0.5,
+                borderTop: 1,
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
+              }}
+              data-testid="dsi-resolution-pagination-footer"
+            >
+              <DsiCandidatesPagination
+                page={candidatesPage.page}
+                pageCount={candidatesPage.pageCount}
+                pageSize={candidatesPage.pageSize}
+                total={candidatesPage.total}
+                skip={candidatesPage.skip}
+                pageItemCount={candidates.length}
+                busy={candidatesPage.query.isFetching || stewardOverlayBusy}
+                onPageChange={candidatesPage.setPage}
+                onPageSizeChange={candidatesPage.setPageSize}
+              />
+            </Box>
           ) : null}
         </Box>
 

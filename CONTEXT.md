@@ -4,13 +4,20 @@
 `main`
 
 ## Head commit
-`1c89ab9` — `dsi: fix intelligence_state persistence and post-apply SOH completion`
+`fafcbbe` — merge `origin/main` (includes Phase 5 Channel Operations + DSI Phase 3/4)
 
 ## Alembic Head
-`20260518_0041` — `fact_inventory_reconciliation` + `source_key` upsert grain. Applied on **`cip`** and **`cip_alembic_smoke`**.
+`20260518_0043` — `fact_dsi_forecast` (+ `20260518_0042` `fact_customer_velocity`). Applied on **`cip`** (May 28, 2026 local).
 
 ## Current State
 - API .env confirmed pointing to cip (verified May 27, 2026)
+
+---
+
+## Latest work (May 2026) — DSI resolution steward layout
+
+- **Imports resolution workspace:** candidate table scrolls inside a flex pane (`embeddedScrollableTable`); pagination footer pinned below grid (Previous/Next, page size) — fixes clipped rows and invisible pagination on large jobs.
+- **Hydration fixes:** `motion.div` → `div` on resolution alert; steward “Saving…” chip under `Typography component="div"`.
 
 ---
 

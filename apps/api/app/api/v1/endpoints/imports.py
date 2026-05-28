@@ -672,7 +672,7 @@ async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
             state_u = (str(task_state or "PENDING")).strip().upper()
             if isinstance(info, dict) and state_u in ACTIVE_CELERY_STATES:
                 progress["phase"] = info.get("phase", "processing_rows")
-                progress["phase_label"] = info.get("phase_label", "Processing rows")
+                progress["phase_label"] = str(info.get("phase_label") or "Processing rows")
                 progress["current_row"] = info.get("current_row", 0)
                 total_from_celery = info.get("total_rows", 0)
                 progress["total_rows"] = total_from_celery or total_rows_from_meta
