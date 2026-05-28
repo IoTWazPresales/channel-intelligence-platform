@@ -47,8 +47,22 @@
 - mtd_delta:    FNB (cumulative MTD → weekly delta)
 - wide_extract: IC / Incredible Connections (197 cols)
 
-### Phase 1 (next — one Cursor session per parser)
-- Flat parser
+### Phase 1a — Flat parser
+- `parsers/customer_sell_through_flat.py` — `parse_flat_report()` →
+  `ParseResult` (no DB, isolated)
+- No retailer-specific logic — works for any flat source
+- Header detection: best-match scan across first 10 rows
+- Column mapping: `field_mapping` first, aliases fallback
+- Period extraction: date column → filename date range → filename
+  date → week number → None + warning
+- Formula/apostrophe normalisation on all text fields
+- Rows skipped if product token or `units_sold` missing
+- `customer_sell_through_apply.py`: upsert resolved staging lines to
+  `fact_customer_sellthrough`
+- `customer_report_config.last_report_received` updated on flat import
+- Fixtures: `tests/fixtures/customer_reports/` (generic synthetic xlsx)
+
+### Phase 1 (remaining parsers)
 - Pivoted parser (auto-unpivot week columns)
 - Multi-sheet parser (all week sheets in one job)
 - MTD delta parser (prior week lookup + estimate flag)

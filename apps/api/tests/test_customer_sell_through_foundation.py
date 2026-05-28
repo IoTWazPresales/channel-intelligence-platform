@@ -56,11 +56,20 @@ def test_staging_line_defaults_to_pending() -> None:
     assert line.source_row_number == 3
 
 
-def test_handle_flat_not_implemented_message() -> None:
-    with pytest.raises(NotImplementedError, match="flat") as exc:
-        _handle_flat(MagicMock(), MagicMock(), pd.DataFrame(), {}, None)
-    assert "Evetech" in str(exc.value)
-    assert "Takealot" in str(exc.value)
+def test_handle_flat_fails_without_raw_file_metadata() -> None:
+    db = MagicMock()
+    job = MagicMock()
+    job.id = 1
+    job.source = None
+    job.file_name = "flat.xlsx"
+    job.import_mode = "preview"
+    job.staged_metadata = {"customer_id": 5}
+    db.scalars.return_value.first.return_value = None
+    errors = _handle_flat(db, job, pd.DataFrame(), {}, None)
+    assert errors == 1
+    assert job.stage == "failed"
+    err = (job.staged_metadata or {}).get("customer_sellthrough_error")
+    assert err.get("reason") == "parse_failed"
 
 
 def test_handle_pivoted_not_implemented_message() -> None:
@@ -88,7 +97,7 @@ def test_process_catches_not_implemented_sets_metadata_and_does_not_raise() -> N
         source_id=1,
         file_name="game.xlsx",
         template_slug="customer_sell_through",
-        staged_metadata={"report_structure_type": STRUCTURE_FLAT},
+        staged_metadata={"report_structure_type": STRUCTURE_PIVOTED},
     )
     errors = process_customer_sell_through(MagicMock(), job, pd.DataFrame(), {})
     assert errors == 1
@@ -98,8 +107,8 @@ def test_process_catches_not_implemented_sets_metadata_and_does_not_raise() -> N
     err = meta.get("customer_sellthrough_error")
     assert isinstance(err, dict)
     assert err.get("reason") == "parser_not_implemented"
-    assert err.get("structure_type") == STRUCTURE_FLAT
-    assert "Evetech" in str(err.get("message"))
+    assert err.get("structure_type") == STRUCTURE_PIVOTED
+    assert "Game" in str(err.get("message"))
 
 
 def test_customer_report_config_defaults() -> None:
