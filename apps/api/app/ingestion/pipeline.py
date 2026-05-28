@@ -14,6 +14,7 @@ from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimPr
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
 from app.models.mapping import EntityMappingQueue
 from app.services.catalog.product_import_sync import sync_bulk_upsert_products_from_rows
+from app.ingestion.pipeline_registry import extend_import_pipeline_handlers
 from app.services.imports.distributor_sales_inventory import process_distributor_sales_inventory
 from app.services.imports.import_job_background_metadata import persist_clear_background_task_metadata
 from app.services.imports.shipment_evidence_import import process_shipment_evidence_import
@@ -797,6 +798,7 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
                 _db, _job, _job.file_name, data
             ),
         }
+        extend_import_pipeline_handlers(handlers)
         processor = handlers.get(handler)
         if processor is None:
             db.add(
@@ -814,10 +816,19 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
         else:
             errors = processor(db, job, df, mapping)
 
-        job.stage = STAGE_VALIDATED
-        job.status = "completed_with_errors" if errors else "completed"
+        meta_after = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+        if handler == "customer_sell_through" and meta_after.get("customer_sellthrough_error"):
+            job.stage = STAGE_FAILED
+            job.status = "completed_with_errors"
+            if not job.error_summary:
+                err = meta_after.get("customer_sellthrough_error")
+                if isinstance(err, dict) and err.get("message"):
+                    job.error_summary = str(err["message"])[:500]
+        else:
+            job.stage = STAGE_VALIDATED
+            job.status = "completed_with_errors" if errors else "completed"
+            job.error_summary = f"{errors} rows require attention" if errors else None
         job.completed_at = datetime.now(timezone.utc)
-        job.error_summary = f"{errors} rows require attention" if errors else None
         persist_clear_background_task_metadata(db, job)
         db.commit()
         db.refresh(job)

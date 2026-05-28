@@ -7,10 +7,72 @@
 `1c89ab9` — `dsi: fix intelligence_state persistence and post-apply SOH completion`
 
 ## Alembic Head
-`20260518_0041` — `fact_inventory_reconciliation` + `source_key` upsert grain. Applied on **`cip`** and **`cip_alembic_smoke`**.
+`20260518_0045` — Customer sell-through Phase 0 (`fact_customer_sellthrough`, staging, `customer_report_config`, template seed). Prior: `0043` `fact_dsi_forecast`, `0042` `fact_customer_velocity`. Smoke: **`cip_alembic_smoke`** at `0045`.
 
 ## Current State
 - API .env confirmed pointing to cip (verified May 27, 2026)
+
+---
+
+## Latest work (May 2026) — Customer Sell-Through Phase 0
+
+### Foundation
+- fact_customer_sellthrough: grain
+  (customer_id, customer_location_id nullable,
+   product_id, period_start_date)
+  period_type: 'daily' | 'weekly' | 'monthly'
+  daily supported in schema for future API connectors
+  raw_mtd_units + is_mtd_estimate for FNB MTD pattern
+  unit_cost and unit_sell_price captured where present
+  reported_soh captured from customer files
+- import_customer_sellthrough_staging_line: mirrors DSI
+  staging pattern, no resolution plan layer
+- customer_report_config: per-customer cadence, structure
+  type, overdue threshold, last received date
+- import_template seeded: slug=customer_sell_through
+  column aliases cover all 7 confirmed retailers
+- Pipeline handler skeleton: dispatches on 5 structure
+  types (flat/pivoted/multi_sheet/mtd_delta/wide_extract)
+  All parsers raise NotImplementedError — Phase 1
+- Store-level FK: customer_location.id (existing table)
+  nullable for chain-level reports
+- Migrations: 0044 (fact table), 0045 (staging + config
+  + template seed)
+- Smoke migration: 0044+0045 applied on cip_alembic_smoke
+
+### Retailers and structure types
+- flat:         Evetech, Takealot
+- pivoted:      Game, Makro
+- multi_sheet:  Computer Mania
+- mtd_delta:    FNB (cumulative MTD → weekly delta)
+- wide_extract: IC / Incredible Connections (197 cols)
+
+### Phase 1 (next — one Cursor session per parser)
+- Flat parser
+- Pivoted parser (auto-unpivot week columns)
+- Multi-sheet parser (all week sheets in one job)
+- MTD delta parser (prior week lookup + estimate flag)
+- Wide extract parser (IC ASR)
+- AI column classifier (Anthropic API → human confirms
+  → stored in source_definition.column_mapping_memory)
+- Format drift detection
+- Missing data coverage grid
+- Multi-file bulk upload panel (frontend)
+
+### Phase 2 (after Phase 1 validated)
+- SOH derivation service (chain level:
+  Σ DSI sell-out − Σ sell-through)
+- Cost derivation from DSI purchase history
+- Sales price fallback chain
+- Coverage alerts in Channel Operations
+- Customer sell-through velocity
+
+### Phase 3 (future)
+- API connectors (Amazon SP-API, distributor APIs)
+  daily data slots into fact_customer_sellthrough
+  via period_type = 'daily' unchanged
+- Inter-customer stock movement tracking
+- KPI system
 
 ---
 
