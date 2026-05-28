@@ -14,6 +14,24 @@
 
 ---
 
+## Latest work (May 2026) — Phase 5 Channel Operations page
+
+- Extended existing sell-out page into Channel Operations
+- Intelligence depth toggle: Raw|Operational|Strategic|Forecast
+  persisted in localStorage `cip_intel_depth`, default Operational
+- Four tabs: Overview (charts + KPIs + banners), Sell-out
+  (existing page preserved as tab), Inventory, Movements
+- Backend: GET `/channel-ops/summary|sell-out|inventory|movements|forecasts`
+  registered in router
+- Reads: `fact_sales_sellout`, `fact_inventory_distributor`,
+  `fact_inventory_reconciliation`, `fact_customer_velocity`,
+  `fact_dsi_forecast`, `shipment_evidence_line` (`ShipmentEvidenceLine`)
+- `fact_dsi_forecast` only — `fact_forecast` never touched
+- All tabs handle empty tables and missing distributor
+  gracefully with informative states not blank screens
+
+---
+
 ## Latest work (May 2026) — DSI Phase 3 + Phase 4
 
 ### Phase 3 — Velocity learning
