@@ -13,9 +13,14 @@ describe('initPmColumnDrafts', () => {
     expect(d.find((x) => x.header === 'B')?.target).toBe('display_name');
   });
 
-  it('pre-fills target only for auto_map (or legacy suggestions without mapper_action)', () => {
+  it('pre-fills target for auto_map, suggest, and legacy suggestions without mapper_action', () => {
     const suggest = initPmColumnDrafts(['A'], { A: { target: 'display_name', mapper_action: 'suggest' } }, null);
-    expect(suggest[0].target).toBe('');
+    expect(suggest[0].target).toBe('display_name');
+    expect(suggest[0].disposition).not.toBe('ignore');
+
+    const auto = initPmColumnDrafts(['A'], { A: { target: 'technical_product_id', mapper_action: 'auto_map' } }, null);
+    expect(auto[0].target).toBe('technical_product_id');
+    expect(auto[0].disposition).not.toBe('ignore');
 
     const legacy = initPmColumnDrafts(['A'], { A: { target: 'display_name' } }, null);
     expect(legacy[0].target).toBe('display_name');

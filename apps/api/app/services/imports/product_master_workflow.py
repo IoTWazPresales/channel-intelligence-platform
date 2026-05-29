@@ -396,6 +396,22 @@ def decisions_from_columns(headers: list[str], columns: list[dict[str, Any]]) ->
     return {h: by_header[h] for h in headers}
 
 
+def _strip_disposition_for_mapped_targets(decisions: dict[str, Any] | None) -> dict[str, Any]:
+    """Disposition applies only to unmapped columns; drop it when a canonical target is set."""
+    if not decisions:
+        return {}
+    out: dict[str, Any] = {}
+    for h, meta in decisions.items():
+        if not isinstance(meta, dict):
+            out[h] = meta
+            continue
+        m = dict(meta)
+        if m.get("target") and str(m.get("target")).strip():
+            m.pop("disposition", None)
+        out[h] = m
+    return out
+
+
 def decisions_to_field_mapping(decisions: dict[str, Any]) -> dict[str, str]:
     m: dict[str, str] = {}
     for h, meta in decisions.items():
@@ -462,7 +478,9 @@ def save_mapping_sync(db: Session, job_id: int, columns: list[dict[str, Any]]) -
     if errs:
         raise ValueError("; ".join(errs))
     raw_decisions = decisions_from_columns(headers, columns)
-    job.mapping_decisions = normalize_mapping_decisions(raw_decisions)
+    job.mapping_decisions = _strip_disposition_for_mapped_targets(
+        normalize_mapping_decisions(raw_decisions)
+    )
     job.field_mapping = decisions_to_field_mapping(job.mapping_decisions)
     job.stage = STAGE_PM_MAPPING
     job.validation_passed = None

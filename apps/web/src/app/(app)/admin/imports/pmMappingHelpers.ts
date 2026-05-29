@@ -38,12 +38,18 @@ export function initPmColumnDrafts(
   return headers.map((h) => {
     const m = src?.[h];
     const action = m?.mapper_action;
-    const autoFillTarget =
-      m?.target &&
-      String(m.target).trim() &&
-      (action === 'auto_map' || action === undefined || action === null || action === '');
-    if (autoFillTarget) {
-      return { header: h, target: String(m.target).trim(), disposition: 'ignore' };
+    const mappedTarget =
+      m?.target && String(m.target).trim() ? String(m.target).trim() : '';
+    const prefillTarget =
+      mappedTarget &&
+      (action === 'auto_map' ||
+        action === 'suggest' ||
+        action === undefined ||
+        action === null ||
+        action === '');
+    if (prefillTarget) {
+      // Canonical target is active; disposition is not sent to API (see pmDraftsToApiColumns).
+      return { header: h, target: mappedTarget, disposition: 'stage_raw' };
     }
     if (m?.mapper_action === 'recommend_stage_metadata' && m.recommended_disposition === 'stage_raw') {
       return { header: h, target: '', disposition: 'stage_raw' };

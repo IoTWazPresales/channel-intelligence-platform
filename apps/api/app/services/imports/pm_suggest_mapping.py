@@ -711,6 +711,7 @@ def _finalize_mapper_decision(
     if auto_ok and best_t:
         base_out["mapper_action"] = "auto_map"
         base_out["target"] = best_t
+        base_out.pop("disposition", None)
         base_out["confidence"] = round(max(conf, 0.56), 3)
         return base_out
 
@@ -718,6 +719,7 @@ def _finalize_mapper_decision(
         base_out["mapper_action"] = "suggest"
         base_out["target"] = best_t
         base_out["suggested_target"] = best_t
+        base_out.pop("disposition", None)
         base_out["confidence"] = round(min(conf, 0.88), 3)
         rs = base_out["reasons"]
         if ambiguous and not strong_signal:
