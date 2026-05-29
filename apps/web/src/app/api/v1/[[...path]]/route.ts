@@ -60,6 +60,20 @@ function upstreamOrigin(): string {
   return resolvedApiUpstreamOrigin();
 }
 
+/** Long-running import apply/validate/commit can exceed the default undici/fetch timeout. */
+const LONG_PROXY_TIMEOUT_MS = 600_000;
+
+function proxyFetchInitNeedsLongTimeout(method: string, pathSuffix: string): boolean {
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false;
+  const p = pathSuffix.toLowerCase();
+  return (
+    p.includes('/validate') ||
+    p.includes('/commit') ||
+    p.endsWith('/apply') ||
+    p.includes('/apply/')
+  );
+}
+
 async function proxy(request: NextRequest, pathSegments: string[] | undefined) {
   if (!allowSameOriginApiProxy()) {
     return NextResponse.json({ detail: 'Not Found' }, { status: 404 });
@@ -80,6 +94,10 @@ async function proxy(request: NextRequest, pathSegments: string[] | undefined) {
     headers,
     redirect: 'manual',
   };
+
+  if (proxyFetchInitNeedsLongTimeout(request.method, suffix)) {
+    init.signal = AbortSignal.timeout(LONG_PROXY_TIMEOUT_MS);
+  }
 
   if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS') {
     init.body = request.body;

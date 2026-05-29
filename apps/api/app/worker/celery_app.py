@@ -16,6 +16,7 @@ celery_app.conf.task_routes = {
     "imports.process_job": {"queue": "celery"},
     "imports.infer_dsi": {"queue": "celery"},
     "imports.product_master_commit": {"queue": "celery"},
+    "imports.product_master_validate": {"queue": "celery"},
     "imports.dsi_bulk_provisional_customers": {"queue": "celery"},
     "imports.dsi_resolution_plan_apply": {"queue": "celery"},
     "imports.dsi_soh_reconciliation": {"queue": "celery"},

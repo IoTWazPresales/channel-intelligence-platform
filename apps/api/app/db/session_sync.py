@@ -7,7 +7,14 @@ from app.core.config import get_settings
 from app.db.sync_url import sqlalchemy_sync_engine_url
 
 settings = get_settings()
-sync_engine = create_engine(sqlalchemy_sync_engine_url(settings.database_url_sync), pool_pre_ping=True)
+sync_engine = create_engine(
+    sqlalchemy_sync_engine_url(settings.database_url_sync),
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=300,
+    connect_args={"prepare_threshold": None},
+)
 SessionLocal = sessionmaker(bind=sync_engine, class_=Session, autoflush=False, autocommit=False)
 
 

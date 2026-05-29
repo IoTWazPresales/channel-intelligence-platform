@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Uploa
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -27,18 +28,30 @@ from app.services.imports.pm_field_catalog import (
 )
 from app.services.imports.product_master_workflow import (
     STATUS_PM_COMMIT_QUEUED,
+    STATUS_PM_VALIDATE_QUEUED,
+    _persist_pm_validate_task_metadata,
     build_pm_import_progress,
     infer_headers_sync,
     save_mapping_sync,
     suggest_mapping_decisions,
     try_enqueue_pm_commit_sync,
-    validate_product_master_sync,
+    try_enqueue_pm_validate_sync,
 )
-from app.worker.tasks import product_master_commit_task, run_product_master_commit_job
+from app.worker.tasks import (
+    product_master_commit_task,
+    product_master_validate_task,
+    run_product_master_commit_job,
+    run_product_master_validate_job,
+)
 from app.storage.local import get_storage_backend
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+_DB_UNAVAILABLE_DETAIL = {
+    "message": "Database temporarily unavailable — please retry",
+    "code": "database_unavailable",
+}
 
 
 class PMColumnMapping(BaseModel):
@@ -129,24 +142,30 @@ async def get_product_master_job_state(
     x_user_role: str | None = Header(default=None, alias="X-User-Role"),
 ):
     _require_admin(x_user_role)
-    job = await db.scalar(
-        select(ImportJob)
-        .options(joinedload(ImportJob.source).joinedload(SourceDefinition.import_template))
-        .where(ImportJob.id == job_id)
-    )
-    if not job or job.template_slug != "product_master":
-        raise HTTPException(status_code=404, detail="Job not found")
-    headers = job.file_headers or []
-    suggestions = None
-    if headers and job.source:
-        suggestions = suggest_mapping_decisions(headers, job.source, job.inferred_schema)
-    md_norm = normalize_mapping_decisions(job.mapping_decisions) if job.mapping_decisions else None
-    sev_result = await db.execute(
-        select(ImportRowResult.severity, func.count(ImportRowResult.id))
-        .where(ImportRowResult.job_id == job_id)
-        .group_by(ImportRowResult.severity)
-    )
-    sev_counts = {str(row[0]): int(row[1]) for row in sev_result.all()}
+    try:
+        job = await db.scalar(
+            select(ImportJob)
+            .options(joinedload(ImportJob.source).joinedload(SourceDefinition.import_template))
+            .where(ImportJob.id == job_id)
+        )
+        if not job or job.template_slug != "product_master":
+            raise HTTPException(status_code=404, detail="Job not found")
+        headers = job.file_headers or []
+        suggestions = None
+        if headers and job.source:
+            suggestions = suggest_mapping_decisions(headers, job.source, job.inferred_schema)
+        md_norm = normalize_mapping_decisions(job.mapping_decisions) if job.mapping_decisions else None
+        sev_result = await db.execute(
+            select(ImportRowResult.severity, func.count(ImportRowResult.id))
+            .where(ImportRowResult.job_id == job_id)
+            .group_by(ImportRowResult.severity)
+        )
+        sev_counts = {str(row[0]): int(row[1]) for row in sev_result.all()}
+    except HTTPException:
+        raise
+    except (OperationalError, DBAPIError) as exc:
+        logger.warning("product_master job state DB error job_id=%s", job_id, exc_info=exc)
+        raise HTTPException(status_code=503, detail=_DB_UNAVAILABLE_DETAIL) from exc
     progress = build_pm_import_progress(job, sev_counts)
     return {
         "id": job.id,
@@ -199,26 +218,94 @@ async def post_product_master_validate(
     _require_admin(x_user_role)
     try:
         with SessionLocal() as sync_db:
-            validate_product_master_sync(sync_db, job_id)
+            out = try_enqueue_pm_validate_sync(sync_db, job_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        logger.exception("product_master validate failed job_id=%s", job_id)
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "Product Master validation failed due to an internal error.",
-                "code": "pm_validate_internal",
+
+    oc = out["outcome"]
+    if oc == "not_found":
+        raise HTTPException(status_code=404, detail=out["message"])
+    if oc == "not_eligible":
+        raise HTTPException(status_code=400, detail=out["message"])
+    if oc in ("already_running", "already_queued"):
+        job = await db.get(ImportJob, job_id)
+        return JSONResponse(
+            status_code=int(out["http_status"]),
+            content={
+                "id": job_id,
+                "stage": job.stage if job else None,
+                "status": job.status if job else None,
+                "validation_passed": job.validation_passed if job else None,
+                "error_summary": job.error_summary if job else None,
+                "pm_validate": {"outcome": oc, "message": out["message"]},
             },
-        ) from e
+        )
+
+    if oc == "enqueued":
+        settings = get_settings()
+        celery_task_id: str | None = None
+        if settings.cip_dev_celery_dispatch == "in_process_thread":
+
+            def _in_process_pm_validate() -> None:
+                try:
+                    run_product_master_validate_job(
+                        job_id,
+                        celery_task_id="dev-in-process-thread",
+                    )
+                except Exception:
+                    logger.exception(
+                        "product_master validate in-process thread failed job_id=%s (CIP_DEV_CELERY_DISPATCH=in_process_thread)",
+                        job_id,
+                    )
+
+            DEV_CELERY_LOGGER.warning(
+                "ENQUEUE: job_id=%s — CIP_DEV_CELERY_DISPATCH=in_process_thread (DEV ONLY). "
+                "Starting daemon thread for PM validate (no Celery broker).",
+                job_id,
+            )
+            threading.Thread(target=_in_process_pm_validate, name=f"pm-validate-{job_id}", daemon=True).start()
+            celery_task_id = "dev-in-process-thread"
+        else:
+            try:
+                async_result = product_master_validate_task.delay(job_id)
+                celery_task_id = str(async_result.id)
+            except Exception as e:
+                logger.exception("product_master validate dispatch failed job_id=%s", job_id)
+                with SessionLocal() as sync_db2:
+                    j2 = sync_db2.get(ImportJob, job_id)
+                    if j2 is not None and j2.status == STATUS_PM_VALIDATE_QUEUED:
+                        j2.status = "draft"
+                        j2.error_summary = "Validation could not be dispatched to the worker (broker unavailable?)."
+                        sync_db2.commit()
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "message": "Validation was recorded but could not be dispatched to the worker. Check Redis and the worker service, or set CIP_DEV_CELERY_DISPATCH=in_process_thread for local dev only.",
+                        "code": "pm_validate_dispatch_failed",
+                    },
+                ) from e
+
+        if celery_task_id:
+            with SessionLocal() as sync_db3:
+                j3 = sync_db3.get(ImportJob, job_id)
+                if j3 is not None:
+                    _persist_pm_validate_task_metadata(
+                        j3,
+                        task_id=celery_task_id,
+                        async_poll=True,
+                    )
+                    sync_db3.commit()
+
     job = await db.get(ImportJob, job_id)
-    return {
+    payload: dict = {
         "id": job_id,
         "stage": job.stage if job else None,
         "status": job.status if job else None,
         "validation_passed": job.validation_passed if job else None,
         "error_summary": job.error_summary if job else None,
+        "pm_validate": {"outcome": oc, "message": out["message"]},
     }
+    return JSONResponse(status_code=int(out["http_status"]), content=payload)
 
 
 @router.post("/jobs/{job_id}/commit")

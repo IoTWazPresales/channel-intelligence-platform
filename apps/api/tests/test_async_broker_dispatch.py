@@ -63,6 +63,15 @@ def test_run_product_master_commit_job_logs_dev_only_execution(caplog: pytest.Lo
     assert "99" in caplog.text
 
 
+def test_run_product_master_validate_job_invokes_worker_with_session() -> None:
+    from app.worker.tasks import run_product_master_validate_job
+
+    with patch("app.services.imports.pm_validate_sync.run_product_master_validate_sync", return_value=42) as m_run:
+        jid = run_product_master_validate_job(42, celery_task_id="unit-test-id")
+        assert jid == 42
+        m_run.assert_called_once_with(42, celery_task_id="unit-test-id")
+
+
 def test_startup_warns_when_in_process_thread_dispatch(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

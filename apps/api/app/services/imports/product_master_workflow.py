@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 import pandas as pd
-from sqlalchemy import delete, select
+from sqlalchemy import delete, insert, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.ingestion.infer import infer_schema, read_tabular
@@ -46,13 +46,20 @@ STAGE_PM_COMMITTED = "pm_committed"
 STATUS_PM_COMMIT_QUEUED = "commit_queued"
 STATUS_PM_COMMIT_RUNNING = "commit_running"
 STATUS_PM_COMMIT_FAILED = "commit_failed"
+STATUS_PM_VALIDATE_QUEUED = "validate_queued"
+STATUS_PM_VALIDATE_RUNNING = "validate_running"
 
 # If a worker dies mid-commit, allow a new enqueue after this (API-side reclaim).
 STALE_COMMIT_RUNNING = timedelta(hours=1)
+STALE_VALIDATE_RUNNING = timedelta(hours=1)
 
 
 def _pm_commit_blocked_statuses() -> frozenset[str]:
     return frozenset({STATUS_PM_COMMIT_QUEUED, STATUS_PM_COMMIT_RUNNING})
+
+
+def _pm_validate_blocked_statuses() -> frozenset[str]:
+    return frozenset({STATUS_PM_VALIDATE_QUEUED, STATUS_PM_VALIDATE_RUNNING})
 
 
 def build_pm_import_progress(job: ImportJob, severity_counts: dict[str, int]) -> dict[str, Any]:
@@ -69,6 +76,7 @@ def build_pm_import_progress(job: ImportJob, severity_counts: dict[str, int]) ->
 
     jst = (job.status or "").strip()
     commit_async_phase: str | None = None
+    validate_async_phase: str | None = None
 
     # Rail: 0 Upload → 1 Map → 2 Validate → 3 Review → 4 Commit
     rail_index = 0
@@ -80,6 +88,18 @@ def build_pm_import_progress(job: ImportJob, severity_counts: dict[str, int]) ->
         phase_id = "committed"
         phase_label = "Committed"
         phase_description = "Import applied to the product catalog."
+    elif jst == STATUS_PM_VALIDATE_RUNNING:
+        rail_index = 2
+        phase_id = "validate_running"
+        validate_async_phase = "running"
+        phase_label = "Validating (background)"
+        phase_description = "Row checks and staged metadata are running in the background worker. You can leave this page — status updates automatically."
+    elif jst == STATUS_PM_VALIDATE_QUEUED:
+        rail_index = 2
+        phase_id = "validate_queued"
+        validate_async_phase = "queued"
+        phase_label = "Validation queued"
+        phase_description = "Validation is queued for the background worker and will start shortly."
     elif jst == STATUS_PM_COMMIT_RUNNING:
         rail_index = 4
         phase_id = "commit_running"
@@ -171,6 +191,7 @@ def build_pm_import_progress(job: ImportJob, severity_counts: dict[str, int]) ->
         "updated_at": updated,
         "completed_at": completed,
         "commit_async_phase": commit_async_phase,
+        "validate_async_phase": validate_async_phase,
     }
 
 
@@ -496,17 +517,51 @@ def _clear_row_results(db: Session, job_id: int) -> None:
     db.execute(delete(ImportRowResult).where(ImportRowResult.job_id == job_id))
 
 
-def validate_product_master_sync(db: Session, job_id: int) -> ImportJob:
+def _append_pm_row_result(
+    bucket: list[dict[str, Any]],
+    *,
+    job_id: int,
+    row_number: int,
+    severity: str,
+    code: str,
+    message: str,
+    raw_payload: Any = None,
+) -> None:
+    bucket.append(
+        {
+            "job_id": job_id,
+            "row_number": row_number,
+            "severity": severity,
+            "code": code,
+            "message": message,
+            "raw_payload": to_jsonable(raw_payload) if raw_payload is not None else None,
+        }
+    )
+
+
+def _bulk_insert_row_results(db: Session, rows: list[dict[str, Any]], *, chunk_size: int = 2000) -> None:
+    if not rows:
+        return
+    for offset in range(0, len(rows), chunk_size):
+        db.execute(insert(ImportRowResult), rows[offset : offset + chunk_size])
+
+
+def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool = False) -> ImportJob:
     job = db.get(ImportJob, job_id)
     if not job or job.template_slug != "product_master":
         raise ValueError("invalid job")
     if (job.status or "") in _pm_commit_blocked_statuses():
         raise ValueError("Cannot validate while a Product Master commit is queued or running.")
+    if not from_worker and (job.status or "") in _pm_validate_blocked_statuses():
+        raise ValueError("Validation is already queued or running for this job.")
+    if from_worker and (job.status or "") not in (STATUS_PM_VALIDATE_RUNNING,):
+        raise ValueError(f"expected status {STATUS_PM_VALIDATE_RUNNING!r}, got {(job.status or '')!r}")
     if job.stage not in (STAGE_PM_MAPPING,):
         raise ValueError("save mapping before validate")
     if not job.mapping_decisions:
         raise ValueError("mapping_decisions missing")
     _clear_row_results(db, job_id)
+    row_results: list[dict[str, Any]] = []
     headers = job.file_headers or []
     cols_payload = [{"header": h, **(job.mapping_decisions[h])} for h in headers]
     errs = validate_mapping_payload(headers, cols_payload)
@@ -522,20 +577,24 @@ def validate_product_master_sync(db: Session, job_id: int) -> ImportJob:
     name_col = display_name_column(fm)
     df, dropped_desc = strip_leading_descriptor_rows(df, tech_col=tech_col, name_col=name_col)
     if dropped_desc:
-        db.add(
-            ImportRowResult(
-                job_id=job.id,
-                row_number=0,
-                severity="info",
-                code="leading_descriptor_rows_excluded",
-                message=(
-                    f"Excluded {len(dropped_desc)} leading row(s) that look like column labels / "
-                    "a second header row (not product data)."
-                ),
-                raw_payload=to_jsonable({"dropped_iloc_positions": dropped_desc}),
-            )
+        _append_pm_row_result(
+            row_results,
+            job_id=job.id,
+            row_number=0,
+            severity="info",
+            code="leading_descriptor_rows_excluded",
+            message=(
+                f"Excluded {len(dropped_desc)} leading row(s) that look like column labels / "
+                "a second header row (not product data)."
+            ),
+            raw_payload={"dropped_iloc_positions": dropped_desc},
         )
     market_col = next((k for k, v in fm.items() if v == "market_sku"), None)
+    spc_col = next((k for k, v in fm.items() if v == "source_product_code"), None)
+    cc_col = next((k for k, v in fm.items() if v == "country_code"), None)
+    ean_col = next((k for k, v in fm.items() if v == "barcode_ean"), None)
+    upc_col = next((k for k, v in fm.items() if v == "barcode_upc"), None)
+    ch_col = next((k for k, v in fm.items() if v == "channel_code"), None)
 
     stage_cols = [
         h
@@ -567,141 +626,121 @@ def validate_product_master_sync(db: Session, job_id: int) -> ImportJob:
                 market_vals.append(mk)
 
         if not tid:
-            db.add(
-                ImportRowResult(
-                    job_id=job.id,
-                    row_number=int(idx) + 1,
-                    severity="warning",
-                    code="blank_technical_id",
-                    message="Blank technical_product_id",
-                    raw_payload=None,
-                )
+            _append_pm_row_result(
+                row_results,
+                job_id=job.id,
+                row_number=int(idx) + 1,
+                severity="warning",
+                code="blank_technical_id",
+                message="Blank technical_product_id",
             )
             continue
         if not disp:
-            db.add(
-                ImportRowResult(
-                    job_id=job.id,
-                    row_number=int(idx) + 1,
-                    severity="error",
-                    code="blank_display_name",
-                    message="Blank display_name",
-                    raw_payload=None,
-                )
+            _append_pm_row_result(
+                row_results,
+                job_id=job.id,
+                row_number=int(idx) + 1,
+                severity="error",
+                code="blank_display_name",
+                message="Blank display_name",
             )
             errors += 1
             continue
         if len(tid) > 128:
-            db.add(
-                ImportRowResult(
-                    job_id=job.id,
-                    row_number=int(idx) + 1,
-                    severity="error",
-                    code="technical_id_too_long",
-                    message=f"technical_product_id must be at most 128 characters (got {len(tid)}).",
-                    raw_payload=to_jsonable({"value": tid[:96]}),
-                )
+            _append_pm_row_result(
+                row_results,
+                job_id=job.id,
+                row_number=int(idx) + 1,
+                severity="error",
+                code="technical_id_too_long",
+                message=f"technical_product_id must be at most 128 characters (got {len(tid)}).",
+                raw_payload={"value": tid[:96]},
             )
             errors += 1
             continue
         if len(disp) > 512:
-            db.add(
-                ImportRowResult(
-                    job_id=job.id,
-                    row_number=int(idx) + 1,
-                    severity="error",
-                    code="display_name_too_long",
-                    message=f"display_name must be at most 512 characters (got {len(disp)}).",
-                    raw_payload=None,
-                )
+            _append_pm_row_result(
+                row_results,
+                job_id=job.id,
+                row_number=int(idx) + 1,
+                severity="error",
+                code="display_name_too_long",
+                message=f"display_name must be at most 512 characters (got {len(disp)}).",
             )
             errors += 1
             continue
-        spc_col = next((k for k, v in fm.items() if v == "source_product_code"), None)
         if spc_col:
             spv = scalar_to_clean_str(row.get(spc_col))
             if spv and len(spv) > 128:
-                db.add(
-                    ImportRowResult(
-                        job_id=job.id,
-                        row_number=int(idx) + 1,
-                        severity="error",
-                        code="source_product_code_too_long",
-                        message=(
-                            f"source_product_code (catalog source SKU) must be at most 128 characters "
-                            f"(got {len(spv)})."
-                        ),
-                        raw_payload=to_jsonable({"value": spv[:96]}),
-                    )
+                _append_pm_row_result(
+                    row_results,
+                    job_id=job.id,
+                    row_number=int(idx) + 1,
+                    severity="error",
+                    code="source_product_code_too_long",
+                    message=(
+                        f"source_product_code (catalog source SKU) must be at most 128 characters "
+                        f"(got {len(spv)})."
+                    ),
+                    raw_payload={"value": spv[:96]},
                 )
                 errors += 1
                 continue
-        cc_col = next((k for k, v in fm.items() if v == "country_code"), None)
         if cc_col:
             ccv = scalar_to_clean_str(row.get(cc_col))
             if ccv and len(ccv) > 8:
-                db.add(
-                    ImportRowResult(
-                        job_id=job.id,
-                        row_number=int(idx) + 1,
-                        severity="error",
-                        code="country_code_too_long",
-                        message=f"country_code must be at most 8 characters (got {len(ccv)}).",
-                        raw_payload=to_jsonable({"value": ccv[:64]}),
-                    )
+                _append_pm_row_result(
+                    row_results,
+                    job_id=job.id,
+                    row_number=int(idx) + 1,
+                    severity="error",
+                    code="country_code_too_long",
+                    message=f"country_code must be at most 8 characters (got {len(ccv)}).",
+                    raw_payload={"value": ccv[:64]},
                 )
                 errors += 1
                 continue
-
-        ean_col = next((k for k, v in fm.items() if v == "barcode_ean"), None)
         if ean_col:
             ev = scalar_to_clean_str(row.get(ean_col))
             if ev and len(ev) > 32:
-                db.add(
-                    ImportRowResult(
-                        job_id=job.id,
-                        row_number=int(idx) + 1,
-                        severity="error",
-                        code="ean_too_long",
-                        message=f"EAN must be at most 32 characters (got {len(ev)}).",
-                        raw_payload=to_jsonable({"value": ev[:64]}),
-                    )
+                _append_pm_row_result(
+                    row_results,
+                    job_id=job.id,
+                    row_number=int(idx) + 1,
+                    severity="error",
+                    code="ean_too_long",
+                    message=f"EAN must be at most 32 characters (got {len(ev)}).",
+                    raw_payload={"value": ev[:64]},
                 )
                 errors += 1
                 continue
-        upc_col = next((k for k, v in fm.items() if v == "barcode_upc"), None)
         if upc_col:
             uv = scalar_to_clean_str(row.get(upc_col))
             if uv and len(uv) > 32:
-                db.add(
-                    ImportRowResult(
-                        job_id=job.id,
-                        row_number=int(idx) + 1,
-                        severity="error",
-                        code="upc_too_long",
-                        message=f"UPC must be at most 32 characters (got {len(uv)}).",
-                        raw_payload=to_jsonable({"value": uv[:64]}),
-                    )
+                _append_pm_row_result(
+                    row_results,
+                    job_id=job.id,
+                    row_number=int(idx) + 1,
+                    severity="error",
+                    code="upc_too_long",
+                    message=f"UPC must be at most 32 characters (got {len(uv)}).",
+                    raw_payload={"value": uv[:64]},
                 )
                 errors += 1
                 continue
-
-        ch_col = next((k for k, v in fm.items() if v == "channel_code"), None)
         ch_raw = None
         if ch_col:
             v = normalize_scalar_for_pm(row.get(ch_col))
             if v is not None and str(v).strip():
                 ch_raw = str(v).strip()
         if ch_raw and ch_raw.lower() not in channels:
-            db.add(
-                ImportRowResult(
-                    job_id=job.id,
-                    row_number=int(idx) + 1,
-                    severity="error",
-                    code="unknown_channel",
-                    message=f"Unknown channel_code {ch_raw!r}",
-                    raw_payload=None,
-                )
+            _append_pm_row_result(
+                row_results,
+                job_id=job.id,
+                row_number=int(idx) + 1,
+                severity="error",
+                code="unknown_channel",
+                message=f"Unknown channel_code {ch_raw!r}",
             )
             errors += 1
             continue
@@ -715,27 +754,25 @@ def validate_product_master_sync(db: Session, job_id: int) -> ImportJob:
 
     tech_dups = [k for k, v in Counter(tech_values).items() if v > 1]
     if tech_dups:
-        db.add(
-            ImportRowResult(
-                job_id=job.id,
-                row_number=0,
-                severity="warning",
-                code="duplicate_technical_id",
-                message=f"Duplicate technical_product_id values in file ({len(tech_dups)} id(s)); review rows.",
-                raw_payload=to_jsonable({"sample_ids": tech_dups[:20]}),
-            )
+        _append_pm_row_result(
+            row_results,
+            job_id=job.id,
+            row_number=0,
+            severity="warning",
+            code="duplicate_technical_id",
+            message=f"Duplicate technical_product_id values in file ({len(tech_dups)} id(s)); review rows.",
+            raw_payload={"sample_ids": tech_dups[:20]},
         )
     mv_dups = [k for k, v in Counter(market_vals).items() if v > 1] if market_col else []
     if mv_dups:
-        db.add(
-            ImportRowResult(
-                job_id=job.id,
-                row_number=0,
-                severity="warning",
-                code="duplicate_market_sku",
-                message=f"Duplicate market_sku values ({len(mv_dups)}); verify commercial keys.",
-                raw_payload=to_jsonable({"sample": mv_dups[:20]}),
-            )
+        _append_pm_row_result(
+            row_results,
+            job_id=job.id,
+            row_number=0,
+            severity="warning",
+            code="duplicate_market_sku",
+            message=f"Duplicate market_sku values ({len(mv_dups)}); verify commercial keys.",
+            raw_payload={"sample": mv_dups[:20]},
         )
 
     id_col_label = fm.get(tech_col) or "technical_product_id"
@@ -746,47 +783,180 @@ def validate_product_master_sync(db: Session, job_id: int) -> ImportJob:
         or not (scalar_to_clean_str(row.get(name_col)) or "")
     )
     if missing_identity_rows:
-        db.add(
-            ImportRowResult(
-                job_id=job.id,
-                row_number=0,
-                severity="warning",
-                code="identity_quality",
-                message=f"{missing_identity_rows} row(s) missing technical id or display name.",
-                raw_payload=to_jsonable({"technical_column": tech_col, "mapped_as": id_col_label}),
-            )
+        _append_pm_row_result(
+            row_results,
+            job_id=job.id,
+            row_number=0,
+            severity="warning",
+            code="identity_quality",
+            message=f"{missing_identity_rows} row(s) missing technical id or display name.",
+            raw_payload={"technical_column": tech_col, "mapped_as": id_col_label},
         )
 
     if cand_cols:
-        db.add(
-            ImportRowResult(
-                job_id=job.id,
-                row_number=0,
-                severity="info",
-                code="attribute_candidate",
-                message="Columns flagged for steward review: " + ", ".join(repr(c) for c in cand_cols),
-                raw_payload=to_jsonable({"headers": cand_cols}),
-            )
+        _append_pm_row_result(
+            row_results,
+            job_id=job.id,
+            row_number=0,
+            severity="info",
+            code="attribute_candidate",
+            message="Columns flagged for steward review: " + ", ".join(repr(c) for c in cand_cols),
+            raw_payload={"headers": cand_cols},
         )
+
+    _append_pm_row_result(
+        row_results,
+        job_id=job.id,
+        row_number=0,
+        severity="info" if errors == 0 else "warning",
+        code="pm_validation_summary",
+        message=json.dumps({"row_errors": errors, "staged_row_count": len(staged)}),
+    )
+    _bulk_insert_row_results(db, row_results)
 
     job.staged_metadata = to_jsonable(staged) if staged else {}
     job.validation_passed = errors == 0
     job.stage = STAGE_PM_VALIDATED
     job.status = "validated" if errors == 0 else "validation_failed"
     job.error_summary = f"{errors} row errors" if errors else None
-    db.add(
-        ImportRowResult(
-            job_id=job.id,
-            row_number=0,
-            severity="info" if errors == 0 else "warning",
-            code="pm_validation_summary",
-            message=json.dumps({"row_errors": errors, "staged_row_count": len(staged)}),
-            raw_payload=None,
-        )
-    )
+    _clear_pm_validate_task_metadata(job)
     db.commit()
     db.refresh(job)
     return job
+
+
+def _clear_pm_validate_task_metadata(job: ImportJob) -> None:
+    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    if meta.pop("pm_validate_task", None) is not None:
+        job.staged_metadata = to_jsonable(meta) if meta else None
+
+
+def _persist_pm_validate_task_metadata(
+    job: ImportJob,
+    *,
+    task_id: str,
+    async_poll: bool,
+) -> None:
+    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    meta["pm_validate_task"] = to_jsonable(
+        {
+            "task_id": task_id,
+            "async_poll": async_poll,
+            "kind": "product_master_validate",
+            "label": "Validating product master…",
+            "queued_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    job.staged_metadata = to_jsonable(meta)
+
+
+def try_enqueue_pm_validate_sync(db: Session, job_id: int) -> dict[str, Any]:
+    """Atomically enqueue Product Master validation (row lock). Returns outcome for API layer."""
+    job = db.execute(
+        select(ImportJob)
+        .options(selectinload(ImportJob.source).selectinload(SourceDefinition.import_template))
+        .where(ImportJob.id == job_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if not job or job.template_slug != "product_master":
+        return {"outcome": "not_found", "http_status": 404, "message": "Job not found"}
+    if (job.status or "") in _pm_commit_blocked_statuses():
+        return {
+            "outcome": "not_eligible",
+            "http_status": 400,
+            "message": "Cannot validate while a Product Master commit is queued or running.",
+        }
+    if job.status == STATUS_PM_VALIDATE_RUNNING:
+        return {
+            "outcome": "already_running",
+            "http_status": 200,
+            "message": "Validation is already running for this job.",
+            "job_status": job.status,
+        }
+    if job.status == STATUS_PM_VALIDATE_QUEUED:
+        return {
+            "outcome": "already_queued",
+            "http_status": 200,
+            "message": "Validation is already queued for this job.",
+            "job_status": job.status,
+        }
+    if job.stage != STAGE_PM_MAPPING:
+        return {"outcome": "not_eligible", "http_status": 400, "message": "save mapping before validate"}
+    if not job.mapping_decisions:
+        return {"outcome": "not_eligible", "http_status": 400, "message": "mapping_decisions missing"}
+
+    job.status = STATUS_PM_VALIDATE_QUEUED
+    job.error_summary = None
+    db.commit()
+    return {
+        "outcome": "enqueued",
+        "http_status": 202,
+        "message": "Validation queued for background processing.",
+        "job_id": job.id,
+    }
+
+
+def run_pm_validate_worker(db: Session, job_id: int, *, celery_task_id: str | None) -> None:
+    """Celery entry: run validation; must follow try_enqueue (status validate_queued)."""
+    job = db.execute(
+        select(ImportJob)
+        .options(selectinload(ImportJob.source).selectinload(SourceDefinition.import_template))
+        .where(ImportJob.id == job_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if not job or job.template_slug != "product_master":
+        logger.warning("run_pm_validate_worker: missing job job_id=%s", job_id)
+        return
+    if job.status != STATUS_PM_VALIDATE_QUEUED:
+        logger.info(
+            "run_pm_validate_worker: skip job_id=%s expected=%s got=%s",
+            job_id,
+            STATUS_PM_VALIDATE_QUEUED,
+            job.status,
+        )
+        return
+
+    now = datetime.now(timezone.utc)
+    job.status = STATUS_PM_VALIDATE_RUNNING
+    _persist_pm_validate_task_metadata(
+        job,
+        task_id=str(celery_task_id or f"pm-validate-{job_id}"),
+        async_poll=True,
+    )
+    db.commit()
+
+    try:
+        validate_product_master_sync(db, job_id, from_worker=True)
+    except ValueError as exc:
+        logger.warning("run_pm_validate_worker: validation rejected job_id=%s: %s", job_id, exc)
+        db.rollback()
+        job2 = db.get(ImportJob, job_id)
+        if job2:
+            _clear_pm_validate_task_metadata(job2)
+            job2.status = "validation_failed"
+            job2.error_summary = str(exc)[:2000]
+            db.add(job2)
+            db.commit()
+    except Exception as exc:
+        logger.exception("run_pm_validate_worker: validation failed job_id=%s", job_id)
+        db.rollback()
+        job2 = db.get(ImportJob, job_id)
+        if job2:
+            _clear_pm_validate_task_metadata(job2)
+            job2.status = "validation_failed"
+            if not job2.error_summary:
+                job2.error_summary = str(exc)[:2000]
+            db.add(
+                ImportRowResult(
+                    job_id=job2.id,
+                    row_number=0,
+                    severity="error",
+                    code="pm_validate_worker_failed",
+                    message=f"Background validation failed: {str(exc)[:1200]}",
+                    raw_payload=to_jsonable({"error_type": exc.__class__.__name__}),
+                )
+            )
+            db.commit()
 
 
 def _sync_key_for_generic(gt: str) -> str | None:

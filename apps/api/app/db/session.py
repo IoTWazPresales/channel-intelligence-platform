@@ -8,6 +8,9 @@ engine = create_async_engine(
     settings.database_url,
     echo=False,
     pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=300,
     connect_args={
         "ssl": "require",
         "statement_cache_size": 0,

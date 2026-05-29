@@ -199,6 +199,34 @@ def dsi_forecasting_task(self, job_id: int, payload: dict) -> dict:
         raise
 
 
+def run_product_master_validate_job(job_id: int, *, celery_task_id: str | None) -> int:
+    """Shared implementation for Celery worker and explicit dev-only dispatch paths."""
+    from app.services.imports.pm_validate_sync import run_product_master_validate_sync
+
+    if celery_task_id == "dev-in-process-thread":
+        DEV_CELERY_LOGGER.warning(
+            "EXECUTION: Product Master validate job_id=%s running in-process (DEV ONLY, "
+            "CIP_DEV_CELERY_DISPATCH=in_process_thread). Not broker-isolated.",
+            job_id,
+        )
+
+    try:
+        return run_product_master_validate_sync(job_id, celery_task_id=celery_task_id)
+    except Exception:
+        logger.exception("product_master_validate job failed job_id=%s", job_id)
+        raise
+
+
+@celery_app.task(name="imports.product_master_validate", bind=True, ack_late=True)
+def product_master_validate_task(self, job_id: int) -> int:
+    """Background Product Master validation: must be enqueued via try_enqueue_pm_validate_sync first."""
+    celery_id = getattr(getattr(self, "request", None), "id", None)
+    return run_product_master_validate_job(
+        job_id,
+        celery_task_id=str(celery_id) if celery_id else None,
+    )
+
+
 @celery_app.task(name="imports.product_master_commit", bind=True, ack_late=True)
 def product_master_commit_task(self, job_id: int, confirm_destructive: bool) -> int:
     """Background Product Master apply: must be enqueued via try_enqueue_pm_commit_sync first."""

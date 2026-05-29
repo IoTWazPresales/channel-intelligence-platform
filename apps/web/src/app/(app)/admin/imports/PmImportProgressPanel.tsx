@@ -75,8 +75,14 @@ export function PmImportProgressPanel({
 }: PmImportProgressPanelProps) {
   const asyncCommitPending =
     jobStatus === 'commit_queued' || jobStatus === 'commit_running';
+  const asyncValidatePending =
+    jobStatus === 'validate_queued' || jobStatus === 'validate_running';
   const busy =
-    isValidating || isCommitting || Boolean(isSavingMapping) || asyncCommitPending;
+    isValidating ||
+    isCommitting ||
+    Boolean(isSavingMapping) ||
+    asyncCommitPending ||
+    asyncValidatePending;
   const startRef = useRef<number | null>(null);
   const [tick, setTick] = useState(0);
 
@@ -102,12 +108,14 @@ export function PmImportProgressPanel({
 
   const phaseTitle = useMemo(() => {
     if (isSavingMapping) return 'Saving mapping';
-    if (isValidating) return 'Validating';
+    if (isValidating) return 'Enqueueing validation';
+    if (jobStatus === 'validate_running') return 'Validating (background worker)';
+    if (jobStatus === 'validate_queued') return 'Validation queued';
     if (isCommitting) return 'Enqueueing commit';
     if (jobStatus === 'commit_running') return 'Committing (background worker)';
     if (jobStatus === 'commit_queued') return 'Commit queued';
     return progress?.phase_label ?? 'Import status';
-  }, [isCommitting, isSavingMapping, isValidating, jobStatus, progress?.phase_label]);
+  }, [isCommitting, isSavingMapping, isValidating, jobStatus, progress?.phase_description, progress?.phase_label]);
 
   const phaseDescription = useMemo(() => {
     if (isSavingMapping) return 'Updating column mapping on the server…';

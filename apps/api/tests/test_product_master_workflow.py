@@ -248,9 +248,13 @@ def test_validate_product_master_staged_metadata_is_json_serializable(monkeypatc
 
     db = MagicMock()
     db.get.return_value = job
+    job.status = "validate_running"
     db.scalars.side_effect = [scal_raw, scal_ch]
+    db.execute = MagicMock()
 
-    validate_product_master_sync(db, 42)
+    validate_product_master_sync(db, 42, from_worker=True)
+
+    assert db.execute.called
 
     json.dumps(job.staged_metadata)
     assert str(job.staged_metadata["0"]["ship_date"]).startswith("2024-06-15")

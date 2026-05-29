@@ -522,13 +522,33 @@ function AdminImportsPageContent() {
     },
   });
 
+  const importJobsListError = useMemo((): Error | null => {
+    if (!jobsIsError) return null;
+    const raw = toQueryError(jobsErr)?.message ?? '';
+    if (
+      /internal server error/i.test(raw) ||
+      /\b500\b/.test(raw) ||
+      /database temporarily unavailable/i.test(raw) ||
+      /\b503\b/.test(raw) ||
+      !raw.trim()
+    ) {
+      return new Error('Unable to load import jobs — please retry.');
+    }
+    return new Error(raw);
+  }, [jobsIsError, jobsErr]);
+
   const { data: previewRows, refetch: refetchPreview } = useQuery({
     queryKey: ['import-job-rows', lastJobId],
     queryFn: ({ signal }) => apiGet<RowResult[]>(`/api/v1/imports/jobs/${lastJobId}/rows`, { signal }),
     enabled: lastJobId != null,
   });
 
-  const { data: jobDetail } = useQuery({
+  const {
+    data: jobDetail,
+    isError: jobDetailIsError,
+    error: jobDetailErr,
+    isFetched: jobDetailFetched,
+  } = useQuery({
     queryKey: ['import-job', jobIdParam],
     queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${jobIdParam}`, { signal }),
     enabled: jobIdParam != null,
@@ -578,6 +598,27 @@ function AdminImportsPageContent() {
     setLastJobId(jobDetail.id);
     setSelectedSlug(jobDetail.template_slug ?? null);
     setIsJobRevisitMode(true);
+    if (jobDetail.template_slug === 'product_master') {
+      setIsJobRevisitMode(false);
+      const stage = (jobDetail.stage || '').trim();
+      const status = (jobDetail.status || '').trim();
+      if (status === 'validate_queued' || status === 'validate_running') {
+        setActiveStep(5);
+      } else if (status === 'commit_queued' || status === 'commit_running') {
+        setActiveStep(6);
+      } else if (stage === 'pm_committed') {
+        setActiveStep(6);
+      } else if (stage === 'pm_validated') {
+        setActiveStep(5);
+      } else if (stage === 'pm_mapping_saved') {
+        setActiveStep(5);
+      } else if (stage === 'pm_headers_ready') {
+        setActiveStep(4);
+      } else {
+        setActiveStep(3);
+      }
+      return;
+    }
     if (jobDetail.template_slug !== 'product_master') {
       if (jobDetail.template_slug === 'distributor_inventory') {
         const stage = (jobDetail.stage || '').trim();
@@ -594,9 +635,22 @@ function AdminImportsPageContent() {
         setActiveStep(4);
       }
     }
-    // PM jobs: activeStep stays at 0; a deferred alert is shown instead of
-    // attempting to reconstruct the PM mapping/validate/commit wizard.
   }, [jobDetail, visibleTemplates, searchParams]);
+
+  useEffect(() => {
+    if (jobIdParam == null || !jobDetailFetched) return;
+    if (jobDetail) return;
+    if (!jobDetailIsError) return;
+    const msg =
+      jobDetailErr instanceof Error ? jobDetailErr.message : String(jobDetailErr ?? '');
+    if (
+      /\b404\b/.test(msg) ||
+      /not\s+found/i.test(msg) ||
+      /job\s+not\s+found/i.test(msg)
+    ) {
+      router.replace('/admin/imports');
+    }
+  }, [jobIdParam, jobDetail, jobDetailFetched, jobDetailIsError, jobDetailErr, router]);
 
   // Diagnostic summary: group previewRows by code, sorted by count desc, capped at 8.
   const diagnosticSummary = useMemo<Array<{ code: string; count: number }>>(() => {
@@ -1306,12 +1360,22 @@ function AdminImportsPageContent() {
         method: 'POST',
         headers: defaultHeaders,
       });
-      if (!res.ok) throw new Error(await readFetchError(res));
-      return res.json() as Promise<{ validation_passed: boolean | null }>;
+      const text = await res.text();
+      if (res.status !== 202 && !res.ok) {
+        throw new Error(
+          await readFetchError(new Response(text, { status: res.status, statusText: res.statusText }))
+        );
+      }
+      return (text ? JSON.parse(text) : {}) as {
+        validation_passed?: boolean | null;
+        status?: string;
+        pm_validate?: { outcome?: string; message?: string };
+      };
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['pm-import-state', lastJobId] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
     },
   });
 
@@ -1345,7 +1409,13 @@ function AdminImportsPageContent() {
     },
   });
 
-  const { data: pmJobState, refetch: refetchPmState } = useQuery({
+  const {
+    data: pmJobState,
+    refetch: refetchPmState,
+    isError: pmStateIsError,
+    isLoading: pmStateLoading,
+    error: pmStateErr,
+  } = useQuery({
     queryKey: ['pm-import-state', lastJobId],
     queryFn: ({ signal }) => apiGet<PmJobState>(`/api/v1/imports/product-master/jobs/${lastJobId}/state`, { signal }),
     enabled: Boolean(isPm && lastJobId != null),
@@ -1355,9 +1425,23 @@ function AdminImportsPageContent() {
       const data = query.state.data as PmJobState | undefined;
       const commitBusy =
         data?.status === 'commit_queued' || data?.status === 'commit_running';
-      return externalBusy || commitBusy ? 2000 : false;
+      const validateBusy =
+        data?.status === 'validate_queued' || data?.status === 'validate_running';
+      return externalBusy || commitBusy || validateBusy ? 2000 : false;
     },
   });
+
+  const pmStateLoadMessage = useMemo(() => {
+    if (!pmStateIsError) return null;
+    const raw = safeDisplayError(pmStateErr);
+    if (/database temporarily unavailable/i.test(raw) || /\b503\b/.test(raw)) {
+      return 'Database temporarily unavailable — please retry.';
+    }
+    if (/\b404\b/.test(raw) || /not\s+found/i.test(raw)) {
+      return 'Product Master import job not found. It may have been deleted.';
+    }
+    return raw || 'Unable to load Product Master job state — please retry.';
+  }, [pmStateIsError, pmStateErr]);
 
   const hdrKey = pmJobState?.file_headers?.join('|') ?? '';
   useEffect(() => {
@@ -2050,6 +2134,41 @@ function AdminImportsPageContent() {
 
         {activeStep === 4 && isPm && selectedTemplate ? (
           <Stack spacing={2}>
+            {pmStateIsError ? (
+              <Alert
+                severity="error"
+                action={
+                  <Button color="inherit" size="small" onClick={() => void refetchPmState()}>
+                    Retry
+                  </Button>
+                }
+              >
+                {pmStateLoadMessage}
+              </Alert>
+            ) : null}
+            {pmStateLoading && !pmJobState?.file_headers?.length && !pmStateIsError ? (
+              <Stack spacing={1}>
+                <LinearProgress />
+                <Typography variant="body2" color="text.secondary">
+                  Loading Product Master job state…
+                </Typography>
+              </Stack>
+            ) : null}
+            {!pmStateIsError && !pmStateLoading && !pmJobState?.file_headers?.length ? (
+              <Alert
+                severity="warning"
+                action={
+                  <Button color="inherit" size="small" onClick={() => void refetchPmState()}>
+                    Retry
+                  </Button>
+                }
+              >
+                Column mapping is not available — no file headers were returned for this job. Go back to
+                upload or retry loading job state.
+              </Alert>
+            ) : null}
+            {!pmStateIsError && pmJobState?.file_headers?.length ? (
+              <>
             <Typography variant="subtitle2">Map file columns → canonical fields</Typography>
             <Alert severity={requiredOk ? 'success' : 'warning'}>
               <strong>Required core:</strong> map <strong>display_name</strong> once, and exactly one{' '}
@@ -2478,6 +2597,18 @@ function AdminImportsPageContent() {
                 Save & continue to validate
               </Button>
             </Stack>
+              </>
+            ) : null}
+            {pmStateIsError || (!pmJobState?.file_headers?.length && !pmStateLoading) ? (
+              <Stack direction="row" spacing={1}>
+                <Button onClick={() => setActiveStep(3)}>Back</Button>
+                {pmStateIsError ? (
+                  <Button variant="outlined" onClick={() => void refetchPmState()}>
+                    Retry
+                  </Button>
+                ) : null}
+              </Stack>
+            ) : null}
           </Stack>
         ) : null}
 
@@ -2485,13 +2616,34 @@ function AdminImportsPageContent() {
           <Stack spacing={2}>
             <Typography variant="subtitle2">Validate import (no catalog writes)</Typography>
             <Stack direction="row" spacing={1} alignItems="center">
-              <Button variant="contained" onClick={() => void validatePm.mutateAsync()} disabled={validatePm.isPending}>
+              <Button
+                variant="contained"
+                onClick={() => void validatePm.mutateAsync()}
+                disabled={
+                  validatePm.isPending ||
+                  pmJobState?.status === 'validate_queued' ||
+                  pmJobState?.status === 'validate_running'
+                }
+              >
                 Run validation
               </Button>
               {pmJobState?.validation_passed === true ? <Chip color="success" label="Passed" /> : null}
               {pmJobState?.validation_passed === false ? <Chip color="error" label="Failed" /> : null}
-              {pmJobState?.validation_passed == null ? <Chip variant="outlined" label="Not run yet" /> : null}
+              {pmJobState?.validation_passed == null &&
+              pmJobState?.status !== 'validate_queued' &&
+              pmJobState?.status !== 'validate_running' ? (
+                <Chip variant="outlined" label="Not run yet" />
+              ) : null}
+              {pmJobState?.status === 'validate_queued' || pmJobState?.status === 'validate_running' ? (
+                <Chip color="info" label="Validating in background…" />
+              ) : null}
             </Stack>
+            {pmJobState?.status === 'validate_queued' || pmJobState?.status === 'validate_running' ? (
+              <Alert severity="info">
+                Validation is running in the background worker. This page will refresh automatically — you can leave and
+                return later.
+              </Alert>
+            ) : null}
             {pmJobState?.error_summary ? <Alert severity="warning">{pmJobState.error_summary}</Alert> : null}
             {validatePm.isError ? (
               <Alert severity="error">{safeDisplayError(validatePm.error)}</Alert>
@@ -3733,7 +3885,7 @@ function AdminImportsPageContent() {
           intro="Jobs include template slug and import mode. Product Master mapping jobs show stages pm_headers_ready → pm_mapping_saved → pm_validated → pm_committed."
           isLoading={jobsLoading}
           isError={jobsIsError}
-          error={toQueryError(jobsErr)}
+          error={importJobsListError}
           onRetry={() => void refetchJobs()}
           isEmpty={jobsList.length === 0}
           empty={{
