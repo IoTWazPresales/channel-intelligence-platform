@@ -231,6 +231,48 @@ type PmJobState = {
   progress?: PmProgressSnapshot | null;
 };
 
+/** Map PM server job state to wizard step indices (stepsPm: 3 upload … 6 commit). */
+function pmWizardActiveStepFromServer(state: {
+  stage: string;
+  status: string;
+  validation_passed: boolean | null;
+  progress?: PmProgressSnapshot | null;
+}): number | null {
+  const stage = (state.stage || '').trim();
+  const status = (state.status || '').trim();
+  const phaseId = (state.progress?.phase_id || '').trim();
+
+  if (
+    status === 'commit_queued' ||
+    status === 'commit_running' ||
+    status === 'commit_failed' ||
+    stage === 'pm_committed'
+  ) {
+    return 6;
+  }
+  if (stage === 'pm_validated') {
+    return state.validation_passed === true ? 6 : 5;
+  }
+  if (
+    status === 'validate_queued' ||
+    status === 'validate_running' ||
+    stage === 'pm_mapping_saved' ||
+    phaseId === 'validate_pending' ||
+    phaseId === 'validate_queued' ||
+    phaseId === 'validate_running' ||
+    phaseId === 'validate_failed'
+  ) {
+    return 5;
+  }
+  if (stage === 'pm_headers_ready' || phaseId === 'map') {
+    return 4;
+  }
+  if (phaseId === 'upload' || stage === 'uploaded') {
+    return 3;
+  }
+  return null;
+}
+
 const HL_MAPPING_DISPLAY_FIELDS: Array<{ canonical: string; label: string }> = [
   { canonical: 'customer_token', label: 'Customer' },
   { canonical: 'distributor_token', label: 'Distributor' },
@@ -1450,6 +1492,21 @@ function AdminImportsPageContent() {
       initPmColumnDrafts(pmJobState.file_headers, pmJobState.suggested_mapping, pmJobState.mapping_decisions)
     );
   }, [isPm, activeStep, lastJobId, hdrKey, pmJobState?.suggested_mapping, pmJobState?.mapping_decisions]);
+
+  // Align wizard body with polled PM job state (upload, mapping save, validate/commit progress).
+  useEffect(() => {
+    if (!isPm || lastJobId == null || !pmJobState || pmJobState.id !== lastJobId) return;
+    if (activeStep < 3 && jobIdParam !== lastJobId) return;
+    const derived = pmWizardActiveStepFromServer(pmJobState);
+    if (derived == null) return;
+    setActiveStep((prev) => (prev === derived ? prev : derived));
+  }, [
+    isPm,
+    lastJobId,
+    jobIdParam,
+    activeStep,
+    pmJobState,
+  ]);
 
   const downloadSample = useCallback(async () => {
     if (!selectedSlug) return;

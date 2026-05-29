@@ -245,12 +245,12 @@ describe('AdminImportsPage job revisit via ?job= URL param', () => {
     expect(await screen.findByText('unknown_product')).toBeInTheDocument();
   });
 
-  it('shows PM deferred alert and does not crash for a product_master job revisit', async () => {
+  it('resumes PM wizard for product_master job revisit (no read-only deferred alert)', async () => {
     searchString = 'job=99';
     renderPage();
-    expect(await screen.findByText(/Viewing previous Product Master job/i)).toBeInTheDocument();
-    expect(screen.getByText(/Full PM revisit is not yet supported/i)).toBeInTheDocument();
-    // Should not throw or show an error
+    expect(screen.queryByText(/Viewing previous Product Master job/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Full PM revisit is not yet supported/i)).not.toBeInTheDocument();
+    expect(await screen.findByText('Commit to catalog')).toBeInTheDocument();
     expect(screen.queryByText('unknown_product')).not.toBeInTheDocument();
   });
 
