@@ -4,7 +4,7 @@
 `main`
 
 ## Head commit
-(pending push) — `pm: async Celery validation, bulk row results, wizard resume, proxy timeout`
+`8e7a885` — `pm: async Celery validation, bulk row results, wizard resume`
 
 ## Alembic Head
 `20260518_0045` — Customer sell-through Phase 0 (`fact_customer_sellthrough`, staging, `customer_report_config`, template seed). Prior: `0043` `fact_dsi_forecast`, `0042` `fact_customer_velocity`. Smoke: **`cip_alembic_smoke`** at `0045`.
