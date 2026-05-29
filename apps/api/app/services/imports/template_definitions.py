@@ -18,7 +18,18 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "destructive_apply_requires_confirm": True,
         "accepted_file_types": [".csv", ".xlsx"],
         "expected_columns": {
-            "sku": {"aliases": ["item", "item_code", "product_sku"], "required": True},
+            "sku": {
+                "aliases": [
+                    "item",
+                    "item_code",
+                    "product_sku",
+                    "item_id",
+                    "material",
+                    "material_code",
+                    "sku_code",
+                ],
+                "required": True,
+            },
             "name": {"aliases": ["product_name", "title", "description"], "required": True},
             "category": {"aliases": ["cat", "product_category"], "required": False},
             "channel_code": {"aliases": ["channel", "ch_code", "primary_channel"], "required": False},
