@@ -277,18 +277,38 @@ def _process_product_master(db: Session, job: ImportJob, df: pd.DataFrame, mappi
             if v is not None and str(v).strip():
                 ch_raw = str(v).strip()
         if ch_raw and ch_raw.lower() not in channels:
-            db.add(
-                ImportRowResult(
-                    job_id=job.id,
-                    row_number=int(idx) + 1,
-                    severity="error",
-                    code="unknown_channel",
-                    message=f"Unknown channel_code {ch_raw!r}",
-                    raw_payload=row.where(pd.notnull(row), None).to_dict(),
-                )
+            from app.services.imports.ai_resolver_wiring import try_ai_token_resolution
+
+            ch_candidates = [
+                {"id": int(cid), "code": code, "name": code}
+                for code, cid in list(channels.items())[:20]
+            ]
+            ai_ch_id, _, _ = try_ai_token_resolution(
+                raw_token=ch_raw,
+                token_type="customer",
+                candidates=ch_candidates,
+                import_type="product_master",
+                job_id=int(job.id),
+                extra_context={"match_field": "channel_code"},
             )
-            errors += 1
-            continue
+            if ai_ch_id is not None:
+                for code, cid in channels.items():
+                    if int(cid) == int(ai_ch_id):
+                        ch_raw = code
+                        break
+            else:
+                db.add(
+                    ImportRowResult(
+                        job_id=job.id,
+                        row_number=int(idx) + 1,
+                        severity="error",
+                        code="unknown_channel",
+                        message=f"Unknown channel_code {ch_raw!r}",
+                        raw_payload=row.where(pd.notnull(row), None).to_dict(),
+                    )
+                )
+                errors += 1
+                continue
         payloads.append({"sku": sku, "name": name, "category": cat, "channel_code": ch_raw})
 
     if errors:
@@ -453,18 +473,35 @@ def _process_customer_master(db: Session, job: ImportJob, df: pd.DataFrame, mapp
             if candidate:
                 region_id = regions.get(candidate.lower())
                 if region_id is None:
-                    db.add(
-                        ImportRowResult(
-                            job_id=job.id,
-                            row_number=row_number,
-                            severity="error",
-                            code="unknown_region_code",
-                            message=f"Unknown region_code {candidate!r}",
-                            raw_payload=raw_payload,
-                        )
+                    from app.services.imports.ai_resolver_wiring import try_ai_token_resolution
+
+                    reg_candidates = [
+                        {"id": int(rid), "code": code, "name": code}
+                        for code, rid in list(regions.items())[:20]
+                    ]
+                    ai_rid, _, _ = try_ai_token_resolution(
+                        raw_token=candidate,
+                        token_type="customer",
+                        candidates=reg_candidates,
+                        import_type="customer_master",
+                        job_id=int(job.id),
+                        extra_context={"match_field": "region_code"},
                     )
-                    errors += 1
-                    continue
+                    if ai_rid is not None:
+                        region_id = ai_rid
+                    else:
+                        db.add(
+                            ImportRowResult(
+                                job_id=job.id,
+                                row_number=row_number,
+                                severity="error",
+                                code="unknown_region_code",
+                                message=f"Unknown region_code {candidate!r}",
+                                raw_payload=raw_payload,
+                            )
+                        )
+                        errors += 1
+                        continue
 
         channel_id = None
         if channel_col:
@@ -472,18 +509,35 @@ def _process_customer_master(db: Session, job: ImportJob, df: pd.DataFrame, mapp
             if candidate:
                 channel_id = channels.get(candidate.lower())
                 if channel_id is None:
-                    db.add(
-                        ImportRowResult(
-                            job_id=job.id,
-                            row_number=row_number,
-                            severity="error",
-                            code="unknown_channel_code",
-                            message=f"Unknown channel_code {candidate!r}",
-                            raw_payload=raw_payload,
-                        )
+                    from app.services.imports.ai_resolver_wiring import try_ai_token_resolution
+
+                    ch_candidates = [
+                        {"id": int(cid), "code": code, "name": code}
+                        for code, cid in list(channels.items())[:20]
+                    ]
+                    ai_cid, _, _ = try_ai_token_resolution(
+                        raw_token=candidate,
+                        token_type="customer",
+                        candidates=ch_candidates,
+                        import_type="customer_master",
+                        job_id=int(job.id),
+                        extra_context={"match_field": "channel_code"},
                     )
-                    errors += 1
-                    continue
+                    if ai_cid is not None:
+                        channel_id = ai_cid
+                    else:
+                        db.add(
+                            ImportRowResult(
+                                job_id=job.id,
+                                row_number=row_number,
+                                severity="error",
+                                code="unknown_channel_code",
+                                message=f"Unknown channel_code {candidate!r}",
+                                raw_payload=raw_payload,
+                            )
+                        )
+                        errors += 1
+                        continue
 
         preferred_distributor_id = None
         if dist_col:
@@ -491,18 +545,34 @@ def _process_customer_master(db: Session, job: ImportJob, df: pd.DataFrame, mapp
             if candidate:
                 preferred_distributor_id = distributors.get(candidate.lower())
                 if preferred_distributor_id is None:
-                    db.add(
-                        ImportRowResult(
-                            job_id=job.id,
-                            row_number=row_number,
-                            severity="error",
-                            code="unknown_preferred_distributor_code",
-                            message=f"Unknown preferred_distributor_code {candidate!r}",
-                            raw_payload=raw_payload,
-                        )
+                    from app.services.imports.ai_resolver_wiring import (
+                        distributor_candidates,
+                        try_ai_token_resolution,
                     )
-                    errors += 1
-                    continue
+
+                    ai_did, _, _ = try_ai_token_resolution(
+                        raw_token=candidate,
+                        token_type="distributor",
+                        candidates=distributor_candidates(db, candidate),
+                        import_type="customer_master",
+                        job_id=int(job.id),
+                        extra_context={"match_field": "preferred_distributor_code"},
+                    )
+                    if ai_did is not None:
+                        preferred_distributor_id = ai_did
+                    else:
+                        db.add(
+                            ImportRowResult(
+                                job_id=job.id,
+                                row_number=row_number,
+                                severity="error",
+                                code="unknown_preferred_distributor_code",
+                                message=f"Unknown preferred_distributor_code {candidate!r}",
+                                raw_payload=raw_payload,
+                            )
+                        )
+                        errors += 1
+                        continue
 
         pending.append(
             {

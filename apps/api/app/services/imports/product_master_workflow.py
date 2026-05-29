@@ -781,6 +781,76 @@ def _sync_key_for_generic(gt: str) -> str | None:
     return None
 
 
+def _maybe_ai_remap_product_by_description(
+    db: Session,
+    pl: dict[str, Any],
+    fm: dict[str, str],
+    row: Any,
+    job_id: int,
+) -> dict[str, Any]:
+    """After deterministic identity checks: optional description-based product match (AI only)."""
+    from app.core.config import get_settings
+
+    if not get_settings().ai_assist_enabled:
+        return pl
+
+    tid = str(pl.get("sku") or "").strip()
+    if not tid:
+        return pl
+
+    exists = db.scalars(select(DimProduct.id).where(DimProduct.sku == tid)).first()
+    if exists is not None:
+        return pl
+
+    ean_col = next((k for k, v in fm.items() if v == "barcode_ean"), None)
+    if ean_col:
+        ev = scalar_to_clean_str(row.get(ean_col))
+        if ev:
+            ean_match = db.scalars(select(DimProduct).where(DimProduct.ean == ev)).first()
+            if ean_match is not None:
+                return pl
+
+    description = str(pl.get("name") or "").strip()
+    if not description:
+        return pl
+
+    from app.services.imports.ai_resolver_wiring import (
+        product_candidates_from_db,
+        try_ai_token_resolution,
+    )
+
+    ai_id, ai_tag, _suggestion = try_ai_token_resolution(
+        raw_token=description,
+        token_type="product",
+        candidates=product_candidates_from_db(db, description),
+        import_type="product_master",
+        job_id=job_id,
+        extra_context={"match_by": "description"},
+    )
+    if ai_id is None or ai_tag != "ai_auto_resolved":
+        second_id, second_tag, _ = try_ai_token_resolution(
+            raw_token=tid,
+            token_type="product",
+            candidates=product_candidates_from_db(db, tid),
+            import_type="product_master",
+            job_id=job_id,
+        )
+        if second_id is not None and second_tag == "ai_auto_resolved":
+            ai_id = second_id
+
+    if ai_id is None:
+        return pl
+
+    prod = db.get(DimProduct, int(ai_id))
+    if prod is None or not prod.sku:
+        return pl
+
+    out = dict(pl)
+    out["sku"] = prod.sku
+    out["part_number"] = prod.part_number or prod.sku
+    return out
+
+
 def _row_payload_for_dim(row: Any, fm: dict[str, str]) -> dict[str, Any] | None:
     tech_col = technical_id_column(fm)
     tech = scalar_to_clean_str(row.get(tech_col)) or ""
@@ -852,6 +922,7 @@ def commit_product_master_sync(
     for _, row in df.iterrows():
         pl = _row_payload_for_dim(row, fm)
         if pl:
+            pl = _maybe_ai_remap_product_by_description(db, pl, fm, row, int(job.id))
             payloads.append(pl)
 
     src = job.source

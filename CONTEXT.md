@@ -81,10 +81,23 @@
 - Generic — works across all import types
 - AI failure never breaks import — always falls back
 
-#### Testing
-- `AI_ASSIST_ENABLED=false`: deterministic only (default)
-- `AI_ASSIST_ENABLED=true`: AI layer active
-- All AI calls mocked in `test_customer_sellthrough_parsers.py`
+  #### Testing
+  - `AI_ASSIST_ENABLED=false`: deterministic only (default)
+  - `AI_ASSIST_ENABLED=true`: AI layer active
+  - All AI calls mocked in `test_customer_sellthrough_parsers.py`
+
+### AI resolver wired into existing import handlers
+
+Handlers updated (surgical additions only):
+- `product_master` (workflow commit): token + description matching fallback
+- `customer_master` (pipeline): FK code resolution for region/channel/preferred distributor
+- `distributor_master`: no unresolved-token path (direct upsert by code)
+- `distributor_sales_inventory`: product/customer/distributor AI after deterministic + format drift
+- `shipment_evidence_import`: product/distributor AI + format drift
+
+Pattern: deterministic first, AI only on failure. Confidence >= 0.90 → auto-apply ID.
+Below 0.90 → `ai_suggested` diagnostic on staging/shipment payload. AI failure graceful.
+`AI_ASSIST_ENABLED=false` → zero AI calls (default). Shared helpers: `ai_resolver_wiring.py`.
 
 ### Phase 1 (remaining — non-parser)
 - Missing data coverage grid

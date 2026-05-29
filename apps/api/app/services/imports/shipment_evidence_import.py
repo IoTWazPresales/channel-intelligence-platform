@@ -762,6 +762,27 @@ def _resolve_unresolved_shipment_lines_for_job(
                 upc_code=line.upc_code,
                 sales_model_name=line.sales_model_name,
             )
+            if pid is None and pstatus in ("no_match", "ambiguous", "inactive_only", "no_identifier"):
+                from app.services.imports.ai_resolver_wiring import (
+                    product_candidates_from_index,
+                    try_ai_token_resolution,
+                )
+
+                raw_prod = line.item_code or line.ean_code or line.upc_code or line.sales_model_name
+                ai_id, _ai_tag, ai_suggestion = try_ai_token_resolution(
+                    raw_token=raw_prod,
+                    token_type="product",
+                    candidates=product_candidates_from_index(idx, raw_prod or ""),
+                    import_type="shipment_evidence_import",
+                    job_id=int(job.id),
+                )
+                if ai_id is not None:
+                    pid = ai_id
+                    pstatus = "resolved_unique"
+                    pdetail = "ai_auto_resolved"
+                elif ai_suggestion is not None:
+                    pstatus = "ai_suggested"
+                    pdetail = ai_suggestion.reasoning[:256]
             line.product_id = pid
             line.product_resolution_status = pstatus
             line.product_resolution_token = ptoken
@@ -774,6 +795,26 @@ def _resolve_unresolved_shipment_lines_for_job(
                 bill_to=line.bill_to_raw,
                 ship_to=line.ship_to_raw,
             )
+            if did is None and dstatus == "unresolved":
+                from app.services.imports.ai_resolver_wiring import (
+                    distributor_candidates,
+                    try_ai_token_resolution,
+                )
+
+                dist_tok = line.bill_to_raw or line.ship_to_raw
+                ai_id, _ai_tag, ai_suggestion = try_ai_token_resolution(
+                    raw_token=dist_tok,
+                    token_type="distributor",
+                    candidates=distributor_candidates(db, dist_tok or ""),
+                    import_type="shipment_evidence_import",
+                    job_id=int(job.id),
+                )
+                if ai_id is not None:
+                    did = ai_id
+                    dstatus = "resolved"
+                    dtoken = dist_tok
+                elif ai_suggestion is not None:
+                    dstatus = "ai_suggested"
             line.distributor_id = did
             line.distributor_resolution_status = dstatus
             line.distributor_resolution_token = dtoken
@@ -878,6 +919,23 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
     idx = _load_product_resolution_index(db)
     source_id = int(job.source_id) if job.source_id else None
 
+    source = job.source
+    if source and isinstance(source.column_mapping_memory, dict) and frames:
+        from app.services.imports.ai_resolver_wiring import record_format_drift_on_job
+
+        first_headers: list[str] = []
+        for _sn, frame, _rt, _ls in frames:
+            if frame is not None and len(frame.columns):
+                first_headers = [str(c) for c in frame.columns]
+                break
+        if first_headers:
+            record_format_drift_on_job(
+                job,
+                current_headers=first_headers,
+                column_mapping_memory=source.column_mapping_memory,
+                field_mapping=effective_src_to_canon,
+            )
+
     blocking = 0
     global_row = 0
     unknown_reports = 0
@@ -910,6 +968,57 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
                     bill_to=ex["bill_to_raw"],
                     ship_to=ex["ship_to_raw"],
                 )
+
+                if pid is None and pstatus in ("no_match", "ambiguous", "inactive_only", "no_identifier"):
+                    from app.services.imports.ai_resolver_wiring import (
+                        product_candidates_from_index,
+                        stash_ai_suggestion_on_payload,
+                        try_ai_token_resolution,
+                    )
+
+                    raw_prod = ex["item_code"] or ex["ean_code"] or ex["upc_code"] or ex["sales_model_name"]
+                    ai_id, ai_tag, ai_suggestion = try_ai_token_resolution(
+                        raw_token=raw_prod,
+                        token_type="product",
+                        candidates=product_candidates_from_index(idx, raw_prod or ""),
+                        import_type="shipment_evidence_import",
+                        job_id=int(job.id),
+                    )
+                    if ai_id is not None:
+                        pid = ai_id
+                        pstatus = "resolved_unique"
+                        pdetail = "ai_auto_resolved"
+                    elif ai_suggestion is not None:
+                        pstatus = "ai_suggested"
+                        pdetail = ai_suggestion.reasoning[:256]
+                        raw_payload = stash_ai_suggestion_on_payload(
+                            raw_payload, token_type="product", suggestion=ai_suggestion
+                        )
+
+                if did is None and dstatus == "unresolved":
+                    from app.services.imports.ai_resolver_wiring import (
+                        distributor_candidates,
+                        stash_ai_suggestion_on_payload,
+                        try_ai_token_resolution,
+                    )
+
+                    dist_tok = ex["bill_to_raw"] or ex["ship_to_raw"]
+                    ai_id, ai_tag, ai_suggestion = try_ai_token_resolution(
+                        raw_token=dist_tok,
+                        token_type="distributor",
+                        candidates=distributor_candidates(db, dist_tok or ""),
+                        import_type="shipment_evidence_import",
+                        job_id=int(job.id),
+                    )
+                    if ai_id is not None:
+                        did = ai_id
+                        dstatus = "resolved"
+                        dtoken = dist_tok
+                    elif ai_suggestion is not None:
+                        dstatus = "ai_suggested"
+                        raw_payload = stash_ai_suggestion_on_payload(
+                            raw_payload, token_type="distributor", suggestion=ai_suggestion
+                        )
 
                 q_dec = _decimal_or_none(ex["quantity"])
                 row_values: dict[str, Any] = {

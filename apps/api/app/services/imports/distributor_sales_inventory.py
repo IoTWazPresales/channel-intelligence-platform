@@ -1181,6 +1181,16 @@ def process_distributor_sales_inventory(
         )
         return 1
 
+    if job.source and isinstance(job.source.column_mapping_memory, dict):
+        from app.services.imports.ai_resolver_wiring import record_format_drift_on_job
+
+        record_format_drift_on_job(
+            job,
+            current_headers=[str(c) for c in df.columns],
+            column_mapping_memory=job.source.column_mapping_memory,
+            field_mapping=mapping,
+        )
+
     preserved_candidate_steward: dict[tuple[str, str], dict[str, Any]] = {}
     for existing in db.scalars(
         select(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job.id)
@@ -1399,6 +1409,26 @@ def process_distributor_sales_inventory(
                 rdid = int(dist_auto.entity_id)
                 diag.append("distributor_resolved_weekly_auto")
 
+        if rdid is None and dist_raw:
+            from app.services.imports.ai_resolver_wiring import (
+                append_ai_diagnostic,
+                distributor_candidates,
+                try_ai_token_resolution,
+            )
+
+            ai_id, ai_tag, ai_suggestion = try_ai_token_resolution(
+                raw_token=dist_raw,
+                token_type="distributor",
+                candidates=distributor_candidates(db, dist_raw),
+                import_type="distributor_sales_inventory",
+                job_id=int(job.id),
+            )
+            if ai_id is not None:
+                rdid = ai_id
+                diag.append("distributor_ai_auto_resolved")
+            elif ai_suggestion is not None and ai_tag == "ai_suggested":
+                diag = append_ai_diagnostic(diag, token_type="distributor", suggestion=ai_suggestion)
+
         evidence_date = tx_date or snap_date
         rpid, perr, presolve_tag, pev = _resolve_product(
             prod_raw,
@@ -1432,6 +1462,26 @@ def process_distributor_sales_inventory(
                 pev = pev or {}
                 pev["weekly_auto_conflict"] = True
                 pev["prior_resolution_conflict"] = prod_auto.conflict_prior
+
+        if rpid is None and prod_raw:
+            from app.services.imports.ai_resolver_wiring import (
+                append_ai_diagnostic,
+                product_candidates_from_index,
+                try_ai_token_resolution,
+            )
+
+            ai_id, ai_tag, ai_suggestion = try_ai_token_resolution(
+                raw_token=prod_raw,
+                token_type="product",
+                candidates=product_candidates_from_index(prod_idx, prod_raw),
+                import_type="distributor_sales_inventory",
+                job_id=int(job.id),
+            )
+            if ai_id is not None:
+                rpid = ai_id
+                diag.append("product_ai_auto_resolved")
+            elif ai_suggestion is not None and ai_tag == "ai_suggested":
+                diag = append_ai_diagnostic(diag, token_type="product", suggestion=ai_suggestion)
 
         rdistributor_id = rdid
         rcustomer_id: int | None = None
@@ -1482,9 +1532,28 @@ def process_distributor_sales_inventory(
                         "conflict_flag": True,
                         "prior_resolution_conflict": cust_auto.conflict_prior,
                     }
+            if rcustomer_id is None and cust_res_raw:
+                from app.services.imports.ai_resolver_wiring import (
+                    append_ai_diagnostic,
+                    customer_candidates,
+                    try_ai_token_resolution,
+                )
+
+                ai_id, ai_tag, ai_suggestion = try_ai_token_resolution(
+                    raw_token=cust_res_raw,
+                    token_type="customer",
+                    candidates=customer_candidates(db, cust_res_raw),
+                    import_type="distributor_sales_inventory",
+                    job_id=int(job.id),
+                )
+                if ai_id is not None:
+                    rcustomer_id = ai_id
+                    diag.append("customer_ai_auto_resolved")
+                elif ai_suggestion is not None and ai_tag == "ai_suggested":
+                    diag = append_ai_diagnostic(diag, token_type="customer", suggestion=ai_suggestion)
             diag.extend(cust_res_notes)
 
-        hard_row = bool(derr or perr)
+        hard_row = bool((derr and rdid is None) or (perr and rpid is None))
         sellout_blocked_no_customer = bool(sellout_or_return_attempt and rcustomer_id is None)
         sellout_blocked_no_tx = bool(
             qty_f is not None and qty_f != 0 and tx_date is None
