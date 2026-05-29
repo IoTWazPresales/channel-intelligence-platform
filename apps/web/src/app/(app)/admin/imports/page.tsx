@@ -2337,11 +2337,7 @@ function AdminImportsPageContent() {
                         onChange={(_, opt) => {
                           const v = opt?.key ?? '';
                           setPmColumns((prev) =>
-                            prev.map((p) =>
-                              p.header === row.header
-                                ? { ...p, target: v, disposition: v ? 'ignore' : p.disposition }
-                                : p
-                            )
+                            prev.map((p) => (p.header === row.header ? { ...p, target: v } : p))
                           );
                         }}
                         renderOption={(props, opt) => (
@@ -2423,24 +2419,35 @@ function AdminImportsPageContent() {
                       />
                     </TableCell>
                     <TableCell sx={{ minWidth: 220 }}>
-                      <FormControl size="small" fullWidth disabled={Boolean(row.target.trim())}>
-                        <InputLabel id={`disp-${row.header}`}>Disposition</InputLabel>
-                        <Select
-                          labelId={`disp-${row.header}`}
+                      {row.target.trim() ? (
+                        <TextField
                           label="Disposition"
-                          value={row.target.trim() ? 'ignore' : row.disposition}
-                          onChange={(e) => {
-                            const v = e.target.value as PmDisposition;
-                            setPmColumns((prev) =>
-                              prev.map((p) => (p.header === row.header ? { ...p, disposition: v } : p))
-                            );
-                          }}
-                        >
-                          <MenuItem value="ignore">Ignore</MenuItem>
-                          <MenuItem value="stage_raw">Retain as staged metadata</MenuItem>
-                          <MenuItem value="attribute_candidate">Request new field (steward review)</MenuItem>
-                        </Select>
-                      </FormControl>
+                          size="small"
+                          fullWidth
+                          disabled
+                          value="Mapped"
+                          helperText="Column is mapped to a canonical system field"
+                        />
+                      ) : (
+                        <FormControl size="small" fullWidth>
+                          <InputLabel id={`disp-${row.header}`}>Disposition</InputLabel>
+                          <Select
+                            labelId={`disp-${row.header}`}
+                            label="Disposition"
+                            value={row.disposition}
+                            onChange={(e) => {
+                              const v = e.target.value as PmDisposition;
+                              setPmColumns((prev) =>
+                                prev.map((p) => (p.header === row.header ? { ...p, disposition: v } : p))
+                              );
+                            }}
+                          >
+                            <MenuItem value="ignore">Ignore</MenuItem>
+                            <MenuItem value="stage_raw">Retain as staged metadata</MenuItem>
+                            <MenuItem value="attribute_candidate">Request new field (steward review)</MenuItem>
+                          </Select>
+                        </FormControl>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
