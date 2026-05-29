@@ -9,6 +9,8 @@ Channel Intelligence Platform — supply chain intelligence monorepo.
 2. `.cursor/rules/Supply-Chain-Intelligence-Project-Rules.mdc` — architecture,
    domain language, known gotchas, stop conditions
 3. `.cursor/rules/engineering-rules.mdc` — general engineering behaviour rules
+4. `.cursor/rules/cloud-local-git-handoff.mdc` — when switching between
+   **local desktop** and **Cursor cloud**: commit, push, pull via GitHub first
 
 Do not skip this. Context loss is the primary cause of regressions in
 AI-assisted development.

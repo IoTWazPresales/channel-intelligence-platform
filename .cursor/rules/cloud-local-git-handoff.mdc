@@ -1,0 +1,41 @@
+---
+description: Git handoff when switching between local desktop and Cursor cloud agent
+alwaysApply: true
+---
+
+# Cloud ↔ Local Git Handoff
+
+The local folder and the cloud agent workspace are **separate clones**. GitHub (`origin`) is the single source of truth between them. Never assume the other environment has your commits.
+
+## Before leaving this environment (switching to cloud OR to local)
+
+1. Run `git status`. If the working tree is dirty, finish or stash intentionally — do not switch with unexplained uncommitted work unless the user asked to stash.
+2. Run `git fetch origin`.
+3. Compare current branch to its upstream (or `origin/main` if there is no upstream):
+   - `git rev-parse HEAD`
+   - `git rev-parse @{u}` or `git rev-parse origin/main`
+4. **If you have local commits not on GitHub** (`git log origin/<branch>..HEAD` is non-empty):
+   - Ensure changes are committed (explicit paths only — never `git add -A`).
+   - Run `git push -u origin HEAD` (or push the branch the user is working on).
+   - Do not switch until push succeeds or the user explicitly opts out.
+5. **If GitHub is ahead of you** (`git log HEAD..origin/<branch>` is non-empty):
+   - Run `git pull --no-rebase origin <branch>` (or merge `origin/main` into your branch) and resolve conflicts before switching.
+6. Briefly state in chat: branch name, last commit hash pushed, and whether the other environment should `git pull`.
+
+## After arriving in the other environment
+
+1. `git fetch origin`
+2. `git checkout <same-branch>` or `git checkout main` then `git pull origin main` as appropriate
+3. If on a feature branch that was updated remotely: `git pull origin <branch>` or `git merge origin/main`
+4. Read `CONTEXT.md` before starting task work
+
+## Branch conventions
+
+- Prefer **feature branches** for cloud agent work; merge to `main` only when the user says "promote to main" or "merge to main".
+- Cloud-only branches (`cursor/cloud-agent-*`) may not exist on all machines — use `git fetch origin` and checkout tracking branch, or merge via `main`.
+
+## Do not
+
+- Switch environments with unpushed commits that the user expects on the other side
+- Run `git push` to `main` without explicit user instruction (project promotion rule still applies)
+- Use `git add -A` / `git add .` (explicit paths only)
