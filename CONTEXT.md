@@ -4,7 +4,7 @@
 `main`
 
 ## Head commit
-`1c89ab9` — `dsi: fix intelligence_state persistence and post-apply SOH completion`
+`8868d0b` — `fix: PgBouncer statement cache + product master sku aliases` (session `statement_cache_size=0`; PM sku aliases incl. `item_id`; Supabase `import_template` via MCP `fix_product_master_sku_aliases`)
 
 ## Alembic Head
 `20260518_0045` — Customer sell-through Phase 0 (`fact_customer_sellthrough`, staging, `customer_report_config`, template seed). Prior: `0043` `fact_dsi_forecast`, `0042` `fact_customer_velocity`. Smoke: **`cip_alembic_smoke`** at `0045`.
