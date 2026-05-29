@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # When true, exposes POST /api/v1/dev/database-wipe (Settings UI). Never enable in shared/prod.
     allow_db_wipe: bool = False
 
+    # Gates all AI-assisted import resolution / column mapping API calls platform-wide.
+    ai_assist_enabled: bool = Field(
+        default=False,
+        description="Enable AI-assisted import mapping and resolution (env AI_ASSIST_ENABLED).",
+    )
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]

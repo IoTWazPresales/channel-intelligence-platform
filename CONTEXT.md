@@ -62,14 +62,31 @@
 - `customer_report_config.last_report_received` updated on flat import
 - Fixtures: `tests/fixtures/customer_reports/` (generic synthetic xlsx)
 
-### Phase 1 (remaining parsers)
-- Pivoted parser (auto-unpivot week columns)
-- Multi-sheet parser (all week sheets in one job)
-- MTD delta parser (prior week lookup + estimate flag)
-- Wide extract parser (IC ASR)
-- AI column classifier (Anthropic API → human confirms
-  → stored in source_definition.column_mapping_memory)
-- Format drift detection
+### Phase 1b-1e — All parsers + AI resolver layer
+
+#### Parsers (all generic, no retailer-specific logic)
+- `pivoted`: period columns detected by pattern, auto-unpivot, SOH on latest period only
+- `multi_sheet`: all data sheets processed, summary sheets excluded, chronological order
+- `mtd_delta`: prior week lookup from staging, `derived_units = current - prior`,
+  `is_mtd_estimate` flag when no prior exists
+- `wide_extract`: header-first streaming, 500-row chunks, falls back to pivoted unpivot
+  if period cols found
+
+#### AI resolver layer (`ai_import_resolver.py`)
+- Gated behind `AI_ASSIST_ENABLED` env var (default False)
+- `suggest_column_mapping`: first-time format classification
+- `suggest_token_resolution`: unresolved token matching — auto_resolved ≥ 0.90 confidence,
+  `ai_suggested` below
+- `detect_format_drift`: set comparison + AI for partial drift
+- Generic — works across all import types
+- AI failure never breaks import — always falls back
+
+#### Testing
+- `AI_ASSIST_ENABLED=false`: deterministic only (default)
+- `AI_ASSIST_ENABLED=true`: AI layer active
+- All AI calls mocked in `test_customer_sellthrough_parsers.py`
+
+### Phase 1 (remaining — non-parser)
 - Missing data coverage grid
 - Multi-file bulk upload panel (frontend)
 

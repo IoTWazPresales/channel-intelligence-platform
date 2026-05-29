@@ -19,9 +19,27 @@ from app.services.imports.distributor_sales_inventory import (
     _load_product_resolution_index,
     _product_token_key,
 )
+from app.core.config import get_settings
+from app.services.imports.ai_import_resolver import (
+    AI_AUTO_RESOLVE_THRESHOLD,
+    detect_format_drift,
+    suggest_token_resolution,
+)
 from app.services.imports.parsers.customer_sell_through_flat import (
     EXPECTED_COLUMNS_META_KEY,
     parse_flat_report,
+)
+from app.services.imports.parsers.customer_sell_through_mtd_delta import (
+    parse_mtd_delta_report,
+)
+from app.services.imports.parsers.customer_sell_through_multi_sheet import (
+    parse_multi_sheet_report,
+)
+from app.services.imports.parsers.customer_sell_through_pivoted import (
+    parse_pivoted_report,
+)
+from app.services.imports.parsers.customer_sell_through_wide_extract import (
+    parse_wide_extract_report,
 )
 from app.storage.local import get_storage_backend
 from app.utils.json_safe import to_jsonable
@@ -36,15 +54,6 @@ STRUCTURE_PIVOTED = "pivoted"
 STRUCTURE_MULTI_SHEET = "multi_sheet"
 STRUCTURE_MTD_DELTA = "mtd_delta"
 STRUCTURE_WIDE_EXTRACT = "wide_extract"
-
-_RETAILERS_BY_STRUCTURE: dict[str, str] = {
-    STRUCTURE_FLAT: "Evetech, Takealot",
-    STRUCTURE_PIVOTED: "Game, Makro",
-    STRUCTURE_MULTI_SHEET: "Computer Mania",
-    STRUCTURE_MTD_DELTA: "FNB",
-    STRUCTURE_WIDE_EXTRACT: "IC (Incredible Connections)",
-}
-
 
 def customer_sellthrough_source_key(
     *,
@@ -84,11 +93,7 @@ def customer_report_config_defaults(*, customer_id: int) -> CustomerReportConfig
 
 
 def _parser_not_implemented_message(structure_type: str) -> str:
-    retailers = _RETAILERS_BY_STRUCTURE.get(structure_type, "see documentation")
-    return (
-        f"Parser not yet implemented for structure type: {structure_type}. "
-        f"Phase 1 will implement this handler. Supported retailers: {retailers}"
-    )
+    return f"Parser not yet implemented for structure type: {structure_type}"
 
 
 def _write_parse_failed(job: ImportJob, message: str) -> None:
@@ -169,6 +174,331 @@ def _upsert_customer_report_config(
     if not cfg.report_structure_type:
         cfg.report_structure_type = report_structure_type
     db.add(cfg)
+
+
+def _build_parse_mapping(
+    db: Session,
+    job: ImportJob,
+    mapping: dict[str, str],
+    template: ImportTemplate | None,
+) -> tuple[dict, list[str]]:
+    from app.ingestion.pipeline import effective_mapping_template
+
+    expected = effective_mapping_template(job.source) if job.source else {}
+    if template and template.expected_columns:
+        for k, v in template.expected_columns.items():
+            if isinstance(v, dict):
+                expected.setdefault(k, {"aliases": list(v.get("aliases", []))})
+
+    parse_mapping = dict(mapping or {})
+    parse_mapping[EXPECTED_COLUMNS_META_KEY] = expected
+    return parse_mapping, []
+
+
+def _sniff_file_headers(file_bytes: bytes, filename: str) -> list[str]:
+    from app.services.imports.parsers.customer_sell_through_flat import _normalize_text, _read_workbook_sheets
+
+    try:
+        for _name, raw in _read_workbook_sheets(file_bytes, filename):
+            if raw is not None and not raw.empty:
+                return [str(_normalize_text(c) or "").strip() for c in raw.iloc[0].tolist()]
+    except ValueError:
+        return []
+    return []
+
+
+def _format_drift_warnings(job: ImportJob, current_headers: list[str]) -> list[str]:
+    if not job.source or not isinstance(job.source.column_mapping_memory, dict):
+        return []
+    stored = job.source.column_mapping_memory
+    stored_headers = list((stored.get("by_header_norm") or {}).keys())
+    drift = detect_format_drift(current_headers, stored_headers, stored)
+    if not drift or not drift.has_drift:
+        return []
+    return [
+        f"Format drift detected: new={drift.new_columns} missing={drift.missing_columns}"
+    ]
+
+
+def _load_job_file_bytes(db: Session, job: ImportJob) -> tuple[bytes | None, str | None]:
+    raw_meta = db.scalars(select(RawFileMetadata).where(RawFileMetadata.job_id == job.id)).first()
+    if not raw_meta:
+        return None, "No raw file metadata for this import job."
+    storage = get_storage_backend()
+    return storage.read(raw_meta.storage_key), None
+
+
+def _product_candidates(idx: ProductResolutionIndex, token: str, limit: int = 10) -> list[dict[str, Any]]:
+    key = _product_token_key(token)
+    out: list[dict[str, Any]] = []
+    if key:
+        for sku, pid in idx.sku_to_id.items():
+            if key in sku or sku in key:
+                out.append({"id": int(pid), "sku": sku})
+                if len(out) >= limit:
+                    return out
+    for sku, pid in list(idx.sku_to_id.items())[:limit]:
+        out.append({"id": int(pid), "sku": sku})
+    return out[:limit]
+
+
+def _location_candidates(db: Session, customer_id: int, token: str, limit: int = 10) -> list[dict[str, Any]]:
+    rows = db.scalars(
+        select(CustomerLocation).where(CustomerLocation.customer_id == customer_id).limit(limit * 3)
+    ).all()
+    key = (token or "").strip().lower()
+    out: list[dict[str, Any]] = []
+    for loc in rows:
+        code = (loc.location_code or "").strip().lower()
+        name = (loc.location_name or "").strip().lower()
+        if not key or key in code or key in name or code in key:
+            out.append(
+                {
+                    "id": int(loc.id),
+                    "location_code": loc.location_code,
+                    "location_name": loc.location_name,
+                }
+            )
+        if len(out) >= limit:
+            break
+    if not out:
+        for loc in rows[:limit]:
+            out.append(
+                {
+                    "id": int(loc.id),
+                    "location_code": loc.location_code,
+                    "location_name": loc.location_name,
+                }
+            )
+    return out[:limit]
+
+
+def _apply_ai_resolution_to_line(
+    db: Session,
+    *,
+    line: ImportCustomerSellthroughStagingLine,
+    customer_id: int,
+    prod_idx: ProductResolutionIndex,
+    ai_assist_used: list[bool],
+) -> tuple[bool, bool]:
+    product_ok = line.resolved_product_id is not None
+
+    if not product_ok and line.raw_product_token and get_settings().ai_assist_enabled:
+        suggestion = suggest_token_resolution(
+            line.raw_product_token,
+            "product",
+            _product_candidates(prod_idx, line.raw_product_token),
+            {"customer_id": customer_id},
+        )
+        if suggestion:
+            ai_assist_used[0] = True
+            payload = dict(line.raw_row_payload or {})
+            payload["_ai_resolution"] = {
+                "token_type": "product",
+                "suggestion": {
+                    "best_match_id": suggestion.best_match_id,
+                    "confidence": suggestion.confidence,
+                    "reasoning": suggestion.reasoning,
+                    "alternatives": suggestion.alternatives,
+                },
+            }
+            line.raw_row_payload = to_jsonable(payload)
+            if suggestion.best_match_id is not None and suggestion.confidence >= AI_AUTO_RESOLVE_THRESHOLD:
+                line.resolved_product_id = int(suggestion.best_match_id)
+                line.resolution_status = "ai_auto_resolved"
+                product_ok = True
+            else:
+                line.resolution_status = "ai_suggested"
+
+    location_ok = True
+    if line.raw_location_token:
+        loc_id = db.scalar(
+            select(CustomerLocation.id).where(
+                CustomerLocation.customer_id == customer_id,
+                CustomerLocation.location_code == line.raw_location_token,
+            )
+        )
+        if loc_id is not None:
+            line.resolved_location_id = int(loc_id)
+        elif get_settings().ai_assist_enabled:
+            suggestion = suggest_token_resolution(
+                line.raw_location_token,
+                "location",
+                _location_candidates(db, customer_id, line.raw_location_token),
+                {"customer_id": customer_id},
+            )
+            if suggestion:
+                ai_assist_used[0] = True
+                payload = dict(line.raw_row_payload or {})
+                ai_block = payload.get("_ai_resolution")
+                if not isinstance(ai_block, dict):
+                    ai_block = {}
+                ai_block["location"] = {
+                    "best_match_id": suggestion.best_match_id,
+                    "confidence": suggestion.confidence,
+                    "reasoning": suggestion.reasoning,
+                }
+                payload["_ai_resolution"] = ai_block
+                line.raw_row_payload = to_jsonable(payload)
+                if suggestion.best_match_id is not None and suggestion.confidence >= AI_AUTO_RESOLVE_THRESHOLD:
+                    line.resolved_location_id = int(suggestion.best_match_id)
+                else:
+                    location_ok = False
+                    if line.resolution_status == "pending":
+                        line.resolution_status = "ai_suggested"
+            else:
+                location_ok = False
+        else:
+            location_ok = False
+
+    return product_ok, location_ok
+
+
+def _ingest_parse_result(
+    db: Session,
+    job: ImportJob,
+    *,
+    customer_id: int,
+    result: Any,
+    structure_type: str,
+    summary_key: str,
+    drift_warnings: list[str] | None = None,
+) -> int:
+    if result.error:
+        _write_parse_failed(job, result.error)
+        return 1
+
+    db.execute(
+        delete(ImportCustomerSellthroughStagingLine).where(
+            ImportCustomerSellthroughStagingLine.import_job_id == job.id
+        )
+    )
+    db.flush()
+
+    prod_idx = _load_product_resolution_index(db)
+    resolved_n = 0
+    unresolved_n = 0
+    ai_assist_used = [False]
+
+    for row in result.rows:
+        line = ImportCustomerSellthroughStagingLine(**row)
+        line.resolved_customer_id = customer_id
+
+        if line.raw_product_token:
+            pid = resolve_product_id_for_sellthrough(prod_idx, line.raw_product_token)
+            if pid is not None:
+                line.resolved_product_id = pid
+
+        product_ok, location_ok = _apply_ai_resolution_to_line(
+            db,
+            line=line,
+            customer_id=customer_id,
+            prod_idx=prod_idx,
+            ai_assist_used=ai_assist_used,
+        )
+
+        if not product_ok and line.raw_product_token:
+            pid = resolve_product_id_for_sellthrough(prod_idx, line.raw_product_token)
+            if pid is not None:
+                line.resolved_product_id = pid
+                product_ok = True
+
+        if product_ok and location_ok and line.resolution_status in ("pending", "unresolved"):
+            line.resolution_status = "resolved"
+
+        if product_ok and location_ok:
+            if line.resolution_status in ("ai_auto_resolved", "pending"):
+                line.resolution_status = "resolved"
+            if line.resolution_status == "resolved":
+                resolved_n += 1
+            else:
+                unresolved_n += 1
+        else:
+            if line.resolution_status == "pending":
+                line.resolution_status = "unresolved"
+            unresolved_n += 1
+
+        db.add(line)
+
+    db.flush()
+
+    warnings = list(result.warnings or [])
+    if drift_warnings:
+        warnings = drift_warnings + warnings
+
+    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    summary: dict[str, Any] = {
+        "period_start_date": str(result.period_start_date) if result.period_start_date else None,
+        "total_rows": len(result.rows),
+        "resolved": resolved_n,
+        "unresolved": unresolved_n,
+        "warnings": warnings,
+    }
+    if ai_assist_used[0]:
+        summary["ai_assist_used"] = True
+    meta[summary_key] = to_jsonable(summary)
+    job.staged_metadata = to_jsonable(meta)
+
+    _upsert_customer_report_config(
+        db,
+        customer_id=customer_id,
+        period_start_date=result.period_start_date,
+        report_structure_type=structure_type,
+    )
+
+    if (job.import_mode or "").strip().lower() == "apply":
+        from app.services.imports.customer_sell_through_apply import apply_customer_sellthrough_staging
+
+        apply_customer_sellthrough_staging(db, job.id)
+
+    return 0 if result.rows else 0
+
+
+def _run_structure_handler(
+    db: Session,
+    job: ImportJob,
+    mapping: dict[str, str],
+    template: ImportTemplate | None,
+    *,
+    structure_type: str,
+    summary_key: str,
+    parse_fn,
+    needs_db: bool = False,
+) -> int:
+    customer_id = resolve_customer_id_for_job(db, job)
+    if customer_id is None:
+        _write_parse_failed(
+            job,
+            "Could not resolve customer_id for this import job (set staged_metadata.customer_id or source customer).",
+        )
+        return 1
+
+    file_bytes, err = _load_job_file_bytes(db, job)
+    if err or file_bytes is None:
+        _write_parse_failed(job, err or "Missing file bytes")
+        return 1
+
+    parse_mapping, _ = _build_parse_mapping(db, job, mapping, template)
+    if structure_type == STRUCTURE_MTD_DELTA:
+        parse_mapping["__customer_id__"] = customer_id
+
+    fname = job.file_name or "upload"
+    drift_warnings = _format_drift_warnings(job, _sniff_file_headers(file_bytes, fname))
+    jid = int(job.id)
+    if needs_db:
+        result = parse_fn(file_bytes, fname, parse_mapping, jid, db)
+    else:
+        result = parse_fn(file_bytes, fname, parse_mapping, jid)
+
+    return _ingest_parse_result(
+        db,
+        job,
+        customer_id=customer_id,
+        result=result,
+        structure_type=structure_type,
+        summary_key=summary_key,
+        drift_warnings=drift_warnings,
+    )
 
 
 def _handle_flat(
@@ -292,7 +622,16 @@ def _handle_pivoted(
     mapping: dict[str, str],
     template: ImportTemplate | None,
 ) -> int:
-    raise NotImplementedError(_parser_not_implemented_message(STRUCTURE_PIVOTED))
+    del df
+    return _run_structure_handler(
+        db,
+        job,
+        mapping,
+        template,
+        structure_type=STRUCTURE_PIVOTED,
+        summary_key="customer_sellthrough_pivoted",
+        parse_fn=parse_pivoted_report,
+    )
 
 
 def _handle_multi_sheet(
@@ -302,7 +641,16 @@ def _handle_multi_sheet(
     mapping: dict[str, str],
     template: ImportTemplate | None,
 ) -> int:
-    raise NotImplementedError(_parser_not_implemented_message(STRUCTURE_MULTI_SHEET))
+    del df
+    return _run_structure_handler(
+        db,
+        job,
+        mapping,
+        template,
+        structure_type=STRUCTURE_MULTI_SHEET,
+        summary_key="customer_sellthrough_multi_sheet",
+        parse_fn=parse_multi_sheet_report,
+    )
 
 
 def _handle_mtd_delta(
@@ -312,7 +660,17 @@ def _handle_mtd_delta(
     mapping: dict[str, str],
     template: ImportTemplate | None,
 ) -> int:
-    raise NotImplementedError(_parser_not_implemented_message(STRUCTURE_MTD_DELTA))
+    del df
+    return _run_structure_handler(
+        db,
+        job,
+        mapping,
+        template,
+        structure_type=STRUCTURE_MTD_DELTA,
+        summary_key="customer_sellthrough_mtd_delta",
+        parse_fn=parse_mtd_delta_report,
+        needs_db=True,
+    )
 
 
 def _handle_wide_extract(
@@ -322,7 +680,16 @@ def _handle_wide_extract(
     mapping: dict[str, str],
     template: ImportTemplate | None,
 ) -> int:
-    raise NotImplementedError(_parser_not_implemented_message(STRUCTURE_WIDE_EXTRACT))
+    del df
+    return _run_structure_handler(
+        db,
+        job,
+        mapping,
+        template,
+        structure_type=STRUCTURE_WIDE_EXTRACT,
+        summary_key="customer_sellthrough_wide_extract",
+        parse_fn=parse_wide_extract_report,
+    )
 
 
 def _write_parser_not_implemented(job: ImportJob, structure_type: str, message: str) -> None:
