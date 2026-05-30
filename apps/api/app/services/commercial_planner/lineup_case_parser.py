@@ -322,7 +322,7 @@ async def preview_current_lineup_file(
         unknown_customer_rows=unk_cust,
         unknown_distributor_rows=unk_dist,
         warnings=warnings,
-        can_apply=total_rows > 0,
+        can_apply=total_rows > 0 and resolved_products > 0,
         rows=rows,
     )
 

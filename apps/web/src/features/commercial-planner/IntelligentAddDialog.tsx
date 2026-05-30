@@ -34,6 +34,7 @@ type RankingRow = {
   trust_tier: string;
   already_in_plan: boolean;
   suggested_target_units: number;
+  suggested_srp_local?: number;
 };
 
 type RankingsResponse = {
@@ -116,7 +117,10 @@ export function IntelligentAddDialog({
           distributor_id: distributor.id,
           product_id: row.product_id,
           target_units: row.suggested_target_units,
-          target_srp_local: 0,
+          target_srp_local:
+            row.suggested_srp_local != null && row.suggested_srp_local > 0
+              ? row.suggested_srp_local
+              : 1000,
           promo_mix_pct: 0.5,
         });
         created++;
@@ -124,7 +128,9 @@ export function IntelligentAddDialog({
         skipped++;
       }
     }
-    setSummary(`Created ${created} line(s). Skipped or failed: ${skipped}. Set SRP and recalculate.`);
+    setSummary(
+      `Created ${created} line(s). Skipped or failed: ${skipped}. Review SRP in the grid and recalculate.`,
+    );
     setCreating(false);
     if (created > 0) onCreated();
   };

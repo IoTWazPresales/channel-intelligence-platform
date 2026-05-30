@@ -33,5 +33,7 @@ Suggestions (`GET /plans/{id}/suggestions`) also use **current lineup case** lin
 
 ## Phases (delivery)
 
-1. **Done in branch:** flag, preview/apply, intelligence rankings API, suggestion precedence, intelligent add UI
-2. **Next:** Celery parse for large files, mapping queue bridge, dashboard widgets (optional)
+1. **Done in branch:** flag, preview/apply (retry + create-case), intelligence rankings (+ SRP/promo signals), suggestion precedence, intelligent add UI with suggested SRP
+2. **Next:** Celery parse (`lineup_parse_worker.py` ready), mapping queue bridge, dashboard widgets, rankings catalogue filter
+
+See **`docs/COMMERCIAL_PLANNER_GAP_ANALYSIS.md`** for risks, test results, and gap register.

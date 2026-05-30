@@ -16,7 +16,7 @@ from app.models.commercial_planner import (
     CommercialSkuAssumption,
 )
 from app.models.dimensions import DimProduct
-from app.models.facts import FactForecast, FactSalesSellout
+from app.models.facts import FactForecast, FactPricing, FactPromotionPlan, FactSalesSellout
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob
 from app.services.commercial_planner.calculator import CommercialCalcInputs, compute_line_economics
@@ -42,6 +42,135 @@ async def _sellout_avg_by_product(
         )
     ).all()
     return {int(r.product_id): float(r.avg_units) for r in rows}
+
+
+async def _net_price_by_product(
+    db: AsyncSession, customer_id: int, product_ids: list[int]
+) -> dict[int, float]:
+    """Latest net price per product; prefer customer-specific rows over global."""
+    if not product_ids:
+        return {}
+    pricing_sq = (
+        select(
+            FactPricing.product_id,
+            FactPricing.net_price,
+            FactPricing.customer_id,
+            func.row_number()
+            .over(
+                partition_by=FactPricing.product_id,
+                order_by=(
+                    (FactPricing.customer_id == customer_id).desc(),
+                    FactPricing.effective_date.desc(),
+                ),
+            )
+            .label("rn"),
+        )
+        .where(
+            FactPricing.product_id.in_(product_ids),
+            (FactPricing.customer_id == customer_id) | (FactPricing.customer_id.is_(None)),
+        )
+        .subquery()
+    )
+    rows = (
+        await db.execute(
+            select(pricing_sq.c.product_id, pricing_sq.c.net_price).where(pricing_sq.c.rn == 1)
+        )
+    ).all()
+    return {int(r.product_id): float(r.net_price) for r in rows}
+
+
+async def _lineup_msrp_by_product(
+    db: AsyncSession, *, plan_id: int, customer_id: int, product_ids: list[int]
+) -> dict[int, float]:
+    """MSRP evidence from current lineup case lines, else latest historical lineup apply job."""
+    if not product_ids:
+        return {}
+    out: dict[int, float] = {}
+    cl_rows = (
+        await db.execute(
+            select(
+                CommercialLineupLine.product_id,
+                func.max(CommercialLineupLine.msrp_local).label("msrp"),
+            )
+            .join(CommercialLineupCase, CommercialLineupCase.id == CommercialLineupLine.case_id)
+            .where(
+                CommercialLineupCase.commercial_plan_id == plan_id,
+                CommercialLineupLine.product_id.in_(product_ids),
+                CommercialLineupLine.msrp_local.isnot(None),
+            )
+            .group_by(CommercialLineupLine.product_id)
+        )
+    ).all()
+    for r in cl_rows:
+        if r.product_id is not None and r.msrp is not None:
+            out[int(r.product_id)] = float(r.msrp)
+
+    missing = [pid for pid in product_ids if pid not in out]
+    if not missing:
+        return out
+
+    latest_job_id = await db.scalar(
+        select(func.max(HistoricalLineupImportHeader.import_job_id))
+        .join(HistoricalLineupImportLine, HistoricalLineupImportLine.header_id == HistoricalLineupImportHeader.id)
+        .join(ImportJob, ImportJob.id == HistoricalLineupImportHeader.import_job_id)
+        .where(
+            HistoricalLineupImportLine.product_id.in_(missing),
+            ImportJob.import_mode == "apply",
+            ImportJob.template_slug == "historical_lineup",
+        )
+    )
+    if not latest_job_id:
+        return out
+
+    hist_rows = (
+        await db.execute(
+            select(
+                HistoricalLineupImportLine.product_id,
+                func.max(HistoricalLineupImportLine.msrp_local).label("msrp"),
+            )
+            .join(
+                HistoricalLineupImportHeader,
+                HistoricalLineupImportHeader.id == HistoricalLineupImportLine.header_id,
+            )
+            .where(
+                HistoricalLineupImportHeader.import_job_id == latest_job_id,
+                HistoricalLineupImportLine.product_id.in_(missing),
+                HistoricalLineupImportHeader.customer_id == customer_id,
+                HistoricalLineupImportLine.msrp_local.isnot(None),
+            )
+            .group_by(HistoricalLineupImportLine.product_id)
+        )
+    ).all()
+    for r in hist_rows:
+        if r.product_id is not None and r.msrp is not None:
+            out[int(r.product_id)] = float(r.msrp)
+    return out
+
+
+async def _promo_product_ids(db: AsyncSession, product_ids: list[int]) -> set[int]:
+    if not product_ids:
+        return set()
+    rows = (
+        await db.execute(
+            select(FactPromotionPlan.product_id)
+            .where(FactPromotionPlan.product_id.in_(product_ids))
+            .distinct()
+        )
+    ).scalars().all()
+    return {int(x) for x in rows}
+
+
+def _suggested_srp_local(
+    *,
+    lineup_msrp: float | None,
+    net_price: float | None,
+    default: float = 1000.0,
+) -> float:
+    if lineup_msrp is not None and lineup_msrp > 0:
+        return round(lineup_msrp, 2)
+    if net_price is not None and net_price > 0:
+        return round(net_price * 1.12, 2)
+    return default
 
 
 async def _forecast_by_product(db: AsyncSession, product_ids: list[int]) -> dict[int, float]:
@@ -147,6 +276,8 @@ def _score_product(
     in_plan: bool,
     gp_per_unit: float | None,
     calc_flags: list[str],
+    suggested_srp_local: float,
+    has_promo_plan: bool,
 ) -> dict[str, Any]:
     factors: list[dict[str, Any]] = []
     score = 0.0
@@ -182,6 +313,10 @@ def _score_product(
         score -= 8.0
         factors.append({"signal": "already_in_plan", "value": True, "weight": -8.0})
 
+    if has_promo_plan:
+        score += 4.0
+        factors.append({"signal": "promotion_plan_exists", "value": True, "weight": 4.0})
+
     tier, tier_reasons = classify_line_economics_trust(calc_flags)
     confidence = "high" if sellout_avg > 0 and tier == "ok" else "medium" if sellout_avg > 0 else "low"
     if tier == "blocked":
@@ -208,6 +343,7 @@ def _score_product(
             ),
             2,
         ),
+        "suggested_srp_local": suggested_srp_local,
     }
 
 
@@ -230,6 +366,11 @@ async def rank_products_for_customer(
     forecast_map = await _forecast_by_product(db, product_ids)
     hist_map = await _historical_lineup_qty(db, customer_id, product_ids)
     current_map = await _current_lineup_qty(db, plan_id, product_ids)
+    net_price_map = await _net_price_by_product(db, customer_id, product_ids)
+    msrp_map = await _lineup_msrp_by_product(
+        db, plan_id=plan_id, customer_id=customer_id, product_ids=product_ids
+    )
+    promo_ids = await _promo_product_ids(db, product_ids)
 
     cterm = (
         await db.execute(select(CommercialCustomerTerm).where(CommercialCustomerTerm.customer_id == customer_id))
@@ -260,7 +401,10 @@ async def rank_products_for_customer(
         ):
             continue
 
-        target_srp = 1000.0
+        target_srp = _suggested_srp_local(
+            lineup_msrp=msrp_map.get(p.id),
+            net_price=net_price_map.get(p.id),
+        )
         gp_per_unit = None
         calc_flags: list[str] = []
         if sku and cterm and dterm:
@@ -296,6 +440,8 @@ async def rank_products_for_customer(
                 in_plan=p.id in in_plan,
                 gp_per_unit=gp_per_unit,
                 calc_flags=calc_flags,
+                suggested_srp_local=target_srp,
+                has_promo_plan=p.id in promo_ids,
             )
         )
 

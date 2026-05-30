@@ -1674,6 +1674,14 @@ function UploadLineupDialog({
   const [file, setFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdCaseId, setCreatedCaseId] = useState<number | null>(null);
+  const [preview, setPreview] = useState<{
+    total_rows: number;
+    resolved_products: number;
+    unresolved_products: number;
+    warnings: string[];
+    can_apply: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -1688,13 +1696,16 @@ function UploadLineupDialog({
     setError(null);
     setPeriodLabel('');
     setNotes('');
+    setCreatedCaseId(null);
+    setPreview(null);
     onClose();
   };
 
-  const handleCreate = async () => {
+  const handleCreateCase = async () => {
     if (!activePlanId) return;
     setCreating(true);
     setError(null);
+    setPreview(null);
     try {
       const caseResponse = await apiPost<{ id: number }>('/api/v1/commercial-planner/lineup-cases', {
         commercial_plan_id: activePlanId,
@@ -1703,30 +1714,76 @@ function UploadLineupDialog({
         country_code: countryCode,
         notes: notes.trim() || null,
       });
-
-      if (file) {
-        const fd = new FormData();
-        fd.append('file', file);
-        const parseRes = await fetch(
-          `/api/v1/commercial-planner/lineup-cases/${caseResponse.id}/parse-upload`,
-          { method: 'POST', body: fd },
-        );
-        if (!parseRes.ok) {
-          const errBody = await parseRes.json().catch(() => ({}));
-          setError(
-            `Case created (id=${caseResponse.id}) but file parse failed. ` +
-              `The draft case has no lines yet — use "Upload file to this case" on the case card to retry, or delete the draft. ` +
-              formatHttpErrorDetail(errBody.detail),
-          );
-          return;
-        }
+      setCreatedCaseId(caseResponse.id);
+      if (!file) {
+        onCreated();
+        handleClose();
       }
-
-      onCreated();
-      handleClose();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to create lineup case';
       setError(msg);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handlePreviewFile = async () => {
+    if (!file || createdCaseId == null) return;
+    setCreating(true);
+    setError(null);
+    setPreview(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(
+        `/api/v1/commercial-planner/lineup-cases/${createdCaseId}/parse-preview`,
+        { method: 'POST', body: fd },
+      );
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        setError(`Preview failed. ${formatHttpErrorDetail(errBody.detail)}`);
+        return;
+      }
+      const data = await res.json();
+      setPreview({
+        total_rows: data.total_rows,
+        resolved_products: data.resolved_products,
+        unresolved_products: data.unresolved_products,
+        warnings: data.warnings ?? [],
+        can_apply: Boolean(data.can_apply),
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Preview failed');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleApplyFile = async () => {
+    if (!file || createdCaseId == null) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('confirm', 'true');
+      const parseRes = await fetch(
+        `/api/v1/commercial-planner/lineup-cases/${createdCaseId}/parse-apply`,
+        { method: 'POST', body: fd },
+      );
+      if (!parseRes.ok) {
+        const errBody = await parseRes.json().catch(() => ({}));
+        setError(
+          `Case created (id=${createdCaseId}) but apply failed. ` +
+            `Use "Upload file to this case" on the case card to retry. ` +
+            formatHttpErrorDetail(errBody.detail),
+        );
+        return;
+      }
+      onCreated();
+      handleClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Apply failed');
     } finally {
       setCreating(false);
     }
@@ -1796,6 +1853,17 @@ function UploadLineupDialog({
               />
             </Button>
           </Box>
+          {createdCaseId != null && file ? (
+            <Alert severity="success">Case #{createdCaseId} created. Preview the file before apply.</Alert>
+          ) : null}
+          {preview ? (
+            <Alert severity="info" data-testid="upload-lineup-parse-preview-summary">
+              Preview: {preview.total_rows} rows — {preview.resolved_products} products resolved,{' '}
+              {preview.unresolved_products} unresolved.
+              {!preview.can_apply ? ' Nothing resolvable to apply.' : ''}
+              {preview.warnings.length > 0 ? ` Warnings: ${preview.warnings.join('; ')}` : ''}
+            </Alert>
+          ) : null}
           {error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
@@ -1803,15 +1871,38 @@ function UploadLineupDialog({
         <Button size="small" onClick={handleClose}>
           Cancel
         </Button>
-        <Button
-          size="small"
-          variant="contained"
-          onClick={handleCreate}
-          disabled={creating}
-          data-testid="upload-lineup-confirm"
-        >
-          {creating ? 'Creating…' : 'Create'}
-        </Button>
+        {createdCaseId != null && file ? (
+          <>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => void handlePreviewFile()}
+              disabled={creating}
+              data-testid="upload-lineup-preview"
+            >
+              {creating && !preview ? 'Previewing…' : 'Preview file'}
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => void handleApplyFile()}
+              disabled={creating || !preview?.can_apply}
+              data-testid="upload-lineup-apply"
+            >
+              {creating && preview ? 'Applying…' : 'Apply to case'}
+            </Button>
+          </>
+        ) : (
+          <Button
+            size="small"
+            variant="contained"
+            onClick={() => void handleCreateCase()}
+            disabled={creating}
+            data-testid="upload-lineup-confirm"
+          >
+            {creating ? 'Creating…' : 'Create'}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

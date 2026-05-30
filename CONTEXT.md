@@ -1,9 +1,18 @@
 # Channel Intelligence Platform — Current Context
 
 ## Branch
-`cursor/commercial-planner-program-84b1` (Commercial Planner program phase 1)
+`cursor/commercial-planner-program-84b1` (Commercial Planner program phase 1 — complete + gap analysis)
 
-### May 30, 2026 — Commercial Planner program (phase 1)
+### May 30, 2026 — Commercial Planner program (phase 1 finish + QA)
+- **Flag:** `CIP_COMMERCIAL_PLANNER_ENABLED` / `NEXT_PUBLIC_CIP_COMMERCIAL_PLANNER_ENABLED` (default on).
+- **Lineup:** preview → apply on retry parse and **create-case** dialog; `can_apply` requires ≥1 resolved product.
+- **Intelligence:** rankings use sellout, forecast, lineup MSRP, customer net price, promo plan; returns `suggested_srp_local`; intelligent add uses it.
+- **Suggestions:** Prefer current `CommercialLineupCase` on plan before historical lineup job.
+- **Docs:** `docs/COMMERCIAL_PLANNER_PROGRAM.md`, **`docs/COMMERCIAL_PLANNER_GAP_ANALYSIS.md`** (risks, gaps, test matrix).
+- **Tests:** API 13 focused + 74 route tests; web 91 CP tests (page + CurrentLineupSection + autocomplete). DB bootstrap test needs Postgres.
+- **Deferred:** Celery parse task (`lineup_parse_worker.py` scaffold only), router split, dashboard widgets, steward mapping bridge.
+
+### May 30, 2026 — Commercial Planner program (phase 1 initial)
 - **Flag:** `CIP_COMMERCIAL_PLANNER_ENABLED` / `NEXT_PUBLIC_CIP_COMMERCIAL_PLANNER_ENABLED` (default on).
 - **Lineup:** `POST …/parse-preview` + `POST …/parse-apply?confirm=true`; upload dialog uses preview then apply.
 - **Intelligence:** `GET …/plans/{id}/intelligence/customer/{cid}/product-rankings`; web **Intelligent add** dialog.
