@@ -4,12 +4,29 @@
 `main`
 
 ## Head commit
-`6e6ff6f` — docs CONTEXT head; `8e7a885` — pm async Celery validation, bulk row results, wizard resume
+`c4a8cf9` on origin — NullPool / Supabase async pooler; local uncommitted: dev scripts + PM stale validate + imports UX
+
 ## Alembic Head
 `20260518_0045` — Customer sell-through Phase 0 (`fact_customer_sellthrough`, staging, `customer_report_config`, template seed). Prior: `0043` `fact_dsi_forecast`, `0042` `fact_customer_velocity`. Smoke: **`cip_alembic_smoke`** at `0045`.
 
 ## Current State
-- API .env confirmed pointing to cip (verified May 27, 2026)
+- **Local dev:** Windows, **no Docker**; Supabase `cip` via `DATABASE_URL` transaction pooler `:6543` + `NullPool` (`app/db/session.py`).
+- **Redis:** Celery requires `127.0.0.1:6379` from Windows; WSL-only ping is not enough. Fallback: `CIP_DEV_CELERY_DISPATCH=in_process_thread` in `apps/api/.env`.
+- **`stop-dev.ps1` / `restart-dev.ps1`:** fixed `$pid` bug; restart waits for Redis on Windows.
+
+### May 30, 2026 — Dev reliability + PM imports (local, pending commit)
+| Area | Before | After |
+|------|--------|--------|
+| `stop-dev.ps1` | Crashed on `$pid`; orphans on :8001/:3000 | Kills listeners + repo-scoped processes |
+| `restart-dev.ps1` | Windows could not see Redis; windows closed on error | Waits for `:6379`; error + Enter on failure |
+| PM `validate_running` stuck | Jobs hung after dead worker (e.g. job #4) | `reconcile_stale_pm_validate_sync` (30 min) on GET `/state`, enqueue, worker |
+| PM GET `/state` payload | ~100KB+ inferred samples every poll | `inferred_schema_for_state_payload` trims samples (mapping UI unchanged) |
+| Imports jobs grid | Full “Loading data…” on refetch | Spinner only when `jobs == null` |
+| New PM wizard | Stale `lastJobId` could confuse steps | Cleared when picking a new import type |
+
+**Tests run:** `test_product_master_workflow.py` 18/18; `test_ai_resolver_integration.py` 16/16; `imports/page.test.tsx` 26/26. Full `pnpm test:web` has unrelated failures/timeouts elsewhere.
+
+**AI:** `AI_ASSIST_ENABLED=false` locally → Anthropic not called; package installed.
 
 ---
 
@@ -20,7 +37,7 @@
 - **Celery task** `imports.product_master_validate` → `product_master_validate_task` / `run_product_master_validate_job` / `run_pm_validate_worker`.
 - **POST `/api/v1/imports/product-master/jobs/{id}/validate`**: returns **202** with `pm_validate.outcome=enqueued` when dispatched; polls via existing **GET …/state**.
 - **Activity bell**: `staged_metadata.pm_validate_task` slot (`kind: product_master_validate`) in `background_tasks.py`.
-- **DB pools** (Supabase): async `pool_size=5`, `max_overflow=10`, `pool_recycle=300`; sync `prepare_threshold=None`.
+- **DB pools** (Supabase): async **`NullPool`** + `statement_cache_size=0` (`c4a8cf9`); sync `prepare_threshold=None`.
 
 ### Web
 - PM validate mutation accepts **202**; polls state while `validate_queued` / `validate_running`.

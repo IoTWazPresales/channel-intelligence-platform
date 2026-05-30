@@ -51,7 +51,8 @@ STATUS_PM_VALIDATE_RUNNING = "validate_running"
 
 # If a worker dies mid-commit, allow a new enqueue after this (API-side reclaim).
 STALE_COMMIT_RUNNING = timedelta(hours=1)
-STALE_VALIDATE_RUNNING = timedelta(hours=1)
+# PM validate queued/running with no worker progress (reclaim for re-run validation).
+PM_ASYNC_VALIDATE_STALE = timedelta(minutes=30)
 
 
 def _pm_commit_blocked_statuses() -> frozenset[str]:
@@ -831,6 +832,96 @@ def _clear_pm_validate_task_metadata(job: ImportJob) -> None:
         job.staged_metadata = to_jsonable(meta) if meta else None
 
 
+def _pm_async_task_queued_at(job: ImportJob, slot_key: str) -> datetime | None:
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    slot = meta.get(slot_key)
+    if not isinstance(slot, dict):
+        return None
+    raw = slot.get("queued_at")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _celery_task_terminal_idle(task_id: str | None) -> bool:
+    """True when Celery reports the task finished or was never picked up (PENDING) long enough."""
+    if not task_id:
+        return True
+    try:
+        from celery.result import AsyncResult
+
+        state = AsyncResult(str(task_id)).state
+    except Exception:
+        return True
+    return state in ("SUCCESS", "FAILURE", "REVOKED") or state == "PENDING"
+
+
+def reconcile_stale_pm_validate_sync(db: Session, job: ImportJob) -> bool:
+    """Clear abandoned validate_queued/running so the UI can run validation again."""
+    st = (job.status or "").strip()
+    if st not in (STATUS_PM_VALIDATE_QUEUED, STATUS_PM_VALIDATE_RUNNING):
+        return False
+    now = datetime.now(timezone.utc)
+    queued = _pm_async_task_queued_at(job, "pm_validate_task")
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    task_slot = meta.get("pm_validate_task") if isinstance(meta.get("pm_validate_task"), dict) else {}
+    task_id = task_slot.get("task_id")
+    if queued is None:
+        updated = getattr(job, "updated_at", None)
+        if updated is not None and updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        age = (now - updated) if updated is not None else PM_ASYNC_VALIDATE_STALE
+    else:
+        age = now - queued
+    if age < PM_ASYNC_VALIDATE_STALE:
+        return False
+    if not _celery_task_terminal_idle(str(task_id) if task_id else None):
+        return False
+    _clear_pm_validate_task_metadata(job)
+    job.status = "draft"
+    if job.stage not in (STAGE_PM_MAPPING, STAGE_PM_HEADERS):
+        job.stage = STAGE_PM_MAPPING
+    job.error_summary = (
+        "Background validation did not complete (worker unavailable or task expired). "
+        "Run validation again."
+    )
+    db.add(
+        ImportRowResult(
+            job_id=job.id,
+            row_number=0,
+            severity="warning",
+            code="pm_validate_stale_recovered",
+            message="Stale validate task was cleared so you can retry validation.",
+            raw_payload=to_jsonable({"task_id": task_id, "age_seconds": int(age.total_seconds())}),
+        )
+    )
+    db.add(job)
+    db.commit()
+    return True
+
+
+def inferred_schema_for_state_payload(inferred: Any) -> Any:
+    """Trim heavy column samples for GET /state polling (full data remains on ImportJob)."""
+    if not isinstance(inferred, dict):
+        return inferred
+    cols = inferred.get("columns")
+    if not isinstance(cols, list):
+        return inferred
+    slim: list[dict[str, Any]] = []
+    for col in cols[:400]:
+        if not isinstance(col, dict):
+            continue
+        entry = {k: v for k, v in col.items() if k != "sample"}
+        samples = col.get("sample")
+        if isinstance(samples, list) and samples:
+            entry["sample"] = samples[:2]
+        slim.append(entry)
+    return {**inferred, "columns": slim}
+
+
 def _persist_pm_validate_task_metadata(
     job: ImportJob,
     *,
@@ -867,12 +958,22 @@ def try_enqueue_pm_validate_sync(db: Session, job_id: int) -> dict[str, Any]:
             "message": "Cannot validate while a Product Master commit is queued or running.",
         }
     if job.status == STATUS_PM_VALIDATE_RUNNING:
-        return {
-            "outcome": "already_running",
-            "http_status": 200,
-            "message": "Validation is already running for this job.",
-            "job_status": job.status,
-        }
+        if reconcile_stale_pm_validate_sync(db, job):
+            job = db.execute(
+                select(ImportJob)
+                .options(selectinload(ImportJob.source).selectinload(SourceDefinition.import_template))
+                .where(ImportJob.id == job_id)
+                .with_for_update()
+            ).scalar_one_or_none()
+            if not job:
+                return {"outcome": "not_found", "http_status": 404, "message": "Job not found"}
+        else:
+            return {
+                "outcome": "already_running",
+                "http_status": 200,
+                "message": "Validation is already running for this job.",
+                "job_status": job.status,
+            }
     if job.status == STATUS_PM_VALIDATE_QUEUED:
         return {
             "outcome": "already_queued",
@@ -907,6 +1008,23 @@ def run_pm_validate_worker(db: Session, job_id: int, *, celery_task_id: str | No
     if not job or job.template_slug != "product_master":
         logger.warning("run_pm_validate_worker: missing job job_id=%s", job_id)
         return
+    if job.status == STATUS_PM_VALIDATE_RUNNING:
+        if reconcile_stale_pm_validate_sync(db, job):
+            job = db.execute(
+                select(ImportJob)
+                .options(selectinload(ImportJob.source).selectinload(SourceDefinition.import_template))
+                .where(ImportJob.id == job_id)
+                .with_for_update()
+            ).scalar_one_or_none()
+            if not job:
+                return
+        else:
+            logger.info(
+                "run_pm_validate_worker: skip job_id=%s already %s",
+                job_id,
+                STATUS_PM_VALIDATE_RUNNING,
+            )
+            return
     if job.status != STATUS_PM_VALIDATE_QUEUED:
         logger.info(
             "run_pm_validate_worker: skip job_id=%s expected=%s got=%s",

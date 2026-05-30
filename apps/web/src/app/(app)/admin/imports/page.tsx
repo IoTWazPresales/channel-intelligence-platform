@@ -1931,6 +1931,7 @@ function AdminImportsPageContent() {
                           : 'apply'
                       );
                       setConfirmDestructive(false);
+                      setLastJobId(null);
                       setLastGenericFile(null);
                       setHistoricalValidatedJobId(null);
                       setIsJobRevisitMode(false);
@@ -3940,7 +3941,7 @@ function AdminImportsPageContent() {
         </Typography>
         <ModuleDataSection
           intro="Jobs include template slug and import mode. Product Master mapping jobs show stages pm_headers_ready → pm_mapping_saved → pm_validated → pm_committed."
-          isLoading={jobsLoading}
+          isLoading={jobsLoading && jobs == null}
           isError={jobsIsError}
           error={importJobsListError}
           onRetry={() => void refetchJobs()}

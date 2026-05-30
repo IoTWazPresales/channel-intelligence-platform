@@ -15,8 +15,8 @@ function Stop-CipDevProcesses {
             $line = $_.Trim()
             if ($line -notmatch 'LISTENING') { return }
             if ($line -notmatch ":$port\s") { return }
-            $pid = ($line -split '\s+')[-1]
-            if ($pid -match '^\d+$') { $pids += [int]$pid }
+            $procId = ($line -split '\s+')[-1]
+            if ($procId -match '^\d+$') { $pids += [int]$procId }
         }
         foreach ($procId in ($pids | Select-Object -Unique)) {
             if ($procId -le 4) { continue }

@@ -31,7 +31,9 @@ from app.services.imports.product_master_workflow import (
     STATUS_PM_VALIDATE_QUEUED,
     _persist_pm_validate_task_metadata,
     build_pm_import_progress,
+    inferred_schema_for_state_payload,
     infer_headers_sync,
+    reconcile_stale_pm_validate_sync,
     save_mapping_sync,
     suggest_mapping_decisions,
     try_enqueue_pm_commit_sync,
@@ -150,6 +152,10 @@ async def get_product_master_job_state(
         )
         if not job or job.template_slug != "product_master":
             raise HTTPException(status_code=404, detail="Job not found")
+        with SessionLocal() as sync_db:
+            sync_job = sync_db.get(ImportJob, job_id)
+            if sync_job and reconcile_stale_pm_validate_sync(sync_db, sync_job):
+                await db.refresh(job)
         headers = job.file_headers or []
         suggestions = None
         if headers and job.source:
@@ -183,7 +189,7 @@ async def get_product_master_job_state(
         "validation_passed": job.validation_passed,
         "error_summary": job.error_summary,
         "staged_metadata_preview": job.staged_metadata,
-        "inferred_schema": job.inferred_schema,
+        "inferred_schema": inferred_schema_for_state_payload(job.inferred_schema),
         "progress": progress,
     }
 

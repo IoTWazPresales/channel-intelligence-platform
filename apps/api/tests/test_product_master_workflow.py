@@ -15,8 +15,11 @@ from app.services.imports.product_master_workflow import (
     STAGE_PM_COMMITTED,
     STAGE_PM_MAPPING,
     STAGE_PM_VALIDATED,
+    STATUS_PM_VALIDATE_RUNNING,
     build_pm_import_progress,
     commit_product_master_sync,
+    inferred_schema_for_state_payload,
+    reconcile_stale_pm_validate_sync,
     save_mapping_sync,
     suggest_mapping_decisions,
     validate_mapping_payload,
@@ -289,3 +292,38 @@ def test_save_mapping_rejects_wrong_stage() -> None:
     ]
     with pytest.raises(ValueError, match="editable mapping stage"):
         save_mapping_sync(db, 1, cols)
+
+
+def test_inferred_schema_for_state_payload_trims_samples() -> None:
+    big = {"columns": [{"name": "a", "dtype": "object", "sample": list(range(20))}], "row_count": 1}
+    slim = inferred_schema_for_state_payload(big)
+    assert isinstance(slim, dict)
+    assert len(slim["columns"][0]["sample"]) == 2
+
+
+def test_reconcile_stale_pm_validate_clears_abandoned_running() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.ingestion import ImportJob
+
+    old = datetime.now(timezone.utc) - timedelta(minutes=45)
+    job = ImportJob(
+        template_slug="product_master",
+        stage=STAGE_PM_MAPPING,
+        status=STATUS_PM_VALIDATE_RUNNING,
+        staged_metadata={
+            "pm_validate_task": {
+                "task_id": "dead-task-id",
+                "queued_at": old.isoformat(),
+                "async_poll": True,
+            }
+        },
+    )
+    db = MagicMock()
+    db.add = MagicMock()
+    db.commit = MagicMock()
+
+    changed = reconcile_stale_pm_validate_sync(db, job)
+    assert changed is True
+    assert job.status == "draft"
+    assert job.staged_metadata is None or "pm_validate_task" not in (job.staged_metadata or {})
