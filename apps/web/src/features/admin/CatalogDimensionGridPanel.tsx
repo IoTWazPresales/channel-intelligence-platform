@@ -92,14 +92,15 @@ export function CatalogDimensionGridPanel({ config }: { config: CatalogDimension
     if (!bulkDeletePreview) return;
     setBulkDeleteBusy(true);
     try {
-      await apiPost(config.bulkConfirmPath, { entity_ids: bulkDeletePreview.entity_ids });
+      await apiPost(config.bulkConfirmPath, {
+        entity_ids: bulkDeletePreview.entity_ids,
+        deletable_ids: bulkDeletePreview.deletable_ids,
+      });
       setBulkDeleteOpen(false);
       setBulkDeletePreview(null);
       setBulkSelectionMode('normal');
       delRow.reset();
       await qc.invalidateQueries({ queryKey: [config.queryKey] });
-    } catch (e) {
-      alert(safeDisplayError(e));
     } finally {
       setBulkDeleteBusy(false);
     }

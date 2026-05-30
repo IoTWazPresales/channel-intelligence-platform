@@ -1,12 +1,19 @@
 """Master bulk delete preview/confirm for products and customers."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import get_db
 from app.main import app
+from app.services.master_entity_bulk_delete import (
+    MasterBulkDeleteIntegrityError,
+    confirm_master_bulk_delete,
+    preview_master_bulk_delete,
+)
 
 client = TestClient(app)
 
@@ -106,3 +113,68 @@ def test_catalog_and_distributor_bulk_delete_preview(path: str, patch_target: st
     assert r.status_code == 200
     assert r.json()["entity_type"] == kind
     assert r.json()["deletable_ids"] == [10]
+
+
+def test_confirm_with_deletable_ids_does_not_call_preview():
+    db = MagicMock()
+    db.get = AsyncMock(return_value=MagicMock(code="CUST-1"))
+    db.commit = AsyncMock()
+
+    async def _run():
+        with patch(
+            "app.services.master_entity_bulk_delete._batch_refs",
+            new=AsyncMock(return_value={1: []}),
+        ), patch(
+            "app.services.master_entity_bulk_delete._delete_one",
+            new=AsyncMock(return_value=True),
+        ), patch(
+            "app.services.master_entity_bulk_delete.preview_master_bulk_delete",
+            new=AsyncMock(),
+        ) as preview_mock:
+            result = await confirm_master_bulk_delete(
+                db, "customers", [1, 2], deletable_ids=[1]
+            )
+        preview_mock.assert_not_called()
+        assert result["deleted_ids"] == [1]
+
+    asyncio.run(_run())
+
+
+def test_confirm_integrity_error_raises_structured_conflict():
+    db = MagicMock()
+    db.get = AsyncMock(return_value=MagicMock(code="CUST-1"))
+    db.commit = AsyncMock(side_effect=IntegrityError("fk", {}, Exception()))
+    db.rollback = AsyncMock()
+
+    async def _run():
+        with patch(
+            "app.services.master_entity_bulk_delete._batch_refs",
+            new=AsyncMock(return_value={1: []}),
+        ), patch(
+            "app.services.master_entity_bulk_delete._delete_one",
+            new=AsyncMock(return_value=True),
+        ):
+            with pytest.raises(MasterBulkDeleteIntegrityError) as exc_info:
+                await confirm_master_bulk_delete(db, "customers", [1], deletable_ids=[1])
+        assert exc_info.value.references
+        db.rollback.assert_awaited_once()
+
+    asyncio.run(_run())
+
+
+def test_preview_uses_batch_breakdown():
+    db = MagicMock()
+
+    async def _run():
+        with patch(
+            "app.services.master_entity_bulk_delete._batch_refs",
+            new=AsyncMock(return_value={5: [{"label": "Sell-out", "count": 2}]}),
+        ), patch(
+            "app.services.master_entity_bulk_delete._entity_label",
+            new=AsyncMock(return_value="CUST-5"),
+        ):
+            payload = await preview_master_bulk_delete(db, "customers", [5])
+        assert payload["blocked_count"] == 1
+        assert payload["deletable_ids"] == []
+
+    asyncio.run(_run())

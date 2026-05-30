@@ -1,6 +1,17 @@
 # Channel Intelligence Platform — Current Context
 
 ## Branch
+`main`
+
+### May 30, 2026 — Master bulk delete: complete FK checks, batched preview, 409 on confirm
+- **Fix:** Extended `customer_usage` / `product_usage` / `distributor_usage` / `channel_usage` / `region_usage` with staging lines, token aliases, mapping candidates, catalog links, etc.
+- **Performance:** `*_hard_reference_breakdown_batch` + `master_usage_batch.py`; preview no longer N×15 queries per id.
+- **Confirm:** Body `{ entity_ids, deletable_ids? }`; skips full re-preview when `deletable_ids` sent; batched recheck; `IntegrityError` → 409 with `references` (all-or-nothing).
+- **Web:** Confirm passes `deletable_ids`; `MasterBulkDeleteImpactDialog` shows 409 reference detail; `apiPost` raises `HttpConflictError` on 409.
+- **Docs:** `docs/MASTER_BULK_DELETE_AUDIT.md`
+- **Tests:** `test_master_entity_bulk_delete.py`, `test_customer_bulk_delete_staging_block.py`, `MasterBulkDeleteImpactDialog.test.tsx` (14 API + 3 web passing).
+
+## Branch (prior)
 `main` (merged `feat/master-delete-reference-checks-bulk`)
 
 ## Head commit

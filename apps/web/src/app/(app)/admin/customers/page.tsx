@@ -873,14 +873,15 @@ function AdminCustomersPageContent() {
     if (!bulkDeletePreview) return;
     setBulkDeleteBusy(true);
     try {
-      await apiPost('/api/v1/customers/bulk-delete-confirm', { entity_ids: bulkDeletePreview.entity_ids });
+      await apiPost('/api/v1/customers/bulk-delete-confirm', {
+        entity_ids: bulkDeletePreview.entity_ids,
+        deletable_ids: bulkDeletePreview.deletable_ids,
+      });
       setBulkDeleteOpen(false);
       setBulkDeletePreview(null);
       setBulkSelectionMode('normal');
       delCustomer.reset();
       await qc.invalidateQueries({ queryKey: ['admin-customers'] });
-    } catch (e) {
-      alert(safeDisplayError(e));
     } finally {
       setBulkDeleteBusy(false);
     }

@@ -696,14 +696,15 @@ function AdminDistributorsPageContent() {
     if (!bulkDeletePreview) return;
     setBulkDeleteBusy(true);
     try {
-      await apiPost('/api/v1/distributors/bulk-delete-confirm', { entity_ids: bulkDeletePreview.entity_ids });
+      await apiPost('/api/v1/distributors/bulk-delete-confirm', {
+        entity_ids: bulkDeletePreview.entity_ids,
+        deletable_ids: bulkDeletePreview.deletable_ids,
+      });
       setBulkDeleteOpen(false);
       setBulkDeletePreview(null);
       setBulkSelectionMode('normal');
       delDist.reset();
       await qc.invalidateQueries({ queryKey: ['admin-distributors'] });
-    } catch (e) {
-      alert(safeDisplayError(e));
     } finally {
       setBulkDeleteBusy(false);
     }

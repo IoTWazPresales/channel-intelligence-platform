@@ -2,59 +2,42 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dimensions import DimChannel, DimCustomer, DimProduct
 from app.models.facts import FactActivation, FactPricing, FactSalesSellout
 from app.models.historical_lineup import HistoricalLineupImportHeader
+from app.models.import_distributor_si import ChannelSourceTokenAlias
 from app.models.lineup import FactLineupPlanItem
+from app.services.master_usage_batch import batch_counts_for_column, merge_batch_refs
 
 
-def _hard_reference_checks(channel_id: int) -> list[tuple[str, object]]:
-    return [
-        (
-            "Products (primary channel)",
-            select(func.count()).select_from(DimProduct).where(DimProduct.channel_id == channel_id),
-        ),
-        (
-            "Customers",
-            select(func.count()).select_from(DimCustomer).where(DimCustomer.channel_id == channel_id),
-        ),
-        (
-            "Sell-out",
-            select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.channel_id == channel_id),
-        ),
-        (
-            "Pricing",
-            select(func.count()).select_from(FactPricing).where(FactPricing.channel_id == channel_id),
-        ),
-        (
-            "Activation",
-            select(func.count()).select_from(FactActivation).where(FactActivation.channel_id == channel_id),
-        ),
-        (
-            "Lineup plan items",
-            select(func.count())
-            .select_from(FactLineupPlanItem)
-            .where(FactLineupPlanItem.channel_id == channel_id),
-        ),
-        (
-            "Historical lineup headers",
-            select(func.count())
-            .select_from(HistoricalLineupImportHeader)
-            .where(HistoricalLineupImportHeader.channel_id == channel_id),
-        ),
+async def channel_hard_reference_breakdown_batch(
+    db: AsyncSession, channel_ids: list[int]
+) -> dict[int, list[dict[str, int | str]]]:
+    ids = [int(i) for i in channel_ids if isinstance(i, int) and i > 0]
+    out: dict[int, list[dict[str, int | str]]] = {i: [] for i in ids}
+    if not ids:
+        return out
+
+    specs: list[tuple[str, object]] = [
+        ("Products (primary channel)", DimProduct.channel_id),
+        ("Customers", DimCustomer.channel_id),
+        ("Sell-out", FactSalesSellout.channel_id),
+        ("Pricing", FactPricing.channel_id),
+        ("Activation", FactActivation.channel_id),
+        ("Lineup plan items", FactLineupPlanItem.channel_id),
+        ("Historical lineup headers", HistoricalLineupImportHeader.channel_id),
+        ("Channel source token aliases", ChannelSourceTokenAlias.channel_id),
     ]
+    for label, col in specs:
+        merge_batch_refs(out, ids, label, await batch_counts_for_column(db, col, ids))
+    return out
 
 
 async def channel_hard_reference_breakdown(db: AsyncSession, channel_id: int) -> list[dict[str, int | str]]:
     row = await db.get(DimChannel, channel_id)
     if not row:
         return []
-    out: list[dict[str, int | str]] = []
-    for label, stmt in _hard_reference_checks(channel_id):
-        n = (await db.execute(stmt)).scalar_one()
-        if int(n) > 0:
-            out.append({"label": label, "count": int(n)})
-    return out
+    batch = await channel_hard_reference_breakdown_batch(db, [channel_id])
+    return batch.get(channel_id, [])

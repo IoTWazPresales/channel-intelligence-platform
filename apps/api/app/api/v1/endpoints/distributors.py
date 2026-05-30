@@ -15,7 +15,13 @@ from app.services.distributor_usage import (
     delete_distributor_children,
     distributor_hard_reference_breakdown,
 )
-from app.services.master_entity_bulk_delete import confirm_master_bulk_delete, preview_master_bulk_delete
+from app.api.v1.master_bulk_delete_http import raise_bulk_delete_http_error
+from app.services.master_entity_bulk_delete import (
+    MasterBulkDeleteConfirmBody,
+    MasterBulkDeleteIntegrityError,
+    confirm_master_bulk_delete,
+    preview_master_bulk_delete,
+)
 
 router = APIRouter()
 
@@ -106,33 +112,23 @@ async def post_distributors_bulk_delete_preview(body: MasterBulkIdsBody, db: Asy
 
 
 @router.post("/bulk-delete-confirm")
-async def post_distributors_bulk_delete_confirm(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+async def post_distributors_bulk_delete_confirm(
+    body: MasterBulkDeleteConfirmBody, db: AsyncSession = Depends(get_db)
+):
     if not body.entity_ids:
         raise HTTPException(
             status_code=400,
             detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid distributor id."},
         )
     try:
-        return await confirm_master_bulk_delete(db, "distributors", body.entity_ids)
-    except ValueError as exc:
-        code = str(exc)
-        if code == "not_all_entities_found":
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "error": code,
-                    "message": "One or more distributor ids no longer exist; refresh the list and try again.",
-                },
-            ) from None
-        if code == "entities_still_blocked":
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "error": code,
-                    "message": "No selected distributors can be deleted; all are still referenced.",
-                },
-            ) from None
-        raise
+        return await confirm_master_bulk_delete(
+            db,
+            "distributors",
+            body.entity_ids,
+            deletable_ids=body.deletable_ids,
+        )
+    except (ValueError, MasterBulkDeleteIntegrityError) as exc:
+        raise_bulk_delete_http_error(exc, entity_label="distributor")
 
 
 @router.get("")

@@ -14,6 +14,9 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import { useState } from 'react';
+
+import { HttpConflictError } from '@/lib/api';
 
 export type MasterBulkDeletePreviewRow = {
   id: number;
@@ -33,6 +36,15 @@ export type MasterBulkDeletePreview = {
   deletable_ids: number[];
 };
 
+export function formatMasterBulkDeleteConflict(err: unknown): string {
+  if (HttpConflictError.is(err)) {
+    const lines = err.references.map((r) => `${r.label} (${r.count})`);
+    return lines.length ? `${err.message}\n\n${lines.join('\n')}` : err.message;
+  }
+  if (err instanceof Error) return err.message;
+  return 'Delete failed due to a conflict.';
+}
+
 export function MasterBulkDeleteImpactDialog({
   open,
   busy,
@@ -42,6 +54,7 @@ export function MasterBulkDeleteImpactDialog({
   onImpactAcknowledgedChange,
   onClose,
   onConfirm,
+  confirmError,
 }: {
   open: boolean;
   busy: boolean;
@@ -50,12 +63,24 @@ export function MasterBulkDeleteImpactDialog({
   impactAcknowledged: boolean;
   onImpactAcknowledgedChange: (v: boolean) => void;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
+  confirmError?: unknown;
 }) {
+  const [localConflict, setLocalConflict] = useState<unknown>(null);
+  const conflict = confirmError ?? localConflict;
   const missing = preview?.missing_entity_ids?.length ?? 0;
   const blocked = preview?.blocked_count ?? 0;
   const deletable = preview?.deletable_count ?? 0;
   const confirmDisabled = busy || !preview || missing > 0 || deletable === 0 || !impactAcknowledged;
+
+  const handleConfirm = async () => {
+    setLocalConflict(null);
+    try {
+      await onConfirm();
+    } catch (e) {
+      setLocalConflict(e);
+    }
+  };
 
   return (
     <Dialog
@@ -68,6 +93,24 @@ export function MasterBulkDeleteImpactDialog({
       <DialogTitle>Delete {entityLabel} — impact preview</DialogTitle>
       <DialogContent dividers>
         {busy ? <LinearProgress sx={{ mb: 2 }} /> : null}
+        {conflict ? (
+          <Alert severity="error" sx={{ mb: 2 }} data-testid="master-bulk-confirm-error">
+            {HttpConflictError.is(conflict) && conflict.references.length > 0 ? (
+              <Stack spacing={1}>
+                <Typography variant="body2">{conflict.message}</Typography>
+                <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                  {conflict.references.map((ref) => (
+                    <Typography key={ref.label} component="li" variant="caption">
+                      {ref.label} ({ref.count})
+                    </Typography>
+                  ))}
+                </Box>
+              </Stack>
+            ) : (
+              formatMasterBulkDeleteConflict(conflict)
+            )}
+          </Alert>
+        ) : null}
         {!preview ? (
           <Typography color="text.secondary">No preview loaded.</Typography>
         ) : (
@@ -142,7 +185,7 @@ export function MasterBulkDeleteImpactDialog({
           color="error"
           variant="contained"
           disabled={confirmDisabled}
-          onClick={onConfirm}
+          onClick={() => void handleConfirm()}
           data-testid="master-bulk-confirm-delete"
         >
           Confirm delete

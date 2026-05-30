@@ -116,7 +116,8 @@ export async function apiPost<T>(path: string, body?: unknown, init?: RequestIni
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(await readFetchError(res));
+    const text = await res.text();
+    throw parseConflictError(res.status, text);
   }
   return res.json() as Promise<T>;
 }
@@ -232,7 +233,7 @@ function conflictPayloadFrom409Body(text: string): { message: string; references
   return null;
 }
 
-function parseDeleteError(status: number, text: string): Error {
+function parseConflictError(status: number, text: string): Error {
   if (status === 409) {
     const parsed = conflictPayloadFrom409Body(text);
     if (parsed) return new HttpConflictError(parsed.message, parsed.references);
@@ -245,6 +246,10 @@ function parseDeleteError(status: number, text: string): Error {
     }
   }
   return new Error(errorMessageFromResponse(status, text));
+}
+
+function parseDeleteError(status: number, text: string): Error {
+  return parseConflictError(status, text);
 }
 
 export async function apiDelete(path: string, init?: RequestInit): Promise<void> {

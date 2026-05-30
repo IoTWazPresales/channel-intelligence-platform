@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupLine
@@ -16,6 +16,7 @@ from app.models.dimensions import CustomerContact, CustomerLocation, DimCustomer
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.facts import (
+    FactBudgetRequest,
     FactForecast,
     FactInventoryCustomer,
     FactInventoryReconciliation,
@@ -24,108 +25,95 @@ from app.models.facts import (
     FactSalesSellout,
 )
 from app.models.historical_lineup import HistoricalLineupImportHeader
+from app.models.import_customer_sellthrough_staging import ImportCustomerSellthroughStagingLine
+from app.models.import_distributor_si import (
+    CustomerSourceTokenAlias,
+    ImportDistributorSiStagingLine,
+    ImportEntityMappingCandidate,
+)
 from app.models.lineup import FactLineupPlanItem
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
+from app.services.master_usage_batch import batch_counts_for_column, merge_batch_refs
+
+_CUSTOMER_MAPPING_ENTITY_TYPES = (
+    "customer_dealer_token",
+    "shipment_customer_token",
+)
 
 
-def _hard_reference_checks(customer_id: int) -> list[tuple[str, object]]:
-    return [
-        (
-            "Sell-out",
-            select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.customer_id == customer_id),
-        ),
-        (
-            "Returns",
-            select(func.count()).select_from(FactReturns).where(FactReturns.customer_id == customer_id),
-        ),
-        (
-            "Customer inventory",
-            select(func.count())
-            .select_from(FactInventoryCustomer)
-            .where(FactInventoryCustomer.customer_id == customer_id),
-        ),
-        (
-            "Inventory reconciliation",
-            select(func.count())
-            .select_from(FactInventoryReconciliation)
-            .where(FactInventoryReconciliation.customer_id == customer_id),
-        ),
-        (
-            "Customer sell-through",
-            select(func.count())
-            .select_from(FactCustomerSellthrough)
-            .where(FactCustomerSellthrough.customer_id == customer_id),
-        ),
-        (
-            "Customer velocity",
-            select(func.count())
-            .select_from(FactCustomerVelocity)
-            .where(FactCustomerVelocity.customer_id == customer_id),
-        ),
-        (
-            "Pricing (customer-specific)",
-            select(func.count()).select_from(FactPricing).where(FactPricing.customer_id == customer_id),
-        ),
-        (
-            "Forecasts",
-            select(func.count()).select_from(FactForecast).where(FactForecast.customer_id == customer_id),
-        ),
-        (
-            "Lineup plan items",
-            select(func.count())
-            .select_from(FactLineupPlanItem)
-            .where(FactLineupPlanItem.customer_id == customer_id),
-        ),
-        (
-            "Commercial customer terms",
-            select(func.count())
-            .select_from(CommercialCustomerTerm)
-            .where(CommercialCustomerTerm.customer_id == customer_id),
-        ),
-        (
-            "Commercial plan lines",
-            select(func.count())
-            .select_from(CommercialPlanLine)
-            .where(CommercialPlanLine.customer_id == customer_id),
-        ),
-        (
-            "Commercial lineup lines",
-            select(func.count())
-            .select_from(CommercialLineupLine)
-            .where(CommercialLineupLine.customer_id == customer_id),
-        ),
-        (
-            "Historical lineup headers",
-            select(func.count())
-            .select_from(HistoricalLineupImportHeader)
-            .where(HistoricalLineupImportHeader.customer_id == customer_id),
-        ),
-        (
-            "Shipment evidence (resolved customer)",
-            select(func.count())
-            .select_from(ShipmentEvidenceLine)
-            .where(ShipmentEvidenceLine.customer_id == customer_id),
-        ),
-        (
-            "Customer report config",
-            select(func.count())
-            .select_from(CustomerReportConfig)
-            .where(CustomerReportConfig.customer_id == customer_id),
-        ),
+async def _batch_mapping_candidate_counts(db: AsyncSession, customer_ids: list[int]) -> dict[int, int]:
+    ids = [int(i) for i in customer_ids if isinstance(i, int) and i > 0]
+    if not ids:
+        return {}
+    col = ImportEntityMappingCandidate.suggested_entity_id
+    stmt = (
+        select(col, func.count())
+        .where(
+            col.in_(ids),
+            ImportEntityMappingCandidate.entity_type.in_(_CUSTOMER_MAPPING_ENTITY_TYPES),
+        )
+        .group_by(col)
+    )
+    rows = (await db.execute(stmt)).all()
+    return {int(k): int(v) for k, v in rows if k is not None}
+
+
+async def customer_hard_reference_breakdown_batch(
+    db: AsyncSession, customer_ids: list[int]
+) -> dict[int, list[dict[str, int | str]]]:
+    ids = [int(i) for i in customer_ids if isinstance(i, int) and i > 0]
+    out: dict[int, list[dict[str, int | str]]] = {i: [] for i in ids}
+    if not ids:
+        return out
+
+    open_rows = (
+        await db.execute(
+            select(DimCustomer.id).where(
+                DimCustomer.id.in_(ids),
+                DimCustomer.code == OPEN_CHANNEL_CUSTOMER_CODE,
+            )
+        )
+    ).scalars().all()
+    for cid in open_rows:
+        out[int(cid)].append({"label": "System reference account (OPEN_CHANNEL)", "count": 1})
+
+    specs: list[tuple[str, object]] = [
+        ("Sell-out", FactSalesSellout.customer_id),
+        ("Returns", FactReturns.customer_id),
+        ("Customer inventory", FactInventoryCustomer.customer_id),
+        ("Inventory reconciliation", FactInventoryReconciliation.customer_id),
+        ("Customer sell-through", FactCustomerSellthrough.customer_id),
+        ("Customer velocity", FactCustomerVelocity.customer_id),
+        ("Pricing (customer-specific)", FactPricing.customer_id),
+        ("Forecasts", FactForecast.customer_id),
+        ("Lineup plan items", FactLineupPlanItem.customer_id),
+        ("Commercial customer terms", CommercialCustomerTerm.customer_id),
+        ("Commercial plan lines", CommercialPlanLine.customer_id),
+        ("Commercial lineup lines", CommercialLineupLine.customer_id),
+        ("Historical lineup headers", HistoricalLineupImportHeader.customer_id),
+        ("Shipment evidence (resolved customer)", ShipmentEvidenceLine.customer_id),
+        ("Customer report config", CustomerReportConfig.customer_id),
+        ("DSI import staging (resolved customer)", ImportDistributorSiStagingLine.resolved_customer_id),
+        ("Customer sell-through import staging", ImportCustomerSellthroughStagingLine.resolved_customer_id),
+        ("Customer source token aliases", CustomerSourceTokenAlias.customer_id),
+        ("Budget requests (linked customer)", FactBudgetRequest.linked_customer_id),
     ]
+    for label, col in specs:
+        merge_batch_refs(out, ids, label, await batch_counts_for_column(db, col, ids))
+
+    merge_batch_refs(
+        out,
+        ids,
+        "Import mapping candidates (customer)",
+        await _batch_mapping_candidate_counts(db, ids),
+    )
+    return out
 
 
 async def customer_hard_reference_breakdown(db: AsyncSession, customer_id: int) -> list[dict[str, int | str]]:
-    row = await db.get(DimCustomer, customer_id)
-    if row and row.code == OPEN_CHANNEL_CUSTOMER_CODE:
-        return [{"label": "System reference account (OPEN_CHANNEL)", "count": 1}]
-    out: list[dict[str, int | str]] = []
-    for label, stmt in _hard_reference_checks(customer_id):
-        n = (await db.execute(stmt)).scalar_one()
-        if int(n) > 0:
-            out.append({"label": label, "count": int(n)})
-    return out
+    batch = await customer_hard_reference_breakdown_batch(db, [customer_id])
+    return batch.get(customer_id, [])
 
 
 async def cleanup_soft_customer_references(db: AsyncSession, customer_id: int) -> None:

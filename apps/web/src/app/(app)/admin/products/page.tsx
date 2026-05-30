@@ -675,15 +675,16 @@ function AdminProductsPageContent() {
     if (!bulkDeletePreview) return;
     setBulkDeleteBusy(true);
     try {
-      await apiPost('/api/v1/products/bulk-delete-confirm', { entity_ids: bulkDeletePreview.entity_ids });
+      await apiPost('/api/v1/products/bulk-delete-confirm', {
+        entity_ids: bulkDeletePreview.entity_ids,
+        deletable_ids: bulkDeletePreview.deletable_ids,
+      });
       setBulkDeleteOpen(false);
       setBulkDeletePreview(null);
       setBulkSelectionMode('normal');
       delProduct.reset();
       setBlockedDeleteProductId(null);
       await qc.invalidateQueries({ queryKey: ['admin-products'] });
-    } catch (e) {
-      alert(safeDisplayError(e));
     } finally {
       setBulkDeleteBusy(false);
     }

@@ -15,7 +15,13 @@ from app.services.product_dsi_maintenance import (
     clear_dsi_facts_for_product,
     dsi_dependency_detail_payload,
 )
-from app.services.master_entity_bulk_delete import confirm_master_bulk_delete, preview_master_bulk_delete
+from app.api.v1.master_bulk_delete_http import raise_bulk_delete_http_error
+from app.services.master_entity_bulk_delete import (
+    MasterBulkDeleteConfirmBody,
+    MasterBulkDeleteIntegrityError,
+    confirm_master_bulk_delete,
+    preview_master_bulk_delete,
+)
 from app.services.product_usage import cleanup_soft_product_references, product_hard_reference_breakdown
 
 router = APIRouter()
@@ -404,33 +410,23 @@ async def post_products_bulk_delete_preview(body: MasterBulkIdsBody, db: AsyncSe
 
 
 @router.post("/bulk-delete-confirm")
-async def post_products_bulk_delete_confirm(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+async def post_products_bulk_delete_confirm(
+    body: MasterBulkDeleteConfirmBody, db: AsyncSession = Depends(get_db)
+):
     if not body.entity_ids:
         raise HTTPException(
             status_code=400,
             detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid product id."},
         )
     try:
-        return await confirm_master_bulk_delete(db, "products", body.entity_ids)
-    except ValueError as exc:
-        code = str(exc)
-        if code == "not_all_entities_found":
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "error": code,
-                    "message": "One or more product ids no longer exist; refresh the list and try again.",
-                },
-            ) from None
-        if code == "entities_still_blocked":
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "error": code,
-                    "message": "No selected products can be deleted; all are still referenced.",
-                },
-            ) from None
-        raise
+        return await confirm_master_bulk_delete(
+            db,
+            "products",
+            body.entity_ids,
+            deletable_ids=body.deletable_ids,
+        )
+    except (ValueError, MasterBulkDeleteIntegrityError) as exc:
+        raise_bulk_delete_http_error(exc, entity_label="product")
 
 
 async def _delete_dim_product(product_id: int, db: AsyncSession) -> Response:
