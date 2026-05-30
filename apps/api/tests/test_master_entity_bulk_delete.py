@@ -50,3 +50,46 @@ def test_products_bulk_delete_preview():
     assert r.status_code == 200
     assert r.json()["blocked_count"] == 1
     assert r.json()["deletable_ids"] == [1]
+
+
+@pytest.mark.parametrize(
+    ("path", "patch_target", "kind"),
+    [
+        (
+            "/api/v1/catalog/channels/bulk-delete-preview",
+            "app.api.v1.endpoints.catalog.preview_master_bulk_delete",
+            "channels",
+        ),
+        (
+            "/api/v1/catalog/regions/bulk-delete-preview",
+            "app.api.v1.endpoints.catalog.preview_master_bulk_delete",
+            "regions",
+        ),
+        (
+            "/api/v1/distributors/bulk-delete-preview",
+            "app.api.v1.endpoints.distributors.preview_master_bulk_delete",
+            "distributors",
+        ),
+    ],
+)
+def test_catalog_and_distributor_bulk_delete_preview(path: str, patch_target: str, kind: str):
+    async def fake_db():
+        yield MagicMock()
+
+    app.dependency_overrides[get_db] = fake_db
+
+    preview_payload = {
+        "entity_type": kind,
+        "entity_ids": [10],
+        "missing_entity_ids": [],
+        "rows": [{"id": 10, "missing": False, "label": "X", "references": [], "blocked": False}],
+        "blocked_count": 0,
+        "deletable_count": 1,
+        "deletable_ids": [10],
+    }
+    with patch(patch_target, new=AsyncMock(return_value=preview_payload)):
+        r = client.post(path, json={"entity_ids": [10]})
+
+    assert r.status_code == 200
+    assert r.json()["entity_type"] == kind
+    assert r.json()["deletable_ids"] == [10]

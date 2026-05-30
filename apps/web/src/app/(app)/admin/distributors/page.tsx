@@ -35,15 +35,20 @@ import type {
   GridReadyEvent,
 } from 'ag-grid-community';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, type ReactNode, useCallback, useMemo, useState } from 'react';
+import { Suspense, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
+import {
+  MasterBulkDeleteImpactDialog,
+  type MasterBulkDeletePreview,
+} from '@/components/bulkTable/MasterBulkDeleteImpactDialog';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { DistributorCommercialTermsPanel } from '@/features/admin/DistributorCommercialTermsPanel';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
-import { apiDelete, apiGet, apiPatch, apiPost, HttpConflictError } from '@/lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 type DistributorRow = {
@@ -217,6 +222,13 @@ function AdminDistributorsPageContent() {
   const [distColumnsOpen, setDistColumnsOpen] = useState(false);
   const [distColumnSearch, setDistColumnSearch] = useState('');
   const [distColumnVisibility, setDistColumnVisibility] = useState<Record<string, boolean>>({});
+  const [bulkSelectionMode, setBulkSelectionMode] = useState<BulkTableSelectionMode>('normal');
+  const [bulkSelectedCount, setBulkSelectedCount] = useState(0);
+  const [visibleRowCount, setVisibleRowCount] = useState(0);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeletePreview, setBulkDeletePreview] = useState<MasterBulkDeletePreview | null>(null);
+  const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
+  const [bulkDeleteAck, setBulkDeleteAck] = useState(false);
 
   const page = Number(searchParams.get('page') || '1') || 1;
   const pageSize = Number(searchParams.get('page_size') || '25') || 25;
@@ -644,9 +656,63 @@ function AdminDistributorsPageContent() {
     }
   }, []);
 
+  useEffect(() => {
+    if (bulkSelectionMode !== 'selecting') {
+      distGridApi?.deselectAll();
+      setBulkSelectedCount(0);
+    }
+  }, [bulkSelectionMode, distGridApi]);
+
+  useEffect(() => {
+    setVisibleRowCount((distributors?.items ?? []).length);
+  }, [distributors?.items]);
+
+  const openDistributorBulkDeletePreview = useCallback(async () => {
+    if (!distGridApi) return;
+    const ids = distGridApi.getSelectedRows().map((r: DistributorRow) => r.id);
+    if (!ids.length) return;
+    setBulkDeleteBusy(true);
+    setBulkDeleteAck(false);
+    try {
+      const data = await apiPost<MasterBulkDeletePreview>('/api/v1/distributors/bulk-delete-preview', {
+        entity_ids: ids,
+      });
+      setBulkDeletePreview(data);
+      setBulkDeleteOpen(true);
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setBulkDeleteBusy(false);
+    }
+  }, [distGridApi]);
+
+  const closeDistributorBulkDeleteDialog = useCallback(() => {
+    if (bulkDeleteBusy) return;
+    setBulkDeleteOpen(false);
+    setBulkDeletePreview(null);
+  }, [bulkDeleteBusy]);
+
+  const confirmDistributorBulkDelete = useCallback(async () => {
+    if (!bulkDeletePreview) return;
+    setBulkDeleteBusy(true);
+    try {
+      await apiPost('/api/v1/distributors/bulk-delete-confirm', { entity_ids: bulkDeletePreview.entity_ids });
+      setBulkDeleteOpen(false);
+      setBulkDeletePreview(null);
+      setBulkSelectionMode('normal');
+      delDist.reset();
+      await qc.invalidateQueries({ queryKey: ['admin-distributors'] });
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setBulkDeleteBusy(false);
+    }
+  }, [bulkDeletePreview, delDist, qc]);
+
   const onDistMasterGridReady = useCallback(
     (e: GridReadyEvent<DistributorRow>) => {
       setDistGridApi(e.api);
+      setVisibleRowCount(e.api.getDisplayedRowCount());
       try {
         const raw = localStorage.getItem(DISTRIBUTOR_MASTER_GRID_STATE_KEY);
         if (raw) {
@@ -743,8 +809,8 @@ function AdminDistributorsPageContent() {
     [distCodes, delInbound, delInbound.isPending, clearInbound.isPending]
   );
 
-  const distGrid: GridOptions<DistributorRow> = useMemo(
-    () => ({
+  const distGrid: GridOptions<DistributorRow> = useMemo(() => {
+    const base: GridOptions<DistributorRow> = {
       singleClickEdit: true,
       onCellValueChanged: onDistCell,
       onGridReady: onDistMasterGridReady,
@@ -752,9 +818,27 @@ function AdminDistributorsPageContent() {
       onColumnVisible: onDistMasterColumnStateEvent,
       onColumnPinned: onDistMasterColumnStateEvent,
       onColumnResized: onDistMasterColumnStateEvent,
-    }),
-    [onDistCell, onDistMasterGridReady, onDistMasterColumnStateEvent]
-  );
+      onFilterChanged: (e) => {
+        if (bulkSelectionMode === 'selecting') setVisibleRowCount(e.api.getDisplayedRowCount());
+      },
+      onSortChanged: (e) => {
+        if (bulkSelectionMode === 'selecting') setVisibleRowCount(e.api.getDisplayedRowCount());
+      },
+    };
+    if (bulkSelectionMode !== 'selecting') return base;
+    return {
+      ...base,
+      rowSelection: {
+        mode: 'multiRow',
+        checkboxes: true,
+        headerCheckbox: true,
+        enableClickSelection: false,
+      },
+      onSelectionChanged: (e) => {
+        setBulkSelectedCount(e.api.getSelectedRows().length);
+      },
+    };
+  }, [bulkSelectionMode, onDistCell, onDistMasterGridReady, onDistMasterColumnStateEvent]);
   const sellGrid: GridOptions<SelloutRow> = useMemo(
     () => ({ singleClickEdit: true, onCellValueChanged: onSellCell }),
     [onSellCell]
@@ -978,7 +1062,26 @@ function AdminDistributorsPageContent() {
                         ? '/admin/imports?template=distributor_inventory'
                         : undefined
                   }
-                  busy={delDist.isPending || createDist.isPending}
+                  busy={delDist.isPending || createDist.isPending || bulkDeleteBusy}
+                />
+                <BulkSelectionToolbar
+                  mode={bulkSelectionMode}
+                  selectedCount={bulkSelectedCount}
+                  visibleRowCount={visibleRowCount}
+                  onEnterSelectionMode={() => setBulkSelectionMode('selecting')}
+                  onExitSelectionMode={() => setBulkSelectionMode('normal')}
+                  onSelectAllVisible={() => {
+                    if (!distGridApi) return;
+                    distGridApi.forEachNodeAfterFilterAndSort(
+                      (node: { data?: DistributorRow; setSelected: (v: boolean) => void }) => {
+                        if (node.data) node.setSelected(true);
+                      }
+                    );
+                  }}
+                  onDeselectAll={() => distGridApi?.deselectAll()}
+                  onPreviewDangerAction={() => void openDistributorBulkDeletePreview()}
+                  previewDangerDisabled={bulkDeleteBusy}
+                  busy={bulkDeleteBusy}
                 />
               </Stack>
             }
@@ -1521,6 +1624,16 @@ function AdminDistributorsPageContent() {
           ) : null}
         </Box>
       </Drawer>
+      <MasterBulkDeleteImpactDialog
+        open={bulkDeleteOpen}
+        busy={bulkDeleteBusy}
+        preview={bulkDeletePreview}
+        entityLabel="distributors"
+        impactAcknowledged={bulkDeleteAck}
+        onImpactAcknowledgedChange={setBulkDeleteAck}
+        onClose={closeDistributorBulkDeleteDialog}
+        onConfirm={() => void confirmDistributorBulkDelete()}
+      />
     </>
   );
 }

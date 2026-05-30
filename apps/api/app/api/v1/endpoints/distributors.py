@@ -15,8 +15,13 @@ from app.services.distributor_usage import (
     delete_distributor_children,
     distributor_hard_reference_breakdown,
 )
+from app.services.master_entity_bulk_delete import confirm_master_bulk_delete, preview_master_bulk_delete
 
 router = APIRouter()
+
+
+class MasterBulkIdsBody(BaseModel):
+    entity_ids: list[int] = Field(default_factory=list, max_length=200)
 
 ALLOWED_DISTRIBUTOR_LOCATION_TYPES = {"hq", "branch", "warehouse", "office", "store", "other"}
 ALLOWED_DISTRIBUTOR_CONTACT_ROLES = {"general", "executive", "sales", "operations", "finance", "support", "other"}
@@ -88,6 +93,46 @@ def _linkage_status(
     if linked_rows < total_rows:
         return "partial"
     return "healthy"
+
+
+@router.post("/bulk-delete-preview")
+async def post_distributors_bulk_delete_preview(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+    if not body.entity_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid distributor id."},
+        )
+    return await preview_master_bulk_delete(db, "distributors", body.entity_ids)
+
+
+@router.post("/bulk-delete-confirm")
+async def post_distributors_bulk_delete_confirm(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+    if not body.entity_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid distributor id."},
+        )
+    try:
+        return await confirm_master_bulk_delete(db, "distributors", body.entity_ids)
+    except ValueError as exc:
+        code = str(exc)
+        if code == "not_all_entities_found":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": code,
+                    "message": "One or more distributor ids no longer exist; refresh the list and try again.",
+                },
+            ) from None
+        if code == "entities_still_blocked":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": code,
+                    "message": "No selected distributors can be deleted; all are still referenced.",
+                },
+            ) from None
+        raise
 
 
 @router.get("")

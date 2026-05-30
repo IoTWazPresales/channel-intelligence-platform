@@ -6,15 +6,18 @@ from typing import Any, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.dimensions import DimCustomer, DimProduct
+from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct, DimRegion
+from app.services.channel_usage import channel_hard_reference_breakdown
 from app.services.customer_usage import (
     cleanup_soft_customer_references,
     customer_hard_reference_breakdown,
     delete_customer_children,
 )
+from app.services.distributor_usage import delete_distributor_children, distributor_hard_reference_breakdown
 from app.services.product_usage import cleanup_soft_product_references, product_hard_reference_breakdown
+from app.services.region_usage import region_hard_reference_breakdown
 
-MasterEntityKind = Literal["products", "customers"]
+MasterEntityKind = Literal["products", "customers", "channels", "regions", "distributors"]
 MAX_BULK_IDS = 200
 
 
@@ -50,10 +53,46 @@ async def _preview_one(
             "references": refs,
             "blocked": len(refs) > 0,
         }
-    row = await db.get(DimCustomer, entity_id)
+    if kind == "customers":
+        row = await db.get(DimCustomer, entity_id)
+        if not row:
+            return {"id": entity_id, "missing": True, "label": None, "references": [], "blocked": False}
+        refs = await customer_hard_reference_breakdown(db, entity_id)
+        return {
+            "id": entity_id,
+            "missing": False,
+            "label": row.code,
+            "references": refs,
+            "blocked": len(refs) > 0,
+        }
+    if kind == "channels":
+        row = await db.get(DimChannel, entity_id)
+        if not row:
+            return {"id": entity_id, "missing": True, "label": None, "references": [], "blocked": False}
+        refs = await channel_hard_reference_breakdown(db, entity_id)
+        return {
+            "id": entity_id,
+            "missing": False,
+            "label": row.code,
+            "references": refs,
+            "blocked": len(refs) > 0,
+        }
+    if kind == "regions":
+        row = await db.get(DimRegion, entity_id)
+        if not row:
+            return {"id": entity_id, "missing": True, "label": None, "references": [], "blocked": False}
+        refs = await region_hard_reference_breakdown(db, entity_id)
+        return {
+            "id": entity_id,
+            "missing": False,
+            "label": row.code,
+            "references": refs,
+            "blocked": len(refs) > 0,
+        }
+    row = await db.get(DimDistributor, entity_id)
     if not row:
         return {"id": entity_id, "missing": True, "label": None, "references": [], "blocked": False}
-    refs = await customer_hard_reference_breakdown(db, entity_id)
+    refs = await distributor_hard_reference_breakdown(db, entity_id)
     return {
         "id": entity_id,
         "missing": False,
@@ -102,12 +141,28 @@ async def confirm_master_bulk_delete(
                 continue
             await cleanup_soft_product_references(db, eid)
             await db.delete(row)
-        else:
+        elif kind == "customers":
             row = await db.get(DimCustomer, eid)
             if not row:
                 continue
             await cleanup_soft_customer_references(db, eid)
             await delete_customer_children(db, eid)
+            await db.delete(row)
+        elif kind == "channels":
+            row = await db.get(DimChannel, eid)
+            if not row:
+                continue
+            await db.delete(row)
+        elif kind == "regions":
+            row = await db.get(DimRegion, eid)
+            if not row:
+                continue
+            await db.delete(row)
+        else:
+            row = await db.get(DimDistributor, eid)
+            if not row:
+                continue
+            await delete_distributor_children(db, eid)
             await db.delete(row)
         deleted_ids.append(eid)
     await db.commit()

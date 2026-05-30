@@ -1,10 +1,17 @@
 # Channel Intelligence Platform — Current Context
 
 ## Branch
-`feat/master-delete-reference-checks-bulk`
+`main` (merged `feat/master-delete-reference-checks-bulk`)
 
 ## Head commit
-`fac1462` on `origin/feat/master-delete-reference-checks-bulk` — master delete reference checks + customers/products bulk delete
+`d7e594c` on `main` — channels/regions admin grids, distributor bulk delete, premium nav
+
+### May 29, 2026 — Master data admin grids, bulk delete, premium nav
+- **Merge:** `feat/master-delete-reference-checks-bulk` → `main` (reference-check delete + customers/products bulk delete).
+- **Channels & Regions:** `GET/DELETE` + bulk preview/confirm on `catalog.py`; admin page `/admin/channels-regions` with `CatalogDimensionGridPanel` (row delete 409 alerts, `BulkSelectionToolbar`, `MasterBulkDeleteImpactDialog`).
+- **Distributors:** bulk preview/confirm API + `BulkSelectionToolbar` on distributor master grid (mirrors customers/products).
+- **Nav (shell only):** `navConfig.ts` + `AppShell.tsx` — grouped IA (Overview → Admin), collapsible groups, icon rail + flyout when collapsed, `cip.shell.nav.collapsed.v1` + `cip.shell.nav.groupExpanded.v1` in localStorage. No route/page file changes except new `channels-regions` page.
+- **Tests:** `test_master_entity_bulk_delete.py` extended for channels/regions/distributors bulk preview routes.
 
 ### May 30, 2026 — Master delete reference checks + bulk delete
 - **Reference-check delete** (mirrors `product_usage.py`): `customer_usage`, `distributor_usage`, `channel_usage`, `region_usage`, `customer_location_usage` + structured 409 + GET refs on API.

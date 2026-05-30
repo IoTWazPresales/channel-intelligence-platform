@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,9 +7,88 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.models.dimensions import DimChannel, DimRegion
 from app.services.channel_usage import channel_hard_reference_breakdown
+from app.services.master_entity_bulk_delete import confirm_master_bulk_delete, preview_master_bulk_delete
 from app.services.region_usage import region_hard_reference_breakdown
 
 router = APIRouter()
+
+
+class MasterBulkIdsBody(BaseModel):
+    entity_ids: list[int] = Field(default_factory=list, max_length=200)
+
+
+@router.post("/channels/bulk-delete-preview")
+async def post_channels_bulk_delete_preview(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+    if not body.entity_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid channel id."},
+        )
+    return await preview_master_bulk_delete(db, "channels", body.entity_ids)
+
+
+@router.post("/channels/bulk-delete-confirm")
+async def post_channels_bulk_delete_confirm(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+    if not body.entity_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid channel id."},
+        )
+    try:
+        return await confirm_master_bulk_delete(db, "channels", body.entity_ids)
+    except ValueError as exc:
+        code = str(exc)
+        if code == "not_all_entities_found":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": code,
+                    "message": "One or more channel ids no longer exist; refresh the list and try again.",
+                },
+            ) from None
+        if code == "entities_still_blocked":
+            raise HTTPException(
+                status_code=409,
+                detail={"error": code, "message": "No selected channels can be deleted; all are still referenced."},
+            ) from None
+        raise
+
+
+@router.post("/regions/bulk-delete-preview")
+async def post_regions_bulk_delete_preview(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+    if not body.entity_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid region id."},
+        )
+    return await preview_master_bulk_delete(db, "regions", body.entity_ids)
+
+
+@router.post("/regions/bulk-delete-confirm")
+async def post_regions_bulk_delete_confirm(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+    if not body.entity_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid region id."},
+        )
+    try:
+        return await confirm_master_bulk_delete(db, "regions", body.entity_ids)
+    except ValueError as exc:
+        code = str(exc)
+        if code == "not_all_entities_found":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": code,
+                    "message": "One or more region ids no longer exist; refresh the list and try again.",
+                },
+            ) from None
+        if code == "entities_still_blocked":
+            raise HTTPException(
+                status_code=409,
+                detail={"error": code, "message": "No selected regions can be deleted; all are still referenced."},
+            ) from None
+        raise
 
 
 @router.get("/channels")
