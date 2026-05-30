@@ -4,7 +4,7 @@
 `main` (merged `feat/master-delete-reference-checks-bulk`)
 
 ## Head commit
-`d7e594c` on `main` — channels/regions admin grids, distributor bulk delete, premium nav
+`448ee1d` on `main` — channels/regions admin grids, distributor bulk delete, premium nav
 
 ### May 29, 2026 — Master data admin grids, bulk delete, premium nav
 - **Merge:** `feat/master-delete-reference-checks-bulk` → `main` (reference-check delete + customers/products bulk delete).
