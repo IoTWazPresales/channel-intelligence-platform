@@ -37,13 +37,18 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Suspense } from 'react';
 
+import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
+import {
+  MasterBulkDeleteImpactDialog,
+  type MasterBulkDeletePreview,
+} from '@/components/bulkTable/MasterBulkDeleteImpactDialog';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { ProductSkuEconomicsPanel } from '@/features/admin/ProductSkuEconomicsPanel';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
-import { apiDelete, apiDeleteJson, apiGet, apiPatch, apiPost, HttpConflictError } from '@/lib/api';
+import { apiDelete, apiDeleteJson, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 const DSI_REFERENCE_LABELS = new Set(['Distributor inventory', 'Sell-out']);
@@ -228,6 +233,13 @@ function AdminProductsPageContent() {
   const [blockedDeleteProductId, setBlockedDeleteProductId] = useState<number | null>(null);
   const [dsiConfirmOpen, setDsiConfirmOpen] = useState(false);
   const [dsiConfirmText, setDsiConfirmText] = useState('');
+  const [bulkSelectionMode, setBulkSelectionMode] = useState<BulkTableSelectionMode>('normal');
+  const [bulkSelectedCount, setBulkSelectedCount] = useState(0);
+  const [visibleRowCount, setVisibleRowCount] = useState(0);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeletePreview, setBulkDeletePreview] = useState<MasterBulkDeletePreview | null>(null);
+  const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
+  const [bulkDeleteAck, setBulkDeleteAck] = useState(false);
 
   const page = Number(searchParams.get('page') || '1') || 1;
   const pageSize = Number(searchParams.get('page_size') || `${DEFAULT_PAGE_SIZE}`) || DEFAULT_PAGE_SIZE;
@@ -623,19 +635,93 @@ function AdminProductsPageContent() {
     [persistGridState, syncColumnVisibility]
   );
 
-  const gridOptions: GridOptions<ProductRow> = useMemo(
-    () => ({
+  useEffect(() => {
+    if (bulkSelectionMode !== 'selecting') {
+      gridApi?.deselectAll();
+      setBulkSelectedCount(0);
+    }
+  }, [bulkSelectionMode, gridApi]);
+
+  useEffect(() => {
+    setVisibleRowCount((products?.items ?? []).length);
+  }, [products?.items]);
+
+  const openProductBulkDeletePreview = useCallback(async () => {
+    if (!gridApi) return;
+    const ids = gridApi.getSelectedRows().map((r: ProductRow) => r.id);
+    if (!ids.length) return;
+    setBulkDeleteBusy(true);
+    setBulkDeleteAck(false);
+    try {
+      const data = await apiPost<MasterBulkDeletePreview>('/api/v1/products/bulk-delete-preview', {
+        entity_ids: ids,
+      });
+      setBulkDeletePreview(data);
+      setBulkDeleteOpen(true);
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setBulkDeleteBusy(false);
+    }
+  }, [gridApi]);
+
+  const closeProductBulkDeleteDialog = useCallback(() => {
+    if (bulkDeleteBusy) return;
+    setBulkDeleteOpen(false);
+    setBulkDeletePreview(null);
+  }, [bulkDeleteBusy]);
+
+  const confirmProductBulkDelete = useCallback(async () => {
+    if (!bulkDeletePreview) return;
+    setBulkDeleteBusy(true);
+    try {
+      await apiPost('/api/v1/products/bulk-delete-confirm', { entity_ids: bulkDeletePreview.entity_ids });
+      setBulkDeleteOpen(false);
+      setBulkDeletePreview(null);
+      setBulkSelectionMode('normal');
+      delProduct.reset();
+      setBlockedDeleteProductId(null);
+      await qc.invalidateQueries({ queryKey: ['admin-products'] });
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setBulkDeleteBusy(false);
+    }
+  }, [bulkDeletePreview, delProduct, qc]);
+
+  const gridOptions: GridOptions<ProductRow> = useMemo(() => {
+    const base: GridOptions<ProductRow> = {
       singleClickEdit: true,
       onCellValueChanged,
-      // Column visibility uses the toolbar picker; no Enterprise sidebar.
-      onGridReady,
+      onGridReady: (e) => {
+        onGridReady(e);
+        setVisibleRowCount(e.api.getDisplayedRowCount());
+      },
       onColumnMoved: onColumnStateEvent,
       onColumnVisible: onColumnStateEvent,
       onColumnPinned: onColumnStateEvent,
       onColumnResized: onColumnStateEvent,
-    }),
-    [onCellValueChanged, onGridReady, onColumnStateEvent]
-  );
+      onFilterChanged: (e) => {
+        if (bulkSelectionMode === 'selecting') setVisibleRowCount(e.api.getDisplayedRowCount());
+      },
+      onSortChanged: (e) => {
+        if (bulkSelectionMode === 'selecting') setVisibleRowCount(e.api.getDisplayedRowCount());
+      },
+    };
+    if (bulkSelectionMode !== 'selecting') return base;
+    return {
+      ...base,
+      rowSelection: {
+        mode: 'multiRow',
+        checkboxes: true,
+        headerCheckbox: true,
+        enableClickSelection: false,
+      },
+      onSelectionChanged: (e) => {
+        setBulkSelectedCount(e.api.getSelectedRows().length);
+      },
+    };
+  }, [bulkSelectionMode, onCellValueChanged, onGridReady, onColumnStateEvent]);
   const groupedColumnPickerBlocks = useMemo((): { label: string; options: { id: string; label: string }[] }[] => {
     const query = columnSearch.trim().toLowerCase();
     const blocks: { label: string; options: { id: string; label: string }[] }[] = STATIC_PRODUCT_COLUMN_GROUPS.map(
@@ -861,7 +947,24 @@ function AdminProductsPageContent() {
         <ModuleGridToolbar
           onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-products'] })}
           sx={{ mb: 0 }}
-          busy={delProduct.isPending}
+          busy={delProduct.isPending || bulkDeleteBusy}
+        />
+        <BulkSelectionToolbar
+          mode={bulkSelectionMode}
+          selectedCount={bulkSelectedCount}
+          visibleRowCount={visibleRowCount}
+          onEnterSelectionMode={() => setBulkSelectionMode('selecting')}
+          onExitSelectionMode={() => setBulkSelectionMode('normal')}
+          onSelectAllVisible={() => {
+            if (!gridApi) return;
+            gridApi.forEachNodeAfterFilterAndSort((node: { data?: ProductRow; setSelected: (v: boolean) => void }) => {
+              if (node.data) node.setSelected(true);
+            });
+          }}
+          onDeselectAll={() => gridApi?.deselectAll()}
+          onPreviewDangerAction={() => void openProductBulkDeletePreview()}
+          previewDangerDisabled={bulkDeleteBusy}
+          busy={bulkDeleteBusy}
         />
       </Stack>
       <Paper sx={{ p: 2, mb: 2 }}>
@@ -1038,7 +1141,13 @@ function AdminProductsPageContent() {
             secondary: { label: 'Data & imports', href: '/admin/imports' },
           }}
         >
-          <EnterpriseDataGrid rowData={rows} columnDefs={colDefs} gridOptions={gridOptions} height={520} />
+          <EnterpriseDataGrid
+            key={bulkSelectionMode === 'selecting' ? 'products-bulk' : 'products-normal'}
+            rowData={rows}
+            columnDefs={colDefs}
+            gridOptions={gridOptions}
+            height={520}
+          />
           <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center">
             <Button disabled={page <= 1} onClick={() => setParamState({ page: String(page - 1) })}>
               Prev
@@ -1272,6 +1381,16 @@ function AdminProductsPageContent() {
           )}
         </Box>
       </Drawer>
+      <MasterBulkDeleteImpactDialog
+        open={bulkDeleteOpen}
+        busy={bulkDeleteBusy}
+        preview={bulkDeletePreview}
+        entityLabel="products"
+        impactAcknowledged={bulkDeleteAck}
+        onImpactAcknowledgedChange={setBulkDeleteAck}
+        onClose={closeProductBulkDeleteDialog}
+        onConfirm={() => void confirmProductBulkDelete()}
+      />
     </>
   );
 }

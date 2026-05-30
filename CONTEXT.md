@@ -1,10 +1,20 @@
 # Channel Intelligence Platform — Current Context
 
 ## Branch
-`main`
+`feat/master-delete-reference-checks-bulk`
 
 ## Head commit
-`c4a8cf9` on origin — NullPool / Supabase async pooler; local uncommitted: dev scripts + PM stale validate + imports UX
+(pending push) — master delete reference checks + customers/products bulk delete
+
+## Alembic Head
+`20260518_0045` — unchanged (no migrations in this work)
+
+### May 30, 2026 — Master delete reference checks + bulk delete
+- **Reference-check delete** (mirrors `product_usage.py`): `customer_usage`, `distributor_usage`, `channel_usage`, `region_usage`, `customer_location_usage` + structured 409 + GET refs on API.
+- **UI:** Customers + Products admin grids: row-delete conflict alerts; Distributors row-delete alert; customer location delete alert in drawer.
+- **Bulk delete:** `BulkSelectionToolbar` + `MasterBulkDeleteImpactDialog` on **Admin → Customers** and **Admin → Products**; `POST …/bulk-delete-preview` and `…/bulk-delete-confirm` (skips blocked rows, deletes deletable only).
+- **Catalog API:** `DELETE /catalog/channels/{id}`, `DELETE /catalog/regions/{id}` with reference breakdown (no dedicated channel/region admin grid yet).
+- **Tests:** `test_customers_delete.py`, `test_master_entity_bulk_delete.py`, `MasterBulkDeleteImpactDialog.test.tsx` (+ existing `test_products_delete.py`).
 
 ## Alembic Head
 `20260518_0045` — Customer sell-through Phase 0 (`fact_customer_sellthrough`, staging, `customer_report_config`, template seed). Prior: `0043` `fact_dsi_forecast`, `0042` `fact_customer_velocity`. Smoke: **`cip_alembic_smoke`** at `0045`.

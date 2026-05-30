@@ -36,13 +36,18 @@ import type {
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
+import {
+  MasterBulkDeleteImpactDialog,
+  type MasterBulkDeletePreview,
+} from '@/components/bulkTable/MasterBulkDeleteImpactDialog';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { CustomerCommercialTermsPanel } from '@/features/admin/CustomerCommercialTermsPanel';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
-import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 type CustomerRow = {
@@ -258,6 +263,13 @@ function AdminCustomersPageContent() {
   const [editingLocationId, setEditingLocationId] = useState<number | null>(null);
   const [editingContactId, setEditingContactId] = useState<number | null>(null);
   const [gridApi, setGridApi] = useState<any | null>(null);
+  const [bulkSelectionMode, setBulkSelectionMode] = useState<BulkTableSelectionMode>('normal');
+  const [bulkSelectedCount, setBulkSelectedCount] = useState(0);
+  const [visibleRowCount, setVisibleRowCount] = useState(0);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeletePreview, setBulkDeletePreview] = useState<MasterBulkDeletePreview | null>(null);
+  const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
+  const [bulkDeleteAck, setBulkDeleteAck] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState('');
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
@@ -821,19 +833,92 @@ function AdminCustomersPageContent() {
     [gridApi, persistGridState]
   );
 
-  const gridOptions: GridOptions<CustomerRow> = useMemo(
-    () => ({
+  useEffect(() => {
+    if (bulkSelectionMode !== 'selecting') {
+      gridApi?.deselectAll();
+      setBulkSelectedCount(0);
+    }
+  }, [bulkSelectionMode, gridApi]);
+
+  useEffect(() => {
+    setVisibleRowCount((customers?.items ?? []).length);
+  }, [customers?.items]);
+
+  const openCustomerBulkDeletePreview = useCallback(async () => {
+    if (!gridApi) return;
+    const ids = gridApi.getSelectedRows().map((r: CustomerRow) => r.id);
+    if (!ids.length) return;
+    setBulkDeleteBusy(true);
+    setBulkDeleteAck(false);
+    try {
+      const data = await apiPost<MasterBulkDeletePreview>('/api/v1/customers/bulk-delete-preview', {
+        entity_ids: ids,
+      });
+      setBulkDeletePreview(data);
+      setBulkDeleteOpen(true);
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setBulkDeleteBusy(false);
+    }
+  }, [gridApi]);
+
+  const closeCustomerBulkDeleteDialog = useCallback(() => {
+    if (bulkDeleteBusy) return;
+    setBulkDeleteOpen(false);
+    setBulkDeletePreview(null);
+  }, [bulkDeleteBusy]);
+
+  const confirmCustomerBulkDelete = useCallback(async () => {
+    if (!bulkDeletePreview) return;
+    setBulkDeleteBusy(true);
+    try {
+      await apiPost('/api/v1/customers/bulk-delete-confirm', { entity_ids: bulkDeletePreview.entity_ids });
+      setBulkDeleteOpen(false);
+      setBulkDeletePreview(null);
+      setBulkSelectionMode('normal');
+      delCustomer.reset();
+      await qc.invalidateQueries({ queryKey: ['admin-customers'] });
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setBulkDeleteBusy(false);
+    }
+  }, [bulkDeletePreview, delCustomer, qc]);
+
+  const gridOptions: GridOptions<CustomerRow> = useMemo(() => {
+    const base: GridOptions<CustomerRow> = {
       singleClickEdit: true,
       onCellValueChanged,
-      // Column visibility uses the toolbar picker (Product Master pattern); no Enterprise sidebar.
-      onGridReady,
+      onGridReady: (e) => {
+        onGridReady(e);
+        setVisibleRowCount(e.api.getDisplayedRowCount());
+      },
       onColumnMoved: onColumnStateEvent,
       onColumnVisible: onColumnStateEvent,
       onColumnPinned: onColumnStateEvent,
       onColumnResized: onColumnStateEvent,
-    }),
-    [onCellValueChanged, onGridReady, onColumnStateEvent]
-  );
+      onFilterChanged: (e) => {
+        if (bulkSelectionMode === 'selecting') setVisibleRowCount(e.api.getDisplayedRowCount());
+      },
+      onSortChanged: (e) => {
+        if (bulkSelectionMode === 'selecting') setVisibleRowCount(e.api.getDisplayedRowCount());
+      },
+    };
+    if (bulkSelectionMode !== 'selecting') return base;
+    return {
+      ...base,
+      rowSelection: {
+        mode: 'multiRow',
+        checkboxes: true,
+        headerCheckbox: true,
+        enableClickSelection: false,
+      },
+      onSelectionChanged: (e) => {
+        setBulkSelectedCount(e.api.getSelectedRows().length);
+      },
+    };
+  }, [bulkSelectionMode, onCellValueChanged, onGridReady, onColumnStateEvent]);
 
   const rows = customers?.items ?? [];
   const total = customers?.total ?? 0;
@@ -846,6 +931,26 @@ function AdminCustomersPageContent() {
         Customer account master is governed here. For bulk updates use Data & imports; use this table for operational
         maintenance, filters, and classification edits.
       </Alert>
+      {delCustomer.isError ? (
+        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => delCustomer.reset()}>
+          {HttpConflictError.is(delCustomer.error) ? (
+            <Stack spacing={1}>
+              <Typography variant="body2">{delCustomer.error.message}</Typography>
+              {delCustomer.error.references.length > 0 ? (
+                <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                  {delCustomer.error.references.map((r) => (
+                    <Typography key={`${r.label}-${r.count}`} component="li" variant="body2">
+                      {r.label} ({r.count})
+                    </Typography>
+                  ))}
+                </Box>
+              ) : null}
+            </Stack>
+          ) : (
+            <Typography variant="body2">{(delCustomer.error as Error).message}</Typography>
+          )}
+        </Alert>
+      ) : null}
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
         <Button
           variant="contained"
@@ -892,7 +997,24 @@ function AdminCustomersPageContent() {
         <ModuleGridToolbar
           onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-customers'] })}
           sx={{ mb: 0 }}
-          busy={delCustomer.isPending}
+          busy={delCustomer.isPending || bulkDeleteBusy}
+        />
+        <BulkSelectionToolbar
+          mode={bulkSelectionMode}
+          selectedCount={bulkSelectedCount}
+          visibleRowCount={visibleRowCount}
+          onEnterSelectionMode={() => setBulkSelectionMode('selecting')}
+          onExitSelectionMode={() => setBulkSelectionMode('normal')}
+          onSelectAllVisible={() => {
+            if (!gridApi) return;
+            gridApi.forEachNodeAfterFilterAndSort((node: { data?: CustomerRow; setSelected: (v: boolean) => void }) => {
+              if (node.data) node.setSelected(true);
+            });
+          }}
+          onDeselectAll={() => gridApi?.deselectAll()}
+          onPreviewDangerAction={() => void openCustomerBulkDeletePreview()}
+          previewDangerDisabled={bulkDeleteBusy}
+          busy={bulkDeleteBusy}
         />
       </Stack>
       <Paper sx={{ p: 2, mb: 2 }}>
@@ -1083,7 +1205,13 @@ function AdminCustomersPageContent() {
             secondary: { label: 'Import customer master', href: '/admin/imports?template=customer_master' },
           }}
         >
-          <EnterpriseDataGrid rowData={rows} columnDefs={colDefs} gridOptions={gridOptions} height={520} />
+          <EnterpriseDataGrid
+            key={bulkSelectionMode === 'selecting' ? 'customers-bulk' : 'customers-normal'}
+            rowData={rows}
+            columnDefs={colDefs}
+            gridOptions={gridOptions}
+            height={520}
+          />
           <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center">
             <Button disabled={page <= 1} onClick={() => setParamState({ page: String(page - 1) })}>
               Prev
@@ -1410,6 +1538,22 @@ function AdminCustomersPageContent() {
               <Typography variant="subtitle2" sx={{ pt: 1 }}>
                 Locations
               </Typography>
+              {deleteLocation.isError ? (
+                <Alert severity="warning" sx={{ mb: 1 }} onClose={() => deleteLocation.reset()}>
+                  {HttpConflictError.is(deleteLocation.error) ? (
+                    <Stack spacing={0.5}>
+                      <Typography variant="body2">{deleteLocation.error.message}</Typography>
+                      {deleteLocation.error.references.map((r) => (
+                        <Typography key={`${r.label}-${r.count}`} variant="caption" component="div">
+                          {r.label} ({r.count})
+                        </Typography>
+                      ))}
+                    </Stack>
+                  ) : (
+                    <Typography variant="body2">{(deleteLocation.error as Error).message}</Typography>
+                  )}
+                </Alert>
+              ) : null}
               {locationsLoading ? <Typography variant="body2">Loading locations…</Typography> : null}
               {(locations ?? []).map((loc) => (
                 <Paper key={loc.id} variant="outlined" sx={{ p: 1 }}>
@@ -1651,6 +1795,16 @@ function AdminCustomersPageContent() {
           )}
         </Box>
       </Drawer>
+      <MasterBulkDeleteImpactDialog
+        open={bulkDeleteOpen}
+        busy={bulkDeleteBusy}
+        preview={bulkDeletePreview}
+        entityLabel="customers"
+        impactAcknowledged={bulkDeleteAck}
+        onImpactAcknowledgedChange={setBulkDeleteAck}
+        onClose={closeCustomerBulkDeleteDialog}
+        onConfirm={() => void confirmCustomerBulkDelete()}
+      />
     </>
   );
 }

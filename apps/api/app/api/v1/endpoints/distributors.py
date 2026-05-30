@@ -11,6 +11,10 @@ from app.models.dimensions import DimDistributor, DistributorContact, Distributo
 from app.models.facts import FactInboundShipment, FactSalesSellout
 from app.models.import_distributor_si import DistributorSourceTokenAlias
 from app.models.ingestion import ImportJob
+from app.services.distributor_usage import (
+    delete_distributor_children,
+    distributor_hard_reference_breakdown,
+)
 
 router = APIRouter()
 
@@ -398,19 +402,63 @@ async def patch_distributor(
     }
 
 
+async def _distributor_references_bundle(db: AsyncSession, distributor_id: int) -> dict:
+    row = await db.get(DimDistributor, distributor_id)
+    if not row:
+        raise HTTPException(
+            status_code=404, detail={"error": "distributor_not_found", "distributor_id": distributor_id}
+        )
+    refs = await distributor_hard_reference_breakdown(db, distributor_id)
+    return {"distributor_code": row.code, "references": refs, "blocked": len(refs) > 0}
+
+
+@router.get("/references")
+async def get_distributor_references_by_query(
+    distributor_id: int = Query(..., ge=1, description="dim_distributor.id"),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _distributor_references_bundle(db, distributor_id)
+
+
+@router.get("/id/{distributor_id}/refs")
+async def get_distributor_refs_for_delete_ux(distributor_id: int, db: AsyncSession = Depends(get_db)):
+    return await _distributor_references_bundle(db, distributor_id)
+
+
+@router.get("/{distributor_id}/references")
+async def get_distributor_references(distributor_id: int, db: AsyncSession = Depends(get_db)):
+    return await _distributor_references_bundle(db, distributor_id)
+
+
 @router.delete("/{distributor_id}", status_code=204)
 async def delete_distributor(distributor_id: int, db: AsyncSession = Depends(get_db)):
     row = await db.get(DimDistributor, distributor_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
+    refs = await distributor_hard_reference_breakdown(db, distributor_id)
+    if refs:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Distributor is still referenced; remove or clear dependent rows first.",
+                "references": refs,
+            },
+        )
+    await delete_distributor_children(db, distributor_id)
     await db.delete(row)
     try:
         await db.commit()
     except IntegrityError:
         await db.rollback()
+        refs2 = await distributor_hard_reference_breakdown(db, distributor_id)
         raise HTTPException(
             status_code=409,
-            detail="Distributor is still referenced by facts or other rows; remove those first.",
+            detail={
+                "message": "Distributor could not be deleted (database constraint). Dependent data may have changed.",
+                "references": refs2
+                if refs2
+                else [{"label": "Unknown referencing rows (try refresh)", "count": 1}],
+            },
         ) from None
     return Response(status_code=204)
 

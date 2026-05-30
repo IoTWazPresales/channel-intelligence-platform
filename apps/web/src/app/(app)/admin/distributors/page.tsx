@@ -43,7 +43,7 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { DistributorCommercialTermsPanel } from '@/features/admin/DistributorCommercialTermsPanel';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
-import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost, HttpConflictError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 type DistributorRow = {
@@ -780,6 +780,26 @@ function AdminDistributorsPageContent() {
         Maintain distributor master records first, then monitor linkage health across sell-out and inbound feeds.
         Transitional fact-mapping tabs remain available below while import and routing maturity catches up.
       </Alert>
+      {delDist.isError ? (
+        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => delDist.reset()}>
+          {HttpConflictError.is(delDist.error) ? (
+            <Stack spacing={1}>
+              <Typography variant="body2">{delDist.error.message}</Typography>
+              {delDist.error.references.length > 0 ? (
+                <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                  {delDist.error.references.map((r) => (
+                    <Typography key={`${r.label}-${r.count}`} component="li" variant="body2">
+                      {r.label} ({r.count})
+                    </Typography>
+                  ))}
+                </Box>
+              ) : null}
+            </Stack>
+          ) : (
+            <Typography variant="body2">{(delDist.error as Error).message}</Typography>
+          )}
+        </Alert>
+      ) : null}
       <Paper sx={{ px: 2, pt: 1 }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)}>
           <Tab label="Distributor master" />

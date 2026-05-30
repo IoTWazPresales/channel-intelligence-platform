@@ -19,8 +19,19 @@ from app.models.dimensions import (
 )
 from app.models.import_distributor_si import CustomerSourceTokenAlias
 from app.models.ingestion import ImportJob
+from app.services.customer_usage import (
+    cleanup_soft_customer_references,
+    customer_hard_reference_breakdown,
+    delete_customer_children,
+)
+from app.services.customer_location_usage import customer_location_hard_reference_breakdown
+from app.services.master_entity_bulk_delete import confirm_master_bulk_delete, preview_master_bulk_delete
 
 router = APIRouter()
+
+
+class MasterBulkIdsBody(BaseModel):
+    entity_ids: list[int] = Field(default_factory=list, max_length=200)
 
 ALLOWED_CUSTOMER_STATUS = {"active", "inactive", "onboarding", "blocked", "unverified", "needs_review"}
 ALLOWED_PARTNER_TIER = {"strategic", "tier_1", "tier_2", "tier_3", "core", "long_tail", "unmanaged"}
@@ -637,13 +648,101 @@ async def patch_customer_location(
     return _location_to_api(row, region_code)
 
 
+async def _customer_references_bundle(db: AsyncSession, customer_id: int) -> dict:
+    row = await db.get(DimCustomer, customer_id)
+    if not row:
+        raise HTTPException(status_code=404, detail={"error": "customer_not_found", "customer_id": customer_id})
+    refs = await customer_hard_reference_breakdown(db, customer_id)
+    return {"customer_code": row.code, "references": refs, "blocked": len(refs) > 0}
+
+
+@router.get("/references")
+async def get_customer_references_by_query(
+    customer_id: int = Query(..., ge=1, description="dim_customer.id"),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _customer_references_bundle(db, customer_id)
+
+
+@router.get("/id/{customer_id}/refs")
+async def get_customer_refs_for_delete_ux(customer_id: int, db: AsyncSession = Depends(get_db)):
+    return await _customer_references_bundle(db, customer_id)
+
+
+@router.get("/{customer_id}/references")
+async def get_customer_references(customer_id: int, db: AsyncSession = Depends(get_db)):
+    return await _customer_references_bundle(db, customer_id)
+
+
+@router.post("/bulk-delete-preview")
+async def post_customers_bulk_delete_preview(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+    if not body.entity_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid customer id."},
+        )
+    return await preview_master_bulk_delete(db, "customers", body.entity_ids)
+
+
+@router.post("/bulk-delete-confirm")
+async def post_customers_bulk_delete_confirm(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+    if not body.entity_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid customer id."},
+        )
+    try:
+        return await confirm_master_bulk_delete(db, "customers", body.entity_ids)
+    except ValueError as exc:
+        code = str(exc)
+        if code == "not_all_entities_found":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": code,
+                    "message": "One or more customer ids no longer exist; refresh the list and try again.",
+                },
+            ) from None
+        if code == "entities_still_blocked":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": code,
+                    "message": "No selected customers can be deleted; all are still referenced.",
+                },
+            ) from None
+        raise
+
+
 @router.delete("/{customer_id}/locations/{location_id}", status_code=204)
 async def delete_customer_location(customer_id: int, location_id: int, db: AsyncSession = Depends(get_db)):
     row = await db.get(CustomerLocation, location_id)
     if not row or row.customer_id != customer_id:
         raise HTTPException(status_code=404, detail="Not found")
+    refs = await customer_location_hard_reference_breakdown(db, location_id)
+    if refs:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Customer location is still referenced; remove dependent rows first.",
+                "references": refs,
+            },
+        )
     await db.delete(row)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        refs2 = await customer_location_hard_reference_breakdown(db, location_id)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Customer location could not be deleted (database constraint).",
+                "references": refs2
+                if refs2
+                else [{"label": "Unknown referencing rows (try refresh)", "count": 1}],
+            },
+        ) from None
     return Response(status_code=204)
 
 
@@ -755,23 +854,30 @@ async def delete_customer(customer_id: int, db: AsyncSession = Depends(get_db)):
     row = await db.get(DimCustomer, customer_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
-    locations = (
-        await db.execute(select(CustomerLocation).where(CustomerLocation.customer_id == customer_id))
-    ).scalars().all()
-    for loc in locations:
-        await db.delete(loc)
-    contacts = (
-        await db.execute(select(CustomerContact).where(CustomerContact.customer_id == customer_id))
-    ).scalars().all()
-    for contact in contacts:
-        await db.delete(contact)
+    refs = await customer_hard_reference_breakdown(db, customer_id)
+    if refs:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Customer is still referenced; remove or clear dependent rows first.",
+                "references": refs,
+            },
+        )
+    await cleanup_soft_customer_references(db, customer_id)
+    await delete_customer_children(db, customer_id)
     await db.delete(row)
     try:
         await db.commit()
     except IntegrityError:
         await db.rollback()
+        refs2 = await customer_hard_reference_breakdown(db, customer_id)
         raise HTTPException(
             status_code=409,
-            detail="Customer is still referenced by facts or other rows; remove those first.",
+            detail={
+                "message": "Customer could not be deleted (database constraint). Dependent data may have changed.",
+                "references": refs2
+                if refs2
+                else [{"label": "Unknown referencing rows (try refresh)", "count": 1}],
+            },
         ) from None
     return Response(status_code=204)

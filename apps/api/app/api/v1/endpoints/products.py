@@ -15,9 +15,14 @@ from app.services.product_dsi_maintenance import (
     clear_dsi_facts_for_product,
     dsi_dependency_detail_payload,
 )
+from app.services.master_entity_bulk_delete import confirm_master_bulk_delete, preview_master_bulk_delete
 from app.services.product_usage import cleanup_soft_product_references, product_hard_reference_breakdown
 
 router = APIRouter()
+
+
+class MasterBulkIdsBody(BaseModel):
+    entity_ids: list[int] = Field(default_factory=list, max_length=200)
 
 
 def _compact_specs_preview(
@@ -386,6 +391,46 @@ async def bulk_upsert_products(body: ProductBulkBody, db: AsyncSession = Depends
 async def get_product_references(product_id: int, db: AsyncSession = Depends(get_db)):
     """List user-facing areas that still reference this product (for delete UX)."""
     return await _product_references_bundle(db, product_id)
+
+
+@router.post("/bulk-delete-preview")
+async def post_products_bulk_delete_preview(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+    if not body.entity_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid product id."},
+        )
+    return await preview_master_bulk_delete(db, "products", body.entity_ids)
+
+
+@router.post("/bulk-delete-confirm")
+async def post_products_bulk_delete_confirm(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+    if not body.entity_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid product id."},
+        )
+    try:
+        return await confirm_master_bulk_delete(db, "products", body.entity_ids)
+    except ValueError as exc:
+        code = str(exc)
+        if code == "not_all_entities_found":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": code,
+                    "message": "One or more product ids no longer exist; refresh the list and try again.",
+                },
+            ) from None
+        if code == "entities_still_blocked":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": code,
+                    "message": "No selected products can be deleted; all are still referenced.",
+                },
+            ) from None
+        raise
 
 
 async def _delete_dim_product(product_id: int, db: AsyncSession) -> Response:
