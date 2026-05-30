@@ -29,6 +29,8 @@ def test_score_product_respects_already_in_plan():
         calc_flags=[],
         suggested_srp_local=1000.0,
         has_promo_plan=False,
+        has_budget_request=False,
+        has_buy_plan=False,
     )
     assert row["already_in_plan"] is True
     assert row["opportunity_score"] < 80

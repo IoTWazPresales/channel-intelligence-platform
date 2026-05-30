@@ -1,23 +1,23 @@
 # Commercial Planner — Gap Analysis & Risk Register
 
 **Branch:** `cursor/commercial-planner-program-84b1`  
-**Date:** 2026-05-30  
-**Scope:** Program phase 1 delivery + post-implementation review (testing, risks, gaps vs approved plan)
+**Date:** 2026-05-30 (updated after phase 2 completion)  
+**Scope:** Program phases 1–2 delivery + post-implementation review
 
 ---
 
 ## Executive summary
 
-Phase 1 delivers a **shippable foundation**: feature flag, preview/apply lineup import, deterministic product rankings, intelligent add UI, and suggestion precedence for current lineup cases. The module remains **operationally usable** but **not parity** with DSI/Product Master import maturity, dashboard integration, or full multi-signal intelligence.
+Phases 1–2 deliver a **production-usable** Commercial Planner: feature flag, preview/apply (with async Celery for large files), multi-signal rankings, steward export, dashboard KPI, and in-process ranking snapshots. Remaining gaps are mainly **RBAC**, **durable recommendation store**, and **full monolith router extraction**.
 
 | Area | Status | Gap severity |
 |------|--------|--------------|
 | Plan builder (lines, recalc, economics) | Working (pre-existing) | Low — monolithic UI |
-| Current lineup import | Preview/apply on retry + create-case flows | Medium — no Celery for large files |
-| Intelligence rankings | v1 deterministic + SRP hints | Medium — 500-SKU cap, sparse data |
-| Steward / mapping queue | Case-scoped resolution only | High — no global steward bridge |
+| Current lineup import | Preview/apply + Celery 202 | Low — monitor broker timeouts |
+| Intelligence rankings | Multi-signal + candidate union | Low — empty when no signals |
+| Steward / mapping queue | Case export JSON + case resolution | Medium — no central mappings inbox auto-feed |
 | Feature flag / removability | API + nav | Low |
-| Dashboard / analytics | Not integrated | Medium |
+| Dashboard / analytics | KPI on summary | Low — no per-plan drill-down widget |
 | Security / RBAC | Stub auth | High (platform-wide) |
 
 ---

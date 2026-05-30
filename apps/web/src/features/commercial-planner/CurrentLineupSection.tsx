@@ -1580,6 +1580,12 @@ function RetryParseDialog({
         `/api/v1/commercial-planner/lineup-cases/${targetCase.id}/parse-apply`,
         { method: 'POST', body: fd },
       );
+      if (parseRes.status === 202) {
+        setError(null);
+        onParsed();
+        handleClose();
+        return;
+      }
       if (!parseRes.ok) {
         const errBody = await parseRes.json().catch(() => ({}));
         setError(
@@ -1771,6 +1777,11 @@ function UploadLineupDialog({
         `/api/v1/commercial-planner/lineup-cases/${createdCaseId}/parse-apply`,
         { method: 'POST', body: fd },
       );
+      if (parseRes.status === 202) {
+        onCreated();
+        handleClose();
+        return;
+      }
       if (!parseRes.ok) {
         const errBody = await parseRes.json().catch(() => ({}));
         setError(
@@ -2470,14 +2481,39 @@ export function CurrentLineupSection({
               </Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap">
                 {RESOLUTION_UI_STATUSES.has(activeCase.commercial_status) && (
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => setResolutionCase(activeCase)}
-                    data-testid="lineup-entity-resolution-open"
-                  >
-                    Resolve entities
-                  </Button>
+                  <>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => setResolutionCase(activeCase)}
+                      data-testid="lineup-entity-resolution-open"
+                    >
+                      Resolve entities
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="text"
+                      data-testid="lineup-steward-export"
+                      onClick={() => {
+                        void (async () => {
+                          const data = await apiGet<Record<string, unknown>>(
+                            `/api/v1/commercial-planner/lineup-cases/${activeCase.id}/steward-export`,
+                          );
+                          const blob = new Blob([JSON.stringify(data, null, 2)], {
+                            type: 'application/json',
+                          });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `lineup-case-${activeCase.id}-steward-export.json`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        })();
+                      }}
+                    >
+                      Steward export
+                    </Button>
+                  </>
                 )}
                 <Button size="small" variant="text" onClick={() => setColSelectorOpen(true)} data-testid="lineup-workbench-columns">
                   Workbench columns

@@ -33,7 +33,14 @@ Suggestions (`GET /plans/{id}/suggestions`) also use **current lineup case** lin
 
 ## Phases (delivery)
 
-1. **Done in branch:** flag, preview/apply (retry + create-case), intelligence rankings (+ SRP/promo signals), suggestion precedence, intelligent add UI with suggested SRP
-2. **Next:** Celery parse (`lineup_parse_worker.py` ready), mapping queue bridge, dashboard widgets, rankings catalogue filter
+1. **Phase 1:** flag, preview/apply (retry + create-case), intelligence rankings, suggestion precedence, intelligent add UI
+2. **Phase 2 (complete on branch):**
+   - Celery `commercial_planner.parse_lineup_case` + HTTP 202 for large files; activity feed `lineup_parse_task`
+   - Rankings: candidate product union (sellout, lineup, forecast, pricing, promo, budget, buy plan); customer-scoped forecast
+   - Steward export: `GET …/lineup-cases/{id}/steward-export` + web download
+   - Dashboard KPI: `kpis.commercial_planner` on `/dashboard/summary`
+   - Intelligence snapshots: POST/GET ranking snapshot (in-process audit)
+   - Router modules: `commercial_planner_lineup_routes.py`, `commercial_planner_intelligence_routes.py`, `commercial_planner_auth.py`
+   - Shared readiness: `plan_readiness.py`
 
-See **`docs/COMMERCIAL_PLANNER_GAP_ANALYSIS.md`** for risks, test results, and gap register.
+See **`docs/COMMERCIAL_PLANNER_GAP_ANALYSIS.md`** for residual risks (RBAC, full router monolith split, durable snapshot store).

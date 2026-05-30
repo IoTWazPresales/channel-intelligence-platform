@@ -6,7 +6,7 @@ from typing import Any
 
 import math
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
@@ -16,7 +16,14 @@ from app.models.commercial_planner import (
     CommercialSkuAssumption,
 )
 from app.models.dimensions import DimProduct
-from app.models.facts import FactForecast, FactPricing, FactPromotionPlan, FactSalesSellout
+from app.models.facts import (
+    FactBudgetRequest,
+    FactBuyPlan,
+    FactForecast,
+    FactPricing,
+    FactPromotionPlan,
+    FactSalesSellout,
+)
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob
 from app.services.commercial_planner.calculator import CommercialCalcInputs, compute_line_economics
@@ -173,7 +180,10 @@ def _suggested_srp_local(
     return default
 
 
-async def _forecast_by_product(db: AsyncSession, product_ids: list[int]) -> dict[int, float]:
+async def _forecast_by_product(
+    db: AsyncSession, customer_id: int, product_ids: list[int]
+) -> dict[int, float]:
+    """Latest forecast per product; prefer customer-specific rows over global."""
     if not product_ids:
         return {}
     forecast_sq = (
@@ -181,10 +191,19 @@ async def _forecast_by_product(db: AsyncSession, product_ids: list[int]) -> dict
             FactForecast.product_id,
             FactForecast.forecast_units,
             func.row_number()
-            .over(partition_by=FactForecast.product_id, order_by=FactForecast.period_start.desc())
+            .over(
+                partition_by=FactForecast.product_id,
+                order_by=(
+                    (FactForecast.customer_id == customer_id).desc(),
+                    FactForecast.period_start.desc(),
+                ),
+            )
             .label("rn"),
         )
-        .where(FactForecast.product_id.in_(product_ids))
+        .where(
+            FactForecast.product_id.in_(product_ids),
+            (FactForecast.customer_id == customer_id) | (FactForecast.customer_id.is_(None)),
+        )
         .subquery()
     )
     rows = (
@@ -193,6 +212,160 @@ async def _forecast_by_product(db: AsyncSession, product_ids: list[int]) -> dict
         )
     ).all()
     return {int(r.product_id): float(r.forecast_units) for r in rows}
+
+
+async def _candidate_product_ids(
+    db: AsyncSession,
+    *,
+    plan_id: int,
+    customer_id: int,
+    distributor_id: int,
+    cap: int = 500,
+) -> list[int]:
+    """Union of products with sellout, plan, lineup, forecast, pricing, promo, budget, or buy-plan signals."""
+    ids: set[int] = set(await _plan_product_ids(db, plan_id))
+
+    sellout_ids = (
+        await db.execute(
+            select(FactSalesSellout.product_id)
+            .where(FactSalesSellout.customer_id == customer_id)
+            .distinct()
+        )
+    ).scalars().all()
+    ids.update(int(x) for x in sellout_ids if x is not None)
+
+    lineup_ids = (
+        await db.execute(
+            select(CommercialLineupLine.product_id)
+            .join(CommercialLineupCase, CommercialLineupCase.id == CommercialLineupLine.case_id)
+            .where(
+                CommercialLineupCase.commercial_plan_id == plan_id,
+                CommercialLineupLine.product_id.isnot(None),
+            )
+            .distinct()
+        )
+    ).scalars().all()
+    ids.update(int(x) for x in lineup_ids if x is not None)
+
+    hist_ids = (
+        await db.execute(
+            select(HistoricalLineupImportLine.product_id)
+            .join(
+                HistoricalLineupImportHeader,
+                HistoricalLineupImportHeader.id == HistoricalLineupImportLine.header_id,
+            )
+            .where(
+                HistoricalLineupImportLine.product_id.isnot(None),
+                or_(
+                    HistoricalLineupImportHeader.customer_id == customer_id,
+                    HistoricalLineupImportHeader.customer_id.is_(None),
+                ),
+            )
+            .distinct()
+        )
+    ).scalars().all()
+    ids.update(int(x) for x in hist_ids if x is not None)
+
+    forecast_ids = (
+        await db.execute(
+            select(FactForecast.product_id)
+            .where(
+                (FactForecast.customer_id == customer_id) | (FactForecast.customer_id.is_(None)),
+            )
+            .distinct()
+        )
+    ).scalars().all()
+    ids.update(int(x) for x in forecast_ids if x is not None)
+
+    pricing_ids = (
+        await db.execute(
+            select(FactPricing.product_id)
+            .where(
+                (FactPricing.customer_id == customer_id) | (FactPricing.customer_id.is_(None)),
+            )
+            .distinct()
+        )
+    ).scalars().all()
+    ids.update(int(x) for x in pricing_ids if x is not None)
+
+    promo_ids = (await db.execute(select(FactPromotionPlan.product_id).distinct())).scalars().all()
+    ids.update(int(x) for x in promo_ids if x is not None)
+
+    budget_ids = (
+        await db.execute(
+            select(FactBudgetRequest.linked_product_id)
+            .where(
+                FactBudgetRequest.linked_product_id.isnot(None),
+                or_(
+                    FactBudgetRequest.linked_customer_id == customer_id,
+                    FactBudgetRequest.linked_customer_id.is_(None),
+                ),
+                FactBudgetRequest.status.in_(["draft", "submitted", "under_review", "approved"]),
+            )
+            .distinct()
+        )
+    ).scalars().all()
+    ids.update(int(x) for x in budget_ids if x is not None)
+
+    buy_plan_ids = (
+        await db.execute(
+            select(FactBuyPlan.product_id).where(
+                or_(
+                    FactBuyPlan.distributor_id == distributor_id,
+                    FactBuyPlan.distributor_id.is_(None),
+                )
+            ).distinct()
+        )
+    ).scalars().all()
+    ids.update(int(x) for x in buy_plan_ids if x is not None)
+
+    if not ids:
+        return []
+
+    ordered = list(ids)
+    ordered.sort()
+    return ordered[:cap]
+
+
+async def _budget_request_product_ids(db: AsyncSession, customer_id: int, product_ids: list[int]) -> set[int]:
+    if not product_ids:
+        return set()
+    rows = (
+        await db.execute(
+            select(FactBudgetRequest.linked_product_id)
+            .where(
+                FactBudgetRequest.linked_product_id.in_(product_ids),
+                or_(
+                    FactBudgetRequest.linked_customer_id == customer_id,
+                    FactBudgetRequest.linked_customer_id.is_(None),
+                ),
+                FactBudgetRequest.status.in_(["draft", "submitted", "under_review", "approved"]),
+            )
+            .distinct()
+        )
+    ).scalars().all()
+    return {int(x) for x in rows if x is not None}
+
+
+async def _buy_plan_product_ids(
+    db: AsyncSession, distributor_id: int, product_ids: list[int]
+) -> set[int]:
+    if not product_ids:
+        return set()
+    rows = (
+        await db.execute(
+            select(FactBuyPlan.product_id)
+            .where(
+                FactBuyPlan.product_id.in_(product_ids),
+                or_(
+                    FactBuyPlan.distributor_id == distributor_id,
+                    FactBuyPlan.distributor_id.is_(None),
+                ),
+            )
+            .distinct()
+        )
+    ).scalars().all()
+    return {int(x) for x in rows if x is not None}
 
 
 async def _historical_lineup_qty(
@@ -225,7 +398,10 @@ async def _historical_lineup_qty(
             .where(
                 HistoricalLineupImportHeader.import_job_id == latest_job_id,
                 HistoricalLineupImportLine.product_id.in_(product_ids),
-                HistoricalLineupImportHeader.customer_id == customer_id,
+                or_(
+                    HistoricalLineupImportHeader.customer_id == customer_id,
+                    HistoricalLineupImportHeader.customer_id.is_(None),
+                ),
             )
             .group_by(HistoricalLineupImportLine.product_id)
         )
@@ -278,6 +454,8 @@ def _score_product(
     calc_flags: list[str],
     suggested_srp_local: float,
     has_promo_plan: bool,
+    has_budget_request: bool,
+    has_buy_plan: bool,
 ) -> dict[str, Any]:
     factors: list[dict[str, Any]] = []
     score = 0.0
@@ -316,6 +494,14 @@ def _score_product(
     if has_promo_plan:
         score += 4.0
         factors.append({"signal": "promotion_plan_exists", "value": True, "weight": 4.0})
+
+    if has_budget_request:
+        score += 3.0
+        factors.append({"signal": "budget_request_linked", "value": True, "weight": 3.0})
+
+    if has_buy_plan:
+        score += 3.0
+        factors.append({"signal": "buy_plan_recommendation", "value": True, "weight": 3.0})
 
     tier, tier_reasons = classify_line_economics_trust(calc_flags)
     confidence = "high" if sellout_avg > 0 and tier == "ok" else "medium" if sellout_avg > 0 else "low"
@@ -358,12 +544,22 @@ async def rank_products_for_customer(
     """Rank catalogue products for a customer on a plan (deterministic v1)."""
     limit = max(1, min(limit, 200))
     in_plan = await _plan_product_ids(db, plan_id)
+    candidate_ids = await _candidate_product_ids(
+        db,
+        plan_id=plan_id,
+        customer_id=customer_id,
+        distributor_id=distributor_id,
+    )
+    if not candidate_ids:
+        return []
 
-    products = (await db.execute(select(DimProduct).order_by(DimProduct.sku).limit(500))).scalars().all()
+    products = (
+        await db.execute(select(DimProduct).where(DimProduct.id.in_(candidate_ids)).order_by(DimProduct.sku))
+    ).scalars().all()
     product_ids = [p.id for p in products]
 
     sellout_map = await _sellout_avg_by_product(db, customer_id, product_ids)
-    forecast_map = await _forecast_by_product(db, product_ids)
+    forecast_map = await _forecast_by_product(db, customer_id, product_ids)
     hist_map = await _historical_lineup_qty(db, customer_id, product_ids)
     current_map = await _current_lineup_qty(db, plan_id, product_ids)
     net_price_map = await _net_price_by_product(db, customer_id, product_ids)
@@ -371,6 +567,8 @@ async def rank_products_for_customer(
         db, plan_id=plan_id, customer_id=customer_id, product_ids=product_ids
     )
     promo_ids = await _promo_product_ids(db, product_ids)
+    budget_ids = await _budget_request_product_ids(db, customer_id, product_ids)
+    buy_plan_ids = await _buy_plan_product_ids(db, distributor_id, product_ids)
 
     cterm = (
         await db.execute(select(CommercialCustomerTerm).where(CommercialCustomerTerm.customer_id == customer_id))
@@ -442,6 +640,8 @@ async def rank_products_for_customer(
                 calc_flags=calc_flags,
                 suggested_srp_local=target_srp,
                 has_promo_plan=p.id in promo_ids,
+                has_budget_request=p.id in budget_ids,
+                has_buy_plan=p.id in buy_plan_ids,
             )
         )
 

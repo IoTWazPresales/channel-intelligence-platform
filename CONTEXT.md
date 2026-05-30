@@ -1,7 +1,15 @@
 # Channel Intelligence Platform — Current Context
 
 ## Branch
-`cursor/commercial-planner-program-84b1` (Commercial Planner program phase 1 — complete + gap analysis)
+`cursor/commercial-planner-program-84b1` (Commercial Planner program phases 1–2 complete)
+
+### May 30, 2026 — Commercial Planner program (phases 2 complete)
+- **Celery:** `commercial_planner.parse_lineup_case`; parse-upload/apply returns **202** when file ≥512KB or ≥500 preview rows; activity feed `lineup_parse_task`.
+- **Intelligence:** Candidate product union; customer-scoped `FactForecast`; budget request + buy plan signals; ranking snapshots (in-process POST/GET).
+- **Steward:** `GET …/lineup-cases/{id}/steward-export`; web **Steward export** download on case workbench.
+- **Dashboard:** `kpis.commercial_planner` on `GET /dashboard/summary`; web KPI when flag on.
+- **Modularity:** `commercial_planner_auth.py`, `commercial_planner_lineup_routes.py`, `commercial_planner_intelligence_routes.py`, `plan_readiness.py`, `lineup_parse_api.py`.
+- **Tests:** API 90 CP tests; web 91 CP tests passing.
 
 ### May 30, 2026 — Commercial Planner program (phase 1 finish + QA)
 - **Flag:** `CIP_COMMERCIAL_PLANNER_ENABLED` / `NEXT_PUBLIC_CIP_COMMERCIAL_PLANNER_ENABLED` (default on).

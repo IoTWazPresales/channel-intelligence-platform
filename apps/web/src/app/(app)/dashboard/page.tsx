@@ -7,10 +7,20 @@ import NextLink from 'next/link';
 import { KpiCard } from '@/components/KpiCard';
 import { PageHeader } from '@/components/PageHeader';
 import { apiGet } from '@/lib/api';
+import { isCommercialPlannerEnabled } from '@/features/shell/navConfig';
 import { useUiStore } from '@/stores/uiStore';
 
 type Summary = {
-  kpis: { open_exceptions: number; open_budget_requests: number; inbound_shipments_tracked: number };
+  kpis: {
+    open_exceptions: number;
+    open_budget_requests: number;
+    inbound_shipments_tracked: number;
+    commercial_planner?: {
+      plan_count: number;
+      plans_not_ready: number;
+      plans_with_lines: number;
+    } | null;
+  };
   stock_health: Record<string, number>;
   recommended_actions: { title: string; href: string; reason: string }[];
 };
@@ -64,6 +74,15 @@ export default function DashboardPage() {
                 hint="Not yet received"
               />
             </Box>
+            {isCommercialPlannerEnabled() && data?.kpis.commercial_planner ? (
+              <Box sx={{ flex: 1 }}>
+                <KpiCard
+                  label="Commercial plans not ready"
+                  value={data.kpis.commercial_planner.plans_not_ready}
+                  hint={`${data.kpis.commercial_planner.plan_count} plan(s) scanned — open Commercial planner`}
+                />
+              </Box>
+            ) : null}
           </Stack>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
             <Paper sx={{ p: 2, flex: 1 }}>

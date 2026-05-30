@@ -332,6 +332,8 @@ async def parse_current_lineup_file(
     case_id: int,
     filename: str,
     file_bytes: bytes,
+    *,
+    existing_import_job_id: int | None = None,
 ) -> ParseResult:
     """Parse an uploaded lineup file and write CommercialLineupLine rows.
 
@@ -375,15 +377,25 @@ async def parse_current_lineup_file(
         )
     source_id = source.id
 
-    job = ImportJob(
-        source_id=source_id,
-        template_slug="current_lineup",
-        import_mode="apply",
-        status="running",
-        file_name=filename,
-        started_at=now,
-    )
-    db.add(job)
+    if existing_import_job_id is not None:
+        job = await db.get(ImportJob, existing_import_job_id)
+        if job is None:
+            raise ValueError(f"ImportJob id={existing_import_job_id} not found for lineup parse")
+        job.status = "running"
+        job.file_name = filename
+        job.error_summary = None
+        job.started_at = now
+        job.completed_at = None
+    else:
+        job = ImportJob(
+            source_id=source_id,
+            template_slug="current_lineup",
+            import_mode="apply",
+            status="running",
+            file_name=filename,
+            started_at=now,
+        )
+        db.add(job)
     await db.flush()
 
     try:

@@ -227,6 +227,36 @@ def product_master_validate_task(self, job_id: int) -> int:
     )
 
 
+@celery_app.task(name="commercial_planner.parse_lineup_case", bind=True, ack_late=True)
+def commercial_planner_lineup_parse_task(
+    self,
+    case_id: int,
+    filename: str,
+    file_b64: str,
+    import_job_id: int,
+) -> dict:
+    """Background current lineup parse for large uploads."""
+    from app.services.commercial_planner.lineup_parse_worker import run_lineup_case_parse_job
+
+    celery_id = getattr(getattr(self, "request", None), "id", None)
+    if celery_id == "dev-in-process-thread":
+        DEV_CELERY_LOGGER.warning(
+            "EXECUTION: lineup parse case_id=%s in-process (DEV ONLY).",
+            case_id,
+        )
+    try:
+        return run_lineup_case_parse_job(
+            case_id,
+            filename,
+            file_b64,
+            import_job_id,
+            celery_task_id=str(celery_id) if celery_id else None,
+        )
+    except Exception:
+        logger.exception("lineup parse failed case_id=%s", case_id)
+        raise
+
+
 @celery_app.task(name="imports.product_master_commit", bind=True, ack_late=True)
 def product_master_commit_task(self, job_id: int, confirm_destructive: bool) -> int:
     """Background Product Master apply: must be enqueued via try_enqueue_pm_commit_sync first."""

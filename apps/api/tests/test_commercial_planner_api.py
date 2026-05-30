@@ -16,6 +16,29 @@ def clear_overrides():
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def _mock_lineup_preview_for_parse_upload(monkeypatch):
+    """Parse-upload tests mock apply only; preview must allow apply gate."""
+
+    async def _fake_preview(*_args, **_kwargs):
+        from app.services.commercial_planner.lineup_case_parser import LineupParsePreview
+
+        return LineupParsePreview(
+            total_rows=3,
+            resolved_products=2,
+            unresolved_products=1,
+            unknown_customer_rows=0,
+            unknown_distributor_rows=0,
+            warnings=[],
+            can_apply=True,
+        )
+
+    monkeypatch.setattr(
+        "app.services.commercial_planner.lineup_parse_api.preview_current_lineup_file",
+        _fake_preview,
+    )
+
+
 def test_create_commercial_plan_contract():
     created = SimpleNamespace(id=101)
 
@@ -603,12 +626,12 @@ def test_plan_readiness_reports_missing_defaults():
     app.dependency_overrides[get_db] = fake_db
     with (
         patch(
-            "app.api.v1.endpoints.commercial_planner.get_open_channel_customer_id",
+            "app.services.commercial_planner.plan_readiness.get_open_channel_customer_id",
             new_callable=AsyncMock,
             return_value=1,
         ),
         patch(
-            "app.api.v1.endpoints.commercial_planner.get_unassigned_distributor_id",
+            "app.services.commercial_planner.plan_readiness.get_unassigned_distributor_id",
             new_callable=AsyncMock,
             return_value=2,
         ),
@@ -677,12 +700,12 @@ def test_plan_readiness_flags_invalid_controlled_cost_when_sku_row_zero():
     app.dependency_overrides[get_db] = fake_db
     with (
         patch(
-            "app.api.v1.endpoints.commercial_planner.get_open_channel_customer_id",
+            "app.services.commercial_planner.plan_readiness.get_open_channel_customer_id",
             new_callable=AsyncMock,
             return_value=1,
         ),
         patch(
-            "app.api.v1.endpoints.commercial_planner.get_unassigned_distributor_id",
+            "app.services.commercial_planner.plan_readiness.get_unassigned_distributor_id",
             new_callable=AsyncMock,
             return_value=2,
         ),
@@ -1261,7 +1284,7 @@ def test_parse_upload_creates_lineup_lines():
     app.dependency_overrides[get_db] = fake_db
 
     with patch(
-        "app.api.v1.endpoints.commercial_planner.parse_current_lineup_file",
+        "app.services.commercial_planner.lineup_parse_api.parse_current_lineup_file",
         new=AsyncMock(return_value=_make_parse_result(line_count=3, resolved_products=2, unresolved_products=1)),
     ):
         csv_bytes = b"sku,qty,msrp\nSKU-A,10,999\nSKU-B,5,799\nSKU-C,20,1299\n"
@@ -1296,7 +1319,7 @@ def test_parse_upload_resolves_products():
     app.dependency_overrides[get_db] = fake_db
 
     with patch(
-        "app.api.v1.endpoints.commercial_planner.parse_current_lineup_file",
+        "app.services.commercial_planner.lineup_parse_api.parse_current_lineup_file",
         new=AsyncMock(return_value=_make_parse_result(case_id=2, resolved_products=5, unresolved_products=0, total_rows=5, line_count=5)),
     ):
         csv_bytes = b"sku,qty\nSKU-1,10\n"
@@ -1330,7 +1353,7 @@ def test_parse_upload_dap_stored_as_evidence_not_cost():
 
     result = _make_parse_result(case_id=3)
     with patch(
-        "app.api.v1.endpoints.commercial_planner.parse_current_lineup_file",
+        "app.services.commercial_planner.lineup_parse_api.parse_current_lineup_file",
         new=AsyncMock(return_value=result),
     ):
         csv_bytes = b"sku,dap,qty\nSKU-A,50.0,10\n"
@@ -1364,7 +1387,7 @@ def test_parse_upload_unresolved_customer_stored_as_token():
 
     result = _make_parse_result(case_id=4, warnings=["unknown_customer for row 1"])
     with patch(
-        "app.api.v1.endpoints.commercial_planner.parse_current_lineup_file",
+        "app.services.commercial_planner.lineup_parse_api.parse_current_lineup_file",
         new=AsyncMock(return_value=result),
     ):
         csv_bytes = b"sku,customer,qty\nSKU-A,UNKNOWN-CUST,10\n"
@@ -1596,7 +1619,7 @@ def test_parse_upload_returns_structured_422_when_seed_not_configured(monkeypatc
         )
 
     monkeypatch.setattr(
-        "app.api.v1.endpoints.commercial_planner.parse_current_lineup_file",
+        "app.services.commercial_planner.lineup_parse_api.parse_current_lineup_file",
         boom,
     )
 

@@ -22,6 +22,7 @@ celery_app.conf.task_routes = {
     "imports.dsi_soh_reconciliation": {"queue": "celery"},
     "imports.dsi_velocity_compute": {"queue": "celery"},
     "imports.dsi_forecasting": {"queue": "celery"},
+    "commercial_planner.parse_lineup_case": {"queue": "celery"},
 }
 
 import app.worker.tasks  # noqa: E402, F401 — register tasks

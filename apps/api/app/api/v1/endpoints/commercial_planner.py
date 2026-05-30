@@ -83,9 +83,11 @@ from app.services.commercial_planner.suggestions import (
     build_quantity_suggestion,
 )
 
+from app.api.v1.endpoints.commercial_planner_auth import require_commercial_planner_enabled
+
+
 async def _require_commercial_planner_enabled() -> None:
-    if not commercial_planner_enabled():
-        raise HTTPException(status_code=404, detail="Commercial planner is disabled")
+    await require_commercial_planner_enabled()
 
 
 router = APIRouter(dependencies=[Depends(_require_commercial_planner_enabled)])
@@ -138,163 +140,16 @@ def _sku_assumption_invalid_reserve(sku: CommercialSkuAssumption | None) -> bool
     return False
 
 
+from app.services.commercial_planner.plan_readiness import (
+    compute_plan_readiness_payload as _compute_plan_readiness_payload,
+)
+
+
 async def compute_plan_readiness_payload(db: AsyncSession, plan_id: int) -> dict:
-    """Plan-level readiness for missing commercial defaults and invalid SKU economics (read-only)."""
-    plan = await db.get(CommercialPlan, plan_id)
-    if not plan:
+    out = await _compute_plan_readiness_payload(db, plan_id)
+    if out is None:
         raise HTTPException(status_code=404, detail="Plan not found")
-
-    rows = (
-        await db.execute(select(CommercialPlanLine).where(CommercialPlanLine.commercial_plan_id == plan_id))
-    ).scalars().all()
-
-    open_channel_dim_ok = await get_open_channel_customer_id(db) is not None
-    unassigned_distributor_id = await get_unassigned_distributor_id(db)
-    unassigned_dim_ok = unassigned_distributor_id is not None
-
-    if not rows:
-        parts0: list[str] = []
-        if not open_channel_dim_ok:
-            parts0.append(
-                "Admin/setup: dim_customer OPEN_CHANNEL missing — run `alembic upgrade head` or "
-                "`python scripts/seed.py --commercial-system-reference-only`."
-            )
-        if not unassigned_dim_ok:
-            parts0.append(
-                "Admin/setup: dim_distributor UNASSIGNED missing — run `alembic upgrade head` or "
-                "`python scripts/seed.py --commercial-system-reference-only`."
-            )
-        return {
-            "plan_id": plan_id,
-            "line_count": 0,
-            "missing_customer_term": 0,
-            "missing_distributor_term": 0,
-            "missing_sku_assumption": 0,
-            "invalid_controlled_cost": 0,
-            "invalid_fx": 0,
-            "invalid_vat": 0,
-            "invalid_reserve": 0,
-            "using_unassigned_distributor": 0,
-            "lines_with_calc_flags": 0,
-            "ready": open_channel_dim_ok and unassigned_dim_ok,
-            "system_reference_open_channel_dim_ok": open_channel_dim_ok,
-            "system_reference_unassigned_distributor_dim_ok": unassigned_dim_ok,
-            "readiness_summary": ("; ".join(parts0) if parts0 else "No lines in plan."),
-        }
-
-    product_ids = list({r.product_id for r in rows})
-    customer_ids = list({r.customer_id for r in rows})
-    distributor_ids = list({r.distributor_id for r in rows})
-
-    existing_cterms: set[int] = set(
-        (await db.execute(
-            select(CommercialCustomerTerm.customer_id).where(CommercialCustomerTerm.customer_id.in_(customer_ids))
-        )).scalars().all()
-    )
-    existing_dterms: set[int] = set(
-        (await db.execute(
-            select(CommercialDistributorTerm.distributor_id).where(
-                CommercialDistributorTerm.distributor_id.in_(distributor_ids)
-            )
-        )).scalars().all()
-    )
-    sku_rows = (
-        await db.execute(select(CommercialSkuAssumption).where(CommercialSkuAssumption.product_id.in_(product_ids)))
-    ).scalars().all()
-    sku_by_product: dict[int, CommercialSkuAssumption] = {s.product_id: s for s in sku_rows}
-
-    missing_ct = sum(1 for r in rows if r.customer_id not in existing_cterms)
-    missing_dt = sum(1 for r in rows if r.distributor_id not in existing_dterms)
-    missing_sku = sum(1 for r in rows if r.product_id not in sku_by_product)
-
-    invalid_cc = 0
-    invalid_fx = 0
-    invalid_vat = 0
-    invalid_res = 0
-    for r in rows:
-        sku = sku_by_product.get(r.product_id)
-        if sku is None:
-            continue
-        if _sku_assumption_invalid_controlled_cost(sku):
-            invalid_cc += 1
-        if _sku_assumption_invalid_fx(sku):
-            invalid_fx += 1
-        if _sku_assumption_invalid_vat(sku):
-            invalid_vat += 1
-        if _sku_assumption_invalid_reserve(sku):
-            invalid_res += 1
-
-    using_una = (
-        sum(1 for r in rows if unassigned_distributor_id is not None and r.distributor_id == unassigned_distributor_id)
-        if unassigned_distributor_id is not None
-        else 0
-    )
-
-    lines_with_flags = sum(1 for r in rows if r.calc_flags)
-
-    parts: list[str] = []
-    if not open_channel_dim_ok:
-        parts.append(
-            "Admin/setup: dim_customer OPEN_CHANNEL missing — run `alembic upgrade head` or "
-            "`python scripts/seed.py --commercial-system-reference-only` (not created from uploads)."
-        )
-    if not unassigned_dim_ok:
-        parts.append(
-            "Admin/setup: dim_distributor UNASSIGNED missing — run `alembic upgrade head` or "
-            "`python scripts/seed.py --commercial-system-reference-only` (not created from uploads)."
-        )
-    if missing_ct:
-        parts.append(f"{missing_ct} line(s) missing customer terms")
-    if missing_dt:
-        parts.append(f"{missing_dt} line(s) missing distributor terms")
-    if missing_sku:
-        parts.append(f"{missing_sku} line(s) missing SKU assumptions")
-    if invalid_cc:
-        parts.append(f"{invalid_cc} line(s) have invalid or missing controlled cost on SKU assumption")
-    if invalid_fx:
-        parts.append(
-            f"{invalid_fx} line(s) have invalid FX (plan currency units per 1 controlled-cost currency) on SKU assumption"
-        )
-    if invalid_vat:
-        parts.append(f"{invalid_vat} line(s) have invalid VAT % on SKU assumption")
-    if invalid_res:
-        parts.append(f"{invalid_res} line(s) have invalid reserve % or campaign/support split on SKU assumption")
-    if using_una:
-        parts.append(
-            f"{using_una} line(s) use UNASSIGNED distributor — resolve distributor for trusted channel economics"
-        )
-    if lines_with_flags:
-        parts.append(f"{lines_with_flags} line(s) have economics flags")
-
-    ready = (
-        missing_ct == 0
-        and missing_dt == 0
-        and missing_sku == 0
-        and invalid_cc == 0
-        and invalid_fx == 0
-        and invalid_vat == 0
-        and invalid_res == 0
-        and open_channel_dim_ok
-        and unassigned_dim_ok
-    )
-
-    return {
-        "plan_id": plan_id,
-        "line_count": len(rows),
-        "missing_customer_term": missing_ct,
-        "missing_distributor_term": missing_dt,
-        "missing_sku_assumption": missing_sku,
-        "invalid_controlled_cost": invalid_cc,
-        "invalid_fx": invalid_fx,
-        "invalid_vat": invalid_vat,
-        "invalid_reserve": invalid_res,
-        "using_unassigned_distributor": using_una,
-        "lines_with_calc_flags": lines_with_flags,
-        "ready": ready,
-        "system_reference_open_channel_dim_ok": open_channel_dim_ok,
-        "system_reference_unassigned_distributor_dim_ok": unassigned_dim_ok,
-        "readiness_summary": "; ".join(parts) if parts else "All defaults present.",
-    }
+    return out
 
 
 class PlanCreate(BaseModel):
@@ -2885,20 +2740,24 @@ async def parse_lineup_case_preview(
     }
 
 
-@router.post("/lineup-cases/{case_id}/parse-apply", status_code=200)
+@router.post("/lineup-cases/{case_id}/parse-apply")
 async def parse_lineup_case_apply(
     case_id: int,
     file: UploadFile = File(...),
     confirm: bool = Form(default=False),
     db: AsyncSession = Depends(get_db),
 ):
-    """Apply parsed upload after preview. Requires confirm=true."""
+    """Apply parsed upload after preview. Requires confirm=true. May return 202 for large files."""
     if not confirm:
         raise HTTPException(status_code=400, detail="confirm=true is required to apply parse")
-    return await parse_lineup_case_upload(case_id, file, db)
+    filename = file.filename or "upload"
+    file_bytes = await file.read()
+    from app.services.commercial_planner.lineup_parse_api import execute_lineup_parse_upload
+
+    return await execute_lineup_parse_upload(db, case_id, filename, file_bytes)
 
 
-@router.post("/lineup-cases/{case_id}/parse-upload", status_code=200)
+@router.post("/lineup-cases/{case_id}/parse-upload")
 async def parse_lineup_case_upload(
     case_id: int,
     file: UploadFile = File(...),
@@ -2908,61 +2767,13 @@ async def parse_lineup_case_upload(
 
     DAP fields are stored as evidence (dap_evidence_local) only.
     Never mapped to SKU controlled cost or override_controlled_cost_amount.
+    Large files may return HTTP 202 and run via Celery (activity feed).
     """
-    case = await db.get(CommercialLineupCase, case_id)
-    if not case:
-        raise HTTPException(status_code=404, detail="Lineup case not found")
-    if case.commercial_status not in ("draft_imported",):
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Can only parse-upload to cases with status 'draft_imported'. "
-                f"Current: '{case.commercial_status}'"
-            ),
-        )
-
-    existing_count = (
-        await db.execute(
-            select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
-        )
-    ).scalar_one()
-    if existing_count > 0:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"This case already has {existing_count} lines. "
-                "Delete the case and create a new one to re-upload."
-            ),
-        )
-
     filename = file.filename or "upload"
     file_bytes = await file.read()
-    if not file_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    from app.services.commercial_planner.lineup_parse_api import execute_lineup_parse_upload
 
-    try:
-        result = await parse_current_lineup_file(db, case_id, filename, file_bytes)
-    except CurrentLineupSourceNotConfiguredError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error": "current_lineup_import_not_seeded",
-                "message": str(exc),
-                "remediation": exc.remediation,
-            },
-        ) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Parse failed: {exc}") from exc
-
-    return {
-        "case_id": result.case_id,
-        "import_job_id": result.import_job_id,
-        "total_rows": result.total_rows,
-        "resolved_products": result.resolved_products,
-        "unresolved_products": result.unresolved_products,
-        "line_count": result.line_count,
-        "warnings": result.warnings,
-    }
+    return await execute_lineup_parse_upload(db, case_id, filename, file_bytes)
 
 
 @router.get("/plans/{plan_id}/column-metadata")
@@ -3360,3 +3171,12 @@ async def sync_lineup_case_to_plan(
         "created_line_ids": created_ids,
         "warnings": warnings,
     }
+
+
+from app.api.v1.endpoints.commercial_planner_intelligence_routes import (
+    router as _cp_intelligence_extra_router,
+)
+from app.api.v1.endpoints.commercial_planner_lineup_routes import router as _cp_lineup_extra_router
+
+router.include_router(_cp_lineup_extra_router)
+router.include_router(_cp_intelligence_extra_router)

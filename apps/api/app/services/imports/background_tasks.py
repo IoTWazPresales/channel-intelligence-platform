@@ -39,6 +39,8 @@ def _task_label(job: ImportJob, *, kind: str) -> str:
         return f"Generating forecasts (DSI job {jid})"
     if kind == "product_master_validate":
         return f"Validating product master (job {jid})"
+    if kind == "commercial_planner_lineup_parse":
+        return f"Parsing current lineup (job {jid})"
     if slug == "distributor_inventory":
         if mode == "validate":
             return f"Validating DSI import {jid}"
@@ -99,6 +101,8 @@ def _clear_task_slot_metadata(meta: dict[str, Any], slot: str) -> None:
         meta.pop("dsi_forecasting_task", None)
     elif slot == "pm_validate":
         meta.pop("pm_validate_task", None)
+    elif slot == "lineup_parse":
+        meta.pop("lineup_parse_task", None)
     else:
         meta.pop("dsi_bulk_task", None)
 
@@ -134,6 +138,8 @@ def _jobs_with_possible_background_tasks():
         ImportJob.status == "running",
         and_(has_meta, ImportJob.staged_metadata.has_key("celery_task_id")),
         and_(has_meta, ImportJob.staged_metadata.has_key("dsi_bulk_task")),
+        and_(has_meta, ImportJob.staged_metadata.has_key("lineup_parse_task")),
+        and_(has_meta, ImportJob.staged_metadata.has_key("pm_validate_task")),
     )
 
 
@@ -242,6 +248,19 @@ def _build_background_task_records(
                         ptid.strip(),
                         "product_master_validate",
                         str(pm_validate_task.get("label") or "Validating product master…"),
+                    )
+                )
+
+        lineup_parse_task = meta.get("lineup_parse_task")
+        if isinstance(lineup_parse_task, dict):
+            ltid = lineup_parse_task.get("task_id")
+            if isinstance(ltid, str) and ltid.strip():
+                descriptors.append(
+                    (
+                        "lineup_parse",
+                        ltid.strip(),
+                        "commercial_planner_lineup_parse",
+                        str(lineup_parse_task.get("label") or "Parsing current lineup…"),
                     )
                 )
 
