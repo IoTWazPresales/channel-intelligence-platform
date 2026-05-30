@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.commercial_lineup import CommercialLineupCase
+from app.models.commercial_lineup import CommercialLineupLine
 from app.models.commercial_planner import CommercialDistributorTerm, CommercialPlanLine
 from app.models.dimensions import DimCustomer, DimDistributor, DistributorContact, DistributorLocation
 from app.models.fact_dsi_forecast import FactDsiForecast
@@ -76,10 +76,10 @@ def _hard_reference_checks(distributor_id: int) -> list[tuple[str, object]]:
             .where(CommercialPlanLine.distributor_id == distributor_id),
         ),
         (
-            "Commercial lineup cases",
+            "Commercial lineup lines",
             select(func.count())
-            .select_from(CommercialLineupCase)
-            .where(CommercialLineupCase.distributor_id == distributor_id),
+            .select_from(CommercialLineupLine)
+            .where(CommercialLineupLine.distributor_id == distributor_id),
         ),
         (
             "Historical lineup headers",

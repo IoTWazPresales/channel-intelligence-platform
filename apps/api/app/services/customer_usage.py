@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.commercial_lineup import CommercialLineupCase
+from app.models.commercial_lineup import CommercialLineupLine
 from app.models.commercial_planner import (
     CommercialCustomerTerm,
     CommercialPlanLine,
@@ -90,10 +90,10 @@ def _hard_reference_checks(customer_id: int) -> list[tuple[str, object]]:
             .where(CommercialPlanLine.customer_id == customer_id),
         ),
         (
-            "Commercial lineup cases",
+            "Commercial lineup lines",
             select(func.count())
-            .select_from(CommercialLineupCase)
-            .where(CommercialLineupCase.customer_id == customer_id),
+            .select_from(CommercialLineupLine)
+            .where(CommercialLineupLine.customer_id == customer_id),
         ),
         (
             "Historical lineup headers",
