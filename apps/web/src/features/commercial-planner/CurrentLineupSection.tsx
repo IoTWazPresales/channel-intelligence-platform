@@ -1523,28 +1523,67 @@ function RetryParseDialog({
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{
+    total_rows: number;
+    resolved_products: number;
+    unresolved_products: number;
+    warnings: string[];
+  } | null>(null);
 
   const handleClose = () => {
     setFile(null);
     setError(null);
+    setPreview(null);
     onClose();
   };
 
-  const handleSubmit = async () => {
+  const handlePreview = async () => {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    setPreview(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(
+        `/api/v1/commercial-planner/lineup-cases/${targetCase.id}/parse-preview`,
+        { method: 'POST', body: fd },
+      );
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        setError(`Preview failed. ${formatHttpErrorDetail(errBody.detail)}`);
+        return;
+      }
+      const data = await res.json();
+      setPreview({
+        total_rows: data.total_rows,
+        resolved_products: data.resolved_products,
+        unresolved_products: data.unresolved_products,
+        warnings: data.warnings ?? [],
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Preview failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleApply = async () => {
     if (!file) return;
     setUploading(true);
     setError(null);
     try {
       const fd = new FormData();
       fd.append('file', file);
+      fd.append('confirm', 'true');
       const parseRes = await fetch(
-        `/api/v1/commercial-planner/lineup-cases/${targetCase.id}/parse-upload`,
+        `/api/v1/commercial-planner/lineup-cases/${targetCase.id}/parse-apply`,
         { method: 'POST', body: fd },
       );
       if (!parseRes.ok) {
         const errBody = await parseRes.json().catch(() => ({}));
         setError(
-          `Parse failed. ${formatHttpErrorDetail(errBody.detail)} You can fix the file and try again.`,
+          `Apply failed. ${formatHttpErrorDetail(errBody.detail)} You can fix the file and try again.`,
         );
         return;
       }
@@ -1574,6 +1613,13 @@ function RetryParseDialog({
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
           </Button>
+          {preview ? (
+            <Alert severity="info" data-testid="lineup-parse-preview-summary">
+              Preview: {preview.total_rows} rows — {preview.resolved_products} products resolved,{' '}
+              {preview.unresolved_products} unresolved.
+              {preview.warnings.length > 0 ? ` Warnings: ${preview.warnings.join('; ')}` : ''}
+            </Alert>
+          ) : null}
           {error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
@@ -1583,12 +1629,21 @@ function RetryParseDialog({
         </Button>
         <Button
           size="small"
-          variant="contained"
-          onClick={handleSubmit}
+          variant="outlined"
+          onClick={() => void handlePreview()}
           disabled={!file || uploading}
+          data-testid="retry-parse-preview"
+        >
+          {uploading && !preview ? 'Previewing…' : 'Preview'}
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
+          onClick={() => void handleApply()}
+          disabled={!file || !preview || uploading}
           data-testid="retry-parse-confirm"
         >
-          {uploading ? 'Uploading…' : 'Parse file'}
+          {uploading && preview ? 'Applying…' : 'Apply to case'}
         </Button>
       </DialogActions>
     </Dialog>

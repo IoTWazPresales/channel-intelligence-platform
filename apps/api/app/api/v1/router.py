@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.core.feature_flags import commercial_planner_enabled
 from app.api.v1.endpoints import (
     auth,
     budgets,
@@ -48,7 +49,8 @@ api_router.include_router(shipping.router, prefix="/shipping", tags=["shipping"]
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(forecasts.router, prefix="/forecasts", tags=["forecasts"])
 api_router.include_router(buy_plans.router, prefix="/buy-plans", tags=["buy-plans"])
-api_router.include_router(commercial_planner.router, prefix="/commercial-planner", tags=["commercial-planner"])
+if commercial_planner_enabled():
+    api_router.include_router(commercial_planner.router, prefix="/commercial-planner", tags=["commercial-planner"])
 api_router.include_router(pricing.router, prefix="/pricing", tags=["pricing"])
 api_router.include_router(promotions.router, prefix="/promotions", tags=["promotions"])
 api_router.include_router(promo_exports.router, prefix="/promotions", tags=["promotions"])

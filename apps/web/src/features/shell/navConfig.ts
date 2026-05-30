@@ -16,6 +16,22 @@ export type NavGroup = {
 export const NAV_STORAGE_COLLAPSED = 'cip.shell.nav.collapsed.v1';
 export const NAV_STORAGE_GROUP_EXPANDED = 'cip.shell.nav.groupExpanded.v1';
 
+/** Web feature flag — default on when unset. */
+export function isCommercialPlannerEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_CIP_COMMERCIAL_PLANNER_ENABLED !== 'false';
+}
+
+export function shellNavGroups(): NavGroup[] {
+  if (isCommercialPlannerEnabled()) return navGroups;
+  return navGroups
+    .map((g) =>
+      g.id === 'commercial-planning'
+        ? { ...g, items: g.items.filter((i) => i.href !== '/commercial-planner') }
+        : g,
+    )
+    .filter((g) => g.items.length > 0);
+}
+
 export const navGroups: NavGroup[] = [
   {
     id: 'overview',

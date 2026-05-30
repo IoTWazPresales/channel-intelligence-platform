@@ -50,6 +50,20 @@ class ParseResult:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass
+class LineupParsePreview:
+    """In-memory parse result (no DB writes)."""
+
+    total_rows: int
+    resolved_products: int
+    unresolved_products: int
+    unknown_customer_rows: int
+    unknown_distributor_rows: int
+    warnings: list[str]
+    can_apply: bool
+    rows: list[dict[str, Any]] = field(default_factory=list)
+
+
 def _safe_float(val: Any) -> float | None:
     if val is None:
         return None
@@ -124,6 +138,195 @@ def _build_distributor_map(distributors: list[DimDistributor]) -> dict[str, DimD
     return m
 
 
+def _parse_file_to_row_dicts(
+    filename: str,
+    file_bytes: bytes,
+    *,
+    product_map: dict[str, DimProduct],
+    customer_map: dict[str, DimCustomer],
+    distributor_map: dict[str, DimDistributor],
+    row_limit: int | None = None,
+) -> tuple[list[dict[str, Any]], list[str], int, int, int, int]:
+    """Parse tabular file into serialisable row dicts. Returns rows, warnings, counts."""
+    warnings: list[str] = []
+    raw_df = _load_df(filename, file_bytes)
+    header_row = _find_header_row(raw_df)
+    if header_row is None:
+        header_row = 0
+        warnings.append("Could not detect header row; using row 0 as header.")
+
+    header = [str(v).strip() for v in raw_df.iloc[header_row].values]
+    data_df = raw_df.iloc[header_row + 1 :].copy()
+    data_df.columns = header  # type: ignore[assignment]
+    data_df = data_df.reset_index(drop=True)
+    col_map = build_commercial_lineup_column_map(header)
+    if not col_map:
+        warnings.append("No recognisable columns found in file; no lines would be written.")
+
+    out: list[dict[str, Any]] = []
+    total_rows = 0
+    resolved_products = 0
+    unresolved_products = 0
+    unknown_customer_rows = 0
+    unknown_distributor_rows = 0
+
+    for row_idx, row in data_df.iterrows():
+        if row_limit is not None and len(out) >= row_limit:
+            break
+        raw: dict[str, Any] = {}
+        for dest_field, src_col in col_map.items():
+            raw[dest_field] = row.get(src_col)
+
+        all_empty = all(_safe_str(v) is None for v in raw.values())
+        if all_empty:
+            continue
+
+        total_rows += 1
+        diag: list[str] = []
+
+        sku_raw = _safe_str(raw.get("sku_raw"))
+        part_number_raw = _safe_str(raw.get("part_number_raw"))
+        model_raw = _safe_str(raw.get("model_raw"))
+        customer_token_val = _safe_str(raw.get("customer_token"))
+        distributor_token_val = _safe_str(raw.get("distributor_token"))
+        base_unit_raw = _safe_str(raw.get("base_unit_raw"))
+
+        channel_dist_hint = extract_distributor_name_from_channel_customer_cell(customer_token_val)
+        open_channel_row = channel_dist_hint is not None
+        channel_uploaded_cell = customer_token_val if open_channel_row else None
+        if open_channel_row:
+            customer_token_val = None
+
+        resolved_product: DimProduct | None = None
+        for lookup_val in (sku_raw, part_number_raw, model_raw):
+            if lookup_val and lookup_val.lower() in product_map:
+                resolved_product = product_map[lookup_val.lower()]
+                break
+
+        if resolved_product is None:
+            diag.append("unresolved_product")
+            unresolved_products += 1
+        else:
+            resolved_products += 1
+
+        resolved_customer: DimCustomer | None = None
+        if customer_token_val:
+            resolved_customer = customer_map.get(customer_token_val.lower())
+            if resolved_customer is None:
+                diag.append("unknown_customer")
+                unknown_customer_rows += 1
+
+        resolved_distributor: DimDistributor | None = None
+        if distributor_token_val:
+            resolved_distributor = distributor_map.get(distributor_token_val.lower())
+            if resolved_distributor is None:
+                diag.append("unknown_distributor")
+                unknown_distributor_rows += 1
+        elif open_channel_row and channel_dist_hint:
+            resolved_distributor = distributor_map.get(channel_dist_hint.lower())
+            if resolved_distributor is None:
+                diag.append("unknown_distributor")
+                unknown_distributor_rows += 1
+
+        uploaded_by_header: dict[str, str] = {}
+        for col in data_df.columns:
+            cell = _safe_str(row.get(col))
+            if cell:
+                uploaded_by_header[str(col).strip()] = cell
+
+        payload_keys = {
+            "sku_raw",
+            "part_number_raw",
+            "model_raw",
+            "customer_token",
+            "distributor_token",
+            "quantity_units",
+            "msrp_local",
+            "promo_price_evidence_local",
+            "dap_evidence_local",
+            "rebate_pct_evidence",
+            "distributor_margin_pct_evidence",
+            "vat_pct_evidence",
+            "base_unit_raw",
+        }
+        raw_row_payload: dict[str, Any] = {
+            dest: _safe_str(val) for dest, val in raw.items() if dest in payload_keys and val is not None
+        }
+        raw_row_payload["uploaded"] = uploaded_by_header
+        if open_channel_row:
+            raw_row_payload[STAGING_OPEN_CHANNEL_KEY] = True
+            if channel_uploaded_cell:
+                raw_row_payload[CHANNEL_ROUTE_UPLOADED_CELL_KEY] = channel_uploaded_cell
+                raw_row_payload["customer_token"] = channel_uploaded_cell
+
+        out.append(
+            {
+                "source_row_number": int(row_idx) + 1,
+                "product_id": resolved_product.id if resolved_product else None,
+                "product_sku": resolved_product.sku if resolved_product else None,
+                "customer_id": resolved_customer.id if resolved_customer else None,
+                "customer_token": customer_token_val,
+                "distributor_id": resolved_distributor.id if resolved_distributor else None,
+                "sku_raw": sku_raw,
+                "part_number_raw": part_number_raw,
+                "model_raw": model_raw,
+                "base_unit_raw": base_unit_raw,
+                "quantity_units": _safe_float(raw.get("quantity_units")),
+                "msrp_local": _safe_float(raw.get("msrp_local")),
+                "promo_price_evidence_local": _safe_float(raw.get("promo_price_evidence_local")),
+                "dap_evidence_local": _safe_float(raw.get("dap_evidence_local")),
+                "diagnostic_codes": diag,
+                "row_status": "resolved" if resolved_product else "unresolved",
+                "raw_row_payload": raw_row_payload,
+            }
+        )
+
+    return (
+        out,
+        warnings,
+        total_rows,
+        resolved_products,
+        unresolved_products,
+        unknown_customer_rows,
+        unknown_distributor_rows,
+    )
+
+
+async def preview_current_lineup_file(
+    db: AsyncSession,
+    filename: str,
+    file_bytes: bytes,
+    *,
+    sample_limit: int = 150,
+) -> LineupParsePreview:
+    """Parse file without writing lineup lines (preview before apply)."""
+    products = (await db.execute(select(DimProduct))).scalars().all()
+    customers = (await db.execute(select(DimCustomer))).scalars().all()
+    distributors = (await db.execute(select(DimDistributor))).scalars().all()
+    product_map = _build_product_map(list(products))
+    customer_map = _build_customer_map(list(customers))
+    distributor_map = _build_distributor_map(list(distributors))
+
+    rows, warnings, total_rows, resolved_products, unresolved_products, unk_cust, unk_dist = _parse_file_to_row_dicts(
+        filename,
+        file_bytes,
+        product_map=product_map,
+        customer_map=customer_map,
+        distributor_map=distributor_map,
+        row_limit=sample_limit,
+    )
+    return LineupParsePreview(
+        total_rows=total_rows,
+        resolved_products=resolved_products,
+        unresolved_products=unresolved_products,
+        unknown_customer_rows=unk_cust,
+        unknown_distributor_rows=unk_dist,
+        warnings=warnings,
+        can_apply=total_rows > 0,
+        rows=rows,
+    )
+
+
 async def parse_current_lineup_file(
     db: AsyncSession,
     case_id: int,
@@ -183,141 +386,43 @@ async def parse_current_lineup_file(
     db.add(job)
     await db.flush()
 
-    warnings: list[str] = []
-
     try:
-        raw_df = _load_df(filename, file_bytes)
-
-        header_row = _find_header_row(raw_df)
-        if header_row is None:
-            header_row = 0
-            warnings.append("Could not detect header row; using row 0 as header.")
-
-        header = [str(v).strip() for v in raw_df.iloc[header_row].values]
-        data_df = raw_df.iloc[header_row + 1 :].copy()
-        data_df.columns = header  # type: ignore[assignment]
-        data_df = data_df.reset_index(drop=True)
-
-        col_map = build_commercial_lineup_column_map(header)
-
-        if not col_map:
-            warnings.append("No recognisable columns found in file; no lines written.")
-
-        # Load all products and customers into memory
         products = (await db.execute(select(DimProduct))).scalars().all()
         customers = (await db.execute(select(DimCustomer))).scalars().all()
         distributors = (await db.execute(select(DimDistributor))).scalars().all()
-
         product_map = _build_product_map(list(products))
         customer_map = _build_customer_map(list(customers))
         distributor_map = _build_distributor_map(list(distributors))
 
+        row_dicts, warnings, total_rows, resolved_products, unresolved_products, _, _ = _parse_file_to_row_dicts(
+            filename,
+            file_bytes,
+            product_map=product_map,
+            customer_map=customer_map,
+            distributor_map=distributor_map,
+            row_limit=None,
+        )
+
         lines_to_add: list[CommercialLineupLine] = []
-        total_rows = 0
-        resolved_products = 0
-        unresolved_products = 0
-
-        for row_idx, row in data_df.iterrows():
-            raw: dict[str, Any] = {}
-            for dest_field, src_col in col_map.items():
-                raw[dest_field] = row.get(src_col)
-
-            all_empty = all(
-                _safe_str(v) is None for v in raw.values()
-            )
-            if all_empty:
-                continue
-
-            total_rows += 1
-            diag: list[str] = []
-
-            sku_raw = _safe_str(raw.get("sku_raw"))
-            part_number_raw = _safe_str(raw.get("part_number_raw"))
-            model_raw = _safe_str(raw.get("model_raw"))
-            customer_token_val = _safe_str(raw.get("customer_token"))
-            distributor_token_val = _safe_str(raw.get("distributor_token"))
-            base_unit_raw = _safe_str(raw.get("base_unit_raw"))
-
-            channel_dist_hint = extract_distributor_name_from_channel_customer_cell(customer_token_val)
-            open_channel_row = channel_dist_hint is not None
-            channel_uploaded_cell = customer_token_val if open_channel_row else None
-            if open_channel_row:
-                customer_token_val = None
-
-            resolved_product: DimProduct | None = None
-            for lookup_val in (sku_raw, part_number_raw, model_raw):
-                if lookup_val and lookup_val.lower() in product_map:
-                    resolved_product = product_map[lookup_val.lower()]
-                    break
-
-            if resolved_product is None:
-                diag.append("unresolved_product")
-                unresolved_products += 1
-            else:
-                resolved_products += 1
-
-            resolved_customer: DimCustomer | None = None
-            if customer_token_val:
-                resolved_customer = customer_map.get(customer_token_val.lower())
-                if resolved_customer is None:
-                    diag.append("unknown_customer")
-
-            resolved_distributor: DimDistributor | None = None
-            if distributor_token_val:
-                resolved_distributor = distributor_map.get(distributor_token_val.lower())
-                if resolved_distributor is None:
-                    diag.append("unknown_distributor")
-            elif open_channel_row and channel_dist_hint:
-                resolved_distributor = distributor_map.get(channel_dist_hint.lower())
-                if resolved_distributor is None:
-                    diag.append("unknown_distributor")
-
-            uploaded_by_header: dict[str, str] = {}
-            for col in data_df.columns:
-                cell = _safe_str(row.get(col))
-                if cell:
-                    uploaded_by_header[str(col).strip()] = cell
-
-            payload_keys = {
-                "sku_raw", "part_number_raw", "model_raw", "customer_token",
-                "distributor_token", "quantity_units", "msrp_local",
-                "promo_price_evidence_local", "dap_evidence_local",
-                "rebate_pct_evidence", "distributor_margin_pct_evidence",
-                "vat_pct_evidence", "base_unit_raw",
-            }
-            raw_row_payload: dict[str, Any] = {
-                dest: _safe_str(val)
-                for dest, val in raw.items()
-                if dest in payload_keys and val is not None
-            }
-            raw_row_payload["uploaded"] = uploaded_by_header
-            if open_channel_row:
-                raw_row_payload[STAGING_OPEN_CHANNEL_KEY] = True
-                if channel_uploaded_cell:
-                    raw_row_payload[CHANNEL_ROUTE_UPLOADED_CELL_KEY] = channel_uploaded_cell
-                if channel_uploaded_cell:
-                    raw_row_payload["customer_token"] = channel_uploaded_cell
-
+        for rd in row_dicts:
+            diag = rd.get("diagnostic_codes") or []
             line = CommercialLineupLine(
                 case_id=case_id,
-                source_row_number=int(row_idx) + 1,
-                product_id=resolved_product.id if resolved_product else None,
-                customer_id=resolved_customer.id if resolved_customer else None,
-                distributor_id=resolved_distributor.id if resolved_distributor else None,
-                customer_token=customer_token_val,
-                sku_raw=sku_raw,
-                part_number_raw=part_number_raw,
-                model_raw=model_raw,
-                base_unit_raw=base_unit_raw,
-                quantity_units=_safe_float(raw.get("quantity_units")),
-                msrp_local=_safe_float(raw.get("msrp_local")),
-                promo_price_evidence_local=_safe_float(raw.get("promo_price_evidence_local")),
-                dap_evidence_local=_safe_float(raw.get("dap_evidence_local")),
-                rebate_pct_evidence=_safe_float(raw.get("rebate_pct_evidence")),
-                distributor_margin_pct_evidence=_safe_float(raw.get("distributor_margin_pct_evidence")),
-                vat_pct_evidence=_safe_float(raw.get("vat_pct_evidence")),
-                raw_row_payload=raw_row_payload,
-                row_status="resolved" if resolved_product else "unresolved",
+                source_row_number=rd["source_row_number"],
+                product_id=rd.get("product_id"),
+                customer_id=rd.get("customer_id"),
+                distributor_id=rd.get("distributor_id"),
+                customer_token=rd.get("customer_token"),
+                sku_raw=rd.get("sku_raw"),
+                part_number_raw=rd.get("part_number_raw"),
+                model_raw=rd.get("model_raw"),
+                base_unit_raw=rd.get("base_unit_raw"),
+                quantity_units=rd.get("quantity_units"),
+                msrp_local=rd.get("msrp_local"),
+                promo_price_evidence_local=rd.get("promo_price_evidence_local"),
+                dap_evidence_local=rd.get("dap_evidence_local"),
+                raw_row_payload=rd.get("raw_row_payload"),
+                row_status=rd.get("row_status") or "imported",
                 diagnostic_codes=diag if diag else None,
             )
             db.add(line)

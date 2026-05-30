@@ -39,6 +39,7 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { AddProductSetDialog } from '@/features/commercial-planner/AddProductSetDialog';
+import { IntelligentAddDialog } from '@/features/commercial-planner/IntelligentAddDialog';
 import { ColumnSelectorModal, type ColumnMetadata } from '@/features/commercial-planner/ColumnSelectorModal';
 import { CommercialDataMap } from '@/features/commercial-planner/CommercialDataMap';
 import { CurrentLineupSection } from '@/features/commercial-planner/CurrentLineupSection';
@@ -667,6 +668,7 @@ export default function CommercialPlannerPage() {
   );
   const [suggestionPreview, setSuggestionPreview] = useState<SuggestionPreviewState | null>(null);
   const [addProductSetOpen, setAddProductSetOpen] = useState(false);
+  const [intelligentAddOpen, setIntelligentAddOpen] = useState(false);
   const [columnSelectorOpen, setColumnSelectorOpen] = useState(false);
   const [deletePlanOpen, setDeletePlanOpen] = useState(false);
   const [addFromLineupOpen, setAddFromLineupOpen] = useState(false);
@@ -2056,6 +2058,15 @@ export default function CommercialPlannerPage() {
             disabled={activePlanId == null}
           >
             Add product set
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            data-testid="intelligent-add-btn"
+            onClick={() => setIntelligentAddOpen(true)}
+            disabled={activePlanId == null}
+          >
+            Intelligent add
           </Button>
           <Button
             size="small"
@@ -3616,6 +3627,19 @@ export default function CommercialPlannerPage() {
         }}
         activePlanId={activePlanId}
         existingLines={lines ?? []}
+      />
+      <IntelligentAddDialog
+        open={intelligentAddOpen}
+        onClose={() => setIntelligentAddOpen(false)}
+        activePlanId={activePlanId}
+        onCreated={() => {
+          void qc.invalidateQueries({ queryKey: ['commercial-plan-lines', activePlanId] });
+          void qc.invalidateQueries({ queryKey: ['commercial-plan-summary', activePlanId] });
+          void qc.invalidateQueries({ queryKey: ['commercial-plan-suggestions', activePlanId] });
+        }}
+        existingLineKeys={
+          new Set((lines ?? []).map((l) => `${l.customer_id}|${l.distributor_id}|${l.product_id}`))
+        }
       />
     </>
   );

@@ -7,6 +7,8 @@ from datetime import date, datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
+
+from app.core.feature_flags import commercial_planner_enabled
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete as sa_delete, distinct, func, or_, select, tuple_
 from sqlalchemy.exc import IntegrityError
@@ -42,7 +44,11 @@ from app.services.commercial_planner.lineup_entity_resolution import (
     apply_entity_resolutions,
     collect_entity_resolution_candidates,
 )
-from app.services.commercial_planner.lineup_case_parser import parse_current_lineup_file
+from app.services.commercial_planner.intelligence.product_rankings import rank_products_for_customer
+from app.services.commercial_planner.lineup_case_parser import (
+    parse_current_lineup_file,
+    preview_current_lineup_file,
+)
 from app.services.commercial_planner.lineup_open_channel import (
     CHANNEL_ROUTE_UPLOADED_CELL_KEY,
     STAGING_OPEN_CHANNEL_KEY,
@@ -77,7 +83,12 @@ from app.services.commercial_planner.suggestions import (
     build_quantity_suggestion,
 )
 
-router = APIRouter()
+async def _require_commercial_planner_enabled() -> None:
+    if not commercial_planner_enabled():
+        raise HTTPException(status_code=404, detail="Commercial planner is disabled")
+
+
+router = APIRouter(dependencies=[Depends(_require_commercial_planner_enabled)])
 
 ALLOWED_PLAN_STATUSES = {"draft", "review", "approved", "published"}
 
@@ -1134,7 +1145,7 @@ async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db))
     # ── 5. Batch lineup evidence per product_id (latest apply job) ───────────
     latest_job_id = await db.scalar(
         select(func.max(HistoricalLineupImportHeader.import_job_id))
-        .join(HistoricalLineupImportLine, HistoricalLineupImportLine.header_id == HistoricalLineupImportHeader.id)
+        .join(HistoricalLineupImportLine, HistoricalLineupImportLine.header_id == HistoricalLineupImportLine.id)
         .join(ImportJob, ImportJob.id == HistoricalLineupImportHeader.import_job_id)
         .where(
             HistoricalLineupImportLine.product_id.in_(product_ids),
@@ -1142,6 +1153,33 @@ async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db))
             ImportJob.template_slug == "historical_lineup",
         )
     )
+    current_lineup_map: dict[int, dict] = {}
+    cl_rows = (
+        await db.execute(
+            select(
+                CommercialLineupLine.product_id,
+                func.max(CommercialLineupLine.msrp_local).label("msrp_local"),
+                func.max(CommercialLineupLine.promo_price_evidence_local).label("promo_price_local"),
+                func.sum(CommercialLineupLine.quantity_units).label("total_quantity_units"),
+            )
+            .join(CommercialLineupCase, CommercialLineupCase.id == CommercialLineupLine.case_id)
+            .where(
+                CommercialLineupCase.commercial_plan_id == plan_id,
+                CommercialLineupLine.product_id.in_(product_ids),
+            )
+            .group_by(CommercialLineupLine.product_id)
+        )
+    ).all()
+    for clr in cl_rows:
+        if clr.product_id is None:
+            continue
+        current_lineup_map[int(clr.product_id)] = {
+            "msrp_local": float(clr.msrp_local) if clr.msrp_local is not None else None,
+            "promo_price_local": float(clr.promo_price_local) if clr.promo_price_local is not None else None,
+            "total_quantity_units": float(clr.total_quantity_units) if clr.total_quantity_units is not None else None,
+            "source": "current_lineup_case",
+        }
+
     lineup_map: dict[int, dict] = {}
     if latest_job_id:
         lineup_ev_rows = (
@@ -1178,6 +1216,12 @@ async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db))
     for row in rows:
         key = (row.customer_id, row.product_id)
         le = lineup_map.get(row.product_id, {})
+        cle = current_lineup_map.get(row.product_id, {})
+        lineup_msrp = cle.get("msrp_local") if cle else le.get("msrp_local")
+        lineup_promo = cle.get("promo_price_local") if cle else le.get("promo_price_local")
+        lineup_qty = cle.get("total_quantity_units") if cle else le.get("total_quantity_units")
+        lineup_job = None if cle else le.get("job_id")
+        lineup_period = le.get("period_label") if le else None
         inp = SuggestionInputs(
             avg_sellout_units=avg_sellout_map.get(key, 0.0),
             prior_planned_units=prior_planned_map.get(key),
@@ -1185,11 +1229,11 @@ async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db))
             latest_net_price=pricing_map.get(row.product_id),
             target_srp_local=float(row.target_srp_local),
             promo_mix_pct=float(row.promo_mix_pct),
-            lineup_msrp_local=le.get("msrp_local"),
-            lineup_promo_price_local=le.get("promo_price_local"),
-            lineup_quantity_units=le.get("total_quantity_units"),
-            lineup_period_label=le.get("period_label"),
-            lineup_job_id=le.get("job_id"),
+            lineup_msrp_local=lineup_msrp,
+            lineup_promo_price_local=lineup_promo,
+            lineup_quantity_units=lineup_qty,
+            lineup_period_label=lineup_period,
+            lineup_job_id=lineup_job,
         )
         qty, qty_reason, qty_conf = build_quantity_suggestion(inp)
         srp, promo_srp, price_reason, price_conf = build_pricing_suggestion(inp)
@@ -1244,6 +1288,7 @@ async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db))
                         "forecast": inp.forecast_units is not None,
                         "net_price": inp.latest_net_price is not None,
                         "lineup": inp.lineup_job_id is not None,
+                        "current_lineup_case": bool(cle),
                     },
                 },
             }
@@ -1255,6 +1300,36 @@ async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db))
 async def get_plan_readiness(plan_id: int, db: AsyncSession = Depends(get_db)):
     """Return a data-readiness gate summary for a plan (read-only)."""
     return await compute_plan_readiness_payload(db, plan_id)
+
+
+@router.get("/plans/{plan_id}/intelligence/customer/{customer_id}/product-rankings")
+async def get_customer_product_rankings(
+    plan_id: int,
+    customer_id: int,
+    distributor_id: int = Query(..., description="Distributor context for economics scoring"),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    """Rank products for a customer on this plan (deterministic opportunity score)."""
+    if not await db.get(CommercialPlan, plan_id):
+        raise HTTPException(status_code=404, detail="Plan not found")
+    if not await db.get(DimCustomer, customer_id):
+        raise HTTPException(status_code=404, detail="Customer not found")
+    if not await db.get(DimDistributor, distributor_id):
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    items = await rank_products_for_customer(
+        db,
+        plan_id=plan_id,
+        customer_id=customer_id,
+        distributor_id=distributor_id,
+        limit=limit,
+    )
+    return {
+        "plan_id": plan_id,
+        "customer_id": customer_id,
+        "distributor_id": distributor_id,
+        "items": items,
+    }
 
 
 @router.get("/lineup-evidence")
@@ -2776,6 +2851,51 @@ async def delete_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(case)
     await db.commit()
     return Response(status_code=204)
+
+
+@router.post("/lineup-cases/{case_id}/parse-preview", status_code=200)
+async def parse_lineup_case_preview(
+    case_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parse upload in memory; does not write CommercialLineupLine rows."""
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    filename = file.filename or "upload"
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    try:
+        preview = await preview_current_lineup_file(db, filename, file_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Parse preview failed: {exc}") from exc
+    return {
+        "case_id": case_id,
+        "total_rows": preview.total_rows,
+        "resolved_products": preview.resolved_products,
+        "unresolved_products": preview.unresolved_products,
+        "unknown_customer_rows": preview.unknown_customer_rows,
+        "unknown_distributor_rows": preview.unknown_distributor_rows,
+        "warnings": preview.warnings,
+        "can_apply": preview.can_apply,
+        "rows": preview.rows,
+        "rows_truncated": preview.total_rows > len(preview.rows),
+    }
+
+
+@router.post("/lineup-cases/{case_id}/parse-apply", status_code=200)
+async def parse_lineup_case_apply(
+    case_id: int,
+    file: UploadFile = File(...),
+    confirm: bool = Form(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply parsed upload after preview. Requires confirm=true."""
+    if not confirm:
+        raise HTTPException(status_code=400, detail="confirm=true is required to apply parse")
+    return await parse_lineup_case_upload(case_id, file, db)
 
 
 @router.post("/lineup-cases/{case_id}/parse-upload", status_code=200)

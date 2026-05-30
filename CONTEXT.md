@@ -1,7 +1,15 @@
 # Channel Intelligence Platform — Current Context
 
 ## Branch
-`main`
+`cursor/commercial-planner-program-84b1` (Commercial Planner program phase 1)
+
+### May 30, 2026 — Commercial Planner program (phase 1)
+- **Flag:** `CIP_COMMERCIAL_PLANNER_ENABLED` / `NEXT_PUBLIC_CIP_COMMERCIAL_PLANNER_ENABLED` (default on).
+- **Lineup:** `POST …/parse-preview` + `POST …/parse-apply?confirm=true`; upload dialog uses preview then apply.
+- **Intelligence:** `GET …/plans/{id}/intelligence/customer/{cid}/product-rankings`; web **Intelligent add** dialog.
+- **Suggestions:** Prefer current `CommercialLineupCase` lines on plan before historical lineup job.
+- **Docs:** `docs/COMMERCIAL_PLANNER_PROGRAM.md`
+- **Tests:** `test_commercial_planner_intelligence.py`, `test_lineup_parse_preview.py`
 
 ### May 30, 2026 — Master bulk delete: complete FK checks, batched preview, 409 on confirm
 - **Fix:** Extended `customer_usage` / `product_usage` / `distributor_usage` / `channel_usage` / `region_usage` with staging lines, token aliases, mapping candidates, catalog links, etc.

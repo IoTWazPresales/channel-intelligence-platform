@@ -45,7 +45,7 @@ import {
   defaultGroupExpandedState,
   NAV_STORAGE_COLLAPSED,
   NAV_STORAGE_GROUP_EXPANDED,
-  navGroups,
+  shellNavGroups,
   navHrefMatches,
   type NavGroup,
 } from '@/features/shell/navConfig';
@@ -230,7 +230,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
       <Divider sx={{ borderColor: sidebarBorder }} />
 
       <Box sx={{ flex: 1, overflow: 'auto', py: 1 }}>
-        {navGroups.map((group) => {
+        {shellNavGroups().map((group) => {
           const GroupIcon = GROUP_ICONS[group.id] ?? DashboardOutlinedIcon;
           const expanded = groupExpanded[group.id] !== false;
 
