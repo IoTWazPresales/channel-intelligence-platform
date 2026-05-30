@@ -4,10 +4,7 @@
 `feat/master-delete-reference-checks-bulk`
 
 ## Head commit
-(pending push) — master delete reference checks + customers/products bulk delete
-
-## Alembic Head
-`20260518_0045` — unchanged (no migrations in this work)
+`fac1462` on `origin/feat/master-delete-reference-checks-bulk` — master delete reference checks + customers/products bulk delete
 
 ### May 30, 2026 — Master delete reference checks + bulk delete
 - **Reference-check delete** (mirrors `product_usage.py`): `customer_usage`, `distributor_usage`, `channel_usage`, `region_usage`, `customer_location_usage` + structured 409 + GET refs on API.
