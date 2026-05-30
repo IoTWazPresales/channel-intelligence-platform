@@ -9,7 +9,7 @@ import pytest
 
 from app.api.deps import get_db
 from app.main import app
-from app.services.customer_usage import customer_hard_reference_breakdown_batch
+from app.services.customer_usage import _SPECS, customer_hard_reference_breakdown_batch
 from app.services.master_entity_bulk_delete import MasterBulkDeleteIntegrityError
 
 client = TestClient(app)
@@ -21,26 +21,23 @@ def clear_overrides():
     app.dependency_overrides.clear()
 
 
+def test_customer_specs_include_dsi_staging():
+    """DSI staging must be registered in _SPECS so it is part of the UNION ALL check."""
+    labels = {label for label, _ in _SPECS}
+    assert "DSI import staging (resolved customer)" in labels
+
+
 def test_customer_batch_breakdown_includes_dsi_staging_label():
-    from app.models.import_distributor_si import ImportDistributorSiStagingLine
-
+    """batch_counts_multi_table result must surface DSI staging references."""
     db = MagicMock()
-    open_result = MagicMock()
-    open_result.scalars.return_value.all.return_value = []
 
-    async def fake_batch(_db, col, ids):
-        if col is ImportDistributorSiStagingLine.resolved_customer_id:
-            return {ids[0]: 2}
-        return {}
+    async def fake_multi_table(_db, subqueries, ids):
+        return {99: [{"label": "DSI import staging (resolved customer)", "count": 2}]}
 
     async def _run():
-        db.execute = AsyncMock(return_value=open_result)
         with patch(
-            "app.services.customer_usage.batch_counts_for_column",
-            new=AsyncMock(side_effect=fake_batch),
-        ), patch(
-            "app.services.customer_usage._batch_mapping_candidate_counts",
-            new=AsyncMock(return_value={}),
+            "app.services.customer_usage.batch_counts_multi_table",
+            new=AsyncMock(side_effect=fake_multi_table),
         ):
             result = await customer_hard_reference_breakdown_batch(db, [99])
         labels = [r["label"] for r in result.get(99, [])]

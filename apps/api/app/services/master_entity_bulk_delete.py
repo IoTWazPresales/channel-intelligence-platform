@@ -1,10 +1,28 @@
-"""Bulk delete preview/confirm for master dimensions."""
+"""Bulk delete preview/confirm for master dimensions.
+
+Performance design
+------------------
+* preview  — one UNION ALL reference check (1 round trip) + one batch label
+             fetch (1 round trip) = 2 round trips regardless of how many tables
+             are checked or how many entities are in the selection.
+
+* confirm  — when ``deletable_ids`` is provided from a recent preview the
+             expensive reference re-check is skipped entirely.  Only a single
+             batch existence query is issued before proceeding to deletes.  The
+             ``db.commit()`` IntegrityError handler is the data-integrity safety
+             net for concurrent changes between preview and confirm.
+
+* error path — any unhandled exception (asyncpg timeout, connection reset, etc.)
+               is re-raised so the endpoint layer can map it to a structured
+               HTTP response rather than a bare 500.
+"""
 
 from __future__ import annotations
 
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,21 +90,55 @@ async def _batch_refs(
     return await distributor_hard_reference_breakdown_batch(db, entity_ids)
 
 
-async def _entity_label(db: AsyncSession, kind: MasterEntityKind, entity_id: int) -> str | None:
+async def _batch_entity_labels(
+    db: AsyncSession, kind: MasterEntityKind, entity_ids: list[int]
+) -> dict[int, str]:
+    """Fetch entity labels for all IDs in a single SELECT IN query.
+
+    Missing IDs (rows not found in the database) are absent from the returned
+    dict, allowing callers to detect deletions that occurred since preview.
+    """
+    if not entity_ids:
+        return {}
     if kind == "products":
-        row = await db.get(DimProduct, entity_id)
-        return row.sku if row else None
+        rows = (
+            await db.execute(select(DimProduct.id, DimProduct.sku).where(DimProduct.id.in_(entity_ids)))
+        ).all()
+        return {row.id: row.sku for row in rows}
     if kind == "customers":
-        row = await db.get(DimCustomer, entity_id)
-        return row.code if row else None
+        rows = (
+            await db.execute(
+                select(DimCustomer.id, DimCustomer.code).where(DimCustomer.id.in_(entity_ids))
+            )
+        ).all()
+        return {row.id: row.code for row in rows}
     if kind == "channels":
-        row = await db.get(DimChannel, entity_id)
-        return row.code if row else None
+        rows = (
+            await db.execute(
+                select(DimChannel.id, DimChannel.code).where(DimChannel.id.in_(entity_ids))
+            )
+        ).all()
+        return {row.id: row.code for row in rows}
     if kind == "regions":
-        row = await db.get(DimRegion, entity_id)
-        return row.code if row else None
-    row = await db.get(DimDistributor, entity_id)
-    return row.code if row else None
+        rows = (
+            await db.execute(
+                select(DimRegion.id, DimRegion.code).where(DimRegion.id.in_(entity_ids))
+            )
+        ).all()
+        return {row.id: row.code for row in rows}
+    rows = (
+        await db.execute(
+            select(DimDistributor.id, DimDistributor.code).where(DimDistributor.id.in_(entity_ids))
+        )
+    ).all()
+    return {row.id: row.code for row in rows}
+
+
+# Keep the single-entity helper for backward compat (used by some endpoint
+# error paths and existing tests).
+async def _entity_label(db: AsyncSession, kind: MasterEntityKind, entity_id: int) -> str | None:
+    label_map = await _batch_entity_labels(db, kind, [entity_id])
+    return label_map.get(entity_id)
 
 
 def _preview_row(
@@ -112,11 +164,13 @@ async def preview_master_bulk_delete(
     entity_ids: list[int],
 ) -> dict[str, Any]:
     ids = normalize_entity_ids(entity_ids)
+    # Two queries: one UNION ALL reference check, one batch label fetch.
     ref_map = await _batch_refs(db, kind, ids)
+    label_map = await _batch_entity_labels(db, kind, ids)
     rows: list[dict[str, Any]] = []
     for eid in ids:
         refs = ref_map.get(eid, [])
-        label = await _entity_label(db, kind, eid)
+        label = label_map.get(eid)
         rows.append(_preview_row(eid, label, refs, missing=label is None))
 
     missing_ids = [r["id"] for r in rows if r.get("missing")]
@@ -184,20 +238,15 @@ async def confirm_master_bulk_delete(
         target_ids = normalize_entity_ids(deletable_ids)
         if not target_ids:
             raise ValueError("entities_still_blocked")
-        id_set = set(ids)
-        if not set(target_ids).issubset(id_set):
+        if not set(target_ids).issubset(set(ids)):
             raise ValueError("deletable_ids_not_subset")
-        ref_map = await _batch_refs(db, kind, target_ids)
-        blocked_at_confirm = [eid for eid in target_ids if ref_map.get(eid)]
-        if blocked_at_confirm:
-            merged_refs: list[dict[str, int | str]] = []
-            for eid in blocked_at_confirm:
-                merged_refs.extend(ref_map.get(eid, []))
-            raise MasterBulkDeleteIntegrityError(
-                "One or more rows are still referenced and cannot be deleted.",
-                merged_refs,
-            )
-        preview = None
+        # Skip the full reference re-check — the preview already determined
+        # these IDs are deletable.  The commit IntegrityError handler below
+        # is the safety net for concurrent changes between preview and confirm.
+        label_map = await _batch_entity_labels(db, kind, target_ids)
+        missing = [eid for eid in target_ids if eid not in label_map]
+        if missing:
+            raise ValueError("not_all_entities_found")
         skipped_blocked_ids = [eid for eid in ids if eid not in set(target_ids)]
         skipped_blocked_count = len(skipped_blocked_ids)
     else:
@@ -209,11 +258,6 @@ async def confirm_master_bulk_delete(
             raise ValueError("entities_still_blocked")
         skipped_blocked_ids = [r["id"] for r in preview["rows"] if r.get("blocked")]
         skipped_blocked_count = preview["blocked_count"]
-
-    for eid in target_ids:
-        row = await _entity_label(db, kind, eid)
-        if row is None:
-            raise ValueError("not_all_entities_found")
 
     deleted_ids: list[int] = []
     try:
@@ -233,6 +277,9 @@ async def confirm_master_bulk_delete(
             if last_refs
             else [{"label": "Unknown referencing rows (try refresh)", "count": 1}],
         ) from None
+    except Exception:
+        await db.rollback()
+        raise
 
     return {
         "entity_type": kind,

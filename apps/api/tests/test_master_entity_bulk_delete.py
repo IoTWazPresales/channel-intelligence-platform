@@ -116,14 +116,14 @@ def test_catalog_and_distributor_bulk_delete_preview(path: str, patch_target: st
 
 
 def test_confirm_with_deletable_ids_does_not_call_preview():
+    """When deletable_ids is provided confirm must skip the full reference re-check."""
     db = MagicMock()
-    db.get = AsyncMock(return_value=MagicMock(code="CUST-1"))
     db.commit = AsyncMock()
 
     async def _run():
         with patch(
-            "app.services.master_entity_bulk_delete._batch_refs",
-            new=AsyncMock(return_value={1: []}),
+            "app.services.master_entity_bulk_delete._batch_entity_labels",
+            new=AsyncMock(return_value={1: "CUST-1"}),
         ), patch(
             "app.services.master_entity_bulk_delete._delete_one",
             new=AsyncMock(return_value=True),
@@ -142,17 +142,19 @@ def test_confirm_with_deletable_ids_does_not_call_preview():
 
 def test_confirm_integrity_error_raises_structured_conflict():
     db = MagicMock()
-    db.get = AsyncMock(return_value=MagicMock(code="CUST-1"))
     db.commit = AsyncMock(side_effect=IntegrityError("fk", {}, Exception()))
     db.rollback = AsyncMock()
 
     async def _run():
         with patch(
-            "app.services.master_entity_bulk_delete._batch_refs",
-            new=AsyncMock(return_value={1: []}),
+            "app.services.master_entity_bulk_delete._batch_entity_labels",
+            new=AsyncMock(return_value={1: "CUST-1"}),
         ), patch(
             "app.services.master_entity_bulk_delete._delete_one",
             new=AsyncMock(return_value=True),
+        ), patch(
+            "app.services.master_entity_bulk_delete._batch_refs",
+            new=AsyncMock(return_value={1: [{"label": "Sell-out", "count": 1}]}),
         ):
             with pytest.raises(MasterBulkDeleteIntegrityError) as exc_info:
                 await confirm_master_bulk_delete(db, "customers", [1], deletable_ids=[1])
@@ -170,8 +172,8 @@ def test_preview_uses_batch_breakdown():
             "app.services.master_entity_bulk_delete._batch_refs",
             new=AsyncMock(return_value={5: [{"label": "Sell-out", "count": 2}]}),
         ), patch(
-            "app.services.master_entity_bulk_delete._entity_label",
-            new=AsyncMock(return_value="CUST-5"),
+            "app.services.master_entity_bulk_delete._batch_entity_labels",
+            new=AsyncMock(return_value={5: "CUST-5"}),
         ):
             payload = await preview_master_bulk_delete(db, "customers", [5])
         assert payload["blocked_count"] == 1

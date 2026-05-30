@@ -489,7 +489,7 @@ async def post_customers_bulk_delete_confirm(
             body.entity_ids,
             deletable_ids=body.deletable_ids,
         )
-    except (ValueError, MasterBulkDeleteIntegrityError) as exc:
+    except Exception as exc:
         raise_bulk_delete_http_error(exc, entity_label="customer")
 
 

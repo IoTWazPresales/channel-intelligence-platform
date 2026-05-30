@@ -49,7 +49,7 @@ async def post_channels_bulk_delete_confirm(
             body.entity_ids,
             deletable_ids=body.deletable_ids,
         )
-    except (ValueError, MasterBulkDeleteIntegrityError) as exc:
+    except Exception as exc:
         raise_bulk_delete_http_error(exc, entity_label="channel")
 
 
@@ -79,7 +79,7 @@ async def post_regions_bulk_delete_confirm(
             body.entity_ids,
             deletable_ids=body.deletable_ids,
         )
-    except (ValueError, MasterBulkDeleteIntegrityError) as exc:
+    except Exception as exc:
         raise_bulk_delete_http_error(exc, entity_label="region")
 
 

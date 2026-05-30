@@ -1,8 +1,12 @@
-"""Product delete: hard blockers vs derived rows that are auto-cleaned."""
+"""Product delete: hard blockers vs derived rows that are auto-cleaned.
+
+All hard-reference checks are executed as a single UNION ALL query — one
+network round trip to the database regardless of the number of tables checked.
+"""
 
 from __future__ import annotations
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import Select, delete, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_planner import CommercialSkuAssumption
@@ -43,55 +47,68 @@ from app.models.lineup import FactLineupPlanItem
 from app.models.mapping import ProductAlias
 from app.models.product_catalog import CatalogProduct
 from app.models.shipment_evidence import ShipmentEvidenceLine
-from app.services.master_usage_batch import batch_counts_for_column, merge_batch_refs
+from app.services.master_usage_batch import batch_counts_multi_table, count_subquery_for_columns
 
 _PRODUCT_MAPPING_ENTITY_TYPES = ("product_identifier",)
 
-
-async def _batch_product_roadmap_counts(db: AsyncSession, product_ids: list[int]) -> dict[int, int]:
-    ids = [int(i) for i in product_ids if isinstance(i, int) and i > 0]
-    if not ids:
-        return {}
-    out: dict[int, int] = {i: 0 for i in ids}
-    for col in (
-        FactProductRoadmap.product_id,
-        FactProductRoadmap.replacement_candidate_id,
-    ):
-        for pid, cnt in (await batch_counts_for_column(db, col, ids)).items():
-            out[pid] = out.get(pid, 0) + cnt
-    return {pid: n for pid, n in out.items() if n > 0}
-
-
-async def _batch_lineup_product_counts(db: AsyncSession, product_ids: list[int]) -> dict[int, int]:
-    ids = [int(i) for i in product_ids if isinstance(i, int) and i > 0]
-    if not ids:
-        return {}
-    out: dict[int, int] = {i: 0 for i in ids}
-    for col in (
-        FactLineupPlanItem.product_id,
-        FactLineupPlanItem.predecessor_product_id,
-        FactLineupPlanItem.successor_product_id,
-    ):
-        for pid, cnt in (await batch_counts_for_column(db, col, ids)).items():
-            out[pid] = out.get(pid, 0) + cnt
-    return {pid: n for pid, n in out.items() if n > 0}
+_SPECS: list[tuple[str, object]] = [
+    ("Sell-out", FactSalesSellout.product_id),
+    ("Sell-in", FactSalesSellin.product_id),
+    ("Customer inventory", FactInventoryCustomer.product_id),
+    ("Distributor inventory", FactInventoryDistributor.product_id),
+    ("Inbound shipments", FactInboundShipment.product_id),
+    ("Pricing", FactPricing.product_id),
+    ("Support / MDF", FactSupport.product_id),
+    ("Promotion plans", FactPromotionPlan.product_id),
+    ("Promotion performance", FactPromotionPerformance.product_id),
+    ("Forecasts", FactForecast.product_id),
+    ("Buy plans", FactBuyPlan.product_id),
+    ("Competitor mappings", FactCompetitorMapping.product_id),
+    ("Budget requests (linked SKU)", FactBudgetRequest.linked_product_id),
+    ("Activation", FactActivation.product_id),
+    ("Customer sell-through", FactCustomerSellthrough.product_id),
+    ("Customer velocity", FactCustomerVelocity.product_id),
+    ("DSI forecasts", FactDsiForecast.product_id),
+    ("Shipment evidence (resolved product)", ShipmentEvidenceLine.product_id),
+    ("DSI import staging (resolved product)", ImportDistributorSiStagingLine.resolved_product_id),
+    ("Customer sell-through import staging", ImportCustomerSellthroughStagingLine.resolved_product_id),
+    ("Catalog products (canonical link)", CatalogProduct.canonical_product_id),
+    ("Commercial SKU assumptions", CommercialSkuAssumption.product_id),
+]
 
 
-async def _batch_mapping_candidate_counts(db: AsyncSession, product_ids: list[int]) -> dict[int, int]:
-    ids = [int(i) for i in product_ids if isinstance(i, int) and i > 0]
-    if not ids:
-        return {}
-    col = ImportEntityMappingCandidate.suggested_entity_id
-    stmt = (
-        select(col, func.count())
+def _extra_product_subqueries(ids: list[int]) -> list[Select]:
+    """Additional subqueries for multi-column or filtered reference checks."""
+    return [
+        # Roadmap references products as primary SKU or as replacement candidate.
+        # The two columns are merged into a single count per entity.
+        count_subquery_for_columns(
+            "Product roadmap",
+            [FactProductRoadmap.product_id, FactProductRoadmap.replacement_candidate_id],
+            ids,
+        ),
+        # Lineup items reference products in three roles; aggregate all three.
+        count_subquery_for_columns(
+            "Lineup plan items",
+            [
+                FactLineupPlanItem.product_id,
+                FactLineupPlanItem.predecessor_product_id,
+                FactLineupPlanItem.successor_product_id,
+            ],
+            ids,
+        ),
+        # Mapping candidates restricted to product entity types.
+        select(
+            literal("Import mapping candidates (product)").label("lbl"),
+            ImportEntityMappingCandidate.suggested_entity_id.label("entity_id"),
+            func.count().label("cnt"),
+        )
         .where(
-            col.in_(ids),
+            ImportEntityMappingCandidate.suggested_entity_id.in_(ids),
             ImportEntityMappingCandidate.entity_type.in_(_PRODUCT_MAPPING_ENTITY_TYPES),
         )
-        .group_by(col)
-    )
-    rows = (await db.execute(stmt)).all()
-    return {int(k): int(v) for k, v in rows if k is not None}
+        .group_by(ImportEntityMappingCandidate.suggested_entity_id),
+    ]
 
 
 async def product_hard_reference_breakdown_batch(
@@ -101,43 +118,9 @@ async def product_hard_reference_breakdown_batch(
     out: dict[int, list[dict[str, int | str]]] = {i: [] for i in ids}
     if not ids:
         return out
-
-    specs: list[tuple[str, object]] = [
-        ("Sell-out", FactSalesSellout.product_id),
-        ("Sell-in", FactSalesSellin.product_id),
-        ("Customer inventory", FactInventoryCustomer.product_id),
-        ("Distributor inventory", FactInventoryDistributor.product_id),
-        ("Inbound shipments", FactInboundShipment.product_id),
-        ("Pricing", FactPricing.product_id),
-        ("Support / MDF", FactSupport.product_id),
-        ("Promotion plans", FactPromotionPlan.product_id),
-        ("Promotion performance", FactPromotionPerformance.product_id),
-        ("Forecasts", FactForecast.product_id),
-        ("Buy plans", FactBuyPlan.product_id),
-        ("Competitor mappings", FactCompetitorMapping.product_id),
-        ("Budget requests (linked SKU)", FactBudgetRequest.linked_product_id),
-        ("Activation", FactActivation.product_id),
-        ("Customer sell-through", FactCustomerSellthrough.product_id),
-        ("Customer velocity", FactCustomerVelocity.product_id),
-        ("DSI forecasts", FactDsiForecast.product_id),
-        ("Shipment evidence (resolved product)", ShipmentEvidenceLine.product_id),
-        ("DSI import staging (resolved product)", ImportDistributorSiStagingLine.resolved_product_id),
-        ("Customer sell-through import staging", ImportCustomerSellthroughStagingLine.resolved_product_id),
-        ("Catalog products (canonical link)", CatalogProduct.canonical_product_id),
-        ("Commercial SKU assumptions", CommercialSkuAssumption.product_id),
-    ]
-    for label, col in specs:
-        merge_batch_refs(out, ids, label, await batch_counts_for_column(db, col, ids))
-
-    merge_batch_refs(out, ids, "Product roadmap", await _batch_product_roadmap_counts(db, ids))
-    merge_batch_refs(out, ids, "Lineup plan items", await _batch_lineup_product_counts(db, ids))
-    merge_batch_refs(
-        out,
-        ids,
-        "Import mapping candidates (product)",
-        await _batch_mapping_candidate_counts(db, ids),
-    )
-    return out
+    subqueries = [count_subquery_for_columns(label, [col], ids) for label, col in _SPECS]
+    subqueries.extend(_extra_product_subqueries(ids))
+    return await batch_counts_multi_table(db, subqueries, ids)
 
 
 async def cleanup_soft_product_references(db: AsyncSession, product_id: int) -> None:
@@ -154,10 +137,14 @@ async def cleanup_soft_product_references(db: AsyncSession, product_id: int) -> 
     await db.execute(delete(ExceptionInboxItem).where(ExceptionInboxItem.product_id == product_id))
 
 
-async def product_hard_reference_breakdown(db: AsyncSession, product_id: int) -> list[dict[str, int | str]]:
+async def product_hard_reference_breakdown(
+    db: AsyncSession, product_id: int
+) -> list[dict[str, int | str]]:
     batch = await product_hard_reference_breakdown_batch(db, [product_id])
     return batch.get(product_id, [])
 
 
-async def product_reference_breakdown(db: AsyncSession, product_id: int) -> list[dict[str, int | str]]:
+async def product_reference_breakdown(
+    db: AsyncSession, product_id: int
+) -> list[dict[str, int | str]]:
     return await product_hard_reference_breakdown(db, product_id)

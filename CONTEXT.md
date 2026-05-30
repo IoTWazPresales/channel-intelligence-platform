@@ -1,5 +1,15 @@
 # Channel Intelligence Platform — Current Context
 
+### May 31, 2026 — Master delete: UNION ALL reference checks, no NameError, no redundant re-check
+- **Bug fix:** `customer_usage.py` was missing `from sqlalchemy import func` → `NameError` at runtime → bulk delete 500. Added `func` (and `literal`, `Select`) to imports.
+- **Performance:** All six `*_usage.py` reference checks now execute as a **single UNION ALL query** (one network round trip) instead of 19–25 sequential awaited queries. Before: ~2s × 21 queries ≈ 42 s. After: 1 round trip (~1–3 s for the UNION).
+- **Architecture:** New `count_subquery_for_columns(label, columns, ids)` + `batch_counts_multi_table(db, subqueries, ids)` utilities in `master_usage_batch.py`. Multi-column tables (roadmap product_id + replacement_candidate_id, lineup 3 roles) are aggregated via an inner `UNION ALL` subquery — one entry per entity, not one per column.
+- **Confirm path:** When `deletable_ids` is provided from the preview, the full reference re-check is skipped. A single `_batch_entity_labels` batch SELECT replaces the old `_batch_refs` (21 queries) + per-entity label loop (N queries). Preview cost: 2 queries. Confirm cost: 1 query (existence) + delete operations.
+- **Children deletes:** `delete_customer_children` and `delete_distributor_children` now use bulk `DELETE WHERE customer_id = ?` SQL instead of per-row ORM deletes.
+- **Exception safety:** `raise_bulk_delete_http_error` now handles all exception types (not just `ValueError`/`MasterBulkDeleteIntegrityError`) and always raises `HTTPException`. All confirm endpoints use `except Exception`.
+- **Tests:** 12/12 passing; patches retargeted from `_batch_refs`/`batch_counts_for_column` to `_batch_entity_labels`/`batch_counts_multi_table`.
+- **Modules changed:** `master_usage_batch.py`, `customer_usage.py`, `product_usage.py`, `distributor_usage.py`, `channel_usage.py`, `region_usage.py`, `master_entity_bulk_delete.py`, `master_bulk_delete_http.py`, endpoints: `customers`, `products`, `distributors`, `catalog`.
+
 ### May 30, 2026 — Product Master staging: file is source of truth (no row JSONB blob)
 - **Validate** no longer builds or persists per-row `staged_metadata` maps (`"0"`…`"17135"` keys). Stores scalar `pm_staged_row_count` only; `pm_validate_task` and other import-type slots in the same JSONB column are unchanged.
 - **Commit** re-reads the uploaded file and derives `stage_raw` values into `specs_json.import_staging` and catalog `row_staged_snapshot`; `dim_product` / `catalog_product` / PAV use chunked IN batch loads (no per-row `SELECT` by SKU).

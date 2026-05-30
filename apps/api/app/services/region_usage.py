@@ -1,4 +1,7 @@
-"""Region delete: hard blockers (nullable FKs on masters)."""
+"""Region delete: hard blockers (nullable FKs on masters).
+
+All reference checks execute as a single UNION ALL query.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dimensions import CustomerLocation, DimCustomer, DimRegion
 from app.models.import_distributor_si import RegionSourceTokenAlias
-from app.services.master_usage_batch import batch_counts_for_column, merge_batch_refs
+from app.services.master_usage_batch import batch_counts_multi_table, count_subquery_for_columns
+
+_SPECS: list[tuple[str, object]] = [
+    ("Customers", DimCustomer.region_id),
+    ("Customer locations", CustomerLocation.region_id),
+    ("Region source token aliases", RegionSourceTokenAlias.region_id),
+]
 
 
 async def region_hard_reference_breakdown_batch(
@@ -16,18 +25,13 @@ async def region_hard_reference_breakdown_batch(
     out: dict[int, list[dict[str, int | str]]] = {i: [] for i in ids}
     if not ids:
         return out
-
-    specs: list[tuple[str, object]] = [
-        ("Customers", DimCustomer.region_id),
-        ("Customer locations", CustomerLocation.region_id),
-        ("Region source token aliases", RegionSourceTokenAlias.region_id),
-    ]
-    for label, col in specs:
-        merge_batch_refs(out, ids, label, await batch_counts_for_column(db, col, ids))
-    return out
+    subqueries = [count_subquery_for_columns(label, [col], ids) for label, col in _SPECS]
+    return await batch_counts_multi_table(db, subqueries, ids)
 
 
-async def region_hard_reference_breakdown(db: AsyncSession, region_id: int) -> list[dict[str, int | str]]:
+async def region_hard_reference_breakdown(
+    db: AsyncSession, region_id: int
+) -> list[dict[str, int | str]]:
     row = await db.get(DimRegion, region_id)
     if not row:
         return []

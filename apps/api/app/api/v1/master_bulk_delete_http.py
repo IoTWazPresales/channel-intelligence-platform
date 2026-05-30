@@ -1,4 +1,8 @@
-"""Map master bulk-delete service errors to HTTP responses."""
+"""Map master bulk-delete service errors to HTTP responses.
+
+Every code path ends with an HTTPException — callers can safely use
+``except Exception`` and route everything through this function.
+"""
 
 from __future__ import annotations
 
@@ -16,15 +20,26 @@ def raise_bulk_delete_http_error(exc: Exception, *, entity_label: str) -> None:
                 "references": exc.references,
             },
         ) from None
+
     if not isinstance(exc, ValueError):
-        raise exc
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Delete operation failed unexpectedly. Please try again.",
+                "error": type(exc).__name__,
+            },
+        ) from exc
+
     code = str(exc)
     if code == "not_all_entities_found":
         raise HTTPException(
             status_code=409,
             detail={
                 "error": code,
-                "message": f"One or more {entity_label} ids no longer exist; refresh the list and try again.",
+                "message": (
+                    f"One or more {entity_label} ids no longer exist; "
+                    "refresh the list and try again."
+                ),
             },
         ) from None
     if code == "entities_still_blocked":
@@ -51,4 +66,12 @@ def raise_bulk_delete_http_error(exc: Exception, *, entity_label: str) -> None:
                 "message": f"Provide at least one valid {entity_label} id.",
             },
         ) from None
-    raise exc
+    # Unknown ValueError — surface it as a 500 rather than letting it propagate
+    # as an unhandled exception.
+    raise HTTPException(
+        status_code=500,
+        detail={
+            "error": code,
+            "message": f"Unexpected error during {entity_label} deletion.",
+        },
+    ) from exc

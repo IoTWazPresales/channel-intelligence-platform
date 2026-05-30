@@ -1,8 +1,12 @@
-"""Distributor delete: hard blockers vs child rows removed with the dimension."""
+"""Distributor delete: hard blockers vs child rows removed with the dimension.
+
+All hard-reference checks are executed as a single UNION ALL query — one
+network round trip to the database regardless of the number of tables checked.
+"""
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, delete, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupLine
@@ -27,29 +31,55 @@ from app.models.import_distributor_si import (
 )
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.commercial_planner.unassigned_distributor import UNASSIGNED_DISTRIBUTOR_CODE
-from app.services.master_usage_batch import batch_counts_for_column, merge_batch_refs
+from app.services.master_usage_batch import batch_counts_multi_table, count_subquery_for_columns
 
 _DISTRIBUTOR_MAPPING_ENTITY_TYPES = (
     "distributor_token",
     "shipment_distributor",
 )
 
+_SPECS: list[tuple[str, object]] = [
+    ("Sell-in", FactSalesSellin.distributor_id),
+    ("Sell-out", FactSalesSellout.distributor_id),
+    ("Returns", FactReturns.distributor_id),
+    ("Distributor inventory", FactInventoryDistributor.distributor_id),
+    ("Inventory reconciliation", FactInventoryReconciliation.distributor_id),
+    ("Inbound shipments", FactInboundShipment.distributor_id),
+    ("Buy plans", FactBuyPlan.distributor_id),
+    ("DSI forecasts", FactDsiForecast.distributor_id),
+    ("Customer velocity", FactCustomerVelocity.distributor_id),
+    ("Commercial distributor terms", CommercialDistributorTerm.distributor_id),
+    ("Commercial plan lines", CommercialPlanLine.distributor_id),
+    ("Commercial lineup lines", CommercialLineupLine.distributor_id),
+    ("Historical lineup headers", HistoricalLineupImportHeader.distributor_id),
+    ("Shipment evidence (resolved distributor)", ShipmentEvidenceLine.distributor_id),
+    ("Customers with preferred distributor", DimCustomer.preferred_distributor_id),
+    ("DSI import staging (resolved distributor)", ImportDistributorSiStagingLine.resolved_distributor_id),
+    ("Distributor source token aliases", DistributorSourceTokenAlias.distributor_id),
+]
 
-async def _batch_mapping_candidate_counts(db: AsyncSession, distributor_ids: list[int]) -> dict[int, int]:
-    ids = [int(i) for i in distributor_ids if isinstance(i, int) and i > 0]
-    if not ids:
-        return {}
-    col = ImportEntityMappingCandidate.suggested_entity_id
-    stmt = (
-        select(col, func.count())
+
+def _extra_distributor_subqueries(ids: list[int]) -> list[Select]:
+    """Additional subqueries with non-standard WHERE clauses included in the UNION ALL."""
+    return [
+        # Flag the system-reserved UNASSIGNED record as undeletable.
+        select(
+            literal("System reference account (UNASSIGNED)").label("lbl"),
+            DimDistributor.id.label("entity_id"),
+            literal(1).label("cnt"),
+        ).where(DimDistributor.id.in_(ids), DimDistributor.code == UNASSIGNED_DISTRIBUTOR_CODE),
+        # Mapping candidates restricted to distributor entity types.
+        select(
+            literal("Import mapping candidates (distributor)").label("lbl"),
+            ImportEntityMappingCandidate.suggested_entity_id.label("entity_id"),
+            func.count().label("cnt"),
+        )
         .where(
-            col.in_(ids),
+            ImportEntityMappingCandidate.suggested_entity_id.in_(ids),
             ImportEntityMappingCandidate.entity_type.in_(_DISTRIBUTOR_MAPPING_ENTITY_TYPES),
         )
-        .group_by(col)
-    )
-    rows = (await db.execute(stmt)).all()
-    return {int(k): int(v) for k, v in rows if k is not None}
+        .group_by(ImportEntityMappingCandidate.suggested_entity_id),
+    ]
 
 
 async def distributor_hard_reference_breakdown_batch(
@@ -59,47 +89,9 @@ async def distributor_hard_reference_breakdown_batch(
     out: dict[int, list[dict[str, int | str]]] = {i: [] for i in ids}
     if not ids:
         return out
-
-    unassigned_rows = (
-        await db.execute(
-            select(DimDistributor.id).where(
-                DimDistributor.id.in_(ids),
-                DimDistributor.code == UNASSIGNED_DISTRIBUTOR_CODE,
-            )
-        )
-    ).scalars().all()
-    for did in unassigned_rows:
-        out[int(did)].append({"label": "System reference account (UNASSIGNED)", "count": 1})
-
-    specs: list[tuple[str, object]] = [
-        ("Sell-in", FactSalesSellin.distributor_id),
-        ("Sell-out", FactSalesSellout.distributor_id),
-        ("Returns", FactReturns.distributor_id),
-        ("Distributor inventory", FactInventoryDistributor.distributor_id),
-        ("Inventory reconciliation", FactInventoryReconciliation.distributor_id),
-        ("Inbound shipments", FactInboundShipment.distributor_id),
-        ("Buy plans", FactBuyPlan.distributor_id),
-        ("DSI forecasts", FactDsiForecast.distributor_id),
-        ("Customer velocity", FactCustomerVelocity.distributor_id),
-        ("Commercial distributor terms", CommercialDistributorTerm.distributor_id),
-        ("Commercial plan lines", CommercialPlanLine.distributor_id),
-        ("Commercial lineup lines", CommercialLineupLine.distributor_id),
-        ("Historical lineup headers", HistoricalLineupImportHeader.distributor_id),
-        ("Shipment evidence (resolved distributor)", ShipmentEvidenceLine.distributor_id),
-        ("Customers with preferred distributor", DimCustomer.preferred_distributor_id),
-        ("DSI import staging (resolved distributor)", ImportDistributorSiStagingLine.resolved_distributor_id),
-        ("Distributor source token aliases", DistributorSourceTokenAlias.distributor_id),
-    ]
-    for label, col in specs:
-        merge_batch_refs(out, ids, label, await batch_counts_for_column(db, col, ids))
-
-    merge_batch_refs(
-        out,
-        ids,
-        "Import mapping candidates (distributor)",
-        await _batch_mapping_candidate_counts(db, ids),
-    )
-    return out
+    subqueries = [count_subquery_for_columns(label, [col], ids) for label, col in _SPECS]
+    subqueries.extend(_extra_distributor_subqueries(ids))
+    return await batch_counts_multi_table(db, subqueries, ids)
 
 
 async def distributor_hard_reference_breakdown(
@@ -110,13 +102,9 @@ async def distributor_hard_reference_breakdown(
 
 
 async def delete_distributor_children(db: AsyncSession, distributor_id: int) -> None:
-    locations = (
-        await db.execute(select(DistributorLocation).where(DistributorLocation.distributor_id == distributor_id))
-    ).scalars().all()
-    for loc in locations:
-        await db.delete(loc)
-    contacts = (
-        await db.execute(select(DistributorContact).where(DistributorContact.distributor_id == distributor_id))
-    ).scalars().all()
-    for contact in contacts:
-        await db.delete(contact)
+    await db.execute(
+        delete(DistributorLocation).where(DistributorLocation.distributor_id == distributor_id)
+    )
+    await db.execute(
+        delete(DistributorContact).where(DistributorContact.distributor_id == distributor_id)
+    )
