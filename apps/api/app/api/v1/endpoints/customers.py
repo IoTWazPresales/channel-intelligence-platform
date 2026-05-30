@@ -457,6 +457,46 @@ async def create_customer(body: CustomerCreate, db: AsyncSession = Depends(get_d
     }
 
 
+@router.post("/bulk-delete-preview")
+async def post_customers_bulk_delete_preview(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+    if not body.entity_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid customer id."},
+        )
+    return await preview_master_bulk_delete(db, "customers", body.entity_ids)
+
+
+@router.post("/bulk-delete-confirm")
+async def post_customers_bulk_delete_confirm(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+    if not body.entity_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid customer id."},
+        )
+    try:
+        return await confirm_master_bulk_delete(db, "customers", body.entity_ids)
+    except ValueError as exc:
+        code = str(exc)
+        if code == "not_all_entities_found":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": code,
+                    "message": "One or more customer ids no longer exist; refresh the list and try again.",
+                },
+            ) from None
+        if code == "entities_still_blocked":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": code,
+                    "message": "No selected customers can be deleted; all are still referenced.",
+                },
+            ) from None
+        raise
+
+
 @router.patch("/{customer_id}")
 async def patch_customer(customer_id: int, body: CustomerPatch, db: AsyncSession = Depends(get_db)):
     row = await db.get(DimCustomer, customer_id)
@@ -672,46 +712,6 @@ async def get_customer_refs_for_delete_ux(customer_id: int, db: AsyncSession = D
 @router.get("/{customer_id}/references")
 async def get_customer_references(customer_id: int, db: AsyncSession = Depends(get_db)):
     return await _customer_references_bundle(db, customer_id)
-
-
-@router.post("/bulk-delete-preview")
-async def post_customers_bulk_delete_preview(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
-    if not body.entity_ids:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid customer id."},
-        )
-    return await preview_master_bulk_delete(db, "customers", body.entity_ids)
-
-
-@router.post("/bulk-delete-confirm")
-async def post_customers_bulk_delete_confirm(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
-    if not body.entity_ids:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid customer id."},
-        )
-    try:
-        return await confirm_master_bulk_delete(db, "customers", body.entity_ids)
-    except ValueError as exc:
-        code = str(exc)
-        if code == "not_all_entities_found":
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "error": code,
-                    "message": "One or more customer ids no longer exist; refresh the list and try again.",
-                },
-            ) from None
-        if code == "entities_still_blocked":
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "error": code,
-                    "message": "No selected customers can be deleted; all are still referenced.",
-                },
-            ) from None
-        raise
 
 
 @router.delete("/{customer_id}/locations/{location_id}", status_code=204)

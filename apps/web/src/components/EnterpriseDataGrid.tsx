@@ -85,19 +85,22 @@ export const EnterpriseDataGrid = forwardRef(function EnterpriseDataGrid<T>(
   );
 
   const gridClass = isDark ? 'ag-theme-material-dark' : 'ag-theme-material';
+  const { rowSelection, ...restGridOptions } = gridOptions ?? {};
+  const agGridInstanceKey = `${pathname ?? '_'}_${rowSelection ? 'bulk-select' : 'normal'}`;
 
   return (
     <Box className={gridClass} sx={shellSx} style={agVarsInline}>
       <AgGridReact
         ref={ref}
-        key={pathname ?? '_'}
+        key={agGridInstanceKey}
         rowData={rowData}
         columnDefs={columnDefs}
         defaultColDef={defaultColDef}
         animateRows
         headerHeight={theme.density === 'compact' ? 36 : 42}
         rowHeight={theme.density === 'compact' ? 34 : 42}
-        {...gridOptions}
+        {...restGridOptions}
+        rowSelection={rowSelection}
         theme="legacy"
       />
     </Box>

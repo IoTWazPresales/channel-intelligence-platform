@@ -11,6 +11,19 @@ from app.main import app
 client = TestClient(app)
 
 
+def test_customers_bulk_delete_preview_route_accepts_post():
+    """Literal /bulk-delete-preview must be registered for POST (not shadowed by /{customer_id})."""
+    found = False
+    for route in app.routes:
+        if getattr(route, "path", None) != "/api/v1/customers/bulk-delete-preview":
+            continue
+        methods = getattr(route, "methods", None) or set()
+        if "POST" in methods:
+            found = True
+            break
+    assert found
+
+
 @pytest.fixture(autouse=True)
 def clear_overrides():
     yield
