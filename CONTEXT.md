@@ -1,5 +1,11 @@
 # Channel Intelligence Platform — Current Context
 
+### May 30, 2026 — Product Master staging: file is source of truth (no row JSONB blob)
+- **Validate** no longer builds or persists per-row `staged_metadata` maps (`"0"`…`"17135"` keys). Stores scalar `pm_staged_row_count` only; `pm_validate_task` and other import-type slots in the same JSONB column are unchanged.
+- **Commit** re-reads the uploaded file and derives `stage_raw` values into `specs_json.import_staging` and catalog `row_staged_snapshot`; `dim_product` / `catalog_product` / PAV use chunked IN batch loads (no per-row `SELECT` by SKU).
+- **GET …/product-master/jobs/{id}/state** returns `staged_row_count` instead of the full `staged_metadata_preview` blob (stops polling multi‑MB JSON every few seconds).
+- **Module:** `app/services/imports/pm_staging.py` (shared helpers).
+
 ## Branch
 `cursor/commercial-planner-program-84b1` (Commercial Planner program phases 1–2 complete)
 

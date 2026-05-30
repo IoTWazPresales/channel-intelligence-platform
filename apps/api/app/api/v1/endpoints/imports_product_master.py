@@ -26,6 +26,7 @@ from app.services.imports.pm_field_catalog import (
     field_definitions_for_api,
     normalize_mapping_decisions,
 )
+from app.services.imports.pm_staging import pm_staged_row_count_from_metadata
 from app.services.imports.product_master_workflow import (
     STATUS_PM_COMMIT_QUEUED,
     STATUS_PM_VALIDATE_QUEUED,
@@ -188,7 +189,7 @@ async def get_product_master_job_state(
         "field_definitions": field_definitions_for_api(),
         "validation_passed": job.validation_passed,
         "error_summary": job.error_summary,
-        "staged_metadata_preview": job.staged_metadata,
+        "staged_row_count": pm_staged_row_count_from_metadata(job.staged_metadata),
         "inferred_schema": inferred_schema_for_state_payload(job.inferred_schema),
         "progress": progress,
     }

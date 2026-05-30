@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -11,6 +12,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 from app.services.imports.pm_commit_catalog import commit_catalog_and_eav
+from app.services.imports.pm_staging import PM_STAGED_ROW_COUNT_KEY, pm_staged_row_count_from_metadata
 from app.services.imports.product_master_workflow import (
     STAGE_PM_COMMITTED,
     STAGE_PM_MAPPING,
@@ -197,7 +199,7 @@ def test_commit_catalog_skips_without_product_catalog_id() -> None:
         source,
         df,
         mapping_decisions={},
-        staged_row_values={},
+        products_by_sku={},
         technical_id_col="sku",
         name_col="name",
     )
@@ -212,13 +214,14 @@ def test_namespace_for_catalog_staged_is_deterministic() -> None:
     assert m._namespace_for(5, "candidate", "Foo Bar!!") == "catalog:5:candidate:foo_bar"
 
 
-def test_validate_product_master_staged_metadata_is_json_serializable(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Regression: staged_metadata JSONB must not contain raw datetime (psycopg serialization)."""
+def test_validate_persists_staged_row_count_not_row_index_map(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Validate stores pm_staged_row_count only; staging values are derived at commit from the file."""
     df = pd.DataFrame(
         {
-            "sku": ["A1"],
-            "name": ["Widget"],
-            "ship_date": [datetime(2024, 6, 15, 14, 30, 0)],
+            "sku": ["90NB0F12-M00000", "90NB0F12-M00001"],
+            "name": ["Widget Alpha", "Gadget Beta"],
+            "ship_date": [datetime(2024, 6, 15, 14, 30, 0), datetime(2024, 7, 1)],
+            "notes": ["n1", "n2"],
         }
     )
 
@@ -231,17 +234,23 @@ def test_validate_product_master_staged_metadata_is_json_serializable(monkeypatc
         lambda: MagicMock(read=lambda key: b""),
     )
 
-    job = MagicMock()
-    job.id = 42
-    job.template_slug = "product_master"
-    job.stage = STAGE_PM_MAPPING
-    job.mapping_decisions = {
-        "sku": {"target": "technical_product_id"},
-        "name": {"target": "display_name"},
-        "ship_date": {"disposition": "stage_raw"},
-    }
-    job.file_headers = ["sku", "name", "ship_date"]
-    job.file_name = "t.csv"
+    job = SimpleNamespace(
+        id=42,
+        template_slug="product_master",
+        stage=STAGE_PM_MAPPING,
+        status="validate_running",
+        mapping_decisions={
+            "sku": {"target": "technical_product_id"},
+            "name": {"target": "display_name"},
+            "ship_date": {"disposition": "stage_raw"},
+            "notes": {"disposition": "stage_raw"},
+        },
+        file_headers=["sku", "name", "ship_date", "notes"],
+        file_name="t.csv",
+        staged_metadata={"pm_validate_task": {"task_id": "t1"}},
+        validation_passed=None,
+        error_summary=None,
+    )
 
     raw_meta = MagicMock(storage_key="k")
     scal_raw = MagicMock()
@@ -251,16 +260,105 @@ def test_validate_product_master_staged_metadata_is_json_serializable(monkeypatc
 
     db = MagicMock()
     db.get.return_value = job
-    job.status = "validate_running"
     db.scalars.side_effect = [scal_raw, scal_ch]
     db.execute = MagicMock()
+    db.refresh = MagicMock()
 
     validate_product_master_sync(db, 42, from_worker=True)
 
     assert db.execute.called
+    meta = job.staged_metadata
+    assert isinstance(meta, dict)
+    assert meta.get(PM_STAGED_ROW_COUNT_KEY) == 2
+    assert "0" not in meta
+    assert "1" not in meta
+    assert "pm_validate_task" not in meta
+    json.dumps(meta)
 
-    json.dumps(job.staged_metadata)
-    assert str(job.staged_metadata["0"]["ship_date"]).startswith("2024-06-15")
+
+def test_commit_derives_import_staging_without_per_row_product_select(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Commit applies import_staging from file; dim_product SELECT count is O(chunks) not O(rows)."""
+    from app.services.imports import product_master_workflow as pmw
+
+    df = pd.DataFrame(
+        {
+            "sku": ["90NB0F12-M00000", "90NB0F12-M00001"],
+            "name": ["Widget Alpha", "Gadget Beta"],
+            "color": ["Red", "Blue"],
+        }
+    )
+
+    monkeypatch.setattr(pmw, "read_tabular", lambda fn, data: df)
+    monkeypatch.setattr(pmw, "get_storage_backend", lambda: MagicMock(read=lambda key: b""))
+    monkeypatch.setattr(
+        pmw,
+        "sync_bulk_upsert_products_from_rows",
+        lambda db, payloads: {"created": len(payloads), "updated": 0, "total": len(payloads)},
+    )
+    monkeypatch.setattr(pmw, "commit_catalog_and_eav", lambda *a, **k: 0)
+
+    products = {
+        "90NB0F12-M00000": SimpleNamespace(id=1, sku="90NB0F12-M00000", name="Widget Alpha", specs_json={}),
+        "90NB0F12-M00001": SimpleNamespace(id=2, sku="90NB0F12-M00001", name="Gadget Beta", specs_json={}),
+    }
+
+    def fake_batch_load(db, skus, **kwargs):
+        return {s: products[s] for s in skus if s in products}
+
+    monkeypatch.setattr(pmw, "batch_load_dim_products_by_sku", fake_batch_load)
+
+    job = SimpleNamespace(
+        id=7,
+        template_slug="product_master",
+        stage=STAGE_PM_VALIDATED,
+        status="validated",
+        validation_passed=True,
+        mapping_decisions={
+            "sku": {"target": "technical_product_id"},
+            "name": {"target": "display_name"},
+            "color": {"disposition": "stage_raw"},
+        },
+        file_name="t.csv",
+        staged_metadata={PM_STAGED_ROW_COUNT_KEY: 2},
+        source=SimpleNamespace(import_template=None, product_catalog_id=None),
+        pm_commit_meta=None,
+        error_summary=None,
+        completed_at=None,
+        archived_at=None,
+        import_mode="validate",
+    )
+
+    raw_meta = MagicMock(storage_key="k")
+    scal_raw = MagicMock()
+    scal_raw.one.return_value = raw_meta
+
+    exec_result = MagicMock()
+    exec_result.scalar_one_or_none.return_value = job
+
+    db = MagicMock()
+    db.execute.return_value = exec_result
+    db.scalars.return_value = scal_raw
+
+    dim_selects: list[str] = []
+
+    def count_scalars(stmt, *a, **kw):
+        text = str(stmt)
+        if "dim_product" in text.lower() and "sku" in text.lower():
+            dim_selects.append(text)
+        if "raw_file_metadata" in text.lower():
+            return scal_raw
+        return MagicMock(all=MagicMock(return_value=[]), first=MagicMock(return_value=None))
+
+    db.scalars.side_effect = count_scalars
+
+    commit_product_master_sync(db, 7, confirm_destructive=False)
+
+    assert products["90NB0F12-M00000"].specs_json.get("import_staging") == {"color": "Red"}
+    assert products["90NB0F12-M00001"].specs_json.get("import_staging") == {"color": "Blue"}
+    # batch_load is mocked; commit must not issue per-row DimProduct SELECT by sku
+    assert len(dim_selects) == 0
 
 
 def test_build_pm_import_progress_committed() -> None:
@@ -268,7 +366,7 @@ def test_build_pm_import_progress_committed() -> None:
     job.stage = STAGE_PM_COMMITTED
     job.validation_passed = True
     job.inferred_schema = {"row_count": 120}
-    job.staged_metadata = {"0": {"x": 1}}
+    job.staged_metadata = {PM_STAGED_ROW_COUNT_KEY: 1}
     job.error_summary = None
     job.started_at = None
     job.updated_at = None

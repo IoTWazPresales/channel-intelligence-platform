@@ -224,7 +224,7 @@ type PmJobState = {
   field_definitions?: PmFieldDefinition[];
   validation_passed: boolean | null;
   error_summary: string | null;
-  staged_metadata_preview: Record<string, Record<string, unknown>> | null;
+  staged_row_count?: number;
   /** Present after infer; includes dtype + first-row samples per column (JSON-safe). */
   inferred_schema?: { row_count: number; columns: InferredColumn[] } | null;
   /** Server-derived progress (counts, rail, phase); refreshed while validate/commit run. */
@@ -2736,10 +2736,10 @@ function AdminImportsPageContent() {
                 </Table>
               </>
             ) : null}
-            {pmJobState?.staged_metadata_preview && Object.keys(pmJobState.staged_metadata_preview).length > 0 ? (
+            {(pmJobState?.staged_row_count ?? 0) > 0 ? (
               <Alert severity="info">
-                Staged metadata rows (preview): <strong>{Object.keys(pmJobState.staged_metadata_preview).length}</strong> index
-                keys — values are merged into <code>specs_json.import_staging</code> on commit.
+                Staged metadata rows: <strong>{pmJobState.staged_row_count}</strong> row(s) with stage_raw values —
+                merged into <code>specs_json.import_staging</code> on commit (derived from the file, not stored on the job).
               </Alert>
             ) : null}
             <Stack direction="row" spacing={1}>

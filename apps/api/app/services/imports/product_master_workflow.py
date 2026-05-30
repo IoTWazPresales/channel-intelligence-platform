@@ -17,6 +17,15 @@ from app.models.dimensions import DimChannel, DimProduct
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
 from app.services.catalog.product_import_sync import sync_bulk_upsert_products_from_rows
 from app.services.imports.pm_commit_catalog import commit_catalog_and_eav
+from app.services.imports.pm_staging import (
+    batch_load_dim_products_by_sku,
+    collect_technical_ids_from_df,
+    persist_pm_staged_row_count,
+    pm_staged_row_count_from_metadata,
+    row_has_stage_raw_data,
+    row_stage_fragment_from_row,
+    stage_raw_columns_from_decisions,
+)
 from app.services.imports.pm_field_catalog import (
     PM_CANONICAL_GENERIC,
     PM_IDENTITY_TARGETS,
@@ -69,7 +78,7 @@ def build_pm_import_progress(job: ImportJob, severity_counts: dict[str, int]) ->
     vp = job.validation_passed
     inf = job.inferred_schema if isinstance(job.inferred_schema, dict) else {}
     total_rows = inf.get("row_count")
-    staged_row_count = len(job.staged_metadata) if isinstance(job.staged_metadata, dict) else 0
+    staged_row_count = pm_staged_row_count_from_metadata(job.staged_metadata)
 
     warn_n = int(severity_counts.get("warning", 0))
     err_n = int(severity_counts.get("error", 0))
@@ -597,11 +606,7 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
     upc_col = next((k for k, v in fm.items() if v == "barcode_upc"), None)
     ch_col = next((k for k, v in fm.items() if v == "channel_code"), None)
 
-    stage_cols = [
-        h
-        for h, m in (job.mapping_decisions or {}).items()
-        if isinstance(m, dict) and m.get("disposition") == "stage_raw"
-    ]
+    stage_cols = stage_raw_columns_from_decisions(job.mapping_decisions)
     cand_cols = [
         h
         for h, m in (job.mapping_decisions or {}).items()
@@ -609,7 +614,7 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
     ]
 
     channels = {c.code.strip().lower(): c.id for c in db.scalars(select(DimChannel)).all()}
-    staged: dict[str, dict[str, Any]] = {}
+    staged_row_count = 0
     errors = 0
 
     tech_values: list[str] = []
@@ -745,13 +750,8 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
             )
             errors += 1
             continue
-        row_stage: dict[str, Any] = {}
-        for sc in stage_cols:
-            v = normalize_scalar_for_pm(row.get(sc))
-            if v is not None and str(v).strip() != "":
-                row_stage[sc] = to_jsonable(v)
-        if row_stage:
-            staged[str(int(idx))] = row_stage
+        if row_has_stage_raw_data(row, stage_cols):
+            staged_row_count += 1
 
     tech_dups = [k for k, v in Counter(tech_values).items() if v > 1]
     if tech_dups:
@@ -811,11 +811,11 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
         row_number=0,
         severity="info" if errors == 0 else "warning",
         code="pm_validation_summary",
-        message=json.dumps({"row_errors": errors, "staged_row_count": len(staged)}),
+        message=json.dumps({"row_errors": errors, "staged_row_count": staged_row_count}),
     )
     _bulk_insert_row_results(db, row_results)
 
-    job.staged_metadata = to_jsonable(staged) if staged else {}
+    persist_pm_staged_row_count(job, staged_row_count)
     job.validation_passed = errors == 0
     job.stage = STAGE_PM_VALIDATED
     job.status = "validated" if errors == 0 else "validation_failed"
@@ -1222,7 +1222,7 @@ def commit_product_master_sync(
     df, _dropped_commit = strip_leading_descriptor_rows(df, tech_col=tech_col, name_col=name_col)
     source_code_col = next((k for k, v in fm.items() if v == "source_product_code"), None)
 
-    staged = job.staged_metadata or {}
+    stage_cols = stage_raw_columns_from_decisions(job.mapping_decisions)
 
     payloads: list[dict[str, Any]] = []
     for _, row in df.iterrows():
@@ -1234,6 +1234,9 @@ def commit_product_master_sync(
     src = job.source
     try:
         sync_bulk_upsert_products_from_rows(db, payloads)
+        tech_ids = collect_technical_ids_from_df(df, tech_col)
+        products_by_sku = batch_load_dim_products_by_sku(db, tech_ids)
+
         catalog_rows = 0
         if src is not None and src.product_catalog_id is not None:
             catalog_rows = commit_catalog_and_eav(
@@ -1242,7 +1245,7 @@ def commit_product_master_sync(
                 src,
                 df,
                 mapping_decisions=job.mapping_decisions,
-                staged_row_values=staged,
+                products_by_sku=products_by_sku,
                 technical_id_col=tech_col,
                 name_col=name_col,
                 source_sku_col=source_code_col,
@@ -1252,11 +1255,10 @@ def commit_product_master_sync(
             tid = scalar_to_clean_str(row.get(tech_col)) or ""
             if not tid:
                 continue
-            rk = str(int(idx))
-            frag = staged.get(rk)
+            frag = row_stage_fragment_from_row(row, stage_cols)
             if not frag:
                 continue
-            prod = db.scalars(select(DimProduct).where(DimProduct.sku == tid)).first()
+            prod = products_by_sku.get(tid)
             if not prod:
                 continue
             specs = dict(prod.specs_json or {})
