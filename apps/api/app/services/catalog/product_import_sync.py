@@ -170,7 +170,7 @@ def _staging_tuple(
         ff,
         has_pb,
         pb,
-        *str_dim_flags,
+        *(item for pair in str_dim_flags for item in pair),
     )
 
 

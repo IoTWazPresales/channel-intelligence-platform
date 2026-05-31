@@ -1,5 +1,15 @@
 # Channel Intelligence Platform — Current Context
 
+### May 31, 2026 — PM commit crash fixed; dev process kill hardened
+- **PM commit crash (`Wrong number of elements for 36-tuple`):** `_staging_tuple()` in `product_import_sync.py` was spreading `str_dim_flags` (`list[tuple[bool,str|None]]`) with `*str_dim_flags`, producing 26 elements instead of 36. Fixed to `*(item for pair in str_dim_flags for item in pair)` — flattens 10 pairs → 20 scalars → 36 total. Known gotcha now resolved.
+- **PM commit error quality:** `commit_product_master_sync` `except Exception` now raises `ValueError(f"Product commit failed: {msg[:500]}")` instead of a generic placeholder. `job.error_summary` now contains the real error (e.g. `ArgumentError: Wrong number of elements…`) not "See import row results for details."
+- **PM commit row results at step 6:** `page.tsx` commit step now renders the `previewRows` table when `commit_failed`, so the user sees the `product_commit_db_error` row result inline without navigating back to the review step.
+- **Dev process kill hardened:**
+  - `stop-dev.ps1`: adds `Stop-ProcessTree` (kills PID + all descendants recursively); reads `.cip-dev-pids/*.pid` files and kills trees first; port sweep second; WMI name+path sweep third; removes non-existent `celery.exe` from `$procNames`; extends wait to 5s; verifies ports 8001/3000 are free after kill and warns if not.
+  - `restart-dev.ps1`: writes each spawned window PID to `.cip-dev-pids/<service>-window.pid`; clears PID dir on each restart.
+  - `dev-api.js` / `dev-worker.js` / `dev-web.js`: each writes `process.pid` to `.cip-dev-pids/<service>.pid` on start and deletes it on exit/SIGTERM/SIGINT.
+  - `.cip-dev-pids/` added to `.gitignore`.
+
 ### May 31, 2026 — Bulk delete SQL proof: 2 statements (not 21); confirm timeout → 504
 - **Measured (real session, Supabase `postgres` via `.env`, no mocks):** `preview_master_bulk_delete` for 3 customers = **2** cursor executes (1 `UNION ALL` reference check + 1 label `SELECT IN`), **~3.6s**. `customer_hard_reference_breakdown_batch` alone = **1** execute.
 - **Instrumentation:** `db_sql_counter.py` (`before_cursor_execute` on engine); bulk-delete customer routes return `X-CIP-SQL-Count` + log `bulk_delete_sql_probe statements=N`. Script: `apps/api/scripts/measure_bulk_delete_sql.py`.

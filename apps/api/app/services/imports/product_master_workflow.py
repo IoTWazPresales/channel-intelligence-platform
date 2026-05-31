@@ -1318,9 +1318,6 @@ def commit_product_master_sync(
             )
         )
         db.commit()
-        raise ValueError(
-            "Product commit failed due to a database constraint or type mismatch. "
-            "See import row results for details."
-        ) from exc
+        raise ValueError(f"Product commit failed: {msg[:500]}") from exc
     db.refresh(job)
     return job

@@ -2776,8 +2776,30 @@ function AdminImportsPageContent() {
             {pmJobState?.status === 'commit_failed' ? (
               <Alert severity="error">
                 {pmJobState.error_summary ??
-                  'Commit failed. Review import row messages, fix the source or mapping, then try Commit again.'}
+                  'Commit failed. Review import row messages below, fix the source or mapping, then try Commit again.'}
               </Alert>
+            ) : null}
+            {pmJobState?.status === 'commit_failed' && previewRows && previewRows.length > 0 ? (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Row</TableCell>
+                    <TableCell>Severity</TableCell>
+                    <TableCell>Code</TableCell>
+                    <TableCell>Message</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {previewRows.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.row_number}</TableCell>
+                      <TableCell>{r.severity}</TableCell>
+                      <TableCell>{r.code}</TableCell>
+                      <TableCell>{r.message}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             ) : null}
             {pmJobState?.stage === 'pm_committed' ? (
               <Alert severity="success">Commit finished successfully. This import is applied to the catalog.</Alert>

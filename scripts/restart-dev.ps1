@@ -1,4 +1,5 @@
 # Restart local CIP dev stack: kill stale processes, then Redis (WSL) + worker + API + web.
+# Spawned window PIDs are written to .cip-dev-pids/ so stop-dev.ps1 can kill them precisely.
 # Usage: .\scripts\restart-dev.ps1
 # Local Windows only — does not use Docker. Redis must be reachable at 127.0.0.1:6379 from Windows
 # (WSL redis-server with localhost forwarding, or native Redis).
@@ -9,6 +10,13 @@ $ErrorActionPreference = 'Continue'
 Stop-CipDevProcesses
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$pidDir = Join-Path $repo '.cip-dev-pids'
+
+# Ensure PID directory exists and is clean for this session.
+if (-not (Test-Path $pidDir)) {
+    New-Item -ItemType Directory -Path $pidDir -Force | Out-Null
+}
+Remove-Item -Path (Join-Path $pidDir '*.pid') -Force -ErrorAction SilentlyContinue
 
 function Wait-RedisWindows {
     param([int]$MaxSeconds = 90)
@@ -40,8 +48,8 @@ if (-not (Wait-RedisWindows)) {
 }
 
 function Start-DevWindow {
-    param([string]$Title, [string]$Command)
-    Start-Process powershell.exe -ArgumentList @(
+    param([string]$Title, [string]$Command, [string]$PidFile)
+    $proc = Start-Process powershell.exe -ArgumentList @(
         '-NoExit', '-Command',
         @"
 `$host.ui.RawUI.WindowTitle = '$Title'
@@ -56,14 +64,22 @@ Write-Host ''
 Write-Host 'Press Enter to close this window...' -ForegroundColor DarkGray
 Read-Host
 "@
-    )
+    ) -PassThru
+
+    if ($proc -and $proc.Id -and $PidFile) {
+        Set-Content -Path $PidFile -Value $proc.Id -Encoding UTF8
+        Write-Host "  Spawned '$Title' window PID $($proc.Id) → $PidFile" -ForegroundColor DarkGray
+    }
+    return $proc
 }
 
-Start-DevWindow -Title 'CIP Worker' -Command 'pnpm dev:worker'
+Start-DevWindow -Title 'CIP Worker' -Command 'pnpm dev:worker' -PidFile (Join-Path $pidDir 'worker-window.pid')
 Start-Sleep -Seconds 2
-Start-DevWindow -Title 'CIP API :8001' -Command 'pnpm dev:api'
+Start-DevWindow -Title 'CIP API :8001' -Command 'pnpm dev:api' -PidFile (Join-Path $pidDir 'api-window.pid')
 Start-Sleep -Seconds 1
-Start-DevWindow -Title 'CIP Web :3000' -Command 'pnpm dev:web'
+Start-DevWindow -Title 'CIP Web :3000' -Command 'pnpm dev:web' -PidFile (Join-Path $pidDir 'web-window.pid')
 
 Write-Host 'Dev stack starting in separate windows (Redis WSL, worker, API :8001, web :3000).' -ForegroundColor Green
 Write-Host "Redis helper PID: $($redisWindow.Id)" -ForegroundColor DarkGray
+Write-Host "PID files in: $pidDir" -ForegroundColor DarkGray
+Write-Host "Run .\scripts\stop-dev.ps1 to cleanly stop all services." -ForegroundColor DarkGray

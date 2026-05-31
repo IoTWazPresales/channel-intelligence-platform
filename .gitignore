@@ -50,3 +50,6 @@ blob-report/
 # Accidental DB dumps / one-off scratch files
 *.dump
 queryex
+
+# Dev process PID files (generated at runtime by dev-*.js scripts)
+.cip-dev-pids/

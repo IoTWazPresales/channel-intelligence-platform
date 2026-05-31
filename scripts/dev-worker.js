@@ -12,6 +12,25 @@ const net = require('net');
 const path = require('path');
 const { URL } = require('url');
 
+const pidDir = path.join(__dirname, '..', '.cip-dev-pids');
+const pidFile = path.join(pidDir, 'worker.pid');
+
+function writePid() {
+  try {
+    fs.mkdirSync(pidDir, { recursive: true });
+    fs.writeFileSync(pidFile, String(process.pid), 'utf8');
+  } catch { /* non-fatal */ }
+}
+
+function deletePid() {
+  try { fs.unlinkSync(pidFile); } catch { /* already gone */ }
+}
+
+writePid();
+process.on('exit', deletePid);
+process.on('SIGTERM', () => { deletePid(); process.exit(0); });
+process.on('SIGINT', () => { deletePid(); process.exit(0); });
+
 const apiRoot = path.join(__dirname, '..', 'apps', 'api');
 const isWin = process.platform === 'win32';
 const py = path.join(apiRoot, '.venv', isWin ? 'Scripts' : 'bin', isWin ? 'python.exe' : 'python');
