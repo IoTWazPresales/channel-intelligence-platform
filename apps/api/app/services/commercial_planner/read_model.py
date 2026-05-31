@@ -11,18 +11,24 @@ from app.services.commercial_planner.economics_trust import classify_line_econom
 
 
 def _flatten_specs_json(specs_json: dict[str, Any] | None) -> dict[str, Any]:
-    """Merge top-level specs_json with import_staging nested dict when present (read-only)."""
+    """Merge top-level specs_json with nested import_staging / attribute_candidates dicts (read-only).
+
+    Both nested containers hold raw file columns captured at commit (stage_raw and
+    attribute_candidate dispositions). Flattening them up surfaces those columns as
+    optional grid columns and planner specs. Top-level keys win over nested ones.
+    """
     if not specs_json or not isinstance(specs_json, dict):
         return {}
     out: dict[str, Any] = dict(specs_json)
-    nest = specs_json.get("import_staging") if isinstance(specs_json.get("import_staging"), dict) else None
-    if nest is None and isinstance(specs_json.get("importStaging"), dict):
-        nest = specs_json["importStaging"]
-    if isinstance(nest, dict):
-        for k, v in nest.items():
-            ks = str(k)
-            if ks not in out:
-                out[ks] = v
+    for primary, alias in (("import_staging", "importStaging"), ("attribute_candidates", None)):
+        nest = specs_json.get(primary) if isinstance(specs_json.get(primary), dict) else None
+        if nest is None and alias and isinstance(specs_json.get(alias), dict):
+            nest = specs_json[alias]
+        if isinstance(nest, dict):
+            for k, v in nest.items():
+                ks = str(k)
+                if ks not in out:
+                    out[ks] = v
     return out
 
 
@@ -57,7 +63,7 @@ def specs_json_flat_string_map(specs_json: dict[str, Any] | None, *, max_keys: i
     """Flatten specs_json to string values for optional grid columns (no nested objects)."""
     flat = _flatten_specs_json(specs_json)
     out: dict[str, str] = {}
-    skip = frozenset({"import_staging", "importStaging"})
+    skip = frozenset({"import_staging", "importStaging", "attribute_candidates"})
     for raw_k, v in flat.items():
         if len(out) >= max_keys:
             break

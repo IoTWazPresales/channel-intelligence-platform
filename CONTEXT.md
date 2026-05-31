@@ -1,5 +1,18 @@
 # Channel Intelligence Platform — Current Context
 
+### May 31, 2026 — PM commit: retire dead EAV write, consolidate specs on dim_product.specs_json
+- **Branch:** `feature/pm-specs-json-retire-eav` (NOT merged to main; for review).
+- **Finding (read-only audit):** `product_attribute_value` (~2M rows / 286MB on Supabase) is **write-only** — referenced only in its model, the migration, and the commit *write* path; **zero readers** (no endpoint/read-model/frontend). `catalog_product` **is** read (products endpoint joins it for `last_import_date`). `dim_product.specs_json` (JSONB) **is** the live, read spec store (products grid `specs_flat`/`specs_preview` + commercial planner `product_specs_from_json`/`specs_json_flat_string_map`), and already merges `specs_json.import_staging`.
+- **Change (additive, flag-gated, reversible):**
+  - Commit now routes **both** `stage_raw` → `specs_json.import_staging` **and** `attribute_candidate` → `specs_json.attribute_candidates` (distinct key so steward review can still distinguish). All dispositioned file columns land in the canonical, read JSONB store.
+  - `commit_catalog_and_eav(..., write_attribute_values=False)` — **skips** the legacy PAV write by default (no attr-def creation, no PAV rows); still upserts `catalog_product`. Gated by new setting `pm_write_legacy_eav` (env `PM_WRITE_LEGACY_EAV`, default off) as a reversible escape hatch.
+  - `read_model._flatten_specs_json` now flattens `attribute_candidates` (like `import_staging`) so those columns surface as optional grid columns / planner specs; container keys excluded from `specs_flat` + `_compact_specs_preview`.
+- **Impact:** PM commit stops writing ~1 row per (product × attribute) — commit drops from minutes to seconds, 286MB stops growing — with zero reader impact (PAV had none). Existing 2M PAV rows are **left in place** (dropping them is destructive — needs explicit approval).
+- **Not done (next, explicit approval / careful validation):** drop/retire existing `product_attribute_value` data; connection pooling fix (session pooler `:5432` + modest pool — note prior **ECHECKOUTTIMEOUT** history, validate carefully); `catalog_product` per-row `flush()` → bulk `INSERT…ON CONFLICT`; deployment co-location (API next to DB in EU) as the biggest latency lever; full PIM/category-template model.
+- **Tests:** `test_product_master_workflow.py` (21) + `test_commercial_planner_api.py` + `test_products_list_contract.py` = 98 passing. New: EAV-gating (skips PAV by default, writes when flag on), `attribute_candidates` routing into specs_json, and specs_flat surfacing. No new SQL constructs introduced (logic-only change). Real end-to-end import re-run recommended as final confirmation.
+
+
+
 ### May 31, 2026 — PM commit cast fix; project rules updated with SQL validation rule
 - **PM commit `DatatypeMismatch: CASE types integer and text`:** `_merge_select()` in `product_import_sync.py` used `opt_str` (designed for string columns) for `channel_id` (Integer), `launch_date` (Date), and `retired_date` (Date). psycopg3 sends Python `None` as a typeless NULL; PostgreSQL defaults untyped NULLs to `text`; CASE expression trying to unify `text` (staging) with `integer`/`date` (ORM column) → `DatatypeMismatch`. Fix: `cast(st.c.channel_id, Integer)`, `cast(st.c.launch_date, Date)`, `cast(st.c.retired_date, Date)` in the CASE branches.
 - **Project rules updated:** Added `psycopg3 typeless NULLs in VALUES clause` to Known Gotchas. Added "SQL Validation Rule" section: any task writing custom SQL constructs (VALUES clauses, CASE expressions, bulk INSERT/SELECT from staging) must run at minimum one real end-to-end execution against the actual DB before declaring done. Mock-only tests are not sufficient proof for SQL correctness.

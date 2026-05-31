@@ -47,6 +47,15 @@ class Settings(BaseSettings):
         description="Enable AI-assisted import mapping and resolution (env AI_ASSIST_ENABLED).",
     )
 
+    # Legacy EAV (product_attribute_value) write path during Product Master commit.
+    # The canonical, read spec store is dim_product.specs_json; nothing reads
+    # product_attribute_value. Default off so commit does not write ~1 row per
+    # (product x attribute) — kept as a reversible escape hatch only.
+    pm_write_legacy_eav: bool = Field(
+        default=False,
+        description="Write legacy product_attribute_value rows on PM commit (env PM_WRITE_LEGACY_EAV). Off by default; specs land in dim_product.specs_json.",
+    )
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]

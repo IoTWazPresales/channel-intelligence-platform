@@ -183,32 +183,43 @@ def commit_catalog_and_eav(
     technical_id_col: str,
     name_col: str,
     source_sku_col: str | None = None,
+    write_attribute_values: bool = False,
 ) -> int:
-    """Upsert catalog_product + PAV rows. Returns number of catalog_product rows touched.
+    """Upsert catalog_product (and, only when ``write_attribute_values``, legacy PAV rows).
+
+    Returns number of catalog_product rows touched.
 
     `products_by_sku` must be preloaded (chunked IN on dim_product.sku) — no per-row product SELECT.
-    PAV and catalog_product rows are batch-loaded by source_sku / catalog_product_id.
+    catalog_product rows are batch-loaded by source_sku.
+
+    The canonical, read spec store is ``dim_product.specs_json`` (written by the caller).
+    ``product_attribute_value`` (EAV) has no readers and is skipped by default; the
+    ``write_attribute_values`` flag is a reversible escape hatch only. When False, this
+    function still upserts ``catalog_product`` (which IS read for import provenance) but
+    writes no attribute definitions or PAV rows — avoiding ~1 row per (product x attribute).
     """
     catalog_id = source.product_catalog_id
     if catalog_id is None:
         return 0
 
     stage_headers, cand_headers = _disposition_columns(mapping_decisions)
-    all_headers = stage_headers + cand_headers
-    namespaces = [_namespace_for(catalog_id, "staged" if h in stage_headers else "candidate", h) for h in all_headers]
-    attr_by_ns = _batch_load_attr_defs_by_namespace(db, namespaces)
-    for h in stage_headers:
-        ns = _namespace_for(catalog_id, "staged", h)
-        if ns not in attr_by_ns:
-            attr_by_ns[ns] = get_or_create_attr_def(
-                db, catalog_id=catalog_id, namespace=ns, display_name=h, kind="staged"
-            )
-    for h in cand_headers:
-        ns = _namespace_for(catalog_id, "candidate", h)
-        if ns not in attr_by_ns:
-            attr_by_ns[ns] = get_or_create_attr_def(
-                db, catalog_id=catalog_id, namespace=ns, display_name=h, kind="candidate"
-            )
+    attr_by_ns: dict[str, AttributeDefinition] = {}
+    if write_attribute_values:
+        all_headers = stage_headers + cand_headers
+        namespaces = [_namespace_for(catalog_id, "staged" if h in stage_headers else "candidate", h) for h in all_headers]
+        attr_by_ns = _batch_load_attr_defs_by_namespace(db, namespaces)
+        for h in stage_headers:
+            ns = _namespace_for(catalog_id, "staged", h)
+            if ns not in attr_by_ns:
+                attr_by_ns[ns] = get_or_create_attr_def(
+                    db, catalog_id=catalog_id, namespace=ns, display_name=h, kind="staged"
+                )
+        for h in cand_headers:
+            ns = _namespace_for(catalog_id, "candidate", h)
+            if ns not in attr_by_ns:
+                attr_by_ns[ns] = get_or_create_attr_def(
+                    db, catalog_id=catalog_id, namespace=ns, display_name=h, kind="candidate"
+                )
 
     source_skus: list[str] = []
     for idx, row in df.iterrows():
@@ -284,6 +295,10 @@ def commit_catalog_and_eav(
             catalog_by_sku[src_sku] = cp
         n += 1
         touched_cp_ids.append(int(cp.id))
+
+    # Legacy EAV path (no readers) — skipped unless explicitly re-enabled.
+    if not write_attribute_values:
+        return n
 
     pav_map = _batch_load_pav_map(db, touched_cp_ids)
 

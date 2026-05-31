@@ -53,8 +53,10 @@ def _compact_specs_preview(
             return f'{s[: max_val_len - 1]}…'
         return s
 
+    # Nested containers (raw file columns) are surfaced via specs_flat, not the preview.
+    skip = {"import_staging", "importStaging", "attribute_candidates"}
     out: dict[str, str] = {}
-    for k in sorted(str(x) for x in specs.keys())[:max_keys]:
+    for k in sorted(str(x) for x in specs.keys() if str(x) not in skip)[:max_keys]:
         out[str(k)] = _one(specs.get(k))
     return out
 

@@ -18,6 +18,7 @@ from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, So
 from app.services.catalog.product_import_sync import sync_bulk_upsert_products_from_rows
 from app.services.imports.pm_commit_catalog import commit_catalog_and_eav
 from app.services.imports.pm_staging import (
+    attribute_candidate_columns_from_decisions,
     batch_load_dim_products_by_sku,
     collect_technical_ids_from_df,
     persist_pm_staged_row_count,
@@ -1222,7 +1223,11 @@ def commit_product_master_sync(
     df, _dropped_commit = strip_leading_descriptor_rows(df, tech_col=tech_col, name_col=name_col)
     source_code_col = next((k for k, v in fm.items() if v == "source_product_code"), None)
 
+    from app.core.config import get_settings
+
     stage_cols = stage_raw_columns_from_decisions(job.mapping_decisions)
+    candidate_cols = attribute_candidate_columns_from_decisions(job.mapping_decisions)
+    write_legacy_eav = get_settings().pm_write_legacy_eav
 
     payloads: list[dict[str, Any]] = []
     for _, row in df.iterrows():
@@ -1249,23 +1254,35 @@ def commit_product_master_sync(
                 technical_id_col=tech_col,
                 name_col=name_col,
                 source_sku_col=source_code_col,
+                write_attribute_values=write_legacy_eav,
             )
 
+        # Canonical spec store: all dispositioned file columns land in
+        # dim_product.specs_json (the live, read JSONB store). stage_raw →
+        # `import_staging`; attribute_candidate → `attribute_candidates`
+        # (kept under a distinct key so steward review can still tell them apart).
         for idx, row in df.iterrows():
             tid = scalar_to_clean_str(row.get(tech_col)) or ""
             if not tid:
                 continue
-            frag = row_stage_fragment_from_row(row, stage_cols)
-            if not frag:
+            stage_frag = row_stage_fragment_from_row(row, stage_cols)
+            cand_frag = row_stage_fragment_from_row(row, candidate_cols)
+            if not stage_frag and not cand_frag:
                 continue
             prod = products_by_sku.get(tid)
             if not prod:
                 continue
             specs = dict(prod.specs_json or {})
-            imp = dict(specs.get("import_staging") or {})
-            for k, v in frag.items():
-                imp[k] = v
-            specs["import_staging"] = imp
+            if stage_frag:
+                imp = dict(specs.get("import_staging") or {})
+                for k, v in stage_frag.items():
+                    imp[k] = v
+                specs["import_staging"] = imp
+            if cand_frag:
+                cand = dict(specs.get("attribute_candidates") or {})
+                for k, v in cand_frag.items():
+                    cand[k] = v
+                specs["attribute_candidates"] = cand
             prod.specs_json = specs
 
         raw_commit_meta: dict[str, Any] | None = None

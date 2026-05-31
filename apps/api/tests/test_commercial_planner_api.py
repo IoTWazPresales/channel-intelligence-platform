@@ -911,6 +911,26 @@ def test_product_specs_from_json_returns_nulls_without_invention():
     assert all(out[k] is None for k in out)
 
 
+def test_specs_flat_surfaces_import_staging_and_attribute_candidates():
+    """Both nested file-column containers flatten up into the optional grid columns."""
+    from app.services.commercial_planner.read_model import specs_json_flat_string_map
+
+    flat = specs_json_flat_string_map(
+        {
+            "CPU": "i9",
+            "import_staging": {"storage": "1TB"},
+            "attribute_candidates": {"warranty": "24mo", "panel": "OLED"},
+        }
+    )
+    assert flat["CPU"] == "i9"
+    assert flat["storage"] == "1TB"          # stage_raw column surfaced
+    assert flat["warranty"] == "24mo"        # attribute_candidate column surfaced
+    assert flat["panel"] == "OLED"
+    # container keys themselves are not emitted as columns
+    assert "import_staging" not in flat
+    assert "attribute_candidates" not in flat
+
+
 def test_local_prices_from_economics_amounts_requires_positive_fx():
     from app.services.commercial_planner.read_model import local_prices_from_economics_amounts
 

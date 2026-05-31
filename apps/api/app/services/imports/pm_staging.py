@@ -26,6 +26,16 @@ def stage_raw_columns_from_decisions(mapping_decisions: dict[str, Any] | None) -
     return out
 
 
+def attribute_candidate_columns_from_decisions(mapping_decisions: dict[str, Any] | None) -> list[str]:
+    if not mapping_decisions:
+        return []
+    out: list[str] = []
+    for h, m in mapping_decisions.items():
+        if isinstance(m, dict) and str(m.get("disposition") or "").strip() == "attribute_candidate":
+            out.append(str(h))
+    return out
+
+
 def row_stage_fragment_from_row(row: Any, stage_cols: list[str]) -> dict[str, Any]:
     """Build stage_raw cell map for one file row (JSON-safe values)."""
     if not stage_cols:

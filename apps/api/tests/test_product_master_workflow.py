@@ -214,6 +214,99 @@ def test_namespace_for_catalog_staged_is_deterministic() -> None:
     assert m._namespace_for(5, "candidate", "Foo Bar!!") == "catalog:5:candidate:foo_bar"
 
 
+class _RecordingSession:
+    """Minimal sync-Session stand-in that records added objects and assigns ids on flush."""
+
+    def __init__(self) -> None:
+        self.added: list[object] = []
+        self._next_id = 0
+
+    def scalars(self, *_a, **_k):
+        m = MagicMock()
+        m.all.return_value = []
+        m.first.return_value = None
+        return m
+
+    def add(self, obj) -> None:
+        self.added.append(obj)
+
+    def flush(self) -> None:
+        for obj in self.added:
+            if getattr(obj, "id", None) is None:
+                self._next_id += 1
+                obj.id = self._next_id
+
+
+def _eav_fixture():
+    from app.models.product_catalog import CatalogProduct, ProductAttributeValue
+
+    df = pd.DataFrame(
+        {
+            "sku": ["SKU-1", "SKU-2"],
+            "name": ["Alpha", "Beta"],
+            "color": ["Red", "Blue"],
+            "warranty": ["24mo", "12mo"],
+        }
+    )
+    mapping = {
+        "sku": {"target": "technical_product_id"},
+        "name": {"target": "display_name"},
+        "color": {"disposition": "stage_raw"},
+        "warranty": {"disposition": "attribute_candidate"},
+    }
+    products = {
+        "SKU-1": SimpleNamespace(id=101, sku="SKU-1"),
+        "SKU-2": SimpleNamespace(id=102, sku="SKU-2"),
+    }
+    job = SimpleNamespace(id=7, template_slug="product_master")
+    source = SimpleNamespace(product_catalog_id=10)
+    return df, mapping, products, job, source, CatalogProduct, ProductAttributeValue
+
+
+def test_commit_catalog_skips_eav_by_default_but_writes_catalog_product() -> None:
+    df, mapping, products, job, source, CatalogProduct, ProductAttributeValue = _eav_fixture()
+    db = _RecordingSession()
+
+    n = commit_catalog_and_eav(
+        db,
+        job,
+        source,
+        df,
+        mapping_decisions=mapping,
+        products_by_sku=products,
+        technical_id_col="sku",
+        name_col="name",
+        # write_attribute_values defaults to False
+    )
+
+    assert n == 2
+    assert any(isinstance(o, CatalogProduct) for o in db.added), "catalog_product must still be written"
+    assert not any(
+        isinstance(o, ProductAttributeValue) for o in db.added
+    ), "legacy EAV rows must NOT be written by default"
+
+
+def test_commit_catalog_writes_eav_when_flag_enabled() -> None:
+    df, mapping, products, job, source, CatalogProduct, ProductAttributeValue = _eav_fixture()
+    db = _RecordingSession()
+
+    commit_catalog_and_eav(
+        db,
+        job,
+        source,
+        df,
+        mapping_decisions=mapping,
+        products_by_sku=products,
+        technical_id_col="sku",
+        name_col="name",
+        write_attribute_values=True,
+    )
+
+    assert any(
+        isinstance(o, ProductAttributeValue) for o in db.added
+    ), "legacy EAV rows must be written when the flag is on"
+
+
 def test_validate_persists_staged_row_count_not_row_index_map(monkeypatch: pytest.MonkeyPatch) -> None:
     """Validate stores pm_staged_row_count only; staging values are derived at commit from the file."""
     df = pd.DataFrame(
@@ -287,6 +380,7 @@ def test_commit_derives_import_staging_without_per_row_product_select(
             "sku": ["90NB0F12-M00000", "90NB0F12-M00001"],
             "name": ["Widget Alpha", "Gadget Beta"],
             "color": ["Red", "Blue"],
+            "warranty": ["24mo", "12mo"],
         }
     )
 
@@ -297,7 +391,14 @@ def test_commit_derives_import_staging_without_per_row_product_select(
         "sync_bulk_upsert_products_from_rows",
         lambda db, payloads: {"created": len(payloads), "updated": 0, "total": len(payloads)},
     )
-    monkeypatch.setattr(pmw, "commit_catalog_and_eav", lambda *a, **k: 0)
+
+    eav_calls: dict[str, object] = {}
+
+    def fake_eav(*a, **k):
+        eav_calls.update(k)
+        return 0
+
+    monkeypatch.setattr(pmw, "commit_catalog_and_eav", fake_eav)
 
     products = {
         "90NB0F12-M00000": SimpleNamespace(id=1, sku="90NB0F12-M00000", name="Widget Alpha", specs_json={}),
@@ -319,10 +420,11 @@ def test_commit_derives_import_staging_without_per_row_product_select(
             "sku": {"target": "technical_product_id"},
             "name": {"target": "display_name"},
             "color": {"disposition": "stage_raw"},
+            "warranty": {"disposition": "attribute_candidate"},
         },
         file_name="t.csv",
         staged_metadata={PM_STAGED_ROW_COUNT_KEY: 2},
-        source=SimpleNamespace(import_template=None, product_catalog_id=None),
+        source=SimpleNamespace(import_template=None, product_catalog_id=1),
         pm_commit_meta=None,
         error_summary=None,
         completed_at=None,
@@ -357,6 +459,11 @@ def test_commit_derives_import_staging_without_per_row_product_select(
 
     assert products["90NB0F12-M00000"].specs_json.get("import_staging") == {"color": "Red"}
     assert products["90NB0F12-M00001"].specs_json.get("import_staging") == {"color": "Blue"}
+    # attribute_candidate columns land under a distinct specs_json key (kept usable + distinguishable)
+    assert products["90NB0F12-M00000"].specs_json.get("attribute_candidates") == {"warranty": "24mo"}
+    assert products["90NB0F12-M00001"].specs_json.get("attribute_candidates") == {"warranty": "12mo"}
+    # legacy EAV write is off by default — commit must pass write_attribute_values=False
+    assert eav_calls.get("write_attribute_values") is False
     # batch_load is mocked; commit must not issue per-row DimProduct SELECT by sku
     assert len(dim_selects) == 0
 
