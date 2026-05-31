@@ -1,5 +1,41 @@
 # Channel Intelligence Platform — Current Context
 
+### May 31, 2026 — Phase 1: Import Flow capability contract (DESIGN ONLY, for review)
+- **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main).
+- **Deliverable:** `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` — declarative per-importer
+  flow contract (steps, needs_mapping, mapping_ui, needs_steward, steward_surface,
+  apply_mode, apply_requires_confirm, archives_on_complete, import_mode_choice,
+  hidden_from_generic_ui, tracking_kinds). **No code/behavior changed** — Markdown doc
+  + illustrative Python/TS types only (nothing imports them).
+- **Audit grounding (read-only):** wizard `page.tsx` (~3,900 LOC) branches on
+  `isPm`/`isDsi`/`isShipmentEvidence` in 80+ spots with 4 hard-coded step arrays;
+  job-tracking registration is copy-pasted per importer (`_persist_*_task_metadata` in
+  pm_commit/pm_validate/dsi velocity/soh/forecasting/resolution-plan/lineup-parse), with
+  parallel readers + clearers in `background_tasks.py`. The existing `import_template`
+  row already carries a *partial* contract (`pipeline_handler`,
+  `destructive_apply_requires_confirm`, `requires_provider`, …) — capability layer is
+  additive on top.
+- **Latent bug found (recorded, not fixed):** `import_job_background_metadata.clear_background_task_metadata`
+  (used by cancel/retry) only strips `celery_task_id` + `dsi_bulk_task`, leaving orphan
+  `pm_commit_task`/`pm_validate_task`/`dsi_soh_reconcile_task`/`dsi_velocity_compute_task`/
+  `dsi_forecasting_task`/`lineup_parse_task` slots the feed keeps discovering. Phase 2
+  (single slot registry) removes the class of bug.
+- **Drift flagged:** `customer_sell_through` is DB-seeded (migration 0045) but absent from
+  `template_definitions.py` and the generic wizard — open question in the doc (§9).
+- **Decisions locked (user, doc §9 → D1–D5):** D1 `customer_sell_through` = its own
+  surface (`hidden_from_generic_ui`, needs_steward yes, fact_upsert_after_steward, no
+  confirm; UI/mode deferred to its surface design). D2 deliver contract via **static
+  client map first** (documented upgrade path to a `GET /templates` `capability` field if
+  the app grows). D3 TS types live in **`packages/types/`**. D4 `inbound_shipments` =
+  **"4-step-with-inline-steward"**, revisit explicit mapping/validate steps in Phase 3.
+  D5 §5 matrix committed **as-is** as a living doc. §10 = add-only correction log.
+- **Next:** produce the Phase 2 (job-tracking unification) file-level plan for approval —
+  single slot registry from the contract's `TrackingKind`/`TrackingSlot`, one shared
+  register/discover/clear helper, and fix the orphan-slot bug in
+  `clear_background_task_metadata`. Still awaiting the user's real Product Master import
+  re-run on this branch (commit should finish in seconds, bell indicator visible, job
+  stays in list) — gate before Phase 3 wizard componentization.
+
 ### May 31, 2026 — Import audit + Phase 0: PM commit job tracking (activity feed, job list, dispatch log)
 - **Branch:** `feature/pm-specs-json-retire-eav` (same branch as the EAV retirement; both are PM-commit-area improvements). NOT merged to main.
 - **Audit (read-only) — import drift findings:**
