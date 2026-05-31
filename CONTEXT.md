@@ -1,5 +1,20 @@
 # Channel Intelligence Platform — Current Context
 
+### May 31, 2026 — Import audit + Phase 0: PM commit job tracking (activity feed, job list, dispatch log)
+- **Branch:** `feature/pm-specs-json-retire-eav` (same branch as the EAV retirement; both are PM-commit-area improvements). NOT merged to main.
+- **Audit (read-only) — import drift findings:**
+  - Importers: `product_master` (own endpoints + 6-step wizard, no steward — correct), `distributor_inventory`/DSI (7-step + steward), `inbound_shipments`/shipment evidence (4-step + steward panel), plus `distributor_master`/`customer_master`/`historical_lineup`/`customer_sell_through`/`current_lineup`. **Capability differences are legitimate; the drift is the lack of a shared flow contract** — each importer grew its own endpoints, wizard branch (`isPm ? … : isDsi ? …`), mapping UI, and job-tracking wiring.
+  - `product_attribute_value` only PM writes product attributes; DSI/shipment/sell-through write `fact_*` tables (no PAV). So the specs_json/EAV change is PM-specific; Supabase write-optimization + job-tracking consistency are cross-cutting.
+- **Phase 0 bug fixes (the 3 symptoms after switching to broker):**
+  1. **No top-right activity-feed indicator for PM commit** — root cause: commit never registered a task slot in `staged_metadata` and its status is `commit_running` (not `running`), so `background_tasks.py` never discovered it. Fix: `run_pm_commit_worker` now writes a `pm_commit_task` slot (`_persist_pm_commit_task_metadata`); feed filter + `_build_background_task_records` + `_clear_task_slot_metadata` handle the `pm_commit` slot / `product_master_commit` kind (frontend already understood that kind).
+  2. **Committed job vanished from job list** — root cause: commit set `job.archived_at = now()` and `/jobs` hides archived. Fix: **removed auto-archive on commit success**; a completed PM job stays visible (consistent with DSI). Archiving is now a user action only.
+  3. **No Celery detail** — broker dispatch discarded the task id. Fix: capture + `logger.info(... task_id=...)` on dispatch. (Also: commit is now fast after the EAV retirement, so it can complete quickly.)
+  - `job_db_indicates_pipeline_finished` now treats `pm_committed` stage and `commit_failed` status as finished so the feed clears the slot in all modes.
+- **Tests:** `test_background_tasks.py` (+2: PM commit listed while running; slot cleared once `pm_committed`), `test_product_master_workflow.py`, `test_import_jobs_list.py`, `test_imports_templates.py` = 32 passing.
+- **Next phases (new chat) — Phases 1–4 (design in `docs/PRODUCT_MASTER_PIM_DESIGN_BRIEF.md` + import-audit plan):** (1) define a declarative Import Flow capability contract; (2) unify job-tracking/activity-feed registration across all importers via one helper; (3) componentize the web wizard around the capability spec (flag-gated, per importer); (4) apply Supabase write optimizations (bulk writes, pooling) consistently. Gate full componentization behind proving the core loop first. Also still pending: drop existing 2M PAV rows (destructive — approval), connection pooling (`:5432` + modest pool, ECHECKOUTTIMEOUT history), `catalog_product` per-row flush → bulk, EU co-location of API+DB.
+
+
+
 ### May 31, 2026 — PM commit: retire dead EAV write, consolidate specs on dim_product.specs_json
 - **Branch:** `feature/pm-specs-json-retire-eav` (NOT merged to main; for review).
 - **Finding (read-only audit):** `product_attribute_value` (~2M rows / 286MB on Supabase) is **write-only** — referenced only in its model, the migration, and the commit *write* path; **zero readers** (no endpoint/read-model/frontend). `catalog_product` **is** read (products endpoint joins it for `last_import_date`). `dim_product.specs_json` (JSONB) **is** the live, read spec store (products grid `specs_flat`/`specs_preview` + commercial planner `product_specs_from_json`/`specs_json_flat_string_map`), and already merges `specs_json.import_staging`.

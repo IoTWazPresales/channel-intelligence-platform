@@ -360,7 +360,12 @@ async def post_product_master_commit(
             threading.Thread(target=_in_process_pm_commit, name=f"pm-commit-{job_id}", daemon=True).start()
         else:
             try:
-                product_master_commit_task.delay(job_id, confirm_destructive)
+                async_result = product_master_commit_task.delay(job_id, confirm_destructive)
+                logger.info(
+                    "product_master commit dispatched to worker job_id=%s task_id=%s",
+                    job_id,
+                    getattr(async_result, "id", None),
+                )
             except Exception as e:
                 logger.exception("product_master commit dispatch failed job_id=%s", job_id)
                 with SessionLocal() as sync_db2:

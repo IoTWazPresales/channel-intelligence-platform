@@ -101,6 +101,8 @@ def _clear_task_slot_metadata(meta: dict[str, Any], slot: str) -> None:
         meta.pop("dsi_forecasting_task", None)
     elif slot == "pm_validate":
         meta.pop("pm_validate_task", None)
+    elif slot == "pm_commit":
+        meta.pop("pm_commit_task", None)
     elif slot == "lineup_parse":
         meta.pop("lineup_parse_task", None)
     else:
@@ -140,6 +142,7 @@ def _jobs_with_possible_background_tasks():
         and_(has_meta, ImportJob.staged_metadata.has_key("dsi_bulk_task")),
         and_(has_meta, ImportJob.staged_metadata.has_key("lineup_parse_task")),
         and_(has_meta, ImportJob.staged_metadata.has_key("pm_validate_task")),
+        and_(has_meta, ImportJob.staged_metadata.has_key("pm_commit_task")),
     )
 
 
@@ -248,6 +251,19 @@ def _build_background_task_records(
                         ptid.strip(),
                         "product_master_validate",
                         str(pm_validate_task.get("label") or "Validating product master…"),
+                    )
+                )
+
+        pm_commit_task = meta.get("pm_commit_task")
+        if isinstance(pm_commit_task, dict):
+            ctid = pm_commit_task.get("task_id")
+            if isinstance(ctid, str) and ctid.strip():
+                descriptors.append(
+                    (
+                        "pm_commit",
+                        ctid.strip(),
+                        "product_master_commit",
+                        str(pm_commit_task.get("label") or "Committing product master…"),
                     )
                 )
 

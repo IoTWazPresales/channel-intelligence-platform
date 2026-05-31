@@ -103,6 +103,64 @@ def test_running_revalidate_on_validated_job_lists_active_task() -> None:
     assert out[0]["pct"] == 10
 
 
+def test_pm_commit_in_progress_is_listed_in_activity_feed() -> None:
+    """PM commit must surface in the global activity feed (bell) like other importers."""
+    mock_session = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = 4
+    mock_job.status = "commit_running"
+    mock_job.stage = "pm_validated"
+    mock_job.template_slug = "product_master"
+    mock_job.import_mode = "apply"
+    mock_job.file_name = "catalog.xlsx"
+    mock_job.staged_metadata = {
+        "pm_commit_task": {
+            "task_id": "commit-task-1",
+            "kind": "product_master_commit",
+            "label": "Committing product master…",
+        }
+    }
+
+    mock_session.scalars.return_value.all.return_value = [mock_job]
+
+    with (
+        patch("app.services.imports.background_tasks.SessionLocal") as mock_local,
+        patch(
+            "app.services.imports.background_tasks._read_celery_safe",
+            return_value=("PROGRESS", {"phase": "applying", "pct": 40}),
+        ),
+    ):
+        mock_local.return_value.__enter__.return_value = mock_session
+        out = list_active_import_background_tasks_sync(limit=10)
+
+    assert len(out) == 1
+    assert out[0]["import_job_id"] == 4
+    assert out[0]["kind"] == "product_master_commit"
+
+
+def test_pm_commit_slot_cleared_once_job_completed() -> None:
+    """A finished PM commit (stage pm_committed) drops out of the feed and clears its slot."""
+    mock_session = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = 4
+    mock_job.status = "completed"
+    mock_job.stage = "pm_committed"
+    mock_job.template_slug = "product_master"
+    mock_job.import_mode = "apply"
+    mock_job.file_name = "catalog.xlsx"
+    mock_job.staged_metadata = {"pm_commit_task": {"task_id": "commit-task-1"}}
+
+    mock_session.scalars.return_value.all.return_value = [mock_job]
+
+    with patch("app.services.imports.background_tasks.SessionLocal") as mock_local:
+        mock_local.return_value.__enter__.return_value = mock_session
+        out = list_active_import_background_tasks_sync(limit=10)
+
+    assert out == []
+    assert mock_job.staged_metadata is None
+    mock_session.commit.assert_called_once()
+
+
 def test_validated_job_clears_metadata_when_celery_still_pending() -> None:
     mock_session = MagicMock()
     mock_job = MagicMock()

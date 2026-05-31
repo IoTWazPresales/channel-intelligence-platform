@@ -329,6 +329,12 @@ def run_pm_commit_worker(db: Session, job_id: int, *, confirm_destructive: bool,
         meta["celery_task_id"] = celery_task_id
     job.pm_commit_meta = meta
     job.status = STATUS_PM_COMMIT_RUNNING
+    # Make the commit visible to the global activity feed (bell) like other importers.
+    _persist_pm_commit_task_metadata(
+        job,
+        task_id=str(celery_task_id or f"pm-commit-{job_id}"),
+        async_poll=True,
+    )
     db.commit()
 
     try:
@@ -345,6 +351,7 @@ def run_pm_commit_worker(db: Session, job_id: int, *, confirm_destructive: bool,
             m2["error_message"] = str(exc)[:2000]
             job2.pm_commit_meta = m2
             job2.status = STATUS_PM_COMMIT_FAILED
+            _clear_pm_commit_task_metadata(job2)
             if not job2.error_summary:
                 job2.error_summary = str(exc)[:2000]
             db.add(
@@ -833,6 +840,12 @@ def _clear_pm_validate_task_metadata(job: ImportJob) -> None:
         job.staged_metadata = to_jsonable(meta) if meta else None
 
 
+def _clear_pm_commit_task_metadata(job: ImportJob) -> None:
+    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    if meta.pop("pm_commit_task", None) is not None:
+        job.staged_metadata = to_jsonable(meta) if meta else None
+
+
 def _pm_async_task_queued_at(job: ImportJob, slot_key: str) -> datetime | None:
     meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
     slot = meta.get(slot_key)
@@ -936,6 +949,27 @@ def _persist_pm_validate_task_metadata(
             "async_poll": async_poll,
             "kind": "product_master_validate",
             "label": "Validating product master…",
+            "queued_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    job.staged_metadata = to_jsonable(meta)
+
+
+def _persist_pm_commit_task_metadata(
+    job: ImportJob,
+    *,
+    task_id: str,
+    async_poll: bool,
+) -> None:
+    """Register the PM commit Celery task in staged_metadata so the global activity feed
+    (background_tasks.py) discovers and tracks it — same slot pattern as pm_validate_task."""
+    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    meta["pm_commit_task"] = to_jsonable(
+        {
+            "task_id": task_id,
+            "async_poll": async_poll,
+            "kind": "product_master_commit",
+            "label": "Committing product master…",
             "queued_at": datetime.now(timezone.utc).isoformat(),
         }
     )
@@ -1304,8 +1338,10 @@ def commit_product_master_sync(
         job.stage = STAGE_PM_COMMITTED
         job.status = "completed"
         job.completed_at = datetime.now(timezone.utc)
-        job.archived_at = datetime.now(timezone.utc)
+        # Do not auto-archive on commit: a completed PM job stays visible in the job
+        # list (consistent with DSI and other importers). Archiving is a user action.
         job.import_mode = "apply"
+        _clear_pm_commit_task_metadata(job)
         db.commit()
     except ValueError as exc:
         db.rollback()
