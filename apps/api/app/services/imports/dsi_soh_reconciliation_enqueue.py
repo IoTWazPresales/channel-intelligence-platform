@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -13,7 +13,11 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.ingestion import ImportJob
 from app.services.imports.dsi_soh_reconciliation_sync import run_dsi_soh_reconciliation_sync
-from app.utils.json_safe import to_jsonable
+from app.services.imports.import_background_slots import (
+    SLOT_DSI_SOH,
+    set_task_slot_by_job_id,
+    set_task_slot_on_job,
+)
 from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -85,25 +89,7 @@ def enqueue_dsi_soh_reconciliation(
 
 
 def _persist_soh_task_metadata(job_id: int, task_id: str, *, async_poll: bool) -> None:
-    from app.db.session_sync import SessionLocal
-
-    with SessionLocal() as db:
-        job = db.get(ImportJob, int(job_id))
-        if job is None:
-            return
-        meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
-        meta["dsi_soh_reconcile_task"] = to_jsonable(
-            {
-                "task_id": task_id,
-                "async_poll": async_poll,
-                "kind": "dsi_soh_reconciliation",
-                "label": "Reconciling inventory…",
-                "queued_at": datetime.now(timezone.utc).isoformat(),
-            }
-        )
-        job.staged_metadata = to_jsonable(meta)
-        db.add(job)
-        db.commit()
+    set_task_slot_by_job_id(int(job_id), SLOT_DSI_SOH, task_id=task_id, async_poll=async_poll)
 
 
 def dispatch_dsi_soh_reconciliation_after_apply(
@@ -125,16 +111,6 @@ def dispatch_dsi_soh_reconciliation_after_apply(
         period_end_date=period_end_date,
         detach_from_caller=True,
     )
-    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
-    meta["dsi_soh_reconcile_task"] = to_jsonable(
-        {
-            "task_id": task_id,
-            "async_poll": async_poll,
-            "kind": "dsi_soh_reconciliation",
-            "label": "Reconciling inventory…",
-            "queued_at": datetime.now(timezone.utc).isoformat(),
-        }
-    )
-    job.staged_metadata = to_jsonable(meta)
+    set_task_slot_on_job(job, SLOT_DSI_SOH, task_id=task_id, async_poll=async_poll)
     session.add(job)
     session.flush()

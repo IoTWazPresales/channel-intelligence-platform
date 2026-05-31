@@ -80,24 +80,28 @@ def persist_pipeline_worker_started_at(session: Session, job: ImportJob) -> None
 
 
 def clear_background_task_metadata(meta: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Return staged_metadata without background-task keys (or None if empty)."""
-    if not isinstance(meta, dict):
-        return None
-    m = dict(meta)
-    m.pop("celery_task_id", None)
-    m.pop("dsi_bulk_task", None)
-    m.pop("pipeline_queued_at", None)
-    m.pop("pipeline_started_at", None)
-    return to_jsonable(m) if m else None
+    """Return staged_metadata without ANY background-task slot (or None if empty).
+
+    Clears every registered slot (not just ``celery_task_id`` / ``dsi_bulk_task``) plus
+    the pipeline timing keys, so cancel/retry can never leave an orphan ``pm_commit_task``,
+    ``pm_validate_task``, ``dsi_soh_reconcile_task``, ``dsi_velocity_compute_task``,
+    ``dsi_forecasting_task`` or ``lineup_parse_task`` that the activity feed keeps showing.
+    """
+    from app.services.imports.import_background_slots import clear_all_task_slots
+
+    return clear_all_task_slots(meta, include_timing=True)
 
 
 def clear_background_task_metadata_on_job(job: ImportJob) -> bool:
-    """Remove celery_task_id / dsi_bulk_task from job. Returns True if mutated."""
+    """Remove every background-task slot from the job. Returns True if mutated."""
+    from app.services.imports.import_background_slots import has_any_task_slot
+
     if not isinstance(job.staged_metadata, dict):
         return False
-    if "celery_task_id" not in job.staged_metadata and "dsi_bulk_task" not in job.staged_metadata:
+    meta = job.staged_metadata
+    if not has_any_task_slot(meta) and "pipeline_queued_at" not in meta and "pipeline_started_at" not in meta:
         return False
-    job.staged_metadata = clear_background_task_metadata(job.staged_metadata)
+    job.staged_metadata = clear_background_task_metadata(meta)
     return True
 
 

@@ -1,5 +1,46 @@
 # Channel Intelligence Platform — Current Context
 
+### May 31, 2026 — Phase 2: Unify job-tracking via single slot registry (+ orphan-slot bug fix)
+- **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main).
+- **What:** Replaced ~11 copy-pasted `staged_metadata` task-slot writers + 8 hand-coded
+  discovery readers + 3 inconsistent clearers with ONE registry.
+- **New module `app/services/imports/import_background_slots.py`:** `TASK_SLOTS`
+  (8 `SlotDescriptor`s) + helpers `set_task_slot_on_job` / `set_task_slot_by_job_id`
+  (writers), `iter_active_slots` (discovery), `clear_task_slot` / `clear_task_slot_on_job`
+  / `clear_all_task_slots` (clearers), `jobs_with_possible_background_tasks` (query
+  fragment), and `task_label` (moved out of background_tasks). Models the 3 slot shapes:
+  fixed-kind, `main` (`celery_task_id`, bare-string, kind from template_slug), and
+  `dsi_bulk_task` (kind in payload, legacy `dsi_bulk_provisional_customers` normalized to
+  `dsi_bulk_provisional`). On-disk JSON shape preserved (byte-compatible; `dsi_bulk` now
+  also stores `async_poll`, harmless).
+- **Writers refactored to the registry:** `product_master_workflow.py` (pm_validate,
+  pm_commit + clearers), `dsi_velocity_enqueue.py`, `dsi_soh_reconciliation_enqueue.py`,
+  `dsi_forecasting_enqueue.py` (each: `_persist_*` delegates + **removed the duplicated
+  inline write** in their `dispatch_*`), `lineup_parse_dispatch.py`, `mappings.py`
+  (both `dsi_bulk_task` sites), `imports.py` (all 3 `celery_task_id` main sites).
+  `background_tasks.py` discovery loop now iterates `iter_active_slots`.
+- **Bug fixed (the payoff):** `import_job_background_metadata.clear_background_task_metadata`
+  now clears EVERY registered slot (was only `celery_task_id` + `dsi_bulk_task`), so
+  cancel/retry (`import_job_task_control`) can no longer leave orphan `pm_*`/`dsi_soh`/
+  `dsi_velocity`/`dsi_forecasting`/`lineup_parse` slots the bell kept showing.
+- **Known follow-up (deliberately NOT in scope):** `import_job_task_control._collect_celery_task_ids`
+  still only *revokes* the main + dsi_bulk Celery tasks (metadata is now fully cleared, but
+  pm_commit/validate/soh/velocity/forecasting/lineup sub-tasks are not revoked on cancel).
+  Low risk (worker self-completes); extend revoke via the registry in a later pass.
+- **Tests:** new `test_import_background_slots.py` (7) + new cancel-clears-all-slots
+  regression in `test_import_job_task_control.py`. Focused suites green: background_tasks,
+  import_job_task_control, async_broker_dispatch, product_master_workflow, dsi_job_progress,
+  dsi_soh_reconciliation, lineup_parse_preview, dsi_velocity_intelligence, import_jobs_list,
+  imports_templates (~72 passing).
+- **Real DB validation (Supabase `postgres` via `.env`, no mocks):** registry-generated
+  `has_key` discovery query executed; `list_active_import_background_tasks_sync` ran
+  end-to-end; full write→flush→re-read (`iter_active_slots`)→`clear_all_task_slots`→re-read
+  round-trip on a real `import_job` row, then ROLLBACK (no persistence). No new SQL
+  constructs (JSONB dict writes via ORM).
+- **Next:** Phase 3 (wizard componentization around the contract, static client map first,
+  flag-gated per importer) — GATED behind the user's real PM core-loop re-run. Phase 4
+  (Supabase write optimizations) still pending approval.
+
 ### May 31, 2026 — Phase 1: Import Flow capability contract (DESIGN ONLY, for review)
 - **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main).
 - **Deliverable:** `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` — declarative per-importer

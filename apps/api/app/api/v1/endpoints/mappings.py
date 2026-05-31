@@ -35,6 +35,7 @@ from app.schemas.dsi_resolution_plan_requests import (
 )
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
 from app.services.imports.distributor_sales_inventory import _norm_key
+from app.services.imports.import_background_slots import SLOT_DSI_BULK, set_task_slot_on_job
 from app.services.imports.dsi_apply_completion import DsiApplyCompletionError, complete_dsi_import_job_to_loaded
 from app.services.imports.dsi_resolution_plan import (
     apply_dsi_resolution_plan_rows,
@@ -773,17 +774,13 @@ async def dsi_steward_bulk_provisional_apply_async(
     task_id, async_poll = _enqueue_dsi_bulk_provisional_customers(job_id, payload)
     job = await db.get(ImportJob, job_id)
     if job:
-        from datetime import datetime, timezone
-
-        from app.utils.json_safe import to_jsonable
-
-        m = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
-        m["dsi_bulk_task"] = {
-            "task_id": task_id,
-            "kind": "dsi_bulk_provisional_customers",
-            "queued_at": datetime.now(timezone.utc).isoformat(),
-        }
-        job.staged_metadata = to_jsonable(m)
+        set_task_slot_on_job(
+            job,
+            SLOT_DSI_BULK,
+            task_id=task_id,
+            async_poll=async_poll,
+            kind="dsi_bulk_provisional_customers",
+        )
         await db.commit()
     return {
         "import_job_id": job_id,
@@ -1062,18 +1059,14 @@ async def dsi_resolution_plan_apply_async(
 
     payload = _dsi_resolution_plan_apply_payload_from_body(body)
     task_id, async_poll = _enqueue_dsi_resolution_plan_apply(job_id, payload)
-    from datetime import datetime, timezone
-
-    from app.utils.json_safe import to_jsonable
-
-    m = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
-    m["dsi_bulk_task"] = {
-        "task_id": task_id,
-        "kind": "dsi_resolution_plan_apply",
-        "queued_at": datetime.now(timezone.utc).isoformat(),
-        "candidate_count": len(body.candidate_ids),
-    }
-    job.staged_metadata = to_jsonable(m)
+    set_task_slot_on_job(
+        job,
+        SLOT_DSI_BULK,
+        task_id=task_id,
+        async_poll=async_poll,
+        kind="dsi_resolution_plan_apply",
+        candidate_count=len(body.candidate_ids),
+    )
     await db.commit()
     return {
         "import_job_id": job_id,

@@ -16,6 +16,12 @@ from app.ingestion.infer import infer_schema, read_tabular
 from app.models.dimensions import DimChannel, DimProduct
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
 from app.services.catalog.product_import_sync import sync_bulk_upsert_products_from_rows
+from app.services.imports.import_background_slots import (
+    SLOT_PM_COMMIT,
+    SLOT_PM_VALIDATE,
+    clear_task_slot_on_job,
+    set_task_slot_on_job,
+)
 from app.services.imports.pm_commit_catalog import commit_catalog_and_eav
 from app.services.imports.pm_staging import (
     attribute_candidate_columns_from_decisions,
@@ -835,15 +841,11 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
 
 
 def _clear_pm_validate_task_metadata(job: ImportJob) -> None:
-    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
-    if meta.pop("pm_validate_task", None) is not None:
-        job.staged_metadata = to_jsonable(meta) if meta else None
+    clear_task_slot_on_job(job, SLOT_PM_VALIDATE)
 
 
 def _clear_pm_commit_task_metadata(job: ImportJob) -> None:
-    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
-    if meta.pop("pm_commit_task", None) is not None:
-        job.staged_metadata = to_jsonable(meta) if meta else None
+    clear_task_slot_on_job(job, SLOT_PM_COMMIT)
 
 
 def _pm_async_task_queued_at(job: ImportJob, slot_key: str) -> datetime | None:
@@ -942,17 +944,7 @@ def _persist_pm_validate_task_metadata(
     task_id: str,
     async_poll: bool,
 ) -> None:
-    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
-    meta["pm_validate_task"] = to_jsonable(
-        {
-            "task_id": task_id,
-            "async_poll": async_poll,
-            "kind": "product_master_validate",
-            "label": "Validating product master…",
-            "queued_at": datetime.now(timezone.utc).isoformat(),
-        }
-    )
-    job.staged_metadata = to_jsonable(meta)
+    set_task_slot_on_job(job, SLOT_PM_VALIDATE, task_id=task_id, async_poll=async_poll)
 
 
 def _persist_pm_commit_task_metadata(
@@ -963,17 +955,7 @@ def _persist_pm_commit_task_metadata(
 ) -> None:
     """Register the PM commit Celery task in staged_metadata so the global activity feed
     (background_tasks.py) discovers and tracks it — same slot pattern as pm_validate_task."""
-    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
-    meta["pm_commit_task"] = to_jsonable(
-        {
-            "task_id": task_id,
-            "async_poll": async_poll,
-            "kind": "product_master_commit",
-            "label": "Committing product master…",
-            "queued_at": datetime.now(timezone.utc).isoformat(),
-        }
-    )
-    job.staged_metadata = to_jsonable(meta)
+    set_task_slot_on_job(job, SLOT_PM_COMMIT, task_id=task_id, async_poll=async_poll)
 
 
 def try_enqueue_pm_validate_sync(db: Session, job_id: int) -> dict[str, Any]:

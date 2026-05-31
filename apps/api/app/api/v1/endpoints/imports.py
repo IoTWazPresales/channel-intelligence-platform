@@ -32,6 +32,7 @@ from app.services.imports.shipment_field_mapping import (
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
 from app.storage.local import get_storage_backend
+from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
 from app.services.imports.import_job_bulk_delete import bulk_delete_import_jobs, normalize_job_ids, preview_import_job_bulk_delete
 from app.services.imports.template_definitions import product_master_sample_csv
 from app.utils.json_safe import to_jsonable
@@ -165,9 +166,7 @@ def _persist_pipeline_celery_task_id(job_id: int, task_id: str | None) -> None:
         j_meta = meta_db.get(ImportJob, job_id)
         if j_meta is None:
             return
-        m = dict(j_meta.staged_metadata or {})
-        m["celery_task_id"] = task_id
-        j_meta.staged_metadata = m
+        set_task_slot_on_job(j_meta, SLOT_MAIN, task_id=task_id)
         meta_db.commit()
 
 
@@ -755,9 +754,7 @@ async def post_retry_import_job(job_id: int, db: AsyncSession = Depends(get_db))
             with SessionLocal() as meta_db:
                 j_meta = meta_db.get(ImportJob, job_id)
                 if j_meta is not None:
-                    m = dict(j_meta.staged_metadata or {})
-                    m["celery_task_id"] = task_id
-                    j_meta.staged_metadata = m
+                    set_task_slot_on_job(j_meta, SLOT_MAIN, task_id=task_id)
                     meta_db.commit()
         if not dispatched:
             raise RuntimeError("Failed to enqueue import job retry")
@@ -844,9 +841,7 @@ async def post_shipment_validate(job_id: int, db: AsyncSession = Depends(get_db)
         with SessionLocal() as meta_db:
             j_meta = meta_db.get(ImportJob, job_id)
             if j_meta is not None:
-                m = dict(j_meta.staged_metadata or {})
-                m["celery_task_id"] = shipment_task_id
-                j_meta.staged_metadata = m
+                set_task_slot_on_job(j_meta, SLOT_MAIN, task_id=shipment_task_id)
                 meta_db.commit()
 
     job2 = await db.get(ImportJob, job_id)

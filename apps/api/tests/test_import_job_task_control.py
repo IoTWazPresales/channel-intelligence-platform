@@ -29,6 +29,34 @@ def test_cancel_import_job_revokes_clears_and_marks_failed() -> None:
     mock_session.commit.assert_called_once()
 
 
+def test_cancel_import_job_clears_all_registered_slots() -> None:
+    """Regression: cancel must clear every background-task slot, not just main/dsi_bulk.
+
+    Previously pm_commit_task / pm_validate_task / dsi_soh/velocity/forecasting and
+    lineup_parse slots survived cancel/retry and kept showing in the activity feed.
+    """
+    mock_session = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = 21
+    mock_job.status = "running"
+    mock_job.staged_metadata = {
+        "celery_task_id": "main-1",
+        "pm_commit_task": {"task_id": "commit-1"},
+        "dsi_soh_reconcile_task": {"task_id": "soh-1"},
+        "dsi_velocity_compute_task": {"task_id": "vel-1"},
+        "dsi_forecasting_task": {"task_id": "fc-1"},
+        "lineup_parse_task": {"task_id": "lp-1"},
+        "dsi_validate_total_rows": 5,
+    }
+    mock_session.get.return_value = mock_job
+
+    with patch("app.services.imports.import_job_task_control._revoke_celery_tasks"):
+        cancel_import_job_sync(mock_session, 21)
+
+    # Only the non-task scalar survives; every slot is gone (no orphans).
+    assert mock_job.staged_metadata == {"dsi_validate_total_rows": 5}
+
+
 def test_cancel_import_job_stale_no_celery_ids() -> None:
     mock_session = MagicMock()
     mock_job = MagicMock()

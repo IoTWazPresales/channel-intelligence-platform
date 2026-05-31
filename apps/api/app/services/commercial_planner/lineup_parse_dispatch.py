@@ -20,7 +20,7 @@ from app.services.commercial_planner.lineup_parse_worker import (
     ASYNC_PARSE_BYTE_THRESHOLD,
     ASYNC_PARSE_ROW_THRESHOLD,
 )
-from app.utils.json_safe import to_jsonable
+from app.services.imports.import_background_slots import SLOT_LINEUP_PARSE, set_task_slot_on_job
 
 logger = logging.getLogger(__name__)
 DEV_CELERY_LOGGER = logging.getLogger("cip.dev_celery")
@@ -41,18 +41,14 @@ def _persist_lineup_parse_task_metadata(
     case_id: int,
     filename: str,
 ) -> None:
-    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
-    meta["lineup_parse_task"] = to_jsonable(
-        {
-            "task_id": task_id,
-            "case_id": case_id,
-            "filename": filename,
-            "kind": "commercial_planner_lineup_parse",
-            "label": f"Parsing lineup case #{case_id}…",
-            "queued_at": datetime.now(timezone.utc).isoformat(),
-        }
+    set_task_slot_on_job(
+        job,
+        SLOT_LINEUP_PARSE,
+        task_id=task_id,
+        case_id=case_id,
+        filename=filename,
+        label=f"Parsing lineup case #{case_id}…",
     )
-    job.staged_metadata = meta
 
 
 def prepare_lineup_parse_import_job_sync(
