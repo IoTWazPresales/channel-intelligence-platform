@@ -115,8 +115,8 @@ def test_catalog_and_distributor_bulk_delete_preview(path: str, patch_target: st
     assert r.json()["deletable_ids"] == [10]
 
 
-def test_confirm_with_deletable_ids_does_not_call_preview():
-    """When deletable_ids is provided confirm must skip the full reference re-check."""
+def test_confirm_with_deletable_ids_rechecks_refs_not_full_preview():
+    """Confirm with deletable_ids runs batched re-check, not full preview replay."""
     db = MagicMock()
     db.commit = AsyncMock()
 
@@ -124,6 +124,9 @@ def test_confirm_with_deletable_ids_does_not_call_preview():
         with patch(
             "app.services.master_entity_bulk_delete._batch_entity_labels",
             new=AsyncMock(return_value={1: "CUST-1"}),
+        ), patch(
+            "app.services.master_entity_bulk_delete._batch_refs",
+            new=AsyncMock(return_value={1: []}),
         ), patch(
             "app.services.master_entity_bulk_delete._delete_one",
             new=AsyncMock(return_value=True),
@@ -150,11 +153,11 @@ def test_confirm_integrity_error_raises_structured_conflict():
             "app.services.master_entity_bulk_delete._batch_entity_labels",
             new=AsyncMock(return_value={1: "CUST-1"}),
         ), patch(
+            "app.services.master_entity_bulk_delete._batch_refs",
+            new=AsyncMock(side_effect=[{1: []}, {1: [{"label": "Sell-out", "count": 1}]}]),
+        ), patch(
             "app.services.master_entity_bulk_delete._delete_one",
             new=AsyncMock(return_value=True),
-        ), patch(
-            "app.services.master_entity_bulk_delete._batch_refs",
-            new=AsyncMock(return_value={1: [{"label": "Sell-out", "count": 1}]}),
         ):
             with pytest.raises(MasterBulkDeleteIntegrityError) as exc_info:
                 await confirm_master_bulk_delete(db, "customers", [1], deletable_ids=[1])

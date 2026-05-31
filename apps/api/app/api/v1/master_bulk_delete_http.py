@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from app.services.master_entity_bulk_delete import MasterBulkDeleteIntegrityError
+from app.services.master_entity_bulk_delete import (
+    MasterBulkDeleteIntegrityError,
+    is_db_integrity_error,
+)
 
 
 def raise_bulk_delete_http_error(exc: Exception, *, entity_label: str) -> None:
@@ -18,6 +21,18 @@ def raise_bulk_delete_http_error(exc: Exception, *, entity_label: str) -> None:
             detail={
                 "message": exc.message,
                 "references": exc.references,
+            },
+        ) from None
+
+    if is_db_integrity_error(exc):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    "One or more rows could not be deleted (database constraint). "
+                    "Dependent data may have changed."
+                ),
+                "references": [{"label": "Unknown referencing rows (try refresh)", "count": 1}],
             },
         ) from None
 

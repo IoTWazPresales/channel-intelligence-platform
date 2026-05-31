@@ -3,18 +3,15 @@
 Performance design
 ------------------
 * preview  — one UNION ALL reference check (1 round trip) + one batch label
-             fetch (1 round trip) = 2 round trips regardless of how many tables
-             are checked or how many entities are in the selection.
+             fetch (1 round trip) = 2 round trips regardless of selection size.
 
-* confirm  — when ``deletable_ids`` is provided from a recent preview the
-             expensive reference re-check is skipped entirely.  Only a single
-             batch existence query is issued before proceeding to deletes.  The
-             ``db.commit()`` IntegrityError handler is the data-integrity safety
-             net for concurrent changes between preview and confirm.
+* confirm  — when ``deletable_ids`` is provided: one UNION ALL re-check on those
+             ids (1 round trip) + one batch existence/label query (1 round trip)
+             before deletes.  Skips full preview replay but never trusts stale
+             preview alone.
 
-* error path — any unhandled exception (asyncpg timeout, connection reset, etc.)
-               is re-raised so the endpoint layer can map it to a structured
-               HTTP response rather than a bare 500.
+* integrity — ``db.commit()`` and autoflush paths map FK violations to
+              ``MasterBulkDeleteIntegrityError`` (HTTP 409) with reference detail.
 """
 
 from __future__ import annotations
@@ -23,7 +20,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct, DimRegion
@@ -42,6 +39,9 @@ from app.services.region_usage import region_hard_reference_breakdown_batch
 
 MasterEntityKind = Literal["products", "customers", "channels", "regions", "distributors"]
 MAX_BULK_IDS = 200
+
+_PG_FK_VIOLATION = "23503"
+_PG_UNIQUE_VIOLATION = "23505"
 
 
 class MasterBulkDeleteConfirmBody(BaseModel):
@@ -74,6 +74,30 @@ def normalize_entity_ids(entity_ids: list[int]) -> list[int]:
     return out
 
 
+def is_db_integrity_error(exc: BaseException) -> bool:
+    """True for SQLAlchemy IntegrityError and asyncpg/pg FK/unique violations."""
+    if isinstance(exc, IntegrityError):
+        return True
+    if isinstance(exc, DBAPIError):
+        orig = getattr(exc, "orig", None)
+        sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+        if sqlstate in (_PG_FK_VIOLATION, _PG_UNIQUE_VIOLATION):
+            return True
+        name = type(orig).__name__.lower() if orig is not None else ""
+        if "integrity" in name or "foreignkey" in name or "uniqueviolation" in name:
+            return True
+    return False
+
+
+def _merge_refs_for_ids(
+    ref_map: dict[int, list[dict[str, int | str]]], entity_ids: list[int]
+) -> list[dict[str, int | str]]:
+    merged: list[dict[str, int | str]] = []
+    for eid in entity_ids:
+        merged.extend(ref_map.get(eid, []))
+    return merged
+
+
 async def _batch_refs(
     db: AsyncSession,
     kind: MasterEntityKind,
@@ -93,11 +117,7 @@ async def _batch_refs(
 async def _batch_entity_labels(
     db: AsyncSession, kind: MasterEntityKind, entity_ids: list[int]
 ) -> dict[int, str]:
-    """Fetch entity labels for all IDs in a single SELECT IN query.
-
-    Missing IDs (rows not found in the database) are absent from the returned
-    dict, allowing callers to detect deletions that occurred since preview.
-    """
+    """Fetch entity labels for all IDs in a single SELECT IN query."""
     if not entity_ids:
         return {}
     if kind == "products":
@@ -134,8 +154,6 @@ async def _batch_entity_labels(
     return {row.id: row.code for row in rows}
 
 
-# Keep the single-entity helper for backward compat (used by some endpoint
-# error paths and existing tests).
 async def _entity_label(db: AsyncSession, kind: MasterEntityKind, entity_id: int) -> str | None:
     label_map = await _batch_entity_labels(db, kind, [entity_id])
     return label_map.get(entity_id)
@@ -164,7 +182,6 @@ async def preview_master_bulk_delete(
     entity_ids: list[int],
 ) -> dict[str, Any]:
     ids = normalize_entity_ids(entity_ids)
-    # Two queries: one UNION ALL reference check, one batch label fetch.
     ref_map = await _batch_refs(db, kind, ids)
     label_map = await _batch_entity_labels(db, kind, ids)
     rows: list[dict[str, Any]] = []
@@ -223,6 +240,22 @@ async def _delete_one(db: AsyncSession, kind: MasterEntityKind, eid: int) -> boo
     return True
 
 
+async def _raise_confirm_integrity_conflict(
+    db: AsyncSession,
+    kind: MasterEntityKind,
+    target_ids: list[int],
+    *,
+    message: str,
+) -> None:
+    """Re-query hard refs after rollback and raise structured 409 payload."""
+    ref_map = await _batch_refs(db, kind, target_ids)
+    refs = _merge_refs_for_ids(ref_map, target_ids)
+    raise MasterBulkDeleteIntegrityError(
+        message,
+        refs if refs else [{"label": "Unknown referencing rows (try refresh)", "count": 1}],
+    )
+
+
 async def confirm_master_bulk_delete(
     db: AsyncSession,
     kind: MasterEntityKind,
@@ -240,13 +273,18 @@ async def confirm_master_bulk_delete(
             raise ValueError("entities_still_blocked")
         if not set(target_ids).issubset(set(ids)):
             raise ValueError("deletable_ids_not_subset")
-        # Skip the full reference re-check — the preview already determined
-        # these IDs are deletable.  The commit IntegrityError handler below
-        # is the safety net for concurrent changes between preview and confirm.
         label_map = await _batch_entity_labels(db, kind, target_ids)
         missing = [eid for eid in target_ids if eid not in label_map]
         if missing:
             raise ValueError("not_all_entities_found")
+        # One UNION ALL re-check — catches stale preview and surfaces blockers (e.g. DSI staging).
+        ref_map = await _batch_refs(db, kind, target_ids)
+        blocked_at_confirm = [eid for eid in target_ids if ref_map.get(eid)]
+        if blocked_at_confirm:
+            raise MasterBulkDeleteIntegrityError(
+                "One or more rows are still referenced and cannot be deleted.",
+                _merge_refs_for_ids(ref_map, blocked_at_confirm),
+            )
         skipped_blocked_ids = [eid for eid in ids if eid not in set(target_ids)]
         skipped_blocked_count = len(skipped_blocked_ids)
     else:
@@ -265,20 +303,18 @@ async def confirm_master_bulk_delete(
             if await _delete_one(db, kind, eid):
                 deleted_ids.append(eid)
         await db.commit()
-    except IntegrityError:
+    except Exception as exc:
         await db.rollback()
-        last_refs: list[dict[str, int | str]] = []
-        if deleted_ids:
-            ref_map = await _batch_refs(db, kind, deleted_ids[:1])
-            last_refs = ref_map.get(deleted_ids[0], [])
-        raise MasterBulkDeleteIntegrityError(
-            "One or more rows could not be deleted (database constraint). Dependent data may have changed.",
-            last_refs
-            if last_refs
-            else [{"label": "Unknown referencing rows (try refresh)", "count": 1}],
-        ) from None
-    except Exception:
-        await db.rollback()
+        if is_db_integrity_error(exc):
+            await _raise_confirm_integrity_conflict(
+                db,
+                kind,
+                target_ids,
+                message=(
+                    "One or more rows could not be deleted (database constraint). "
+                    "Dependent data may have changed."
+                ),
+            )
         raise
 
     return {

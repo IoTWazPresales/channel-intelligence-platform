@@ -11,8 +11,9 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 
-const apiRoot = path.join(__dirname, '..', 'apps', 'api');
 const isWin = process.platform === 'win32';
+
+const apiRoot = path.join(__dirname, '..', 'apps', 'api');
 const py = path.join(apiRoot, '.venv', isWin ? 'Scripts' : 'bin', isWin ? 'python.exe' : 'python');
 
 const OPENAPI_MARKER = '"/api/v1/dev/database-wipe"';
@@ -57,6 +58,52 @@ try {
 }
 
 /**
+ * Kill the process listening on port (Windows: netstat; Unix: lsof).
+ * @returns {boolean} true if a process was killed
+ */
+function killProcessOnPort(port) {
+  try {
+    if (isWin) {
+      const out = execFileSync('netstat', ['-ano'], { encoding: 'utf8' });
+      const pids = new Set();
+      for (const line of out.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed.includes('LISTENING')) continue;
+        if (!new RegExp(`:${port}\\s`).test(trimmed)) continue;
+        const parts = trimmed.split(/\s+/);
+        const pid = parseInt(parts[parts.length - 1], 10);
+        if (pid > 4) pids.add(pid);
+      }
+      let killed = false;
+      for (const pid of pids) {
+        try {
+          execFileSync('taskkill', ['/PID', String(pid), '/F'], { stdio: 'ignore' });
+          console.error(`[cip-dev-api] killed stale process PID ${pid} on port ${port}`);
+          killed = true;
+        } catch {
+          /* already gone */
+        }
+      }
+      return killed;
+    }
+    const out = execFileSync('lsof', ['-ti', `tcp:${port}`], { encoding: 'utf8' }).trim();
+    if (!out) return false;
+    for (const pid of out.split(/\s+/)) {
+      if (!pid) continue;
+      try {
+        process.kill(parseInt(pid, 10), 'SIGTERM');
+        console.error(`[cip-dev-api] killed stale process PID ${pid} on port ${port}`);
+      } catch {
+        /* ignore */
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * @returns {Promise<string|null>} error message or null if OK to start uvicorn
  */
 function preflightListenPort() {
@@ -91,11 +138,12 @@ function preflightListenPort() {
         });
         res.on('close', () => {
           if (res.statusCode === 200 && text.includes(OPENAPI_MARKER)) {
-            resolve(
-              `[cip-dev-api] Port ${port} already serves an OpenAPI document that includes GET /api/v1/dev/database-wipe.\n` +
-                `Another Channel Intelligence API (or duplicate uvicorn) is bound there. Stop it first, or start this API on a different port:\n` +
-                `  CIP_API_PORT=8002 pnpm dev:api`
+            console.error(
+              `[cip-dev-api] Port ${port} is occupied by a Channel Intelligence API (stale or duplicate uvicorn). ` +
+                'Stopping it and starting a fresh instance.'
             );
+            killProcessOnPort(port);
+            setTimeout(() => resolve(null), 800);
             return;
           }
           if (res.statusCode === 200 && text.includes('"/api/v1/') && !text.includes(OPENAPI_MARKER)) {

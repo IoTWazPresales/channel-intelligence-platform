@@ -6,7 +6,7 @@ network round trip to the database regardless of the number of tables checked.
 
 from __future__ import annotations
 
-from sqlalchemy import Select, delete, func, literal, select
+from sqlalchemy import BigInteger, Select, cast, delete, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupLine
@@ -45,6 +45,8 @@ _CUSTOMER_MAPPING_ENTITY_TYPES = (
     "shipment_customer_token",
 )
 
+DSI_STAGING_REF_LABEL = "DSI import staging (resolved customer)"
+
 # Ordered spec list: (display label, FK column).
 # Each entry becomes one subquery in the UNION ALL reference check.
 _SPECS: list[tuple[str, object]] = [
@@ -63,7 +65,7 @@ _SPECS: list[tuple[str, object]] = [
     ("Historical lineup headers", HistoricalLineupImportHeader.customer_id),
     ("Shipment evidence (resolved customer)", ShipmentEvidenceLine.customer_id),
     ("Customer report config", CustomerReportConfig.customer_id),
-    ("DSI import staging (resolved customer)", ImportDistributorSiStagingLine.resolved_customer_id),
+    (DSI_STAGING_REF_LABEL, ImportDistributorSiStagingLine.resolved_customer_id),
     ("Customer sell-through import staging", ImportCustomerSellthroughStagingLine.resolved_customer_id),
     ("Customer source token aliases", CustomerSourceTokenAlias.customer_id),
     ("Budget requests (linked customer)", FactBudgetRequest.linked_customer_id),
@@ -72,18 +74,19 @@ _SPECS: list[tuple[str, object]] = [
 
 def _extra_customer_subqueries(ids: list[int]) -> list[Select]:
     """Additional subqueries with non-standard WHERE clauses included in the UNION ALL."""
+    cnt_one = cast(literal(1), BigInteger).label("cnt")
     return [
         # Flag the system-reserved OPEN_CHANNEL record as undeletable.
         select(
             literal("System reference account (OPEN_CHANNEL)").label("lbl"),
             DimCustomer.id.label("entity_id"),
-            literal(1).label("cnt"),
+            cnt_one,
         ).where(DimCustomer.id.in_(ids), DimCustomer.code == OPEN_CHANNEL_CUSTOMER_CODE),
         # Mapping candidates restricted to customer entity types.
         select(
             literal("Import mapping candidates (customer)").label("lbl"),
             ImportEntityMappingCandidate.suggested_entity_id.label("entity_id"),
-            func.count().label("cnt"),
+            cast(func.count(), BigInteger).label("cnt"),
         )
         .where(
             ImportEntityMappingCandidate.suggested_entity_id.in_(ids),
@@ -119,5 +122,9 @@ async def cleanup_soft_customer_references(db: AsyncSession, customer_id: int) -
 
 
 async def delete_customer_children(db: AsyncSession, customer_id: int) -> None:
+    """Remove child rows before dim_customer delete (aliases also CASCADE at DB level)."""
+    await db.execute(
+        delete(CustomerSourceTokenAlias).where(CustomerSourceTokenAlias.customer_id == customer_id)
+    )
     await db.execute(delete(CustomerLocation).where(CustomerLocation.customer_id == customer_id))
     await db.execute(delete(CustomerContact).where(CustomerContact.customer_id == customer_id))

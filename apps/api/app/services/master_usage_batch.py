@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import ColumnElement, Select, func, literal, select, union_all
+from sqlalchemy import BigInteger, ColumnElement, Select, cast, func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -26,10 +26,15 @@ def count_subquery_for_columns(
     column.
     """
     ids = [int(i) for i in entity_ids if isinstance(i, int) and i > 0]
+    cnt_expr = cast(func.count(), BigInteger).label("cnt")
     if len(columns) == 1:
         col = columns[0]
         return (
-            select(literal(label).label("lbl"), col.label("entity_id"), func.count().label("cnt"))
+            select(
+                literal(label, type_=None).label("lbl"),
+                col.label("entity_id"),
+                cnt_expr,
+            )
             .where(col.in_(ids))
             .group_by(col)
         )
@@ -37,9 +42,9 @@ def count_subquery_for_columns(
         select(col.label("entity_id")).where(col.in_(ids)) for col in columns
     ]).subquery()
     return select(
-        literal(label).label("lbl"),
+        literal(label, type_=None).label("lbl"),
         inner.c.entity_id.label("entity_id"),
-        func.count().label("cnt"),
+        cnt_expr,
     ).group_by(inner.c.entity_id)
 
 
@@ -62,18 +67,20 @@ async def batch_counts_multi_table(
         return out
     combined = union_all(*subqueries)
     rows = (await db.execute(combined)).all()
-    for lbl, entity_id, cnt in rows:
+    for row in rows:
+        mapping = row._mapping
+        entity_id = mapping.get("entity_id")
         if entity_id is None:
             continue
         eid = int(entity_id)
-        if eid in out and int(cnt) > 0:
-            out[eid].append({"label": str(lbl), "count": int(cnt)})
+        cnt = int(mapping.get("cnt") or 0)
+        if eid in out and cnt > 0:
+            out[eid].append({"label": str(mapping.get("lbl")), "count": cnt})
     return out
 
 
 # ---------------------------------------------------------------------------
-# Legacy helpers retained for backward compat (still used by callers that have
-# not yet been migrated to batch_counts_multi_table).
+# Legacy helpers retained for backward compat.
 # ---------------------------------------------------------------------------
 
 async def batch_counts_for_column(

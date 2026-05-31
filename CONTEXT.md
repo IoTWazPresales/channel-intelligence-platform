@@ -1,5 +1,12 @@
 # Channel Intelligence Platform — Current Context
 
+### May 31, 2026 — Customer bulk delete: DSI staging blockers, confirm 409, dev port kill
+- **Reference matrix:** `import_distributor_si_staging_line.resolved_customer_id` is in customer `_SPECS` (`DSI_STAGING_REF_LABEL`); `customer_source_token_alias` remains a **preview blocker** (not auto-deleted as child — explicit bulk delete before `dim_customer` for session consistency; DB also CASCADE).
+- **Confirm:** Restored batched `_batch_refs` re-check when `deletable_ids` is sent (1 UNION ALL query) — blocks stale preview (e.g. CUST-1001 + 11 DSI staging rows). `is_db_integrity_error()` maps asyncpg/sqlalchemy FK violations to `MasterBulkDeleteIntegrityError` → HTTP **409** with `references`, not 500.
+- **Preview perf:** UNION ALL uses homogenized `cnt` types (`BigInteger`) and `row._mapping` parsing; tests assert **1** `db.execute` per breakdown and **1** `_batch_refs` call for 6 customers (2 queries total for preview).
+- **Dev restart:** `scripts/stop-dev.ps1` uses `Get-NetTCPConnection` for ports 8001/3000/5555; `scripts/dev-api.js` kills stale CIP API on :8001 when OpenAPI matches, then starts uvicorn.
+- **Tests:** 20/20 in `test_customer_bulk_delete_staging_block.py` + `test_master_entity_bulk_delete.py`.
+
 ### May 31, 2026 — Master delete: UNION ALL reference checks, no NameError, no redundant re-check
 - **Bug fix:** `customer_usage.py` was missing `from sqlalchemy import func` → `NameError` at runtime → bulk delete 500. Added `func` (and `literal`, `Select`) to imports.
 - **Performance:** All six `*_usage.py` reference checks now execute as a **single UNION ALL query** (one network round trip) instead of 19–25 sequential awaited queries. Before: ~2s × 21 queries ≈ 42 s. After: 1 round trip (~1–3 s for the UNION).

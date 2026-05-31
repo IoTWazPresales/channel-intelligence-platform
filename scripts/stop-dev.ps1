@@ -11,15 +11,16 @@ function Stop-CipDevProcesses {
 
     foreach ($port in @(8001, 3000, 5555)) {
         $pids = @()
-        netstat -ano | ForEach-Object {
-            $line = $_.Trim()
-            if ($line -notmatch 'LISTENING') { return }
-            if ($line -notmatch ":$port\s") { return }
-            $procId = ($line -split '\s+')[-1]
-            if ($procId -match '^\d+$') { $pids += [int]$procId }
+        try {
+            $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+            foreach ($conn in $conns) {
+                $procId = [int]$conn.OwningProcess
+                if ($procId -gt 4) { $pids += $procId }
+            }
+        } catch {
+            Write-Host "  Get-NetTCPConnection failed for port ${port}: $_" -ForegroundColor DarkYellow
         }
         foreach ($procId in ($pids | Select-Object -Unique)) {
-            if ($procId -le 4) { continue }
             Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
             Write-Host "  Killed PID $procId (listening on port $port)"
         }
