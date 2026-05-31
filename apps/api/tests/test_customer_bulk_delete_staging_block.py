@@ -22,6 +22,7 @@ from app.services.customer_usage import (
 )
 from app.services.master_entity_bulk_delete import (
     MasterBulkDeleteIntegrityError,
+    MasterBulkDeleteTimeoutError,
     confirm_master_bulk_delete,
     is_db_integrity_error,
     preview_master_bulk_delete,
@@ -239,6 +240,14 @@ def test_bulk_delete_confirm_staging_blocked_returns_409_not_500():
     detail = r.json()["detail"]
     assert detail["references"][0]["label"] == DSI_STAGING_REF_LABEL
     assert detail["references"][0]["count"] == 11
+
+
+def test_bulk_delete_confirm_timeout_returns_504_not_500():
+    exc = MasterBulkDeleteTimeoutError("timed out", phase="reference_union")
+    with pytest.raises(HTTPException) as raised:
+        raise_bulk_delete_http_error(exc, entity_label="customer")
+    assert raised.value.status_code == 504
+    assert raised.value.detail["error"] == "statement_timeout"
 
 
 def test_bulk_delete_confirm_with_deletable_ids_skips_full_preview():

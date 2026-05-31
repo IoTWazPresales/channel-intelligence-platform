@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from app.api.deps import get_db
+from app.api.v1.bulk_delete_sql_probe import apply_sql_probe_headers, bulk_delete_sql_probe
 from app.models.dimensions import (
     CustomerContact,
     CustomerLocation,
@@ -464,18 +465,27 @@ async def create_customer(body: CustomerCreate, db: AsyncSession = Depends(get_d
 
 
 @router.post("/bulk-delete-preview")
-async def post_customers_bulk_delete_preview(body: MasterBulkIdsBody, db: AsyncSession = Depends(get_db)):
+async def post_customers_bulk_delete_preview(
+    body: MasterBulkIdsBody,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
     if not body.entity_ids:
         raise HTTPException(
             status_code=400,
             detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid customer id."},
         )
-    return await preview_master_bulk_delete(db, "customers", body.entity_ids)
+    with bulk_delete_sql_probe() as counter:
+        payload = await preview_master_bulk_delete(db, "customers", body.entity_ids)
+    apply_sql_probe_headers(response, counter)
+    return payload
 
 
 @router.post("/bulk-delete-confirm")
 async def post_customers_bulk_delete_confirm(
-    body: MasterBulkDeleteConfirmBody, db: AsyncSession = Depends(get_db)
+    body: MasterBulkDeleteConfirmBody,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
 ):
     if not body.entity_ids:
         raise HTTPException(
@@ -483,12 +493,15 @@ async def post_customers_bulk_delete_confirm(
             detail={"error": "no_valid_entity_ids", "message": "Provide at least one valid customer id."},
         )
     try:
-        return await confirm_master_bulk_delete(
-            db,
-            "customers",
-            body.entity_ids,
-            deletable_ids=body.deletable_ids,
-        )
+        with bulk_delete_sql_probe() as counter:
+            payload = await confirm_master_bulk_delete(
+                db,
+                "customers",
+                body.entity_ids,
+                deletable_ids=body.deletable_ids,
+            )
+        apply_sql_probe_headers(response, counter)
+        return payload
     except Exception as exc:
         raise_bulk_delete_http_error(exc, entity_label="customer")
 

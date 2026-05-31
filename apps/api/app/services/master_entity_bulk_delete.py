@@ -5,22 +5,23 @@ Performance design
 * preview  — one UNION ALL reference check (1 round trip) + one batch label
              fetch (1 round trip) = 2 round trips regardless of selection size.
 
-* confirm  — when ``deletable_ids`` is provided: one UNION ALL re-check on those
-             ids (1 round trip) + one batch existence/label query (1 round trip)
-             before deletes.  Skips full preview replay but never trusts stale
-             preview alone.
+* confirm  — when ``deletable_ids`` is provided: one UNION ALL re-check + one
+             batch existence/label query before deletes.
 
-* integrity — ``db.commit()`` and autoflush paths map FK violations to
-              ``MasterBulkDeleteIntegrityError`` (HTTP 409) with reference detail.
+* integrity — FK violations → ``MasterBulkDeleteIntegrityError`` (HTTP 409).
+
+* timeout — statement timeout / query canceled → ``MasterBulkDeleteTimeoutError``
+              (HTTP 504).
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct, DimRegion
@@ -37,11 +38,14 @@ from app.services.distributor_usage import (
 from app.services.product_usage import cleanup_soft_product_references, product_hard_reference_breakdown_batch
 from app.services.region_usage import region_hard_reference_breakdown_batch
 
+logger = logging.getLogger(__name__)
+
 MasterEntityKind = Literal["products", "customers", "channels", "regions", "distributors"]
 MAX_BULK_IDS = 200
 
 _PG_FK_VIOLATION = "23503"
 _PG_UNIQUE_VIOLATION = "23505"
+_PG_QUERY_CANCELED = "57014"
 
 
 class MasterBulkDeleteConfirmBody(BaseModel):
@@ -59,6 +63,15 @@ class MasterBulkDeleteIntegrityError(Exception):
         self.references = references or []
 
 
+class MasterBulkDeleteTimeoutError(Exception):
+    """Raised when a reference check or delete exceeds the database statement timeout."""
+
+    def __init__(self, message: str, *, phase: str | None = None):
+        super().__init__(message)
+        self.message = message
+        self.phase = phase
+
+
 def normalize_entity_ids(entity_ids: list[int]) -> list[int]:
     out: list[int] = []
     seen: set[int] = set()
@@ -74,19 +87,58 @@ def normalize_entity_ids(entity_ids: list[int]) -> list[int]:
     return out
 
 
+def _pg_sqlstate(exc: BaseException) -> str | None:
+    orig = getattr(exc, "orig", None)
+    if orig is None:
+        return None
+    return getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+
+
+def is_statement_timeout_error(exc: BaseException) -> bool:
+    """True for statement_timeout / query canceled (asyncpg QueryCanceledError, SQLSTATE 57014)."""
+    if isinstance(exc, OperationalError):
+        state = _pg_sqlstate(exc)
+        if state == _PG_QUERY_CANCELED:
+            return True
+        orig = getattr(exc, "orig", None)
+        if orig is not None and "QueryCanceled" in type(orig).__name__:
+            return True
+        if orig is not None and "Timeout" in type(orig).__name__:
+            return True
+    if isinstance(exc, DBAPIError):
+        state = _pg_sqlstate(exc)
+        if state == _PG_QUERY_CANCELED:
+            return True
+        orig = getattr(exc, "orig", None)
+        if orig is not None and "QueryCanceled" in type(orig).__name__:
+            return True
+    return False
+
+
 def is_db_integrity_error(exc: BaseException) -> bool:
     """True for SQLAlchemy IntegrityError and asyncpg/pg FK/unique violations."""
     if isinstance(exc, IntegrityError):
         return True
     if isinstance(exc, DBAPIError):
+        state = _pg_sqlstate(exc)
+        if state in (_PG_FK_VIOLATION, _PG_UNIQUE_VIOLATION):
+            return True
         orig = getattr(exc, "orig", None)
-        sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
-        if sqlstate in (_PG_FK_VIOLATION, _PG_UNIQUE_VIOLATION):
-            return True
-        name = type(orig).__name__.lower() if orig is not None else ""
-        if "integrity" in name or "foreignkey" in name or "uniqueviolation" in name:
-            return True
+        if orig is not None:
+            name = type(orig).__name__.lower()
+            if "integrity" in name or "foreignkey" in name or "uniqueviolation" in name:
+                return True
     return False
+
+
+def _reraise_db_error(exc: BaseException, *, phase: str) -> None:
+    if is_statement_timeout_error(exc):
+        raise MasterBulkDeleteTimeoutError(
+            "The delete operation timed out while checking references. "
+            "Try fewer rows or retry when the database is less busy.",
+            phase=phase,
+        ) from exc
+    raise
 
 
 def _merge_refs_for_ids(
@@ -103,15 +155,18 @@ async def _batch_refs(
     kind: MasterEntityKind,
     entity_ids: list[int],
 ) -> dict[int, list[dict[str, int | str]]]:
-    if kind == "products":
-        return await product_hard_reference_breakdown_batch(db, entity_ids)
-    if kind == "customers":
-        return await customer_hard_reference_breakdown_batch(db, entity_ids)
-    if kind == "channels":
-        return await channel_hard_reference_breakdown_batch(db, entity_ids)
-    if kind == "regions":
-        return await region_hard_reference_breakdown_batch(db, entity_ids)
-    return await distributor_hard_reference_breakdown_batch(db, entity_ids)
+    try:
+        if kind == "products":
+            return await product_hard_reference_breakdown_batch(db, entity_ids)
+        if kind == "customers":
+            return await customer_hard_reference_breakdown_batch(db, entity_ids)
+        if kind == "channels":
+            return await channel_hard_reference_breakdown_batch(db, entity_ids)
+        if kind == "regions":
+            return await region_hard_reference_breakdown_batch(db, entity_ids)
+        return await distributor_hard_reference_breakdown_batch(db, entity_ids)
+    except Exception as exc:
+        _reraise_db_error(exc, phase="reference_union")
 
 
 async def _batch_entity_labels(
@@ -120,38 +175,41 @@ async def _batch_entity_labels(
     """Fetch entity labels for all IDs in a single SELECT IN query."""
     if not entity_ids:
         return {}
-    if kind == "products":
-        rows = (
-            await db.execute(select(DimProduct.id, DimProduct.sku).where(DimProduct.id.in_(entity_ids)))
-        ).all()
-        return {row.id: row.sku for row in rows}
-    if kind == "customers":
+    try:
+        if kind == "products":
+            rows = (
+                await db.execute(select(DimProduct.id, DimProduct.sku).where(DimProduct.id.in_(entity_ids)))
+            ).all()
+            return {row.id: row.sku for row in rows}
+        if kind == "customers":
+            rows = (
+                await db.execute(
+                    select(DimCustomer.id, DimCustomer.code).where(DimCustomer.id.in_(entity_ids))
+                )
+            ).all()
+            return {row.id: row.code for row in rows}
+        if kind == "channels":
+            rows = (
+                await db.execute(
+                    select(DimChannel.id, DimChannel.code).where(DimChannel.id.in_(entity_ids))
+                )
+            ).all()
+            return {row.id: row.code for row in rows}
+        if kind == "regions":
+            rows = (
+                await db.execute(
+                    select(DimRegion.id, DimRegion.code).where(DimRegion.id.in_(entity_ids))
+                )
+            ).all()
+            return {row.id: row.code for row in rows}
         rows = (
             await db.execute(
-                select(DimCustomer.id, DimCustomer.code).where(DimCustomer.id.in_(entity_ids))
+                select(DimDistributor.id, DimDistributor.code).where(DimDistributor.id.in_(entity_ids))
             )
         ).all()
         return {row.id: row.code for row in rows}
-    if kind == "channels":
-        rows = (
-            await db.execute(
-                select(DimChannel.id, DimChannel.code).where(DimChannel.id.in_(entity_ids))
-            )
-        ).all()
-        return {row.id: row.code for row in rows}
-    if kind == "regions":
-        rows = (
-            await db.execute(
-                select(DimRegion.id, DimRegion.code).where(DimRegion.id.in_(entity_ids))
-            )
-        ).all()
-        return {row.id: row.code for row in rows}
-    rows = (
-        await db.execute(
-            select(DimDistributor.id, DimDistributor.code).where(DimDistributor.id.in_(entity_ids))
-        )
-    ).all()
-    return {row.id: row.code for row in rows}
+    except Exception as exc:
+        _reraise_db_error(exc, phase="entity_labels")
 
 
 async def _entity_label(db: AsyncSession, kind: MasterEntityKind, entity_id: int) -> str | None:
@@ -277,7 +335,6 @@ async def confirm_master_bulk_delete(
         missing = [eid for eid in target_ids if eid not in label_map]
         if missing:
             raise ValueError("not_all_entities_found")
-        # One UNION ALL re-check — catches stale preview and surfaces blockers (e.g. DSI staging).
         ref_map = await _batch_refs(db, kind, target_ids)
         blocked_at_confirm = [eid for eid in target_ids if ref_map.get(eid)]
         if blocked_at_confirm:
@@ -305,6 +362,17 @@ async def confirm_master_bulk_delete(
         await db.commit()
     except Exception as exc:
         await db.rollback()
+        logger.warning(
+            "bulk_delete_confirm failed kind=%s target_count=%s exc_type=%s",
+            kind,
+            len(target_ids),
+            type(exc).__name__,
+        )
+        if is_statement_timeout_error(exc):
+            raise MasterBulkDeleteTimeoutError(
+                "The delete operation timed out. Try fewer rows or retry when the database is less busy.",
+                phase="delete_commit",
+            ) from exc
         if is_db_integrity_error(exc):
             await _raise_confirm_integrity_conflict(
                 db,

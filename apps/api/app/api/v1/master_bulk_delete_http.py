@@ -10,7 +10,9 @@ from fastapi import HTTPException
 
 from app.services.master_entity_bulk_delete import (
     MasterBulkDeleteIntegrityError,
+    MasterBulkDeleteTimeoutError,
     is_db_integrity_error,
+    is_statement_timeout_error,
 )
 
 
@@ -24,6 +26,29 @@ def raise_bulk_delete_http_error(exc: Exception, *, entity_label: str) -> None:
             },
         ) from None
 
+    if isinstance(exc, MasterBulkDeleteTimeoutError):
+        raise HTTPException(
+            status_code=504,
+            detail={
+                "error": "statement_timeout",
+                "message": exc.message,
+                "phase": exc.phase,
+            },
+        ) from None
+
+    if is_statement_timeout_error(exc):
+        raise HTTPException(
+            status_code=504,
+            detail={
+                "error": "statement_timeout",
+                "message": (
+                    "The delete operation timed out while talking to the database. "
+                    "Try fewer rows or retry when the database is less busy."
+                ),
+                "exception_type": type(exc).__name__,
+            },
+        ) from None
+
     if is_db_integrity_error(exc):
         raise HTTPException(
             status_code=409,
@@ -33,6 +58,7 @@ def raise_bulk_delete_http_error(exc: Exception, *, entity_label: str) -> None:
                     "Dependent data may have changed."
                 ),
                 "references": [{"label": "Unknown referencing rows (try refresh)", "count": 1}],
+                "exception_type": type(exc).__name__,
             },
         ) from None
 
@@ -81,8 +107,6 @@ def raise_bulk_delete_http_error(exc: Exception, *, entity_label: str) -> None:
                 "message": f"Provide at least one valid {entity_label} id.",
             },
         ) from None
-    # Unknown ValueError — surface it as a 500 rather than letting it propagate
-    # as an unhandled exception.
     raise HTTPException(
         status_code=500,
         detail={

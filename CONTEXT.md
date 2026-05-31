@@ -1,5 +1,12 @@
 # Channel Intelligence Platform — Current Context
 
+### May 31, 2026 — Bulk delete SQL proof: 2 statements (not 21); confirm timeout → 504
+- **Measured (real session, Supabase `postgres` via `.env`, no mocks):** `preview_master_bulk_delete` for 3 customers = **2** cursor executes (1 `UNION ALL` reference check + 1 label `SELECT IN`), **~3.6s**. `customer_hard_reference_breakdown_batch` alone = **1** execute.
+- **Instrumentation:** `db_sql_counter.py` (`before_cursor_execute` on engine); bulk-delete customer routes return `X-CIP-SQL-Count` + log `bulk_delete_sql_probe statements=N`. Script: `apps/api/scripts/measure_bulk_delete_sql.py`.
+- **If :8001 still ~24–30s with empty `X-CIP-SQL-Count`:** stale uvicorn process (pre-union code). Restart API (`pnpm dev:api` / `stop-dev.ps1`); header should show `2`.
+- **Confirm:** `OperationalError` / SQLSTATE `57014` (statement_timeout) → `MasterBulkDeleteTimeoutError` → HTTP **504** with `error: statement_timeout`. FK `IntegrityError` still → **409** with `references`. Confirm logs `exc_type=...` on failure.
+- **Tests:** `test_master_bulk_delete_sql_integration.py` (real `AsyncSessionLocal`, asserts `counter.count == 2`); 25/25 bulk-delete tests passing with `ALLOW_TESTS_ON_DEV_DB=1`.
+
 ### May 31, 2026 — Customer bulk delete: DSI staging blockers, confirm 409, dev port kill
 - **Reference matrix:** `import_distributor_si_staging_line.resolved_customer_id` is in customer `_SPECS` (`DSI_STAGING_REF_LABEL`); `customer_source_token_alias` remains a **preview blocker** (not auto-deleted as child — explicit bulk delete before `dim_customer` for session consistency; DB also CASCADE).
 - **Confirm:** Restored batched `_batch_refs` re-check when `deletable_ids` is sent (1 UNION ALL query) — blocks stale preview (e.g. CUST-1001 + 11 DSI staging rows). `is_db_integrity_error()` maps asyncpg/sqlalchemy FK violations to `MasterBulkDeleteIntegrityError` → HTTP **409** with `references`, not 500.
