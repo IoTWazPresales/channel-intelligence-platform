@@ -388,6 +388,24 @@ def has_any_task_slot(meta: dict[str, Any] | None) -> bool:
     return any(key in meta for key in _TASK_META_KEYS)
 
 
+def iter_slot_task_ids(meta: dict[str, Any] | None) -> Iterator[str]:
+    """Yield the Celery task id of every registered slot present in ``meta``.
+
+    Registry order (main → dsi_bulk → soh → velocity → forecasting → pm_validate →
+    pm_commit → lineup). Used by cancel to revoke ALL in-flight sub-tasks, not just the
+    main/dsi_bulk pair.
+    """
+    if not isinstance(meta, dict):
+        return
+    for descriptor in TASK_SLOTS:
+        value = meta.get(descriptor.meta_key)
+        if value is None:
+            continue
+        task_id = _extract_task_id(descriptor, value)
+        if task_id:
+            yield task_id
+
+
 # --- Query fragment ------------------------------------------------------------
 
 

@@ -50,9 +50,11 @@ def test_cancel_import_job_clears_all_registered_slots() -> None:
     }
     mock_session.get.return_value = mock_job
 
-    with patch("app.services.imports.import_job_task_control._revoke_celery_tasks"):
+    with patch("app.services.imports.import_job_task_control._revoke_celery_tasks") as mock_revoke:
         cancel_import_job_sync(mock_session, 21)
 
+    # Every slot's Celery task is revoked (registry order), not just main/dsi_bulk.
+    mock_revoke.assert_called_once_with(["main-1", "soh-1", "vel-1", "fc-1", "commit-1", "lp-1"])
     # Only the non-task scalar survives; every slot is gone (no orphans).
     assert mock_job.staged_metadata == {"dsi_validate_total_rows": 5}
 

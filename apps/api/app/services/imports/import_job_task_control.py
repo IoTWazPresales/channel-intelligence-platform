@@ -9,6 +9,7 @@ from celery.result import AsyncResult
 from sqlalchemy.orm import Session
 
 from app.models.ingestion import ImportJob
+from app.services.imports.import_background_slots import iter_slot_task_ids
 from app.services.imports.import_job_background_metadata import clear_background_task_metadata_on_job
 from app.worker.celery_app import celery_app
 
@@ -16,16 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 def _collect_celery_task_ids(meta: dict[str, Any]) -> list[str]:
-    ids: list[str] = []
-    main = meta.get("celery_task_id")
-    if isinstance(main, str) and main.strip():
-        ids.append(main.strip())
-    bulk = meta.get("dsi_bulk_task")
-    if isinstance(bulk, dict):
-        bt = bulk.get("task_id")
-        if isinstance(bt, str) and bt.strip():
-            ids.append(bt.strip())
-    return ids
+    """Every in-flight Celery task across all registered slots (main, dsi_bulk, pm_*, dsi_*,
+    lineup) so cancel revokes them all — not just the main + dsi_bulk pair."""
+    return list(iter_slot_task_ids(meta))
 
 
 def _revoke_celery_tasks(task_ids: list[str]) -> None:

@@ -1,5 +1,16 @@
 # Channel Intelligence Platform — Current Context
 
+### May 31, 2026 — Phase 2 follow-up: cancel now revokes ALL slot tasks
+- **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main).
+- Closes the Phase 2 known follow-up. Added `iter_slot_task_ids(meta)` to
+  `import_background_slots.py`; `import_job_task_control._collect_celery_task_ids` now
+  returns every registered slot's Celery task id (registry order: main → dsi_bulk → soh →
+  velocity → forecasting → pm_validate → pm_commit → lineup), so cancel **revokes** all
+  in-flight sub-tasks — not just main + dsi_bulk. Metadata clearing was already complete.
+- Existing revoke tests unchanged (main+dsi_bulk order preserved); regression test now also
+  asserts the full revoke list. `test_import_job_task_control` + `test_import_background_slots`
+  + `test_background_tasks` = 20 passing.
+
 ### May 31, 2026 — Phase 2: Unify job-tracking via single slot registry (+ orphan-slot bug fix)
 - **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main).
 - **What:** Replaced ~11 copy-pasted `staged_metadata` task-slot writers + 8 hand-coded
