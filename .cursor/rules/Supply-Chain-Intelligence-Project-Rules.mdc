@@ -214,6 +214,7 @@ cross-distributor — the row remains ambiguous.
 | str_dim_flags not flattened | Tuple arguments not flattened in PM bulk upsert SQL | Flatten before passing to SQL parameters |
 | `alembic upgrade` on wrong DB | Running migration against wrong database | Always verify `current_database()` first |
 | DSI eligibility before corroboration | Inactive candidates filtered before corroboration runs so cross-distributor fallback has no candidates to intersect | Apply historical eligibility relaxation before building the eligible candidate set passed to corroboration |
+| psycopg3 typeless NULLs in VALUES clause | Python `None` is sent as a typeless NULL by psycopg3. PostgreSQL defaults untyped NULLs to `text`. CASE expressions mixing a VALUES clause column with an ORM model column fail with `DatatypeMismatch` if the ORM column is non-text (Integer, Date, etc.) | Wrap non-text VALUES staging columns in `cast(col, Type)` inside any CASE/SELECT that mixes them with ORM columns. String columns are unaffected — PostgreSQL defaults to text which matches varchar. |
 
 ---
 
@@ -307,3 +308,26 @@ Stop and report before proceeding when:
   conflict with the current task
 - `current_database()` returns anything other than `cip` before a DB write
 - The Alembic head in the code does not match `alembic current` on the DB
+
+---
+
+## SQL Validation Rule
+
+Any task that writes or modifies custom SQL constructs — VALUES clauses,
+CASE expressions, bulk INSERT/SELECT from staging, typed column operations —
+**must** include at minimum one real end-to-end execution against the actual
+database before declaring done.
+
+Mock-only tests are not sufficient proof for SQL correctness. They test Python
+logic, not PostgreSQL type resolution, query planning, or dialect behaviour.
+The minimum bar is: run the operation with real data against the dev DB and
+confirm it succeeds without error.
+
+Specifically:
+- After writing any VALUES clause, run at least one real row through the full
+  path. Check for `DatatypeMismatch`, `ProgrammingError`, and `ArgumentError`.
+- After writing any CASE expression mixing VALUES columns with ORM columns,
+  verify PostgreSQL accepts the type resolution (see psycopg3 typeless NULLs
+  gotcha above).
+- Python-level assertions (tuple counts, type checks) are necessary but not
+  sufficient. Always follow them with a real DB execution.

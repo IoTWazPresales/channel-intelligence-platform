@@ -7,7 +7,7 @@ from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import Boolean, Date, Integer, String, case, func, literal_column, select, true
+from sqlalchemy import Boolean, Date, Integer, String, case, cast, func, literal_column, select, true
 from sqlalchemy import values as sql_values
 from sqlalchemy import column as sql_column
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -246,10 +246,10 @@ def _merge_select(st, d):
         opt_str(st.c.has_business_unit, st.c.business_unit, d.c.business_unit).label("business_unit"),
         opt_str(st.c.has_lifecycle_status, st.c.lifecycle_status, d.c.lifecycle_status).label("lifecycle_status"),
         opt_str(st.c.has_country_code, st.c.country_code, d.c.country_code).label("country_code"),
-        opt_str(st.c.has_ld, st.c.launch_date, d.c.launch_date).label("launch_date"),
-        opt_str(st.c.has_eol, st.c.retired_date, d.c.retired_date).label("retired_date"),
+        opt_str(st.c.has_ld, cast(st.c.launch_date, Date), d.c.launch_date).label("launch_date"),
+        opt_str(st.c.has_eol, cast(st.c.retired_date, Date), d.c.retired_date).label("retired_date"),
         func.coalesce(d.c.is_active, true()).label("is_active"),
-        opt_str(st.c.has_ch, st.c.channel_id, d.c.channel_id).label("channel_id"),
+        opt_str(st.c.has_ch, cast(st.c.channel_id, Integer), d.c.channel_id).label("channel_id"),
         func.coalesce(d.c.created_at, func.now()).label("created_at"),
         func.now().label("updated_at"),
     ).select_from(st.outerjoin(d, d.c.sku == st.c.sku))

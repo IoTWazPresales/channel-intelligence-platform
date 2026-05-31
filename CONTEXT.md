@@ -1,5 +1,9 @@
 # Channel Intelligence Platform — Current Context
 
+### May 31, 2026 — PM commit cast fix; project rules updated with SQL validation rule
+- **PM commit `DatatypeMismatch: CASE types integer and text`:** `_merge_select()` in `product_import_sync.py` used `opt_str` (designed for string columns) for `channel_id` (Integer), `launch_date` (Date), and `retired_date` (Date). psycopg3 sends Python `None` as a typeless NULL; PostgreSQL defaults untyped NULLs to `text`; CASE expression trying to unify `text` (staging) with `integer`/`date` (ORM column) → `DatatypeMismatch`. Fix: `cast(st.c.channel_id, Integer)`, `cast(st.c.launch_date, Date)`, `cast(st.c.retired_date, Date)` in the CASE branches.
+- **Project rules updated:** Added `psycopg3 typeless NULLs in VALUES clause` to Known Gotchas. Added "SQL Validation Rule" section: any task writing custom SQL constructs (VALUES clauses, CASE expressions, bulk INSERT/SELECT from staging) must run at minimum one real end-to-end execution against the actual DB before declaring done. Mock-only tests are not sufficient proof for SQL correctness.
+
 ### May 31, 2026 — PM commit crash fixed; dev process kill hardened
 - **PM commit crash (`Wrong number of elements for 36-tuple`):** `_staging_tuple()` in `product_import_sync.py` was spreading `str_dim_flags` (`list[tuple[bool,str|None]]`) with `*str_dim_flags`, producing 26 elements instead of 36. Fixed to `*(item for pair in str_dim_flags for item in pair)` — flattens 10 pairs → 20 scalars → 36 total. Known gotcha now resolved.
 - **PM commit error quality:** `commit_product_master_sync` `except Exception` now raises `ValueError(f"Product commit failed: {msg[:500]}")` instead of a generic placeholder. `job.error_summary` now contains the real error (e.g. `ArgumentError: Wrong number of elements…`) not "See import row results for details."
