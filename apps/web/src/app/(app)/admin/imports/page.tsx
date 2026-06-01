@@ -379,6 +379,21 @@ const SHIPMENT_MAPPING_REQUIRED_GROUPS: CanonicalRequiredGroup[] = [
   { id: 'distributor_party', label: 'Distributor party', anyOf: ['bill_to_raw', 'ship_to_raw', 'distributor_token'] },
 ];
 
+/** Phase rail + copy for the inbound-shipment validate progress panel (reads `imports.process_job` progress). */
+const SHIPMENT_PROGRESS_PHASES = [
+  { id: 'processing_rows', label: 'Resolve rows' },
+  { id: 'writing_shipment_lines', label: 'Write evidence' },
+  { id: 'complete', label: 'Complete' },
+] as const;
+
+const SHIPMENT_PROGRESS_DESCRIPTIONS: Record<string, string> = {
+  queued: 'Queued — waiting for the worker to pick up the task…',
+  processing_rows: 'Parsing the file and resolving products & distributors in memory (no per-row DB scans).',
+  writing_shipment_lines: 'Bulk-writing shipment evidence lines and building steward candidates.',
+  complete: '',
+  failed: '',
+};
+
 function describeTemplateBehavior(template: ImportTemplate | null, isPm: boolean, isDsi: boolean): string {
   if (!template) return 'Pipeline behavior is determined by the selected import type and provider.';
   if (isPm) {
@@ -1372,6 +1387,17 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
       void refetchPreview();
     },
+  });
+
+  const shipmentValidating = Boolean(
+    isShipmentEvidence &&
+      (shipmentValidateRun.isPending ||
+        shipmentValidateAsync ||
+        (shipmentImportJob?.status || '').trim() === 'running') &&
+      (shipmentImportJob?.stage || '').trim() === 'shipment_mapping_ready'
+  );
+  const { data: shipmentProgress } = useImportJobProgressQuery(shipmentMappingJobId ?? undefined, {
+    enabled: shipmentValidating,
   });
 
   const shipmentMappingDraftDirty = useMemo(() => {
@@ -3570,17 +3596,19 @@ function AdminImportsPageContent() {
                         {shipmentValidateRun.isPending || shipmentValidateAsync ? 'Validating…' : 'Run validation'}
                       </Button>
                     </Stack>
-                    {(shipmentValidateRun.isPending ||
-                      shipmentValidateAsync ||
-                      (shipmentImportJob?.status || '').trim() === 'running') &&
-                    isShipmentEvidence &&
-                    (shipmentImportJob?.stage || '').trim() === 'shipment_mapping_ready' ? (
+                    {shipmentValidating ? (
                       <Stack spacing={1} sx={{ mt: 1 }}>
-                        <Alert severity="info">
-                          Inbound shipment validation is running in the background. This page keeps polling the import
-                          job until the stage advances to <strong>validated</strong> or <strong>failed</strong>.
-                        </Alert>
-                        <LinearProgress />
+                        <DsiValidateProgressPanel
+                          progress={shipmentProgress}
+                          isRunning={shipmentValidating}
+                          title="Shipment validation"
+                          phases={SHIPMENT_PROGRESS_PHASES}
+                          phaseDescriptions={SHIPMENT_PROGRESS_DESCRIPTIONS}
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                          Validation runs in the background; this page polls until the stage advances to{' '}
+                          <strong>validated</strong> or <strong>failed</strong>, then loads the steward step.
+                        </Typography>
                       </Stack>
                     ) : null}
                     {saveShipmentMapping.isError ? (

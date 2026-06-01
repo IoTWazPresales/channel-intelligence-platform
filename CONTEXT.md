@@ -1,5 +1,28 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 1, 2026 — Shipment validate progress panel (parity with DSI/PM)
+- **Why:** after the perf fix, shipment validate runs on Celery and finishes (~157s in a real UI run:
+  `Task imports.process_job … succeeded in 157.31s`, job 32 → `validated`, 9,307 lines, **192 candidates**),
+  but the UI showed only a generic "Validating…" spinner — no stage/row progress like DSI/PM.
+- **Root insight:** the progress infra is already generic. `GET /api/v1/imports/jobs/{id}/dsi-progress`
+  reads the job's Celery task slot + PROGRESS meta + stage for **any** `imports.process_job` (not DSI-gated),
+  and `useImportJobProgressQuery` is documented as "DSI validate/revalidate / generic process_job progress".
+  Shipment validate already dispatches `imports.process_job` and (from the perf fix) emits `on_progress`
+  (phase `writing_shipment_lines`, current/total rows). So it was purely a missing frontend panel.
+- **Change (web only):**
+  - `DsiValidateProgressPanel.tsx`: generalised with optional `title`, `phases`, `phaseDescriptions`
+    (defaults preserve exact DSI behaviour). Phase id typing loosened to string; rail/`phaseOrder` derive
+    from the `phases` prop.
+  - `admin/imports/page.tsx`: added `SHIPMENT_PROGRESS_PHASES` (Resolve rows → Write evidence → Complete)
+    + `SHIPMENT_PROGRESS_DESCRIPTIONS`, a `useImportJobProgressQuery(shipmentMappingJobId, { enabled: shipmentValidating })`
+    query, and rendered `<DsiValidateProgressPanel title="Shipment validation" …/>` in place of the plain
+    LinearProgress alert while validating. Shows determinate bar + elapsed + rows processed/total + task state.
+- **Validation:** web `tsc` 91 errors (≤ 92 baseline, none in changed code), eslint 0 errors (4 pre-existing
+  exhaustive-deps warnings), `page.test.tsx` 26/26 pass. (Note: job 32's "failed" row earlier was a debugging
+  artifact from terminating the stuck txn; reset to `shipment_mapping_ready` then it validated cleanly.)
+- **Steward step confirmed working:** after validate, job 32 has 192 `import_entity_mapping_candidate` rows; the
+  "loading" the user saw post-validate is the steward panel fetching those candidates (expected).
+
 ### Jun 1, 2026 — Shipment validate performance: kill per-row N+1 over remote DB (45min → ~2min)
 - **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main). **Not committed yet.**
 - **Symptom:** revisiting shipment job #32 and re-validating "looked frozen" — the validate ran 45+ min

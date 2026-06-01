@@ -35,9 +35,7 @@ const DSI_PROGRESS_PHASES = [
   { id: 'complete', label: 'Complete' },
 ] as const;
 
-type PhaseId = (typeof DSI_PROGRESS_PHASES)[number]['id'];
-
-const PHASE_ORDER: PhaseId[] = DSI_PROGRESS_PHASES.map((p) => p.id);
+export type ValidateProgressPhase = { id: string; label: string };
 
 const pulse = keyframes`
   0% { opacity: 0.55; }
@@ -59,9 +57,22 @@ function formatNum(n: number): string {
 export type DsiValidateProgressPanelProps = {
   progress: DsiValidateProgress | null | undefined;
   isRunning: boolean;
+  /** Overline title. Defaults to "DSI Validation". */
+  title?: string;
+  /** Phase rail steps. Defaults to the DSI pipeline phases. */
+  phases?: readonly ValidateProgressPhase[];
+  /** Optional per-phase description text (keyed by phase id) overriding the built-in DSI copy. */
+  phaseDescriptions?: Record<string, string>;
 };
 
-export function DsiValidateProgressPanel({ progress, isRunning }: DsiValidateProgressPanelProps) {
+export function DsiValidateProgressPanel({
+  progress,
+  isRunning,
+  title = 'DSI Validation',
+  phases = DSI_PROGRESS_PHASES,
+  phaseDescriptions,
+}: DsiValidateProgressPanelProps) {
+  const phaseOrder: string[] = phases.map((p) => p.id);
   const startRef = useRef<number | null>(null);
   const [tick, setTick] = useState(0);
 
@@ -86,14 +97,14 @@ export function DsiValidateProgressPanel({ progress, isRunning }: DsiValidatePro
       ? Math.max(0, Math.floor((Date.now() - startRef.current) / 1000))
       : null;
 
-  const rawPhase = (progress?.phase ?? (isRunning ? 'processing_rows' : 'idle')) as PhaseId | 'idle' | 'failed';
+  const rawPhase = String(progress?.phase ?? (isRunning ? 'processing_rows' : 'idle'));
   const phaseLabel = progress?.phase_label ?? (isRunning ? 'Processing rows' : 'Waiting');
   const currentRow = progress?.current_row ?? 0;
   const totalRows = progress?.total_rows ?? 0;
   const pct = progress?.pct ?? 0;
   const hasDeterminate = pct > 0 && totalRows > 0 && rawPhase !== 'loading_caches';
 
-  const currentPhaseIndex = PHASE_ORDER.indexOf(rawPhase as PhaseId);
+  const currentPhaseIndex = phaseOrder.indexOf(rawPhase);
 
   const queuedAt = progress?.pipeline_queued_at;
   const startedAt = progress?.pipeline_started_at;
@@ -105,7 +116,8 @@ export function DsiValidateProgressPanel({ progress, isRunning }: DsiValidatePro
         : null;
 
   const phaseDescription =
-    rawPhase === 'loading_caches'
+    phaseDescriptions?.[rawPhase] ??
+    (rawPhase === 'loading_caches'
       ? 'Pre-loading entity resolution caches (distributors, products, customers). This is a one-time cost per job.'
       : rawPhase === 'processing_rows'
         ? totalRows > 0
@@ -115,7 +127,7 @@ export function DsiValidateProgressPanel({ progress, isRunning }: DsiValidatePro
           ? 'Aggregating ambiguous entity tokens into steward review candidates.'
           : rawPhase === 'complete' || rawPhase === 'failed'
             ? ''
-            : 'Initialising validation pipeline…';
+            : 'Initialising validation pipeline…');
 
   return (
     <Box
@@ -134,7 +146,7 @@ export function DsiValidateProgressPanel({ progress, isRunning }: DsiValidatePro
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" useFlexGap>
           <Box sx={{ minWidth: 200, flex: 1 }}>
             <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 0.12, fontWeight: 600 }}>
-              DSI Validation
+              {title}
             </Typography>
             <Typography variant="h6" sx={{ fontWeight: 600, mt: 0.25 }}>
               {phaseLabel}
@@ -182,9 +194,9 @@ export function DsiValidateProgressPanel({ progress, isRunning }: DsiValidatePro
 
         {/* Phase rail */}
         <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ pt: 0.25 }}>
-          {DSI_PROGRESS_PHASES.map((p, i) => {
-            const isLast = i === DSI_PROGRESS_PHASES.length - 1;
-            const idx = PHASE_ORDER.indexOf(p.id);
+          {phases.map((p, i) => {
+            const isLast = i === phases.length - 1;
+            const idx = phaseOrder.indexOf(p.id);
             const state: 'complete' | 'current' | 'waiting' | 'failed' =
               rawPhase === 'failed'
                 ? 'failed'
