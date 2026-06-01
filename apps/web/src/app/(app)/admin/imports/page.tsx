@@ -53,6 +53,11 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { ShipmentEntityStewardPanel } from '@/app/(app)/admin/shipment-evidence/ShipmentEntityStewardPanel';
+import {
+  CanonicalColumnMappingPanel,
+  type CanonicalRequiredGroup,
+  type CanonicalTargetOption,
+} from '@/features/import-mapping/CanonicalColumnMappingPanel';
 import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -364,6 +369,15 @@ const SHIPMENT_FIELD_LABELS: Record<string, string> = {
   pod_date: 'POD date (actual delivery)',
   customer_dealer_token: 'Source customer name',
 };
+
+/**
+ * Live "still needs" requirements for inbound shipment mapping. Mirrors the server gate
+ * in `shipment_mapping_gate_errors` so the summary chips match `blocking_mapping_errors`.
+ */
+const SHIPMENT_MAPPING_REQUIRED_GROUPS: CanonicalRequiredGroup[] = [
+  { id: 'product', label: 'Product column', anyOf: ['item_code', 'ean_code', 'upc_code', 'sales_model_name'] },
+  { id: 'distributor_party', label: 'Distributor party', anyOf: ['bill_to_raw', 'ship_to_raw', 'distributor_token'] },
+];
 
 function describeTemplateBehavior(template: ImportTemplate | null, isPm: boolean, isDsi: boolean): string {
   if (!template) return 'Pipeline behavior is determined by the selected import type and provider.';
@@ -1284,6 +1298,16 @@ function AdminImportsPageContent() {
   const shipmentCanonSet = useMemo(
     () => new Set(shipmentMappingState?.canonical_targets ?? []),
     [shipmentMappingState?.canonical_targets]
+  );
+
+  const shipmentMappingTargetOptions = useMemo<CanonicalTargetOption[]>(
+    () =>
+      (shipmentMappingState?.canonical_targets ?? []).map((t) => ({
+        value: t,
+        label: SHIPMENT_FIELD_LABELS[t] ?? t,
+        description: shipmentMappingState?.field_target_descriptions?.[t],
+      })),
+    [shipmentMappingState?.canonical_targets, shipmentMappingState?.field_target_descriptions]
   );
 
   useEffect(() => {
@@ -3412,7 +3436,15 @@ function AdminImportsPageContent() {
               Upload for <strong>{selectedTemplate?.display_name}</strong> using provider{' '}
               <strong>{(sources ?? []).find((s) => s.id === sourceId)?.name ?? '—'}</strong>.
             </Typography>
-            {isJobRevisitMode && lastJobId != null ? (
+            {isJobRevisitMode &&
+            lastJobId != null &&
+            isShipmentEvidence &&
+            (shipmentImportJob?.stage || '').trim() === 'shipment_mapping_ready' ? (
+              <Alert severity="info" data-testid="revisit-banner">
+                Revisiting job <strong>#{lastJobId}</strong>. This job has not been validated yet — you can adjust the
+                column mapping below, save, and run validation without re-uploading.
+              </Alert>
+            ) : isJobRevisitMode && lastJobId != null ? (
               <Alert severity="info" data-testid="revisit-banner">
                 Viewing diagnostics for job <strong>#{lastJobId}</strong> in read-only mode. Upload a new file above to
                 run a fresh import.
@@ -3497,103 +3529,28 @@ function AdminImportsPageContent() {
                 {shipmentMappingStateLoading ? <LinearProgress /> : null}
                 {!shipmentMappingStateLoading && shipmentMappingState?.file_headers?.length ? (
                   <>
-                    {shipmentMappingState.blocking_mapping_errors?.length ? (
-                      <Alert severity="error">
-                        <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
-                          Fix mapping before validating
-                        </Typography>
-                        <Stack component="ul" sx={{ m: 0, pl: 2 }}>
-                          {shipmentMappingState.blocking_mapping_errors.map((e) => (
-                            <Typography key={e.code} component="li" variant="body2">
-                              {e.message}
-                            </Typography>
-                          ))}
-                        </Stack>
-                      </Alert>
-                    ) : null}
-                    {shipmentMappingState.mapping_adjustment_notices?.length ? (
-                      <Alert severity="info">
-                        {shipmentMappingState.mapping_adjustment_notices.map((n) => (
-                          <Typography key={n.code ?? n.message} variant="body2">
-                            {n.message}
-                          </Typography>
-                        ))}
-                      </Alert>
-                    ) : null}
-                    {shipmentMappingDraftDirty ? (
-                      <Alert severity="warning">You have unsaved mapping changes. Save before running validation.</Alert>
-                    ) : null}
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 600 }}>File column</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Maps to</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {shipmentMappingState.file_headers.map((h) => (
-                          <TableRow key={h}>
-                            <TableCell>
-                              <Typography fontWeight={600}>{h}</Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                display="block"
-                                data-testid={`shipment-samples-${h}`}
-                              >
-                                Examples: {formatDsiSamples(shipmentMappingState.column_samples?.[h])}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <FormControl size="small" fullWidth>
-                                <InputLabel id={`shipment-map-${h}`}>Target</InputLabel>
-                                <Select
-                                  labelId={`shipment-map-${h}`}
-                                  label="Target"
-                                  value={shipmentMapDraft[h] ?? ''}
-                                  displayEmpty
-                                  renderValue={(selected) => {
-                                    const v = String(selected ?? '');
-                                    if (!v) return <em>— Unmapped —</em>;
-                                    return SHIPMENT_FIELD_LABELS[v] ?? v;
-                                  }}
-                                  onChange={(e) => {
-                                    const v = e.target.value as string;
-                                    setShipmentMapDraft((prev) => {
-                                      const next = { ...prev };
-                                      if (!v) delete next[h];
-                                      else next[h] = v;
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  <MenuItem value="">
-                                    <em>— Unmapped —</em>
-                                  </MenuItem>
-                                  {(shipmentMappingState.canonical_targets ?? []).map((t) => (
-                                    <MenuItem key={t} value={t} sx={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
-                                      <ListItemText
-                                        primary={SHIPMENT_FIELD_LABELS[t] ?? t}
-                                        secondary={shipmentMappingState.field_target_descriptions?.[t]}
-                                        primaryTypographyProps={{ variant: 'body2' }}
-                                        secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
-                                      />
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <CanonicalColumnMappingPanel
+                      testIdPrefix="shipment"
+                      fileHeaders={shipmentMappingState.file_headers}
+                      draft={shipmentMapDraft}
+                      onChange={(next) => setShipmentMapDraft(next)}
+                      targetOptions={shipmentMappingTargetOptions}
+                      columnSamples={shipmentMappingState.column_samples}
+                      blockingErrors={shipmentMappingState.blocking_mapping_errors}
+                      adjustmentNotices={shipmentMappingState.mapping_adjustment_notices}
+                      requiredGroups={SHIPMENT_MAPPING_REQUIRED_GROUPS}
+                      formatSamples={formatDsiSamples}
+                      dirty={shipmentMappingDraftDirty}
+                    />
+                    {/* This panel only renders at stage `shipment_mapping_ready` (pre-validation),
+                        so re-mapping a revisited job here mutates only job metadata — no evidence
+                        lines or facts exist yet. `isJobRevisitMode` is intentionally not a gate. */}
                     <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
                       <Button
                         variant="outlined"
                         disabled={
                           saveShipmentMapping.isPending ||
-                          !shipmentMappingState.file_headers.length ||
-                          isJobRevisitMode
+                          !shipmentMappingState.file_headers.length
                         }
                         onClick={() => void saveShipmentMapping.mutateAsync()}
                       >
@@ -3606,8 +3563,7 @@ function AdminImportsPageContent() {
                           saveShipmentMapping.isPending ||
                           !shipmentMappingState.file_headers.length ||
                           shipmentMappingDraftDirty ||
-                          !shipmentMappingState.mapping_valid ||
-                          isJobRevisitMode
+                          !shipmentMappingState.mapping_valid
                         }
                         onClick={() => void shipmentValidateRun.mutateAsync()}
                       >
