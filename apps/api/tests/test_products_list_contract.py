@@ -28,7 +28,6 @@ def _fake_product(**overrides):
         "launch_date": date(2024, 1, 1),
         "retired_date": None,
         "is_active": True,
-        "channel_id": 10,
         "specs_json": None,
     }
     base.update(overrides)
@@ -41,8 +40,8 @@ def test_products_list_response_shape_and_pagination_contract():
     count_res.scalar_one.return_value = 2
     rows_res = MagicMock()
     rows_res.all.return_value = [
-        (_fake_product(id=1, sku="A-SKU", specs_json={"RAM": "16GB", "CPU": "X1"}), "RET", date(2026, 1, 10)),
-        (_fake_product(id=2, sku="B-SKU", category=None, channel_id=None), None, None),
+        (_fake_product(id=1, sku="A-SKU", specs_json={"RAM": "16GB", "CPU": "X1"}), date(2026, 1, 10)),
+        (_fake_product(id=2, sku="B-SKU", category=None), None),
     ]
     sess.execute = AsyncMock(side_effect=[count_res, rows_res])
 

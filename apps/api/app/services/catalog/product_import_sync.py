@@ -7,13 +7,13 @@ from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import Boolean, Date, Integer, String, case, cast, func, literal_column, select, true
+from sqlalchemy import Boolean, Date, String, case, cast, func, literal_column, select, true
 from sqlalchemy import values as sql_values
 from sqlalchemy import column as sql_column
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.models.dimensions import DimChannel, DimProduct
+from app.models.dimensions import DimProduct
 
 _STR_DIM_KEYS = (
     "part_number",
@@ -96,7 +96,6 @@ def _dedupe_rows_by_sku_last_wins(rows: list[dict[str, Any]]) -> list[dict[str, 
 
 def _staging_tuple(
     r: dict[str, Any],
-    channels: dict[str, int],
 ) -> tuple[Any, ...] | None:
     """Parse one input row into a VALUES tuple (flags + raw fields). Returns None to skip."""
 
@@ -128,16 +127,6 @@ def _staging_tuple(
     if pb is not None and len(pb) > 64:
         raise ValueError(f"price_band exceeds database limit (64 chars) for SKU {sku!r}.")
 
-    channel_id = None
-    has_ch = False
-    if "channel_code" in r:
-        has_ch = True
-        ch_raw = _strip_optional(r.get("channel_code"))
-        if ch_raw:
-            channel_id = channels.get(ch_raw.lower())
-            if channel_id is None:
-                raise ValueError(f"Unknown channel_code {ch_raw!r} for SKU {sku!r}")
-
     has_ld = "launch_date" in r
     launch_d = _parse_date_val(r.get("launch_date")) if has_ld else None
     has_eol = "end_of_life_date" in r
@@ -160,8 +149,6 @@ def _staging_tuple(
         pn,
         has_cat,
         cat,
-        has_ch,
-        channel_id,
         has_ld,
         launch_d,
         has_eol,
@@ -183,8 +170,6 @@ def _build_staging_values_clause():
         sql_column("part_number", String(128)),
         sql_column("has_cat", Boolean),
         sql_column("category", String(256)),
-        sql_column("has_ch", Boolean),
-        sql_column("channel_id", Integer),
         sql_column("has_ld", Boolean),
         sql_column("launch_date", Date),
         sql_column("has_eol", Boolean),
@@ -249,7 +234,6 @@ def _merge_select(st, d):
         opt_str(st.c.has_ld, cast(st.c.launch_date, Date), d.c.launch_date).label("launch_date"),
         opt_str(st.c.has_eol, cast(st.c.retired_date, Date), d.c.retired_date).label("retired_date"),
         func.coalesce(d.c.is_active, true()).label("is_active"),
-        opt_str(st.c.has_ch, cast(st.c.channel_id, Integer), d.c.channel_id).label("channel_id"),
         func.coalesce(d.c.created_at, func.now()).label("created_at"),
         func.now().label("updated_at"),
     ).select_from(st.outerjoin(d, d.c.sku == st.c.sku))
@@ -262,7 +246,7 @@ def sync_bulk_upsert_products_from_rows(session: Session, rows: list[dict[str, A
     One PostgreSQL ``INSERT .. ON CONFLICT (sku) DO UPDATE`` per chunk (no per-row SELECT).
 
     Each dict requires: sku (technical id), name.
-    Optional: part_number (defaults to sku), category, channel_code, form_factor, price_band,
+    Optional: part_number (defaults to sku), category, form_factor, price_band,
     sales_model_name, model_name, marketing_name, series_name, product_line, ean, upc,
     business_unit, lifecycle_status, country_code, launch_date, end_of_life_date (→ retired_date).
     """
@@ -270,11 +254,10 @@ def sync_bulk_upsert_products_from_rows(session: Session, rows: list[dict[str, A
     if bind is None or bind.dialect.name != "postgresql":
         raise RuntimeError("sync_bulk_upsert_products_from_rows requires PostgreSQL")
 
-    channels = {c.code.strip().lower(): c.id for c in session.scalars(select(DimChannel)).all()}
     deduped = _dedupe_rows_by_sku_last_wins(rows)
     staging_rows: list[tuple[Any, ...]] = []
     for r in deduped:
-        tup = _staging_tuple(r, channels)
+        tup = _staging_tuple(r)
         if tup is not None:
             staging_rows.append(tup)
 
@@ -304,7 +287,6 @@ def sync_bulk_upsert_products_from_rows(session: Session, rows: list[dict[str, A
         tbl.c.launch_date,
         tbl.c.retired_date,
         tbl.c.is_active,
-        tbl.c.channel_id,
         tbl.c.created_at,
         tbl.c.updated_at,
     ]
@@ -339,7 +321,6 @@ def sync_bulk_upsert_products_from_rows(session: Session, rows: list[dict[str, A
                     tbl.c.country_code: insert_stmt.excluded.country_code,
                     tbl.c.launch_date: insert_stmt.excluded.launch_date,
                     tbl.c.retired_date: insert_stmt.excluded.retired_date,
-                    tbl.c.channel_id: insert_stmt.excluded.channel_id,
                     tbl.c.updated_at: insert_stmt.excluded.updated_at,
                 },
             )

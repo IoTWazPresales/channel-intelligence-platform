@@ -192,8 +192,6 @@ vi.mock('@/lib/api', async (importOriginal) => {
               launch_date: '2024-01-01',
               retired_date: null,
               is_active: true,
-              channel_id: 2,
-              channel_code: 'RET',
               missing_required_fields: [],
               last_import_date: '2026-01-01',
               specs_preview: { CPU: 'X1', RAM: '16GB' },
@@ -208,7 +206,6 @@ vi.mock('@/lib/api', async (importOriginal) => {
           specs_field_keys: ['CPU', 'RAM'],
         };
       }
-      if (url === '/api/v1/catalog/channels') return [{ id: 2, code: 'RET', name: 'Retail' }];
       return [];
     }),
     apiPost: vi.fn(async () => ({})),

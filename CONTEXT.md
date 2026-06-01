@@ -1,5 +1,39 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 1, 2026 — Option A step 2: drop dim_product.channel_id (migration + full code removal)
+- **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main).
+- **Migration:** `20260601_0046_drop_dim_product_channel_id.py` (down_revision `20260518_0045`).
+  `op.drop_column('dim_product','channel_id')` guarded by `has_column`; reversible downgrade
+  re-adds the nullable column + FK. **Applied to dev DB** (`alembic current` = `20260601_0046 (head)`).
+- **Safety:** backed up the existing channel assignments before dropping — only **1** product had a
+  non-null `channel_id` — to `apps/api/scripts/_dim_product_channel_backup.json` (untracked, not
+  committed). Postgres dropped the dependent FK + index with the column.
+- **Code removal (channel fully gone from products):**
+  - `models/dimensions.py`: removed `channel_id` + `channel` relationship from `DimProduct`.
+  - `services/catalog/product_import_sync.py`: removed channel from the bulk-upsert VALUES tuple,
+    staging columns, `_merge_select` CASE, insert columns, and ON CONFLICT set; dropped unused
+    `DimChannel`/`Integer` imports. (Custom SQL — validated, see below.)
+  - `api/v1/endpoints/products.py`: removed channel from the list query (DimChannel join + output),
+    the `channel_code` filter, the PATCH `channel_id`, the bulk-import `channel_code`, and the
+    Pydantic models; dropped unused `DimChannel` import.
+  - `services/channel_usage.py`: removed `Products (primary channel)` from the channel-delete
+    reference check (products are no longer a channel-delete blocker).
+  - Web `admin/products/page.tsx`: removed the Primary-channel grid column, filter, inline edit,
+    CSV `channel_code`, detail row, title/intro copy, channels query, and the `ProductRow`
+    channel fields.
+- **Tests:** API `test_product_master_workflow` 22 + `test_products_list_contract` (updated to the
+  2-tuple list shape) + `test_master_entity_bulk_delete` 8 = 32 passing; `alembic current` = head.
+  Web `admin/products/page.test.tsx` channel mocks removed — note this suite has a **pre-existing,
+  unrelated** failure (AG Grid mock lacks `getDisplayedRowCount`); confirmed it fails identically on
+  the pre-change committed version, so not caused by this work. eslint clean on the products page.
+- **Real-DB validation (Supabase `postgres`, SQL rule):** ran 600 synthetic rows through the
+  channel-free `sync_bulk_upsert_products_from_rows` in a transaction — INSERT path created 600,
+  ON CONFLICT re-run updated 600 — then ROLLED BACK (0 leftover). Confirms the modified
+  VALUES/CASE/ON-CONFLICT clause is correct at volume without `channel_id`.
+- **Net:** channel is now entirely absent from Product Master (model, import, validate, products
+  API + grid, schema). It remains where it belongs: `dim_customer`, `fact_*`, price lists, lineup,
+  DSI staging — untouched.
+
 ### Jun 1, 2026 — Option A: remove channel from Product Master (step 1 — code; column drop is step 2)
 - **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main).
 - **Decision (user, Option A):** channel is a go-to-market dimension of transactions/pricing/

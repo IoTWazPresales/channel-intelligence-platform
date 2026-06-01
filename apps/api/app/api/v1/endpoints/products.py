@@ -6,7 +6,7 @@ from sqlalchemy import Date, and_, asc, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
-from app.models.dimensions import DimChannel, DimProduct
+from app.models.dimensions import DimProduct
 from app.models.ingestion import ImportJob
 from app.models.product_catalog import CatalogProduct
 from app.services.commercial_planner.read_model import specs_json_flat_string_map
@@ -69,14 +69,12 @@ class ProductPatch(BaseModel):
     launch_date: date | None = None
     retired_date: date | None = None
     is_active: bool | None = None
-    channel_id: int | None = None
 
 
 class ProductBulkRow(BaseModel):
     sku: str = Field(min_length=1, max_length=64)
     name: str = Field(min_length=1, max_length=512)
     category: str | None = Field(default=None, max_length=256)
-    channel_code: str | None = Field(default=None, max_length=32)
 
 
 class ProductBulkBody(BaseModel):
@@ -92,7 +90,6 @@ async def list_products(
     is_active: bool | None = Query(default=None),
     category: str | None = Query(default=None),
     lifecycle_status: str | None = Query(default=None),
-    channel_code: str | None = Query(default=None),
     launch_date_from: date | None = Query(default=None),
     launch_date_to: date | None = Query(default=None),
     retired_date_from: date | None = Query(default=None),
@@ -125,10 +122,8 @@ async def list_products(
         .subquery()
     )
 
-    base = (
-        select(DimProduct, DimChannel.code.label("channel_code"), last_import_subq.c.last_import_date)
-        .join(DimChannel, DimChannel.id == DimProduct.channel_id, isouter=True)
-        .join(last_import_subq, last_import_subq.c.product_id == DimProduct.id, isouter=True)
+    base = select(DimProduct, last_import_subq.c.last_import_date).join(
+        last_import_subq, last_import_subq.c.product_id == DimProduct.id, isouter=True
     )
     count_stmt = select(func.count()).select_from(DimProduct)
     filters = []
@@ -153,9 +148,6 @@ async def list_products(
         filters.append(DimProduct.category == category.strip())
     if lifecycle_status and lifecycle_status.strip():
         filters.append(DimProduct.lifecycle_status == lifecycle_status.strip())
-    if channel_code and channel_code.strip():
-        base = base.where(DimChannel.code == channel_code.strip())
-        count_stmt = count_stmt.join(DimChannel, DimChannel.id == DimProduct.channel_id)
     if launch_date_from is not None:
         filters.append(DimProduct.launch_date >= launch_date_from)
     if launch_date_to is not None:
@@ -179,7 +171,7 @@ async def list_products(
 
     items = []
     specs_field_keys: set[str] = set()
-    for p, channel_code_out, last_import_date in rows:
+    for p, last_import_date in rows:
         missing_required = []
         if not (p.sku or "").strip():
             missing_required.append("sku")
@@ -213,8 +205,6 @@ async def list_products(
                 "launch_date": p.launch_date.isoformat() if p.launch_date else None,
                 "retired_date": p.retired_date.isoformat() if p.retired_date else None,
                 "is_active": p.is_active,
-                "channel_id": p.channel_id,
-                "channel_code": channel_code_out,
                 "missing_required_fields": missing_required,
                 "last_import_date": last_import_date.isoformat() if last_import_date else None,
                 "specs_preview": _compact_specs_preview(p.specs_json),
@@ -341,13 +331,6 @@ async def patch_product(product_id: int, body: ProductPatch, db: AsyncSession = 
         row.retired_date = data["retired_date"]
     if "is_active" in data:
         row.is_active = bool(data["is_active"])
-    if "channel_id" in data:
-        cid = data["channel_id"]
-        if cid is not None:
-            ch = await db.get(DimChannel, cid)
-            if not ch:
-                raise HTTPException(status_code=400, detail="Invalid channel_id")
-        row.channel_id = cid
     await db.commit()
     await db.refresh(row)
     return {
@@ -360,7 +343,6 @@ async def patch_product(product_id: int, body: ProductPatch, db: AsyncSession = 
         "launch_date": row.launch_date.isoformat() if row.launch_date else None,
         "retired_date": row.retired_date.isoformat() if row.retired_date else None,
         "is_active": row.is_active,
-        "channel_id": row.channel_id,
     }
 
 
@@ -368,28 +350,20 @@ async def patch_product(product_id: int, body: ProductPatch, db: AsyncSession = 
 async def bulk_upsert_products(body: ProductBulkBody, db: AsyncSession = Depends(get_db)):
     if len(body.rows) > 5000:
         raise HTTPException(status_code=400, detail="Too many rows (max 5000)")
-    ch_res = await db.execute(select(DimChannel))
-    channels = {c.code: c.id for c in ch_res.scalars().all()}
     created = 0
     updated = 0
     for r in body.rows:
         sku = r.sku.strip()
         name = r.name.strip()
         cat = r.category.strip() if r.category else None
-        channel_id = None
-        if r.channel_code and r.channel_code.strip():
-            channel_id = channels.get(r.channel_code.strip())
-            if channel_id is None:
-                raise HTTPException(status_code=400, detail=f"Unknown channel_code for SKU {sku!r}")
         existing = await db.execute(select(DimProduct).where(DimProduct.sku == sku))
         row = existing.scalar_one_or_none()
         if row:
             row.name = name
             row.category = cat
-            row.channel_id = channel_id
             updated += 1
         else:
-            db.add(DimProduct(sku=sku, name=name, category=cat, channel_id=channel_id))
+            db.add(DimProduct(sku=sku, name=name, category=cat))
             created += 1
     await db.commit()
     return {"created": created, "updated": updated, "total": len(body.rows)}

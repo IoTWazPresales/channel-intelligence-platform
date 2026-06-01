@@ -140,9 +140,6 @@ class DimProduct(Base, TimestampMixin):
     launch_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     retired_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    channel_id: Mapped[int | None] = mapped_column(ForeignKey("dim_channel.id"), nullable=True)
-
-    channel: Mapped["DimChannel | None"] = relationship()
 
 
 class DimDate(Base):

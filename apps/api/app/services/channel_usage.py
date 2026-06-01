@@ -7,15 +7,16 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.dimensions import DimChannel, DimCustomer, DimProduct
+from app.models.dimensions import DimChannel, DimCustomer
 from app.models.facts import FactActivation, FactPricing, FactSalesSellout
 from app.models.historical_lineup import HistoricalLineupImportHeader
 from app.models.import_distributor_si import ChannelSourceTokenAlias
 from app.models.lineup import FactLineupPlanItem
 from app.services.master_usage_batch import batch_counts_multi_table, count_subquery_for_columns
 
+# dim_product no longer carries a channel FK (channel is a go-to-market dimension of
+# transactions/customers, not a product attribute) — products are not a channel-delete blocker.
 _SPECS: list[tuple[str, object]] = [
-    ("Products (primary channel)", DimProduct.channel_id),
     ("Customers", DimCustomer.channel_id),
     ("Sell-out", FactSalesSellout.channel_id),
     ("Pricing", FactPricing.channel_id),

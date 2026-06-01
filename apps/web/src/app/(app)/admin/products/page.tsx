@@ -96,8 +96,6 @@ type ProductRow = {
   launch_date: string | null;
   retired_date: string | null;
   is_active: boolean;
-  channel_id: number | null;
-  channel_code: string | null;
   missing_required_fields: string[];
   last_import_date: string | null;
   /** Top-level specs_json preview (small key cap on API). */
@@ -106,7 +104,6 @@ type ProductRow = {
   specs_flat?: Record<string, string>;
 };
 
-type CodeRow = { id: number; code: string; name: string };
 type ProductListResponse = {
   items: ProductRow[];
   page: number;
@@ -142,13 +139,12 @@ const ALL_PRODUCT_COLUMN_FIELDS = [
   'launch_date',
   'retired_date',
   'is_active',
-  'channel_code',
   'missing_required_fields',
   'last_import_date',
 ] as const;
 type ProductColumnField = (typeof ALL_PRODUCT_COLUMN_FIELDS)[number];
 
-/** ColDef `hide` on optional columns was resetting visibility when columnDefs refreshed (e.g. channels load). Defaults are applied once via column state in onGridReady instead. */
+/** ColDef `hide` on optional columns was resetting visibility when columnDefs refreshed. Defaults are applied once via column state in onGridReady instead. */
 const DEFAULT_INITIALLY_HIDDEN_FIELDS: readonly ProductColumnField[] = [
   'part_number',
   'sales_model_name',
@@ -162,7 +158,7 @@ const DEFAULT_INITIALLY_HIDDEN_FIELDS: readonly ProductColumnField[] = [
 ];
 
 const STATIC_PRODUCT_COLUMN_GROUPS: { label: string; fields: ProductColumnField[] }[] = [
-  { label: 'Core identity', fields: ['sku', 'name', 'category', 'channel_code', 'is_active'] },
+  { label: 'Core identity', fields: ['sku', 'name', 'category', 'is_active'] },
   { label: 'Commercial naming', fields: ['part_number', 'sales_model_name', 'model_name', 'series_name'] },
   { label: 'Portfolio attributes', fields: ['product_line', 'business_unit', 'form_factor', 'country_code'] },
   { label: 'Lifecycle & compliance', fields: ['lifecycle_status', 'launch_date', 'retired_date'] },
@@ -189,7 +185,6 @@ function parseProductCsv(text: string): {
   sku: string;
   name: string;
   category?: string;
-  channel_code?: string;
 }[] {
   const lines = text
     .split(/\r?\n/)
@@ -199,15 +194,14 @@ function parseProductCsv(text: string): {
   const first = lines[0].toLowerCase();
   const hasHeader = first.includes('sku') && first.includes('name');
   const dataLines = hasHeader ? lines.slice(1) : lines;
-  const rows: { sku: string; name: string; category?: string; channel_code?: string }[] = [];
+  const rows: { sku: string; name: string; category?: string }[] = [];
   for (const line of dataLines) {
     const parts = line.split(',').map((p) => p.trim().replace(/^"|"$/g, ''));
     if (parts.length < 2) continue;
-    const [sku, name, category, channel_code] = parts;
+    const [sku, name, category] = parts;
     if (!sku || !name) continue;
-    const r: { sku: string; name: string; category?: string; channel_code?: string } = { sku, name };
+    const r: { sku: string; name: string; category?: string } = { sku, name };
     if (category) r.category = category;
-    if (channel_code) r.channel_code = channel_code;
     rows.push(r);
   }
   return rows;
@@ -247,7 +241,6 @@ function AdminProductsPageContent() {
   const isActiveFilter = parseBool(searchParams.get('is_active'));
   const categoryFilter = searchParams.get('category') ?? '';
   const lifecycleFilter = searchParams.get('lifecycle_status') ?? '';
-  const channelCodeFilter = searchParams.get('channel_code') ?? '';
   const launchDateFrom = searchParams.get('launch_date_from') ?? '';
   const launchDateTo = searchParams.get('launch_date_to') ?? '';
   const retiredDateFrom = searchParams.get('retired_date_from') ?? '';
@@ -313,7 +306,6 @@ function AdminProductsPageContent() {
       isActiveFilter,
       categoryFilter,
       lifecycleFilter,
-      channelCodeFilter,
       launchDateFrom,
       launchDateTo,
       retiredDateFrom,
@@ -331,7 +323,6 @@ function AdminProductsPageContent() {
       if (isActiveFilter != null) sp.set('is_active', String(isActiveFilter));
       if (categoryFilter) sp.set('category', categoryFilter);
       if (lifecycleFilter) sp.set('lifecycle_status', lifecycleFilter);
-      if (channelCodeFilter) sp.set('channel_code', channelCodeFilter);
       if (launchDateFrom) sp.set('launch_date_from', launchDateFrom);
       if (launchDateTo) sp.set('launch_date_to', launchDateTo);
       if (retiredDateFrom) sp.set('retired_date_from', retiredDateFrom);
@@ -365,13 +356,6 @@ function AdminProductsPageContent() {
       return next;
     });
   }, [specsFieldKeysSig]);
-
-  const { data: channels } = useQuery({
-    queryKey: ['catalog-channels'],
-    queryFn: ({ signal }) => apiGet<CodeRow[]>('/api/v1/catalog/channels', { signal }),
-  });
-
-  const channelCodes = useMemo(() => ['', ...(channels ?? []).map((c) => c.code)], [channels]);
 
   const bulk = useMutation({
     mutationFn: (rows: ReturnType<typeof parseProductCsv>) => apiPost('/api/v1/products/bulk', { rows }),
@@ -455,10 +439,6 @@ function AdminProductsPageContent() {
           await apiPatch(`/api/v1/products/${id}`, { retired_date: String(e.newValue ?? '') || null });
         } else if (field === 'is_active') {
           await apiPatch(`/api/v1/products/${id}`, { is_active: Boolean(e.newValue) });
-        } else if (field === 'channel_code') {
-          const code = String(e.newValue ?? '');
-          const ch = (channels ?? []).find((c) => c.code === code);
-          await apiPatch(`/api/v1/products/${id}`, { channel_id: ch ? ch.id : null });
         }
         await qc.invalidateQueries({ queryKey: ['admin-products'] });
       } catch (err) {
@@ -466,7 +446,7 @@ function AdminProductsPageContent() {
         await qc.invalidateQueries({ queryKey: ['admin-products'] });
       }
     },
-    [channels, qc]
+    [qc]
   );
 
   const colDefs: ColDef<ProductRow>[] = useMemo(() => {
@@ -488,14 +468,6 @@ function AdminProductsPageContent() {
       { field: 'launch_date', headerName: 'Launch date', minWidth: 130, editable: true },
       { field: 'retired_date', headerName: 'Retired date', minWidth: 130, editable: true },
       { field: 'is_active', headerName: 'Active', width: 100, editable: true, cellDataType: 'boolean' },
-      {
-        field: 'channel_code',
-        headerName: 'Primary channel',
-        minWidth: 140,
-        editable: true,
-        cellEditor: 'agSelectCellEditor',
-        cellEditorParams: { values: channelCodes },
-      },
       {
         field: 'missing_required_fields',
         headerName: 'Missing required',
@@ -559,7 +531,7 @@ function AdminProductsPageContent() {
           'Delete this product from the global catalogue? Derived metrics and aliases are removed automatically. If sales, inventory, pricing, lineup, or other core facts still reference this SKU, the delete will be blocked.',
       }),
     ];
-  }, [channelCodes, onDeleteProduct, delProduct.isPending, accumulatedSpecKeys]);
+  }, [onDeleteProduct, delProduct.isPending, accumulatedSpecKeys]);
 
   const columnLabelByField = useMemo(() => {
     const out: Record<string, string> = {};
@@ -785,10 +757,10 @@ function AdminProductsPageContent() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Products' }]} title="Products & channel placement" />
+      <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Products' }]} title="Products" />
       <Alert severity="info" sx={{ mb: 2 }}>
-        <strong>Primary channel</strong> on a product is a planning default (SKU-level shelf); sell-out rows can still
-        carry their own channel. Edit grid cells or paste CSV: <code>sku,name,category,channel_code</code>.
+        Edit product attributes inline in the grid, or paste CSV: <code>sku,name,category</code>. Channel is not a
+        product attribute — it lives on sell-out, pricing, lineup, and customer records.
       </Alert>
       {delProduct.isError ? (
         <Alert severity="warning" sx={{ mb: 2 }} onClose={() => delProduct.reset()}>
@@ -1019,21 +991,6 @@ function AdminProductsPageContent() {
               ))}
             </Select>
           </FormControl>
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel>Primary channel</InputLabel>
-            <Select
-              label="Primary channel"
-              value={channelCodeFilter}
-              onChange={(e) => setParamState({ channel_code: String(e.target.value || '') }, true)}
-            >
-              <MenuItem value="">All</MenuItem>
-              {(channels ?? []).map((c) => (
-                <MenuItem key={c.code} value={c.code}>
-                  {c.code}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
           <TextField
             size="small"
             label="Launch from"
@@ -1078,7 +1035,7 @@ function AdminProductsPageContent() {
               <MenuItem value="desc">Desc</MenuItem>
             </Select>
           </FormControl>
-          <Button variant="text" onClick={() => setParamState({ q: '', is_active: '', category: '', lifecycle_status: '', channel_code: '', launch_date_from: '', launch_date_to: '', retired_date_from: '', retired_date_to: '', sort_by: DEFAULT_SORT_BY, sort_dir: DEFAULT_SORT_DIR }, true)}>
+          <Button variant="text" onClick={() => setParamState({ q: '', is_active: '', category: '', lifecycle_status: '', launch_date_from: '', launch_date_to: '', retired_date_from: '', retired_date_to: '', sort_by: DEFAULT_SORT_BY, sort_dir: DEFAULT_SORT_DIR }, true)}>
             Clear filters
           </Button>
         </Stack>
@@ -1129,7 +1086,7 @@ function AdminProductsPageContent() {
       </Paper>
       <Paper sx={{ p: 2 }}>
         <ModuleDataSection
-          intro={<>Rows are stored in <strong>dim_product</strong> with optional <strong>channel_id</strong>.</>}
+          intro={<>Rows are stored in <strong>dim_product</strong>.</>}
           isLoading={productsLoading}
           isError={productsIsError}
           error={toQueryError(productsErr)}
@@ -1247,7 +1204,7 @@ function AdminProductsPageContent() {
             fullWidth
             value={paste}
             onChange={(ev) => setPaste(ev.target.value)}
-            placeholder="sku,name,category,channel_code"
+            placeholder="sku,name,category"
           />
           {bulk.isError ? (
             <Alert severity="error" sx={{ mt: 2 }}>
@@ -1352,9 +1309,6 @@ function AdminProductsPageContent() {
               </Typography>
               <Typography variant="body2">
                 <strong>Retired:</strong> {selectedRow.retired_date ?? '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Primary channel:</strong> {selectedRow.channel_code ?? '—'}
               </Typography>
               <Typography variant="body2">
                 <strong>Last import:</strong> {selectedRow.last_import_date ?? '—'}
