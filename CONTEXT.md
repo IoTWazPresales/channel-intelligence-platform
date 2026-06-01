@@ -1,5 +1,13 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 1, 2026 — Shipment steward performance (UX + batching, no logic change)
+- **Branch:** `fix/shipment-steward-performance` (from `main`, not merged). **Pushed** after commits.
+- **Problem:** steward map/provisional felt frozen (~97s provisional, ~26s map) — per-line `db.get` on `context.line_ids`, full-job re-enrich + `commit` after every candidate; UI debounced search missing, bulk map had no in-dialog progress, double `invalidate`+`refetch`.
+- **Phase 1 (web):** `ShipmentEntityStewardPanel` — 300ms debounce on customer/distributor/bulk-map search; bulk map modal spinner + “Mapping N candidates…”, in-modal `Alert` errors, block close while pending; steward mutations `invalidate()` only (no redundant `refetch()`).
+- **Phase 2 (api):** `shipment_evidence_steward_ops.py` — `_verify_line_scope` / `_mark_customer_lines_resolved` / `_update_lines_resolved` set-based; `_apply_*_without_commit` + single-action wrappers unchanged in outcome; `execute_bulk_map_shipment_customers`, bulk provisional + bulk apply plans + apply high-confidence auto-map enrich/commit once per batch. `shipment_evidence.py` bulk-map endpoint delegates to ops helper.
+- **Unchanged:** resolution/scoring/enrichment logic, governance, `created_from_import_job_id` on aliases, mapping-candidates payload shape.
+- **Validation:** `page.test.tsx` 26/26; `pytest tests/test_shipment_evidence_steward_ops.py` + import background slot tests (no real-DB steward runs). Warren to smoke speed in browser.
+
 ### Jun 1, 2026 — Shipment validate progress panel (parity with DSI/PM)
 - **Why:** after the perf fix, shipment validate runs on Celery and finishes (~157s in a real UI run:
   `Task imports.process_job … succeeded in 157.31s`, job 32 → `validated`, 9,307 lines, **192 candidates**),
