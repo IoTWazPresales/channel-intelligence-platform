@@ -369,6 +369,65 @@ def test_validate_persists_staged_row_count_not_row_index_map(monkeypatch: pytes
     json.dumps(meta)
 
 
+def test_validate_caps_detail_per_code_and_emits_code_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A systemic error (wrong column → channel_code) must not persist ~all rows: detail is
+    capped per code, and the summary row carries accurate code_counts for the UI breakdown."""
+    from app.services.imports import product_master_workflow as pmw
+
+    n = 130  # > PM_VALIDATION_DETAIL_CAP_PER_CODE
+    df = pd.DataFrame(
+        {
+            "sku": [f"SKU-{i:05d}" for i in range(n)],
+            "name": [f"Product {i}" for i in range(n)],
+            "ch": ["ROG Strix"] * n,  # mapped to channel_code; no such channel exists
+        }
+    )
+    monkeypatch.setattr(pmw, "read_tabular", lambda fn, data: df)
+    monkeypatch.setattr(pmw, "get_storage_backend", lambda: MagicMock(read=lambda key: b""))
+
+    captured: dict[str, list] = {}
+    monkeypatch.setattr(pmw, "_bulk_insert_row_results", lambda db, rows, **kw: captured.update(rows=rows))
+
+    job = SimpleNamespace(
+        id=77,
+        template_slug="product_master",
+        stage=STAGE_PM_MAPPING,
+        status="validate_running",
+        mapping_decisions={
+            "sku": {"target": "technical_product_id"},
+            "name": {"target": "display_name"},
+            "ch": {"target": "channel_code"},
+        },
+        file_headers=["sku", "name", "ch"],
+        file_name="t.csv",
+        staged_metadata={"pm_validate_task": {"task_id": "t1"}},
+        validation_passed=None,
+        error_summary=None,
+    )
+
+    raw_meta = MagicMock(storage_key="k")
+    scal_raw = MagicMock()
+    scal_raw.one.return_value = raw_meta
+    scal_ch = MagicMock()
+    scal_ch.all.return_value = []  # no channels → every ROG Strix is unknown_channel
+
+    db = MagicMock()
+    db.get.return_value = job
+    db.scalars.side_effect = [scal_raw, scal_ch]
+
+    validate_product_master_sync(db, 77, from_worker=True)
+
+    rows = captured["rows"]
+    unknown_detail = [r for r in rows if r["code"] == "unknown_channel" and r["row_number"] != 0]
+    assert len(unknown_detail) == pmw.PM_VALIDATION_DETAIL_CAP_PER_CODE  # capped, not 130
+    summary = next(r for r in rows if r["code"] == "pm_validation_summary")
+    parsed = json.loads(summary["message"])
+    assert parsed["row_errors"] == n
+    assert parsed["code_counts"]["unknown_channel"] == n  # true total preserved for the UI
+    assert job.validation_passed is False
+    assert job.status == "validation_failed"
+
+
 def test_commit_derives_import_staging_without_per_row_product_select(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

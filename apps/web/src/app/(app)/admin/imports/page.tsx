@@ -694,6 +694,45 @@ function AdminImportsPageContent() {
     }
   }, [jobIdParam, jobDetail, jobDetailFetched, jobDetailIsError, jobDetailErr, router]);
 
+  // PM validation breakdown: authoritative per-code totals from the pm_validation_summary
+  // row (which carries true counts even though stored detail rows are capped per code),
+  // each with a sample message so the user can see WHAT failed (e.g. unknown_channel 'ROG Strix').
+  const pmErrorBreakdown = useMemo<Array<{ code: string; count: number; sample: string | null; severity: string }>>(() => {
+    if (!isPm || !previewRows?.length) return [];
+    let counts: Record<string, number> | null = null;
+    const summaryRow = previewRows.find((r) => r.code === 'pm_validation_summary');
+    if (summaryRow?.message) {
+      try {
+        const parsed = JSON.parse(summaryRow.message) as { code_counts?: Record<string, number> };
+        if (parsed && typeof parsed === 'object' && parsed.code_counts) counts = parsed.code_counts;
+      } catch {
+        counts = null;
+      }
+    }
+    if (!counts) {
+      counts = {};
+      for (const r of previewRows) {
+        if (r.code && r.code !== 'pm_validation_summary') counts[r.code] = (counts[r.code] ?? 0) + 1;
+      }
+    }
+    const sample: Record<string, string> = {};
+    const severityByCode: Record<string, string> = {};
+    for (const r of previewRows) {
+      if (!r.code || r.code === 'pm_validation_summary') continue;
+      if (!sample[r.code] && r.message) sample[r.code] = r.message;
+      if (!severityByCode[r.code]) severityByCode[r.code] = r.severity;
+    }
+    return Object.entries(counts)
+      .filter(([code]) => code && code !== 'pm_validation_summary')
+      .sort((a, b) => b[1] - a[1])
+      .map(([code, count]) => ({
+        code,
+        count,
+        sample: sample[code] ?? null,
+        severity: severityByCode[code] ?? 'info',
+      }));
+  }, [isPm, previewRows]);
+
   // Diagnostic summary: group previewRows by code, sorted by count desc, capped at 8.
   const diagnosticSummary = useMemo<Array<{ code: string; count: number }>>(() => {
     if (!previewRows?.length) return [];
@@ -1494,11 +1533,20 @@ function AdminImportsPageContent() {
   }, [isPm, activeStep, lastJobId, hdrKey, pmJobState?.suggested_mapping, pmJobState?.mapping_decisions]);
 
   // Align wizard body with polled PM job state (upload, mapping save, validate/commit progress).
+  // Only react when the *server-derived* step actually changes for this job — never on plain
+  // activeStep changes — so manual Back navigation (e.g. from a validation_failed Validate step
+  // back to Column mapping) is not immediately yanked forward again by the next poll.
+  const pmDerivedStepRef = useRef<{ jobId: number | null; step: number | null }>({ jobId: null, step: null });
   useEffect(() => {
     if (!isPm || lastJobId == null || !pmJobState || pmJobState.id !== lastJobId) return;
     if (activeStep < 3 && jobIdParam !== lastJobId) return;
     const derived = pmWizardActiveStepFromServer(pmJobState);
     if (derived == null) return;
+    if (pmDerivedStepRef.current.jobId !== lastJobId) {
+      pmDerivedStepRef.current = { jobId: lastJobId, step: null };
+    }
+    if (pmDerivedStepRef.current.step === derived) return;
+    pmDerivedStepRef.current = { jobId: lastJobId, step: derived };
     setActiveStep((prev) => (prev === derived ? prev : derived));
   }, [
     isPm,
@@ -1507,6 +1555,24 @@ function AdminImportsPageContent() {
     activeStep,
     pmJobState,
   ]);
+
+  // PM async validation finishes in a background worker; only pm-import-state is polled.
+  // Refetch the row-result detail (used by the per-code breakdown + detail table) when the
+  // job transitions out of validate_queued/validate_running into a terminal validate state,
+  // otherwise the Validate step shows only the bare error count and no per-row detail.
+  const pmPrevStatusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isPm || lastJobId == null || !pmJobState || pmJobState.id !== lastJobId) return;
+    const prev = pmPrevStatusRef.current;
+    const cur = pmJobState.status ?? null;
+    pmPrevStatusRef.current = cur;
+    const wasValidating = prev === 'validate_running' || prev === 'validate_queued';
+    const nowDone = cur === 'validated' || cur === 'validation_failed';
+    if (wasValidating && nowDone) {
+      void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+      void refetchPreview();
+    }
+  }, [isPm, lastJobId, pmJobState, qc, refetchPreview]);
 
   const downloadSample = useCallback(async () => {
     if (!selectedSlug) return;
@@ -2705,6 +2771,42 @@ function AdminImportsPageContent() {
             {pmJobState?.error_summary ? <Alert severity="warning">{pmJobState.error_summary}</Alert> : null}
             {validatePm.isError ? (
               <Alert severity="error">{safeDisplayError(validatePm.error)}</Alert>
+            ) : null}
+            {pmErrorBreakdown.length > 0 ? (
+              <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  What failed (grouped by issue)
+                </Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Issue</TableCell>
+                      <TableCell align="right">Rows</TableCell>
+                      <TableCell>Example</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {pmErrorBreakdown.map((b) => (
+                      <TableRow key={b.code}>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={b.code}
+                            color={b.severity === 'error' ? 'error' : b.severity === 'warning' ? 'warning' : 'default'}
+                            variant={b.severity === 'info' ? 'outlined' : 'filled'}
+                          />
+                        </TableCell>
+                        <TableCell align="right">{b.count.toLocaleString()}</TableCell>
+                        <TableCell sx={{ maxWidth: 520, whiteSpace: 'normal' }}>{b.sample ?? '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <Typography variant="caption" color="text.secondary">
+                  Detail rows below are capped per issue; counts above are the true totals. Fix the mapping or source,
+                  then re-run validation.
+                </Typography>
+              </Box>
             ) : null}
             {previewRows && previewRows.length > 0 ? (
               <>

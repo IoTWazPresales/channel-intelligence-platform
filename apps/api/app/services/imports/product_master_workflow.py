@@ -570,6 +570,13 @@ def _bulk_insert_row_results(db: Session, rows: list[dict[str, Any]], *, chunk_s
         db.execute(insert(ImportRowResult), rows[offset : offset + chunk_size])
 
 
+# Max per-row ImportRowResult detail persisted per error/warning code. The true totals are
+# carried in the pm_validation_summary row's code_counts; this bounds the stored + returned
+# detail so a single systemic mistake (e.g. a wrong column mapped to channel_code across ~17k
+# rows) cannot insert/return tens of thousands of near-identical rows.
+PM_VALIDATION_DETAIL_CAP_PER_CODE = 50
+
+
 def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool = False) -> ImportJob:
     job = db.get(ImportJob, job_id)
     if not job or job.template_slug != "product_master":
@@ -760,7 +767,12 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
                 row_number=int(idx) + 1,
                 severity="error",
                 code="unknown_channel",
-                message=f"Unknown channel_code {ch_raw!r}",
+                message=(
+                    f"Unknown channel_code {ch_raw!r} — source column {ch_col!r} is mapped to "
+                    "channel_code, but this value is not a known sales channel. If this column is "
+                    "not a sales channel, change its mapping (ignore or staged metadata) and re-validate."
+                ),
+                raw_payload={"value": ch_raw[:96], "source_column": ch_col},
             )
             errors += 1
             continue
@@ -819,13 +831,35 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
             raw_payload={"headers": cand_cols},
         )
 
+    # Authoritative per-code totals BEFORE capping detail — the frontend reads code_counts to
+    # show accurate "N × code" even though only a sample of detail rows per code is persisted.
+    code_counts = Counter(r["code"] for r in row_results)
+
+    per_code_seen: Counter[str] = Counter()
+    capped_results: list[dict[str, Any]] = []
+    for r in row_results:
+        if r["row_number"] == 0:
+            capped_results.append(r)
+            continue
+        if per_code_seen[r["code"]] < PM_VALIDATION_DETAIL_CAP_PER_CODE:
+            capped_results.append(r)
+            per_code_seen[r["code"]] += 1
+    row_results = capped_results
+
     _append_pm_row_result(
         row_results,
         job_id=job.id,
         row_number=0,
         severity="info" if errors == 0 else "warning",
         code="pm_validation_summary",
-        message=json.dumps({"row_errors": errors, "staged_row_count": staged_row_count}),
+        message=json.dumps(
+            {
+                "row_errors": errors,
+                "staged_row_count": staged_row_count,
+                "code_counts": dict(code_counts),
+                "detail_capped_per_code": PM_VALIDATION_DETAIL_CAP_PER_CODE,
+            }
+        ),
     )
     _bulk_insert_row_results(db, row_results)
 

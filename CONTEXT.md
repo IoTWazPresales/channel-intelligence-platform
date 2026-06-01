@@ -1,5 +1,41 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 1, 2026 — PM validation: surface WHY it failed, unblock Back, cap detail at scale
+- **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main).
+- **Symptom (user):** a PM import showed "Validation failed / 16836 row errors" with **no
+  per-row detail**, **nothing in logs/console**, and the wizard **wouldn't let you go Back**
+  to fix the mapping. Validation actually *succeeded* in the worker (~57s) — 16,836 of 17,136
+  rows legitimately failed one rule.
+- **Real cause (read from DB):** all 16,836 errors were `unknown_channel` — source column
+  **`bu_segment`** was mapped to `channel_code`; no such channel exists, so every row failed.
+- **Three problems fixed:**
+  - **B (no detail shown):** PM async validation finishes in the worker; only `pm-import-state`
+    was polled, and `validatePm` invalidated `import-job-rows` only at enqueue (202, before any
+    rows exist). Added a `page.tsx` effect that refetches row results when status transitions
+    `validate_running/queued → validated/validation_failed`. (frontend)
+  - **C (can't go Back):** the wizard-realignment effect had `activeStep` in deps and re-derived
+    the step on every change → `validation_failed` (=step 5) snapped you back whenever you hit
+    Back. Now dedupes by server-derived step (`pmDerivedStepRef`): realigns only on real state
+    transitions, never fighting manual nav. (frontend)
+  - **D (opaque + unbounded):** backend `validate_product_master_sync` now (a) caps persisted
+    per-row detail to `PM_VALIDATION_DETAIL_CAP_PER_CODE=50` per code, (b) emits accurate
+    `code_counts` in the `pm_validation_summary` row, and (c) gives `unknown_channel` a clear
+    message naming the source column + remediation. `page.tsx` renders a "What failed (grouped
+    by issue)" table reading `code_counts` (true totals) with a sample per code. (backend+frontend)
+- **Note:** the `page.tsx` half (B/C/D-frontend) was already in the working tree at the start of
+  this turn (parallel/desktop edit); this commit completes the backend it depends on and validates
+  the whole thing together.
+- **Tests:** `test_product_master_workflow.py` 22 passing (+1 new: detail capped at 50/code while
+  `code_counts.unknown_channel == 130` total). Web `imports/page.test.tsx` 26/26. eslint 0 errors
+  on page.tsx (pre-existing exhaustive-deps warnings only). (`tsc --noEmit` has pre-existing
+  project-wide AG Grid/`never` errors — project gates on eslint+vitest, not tsc.)
+- **Real-DB run at true volume (Supabase `postgres`):** re-validated job 30 (17,136-row file):
+  detail rows **16,836 → 53** (50 capped + 3 structural), summary `code_counts.unknown_channel =
+  16836`, message points at column `bu_segment`. Job 30 stays `validation_failed` (still the wrong
+  mapping) but now shows the cause. (No new SQL constructs — fewer rows into existing bulk insert.)
+- **User action to clear job 30:** remap `bu_segment` off `channel_code` (ignore / staged metadata)
+  and re-validate.
+
 ### May 31, 2026 — Phase 2 follow-up: cancel now revokes ALL slot tasks
 - **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main).
 - Closes the Phase 2 known follow-up. Added `iter_slot_task_ids(meta)` to
