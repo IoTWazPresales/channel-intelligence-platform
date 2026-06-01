@@ -20,12 +20,16 @@ from app.services.imports.shipment_inbound_facts import upsert_inbound_shipment_
 from app.services.imports.shipment_evidence_resolution_plan import (
     SHIPMENT_CUSTOMER_ENTITY,
     SHIPMENT_DISTRIBUTOR_ENTITY,
+    enrich_shipment_customer_token_candidates,
+    enrich_shipment_distributor_candidates,
 )
 from app.services.imports.shipment_evidence_steward_ops import (
     ShipmentStewardOpError,
-    _re_enrich_open_shipment_customer_candidates,
+    _apply_map_shipment_customer_without_commit,
+    _apply_map_shipment_distributor_without_commit,
     execute_bulk_apply_shipment_candidate_plans,
     execute_bulk_create_provisional_shipment_customers,
+    execute_bulk_map_shipment_customers,
     execute_clear_special_category_shipment_candidate,
     execute_create_provisional_shipment_customer,
     execute_create_provisional_shipment_distributor,
@@ -81,8 +85,10 @@ def _shipment_candidate_eligible_for_apply_auto_map(cand: ImportEntityMappingCan
 
 
 def _apply_high_confidence_shipment_mapping_candidates(import_job_id: int) -> int:
-    """Execute ``execute_map_shipment_*`` for each eligible candidate; executors commit per call."""
-    applied = 0
+    """Map high-confidence planner suggestions; enrich and commit once per entity type (not per candidate)."""
+    applied: list[int] = []
+    any_customer = False
+    any_distributor = False
     with SessionLocal() as s:
         ids = [
             int(x)
@@ -105,14 +111,37 @@ def _apply_high_confidence_shipment_mapping_candidates(import_job_id: int) -> in
             eid = int(cand.suggested_entity_id)
             try:
                 if action == "map_distributor":
-                    execute_map_shipment_distributor(s, cand, distributor_id=eid, raw_token=None)
-                    applied += 1
+                    _apply_map_shipment_distributor_without_commit(
+                        s, cand, distributor_id=eid, raw_token=None
+                    )
+                    any_distributor = True
+                    applied.append(cid)
                 elif action == "map_customer":
-                    execute_map_shipment_customer(s, cand, customer_id=eid, raw_token=None)
-                    applied += 1
+                    _apply_map_shipment_customer_without_commit(
+                        s, cand, customer_id=eid, raw_token=None
+                    )
+                    any_customer = True
+                    applied.append(cid)
             except ShipmentStewardOpError:
                 continue
-    return applied
+        if applied:
+            sid: int | None = None
+            for cid in reversed(applied):
+                c = s.get(ImportEntityMappingCandidate, cid)
+                if c is not None:
+                    sid = int(c.source_definition_id) if c.source_definition_id is not None else None
+                    break
+            if any_customer:
+                enrich_shipment_customer_token_candidates(
+                    s, import_job_id=int(import_job_id), source_definition_id=sid
+                )
+                s.commit()
+            if any_distributor:
+                enrich_shipment_distributor_candidates(
+                    s, import_job_id=int(import_job_id), source_definition_id=sid
+                )
+                s.commit()
+    return len(applied)
 
 
 def _is_admin(x_user_role: str | None) -> bool:
@@ -378,31 +407,12 @@ async def shipment_import_candidates_bulk_map_customer(
 ) -> dict[str, Any]:
     """Map many shipment customer candidates to one existing customer; re-enriches the job once at the end."""
     _require_admin(x_user_role)
-    mapped: list[int] = []
-    errors: list[dict[str, Any]] = []
     with SessionLocal() as s:
-        job_id: int | None = None
-        for cid in body.candidate_ids:
-            cand = s.get(ImportEntityMappingCandidate, int(cid))
-            if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
-                errors.append({"candidate_id": int(cid), "reason": "candidate_not_found_or_wrong_entity"})
-                continue
-            if job_id is None:
-                job_id = int(cand.import_job_id)
-            elif int(cand.import_job_id) != job_id:
-                errors.append({"candidate_id": int(cid), "reason": "candidate_not_same_import_job"})
-                continue
-            try:
-                execute_map_shipment_customer(s, cand, customer_id=body.customer_id, raw_token=None)
-                mapped.append(int(cid))
-            except ShipmentStewardOpError as exc:
-                errors.append({"candidate_id": int(cid), "reason": str(exc.detail)})
-        if mapped:
-            any_cand = s.get(ImportEntityMappingCandidate, mapped[0])
-            if any_cand is not None:
-                _re_enrich_open_shipment_customer_candidates(s, any_cand)
-            s.commit()
-    return {"mapped": mapped, "errors": errors}
+        return execute_bulk_map_shipment_customers(
+            s,
+            customer_id=int(body.customer_id),
+            candidate_ids=[int(x) for x in body.candidate_ids],
+        )
 
 
 @router.post("/import-candidates/{candidate_id}/map-distributor")

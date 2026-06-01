@@ -246,10 +246,21 @@ _VALID_SHIPMENT_CUSTOMER_PARTNER_TIERS = frozenset(
 
 
 def _verify_line_scope(db: Session, cand: ImportEntityMappingCandidate, line_ids: list[int]) -> None:
+    if not line_ids:
+        return
     jid = int(cand.import_job_id)
-    for lid in line_ids:
-        row = db.get(ShipmentEvidenceLine, lid)
-        if not row or int(row.import_job_id) != jid:
+    unique_ids = list(dict.fromkeys(int(x) for x in line_ids))
+    found = {
+        int(x)
+        for x in db.scalars(
+            select(ShipmentEvidenceLine.id).where(
+                ShipmentEvidenceLine.id.in_(unique_ids),
+                ShipmentEvidenceLine.import_job_id == jid,
+            )
+        ).all()
+    }
+    for lid in unique_ids:
+        if lid not in found:
             raise ShipmentStewardOpError(f"Line {lid} not in scope for candidate job {jid}", status_code=400)
 
 
@@ -260,20 +271,23 @@ def _update_lines_resolved(
     distributor_id: int,
     resolution_token: str,
 ) -> int:
-    n = 0
+    if not line_ids:
+        return 0
+    unique_ids = list(dict.fromkeys(int(x) for x in line_ids))
     tok = (resolution_token or "")[:512]
-    for lid in line_ids:
-        line = db.get(ShipmentEvidenceLine, lid)
-        if line is None:
-            continue
-        line.distributor_id = int(distributor_id)
-        line.distributor_resolution_status = "resolved"
-        line.distributor_resolution_token = tok
-        n += 1
-    return n
+    result = db.execute(
+        update(ShipmentEvidenceLine)
+        .where(ShipmentEvidenceLine.id.in_(unique_ids))
+        .values(
+            distributor_id=int(distributor_id),
+            distributor_resolution_status="resolved",
+            distributor_resolution_token=tok,
+        )
+    )
+    return int(result.rowcount or 0)
 
 
-def execute_map_shipment_distributor(
+def _apply_map_shipment_distributor_without_commit(
     db: Session,
     cand: ImportEntityMappingCandidate,
     *,
@@ -320,12 +334,33 @@ def execute_map_shipment_distributor(
     cand.suggested_entity_id = int(distributor_id)
     cand.match_reason = "steward_map_existing_distributor"
     db.add(cand)
+    return {
+        "ok": True,
+        "alias_id": int(alias.id),
+        "distributor_id": int(distributor_id),
+        "candidate_id": int(cand.id),
+        "lines_updated": len(line_ids),
+    }
+
+
+def execute_map_shipment_distributor(
+    db: Session,
+    cand: ImportEntityMappingCandidate,
+    *,
+    distributor_id: int,
+    raw_token: str | None,
+) -> dict[str, Any]:
+    out = _apply_map_shipment_distributor_without_commit(
+        db, cand, distributor_id=distributor_id, raw_token=raw_token
+    )
     db.commit()
-    db.refresh(alias)
-    return {"ok": True, "alias_id": int(alias.id), "distributor_id": int(distributor_id), "candidate_id": int(cand.id), "lines_updated": len(line_ids)}
+    alias = db.get(DistributorSourceTokenAlias, int(out["alias_id"]))
+    if alias is not None:
+        db.refresh(alias)
+    return out
 
 
-def execute_create_provisional_shipment_distributor(
+def _apply_create_provisional_shipment_distributor_without_commit(
     db: Session,
     cand: ImportEntityMappingCandidate,
     *,
@@ -388,9 +423,6 @@ def execute_create_provisional_shipment_distributor(
     cand.suggested_entity_id = int(row.id)
     cand.match_reason = "steward_created_provisional_distributor"
     db.add(cand)
-    db.commit()
-    db.refresh(row)
-    db.refresh(alias)
     return {
         "ok": True,
         "distributor_id": int(row.id),
@@ -399,6 +431,33 @@ def execute_create_provisional_shipment_distributor(
         "candidate_id": int(cand.id),
         "lines_updated": len(line_ids),
     }
+
+
+def execute_create_provisional_shipment_distributor(
+    db: Session,
+    cand: ImportEntityMappingCandidate,
+    *,
+    display_name: str | None,
+    distributor_code: str | None,
+    confirm_for_suspicious_token: bool,
+    bypass_suspicious_token_gate: bool = False,
+) -> dict[str, Any]:
+    out = _apply_create_provisional_shipment_distributor_without_commit(
+        db,
+        cand,
+        display_name=display_name,
+        distributor_code=distributor_code,
+        confirm_for_suspicious_token=confirm_for_suspicious_token,
+        bypass_suspicious_token_gate=bypass_suspicious_token_gate,
+    )
+    db.commit()
+    dist = db.get(DimDistributor, int(out["distributor_id"]))
+    alias = db.get(DistributorSourceTokenAlias, int(out["alias_id"]))
+    if dist is not None:
+        db.refresh(dist)
+    if alias is not None:
+        db.refresh(alias)
+    return out
 
 
 def _allocate_tmp_customer_code(db: Session) -> str:
@@ -411,9 +470,19 @@ def _allocate_tmp_customer_code(db: Session) -> str:
     raise ShipmentStewardOpError("Could not allocate temporary customer code", status_code=503)
 
 
-def _re_enrich_open_shipment_customer_candidates(db: Session, cand: ImportEntityMappingCandidate) -> None:
+def _re_enrich_shipment_customer_candidates_for_job(
+    db: Session, *, import_job_id: int, source_definition_id: int | None
+) -> None:
     """Rescore non-terminal shipment customer candidates after aliases change (same import job)."""
     enrich_shipment_customer_token_candidates(
+        db,
+        import_job_id=int(import_job_id),
+        source_definition_id=source_definition_id,
+    )
+
+
+def _re_enrich_open_shipment_customer_candidates(db: Session, cand: ImportEntityMappingCandidate) -> None:
+    _re_enrich_shipment_customer_candidates_for_job(
         db,
         import_job_id=int(cand.import_job_id),
         source_definition_id=int(cand.source_definition_id) if cand.source_definition_id is not None else None,
@@ -421,20 +490,19 @@ def _re_enrich_open_shipment_customer_candidates(db: Session, cand: ImportEntity
 
 
 def _mark_customer_lines_resolved(db: Session, line_ids: list[int], customer_id: int) -> int:
-    n = 0
+    if not line_ids:
+        return 0
+    unique_ids = list(dict.fromkeys(int(x) for x in line_ids))
     cid = int(customer_id)
-    for lid in line_ids:
-        line = db.get(ShipmentEvidenceLine, lid)
-        if line is None:
-            continue
-        line.customer_resolution_status = "resolved"
-        line.customer_id = cid
-        db.add(line)
-        n += 1
-    return n
+    result = db.execute(
+        update(ShipmentEvidenceLine)
+        .where(ShipmentEvidenceLine.id.in_(unique_ids))
+        .values(customer_resolution_status="resolved", customer_id=cid)
+    )
+    return int(result.rowcount or 0)
 
 
-def execute_map_shipment_customer(
+def _apply_map_shipment_customer_without_commit(
     db: Session,
     cand: ImportEntityMappingCandidate,
     *,
@@ -486,8 +554,6 @@ def execute_map_shipment_customer(
     cand.suggested_entity_id = int(customer_id)
     cand.match_reason = "steward_map_existing_customer"
     db.add(cand)
-    _re_enrich_open_shipment_customer_candidates(db, cand)
-    db.commit()
     return {
         "ok": True,
         "alias_id": int(alias_ids[0]),
@@ -498,7 +564,27 @@ def execute_map_shipment_customer(
     }
 
 
-def execute_create_provisional_shipment_customer(
+def execute_map_shipment_customer(
+    db: Session,
+    cand: ImportEntityMappingCandidate,
+    *,
+    customer_id: int,
+    raw_token: str | None,
+    bypass_partner_text_guards: bool = False,
+) -> dict[str, Any]:
+    out = _apply_map_shipment_customer_without_commit(
+        db,
+        cand,
+        customer_id=customer_id,
+        raw_token=raw_token,
+        bypass_partner_text_guards=bypass_partner_text_guards,
+    )
+    _re_enrich_open_shipment_customer_candidates(db, cand)
+    db.commit()
+    return out
+
+
+def _apply_create_provisional_shipment_customer_without_commit(
     db: Session,
     cand: ImportEntityMappingCandidate,
     *,
@@ -542,8 +628,6 @@ def execute_create_provisional_shipment_customer(
             )
             line_ids = _line_ids_from_context(cand)
             n_stamp = _mark_customer_lines_resolved(db, line_ids, int(cust.id)) if line_ids else 0
-            _re_enrich_open_shipment_customer_candidates(db, cand)
-            db.commit()
             return {
                 "ok": True,
                 "idempotent": True,
@@ -624,9 +708,6 @@ def execute_create_provisional_shipment_customer(
     cand.suggested_entity_id = int(row.id)
     cand.match_reason = "steward_created_provisional_customer"
     db.add(cand)
-    _re_enrich_open_shipment_customer_candidates(db, cand)
-    db.commit()
-    db.refresh(row)
     return {
         "ok": True,
         "customer_id": int(row.id),
@@ -636,6 +717,38 @@ def execute_create_provisional_shipment_customer(
         "candidate_id": int(cand.id),
         "lines_updated": len(line_ids),
     }
+
+
+def execute_create_provisional_shipment_customer(
+    db: Session,
+    cand: ImportEntityMappingCandidate,
+    *,
+    display_name: str | None,
+    region_id: int | None,
+    channel_id: int | None,
+    preferred_distributor_id: int | None,
+    partner_tier: str | None,
+    notes_summary: str | None,
+    bypass_partner_text_guards: bool = False,
+) -> dict[str, Any]:
+    out = _apply_create_provisional_shipment_customer_without_commit(
+        db,
+        cand,
+        display_name=display_name,
+        region_id=region_id,
+        channel_id=channel_id,
+        preferred_distributor_id=preferred_distributor_id,
+        partner_tier=partner_tier,
+        notes_summary=notes_summary,
+        bypass_partner_text_guards=bypass_partner_text_guards,
+    )
+    _re_enrich_open_shipment_customer_candidates(db, cand)
+    db.commit()
+    if not out.get("idempotent"):
+        row = db.get(DimCustomer, int(out["customer_id"]))
+        if row is not None:
+            db.refresh(row)
+    return out
 
 
 def _provisional_customer_bulk_group_key(cand: ImportEntityMappingCandidate, per: dict[int, str]) -> str:
@@ -650,7 +763,7 @@ def _provisional_customer_bulk_group_key(cand: ImportEntityMappingCandidate, per
     return f"__singleton_candidate_{int(cand.id)}__"
 
 
-def execute_attach_shipment_customer_candidate_to_existing_customer(
+def _apply_attach_shipment_customer_candidate_without_commit(
     db: Session,
     cand: ImportEntityMappingCandidate,
     *,
@@ -702,8 +815,6 @@ def execute_attach_shipment_customer_candidate_to_existing_customer(
     cand.suggested_entity_id = int(customer_id)
     cand.match_reason = "steward_created_provisional_customer"
     db.add(cand)
-    _re_enrich_open_shipment_customer_candidates(db, cand)
-    db.commit()
     return {
         "ok": True,
         "customer_id": int(customer_id),
@@ -713,6 +824,21 @@ def execute_attach_shipment_customer_candidate_to_existing_customer(
         "lines_updated": len(line_ids),
         "grouped_attach": True,
     }
+
+
+def execute_attach_shipment_customer_candidate_to_existing_customer(
+    db: Session,
+    cand: ImportEntityMappingCandidate,
+    *,
+    customer_id: int,
+    notes_summary: str | None,
+) -> dict[str, Any]:
+    out = _apply_attach_shipment_customer_candidate_without_commit(
+        db, cand, customer_id=customer_id, notes_summary=notes_summary
+    )
+    _re_enrich_open_shipment_customer_candidates(db, cand)
+    db.commit()
+    return out
 
 
 ALLOWED_MANUAL_SPECIAL_CATEGORIES = frozenset({"noise_only", "internal_note"})
@@ -833,12 +959,14 @@ def execute_bulk_apply_shipment_candidate_plans(
                     eid = cand.suggested_entity_id
                     if eid is None:
                         raise ShipmentStewardOpError("plan missing suggested_entity_id", status_code=400)
-                    execute_map_shipment_distributor(db, cand, distributor_id=int(eid), raw_token=None)
+                    _apply_map_shipment_distributor_without_commit(
+                        db, cand, distributor_id=int(eid), raw_token=None
+                    )
                     applied.append(cid)
                 elif action == "create_provisional_distributor":
                     raw = _first_sample_raw(cand)
                     dn = _display_name_from_context_or_sample(cand, None, raw)
-                    execute_create_provisional_shipment_distributor(
+                    _apply_create_provisional_shipment_distributor_without_commit(
                         db,
                         cand,
                         display_name=dn.strip() or None,
@@ -855,14 +983,18 @@ def execute_bulk_apply_shipment_candidate_plans(
                     eid = cand.suggested_entity_id
                     if eid is None:
                         raise ShipmentStewardOpError("plan missing suggested_entity_id", status_code=400)
-                    execute_map_shipment_customer(
-                        db, cand, customer_id=int(eid), raw_token=None, bypass_partner_text_guards=True
+                    _apply_map_shipment_customer_without_commit(
+                        db,
+                        cand,
+                        customer_id=int(eid),
+                        raw_token=None,
+                        bypass_partner_text_guards=True,
                     )
                     applied.append(cid)
                 elif action == "create_provisional_customer":
                     raw = _first_sample_raw(cand)
                     dn = _display_name_from_context_or_sample(cand, None, raw)
-                    execute_create_provisional_shipment_customer(
+                    _apply_create_provisional_shipment_customer_without_commit(
                         db,
                         cand,
                         display_name=dn.strip() or None,
@@ -937,7 +1069,7 @@ def execute_bulk_create_provisional_shipment_customers(
         leader = group[0]
         dn_leader = per.get(int(leader.id))
         try:
-            out = execute_create_provisional_shipment_customer(
+            out = _apply_create_provisional_shipment_customer_without_commit(
                 db,
                 leader,
                 display_name=dn_leader,
@@ -951,7 +1083,7 @@ def execute_bulk_create_provisional_shipment_customers(
             cust_id = int(out["customer_id"])
             for follower in group[1:]:
                 try:
-                    out2 = execute_attach_shipment_customer_candidate_to_existing_customer(
+                    out2 = _apply_attach_shipment_customer_candidate_without_commit(
                         db,
                         follower,
                         customer_id=cust_id,
@@ -964,7 +1096,56 @@ def execute_bulk_create_provisional_shipment_customers(
             for c in group:
                 errors.append({"candidate_id": int(c.id), "message": exc.detail})
 
+    if results:
+        sid: int | None = None
+        for cand in cands:
+            if cand.source_definition_id is not None:
+                sid = int(cand.source_definition_id)
+                break
+        _re_enrich_shipment_customer_candidates_for_job(
+            db, import_job_id=int(job_id), source_definition_id=sid
+        )
+        db.commit()
+
     return {"ok": len(errors) == 0, "results": results, "errors": errors}
+
+
+def execute_bulk_map_shipment_customers(
+    db: Session,
+    *,
+    customer_id: int,
+    candidate_ids: list[int],
+) -> dict[str, Any]:
+    """Map many shipment customer candidates to one customer; enrich and commit once at the end."""
+    mapped: list[int] = []
+    errors: list[dict[str, Any]] = []
+    job_id: int | None = None
+    source_definition_id: int | None = None
+    for cid in candidate_ids:
+        cand = db.get(ImportEntityMappingCandidate, int(cid))
+        if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
+            errors.append({"candidate_id": int(cid), "reason": "candidate_not_found_or_wrong_entity"})
+            continue
+        if job_id is None:
+            job_id = int(cand.import_job_id)
+        elif int(cand.import_job_id) != job_id:
+            errors.append({"candidate_id": int(cid), "reason": "candidate_not_same_import_job"})
+            continue
+        if source_definition_id is None and cand.source_definition_id is not None:
+            source_definition_id = int(cand.source_definition_id)
+        try:
+            _apply_map_shipment_customer_without_commit(
+                db, cand, customer_id=int(customer_id), raw_token=None
+            )
+            mapped.append(int(cid))
+        except ShipmentStewardOpError as exc:
+            errors.append({"candidate_id": int(cid), "reason": str(exc.detail)})
+    if mapped and job_id is not None:
+        _re_enrich_shipment_customer_candidates_for_job(
+            db, import_job_id=int(job_id), source_definition_id=source_definition_id
+        )
+        db.commit()
+    return {"mapped": mapped, "errors": errors}
 
 
 def merge_duplicate_shipment_provisional_customers_by_display_name(
