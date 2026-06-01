@@ -83,7 +83,8 @@ def test_products_list_response_shape_and_pagination_contract():
         assert body["items"][1]["specs_preview"] == {}
         assert body["items"][1]["specs_flat"] == {}
         assert "category" in body["items"][1]["missing_required_fields"]
-        assert "channel" in body["items"][1]["missing_required_fields"]
+        # Channel is no longer a required product attribute (removed from Product Master).
+        assert "channel" not in body["items"][1]["missing_required_fields"]
     finally:
         app.dependency_overrides.clear()
 

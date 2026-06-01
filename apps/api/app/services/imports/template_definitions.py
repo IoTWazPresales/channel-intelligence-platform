@@ -32,7 +32,6 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
             },
             "name": {"aliases": ["product_name", "title", "description"], "required": True},
             "category": {"aliases": ["cat", "product_category"], "required": False},
-            "channel_code": {"aliases": ["channel", "ch_code", "primary_channel"], "required": False},
         },
     },
     {
@@ -480,6 +479,6 @@ DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
 
 def product_master_sample_csv() -> str:
     return (
-        "sku,name,category,channel_code\n"
-        "SKU-NEW-99,Example product,Audio,RET\n"
+        "sku,name,category\n"
+        "SKU-NEW-99,Example product,Audio\n"
     )

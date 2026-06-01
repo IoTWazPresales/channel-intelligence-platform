@@ -13,7 +13,7 @@ from sqlalchemy import delete, insert, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.ingestion.infer import infer_schema, read_tabular
-from app.models.dimensions import DimChannel, DimProduct
+from app.models.dimensions import DimProduct
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
 from app.services.catalog.product_import_sync import sync_bulk_upsert_products_from_rows
 from app.services.imports.import_background_slots import (
@@ -625,7 +625,6 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
     cc_col = next((k for k, v in fm.items() if v == "country_code"), None)
     ean_col = next((k for k, v in fm.items() if v == "barcode_ean"), None)
     upc_col = next((k for k, v in fm.items() if v == "barcode_upc"), None)
-    ch_col = next((k for k, v in fm.items() if v == "channel_code"), None)
 
     stage_cols = stage_raw_columns_from_decisions(job.mapping_decisions)
     cand_cols = [
@@ -634,7 +633,6 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
         if isinstance(m, dict) and m.get("disposition") == "attribute_candidate"
     ]
 
-    channels = {c.code.strip().lower(): c.id for c in db.scalars(select(DimChannel)).all()}
     staged_row_count = 0
     errors = 0
 
@@ -755,27 +753,6 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
                 )
                 errors += 1
                 continue
-        ch_raw = None
-        if ch_col:
-            v = normalize_scalar_for_pm(row.get(ch_col))
-            if v is not None and str(v).strip():
-                ch_raw = str(v).strip()
-        if ch_raw and ch_raw.lower() not in channels:
-            _append_pm_row_result(
-                row_results,
-                job_id=job.id,
-                row_number=int(idx) + 1,
-                severity="error",
-                code="unknown_channel",
-                message=(
-                    f"Unknown channel_code {ch_raw!r} — source column {ch_col!r} is mapped to "
-                    "channel_code, but this value is not a known sales channel. If this column is "
-                    "not a sales channel, change its mapping (ignore or staged metadata) and re-validate."
-                ),
-                raw_payload={"value": ch_raw[:96], "source_column": ch_col},
-            )
-            errors += 1
-            continue
         if row_has_stage_raw_data(row, stage_cols):
             staged_row_count += 1
 

@@ -1,5 +1,45 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 1, 2026 — Option A: remove channel from Product Master (step 1 — code; column drop is step 2)
+- **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main).
+- **Decision (user, Option A):** channel is a go-to-market dimension of transactions/pricing/
+  lineup/customer, NOT an intrinsic product attribute. Remove it from Product Master.
+  (`bu_segment` = "business unit segment" → belongs in the existing `dim_product.business_unit`,
+  not `channel_code`.)
+- **Step 1 (this commit — additive, NO migration, non-breaking):**
+  - `pm_field_catalog.py`: removed `channel_code` from `PM_CANONICAL_GENERIC`, `PM_SEMANTIC_GROUP`,
+    and `field_definitions_for_api()`. Because `PM_CANONICAL_GENERIC` is the single gate, this
+    cascades: `validate_mapping_payload` now rejects `channel_code`, `_sync_key_for_generic`
+    no longer persists it, and the auto-mappers/suggesters no longer offer it.
+  - `pm_suggest_mapping.py`: removed the `channel_code` suggestion entry.
+  - `product_master_workflow.validate_product_master_sync`: removed channel column detection,
+    the `DimChannel` channels query, and the `unknown_channel` row validation (dead once
+    channel_code isn't a target). Dropped now-unused `DimChannel` import.
+  - `template_definitions.py`: removed `channel_code` from the `product_master` template
+    expected_columns and the sample CSV.
+  - `products.py`: removed the `channel` entry from a product's `missing_required_fields`
+    (a product with no channel is normal, not incomplete).
+- **Still present (intentionally, until step 2 migration):** `dim_product.channel_id` column;
+  `product_import_sync.py` channel plumbing (now dormant — `channel_code` never reaches it, so
+  existing values are preserved and none are written); the products read model still returns
+  `channel_id`/`channel_code` and supports the channel filter/PATCH/bulk-import. These all
+  reference the column, so they move together with the column-drop migration.
+- **Behavior for existing jobs:** a saved mapping to `channel_code` (e.g. job 30's `bu_segment`)
+  now fails fast at the mapping-payload check — `Unknown canonical target 'channel_code' for
+  column 'bu_segment'` — a clear mapping-level error instead of 16k row errors. Job 30 reset to
+  `validation_failed` / `pm_mapping_saved` with a remediation message.
+- **Tests:** `test_product_master_workflow.py` 22 (cap test reworked to `blank_display_name`,
+  no longer channel-dependent); `test_products_list_contract.py` updated (asserts `channel` NOT
+  in missing_required); `test_imports_templates.py` 2 (after a transient Supabase DNS blip —
+  `getaddrinfo failed`, the documented NullPool issue — unrelated to this change).
+- **Real-DB confirm (Supabase `postgres`):** `channel_code in PM_CANONICAL_GENERIC == False`;
+  re-validating job 30 raises the clear mapping-level rejection naming `bu_segment`. No new SQL.
+- **Step 2 (NOT done — needs explicit go + Supabase restore point):** Alembic migration to drop
+  `dim_product.channel_id`, plus removing the now-dead channel plumbing from `product_import_sync.py`
+  and the channel filter/PATCH/bulk-import/output from `products.py`. Migration = hard stop until approved.
+- **User action to clear job 30:** open mapping, remap `bu_segment` → `business_unit` (or ignore),
+  re-validate.
+
 ### Jun 1, 2026 — PM validation: surface WHY it failed, unblock Back, cap detail at scale
 - **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main).
 - **Symptom (user):** a PM import showed "Validation failed / 16836 row errors" with **no

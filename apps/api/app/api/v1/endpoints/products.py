@@ -189,8 +189,8 @@ async def list_products(
             missing_required.append("category")
         if not (p.lifecycle_status or "").strip():
             missing_required.append("lifecycle_status")
-        if p.channel_id is None:
-            missing_required.append("channel")
+        # Channel is intentionally NOT a required product attribute — it is a go-to-market
+        # dimension of transactions/pricing/customer, not an intrinsic product property.
         specs_flat = specs_json_flat_string_map(p.specs_json if isinstance(p.specs_json, dict) else None, max_keys=48)
         specs_field_keys.update(specs_flat.keys())
         items.append(

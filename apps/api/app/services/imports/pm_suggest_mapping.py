@@ -376,7 +376,6 @@ def _header_pattern_scores(nh: str) -> tuple[dict[str, float], dict[str, list[st
         ),
         ("business_unit", ["business_unit", "bu_code", "division"], 2.2),
         ("form_factor", ["form_factor", "chassis", "product_type"], 3.0),
-        ("channel_code", ["channel_code", "sales_channel"], 2.2),
         ("price_band", ["price_band", "price_tier"], 2.0),
         ("country_code", ["country_code", "market_country"], 2.0),
         ("lifecycle_status", ["lifecycle", "item_status", "publish"], 2.4),

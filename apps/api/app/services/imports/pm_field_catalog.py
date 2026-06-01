@@ -40,7 +40,6 @@ PM_CANONICAL_GENERIC: frozenset[str] = frozenset(
         "series",
         "business_unit",
         "form_factor",
-        "channel_code",
         "price_band",
         "country_code",
         "lifecycle_status",
@@ -48,6 +47,9 @@ PM_CANONICAL_GENERIC: frozenset[str] = frozenset(
         "end_of_life_date",
     }
 )
+# channel_code is intentionally NOT a Product Master target. Channel is a go-to-market
+# dimension of transactions / pricing / lineup / customer — not an intrinsic product
+# attribute. It lives on fact_*, price lists, dim_customer, etc. (Option A, Jun 2026.)
 
 # Union of generic + legacy strings accepted on incoming payloads before normalize.
 PRODUCT_MASTER_CANONICAL: frozenset[str] = frozenset(PM_CANONICAL_GENERIC | set(LEGACY_PM_TARGET_TO_GENERIC.keys()))
@@ -66,7 +68,6 @@ PM_SEMANTIC_GROUP: dict[str, str] = {
     "series": "classification",
     "business_unit": "classification",
     "form_factor": "classification",
-    "channel_code": "classification",
     "price_band": "classification",
     "country_code": "classification",
     "lifecycle_status": "lifecycle",
@@ -249,15 +250,6 @@ def field_definitions_for_api() -> list[dict[str, Any]]:
             "dim_persistence": "canonical",
             "role": "classification",
             "description": "Physical product type (e.g. notebook, desktop, accessory).",
-        },
-        {
-            "key": "channel_code",
-            "group": "optional",
-            "label": "channel_code",
-            "importance": "medium",
-            "dim_persistence": "canonical",
-            "role": "classification",
-            "description": "Selling-channel code when the file is channel-specific.",
         },
         {
             "key": "price_band",
