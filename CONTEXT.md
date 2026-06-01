@@ -1,5 +1,55 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 1, 2026 — Shipment validate performance: kill per-row N+1 over remote DB (45min → ~2min)
+- **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main). **Not committed yet.**
+- **Symptom:** revisiting shipment job #32 and re-validating "looked frozen" — the validate ran 45+ min
+  and never finished. UI just polls with an indeterminate spinner (shipment has no progress panel) and
+  commits only at the end, so externally it shows `stage=shipment_mapping_ready / status=pending / 0 lines`
+  the whole time. Job ran **in-process in the API** via the daemon-thread fallback (Celery worker optional);
+  validate also dispatches to Celery (`imports.process_job`) when a worker is up — both paths share the
+  same `process_import_job_sync` code, so this fix benefits both.
+- **Root cause (confirmed via `pg_stat_activity` + tiny row counts: dim_distributor=3, dim_customer=3):**
+  NOT data volume. It is **per-query round-trip latency to the remote Supabase DB (~2–3s each) × a pipeline
+  full of per-row/per-candidate queries.** Dominant offender: `_resolve_distributor_strict` did
+  `for d in db.scalars(select(DimDistributor)).all()` — a **full dim_distributor scan per row** (×bill_to/ship_to)
+  = ~thousands of queries for the 9,307-row file. Secondary: per-row evidence upsert (one INSERT/row),
+  per-row AI candidate DB queries even when AI disabled, and per-candidate scans in enrichment scoring.
+- **Fixes (all in the validate write path; resolution semantics unchanged):**
+  - `distributor_sales_inventory.py`: added `_build_distributor_resolution_cache` (loads dim_distributor +
+    approved aliases **once**, no customer load) and `_resolve_distributor_strict_from_cache` (in-memory
+    mirror of `_resolve_distributor_strict` — alias-unique + **exact** code/name only, **no substring**, per
+    the shipment governance rule).
+  - `shipment_evidence_import.py`: build the distributor cache once; `resolve_distributor_for_evidence`
+    takes `res_cache` and resolves in-memory (zero per-row DB). Replaced per-row upsert with a **buffered
+    chunked bulk** `INSERT … ON CONFLICT DO UPDATE` (`_flush_shipment_line_batch`): dedupes by `source_key`
+    within a batch (latest-wins, matches old sequential), falls back to per-row on a Postgres `DataError`
+    (preserves the Excel out-of-range-date clear-and-retry). `_SHIPMENT_UPSERT_CHUNK = 1000` (~41 cols ⇒
+    ~41k params, under the 65535 limit). Guarded the per-row AI blocks behind `get_settings().ai_assist_enabled`
+    (no per-row `distributor_candidates(db,…)` query when AI off). Wired `on_progress` through; pipeline.py
+    now passes `on_progress` to the shipment handler too.
+  - `shipment_evidence_resolution_plan.py`: candidate **enrichment** is now cache-aware — `build_shipment_enrich_refs`
+    preloads dims + approved aliases once per enrich pass; the four lookup helpers + both `score_*` take an
+    optional `refs` and resolve in-memory (backward-compatible: `refs=None` keeps the old DB path).
+- **Validation (SQL rule — real end-to-end against dev DB, rolled back, never committed):** ran the actual
+  `process_shipment_evidence_import` on job #32's file (**9,307 rows**, multi-sheet). Result:
+  **0 blocking errors, 9,307 evidence lines written in-txn, distributor_resolved=0** (correct — strict
+  exact-match finds none of the ACZA tokens among the 3 dims; identical to the old DB strict path → all
+  become steward candidates). Elapsed: **199.9s @ chunk=200 → 134.8s @ chunk=1000** (was 45min+ / never
+  finished). Transaction rolled back. `py_compile` + import smoke clean (ruff not installed in venv).
+- **Stewarding unchanged & intact:** validate still only *resolves* against existing dims (read-only) and
+  builds `ImportEntityMappingCandidate` rows for unresolved tokens; **no master auto-create**. Distributor/
+  customer creation still happens only in the steward panel (`execute_create_provisional_shipment_*`) after
+  validate. The steward step is the next screen after validate commits.
+- **Remaining (systemic, NOT an N+1):** the residual ~135s is pure remote round-trip latency across the now-
+  batched ops (product index load, ~10 upsert chunks, re-resolve select, candidate inserts, enrich). This is
+  the **Phase 4 connection pooling / EU co-location** lever — the real systemic fix to apply across importers.
+- **Also this session (web, uncommitted):** shared `CanonicalColumnMappingPanel` (`apps/web/src/features/import-mapping/`)
+  used by shipment mapping — summary chips, mapped/unmapped filter, searchable Autocomplete target picker with
+  descriptions + duplicate "also mapped from" + dynamic status-aware grouping (Selected / Still needed /
+  Available / Already mapped). Enabled re-map/re-save/re-validate on a revisited shipment job **only** at
+  stage `shipment_mapping_ready` (pre-validation; revisit banner made stage-aware). Web: tsc 92=baseline
+  (no new errors), eslint clean, 26/26 imports tests pass.
+
 ### Jun 1, 2026 — Option A step 2: drop dim_product.channel_id (migration + full code removal)
 - **Branch:** `feature/pm-specs-json-retire-eav` (not merged to main).
 - **Migration:** `20260601_0046_drop_dim_product_channel_id.py` (down_revision `20260518_0045`).

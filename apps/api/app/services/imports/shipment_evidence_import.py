@@ -24,14 +24,18 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.distributor_sales_inventory import (
+    DSIResolutionCache,
     ProductResolutionIndex,
+    _build_distributor_resolution_cache,
     _load_product_resolution_index,
     _norm_key,
     _resolve_distributor_strict,
+    _resolve_distributor_strict_from_cache,
     _resolve_product,
 )
 from app.services.imports.shipment_evidence_candidate_names import suggested_name_for_distributor_token
@@ -310,17 +314,29 @@ def resolve_distributor_for_evidence(
     *,
     bill_to: str | None,
     ship_to: str | None,
+    res_cache: "DSIResolutionCache | None" = None,
 ) -> tuple[int | None, str, str | None]:
+    """Resolve a line's distributor via Bill To then Ship To.
+
+    When ``res_cache`` is supplied, resolution is fully in-memory (zero per-row DB queries) —
+    the strict alias + exact code/name semantics are identical to the per-row DB path.
+    """
+
+    def _resolve_token(tok: str) -> int | None:
+        if res_cache is not None:
+            did, _err = _resolve_distributor_strict_from_cache(tok, source_id, res_cache)
+        else:
+            did, _err = _resolve_distributor_strict(db, tok, source_id)
+        return int(did) if did is not None else None
+
     if bill_to:
-        did, err = _resolve_distributor_strict(db, bill_to, source_id)
+        did = _resolve_token(bill_to)
         if did is not None:
-            return int(did), "resolved", bill_to
-        if err:
-            pass
+            return did, "resolved", bill_to
     if ship_to:
-        did, err = _resolve_distributor_strict(db, ship_to, source_id)
+        did = _resolve_token(ship_to)
         if did is not None:
-            return int(did), "resolved", ship_to
+            return did, "resolved", ship_to
     if not (bill_to or ship_to):
         return None, "skipped_empty", None
     return None, "unresolved", bill_to or ship_to
@@ -654,6 +670,10 @@ def _rebuild_shipment_customer_candidates(db: Session, job: ImportJob) -> None:
     enrich_shipment_customer_token_candidates(db, import_job_id=jid, source_definition_id=sid)
 
 
+# Multi-row upsert batch size. ~41 columns/row keeps params well under Postgres' 65535 limit
+# (1000 × 41 ≈ 41k) while cutting round-trips ~5× vs small batches against a remote DB.
+_SHIPMENT_UPSERT_CHUNK = 1000
+
 _SHIPMENT_LINE_DATE_COLS = (
     "ship_confirm_date",
     "schedule_ship_date",
@@ -671,45 +691,63 @@ def _is_psycopg_data_error(exc: BaseException) -> bool:
     return isinstance(exc, DBAPIError) and isinstance(getattr(exc, "orig", None), PsycopgDataError)
 
 
+def _shipment_line_conflict_set(ex: Any) -> dict[str, Any]:
+    """ON CONFLICT DO UPDATE assignments (source-derived columns only).
+
+    ``id``, ``created_at`` and all product/distributor/customer resolution columns on the
+    existing row are intentionally preserved; post-loop ``_resolve_unresolved_shipment_lines_for_job``
+    fills unresolved ids. Shared by the single-row and bulk upsert paths.
+    """
+    return {
+        "source_sheet": ex.source_sheet,
+        "source_row_number": ex.source_row_number,
+        "report_type": ex.report_type,
+        "line_state": ex.line_state,
+        "raw_source_row": ex.raw_source_row,
+        "operating_unit": ex.operating_unit,
+        "bill_to_raw": ex.bill_to_raw,
+        "ship_to_raw": ex.ship_to_raw,
+        "order_no": ex.order_no,
+        "order_line": ex.order_line,
+        "delivery_no": ex.delivery_no,
+        "invoice_line": ex.invoice_line,
+        "item_code": ex.item_code,
+        "sales_model_name": ex.sales_model_name,
+        "customer_item": ex.customer_item,
+        "ean_code": ex.ean_code,
+        "upc_code": ex.upc_code,
+        "mpor_item_no": ex.mpor_item_no,
+        "quantity": ex.quantity,
+        "unit_price": ex.unit_price,
+        "amount": ex.amount,
+        "currency_code": ex.currency_code,
+        "ship_confirm_date": ex.ship_confirm_date,
+        "schedule_ship_date": ex.schedule_ship_date,
+        "promise_date": ex.promise_date,
+        "exwork_date": ex.exwork_date,
+        "erd_date": ex.erd_date,
+        "est_pod_date": ex.est_pod_date,
+        "pod_date": ex.pod_date,
+        "customer_dealer_token": ex.customer_dealer_token,
+        "updated_at": func.now(),
+    }
+
+
 def _shipment_evidence_line_upsert_statement(values: dict[str, Any]):
     t = ShipmentEvidenceLine.__table__
     ins = pg_insert(t).values(**values)
-    ex = ins.excluded
     return ins.on_conflict_do_update(
         constraint="uq_shipment_evidence_line_import_job_source_key",
-        set_={
-            "source_sheet": ex.source_sheet,
-            "source_row_number": ex.source_row_number,
-            "report_type": ex.report_type,
-            "line_state": ex.line_state,
-            "raw_source_row": ex.raw_source_row,
-            "operating_unit": ex.operating_unit,
-            "bill_to_raw": ex.bill_to_raw,
-            "ship_to_raw": ex.ship_to_raw,
-            "order_no": ex.order_no,
-            "order_line": ex.order_line,
-            "delivery_no": ex.delivery_no,
-            "invoice_line": ex.invoice_line,
-            "item_code": ex.item_code,
-            "sales_model_name": ex.sales_model_name,
-            "customer_item": ex.customer_item,
-            "ean_code": ex.ean_code,
-            "upc_code": ex.upc_code,
-            "mpor_item_no": ex.mpor_item_no,
-            "quantity": ex.quantity,
-            "unit_price": ex.unit_price,
-            "amount": ex.amount,
-            "currency_code": ex.currency_code,
-            "ship_confirm_date": ex.ship_confirm_date,
-            "schedule_ship_date": ex.schedule_ship_date,
-            "promise_date": ex.promise_date,
-            "exwork_date": ex.exwork_date,
-            "erd_date": ex.erd_date,
-            "est_pod_date": ex.est_pod_date,
-            "pod_date": ex.pod_date,
-            "customer_dealer_token": ex.customer_dealer_token,
-            "updated_at": func.now(),
-        },
+        set_=_shipment_line_conflict_set(ins.excluded),
+    )
+
+
+def _shipment_evidence_line_bulk_upsert_statement(rows: list[dict[str, Any]]):
+    t = ShipmentEvidenceLine.__table__
+    ins = pg_insert(t).values(rows)
+    return ins.on_conflict_do_update(
+        constraint="uq_shipment_evidence_line_import_job_source_key",
+        set_=_shipment_line_conflict_set(ins.excluded),
     )
 
 
@@ -737,13 +775,40 @@ def _execute_shipment_line_upsert(db: Session, values: dict[str, Any]) -> None:
             db.execute(_shipment_evidence_line_upsert_statement(cleared))
 
 
+def _flush_shipment_line_batch(db: Session, rows: list[dict[str, Any]]) -> None:
+    """Bulk upsert a batch of evidence lines in one statement.
+
+    De-duplicates by ``source_key`` within the batch (keeping the last occurrence — same
+    "latest wins" semantics as the previous sequential per-row upsert), so a single
+    ``INSERT … ON CONFLICT DO UPDATE`` cannot try to touch the same row twice. On a Postgres
+    ``DataError`` (e.g. an out-of-range Excel date anywhere in the batch), falls back to the
+    per-row path so the offending row's dates are cleared without losing the rest.
+    """
+    if not rows:
+        return
+    deduped: dict[Any, dict[str, Any]] = {}
+    for r in rows:
+        deduped[r["source_key"]] = r
+    batch = list(deduped.values())
+    try:
+        with db.begin_nested():
+            db.execute(_shipment_evidence_line_bulk_upsert_statement(batch))
+    except Exception as exc:
+        if not _is_psycopg_data_error(exc):
+            raise
+        for r in batch:
+            _execute_shipment_line_upsert(db, r)
+
+
 def _resolve_unresolved_shipment_lines_for_job(
     db: Session,
     job: ImportJob,
     idx: ProductResolutionIndex,
     source_id: int | None,
+    res_cache: "DSIResolutionCache | None" = None,
 ) -> None:
     """Re-run product and/or distributor resolution only where the corresponding id is still null."""
+    ai_enabled = bool(get_settings().ai_assist_enabled)
     jid = int(job.id)
     lines = list(
         db.scalars(
@@ -762,7 +827,7 @@ def _resolve_unresolved_shipment_lines_for_job(
                 upc_code=line.upc_code,
                 sales_model_name=line.sales_model_name,
             )
-            if pid is None and pstatus in ("no_match", "ambiguous", "inactive_only", "no_identifier"):
+            if ai_enabled and pid is None and pstatus in ("no_match", "ambiguous", "inactive_only", "no_identifier"):
                 from app.services.imports.ai_resolver_wiring import (
                     product_candidates_from_index,
                     try_ai_token_resolution,
@@ -794,8 +859,9 @@ def _resolve_unresolved_shipment_lines_for_job(
                 source_id,
                 bill_to=line.bill_to_raw,
                 ship_to=line.ship_to_raw,
+                res_cache=res_cache,
             )
-            if did is None and dstatus == "unresolved":
+            if ai_enabled and did is None and dstatus == "unresolved":
                 from app.services.imports.ai_resolver_wiring import (
                     distributor_candidates,
                     try_ai_token_resolution,
@@ -895,7 +961,13 @@ def _src_to_canonical_rev(src_to_canon: dict[str, Any] | None) -> dict[str, str]
     return rev or None
 
 
-def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFrame, mapping: dict[str, str]) -> int:
+def process_shipment_evidence_import(
+    db: Session,
+    job: ImportJob,
+    df: pd.DataFrame,
+    mapping: dict[str, str],
+    on_progress: Any = None,
+) -> int:
     """Parse file(s), write ``ShipmentEvidenceLine`` rows. Returns blocking error count."""
     effective_src_to_canon: dict[str, Any] = dict(job.field_mapping or mapping or {})
     header_by_canonical = _src_to_canonical_rev(effective_src_to_canon)
@@ -918,6 +990,22 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
 
     idx = _load_product_resolution_index(db)
     source_id = int(job.source_id) if job.source_id else None
+    # Pre-load distributor master + approved aliases once so per-row resolution is in-memory
+    # (replaces a full dim_distributor table scan per row — the dominant validate cost).
+    res_cache = _build_distributor_resolution_cache(db, source_id)
+    ai_enabled = bool(get_settings().ai_assist_enabled)
+
+    total_rows = 0
+    for _sn, _frame, _rt, _ls in frames:
+        if _frame is not None and _rt != REPORT_UNKNOWN:
+            total_rows += len(_frame)
+
+    line_buffer: list[dict[str, Any]] = []
+
+    def _flush_buffer() -> None:
+        if line_buffer:
+            _flush_shipment_line_batch(db, line_buffer)
+            line_buffer.clear()
 
     source = job.source
     if source and isinstance(source.column_mapping_memory, dict) and frames:
@@ -967,9 +1055,10 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
                     source_id,
                     bill_to=ex["bill_to_raw"],
                     ship_to=ex["ship_to_raw"],
+                    res_cache=res_cache,
                 )
 
-                if pid is None and pstatus in ("no_match", "ambiguous", "inactive_only", "no_identifier"):
+                if ai_enabled and pid is None and pstatus in ("no_match", "ambiguous", "inactive_only", "no_identifier"):
                     from app.services.imports.ai_resolver_wiring import (
                         product_candidates_from_index,
                         stash_ai_suggestion_on_payload,
@@ -995,7 +1084,7 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
                             raw_payload, token_type="product", suggestion=ai_suggestion
                         )
 
-                if did is None and dstatus == "unresolved":
+                if ai_enabled and did is None and dstatus == "unresolved":
                     from app.services.imports.ai_resolver_wiring import (
                         distributor_candidates,
                         stash_ai_suggestion_on_payload,
@@ -1064,7 +1153,7 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
                     "distributor_resolution_status": dstatus,
                     "distributor_resolution_token": dtoken,
                 }
-                _execute_shipment_line_upsert(db, row_values)
+                line_buffer.append(row_values)
             except ShipmentEvidenceSourceKeyError as exc:
                 blocking += 1
                 db.add(
@@ -1090,8 +1179,17 @@ def process_shipment_evidence_import(db: Session, job: ImportJob, df: pd.DataFra
                     )
                 )
 
+            if len(line_buffer) >= _SHIPMENT_UPSERT_CHUNK:
+                _flush_buffer()
+                if on_progress is not None:
+                    on_progress("writing_shipment_lines", "Writing shipment evidence", global_row, total_rows)
+
+    _flush_buffer()
+    if on_progress is not None:
+        on_progress("writing_shipment_lines", "Writing shipment evidence", global_row, total_rows)
+
     db.flush()
-    _resolve_unresolved_shipment_lines_for_job(db, job, idx, source_id)
+    _resolve_unresolved_shipment_lines_for_job(db, job, idx, source_id, res_cache=res_cache)
 
     if unknown_reports == len(frames) and global_row == 0:
         blocking += 1

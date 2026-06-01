@@ -6,6 +6,8 @@ steward apply paths remain strict (approved alias + explicit dimension choice).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -26,9 +28,74 @@ SHIPMENT_CUSTOMER_ENTITY = "shipment_customer_token"
 SHIPMENT_CANDIDATE_TERMINAL_STATUSES = frozenset({"resolved", "ignored", "waived_open_channel", "steward_rejected"})
 
 
-def _alias_distributor_ids(db: Session, *, source_definition_id: int | None, normalized_token: str) -> list[int]:
+@dataclass
+class ShipmentEnrichRefs:
+    """One-time preload of the (small) reference tables used to score candidates.
+
+    Lets enrich passes resolve every candidate in-memory instead of issuing per-candidate
+    alias queries + full ``dim_distributor`` / ``dim_customer`` scans — which, against a
+    remote DB, dominate validate time (round-trip latency × candidate count).
+    """
+
+    distributors: list  # list[DimDistributor]
+    customers: list  # list[DimCustomer]
+    dist_aliases: list  # list[(normalized_token, distributor_id, source_definition_id)] status == approved
+    cust_aliases: list  # list[(normalized_token, customer_id, source_definition_id)] status == approved
+
+
+def build_shipment_enrich_refs(db: Session) -> "ShipmentEnrichRefs":
+    """Load distributor/customer dims + approved aliases once for in-memory candidate scoring."""
+    distributors = list(db.scalars(select(DimDistributor)).all())
+    customers = list(db.scalars(select(DimCustomer)).all())
+    dist_aliases = list(
+        db.execute(
+            select(
+                DistributorSourceTokenAlias.normalized_token,
+                DistributorSourceTokenAlias.distributor_id,
+                DistributorSourceTokenAlias.source_definition_id,
+            ).where(DistributorSourceTokenAlias.status == "approved")
+        ).all()
+    )
+    cust_aliases = list(
+        db.execute(
+            select(
+                CustomerSourceTokenAlias.normalized_token,
+                CustomerSourceTokenAlias.customer_id,
+                CustomerSourceTokenAlias.source_definition_id,
+            ).where(CustomerSourceTokenAlias.status == "approved")
+        ).all()
+    )
+    return ShipmentEnrichRefs(
+        distributors=distributors,
+        customers=customers,
+        dist_aliases=dist_aliases,
+        cust_aliases=cust_aliases,
+    )
+
+
+def _alias_source_match(alias_source_id: int | None, source_definition_id: int | None) -> bool:
+    """Replicate the source-scoping filter used by the alias queries."""
+    if source_definition_id is not None:
+        return alias_source_id is None or alias_source_id == source_definition_id
+    return alias_source_id is None
+
+
+def _alias_distributor_ids(
+    db: Session,
+    *,
+    source_definition_id: int | None,
+    normalized_token: str,
+    refs: "ShipmentEnrichRefs | None" = None,
+) -> list[int]:
     if not normalized_token:
         return []
+    if refs is not None:
+        out = [
+            int(did)
+            for nt, did, sdid in refs.dist_aliases
+            if nt == normalized_token and _alias_source_match(sdid, source_definition_id)
+        ]
+        return list(dict.fromkeys(out))
     q = select(DistributorSourceTokenAlias.distributor_id).where(
         DistributorSourceTokenAlias.normalized_token == normalized_token,
         DistributorSourceTokenAlias.status == "approved",
@@ -46,9 +113,22 @@ def _alias_distributor_ids(db: Session, *, source_definition_id: int | None, nor
     return [int(x) for x in rows]
 
 
-def _alias_customer_ids(db: Session, *, source_definition_id: int | None, normalized_token: str) -> list[int]:
+def _alias_customer_ids(
+    db: Session,
+    *,
+    source_definition_id: int | None,
+    normalized_token: str,
+    refs: "ShipmentEnrichRefs | None" = None,
+) -> list[int]:
     if not normalized_token:
         return []
+    if refs is not None:
+        out = [
+            int(cid)
+            for nt, cid, sdid in refs.cust_aliases
+            if nt == normalized_token and _alias_source_match(sdid, source_definition_id)
+        ]
+        return list(dict.fromkeys(out))
     q = select(CustomerSourceTokenAlias.customer_id).where(
         CustomerSourceTokenAlias.normalized_token == normalized_token,
         CustomerSourceTokenAlias.status == "approved",
@@ -66,13 +146,16 @@ def _alias_customer_ids(db: Session, *, source_definition_id: int | None, normal
     return [int(x) for x in rows]
 
 
-def _exact_dim_matches(db: Session, *, normalized_token: str) -> list[int]:
+def _exact_dim_matches(
+    db: Session, *, normalized_token: str, refs: "ShipmentEnrichRefs | None" = None
+) -> list[int]:
     """Exact dim_distributor match on normalized code or full normalized name (strict)."""
     nk = (normalized_token or "").strip().lower()
     if not nk:
         return []
+    rows = refs.distributors if refs is not None else db.scalars(select(DimDistributor)).all()
     out: list[int] = []
-    for d in db.scalars(select(DimDistributor)).all():
+    for d in rows:
         code = (d.code or "").strip().lower()
         name = (d.name or "").strip().lower()
         if code == nk or name == nk:
@@ -80,12 +163,15 @@ def _exact_dim_matches(db: Session, *, normalized_token: str) -> list[int]:
     return sorted(set(out))
 
 
-def _exact_dim_customer_matches(db: Session, *, normalized_token: str) -> list[int]:
+def _exact_dim_customer_matches(
+    db: Session, *, normalized_token: str, refs: "ShipmentEnrichRefs | None" = None
+) -> list[int]:
     nk = (normalized_token or "").strip().lower()
     if not nk:
         return []
+    rows = refs.customers if refs is not None else db.scalars(select(DimCustomer)).all()
     out: list[int] = []
-    for c in db.scalars(select(DimCustomer)).all():
+    for c in rows:
         code = (c.code or "").strip().lower()
         name = (c.name or "").strip().lower()
         if code == nk or name == nk:
@@ -98,11 +184,12 @@ def score_shipment_distributor_candidate(
     cand: ImportEntityMappingCandidate,
     *,
     source_definition_id: int | None,
+    refs: "ShipmentEnrichRefs | None" = None,
 ) -> dict[str, Any]:
     """Return plan fields: suggested_action, suggested_entity_id, match_reason, confidence_score."""
     nt = (cand.normalized_key or "").strip()
-    alias_ids = _alias_distributor_ids(db, source_definition_id=source_definition_id, normalized_token=nt)
-    dim_ids = _exact_dim_matches(db, normalized_token=nt)
+    alias_ids = _alias_distributor_ids(db, source_definition_id=source_definition_id, normalized_token=nt, refs=refs)
+    dim_ids = _exact_dim_matches(db, normalized_token=nt, refs=refs)
 
     if len(alias_ids) == 1:
         return {
@@ -169,6 +256,7 @@ def score_shipment_customer_token_candidate(
     cand: ImportEntityMappingCandidate,
     *,
     source_definition_id: int | None,
+    refs: "ShipmentEnrichRefs | None" = None,
 ) -> dict[str, Any]:
     norms = _shipment_customer_lookup_norm_tokens(cand)
     if not norms:
@@ -180,7 +268,12 @@ def score_shipment_customer_token_candidate(
         }
 
     alias_sets = [
-        set(int(x) for x in _alias_customer_ids(db, source_definition_id=source_definition_id, normalized_token=nt))
+        set(
+            int(x)
+            for x in _alias_customer_ids(
+                db, source_definition_id=source_definition_id, normalized_token=nt, refs=refs
+            )
+        )
         for nt in norms
     ]
     nonempty = [(nt, s) for nt, s in zip(norms, alias_sets) if s]
@@ -215,7 +308,9 @@ def score_shipment_customer_token_candidate(
             "confidence_score": 1.0,
         }
 
-    dim_sets = [set(int(x) for x in _exact_dim_customer_matches(db, normalized_token=nt)) for nt in norms]
+    dim_sets = [
+        set(int(x) for x in _exact_dim_customer_matches(db, normalized_token=nt, refs=refs)) for nt in norms
+    ]
     dim_nonempty = [(nt, s) for nt, s in zip(norms, dim_sets) if s]
     if dim_nonempty:
         if any(len(s) > 1 for _, s in dim_nonempty):
@@ -266,10 +361,11 @@ def enrich_shipment_distributor_candidates(db: Session, *, import_job_id: int, s
             )
         ).all()
     )
+    refs = build_shipment_enrich_refs(db) if rows else None
     for cand in rows:
         if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
             continue
-        plan = score_shipment_distributor_candidate(db, cand, source_definition_id=source_definition_id)
+        plan = score_shipment_distributor_candidate(db, cand, source_definition_id=source_definition_id, refs=refs)
         cand.suggested_entity_id = plan.get("suggested_entity_id")
         cand.match_reason = str(plan.get("match_reason") or "")[:256] or None
         cand.confidence_score = plan.get("confidence_score")
@@ -289,10 +385,11 @@ def enrich_shipment_customer_token_candidates(db: Session, *, import_job_id: int
             )
         ).all()
     )
+    refs = build_shipment_enrich_refs(db) if rows else None
     for cand in rows:
         if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
             continue
-        plan = score_shipment_customer_token_candidate(db, cand, source_definition_id=source_definition_id)
+        plan = score_shipment_customer_token_candidate(db, cand, source_definition_id=source_definition_id, refs=refs)
         cand.suggested_entity_id = plan.get("suggested_entity_id")
         cand.match_reason = str(plan.get("match_reason") or "")[:256] or None
         cand.confidence_score = plan.get("confidence_score")

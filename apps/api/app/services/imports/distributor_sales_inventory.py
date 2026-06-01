@@ -594,6 +594,30 @@ def _build_resolution_cache(db: Session, source_def_id: int | None) -> "DSIResol
     )
 
 
+def _build_distributor_resolution_cache(db: Session, source_def_id: int | None = None) -> "DSIResolutionCache":
+    """Distributor-only resolution cache — loads ``dim_distributor`` + approved aliases only.
+
+    Shipment evidence import resolves products via an in-memory index and defers customer
+    resolution to the steward step, so it never needs the (potentially large) customer tables.
+    Loading only distributors keeps the one-time pre-load cheap.
+    """
+    _ = source_def_id  # alias rows are filtered per-token at resolve time
+    all_distributors = list(db.scalars(select(DimDistributor)).all())
+    dist_aliases = list(
+        db.scalars(
+            select(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.status == "approved")
+        ).all()
+    )
+    return DSIResolutionCache(
+        all_distributors=all_distributors,
+        dist_aliases=dist_aliases,
+        customer_code_to_id={},
+        customer_name_to_ids={},
+        cust_aliases=[],
+        open_channel_cid=None,
+    )
+
+
 def _shipment_disambiguate_product_id(
     db: Session | None,
     distributor_id: int | None,
@@ -894,6 +918,46 @@ def _resolve_distributor_from_cache(
         if token in d.name.strip().lower() or d.name.strip().lower() in token:
             if len(token) >= 4:
                 return d.id, None
+
+    return None, "unresolved_distributor_token"
+
+
+def _resolve_distributor_strict_from_cache(
+    raw: str | None,
+    source_id: int | None,
+    res_cache: "DSIResolutionCache",
+) -> tuple[int | None, str | None]:
+    """In-memory equivalent of ``_resolve_distributor_strict`` — zero DB queries.
+
+    Mirrors the shipment-evidence strict resolver: **approved aliases** (unique match) then
+    **exact** code/name equality only. No substring heuristics (governance: shipment evidence
+    must not mis-bind tokens). Replaces the per-row alias query + full ``DimDistributor`` table
+    scan with lookups against the pre-loaded ``DSIResolutionCache``.
+    """
+    if not raw or not str(raw).strip():
+        return None, "missing_distributor_cell_value"
+    token = raw.strip().lower()
+    nt = _norm_key(raw)
+
+    if nt:
+        matches: list[int] = []
+        for a in res_cache.dist_aliases:
+            if a.normalized_token != nt:
+                continue
+            if (
+                source_id is not None
+                and a.source_definition_id is not None
+                and a.source_definition_id != source_id
+            ):
+                continue
+            matches.append(int(a.distributor_id))
+        unique = list(dict.fromkeys(matches))
+        if len(unique) == 1:
+            return unique[0], None
+
+    for d in res_cache.all_distributors:
+        if d.code.strip().lower() == token or d.name.strip().lower() == token:
+            return d.id, None
 
     return None, "unresolved_distributor_token"
 
