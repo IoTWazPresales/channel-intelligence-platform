@@ -285,7 +285,11 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
   const [bulkProvNamesById, setBulkProvNamesById] = useState<Record<number, string>>({});
   const [bulkMapOpen, setBulkMapOpen] = useState(false);
   const [bulkMapSearch, setBulkMapSearch] = useState('');
+  const [bulkMapSearchDebounced, setBulkMapSearchDebounced] = useState('');
   const [bulkMapPickId, setBulkMapPickId] = useState<number | null>(null);
+  const [bulkMapModalError, setBulkMapModalError] = useState<string | null>(null);
+  const [custQDebounced, setCustQDebounced] = useState('');
+  const [distQDebounced, setDistQDebounced] = useState('');
   const [specialCatOpen, setSpecialCatOpen] = useState(false);
   const [specialCatChoice, setSpecialCatChoice] = useState<'noise_only' | 'internal_note'>('noise_only');
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -342,6 +346,21 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       return next;
     });
   }, [filteredRows]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setCustQDebounced(custQ), 300);
+    return () => window.clearTimeout(t);
+  }, [custQ]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDistQDebounced(distQ), 300);
+    return () => window.clearTimeout(t);
+  }, [distQ]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setBulkMapSearchDebounced(bulkMapSearch), 300);
+    return () => window.clearTimeout(t);
+  }, [bulkMapSearch]);
   const allVisibleSelected =
     visibleRowIds.length > 0 && visibleRowIds.every((id) => selectedCandidateIds.has(id));
   const someVisibleSelected = visibleRowIds.some((id) => selectedCandidateIds.has(id));
@@ -358,23 +377,24 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
   );
 
   const { data: distHits = [] } = useQuery({
-    queryKey: ['distributors-search-shipment-steward', distQ],
+    queryKey: ['distributors-search-shipment-steward', distQDebounced],
     queryFn: ({ signal }) =>
       apiGet<{ items: DistributorHit[] }>(
-        `/api/v1/distributors?q=${encodeURIComponent(distQ)}&page_size=20`,
+        `/api/v1/distributors?q=${encodeURIComponent(distQDebounced)}&page_size=20`,
         { signal }
       ),
-    enabled: distQ.trim().length >= 1,
+    enabled: distQDebounced.trim().length >= 1,
     select: (r) => r.items ?? [],
   });
 
   const { data: custHits = [] } = useQuery({
-    queryKey: ['customers-search-shipment-steward', custQ],
+    queryKey: ['customers-search-shipment-steward', custQDebounced],
     queryFn: ({ signal }) =>
-      apiGet<{ items: CustomerHit[] }>(`/api/v1/customers?q=${encodeURIComponent(custQ)}&page_size=20`, {
-        signal,
-      }),
-    enabled: custQ.trim().length >= 1,
+      apiGet<{ items: CustomerHit[] }>(
+        `/api/v1/customers?q=${encodeURIComponent(custQDebounced)}&page_size=20`,
+        { signal }
+      ),
+    enabled: custQDebounced.trim().length >= 1,
     select: (r) => r.items ?? [],
   });
 
@@ -390,13 +410,13 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
   });
 
   const { data: bulkMapSearchHits = [] } = useQuery({
-    queryKey: ['customers-bulk-map-search', bulkMapSearch],
+    queryKey: ['customers-bulk-map-search', bulkMapSearchDebounced],
     queryFn: ({ signal }) =>
       apiGet<{ items: CustomerHit[] }>(
-        `/api/v1/customers?q=${encodeURIComponent(bulkMapSearch.trim())}&page_size=20`,
+        `/api/v1/customers?q=${encodeURIComponent(bulkMapSearchDebounced.trim())}&page_size=20`,
         { signal }
       ),
-    enabled: bulkMapOpen && bulkMapSearch.trim().length >= 1,
+    enabled: bulkMapOpen && bulkMapSearchDebounced.trim().length >= 1,
     select: (r) => r.items ?? [],
   });
 
@@ -441,7 +461,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setMapOpen(false);
       setActive(null);
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -466,7 +485,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setProvOpen(false);
       setActive(null);
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -497,7 +515,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setProvOpen(false);
       setActive(null);
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -641,7 +658,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setBulkProvNamesById({});
       setSelectedCandidateIds(new Set());
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -661,20 +677,30 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
         .join('; ');
       const suffix = errs.length > 6 ? '…' : '';
       if (errs.length && nMap > 0) {
-        setActionError(`Partial success: mapped ${nMap}. Failed: ${errSummary}${suffix}`);
+        const msg = `Partial success: mapped ${nMap}. Failed: ${errSummary}${suffix}`;
+        setBulkMapModalError(msg);
+        setActionError(msg);
       } else if (errs.length) {
-        setActionError(`Bulk map failed: ${errSummary}${suffix}`);
+        const msg = `Bulk map failed: ${errSummary}${suffix}`;
+        setBulkMapModalError(msg);
+        setActionError(msg);
+        return;
       } else {
+        setBulkMapModalError(null);
         setActionError(null);
+        setBulkMapOpen(false);
+        setBulkMapSearch('');
+        setBulkMapPickId(null);
+        setSelectedCandidateIds(new Set());
       }
-      setBulkMapOpen(false);
-      setBulkMapSearch('');
-      setBulkMapPickId(null);
-      setSelectedCandidateIds(new Set());
-      invalidate();
-      void refetch();
+      if (nMap > 0) {
+        invalidate();
+      }
     },
-    onError: (e: Error) => setActionError(e.message),
+    onError: (e: Error) => {
+      setBulkMapModalError(e.message);
+      setActionError(e.message);
+    },
   });
 
   const manualSpecialMut = useMutation({
@@ -688,7 +714,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setSpecialCatOpen(false);
       setActive(null);
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -701,7 +726,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setRejectOpen(false);
       setActive(null);
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -736,7 +760,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setSelectedCandidateIds(new Set());
       invalidate();
       if (importJobId != null) void qc.invalidateQueries({ queryKey: ['import-job', importJobId] });
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -751,7 +774,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setActionError(null);
       setActive(null);
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -883,7 +905,9 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
               disabled={selectedCustomerIdsList.length === 0}
               onClick={() => {
                 setBulkMapSearch('');
+                setBulkMapSearchDebounced('');
                 setBulkMapPickId(null);
+                setBulkMapModalError(null);
                 setActionError(null);
                 setBulkMapOpen(true);
               }}
@@ -1678,10 +1702,33 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
         </DialogActions>
       </Dialog>
 
-      <Dialog open={bulkMapOpen} onClose={() => setBulkMapOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={bulkMapOpen}
+        onClose={() => {
+          if (bulkMapMut.isPending) return;
+          setBulkMapOpen(false);
+          setBulkMapModalError(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Bulk map to customer</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
+            {bulkMapModalError ? (
+              <Alert severity="error" onClose={() => setBulkMapModalError(null)}>
+                {bulkMapModalError}
+              </Alert>
+            ) : null}
+            {bulkMapMut.isPending ? (
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <CircularProgress size={22} />
+                <Typography variant="body2" color="text.secondary">
+                  Mapping {selectedCustomerIdsList.length} candidate
+                  {selectedCustomerIdsList.length === 1 ? '' : 's'}…
+                </Typography>
+              </Stack>
+            ) : null}
             <Typography variant="body2">
               Maps <strong>{selectedCustomerIdsList.length}</strong> selected channel partner candidate(s) to one
               existing customer.
@@ -1724,7 +1771,7 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
               fullWidth
               helperText="Provisional (unverified) matches are listed first when you search."
             />
-            {bulkMapSearch.trim().length >= 1 ? (
+            {bulkMapSearchDebounced.trim().length >= 1 ? (
               bulkMapSearchHits.length === 0 ? (
                 <Typography variant="caption" color="text.secondary">
                   No matches.
@@ -1758,7 +1805,16 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setBulkMapOpen(false)}>Cancel</Button>
+          <Button
+            disabled={bulkMapMut.isPending}
+            onClick={() => {
+              if (bulkMapMut.isPending) return;
+              setBulkMapOpen(false);
+              setBulkMapModalError(null);
+            }}
+          >
+            Cancel
+          </Button>
           <Button
             variant="contained"
             disabled={
@@ -1769,13 +1825,17 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
             }
             onClick={() => {
               if (importJobId == null || bulkMapPickId == null) return;
+              setBulkMapModalError(null);
               bulkMapMut.mutate({
                 candidate_ids: selectedCustomerIdsList,
                 customer_id: bulkMapPickId,
               });
             }}
+            startIcon={bulkMapMut.isPending ? <CircularProgress size={18} color="inherit" /> : undefined}
           >
-            Map selected
+            {bulkMapMut.isPending
+              ? `Mapping ${selectedCustomerIdsList.length} candidate${selectedCustomerIdsList.length === 1 ? '' : 's'}…`
+              : 'Map selected'}
           </Button>
         </DialogActions>
       </Dialog>
