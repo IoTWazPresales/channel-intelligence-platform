@@ -1,0 +1,22 @@
+---
+description: Capture intentionally deferred work in docs/BACKLOG.md before moving on
+alwaysApply: true
+---
+
+# Deferral discipline
+
+When work is **intentionally deferred** (not merely deprioritized in chat):
+
+1. **Capture it in `docs/BACKLOG.md`** before moving on, using the file’s entry template:
+   - idea, why it matters and why it is deferrable, what the work is
+   - regression traps / hard constraints, behavior to retain, out-of-scope
+   - **TRIGGER** — the concrete condition to resume
+   - **Source** — path(s) in repo (doc, comment, or planning file) that record the deferral; do not invent backlog items without a source
+
+2. **Do not park decisions only verbally** — chat and `CONTEXT.md` history are not substitutes for the backlog. `CONTEXT.md` records what happened; `BACKLOG.md` records what is intentionally not done yet.
+
+3. **When choosing next work**, read `docs/BACKLOG.md` and prefer entries whose **TRIGGER** has fired (or is explicitly waived by the user).
+
+4. **Do not add LOCKED architecture decisions** to the backlog (e.g. settled NullPool/`6543` async config choices, `specs_json` canonical, SOH derived-only). Backlog = postponed work with a resume trigger, not settled truth.
+
+5. **Standalone backlog commits** — changes to `docs/BACKLOG.md` and this rule may ship as docs-only commits; do not mix with feature implementation unless the user asks.

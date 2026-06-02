@@ -1,5 +1,10 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 1, 2026 — Backlog home + deferral discipline
+- **`docs/BACKLOG.md`** is now the canonical list of **intentionally deferred** work (each entry: source citation, scope, regression traps, **TRIGGER** to resume). Distinct from this file’s completed-history sections.
+- **`.cursor/rules/deferral-discipline.mdc`** — when deferring work, add/update `BACKLOG.md` before moving on; check backlog triggers when picking up new tasks.
+- Seeded with shipment steward workspace swap (BACKLOG-001) plus sourced items from `CONTEXT.md`, `IMPORT_FLOW_CAPABILITY_CONTRACT.md`, PIM brief, DSI plans, and related docs. See **Unsourced** section in `BACKLOG.md` for checklist items not found in repo text.
+
 ### Jun 1, 2026 — Shipment steward performance (UX + batching, no logic change)
 - **Branch:** `fix/shipment-steward-performance` (from `main`, not merged). **Pushed** after commits.
 - **Problem:** steward map/provisional felt frozen (~97s provisional, ~26s map) — per-line `db.get` on `context.line_ids`, full-job re-enrich + `commit` after every candidate; UI debounced search missing, bulk map had no in-dialog progress, double `invalidate`+`refetch`.
