@@ -307,6 +307,40 @@
 
 ---
 
+## BACKLOG-022 — Unify the import worker enqueue helper (validate vs shipment apply)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-03 (during shipment apply backgrounding) |
+| **Effort** | Small |
+| **Source** | `apps/api/app/api/v1/endpoints/imports.py` (`_enqueue_import_worker_task`, ~line 71); `apps/api/app/api/v1/endpoints/shipment_evidence.py` (`_dispatch_shipment_apply`) |
+| **Idea** | `_dispatch_shipment_apply` deliberately duplicates the broker-send → dev in-process thread → sync fallback logic of `imports._enqueue_import_worker_task` (only `task_name` + `sync_work` differ). Extract the helper into a shared service (e.g. `app/services/imports/import_dispatch.py`) and import it from both endpoints. |
+| **Why / deferrable** | Duplication chosen to avoid coupling the apply path to the validate endpoint module and to keep the working validate dispatch untouched while shipping the apply fix. Pure refactor; no behavior change. |
+| **What the work is** | Move the generic enqueue helper to a service module; update `imports._enqueue_import_pipeline_job` and `shipment_evidence._dispatch_shipment_apply` to call it; keep dev-fallback + task-id semantics identical. |
+| **Regression traps** | Must preserve `(dispatched, task_id)` contract, dev `CIP_DEV_CELERY_DISPATCH=in_process_thread` branch, and sync inline fallback; do not change validate dispatch behavior. |
+| **Behavior to retain** | Validate (`imports.process_job`) and shipment apply (`imports.shipment_apply`) dispatch + fallback semantics. |
+| **Out of scope** | Changing task definitions or progress reading. |
+| **TRIGGER** | A third caller needs the same dispatch helper, or the duplication is flagged in review. |
+
+---
+
+## BACKLOG-023 — Generalize `dsi-progress` terminal label beyond "Validation complete"
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-03 (during shipment apply backgrounding) |
+| **Effort** | Small |
+| **Source** | `apps/api/app/api/v1/endpoints/imports.py` (`get_dsi_job_progress`, the `job_db_indicates_pipeline_finished` branch hardcodes `phase_label = "Validation complete"`) |
+| **Idea** | The shared progress reader is reused by shipment **apply** (which finishes at stage `loaded`), but its terminal label always says "Validation complete". Derive the label from `import_mode` / stage (e.g. "Apply complete" when `import_mode == 'apply'`). |
+| **Why / deferrable** | Cosmetic only — the apply progress panel transitions to the success state correctly; just the transient terminal label is validate-flavored. |
+| **What the work is** | Branch the terminal `phase_label` on `import_mode`/stage in `get_dsi_job_progress`; optionally thread a label through the progress response. |
+| **Regression traps** | Don't change `phase`/`pct`/`status` shape consumed by `useImportJobProgressQuery` and the global indicator. |
+| **Behavior to retain** | DSI + shipment validate progress labels unchanged. |
+| **Out of scope** | Changing how completion is detected. |
+| **TRIGGER** | Apply progress label is reported as confusing, or a per-mode label is otherwise prioritized. |
+
+---
+
 ## Unsourced — confirm with Warren
 
 These were on a verification checklist but **no deferral/pending wording** was found in repo docs, comments, or planning files:

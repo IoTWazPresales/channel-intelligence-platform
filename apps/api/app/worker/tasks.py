@@ -94,6 +94,36 @@ def process_import_job_task(self, job_id: int) -> int:
     return job_id
 
 
+@celery_app.task(name="imports.shipment_apply", bind=True, ack_late=True)
+def shipment_apply_task(self, job_id: int) -> dict:
+    """Background apply for an ``inbound_shipments`` job (auto-map → batched fact upsert → loaded)."""
+    from app.db.session_sync import SessionLocal
+    from app.services.imports.shipment_apply_sync import run_shipment_apply_sync
+
+    def _on_progress(phase: str, phase_label: str, current_row: int, total_rows: int) -> None:
+        try:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "phase": phase,
+                    "phase_label": phase_label,
+                    "current_row": current_row,
+                    "total_rows": total_rows,
+                    "pct": round(current_row / total_rows * 100) if total_rows else 0,
+                },
+            )
+        except Exception:
+            pass
+
+    try:
+        with SessionLocal() as db:
+            return run_shipment_apply_sync(db, job_id, on_progress=_on_progress)
+    except Exception:
+        logger.exception("shipment_apply_task failed job_id=%s — writing STAGE_FAILED", job_id)
+        _write_task_level_failure(job_id)
+        raise
+
+
 @celery_app.task(name="imports.infer_dsi")
 def infer_dsi_import_job_task(job_id: int) -> int:
     """DSI upload infer (headers + initial field_mapping → ``dsi_mapping_ready``)."""

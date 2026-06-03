@@ -1263,6 +1263,10 @@ function AdminImportsPageContent() {
       const st = (j.stage || '').trim();
       const sts = (j.status || '').trim();
       if (sts === 'running') return 1500;
+      // Keep polling through async validate while still at mapping_ready — otherwise the job
+      // record never refreshes after the worker commits and the progress panel spins forever.
+      if (shipmentValidateAsync && st === 'shipment_mapping_ready') return 1500;
+      if (sts === 'completed' || sts === 'completed_with_errors') return 1500;
       if (st === 'validated' || st === 'loaded' || st === 'failed') return false;
       if (st === 'shipment_mapping_ready') return false;
       return 1500;
@@ -1272,8 +1276,18 @@ function AdminImportsPageContent() {
   useEffect(() => {
     if (!isShipmentEvidence || !shipmentImportJob) return;
     const st = (shipmentImportJob.stage || '').trim();
-    if (st === 'validated' || st === 'failed') setShipmentValidateAsync(false);
-  }, [isShipmentEvidence, shipmentImportJob?.stage]);
+    const sts = (shipmentImportJob.status || '').trim();
+    if (
+      st === 'validated' ||
+      st === 'loaded' ||
+      st === 'failed' ||
+      sts === 'completed' ||
+      sts === 'completed_with_errors' ||
+      sts === 'failed'
+    ) {
+      setShipmentValidateAsync(false);
+    }
+  }, [isShipmentEvidence, shipmentImportJob?.stage, shipmentImportJob?.status]);
 
   /** Job id for shipment column mapping + validate (matches steward poll id). */
   const shipmentMappingJobId: number | null = shipmentEvidencePollJobId ?? lastJobId ?? null;
@@ -1389,16 +1403,40 @@ function AdminImportsPageContent() {
     },
   });
 
-  const shipmentValidating = Boolean(
+  const shipmentStage = (shipmentImportJob?.stage || '').trim();
+  const shipmentStatus = (shipmentImportJob?.status || '').trim();
+  const shipmentValidatePollEnabled = Boolean(
     isShipmentEvidence &&
-      (shipmentValidateRun.isPending ||
-        shipmentValidateAsync ||
-        (shipmentImportJob?.status || '').trim() === 'running') &&
-      (shipmentImportJob?.stage || '').trim() === 'shipment_mapping_ready'
+      shipmentMappingJobId != null &&
+      (shipmentValidateRun.isPending || shipmentValidateAsync || shipmentStatus === 'running')
   );
   const { data: shipmentProgress } = useImportJobProgressQuery(shipmentMappingJobId ?? undefined, {
-    enabled: shipmentValidating,
+    enabled: shipmentValidatePollEnabled,
   });
+  const shipmentProgressPhase = (shipmentProgress?.phase ?? '').trim();
+  const shipmentPipelineFinished =
+    shipmentStage === 'validated' ||
+    shipmentStage === 'loaded' ||
+    shipmentStage === 'failed' ||
+    shipmentStatus === 'failed' ||
+    shipmentProgressPhase === 'complete' ||
+    shipmentProgressPhase === 'failed';
+  const shipmentValidating = Boolean(
+    shipmentValidatePollEnabled &&
+      !shipmentPipelineFinished &&
+      shipmentStage === 'shipment_mapping_ready'
+  );
+
+  useEffect(() => {
+    if (!isShipmentEvidence || shipmentMappingJobId == null) return;
+    const phase = (shipmentProgress?.phase ?? '').trim();
+    if (phase !== 'complete' && phase !== 'failed') return;
+    setShipmentValidateAsync(false);
+    void qc.invalidateQueries({ queryKey: ['import-job', shipmentMappingJobId] });
+    void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', shipmentMappingJobId] });
+    void qc.invalidateQueries({ queryKey: ['import-job-rows', shipmentMappingJobId] });
+  }, [isShipmentEvidence, shipmentMappingJobId, shipmentProgress?.phase, qc]);
 
   const shipmentMappingDraftDirty = useMemo(() => {
     if (!shipmentMappingState?.file_headers?.length) return false;

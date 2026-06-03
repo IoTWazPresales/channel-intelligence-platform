@@ -1,5 +1,17 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 3, 2026 — Shipment apply: backgrounded + batched + progress (pipeline parity)
+- **Branch:** `fix/shipment-steward-performance` (not merged). Third and last instance of the same disease the validate and steward paths already had — synchronous, per-row, no progress. Apply is now consistent with them: background + batched + progress.
+- **Problem:** `POST /api/v1/shipment-evidence/jobs/{id}/apply` ran synchronously. On job 32 (9,307 evidence lines) the work took ~306s; the Next proxy gave up waiting for response headers (`UND_ERR_HEADERS_TIMEOUT`, `route.ts:107`) and surfaced a 500. **The backend still completed** — STEP-0 DB check showed job 32 at `loaded`/`completed`, all 9,307 lines present in `fact_inbound_shipment` (idempotent `source_key` upsert held; no partial-apply mess). Re-applying a `loaded` job is a no-op summary.
+- **Backend changes:**
+  - `shipment_inbound_facts.upsert_inbound_shipment_facts_for_job`: per-row `db.execute` loop (9,307 round-trips) → chunked multi-row `INSERT … ON CONFLICT (source_key) DO UPDATE` (500 rows/stmt) + `on_progress(current, total)`. Refresh-column list and latest-job-wins preserved exactly.
+  - New `app/services/imports/shipment_apply_sync.py` — `run_shipment_apply_sync(db, job_id, on_progress)`: auto-map high-confidence `map_*` candidates → batched fact upsert → stage `loaded`/status `completed` → clear background-task metadata. The two auto-map helpers moved here from the endpoint (only referenced there).
+  - New Celery task `imports.shipment_apply` (`worker/tasks.py`), progress via `update_state` (mirrors `dsi_resolution_plan_apply_task`).
+  - `shipment_evidence.py` apply endpoint: keeps idempotent `loaded` early-return; gates on `validated`; marks `running` + `pipeline_queued_at`; dispatches to worker (broker → dev in-process thread → sync fallback, mirroring PM commit); persists `SLOT_MAIN` task id; returns `{async:true,…}` immediately. URL unchanged.
+- **Frontend (`admin/shipment-evidence/page.tsx`):** apply mutation returns immediately and sets `applyDispatched`; existing 2s import-job poll drives the lifecycle; added a `LinearProgress` panel polling the shared `GET /imports/jobs/{id}/dsi-progress`. Steward "N distributor candidates in needs_review" warning is **derived after completion** (job at `loaded`) from the mapping-candidates query, not from the apply response.
+- **Constraints honored:** no schema/migration change; async DB config (NullPool + 6543 + `statement_cache_size=0`) untouched (only sync-session upsert batched); feature branch only; `source_key` upsert / latest-job-wins / no-auto-create preserved. Two contained smells parked in BACKLOG (unify enqueue helper; generalize progress "complete" label).
+- **Validation:** `pytest tests/test_shipment_apply_background.py` 4/4 (chunking + progress + orchestration), existing shipment/steward/progress/background suites green; web `tsc` clean for the page (only pre-existing ag-grid `ColDef<unknown>` generics remain). Not yet smoked against the real worker by Warren.
+
 ### Jun 1, 2026 — Backlog home + deferral discipline
 - **`docs/BACKLOG.md`** is now the canonical list of **intentionally deferred** work (each entry: source citation, scope, regression traps, **TRIGGER** to resume). Distinct from this file’s completed-history sections.
 - **`.cursor/rules/deferral-discipline.mdc`** — when deferring work, add/update `BACKLOG.md` before moving on; check backlog triggers when picking up new tasks.

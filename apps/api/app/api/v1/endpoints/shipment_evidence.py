@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import threading
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -10,23 +12,23 @@ from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.config import get_settings
+from app.core.dev_celery_logging import DEV_CELERY_LOGGER
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import STAGE_LOADED, STAGE_VALIDATED
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
 from app.models.shipment_evidence import ShipmentEvidenceLine
-from app.services.imports.shipment_inbound_facts import upsert_inbound_shipment_facts_for_job
+from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
+from app.services.imports.import_job_background_metadata import persist_pipeline_queued_at
+from app.services.imports.shipment_apply_sync import run_shipment_apply_sync
 from app.services.imports.shipment_evidence_resolution_plan import (
     SHIPMENT_CUSTOMER_ENTITY,
     SHIPMENT_DISTRIBUTOR_ENTITY,
-    enrich_shipment_customer_token_candidates,
-    enrich_shipment_distributor_candidates,
 )
 from app.services.imports.shipment_evidence_steward_ops import (
     ShipmentStewardOpError,
-    _apply_map_shipment_customer_without_commit,
-    _apply_map_shipment_distributor_without_commit,
     execute_bulk_apply_shipment_candidate_plans,
     execute_bulk_create_provisional_shipment_customers,
     execute_bulk_map_shipment_customers,
@@ -38,6 +40,9 @@ from app.services.imports.shipment_evidence_steward_ops import (
     execute_map_shipment_distributor,
     execute_reject_shipment_mapping_candidate,
 )
+from app.worker.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -56,92 +61,45 @@ async def _unresolved_shipment_mapping_candidate_count(db: AsyncSession, job_id:
     return int(raw or 0)
 
 
-def _shipment_candidate_eligible_for_apply_auto_map(cand: ImportEntityMappingCandidate) -> bool:
-    """Align with ``shipment_evidence_resolution_plan`` scoring for map paths.
+def _dispatch_shipment_apply(job_id: int) -> tuple[bool, str | None]:
+    """Publish ``imports.shipment_apply`` to the broker; mirror validate/PM-commit fallback semantics.
 
-    ``map_distributor`` / ``map_customer`` are only emitted with ``confidence_score`` of **1.0** or **0.95**;
-    all other actions use lower scores. Require ``needs_review``, ``suggested_entity_id``, and entity/action match.
+    Returns ``(dispatched, task_id)``. ``dispatched`` is ``True`` when the HTTP layer should treat
+    apply as async — the broker accepted the message (``task_id`` set), or a dev-only in-process
+    thread was started (``CIP_DEV_CELERY_DISPATCH=in_process_thread``). On broker failure with no
+    dev thread it runs the apply inline (``False``) so the operation still completes.
+
+    NOTE: deliberately duplicates ``imports._enqueue_import_worker_task`` to avoid coupling the
+    shipment apply path to the validate endpoint module. Unifying the two is parked in BACKLOG.md.
     """
-    if cand.status != "needs_review":
-        return False
-    sc = cand.confidence_score
-    if sc is None:
-        return False
+    settings = get_settings()
     try:
-        score = float(sc)
-    except (TypeError, ValueError):
-        return False
-    if score < 0.95:
-        return False
-    ctx = cand.context if isinstance(cand.context, dict) else {}
-    action = (str(ctx.get("suggested_action") or "")).strip()
-    if cand.suggested_entity_id is None:
-        return False
-    if action == "map_distributor":
-        return cand.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY
-    if action == "map_customer":
-        return cand.entity_type == SHIPMENT_CUSTOMER_ENTITY
-    return False
+        result = celery_app.send_task("imports.shipment_apply", args=[job_id], ignore_result=True)
+        return True, result.id
+    except Exception:
+        logger.exception("Shipment apply: Celery enqueue failed job_id=%s", job_id)
+        if settings.cip_dev_celery_dispatch == "in_process_thread":
 
+            def _in_process() -> None:
+                try:
+                    with SessionLocal() as s2:
+                        run_shipment_apply_sync(s2, job_id)
+                except Exception:
+                    logger.exception(
+                        "Shipment apply: in-process thread failed job_id=%s "
+                        "(CIP_DEV_CELERY_DISPATCH=in_process_thread after broker failure)",
+                        job_id,
+                    )
 
-def _apply_high_confidence_shipment_mapping_candidates(import_job_id: int) -> int:
-    """Map high-confidence planner suggestions; enrich and commit once per entity type (not per candidate)."""
-    applied: list[int] = []
-    any_customer = False
-    any_distributor = False
-    with SessionLocal() as s:
-        ids = [
-            int(x)
-            for x in s.scalars(
-                select(ImportEntityMappingCandidate.id).where(
-                    ImportEntityMappingCandidate.import_job_id == int(import_job_id),
-                    ImportEntityMappingCandidate.entity_type.in_(
-                        (SHIPMENT_DISTRIBUTOR_ENTITY, SHIPMENT_CUSTOMER_ENTITY)
-                    ),
-                    ImportEntityMappingCandidate.status == "needs_review",
-                ).order_by(ImportEntityMappingCandidate.id)
-            ).all()
-        ]
-        for cid in ids:
-            cand = s.get(ImportEntityMappingCandidate, cid)
-            if cand is None or not _shipment_candidate_eligible_for_apply_auto_map(cand):
-                continue
-            ctx = cand.context if isinstance(cand.context, dict) else {}
-            action = (str(ctx.get("suggested_action") or "")).strip()
-            eid = int(cand.suggested_entity_id)
-            try:
-                if action == "map_distributor":
-                    _apply_map_shipment_distributor_without_commit(
-                        s, cand, distributor_id=eid, raw_token=None
-                    )
-                    any_distributor = True
-                    applied.append(cid)
-                elif action == "map_customer":
-                    _apply_map_shipment_customer_without_commit(
-                        s, cand, customer_id=eid, raw_token=None
-                    )
-                    any_customer = True
-                    applied.append(cid)
-            except ShipmentStewardOpError:
-                continue
-        if applied:
-            sid: int | None = None
-            for cid in reversed(applied):
-                c = s.get(ImportEntityMappingCandidate, cid)
-                if c is not None:
-                    sid = int(c.source_definition_id) if c.source_definition_id is not None else None
-                    break
-            if any_customer:
-                enrich_shipment_customer_token_candidates(
-                    s, import_job_id=int(import_job_id), source_definition_id=sid
-                )
-                s.commit()
-            if any_distributor:
-                enrich_shipment_distributor_candidates(
-                    s, import_job_id=int(import_job_id), source_definition_id=sid
-                )
-                s.commit()
-    return len(applied)
+            DEV_CELERY_LOGGER.warning(
+                "ENQUEUE: Shipment apply job_id=%s — in-process thread after broker failure (DEV ONLY).",
+                job_id,
+            )
+            threading.Thread(target=_in_process, name=f"shipment-apply-{job_id}", daemon=True).start()
+            return True, None
+        with SessionLocal() as sync_fallback:
+            run_shipment_apply_sync(sync_fallback, job_id)
+        return False, None
 
 
 def _is_admin(x_user_role: str | None) -> bool:
@@ -596,7 +554,13 @@ async def apply_shipment_import_job(
     db: AsyncSession = Depends(get_db),
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
 ) -> dict[str, Any]:
-    """Apply an inbound_shipments import job: auto-map planner-confident ``map_*`` candidates, then ``loaded``."""
+    """Apply an inbound_shipments import job in the background: auto-map ``map_*`` candidates, upsert facts, ``loaded``.
+
+    Returns immediately. The work (auto-map → batched ``fact_inbound_shipment`` upsert → stage
+    ``loaded``) runs in the Celery worker (or a dev in-process thread) with progress; poll
+    ``/api/v1/imports/jobs/{job_id}/dsi-progress`` and the job stage. Re-applying a job already at
+    ``loaded`` is an idempotent no-op that returns the current unresolved-candidate summary.
+    """
     _require_admin(x_user_role)
     job = await db.get(ImportJob, job_id)
     if not job or (job.template_slug or "") != "inbound_shipments":
@@ -605,6 +569,8 @@ async def apply_shipment_import_job(
         unresolved_d = await _unresolved_shipment_mapping_candidate_count(db, job_id, SHIPMENT_DISTRIBUTOR_ENTITY)
         unresolved_c = await _unresolved_shipment_mapping_candidate_count(db, job_id, SHIPMENT_CUSTOMER_ENTITY)
         return {
+            "async": False,
+            "already_applied": True,
             "id": job.id,
             "status": job.status,
             "stage": job.stage,
@@ -622,18 +588,46 @@ async def apply_shipment_import_job(
                 "message": f"Job must be at stage {STAGE_VALIDATED!r} to apply; current stage is {job.stage!r}.",
             },
         )
-    auto_applied = _apply_high_confidence_shipment_mapping_candidates(job_id)
-    with SessionLocal() as sync_sess:
-        upsert_inbound_shipment_facts_for_job(sync_sess, job_id)
-        sync_sess.commit()
+
+    # Mark running + record dispatch time before handing off, so progress/background UI are accurate
+    # the instant the request returns (mirrors the validate dispatch path).
+    with SessionLocal() as sync_db:
+        j = sync_db.get(ImportJob, job_id)
+        if j is None:
+            raise HTTPException(status_code=404, detail="Shipment import job not found")
+        j.import_mode = "apply"
+        j.status = "running"
+        persist_pipeline_queued_at(sync_db, j)
+        sync_db.commit()
+
+    dispatched, task_id = _dispatch_shipment_apply(job_id)
+
+    if dispatched and task_id:
+        with SessionLocal() as meta_db:
+            j_meta = meta_db.get(ImportJob, job_id)
+            if j_meta is not None:
+                set_task_slot_on_job(j_meta, SLOT_MAIN, task_id=task_id)
+                meta_db.commit()
+
     await db.refresh(job)
-    job.stage = STAGE_LOADED
-    job.status = "completed"
-    await db.commit()
-    await db.refresh(job)
+
+    if dispatched:
+        return {
+            "async": True,
+            "id": job_id,
+            "status": job.status,
+            "stage": job.stage,
+            "template_slug": job.template_slug,
+            "import_mode": job.import_mode,
+            "task_id": task_id,
+            "message": "Apply started in the background worker.",
+        }
+
+    # Broker unavailable and no dev thread: apply ran inline and is already at ``loaded``.
     unresolved_d = await _unresolved_shipment_mapping_candidate_count(db, job_id, SHIPMENT_DISTRIBUTOR_ENTITY)
     unresolved_c = await _unresolved_shipment_mapping_candidate_count(db, job_id, SHIPMENT_CUSTOMER_ENTITY)
     return {
+        "async": False,
         "id": job.id,
         "status": job.status,
         "stage": job.stage,
@@ -641,7 +635,6 @@ async def apply_shipment_import_job(
         "import_mode": job.import_mode,
         "unresolved_distributor_candidates": unresolved_d,
         "unresolved_customer_candidates": unresolved_c,
-        "auto_applied_candidate_count": auto_applied,
     }
 
 

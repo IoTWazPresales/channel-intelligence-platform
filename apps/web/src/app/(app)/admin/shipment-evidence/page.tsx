@@ -8,6 +8,7 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  LinearProgress,
   MenuItem,
   Paper,
   Stack,
@@ -27,6 +28,7 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
+import { fetchDsiImportPipelineProgress } from '@/features/background-tasks/fetchImportJobProgress';
 
 import {
   SHIPMENT_EVIDENCE_OPTIONAL_FIELDS,
@@ -102,6 +104,27 @@ type ImportJobSummary = {
   unresolved_distributor_candidates?: number;
 };
 
+/** Response from POST /shipment-evidence/jobs/{id}/apply — async dispatch, or sync summary on fallback/already-applied. */
+type ApplyImportResponse = {
+  async?: boolean;
+  already_applied?: boolean;
+  id: number;
+  status?: string;
+  stage?: string | null;
+  task_id?: string | null;
+  unresolved_distributor_candidates?: number;
+  unresolved_customer_candidates?: number;
+  auto_applied_candidate_count?: number;
+  message?: string;
+};
+
+const SHIPMENT_DISTRIBUTOR_ENTITY = 'shipment_distributor';
+
+function unresolvedDistributorWarning(n: number): string | null {
+  if (n <= 0) return null;
+  return `${n} distributor mapping candidate(s) are still in needs_review. You are not blocked — resolve them in the steward panel when ready.`;
+}
+
 function formatRawCell(v: unknown): string {
   if (v == null) return '';
   if (typeof v === 'object') return JSON.stringify(v);
@@ -151,6 +174,8 @@ export default function ShipmentEvidenceAdminPage() {
   const [contextImportJobId, setContextImportJobId] = useState<number | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applyStewardWarning, setApplyStewardWarning] = useState<string | null>(null);
+  /** True once a background apply has been dispatched for the current job; gates progress polling. */
+  const [applyDispatched, setApplyDispatched] = useState(false);
 
   const parsedJobId = useMemo(() => {
     const t = importJobId.trim();
@@ -288,20 +313,20 @@ export default function ShipmentEvidenceAdminPage() {
   const applyImportMut = useMutation({
     mutationFn: async () => {
       if (parsedJobId == null) throw new Error('No import job selected');
-      return apiPost<ImportJobSummary>(`/api/v1/shipment-evidence/jobs/${parsedJobId}/apply`, {});
+      return apiPost<ApplyImportResponse>(`/api/v1/shipment-evidence/jobs/${parsedJobId}/apply`, {});
     },
     onMutate: () => {
       setApplyStewardWarning(null);
     },
     onSuccess: (data) => {
       setApplyError(null);
+      // Background apply: work runs in the worker; poll the job stage + dsi-progress. The unresolved
+      // steward warning is derived once the job reaches `loaded` (see the post-completion query below).
+      setApplyDispatched(true);
+      // Sync fallback / already-applied paths return final counts inline — show the warning now.
       const n = data.unresolved_distributor_candidates;
-      if (typeof n === 'number' && n > 0) {
-        setApplyStewardWarning(
-          `${n} distributor mapping candidate(s) are still in needs_review. You are not blocked — resolve them in the steward panel when ready.`
-        );
-      } else {
-        setApplyStewardWarning(null);
+      if (typeof n === 'number') {
+        setApplyStewardWarning(unresolvedDistributorWarning(n));
       }
       void qc.invalidateQueries({ queryKey: ['import-job', parsedJobId] });
       void qc.invalidateQueries({ queryKey: ['shipment-evidence'] });
@@ -311,6 +336,47 @@ export default function ShipmentEvidenceAdminPage() {
       setApplyError(e.message);
       setApplyStewardWarning(null);
     },
+  });
+
+  // Reset the dispatched flag when the selected job changes so progress polling never leaks across jobs.
+  useEffect(() => {
+    setApplyDispatched(false);
+    setApplyStewardWarning(null);
+  }, [parsedJobId]);
+
+  const applyJobStage = (trackedImportJob?.stage ?? '').trim();
+  const applyInFlight =
+    applyImportMut.isPending ||
+    (applyDispatched && applyJobStage !== 'loaded' && applyJobStage !== 'failed');
+
+  // Live apply progress (auto-map → fact write) from the shared Celery progress reader.
+  const { data: applyProgress } = useQuery({
+    queryKey: ['shipment-apply-progress', parsedJobId],
+    queryFn: ({ signal }) => fetchDsiImportPipelineProgress(parsedJobId!, signal),
+    enabled: parsedJobId != null && applyInFlight,
+    refetchInterval: (q) => {
+      const p = q.state.data;
+      if (p && (p.phase === 'complete' || p.phase === 'failed')) return false;
+      return 1500;
+    },
+  });
+
+  // Derive the steward warning after a background apply completes (job at `loaded`).
+  useQuery({
+    queryKey: ['shipment-apply-unresolved', parsedJobId],
+    queryFn: async ({ signal }) => {
+      const cands = await apiGet<Array<{ entity_type: string; status: string }>>(
+        `/api/v1/shipment-evidence/import-jobs/${parsedJobId}/mapping-candidates`,
+        { signal }
+      );
+      const n = cands.filter(
+        (c) => c.entity_type === SHIPMENT_DISTRIBUTOR_ENTITY && (c.status || '').trim() === 'needs_review'
+      ).length;
+      setApplyStewardWarning(unresolvedDistributorWarning(n));
+      return n;
+    },
+    enabled: parsedJobId != null && applyDispatched && applyJobStage === 'loaded',
+    staleTime: 5_000,
   });
 
   useEffect(() => {
@@ -564,12 +630,26 @@ export default function ShipmentEvidenceAdminPage() {
                   variant="contained"
                   color="primary"
                   size="large"
-                  disabled={!canApplyImport || applyImportMut.isPending || importJobIsError}
+                  disabled={!canApplyImport || applyInFlight || importJobIsError}
                   onClick={() => applyImportMut.mutate()}
                 >
-                  Apply import
+                  {applyInFlight ? 'Applying…' : 'Apply import'}
                 </Button>
               </Stack>
+              {applyInFlight ? (
+                <Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                    {applyProgress?.phase_label ?? 'Apply queued…'}
+                    {applyProgress?.total_rows
+                      ? ` — ${applyProgress.current_row ?? 0}/${applyProgress.total_rows}`
+                      : ''}
+                  </Typography>
+                  <LinearProgress
+                    variant={applyProgress?.total_rows ? 'determinate' : 'indeterminate'}
+                    value={applyProgress?.total_rows ? (applyProgress.pct ?? 0) : undefined}
+                  />
+                </Box>
+              ) : null}
               {applyError ? <Alert severity="error">{applyError}</Alert> : null}
               {applyStewardWarning ? (
                 <Alert severity="warning" onClose={() => setApplyStewardWarning(null)}>
