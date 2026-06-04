@@ -38,6 +38,7 @@ KIND_DSI_SOH_RECONCILIATION = "dsi_soh_reconciliation"
 KIND_DSI_VELOCITY_COMPUTE = "dsi_velocity_compute"
 KIND_DSI_FORECASTING = "dsi_forecasting"
 KIND_SHIPMENT_IMPORT = "shipment_import"
+KIND_SHIPMENT_BULK = "shipment_bulk"
 KIND_COMMERCIAL_PLANNER_LINEUP_PARSE = "commercial_planner_lineup_parse"
 
 # Allowed resolved kinds for the shared ``dsi_bulk_task`` slot. Anything else (e.g. the
@@ -82,6 +83,7 @@ SLOT_DSI_FORECASTING = "dsi_forecasting_task"
 SLOT_PM_VALIDATE = "pm_validate_task"
 SLOT_PM_COMMIT = "pm_commit_task"
 SLOT_LINEUP_PARSE = "lineup_parse_task"
+SLOT_SHIPMENT_BULK = "shipment_bulk_task"
 
 
 TASK_SLOTS: tuple[SlotDescriptor, ...] = (
@@ -153,6 +155,15 @@ TASK_SLOTS: tuple[SlotDescriptor, ...] = (
         fixed_kind=KIND_COMMERCIAL_PLANNER_LINEUP_PARSE,
         default_label="Parsing current lineup…",
     ),
+    SlotDescriptor(
+        slot_key=SLOT_SHIPMENT_BULK,
+        meta_key="shipment_bulk_task",
+        kind_resolution=FIXED,
+        payload_shape=SHAPE_DICT,
+        label_source=LABEL_PAYLOAD,
+        fixed_kind=KIND_SHIPMENT_BULK,
+        default_label="Applying shipment steward bulk action…",
+    ),
 )
 
 _SLOTS_BY_KEY: dict[str, SlotDescriptor] = {s.slot_key: s for s in TASK_SLOTS}
@@ -189,6 +200,8 @@ def task_label(job: ImportJob, *, kind: str) -> str:
         return f"Validating product master (job {jid})"
     if kind == KIND_COMMERCIAL_PLANNER_LINEUP_PARSE:
         return f"Parsing current lineup (job {jid})"
+    if kind == KIND_SHIPMENT_BULK:
+        return f"Applying shipment steward bulk action (job {jid})"
     if slug == "distributor_inventory":
         if mode == "validate":
             return f"Validating DSI import {jid}"

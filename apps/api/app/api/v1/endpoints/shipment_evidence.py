@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 from typing import Annotated, Any, Literal
@@ -20,8 +21,22 @@ from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
 from app.models.shipment_evidence import ShipmentEvidenceLine
-from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
+from app.services.imports.import_background_slots import (
+    SLOT_MAIN,
+    SLOT_SHIPMENT_BULK,
+    set_task_slot_on_job,
+)
 from app.services.imports.import_job_background_metadata import persist_pipeline_queued_at
+from app.services.imports.shipment_bulk_steward_enqueue import (
+    TASK_SHIPMENT_BULK_APPLY_PLANS,
+    TASK_SHIPMENT_BULK_MAP_CUSTOMER,
+    TASK_SHIPMENT_BULK_PROVISIONAL_CUSTOMERS,
+    dev_shipment_bulk_task_results,
+    enqueue_shipment_bulk_task,
+    run_shipment_bulk_apply_plans_sync,
+    run_shipment_bulk_map_customer_sync,
+    run_shipment_bulk_provisional_customers_sync,
+)
 from app.services.imports.shipment_apply_sync import run_shipment_apply_sync
 from app.services.imports.shipment_evidence_resolution_plan import (
     SHIPMENT_CUSTOMER_ENTITY,
@@ -29,9 +44,6 @@ from app.services.imports.shipment_evidence_resolution_plan import (
 )
 from app.services.imports.shipment_evidence_steward_ops import (
     ShipmentStewardOpError,
-    execute_bulk_apply_shipment_candidate_plans,
-    execute_bulk_create_provisional_shipment_customers,
-    execute_bulk_map_shipment_customers,
     execute_clear_special_category_shipment_candidate,
     execute_create_provisional_shipment_customer,
     execute_create_provisional_shipment_distributor,
@@ -339,38 +351,75 @@ class ShipmentBulkApplyPlansBody(BaseModel):
     candidate_ids: list[int] = Field(..., min_length=1)
 
 
-@router.post("/import-jobs/{job_id}/bulk-apply-confirmed-plans")
+def _write_shipment_bulk_slot(job_id: int, task_id: str, *, async_poll: bool, label: str) -> None:
+    """Record the shipment bulk Celery task on the job so the activity feed shows it and
+    cancel/retry clears it (registered slot ``shipment_bulk_task``)."""
+    with SessionLocal() as meta_db:
+        job = meta_db.get(ImportJob, job_id)
+        if job is not None:
+            set_task_slot_on_job(job, SLOT_SHIPMENT_BULK, task_id=task_id, async_poll=async_poll, label=label)
+            meta_db.commit()
+
+
+@router.post("/import-jobs/{job_id}/bulk-apply-confirmed-plans", status_code=202)
 async def shipment_import_job_bulk_apply_confirmed_plans(
     job_id: int,
     body: ShipmentBulkApplyPlansBody,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
 ) -> dict[str, Any]:
-    """Apply each candidate's persisted planner ``suggested_action`` (map / provisional create), bypassing partner-text guards."""
+    """Enqueue apply of each candidate's persisted planner ``suggested_action`` as a background task.
+
+    Returns ``{async_poll, task_id}`` immediately; poll ``.../shipment-bulk-task/{task_id}``. Bypasses
+    partner-text guards in the worker (existing plan executes). No proxy-timeout risk on large jobs.
+    """
     _require_admin(x_user_role)
     with SessionLocal() as s:
         job = s.get(ImportJob, job_id)
         if not job or (job.template_slug or "") != "inbound_shipments":
             raise HTTPException(status_code=404, detail="Shipment import job not found")
-        return execute_bulk_apply_shipment_candidate_plans(
-            s,
-            import_job_id=job_id,
-            candidate_ids=list(body.candidate_ids),
-        )
+    payload = {"candidate_ids": [int(x) for x in body.candidate_ids]}
+    task_id, async_poll = enqueue_shipment_bulk_task(
+        task_name=TASK_SHIPMENT_BULK_APPLY_PLANS,
+        job_id=job_id,
+        payload=payload,
+        run_sync=lambda: run_shipment_bulk_apply_plans_sync(job_id, payload),
+        dev_prefix="ship-bulk-plans",
+    )
+    _write_shipment_bulk_slot(job_id, task_id, async_poll=async_poll, label="Applying confirmed plans…")
+    return {"import_job_id": job_id, "task_id": task_id, "async_poll": async_poll, "action": "bulk_apply_plans"}
 
 
-@router.post("/import-candidates/bulk-map-customer")
+@router.post("/import-candidates/bulk-map-customer", status_code=202)
 async def shipment_import_candidates_bulk_map_customer(
     body: ShipmentBulkMapCustomerBody,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
 ) -> dict[str, Any]:
-    """Map many shipment customer candidates to one existing customer; re-enriches the job once at the end."""
+    """Enqueue bulk-map of many shipment customer candidates to one existing customer (background task).
+
+    Returns ``{async_poll, task_id}`` immediately; poll ``.../shipment-bulk-task/{task_id}``.
+    """
     _require_admin(x_user_role)
+    job_id_for_slot: int | None = None
     with SessionLocal() as s:
-        return execute_bulk_map_shipment_customers(
-            s,
-            customer_id=int(body.customer_id),
-            candidate_ids=[int(x) for x in body.candidate_ids],
-        )
+        first = s.get(ImportEntityMappingCandidate, int(body.candidate_ids[0]))
+        if first is not None and first.entity_type == SHIPMENT_CUSTOMER_ENTITY:
+            job_id_for_slot = int(first.import_job_id)
+    payload = {"candidate_ids": [int(x) for x in body.candidate_ids], "customer_id": int(body.customer_id)}
+    task_id, async_poll = enqueue_shipment_bulk_task(
+        task_name=TASK_SHIPMENT_BULK_MAP_CUSTOMER,
+        job_id=job_id_for_slot or 0,
+        payload=payload,
+        run_sync=lambda: run_shipment_bulk_map_customer_sync(job_id_for_slot or 0, payload),
+        dev_prefix="ship-bulk-map",
+    )
+    if job_id_for_slot is not None:
+        _write_shipment_bulk_slot(job_id_for_slot, task_id, async_poll=async_poll, label="Mapping channel partners…")
+    return {
+        "import_job_id": job_id_for_slot,
+        "task_id": task_id,
+        "async_poll": async_poll,
+        "action": "bulk_map_customer",
+    }
 
 
 @router.post("/import-candidates/{candidate_id}/map-distributor")
@@ -515,37 +564,102 @@ async def shipment_import_candidate_create_provisional_customer(
             raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
 
 
-@router.post("/import-jobs/{job_id}/bulk-create-provisional-customers")
+@router.post("/import-jobs/{job_id}/bulk-create-provisional-customers", status_code=202)
 async def shipment_import_job_bulk_create_provisional_customers(
     job_id: int,
     body: ShipmentBulkProvisionalCustomersBody,
     db: AsyncSession = Depends(get_db),
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
 ) -> dict[str, Any]:
+    """Enqueue bulk provisional customer creation as a background task (governance: steward-driven only).
+
+    Returns ``{async_poll, task_id}`` immediately; poll ``.../shipment-bulk-task/{task_id}``. Provisional
+    creation stays steward-initiated — this endpoint only backgrounds the work, it does not auto-create.
+    """
     _require_admin(x_user_role)
     job = await db.get(ImportJob, job_id)
     if not job or (job.template_slug or "") != "inbound_shipments":
         raise HTTPException(status_code=404, detail="Shipment import job not found")
-    per: dict[int, str] = {}
-    if body.display_names:
-        for k, v in body.display_names.items():
-            try:
-                per[int(k)] = v
-            except (TypeError, ValueError):
-                continue
-    with SessionLocal() as s:
-        out = execute_bulk_create_provisional_shipment_customers(
-            s,
-            job_id=job_id,
-            candidate_ids=body.candidate_ids,
-            per_candidate_display_name=per,
-            region_id=body.region_id,
-            channel_id=body.channel_id,
-            preferred_distributor_id=body.preferred_distributor_id,
-            partner_tier=body.partner_tier,
-            notes_summary=body.notes_summary,
-        )
-    return out
+    payload: dict[str, Any] = {
+        "candidate_ids": [int(x) for x in body.candidate_ids],
+        "display_names": dict(body.display_names) if body.display_names else None,
+        "region_id": body.region_id,
+        "channel_id": body.channel_id,
+        "preferred_distributor_id": body.preferred_distributor_id,
+        "partner_tier": body.partner_tier,
+        "notes_summary": body.notes_summary,
+    }
+    task_id, async_poll = enqueue_shipment_bulk_task(
+        task_name=TASK_SHIPMENT_BULK_PROVISIONAL_CUSTOMERS,
+        job_id=job_id,
+        payload=payload,
+        run_sync=lambda: run_shipment_bulk_provisional_customers_sync(job_id, payload),
+        dev_prefix="ship-bulk-prov",
+    )
+    _write_shipment_bulk_slot(job_id, task_id, async_poll=async_poll, label="Creating provisional customers…")
+    return {
+        "import_job_id": job_id,
+        "task_id": task_id,
+        "async_poll": async_poll,
+        "action": "bulk_create_provisional_customers",
+    }
+
+
+@router.get("/import-jobs/{job_id}/shipment-bulk-task/{task_id}", status_code=200)
+async def shipment_bulk_task_status(job_id: int, task_id: str) -> dict[str, Any]:
+    """Poll a shipment bulk steward Celery task (or dev in-process / sync fallback) state + result.
+
+    Mirrors ``mappings.dsi_steward_bulk_task_status``: clears the registered ``shipment_bulk_task``
+    slot once the task is terminal so the activity feed does not keep showing a finished job.
+    """
+    dev_store = dev_shipment_bulk_task_results()
+    dev_hit = dev_store.get(task_id)
+    if dev_hit is not None:
+        state = dev_hit.get("state", "SUCCESS")
+        if state in ("SUCCESS", "FAILURE"):
+            dev_store.pop(task_id, None)
+        out: dict[str, Any] = {"import_job_id": job_id, "task_id": task_id, "state": state}
+        if state == "SUCCESS":
+            out["result"] = dev_hit.get("result")
+        else:
+            out["error"] = dev_hit.get("error")
+        if state in ("SUCCESS", "FAILURE"):
+            await asyncio.to_thread(_clear_shipment_bulk_slot, job_id)
+        return out
+
+    from celery.result import AsyncResult
+
+    def _read() -> tuple[str, Any]:
+        r = AsyncResult(task_id, app=celery_app)
+        return r.state, r.info
+
+    task_state, info = await asyncio.to_thread(_read)
+    progress: dict[str, Any] = {"import_job_id": job_id, "task_id": task_id, "state": task_state}
+    if task_state == "PROGRESS" and isinstance(info, dict):
+        progress["phase"] = info.get("phase")
+        progress["phase_label"] = info.get("phase_label")
+        progress["current_row"] = info.get("current_row", 0)
+        progress["total_rows"] = info.get("total_rows", 0)
+        progress["pct"] = info.get("pct", 0)
+    elif task_state == "SUCCESS":
+        raw_result = await asyncio.to_thread(lambda: AsyncResult(task_id, app=celery_app).result)
+        progress["result"] = raw_result if isinstance(raw_result, dict) else None
+    elif task_state == "FAILURE":
+        progress["error"] = str(info)[:800] if info is not None else "Task failed"
+
+    if task_state in ("SUCCESS", "FAILURE", "REVOKED"):
+        await asyncio.to_thread(_clear_shipment_bulk_slot, job_id)
+
+    return progress
+
+
+def _clear_shipment_bulk_slot(job_id: int) -> None:
+    from app.services.imports.import_job_background_metadata import clear_background_task_metadata_on_job
+
+    with SessionLocal() as sess:
+        job = sess.get(ImportJob, job_id)
+        if job and clear_background_task_metadata_on_job(job):
+            sess.commit()
 
 
 @router.post("/jobs/{job_id}/apply")

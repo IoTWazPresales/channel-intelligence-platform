@@ -31,6 +31,7 @@ export type BackgroundTaskKind =
   | 'dsi_bulk_provisional'
   | 'dsi_resolution_plan_apply'
   | 'shipment_import'
+  | 'shipment_bulk'
   | 'product_master_commit'
   | 'product_master_validate'
   | 'commercial_planner_lineup_parse';

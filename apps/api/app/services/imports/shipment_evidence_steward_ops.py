@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -928,17 +928,24 @@ def execute_bulk_apply_shipment_candidate_plans(
     *,
     import_job_id: int,
     candidate_ids: list[int],
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
     """Apply persisted planner ``suggested_action`` for selected ``needs_review`` candidates.
 
     Used after import apply when rows were blocked only by name-review / special-category heuristics:
     partner-text guards are bypassed so the **existing** plan (map or provisional create) can execute.
+
+    ``on_progress(current, total)`` is invoked once per candidate processed (for the background
+    task UI); it is optional and defaults to a no-op so the synchronous call sites are unchanged.
     """
     applied: list[int] = []
     errors: list[dict[str, Any]] = []
     any_customer = False
     any_distributor = False
-    for raw_id in candidate_ids:
+    total = len(candidate_ids)
+    for processed, raw_id in enumerate(candidate_ids, start=1):
+        if on_progress is not None:
+            on_progress(processed, total)
         cid = int(raw_id)
         cand = db.get(ImportEntityMappingCandidate, cid)
         if not cand or int(cand.import_job_id) != int(import_job_id):
@@ -1041,8 +1048,13 @@ def execute_bulk_create_provisional_shipment_customers(
     preferred_distributor_id: int | None,
     partner_tier: str | None,
     notes_summary: str | None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
-    """Run provisional customer create for many candidates, grouping by effective display name (one DimCustomer per group)."""
+    """Run provisional customer create for many candidates, grouping by effective display name (one DimCustomer per group).
+
+    ``on_progress(current, total)`` is invoked once per group bucket processed (optional, defaults to
+    a no-op) so the background task can surface progress without changing the synchronous call sites.
+    """
     from collections import defaultdict
 
     per = per_candidate_display_name or {}
@@ -1064,7 +1076,10 @@ def execute_bulk_create_provisional_shipment_customers(
     for cand in cands:
         buckets[_provisional_customer_bulk_group_key(cand, per)].append(cand)
 
-    for _gk, group in buckets.items():
+    total_groups = len(buckets)
+    for group_index, (_gk, group) in enumerate(buckets.items(), start=1):
+        if on_progress is not None:
+            on_progress(group_index, total_groups)
         group.sort(key=lambda c: int(c.id))
         leader = group[0]
         dn_leader = per.get(int(leader.id))
@@ -1115,13 +1130,21 @@ def execute_bulk_map_shipment_customers(
     *,
     customer_id: int,
     candidate_ids: list[int],
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
-    """Map many shipment customer candidates to one customer; enrich and commit once at the end."""
+    """Map many shipment customer candidates to one customer; enrich and commit once at the end.
+
+    ``on_progress(current, total)`` is invoked once per candidate processed (optional, defaults to a
+    no-op) so the background task can surface progress without changing the synchronous call sites.
+    """
     mapped: list[int] = []
     errors: list[dict[str, Any]] = []
     job_id: int | None = None
     source_definition_id: int | None = None
-    for cid in candidate_ids:
+    total = len(candidate_ids)
+    for processed, cid in enumerate(candidate_ids, start=1):
+        if on_progress is not None:
+            on_progress(processed, total)
         cand = db.get(ImportEntityMappingCandidate, int(cid))
         if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
             errors.append({"candidate_id": int(cid), "reason": "candidate_not_found_or_wrong_entity"})

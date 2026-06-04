@@ -124,6 +124,71 @@ def shipment_apply_task(self, job_id: int) -> dict:
         raise
 
 
+def _shipment_bulk_progress(self, phase: str, phase_label: str):
+    def _on_progress(current: int, total: int) -> None:
+        try:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "phase": phase,
+                    "phase_label": phase_label,
+                    "current_row": current,
+                    "total_rows": total,
+                    "pct": round(current / total * 100) if total else 0,
+                },
+            )
+        except Exception:
+            pass
+
+    return _on_progress
+
+
+@celery_app.task(name="imports.shipment_bulk_map_customer", bind=True, ack_late=True)
+def shipment_bulk_map_customer_task(self, job_id: int, payload: dict) -> dict:
+    """Background bulk-map of shipment customer candidates to one customer (progress per candidate)."""
+    from app.services.imports.shipment_bulk_steward_enqueue import run_shipment_bulk_map_customer_sync
+
+    try:
+        return run_shipment_bulk_map_customer_sync(
+            job_id, payload, on_progress=_shipment_bulk_progress(self, "mapping_customers", "Mapping channel partners")
+        )
+    except Exception:
+        logger.exception("shipment_bulk_map_customer failed job_id=%s", job_id)
+        raise
+
+
+@celery_app.task(name="imports.shipment_bulk_apply_plans", bind=True, ack_late=True)
+def shipment_bulk_apply_plans_task(self, job_id: int, payload: dict) -> dict:
+    """Background apply of persisted shipment candidate plans (progress per candidate)."""
+    from app.services.imports.shipment_bulk_steward_enqueue import run_shipment_bulk_apply_plans_sync
+
+    try:
+        return run_shipment_bulk_apply_plans_sync(
+            job_id, payload, on_progress=_shipment_bulk_progress(self, "applying_plans", "Applying confirmed plans")
+        )
+    except Exception:
+        logger.exception("shipment_bulk_apply_plans failed job_id=%s", job_id)
+        raise
+
+
+@celery_app.task(name="imports.shipment_bulk_provisional_customers", bind=True, ack_late=True)
+def shipment_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dict:
+    """Background bulk provisional customer creation for shipment steward (progress per group)."""
+    from app.services.imports.shipment_bulk_steward_enqueue import (
+        run_shipment_bulk_provisional_customers_sync,
+    )
+
+    try:
+        return run_shipment_bulk_provisional_customers_sync(
+            job_id,
+            payload,
+            on_progress=_shipment_bulk_progress(self, "creating_provisional_customers", "Creating provisional customers"),
+        )
+    except Exception:
+        logger.exception("shipment_bulk_provisional_customers failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.infer_dsi")
 def infer_dsi_import_job_task(job_id: int) -> int:
     """DSI upload infer (headers + initial field_mapping → ``dsi_mapping_ready``)."""
