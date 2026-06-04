@@ -323,6 +323,81 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "expected_columns": {"sku": {"aliases": ["item"], "required": True}},
     },
     {
+        # Already seeded into the DB by migration 20260518_0045; this row aligns the declarative
+        # source of truth with it (no new migration). Values mirror that migration exactly so a
+        # re-seed is idempotent. Driven by its own dedicated surface (see capability contract D1),
+        # not the generic wizard, but it is a real, pipeline-ready importer.
+        "slug": "customer_sell_through",
+        "display_name": "Customer Sell-Through Report",
+        "description": (
+            "Retailer sell-through reports (weekly/monthly file extracts; daily via API in a future phase). "
+            "Supports flat, pivoted, multi-sheet, MTD delta, and wide extract layouts."
+        ),
+        "enabled": True,
+        "hidden": False,
+        "admin_only": False,
+        "requires_provider": True,
+        "pipeline_handler": "customer_sell_through",
+        "destructive_apply_requires_confirm": False,
+        "accepted_file_types": [".csv", ".xlsx", ".xlsm"],
+        "expected_columns": {
+            "units_sold": {
+                "aliases": [
+                    "units_sold",
+                    "qty_sold",
+                    "quantity_sold",
+                    "tw_sales",
+                    "tw sales",
+                    "sales",
+                    "units",
+                    "qty",
+                ],
+                "required": True,
+            },
+            "product_identifier": {
+                "aliases": [
+                    "product_code",
+                    "sku",
+                    "item_code",
+                    "itemno",
+                    "article",
+                    "barcode",
+                    "supplier_code",
+                ],
+                "required": True,
+            },
+            "location_token": {
+                "aliases": ["site_code", "site_name", "store_code", "store_name", "site"],
+                "required": False,
+            },
+            "period_ref": {
+                "aliases": ["week", "transaction_week", "period", "report_week", "week_no"],
+                "required": False,
+            },
+            "unit_sell_price": {
+                "aliases": ["sell_price", "unit_price", "price", "selling_price", "retail_price"],
+                "required": False,
+            },
+            "unit_cost": {
+                "aliases": ["cost", "unit_cost", "mac", "moving_avg_cost", "cost_price"],
+                "required": False,
+            },
+            "reported_soh": {
+                "aliases": [
+                    "soh",
+                    "stock_on_hand",
+                    "in_stock",
+                    "qty_available",
+                    "current_stock",
+                    "on_hand",
+                    "total_soh",
+                    "total_sellable_soh",
+                ],
+                "required": False,
+            },
+        },
+    },
+    {
         "slug": "inbound_shipments",
         "display_name": "Shipment / order evidence",
         "description": (

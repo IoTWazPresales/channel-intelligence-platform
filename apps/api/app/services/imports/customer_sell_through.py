@@ -20,10 +20,10 @@ from app.services.imports.distributor_sales_inventory import (
     _product_token_key,
 )
 from app.core.config import get_settings
-from app.services.imports.ai_import_resolver import (
-    AI_AUTO_RESOLVE_THRESHOLD,
-    detect_format_drift,
-    suggest_token_resolution,
+from app.services.imports.ai_import_resolver import detect_format_drift
+from app.services.imports.ai_resolver_wiring import (
+    stash_ai_suggestion_on_payload,
+    try_ai_token_resolution,
 )
 from app.services.imports.parsers.customer_sell_through_flat import (
     EXPECTED_COLUMNS_META_KEY,
@@ -282,29 +282,27 @@ def _apply_ai_resolution_to_line(
     ai_assist_used: list[bool],
 ) -> tuple[bool, bool]:
     product_ok = line.resolved_product_id is not None
+    job_id = int(getattr(line, "import_job_id", 0) or 0)
 
-    if not product_ok and line.raw_product_token and get_settings().ai_assist_enabled:
-        suggestion = suggest_token_resolution(
-            line.raw_product_token,
-            "product",
-            _product_candidates(prod_idx, line.raw_product_token),
-            {"customer_id": customer_id},
+    # Deterministic-first is already done by the caller (resolved_product_id set on exact match);
+    # this runs only on miss, and goes through the SHARED resolver wrapper (deterministic→AI≥0.90),
+    # same as DSI / shipment — not the bespoke direct call. Wrapper no-ops when AI is disabled.
+    if not product_ok and line.raw_product_token:
+        ai_id, ai_tag, suggestion = try_ai_token_resolution(
+            raw_token=line.raw_product_token,
+            token_type="product",
+            candidates=_product_candidates(prod_idx, line.raw_product_token),
+            import_type="customer_sell_through",
+            job_id=job_id,
+            extra_context={"customer_id": customer_id},
         )
-        if suggestion:
+        if suggestion is not None:
             ai_assist_used[0] = True
-            payload = dict(line.raw_row_payload or {})
-            payload["_ai_resolution"] = {
-                "token_type": "product",
-                "suggestion": {
-                    "best_match_id": suggestion.best_match_id,
-                    "confidence": suggestion.confidence,
-                    "reasoning": suggestion.reasoning,
-                    "alternatives": suggestion.alternatives,
-                },
-            }
-            line.raw_row_payload = to_jsonable(payload)
-            if suggestion.best_match_id is not None and suggestion.confidence >= AI_AUTO_RESOLVE_THRESHOLD:
-                line.resolved_product_id = int(suggestion.best_match_id)
+            line.raw_row_payload = stash_ai_suggestion_on_payload(
+                line.raw_row_payload, token_type="product", suggestion=suggestion
+            )
+            if ai_id is not None and ai_tag == "ai_auto_resolved":
+                line.resolved_product_id = int(ai_id)
                 line.resolution_status = "ai_auto_resolved"
                 product_ok = True
             else:
@@ -320,36 +318,28 @@ def _apply_ai_resolution_to_line(
         )
         if loc_id is not None:
             line.resolved_location_id = int(loc_id)
-        elif get_settings().ai_assist_enabled:
-            suggestion = suggest_token_resolution(
-                line.raw_location_token,
-                "location",
-                _location_candidates(db, customer_id, line.raw_location_token),
-                {"customer_id": customer_id},
+        else:
+            ai_id, ai_tag, suggestion = try_ai_token_resolution(
+                raw_token=line.raw_location_token,
+                token_type="location",
+                candidates=_location_candidates(db, customer_id, line.raw_location_token),
+                import_type="customer_sell_through",
+                job_id=job_id,
+                extra_context={"customer_id": customer_id},
             )
-            if suggestion:
+            if suggestion is not None:
                 ai_assist_used[0] = True
-                payload = dict(line.raw_row_payload or {})
-                ai_block = payload.get("_ai_resolution")
-                if not isinstance(ai_block, dict):
-                    ai_block = {}
-                ai_block["location"] = {
-                    "best_match_id": suggestion.best_match_id,
-                    "confidence": suggestion.confidence,
-                    "reasoning": suggestion.reasoning,
-                }
-                payload["_ai_resolution"] = ai_block
-                line.raw_row_payload = to_jsonable(payload)
-                if suggestion.best_match_id is not None and suggestion.confidence >= AI_AUTO_RESOLVE_THRESHOLD:
-                    line.resolved_location_id = int(suggestion.best_match_id)
+                line.raw_row_payload = stash_ai_suggestion_on_payload(
+                    line.raw_row_payload, token_type="location", suggestion=suggestion
+                )
+                if ai_id is not None and ai_tag == "ai_auto_resolved":
+                    line.resolved_location_id = int(ai_id)
                 else:
                     location_ok = False
                     if line.resolution_status == "pending":
                         line.resolution_status = "ai_suggested"
             else:
                 location_ok = False
-        else:
-            location_ok = False
 
     return product_ok, location_ok
 
