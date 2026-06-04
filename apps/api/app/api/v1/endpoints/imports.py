@@ -159,6 +159,44 @@ def _prepare_dsi_pipeline_dispatch(job_id: int) -> None:
         sync_db.commit()
 
 
+def _dispatch_dsi_apply(job_id: int) -> tuple[bool, str | None]:
+    """Publish ``imports.dsi_apply`` to the broker; mirror the shipment apply dispatch semantics.
+
+    Returns ``(dispatched, task_id)``. ``dispatched`` is ``True`` when apply should be treated as
+    async (broker accepted, or a dev in-process thread started). On broker failure with no dev
+    thread it runs the apply inline (``False``) so the operation still completes. DSI validate is
+    already async; this brings apply to parity without the enqueue-helper dedup (parked in BACKLOG).
+    """
+    settings = get_settings()
+    try:
+        result = celery_app.send_task("imports.dsi_apply", args=[job_id], ignore_result=True)
+        return True, result.id
+    except Exception:
+        logger.exception("DSI apply: Celery enqueue failed job_id=%s", job_id)
+        from app.services.imports.dsi_apply_sync import run_dsi_apply_sync
+
+        if settings.cip_dev_celery_dispatch == "in_process_thread":
+
+            def _in_process() -> None:
+                try:
+                    run_dsi_apply_sync(job_id)
+                except Exception:
+                    logger.exception(
+                        "DSI apply: in-process thread failed job_id=%s "
+                        "(CIP_DEV_CELERY_DISPATCH=in_process_thread after broker failure)",
+                        job_id,
+                    )
+
+            DEV_CELERY_LOGGER.warning(
+                "ENQUEUE: DSI apply job_id=%s — in-process thread after broker failure (DEV ONLY).",
+                job_id,
+            )
+            threading.Thread(target=_in_process, name=f"dsi-apply-{job_id}", daemon=True).start()
+            return True, None
+        run_dsi_apply_sync(job_id)
+        return False, None
+
+
 def _persist_pipeline_celery_task_id(job_id: int, task_id: str | None) -> None:
     if not task_id:
         return
@@ -984,29 +1022,41 @@ async def post_dsi_apply(
     gate = dsi_mapping_gate_errors(job.field_mapping or {})
     if gate:
         raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
-    job.import_mode = "apply"
-    await db.commit()
+    # Mark running + record dispatch time + import_mode=apply in a sync session before handing off,
+    # so progress/background UI are accurate the instant the request returns (mirrors validate +
+    # the shipment apply dispatch). Reject a second apply while Celery work is still active.
     with SessionLocal() as sync_db:
-        process_import_job_sync(sync_db, job_id)
-    with SessionLocal() as sync_db:
-        from app.ingestion.pipeline import STAGE_VALIDATED
-        from app.services.imports.dsi_apply_completion import (
-            DsiApplyCompletionError,
-            complete_dsi_import_job_to_loaded,
-        )
+        from app.services.imports.import_job_background_metadata import persist_pipeline_queued_at
 
-        sync_job = sync_db.get(ImportJob, job_id)
-        if (
-            sync_job
-            and (sync_job.template_slug or "") == "distributor_inventory"
-            and (sync_job.stage or "") == STAGE_VALIDATED
-            and (sync_job.import_mode or "") == "apply"
-        ):
-            try:
-                complete_dsi_import_job_to_loaded(sync_db, job_id)
-            except DsiApplyCompletionError as exc:
-                raise HTTPException(status_code=422, detail=str(exc)) from exc
+        j = sync_db.get(ImportJob, job_id)
+        if j is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        _raise_if_import_pipeline_busy(j)
+        j.import_mode = "apply"
+        j.status = "running"
+        persist_pipeline_queued_at(sync_db, j)
+        sync_db.commit()
+
+    dispatched, task_id = _dispatch_dsi_apply(job_id)
+    if dispatched and task_id:
+        _persist_pipeline_celery_task_id(job_id, task_id)
+
     job2 = await _async_import_job_with_source(db, job_id)
+    if dispatched:
+        # Async: work runs in the worker (or dev thread). Poll
+        # ``GET /api/v1/imports/jobs/{job_id}/dsi-progress`` + the job stage; no proxy-timeout risk.
+        return {
+            "async": True,
+            "id": job_id,
+            "status": job2.status if job2 else "running",
+            "stage": job2.stage if job2 else None,
+            "template_slug": "distributor_inventory",
+            "import_mode": "apply",
+            "task_id": task_id,
+            "message": "DSI apply started in the background worker.",
+        }
+
+    # Broker unavailable and no dev thread: apply ran inline. Surface failures the way it used to.
     if job2 and job2.status == "failed":
         raise HTTPException(
             status_code=422,

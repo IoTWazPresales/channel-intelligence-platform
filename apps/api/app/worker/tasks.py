@@ -189,6 +189,34 @@ def shipment_bulk_provisional_customers_task(self, job_id: int, payload: dict) -
         raise
 
 
+@celery_app.task(name="imports.dsi_apply", bind=True, ack_late=True)
+def dsi_apply_task(self, job_id: int) -> dict:
+    """Background apply for a ``distributor_inventory`` job (pipeline apply → complete-to-loaded)."""
+    from app.services.imports.dsi_apply_sync import run_dsi_apply_sync
+
+    def _on_progress(phase: str, phase_label: str, current_row: int, total_rows: int) -> None:
+        try:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "phase": phase,
+                    "phase_label": phase_label,
+                    "current_row": current_row,
+                    "total_rows": total_rows,
+                    "pct": round(current_row / total_rows * 100) if total_rows else 0,
+                },
+            )
+        except Exception:
+            pass
+
+    try:
+        return run_dsi_apply_sync(job_id, on_progress=_on_progress)
+    except Exception:
+        logger.exception("dsi_apply_task failed job_id=%s — writing STAGE_FAILED", job_id)
+        _write_task_level_failure(job_id)
+        raise
+
+
 @celery_app.task(name="imports.infer_dsi")
 def infer_dsi_import_job_task(job_id: int) -> int:
     """DSI upload infer (headers + initial field_mapping → ``dsi_mapping_ready``)."""
