@@ -341,6 +341,98 @@
 
 ---
 
+## BACKLOG-024 — AI resolver absent for `distributor_master` + `historical_lineup`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-04 (cross-importer alignment pass; explicitly out-of-scope) |
+| **Effort** | Small–medium per importer |
+| **Source** | This branch's importer audit; `apps/api/app/ingestion/pipeline.py::_process_distributor_master` (no AI); `apps/api/app/services/imports/historical_lineup.py` (no `ai_*` import) |
+| **Idea** | Wire the shared `try_ai_token_resolution` wrapper into the two importers that currently hard-error on unknown FK/token instead of offering an AI suggestion — matching `customer_master` (FK codes) and DSI/shipment. |
+| **Why / deferrable** | Same class of unresolved-token failure the wrapper already handles elsewhere; deferrable because these importers are lower-traffic and were not on the shipment→DSI→customer-reports critical path. |
+| **What the work is** | In `_process_distributor_master`, AI-resolve unknown codes via the wrapper + `distributor_candidates`; in historical lineup parsing, AI-resolve customer/distributor/sku tokens on deterministic miss. Deterministic-first, ≥0.90 auto. |
+| **Regression traps** | Don't auto-create masters (governance); keep deterministic resolution first; wrapper no-op when AI disabled. |
+| **Behavior to retain** | Existing hard-error path when AI disabled or below threshold. |
+| **TRIGGER** | An importer-resolution-consistency task is approved, or one of these importers hits real unresolved-token volume. |
+
+---
+
+## BACKLOG-025 — Generic-pipeline apply → async (masters / historical / sell-through)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-04 (out-of-scope this pass) |
+| **Effort** | Medium |
+| **Source** | This branch's audit; `apps/api/app/api/v1/endpoints/imports.py::process_job` runs `process_import_job_sync` inline |
+| **Idea** | Move the generic `POST /jobs/{id}/process` (apply path for `distributor_master`, `customer_master`, `historical_lineup`, `customer_sell_through`) onto the async-dispatch pattern (broker→dev-thread→sync-fallback) with progress, like DSI/shipment apply. |
+| **Why / deferrable** | Large master/sell-through files block the request; deferrable until those importers see large files or after DSI/shipment async lands and stabilizes. |
+| **What the work is** | A generic apply orchestrator + `imports.process_job_apply` task (or reuse `imports.process_job` with progress) + endpoint returns `{async, task_id}` + a registered slot; frontend poll. |
+| **Regression traps** | Per-importer terminal stages differ; preserve each handler's semantics; register the slot (orphan-slot rule). |
+| **Behavior to retain** | Sync-fallback surfaces failures as today. |
+| **TRIGGER** | A master/sell-through file large enough to risk proxy timeout, or a generic-apply-async task is approved. |
+
+---
+
+## BACKLOG-026 — Product Master: consolidate the two apply pipelines
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-04 (out-of-scope this pass) |
+| **Effort** | Medium–large |
+| **Source** | This branch's audit; dedicated `product_master_workflow.py` (`pm_validate`/`pm_commit`, bespoke mapping, AI desc-remap) vs generic `pipeline.py::_process_product_master` (inline, channel-only AI) |
+| **Idea** | One product_master apply path. Today two code paths exist for one slug with divergent AI + mapping behavior and double maintenance. |
+| **Why / deferrable** | Drift risk + duplicate maintenance; deferrable because both currently work and PM is not on this pass's critical path. |
+| **What the work is** | Pick the workflow path as canonical; route the generic handler to it (or delete the generic branch); reconcile AI (description remap vs channel-only) and mapping (bespoke `pmMappingHelpers` vs panel). |
+| **Regression traps** | `specs_json` canonical; two-phase validate→commit semantics; existing PM tests. |
+| **TRIGGER** | A PM consolidation task is approved (pairs naturally with BACKLOG-027). |
+
+---
+
+## BACKLOG-027 — PM + historical mapping UI → shared `CanonicalColumnMappingPanel`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-04 (out-of-scope this pass) |
+| **Effort** | Medium (web) |
+| **Source** | This branch's audit; PM bespoke `pmMappingHelpers`/`pmMappingTargetOptions`; historical override mapping; vs shared panel used by DSI/shipment |
+| **Idea** | Replace the PM and historical-lineup bespoke mapping tables with the shared `CanonicalColumnMappingPanel` (parity rule §4). |
+| **Why / deferrable** | Removes a third/fourth mapping-UI shape; deferrable, cosmetic-ish, no correctness gap. |
+| **What the work is** | Mount the panel with PM/historical target options + samples; keep server validation; delete bespoke helpers once parity verified in-browser. |
+| **Regression traps** | PM `pm_mapping_saved` stage flow; historical override semantics. |
+| **TRIGGER** | A mapping-UI unification task is approved (pairs with BACKLOG-026). |
+
+---
+
+## BACKLOG-028 — Infra: remote Supabase pooler drops SSL on long-lived apply connections
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-04 (observed while smoking DSI apply async) |
+| **Effort** | Investigation (infra), then config |
+| **Source** | This branch's DSI-apply live smoke (2026-06-04): `psycopg.OperationalError: SSL connection has been closed unexpectedly` during the long-held `SELECT … FROM dim_product` (17k rows) deep in `complete_dsi_import_job_to_loaded`, then statement timeout; reproducible across two runs. Short isolated scans (~5–8s) succeed. |
+| **Idea** | The session pooler (`:5432`) drops a connection held open for a long apply transaction, which then lingers server-side as `idle in transaction` holding row locks. This caps how large a DSI apply can run synchronously **or** in a single worker transaction, and it (not this branch's code) blocked the Unit 2 end-to-end facts smoke. |
+| **Why / deferrable** | Environmental, not a code defect — the old sync apply hits the same fragility. Backgrounding is still strictly better (no proxy timeout; clean `STAGE_FAILED`). Deferrable to an infra/connection-strategy task. |
+| **What the work is** | Reproduce against the pooler; tune `statement_timeout` / keepalives / `idle_in_transaction_session_timeout`; consider chunking the apply transaction or BACKLOG-002/-003 (session pooler config / EU co-location). Re-run the Unit 2 facts smoke against a stable DB to confirm. |
+| **Regression traps** | Don't disable statement_timeout globally; keep `statement_cache_size=0`/`prepare_threshold` fixes. |
+| **TRIGGER** | An infra/DB-stability task is approved, or DSI apply fails for Warren in normal use. |
+
+---
+
+## BACKLOG-029 — Finalize Unit 2 frontend + Unit 3 sell-through surface (commit pending)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-04 (blocked by a concurrent tool editing shared web files) |
+| **Effort** | Small (finish + commit) / Medium (sell-through surface) |
+| **Source** | This branch: DSI apply async backend committed `c079cc6` (frontend `dsiApplyAsync` poll present in working-tree `apps/web/src/app/(app)/admin/imports/page.tsx` but uncommitted); customer_sell_through backend committed `09d21ef` (no web surface yet). |
+| **Idea** | (a) Commit the DSI `dsiApplyAsync` poll wiring once the concurrently-edited `page.tsx` settles. (b) Build the minimal drivable `customer_sell_through` surface by composing the shared `CanonicalColumnMappingPanel` + `ImportStewardCandidateWorkspace` + async apply (do not build bespoke UI). |
+| **Why / deferrable** | The web files were being edited by another tool in the working tree, so committing them would have captured unrelated in-progress changes; the live smoke was skipped (BACKLOG-028). |
+| **What the work is** | Extract the `dsiApplyAsync` hunks from `page.tsx` and commit; then a small `CustomerSellThroughImportSection` composing the canonical components against the sell-through endpoints. |
+| **Regression traps** | Apply transits through `validated` before `loaded` — the apply poll must be terminal on `loaded`/`failed`, not `validated` (already implemented). Governance: provisional creation steward-initiated. |
+| **TRIGGER** | The concurrent web edits land/settle; then verify in-browser. |
+
+---
+
 ## Unsourced — confirm with Warren
 
 These were on a verification checklist but **no deferral/pending wording** was found in repo docs, comments, or planning files:
