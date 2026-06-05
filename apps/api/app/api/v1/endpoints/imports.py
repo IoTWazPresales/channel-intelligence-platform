@@ -15,6 +15,10 @@ from app.core.config import get_settings
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
+from app.services.imports.cst_mapping_candidates import (
+    cst_mapping_state_dict,
+    list_cst_mapping_candidates_sync,
+)
 from app.services.imports.dsi_mapping_workflow import (
     dsi_mapping_gate_errors,
     dsi_mapping_state_dict,
@@ -22,6 +26,7 @@ from app.services.imports.dsi_mapping_workflow import (
     merge_dsi_mapping_memory,
     sanitize_dsi_field_mapping,
 )
+from app.services.imports.import_dispatch import enqueue_import_worker_task
 from app.services.imports.shipment_field_mapping import (
     infer_shipment_import_job_sync,
     merge_shipment_mapping_memory,
@@ -76,46 +81,14 @@ def _enqueue_import_worker_task(
     in_process_thread_name: str,
     sync_work: Callable[[Session, int], Any],
 ) -> tuple[bool, str | None]:
-    """Publish ``task_name`` to the Celery broker; mirror upload/validate fallback semantics.
-
-    Uses ``celery_app.send_task`` so dispatch matches the worker-registered task name regardless
-    of import binding order. On broker failure: dev-only in-process thread when
-    ``CIP_DEV_CELERY_DISPATCH=in_process_thread``, otherwise run ``sync_work`` inline in this process.
-
-    Returns ``(dispatched, task_id)`` where dispatched is ``True`` when the HTTP layer should treat
-    the operation as async (broker accepted the message, or a dev thread was started), and
-    ``task_id`` is the Celery task ID when dispatched via the broker (``None`` otherwise).
-    """
-    settings = get_settings()
-    try:
-        result = celery_app.send_task(task_name, args=[job_id], ignore_result=True)
-        return True, result.id
-    except Exception:
-        logger.exception("%s: Celery enqueue failed job_id=%s task=%s", log_label, job_id, task_name)
-        if settings.cip_dev_celery_dispatch == "in_process_thread":
-
-            def _in_process() -> None:
-                try:
-                    with SessionLocal() as s2:
-                        sync_work(s2, job_id)
-                except Exception:
-                    logger.exception(
-                        "%s: in-process thread failed job_id=%s "
-                        "(CIP_DEV_CELERY_DISPATCH=in_process_thread after broker failure)",
-                        log_label,
-                        job_id,
-                    )
-
-            DEV_CELERY_LOGGER.warning(
-                "ENQUEUE: %s job_id=%s — in-process thread after broker failure (DEV ONLY).",
-                log_label,
-                job_id,
-            )
-            threading.Thread(target=_in_process, name=in_process_thread_name, daemon=True).start()
-            return True, None
-        with SessionLocal() as sync_fallback:
-            sync_work(sync_fallback, job_id)
-        return False, None
+    """Delegate to the shared dispatch helper (see ``import_dispatch.enqueue_import_worker_task``)."""
+    return enqueue_import_worker_task(
+        job_id,
+        task_name=task_name,
+        log_label=log_label,
+        in_process_thread_name=in_process_thread_name,
+        sync_work=sync_work,
+    )
 
 
 def _enqueue_import_pipeline_job(job_id: int, *, log_label: str, in_process_thread_name: str) -> tuple[bool, str | None]:
@@ -1067,6 +1040,32 @@ async def post_dsi_apply(
 
 @router.post("/jobs/{job_id}/process")
 async def process_job(job_id: int):
+    dispatched, task_id = _enqueue_import_pipeline_job(
+        job_id,
+        log_label="process_job",
+        in_process_thread_name=f"import-process-{job_id}",
+    )
+    return {"async": dispatched, "task_id": task_id, "job_id": job_id}
+
+
+@router.get("/jobs/{job_id}/cst-mapping-state")
+async def get_cst_mapping_state(job_id: int, db: AsyncSession = Depends(get_db)):
+    job = await _async_import_job_with_source(db, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Import job not found")
+    return cst_mapping_state_dict(job)
+
+
+@router.get("/jobs/{job_id}/cst-candidates")
+async def list_cst_candidates(
+    job_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=1000),
+    entity: str = Query("all"),
+    status: str = Query("all"),
+):
     with SessionLocal() as sync_db:
-        job = process_import_job_sync(sync_db, job_id)
-    return {"id": job.id, "status": job.status, "stage": job.stage, "error_summary": job.error_summary}
+        result = list_cst_mapping_candidates_sync(
+            sync_db, job_id, skip=skip, limit=limit, entity=entity, status=status
+        )
+    return result

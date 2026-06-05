@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -13,8 +12,6 @@ from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
-from app.core.config import get_settings
-from app.core.dev_celery_logging import DEV_CELERY_LOGGER
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import STAGE_LOADED, STAGE_VALIDATED
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
@@ -74,44 +71,16 @@ async def _unresolved_shipment_mapping_candidate_count(db: AsyncSession, job_id:
 
 
 def _dispatch_shipment_apply(job_id: int) -> tuple[bool, str | None]:
-    """Publish ``imports.shipment_apply`` to the broker; mirror validate/PM-commit fallback semantics.
+    """Publish ``imports.shipment_apply`` to the broker via the shared dispatch helper."""
+    from app.services.imports.import_dispatch import enqueue_import_worker_task
 
-    Returns ``(dispatched, task_id)``. ``dispatched`` is ``True`` when the HTTP layer should treat
-    apply as async — the broker accepted the message (``task_id`` set), or a dev-only in-process
-    thread was started (``CIP_DEV_CELERY_DISPATCH=in_process_thread``). On broker failure with no
-    dev thread it runs the apply inline (``False``) so the operation still completes.
-
-    NOTE: deliberately duplicates ``imports._enqueue_import_worker_task`` to avoid coupling the
-    shipment apply path to the validate endpoint module. Unifying the two is parked in BACKLOG.md.
-    """
-    settings = get_settings()
-    try:
-        result = celery_app.send_task("imports.shipment_apply", args=[job_id], ignore_result=True)
-        return True, result.id
-    except Exception:
-        logger.exception("Shipment apply: Celery enqueue failed job_id=%s", job_id)
-        if settings.cip_dev_celery_dispatch == "in_process_thread":
-
-            def _in_process() -> None:
-                try:
-                    with SessionLocal() as s2:
-                        run_shipment_apply_sync(s2, job_id)
-                except Exception:
-                    logger.exception(
-                        "Shipment apply: in-process thread failed job_id=%s "
-                        "(CIP_DEV_CELERY_DISPATCH=in_process_thread after broker failure)",
-                        job_id,
-                    )
-
-            DEV_CELERY_LOGGER.warning(
-                "ENQUEUE: Shipment apply job_id=%s — in-process thread after broker failure (DEV ONLY).",
-                job_id,
-            )
-            threading.Thread(target=_in_process, name=f"shipment-apply-{job_id}", daemon=True).start()
-            return True, None
-        with SessionLocal() as sync_fallback:
-            run_shipment_apply_sync(sync_fallback, job_id)
-        return False, None
+    return enqueue_import_worker_task(
+        job_id,
+        task_name="imports.shipment_apply",
+        log_label="Shipment apply",
+        in_process_thread_name=f"shipment-apply-{job_id}",
+        sync_work=run_shipment_apply_sync,
+    )
 
 
 def _is_admin(x_user_role: str | None) -> bool:

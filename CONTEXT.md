@@ -854,3 +854,38 @@ Phase 0 establishes the **fact-layer foundations** for weekly DSI intelligence. 
 
 - Smoke PM validate on Supabase with 14k+ row file (worker + bell + state poll).
 - Restart API + worker after deploy.
+
+---
+
+### Jun 5, 2026 — Unit B: CST steward backend (commit B on `fix/shipment-steward-performance`)
+
+**What shipped (BACKLOG-022 + BACKLOG-025 + CST steward backend):**
+
+| Area | File(s) | What changed |
+|------|---------|--------------|
+| **Dispatch extraction** (BACKLOG-022) | `app/services/imports/import_dispatch.py` (NEW) | `enqueue_import_worker_task(job_id, *, task_name, log_label, in_process_thread_name, sync_work) → (bool, str\|None)` extracted from `imports.py`. Third caller (CST apply) triggered extraction. |
+| **Dispatch delegation** | `app/api/v1/endpoints/imports.py` | `_enqueue_import_worker_task` now delegates to `import_dispatch.enqueue_import_worker_task`. |
+| **Dispatch delegation** | `app/api/v1/endpoints/shipment_evidence.py` | `_dispatch_shipment_apply` now delegates to same helper. Removed now-unused `threading`, `get_settings`, `DEV_CELERY_LOGGER` imports. |
+| **Async `/process`** (BACKLOG-025 part A) | `app/api/v1/endpoints/imports.py` | `POST /jobs/{id}/process` now enqueues `imports.process_job` via `_enqueue_import_pipeline_job`; returns `{async: bool, task_id: str\|None, job_id: int}`. Was inline-sync. No frontend caller existed — no breaking change. |
+| **CST candidates service** | `app/services/imports/cst_mapping_candidates.py` (NEW) | `upsert_cst_mapping_candidates(db, job_id)` — aggregates unresolved staging tokens into `ImportEntityMappingCandidate` (entity types `cst_product_token`, `cst_location_token`). Preserves terminal-status rows (steward resolutions survive re-runs). Cleans stale `needs_review` rows. `load_resolved_cst_candidates(db, job_id) → (product_map, location_map)` for apply-pass re-application. `list_cst_mapping_candidates_sync`, `cst_mapping_state_dict`, `_serialize_cst_candidate`. |
+| **CST endpoints** | `app/api/v1/endpoints/imports.py` | Added `GET /jobs/{id}/cst-mapping-state` + `GET /jobs/{id}/cst-candidates` (paginated, filterable by `entity`/`status`). |
+| **CST staging → candidates** | `app/services/imports/customer_sell_through.py` | Both `_handle_flat` and `_ingest_parse_result` now: (1) load resolved candidates before the row loop; (2) apply candidate resolutions as last fallback after deterministic+AI resolution; (3) call `upsert_cst_mapping_candidates` after `db.flush()`. |
+| **Pipeline stage fix** | `app/ingestion/pipeline.py` | CST `import_mode=apply` + no errors → `STAGE_LOADED` (was `STAGE_VALIDATED` unconditionally — bug). |
+
+**Design decisions:**
+- Reused `ImportEntityMappingCandidate` — all existing reads filter by `entity_type`, so CST rows don't contaminate DSI/shipment queries.
+- Preserved `ImportEntityMappingCandidate` rows with terminal status on re-runs (mirrors DSI's `preserved_candidate_steward` dict pattern). Only `needs_review` candidates are updated/deleted.
+- Candidate resolution applied inline in the creation loop (load once before loop, not per-row query).
+- Normalizer keys: product uses existing `_product_token_key` (`.strip().lower()`); location uses same pattern via `_location_token_key`.
+- CST mutations (resolve-product, resolve-location, ignore) deferred to Unit C (no browser consumer yet).
+
+**Headless proof:**
+- `GET /jobs/{id}/cst-mapping-state` and `GET /jobs/{id}/cst-candidates` routes registered (verified via `router.routes`).
+- 17 new unit tests in `tests/test_cst_mapping_candidates.py` — 17/17 pass.
+- Full CST test suite: 53 pass, 4 pre-existing failures unchanged (file-not-found mocking issue in `test_customer_sell_through_foundation.py`).
+- All 6 modified modules pass AST syntax check.
+- Browser acceptance (apply round-trip, candidates populated in UI): pending (Unit C).
+
+**BACKLOG updated:** BACKLOG-022 → Done; BACKLOG-025 → Done (part A); part B (frontend progress panel for CST apply) deferred to Unit C.
+
+**Next:** Unit C — CST web surface (`CanonicalColumnMappingPanel` + `ImportStewardCandidateWorkspace` + async apply with progress).

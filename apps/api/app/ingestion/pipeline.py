@@ -895,7 +895,10 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
                 if isinstance(err, dict) and err.get("message"):
                     job.error_summary = str(err["message"])[:500]
         else:
-            job.stage = STAGE_VALIDATED
+            if handler == "customer_sell_through" and (job.import_mode or "").strip().lower() == "apply" and not errors:
+                job.stage = STAGE_LOADED
+            else:
+                job.stage = STAGE_VALIDATED
             job.status = "completed_with_errors" if errors else "completed"
             job.error_summary = f"{errors} rows require attention" if errors else None
         job.completed_at = datetime.now(timezone.utc)

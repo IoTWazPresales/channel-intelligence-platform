@@ -365,6 +365,12 @@ def _ingest_parse_result(
     )
     db.flush()
 
+    from app.services.imports.cst_mapping_candidates import (
+        load_resolved_cst_candidates,
+        upsert_cst_mapping_candidates,
+    )
+
+    resolved_products, resolved_locations = load_resolved_cst_candidates(db, job.id)
     prod_idx = _load_product_resolution_index(db)
     resolved_n = 0
     unresolved_n = 0
@@ -393,6 +399,18 @@ def _ingest_parse_result(
                 line.resolved_product_id = pid
                 product_ok = True
 
+        # Candidate resolution fallback (steward-resolved tokens from a prior validate pass)
+        if not product_ok and line.raw_product_token:
+            key = _product_token_key(line.raw_product_token)
+            if key and key in resolved_products:
+                line.resolved_product_id = resolved_products[key]
+                product_ok = True
+        if not location_ok and line.raw_location_token:
+            loc_key = (line.raw_location_token or "").strip().lower()
+            if loc_key and loc_key in resolved_locations:
+                line.resolved_location_id = resolved_locations[loc_key]
+                location_ok = True
+
         if product_ok and location_ok and line.resolution_status in ("pending", "unresolved"):
             line.resolution_status = "resolved"
 
@@ -411,6 +429,7 @@ def _ingest_parse_result(
         db.add(line)
 
     db.flush()
+    upsert_cst_mapping_candidates(db, job.id)
 
     warnings = list(result.warnings or [])
     if drift_warnings:
@@ -539,6 +558,12 @@ def _handle_flat(
     )
     db.flush()
 
+    from app.services.imports.cst_mapping_candidates import (
+        load_resolved_cst_candidates,
+        upsert_cst_mapping_candidates,
+    )
+
+    resolved_products, resolved_locations = load_resolved_cst_candidates(db, job.id)
     prod_idx = _load_product_resolution_index(db)
     resolved_n = 0
     unresolved_n = 0
@@ -550,6 +575,9 @@ def _handle_flat(
         product_ok = False
         if line.raw_product_token:
             pid = resolve_product_id_for_sellthrough(prod_idx, line.raw_product_token)
+            if pid is None:
+                key = _product_token_key(line.raw_product_token)
+                pid = resolved_products.get(key)
             if pid is not None:
                 line.resolved_product_id = pid
                 product_ok = True
@@ -562,6 +590,9 @@ def _handle_flat(
                     CustomerLocation.location_code == line.raw_location_token,
                 )
             )
+            if loc_id is None:
+                loc_key = (line.raw_location_token or "").strip().lower()
+                loc_id = resolved_locations.get(loc_key)
             if loc_id is not None:
                 line.resolved_location_id = int(loc_id)
             else:
@@ -577,6 +608,7 @@ def _handle_flat(
         db.add(line)
 
     db.flush()
+    upsert_cst_mapping_candidates(db, job.id)
 
     meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
     meta["customer_sellthrough_flat"] = to_jsonable(

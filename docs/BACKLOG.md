@@ -311,16 +311,12 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-03 (during shipment apply backgrounding) |
+| **Status** | **Done · 2026-06-05** (triggered by CST apply — third caller) |
 | **Effort** | Small |
 | **Source** | `apps/api/app/api/v1/endpoints/imports.py` (`_enqueue_import_worker_task`, ~line 71); `apps/api/app/api/v1/endpoints/shipment_evidence.py` (`_dispatch_shipment_apply`) |
 | **Idea** | `_dispatch_shipment_apply` deliberately duplicates the broker-send → dev in-process thread → sync fallback logic of `imports._enqueue_import_worker_task` (only `task_name` + `sync_work` differ). Extract the helper into a shared service (e.g. `app/services/imports/import_dispatch.py`) and import it from both endpoints. |
 | **Why / deferrable** | Duplication chosen to avoid coupling the apply path to the validate endpoint module and to keep the working validate dispatch untouched while shipping the apply fix. Pure refactor; no behavior change. |
-| **What the work is** | Move the generic enqueue helper to a service module; update `imports._enqueue_import_pipeline_job` and `shipment_evidence._dispatch_shipment_apply` to call it; keep dev-fallback + task-id semantics identical. |
-| **Regression traps** | Must preserve `(dispatched, task_id)` contract, dev `CIP_DEV_CELERY_DISPATCH=in_process_thread` branch, and sync inline fallback; do not change validate dispatch behavior. |
-| **Behavior to retain** | Validate (`imports.process_job`) and shipment apply (`imports.shipment_apply`) dispatch + fallback semantics. |
-| **Out of scope** | Changing task definitions or progress reading. |
-| **TRIGGER** | A third caller needs the same dispatch helper, or the duplication is flagged in review. |
+| **Shipped** | `app/services/imports/import_dispatch.py` — `enqueue_import_worker_task(job_id, *, task_name, log_label, in_process_thread_name, sync_work) → (bool, str\|None)`. `imports._enqueue_import_worker_task` now delegates to it; `shipment_evidence._dispatch_shipment_apply` now delegates to it. Preserves `(dispatched, task_id)` contract and both dev-fallback paths. |
 
 ---
 
@@ -361,15 +357,12 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-04 (out-of-scope this pass) |
+| **Status** | **Done (part A) · 2026-06-05** — `/process` endpoint async, returns `{async, task_id, job_id}`. CST is the initial beneficiary. Masters/historical still use the same endpoint and get the async path for free. |
 | **Effort** | Medium |
 | **Source** | This branch's audit; `apps/api/app/api/v1/endpoints/imports.py::process_job` runs `process_import_job_sync` inline |
 | **Idea** | Move the generic `POST /jobs/{id}/process` (apply path for `distributor_master`, `customer_master`, `historical_lineup`, `customer_sell_through`) onto the async-dispatch pattern (broker→dev-thread→sync-fallback) with progress, like DSI/shipment apply. |
-| **Why / deferrable** | Large master/sell-through files block the request; deferrable until those importers see large files or after DSI/shipment async lands and stabilizes. |
-| **What the work is** | A generic apply orchestrator + `imports.process_job_apply` task (or reuse `imports.process_job` with progress) + endpoint returns `{async, task_id}` + a registered slot; frontend poll. |
-| **Regression traps** | Per-importer terminal stages differ; preserve each handler's semantics; register the slot (orphan-slot rule). |
-| **Behavior to retain** | Sync-fallback surfaces failures as today. |
-| **TRIGGER** | A master/sell-through file large enough to risk proxy timeout, or a generic-apply-async task is approved. |
+| **Shipped** | `POST /jobs/{job_id}/process` now calls `_enqueue_import_pipeline_job` (reuses `imports.process_job` Celery task) and returns `{"async": bool, "task_id": str\|None, "job_id": int}`. No frontend caller existed so no breaking change. Progress polling via existing `imports.process_job` task slot is available but not yet wired to a frontend panel. |
+| **Remaining** | Frontend progress panel for CST apply (Unit C); slot registration for CST apply; masters/historical may need their own panels if they become async-heavy. |
 
 ---
 
