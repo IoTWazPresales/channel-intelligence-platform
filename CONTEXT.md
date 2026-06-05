@@ -1,5 +1,55 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 4, 2026 — Units 2–3 + parity standard (DSI apply async, sell-through, docs)
+- **Branch:** `fix/shipment-steward-performance` (not merged). Continuation of the cross-importer
+  alignment pass after Unit 1 (`f4f327d`). Each unit a separate commit; main untouched.
+- **Unit 2 — DSI apply → async** (`c079cc6`, backend): `post_dsi_apply` now dispatches
+  `imports.dsi_apply` (new `dsi_apply_sync.run_dsi_apply_sync`: pipeline-apply → complete-to-loaded,
+  progress, graceful completion-error→failed) via `_dispatch_dsi_apply` (broker→dev-thread→sync
+  fallback) instead of running inline; returns `{async, task_id}`, `409` on busy. SOH/velocity/
+  forecasting stay their own tasks. Frontend (`imports/page.tsx`): dedicated `dsiApplyAsync` poll
+  (terminal on `loaded`/`failed`, **not** `validated` — apply transits through `validated`) + apply
+  progress; tests 3/3 (`test_dsi_apply_background.py`).
+  - **LIVE smoke (local DB):** DSI apply dispatched to a real worker (broker task id,
+    `PENDING→PROGRESS`) and the job reached `stage=loaded`/`status=completed` with a
+    `FactInventoryDistributor` upserted (soh=10). Run against the **local** `cip` DB because the
+    remote Supabase pooler reproducibly drops SSL on the long-lived apply connection (BACKLOG-028) —
+    that fragility pre-dates and also affects the old sync apply.
+- **Unit 3 — customer_sell_through** (`09d21ef`, backend): added the missing `IMPORT_TEMPLATE_ROWS`
+  entry (§1d closed — matches migration 0045, no new migration); batched the per-row
+  `INSERT…ON CONFLICT` fact upsert (chunked, dedup-by-source_key last-wins, optional progress —
+  conflict semantics unchanged); normalized AI calls onto the shared `try_ai_token_resolution`
+  wrapper. Tests 47/47 (parsers + new batched-apply unit tests + AI integration).
+- **Unit 4 — resolution proposal** (`b983d90`, docs): `docs/RESOLUTION_IMPROVEMENT_PROPOSAL.md`
+  (observe-and-propose; cross-importer alias memory, per-type thresholds, normalization/pg_trgm,
+  batched AI, absent-AI importers). No logic change.
+- **Final — parity standard** (`1e2702e`, docs): `.cursor/rules/import-parity.mdc` records the
+  canonical patterns (steward = shared workspace+tabs+banding; apply = async dispatch; resolution =
+  `try_ai_token_resolution`; mapping = `CanonicalColumnMappingPanel`; writes = set-based chunked
+  upsert). Capability-contract living-doc updated; BACKLOG-024…029 capture out-of-scope gaps
+  (AI for distributor_master + historical_lineup; generic-pipeline async apply; PM two-pipeline +
+  mapping-UI; the remote-pooler SSL finding; finalize Unit 2 FE + Unit 3 surface).
+- **Constraints honored:** no schema/migration; async DB config (NullPool/6543/`statement_cache_size=0`)
+  untouched (only sync-session work moved to workers / batched); governance (steward-initiated
+  provisional, no auto-create; SOH calculated-not-stored; source_key upsert) preserved.
+- Note: an unrelated concurrent edit left `imports/page.tsx` with a half-extracted upload zone
+  (dangling `dragActive`/`CloudUploadOutlinedIcon`); restored the two removed declarations so the
+  page compiles (page test 26/26). The standalone `ImportFileUploadZone` component is committed for
+  that extraction to be finished separately.
+
+### Jun 1, 2026 — Inbound shipments: filter-scoped KPIs + delivery lens
+- **Branch:** `fix/shipment-steward-performance` (uncommitted). `/shipping` KPI cards now use the **same filter contract** as the grid (`GET /commercial-summary` accepts all `/lines` filter query params; response includes `filter_scope.active` + `cohort_line_count`).
+- **Web:** `buildShippingCommercialSummaryUrl` / `appendShippingFilterParams` shared with lines URL; `ShippingCommercialSummary` query key includes filter state; banner switches between global vs filtered cohort. **Delivered this week** card (was “Landed”). Smart chips: **Delivered (all)** (`received` + POD set), **In transit** (`scheduled` + no POD). Cargo status dropdown labels: `received` → Delivered, `scheduled` → In transit.
+- **API:** `_build_shipping_fact_filters`, `_count_shipment_facts`, filtered `commercial-summary` + scoped `eta-shifts` when filters active.
+- **Tests:** `buildShippingLinesUrl.test.ts` (3 cases). Not browser-smoked.
+
+### Jun 4, 2026 — Inbound shipments page: grid parity + KPI drill-down
+- **Branch:** `fix/shipment-steward-performance` (uncommitted with other WIP). `/shipping` (`Inbound shipments`) no longer caps at 50 rows with no pager.
+- **Grid:** `EnterpriseDataGrid` + `ModuleDataSection` + `ModuleGridToolbar`; server `skip`/`limit` with `TablePagination` (25–500, persisted in `cip.commercial.inbound-shipments.grid.optional.v1`); filter changes reset to page 0. Qty/amount/currency columns added to default set.
+- **KPI cards (`ShippingCommercialSummary`):** note that cards are global (not filter-scoped); click card → matching smart view + scroll to grid; pipeline card → cargo `scheduled` filter; fixed “units” → **lines**; overdue shows **% of scheduled pipeline** and **% of all facts**; new **Landed this week** card (API: `status=received`, POD in current ISO week).
+- **API (`shipping.py` `commercial-summary`):** `overdue.pct_of_scheduled_pipeline`, `landed_this_week.total`.
+- **Tests:** `buildShippingLinesUrl.test.ts` (vitest). Not browser-smoked in this session.
+
 ### Jun 4, 2026 — Unit 1: shipment steward bulk ops → async Celery (parity with DSI bulk)
 - **Branch:** `fix/shipment-steward-performance` (not merged). Brings the three shipment steward **bulk** ops to the same async-with-progress bar DSI bulk already has; the single-candidate ops stay sync (small/bounded).
 - **Problem:** `bulk-map-customer`, `bulk-apply-confirmed-plans`, `bulk-create-provisional-customers` ran synchronously in-request → proxy-timeout risk on large selections (same disease validate/apply already had).

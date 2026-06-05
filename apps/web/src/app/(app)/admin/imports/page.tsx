@@ -61,6 +61,7 @@ import {
 import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
+import { ImportFileUploadZone } from './ImportFileUploadZone';
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
 import {
   DSI_STEWARD_CONFIG,
@@ -484,7 +485,8 @@ function AdminImportsPageContent() {
   const [sourceId, setSourceId] = useState<number | ''>('');
   const [importMode, setImportMode] = useState<'validate' | 'apply'>('validate');
   const [confirmDestructive, setConfirmDestructive] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
+  /** When a job exists, the large drop zone collapses; user can expand to start a new upload. */
+  const [uploadZoneExpanded, setUploadZoneExpanded] = useState(false);
   const [lastJobId, setLastJobId] = useState<number | null>(null);
   const [lastGenericFile, setLastGenericFile] = useState<File | null>(null);
   const [historicalValidatedJobId, setHistoricalValidatedJobId] = useState<number | null>(null);
@@ -510,7 +512,14 @@ function AdminImportsPageContent() {
   const [shipmentApplyWarning, setShipmentApplyWarning] = useState<string | null>(null);
   const [shipmentMapDraft, setShipmentMapDraft] = useState<Record<string, string>>({});
   const [shipmentValidateAsync, setShipmentValidateAsync] = useState(false);
+  // Drag-and-drop highlight for the inline upload zones. (A standalone ImportFileUploadZone
+  // component exists for an in-progress extraction; restored here so the still-inline zones compile.)
+  const [dragActive, setDragActive] = useState(false);
   const [dsiValidateAsync, setDsiValidateAsync] = useState(false);
+  // DSI apply runs async on the worker too. Tracked separately from validate because apply transits
+  // through stage `validated` on its way to `loaded` — the validate poll would mis-read that
+  // transient `validated` as "done", so apply needs its own poll terminal on `loaded`/`failed`.
+  const [dsiApplyAsync, setDsiApplyAsync] = useState(false);
   const [dsiWorkflowMode, setDsiWorkflowMode] = useState<'auto' | 'historical' | 'weekly'>('auto');
 
   const jobIdParam = useMemo(() => {
@@ -994,8 +1003,25 @@ function AdminImportsPageContent() {
     },
   });
 
+  // Apply poll: terminal on `loaded`/`failed` (apply's terminal stage), NOT `validated` — apply
+  // passes through `validated` before the worker's complete step upserts facts and promotes to `loaded`.
+  const { data: dsiApplyPollJob } = useQuery({
+    queryKey: ['dsi-async-apply-import-job', lastJobId],
+    queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${lastJobId!}`, { signal }),
+    enabled: Boolean(isDsi && lastJobId != null && dsiApplyAsync),
+    refetchInterval: (q) => {
+      const j = q.state.data;
+      if (!j) return 1500;
+      const status = (j.status || '').trim().toLowerCase();
+      const st = (j.stage || '').trim();
+      if (st === 'loaded' || st === 'failed') return false;
+      if (status === 'failed' || status === 'completed' || status === 'completed_with_errors') return false;
+      return 1500;
+    },
+  });
+
   const { data: dsiProgress } = useImportJobProgressQuery(lastJobId ?? undefined, {
-    enabled: Boolean(isDsi && lastJobId != null && dsiValidateAsync),
+    enabled: Boolean(isDsi && lastJobId != null && (dsiValidateAsync || dsiApplyAsync)),
   });
 
   useEffect(() => {
@@ -1026,6 +1052,24 @@ function AdminImportsPageContent() {
     }
   }, [dsiValidateAsync, dsiValidatePollJob, dsiProgress?.phase, qc, refetchDsiMapping, refetchPreview]);
 
+  useEffect(() => {
+    if (!dsiApplyAsync) return;
+    const j = dsiApplyPollJob;
+    if (!j) return;
+    const status = (j.status || '').trim().toLowerCase();
+    const st = (j.stage || '').trim();
+    if (status === 'running' && st !== 'loaded' && st !== 'failed') return;
+    if (st === 'loaded' || st === 'failed' || status === 'completed' || status === 'completed_with_errors' || status === 'failed') {
+      setDsiApplyAsync(false);
+      void (async () => {
+        await refetchDsiImportJobStewardQueries(qc, j.id, { includeImportJobsList: true });
+        void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+        await refetchDsiMapping();
+        await refetchPreview();
+      })();
+    }
+  }, [dsiApplyAsync, dsiApplyPollJob, qc, refetchDsiMapping, refetchPreview]);
+
   const handleDsiAsyncPipelineStarted = useCallback(
     (args: { importJobId: number; taskId?: string | null }) => {
       if (args.importJobId !== lastJobId) return;
@@ -1038,15 +1082,16 @@ function AdminImportsPageContent() {
   );
 
   const dsiPipelineInFlight = useMemo(() => {
-    if (dsiValidateAsync) return true;
-    const j = dsiValidatePollJob;
+    if (dsiValidateAsync || dsiApplyAsync) return true;
+    const j = dsiValidatePollJob ?? dsiApplyPollJob;
     if (!j) return false;
     return (j.status || '').trim().toLowerCase() === 'running';
-  }, [dsiValidateAsync, dsiValidatePollJob]);
+  }, [dsiValidateAsync, dsiApplyAsync, dsiValidatePollJob, dsiApplyPollJob]);
 
   useEffect(() => {
     dsiValidate.reset();
     setDsiValidateAsync(false);
+    setDsiApplyAsync(false);
   }, [lastJobId]);
 
   const dsiApply = useMutation({
@@ -1063,13 +1108,19 @@ function AdminImportsPageContent() {
         headers: defaultHeaders,
       });
       if (!res.ok) throw new Error(await readFetchError(res));
-      return res.json() as Promise<DsiMappingState>;
+      // Apply now dispatches to the worker and returns immediately with {async:true,...}; the
+      // dedicated apply poll drives the lifecycle to `loaded`. (Sync fallback returns DsiMappingState.)
+      return res.json() as Promise<DsiMappingState & { async?: boolean; task_id?: string | null }>;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data && (data as { async?: boolean }).async) {
+        setDsiApplyAsync(true);
+      }
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
     },
     onError: () => {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
@@ -1836,6 +1887,27 @@ function AdminImportsPageContent() {
     sourceId !== '';
 
   const canGoUpload = isPm ? canPmUpload : canGoUploadGeneric;
+
+  const boundImportJobId = lastJobId ?? (isJobRevisitMode && jobIdParam != null ? jobIdParam : null);
+
+  const boundImportJobMeta = useMemo(() => {
+    if (boundImportJobId == null) return null;
+    if (jobDetail?.id === boundImportJobId) {
+      return {
+        id: boundImportJobId,
+        file_name: jobDetail.file_name,
+        stage: jobDetail.stage,
+      };
+    }
+    if (shipmentImportJob && shipmentEvidencePollJobId === boundImportJobId) {
+      return {
+        id: boundImportJobId,
+        file_name: shipmentImportJob.file_name,
+        stage: shipmentImportJob.stage,
+      };
+    }
+    return { id: boundImportJobId, file_name: null as string | null, stage: null as string | null };
+  }, [boundImportJobId, jobDetail, shipmentImportJob, shipmentEvidencePollJobId]);
 
   const identityTargetSet = useMemo(
     () => new Set(pmJobState?.identity_targets ?? ['technical_product_id']),
