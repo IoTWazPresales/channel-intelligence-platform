@@ -1,6 +1,5 @@
 'use client';
 
-import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import Autocomplete from '@mui/material/Autocomplete';
@@ -512,9 +511,6 @@ function AdminImportsPageContent() {
   const [shipmentApplyWarning, setShipmentApplyWarning] = useState<string | null>(null);
   const [shipmentMapDraft, setShipmentMapDraft] = useState<Record<string, string>>({});
   const [shipmentValidateAsync, setShipmentValidateAsync] = useState(false);
-  // Drag-and-drop highlight for the inline upload zones. (A standalone ImportFileUploadZone
-  // component exists for an in-progress extraction; restored here so the still-inline zones compile.)
-  const [dragActive, setDragActive] = useState(false);
   const [dsiValidateAsync, setDsiValidateAsync] = useState(false);
   // DSI apply runs async on the worker too. Tracked separately from validate because apply transits
   // through stage `validated` on its way to `loaded` — the validate poll would mis-read that
@@ -2352,55 +2348,16 @@ function AdminImportsPageContent() {
               immediately; mapping and validate/commit follow in the next steps.
             </Typography>
             {!canGoUpload ? <Alert severity="warning">Select a data provider before uploading.</Alert> : null}
-            <Box
-              onDragEnter={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-              }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-                const f = e.dataTransfer.files?.[0];
-                onFile(f);
-              }}
-              sx={{
-                border: '2px dashed',
-                borderColor: dragActive ? 'primary.main' : 'divider',
-                borderRadius: 2,
-                px: 3,
-                py: 4,
-                textAlign: 'center',
-                bgcolor: dragActive ? 'action.selected' : 'action.hover',
-              }}
-            >
-              <CloudUploadOutlinedIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
-              <Typography variant="subtitle1" fontWeight={600}>
-                Drop CSV or XLSX here
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Or choose a file. No catalog writes until you pass validation and commit on the last step.
-              </Typography>
-              <Button variant="contained" component="label" disabled={!canGoUpload || pmUpload.isPending}>
-                Choose file
-                <input
-                  hidden
-                  type="file"
-                  accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-                  onChange={(e) => {
-                    onFile(e.target.files?.[0]);
-                    e.target.value = '';
-                  }}
-                />
-              </Button>
-            </Box>
-            {pmUpload.isPending ? <LinearProgress /> : null}
-            {pmUpload.isError ? (
-              <Alert severity="error">{safeDisplayError(pmUpload.error)}</Alert>
-            ) : null}
+            <ImportFileUploadZone
+              expanded
+              onExpandedChange={() => {}}
+              canUpload={!!canGoUpload}
+              pending={pmUpload.isPending}
+              error={pmUpload.isError ? safeDisplayError(pmUpload.error) : null}
+              onFile={onFile}
+              subtitle="Or choose a file. No catalog writes until you pass validation and commit on the last step."
+              testIdPrefix="pm-upload"
+            />
             {pmUpload.isSuccess && lastJobId != null ? (
               <Alert severity="success">
                 Job <strong>#{lastJobId}</strong> staged. File headers:{' '}
@@ -3115,53 +3072,16 @@ function AdminImportsPageContent() {
               </Select>
             </FormControl>
             {!canGoUpload ? <Alert severity="warning">Complete provider, mode, and confirmations before uploading.</Alert> : null}
-            <Box
-              onDragEnter={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-              }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-                const f = e.dataTransfer.files?.[0];
-                onFile(f);
-              }}
-              sx={{
-                border: '2px dashed',
-                borderColor: dragActive ? 'primary.main' : 'divider',
-                borderRadius: 2,
-                px: 3,
-                py: 4,
-                textAlign: 'center',
-                bgcolor: dragActive ? 'action.selected' : 'action.hover',
-              }}
-            >
-              <CloudUploadOutlinedIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
-              <Typography variant="subtitle1" fontWeight={600}>
-                Drop CSV or XLSX here
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Or choose a file. Validation and apply run only after you confirm mappings.
-              </Typography>
-              <Button variant="contained" component="label" disabled={!canGoUpload || upload.isPending}>
-                Choose file
-                <input
-                  hidden
-                  type="file"
-                  accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-                  onChange={(e) => {
-                    onFile(e.target.files?.[0]);
-                    e.target.value = '';
-                  }}
-                />
-              </Button>
-            </Box>
-            {upload.isPending ? <LinearProgress /> : null}
-            {upload.isError ? <Alert severity="error">{safeDisplayError(upload.error)}</Alert> : null}
+            <ImportFileUploadZone
+              expanded
+              onExpandedChange={() => {}}
+              canUpload={!!canGoUpload}
+              pending={upload.isPending}
+              error={upload.isError ? safeDisplayError(upload.error) : null}
+              onFile={onFile}
+              subtitle="Or choose a file. Validation and apply run only after you confirm mappings."
+              testIdPrefix="dsi-upload"
+            />
             {upload.isSuccess && lastJobId != null ? (
               <Alert severity="success" data-testid="dsi-upload-success">
                 Job <strong>#{lastJobId}</strong> created. Continue to column mapping.
@@ -3589,55 +3509,16 @@ function AdminImportsPageContent() {
             {!canGoUpload && !isJobRevisitMode ? (
               <Alert severity="warning">Complete provider, mode, and confirmations before uploading.</Alert>
             ) : null}
-            <Box
-              onDragEnter={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-              }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-                const f = e.dataTransfer.files?.[0];
-                onFile(f);
-              }}
-              sx={{
-                border: '2px dashed',
-                borderColor: dragActive ? 'primary.main' : 'divider',
-                borderRadius: 2,
-                px: 3,
-                py: 4,
-                textAlign: 'center',
-                bgcolor: dragActive ? 'action.selected' : 'action.hover',
-              }}
-            >
-              <CloudUploadOutlinedIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
-              <Typography variant="subtitle1" fontWeight={600}>
-                Drop CSV or XLSX here
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Or choose a file. Pipeline runs according to import mode.
-              </Typography>
-              <Button variant="contained" component="label" disabled={!canGoUpload || upload.isPending}>
-                Choose file
-                <input
-                  hidden
-                  type="file"
-                  accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-                  onChange={(e) => {
-                    onFile(e.target.files?.[0]);
-                    e.target.value = '';
-                  }}
-                />
-              </Button>
-            </Box>
-            {upload.isPending ? <LinearProgress /> : null}
-            {upload.isError ? (
-              <Alert severity="error">{safeDisplayError(upload.error)}</Alert>
-            ) : null}
+            <ImportFileUploadZone
+              expanded
+              onExpandedChange={() => {}}
+              canUpload={!!canGoUpload}
+              pending={upload.isPending}
+              error={upload.isError ? safeDisplayError(upload.error) : null}
+              onFile={onFile}
+              subtitle="Or choose a file. Pipeline runs according to import mode."
+              testIdPrefix="generic-upload"
+            />
             {upload.isSuccess && lastJobId != null && upload.data?.import_mode !== 'apply' ? (
               <Alert severity="success">
                 Job <strong>#{lastJobId}</strong> created.{' '}
