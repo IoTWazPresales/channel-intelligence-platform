@@ -418,18 +418,19 @@
 
 ---
 
-## BACKLOG-029 — Finalize Unit 2 frontend + Unit 3 sell-through surface (commit pending)
+## BACKLOG-029 — Unit 3 sell-through surface + `ImportFileUploadZone` extraction decision
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-04 (blocked by a concurrent tool editing shared web files) |
-| **Effort** | Small (finish + commit) / Medium (sell-through surface) |
-| **Source** | This branch: DSI apply async backend committed `c079cc6` (frontend `dsiApplyAsync` poll present in working-tree `apps/web/src/app/(app)/admin/imports/page.tsx` but uncommitted); customer_sell_through backend committed `09d21ef` (no web surface yet). |
-| **Idea** | (a) Commit the DSI `dsiApplyAsync` poll wiring once the concurrently-edited `page.tsx` settles. (b) Build the minimal drivable `customer_sell_through` surface by composing the shared `CanonicalColumnMappingPanel` + `ImportStewardCandidateWorkspace` + async apply (do not build bespoke UI). |
-| **Why / deferrable** | The web files were being edited by another tool in the working tree, so committing them would have captured unrelated in-progress changes; the live smoke was skipped (BACKLOG-028). |
-| **What the work is** | Extract the `dsiApplyAsync` hunks from `page.tsx` and commit; then a small `CustomerSellThroughImportSection` composing the canonical components against the sell-through endpoints. |
-| **Regression traps** | Apply transits through `validated` before `loaded` — the apply poll must be terminal on `loaded`/`failed`, not `validated` (already implemented). Governance: provisional creation steward-initiated. |
-| **TRIGGER** | The concurrent web edits land/settle; then verify in-browser. |
+| **Status / parked** | Parked · 2026-06-05 (updated; part (a) already done) |
+| **Effort** | Medium (sell-through surface) + Small (upload-zone decision) |
+| **Source** | This branch: DSI apply async backend committed `c079cc6`; **`dsiApplyAsync` frontend poll committed `153c93c`** (7 occurrences in `page.tsx` — `setDsiApplyAsync`, `dsiApplyPollJob`, `dsiApplyAsync || dsiApplyPollJob`, poll `useEffect`, `onSuccess` handler; terminal on `loaded`/`failed`, not `validated`). `ImportFileUploadZone` component committed in `153c93c` but **never rendered as JSX** — the import at line 64 of `page.tsx` is unused; the 3 inline upload zones still exist. customer_sell_through backend committed `09d21ef` (no web surface yet). |
+| **Part (a) — DONE** | `dsiApplyAsync` poll wiring committed in `153c93c`. Not a pending task. |
+| **Part (b) — CST surface** | Build the minimal drivable `customer_sell_through` surface by composing the shared `CanonicalColumnMappingPanel` + `ImportStewardCandidateWorkspace` + async apply (do not build bespoke UI). Requires running browser for verification. |
+| **Part (c) — upload-zone extraction** | `ImportFileUploadZone` (`ImportFileUploadZone.tsx`) is a complete, self-contained component. The import in `page.tsx` line 64 is unused (`<ImportFileUploadZone` count = 0). Decide: finish the extraction (replace the 3 inline zones with the component + correct props, then remove the inline duplicates) OR remove the unused import if the extraction is abandoned. Either way: `strict: true` does **not** enable `noUnusedLocals`, so this is currently a lint smell, not a tsc error or runtime break. Requires in-browser upload/drag smoke after any change. |
+| **Regression traps** | Apply poll: transits through `validated` before `loaded` — terminal condition must stay `loaded`/`failed` only (already correct). Upload zones: preserve drag-and-drop, `canUpload` gating, `pending` progress bar; do not break the DSI / shipment / generic upload flows. |
+| **Governance** | Provisional creation stays steward-initiated; no auto-create. |
+| **TRIGGER** | (b) sell-through: surface prioritized in roadmap + running browser available. (c) upload-zone: a browser-verified frontend task is approved for this branch, or the unused import is flagged by linter in CI. |
 
 ---
 

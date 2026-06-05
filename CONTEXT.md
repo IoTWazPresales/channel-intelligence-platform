@@ -1,5 +1,13 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 5, 2026 — Read-only discovery + BACKLOG-029 correction (docs only)
+- **Branch:** `fix/shipment-steward-performance` (not merged). Read-only troubleshooting pass; no application code changed.
+- **Repo state verified:** clean working tree (only 4 expected untracked scratch files: `_pm_job3_*`, `_dim_product_channel_backup.json`); all 7 branch commits present and in sync with `origin/fix/shipment-steward-performance`; backend pure-mock unit tests 19/19 pass; `main` untouched.
+- **DB target verified (no DB touched):** `.env` default `DATABASE_URL_SYNC` → **remote Supabase pooler** (`:5432/postgres`). Local cip DB is `DATABASE_URL_LOCAL_SYNC` only. Any DB-touching test or script on this repo must explicitly override `DATABASE_URL_SYNC` and verify `SELECT current_database()` returns `cip` before writing. The `conftest.py` guard checks for DB name `cip` — the remote name `postgres` would bypass it.
+- **BACKLOG-029 corrected:** part (a) (`dsiApplyAsync` frontend poll) was already committed in `153c93c` — the BACKLOG-029 entry incorrectly said it was "present in working-tree but uncommitted." Updated BACKLOG-029 to mark part (a) done; remaining work is (b) the CST web surface and (c) the `ImportFileUploadZone` extraction decision.
+- **`ImportFileUploadZone` status:** the component file (`ImportFileUploadZone.tsx`) is complete and committed. The import in `page.tsx` line 64 is unused (`<ImportFileUploadZone` JSX count = 0); the 3 inline upload zones still exist. `tsconfig.json` `strict: true` does **not** enable `noUnusedLocals`, so this is a lint smell, not a tsc error or runtime break. No application code changed; captured in BACKLOG-029 part (c).
+- **Nothing else broken:** all deferred items (BACKLOG-001, -024 through -029) are correctly parked, not broken. The prior session's restore of `dragActive`/`CloudUploadOutlinedIcon` declarations kept the page compiling and tests at 26/26.
+
 ### Jun 4, 2026 — Units 2–3 + parity standard (DSI apply async, sell-through, docs)
 - **Branch:** `fix/shipment-steward-performance` (not merged). Continuation of the cross-importer
   alignment pass after Unit 1 (`f4f327d`). Each unit a separate commit; main untouched.
