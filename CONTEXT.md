@@ -1,5 +1,16 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 5, 2026 — DSI remote Supabase handover (docs only; implementation next session)
+- **Branch:** `fix/shipment-steward-performance` (ahead of `origin` by 2 at handover write). **No Phase 1 code in this chat** — audit + handover only.
+- **Handover:** `docs/SESSION_HANDOVER_2026_06_05_DSI_REMOTE_SUPABASE.md` — phased plan, all backlogs mapped, audit instructions, new-agent prompt at §10.
+- **Derived memory:** `docs/memory/derived/platform_dsi_remote_reliability_truth.md` — for Claude Code / Opus audit of future implementation.
+- **New backlog:** **BACKLOG-030** — DSI validate batched staging + chunked commits for remote Supabase (trigger met: job #43).
+- **Active DB (Warren `.env`):** **Supabase EU pooler** (`DATABASE_URL` `:6543`, `DATABASE_URL_SYNC` `:5432`, db `postgres`). Local `cip` at `DATABASE_URL_LOCAL*` is reachable but **not** active. Stay on Supabase by product decision.
+- **Job #43:** `distributor_inventory` / `RAW.xlsx` / ~169k rows — **`failed`/`failed`**, pooler disconnect on `dim_customer LIMIT 60`, **0 candidates** (full rollback). Celery may log task "succeeded" while job is failed (pipeline catches exception). **Re-validate** after Phase 1 or as soak test (Phase 0).
+- **Root cause class:** Monolithic ~45 min transaction + per-row ORM staging + sporadic per-row DB reads — **not** missing temp shipment file download (upload read once; corroboration from DB cache).
+- **Next implementation priority:** Phase 1 (BACKLOG-030) → Phase 2 (BACKLOG-028, -002) → Phase 3 (BACKLOG-003). Completing all unrelated backlogs does **not** guarantee Supabase validate success.
+- **BACKLOG-029(c):** `ImportFileUploadZone` extraction committed in `d0a8923` (3 render sites in `page.tsx`).
+
 ### Jun 5, 2026 — Read-only discovery + BACKLOG-029 correction (docs only)
 - **Branch:** `fix/shipment-steward-performance` (not merged). Read-only troubleshooting pass; no application code changed.
 - **Repo state verified:** clean working tree (only 4 expected untracked scratch files: `_pm_job3_*`, `_dim_product_channel_backup.json`); all 7 branch commits present and in sync with `origin/fix/shipment-steward-performance`; backend pure-mock unit tests 19/19 pass; `main` untouched.

@@ -420,10 +420,28 @@
 | **Source** | This branch: DSI apply async backend committed `c079cc6`; **`dsiApplyAsync` frontend poll committed `153c93c`** (7 occurrences in `page.tsx` — `setDsiApplyAsync`, `dsiApplyPollJob`, `dsiApplyAsync || dsiApplyPollJob`, poll `useEffect`, `onSuccess` handler; terminal on `loaded`/`failed`, not `validated`). `ImportFileUploadZone` component committed in `153c93c` but **never rendered as JSX** — the import at line 64 of `page.tsx` is unused; the 3 inline upload zones still exist. customer_sell_through backend committed `09d21ef` (no web surface yet). |
 | **Part (a) — DONE** | `dsiApplyAsync` poll wiring committed in `153c93c`. Not a pending task. |
 | **Part (b) — CST surface** | Build the minimal drivable `customer_sell_through` surface by composing the shared `CanonicalColumnMappingPanel` + `ImportStewardCandidateWorkspace` + async apply (do not build bespoke UI). Requires running browser for verification. |
-| **Part (c) — upload-zone extraction** | `ImportFileUploadZone` (`ImportFileUploadZone.tsx`) is a complete, self-contained component. The import in `page.tsx` line 64 is unused (`<ImportFileUploadZone` count = 0). Decide: finish the extraction (replace the 3 inline zones with the component + correct props, then remove the inline duplicates) OR remove the unused import if the extraction is abandoned. Either way: `strict: true` does **not** enable `noUnusedLocals`, so this is currently a lint smell, not a tsc error or runtime break. Requires in-browser upload/drag smoke after any change. |
+| **Part (c) — DONE** | `ImportFileUploadZone` extraction committed in `d0a8923` — component rendered at 3 sites in `imports/page.tsx`. Browser upload/drag smoke still recommended when touching that page. |
 | **Regression traps** | Apply poll: transits through `validated` before `loaded` — terminal condition must stay `loaded`/`failed` only (already correct). Upload zones: preserve drag-and-drop, `canUpload` gating, `pending` progress bar; do not break the DSI / shipment / generic upload flows. |
 | **Governance** | Provisional creation stays steward-initiated; no auto-create. |
 | **TRIGGER** | (b) sell-through: surface prioritized in roadmap + running browser available. (c) upload-zone: a browser-verified frontend task is approved for this branch, or the unused import is flagged by linter in CI. |
+
+---
+
+## BACKLOG-030 — DSI validate: batched staging upsert + chunked commits (remote Supabase reliability)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Approved for implementation · 2026-06-05** (handover `docs/SESSION_HANDOVER_2026_06_05_DSI_REMOTE_SUPABASE.md`; incident: DSI job #43, 169k rows, Supabase pooler disconnect) |
+| **Effort** | Large (API); integration test against remote Supabase required |
+| **Source** | Jun 5 audit: job #43 `failed` with `psycopg.OperationalError` on `SELECT dim_customer LIMIT 60` after ~45 min; full rollback → 0 candidates. Shipment validate already batched (`shipment_evidence_import.py`); DSI still per-row `db.add` + monolithic transaction. |
+| **Idea** | Bring DSI validate write path to import-parity bar: chunked `INSERT … ON CONFLICT` for `import_distributor_si_staging_line` (and related row results where applicable); optional **chunked commits** with checkpoint metadata so pooler drops do not zero entire 45-minute runs; eliminate per-row `customer_candidates(db, …)` DB round-trips (use `_build_resolution_cache` / in-memory slice). |
+| **Why / deferrable** | **Not deferrable** for remote Supabase 100k+ row DSI files — BACKLOG-028/002/003 help but do not replace shorter transactions. Warren explicitly staying on remote Supabase for realistic testing. |
+| **What the work is** | (1) Bulk staging upsert mirroring shipment pattern. (2) Chunk boundary + `staged_metadata` checkpoint (design: commit every N rows or per chunk with idempotent re-run). (3) Remove hot-loop `customer_candidates` SELECT. (4) Real Supabase E2E validation per SQL rule. (5) Record wall time vs baseline (~62 rows/sec / ~45 min @ 169k). |
+| **Regression traps** | DSI resolution tier order; eligibility before corroboration; governance (no auto-create); historical vs weekly mode; `source_key` / staging line identity on re-chunk; Celery `process_job` still catches exceptions → job `failed` (document or fix separately). |
+| **Behavior to retain** | `ShipmentCorroborationCache` preload; steward candidate aggregation semantics; idempotent re-validate intent. |
+| **Out of scope** | Temp-file shipment evidence download (wrong layer); switching dev to local `cip`; changing corroboration order. |
+| **Pairs with** | BACKLOG-028 (pooler tuning), BACKLOG-002 (pooling), BACKLOG-003 (EU co-location). |
+| **TRIGGER** | **Met** — job #43 failed on remote Supabase during validate. Implement Phase 1 of `SESSION_HANDOVER_2026_06_05_DSI_REMOTE_SUPABASE.md`. |
 
 ---
 
