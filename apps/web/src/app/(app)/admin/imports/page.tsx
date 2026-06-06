@@ -379,6 +379,14 @@ const SHIPMENT_MAPPING_REQUIRED_GROUPS: CanonicalRequiredGroup[] = [
   { id: 'distributor_party', label: 'Distributor party', anyOf: ['bill_to_raw', 'ship_to_raw', 'distributor_token'] },
 ];
 
+/** Live "still needs" requirements for DSI mapping — mirrors `dsi_mapping_gate_errors`. */
+const DSI_MAPPING_REQUIRED_GROUPS: CanonicalRequiredGroup[] = [
+  { id: 'distributor', label: 'Distributor', anyOf: ['distributor_token'] },
+  { id: 'product', label: 'Product identifier', anyOf: ['product_identifier'] },
+  { id: 'date', label: 'Date', anyOf: ['transaction_date', 'snapshot_date'] },
+  { id: 'quantity', label: 'Quantity or inventory', anyOf: ['quantity_sold', 'stock_on_hand'] },
+];
+
 /** Phase rail + copy for the inbound-shipment validate progress panel (reads `imports.process_job` progress). */
 const SHIPMENT_PROGRESS_PHASES = [
   { id: 'processing_rows', label: 'Resolve rows' },
@@ -872,6 +880,16 @@ function AdminImportsPageContent() {
   const dsiCanonSet = useMemo(
     () => new Set(dsiMappingState?.canonical_targets ?? []),
     [dsiMappingState?.canonical_targets]
+  );
+
+  const dsiMappingTargetOptions = useMemo<CanonicalTargetOption[]>(
+    () =>
+      (dsiMappingState?.canonical_targets ?? []).map((t) => ({
+        value: t,
+        label: dsiTargetLabel(t),
+        description: dsiTargetDescription(t) ?? dsiMappingState?.field_target_descriptions?.[t],
+      })),
+    [dsiMappingState?.canonical_targets, dsiMappingState?.field_target_descriptions]
   );
 
   const dsiServerMappingKey = useMemo(
@@ -3139,96 +3157,21 @@ function AdminImportsPageContent() {
                 ))}
               </Alert>
             ) : null}
-            <Table size="small" data-testid="dsi-mapping-table">
-              <TableHead>
-                <TableRow>
-                  <TableCell>File column</TableCell>
-                  <TableCell sx={{ minWidth: 280 }}>Maps to</TableCell>
-                  <TableCell sx={{ minWidth: 220 }}>Why / confidence</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(dsiMappingState?.file_headers ?? []).map((h) => (
-                  <TableRow key={h}>
-                    <TableCell>
-                      <Typography fontWeight={600}>{h}</Typography>
-                      <Typography variant="caption" color="text.secondary" display="block" data-testid={`dsi-samples-${h}`}>
-                        Examples: {formatDsiSamples(dsiMappingState?.column_samples?.[h])}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Auto: {dsiMappingState?.field_mapping?.[h] ? dsiTargetLabel(dsiMappingState.field_mapping[h]) : '—'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <FormControl size="small" fullWidth>
-                        <InputLabel id={`dsi-map-${h}`}>Target</InputLabel>
-                        <Select
-                          labelId={`dsi-map-${h}`}
-                          label="Target"
-                          value={dsiSelectValue(dsiMapDraft[h], dsiCanonSet)}
-                          displayEmpty
-                          renderValue={(selected) => {
-                            const v = String(selected ?? '');
-                            if (!v) return <em>— Unmapped —</em>;
-                            return dsiTargetLabel(v);
-                          }}
-                          onChange={(e) => {
-                            const v = e.target.value as string;
-                            setDsiMapDraft((prev) => {
-                              const next = { ...prev };
-                              if (!v) delete next[h];
-                              else next[h] = v;
-                              return next;
-                            });
-                          }}
-                        >
-                          <MenuItem value="">
-                            <em>— Unmapped —</em>
-                          </MenuItem>
-                          {(dsiMappingState?.canonical_targets ?? []).map((t) => (
-                            <MenuItem key={t} value={t} sx={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
-                              <ListItemText
-                                primary={dsiTargetLabel(t)}
-                                secondary={
-                                  dsiTargetDescription(t) ??
-                                  dsiMappingState?.field_target_descriptions?.[t] ??
-                                  undefined
-                                }
-                                primaryTypographyProps={{ variant: 'body2' }}
-                                secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
-                              />
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        const hint = dsiMappingState?.column_mapping_hints?.[h];
-                        if (!hint) return <Typography variant="caption" color="text.secondary">—</Typography>;
-                        const conf = hint.confidence != null ? Math.round(Number(hint.confidence) * 100) : null;
-                        const sug = hint.suggested_target ? dsiTargetLabel(hint.suggested_target) : null;
-                        return (
-                          <Stack spacing={0.25}>
-                            <Typography variant="body2">{hint.reason_summary ?? '—'}</Typography>
-                            {sug ? (
-                              <Typography variant="caption" color="text.secondary">
-                                Suggested: {sug}
-                                {conf != null ? ` · ${conf}%` : ''}
-                              </Typography>
-                            ) : conf != null ? (
-                              <Typography variant="caption" color="text.secondary">
-                                Confidence: {conf}%
-                              </Typography>
-                            ) : null}
-                          </Stack>
-                        );
-                      })()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            {!dsiMappingState?.file_headers?.length ? null : (
+              <CanonicalColumnMappingPanel
+                testIdPrefix="dsi"
+                fileHeaders={dsiMappingState.file_headers}
+                draft={dsiMapDraft}
+                onChange={(next) => setDsiMapDraft(next)}
+                targetOptions={dsiMappingTargetOptions}
+                columnSamples={dsiMappingState.column_samples}
+                blockingErrors={dsiMappingState.blocking_mapping_errors}
+                adjustmentNotices={dsiMappingState.mapping_adjustment_notices}
+                requiredGroups={DSI_MAPPING_REQUIRED_GROUPS}
+                formatSamples={formatDsiSamples}
+                dirty={dsiMappingDraftDirty}
+              />
+            )}
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Button onClick={() => setActiveStep(4)}>Back</Button>
               <Button
