@@ -620,6 +620,16 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
     }
 
 
+def _dsi_terminal_progress_label(job: ImportJob) -> str:
+    """Terminal progress label from job stage/mode (validate vs apply)."""
+    stage = (job.stage or "").strip().lower()
+    if stage == "loaded":
+        return "Apply complete"
+    if stage == "validated" or (job.import_mode or "").strip().lower() == "validate":
+        return "Validation complete"
+    return "Complete"
+
+
 @router.get("/jobs/{job_id}/dsi-progress")
 async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
     """Return real-time import pipeline progress from Celery task state (Redis).
@@ -666,7 +676,7 @@ async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
     if job_db_indicates_pipeline_finished(job):
         progress["phase"] = "complete"
         progress["status"] = "complete"
-        progress["phase_label"] = "Validation complete"
+        progress["phase_label"] = _dsi_terminal_progress_label(job)
         progress["pct"] = 100
         progress["current_row"] = total_rows_from_meta
         return progress

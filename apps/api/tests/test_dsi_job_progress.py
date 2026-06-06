@@ -13,6 +13,7 @@ def test_dsi_progress_returns_complete_when_db_validated_despite_stale_celery() 
         job = MagicMock()
         job.stage = "validated"
         job.status = "completed_with_errors"
+        job.import_mode = "validate"
         job.staged_metadata = {"celery_task_id": "stale-task", "dsi_validate_total_rows": 500}
 
         db = AsyncMock()
@@ -26,7 +27,28 @@ def test_dsi_progress_returns_complete_when_db_validated_despite_stale_celery() 
         mock_read.assert_not_called()
         assert out["phase"] == "complete"
         assert out["status"] == "complete"
+        assert out["phase_label"] == "Validation complete"
         assert out["pct"] == 100
+
+    asyncio.run(_run())
+
+
+def test_dsi_progress_apply_complete_label_when_loaded() -> None:
+    async def _run() -> None:
+        job = MagicMock()
+        job.stage = "loaded"
+        job.status = "completed"
+        job.import_mode = "apply"
+        job.staged_metadata = {"celery_task_id": "done-task", "dsi_validate_total_rows": 500}
+
+        db = AsyncMock()
+        db.get = AsyncMock(return_value=job)
+
+        with patch("app.services.imports.background_tasks.read_celery_with_timeout") as mock_read:
+            out = await get_dsi_job_progress(job_id=12, db=db)
+
+        mock_read.assert_not_called()
+        assert out["phase_label"] == "Apply complete"
 
     asyncio.run(_run())
 
