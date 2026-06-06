@@ -1424,6 +1424,49 @@ async def dsi_geo_steward_region_register_from_hint(
     return out
 
 
+class DsiGeoStewardBulkItem(BaseModel):
+    kind: str = Field(..., pattern="^(channel|region)$")
+    raw_token: str = Field(..., min_length=1, max_length=512)
+    normalized_token: str | None = Field(default=None, max_length=512)
+    code: str | None = Field(default=None, max_length=32)
+    name: str | None = Field(default=None, max_length=256)
+    iso_alpha2: str | None = Field(default=None, min_length=2, max_length=2)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class DsiGeoStewardBulkBody(BaseModel):
+    action: str = Field(..., pattern="^(register_region_from_hint|register_from_file)$")
+    items: list[DsiGeoStewardBulkItem] = Field(..., min_length=1, max_length=500)
+
+
+@router.post("/import-jobs/{job_id}/dsi-geo-steward/bulk-apply", status_code=200)
+async def dsi_geo_steward_bulk_apply(
+    job_id: int,
+    body: DsiGeoStewardBulkBody,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(_require_admin_role),
+):
+    """Bulk register region/channel catalog rows + aliases for unresolved geo file tokens."""
+    await _assert_dsi_import_job(db, job_id)
+
+    from app.services.imports.dsi_geo_steward_bulk_sync import apply_dsi_geo_steward_bulk_sync
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return apply_dsi_geo_steward_bulk_sync(
+            sess,
+            import_job_id=job_id,
+            action=body.action,  # type: ignore[arg-type]
+            items=[item.model_dump() for item in body.items],
+        )
+
+    try:
+        out = await db.run_sync(_work)
+    except StewardOpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    await db.commit()
+    return out
+
+
 class CustomerSourceTokenAliasCreate(BaseModel):
     """Explicit approval: map a raw distributor-reported customer/dealer token to an existing dim_customer row."""
 

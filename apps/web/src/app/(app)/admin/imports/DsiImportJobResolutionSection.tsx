@@ -523,7 +523,7 @@ export function DsiImportJobResolutionSection({
                   Plan fallback channel…
                 </Button>
                 <Typography variant="caption" color="text.secondary">
-                  Plan fallbacks only — map file tokens in the panel below.
+                  Plan fallbacks below — use bulk Register ISO regions for geographic channel tokens.
                 </Typography>
               </>
             ) : (
@@ -764,7 +764,9 @@ export function DsiImportJobResolutionSection({
               </Button>
             </Stack>
           ) : null}
-          {candidateWorkspace}
+          <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+            {candidateWorkspace}
+          </Box>
 
           {tabbedMode && isCandidateTab ? (
             <DsiCandidatesPagination

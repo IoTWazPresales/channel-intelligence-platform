@@ -264,30 +264,61 @@ def list_countries_for_api() -> list[dict[str, str]]:
 
 
 def resolve_alpha2_from_token(raw: str) -> str | None:
-    """Conservative geographic hint: exact alpha2/alpha3, full name, or leading token in compound labels."""
+    """Conservative geographic hint: exact alpha2/alpha3, full name, or trailing segment in compound labels."""
+
+    def _single_token(token: str) -> str | None:
+        if not token or not str(token).strip():
+            return None
+        t = str(token).strip()
+        upper = t.upper()
+        alpha2 = alpha2_name_index()
+        if len(upper) == 2 and upper in alpha2:
+            return upper
+        if len(upper) == 3:
+            hit_a3 = name_to_alpha2_index().get(t.lower())
+            if hit_a3:
+                return hit_a3
+        hit = name_to_alpha2_index().get(t.lower())
+        if hit:
+            return hit
+        return None
+
     if not raw or not str(raw).strip():
         return None
     t = str(raw).strip()
-    upper = t.upper()
-    alpha2 = alpha2_name_index()
-    if len(upper) == 2 and upper in alpha2:
-        return upper
-    if len(upper) == 3:
-        low = t.lower()
-        hit_a3 = name_to_alpha2_index().get(low)
-        if hit_a3:
-            return hit_a3
-    low_full = t.lower()
-    hit = name_to_alpha2_index().get(low_full)
+
+    hit = _single_token(t)
     if hit:
         return hit
+
+    # Leading whitespace-delimited token (legacy behaviour).
     parts = t.replace(",", " ").replace("/", " ").split()
     if parts:
-        lead = parts[0].strip().upper()
-        if len(lead) == 2 and lead in alpha2:
-            return lead
-        lead_low = parts[0].strip().lower()
-        hit2 = name_to_alpha2_index().get(lead_low)
-        if hit2:
-            return hit2
+        hit_lead = _single_token(parts[0])
+        if hit_lead:
+            return hit_lead
+
+    # Compound labels: prefer trailing segment (SADC_Botswana → Botswana → BW).
+    if "_" in t:
+        tail = t.rsplit("_", 1)[-1].strip()
+        hit_tail = _single_token(tail)
+        if hit_tail:
+            return hit_tail
+        after_first = t.split("_", 1)[-1].strip()
+        if after_first != tail:
+            hit_after = _single_token(after_first)
+            if hit_after:
+                return hit_after
+
+    if "-" in t:
+        tail = t.rsplit("-", 1)[-1].strip()
+        hit_tail = _single_token(tail)
+        if hit_tail:
+            return hit_tail
+
+    if len(parts) > 1:
+        hit_trail = _single_token(parts[-1])
+        if hit_trail:
+            return hit_trail
+
     return None

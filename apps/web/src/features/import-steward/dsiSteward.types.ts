@@ -1,3 +1,22 @@
+export type DsiGeoStewardBulkAction = 'register_region_from_hint' | 'register_from_file';
+
+export type DsiGeoStewardBulkItem = {
+  kind: 'channel' | 'region';
+  raw_token: string;
+  normalized_token?: string | null;
+  code?: string | null;
+  name?: string | null;
+  iso_alpha2?: string | null;
+};
+
+export type DsiGeoStewardBulkApplyResponse = {
+  import_job_id: number;
+  action: DsiGeoStewardBulkAction;
+  applied: number;
+  failed: number;
+  results: Array<Record<string, unknown>>;
+};
+
 export type DsiBulkAction =
   | 'ignore'
   | 'map_customer'

@@ -62,8 +62,24 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
 
   const colSpan = (selection ? 1 : 0) + columns.length;
 
+  const scrollBody = mainContentSlot ? (
+    <Box
+      data-testid="import-steward-candidate-workspace-main-content"
+      sx={
+        embedded
+          ? { flex: 1, minHeight: 0, overflow: 'auto', pr: 0.5 }
+          : undefined
+      }
+    >
+      {mainContentSlot}
+    </Box>
+  ) : null;
+
   const shell = (
-      <Stack spacing={2}>
+      <Stack
+        spacing={2}
+        sx={embedded ? { flex: 1, minHeight: 0, minWidth: 0 } : undefined}
+      >
         {copy.title ? (
           <Typography variant="h6" component="div">
             {copy.title}
@@ -96,9 +112,7 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
             {filtersSlot}
           </Box>
         ) : null}
-        {mainContentSlot ? (
-          <Box data-testid="import-steward-candidate-workspace-main-content">{mainContentSlot}</Box>
-        ) : null}
+        {scrollBody}
         {mainContentSlot == null && importJobId != null && isLoading ? (
           <Stack spacing={1.5} data-testid="import-steward-candidate-workspace-loading">
             {copy.loadingMessage ? (
@@ -123,7 +137,12 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
           </Typography>
         ) : null}
         {mainContentSlot == null && showTable ? (
-          <Box sx={{ position: 'relative' }}>
+          <Box
+            sx={{
+              position: 'relative',
+              ...(embedded ? { flex: 1, minHeight: 0, overflow: 'auto', pr: 0.5 } : undefined),
+            }}
+          >
             <Backdrop
               sx={{
                 color: 'text.primary',
@@ -143,7 +162,7 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
               ) : null}
             </Backdrop>
             <TableContainer sx={{ maxWidth: '100%' }}>
-            <Table size="small" sx={{ opacity: busy && openRows.length > 0 ? 0.55 : 1 }}>
+            <Table size="small" stickyHeader sx={{ opacity: busy && openRows.length > 0 ? 0.55 : 1 }}>
               <TableHead>
                 <TableRow>
                   {selection ? (
@@ -234,7 +253,11 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
 
   if (embedded) {
     return (
-      <Box data-testid={rootTestId} data-list-domain={listDomainId}>
+      <Box
+        data-testid={rootTestId}
+        data-list-domain={listDomainId}
+        sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0 }}
+      >
         {shell}
       </Box>
     );
