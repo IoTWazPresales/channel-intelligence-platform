@@ -99,7 +99,8 @@ class ShipmentCorroborationCache:
 
         # --- product corroboration rows ---
         # Filter by product_resolution_status='resolved_unique' (has an index).
-        # date_trunc + to_char are applied inside DB to avoid loading every row.
+        # Restrict evidence months in SQL so remote validate does not pull the full table.
+        month_set = set(month_list)
         prod_rows = db.execute(
             text("""
                 SELECT
@@ -118,16 +119,17 @@ class ShipmentCorroborationCache:
                 WHERE product_resolution_status = 'resolved_unique'
                   AND product_id IS NOT NULL
                   AND COALESCE(ship_confirm_date, schedule_ship_date, promise_date) IS NOT NULL
-            """)
+                  AND to_char(
+                        date_trunc('month',
+                            COALESCE(ship_confirm_date, schedule_ship_date, promise_date)),
+                        'YYYY-MM'
+                    ) = ANY(:months)
+            """),
+            {"months": month_list},
         ).fetchall()
 
-        # Filter to only the months we need (done in Python to avoid the
-        # un-indexed date_trunc scan being used as a WHERE filter).
-        month_set = set(month_list)
         for r in prod_rows:
             em: str = r[2] or ""
-            if em not in month_set:
-                continue
             dist_id: int | None = r[0]
             pid = int(r[1])
             item_k, ean_k, upc_k, sm_k = (r[3] or ""), (r[4] or ""), (r[5] or ""), (r[6] or "")
@@ -161,13 +163,17 @@ class ShipmentCorroborationCache:
                   AND customer_resolution_status IN ('resolved', 'resolved_unique')
                   AND distributor_id IS NOT NULL
                   AND COALESCE(ship_confirm_date, schedule_ship_date, promise_date) IS NOT NULL
-            """)
+                  AND to_char(
+                        date_trunc('month',
+                            COALESCE(ship_confirm_date, schedule_ship_date, promise_date)),
+                        'YYYY-MM'
+                    ) = ANY(:months)
+            """),
+            {"months": month_list},
         ).fetchall()
 
         for r in cust_rows:
             em = r[2] or ""
-            if em not in month_set:
-                continue
             dist_id = r[0]
             cid = int(r[1])
             cust_k = r[3] or ""
