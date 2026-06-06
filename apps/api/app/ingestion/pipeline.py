@@ -725,7 +725,32 @@ def _process_distributor_master(db: Session, job: ImportJob, df: pd.DataFrame, m
             )
             errors += 1
             continue
-        pending.append({"code": code, "name": name})
+
+        resolved_code = code
+        exists_in_master = key in existing
+        if not exists_in_master:
+            from app.services.imports.ai_resolver_wiring import (
+                distributor_candidates_from_dim_list,
+                try_ai_token_resolution,
+            )
+
+            ai_did, _, _ = try_ai_token_resolution(
+                raw_token=code,
+                token_type="distributor",
+                candidates=distributor_candidates_from_dim_list(list(existing.values()), code),
+                import_type="distributor_master",
+                job_id=int(job.id),
+                extra_context={"match_field": "distributor_code"},
+            )
+            if ai_did is not None:
+                for dist in existing.values():
+                    dist_id = getattr(dist, "id", None)
+                    if dist_id is not None and int(dist_id) == int(ai_did):
+                        resolved_code = dist.code
+                        exists_in_master = True
+                        break
+
+        pending.append({"code": resolved_code, "name": name})
 
     if errors:
         return errors
