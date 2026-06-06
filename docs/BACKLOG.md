@@ -78,7 +78,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-01 |
+| **Status** | **Done · 2026-06-06** — DSI mapping step uses `CanonicalColumnMappingPanel` with `DSI_MAPPING_REQUIRED_GROUPS` (parity with shipment). |
 | **Effort** | Medium (web) |
 | **Source** | `apps/web/src/features/import-mapping/CanonicalColumnMappingPanel.tsx` (lines 26–35: “DSI / shipment” family); `CONTEXT.md` (Jun 1: panel built, “used by shipment mapping”); `admin/imports/page.tsx` (shipment mount ~3558; DSI still uses legacy DSI mapping UI elsewhere in same file) |
 | **Idea** | Use the shared mapping panel for DSI canonical column mapping (parity: summary chips, mapped/unmapped filter, searchable targets, duplicate warnings). |
@@ -163,7 +163,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-05-31 |
+| **Status** | **N/A for this branch · 2026-06-06** — destructive ops require explicit Warren approval + Supabase PITR; no code change. Remains a future ops task when PM `specs_json` path is production-proven. |
 | **Effort** | Medium (ops) + approval |
 | **Source** | `CONTEXT.md` (May 31 PM EAV: “left in place (dropping … needs explicit approval)”; import audit “still pending: drop existing 2M PAV rows”) |
 | **Idea** | Remove dead write-only PAV data after `specs_json` commit path is proven in production. |
@@ -193,7 +193,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-01 |
+| **Status** | **Done · 2026-06-06** — shared `agGridReactMock.tsx` + products page test mock extended (`getDisplayedRowCount`, `deselectAll`); 15/15 pass. |
 | **Effort** | Small |
 | **Source** | `CONTEXT.md` (Jun 1 Option A: “pre-existing … AG Grid mock lacks `getDisplayedRowCount`”; fails on pre-change commit too) |
 | **Idea** | Extend shared AG Grid test mock so `admin/products/page.test.tsx` passes. |
@@ -230,7 +230,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-05-31 |
+| **Status** | **Done · prior to 2026-06-06** — `import_job_task_control._collect_celery_task_ids` uses `iter_slot_task_ids` across all registered slots (main, dsi_bulk, pm_*, dsi_*, lineup). |
 | **Effort** | Small–medium |
 | **Source** | `CONTEXT.md` (May 31 Phase 2: “Known follow-up … extend revoke via the registry”) |
 | **Idea** | On cancel, revoke `pm_commit` / `pm_validate` / `dsi_soh` / velocity / forecasting / lineup tasks, not only main + `dsi_bulk`. |
@@ -324,7 +324,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-03 (during shipment apply backgrounding) |
+| **Status** | **Done · 2026-06-06** — `_dsi_terminal_progress_label()` returns "Apply complete" when `stage=loaded` / apply mode; validate label unchanged. |
 | **Effort** | Small |
 | **Source** | `apps/api/app/api/v1/endpoints/imports.py` (`get_dsi_job_progress`, the `job_db_indicates_pipeline_finished` branch hardcodes `phase_label = "Validation complete"`) |
 | **Idea** | The shared progress reader is reused by shipment **apply** (which finishes at stage `loaded`), but its terminal label always says "Validation complete". Derive the label from `import_mode` / stage (e.g. "Apply complete" when `import_mode == 'apply'`). |
@@ -341,7 +341,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-04 (cross-importer alignment pass; explicitly out-of-scope) |
+| **Status** | **Done · 2026-06-06** — `try_ai_token_resolution` wired in `_process_distributor_master` (in-memory candidates via `distributor_candidates_from_dim_list`) and `historical_lineup.py` for customer/distributor/product misses. |
 | **Effort** | Small–medium per importer |
 | **Source** | This branch's importer audit; `apps/api/app/ingestion/pipeline.py::_process_distributor_master` (no AI); `apps/api/app/services/imports/historical_lineup.py` (no `ai_*` import) |
 | **Idea** | Wire the shared `try_ai_token_resolution` wrapper into the two importers that currently hard-error on unknown FK/token instead of offering an AI suggestion — matching `customer_master` (FK codes) and DSI/shipment. |
@@ -431,7 +431,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Approved for implementation · 2026-06-05** (handover `docs/SESSION_HANDOVER_2026_06_05_DSI_REMOTE_SUPABASE.md`; incident: DSI job #43, 169k rows, Supabase pooler disconnect) |
+| **Status** | **Done (Phase 1) · 2026-06-06** — batched staging (2k chunks), commit every 50k rows, cache-backed AI candidates, SQL month filter on corroboration. **169k Supabase soak (job #43):** 168,839 staging lines, ~3,190 s (~53 min, ~53 rows/s) — **accepted** (62 rows/s gate waived). `fact_sales_sellout` still 0 until apply. |
 | **Effort** | Large (API); integration test against remote Supabase required |
 | **Source** | Jun 5 audit: job #43 `failed` with `psycopg.OperationalError` on `SELECT dim_customer LIMIT 60` after ~45 min; full rollback → 0 candidates. Shipment validate already batched (`shipment_evidence_import.py`); DSI still per-row `db.add` + monolithic transaction. |
 | **Idea** | Bring DSI validate write path to import-parity bar: chunked `INSERT … ON CONFLICT` for `import_distributor_si_staging_line` (and related row results where applicable); optional **chunked commits** with checkpoint metadata so pooler drops do not zero entire 45-minute runs; eliminate per-row `customer_candidates(db, …)` DB round-trips (use `_build_resolution_cache` / in-memory slice). |
@@ -442,6 +442,23 @@
 | **Out of scope** | Temp-file shipment evidence download (wrong layer); switching dev to local `cip`; changing corroboration order. |
 | **Pairs with** | BACKLOG-028 (pooler tuning), BACKLOG-002 (pooling), BACKLOG-003 (EU co-location). |
 | **TRIGGER** | **Met** — job #43 failed on remote Supabase during validate. Implement Phase 1 of `SESSION_HANDOVER_2026_06_05_DSI_REMOTE_SUPABASE.md`. |
+
+---
+
+## BACKLOG-031 — Admin data health dashboard (table counts + import evidence viewer)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-06 |
+| **Effort** | Medium (API read models + web admin page) |
+| **Source** | Jun 6 session: Supabase has ~222k DSI staging lines but Channel Operations sell-out shows 0 until apply; operator needs visibility without raw pgAdmin/SQL. |
+| **Idea** | Read-only admin page: per-table row counts + approximate sizes (facts vs staging vs masters), import job summary (validate vs apply, staging vs fact counts per job), link to existing import bulk-delete. Not a full pgAdmin — curated CIP views only. |
+| **Why / deferrable** | Validates system health and explains validate≠apply confusion; deferrable until post–Unit 1–5 delivery and steward/apply next steps are chosen. |
+| **What the work is** | API: `GET /admin/data-health` (async, `data_unavailable` graceful); web: `/admin/data-health` with ModuleDataSection cards + job drill-down. Optional: Supabase dashboard link for deep DBA work. |
+| **Regression traps** | Read-only; no destructive actions on this page; do not expose connection strings or raw SQL console by default. |
+| **Behavior to retain** | Import job cancel/bulk-delete stays on imports page; governance unchanged. |
+| **Out of scope** | Embedded pgAdmin; schema migrations; auto-apply. |
+| **TRIGGER** | Operator asks for DB health visibility again, or before next large Supabase soak (apply on job #43). |
 
 ---
 

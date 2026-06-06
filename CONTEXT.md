@@ -1,5 +1,21 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 6, 2026 — Units 1–5 committed; job #43 validate accepted; handover
+- **Branch:** `fix/shipment-steward-performance` — Units 1–5 + docs committed and pushed (see commit hashes below after push).
+- **Unit 1 (BACKLOG-030):** DSI validate throughput — 2k staging chunks, commit every 50k, cache AI candidates, corroboration month filter in SQL. **Job #43 soak:** 168,839 staging lines, 5,425 candidates, ~53 min (~53 rows/s) — **accepted** (62 rows/s gate waived).
+- **Units 2–5:** DSI `CanonicalColumnMappingPanel` (005); progress "Apply complete" label (023); AI on distributor_master + historical_lineup (024); AG Grid mock (012).
+- **Sell-out still empty:** `fact_sales_sellout` = 0 until apply — staging ≠ facts. Channel Operations Sell-out will stay at 0 post-validate.
+- **Handover:** `docs/SESSION_HANDOVER_2026_06_06_DSI_UNITS_1_5.md`. **Next recommended:** steward job #43 → apply; or **BACKLOG-031** admin data health dashboard (not pgAdmin).
+- **Active DB:** Supabase EU `postgres` (pooler). Cleanup via import bulk delete — not seed wipe.
+
+### Jun 6, 2026 — BACKLOG-030 Phase 1: DSI validate bulk staging + remote Supabase reliability
+- **Branch:** `fix/shipment-steward-performance` (uncommitted). **BACKLOG-030 Phase 1 implemented** — batched staging, chunked commits, cache-backed AI candidates.
+- **Code:** `distributor_sales_inventory.py` — `_DSI_STAGING_INSERT_CHUNK=1000`, `pg_insert` bulk flush, `_persist_dsi_validate_checkpoint` (commits every chunk + `staged_metadata`: `dsi_validate_rows_committed`, `dsi_validate_phase`, `dsi_validate_checkpoint_at`); row loop uses `customer_candidates_from_cache` / `distributor_candidates_from_cache` (no per-row `SELECT dim_customer LIMIT 60`). `ai_resolver_wiring.py` — cache helpers; `DSIResolutionCache.all_customers` added.
+- **Real Supabase E2E (postgres via `.env` pooler):** `test_dsi_validate_remote_supabase.py` with `CIP_DSI_SUPABASE_E2E=1` — **1100 rows in 165s (~6.7 rows/s)**; checkpoint metadata + staging count verified. Bulk staging integration test **1050 rows in ~193s** on same target.
+- **Unit tests:** `test_dsi_validate_bulk_staging.py` — 6/6 pass (flush, checkpoint, cache parity, no-DB distributor candidates, multi-chunk process).
+- **Regression note:** `test_distributor_si_validate_staging_candidates_no_queue_spam` expects 1 customer candidate for "Mystery Dealer Zed" — **passes on clean cip**, **0 candidates on Supabase** because remote `dim_customer` has an exact name match (`customer_resolved_exact_name`); not a Phase 1 regression.
+- **Next:** Warren soak — re-validate job #43 (`RAW.xlsx`, ~169k) on Supabase; expect shorter transactions + no pooler disconnect on `dim_customer LIMIT 60`. Phase 2 (BACKLOG-028, -002) still recommended for long apply / pooler tuning.
+
 ### Jun 5, 2026 — DSI remote Supabase handover (docs only; implementation next session)
 - **Branch:** `fix/shipment-steward-performance` (ahead of `origin` by 2 at handover write). **No Phase 1 code in this chat** — audit + handover only.
 - **Handover:** `docs/SESSION_HANDOVER_2026_06_05_DSI_REMOTE_SUPABASE.md` — phased plan, all backlogs mapped, audit instructions, new-agent prompt at §10.
