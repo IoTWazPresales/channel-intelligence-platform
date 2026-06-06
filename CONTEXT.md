@@ -1,7 +1,7 @@
 # Channel Intelligence Platform — Current Context
 
 ### Jun 6, 2026 — Units 1–5 committed; job #43 validate accepted; handover
-- **Branch:** `fix/shipment-steward-performance` — Units 1–5 + docs committed and pushed (see commit hashes below after push).
+- **Branch:** `fix/shipment-steward-performance` — Units 1–5 + docs: `a0df130` (U1), `5fa1418` (U2), `f8f9da4` (U3), `e9ea84f` (U4), `0e3a9cd` (U5), `c1fde51` (docs/handover).
 - **Unit 1 (BACKLOG-030):** DSI validate throughput — 2k staging chunks, commit every 50k, cache AI candidates, corroboration month filter in SQL. **Job #43 soak:** 168,839 staging lines, 5,425 candidates, ~53 min (~53 rows/s) — **accepted** (62 rows/s gate waived).
 - **Units 2–5:** DSI `CanonicalColumnMappingPanel` (005); progress "Apply complete" label (023); AI on distributor_master + historical_lineup (024); AG Grid mock (012).
 - **Sell-out still empty:** `fact_sales_sellout` = 0 until apply — staging ≠ facts. Channel Operations Sell-out will stay at 0 post-validate.
