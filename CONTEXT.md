@@ -1,6 +1,6 @@
 # Channel Intelligence Platform — Current Context
 
-### Jun 6, 2026 — DSI geo steward: compound region parsing + bulk ISO register (uncommitted)
+### Jun 6, 2026 — DSI geo steward: compound region parsing + bulk ISO register (`8466366`)
 - **Branch:** `fix/shipment-steward-performance`
 - **Region parsing:** `resolve_alpha2_from_token` now resolves trailing segments (`SADC_Botswana` → `BW`). Unresolved geo API returns `geographic_hint` for these channel tokens.
 - **Bulk:** `POST …/dsi-geo-steward/bulk-apply` — `register_region_from_hint` | `register_from_file`. Web: checkboxes + **Register ISO regions (N)** on Region & channel tab; geographic rows de-emphasize RTM channel register.
