@@ -206,6 +206,17 @@ async def list_distributor_si_mapping_candidates(
     return await db.run_sync(_work)
 
 
+@router.get("/import-jobs/{job_id}/distributor-si-candidates/tab-counts")
+async def distributor_si_mapping_candidate_tab_counts(job_id: int, db: AsyncSession = Depends(get_db)):
+    """Aggregated open / needs_review counts per entity tab (one query — not six paginated COUNT calls)."""
+    from app.services.imports.dsi_mapping_candidates_tab_counts import dsi_mapping_candidate_tab_counts_sync
+
+    def _work(sess: Session) -> dict:
+        return dsi_mapping_candidate_tab_counts_sync(sess, job_id)
+
+    return await db.run_sync(_work)
+
+
 def _blank_customer_normalized_key(norm: str) -> bool:
     t = (norm or "").strip().lower()
     return t in ("", "__blank__", "none", "n/a", "na", "unknown")
@@ -964,6 +975,52 @@ async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: Asyn
         "failed": len(results) - ok_n,
         "results": results,
         "totals": _dsi_bulk_totals_from_rows(results),
+    }
+
+
+def _enqueue_dsi_resolution_plan_compute(
+    job_id: int,
+    payload: dict[str, Any],
+) -> tuple[str, bool]:
+    from app.services.imports.dsi_resolution_plan_enqueue import enqueue_dsi_resolution_plan_compute
+
+    return enqueue_dsi_resolution_plan_compute(job_id, payload)
+
+
+def _dsi_resolution_plan_compute_payload_from_body(body: DsiResolutionPlanGenerateBody) -> dict[str, Any]:
+    return {
+        "candidate_ids": list(body.candidate_ids) if body.candidate_ids else None,
+        "default_region_id": body.default_region_id,
+        "default_channel_id": body.default_channel_id,
+    }
+
+
+@router.post("/import-jobs/{job_id}/dsi-resolution-plan/compute-async", status_code=202)
+async def dsi_resolution_plan_compute_async(
+    job_id: int, body: DsiResolutionPlanGenerateBody, db: AsyncSession = Depends(get_db)
+):
+    """Enqueue resolution-plan generation (Celery); poll dsi-steward-bulk-task/{task_id} for the plan."""
+    await _assert_dsi_import_job(db, job_id)
+    job = await db.get(ImportJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Import job not found")
+
+    payload = _dsi_resolution_plan_compute_payload_from_body(body)
+    task_id, async_poll = _enqueue_dsi_resolution_plan_compute(job_id, payload)
+    set_task_slot_on_job(
+        job,
+        SLOT_DSI_BULK,
+        task_id=task_id,
+        async_poll=async_poll,
+        kind="dsi_resolution_plan_compute",
+        candidate_count=len(body.candidate_ids or []),
+    )
+    await db.commit()
+    return {
+        "import_job_id": job_id,
+        "task_id": task_id,
+        "async_poll": async_poll,
+        "async": True,
     }
 
 

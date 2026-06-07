@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { apiGet } from '@/lib/api';
@@ -17,7 +17,7 @@ import { defaultDsiStewardCandidateFilterState } from './dsiStewardCandidateFilt
 export function useDsiCandidatesPage(
   importJobId: number,
   stewardFilters: DsiStewardCandidateFilterState = defaultDsiStewardCandidateFilterState(),
-  options?: { enabled?: boolean }
+  options?: { enabled?: boolean; tabKey?: string }
 ) {
   const queryEnabled = options?.enabled !== false && importJobId > 0;
   const [page, setPage] = useState(0);
@@ -45,6 +45,7 @@ export function useDsiCandidatesPage(
   useEffect(() => {
     setPage(0);
   }, [
+    options?.tabKey,
     serverFilterSlice.entity,
     serverFilterSlice.party,
     serverFilterSlice.verifyNameOnly,
@@ -61,6 +62,7 @@ export function useDsiCandidatesPage(
     queryKey,
     enabled: queryEnabled,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       apiGet<DsiMappingCandidatesPageResponse>(
         buildDsiCandidatesListUrl(importJobId, skip, pageSize, stewardFilters),
@@ -72,10 +74,11 @@ export function useDsiCandidatesPage(
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   useEffect(() => {
+    if (query.isFetching) return;
     if (page > 0 && page >= pageCount) {
       setPage(Math.max(0, pageCount - 1));
     }
-  }, [page, pageCount]);
+  }, [page, pageCount, query.isFetching]);
 
   const setPageSizeAndReset = useCallback((size: DsiCandidatePageSize) => {
     setPageSize(size);

@@ -1,13 +1,11 @@
 'use client';
 
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import { apiGet } from '@/lib/api';
 
-import { buildDsiCandidatesListUrl, type DsiMappingCandidatesPageResponse } from './dsiCandidatesQuery';
 import {
   DSI_ENTITY_CANDIDATE_TABS,
-  defaultDsiStewardFiltersForTab,
   type DsiEntityTabId,
 } from './dsiEntityTabs';
 import { DSI_STEWARD_CONFIG } from './dsiSteward.config';
@@ -15,6 +13,11 @@ import type { DsiUnresolvedGeoRowDto } from './dsiSteward.types';
 import { countUnresolvedGeoTokens } from './dsiUnresolvedGeoCount';
 
 export type DsiEntityTabCounts = Record<DsiEntityTabId, { total: number | null; needsWork: number | null }>;
+
+type TabCountsApiResponse = {
+  import_job_id: number;
+  counts: Record<string, { open: number; needs_review: number }>;
+};
 
 const emptyCounts = (): DsiEntityTabCounts => ({
   distributor: { total: null, needsWork: null },
@@ -24,32 +27,15 @@ const emptyCounts = (): DsiEntityTabCounts => ({
 });
 
 export function useDsiEntityTabCounts(importJobId: number, enabled: boolean) {
-  const entityQueries = useQueries({
-    queries: DSI_ENTITY_CANDIDATE_TABS.flatMap((tab) => {
-      const filters = defaultDsiStewardFiltersForTab(tab.id);
-      return [
-        {
-          queryKey: ['distributor-si-candidates', importJobId, 'tab-count', tab.id, 'open'] as const,
-          enabled: enabled && importJobId > 0,
-          refetchOnWindowFocus: false,
-          queryFn: ({ signal }: { signal: AbortSignal }) =>
-            apiGet<DsiMappingCandidatesPageResponse>(
-              buildDsiCandidatesListUrl(importJobId, 0, 1, filters, { status: 'open' }),
-              { signal }
-            ),
-        },
-        {
-          queryKey: ['distributor-si-candidates', importJobId, 'tab-count', tab.id, 'needs_review'] as const,
-          enabled: enabled && importJobId > 0,
-          refetchOnWindowFocus: false,
-          queryFn: ({ signal }: { signal: AbortSignal }) =>
-            apiGet<DsiMappingCandidatesPageResponse>(
-              buildDsiCandidatesListUrl(importJobId, 0, 1, filters, { status: 'needs_review' }),
-              { signal }
-            ),
-        },
-      ];
-    }),
+  const tabCountsQuery = useQuery({
+    queryKey: DSI_STEWARD_CONFIG.candidateTabCountsQueryKey(importJobId),
+    enabled: enabled && importJobId > 0,
+    refetchOnWindowFocus: false,
+    queryFn: ({ signal }) =>
+      apiGet<TabCountsApiResponse>(
+        `/api/v1/mappings/import-jobs/${importJobId}/distributor-si-candidates/tab-counts`,
+        { signal }
+      ),
   });
 
   const geoQuery = useQuery({
@@ -72,15 +58,20 @@ export function useDsiEntityTabCounts(importJobId: number, enabled: boolean) {
     region_channel: 0,
   };
 
-  DSI_ENTITY_CANDIDATE_TABS.forEach((tab, tabIndex) => {
-    const openQ = entityQueries[tabIndex * 2];
-    const needsQ = entityQueries[tabIndex * 2 + 1];
-    counts[tab.id] = {
-      total: openQ.data?.total ?? (openQ.isPending ? null : 0),
-      needsWork: needsQ.data?.total ?? (needsQ.isPending ? null : 0),
-    };
-    openByTab[tab.id] = openQ.data?.total ?? 0;
-  });
+  if (tabCountsQuery.isSuccess && tabCountsQuery.data?.counts) {
+    for (const tab of DSI_ENTITY_CANDIDATE_TABS) {
+      const row = tabCountsQuery.data.counts[tab.id];
+      counts[tab.id] = {
+        total: row?.open ?? 0,
+        needsWork: row?.needs_review ?? 0,
+      };
+      openByTab[tab.id] = row?.open ?? 0;
+    }
+  } else if (tabCountsQuery.isPending) {
+    for (const tab of DSI_ENTITY_CANDIDATE_TABS) {
+      counts[tab.id] = { total: null, needsWork: null };
+    }
+  }
 
   const geoTotal = geoQuery.isSuccess
     ? countUnresolvedGeoTokens(geoQuery.data)
@@ -93,7 +84,7 @@ export function useDsiEntityTabCounts(importJobId: number, enabled: boolean) {
   };
   openByTab.region_channel = geoTotal ?? 0;
 
-  const isLoading = entityQueries.some((q) => q.isLoading) || geoQuery.isLoading;
+  const isLoading = tabCountsQuery.isLoading || geoQuery.isLoading;
 
   return { counts, openByTab, isLoading, unresolvedGeoQuery: geoQuery };
 }

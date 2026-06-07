@@ -161,6 +161,11 @@ class DSIGeoResolutionCache:
             return None, reason
         return None, "no_catalog_match"
 
+    def approved_region_alias_region_ids(self, normalized_token: str) -> list[int]:
+        """Distinct dim_region ids with an approved alias for this normalized file token."""
+        rows = self._region_alias_rows.get((normalized_token or "").strip(), [])
+        return list(dict.fromkeys(r[1] for r in rows))
+
 
 def resolve_source_geo_from_ctx_cached(
     cache: DSIGeoResolutionCache,

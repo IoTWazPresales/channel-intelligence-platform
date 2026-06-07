@@ -19,6 +19,7 @@ celery_app.conf.task_routes = {
     "imports.product_master_validate": {"queue": "celery"},
     "imports.dsi_bulk_provisional_customers": {"queue": "celery"},
     "imports.dsi_resolution_plan_apply": {"queue": "celery"},
+    "imports.dsi_resolution_plan_compute": {"queue": "celery"},
     "imports.dsi_apply": {"queue": "celery"},
     "imports.shipment_apply": {"queue": "celery"},
     "imports.shipment_bulk_map_customer": {"queue": "celery"},

@@ -6,7 +6,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { apiPost } from '@/lib/api';
 
-import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
+import { registerClientBackgroundTask, finishClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 import { pollDsiBulkProvisionalTask } from './dsiBulkProvisionalPoll';
 
 import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
@@ -218,18 +218,27 @@ export function useDsiBulkSteward({
       }
       const body = buildBulkBody();
       if (bulkAction === 'create_provisional_customer') {
-        const enqueued = await apiPost<DsiBulkProvisionalAsyncEnqueueResponse>(
-          `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-provisional-customers/apply-async`,
-          body
-        );
-        registerClientBackgroundTask({
-          taskId: enqueued.task_id,
-          importJobId,
-          kind: 'dsi_bulk_provisional',
-          label: `Creating provisional customers (DSI job ${importJobId})`,
-        });
-        void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
-        return pollDsiBulkProvisionalTask(importJobId, enqueued.task_id);
+        let taskId: string | undefined;
+        try {
+          const enqueued = await apiPost<DsiBulkProvisionalAsyncEnqueueResponse>(
+            `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-provisional-customers/apply-async`,
+            body
+          );
+          taskId = enqueued.task_id;
+          registerClientBackgroundTask({
+            taskId: enqueued.task_id,
+            importJobId,
+            kind: 'dsi_bulk_provisional',
+            label: `Creating provisional customers (DSI job ${importJobId})`,
+          });
+          void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+          return pollDsiBulkProvisionalTask(importJobId, enqueued.task_id, {
+            rowCount: selectedIds.length,
+          });
+        } finally {
+          if (taskId) finishClientBackgroundTask(taskId);
+          void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+        }
       }
       return apiPost<DsiBulkApplyResponse>(
         `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-apply`,

@@ -462,6 +462,23 @@
 
 ---
 
+## BACKLOG-032 — Post import bulk-delete: targeted VACUUM / disk reclamation runbook
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-06 |
+| **Effort** | Small (ops script + docs) · Medium if automated after delete |
+| **Source** | Supabase dev: bulk delete of import jobs (except active job #43); repeated `VACUUM` in SQL editor; `VACUUM FULL` times out; dashboard disk size unchanged. |
+| **Idea** | Document and optionally script **targeted** post-delete maintenance: `VACUUM (ANALYZE)` on evidence/staging tables affected by import job bulk delete; `VACUUM FULL` only as a manual, maintenance-window ops step when dead-tuple bloat is confirmed — not from the app or SQL editor transaction wrapper. |
+| **Why / deferrable** | Regular `VACUUM` does not return disk to the OS; `VACUUM FULL` requires exclusive locks + long runtime (timeouts on Supabase dashboard / pooler). Autovacuum handles most dead tuples; ops step needed only after large evidence deletes when dashboard disk stays high. |
+| **What the work is** | (1) Ops doc: connect via **session** `:5432` psql, `SET statement_timeout = 0`, stop API/worker, one table at a time. (2) Read-only bloat query (`pg_stat_user_tables`, `pg_total_relation_size`) before choosing FULL vs ANALYZE. (3) Optional `apps/api/scripts/vacuum_import_evidence_tables.py` (explicit table list, dry-run, confirms `current_database()`). (4) Do **not** hook into app delete path automatically — governance + lock risk. |
+| **Regression traps** | `VACUUM FULL` on `import_distributor_si_staging_line` while job #43 is active blocks steward/validate; never run inside a transaction; avoid `:6543` pooler for long maintenance; credentials never in repo. |
+| **Behavior to retain** | Import bulk delete remains the supported cleanup path; vacuum is follow-up ops only. |
+| **Out of scope** | Embedded pgAdmin; app-triggered `VACUUM FULL` on every delete; `VACUUM FULL` on all public tables. |
+| **TRIGGER** | After large import evidence bulk delete AND (`n_dead_tup` still high 24h later OR Supabase disk quota pressure) AND Warren approves maintenance window. |
+
+---
+
 ## Unsourced — confirm with Warren
 
 These were on a verification checklist but **no deferral/pending wording** was found in repo docs, comments, or planning files:

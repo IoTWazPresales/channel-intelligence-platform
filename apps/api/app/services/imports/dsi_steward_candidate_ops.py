@@ -234,6 +234,9 @@ async def execute_resolve_dsi_product(
         db.add(alias_row)
     try:
         await db.flush()
+        from app.services.imports.product_resolution_index_cache import invalidate_product_resolution_index_cache
+
+        invalidate_product_resolution_index_cache()
         cand.status = "resolved"
         cand.suggested_entity_id = int(product_id)
         cand.match_reason = "steward_resolve_product_alias"

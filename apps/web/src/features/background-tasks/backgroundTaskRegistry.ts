@@ -45,6 +45,15 @@ export const useBackgroundTaskRegistry = create<BackgroundTaskRegistryState>((se
     }),
 }));
 
+export function unregisterClientBackgroundTask(taskId: string): void {
+  useBackgroundTaskRegistry.getState().removeTask(taskId);
+}
+
+/** Call when an async steward task finishes (success, failure, or timeout). */
+export function finishClientBackgroundTask(taskId: string): void {
+  unregisterClientBackgroundTask(taskId);
+}
+
 /** Call when an async import endpoint returns a Celery task id. */
 export function registerClientBackgroundTask(args: {
   taskId: string;

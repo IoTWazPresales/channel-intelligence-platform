@@ -98,7 +98,11 @@ def list_dsi_mapping_candidates_sync(
     base = select(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job_id)
     filtered = _apply_list_filters(base, params)
 
-    total = int(session.scalar(select(func.count()).select_from(filtered.subquery())) or 0)
+    count_stmt = select(func.count(ImportEntityMappingCandidate.id)).where(
+        ImportEntityMappingCandidate.import_job_id == job_id
+    )
+    count_stmt = _apply_list_filters(count_stmt, params)
+    total = int(session.scalar(count_stmt) or 0)
 
     rows = list(
         session.scalars(

@@ -11,13 +11,12 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent } from 'react';
 import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 
+import type { PlanApplyFeedback } from '@/features/import-steward/dsiSteward.types';
 import {
-  DsiBulkActionInlineForm,
   DsiBulkStewardSection,
   DsiCandidateStewardDrawer,
   DsiCandidatesPagination,
@@ -41,7 +40,6 @@ import {
   dsiTabDependencyNudge,
   filterDsiStewardCandidates,
   formatPlanActionLabel,
-  invalidateDsiImportJobStewardQueries,
   useDsiBulkSteward,
   useDsiResolutionPlan,
   type DsiBulkAction,
@@ -77,7 +75,6 @@ export function DsiImportJobResolutionSection({
   dsiPipelineRunning?: boolean;
   onAsyncPipelineStarted?: (args: { importJobId: number; taskId?: string | null }) => void;
 }) {
-  const qc = useQueryClient();
   const tabbedMode = candidatesOverride == null;
 
   const [activeTab, setActiveTab] = useState<DsiEntityTabId>('distributor');
@@ -96,7 +93,7 @@ export function DsiImportJobResolutionSection({
   );
   const [bulkMode, setBulkMode] = useState<BulkTableSelectionMode>('normal');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [planApplySummary, setPlanApplySummary] = useState<string | null>(null);
+  const [planApplySummary, setPlanApplySummary] = useState<PlanApplyFeedback | null>(null);
   const selectionAnchorIdRef = useRef<number | null>(null);
   const workspaceToolbarRef = useRef<HTMLDivElement | null>(null);
 
@@ -125,6 +122,7 @@ export function DsiImportJobResolutionSection({
 
   const candidatesPage = useDsiCandidatesPage(importJobId, activeFilters, {
     enabled: tabbedMode && visitedTabs.has(activeTab) && isCandidateTab,
+    tabKey: activeTab,
   });
 
   const candidates = candidatesOverride ?? candidatesPage.candidates;
@@ -327,7 +325,9 @@ export function DsiImportJobResolutionSection({
   const stewardBusyMessage = useMemo(() => {
     if (bulk.bulkApply.isPending) return 'Applying bulk steward actions…';
     if (bulk.bulkPreview.isPending) return 'Building bulk steward preview…';
-    if (plan.applyResolutionPlan.isPending) return 'Applying resolution plan…';
+    if (plan.applyResolutionPlan.isPending) {
+      return 'Applying resolution plan… Large batches can take 10+ minutes — you can keep working; progress appears in the activity bell.';
+    }
     if (plan.refreshPlanEffective.isPending) return 'Updating resolution plan after your edits…';
     if (revalidatePipelineBusy) return 'Re-running import validation on the server…';
     return undefined;
@@ -410,12 +410,6 @@ export function DsiImportJobResolutionSection({
       globalSuspicious: plan.planGlobalSuspicious,
     });
   }, [plan]);
-
-  const stewardDone = useCallback(() => {
-    invalidateDsiImportJobStewardQueries(qc, importJobId, { includeImportJobsList: true });
-    onInvalidate();
-    setDetailCandidate(null);
-  }, [qc, importJobId, onInvalidate]);
 
   const lookupPeerCandidateByNormalizedKey = useCallback(
     (normalizedKey: string) =>
@@ -564,6 +558,7 @@ export function DsiImportJobResolutionSection({
                 onEnabledChange={plan.setPlanRegionFallbackEnabled}
                 onRegionIdChange={plan.setPlanRegionId}
                 disabled={stewardOverlayBusy}
+                catalogRegions={plan.regions}
               />
             ) : null}
             {!isRegionChannelTab ? (
@@ -748,21 +743,18 @@ export function DsiImportJobResolutionSection({
           }}
         >
           {planApplySummary ? (
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              flexWrap="wrap"
-              useFlexGap
+            <Alert
+              severity={planApplySummary.severity}
               data-testid="dsi-plan-apply-summary"
+              onClose={() => setPlanApplySummary(null)}
             >
-              <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }}>
-                {planApplySummary}
-              </Typography>
-              <Button size="small" variant="text" onClick={() => setPlanApplySummary(null)}>
-                Dismiss
-              </Button>
-            </Stack>
+              {planApplySummary.message}
+            </Alert>
+          ) : null}
+          {plan.applyResolutionPlan.isError && !planApplySummary ? (
+            <Alert severity="error" data-testid="dsi-plan-apply-error">
+              Apply failed. Check the activity bell or try again with a smaller batch.
+            </Alert>
           ) : null}
           <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             {candidateWorkspace}
@@ -776,7 +768,7 @@ export function DsiImportJobResolutionSection({
               total={candidatesPage.total}
               skip={candidatesPage.skip}
               pageItemCount={candidates.length}
-              busy={candidatesPage.query.isFetching || stewardOverlayBusy}
+              busy={candidatesPage.query.isFetching}
               onPageChange={candidatesPage.setPage}
               onPageSizeChange={candidatesPage.setPageSize}
             />
@@ -791,8 +783,8 @@ export function DsiImportJobResolutionSection({
             onClose={() => setDetailCandidate(null)}
             onRowActionStart={(candidateId) => setRowActionPendingId(candidateId)}
             onRowActionEnd={() => setRowActionPendingId(null)}
-            onDone={stewardDone}
-            onPlanRefresh={refreshResolutionPlanEffective}
+            onDone={() => setDetailCandidate(null)}
+            onStewardFastComplete={plan.evictResolvedCandidates}
             lookupPeerCandidate={lookupPeerCandidateByNormalizedKey}
             onOpenPeerByNormalizedKey={openPeerCandidateByNormalizedKey}
             customerNormalizedKeysOnPage={customerNormalizedKeysOnPage}

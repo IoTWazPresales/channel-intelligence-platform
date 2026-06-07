@@ -286,6 +286,33 @@ def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
         raise
 
 
+@celery_app.task(name="imports.dsi_resolution_plan_compute", bind=True, ack_late=True)
+def dsi_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
+    """Build DSI steward resolution plan off the HTTP request path."""
+    from app.services.imports.dsi_resolution_plan_compute_sync import run_dsi_resolution_plan_compute_sync
+
+    def _on_progress(current: int, total: int) -> None:
+        try:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "phase": "computing_resolution_plan",
+                    "phase_label": "Computing resolution plan",
+                    "current_row": current,
+                    "total_rows": total,
+                    "pct": round(current / total * 100) if total else 0,
+                },
+            )
+        except Exception:
+            pass
+
+    try:
+        return run_dsi_resolution_plan_compute_sync(job_id, payload, on_progress=_on_progress)
+    except Exception:
+        logger.exception("dsi_resolution_plan_compute failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.dsi_soh_reconciliation", bind=True, ack_late=True)
 def dsi_soh_reconciliation_task(self, job_id: int, payload: dict) -> dict:
     """Background SOH reconciliation after DSI apply."""

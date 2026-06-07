@@ -171,13 +171,16 @@ def test_collect_unresolved_geo_channel_geographic_hint_sadc_compound() -> None:
             "source_region_raw_token": None,
         }
 
+    mock_cache = MagicMock()
+    mock_cache.preload_aliases = MagicMock()
+    mock_cache.approved_region_alias_region_ids = MagicMock(return_value=[])
+
     with patch(
         "app.services.imports.dsi_geo_resolution_cache.resolve_source_geo_from_ctx_cached",
         side_effect=fake_geo,
     ):
         with patch("app.services.imports.dsi_geo_resolution_cache.DSIGeoResolutionCache") as mock_cache_cls:
-            mock_cache_cls.build.return_value = MagicMock()
-            mock_cache_cls.build.return_value.preload_aliases = MagicMock()
+            mock_cache_cls.build.return_value = mock_cache
             payload = collect_dsi_job_unresolved_geo_tokens_sync(sess, 43)
 
     assert len(payload["channels"]) == 1
@@ -185,6 +188,78 @@ def test_collect_unresolved_geo_channel_geographic_hint_sadc_compound() -> None:
     assert ch0["raw_token"] == "SADC_Botswana"
     assert ch0["geographic_hint"]["guessed_region_code"] == "BW"
     assert ch0["geographic_hint"]["matched_catalog"] is False
+    assert ch0["geographic_hint"]["alias_registered"] is False
+    assert ch0["geographic_hint"]["registered_region_id"] is None
+
+
+def test_collect_unresolved_geo_geographic_hint_alias_registered() -> None:
+    job = MagicMock()
+    job.template_slug = "distributor_inventory"
+    job.source = MagicMock()
+    job.source.id = 5
+
+    cand = MagicMock()
+    cand.entity_type = "customer_dealer_token"
+    cand.id = 10
+    cand.row_count = 78
+    cand.context = {
+        "source_channel_evidence_norms": ["sadc_botswana"],
+        "source_channel_raw_samples": ["SADC_Botswana"],
+        "source_region_evidence_norms": [],
+        "source_region_raw_samples": [],
+    }
+    cand.source_definition_id = 5
+
+    reg = MagicMock()
+    reg.code = "BW"
+    reg.id = 42
+
+    sess = MagicMock()
+    sess.get = MagicMock(return_value=job)
+
+    def _scalars(stmt):
+        m = MagicMock()
+
+        def all():
+            table = getattr(getattr(stmt, "column_descriptions", [{}])[0], "get", lambda *_: None)("name")
+            if table == "ImportEntityMappingCandidate":
+                return [cand]
+            return [reg]
+
+        m.all = all
+        return m
+
+    sess.scalars = _scalars
+    sess.scalar = MagicMock(return_value=None)
+
+    def fake_geo(session, ctx, *, source_definition_id=None):
+        return {
+            "provisional_channel_conflict": False,
+            "provisional_region_conflict": False,
+            "source_channel_resolved_id": None,
+            "source_channel_resolution_detail": "no_catalog_match",
+            "source_channel_raw_token": "SADC_Botswana",
+            "source_region_resolved_id": None,
+            "source_region_resolution_detail": "missing_source_evidence",
+            "source_region_raw_token": None,
+        }
+
+    mock_cache = MagicMock()
+    mock_cache.preload_aliases = MagicMock()
+    mock_cache.approved_region_alias_region_ids = MagicMock(return_value=[42])
+
+    with patch(
+        "app.services.imports.dsi_geo_resolution_cache.resolve_source_geo_from_ctx_cached",
+        side_effect=fake_geo,
+    ):
+        with patch("app.services.imports.dsi_geo_resolution_cache.DSIGeoResolutionCache") as mock_cache_cls:
+            mock_cache_cls.build.return_value = mock_cache
+            payload = collect_dsi_job_unresolved_geo_tokens_sync(sess, 43)
+
+    ch0 = payload["channels"][0]
+    assert ch0["geographic_hint"]["alias_registered"] is True
+    assert ch0["geographic_hint"]["registered_region_id"] == 42
+    assert ch0["geographic_hint"]["matched_catalog"] is True
 
 
 def test_create_channel_alias_requires_raw_token() -> None:

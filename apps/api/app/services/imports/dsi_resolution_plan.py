@@ -1609,11 +1609,15 @@ def collect_dsi_job_unresolved_geo_tokens_sync(session: Session, job_id: int) ->
             if ent["dimension"] == "channel":
                 iso = resolve_alpha2_from_token(str(ent["raw_token"]))
                 if iso:
-                    rid = region_code_lower.get(iso.lower())
+                    alias_region_ids = geo_cache.approved_region_alias_region_ids(ent["normalized_token"])
+                    catalog_rid = region_code_lower.get(iso.lower())
+                    registered_rid = alias_region_ids[0] if len(alias_region_ids) == 1 else None
                     item["geographic_hint"] = {
                         "guessed_region_code": iso,
-                        "matched_catalog": rid is not None,
-                        "region_id": rid,
+                        "matched_catalog": catalog_rid is not None,
+                        "region_id": catalog_rid,
+                        "alias_registered": len(alias_region_ids) > 0,
+                        "registered_region_id": registered_rid,
                     }
             out.append(item)
         out.sort(key=lambda x: (x["dimension"], x["normalized_token"]))

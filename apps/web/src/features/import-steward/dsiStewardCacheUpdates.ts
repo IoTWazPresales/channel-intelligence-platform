@@ -27,8 +27,143 @@ export function terminalStatusForStewardAction(action: DsiStewardRowAction): str
   return TERMINAL_STATUS_BY_ACTION[action];
 }
 
-function patchCandidateItems(items: DsiCandidateRow[], updater: (rows: DsiCandidateRow[]) => DsiCandidateRow[]): DsiCandidateRow[] {
-  return updater(items);
+type PaginatedCandidates = { items: DsiCandidateRow[]; total: number };
+
+export type DsiCandidatesCacheSnapshot = {
+  importJobId: number;
+  pages: Array<{ queryKey: readonly unknown[]; data: PaginatedCandidates }>;
+  legacy?: DsiCandidateRow[];
+};
+
+function isPaginatedCandidates(data: unknown): data is PaginatedCandidates {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    Array.isArray((data as PaginatedCandidates).items) &&
+    typeof (data as PaginatedCandidates).total === 'number'
+  );
+}
+
+export function snapshotDsiCandidatesCache(
+  qc: QueryClient,
+  importJobId: number
+): DsiCandidatesCacheSnapshot {
+  const pages: DsiCandidatesCacheSnapshot['pages'] = [];
+  for (const [queryKey, data] of qc.getQueriesData<PaginatedCandidates>({
+    queryKey: ['distributor-si-candidates', importJobId],
+  })) {
+    if (!isPaginatedCandidates(data)) continue;
+    pages.push({ queryKey: queryKey as readonly unknown[], data: { ...data, items: [...data.items] } });
+  }
+  const legacy = qc.getQueryData<DsiCandidateRow[]>(DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId));
+  return {
+    importJobId,
+    pages,
+    legacy: legacy ? [...legacy] : undefined,
+  };
+}
+
+export function restoreDsiCandidatesCache(qc: QueryClient, snapshot: DsiCandidatesCacheSnapshot | undefined) {
+  if (!snapshot) return;
+  for (const { queryKey, data } of snapshot.pages) {
+    qc.setQueryData(queryKey, data);
+  }
+  if (snapshot.legacy) {
+    qc.setQueryData(DSI_STEWARD_CONFIG.candidatesQueryKey(snapshot.importJobId), snapshot.legacy);
+  }
+}
+
+/** Drop resolved/terminal rows from open-list caches (status=open server filter). Returns snapshot for rollback. */
+export function removeCandidatesFromDsiCache(
+  qc: QueryClient,
+  importJobId: number,
+  candidateIds: number[]
+): DsiCandidatesCacheSnapshot {
+  const idSet = new Set(candidateIds.filter((id) => Number.isFinite(id)));
+  if (idSet.size === 0) return snapshotDsiCandidatesCache(qc, importJobId);
+
+  const snapshot = snapshotDsiCandidatesCache(qc, importJobId);
+  let removedTotal = 0;
+
+  for (const [queryKey, data] of qc.getQueriesData<PaginatedCandidates>({
+    queryKey: ['distributor-si-candidates', importJobId],
+  })) {
+    if (!isPaginatedCandidates(data)) continue;
+    const nextItems = data.items.filter((c) => !idSet.has(c.id));
+    const removedOnPage = data.items.length - nextItems.length;
+    if (removedOnPage === 0) continue;
+    removedTotal += removedOnPage;
+    qc.setQueryData(queryKey, {
+      ...data,
+      items: nextItems,
+      total: Math.max(0, data.total - removedOnPage),
+    });
+  }
+
+  const legacy = qc.getQueryData<DsiCandidateRow[]>(DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId));
+  if (legacy) {
+    const nextLegacy = legacy.filter((c) => !idSet.has(c.id));
+    if (nextLegacy.length !== legacy.length) {
+      qc.setQueryData(DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId), nextLegacy);
+    }
+  }
+
+  void removedTotal;
+  return snapshot;
+}
+
+export function patchCandidateStatusInDsiCache(
+  qc: QueryClient,
+  importJobId: number,
+  candidateId: number,
+  status: string
+): DsiCandidatesCacheSnapshot {
+  const snapshot = snapshotDsiCandidatesCache(qc, importJobId);
+  const patch = (rows: DsiCandidateRow[]) =>
+    rows.map((c) => (c.id === candidateId ? { ...c, status } : c));
+
+  for (const [queryKey, data] of qc.getQueriesData<PaginatedCandidates>({
+    queryKey: ['distributor-si-candidates', importJobId],
+  })) {
+    if (!isPaginatedCandidates(data)) continue;
+    qc.setQueryData(queryKey, { ...data, items: patch(data.items) });
+  }
+
+  const legacy = qc.getQueryData<DsiCandidateRow[]>(DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId));
+  if (legacy) {
+    qc.setQueryData(DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId), patch(legacy));
+  }
+
+  return snapshot;
+}
+
+export function evictCandidatesFromResolutionPlanCache(
+  qc: QueryClient,
+  importJobId: number,
+  candidateIds: number[]
+) {
+  const idSet = new Set(candidateIds.filter((id) => Number.isFinite(id)));
+  if (idSet.size === 0) return;
+
+  for (const [queryKey, data] of qc.getQueriesData<Record<string, unknown>>({
+    queryKey: DSI_STEWARD_CONFIG.resolutionSuggestionsQueryKeyPrefix(importJobId),
+  })) {
+    if (!data || !Array.isArray(data.rows)) continue;
+    const rows = (data.rows as Array<Record<string, unknown>>).filter(
+      (r) => !idSet.has(Number(r.candidate_id))
+    );
+    const ready = rows.filter((r) => r.ready === true).length;
+    const summary =
+      data.summary && typeof data.summary === 'object'
+        ? {
+            ...(data.summary as Record<string, unknown>),
+            total: rows.length,
+            ready,
+            not_ready: rows.length - ready,
+          }
+        : data.summary;
+    qc.setQueryData(queryKey, { ...data, rows, summary });
+  }
 }
 
 export function patchDsiCandidatesCache(
@@ -38,7 +173,7 @@ export function patchDsiCandidatesCache(
 ): DsiCandidateRow[] | undefined {
   let previousFlat: DsiCandidateRow[] | undefined;
 
-  const pages = qc.getQueriesData<{ items: DsiCandidateRow[]; total: number }>({
+  const pages = qc.getQueriesData<PaginatedCandidates>({
     queryKey: ['distributor-si-candidates', importJobId],
   });
   for (const [key, data] of pages) {
@@ -46,14 +181,14 @@ export function patchDsiCandidatesCache(
     if (!previousFlat) previousFlat = data.items;
     qc.setQueryData(key, {
       ...data,
-      items: patchCandidateItems(data.items, updater),
+      items: updater(data.items),
     });
   }
 
   const legacy = qc.getQueryData<DsiCandidateRow[]>(DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId));
   if (legacy) {
     if (!previousFlat) previousFlat = legacy;
-    qc.setQueryData(DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId), patchCandidateItems(legacy, updater));
+    qc.setQueryData(DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId), updater(legacy));
   }
 
   return previousFlat;

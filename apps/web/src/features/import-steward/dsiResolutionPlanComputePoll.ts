@@ -1,7 +1,6 @@
 import { fetchBulkProvisionalTaskProgress } from '@/features/background-tasks/fetchImportJobProgress';
 
 import { stewardAsyncPollOptions } from './stewardAsyncPoll';
-import type { DsiBulkApplyResponse, DsiBulkTaskStatusResponse } from './dsiSteward.types';
 
 const TERMINAL = new Set(['SUCCESS', 'FAILURE']);
 
@@ -9,12 +8,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Poll bulk provisional Celery task until SUCCESS or FAILURE. */
-export async function pollDsiBulkProvisionalTask(
+/** Poll resolution-plan compute Celery task until SUCCESS or FAILURE. */
+export async function pollDsiResolutionPlanComputeTask(
   importJobId: number,
   taskId: string,
   options?: { intervalMs?: number; maxAttempts?: number; rowCount?: number }
-): Promise<DsiBulkApplyResponse> {
+): Promise<Record<string, unknown>> {
   const scaled = stewardAsyncPollOptions(options?.rowCount ?? 1);
   const intervalMs = options?.intervalMs ?? scaled.intervalMs;
   const maxAttempts = options?.maxAttempts ?? scaled.maxAttempts;
@@ -24,17 +23,15 @@ export async function pollDsiBulkProvisionalTask(
     const state = String(status.state ?? '').toUpperCase();
     if (TERMINAL.has(state)) {
       if (state === 'FAILURE') {
-        throw new Error(status.error ?? 'Bulk provisional customer task failed');
+        throw new Error(status.error ?? 'Resolution plan compute task failed');
       }
-      const result = status.result;
+      const result = status.result as Record<string, unknown> | undefined;
       if (!result || typeof result !== 'object') {
-        throw new Error('Bulk provisional task completed without a result payload');
+        throw new Error('Resolution plan compute completed without a result payload');
       }
-      return result as DsiBulkApplyResponse;
+      return result;
     }
     await sleep(intervalMs);
   }
-  throw new Error('Bulk provisional customer task timed out while polling');
+  throw new Error('Resolution plan compute timed out while polling');
 }
-
-export type { DsiBulkTaskStatusResponse };

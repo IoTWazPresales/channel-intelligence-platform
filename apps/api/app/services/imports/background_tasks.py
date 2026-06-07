@@ -28,6 +28,8 @@ from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
+STALE_PENDING_SLOT_AGE = timedelta(minutes=20)
+
 
 def _normalize_celery_state(state: str | None) -> str:
     return (state or "PENDING").strip().upper()
@@ -65,6 +67,46 @@ def _read_celery_safe(task_id: str, *, timeout_s: float = 3.0) -> tuple[str, dic
 
 def _job_db_indicates_background_work_finished(job: ImportJob) -> bool:
     return job_db_indicates_pipeline_finished(job)
+
+
+def _parse_iso_datetime(raw: Any) -> datetime | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _slot_dispatch_time(job: ImportJob, task_id: str) -> datetime | None:
+    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    for val in meta.values():
+        if isinstance(val, dict) and str(val.get("task_id") or "") == task_id:
+            dt = _parse_iso_datetime(val.get("queued_at"))
+            if dt is not None:
+                return dt
+    dt = _parse_iso_datetime(meta.get("pipeline_queued_at"))
+    if dt is not None:
+        return dt
+    updated = getattr(job, "updated_at", None)
+    if updated is not None:
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        return updated
+    return None
+
+
+def _celery_pending_stale(job: ImportJob, task_id: str, task_state: str, info: dict[str, Any]) -> bool:
+    """True when Celery still reports PENDING with no progress long after dispatch."""
+    if task_state != "PENDING" or info:
+        return False
+    dispatch = _slot_dispatch_time(job, task_id)
+    if dispatch is None:
+        return False
+    return (datetime.now(timezone.utc) - dispatch) >= STALE_PENDING_SLOT_AGE
 
 
 def _progress_from_celery(
@@ -133,6 +175,13 @@ def _build_background_task_records(
                 continue
 
             task_state, info = _read_celery_safe(slot.task_id)
+
+            if _celery_pending_stale(job, slot.task_id, task_state, info):
+                clear_task_slot(meta, slot.slot_key)
+                job.staged_metadata = to_jsonable(meta) if meta else None
+                session.add(job)
+                dirty = True
+                continue
 
             if task_state in TERMINAL_CELERY_STATES or task_state not in ACTIVE_CELERY_STATES:
                 clear_task_slot(meta, slot.slot_key)

@@ -1335,6 +1335,9 @@ def commit_product_master_sync(
         # list (consistent with DSI and other importers). Archiving is a user action.
         job.import_mode = "apply"
         _clear_pm_commit_task_metadata(job)
+        from app.services.imports.product_resolution_index_cache import invalidate_product_resolution_index_cache
+
+        invalidate_product_resolution_index_cache()
         db.commit()
     except ValueError as exc:
         db.rollback()

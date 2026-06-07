@@ -1,5 +1,39 @@
 # Channel Intelligence Platform — Current Context
 
+### Jun 7, 2026 — FK index migration 0047 APPLIED to Supabase EU
+- **Branch:** `fix/shipment-steward-performance`
+- **Commit:** `9fd9b01` — `20260607_0047_fk_indexes_and_duplicate_drops.py`
+- **Applied:** `20260601_0046` → `20260607_0047` via Alembic on Supabase direct `:5432` (~50s). **0 invalid indexes**; duplicate `import_job_id` indexes dropped; canonical kept.
+- **Post-apply:** App-table unindexed FKs = **0**. Remaining 14 in scan = Supabase `auth.*` / `storage.*` system schemas (out of scope).
+- **Local `cip`:** still at `20260601_0046` (unchanged).
+
+- **Branch:** `fix/shipment-steward-performance`
+- **Supabase MCP:** `channel-intelligence-platform` project (`gnhbygwvmnjwhgfskubn`, eu-west-1) is ACTIVE_HEALTHY but `execute_sql` / advisors timed out — consistent with pool exhaustion under steward load (BACKLOG-028).
+- **Item 1 — Tab counts:** `GET …/distributor-si-candidates/tab-counts` (one grouped query); list COUNT uses `count(id)` not subquery projection. Web: `useDsiEntityTabCounts` → single request (+ geo).
+- **Item 2 — Async plan compute:** `POST …/dsi-resolution-plan/compute-async` → Celery/dev-thread; poll `dsi-steward-bulk-task/{task_id}`; kind `dsi_resolution_plan_compute`. Web `useDsiResolutionPlan` fire-and-poll (mirrors apply).
+- **Item 3 — Product index cache:** `product_resolution_index_cache.py` — 5 min TTL, `load_only` identity columns (no `specs_json`); invalidate on PM commit + steward product alias.
+- **Tests:** `test_dsi_mapping_candidates_tab_counts`, `test_product_resolution_index_cache`, `test_dsi_resolution_plan_compute_enqueue` — 4/4 pass.
+- **Next:** Soak job #43 steward page — expect faster tab badges, non-blocking plan compute, fewer dim_product timeouts.
+
+- **Branch:** `fix/shipment-steward-performance`
+- **Problem:** Apply all ready (~985) ran ~11 min then failed (`getaddrinfo` → Supabase); UI showed no error, counts unchanged, activity bell stuck **Queued 0/0**. Poll timeout (~8 min) shorter than task runtime.
+- **Fix (web):** `stewardAsyncPoll.ts` scales poll budget with row count (~20 min for 985 rows). `applyResolutionPlan` `finally` clears client background task + invalidates bell; `onError` shows red Alert above workspace + refreshes tab counts. Stale client-only bell entries (>90s) no longer merge as fake Queued. Bulk provisional apply same cleanup/scaling.
+- **Fix (api):** `background_tasks.py` clears task slots when Celery stays PENDING with no progress >20 min after `queued_at`.
+- **Operational:** Retry after network stable; smaller batches (Apply selected ready ~100/page) safer on remote Supabase. Partial applies possible — refresh counts after failure message.
+
+### Jun 6, 2026 — DSI steward fast path: skip replan on row removal (local, uncommitted)
+- **Branch:** `fix/shipment-steward-performance`
+- **Root cause (cluster map still slow):** Removing resolved rows from the page cache changed `candidateIdsKey` → full `dsi-resolution-plan` refetch ("Computing resolution plan…"). Evicting from `planOverrideMap` also fired debounced `refreshPlanEffective` ("Updating resolution plan after your edits…").
+- **Fix:** `planScopeCandidateIds` stays stable when the page shrinks due to steward actions; in-memory evict only. `planEvictSkipRef` skips debounced effective refresh on evict. Tests: `dsiPlanScope.test.ts` (4/4).
+- **Prior fast path:** Single/cluster steward removes rows from paginated cache + `evictResolvedCandidates`; tab counts only; no full `invalidateDsiImportJobStewardQueries`.
+
+### Jun 6, 2026 — DSI steward fast path (local, uncommitted)
+- **Branch:** `fix/shipment-steward-performance`
+- **Fast steward:** Single-row map/provisional/ignore and duplicate cluster/same-entity actions now remove resolved rows from the paginated cache + evict from in-memory/query plan cache (`evictResolvedCandidates`) without full `invalidateDsiImportJobStewardQueries` or page replan. Tab badge counts refresh via `invalidateDsiStewardTabCounts` only. Drawer closes without double-invalidate.
+- **Files:** `dsiStewardCacheUpdates.ts`, `dsi-mapping-steward-panel.tsx`, `DsiCandidateStewardDrawer.tsx`, `DsiImportJobResolutionSection.tsx`, `useDsiResolutionPlan.ts`, `dsiSteward.config.ts`; tests `dsiStewardCacheUpdates.test.ts` (5/5 pass).
+- **Unchanged:** Re-run import validation, bulk apply, geo steward bulk register still full invalidate. "Different entity" duplicate review patches status in place (`acknowledged_unique`) — row stays on list, plan row retained.
+- **Try on job #43:** Map a duplicate cluster (2–3 rows) — rows should vanish instantly, no "Computing resolution plan…" for the full 1000-row page.
+
 ### Jun 6, 2026 — DSI geo steward: compound region parsing + bulk ISO register (`8466366`)
 - **Branch:** `fix/shipment-steward-performance`
 - **Region parsing:** `resolve_alpha2_from_token` now resolves trailing segments (`SADC_Botswana` → `BW`). Unresolved geo API returns `geographic_hint` for these channel tokens.

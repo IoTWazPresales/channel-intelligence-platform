@@ -29,7 +29,8 @@ import { apiPost, safeDisplayError } from '@/lib/api';
 import { invalidateDsiCatalogQueries, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
 import { DsiPendingButton } from './DsiPendingButton';
 import { prefillGeoCreateFromFileToken } from './geoStewardFilePrefill';
-import { geoRowHasRegionHint, geoRowIsoHint } from './geoStewardHints';
+import { GeoStewardRegisterFromFile } from './GeoStewardRegisterFromFile';
+import { geoRowHasRegionHint, geoRowIsoHint, geoRowRegionAliasRegistered } from './geoStewardHints';
 import type {
   DsiCatalogOpt,
   DsiGeoStewardBulkApplyResponse,
@@ -63,9 +64,11 @@ function GeoStewardTableRow({
   aliasPending,
   onRegisterFromFile,
   registerPending,
+  onRegisterChannelFromFile,
   onRegisterFromHint,
   hintPending,
   isGeographicChannel,
+  regionAliasRegistered,
 }: {
   row: DsiUnresolvedGeoRowDto;
   kind: GeoRowKind;
@@ -86,9 +89,11 @@ function GeoStewardTableRow({
   aliasPending: boolean;
   onRegisterFromFile: () => void;
   registerPending: boolean;
+  onRegisterChannelFromFile?: (args: { raw_token: string; code: string; name: string }) => void | Promise<void>;
   onRegisterFromHint?: () => void;
   hintPending?: boolean;
   isGeographicChannel: boolean;
+  regionAliasRegistered: boolean;
 }) {
   const mapLabel = kind === 'channel' ? 'Map to channel' : 'Map to region';
   const canRegister = Boolean(code.trim() && name.trim());
@@ -137,9 +142,15 @@ function GeoStewardTableRow({
                 Region: {geoRowIsoHint(row) ?? '—'}
               </Typography>
               <Typography variant="caption" color="text.secondary" display="block">
-                {row.geographic_hint?.matched_catalog ? 'Catalog match' : 'Create/link region alias'}
+                {regionAliasRegistered
+                  ? 'Region alias registered for this file token'
+                  : row.geographic_hint?.matched_catalog
+                    ? 'ISO region in catalog — register alias to link token'
+                    : 'Create/link region alias'}
               </Typography>
-              {onRegisterFromHint ? (
+              {regionAliasRegistered ? (
+                <Chip label="Registered" size="small" color="success" variant="outlined" sx={{ height: 22 }} />
+              ) : onRegisterFromHint ? (
                 <DsiPendingButton
                   size="small"
                   variant="contained"
@@ -229,9 +240,25 @@ function GeoStewardTableRow({
               </Stack>
             </>
           ) : (
-            <Typography variant="caption" color="text.secondary">
-              Use Register ISO region — this token is geographic, not RTM.
-            </Typography>
+            <Stack spacing={0.75}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                {regionAliasRegistered
+                  ? 'ISO region alias saved. Re-run validation to refresh the customer plan.'
+                  : 'Primary path: register as ISO region (left). These values sit in the file Channel column but encode countries, not RTM routes like Mass Retail.'}
+              </Typography>
+              <GeoStewardRegisterFromFile
+                row={row}
+                dimension="channel"
+                pending={registerPending}
+                geoBusy={geoBusy}
+                onRegister={async (args) => {
+                  if (onRegisterChannelFromFile) {
+                    await onRegisterChannelFromFile(args);
+                  }
+                }}
+                testIdPrefix={`dsi-geo-ch-rtm-${row.normalized_token}`}
+              />
+            </Stack>
           )}
         </TableCell>
       </TableRow>
@@ -312,12 +339,15 @@ export function UnresolvedGeoStewardPanel({
   );
 
   const geographicChannelRows = useMemo(
-    () => selectedRows.filter((row) => row.kind === 'channel' && geoRowHasRegionHint(row)),
+    () =>
+      selectedRows.filter(
+        (row) => row.kind === 'channel' && geoRowHasRegionHint(row) && !geoRowRegionAliasRegistered(row)
+      ),
     [selectedRows]
   );
 
   const registerFromFileRows = useMemo(
-    () => selectedRows.filter((row) => row.kind === 'region' || !geoRowHasRegionHint(row)),
+    () => selectedRows.filter((row) => row.kind === 'channel' || row.kind === 'region'),
     [selectedRows]
   );
 
@@ -539,7 +569,8 @@ export function UnresolvedGeoStewardPanel({
           Register from file ({registerFromFileRows.length})
         </DsiPendingButton>
         <Typography variant="caption" color="text.secondary">
-          Geographic channel tokens (e.g. SADC_Botswana) register as regions, not RTM channels.
+          Geographic tokens: bulk ISO region (left) or bulk channel create (Register from file). Per-row
+          actions work the same.
         </Typography>
       </Stack>
 
@@ -572,6 +603,7 @@ export function UnresolvedGeoStewardPanel({
                 const mapRecord = row.kind === 'channel' ? chMapId : rgMapId;
                 const mapId = mapRecord[row.rowKey] ?? '';
                 const isGeographicChannel = row.kind === 'channel' && geoRowHasRegionHint(row);
+                const regionAliasRegistered = geoRowRegionAliasRegistered(row);
 
                 return (
                   <GeoStewardTableRow
@@ -607,6 +639,7 @@ export function UnresolvedGeoStewardPanel({
                     onNameChange={(value) => setDraftName((m) => ({ ...m, [row.rowKey]: value }))}
                     geoBusy={geoBusy}
                     isGeographicChannel={isGeographicChannel}
+                    regionAliasRegistered={regionAliasRegistered}
                     aliasPending={row.kind === 'channel' ? chAliasMut.isPending : rgAliasMut.isPending}
                     onSaveAlias={() => {
                       const id = Number(mapId);
@@ -642,8 +675,15 @@ export function UnresolvedGeoStewardPanel({
                           .catch(() => {});
                       }
                     }}
+                    onRegisterChannelFromFile={(args) =>
+                      chCreateMut.mutateAsync({
+                        raw_token: args.raw_token,
+                        channel_code: args.code,
+                        channel_name: args.name,
+                      })
+                    }
                     onRegisterFromHint={
-                      isGeographicChannel
+                      isGeographicChannel && !regionAliasRegistered
                         ? () =>
                             void hintRegionMut
                               .mutateAsync({

@@ -34,6 +34,7 @@ KIND_PRODUCT_MASTER_COMMIT = "product_master_commit"
 KIND_DSI_PIPELINE = "dsi_pipeline"
 KIND_DSI_BULK_PROVISIONAL = "dsi_bulk_provisional"
 KIND_DSI_RESOLUTION_PLAN_APPLY = "dsi_resolution_plan_apply"
+KIND_DSI_RESOLUTION_PLAN_COMPUTE = "dsi_resolution_plan_compute"
 KIND_DSI_SOH_RECONCILIATION = "dsi_soh_reconciliation"
 KIND_DSI_VELOCITY_COMPUTE = "dsi_velocity_compute"
 KIND_DSI_FORECASTING = "dsi_forecasting"
@@ -44,7 +45,11 @@ KIND_COMMERCIAL_PLANNER_LINEUP_PARSE = "commercial_planner_lineup_parse"
 # Allowed resolved kinds for the shared ``dsi_bulk_task`` slot. Anything else (e.g. the
 # legacy ``dsi_bulk_provisional_customers`` string still written by the endpoint) is
 # normalized to ``dsi_bulk_provisional`` — preserving the prior discovery behavior.
-_DSI_BULK_ALLOWED_KINDS = (KIND_DSI_BULK_PROVISIONAL, KIND_DSI_RESOLUTION_PLAN_APPLY)
+_DSI_BULK_ALLOWED_KINDS = (
+    KIND_DSI_BULK_PROVISIONAL,
+    KIND_DSI_RESOLUTION_PLAN_APPLY,
+    KIND_DSI_RESOLUTION_PLAN_COMPUTE,
+)
 
 
 # --- Slot descriptors ----------------------------------------------------------
@@ -190,6 +195,8 @@ def task_label(job: ImportJob, *, kind: str) -> str:
         return f"Creating provisional customers (DSI job {jid})"
     if kind == KIND_DSI_RESOLUTION_PLAN_APPLY:
         return f"Applying resolution plan (DSI job {jid})"
+    if kind == KIND_DSI_RESOLUTION_PLAN_COMPUTE:
+        return f"Computing resolution plan (DSI job {jid})"
     if kind == KIND_DSI_SOH_RECONCILIATION:
         return f"Reconciling inventory (DSI job {jid})"
     if kind == KIND_DSI_VELOCITY_COMPUTE:

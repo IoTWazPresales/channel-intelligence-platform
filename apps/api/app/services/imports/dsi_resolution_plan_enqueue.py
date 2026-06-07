@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from app.core.config import get_settings
 from app.services.imports.dsi_resolution_plan_apply_sync import run_dsi_resolution_plan_apply_sync
+from app.services.imports.dsi_resolution_plan_compute_sync import run_dsi_resolution_plan_compute_sync
 from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -84,4 +85,54 @@ def enqueue_dsi_resolution_plan_apply(
     task_id = f"sync-plan-apply-{uuid.uuid4().hex}"
     _dev_dsi_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
     _finish(out, state="SUCCESS")
+    return task_id, False
+
+
+def enqueue_dsi_resolution_plan_compute(
+    job_id: int,
+    payload: dict[str, Any],
+) -> tuple[str, bool]:
+    """Return ``(task_id, async_poll_required)`` for read-only plan generation."""
+    settings = get_settings()
+    task_name = "imports.dsi_resolution_plan_compute"
+
+    def _run_sync() -> dict[str, Any]:
+        return run_dsi_resolution_plan_compute_sync(job_id, payload)
+
+    try:
+        result = celery_app.send_task(task_name, args=[job_id, payload])
+        return str(result.id), True
+    except Exception:
+        logger.exception(
+            "dsi_resolution_plan_compute: Celery enqueue failed job_id=%s task=%s", job_id, task_name
+        )
+
+    if settings.cip_dev_celery_dispatch == "in_process_thread":
+        task_id = f"dev-plan-compute-{uuid.uuid4().hex}"
+
+        def _in_process() -> None:
+            try:
+                out = _run_sync()
+                _dev_dsi_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
+            except Exception as exc:
+                logger.exception(
+                    "dsi_resolution_plan_compute in-process failed job_id=%s task_id=%s",
+                    job_id,
+                    task_id,
+                )
+                _dev_dsi_bulk_task_results[task_id] = {
+                    "state": "FAILURE",
+                    "error": str(exc)[:800],
+                }
+
+        threading.Thread(
+            target=_in_process,
+            name=f"dsi-plan-compute-{job_id}",
+            daemon=True,
+        ).start()
+        return task_id, True
+
+    out = _run_sync()
+    task_id = f"sync-plan-compute-{uuid.uuid4().hex}"
+    _dev_dsi_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
     return task_id, False

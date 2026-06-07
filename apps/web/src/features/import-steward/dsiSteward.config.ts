@@ -42,6 +42,8 @@ export const DSI_STEWARD_CONFIG = {
       'Open candidates by entity tab (Distributors, Customers, Products). Click a row to open the steward drawer; suggested plan actions apply to the current page until you commit.',
   },
   candidatesQueryKey: (importJobId: number) => ['distributor-si-candidates', importJobId] as const,
+  candidateTabCountsQueryKey: (importJobId: number) =>
+    ['distributor-si-candidates', importJobId, 'tab-counts'] as const,
   candidatesPageQueryKey: (
     importJobId: number,
     skip: number,
@@ -84,6 +86,13 @@ export const DSI_STEWARD_CONFIG = {
   /** Legacy mappings queue page list key (grouped candidates by job). */
   mappingCandidatesListQueryKey: (importJobId: number) => ['dsi-mapping-candidates', importJobId] as const,
 } as const;
+
+/** Invalidate tab badge counts only — not resolution plan or paginated candidate pages. */
+export function invalidateDsiStewardTabCounts(qc: QueryClient, importJobId: number) {
+  void qc.invalidateQueries({
+    queryKey: DSI_STEWARD_CONFIG.candidateTabCountsQueryKey(importJobId),
+  });
+}
 
 /** Invalidate DSI steward caches after apply, revalidate, or geo alias saves. */
 export function invalidateDsiImportJobStewardQueries(

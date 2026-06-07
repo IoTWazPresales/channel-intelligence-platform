@@ -470,60 +470,10 @@ class ProductResolutionIndex:
 
 
 def _load_product_resolution_index(db: Session) -> ProductResolutionIndex:
-    """Load Product Master identity fields + ProductAlias for DSI resolution (single pass per import job)."""
-    products = list(db.scalars(select(DimProduct)).all())
-    products_by_id: dict[int, DimProduct] = {int(p.id): p for p in products}
-    sku_to_id: dict[str, int] = {}
-    part_pairs: list[tuple[str, int]] = []
-    sm_pairs: list[tuple[str, int]] = []
-    model_pairs: list[tuple[str, int]] = []
-    mkt_pairs: list[tuple[str, int]] = []
-    ean_pairs: list[tuple[str, int]] = []
-    upc_pairs: list[tuple[str, int]] = []
-    for p in products:
-        sk = _product_token_key(p.sku)
-        if sk:
-            sku_to_id[sk] = int(p.id)
-        pk = _product_token_key(p.part_number)
-        if pk:
-            part_pairs.append((pk, int(p.id)))
-        sm = _product_token_key(p.sales_model_name)
-        if sm:
-            sm_pairs.append((sm, int(p.id)))
-        mn = _product_token_key(p.model_name)
-        if mn:
-            model_pairs.append((mn, int(p.id)))
-        mk = _product_token_key(p.marketing_name)
-        if mk:
-            mkt_pairs.append((mk, int(p.id)))
-        ean = _product_token_key(p.ean)
-        if ean:
-            ean_pairs.append((ean, int(p.id)))
-        upc = _product_token_key(p.upc)
-        if upc:
-            upc_pairs.append((upc, int(p.id)))
-    alias_pairs: list[tuple[str, int]] = []
-    steward_alias_by_key: dict[str, int] = {}
-    for a in db.scalars(select(ProductAlias)).all():
-        av = _product_token_key(a.alias_value)
-        if av:
-            alias_pairs.append((av, int(a.product_id)))
-            if (getattr(a, "confidence", None) or "") == "steward_approved":
-                pid_a = int(a.product_id)
-                if pid_a in products_by_id:
-                    steward_alias_by_key[av] = pid_a
-    return ProductResolutionIndex(
-        sku_to_id=sku_to_id,
-        part_number_to_ids=_multimap_from_pairs(part_pairs),
-        sales_model_name_to_ids=_multimap_from_pairs(sm_pairs),
-        model_name_to_ids=_multimap_from_pairs(model_pairs),
-        marketing_name_to_ids=_multimap_from_pairs(mkt_pairs),
-        ean_to_ids=_multimap_from_pairs(ean_pairs),
-        upc_to_ids=_multimap_from_pairs(upc_pairs),
-        alias_value_to_ids=_multimap_from_pairs(alias_pairs),
-        products_by_id=products_by_id,
-        steward_alias_by_key=steward_alias_by_key,
-    )
+    """Load Product Master identity fields + ProductAlias (cached, narrow SELECT — no specs_json)."""
+    from app.services.imports.product_resolution_index_cache import get_product_resolution_index
+
+    return get_product_resolution_index(db)
 
 
 @dataclass
