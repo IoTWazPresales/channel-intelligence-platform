@@ -8,14 +8,15 @@ import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { registerClientBackgroundTask, finishClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 
 import { notifyDsiAsyncPipelineStarted } from './dsiAsyncPipelineRun';
-import { pollDsiResolutionPlanApplyTask } from './dsiResolutionPlanApplyPoll';
+import { pollDsiResolutionPlanApplyTask, fetchDsiResolutionPlanApplyResultIfTerminal } from './dsiResolutionPlanApplyPoll';
 import { pollDsiResolutionPlanComputeTask } from './dsiResolutionPlanComputePoll';
-import { evictCandidatesFromResolutionPlanCache } from './dsiStewardCacheUpdates';
+import { evictCandidatesFromResolutionPlanCache, removeCandidatesFromDsiCache } from './dsiStewardCacheUpdates';
 import { DSI_STEWARD_CONFIG, invalidateDsiCatalogQueries, invalidateDsiImportJobStewardQueries, invalidateDsiStewardTabCounts } from './dsiSteward.config';
 import type { DsiCatalogOpt, DsiPlanRowOverride, DsiUnresolvedGeoRowDto, PlanApplyFeedback } from './dsiSteward.types';
 import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
 import { nextPlanScopeCandidateIds } from './dsiPlanScope';
 import { summarizeApplyAllReadyProvisional } from './dsiResolutionPlanDisplay';
+import { waitForDsiStewardBulkIdle } from './waitForDsiStewardBulkIdle';
 
 export function useDsiResolutionPlan({
   importJobId,
@@ -106,6 +107,8 @@ export function useDsiResolutionPlan({
     ),
     enabled: importJobId > 0 && planScopeCandidateIds.length > 0,
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    staleTime: 10 * 60 * 1000,
     queryFn: async ({ signal }) => {
       const body = { ...planDefaultsBody(), candidate_ids: planScopeCandidateIds };
       const enqueued = await apiPost<{
@@ -125,6 +128,7 @@ export function useDsiResolutionPlan({
       try {
         return await pollDsiResolutionPlanComputeTask(importJobId, enqueued.task_id, {
           rowCount: planScopeCandidateIds.length,
+          signal,
         });
       } finally {
         finishClientBackgroundTask(enqueued.task_id);
@@ -200,6 +204,7 @@ export function useDsiResolutionPlan({
       overrides: Array<Record<string, unknown>>;
       globalSuspicious: boolean;
     }) => {
+      await waitForDsiStewardBulkIdle(importJobId);
       let taskId: string | undefined;
       try {
         const body = {
@@ -223,9 +228,15 @@ export function useDsiResolutionPlan({
           label: `Applying resolution plan (DSI job ${importJobId})`,
         });
         void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
-        return pollDsiResolutionPlanApplyTask(importJobId, enqueued.task_id, {
-          rowCount: args.candidateIds.length,
-        });
+        try {
+          return await pollDsiResolutionPlanApplyTask(importJobId, enqueued.task_id, {
+            rowCount: args.candidateIds.length,
+          });
+        } catch (pollErr) {
+          const late = await fetchDsiResolutionPlanApplyResultIfTerminal(importJobId, enqueued.task_id);
+          if (late) return late;
+          throw pollErr;
+        }
       } finally {
         if (taskId) finishClientBackgroundTask(taskId);
         void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
@@ -236,27 +247,58 @@ export function useDsiResolutionPlan({
       const failed = Number(data.failed ?? 0);
       const skippedHold = Number(data.skipped_hold ?? 0);
       const skippedNr = Number(data.skipped_not_ready ?? 0);
+      const partial = Boolean(data.partial_success);
+      const processed = Number(data.processed ?? applied);
+      const interruptMsg = typeof data.error === 'string' ? data.error : '';
+      const appliedIds = (Array.isArray(data.results) ? data.results : [])
+        .filter((r) => r && typeof r === 'object' && (r as { status?: string }).status === 'applied')
+        .map((r) => Number((r as { candidate_id?: unknown }).candidate_id))
+        .filter((id) => Number.isFinite(id));
+
+      if (appliedIds.length > 0) {
+        removeCandidatesFromDsiCache(qc, importJobId, appliedIds);
+        evictCandidatesFromResolutionPlanCache(qc, importJobId, appliedIds);
+      }
+
       setPlanApplySummary({
-        severity: 'success',
-        message: `Resolution plan: applied ${applied}, failed ${failed}, skipped (hold) ${skippedHold}, skipped (not ready) ${skippedNr}. Re-run import validation (server) when ready.`,
+        severity: partial ? 'warning' : 'success',
+        message: partial
+          ? `Resolution plan partially applied: ${applied} of ${processed} processed before interruption (${interruptMsg}). Failed ${failed}, skipped (hold) ${skippedHold}, skipped (not ready) ${skippedNr}. Refresh candidate counts and retry remaining rows.`
+          : `Resolution plan: applied ${applied}, failed ${failed}, skipped (hold) ${skippedHold}, skipped (not ready) ${skippedNr}. Remaining rows are refreshing — re-run import validation (server) when you want staging updated.`,
       });
-      setSuggestionDrawerId(null);
-      setResolutionPlan(null);
-      setPlanOverrideMap({});
-      setPlanGlobalSuspicious(false);
-      setPlanScopeCandidateIds([]);
-      setPlanLoadToken(0);
+      if (!partial) {
+        setSuggestionDrawerId(null);
+        setPlanOverrideMap({});
+        setPlanGlobalSuspicious(false);
+        const appliedSet = new Set(appliedIds);
+        setPlanScopeCandidateIds(
+          candidates.map((c) => c.id).filter((id) => !appliedSet.has(id))
+        );
+        setPlanLoadToken((n) => (n === 0 ? 1 : n));
+        for (const [, cached] of qc.getQueriesData<Record<string, unknown>>({
+          queryKey: DSI_STEWARD_CONFIG.resolutionSuggestionsQueryKeyPrefix(importJobId),
+        })) {
+          if (cached && Array.isArray(cached.rows)) {
+            setResolutionPlan(cached);
+            break;
+          }
+        }
+      }
       invalidateDsiImportJobStewardQueries(qc, importJobId, { includeImportJobsList: true });
+      void qc.refetchQueries({
+        queryKey: DSI_STEWARD_CONFIG.resolutionSuggestionsQueryKeyPrefix(importJobId),
+      });
       setSelectedIds([]);
       onInvalidate();
     },
     onError: (err) => {
       setPlanApplySummary({
-        severity: 'error',
-        message: `${safeDisplayError(err)} Some rows may have been applied before the failure — refresh candidate counts to verify.`,
+        severity: 'warning',
+        message: `${safeDisplayError(err)} The worker may still be running — check the activity bell. When it finishes, refresh suggestions or reload the page to update counts.`,
       });
       invalidateDsiStewardTabCounts(qc, importJobId);
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId) });
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
     },
   });
 

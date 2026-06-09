@@ -33,7 +33,7 @@ export type DsiCatalogOpt = { id: number; code: string; name: string };
 /** Resolution-plan apply feedback shown above the steward workspace. */
 export type PlanApplyFeedback = {
   message: string;
-  severity: 'success' | 'error';
+  severity: 'success' | 'warning' | 'error';
 };
 
 export type DsiUnresolvedGeoRowDto = {

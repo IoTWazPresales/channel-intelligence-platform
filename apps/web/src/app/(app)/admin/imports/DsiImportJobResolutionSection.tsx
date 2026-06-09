@@ -17,6 +17,7 @@ import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/
 
 import type { PlanApplyFeedback } from '@/features/import-steward/dsiSteward.types';
 import {
+  DsiBulkActionInlineForm,
   DsiBulkStewardSection,
   DsiCandidateStewardDrawer,
   DsiCandidatesPagination,
@@ -47,6 +48,7 @@ import {
   type DsiEntityTabId,
   type DsiStewardCandidateFilterState,
 } from '@/features/import-steward';
+import { useDsiStewardBulkBusy } from '@/features/import-steward/useDsiStewardBulkBusy';
 import { safeDisplayError } from '@/lib/api';
 
 import {
@@ -151,6 +153,17 @@ export function DsiImportJobResolutionSection({
     setSelectedIds,
     setPlanApplySummary,
   });
+
+  const stewardBulk = useDsiStewardBulkBusy(importJobId);
+
+  const planComputeBlocking =
+    (plan.suggestionsQuery.isFetching && !plan.suggestionsQuery.data) ||
+    (stewardBulk.computeActive && !plan.applyResolutionPlan.isPending);
+
+  const planApplyBlocked =
+    planComputeBlocking ||
+    stewardBulk.applyActive ||
+    plan.refreshPlanEffective.isPending;
 
   const bulk = useDsiBulkSteward({
     importJobId,
@@ -320,13 +333,18 @@ export function DsiImportJobResolutionSection({
     bulk.bulkApply.isPending ||
     plan.applyResolutionPlan.isPending ||
     plan.refreshPlanEffective.isPending ||
+    planComputeBlocking ||
+    (stewardBulk.applyActive && !plan.applyResolutionPlan.isPending) ||
     revalidatePipelineBusy;
 
   const stewardBusyMessage = useMemo(() => {
     if (bulk.bulkApply.isPending) return 'Applying bulk steward actions…';
     if (bulk.bulkPreview.isPending) return 'Building bulk steward preview…';
-    if (plan.applyResolutionPlan.isPending) {
+    if (plan.applyResolutionPlan.isPending || stewardBulk.applyActive) {
       return 'Applying resolution plan… Large batches can take 10+ minutes — you can keep working; progress appears in the activity bell.';
+    }
+    if (planComputeBlocking) {
+      return 'Computing resolution plan… Apply is disabled until compute finishes.';
     }
     if (plan.refreshPlanEffective.isPending) return 'Updating resolution plan after your edits…';
     if (revalidatePipelineBusy) return 'Re-running import validation on the server…';
@@ -335,6 +353,8 @@ export function DsiImportJobResolutionSection({
     bulk.bulkApply.isPending,
     bulk.bulkPreview.isPending,
     plan.applyResolutionPlan.isPending,
+    stewardBulk.applyActive,
+    planComputeBlocking,
     plan.refreshPlanEffective.isPending,
     revalidatePipelineBusy,
   ]);
@@ -583,8 +603,8 @@ export function DsiImportJobResolutionSection({
                   pendingLabel="Applying…"
                   disabled={
                     selectedReadyPlanIds.length === 0 ||
-                    plan.refreshPlanEffective.isPending ||
-                    stewardOverlayBusy
+                    planApplyBlocked ||
+                    (stewardOverlayBusy && !plan.applyResolutionPlan.isPending)
                   }
                   onClick={() =>
                     void plan.applyResolutionPlan
@@ -606,8 +626,8 @@ export function DsiImportJobResolutionSection({
                   pendingLabel="Applying…"
                   disabled={
                     plan.readyPlanCandidateIds.length === 0 ||
-                    plan.refreshPlanEffective.isPending ||
-                    stewardOverlayBusy
+                    planApplyBlocked ||
+                    (stewardOverlayBusy && !plan.applyResolutionPlan.isPending)
                   }
                   onClick={() => plan.setApplyAllConfirmOpen(true)}
                   data-testid="dsi-resolution-plan-apply-all"
@@ -655,7 +675,7 @@ export function DsiImportJobResolutionSection({
     <Stack spacing={2} data-testid="dsi-import-job-resolution">
       <Typography variant="subtitle2">Resolve blockers for this import</Typography>
       <Alert severity="info">
-        <Typography variant="body2" component="motion.div">
+        <Typography variant="body2" component="div">
           <strong>Validate → Resolve → Revalidate → Apply</strong>. Use entity tabs for distributors, customers, and
           products; use <strong>Region &amp; channel</strong> when file geography does not match the catalog.{' '}
           <Link component={NextLink} href={`/admin/imports?job=${importJobId}`}>
