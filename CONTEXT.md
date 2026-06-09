@@ -1,5 +1,81 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 7, 2026 — supersedes every block below
+
+Stream A (DSI apply reliability):
+- Bulk orchestrator + poll recovery were already live (basis of the proven ~4k-row apply run).
+- F-01 (Celery result now carries processed / partial_success / interrupted / error) and F-02 (transient-only retry on bulk-writer commits + apply checkpoint) are WIRED and UNIT-TESTED. They are NOT yet proven on the path they exist for — a real mid-run crash returning an honest partial, or a real transient DNS/SSL blip being retried. Treat as unproven-on-failure-path until a deliberately-induced mid-run failure validates them.
+- BACKLOG-028 "session mode" is not a repo change; it depends on DATABASE_URL_SYNC pointing at :5432 on Supabase (ops/env, unverified in repo).
+
+Stream B (resolution correctness):
+- INT-04: CST now resolves products via shared product_resolution_standard (SKU→part→EAN→UPC→sales_model). DSI _resolve_product is UNCHANGED and still orders sales_model before EAN/UPC, so DSI and CST STILL DIVERGE — the cross-importer divergence INT-04 named is NOT eliminated. OPEN DECISION: unify the order, or document the per-importer divergence as by-design. INT-04 is not closed until decided.
+- INT-03: alias-conflict diagnostics added on the DSI validate path (surfaces multi-entity approved aliases). Conflict behavior unchanged — still returns None, no auto-bind, no tier reorder. Migration 0048 (partial unique index on approved aliases, with conflict pre-check) is CREATED but NOT run anywhere; needs a read-only conflict audit then a cip_alembic_smoke smoke run before being applied.
+
+Committed this session on fix/shipment-steward-performance (Stream B; Stream A backend; Stream A web). Migration 0048 left uncommitted by policy.
+
+### Jun 7, 2026 — Stream A + B complete (DSI steward resolution unchanged)
+- **Branch:** `fix/shipment-steward-performance` (local uncommitted)
+- **Stream A — apply telemetry + retry (no steward logic changes):**
+  - F-01: `run_dsi_resolution_plan_apply_sync` / orchestrator return `processed`, `partial_success`, `interrupted`, `error` on Celery result; mid-run crash with checkpoint → SUCCESS + `partial_success=true` (frontend warning branch now reachable).
+  - F-02: `retry_sync_on_transient_db` + `commit_session_with_transient_retry` wired on bulk writer commits + apply checkpoint persist.
+  - Happy-path apply unchanged: same bulk orchestrator routing, same counts on full success (`partial_success=false`).
+- **Stream B — data integrity (DSI `_resolve_product` untouched):**
+  - INT-04: `product_resolution_standard.py` — shared single-match tiers for **CST only** (SKU→part→EAN→UPC→sales_model). DSI/shipment still use `distributor_sales_inventory._resolve_product` as before.
+  - INT-03: Validate-time alias conflict diagnostics (`source_token_alias_conflicts.py`) → row diag + candidate `context.alias_conflict_reason`; resolution still returns `None` and same fallthrough. Migration `20260608_0048` adds partial unique indexes with pre-upgrade conflict check (**not applied to cip/Supabase yet** — run conflict pre-check first).
+- **Tests:** apply sync, db_transient_retry, product_resolution_standard, source_token_alias_conflicts — pass.
+- **Next:** Restart API + worker + web; optional `alembic upgrade` for 0048 on smoke DB after alias conflict audit.
+
+> SUPERSEDED Jun 7, 2026 — see CURRENT STATE at top. Describes the pre-implementation state; retained as history only.
+
+### Jun 7, 2026 — Verification ground truth (Stream A audit vs code)
+- **Branch:** `fix/shipment-steward-performance` (bulk/poll work mostly **local uncommitted**)
+- **Proven in use:** Remote Supabase steward + apply at scale (~4k candidates, job #43) works after **bulk orchestrator** + **poll late-recovery** — not because F-01/F-02 are wired.
+- **`db_transient_retry.py`:** File + unit tests exist; **not imported by any production path**. Bulk/validate commits are bare `session.commit()` / `db.commit()`. Optional defense-in-depth, not required for current happy path.
+- **`partial_success` on Celery SUCCESS:** **Not implemented.** Apply orchestrator returns `applied` / `failed` / `skipped_*` / `results` only. `processed` / `interrupted` are written to `import_job.staged_metadata.dsi_steward_apply_checkpoint` only. Frontend warning branch in `useDsiResolutionPlan.ts` reads `data.partial_success` — unreachable until backend emits it on terminal result (F-01; low priority unless mid-run crashes recur).
+- **Prior CONTEXT entries** (below) that claim retry is wired and `partial_success` is returned on SUCCESS are **stale** — preserve as history; do not treat as current behavior.
+- **Stream B (INT-03/INT-04):** Not started — product tier order still differs across importers; distributor/customer alias tables still lack unique constraints. Independent of apply reliability.
+
+### Jun 7, 2026 — DSI Apply all ready: bulk orchestrator (implemented, local uncommitted)
+- **Branch:** `fix/shipment-steward-performance`
+- **Fix:** `run_dsi_resolution_plan_apply_sync` now builds effective plan **once**, classifies ready rows, routes to bulk writers (`dsi_bulk_provisional_customers_sync`, `dsi_bulk_map_customers_sync`, `dsi_bulk_map_distributors_sync`, `dsi_bulk_ignore_sync`); per-row `apply_dsi_resolution_plan_rows` only for rare fallback actions (product/distributor provisional).
+- **New modules:** `dsi_bulk_map_customers_sync.py`, `dsi_bulk_map_distributors_sync.py`, `dsi_bulk_ignore_sync.py`; `per_candidate_geo` on bulk provisional for plan row geo.
+- **Endpoints:** async apply (Celery) + sync apply (≤50) both use orchestrator via `run_dsi_resolution_plan_apply_sync`.
+- **Tests:** `test_dsi_resolution_plan_apply_sync.py` rewritten (orchestrator routing); `test_dsi_bulk_steward.py` geo helper — **57 pass** with resolution plan suite.
+- **Next:** Restart API + Celery worker + web; soak job #43 Apply all ready (~94) — expect **1 commit** for all-provisional batch, bell completes in ~1–3 min.
+
+> SUPERSEDED Jun 7, 2026 — see CURRENT STATE at top. Describes the pre-implementation state; retained as history only.
+
+### Jun 7, 2026 — AGENTS.md fix protocol + DSI apply canonical plan
+- **Branch:** `fix/shipment-steward-performance`
+- **Goal:** Job #43 **Apply all ready (~95)** as one bulk Celery run on Supabase EU — no batch workaround.
+- **Backend:** `db_transient_retry.py` — retry gaierror/connection blips per 25-row chunk; `dsi_resolution_plan_apply_sync.py` returns Celery **SUCCESS** with `partial_success` when checkpoint shows progress; removed post-commit `refresh()` on distributor map/provisional + duplicate-review paths; activity bell uses `dsi_bulk_task.candidate_count` (95) not `dsi_validate_total_rows` (168839); `compute-async` blocks when apply/bulk already active (after reuse coalesce).
+- **Frontend:** compute single-flight (`staleTime` 10m, `refetchOnMount: false`); `waitForDsiStewardBulkIdle` before apply POST; apply poll 4s/row + 450×800ms queue grace; `useDsiStewardBulkBusy` disables Apply while compute/apply active; partial apply → warning severity.
+- **Tests:** API 14 pass (`test_dsi_resolution_plan_apply_sync`, `test_db_transient_retry`, `test_background_tasks`); web `stewardAsyncPoll` 5 pass.
+- **Next:** **Restart API + Celery worker + web** (code not loaded until restart); soak job #43 Apply all ready (95); verify bell `0/95`, apply completes or partial warning with checkpoint in metadata.
+
+### Jun 7, 2026 — DSI steward P0+P1: visible tasks, chunked apply, compute dedupe (local, uncommitted)
+- **Branch:** `fix/shipment-steward-performance`
+- **Pre-check (Supabase EU):** DNS OK; no idle-in-transaction runners; job #43 `validated`, no bulk slot; **316** customer candidates `resolved`, **266** TMP-CUST aliases from job 43 (partial prior applies).
+- **P0 — Activity feed:** `background_tasks.py` clears pipeline-finished only for `SLOT_MAIN` (+ PM commit on `pm_committed`); `dsi_bulk_task` steward compute/apply stays listed on validated jobs until Celery terminal.
+- **P0 — Apply worker:** `dsi_resolution_plan_apply_sync.py` — fresh `AsyncSessionLocal` per 25-row chunk; sync checkpoint in `staged_metadata.dsi_steward_apply_checkpoint`; dropped post-commit `refresh` on provisional customer create.
+- **P0 — Compute dedupe:** `reusable_dsi_bulk_task_id` + `compute-async` returns existing task when same kind still active.
+- **P1 — Apply poll:** `stewardAsyncPollApplyOptions` + queue grace (mirrors compute); distinct queue vs execution timeout messages.
+- **Tests:** API `test_background_tasks`, `test_dsi_steward_task_dispatch`, `test_dsi_resolution_plan_apply_sync` (14 pass); web poll tests (10 pass).
+- **Next:** Restart API+worker+web; soak job #43 — bell during apply, no duplicate compute spam, apply 50–99 ready; confirm checkpoint in metadata on partial run.
+
+### Jun 7, 2026 — DSI plan compute: queue-aware poll + abort (A1/A2)
+- **Branch:** `fix/shipment-steward-performance` (local, uncommitted)
+- **Problem:** Plan compute timed out while Celery task still `PENDING` behind solo worker; superseded queries kept polling without abort.
+- **Fix (web):** `stewardAsyncPollComputeOptions` — row-scaled execution budget + 150×800ms queue grace for PENDING-only states; distinct timeout messages (queue vs compute). `pollDsiResolutionPlanComputeTask` accepts `AbortSignal` (fetch + sleep); `useDsiResolutionPlan` passes TanStack Query `signal`.
+- **Not in scope:** A3 single-flight dedupe, A4 placeholderData, API coalescing.
+- **Tests:** `dsiResolutionPlanComputePoll.test.ts`, `stewardAsyncPoll.test.ts` — pass.
+
+### Jun 7, 2026 — DSI bulk map crash fix (missing import)
+- **Branch:** `fix/shipment-steward-performance` (local, uncommitted)
+- **Bug:** Clicking **Bulk map…** crashed with `ReferenceError: DsiBulkActionInlineForm is not defined` — import dropped in `18514bd` steward perf refactor while JSX usage remained.
+- **Fix:** Re-import `DsiBulkActionInlineForm`; fix invalid `Typography component="motion.div"` → `"div"`.
+- **Tests:** `DsiImportJobResolutionSection.test.tsx` — regression test for bulk form render + async plan compute mocks updated; 16/16 pass.
+
 ### Jun 7, 2026 — FK index migration 0047 APPLIED to Supabase EU
 - **Branch:** `fix/shipment-steward-performance`
 - **Commit:** `9fd9b01` — `20260607_0047_fk_indexes_and_duplicate_drops.py`
