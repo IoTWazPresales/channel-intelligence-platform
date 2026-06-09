@@ -13,6 +13,8 @@ from sqlalchemy import select
 from app.db.session_sync import SessionLocal
 from app.models.ingestion import ImportJob
 from app.services.imports.import_background_slots import (
+    SLOT_MAIN,
+    SLOT_PM_COMMIT,
     clear_task_slot,
     iter_active_slots,
     jobs_with_possible_background_tasks,
@@ -99,6 +101,19 @@ def _slot_dispatch_time(job: ImportJob, task_id: str) -> datetime | None:
     return None
 
 
+def _clear_slot_when_pipeline_finished(job: ImportJob, slot_key: str) -> bool:
+    """Only pipeline-bound slots clear when job stage indicates that pipeline finished.
+
+    Steward bulk tasks (plan compute/apply on validated DSI jobs) stay visible until
+    Celery reports a terminal state.
+    """
+    if slot_key == SLOT_MAIN:
+        return _job_db_indicates_background_work_finished(job)
+    if slot_key == SLOT_PM_COMMIT:
+        return (job.stage or "").strip().lower() == "pm_committed"
+    return False
+
+
 def _celery_pending_stale(job: ImportJob, task_id: str, task_state: str, info: dict[str, Any]) -> bool:
     """True when Celery still reports PENDING with no progress long after dispatch."""
     if task_state != "PENDING" or info:
@@ -109,6 +124,17 @@ def _celery_pending_stale(job: ImportJob, task_id: str, task_state: str, info: d
     return (datetime.now(timezone.utc) - dispatch) >= STALE_PENDING_SLOT_AGE
 
 
+def _steward_bulk_candidate_count(meta: dict[str, Any]) -> int:
+    bulk = meta.get("dsi_bulk_task")
+    if not isinstance(bulk, dict):
+        return 0
+    raw = bulk.get("candidate_count")
+    try:
+        return int(raw) if raw is not None else 0
+    except (TypeError, ValueError):
+        return 0
+
+
 def _progress_from_celery(
     *,
     task_state: str,
@@ -116,7 +142,10 @@ def _progress_from_celery(
     job: ImportJob,
 ) -> dict[str, Any]:
     meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
-    total_rows = int(info.get("total_rows") or meta.get("dsi_validate_total_rows") or 0)
+    steward_total = _steward_bulk_candidate_count(meta)
+    total_rows = int(
+        info.get("total_rows") or steward_total or meta.get("dsi_validate_total_rows") or 0
+    )
     current_row = int(info.get("current_row") or 0)
     pct = int(info.get("pct") or 0)
     phase = str(info.get("phase") or "processing")
@@ -167,7 +196,7 @@ def _build_background_task_records(
             continue
 
         for slot in slots:
-            if _job_db_indicates_background_work_finished(job):
+            if _clear_slot_when_pipeline_finished(job, slot.slot_key):
                 clear_task_slot(meta, slot.slot_key)
                 job.staged_metadata = to_jsonable(meta) if meta else None
                 session.add(job)

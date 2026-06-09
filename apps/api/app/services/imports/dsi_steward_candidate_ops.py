@@ -344,7 +344,6 @@ async def execute_map_dsi_customer(
     )
     try:
         await db.commit()
-        await db.refresh(cand)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError("Could not create alias (duplicate or invalid reference)", status_code=409) from None
@@ -407,7 +406,6 @@ async def execute_map_dsi_distributor(
         cand.suggested_entity_id = distributor_id
         cand.match_reason = "steward_map_existing_distributor"
         await db.commit()
-        await db.refresh(alias)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError("Could not create distributor alias", status_code=409) from None
@@ -653,8 +651,6 @@ async def execute_create_provisional_dsi_customer(
         cand.suggested_entity_id = row.id
         cand.match_reason = "steward_created_provisional_customer"
         await db.commit()
-        await db.refresh(row)
-        await db.refresh(alias)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError("Could not create customer or alias", status_code=409) from None
@@ -811,8 +807,6 @@ async def execute_create_provisional_dsi_distributor(
         cand.suggested_entity_id = row.id
         cand.match_reason = "steward_created_provisional_distributor"
         await db.commit()
-        await db.refresh(row)
-        await db.refresh(alias)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError("Could not create distributor or alias", status_code=409) from None
@@ -820,7 +814,7 @@ async def execute_create_provisional_dsi_distributor(
     return {
         "ok": True,
         "distributor_id": row.id,
-        "distributor_code": row.code,
+        "distributor_code": code[:32],
         "alias_id": alias.id,
         "candidate_id": cand.id,
     }
@@ -878,11 +872,10 @@ async def execute_acknowledge_dsi_duplicate_different_entity(
     cand.status = "acknowledged_unique"
     cand.match_reason = "steward_acknowledged_unique_duplicate"
     await db.commit()
-    await db.refresh(cand)
     return {
         "ok": True,
         "candidate_id": cand.id,
-        "status": cand.status,
+        "status": "acknowledged_unique",
         "peer_candidate_id": peer.id,
         "duplicate_review": review,
     }
@@ -1108,8 +1101,6 @@ async def execute_dsi_duplicate_same_entity(
         _merge_duplicate_review_context(cand, review_primary)
         _merge_duplicate_review_context(peer, review_peer)
         await db.commit()
-        await db.refresh(cand)
-        await db.refresh(peer)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError("Could not complete same-entity mapping (duplicate or invalid reference)", status_code=409) from None
@@ -1232,8 +1223,6 @@ async def execute_dsi_duplicate_cluster_same_entity(
             _merge_duplicate_review_context(cand, review)
 
         await db.commit()
-        for cand in active:
-            await db.refresh(cand)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError(

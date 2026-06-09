@@ -10,6 +10,8 @@ celery_app = Celery(
     backend=settings.celery_result_backend,
 )
 
+celery_app.conf.task_track_started = True
+
 # Tasks use explicit ``name=`` (e.g. ``imports.process_job``), not ``app.worker.tasks.*``.
 # Route them to the default worker queue (``celery worker`` without ``-Q`` consumes ``celery``).
 celery_app.conf.task_routes = {

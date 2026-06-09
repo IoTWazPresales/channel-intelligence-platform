@@ -264,6 +264,9 @@ def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
     """Apply DSI resolution-plan rows (steward map/provisional/product) with progress updates."""
     from app.services.imports.dsi_resolution_plan_apply_sync import run_dsi_resolution_plan_apply_sync
 
+    candidate_ids = payload.get("candidate_ids") or []
+    total_rows = len(candidate_ids) if isinstance(candidate_ids, list) else 0
+
     def _on_progress(current: int, total: int) -> None:
         try:
             self.update_state(
@@ -272,7 +275,7 @@ def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
                     "phase": "applying_resolution_plan",
                     "phase_label": "Applying resolution plan",
                     "current_row": current,
-                    "total_rows": total,
+                    "total_rows": total or total_rows,
                     "pct": round(current / total * 100) if total else 0,
                 },
             )
@@ -280,6 +283,7 @@ def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
             pass
 
     try:
+        _on_progress(0, total_rows or 1)
         return run_dsi_resolution_plan_apply_sync(job_id, payload, on_progress=_on_progress)
     except Exception:
         logger.exception("dsi_resolution_plan_apply failed job_id=%s", job_id)

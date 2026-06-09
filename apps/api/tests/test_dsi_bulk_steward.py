@@ -104,3 +104,20 @@ def test_dsi_bulk_body_create_provisional_distributor_ok() -> None:
         confirm_for_suspicious_distributor_token=True,
     )
     assert b.confirm_for_suspicious_distributor_token is True
+
+
+def test_effective_geo_prefers_explicit_over_fallback() -> None:
+    from app.services.imports.dsi_bulk_provisional_customers_sync import _effective_geo_for_bulk
+
+    er, ec = _effective_geo_for_bulk(
+        None,
+        None,
+        None,
+        None,
+        fallback_region_id=99,
+        fallback_channel_id=88,
+        explicit_region_id=5,
+        explicit_channel_id=6,
+    )
+    assert er == 5
+    assert ec == 6

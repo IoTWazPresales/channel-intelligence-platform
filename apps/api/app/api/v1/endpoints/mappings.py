@@ -35,10 +35,9 @@ from app.schemas.dsi_resolution_plan_requests import (
 )
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
 from app.services.imports.distributor_sales_inventory import _norm_key
-from app.services.imports.import_background_slots import SLOT_DSI_BULK, set_task_slot_on_job
+from app.services.imports.import_background_slots import SLOT_DSI_BULK, KIND_DSI_RESOLUTION_PLAN_COMPUTE, set_task_slot_on_job
 from app.services.imports.dsi_apply_completion import DsiApplyCompletionError, complete_dsi_import_job_to_loaded
 from app.services.imports.dsi_resolution_plan import (
-    apply_dsi_resolution_plan_rows,
     build_dsi_resolution_plan_effective_sync,
     build_dsi_resolution_plan_sync,
     collect_dsi_job_unresolved_geo_tokens_sync,
@@ -54,7 +53,10 @@ from app.services.imports.dsi_steward_geo_catalog import (
 )
 from app.services.imports.dsi_bulk_provisional_customers_sync import run_dsi_bulk_provisional_customers_sync
 from app.services.imports.dsi_resolution_plan_apply_sync import run_dsi_resolution_plan_apply_sync
-from app.services.imports.dsi_steward_task_dispatch import assert_dsi_steward_background_dispatch_allowed
+from app.services.imports.dsi_steward_task_dispatch import (
+    assert_dsi_steward_background_dispatch_allowed,
+    reusable_dsi_bulk_task_id,
+)
 from app.services.imports.dsi_steward_candidate_ops import (
     StewardOpError,
     _first_sample_raw,
@@ -1006,6 +1008,27 @@ async def dsi_resolution_plan_compute_async(
         raise HTTPException(status_code=404, detail="Import job not found")
 
     payload = _dsi_resolution_plan_compute_payload_from_body(body)
+    reused_tid = reusable_dsi_bulk_task_id(job, kind=KIND_DSI_RESOLUTION_PLAN_COMPUTE)
+    if reused_tid:
+        return {
+            "import_job_id": job_id,
+            "task_id": reused_tid,
+            "async_poll": True,
+            "async": True,
+            "reused": True,
+        }
+
+    def _assert_allowed(sess: Session) -> None:
+        j = sess.get(ImportJob, job_id)
+        if j is None:
+            raise ValueError("Import job not found")
+        assert_dsi_steward_background_dispatch_allowed(sess, j)
+
+    try:
+        await db.run_sync(_assert_allowed)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     task_id, async_poll = _enqueue_dsi_resolution_plan_compute(job_id, payload)
     set_task_slot_on_job(
         job,
@@ -1163,22 +1186,8 @@ async def dsi_resolution_plan_apply_endpoint(
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    from app.services.imports.distributor_sales_inventory import _load_product_resolution_index
-
-    ov_list = [o.model_dump(exclude_unset=True) for o in (body.overrides or [])]
-    prod_idx = await db.run_sync(_load_product_resolution_index)
-    return await apply_dsi_resolution_plan_rows(
-        db,
-        job_id,
-        body.candidate_ids,
-        default_region_id=body.default_region_id,
-        default_channel_id=body.default_channel_id,
-        partner_tier=body.partner_tier,
-        provisional_notes_summary=body.provisional_notes_summary,
-        confirm_for_suspicious_distributor_token=body.confirm_for_suspicious_distributor_token,
-        overrides=ov_list or None,
-        product_index=prod_idx,
-    )
+    payload = _dsi_resolution_plan_apply_payload_from_body(body)
+    return run_dsi_resolution_plan_apply_sync(job_id, payload)
 
 
 @router.post("/import-jobs/{job_id}/dsi-apply-complete", status_code=200)

@@ -14,6 +14,7 @@ from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimRe
 from app.models.import_distributor_si import CustomerSourceTokenAlias, ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
 from app.services.imports.distributor_sales_inventory import _norm_key
+from app.services.imports.dsi_bulk_db_commit import commit_session_with_transient_retry
 from app.services.imports.dsi_geo_resolution_cache import DSIGeoResolutionCache, collect_geo_tokens_from_candidates
 from app.services.imports.dsi_resolution_plan import derive_effective_provisional_customer_geo_sync
 from app.services.imports.dsi_steward_candidate_ops import (
@@ -44,7 +45,13 @@ def _effective_geo_for_bulk(
     *,
     fallback_region_id: int | None,
     fallback_channel_id: int | None,
+    explicit_region_id: int | None = None,
+    explicit_channel_id: int | None = None,
 ) -> tuple[int | None, int | None]:
+    if explicit_region_id is not None or explicit_channel_id is not None:
+        er = int(explicit_region_id) if explicit_region_id is not None else None
+        ec = int(explicit_channel_id) if explicit_channel_id is not None else None
+        return er, ec
     g = derive_effective_provisional_customer_geo_sync(
         session,
         cand,
@@ -69,6 +76,8 @@ def _apply_one_provisional_customer_sync(
     preferred_distributor_id: int | None,
     partner_tier: str | None,
     notes_summary: str | None,
+    explicit_region_id: int | None = None,
+    explicit_channel_id: int | None = None,
 ) -> dict[str, Any]:
     if cand.entity_type != "customer_dealer_token":
         raise StewardOpError("Not customer_dealer_token", status_code=400)
@@ -104,6 +113,8 @@ def _apply_one_provisional_customer_sync(
         geo_cache,
         fallback_region_id=fallback_region_id,
         fallback_channel_id=fallback_channel_id,
+        explicit_region_id=explicit_region_id,
+        explicit_channel_id=explicit_channel_id,
     )
 
     if region_id is not None and session.get(DimRegion, region_id) is None:
@@ -194,6 +205,24 @@ def run_dsi_bulk_provisional_customers_sync(
     partner_tier = payload.get("partner_tier")
     notes_summary = payload.get("provisional_notes_summary")
 
+    geo_by_candidate: dict[int, tuple[int | None, int | None]] = {}
+    for raw_geo in payload.get("per_candidate_geo") or []:
+        if not isinstance(raw_geo, dict):
+            continue
+        cid_raw = raw_geo.get("candidate_id")
+        if cid_raw is None:
+            continue
+        try:
+            cid = int(cid_raw)
+        except (TypeError, ValueError):
+            continue
+        er = raw_geo.get("region_id")
+        ec = raw_geo.get("channel_id")
+        geo_by_candidate[cid] = (
+            int(er) if er is not None else None,
+            int(ec) if ec is not None else None,
+        )
+
     found = {
         int(c.id): c
         for c in session.scalars(
@@ -213,7 +242,7 @@ def run_dsi_bulk_provisional_customers_sync(
 
     for idx, cid in enumerate(candidate_ids):
         if on_progress is not None:
-            on_progress(idx, total)
+            on_progress(idx + 1, total)
         cand = found.get(cid)
         if cand is None:
             results.append(
@@ -231,6 +260,7 @@ def run_dsi_bulk_provisional_customers_sync(
         tu = float(cand.total_units) if cand.total_units is not None else None
         trv = float(cand.total_reported_value) if cand.total_reported_value is not None else None
         try:
+            ex_r, ex_c = geo_by_candidate.get(int(cid), (None, None))
             out = _apply_one_provisional_customer_sync(
                 session,
                 cand,
@@ -241,6 +271,8 @@ def run_dsi_bulk_provisional_customers_sync(
                 preferred_distributor_id=preferred_distributor_id,
                 partner_tier=partner_tier,
                 notes_summary=notes_summary,
+                explicit_region_id=ex_r,
+                explicit_channel_id=ex_c,
             )
             applied_before_commit += 1
             results.append(
@@ -268,7 +300,7 @@ def run_dsi_bulk_provisional_customers_sync(
 
     if applied_before_commit > 0:
         try:
-            session.commit()
+            commit_session_with_transient_retry(session)
         except IntegrityError as exc:
             session.rollback()
             raise StewardOpError("Could not commit bulk provisional customers", status_code=409) from exc
