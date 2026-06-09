@@ -17,8 +17,8 @@ from app.models.ingestion import ImportJob, ImportTemplate, RawFileMetadata
 from app.services.imports.distributor_sales_inventory import (
     ProductResolutionIndex,
     _load_product_resolution_index,
-    _product_token_key,
 )
+from app.services.imports.product_resolution_standard import resolve_product_id_single_match
 from app.core.config import get_settings
 from app.services.imports.ai_import_resolver import detect_format_drift
 from app.services.imports.ai_resolver_wiring import (
@@ -136,25 +136,8 @@ def resolve_customer_id_for_job(db: Session, job: ImportJob) -> int | None:
 
 
 def resolve_product_id_for_sellthrough(idx: ProductResolutionIndex, token: str) -> int | None:
-    """Item/material → EAN/UPC → sales model (single match only)."""
-    key = _product_token_key(token)
-    if not key:
-        return None
-    if key in idx.sku_to_id:
-        return int(idx.sku_to_id[key])
-    part_ids = idx.part_number_to_ids.get(key)
-    if part_ids and len(part_ids) == 1:
-        return int(part_ids[0])
-    ean_ids = idx.ean_to_ids.get(key)
-    if ean_ids and len(ean_ids) == 1:
-        return int(ean_ids[0])
-    upc_ids = idx.upc_to_ids.get(key)
-    if upc_ids and len(upc_ids) == 1:
-        return int(upc_ids[0])
-    sm_ids = idx.sales_model_name_to_ids.get(key)
-    if sm_ids and len(sm_ids) == 1:
-        return int(sm_ids[0])
-    return None
+    """Item/material → EAN/UPC → sales model (single match only; shared standard tiers)."""
+    return resolve_product_id_single_match(idx, token)
 
 
 def _upsert_customer_report_config(

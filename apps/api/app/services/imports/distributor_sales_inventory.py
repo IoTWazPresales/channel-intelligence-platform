@@ -1731,6 +1731,19 @@ def process_distributor_sales_inventory(
                 dist_diag.append(derr)
                 diag.append(derr)
             if rdid is None and dist_raw:
+                from app.services.imports.source_token_alias_conflicts import (
+                    distributor_alias_conflict_reason_from_cache,
+                )
+
+                alias_conflict = distributor_alias_conflict_reason_from_cache(
+                    res_cache,
+                    source_definition_id=source_def_id,
+                    normalized_token=_norm_key(dist_raw) or "",
+                )
+                if alias_conflict:
+                    dist_diag.append(alias_conflict)
+                    diag.append(alias_conflict)
+            if rdid is None and dist_raw:
                 from app.services.imports.dsi_weekly_auto_resolution import (
                     check_distributor_auto_resolution_at_validate,
                 )
@@ -1878,6 +1891,20 @@ def process_distributor_sales_inventory(
                 )
                 cust_diag = list(cd)
                 diag.extend(cust_diag)
+                if rcustomer_id is None and cust_res_raw:
+                    from app.services.imports.source_token_alias_conflicts import (
+                        customer_alias_conflict_reason_from_cache,
+                    )
+
+                    cust_alias_conflict = customer_alias_conflict_reason_from_cache(
+                        res_cache,
+                        source_definition_id=source_def_id,
+                        distributor_id=rdistributor_id,
+                        normalized_token=_norm_key(cust_res_raw) or "",
+                    )
+                    if cust_alias_conflict:
+                        cust_diag.append(cust_alias_conflict)
+                        diag.append(cust_alias_conflict)
                 if rcustomer_id is None:
                     from app.services.imports.dsi_weekly_auto_resolution import (
                         check_customer_auto_resolution_at_validate,
@@ -2084,6 +2111,8 @@ def process_distributor_sales_inventory(
             k = ("distributor_token", _norm_key(dist_raw))
             a = agg[k]
             a["row_count"] += 1
+            if "multiple_approved_distributor_aliases_for_token" in diag:
+                a["alias_conflict_reason"] = "multiple_approved_distributor_aliases_for_token"
             if len(a["samples"]) < 5:
                 a["samples"].append(dist_raw)
         if rpid is None and prod_raw:
@@ -2146,6 +2175,8 @@ def process_distributor_sales_inventory(
                 else:
                     a["primary_source"] = "blank"
             a["row_count"] += 1
+            if "multiple_approved_customer_aliases_for_token" in diag:
+                a["alias_conflict_reason"] = "multiple_approved_customer_aliases_for_token"
             if qty_sold is not None:
                 a["total_units"] += abs(qty_sold)
             if reported_rev is not None:
@@ -2259,6 +2290,9 @@ def process_distributor_sales_inventory(
 
     for (etype, nkey), data in agg.items():
         ctx: dict[str, Any] = {"aggregated": True}
+        acr = data.get("alias_conflict_reason")
+        if isinstance(acr, str) and acr.strip():
+            ctx["alias_conflict_reason"] = acr.strip()
         dealer_token_col: str | None = None
         nkey_clean = nkey
         if etype == "customer_dealer_token":
