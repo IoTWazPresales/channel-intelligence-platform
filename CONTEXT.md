@@ -2,7 +2,7 @@
 
 ## CURRENT STATE — Jun 9, 2026 — supersedes every block below
 
-- **Branch:** `fix/shipment-steward-performance` @ `7fc27f9` — Stream C multi-scope shipment tie-break committed + pushed.
+- **Branch:** `fix/shipment-steward-performance` @ `9f51d6a` (Stream C feature `7fc27f9`) — pushed to origin.
 - **Stream C (product corroboration / job #43):** Diagnostic — **705** product candidates block apply (`522` no_match, `183` ambiguous). **~89** ambiguous had deterministic sole ship∩eligible signal missed at validate (multi-distributor / missing month scope). **Fix shipped:** multi-scope plan tie-break (`dsi_product_staging_evidence_scope`, `build_tiebreak_scope_attempts`, `ShipmentCorroborationCache` on plan build; validate persists `unresolved_distributor_ids` + `dsi_evidence_month_counts` for future imports). Unit tests 51 pass (tiebreak + resolution plan). **Not yet smoke-tested on Supabase** — restart API/worker/web, recompute plan on job #43, measure ready-count lift.
 - **Stream A:** unchanged — bulk orchestrator + F-01/F-02 wired, unproven on real failure path.
 - **Stream B:** INT-04 **approved** (centralize-as-superset + barcode tier reorder) — not implemented yet. INT-03 / migration 0048 — audit clean on Supabase; not applied. 0048 key confirmed correct (token+source scope, not entity id).
