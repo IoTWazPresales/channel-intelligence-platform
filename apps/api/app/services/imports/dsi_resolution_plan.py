@@ -611,6 +611,8 @@ def plan_dsi_candidate_sync(
                 except (TypeError, ValueError):
                     dist_id = ship_ev.dominant_unresolved_distributor_id
                 ev_date = evidence_date_from_month(ship_ev.dominant_evidence_month)
+                corr_cache = plan_ctx.shipment_corr_cache if plan_ctx is not None else None
+                staging_scopes = plan_ctx.product_staging_scopes if plan_ctx is not None else None
                 pick, tie_src = try_shipment_tiebreak_product_id(
                     session,
                     eligible_product_ids=elig_ids,
@@ -618,6 +620,10 @@ def plan_dsi_candidate_sync(
                     distributor_id=dist_id,
                     evidence_date=ev_date,
                     stored_distinct_product_ids=ship_ev.stored_distinct_product_ids,
+                    corr_cache=corr_cache,
+                    candidate_context=ctx,
+                    normalized_key=cand.normalized_key,
+                    staging_scopes=staging_scopes,
                 )
                 if pick is not None:
                     return {

@@ -2135,6 +2135,11 @@ def process_distributor_sales_inventory(
             if isinstance(pev, dict) and pev.get("weekly_auto_conflict"):
                 a["conflict_flag"] = True
                 a["prior_resolution_conflict"] = pev.get("prior_resolution_conflict")
+            if evidence_date is not None:
+                em_dsi = evidence_date.strftime("%Y-%m")
+                dsi_mc = a.setdefault("dsi_evidence_month_counts", {})
+                if isinstance(dsi_mc, dict):
+                    dsi_mc[em_dsi] = int(dsi_mc.get(em_dsi) or 0) + 1
             if rdistributor_id and evidence_date:
                 cp = corr_cache.product_corroboration(
                     int(rdistributor_id),
@@ -2356,16 +2361,40 @@ def process_distributor_sales_inventory(
                 if data.get("prior_resolution_conflict") is not None:
                     ctx["prior_resolution_conflict"] = data.get("prior_resolution_conflict")
             dist_unresolved = data.pop("_dist_ids_unresolved", None)
-            if isinstance(dist_unresolved, set) and len(dist_unresolved) == 1:
-                ctx["dominant_unresolved_distributor_id"] = int(next(iter(dist_unresolved)))
+            if isinstance(dist_unresolved, set) and dist_unresolved:
+                dist_sorted = sorted(int(x) for x in dist_unresolved if int(x) > 0)[:8]
+                if dist_sorted:
+                    ctx["unresolved_distributor_ids"] = dist_sorted
+                if len(dist_sorted) == 1:
+                    ctx["dominant_unresolved_distributor_id"] = int(dist_sorted[0])
             ship_ids = data.pop("shipment_distinct_product_ids", None)
             if isinstance(ship_ids, set) and ship_ids:
                 ctx["shipment_distinct_product_ids"] = sorted(int(x) for x in ship_ids if int(x) > 0)[:32]
             month_counts = data.pop("shipment_evidence_month_counts", None)
+            dsi_month_counts = data.pop("dsi_evidence_month_counts", None)
+            combined_month_counts: dict[str, int] = {}
+            for mc_src in (month_counts, dsi_month_counts):
+                if isinstance(mc_src, dict):
+                    for mk, mv in mc_src.items():
+                        if isinstance(mk, str) and mk.strip():
+                            em = mk.strip()[:7]
+                            combined_month_counts[em] = int(combined_month_counts.get(em) or 0) + int(mv or 0)
+            if combined_month_counts:
+                ctx["dominant_evidence_month"] = max(
+                    combined_month_counts.items(), key=lambda kv: int(kv[1] or 0)
+                )[0]
             if isinstance(month_counts, dict) and month_counts:
-                dom_month = max(month_counts.items(), key=lambda kv: int(kv[1] or 0))[0]
-                if isinstance(dom_month, str) and dom_month.strip():
-                    ctx["dominant_evidence_month"] = dom_month.strip()[:7]
+                ctx["shipment_evidence_month_counts"] = {
+                    str(k).strip()[:7]: int(v or 0)
+                    for k, v in month_counts.items()
+                    if str(k).strip()
+                }
+            if isinstance(dsi_month_counts, dict) and dsi_month_counts:
+                ctx["dsi_evidence_month_counts"] = {
+                    str(k).strip()[:7]: int(v or 0)
+                    for k, v in dsi_month_counts.items()
+                    if str(k).strip()
+                }
             acc = data.pop("_pe_acc", None)
             if isinstance(acc, dict):
                 amb = acc.get("amb")

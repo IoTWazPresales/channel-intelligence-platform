@@ -29,6 +29,11 @@ from app.services.imports.distributor_sales_inventory import (
     _resolve_customer_from_cache,
     _resolve_distributor_from_cache,
 )
+from app.services.imports.dsi_product_staging_evidence_scope import (
+    EvidenceScope,
+    load_product_staging_evidence_scopes,
+)
+from app.services.imports.dsi_shipment_corroboration import ShipmentCorroborationCache
 
 
 @dataclass(frozen=True)
@@ -47,6 +52,8 @@ class DSIPlanBuildContext:
     channel_aliases: tuple[ChannelSourceTokenAlias, ...]
     historical_customers: dict[tuple[int | None, str], HistoricalCustomerResolution]
     job_customer_siblings_by_dealer_group: dict[str, tuple[JobCustomerSiblingMapping, ...]]
+    product_staging_scopes: dict[str, list[EvidenceScope]]
+    shipment_corr_cache: ShipmentCorroborationCache | None
 
 
 def build_dsi_plan_build_context(session: Session, *, current_job_id: int | None = None) -> DSIPlanBuildContext:
@@ -105,16 +112,47 @@ def build_dsi_plan_build_context(session: Session, *, current_job_id: int | None
     )
 
     job_siblings: dict[str, tuple[JobCustomerSiblingMapping, ...]] = {}
+    product_staging_scopes: dict[str, list[EvidenceScope]] = {}
+    evidence_months: set[str] = set()
     if current_job_id is not None:
+        jid = int(current_job_id)
         job_cands = list(
             session.scalars(
                 select(ImportEntityMappingCandidate).where(
-                    ImportEntityMappingCandidate.import_job_id == int(current_job_id),
+                    ImportEntityMappingCandidate.import_job_id == jid,
                     ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
                 )
             ).all()
         )
         job_siblings = build_job_customer_sibling_index(job_cands)
+        product_staging_scopes = load_product_staging_evidence_scopes(session, jid)
+        for scopes in product_staging_scopes.values():
+            for _dist, em in scopes:
+                if em:
+                    evidence_months.add(em)
+        prod_cands = session.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == jid,
+                ImportEntityMappingCandidate.entity_type == "product_identifier",
+            )
+        ).all()
+        for cand in prod_cands:
+            ctx = cand.context if isinstance(cand.context, dict) else {}
+            dom = ctx.get("dominant_evidence_month")
+            if isinstance(dom, str) and dom.strip():
+                evidence_months.add(dom.strip()[:7])
+            for counts_key in ("shipment_evidence_month_counts", "dsi_evidence_month_counts"):
+                mc = ctx.get(counts_key)
+                if isinstance(mc, dict):
+                    for mk in mc:
+                        if isinstance(mk, str) and mk.strip():
+                            evidence_months.add(mk.strip()[:7])
+
+    shipment_corr_cache = (
+        ShipmentCorroborationCache.load(session, evidence_months)
+        if evidence_months
+        else None
+    )
 
     return DSIPlanBuildContext(
         res_cache=res_cache,
@@ -129,6 +167,8 @@ def build_dsi_plan_build_context(session: Session, *, current_job_id: int | None
         channel_aliases=channel_aliases,
         historical_customers=historical_customers,
         job_customer_siblings_by_dealer_group=job_siblings,
+        product_staging_scopes=product_staging_scopes,
+        shipment_corr_cache=shipment_corr_cache,
     )
 
 
