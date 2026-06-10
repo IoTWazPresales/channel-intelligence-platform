@@ -2,8 +2,8 @@
 
 ## CURRENT STATE — Jun 9, 2026 — supersedes every block below
 
-- **Branch:** `fix/shipment-steward-performance` — pushed to origin; Stream C feature commit `7fc27f9`.
-- **Stream C (product corroboration / job #43):** Diagnostic — **705** product candidates block apply (`522` no_match, `183` ambiguous). **~89** ambiguous had deterministic sole ship∩eligible signal missed at validate (multi-distributor / missing month scope). **Fix shipped:** multi-scope plan tie-break (`dsi_product_staging_evidence_scope`, `build_tiebreak_scope_attempts`, `ShipmentCorroborationCache` on plan build; validate persists `unresolved_distributor_ids` + `dsi_evidence_month_counts` for future imports). Unit tests 51 pass (tiebreak + resolution plan). **Not yet smoke-tested on Supabase** — restart API/worker/web, recompute plan on job #43, measure ready-count lift.
+- **Branch:** `fix/shipment-steward-performance` (local; global tie-break commit pending push).
+- **Stream C (product corroboration / job #43):** **705** product candidates (`522` no_match, `183` ambiguous). Scoped multi-scope tie-break (`7fc27f9`) lifted **0** on job #43 (evidence at other dist/months, often pre-2025 outside month-windowed cache). **Global-identity fallback shipped:** `GlobalProductIdentityIndex` — one batched load per plan build; `try_shipment_tiebreak_product_id` consults after scoped attempts; reason `shipment_global_identity`. **Verified read-only on Supabase job #43:** ambiguous_eligible ready **3 → 89** (3 stored_context + 86 global); **19** true multi-pid remain not-ready; **522** no_match unchanged; baseline candidates 8414/8631/10554 still `stored_context`. Unit tests 62 pass (tiebreak + resolution plan suites).
 - **Stream A:** unchanged — bulk orchestrator + F-01/F-02 wired, unproven on real failure path.
 - **Stream B:** INT-04 **approved** (centralize-as-superset + barcode tier reorder) — not implemented yet. INT-03 / migration 0048 — audit clean on Supabase; not applied. 0048 key confirmed correct (token+source scope, not entity id).
 - **Next:** Restart API + worker + web; recompute plan on job #43 — expect ambiguous ready count to rise; soak apply; then INT-04.

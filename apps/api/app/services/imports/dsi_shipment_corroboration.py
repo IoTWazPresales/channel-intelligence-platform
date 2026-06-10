@@ -311,6 +311,63 @@ class ShipmentCorroborationCache:
         }
 
 
+class GlobalProductIdentityIndex:
+    """Distinct resolved shipment ``product_id`` values per normalized sales-model token.
+
+    Loaded once per DSI plan request (no month or distributor filter). Used when scoped
+    corroboration cannot find evidence in the job's month-windowed cache.
+    """
+
+    __slots__ = ("_by_token",)
+
+    def __init__(self, by_token: dict[str, tuple[int, ...]]) -> None:
+        self._by_token = by_token
+
+    @classmethod
+    def load(cls, db: Session) -> "GlobalProductIdentityIndex":
+        from app.services.imports.distributor_sales_inventory import _product_token_key
+
+        rows = db.execute(
+            text(
+                """
+                SELECT DISTINCT
+                    lower(btrim(coalesce(sales_model_name, ''))) AS sm_key,
+                    product_id
+                FROM shipment_evidence_line
+                WHERE product_resolution_status = 'resolved_unique'
+                  AND product_id IS NOT NULL
+                  AND btrim(coalesce(sales_model_name, '')) <> ''
+                """
+            )
+        ).fetchall()
+        by_key: dict[str, set[int]] = defaultdict(set)
+        for sm_key, pid in rows:
+            tk = _product_token_key(sm_key)
+            if not tk or pid is None:
+                continue
+            by_key[tk].add(int(pid))
+        frozen = {k: tuple(sorted(v)) for k, v in by_key.items()}
+        logger.info(
+            "GlobalProductIdentityIndex: loaded %d tokens from %d distinct (token, product_id) pairs",
+            len(frozen),
+            len(rows),
+        )
+        return cls(frozen)
+
+    def distinct_product_ids_for_token(self, raw_token: str | None) -> tuple[int, ...]:
+        from app.services.imports.distributor_sales_inventory import _product_token_key
+
+        tk = _product_token_key(raw_token)
+        if not tk:
+            return ()
+        return self._by_token.get(tk, ())
+
+
+def build_global_product_identity_index(session: Session) -> GlobalProductIdentityIndex:
+    """Batch-load global shipment product identity for plan-time tie-break."""
+    return GlobalProductIdentityIndex.load(session)
+
+
 # ---------------------------------------------------------------------------
 # Per-row DB-query functions (used by steward single-row refresh paths)
 # ---------------------------------------------------------------------------

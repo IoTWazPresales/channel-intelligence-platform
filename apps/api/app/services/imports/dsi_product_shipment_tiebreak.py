@@ -192,58 +192,65 @@ def try_shipment_tiebreak_product_id(
     candidate_context: dict[str, Any] | None = None,
     normalized_key: str | None = None,
     staging_scopes: dict[str, list[tuple[int, str]]] | None = None,
+    global_product_identity: Any = None,
 ) -> tuple[int | None, str | None]:
-    """Pick one PM id via stored validate-time ids first, then live shipment corroboration lookup.
+    """Pick one PM id via stored validate-time ids first, then scoped corroboration, then global identity.
 
     Returns ``(product_id, tiebreak_source)`` where source is ``stored_context``,
-    ``shipment_disambiguate``, or None.
+    ``shipment_disambiguate`` (variants), ``shipment_global_identity``, or None.
     """
     pick = intersect_eligible_with_shipment_ids(eligible_product_ids, stored_distinct_product_ids)
     if pick is not None:
         return pick, "stored_context"
 
-    if session is None and corr_cache is None:
-        return None, None
     if not eligible_product_ids:
         return None, None
 
-    from app.services.imports.distributor_sales_inventory import _shipment_disambiguate_product_id
+    if session is not None or corr_cache is not None:
+        from app.services.imports.distributor_sales_inventory import _shipment_disambiguate_product_id
 
-    scope_attempts = build_tiebreak_scope_attempts(
-        candidate_context,
-        normalized_key=normalized_key,
-        staging_scopes=staging_scopes,
-        fallback_distributor_id=distributor_id,
-        fallback_evidence_date=evidence_date,
-    )
-    if not scope_attempts and distributor_id is not None and evidence_date is not None:
-        scope_attempts = [(int(distributor_id), evidence_date)]
-
-    unanimous: set[int] = set()
-    last_scope: str | None = None
-    for dist_id, ev_date in scope_attempts:
-        live_pick, ship_scope = _shipment_disambiguate_product_id(
-            session,
-            dist_id,
-            ev_date,
-            raw_token,
-            eligible_product_ids,
-            corr_cache=corr_cache,
+        scope_attempts = build_tiebreak_scope_attempts(
+            candidate_context,
+            normalized_key=normalized_key,
+            staging_scopes=staging_scopes,
+            fallback_distributor_id=distributor_id,
+            fallback_evidence_date=evidence_date,
         )
-        if live_pick is None:
-            continue
-        unanimous.add(int(live_pick))
-        last_scope = ship_scope
-        if len(unanimous) > 1:
-            return None, None
+        if not scope_attempts and distributor_id is not None and evidence_date is not None:
+            scope_attempts = [(int(distributor_id), evidence_date)]
 
-    if len(unanimous) == 1:
-        src = "shipment_disambiguate"
-        if last_scope == "cross_distributor":
-            src = f"{src}_cross_distributor"
-        if len(scope_attempts) > 1:
-            src = f"{src}_multi_scope"
-        return int(next(iter(unanimous))), src
+        unanimous: set[int] = set()
+        last_scope: str | None = None
+        for dist_id, ev_date in scope_attempts:
+            live_pick, ship_scope = _shipment_disambiguate_product_id(
+                session,
+                dist_id,
+                ev_date,
+                raw_token,
+                eligible_product_ids,
+                corr_cache=corr_cache,
+            )
+            if live_pick is None:
+                continue
+            unanimous.add(int(live_pick))
+            last_scope = ship_scope
+            if len(unanimous) > 1:
+                return None, None
+
+        if len(unanimous) == 1:
+            src = "shipment_disambiguate"
+            if last_scope == "cross_distributor":
+                src = f"{src}_cross_distributor"
+            if len(scope_attempts) > 1:
+                src = f"{src}_multi_scope"
+            return int(next(iter(unanimous))), src
+
+    if global_product_identity is not None:
+        global_ids = global_product_identity.distinct_product_ids_for_token(raw_token)
+        global_pick = intersect_eligible_with_shipment_ids(eligible_product_ids, global_ids)
+        if global_pick is not None:
+            return global_pick, "shipment_global_identity"
+
     return None, None
 
 

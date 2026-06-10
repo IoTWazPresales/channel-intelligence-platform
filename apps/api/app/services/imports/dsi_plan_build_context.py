@@ -33,7 +33,11 @@ from app.services.imports.dsi_product_staging_evidence_scope import (
     EvidenceScope,
     load_product_staging_evidence_scopes,
 )
-from app.services.imports.dsi_shipment_corroboration import ShipmentCorroborationCache
+from app.services.imports.dsi_shipment_corroboration import (
+    GlobalProductIdentityIndex,
+    ShipmentCorroborationCache,
+    build_global_product_identity_index,
+)
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,7 @@ class DSIPlanBuildContext:
     job_customer_siblings_by_dealer_group: dict[str, tuple[JobCustomerSiblingMapping, ...]]
     product_staging_scopes: dict[str, list[EvidenceScope]]
     shipment_corr_cache: ShipmentCorroborationCache | None
+    global_product_identity: GlobalProductIdentityIndex | None
 
 
 def build_dsi_plan_build_context(session: Session, *, current_job_id: int | None = None) -> DSIPlanBuildContext:
@@ -153,6 +158,7 @@ def build_dsi_plan_build_context(session: Session, *, current_job_id: int | None
         if evidence_months
         else None
     )
+    global_product_identity = build_global_product_identity_index(session)
 
     return DSIPlanBuildContext(
         res_cache=res_cache,
@@ -169,6 +175,7 @@ def build_dsi_plan_build_context(session: Session, *, current_job_id: int | None
         job_customer_siblings_by_dealer_group=job_siblings,
         product_staging_scopes=product_staging_scopes,
         shipment_corr_cache=shipment_corr_cache,
+        global_product_identity=global_product_identity,
     )
 
 

@@ -613,6 +613,9 @@ def plan_dsi_candidate_sync(
                 ev_date = evidence_date_from_month(ship_ev.dominant_evidence_month)
                 corr_cache = plan_ctx.shipment_corr_cache if plan_ctx is not None else None
                 staging_scopes = plan_ctx.product_staging_scopes if plan_ctx is not None else None
+                global_identity = (
+                    plan_ctx.global_product_identity if plan_ctx is not None else None
+                )
                 pick, tie_src = try_shipment_tiebreak_product_id(
                     session,
                     eligible_product_ids=elig_ids,
@@ -624,18 +627,26 @@ def plan_dsi_candidate_sync(
                     candidate_context=ctx,
                     normalized_key=cand.normalized_key,
                     staging_scopes=staging_scopes,
+                    global_product_identity=global_identity,
                 )
                 if pick is not None:
+                    if tie_src == "shipment_global_identity":
+                        reason = (
+                            "Global shipment identity: sole resolved product across all evidence — "
+                            "propose ProductAlias bind"
+                        )
+                    else:
+                        reason = (
+                            f"Shipment evidence tie-break ({tie_src or 'shipment'}) — single Product Master "
+                            f"match among eligible rows — propose ProductAlias bind"
+                        )
                     return {
                         **base,
                         "suggested_action": "resolve_product",
                         "plan_status": "ready",
                         "ready": True,
                         "confidence": 0.78,
-                        "reason": (
-                            f"Shipment evidence tie-break ({tie_src or 'shipment'}) — single Product Master "
-                            f"match among eligible rows — propose ProductAlias bind"
-                        ),
+                        "reason": reason,
                         "suggested_target_id": int(pick),
                         "needs_defaults": False,
                         "needs_confirm_suspicious_distributor": False,
