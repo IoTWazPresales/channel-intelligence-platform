@@ -22,6 +22,7 @@ from app.services.imports.distributor_sales_inventory import (
     _DSI_STAGING_INSERT_CHUNK,
     _build_resolution_cache,
     _commit_dsi_validate_chunk,
+    _commit_dsi_validate_heartbeat,
     _flush_dsi_staging_batch,
     _staging_line_row_dict,
 )
@@ -129,6 +130,40 @@ def test_flush_dsi_staging_batch_real_db() -> None:
             text("DELETE FROM import_distributor_si_staging_line WHERE import_job_id = :jid"),
             {"jid": jid},
         )
+        db.execute(text("DELETE FROM import_job WHERE id = :jid"), {"jid": jid})
+        db.commit()
+
+
+def test_commit_dsi_validate_heartbeat_real_db() -> None:
+    with SessionLocal() as db:
+        _ensure_dsi_tables(db)
+        _seed_import_core(db)
+        tpl = db.scalar(select(ImportTemplate).where(ImportTemplate.slug == "distributor_inventory"))
+        src = db.scalar(select(SourceDefinition).where(SourceDefinition.import_template_id == tpl.id))
+        job = ImportJob(
+            source_id=src.id,
+            template_slug="distributor_inventory",
+            file_name="heartbeat_test.csv",
+            import_mode="validate",
+            status="running",
+            stage="mapped",
+            staged_metadata={"dsi_validate_total_rows": 100},
+        )
+        db.add(job)
+        db.flush()
+        jid = int(job.id)
+        _commit_dsi_validate_heartbeat(
+            db,
+            job,
+            phase="loading_caches",
+            sub_phase="customer_aliases",
+            rows_committed=0,
+        )
+        db.refresh(job)
+        meta = job.staged_metadata or {}
+        assert meta.get("dsi_validate_phase") == "loading_caches"
+        assert meta.get("dsi_validate_sub_phase") == "customer_aliases"
+        assert meta.get("dsi_validate_checkpoint_at")
         db.execute(text("DELETE FROM import_job WHERE id = :jid"), {"jid": jid})
         db.commit()
 

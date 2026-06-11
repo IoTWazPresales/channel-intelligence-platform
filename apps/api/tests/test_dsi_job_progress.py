@@ -83,3 +83,44 @@ def test_dsi_progress_returns_celery_when_revalidate_running_on_validated_job() 
         assert out["current_row"] == 200
 
     asyncio.run(_run())
+
+
+def test_dsi_progress_prefers_db_checkpoint_over_stale_celery() -> None:
+    async def _run() -> None:
+        job = MagicMock()
+        job.stage = "dsi_mapping_ready"
+        job.status = "running"
+        job.import_mode = "validate"
+        job.staged_metadata = {
+            "celery_task_id": "active-task",
+            "dsi_validate_total_rows": 168839,
+            "dsi_validate_rows_committed": 0,
+            "dsi_validate_phase": "loading_caches",
+            "dsi_validate_sub_phase": "customer_aliases",
+            "dsi_validate_checkpoint_at": "2026-06-11T21:44:00+00:00",
+        }
+
+        db = AsyncMock()
+        db.get = AsyncMock(return_value=job)
+
+        with patch("app.services.imports.background_tasks.read_celery_with_timeout") as mock_read:
+            mock_read.return_value = (
+                "PROGRESS",
+                {
+                    "phase": "loading_caches",
+                    "phase_label": "Loading resolution caches",
+                    "current_row": 0,
+                    "total_rows": 168839,
+                    "pct": 0,
+                    "progress_at": "2026-06-11T21:00:23+00:00",
+                },
+            )
+
+            out = await get_dsi_job_progress(job_id=86, db=db)
+
+        assert out["phase"] == "loading_caches"
+        assert out["sub_phase"] == "customer_aliases"
+        assert "customer token aliases" in out["phase_label"].lower()
+        assert out["progress_at"] == "2026-06-11T21:44:00+00:00"
+
+    asyncio.run(_run())

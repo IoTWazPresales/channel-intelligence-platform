@@ -499,15 +499,49 @@ class DSIResolutionCache:
     open_channel_cid: int | None  # DimCustomer.id where code == OPEN_CHANNEL_CUSTOMER_CODE
 
 
-def _build_resolution_cache(db: Session, source_def_id: int | None) -> "DSIResolutionCache":
+_DSI_VALIDATE_SUB_PHASE_LABELS: dict[str, str] = {
+    "prepared": "Preparing validation run",
+    "product_index": "Loading product resolution index",
+    "shipment_corroboration": "Loading shipment corroboration cache",
+    "distributors": "Loading distributor master data",
+    "dist_aliases": "Loading distributor token aliases",
+    "customers": "Loading customer master data",
+    "customer_aliases": "Loading customer token aliases",
+    "import_intelligence": "Checking import intelligence state",
+    "weekly_historical_customers": "Loading historical customer resolutions",
+}
+
+
+def dsi_validate_sub_phase_label(sub_phase: str | None) -> str | None:
+    key = (sub_phase or "").strip()
+    if not key:
+        return None
+    return _DSI_VALIDATE_SUB_PHASE_LABELS.get(key, key.replace("_", " ").title())
+
+
+def _build_resolution_cache(
+    db: Session,
+    source_def_id: int | None,
+    *,
+    on_sub_phase: Any = None,
+) -> "DSIResolutionCache":
     """Load all DSI entity-resolution reference tables in one pass before the row loop."""
+    _ = source_def_id  # alias rows are filtered per-token at resolve time
+
+    if on_sub_phase is not None:
+        on_sub_phase("distributors")
     all_distributors = list(db.scalars(select(DimDistributor)).all())
+
+    if on_sub_phase is not None:
+        on_sub_phase("dist_aliases")
     dist_aliases = list(
         db.scalars(
             select(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.status == "approved")
         ).all()
     )
 
+    if on_sub_phase is not None:
+        on_sub_phase("customers")
     all_customers = list(db.scalars(select(DimCustomer)).all())
     customer_code_to_id: dict[str, int] = {}
     customer_name_to_ids: dict[str, list[int]] = {}
@@ -519,6 +553,8 @@ def _build_resolution_cache(db: Session, source_def_id: int | None) -> "DSIResol
         if nk:
             customer_name_to_ids.setdefault(nk, []).append(int(c.id))
 
+    if on_sub_phase is not None:
+        on_sub_phase("customer_aliases")
     cust_aliases = list(
         db.scalars(
             select(CustomerSourceTokenAlias).where(CustomerSourceTokenAlias.status == "approved")
@@ -1357,6 +1393,8 @@ def _update_dsi_validate_checkpoint_metadata(
     *,
     rows_committed: int,
     phase: str,
+    sub_phase: str | None = None,
+    clear_sub_phase: bool = False,
 ) -> None:
     """In-session checkpoint metadata (no commit) for progress between durable commits."""
     from sqlalchemy.orm.attributes import flag_modified
@@ -1365,10 +1403,47 @@ def _update_dsi_validate_checkpoint_metadata(
     meta["dsi_validate_rows_committed"] = int(rows_committed)
     meta["dsi_validate_phase"] = phase
     meta["dsi_validate_checkpoint_at"] = datetime.now(timezone.utc).isoformat()
+    if clear_sub_phase:
+        meta.pop("dsi_validate_sub_phase", None)
+    elif sub_phase is not None:
+        meta["dsi_validate_sub_phase"] = sub_phase
     job.staged_metadata = to_jsonable(meta)
     flag_modified(job, "staged_metadata")
     db.add(job)
     db.flush()
+
+
+def _commit_dsi_validate_heartbeat(
+    db: Session,
+    job: ImportJob,
+    *,
+    phase: str,
+    sub_phase: str | None = None,
+    rows_committed: int | None = None,
+    clear_sub_phase: bool = False,
+    profile: _DsiValidateProfile | None = None,
+) -> None:
+    """Durable progress heartbeat — short transaction, no staging rows required."""
+    from app.services.imports.dsi_bulk_db_commit import commit_session_with_transient_retry
+
+    committed = (
+        int(rows_committed)
+        if rows_committed is not None
+        else int((job.staged_metadata or {}).get("dsi_validate_rows_committed") or 0)
+    )
+    t0 = time.monotonic() if profile and profile.enabled else 0.0
+    _update_dsi_validate_checkpoint_metadata(
+        db,
+        job,
+        rows_committed=committed,
+        phase=phase,
+        sub_phase=sub_phase,
+        clear_sub_phase=clear_sub_phase,
+    )
+    commit_session_with_transient_retry(db)
+    if profile and profile.enabled:
+        profile.commit_s += time.monotonic() - t0
+        profile.commit_count += 1
 
 
 def _commit_dsi_validate_chunk(
@@ -1384,7 +1459,11 @@ def _commit_dsi_validate_chunk(
 
     t0 = time.monotonic() if profile and profile.enabled else 0.0
     _update_dsi_validate_checkpoint_metadata(
-        db, job, rows_committed=rows_committed, phase=phase
+        db,
+        job,
+        rows_committed=rows_committed,
+        phase=phase,
+        clear_sub_phase=True,
     )
     commit_session_with_transient_retry(db)
     if profile and profile.enabled:
@@ -1494,25 +1573,44 @@ def process_distributor_sales_inventory(
     meta["dsi_validate_total_rows"] = len(df)
     meta["dsi_validate_rows_committed"] = 0
     meta["dsi_validate_phase"] = "loading_caches"
+    meta["dsi_validate_sub_phase"] = "prepared"
     meta.pop("dsi_validate_checkpoint_at", None)
     from sqlalchemy.orm.attributes import flag_modified
 
     job.staged_metadata = to_jsonable(meta)
     flag_modified(job, "staged_metadata")
     db.add(job)
-    db.flush()
 
     historical_relaxed = dsi_historical_product_eligibility_relaxed_from_import_job(job)
 
     ignored_src_cols = [k for k, v in mapping.items() if v == "ignored_shipping_evidence"]
 
-    prod_idx = _load_product_resolution_index(db)
     source = job.source
     source_def_id = source.id if source else None
 
     profile = _DsiValidateProfile(enabled=_dsi_validate_profile_enabled())
     process_t0 = time.monotonic()
     upfront_t0 = time.monotonic()
+    total_rows = len(df)
+
+    def _upfront_progress(sub_phase: str) -> None:
+        label = dsi_validate_sub_phase_label(sub_phase) or "Loading resolution caches"
+        _commit_dsi_validate_heartbeat(
+            db,
+            job,
+            phase="loading_caches",
+            sub_phase=sub_phase,
+            rows_committed=0,
+            profile=profile,
+        )
+        if on_progress is not None:
+            on_progress("loading_caches", label, 0, total_rows)
+
+    # End wipe transaction before long-running cache preloads (Supabase idle-in-tx safety).
+    _upfront_progress("prepared")
+
+    prod_idx = _load_product_resolution_index(db)
+    _upfront_progress("product_index")
 
     # --- Pre-load shipment corroboration cache (2 batch queries vs N×6 per-row) ---
     from app.services.imports.dsi_shipment_corroboration import ShipmentCorroborationCache
@@ -1522,17 +1620,15 @@ def process_distributor_sales_inventory(
     logger.info(
         "process_distributor_sales_inventory: job_id=%s rows=%d evidence_months=%s",
         job.id,
-        len(df),
+        total_rows,
         sorted(_evidence_months),
     )
 
-    if on_progress is not None:
-        on_progress("loading_caches", "Loading resolution caches", 0, len(df))
-
     corr_cache = ShipmentCorroborationCache.load(db, _evidence_months)
+    _upfront_progress("shipment_corroboration")
 
     # Pre-load distributor + customer master data (eliminates 4–6 per-row DB round-trips)
-    res_cache = _build_resolution_cache(db, source_def_id)
+    res_cache = _build_resolution_cache(db, source_def_id, on_sub_phase=_upfront_progress)
     # -------------------------------------------------------------------------
 
     from app.services.imports.dsi_import_state_awareness import (
@@ -1544,7 +1640,7 @@ def process_distributor_sales_inventory(
     primary_dist_id = resolve_primary_distributor_id_from_dataframe(db, df, mapping, source_def_id)
     intel_state = check_dsi_import_state(db, job.id, primary_dist_id)
     persist_intelligence_state_on_job(db, job, intel_state)
-    db.flush()
+    _upfront_progress("import_intelligence")
 
     weekly_historical_customers: dict[tuple[int | None, str], Any] = {}
     if not dsi_historical_workflow_from_import_job(job) and source_def_id is not None:
@@ -1555,6 +1651,7 @@ def process_distributor_sales_inventory(
             source_definition_id=int(source_def_id),
             current_job_id=int(job.id),
         )
+        _upfront_progress("weekly_historical_customers")
 
     if profile.enabled:
         profile.upfront_s = time.monotonic() - upfront_t0
@@ -1563,8 +1660,16 @@ def process_distributor_sales_inventory(
             profile.upfront_s,
         )
 
+    _commit_dsi_validate_heartbeat(
+        db,
+        job,
+        phase="processing_rows",
+        rows_committed=0,
+        clear_sub_phase=True,
+        profile=profile,
+    )
     if on_progress is not None:
-        on_progress("processing_rows", "Processing rows", 0, len(df))
+        on_progress("processing_rows", "Processing rows", 0, total_rows)
 
     staging_buffer: list[dict[str, Any]] = []
 
@@ -2262,17 +2367,16 @@ def process_distributor_sales_inventory(
     if profile.enabled:
         profile.log_summary(total_rows=total_rows, total_s=time.monotonic() - process_t0)
 
+    _commit_dsi_validate_heartbeat(
+        db,
+        job,
+        phase="building_candidates",
+        rows_committed=total_rows,
+        clear_sub_phase=True,
+        profile=profile,
+    )
     if on_progress is not None:
         on_progress("building_candidates", "Building candidates", total_rows, total_rows)
-
-    from sqlalchemy.orm.attributes import flag_modified
-
-    meta_phase = dict(job.staged_metadata or {})
-    meta_phase["dsi_validate_phase"] = "building_candidates"
-    job.staged_metadata = to_jsonable(meta_phase)
-    flag_modified(job, "staged_metadata")
-    db.add(job)
-    db.flush()
 
     annotate_dsi_customer_candidate_duplicates(agg, distributors=res_cache.all_distributors)
     annotate_dsi_customer_distributor_name_collisions(agg, res_cache.all_distributors)

@@ -19,18 +19,11 @@ function parseIsoMs(raw: string | null | undefined): number | null {
 function hasRecentHeartbeat(args: {
   progressAt?: string | null;
   pipelineStartedAt?: string | null;
-  taskState?: string | null;
-  progressPhase?: string | null;
   staleAfterMs: number;
 }): boolean {
   const now = Date.now();
   const progressAt = parseIsoMs(args.progressAt);
   if (progressAt != null) return now - progressAt < args.staleAfterMs;
-  const taskState = String(args.taskState ?? '').trim().toUpperCase();
-  const phase = String(args.progressPhase ?? '').trim().toLowerCase();
-  if (taskState === 'PROGRESS' && phase && phase !== 'queued' && phase !== 'idle') {
-    return true;
-  }
   const startedAt = parseIsoMs(args.pipelineStartedAt);
   if (startedAt != null) return now - startedAt < args.staleAfterMs;
   return false;
@@ -62,8 +55,6 @@ export function deriveDsiJobDisplayState(args: {
     const heartbeat = hasRecentHeartbeat({
       progressAt: args.progressAt,
       pipelineStartedAt: args.pipelineStartedAt,
-      taskState: args.taskState,
-      progressPhase: args.progressPhase,
       staleAfterMs,
     });
     if (errorSummary && !heartbeat) {

@@ -632,6 +632,85 @@ def _dsi_terminal_progress_label(job: ImportJob) -> str:
     return "Complete"
 
 
+def _parse_iso_timestamp_ms(raw: Any) -> int | None:
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    try:
+        from datetime import datetime
+
+        normalized = text.replace("Z", "+00:00")
+        return int(datetime.fromisoformat(normalized).timestamp() * 1000)
+    except (TypeError, ValueError):
+        return None
+
+
+def _dsi_validate_progress_label_from_metadata(meta: dict[str, Any]) -> str | None:
+    from app.services.imports.distributor_sales_inventory import dsi_validate_sub_phase_label
+
+    phase = str(meta.get("dsi_validate_phase") or "").strip()
+    if not phase:
+        return None
+    sub = dsi_validate_sub_phase_label(meta.get("dsi_validate_sub_phase"))
+    if phase == "loading_caches" and sub:
+        return sub
+    if phase == "processing_rows":
+        return "Processing rows"
+    if phase == "building_candidates":
+        return "Building candidates"
+    if phase == "complete":
+        return "Validation complete"
+    return phase.replace("_", " ").title()
+
+
+def _dsi_validate_progress_from_metadata(meta: dict[str, Any]) -> dict[str, Any] | None:
+    phase = str(meta.get("dsi_validate_phase") or "").strip()
+    if not phase:
+        return None
+    total_rows = int(meta.get("dsi_validate_total_rows") or 0)
+    current_row = int(meta.get("dsi_validate_rows_committed") or 0)
+    pct = round(current_row / total_rows * 100) if total_rows else 0
+    label = _dsi_validate_progress_label_from_metadata(meta) or "Processing rows"
+    out: dict[str, Any] = {
+        "phase": phase,
+        "phase_label": label,
+        "current_row": current_row,
+        "total_rows": total_rows,
+        "pct": pct,
+        "progress_at": meta.get("dsi_validate_checkpoint_at"),
+    }
+    sub_phase = meta.get("dsi_validate_sub_phase")
+    if isinstance(sub_phase, str) and sub_phase.strip():
+        out["sub_phase"] = sub_phase.strip()
+    return out
+
+
+def _merge_dsi_validate_progress(
+    progress: dict[str, Any],
+    meta: dict[str, Any],
+    celery_info: dict[str, Any] | None,
+) -> None:
+    """Prefer durable DB checkpoint metadata when fresher than Celery PROGRESS."""
+    db_progress = _dsi_validate_progress_from_metadata(meta)
+    if not db_progress:
+        return
+    db_at = _parse_iso_timestamp_ms(db_progress.get("progress_at"))
+    celery_at = _parse_iso_timestamp_ms(
+        celery_info.get("progress_at") if isinstance(celery_info, dict) else None
+    )
+    use_db = db_at is not None and (celery_at is None or db_at >= celery_at)
+    if not use_db and celery_at is None:
+        # Running validate with no Celery heartbeat — DB is authoritative.
+        use_db = True
+    if not use_db:
+        return
+    progress.update(db_progress)
+    if not progress.get("total_rows"):
+        progress["total_rows"] = int(meta.get("dsi_validate_total_rows") or 0)
+
+
 @router.get("/jobs/{job_id}/dsi-progress")
 async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
     """Return real-time import pipeline progress from Celery task state (Redis).
@@ -703,9 +782,13 @@ async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
                 if state_u in ("PENDING", "STARTED") and not info:
                     progress["phase"] = "queued"
                     progress["phase_label"] = "Queued"
+                _merge_dsi_validate_progress(progress, meta, info if isinstance(info, dict) else None)
                 return progress
         except Exception as exc:
             logger.debug("get_dsi_job_progress: Celery read failed job_id=%s: %s", job_id, exc)
+
+    if status_l == "running" or stage_l not in ("validated", "loaded", "failed", "stage_failed"):
+        _merge_dsi_validate_progress(progress, meta, None)
 
     if stage_l in ("failed", "stage_failed") or status_l in ("failed", "interrupted"):
         progress["phase"] = "failed"

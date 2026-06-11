@@ -13,6 +13,8 @@ export type ImportJobPipelineProgress = {
   pipeline_queued_at?: string | null;
   pipeline_started_at?: string | null;
   progress_at?: string | null;
+  /** Durable validate upfront sub-step (from ``staged_metadata.dsi_validate_sub_phase``). */
+  sub_phase?: string | null;
 };
 
 export type BulkProvisionalTaskProgress = {

@@ -1,5 +1,18 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 11, 2026 (DSI validate upfront sub-phase commits + DB phase truth) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local uncommitted).
+- **Incident (job #86, Supabase EU):** Stuck **~48 min idle-in-transaction** on `SELECT customer_source_token_alias` during upfront `loading_caches`; **0 staging rows**; Celery `progress_at` frozen at 21:00 UTC; **DB `dsi_validate_phase` null** (only `flush`, no commit until first staging chunk).
+- **Root cause:** Monolithic open transaction from staging wipe → full cache preload (`_build_resolution_cache`); no durable heartbeats during upfront; UI/Celery treated stale `PROGRESS` as alive heartbeat.
+- **Fix shipped (this session):**
+  - `_commit_dsi_validate_heartbeat` + `dsi_validate_sub_phase` on each upfront step (prepared → product_index → shipment_corroboration → distributors/dist_aliases/customers/customer_aliases → import_intelligence → processing_rows).
+  - `GET /dsi-progress` merges **DB checkpoint** when fresher than Celery (`dsi_validate_checkpoint_at`, `sub_phase`, phase label).
+  - `deriveDsiJobDisplayState` no longer treats stale Celery `PROGRESS` as heartbeat without fresh `progress_at`.
+  - `DsiValidateProgressPanel` shows sub-phase label during `loading_caches`.
+- **Tests:** `test_dsi_job_progress` (DB-over-Celery merge), `test_commit_dsi_validate_heartbeat_real_db`, `dsiJobDisplayState.test.ts` (stale PROGRESS → running_stale) — pass.
+- **Ops for job #86:** Cancel/retry after **restart API + worker** (stuck backend pid ~320340 will not self-heal). Re-validate will show sub-phase rail + DB heartbeats.
+
 ## CURRENT STATE — Jun 9, 2026 (DSI validate transaction + lifecycle) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local; commits for Units 1–4 this session).

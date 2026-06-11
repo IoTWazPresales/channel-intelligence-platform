@@ -36,4 +36,16 @@ describe('deriveDsiJobDisplayState', () => {
     });
     expect(state.kind).toBe('running');
   });
+
+  it('stale Celery PROGRESS without fresh checkpoint is running_stale', () => {
+    const stale = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+    const state = deriveDsiJobDisplayState({
+      status: 'running',
+      stage: 'dsi_mapping_ready',
+      taskState: 'PROGRESS',
+      progressPhase: 'loading_caches',
+      progressAt: stale,
+    });
+    expect(state.kind).toBe('running_stale');
+  });
 });
