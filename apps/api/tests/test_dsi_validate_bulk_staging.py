@@ -20,10 +20,9 @@ from app.services.imports.ai_resolver_wiring import (
 from app.services.imports.distributor_sales_inventory import (
     DSIResolutionCache,
     _DSI_STAGING_INSERT_CHUNK,
-    _DSI_VALIDATE_COMMIT_INTERVAL,
     _build_resolution_cache,
+    _commit_dsi_validate_chunk,
     _flush_dsi_staging_batch,
-    _persist_dsi_validate_checkpoint,
     _staging_line_row_dict,
 )
 from app.services.seed_demo import _seed_import_core
@@ -37,10 +36,6 @@ def _ensure_dsi_tables(db) -> None:
     names = set(inspect(db.connection()).get_table_names())
     if "import_distributor_si_staging_line" not in names:
         pytest.skip("DSI tables missing — apply Alembic head.")
-
-
-def test_dsi_validate_commit_interval_larger_than_insert_chunk() -> None:
-    assert _DSI_VALIDATE_COMMIT_INTERVAL >= _DSI_STAGING_INSERT_CHUNK
 
 
 def test_staging_line_row_dict_shape() -> None:
@@ -138,7 +133,7 @@ def test_flush_dsi_staging_batch_real_db() -> None:
         db.commit()
 
 
-def test_persist_dsi_validate_checkpoint_real_db() -> None:
+def test_commit_dsi_validate_chunk_real_db() -> None:
     with SessionLocal() as db:
         _ensure_dsi_tables(db)
         _seed_import_core(db)
@@ -156,12 +151,243 @@ def test_persist_dsi_validate_checkpoint_real_db() -> None:
         db.add(job)
         db.flush()
         jid = int(job.id)
-        _persist_dsi_validate_checkpoint(db, job, rows_committed=1000, phase="processing_rows")
+        rows = [
+            _staging_line_row_dict(
+                job_id=jid,
+                source_row_number=1,
+                raw_payload={},
+                mapped={},
+                dist_raw="D",
+                cust_raw=None,
+                dg_raw=None,
+                prod_raw="P",
+                rdistributor_id=None,
+                rcustomer_id=None,
+                rpid=None,
+                tx_date=None,
+                invoice_no_val=None,
+                snap_date=None,
+                qty_sold=None,
+                soh=Decimal("1"),
+                unit_price=None,
+                reported_rev=None,
+                computed_rev=None,
+                cur=None,
+                res_status="staged_only",
+                diag=[],
+                sev="info",
+            )
+        ]
+        _flush_dsi_staging_batch(db, rows)
+        _commit_dsi_validate_chunk(db, job, rows_committed=1, phase="processing_rows")
         db.refresh(job)
         meta = job.staged_metadata or {}
-        assert meta.get("dsi_validate_rows_committed") == 1000
+        assert meta.get("dsi_validate_rows_committed") == 1
         assert meta.get("dsi_validate_phase") == "processing_rows"
         assert meta.get("dsi_validate_checkpoint_at")
+        count = db.scalar(
+            select(func.count())
+            .select_from(ImportDistributorSiStagingLine)
+            .where(ImportDistributorSiStagingLine.import_job_id == jid)
+        )
+        assert count == 1
+        db.execute(text("DELETE FROM import_distributor_si_staging_line WHERE import_job_id = :jid"), {"jid": jid})
+        db.execute(text("DELETE FROM import_job WHERE id = :jid"), {"jid": jid})
+        db.commit()
+
+
+def test_commit_dsi_validate_chunk_retries_transient_commit_failure() -> None:
+    """F-02 retries transient OperationalError on chunk commit."""
+    from unittest.mock import patch
+
+    from sqlalchemy.exc import OperationalError
+
+    from app.services.imports.dsi_bulk_db_commit import commit_session_with_transient_retry
+
+    calls = {"n": 0}
+    with SessionLocal() as db:
+        _ensure_dsi_tables(db)
+        _seed_import_core(db)
+        tpl = db.scalar(select(ImportTemplate).where(ImportTemplate.slug == "distributor_inventory"))
+        src = db.scalar(select(SourceDefinition).where(SourceDefinition.import_template_id == tpl.id))
+        job = ImportJob(
+            source_id=src.id,
+            template_slug="distributor_inventory",
+            file_name="retry_test.csv",
+            import_mode="validate",
+            status="running",
+            stage="mapped",
+        )
+        db.add(job)
+        db.flush()
+        jid = int(job.id)
+        rows = [
+            _staging_line_row_dict(
+                job_id=jid,
+                source_row_number=1,
+                raw_payload={},
+                mapped={},
+                dist_raw="DIST",
+                cust_raw=None,
+                dg_raw=None,
+                prod_raw="SKU",
+                rdistributor_id=None,
+                rcustomer_id=None,
+                rpid=None,
+                tx_date=None,
+                invoice_no_val=None,
+                snap_date=None,
+                qty_sold=None,
+                soh=Decimal("1"),
+                unit_price=None,
+                reported_rev=None,
+                computed_rev=None,
+                cur=None,
+                res_status="staged_only",
+                diag=[],
+                sev="info",
+            )
+        ]
+        _flush_dsi_staging_batch(db, rows)
+        real_commit = db.commit
+
+        def flaky_commit() -> None:
+            calls["n"] += 1
+            if calls["n"] < 2:
+                raise OperationalError("commit", {}, Exception("server closed the connection"))
+            real_commit()
+
+        with patch.object(db, "commit", side_effect=flaky_commit):
+            commit_session_with_transient_retry(db)
+        assert calls["n"] == 2
+        db.execute(text("DELETE FROM import_distributor_si_staging_line WHERE import_job_id = :jid"), {"jid": jid})
+        db.execute(text("DELETE FROM import_job WHERE id = :jid"), {"jid": jid})
+        db.commit()
+
+
+def test_flush_dsi_staging_batch_commit_retry_idempotent() -> None:
+    """Delete-before-insert makes chunk replay safe after ambiguous commit."""
+    with SessionLocal() as db:
+        _ensure_dsi_tables(db)
+        _seed_import_core(db)
+        tpl = db.scalar(select(ImportTemplate).where(ImportTemplate.slug == "distributor_inventory"))
+        src = db.scalar(select(SourceDefinition).where(SourceDefinition.import_template_id == tpl.id))
+        job = ImportJob(
+            source_id=src.id,
+            template_slug="distributor_inventory",
+            file_name="retry_test.csv",
+            import_mode="validate",
+            status="running",
+            stage="mapped",
+        )
+        db.add(job)
+        db.flush()
+        jid = int(job.id)
+        rows = [
+            _staging_line_row_dict(
+                job_id=jid,
+                source_row_number=i,
+                raw_payload={"row": i},
+                mapped={},
+                dist_raw="DIST",
+                cust_raw=None,
+                dg_raw=None,
+                prod_raw="SKU",
+                rdistributor_id=None,
+                rcustomer_id=None,
+                rpid=None,
+                tx_date=None,
+                invoice_no_val=None,
+                snap_date=None,
+                qty_sold=None,
+                soh=Decimal("1"),
+                unit_price=None,
+                reported_rev=None,
+                computed_rev=None,
+                cur=None,
+                res_status="staged_only",
+                diag=[],
+                sev="info",
+            )
+            for i in range(1, 4)
+        ]
+        _flush_dsi_staging_batch(db, rows)
+        _commit_dsi_validate_chunk(db, job, rows_committed=3, phase="processing_rows")
+        _flush_dsi_staging_batch(db, rows)
+        _commit_dsi_validate_chunk(db, job, rows_committed=3, phase="processing_rows")
+        count = db.scalar(
+            select(func.count())
+            .select_from(ImportDistributorSiStagingLine)
+            .where(ImportDistributorSiStagingLine.import_job_id == jid)
+        )
+        assert count == 3
+        db.execute(text("DELETE FROM import_distributor_si_staging_line WHERE import_job_id = :jid"), {"jid": jid})
+        db.execute(text("DELETE FROM import_job WHERE id = :jid"), {"jid": jid})
+        db.commit()
+
+
+def test_flush_dsi_staging_batch_crash_between_chunks_no_duplicates() -> None:
+    """Simulate crash after chunk 1 committed: replay chunk 2 only — row counts stay correct."""
+    with SessionLocal() as db:
+        _ensure_dsi_tables(db)
+        _seed_import_core(db)
+        tpl = db.scalar(select(ImportTemplate).where(ImportTemplate.slug == "distributor_inventory"))
+        src = db.scalar(select(SourceDefinition).where(SourceDefinition.import_template_id == tpl.id))
+        job = ImportJob(
+            source_id=src.id,
+            template_slug="distributor_inventory",
+            file_name="crash_test.csv",
+            import_mode="validate",
+            status="running",
+            stage="mapped",
+        )
+        db.add(job)
+        db.flush()
+        jid = int(job.id)
+
+        def chunk_rows(start: int, end: int) -> list[dict]:
+            return [
+                _staging_line_row_dict(
+                    job_id=jid,
+                    source_row_number=i,
+                    raw_payload={"row": i},
+                    mapped={},
+                    dist_raw="DIST",
+                    cust_raw=None,
+                    dg_raw=None,
+                    prod_raw="SKU",
+                    rdistributor_id=None,
+                    rcustomer_id=None,
+                    rpid=None,
+                    tx_date=None,
+                    invoice_no_val=None,
+                    snap_date=None,
+                    qty_sold=None,
+                    soh=Decimal("1"),
+                    unit_price=None,
+                    reported_rev=None,
+                    computed_rev=None,
+                    cur=None,
+                    res_status="staged_only",
+                    diag=[],
+                    sev="info",
+                )
+                for i in range(start, end + 1)
+            ]
+
+        chunk1 = chunk_rows(1, 2)
+        _flush_dsi_staging_batch(db, chunk1)
+        _commit_dsi_validate_chunk(db, job, rows_committed=2, phase="processing_rows")
+        chunk2 = chunk_rows(3, 4)
+        _flush_dsi_staging_batch(db, chunk2)
+        _commit_dsi_validate_chunk(db, job, rows_committed=4, phase="processing_rows")
+        count = db.scalar(
+            select(func.count())
+            .select_from(ImportDistributorSiStagingLine)
+            .where(ImportDistributorSiStagingLine.import_job_id == jid)
+        )
+        assert count == 4
+        db.execute(text("DELETE FROM import_distributor_si_staging_line WHERE import_job_id = :jid"), {"jid": jid})
         db.execute(text("DELETE FROM import_job WHERE id = :jid"), {"jid": jid})
         db.commit()
 

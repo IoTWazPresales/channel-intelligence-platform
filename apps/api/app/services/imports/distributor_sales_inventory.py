@@ -1169,7 +1169,6 @@ def _build_mapped_canonical(
 
 
 _DSI_STAGING_INSERT_CHUNK = 2000  # pg_insert param cap (~25 cols × 2000 < 65535)
-_DSI_VALIDATE_COMMIT_INTERVAL = 50000
 
 
 @dataclass
@@ -1337,12 +1336,19 @@ def _staging_line_row_dict(
 
 
 def _flush_dsi_staging_batch(db: Session, rows: list[dict[str, Any]]) -> None:
-    """Bulk insert staging lines in one statement (validate deletes job lines first)."""
+    """Bulk insert staging lines; delete same source_row_numbers first for commit-retry idempotency."""
     if not rows:
         return
+    job_id = int(rows[0]["import_job_id"])
+    row_nums = [int(r["source_row_number"]) for r in rows]
+    db.execute(
+        delete(ImportDistributorSiStagingLine).where(
+            ImportDistributorSiStagingLine.import_job_id == job_id,
+            ImportDistributorSiStagingLine.source_row_number.in_(row_nums),
+        )
+    )
     t = ImportDistributorSiStagingLine.__table__
-    with db.begin_nested():
-        db.execute(pg_insert(t).values(rows))
+    db.execute(pg_insert(t).values(rows))
 
 
 def _update_dsi_validate_checkpoint_metadata(
@@ -1365,7 +1371,7 @@ def _update_dsi_validate_checkpoint_metadata(
     db.flush()
 
 
-def _persist_dsi_validate_checkpoint(
+def _commit_dsi_validate_chunk(
     db: Session,
     job: ImportJob,
     *,
@@ -1373,12 +1379,14 @@ def _persist_dsi_validate_checkpoint(
     phase: str,
     profile: _DsiValidateProfile | None = None,
 ) -> None:
-    """Commit staged rows + checkpoint metadata so pooler drops do not lose prior chunks."""
+    """Commit staged rows + checkpoint metadata (short transaction per chunk)."""
+    from app.services.imports.dsi_bulk_db_commit import commit_session_with_transient_retry
+
     t0 = time.monotonic() if profile and profile.enabled else 0.0
     _update_dsi_validate_checkpoint_metadata(
         db, job, rows_committed=rows_committed, phase=phase
     )
-    db.commit()
+    commit_session_with_transient_retry(db)
     if profile and profile.enabled:
         profile.commit_s += time.monotonic() - t0
         profile.commit_count += 1
@@ -1392,15 +1400,10 @@ def _flush_dsi_staging_buffer(
     *,
     last_row_number: int,
     phase: str = "processing_rows",
-    commit_checkpoint: bool = True,
     profile: _DsiValidateProfile | None = None,
 ) -> None:
-    """Flush buffer to DB; commit only when ``commit_checkpoint`` (durability vs throughput)."""
+    """Insert one staging chunk and commit with checkpoint metadata (F-02 retry on commit)."""
     if not buffer:
-        if commit_checkpoint:
-            _persist_dsi_validate_checkpoint(
-                db, job, rows_committed=last_row_number, phase=phase, profile=profile
-            )
         return
     row_count = len(buffer)
     t0 = time.monotonic() if profile and profile.enabled else 0.0
@@ -1411,14 +1414,9 @@ def _flush_dsi_staging_buffer(
         profile.bulk_insert_rows += row_count
         profile.chunk_bulk_insert_s += elapsed
     buffer.clear()
-    if commit_checkpoint:
-        _persist_dsi_validate_checkpoint(
-            db, job, rows_committed=last_row_number, phase=phase, profile=profile
-        )
-    else:
-        _update_dsi_validate_checkpoint_metadata(
-            db, job, rows_committed=last_row_number, phase=phase
-        )
+    _commit_dsi_validate_chunk(
+        db, job, rows_committed=last_row_number, phase=phase, profile=profile
+    )
 
 
 def process_distributor_sales_inventory(
@@ -1570,28 +1568,14 @@ def process_distributor_sales_inventory(
 
     staging_buffer: list[dict[str, Any]] = []
 
-    def _maybe_flush_staging(last_rn: int, *, force_commit: bool = False) -> None:
-        at_commit_boundary = force_commit or (
-            last_rn > 0 and last_rn % _DSI_VALIDATE_COMMIT_INTERVAL == 0
-        )
-        if len(staging_buffer) >= _DSI_STAGING_INSERT_CHUNK and not at_commit_boundary:
+    def _maybe_flush_staging(last_rn: int, *, force: bool = False) -> None:
+        if len(staging_buffer) >= _DSI_STAGING_INSERT_CHUNK or (force and staging_buffer):
             _flush_dsi_staging_buffer(
                 db,
                 job,
                 staging_buffer,
                 last_row_number=last_rn,
                 phase="processing_rows",
-                commit_checkpoint=False,
-                profile=profile,
-            )
-        elif at_commit_boundary:
-            _flush_dsi_staging_buffer(
-                db,
-                job,
-                staging_buffer,
-                last_row_number=last_rn,
-                phase="processing_rows",
-                commit_checkpoint=True,
                 profile=profile,
             )
             if profile.enabled:
@@ -2273,7 +2257,7 @@ def process_distributor_sales_inventory(
 
     if profile.enabled:
         profile.finish_chunk(total_rows)
-    _maybe_flush_staging(total_rows, force_commit=True)
+    _maybe_flush_staging(total_rows, force=True)
 
     if profile.enabled:
         profile.log_summary(total_rows=total_rows, total_s=time.monotonic() - process_t0)
