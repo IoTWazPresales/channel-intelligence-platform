@@ -67,6 +67,7 @@ import {
   notifyDsiAsyncPipelineStarted,
   refetchDsiImportJobStewardQueries,
 } from '@/features/import-steward';
+import { deriveDsiJobDisplayState } from '@/features/import-steward/dsiJobDisplayState';
 
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 
@@ -1227,12 +1228,69 @@ function AdminImportsPageContent() {
 
   const dsiGateOk = useMemo(() => dsiGateFromMapping(dsiMapDraft), [dsiMapDraft]);
 
-  const dsiJobFailedAlert =
-    isDsi && dsiMappingState?.status === 'failed' && dsiMappingState.error_summary ? (
-      <Alert severity="error" data-testid="dsi-job-failed-banner">
-        Import job failed: {dsiMappingState.error_summary}
-      </Alert>
-    ) : null;
+  const dsiJobDisplay = useMemo(
+    () =>
+      deriveDsiJobDisplayState({
+        status: dsiMappingState?.status,
+        stage: dsiMappingState?.stage,
+        errorSummary: dsiMappingState?.error_summary,
+        progressPhase: dsiProgress?.phase,
+        taskState: dsiProgress?.task_state,
+        progressAt: dsiProgress?.progress_at,
+        pipelineStartedAt: dsiProgress?.pipeline_started_at,
+      }),
+    [
+      dsiMappingState?.status,
+      dsiMappingState?.stage,
+      dsiMappingState?.error_summary,
+      dsiProgress?.phase,
+      dsiProgress?.task_state,
+      dsiProgress?.progress_at,
+      dsiProgress?.pipeline_started_at,
+    ]
+  );
+
+  const handleDsiJobStateRecovery = useCallback(() => {
+    void refetchDsiMapping();
+    if (lastJobId != null) {
+      void qc.invalidateQueries({ queryKey: ['import-job-pipeline-progress', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['dsi-async-validate-import-job', lastJobId] });
+    }
+  }, [lastJobId, qc, refetchDsiMapping]);
+
+  const dsiJobFailedAlert = useMemo(() => {
+    if (!isDsi) return null;
+    if (dsiJobDisplay.kind === 'failed') {
+      return (
+        <Alert severity="error" data-testid="dsi-job-failed-banner">
+          Import job failed: {dsiJobDisplay.message}
+        </Alert>
+      );
+    }
+    if (dsiJobDisplay.kind === 'interrupted') {
+      return (
+        <Alert severity="warning" data-testid="dsi-job-interrupted-banner">
+          {dsiJobDisplay.message}
+        </Alert>
+      );
+    }
+    if (dsiJobDisplay.kind === 'running_stale') {
+      return (
+        <Alert
+          severity="warning"
+          data-testid="dsi-job-stale-banner"
+          action={
+            <Button color="inherit" size="small" onClick={handleDsiJobStateRecovery}>
+              Check now
+            </Button>
+          }
+        >
+          {dsiJobDisplay.message}
+        </Alert>
+      );
+    }
+    return null;
+  }, [dsiJobDisplay, handleDsiJobStateRecovery, isDsi]);
 
   // Derived data for the HL mapping review panel.
   const hlSheetDetail: HlSheetDetail | null =

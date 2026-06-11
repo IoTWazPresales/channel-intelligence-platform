@@ -12,6 +12,7 @@ export type ImportJobPipelineProgress = {
   task_state?: string | null;
   pipeline_queued_at?: string | null;
   pipeline_started_at?: string | null;
+  progress_at?: string | null;
 };
 
 export type BulkProvisionalTaskProgress = {
