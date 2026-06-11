@@ -1,5 +1,15 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 9, 2026 (DSI validate transaction + lifecycle) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local; commits for Units 1–4 this session).
+- **Root cause (job #43 validate drop):** Sync Celery writer already on Supabase **`:5432` session pooler** — not BACKLOG-028 `:6543` hypothesis. Failure = **~15+ min open transaction** between 50k-row commits with `begin_nested` per 2k staging flush; Supabase terminated backend mid-savepoint.
+- **Unit 1 — validate transaction-duration:** Removed `_DSI_VALIDATE_COMMIT_INTERVAL` + savepoints; each 2k chunk = delete-by-`source_row_number` + insert + checkpoint metadata + `commit_session_with_transient_retry` (F-02). **~85 commits** on 169k rows (~seconds per transaction). No mid-run resume — full re-validate wipes staging; chunk idempotency = delete-before-insert on retry/replay.
+- **Unit 2 — task lifecycle:** Pipeline failure writeback via **fresh `SessionLocal`**; `_prepare_dsi_pipeline_dispatch` clears stale `error_summary`/`completed_at`; reaper marks stale **STARTED/PROGRESS** (no `progress_at` heartbeat, default 30 min, `CIP_STALE_STARTED_PROGRESS_MINUTES`) → `status=interrupted`, preserves `dsi_validate_*` checkpoint, clears slot.
+- **Unit 3 — frontend:** `deriveDsiJobDisplayState` — terminal failed/interrupted > running+heartbeat > running_stale (“check now”) > queued; contradictory `running` + `error_summary` shows stale, not failed.
+- **F-02 coverage:** validate chunk commits now wrapped (was apply/bulk writers only).
+- **Next:** Warren live 169k weekly validate soak; restart API + worker after pull.
+
 ## CURRENT STATE — Jun 9, 2026 — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local; global tie-break commit pending push).

@@ -400,7 +400,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-04 (observed while smoking DSI apply async) |
+| **Status / parked** | **Superseded** · 2026-06-09 — sync engine verified on `:5432` session mode; job #43 validate drop was a **~15 min monolithic transaction** (50k-row commit interval + nested savepoints per 2k chunk), not `:6543` misconfig. Fix: per-chunk commit + F-02 on validate (`distributor_sales_inventory.py`); see CONTEXT.md Jun 9 entry. Apply long-transaction risk may still apply separately — chunk apply remains BACKLOG-002/-003 territory. |
 | **Effort** | Investigation (infra), then config |
 | **Source** | This branch's DSI-apply live smoke (2026-06-04): `psycopg.OperationalError: SSL connection has been closed unexpectedly` during the long-held `SELECT … FROM dim_product` (17k rows) deep in `complete_dsi_import_job_to_loaded`, then statement timeout; reproducible across two runs. Short isolated scans (~5–8s) succeed. |
 | **Idea** | The session pooler (`:5432`) drops a connection held open for a long apply transaction, which then lingers server-side as `idle in transaction` holding row locks. This caps how large a DSI apply can run synchronously **or** in a single worker transaction, and it (not this branch's code) blocked the Unit 2 end-to-end facts smoke. |
