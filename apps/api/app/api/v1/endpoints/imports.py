@@ -128,6 +128,8 @@ def _prepare_dsi_pipeline_dispatch(job_id: int) -> None:
         _raise_if_import_pipeline_busy(j)
         j.import_mode = "validate"
         j.status = "running"
+        j.error_summary = None
+        j.completed_at = None
         persist_pipeline_queued_at(sync_db, j)
         sync_db.commit()
 
@@ -697,6 +699,7 @@ async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
                 total_from_celery = info.get("total_rows", 0)
                 progress["total_rows"] = total_from_celery or total_rows_from_meta
                 progress["pct"] = info.get("pct", 0)
+                progress["progress_at"] = info.get("progress_at")
                 if state_u in ("PENDING", "STARTED") and not info:
                     progress["phase"] = "queued"
                     progress["phase_label"] = "Queued"
@@ -704,9 +707,9 @@ async def get_dsi_job_progress(job_id: int, db: AsyncSession = Depends(get_db)):
         except Exception as exc:
             logger.debug("get_dsi_job_progress: Celery read failed job_id=%s: %s", job_id, exc)
 
-    if stage_l in ("failed", "stage_failed") or status_l == "failed":
+    if stage_l in ("failed", "stage_failed") or status_l in ("failed", "interrupted"):
         progress["phase"] = "failed"
-        progress["phase_label"] = "Failed"
+        progress["phase_label"] = "Interrupted" if status_l == "interrupted" else "Failed"
     elif status_l == "running" or progress["phase"] == "idle":
         progress["phase"] = "processing_rows"
         progress["phase_label"] = "Processing rows"

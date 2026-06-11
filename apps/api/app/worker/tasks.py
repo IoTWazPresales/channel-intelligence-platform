@@ -71,6 +71,8 @@ def process_import_job_task(self, job_id: int) -> int:
 
     def _on_progress(phase: str, phase_label: str, current_row: int, total_rows: int) -> None:
         try:
+            from datetime import datetime, timezone
+
             self.update_state(
                 state="PROGRESS",
                 meta={
@@ -79,6 +81,7 @@ def process_import_job_task(self, job_id: int) -> int:
                     "current_row": current_row,
                     "total_rows": total_rows,
                     "pct": round(current_row / total_rows * 100) if total_rows else 0,
+                    "progress_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
         except Exception:

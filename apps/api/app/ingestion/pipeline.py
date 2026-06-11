@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -21,6 +22,7 @@ from app.services.imports.shipment_evidence_import import process_shipment_evide
 from app.services.imports.historical_lineup import process_historical_lineup_import
 from app.storage.local import get_storage_backend
 
+logger = logging.getLogger(__name__)
 
 STAGE_UPLOADED = "uploaded"
 STAGE_RAW_STORED = "raw_stored"
@@ -932,16 +934,24 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
         db.refresh(job)
     except Exception as exc:  # noqa: BLE001
         db.rollback()
-        job = db.get(ImportJob, job_id)
-        if job:
-            job.status = "failed"
-            job.stage = STAGE_FAILED
-            job.error_summary = str(exc)
-            job.completed_at = datetime.now(timezone.utc)
-            persist_clear_background_task_metadata(db, job)
-            db.commit()
-            db.refresh(job)
-        return job
+        err_msg = str(exc)[:2000]
+        from app.db.session_sync import SessionLocal
+
+        try:
+            with SessionLocal() as fresh_db:
+                job = fresh_db.get(ImportJob, job_id)
+                if job:
+                    job.status = "failed"
+                    job.stage = STAGE_FAILED
+                    job.error_summary = err_msg
+                    job.completed_at = datetime.now(timezone.utc)
+                    persist_clear_background_task_metadata(fresh_db, job)
+                    fresh_db.commit()
+                    fresh_db.refresh(job)
+                    return job
+        except Exception:
+            logger.exception("pipeline failure writeback failed job_id=%s", job_id)
+        return db.get(ImportJob, job_id)
 
     if (job.template_slug or "") == "distributor_inventory" and (job.import_mode or "").strip() == "validate":
         from app.ingestion.dsi_validate_post_sync import run_dsi_validate_post_import_orchestration

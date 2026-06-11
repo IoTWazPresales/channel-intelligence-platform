@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -31,6 +32,15 @@ from app.worker.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 STALE_PENDING_SLOT_AGE = timedelta(minutes=20)
+_DEFAULT_STALE_STARTED_PROGRESS_MINUTES = 30
+
+
+def _stale_started_progress_age() -> timedelta:
+    raw = os.environ.get("CIP_STALE_STARTED_PROGRESS_MINUTES", str(_DEFAULT_STALE_STARTED_PROGRESS_MINUTES))
+    try:
+        return timedelta(minutes=max(1, int(raw.strip())))
+    except (TypeError, ValueError):
+        return timedelta(minutes=_DEFAULT_STALE_STARTED_PROGRESS_MINUTES)
 
 
 def _normalize_celery_state(state: str | None) -> str:
@@ -124,6 +134,47 @@ def _celery_pending_stale(job: ImportJob, task_id: str, task_state: str, info: d
     return (datetime.now(timezone.utc) - dispatch) >= STALE_PENDING_SLOT_AGE
 
 
+def _progress_heartbeat_time(info: dict[str, Any]) -> datetime | None:
+    return _parse_iso_datetime(info.get("progress_at"))
+
+
+def _celery_started_progress_stale(
+    job: ImportJob,
+    task_id: str,
+    task_state: str,
+    info: dict[str, Any],
+) -> bool:
+    """True when STARTED/PROGRESS has no recent progress heartbeat (worker likely dead)."""
+    if task_state not in ("STARTED", "PROGRESS"):
+        return False
+    if (job.status or "").strip().lower() != "running":
+        return False
+    heartbeat = _progress_heartbeat_time(info)
+    if heartbeat is not None:
+        return (datetime.now(timezone.utc) - heartbeat) >= _stale_started_progress_age()
+    dispatch = _slot_dispatch_time(job, task_id)
+    if dispatch is None:
+        return False
+    return (datetime.now(timezone.utc) - dispatch) >= _stale_started_progress_age()
+
+
+def _mark_job_interrupted(session, job: ImportJob, meta: dict[str, Any], slot_key: str) -> None:
+    """Terminal interrupted: preserve validate checkpoint metadata, clear Celery slot."""
+    from app.ingestion.pipeline import STAGE_FAILED
+
+    clear_task_slot(meta, slot_key)
+    job.status = "interrupted"
+    job.stage = STAGE_FAILED
+    if not job.error_summary:
+        job.error_summary = (
+            "Validation interrupted — no worker progress heartbeat. "
+            "Re-dispatch validation to resume from the last checkpoint."
+        )[:500]
+    job.completed_at = datetime.now(timezone.utc)
+    job.staged_metadata = to_jsonable(meta) if meta else None
+    session.add(job)
+
+
 def _steward_bulk_candidate_count(meta: dict[str, Any]) -> int:
     bulk = meta.get("dsi_bulk_task")
     if not isinstance(bulk, dict):
@@ -209,6 +260,11 @@ def _build_background_task_records(
                 clear_task_slot(meta, slot.slot_key)
                 job.staged_metadata = to_jsonable(meta) if meta else None
                 session.add(job)
+                dirty = True
+                continue
+
+            if _celery_started_progress_stale(job, slot.task_id, task_state, info):
+                _mark_job_interrupted(session, job, meta, slot.slot_key)
                 dirty = True
                 continue
 

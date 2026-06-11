@@ -28,7 +28,7 @@ def job_db_indicates_pipeline_finished(job: ImportJob) -> bool:
     stage = (job.stage or "").strip().lower()
     if stage in ("validated", "loaded", "failed", "pm_committed"):
         return True
-    return status in ("completed", "completed_with_errors", "failed", "commit_failed")
+    return status in ("completed", "completed_with_errors", "failed", "commit_failed", "interrupted")
 
 
 def main_celery_task_id(job: ImportJob) -> str | None:
