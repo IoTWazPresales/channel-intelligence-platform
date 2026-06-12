@@ -342,6 +342,8 @@ def resolve_primary_distributor_id_from_dataframe(
     df: Any,
     mapping: dict[str, str],
     source_def_id: int | None,
+    *,
+    res_cache: Any | None = None,
 ) -> int | None:
     """Resolve the first non-empty distributor token in the file (primary scope for intelligence)."""
     from app.services.imports.distributor_sales_inventory import (
@@ -354,7 +356,8 @@ def resolve_primary_distributor_id_from_dataframe(
     col = _col(mapping, "distributor_token")
     if not col or col not in df.columns:
         return None
-    res_cache = _build_resolution_cache(session, source_def_id)
+    if res_cache is None:
+        res_cache = _build_resolution_cache(session, source_def_id)
     for _, row in df.iterrows():
         raw = _clean_str(row.get(col))
         if not raw:

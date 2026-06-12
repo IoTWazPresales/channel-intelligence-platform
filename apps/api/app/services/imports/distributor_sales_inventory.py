@@ -1657,7 +1657,9 @@ def process_distributor_sales_inventory(
         resolve_primary_distributor_id_from_dataframe,
     )
 
-    primary_dist_id = resolve_primary_distributor_id_from_dataframe(db, df, mapping, source_def_id)
+    primary_dist_id = resolve_primary_distributor_id_from_dataframe(
+        db, df, mapping, source_def_id, res_cache=res_cache
+    )
     intel_state = check_dsi_import_state(db, job.id, primary_dist_id)
     persist_intelligence_state_on_job(db, job, intel_state)
     _upfront_progress("import_intelligence")

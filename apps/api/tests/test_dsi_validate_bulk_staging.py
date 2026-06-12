@@ -564,6 +564,110 @@ def test_dsi_validate_bulk_staging_checkpoint_on_process(dsi_source_id: int) -> 
         db.commit()
 
 
+def _minimal_dsi_resolution_cache(*, distributor_id: int = 42, distributor_code: str = "DIST-01") -> DSIResolutionCache:
+    dist = type("D", (), {"id": distributor_id, "code": distributor_code, "name": "Test Distributor"})()
+    return DSIResolutionCache(
+        all_distributors=[dist],
+        dist_aliases=[],
+        all_customers=[],
+        customer_code_to_id={},
+        customer_name_to_ids={},
+        cust_aliases=[],
+        open_channel_cid=None,
+    )
+
+
+def test_resolve_primary_reuses_prebuilt_cache(monkeypatch) -> None:
+    """Prebuilt res_cache must skip _build_resolution_cache."""
+    import pandas as pd
+    from unittest.mock import MagicMock
+
+    from app.services.imports.dsi_import_state_awareness import resolve_primary_distributor_id_from_dataframe
+
+    build_calls: list[int] = []
+
+    def fail_build(*_args, **_kwargs):
+        build_calls.append(1)
+        raise AssertionError("_build_resolution_cache must not run when res_cache is provided")
+
+    monkeypatch.setattr(
+        "app.services.imports.distributor_sales_inventory._build_resolution_cache",
+        fail_build,
+    )
+    cache = _minimal_dsi_resolution_cache()
+    df = pd.DataFrame({"distributor_code": ["DIST-01", "OTHER"]})
+    mapping = {"distributor_code": "distributor_token"}
+    session = MagicMock()
+    result = resolve_primary_distributor_id_from_dataframe(
+        session, df, mapping, None, res_cache=cache
+    )
+    assert result == 42
+    assert build_calls == []
+
+
+def test_resolve_primary_same_output_with_and_without_prebuilt_cache(monkeypatch) -> None:
+    """resolve_primary output is unchanged when the same cache is reused."""
+    import pandas as pd
+    from unittest.mock import MagicMock
+
+    from app.services.imports.dsi_import_state_awareness import resolve_primary_distributor_id_from_dataframe
+
+    cache = _minimal_dsi_resolution_cache(distributor_id=99, distributor_code="ACME")
+    df = pd.DataFrame({"dist_col": ["ACME", "OTHER"]})
+    mapping = {"dist_col": "distributor_token"}
+    session = MagicMock()
+
+    monkeypatch.setattr(
+        "app.services.imports.distributor_sales_inventory._build_resolution_cache",
+        lambda *_a, **_k: cache,
+    )
+    without_prebuilt = resolve_primary_distributor_id_from_dataframe(session, df, mapping, None)
+    with_prebuilt = resolve_primary_distributor_id_from_dataframe(
+        session, df, mapping, None, res_cache=cache
+    )
+    assert without_prebuilt == with_prebuilt == 99
+
+
+def test_dsi_validate_upfront_single_resolution_cache_build(monkeypatch) -> None:
+    """Validate upfront wiring builds resolution cache once and passes it to resolve_primary."""
+    import pandas as pd
+    from unittest.mock import MagicMock
+
+    import app.services.imports.distributor_sales_inventory as dsi_mod
+    from app.services.imports import dsi_import_state_awareness as isa
+
+    build_calls: list[int] = []
+    cache = _minimal_dsi_resolution_cache()
+
+    def counting_build(*_args, **_kwargs):
+        build_calls.append(1)
+        return cache
+
+    monkeypatch.setattr(dsi_mod, "_build_resolution_cache", counting_build)
+
+    df = pd.DataFrame({"distributor_code": ["DIST-01"]})
+    mapping = {"distributor_code": "distributor_token"}
+    session = MagicMock()
+
+    res_cache = dsi_mod._build_resolution_cache(session, 1)
+    isa.resolve_primary_distributor_id_from_dataframe(session, df, mapping, 1, res_cache=res_cache)
+
+    assert len(build_calls) == 1
+
+
+def test_process_dsi_validate_passes_prebuilt_resolution_cache() -> None:
+    """process_distributor_sales_inventory must pass upfront res_cache into resolve_primary."""
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[1] / "app/services/imports/distributor_sales_inventory.py"
+    text = src.read_text(encoding="utf-8")
+    anchor = text.find("res_cache = _build_resolution_cache(db, source_def_id, on_sub_phase=_upfront_progress)")
+    assert anchor != -1
+    snippet = text[anchor : anchor + 600]
+    assert "resolve_primary_distributor_id_from_dataframe(" in snippet
+    assert "res_cache=res_cache" in snippet
+
+
 @pytest.fixture(scope="module")
 def dsi_source_id() -> int:
     with SessionLocal() as db:
