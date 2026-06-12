@@ -11,7 +11,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 from sqlalchemy import delete, func, or_, select, text
@@ -519,6 +519,13 @@ def dsi_validate_sub_phase_label(sub_phase: str | None) -> str | None:
     return _DSI_VALIDATE_SUB_PHASE_LABELS.get(key, key.replace("_", " ").title())
 
 
+def _dsi_session_read_with_transient_retry(db: Session, load: Callable[[], Any]) -> Any:
+    """Transient-retry wrapper for DSI upfront cache reads (rollback + fresh checkout)."""
+    from app.services.imports.dsi_bulk_db_commit import read_session_with_transient_retry
+
+    return read_session_with_transient_retry(db, load)
+
+
 def _build_resolution_cache(
     db: Session,
     source_def_id: int | None,
@@ -530,19 +537,26 @@ def _build_resolution_cache(
 
     if on_sub_phase is not None:
         on_sub_phase("distributors")
-    all_distributors = list(db.scalars(select(DimDistributor)).all())
+    all_distributors = _dsi_session_read_with_transient_retry(
+        db, lambda: list(db.scalars(select(DimDistributor)).all())
+    )
 
     if on_sub_phase is not None:
         on_sub_phase("dist_aliases")
-    dist_aliases = list(
-        db.scalars(
-            select(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.status == "approved")
-        ).all()
+    dist_aliases = _dsi_session_read_with_transient_retry(
+        db,
+        lambda: list(
+            db.scalars(
+                select(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.status == "approved")
+            ).all()
+        ),
     )
 
     if on_sub_phase is not None:
         on_sub_phase("customers")
-    all_customers = list(db.scalars(select(DimCustomer)).all())
+    all_customers = _dsi_session_read_with_transient_retry(
+        db, lambda: list(db.scalars(select(DimCustomer)).all())
+    )
     customer_code_to_id: dict[str, int] = {}
     customer_name_to_ids: dict[str, list[int]] = {}
     for c in all_customers:
@@ -555,14 +569,18 @@ def _build_resolution_cache(
 
     if on_sub_phase is not None:
         on_sub_phase("customer_aliases")
-    cust_aliases = list(
-        db.scalars(
-            select(CustomerSourceTokenAlias).where(CustomerSourceTokenAlias.status == "approved")
-        ).all()
+    cust_aliases = _dsi_session_read_with_transient_retry(
+        db,
+        lambda: list(
+            db.scalars(
+                select(CustomerSourceTokenAlias).where(CustomerSourceTokenAlias.status == "approved")
+            ).all()
+        ),
     )
 
-    open_channel_cid = db.scalar(
-        select(DimCustomer.id).where(DimCustomer.code == OPEN_CHANNEL_CUSTOMER_CODE)
+    open_channel_cid = _dsi_session_read_with_transient_retry(
+        db,
+        lambda: db.scalar(select(DimCustomer.id).where(DimCustomer.code == OPEN_CHANNEL_CUSTOMER_CODE)),
     )
 
     logger.info(
@@ -1609,7 +1627,7 @@ def process_distributor_sales_inventory(
     # End wipe transaction before long-running cache preloads (Supabase idle-in-tx safety).
     _upfront_progress("prepared")
 
-    prod_idx = _load_product_resolution_index(db)
+    prod_idx = _dsi_session_read_with_transient_retry(db, lambda: _load_product_resolution_index(db))
     _upfront_progress("product_index")
 
     # --- Pre-load shipment corroboration cache (2 batch queries vs N×6 per-row) ---
@@ -1624,7 +1642,9 @@ def process_distributor_sales_inventory(
         sorted(_evidence_months),
     )
 
-    corr_cache = ShipmentCorroborationCache.load(db, _evidence_months)
+    corr_cache = _dsi_session_read_with_transient_retry(
+        db, lambda: ShipmentCorroborationCache.load(db, _evidence_months)
+    )
     _upfront_progress("shipment_corroboration")
 
     # Pre-load distributor + customer master data (eliminates 4–6 per-row DB round-trips)

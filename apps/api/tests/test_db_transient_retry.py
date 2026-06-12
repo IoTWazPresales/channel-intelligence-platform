@@ -10,6 +10,7 @@ from app.services.imports.db_transient_retry import (
     is_transient_db_error,
     retry_async_on_transient_db,
     retry_sync_on_transient_db,
+    retry_sync_session_on_transient_db,
 )
 
 
@@ -48,3 +49,48 @@ def test_retry_async_succeeds_on_second_attempt() -> None:
         assert calls["n"] == 2
 
     asyncio.run(run())
+
+
+def test_retry_sync_session_on_transient_db_rolls_back_and_retries() -> None:
+    from unittest.mock import MagicMock
+
+    from sqlalchemy.exc import OperationalError
+
+    session = MagicMock()
+    calls = {"n": 0}
+
+    def op() -> str:
+        calls["n"] += 1
+        if calls["n"] < 2:
+            raise OperationalError("SELECT", {}, Exception("server closed the connection unexpectedly"))
+        return "ok"
+
+    with patch("app.services.imports.db_transient_retry.time.sleep"):
+        result = retry_sync_session_on_transient_db(session, op, attempts=3, base_delay_s=0.01)
+    assert result == "ok"
+    assert calls["n"] == 2
+    session.rollback.assert_called_once()
+
+
+def test_dsi_resolution_cache_read_retries_operational_error_mid_load() -> None:
+    """Simulated dead-socket OperationalError during cache read recovers on retry."""
+    from unittest.mock import MagicMock
+
+    from sqlalchemy.exc import OperationalError
+
+    from app.services.imports.distributor_sales_inventory import _dsi_session_read_with_transient_retry
+
+    session = MagicMock()
+    calls = {"n": 0}
+
+    def load_customer_aliases() -> list[str]:
+        calls["n"] += 1
+        if calls["n"] < 2:
+            raise OperationalError("SELECT", {}, Exception("server closed the connection unexpectedly"))
+        return ["alias-row"]
+
+    with patch("app.services.imports.db_transient_retry.time.sleep"):
+        result = _dsi_session_read_with_transient_retry(session, load_customer_aliases)
+    assert result == ["alias-row"]
+    assert calls["n"] == 2
+    session.rollback.assert_called_once()

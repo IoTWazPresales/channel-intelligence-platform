@@ -8,6 +8,7 @@ import time
 from typing import Awaitable, Callable, TypeVar
 
 from sqlalchemy.exc import DBAPIError, OperationalError
+from sqlalchemy.orm import Session
 
 T = TypeVar("T")
 
@@ -76,6 +77,28 @@ def retry_sync_on_transient_db(
             last_exc = exc
             if attempt >= attempts - 1 or not is_transient_db_error(exc):
                 raise
+            time.sleep(base_delay_s * (attempt + 1))
+    assert last_exc is not None
+    raise last_exc
+
+
+def retry_sync_session_on_transient_db(
+    session: Session,
+    operation: Callable[[], T],
+    *,
+    attempts: int = _DEFAULT_ATTEMPTS,
+    base_delay_s: float = _DEFAULT_BASE_DELAY_S,
+) -> T:
+    """Sync read/retry: rollback poisoned session state, then pool_pre_ping on next use."""
+    last_exc: BaseException | None = None
+    for attempt in range(max(1, attempts)):
+        try:
+            return operation()
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= attempts - 1 or not is_transient_db_error(exc):
+                raise
+            session.rollback()
             time.sleep(base_delay_s * (attempt + 1))
     assert last_exc is not None
     raise last_exc

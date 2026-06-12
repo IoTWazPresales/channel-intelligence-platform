@@ -2,11 +2,23 @@
 
 from __future__ import annotations
 
+from typing import Callable, TypeVar
+
 from sqlalchemy.orm import Session
 
-from app.services.imports.db_transient_retry import retry_sync_on_transient_db
+from app.services.imports.db_transient_retry import (
+    retry_sync_on_transient_db,
+    retry_sync_session_on_transient_db,
+)
+
+T = TypeVar("T")
 
 
 def commit_session_with_transient_retry(session: Session) -> None:
     """Commit once; retry only on transient connection/pooler errors."""
     retry_sync_on_transient_db(lambda: session.commit())
+
+
+def read_session_with_transient_retry(session: Session, operation: Callable[[], T]) -> T:
+    """Read once; rollback and retry on transient connection/pooler errors."""
+    return retry_sync_session_on_transient_db(session, operation)
