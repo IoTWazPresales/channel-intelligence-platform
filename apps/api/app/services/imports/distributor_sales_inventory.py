@@ -476,6 +476,76 @@ def _load_product_resolution_index(db: Session) -> ProductResolutionIndex:
     return get_product_resolution_index(db)
 
 
+@dataclass(frozen=True, slots=True)
+class DSIResolutionDistributorRow:
+    """Detached distributor master row for in-memory DSI resolution."""
+
+    id: int
+    code: str
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class DSIResolutionCustomerRow:
+    """Detached customer master row for in-memory DSI resolution / AI candidates."""
+
+    id: int
+    code: str
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class DSIResolutionDistAliasRow:
+    """Detached approved distributor alias row."""
+
+    normalized_token: str
+    source_definition_id: int | None
+    distributor_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class DSIResolutionCustAliasRow:
+    """Detached approved customer alias row."""
+
+    normalized_token: str
+    source_definition_id: int | None
+    distributor_id: int | None
+    customer_id: int
+
+
+def _distributor_row_from_orm(row: DimDistributor) -> DSIResolutionDistributorRow:
+    return DSIResolutionDistributorRow(
+        id=int(row.id),
+        code=str(row.code or ""),
+        name=str(row.name or ""),
+    )
+
+
+def _customer_row_from_orm(row: DimCustomer) -> DSIResolutionCustomerRow:
+    return DSIResolutionCustomerRow(
+        id=int(row.id),
+        code=str(row.code or ""),
+        name=str(row.name or ""),
+    )
+
+
+def _dist_alias_row_from_orm(row: DistributorSourceTokenAlias) -> DSIResolutionDistAliasRow:
+    return DSIResolutionDistAliasRow(
+        normalized_token=str(row.normalized_token or ""),
+        source_definition_id=int(row.source_definition_id) if row.source_definition_id is not None else None,
+        distributor_id=int(row.distributor_id),
+    )
+
+
+def _cust_alias_row_from_orm(row: CustomerSourceTokenAlias) -> DSIResolutionCustAliasRow:
+    return DSIResolutionCustAliasRow(
+        normalized_token=str(row.normalized_token or ""),
+        source_definition_id=int(row.source_definition_id) if row.source_definition_id is not None else None,
+        distributor_id=int(row.distributor_id) if row.distributor_id is not None else None,
+        customer_id=int(row.customer_id),
+    )
+
+
 @dataclass
 class DSIResolutionCache:
     """Pre-loaded master data for O(1) per-row entity resolution.
@@ -485,18 +555,21 @@ class DSIResolutionCache:
     lookup) with in-memory lookups built from a single pre-load before the row
     loop.
 
+    All entity rows are plain dataclasses — never SQLAlchemy ORM instances — so
+    heartbeat commits cannot expire cached objects and trigger per-PK reloads.
+
     Build via ``_build_resolution_cache`` before calling the processing loop.
     """
 
     # Distributors
-    all_distributors: list  # list[DimDistributor]
-    dist_aliases: list  # list[DistributorSourceTokenAlias], status == "approved"
+    all_distributors: list[DSIResolutionDistributorRow]
+    dist_aliases: list[DSIResolutionDistAliasRow]
     # Customers
-    all_customers: list  # list[DimCustomer] — for AI candidate slice without per-row SELECT
-    customer_code_to_id: dict  # lower_strip(code) → customer_id
-    customer_name_to_ids: dict  # lower_strip(name) → [customer_id, …]
-    cust_aliases: list  # list[CustomerSourceTokenAlias], status == "approved"
-    open_channel_cid: int | None  # DimCustomer.id where code == OPEN_CHANNEL_CUSTOMER_CODE
+    all_customers: list[DSIResolutionCustomerRow]
+    customer_code_to_id: dict[str, int]
+    customer_name_to_ids: dict[str, list[int]]
+    cust_aliases: list[DSIResolutionCustAliasRow]
+    open_channel_cid: int | None
 
 
 _DSI_VALIDATE_SUB_PHASE_LABELS: dict[str, str] = {
@@ -541,10 +614,11 @@ def _build_resolution_cache(
     all_distributors = _dsi_session_read_with_transient_retry(
         db, lambda: list(db.scalars(select(DimDistributor)).all())
     )
+    distributor_rows = [_distributor_row_from_orm(d) for d in all_distributors]
 
     if on_sub_phase is not None:
         on_sub_phase("dist_aliases")
-    dist_aliases = _dsi_session_read_with_transient_retry(
+    dist_aliases_orm = _dsi_session_read_with_transient_retry(
         db,
         lambda: list(
             db.scalars(
@@ -552,15 +626,17 @@ def _build_resolution_cache(
             ).all()
         ),
     )
+    dist_alias_rows = [_dist_alias_row_from_orm(a) for a in dist_aliases_orm]
 
     if on_sub_phase is not None:
         on_sub_phase("customers")
-    all_customers = _dsi_session_read_with_transient_retry(
+    all_customers_orm = _dsi_session_read_with_transient_retry(
         db, lambda: list(db.scalars(select(DimCustomer)).all())
     )
+    customer_rows = [_customer_row_from_orm(c) for c in all_customers_orm]
     customer_code_to_id: dict[str, int] = {}
     customer_name_to_ids: dict[str, list[int]] = {}
-    for c in all_customers:
+    for c in customer_rows:
         ck = (c.code or "").strip().lower()
         if ck:
             customer_code_to_id[ck] = int(c.id)
@@ -570,7 +646,7 @@ def _build_resolution_cache(
 
     if on_sub_phase is not None:
         on_sub_phase("customer_aliases")
-    cust_aliases = _dsi_session_read_with_transient_retry(
+    cust_aliases_orm = _dsi_session_read_with_transient_retry(
         db,
         lambda: list(
             db.scalars(
@@ -578,6 +654,7 @@ def _build_resolution_cache(
             ).all()
         ),
     )
+    cust_alias_rows = [_cust_alias_row_from_orm(a) for a in cust_aliases_orm]
 
     open_channel_cid = _dsi_session_read_with_transient_retry(
         db,
@@ -586,18 +663,18 @@ def _build_resolution_cache(
 
     logger.info(
         "_build_resolution_cache: distributors=%d dist_aliases=%d customers=%d cust_aliases=%d",
-        len(all_distributors),
-        len(dist_aliases),
-        len(all_customers),
-        len(cust_aliases),
+        len(distributor_rows),
+        len(dist_alias_rows),
+        len(customer_rows),
+        len(cust_alias_rows),
     )
     return DSIResolutionCache(
-        all_distributors=all_distributors,
-        dist_aliases=dist_aliases,
-        all_customers=all_customers,
+        all_distributors=distributor_rows,
+        dist_aliases=dist_alias_rows,
+        all_customers=customer_rows,
         customer_code_to_id=customer_code_to_id,
         customer_name_to_ids=customer_name_to_ids,
-        cust_aliases=cust_aliases,
+        cust_aliases=cust_alias_rows,
         open_channel_cid=int(open_channel_cid) if open_channel_cid is not None else None,
     )
 
@@ -611,14 +688,14 @@ def _build_distributor_resolution_cache(db: Session, source_def_id: int | None =
     """
     _ = source_def_id  # alias rows are filtered per-token at resolve time
     all_distributors = list(db.scalars(select(DimDistributor)).all())
-    dist_aliases = list(
+    dist_aliases_orm = list(
         db.scalars(
             select(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.status == "approved")
         ).all()
     )
     return DSIResolutionCache(
-        all_distributors=all_distributors,
-        dist_aliases=dist_aliases,
+        all_distributors=[_distributor_row_from_orm(d) for d in all_distributors],
+        dist_aliases=[_dist_alias_row_from_orm(a) for a in dist_aliases_orm],
         all_customers=[],
         customer_code_to_id={},
         customer_name_to_ids={},
@@ -922,9 +999,11 @@ def _resolve_distributor_from_cache(
 
     # DimDistributor scan (in memory)
     for d in res_cache.all_distributors:
-        if d.code.strip().lower() == token or d.name.strip().lower() == token:
+        code = (d.code or "").strip().lower()
+        name = (d.name or "").strip().lower()
+        if code == token or name == token:
             return d.id, None
-        if token in d.name.strip().lower() or d.name.strip().lower() in token:
+        if token in name or name in token:
             if len(token) >= 4:
                 return d.id, None
 
@@ -965,7 +1044,9 @@ def _resolve_distributor_strict_from_cache(
             return unique[0], None
 
     for d in res_cache.all_distributors:
-        if d.code.strip().lower() == token or d.name.strip().lower() == token:
+        code = (d.code or "").strip().lower()
+        name = (d.name or "").strip().lower()
+        if code == token or name == token:
             return d.id, None
 
     return None, "unresolved_distributor_token"

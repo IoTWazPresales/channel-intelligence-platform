@@ -1,5 +1,13 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 13, 2026 (DSI validate — plain DSIResolutionCache, no ORM PK refresh) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` @ pushed.
+- **Fix:** `DSIResolutionCache` now stores frozen dataclass rows (`DSIResolution{Distributor,Customer,DistAlias,CustAlias}Row`) built in `_build_resolution_cache` / `_build_distributor_resolution_cache`; heartbeat commits can no longer expire cached ORM instances and trigger per-row `WHERE id=:pk` reloads during validate.
+- **Tests:** `test_dsi_resolution_cache_plain.py` (8 focused + conflicts/bulk-staging regressions pass); survival test proves zero DB access after `commit()` on plain cache.
+- **Job #43 soak (post-fix):** Revalidate dispatched; **zero** `WHERE …_alias.id =` / dim PK refresh queries in `pg_stat_activity` throughout monitoring. Run **stuck at upfront `loading_caches` / `customer_aliases`** (~10+ min, idle-in-tx on bulk alias SELECT) — did **not** reach `processing_rows` / 4000-row checkpoint in this session (remote bulk-load hang class, separate from row-loop PK storm). Prior pre-fix run reached `processing_rows` with PK refresh active.
+- **Next:** Re-soak job #43 after upfront completes or on local `cip`; optional local-DB move.
+
 ## CURRENT STATE — Jun 13, 2026 (DSI validate hang — server-side idle-in-tx backstop + residual window + dispatch guard) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (staged this session; builds on `27d4058`). Read-only audit confirmed the prior keepalive/single-build fixes are wired on HEAD but the running worker predates them and they remain **unproven live**.

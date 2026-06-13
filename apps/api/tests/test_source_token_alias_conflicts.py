@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
-from app.services.imports.distributor_sales_inventory import DSIResolutionCache
+from app.services.imports.distributor_sales_inventory import (
+    DSIResolutionCache,
+    DSIResolutionCustAliasRow,
+    DSIResolutionDistAliasRow,
+)
 from app.services.imports.source_token_alias_conflicts import (
     MULTIPLE_CUSTOMER_ALIASES,
     MULTIPLE_DISTRIBUTOR_ALIASES,
@@ -27,8 +29,8 @@ def _dist_cache(*aliases) -> DSIResolutionCache:
 
 def test_distributor_multi_alias_conflict_detected() -> None:
     cache = _dist_cache(
-        SimpleNamespace(normalized_token="acme", source_definition_id=None, distributor_id=1),
-        SimpleNamespace(normalized_token="acme", source_definition_id=None, distributor_id=2),
+        DSIResolutionDistAliasRow(normalized_token="acme", source_definition_id=None, distributor_id=1),
+        DSIResolutionDistAliasRow(normalized_token="acme", source_definition_id=None, distributor_id=2),
     )
     assert (
         distributor_alias_conflict_reason_from_cache(cache, source_definition_id=10, normalized_token="acme")
@@ -38,7 +40,7 @@ def test_distributor_multi_alias_conflict_detected() -> None:
 
 def test_distributor_single_alias_no_conflict() -> None:
     cache = _dist_cache(
-        SimpleNamespace(normalized_token="acme", source_definition_id=None, distributor_id=1),
+        DSIResolutionDistAliasRow(normalized_token="acme", source_definition_id=None, distributor_id=1),
     )
     assert distributor_alias_conflict_reason_from_cache(cache, source_definition_id=10, normalized_token="acme") is None
 
@@ -51,10 +53,10 @@ def test_customer_multi_alias_conflict_detected() -> None:
         customer_code_to_id={},
         customer_name_to_ids={},
         cust_aliases=[
-            SimpleNamespace(
+            DSIResolutionCustAliasRow(
                 normalized_token="dealer1", source_definition_id=None, distributor_id=5, customer_id=100
             ),
-            SimpleNamespace(
+            DSIResolutionCustAliasRow(
                 normalized_token="dealer1", source_definition_id=None, distributor_id=5, customer_id=101
             ),
         ],

@@ -19,6 +19,7 @@ from app.services.imports.ai_resolver_wiring import (
 )
 from app.services.imports.distributor_sales_inventory import (
     DSIResolutionCache,
+    DSIResolutionDistributorRow,
     _DSI_STAGING_INSERT_CHUNK,
     _build_resolution_cache,
     _commit_dsi_validate_chunk,
@@ -440,7 +441,7 @@ def test_customer_candidates_from_cache_matches_db_filtering() -> None:
 def test_distributor_candidates_from_cache_no_db_query(monkeypatch) -> None:
     cache = DSIResolutionCache(
         all_distributors=[
-            type("D", (), {"id": 1, "code": "DIST-01", "name": "Summit Supply"})(),
+            DSIResolutionDistributorRow(id=1, code="DIST-01", name="Summit Supply"),
         ],
         dist_aliases=[],
         all_customers=[],
@@ -565,9 +566,10 @@ def test_dsi_validate_bulk_staging_checkpoint_on_process(dsi_source_id: int) -> 
 
 
 def _minimal_dsi_resolution_cache(*, distributor_id: int = 42, distributor_code: str = "DIST-01") -> DSIResolutionCache:
-    dist = type("D", (), {"id": distributor_id, "code": distributor_code, "name": "Test Distributor"})()
     return DSIResolutionCache(
-        all_distributors=[dist],
+        all_distributors=[
+            DSIResolutionDistributorRow(id=distributor_id, code=distributor_code, name="Test Distributor"),
+        ],
         dist_aliases=[],
         all_customers=[],
         customer_code_to_id={},
