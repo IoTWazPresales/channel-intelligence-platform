@@ -1,5 +1,16 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 13, 2026 (DSI validate hang — server-side idle-in-tx backstop + residual window + dispatch guard) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (staged this session; builds on `27d4058`). Read-only audit confirmed the prior keepalive/single-build fixes are wired on HEAD but the running worker predates them and they remain **unproven live**.
+- **Audit verdict:** keepalives (`0af613a`) catch a *TCP-dead* socket, but there was **no client/server backstop for a connection left `idle in transaction`** (the 47-min hang) where no exception is ever raised, so the transient-retry could not fire. Also found a residual idle-in-tx window (alias/open-channel reads held open across the CPU-bound primary-distributor scan) and a dispatch-guard gap when the Celery result backend loses task state.
+- **Fixes (this session, 3 of 4 — P1 is ops):**
+  - **P0 backstop:** `app/db/session_sync.py` — `build_sync_connect_args()` (testable) adds libpq `options` with **`idle_in_transaction_session_timeout` (default 300000 ms / 5 min)** + optional `statement_timeout` (default off). New settings `cip_sync_idle_in_transaction_timeout_ms` / `cip_sync_statement_timeout_ms` (`config.py`). Idle timeout only fires on an *idle* transaction — never interrupts an active query (respects BACKLOG-028 trap). A stuck idle-in-tx is now terminated server-side → next use raises a transient error the upfront-cache retry recovers from.
+  - **P2 residual window:** `distributor_sales_inventory.py` — `_upfront_progress("resolution_cache_ready")` committed between `_build_resolution_cache` and `resolve_primary_distributor_id_from_dataframe`, so the alias/open-channel read tx is not held idle across the primary scan + intelligence reads. New sub-phase label.
+  - **P3 dispatch guard:** `imports.py::_raise_if_import_pipeline_busy` — when Celery state is lost, a **DSI checkpoint fresher than 120 s** still blocks a duplicate validate (proves a live worker); a stale checkpoint allows re-dispatch (30-min reaper backstop preserved).
+- **Tests (pure-unit, no DB — 28 pass):** `test_session_sync_connect_args.py` (7), `test_import_pipeline_busy_guard.py` (11), `test_dsi_validate_upfront_wiring.py` (4, robust source-wiring moved out of the DB-gated module), regressions `test_db_transient_retry.py` (5) + `test_pipeline_failure_writeback.py` (2). All changed files byte-compile.
+- **Next (P1, ops — unchanged from prior, still required):** restart API + worker, re-validate job #43 soak to prove the idle-in-tx backstop + retry on the real failure path. Ops can tune `CIP_SYNC_IDLE_IN_TRANSACTION_TIMEOUT_MS` in `.env` without a code change. Watch: confirm no legitimate sync path (PM commit) idles a transaction >5 min.
+
 ## CURRENT STATE — Jun 11, 2026 (DSI validate hang fix — keepalives + single cache build) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` @ **`27d4058`** pushed (includes `0af613a` keepalives/retry + `27d4058` single cache build).

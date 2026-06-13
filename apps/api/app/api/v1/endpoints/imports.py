@@ -102,8 +102,36 @@ def _enqueue_import_pipeline_job(job_id: int, *, log_label: str, in_process_thre
     )
 
 
+# A DSI validate worker writes ``dsi_validate_checkpoint_at`` on every upfront sub-phase and every
+# staging chunk. A checkpoint newer than this proves a live worker even when the Celery result
+# backend has lost the task state — so a duplicate dispatch is still rejected. An older (stale)
+# checkpoint does not block: the worker is presumed dead and the stale-task reaper clears the slot.
+_FRESH_DSI_CHECKPOINT_SECONDS = 120
+
+
+def _dsi_validate_checkpoint_age_seconds(job: ImportJob) -> float | None:
+    """Seconds since the job's last durable DSI validate checkpoint, or None if absent/unparseable."""
+    from datetime import datetime, timezone
+
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    raw = meta.get("dsi_validate_checkpoint_at")
+    if not raw:
+        return None
+    try:
+        ts = datetime.fromisoformat(str(raw))
+    except (ValueError, TypeError):
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - ts).total_seconds()
+
+
 def _raise_if_import_pipeline_busy(job: ImportJob) -> None:
-    """Reject a second validate/revalidate while Celery work is still active."""
+    """Reject a second validate/revalidate while pipeline work is still active.
+
+    Active is proven by either an active Celery state or — when the result backend has dropped the
+    task state — a DSI validate checkpoint written within ``_FRESH_DSI_CHECKPOINT_SECONDS``.
+    """
     from app.services.imports.import_job_background_metadata import (
         ACTIVE_CELERY_STATES,
         pipeline_dispatch_conflict_message,
@@ -115,6 +143,10 @@ def _raise_if_import_pipeline_busy(job: ImportJob) -> None:
     state = read_main_celery_state(job)
     if state is not None and state in ACTIVE_CELERY_STATES:
         raise HTTPException(status_code=409, detail=pipeline_dispatch_conflict_message(int(job.id)))
+    if state is None:
+        age = _dsi_validate_checkpoint_age_seconds(job)
+        if age is not None and age < _FRESH_DSI_CHECKPOINT_SECONDS:
+            raise HTTPException(status_code=409, detail=pipeline_dispatch_conflict_message(int(job.id)))
 
 
 def _prepare_dsi_pipeline_dispatch(job_id: int) -> None:

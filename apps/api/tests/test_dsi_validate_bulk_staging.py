@@ -655,17 +655,8 @@ def test_dsi_validate_upfront_single_resolution_cache_build(monkeypatch) -> None
     assert len(build_calls) == 1
 
 
-def test_process_dsi_validate_passes_prebuilt_resolution_cache() -> None:
-    """process_distributor_sales_inventory must pass upfront res_cache into resolve_primary."""
-    from pathlib import Path
-
-    src = Path(__file__).resolve().parents[1] / "app/services/imports/distributor_sales_inventory.py"
-    text = src.read_text(encoding="utf-8")
-    anchor = text.find("res_cache = _build_resolution_cache(db, source_def_id, on_sub_phase=_upfront_progress)")
-    assert anchor != -1
-    snippet = text[anchor : anchor + 600]
-    assert "resolve_primary_distributor_id_from_dataframe(" in snippet
-    assert "res_cache=res_cache" in snippet
+# NOTE: the upfront single-cache-build + tx-closing-heartbeat source-wiring assertions moved to
+# test_dsi_validate_upfront_wiring.py (no DB dependency, so they run outside the import-pipeline DB gate).
 
 
 @pytest.fixture(scope="module")

@@ -56,6 +56,23 @@ class Settings(BaseSettings):
         description="Write legacy product_attribute_value rows on PM commit (env PM_WRITE_LEGACY_EAV). Off by default; specs land in dim_product.specs_json.",
     )
 
+    # Server-side backstop for the sync (Celery/Alembic) engine against the DSI validate hang:
+    # a connection left "idle in transaction" (transaction open, no statement running) longer than
+    # this is terminated by Postgres, so the next use raises a transient error the upfront-cache
+    # retry wrapper can recover from — instead of blocking forever on a dead pooler socket.
+    # Only fires on *idle* transactions; never interrupts an actively-running query. 0 disables.
+    cip_sync_idle_in_transaction_timeout_ms: int = Field(
+        default=300_000,
+        description="Postgres idle_in_transaction_session_timeout (ms) on the sync engine (env CIP_SYNC_IDLE_IN_TRANSACTION_TIMEOUT_MS). 0 disables.",
+    )
+    # Optional hard cap on any single statement on the sync engine. Off by default because a large
+    # apply/commit can legitimately run a long single statement (see BACKLOG-028); enable per-env
+    # only when a runaway statement, not an idle transaction, is the concern. 0 disables.
+    cip_sync_statement_timeout_ms: int = Field(
+        default=0,
+        description="Postgres statement_timeout (ms) on the sync engine (env CIP_SYNC_STATEMENT_TIMEOUT_MS). 0 disables.",
+    )
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]

@@ -507,6 +507,7 @@ _DSI_VALIDATE_SUB_PHASE_LABELS: dict[str, str] = {
     "dist_aliases": "Loading distributor token aliases",
     "customers": "Loading customer master data",
     "customer_aliases": "Loading customer token aliases",
+    "resolution_cache_ready": "Resolving primary distributor",
     "import_intelligence": "Checking import intelligence state",
     "weekly_historical_customers": "Loading historical customer resolutions",
 }
@@ -1649,6 +1650,10 @@ def process_distributor_sales_inventory(
 
     # Pre-load distributor + customer master data (eliminates 4–6 per-row DB round-trips)
     res_cache = _build_resolution_cache(db, source_def_id, on_sub_phase=_upfront_progress)
+    # Commit the alias/open-channel read transaction left open by the cache build before the
+    # CPU-bound primary-distributor scan + intelligence reads, so the connection is not held
+    # "idle in transaction" across that window (Supabase pooler idle-in-tx safety).
+    _upfront_progress("resolution_cache_ready")
     # -------------------------------------------------------------------------
 
     from app.services.imports.dsi_import_state_awareness import (
