@@ -21,6 +21,67 @@ palace is only useful if it stays current.
 
 ---
 
+## Fix protocol — find canonical first (no patches)
+
+**Every bug fix, perf fix, or “make X work” task — before writing code.**
+
+The user expects **architecture alignment**, not symptom patches on the wrong
+code path. Skipping this protocol is a stop condition.
+
+### 1. Interconnection audit (required first deliverable)
+
+Produce a **path map** in chat before implementation:
+
+| UI / trigger | API route | Celery task | Sync writer | Commit model |
+|--------------|-----------|-------------|-------------|--------------|
+
+Steps:
+
+1. Read the importer row in `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` for the
+   affected `template_slug`.
+2. Grep for **parallel paths** to the same steward action:
+   `bulk_*`, `*_apply_sync`, `*_enqueue`, `execute_*`, same page buttons.
+3. List **every button on the affected screen** that writes the same entities.
+4. Document **commit granularity** (per-row vs per-batch vs set-based SQL).
+
+**Stop rule:** If two paths exist for the same steward action and commit models
+differ, assume the **bulk/set-based path is canonical** until proven otherwise.
+Do not tune polls, retries, dedupe, or timeouts on the slow path first.
+
+### 2. Does the fix already exist?
+
+- If canonical bulk/sync writer exists → **wire to it** or extend it (minimal
+  delta). Do not add a second write mechanism.
+- If shipment (or another importer) already solved the same pattern → port that
+  pattern; do not reinvent.
+- If no canonical path exists → troubleshoot from **facts** (logs, endpoints,
+  transaction boundaries), then add **one** new writer at the parity bar
+  (set-based chunked `INSERT … ON CONFLICT` where applicable).
+
+### 3. No patches
+
+Do **not** ship symptom-only changes when the root cause is wrong wiring:
+
+- Poll budget / queue grace / client timeout tweaks
+- Retry layers on a per-row loop that should be batch
+- Dedupe or UI disables that hide duplicate enqueue on a broken path
+
+Those are allowed **only after** the canonical write path is in place, and only
+if a measured gap remains.
+
+### 4. First response format
+
+Before code, state:
+
+1. Path map (above)
+2. Canonical target (file paths)
+3. Why the current path diverges
+4. **One** fix direction (wire / extend / replace — not a P0/P1 patch stack)
+
+If the audit cannot be completed, stop and report — do not implement.
+
+---
+
 ## Environment Detection
 
 Behaviour differs between local and cloud environments. Detect your environment

@@ -1,5 +1,20 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 11, 2026 (DSI validate hang fix — keepalives + single cache build) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` @ **`27d4058`** pushed (includes `0af613a` keepalives/retry + `27d4058` single cache build).
+- **Commits:** `0af613a` TCP keepalives on sync engine + transient-retry on upfront cache reads (rollback + pool_pre_ping); `27d4058` eliminate duplicate `_build_resolution_cache` in validate (`res_cache=` passed to `resolve_primary_distributor_id_from_dataframe`).
+- **Root cause (job #43 baseline hang):** py-spy showed second unmonitored full cache build inside `resolve_primary_distributor_id_from_dataframe` blocked on dead socket during `customer_source_token_alias` SELECT; first build had heartbeats.
+- **Tests:** `test_db_transient_retry` (session rollback retry + mid-cache-load sim), `test_dsi_validate_bulk_staging` (prebuilt cache reuse, single build call-count, wiring assertion) — 9 unit tests pass; no cip/Supabase import runs.
+- **Next:** Restart worker; re-validate job #43 soak; optional DSI typed product columns plan.
+
+## CURRENT STATE — Jun 11, 2026 (commit pushed; DSI typed product columns — planned) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` @ **`7fe2581`** pushed (`dsi: validate upfront sub-phase commits and DB progress truth`).
+- **Pushed:** API upfront heartbeats + `dsi-progress` DB merge + web stale-heartbeat fix — **live on GitHub**.
+- **Next (approved direction, not started):** DSI-only typed product columns (`sales_model_name`, `item_code`, `ean_code`, `upc_code`) paritied with shipment/PM; **do not** change automapping heuristics, shipment, or other importers; phased plan in chat Jun 11.
+- **Ground truth:** DSI `CANONICAL` has only `product_identifier`; shipment template already has `item_code`, `sales_model_name`, `ean_code`, `upc_code`; staging line has `raw_product_token` + `mapped_canonical` JSONB (no separate product-typed raw columns today).
+
 ## CURRENT STATE — Jun 11, 2026 (DSI validate upfront sub-phase commits + DB phase truth) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local uncommitted).
