@@ -1,5 +1,13 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 11, 2026 (DSI steward workspace UX — tab candidates + wizard routing) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` @ `a0a558e` (pushed).
+- **Slice A (`be8eba0`):** Tab switch no longer flashes cross-entity placeholder rows (`keepDsiCandidatesPageDataIfSameEntity`); Clear filters in tabbed mode resets to `defaultDsiStewardFiltersForTab(activeTab)` (entity preserved).
+- **Slice B (`a0a558e`):** `dsiImportWizardRouting.ts` — `dsiWizardActiveStepFromServer` branches on stage **and** status; `dsiJobHasValidationComplete` includes `completed_with_errors`; PM-style guarded step-sync effect on DSI imports page. PM/shipment revisit blocks untouched.
+- **Tests:** `dsiEntityTabs.test.ts` (7), `dsiImportWizardRouting.test.ts` (8), `page.test.tsx` (26) — all pass.
+- **Next:** Manual soak on job #43 steward tabs + revisit `?job=` for completed_with_errors.
+
 ## CURRENT STATE — Jun 14, 2026 (import pipeline dispatch idempotency) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (uncommitted). **Do not push** until Warren approves.
