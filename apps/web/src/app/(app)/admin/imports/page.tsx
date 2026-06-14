@@ -68,6 +68,10 @@ import {
   refetchDsiImportJobStewardQueries,
 } from '@/features/import-steward';
 import { deriveDsiJobDisplayState } from '@/features/import-steward/dsiJobDisplayState';
+import {
+  dsiJobHasValidationComplete,
+  dsiWizardActiveStepFromServer,
+} from '@/features/import-steward/dsiImportWizardRouting';
 
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 
@@ -706,14 +710,11 @@ function AdminImportsPageContent() {
     }
     if (jobDetail.template_slug !== 'product_master') {
       if (jobDetail.template_slug === 'distributor_inventory') {
-        const stage = (jobDetail.stage || '').trim();
-        if (stage === 'dsi_mapping_ready') {
-          setActiveStep(5);
-        } else if (stage === 'validated' || stage === 'failed') {
-          setActiveStep(6);
-        } else {
-          setActiveStep(4);
-        }
+        const derived = dsiWizardActiveStepFromServer({
+          stage: jobDetail.stage ?? '',
+          status: jobDetail.status ?? '',
+        });
+        if (derived != null) setActiveStep(derived);
       } else if (jobDetail.template_slug === 'inbound_shipments') {
         setActiveStep(3);
       } else {
@@ -1198,7 +1199,74 @@ function AdminImportsPageContent() {
     return (dsiMappingState?.stage || '').trim();
   }, [dsiValidatePollJob?.stage, dsiMappingState?.stage]);
 
-  const dsiValidationComplete = dsiValidateStage === 'validated' || dsiValidateStage === 'failed';
+  const dsiJobSnapshotForRouting = useMemo(() => {
+    const job =
+      (dsiValidatePollJob?.id === lastJobId ? dsiValidatePollJob : null) ??
+      (dsiApplyPollJob?.id === lastJobId ? dsiApplyPollJob : null) ??
+      (jobDetail?.id === lastJobId && jobDetail.template_slug === 'distributor_inventory'
+        ? jobDetail
+        : null) ??
+      (dsiMappingState?.id === lastJobId ? dsiMappingState : null);
+    if (!job) {
+      return { stage: dsiValidateStage, status: '' };
+    }
+    return {
+      stage: String(job.stage ?? dsiValidateStage ?? ''),
+      status: String(job.status ?? ''),
+    };
+  }, [
+    dsiValidatePollJob,
+    dsiApplyPollJob,
+    jobDetail,
+    dsiMappingState,
+    lastJobId,
+    dsiValidateStage,
+  ]);
+
+  const dsiValidationComplete = useMemo(
+    () => dsiJobHasValidationComplete(dsiJobSnapshotForRouting),
+    [dsiJobSnapshotForRouting]
+  );
+
+  const dsiDerivedStepRef = useRef<{ jobId: number | null; step: number | null }>({ jobId: null, step: null });
+  useEffect(() => {
+    if (!isDsi || lastJobId == null) return;
+    const job =
+      (dsiValidatePollJob?.id === lastJobId ? dsiValidatePollJob : null) ??
+      (dsiApplyPollJob?.id === lastJobId ? dsiApplyPollJob : null) ??
+      (jobDetail?.id === lastJobId && jobDetail.template_slug === 'distributor_inventory'
+        ? jobDetail
+        : null) ??
+      (dsiMappingState?.id === lastJobId ? dsiMappingState : null);
+    if (!job) return;
+    if (activeStep < 4 && jobIdParam !== lastJobId) return;
+
+    const derived = dsiWizardActiveStepFromServer({
+      stage: String(job.stage ?? ''),
+      status: String(job.status ?? ''),
+    });
+    if (derived == null) return;
+
+    if ((dsiPipelineInFlight || dsiValidateAsync) && activeStep >= 6 && derived < 6) return;
+
+    if (dsiDerivedStepRef.current.jobId !== lastJobId) {
+      dsiDerivedStepRef.current = { jobId: lastJobId, step: null };
+    }
+    if (dsiDerivedStepRef.current.step === derived) return;
+    dsiDerivedStepRef.current = { jobId: lastJobId, step: derived };
+    setActiveStep((prev) => (prev === derived ? prev : derived));
+  }, [
+    isDsi,
+    lastJobId,
+    jobIdParam,
+    activeStep,
+    dsiValidatePollJob,
+    dsiApplyPollJob,
+    jobDetail,
+    dsiMappingState,
+    dsiPipelineInFlight,
+    dsiValidateAsync,
+  ]);
 
   const { data: dsiJobIntelligence } = useQuery({
     queryKey: ['dsi-job-intelligence', lastJobId],
