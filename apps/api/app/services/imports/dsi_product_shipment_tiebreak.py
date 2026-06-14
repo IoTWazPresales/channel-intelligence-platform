@@ -221,6 +221,7 @@ def try_shipment_tiebreak_product_id(
 
         unanimous: set[int] = set()
         last_scope: str | None = None
+        scope_conflict = False
         for dist_id, ev_date in scope_attempts:
             live_pick, ship_scope = _shipment_disambiguate_product_id(
                 session,
@@ -235,9 +236,10 @@ def try_shipment_tiebreak_product_id(
             unanimous.add(int(live_pick))
             last_scope = ship_scope
             if len(unanimous) > 1:
-                return None, None
+                scope_conflict = True
+                break
 
-        if len(unanimous) == 1:
+        if not scope_conflict and len(unanimous) == 1:
             src = "shipment_disambiguate"
             if last_scope == "cross_distributor":
                 src = f"{src}_cross_distributor"
@@ -252,6 +254,84 @@ def try_shipment_tiebreak_product_id(
             return global_pick, "shipment_global_identity"
 
     return None, None
+
+
+def enrich_product_global_identity_context(
+    ctx: dict[str, Any],
+    raw_token: str | None,
+    *,
+    global_product_identity: Any | None,
+    eligible_product_ids: list[int] | None = None,
+) -> None:
+    """Persist signal-only global shipment identity explainability on candidate context."""
+    from app.services.imports.dsi_product_token_identity import product_identity_lookup_keys
+
+    keys = product_identity_lookup_keys(raw_token)
+    if keys:
+        ctx["product_identity_lookup_keys"] = list(keys)
+    if global_product_identity is None:
+        return
+    global_ids = global_product_identity.distinct_product_ids_for_token(raw_token)
+    if global_ids:
+        ctx["shipment_global_product_ids"] = [int(x) for x in global_ids]
+    elig = [int(x) for x in (eligible_product_ids or []) if int(x) > 0]
+    if not elig:
+        return
+    pick = intersect_eligible_with_shipment_ids(elig, global_ids)
+    if pick is not None:
+        ctx["shipment_product_tiebreak"] = {
+            "resolved_product_id": int(pick),
+            "source": "shipment_global_identity",
+            "signal_only": True,
+        }
+
+
+def ambiguous_product_plan_reason_from_context(ctx: dict[str, Any] | None) -> str:
+    """Structured plan reason when ambiguous_eligible tie-break cannot auto-pick."""
+    if not ctx:
+        return "Multiple eligible Product Master matches — ambiguous; steward must choose product"
+    global_ids = ctx.get("shipment_global_product_ids")
+    gset: set[int] = set()
+    if isinstance(global_ids, list):
+        for x in global_ids:
+            try:
+                v = int(x)
+            except (TypeError, ValueError):
+                continue
+            if v > 0:
+                gset.add(v)
+    amb = ctx.get("product_ambiguous_eligible")
+    elig: set[int] = set()
+    if isinstance(amb, dict):
+        for ep in amb.get("eligible_products") or []:
+            if isinstance(ep, dict):
+                try:
+                    v = int(ep.get("product_id"))
+                    if v > 0:
+                        elig.add(v)
+                except (TypeError, ValueError):
+                    pass
+        if not elig:
+            for x in amb.get("product_ids") or []:
+                try:
+                    v = int(x)
+                    if v > 0:
+                        elig.add(v)
+                except (TypeError, ValueError):
+                    pass
+    overlap = elig & gset
+    if not gset:
+        return (
+            "No resolved shipment sales-model evidence for this token — "
+            "steward must choose among eligible Product Master rows"
+        )
+    if len(gset) > 1 and len(overlap) > 1:
+        ids_s = ", ".join(str(x) for x in sorted(overlap)[:8])
+        return (
+            f"Shipment evidence maps this sales model to multiple products ({ids_s}) — "
+            "steward must choose"
+        )
+    return "Multiple eligible Product Master matches — ambiguous; steward must choose product"
 
 
 def corroboration_chip_label_from_context(ctx: dict[str, Any] | None) -> str | None:

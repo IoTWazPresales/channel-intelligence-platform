@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { nextPlanScopeCandidateIds } from './dsiPlanScope';
+import { nextPlanScopeCandidateIds, shrinkPlanScopeCandidateIds } from './dsiPlanScope';
 
 describe('nextPlanScopeCandidateIds', () => {
   it('initializes from current page ids', () => {
@@ -17,5 +17,15 @@ describe('nextPlanScopeCandidateIds', () => {
 
   it('updates scope when rows are restored after rollback', () => {
     expect(nextPlanScopeCandidateIds([1, 2, 3], [1, 2, 3, 4])).toEqual([1, 2, 3, 4]);
+  });
+});
+
+describe('shrinkPlanScopeCandidateIds', () => {
+  it('removes ignored ids from frozen plan scope', () => {
+    expect(shrinkPlanScopeCandidateIds([1, 2, 3, 4], [2, 99])).toEqual([1, 3, 4]);
+  });
+
+  it('keeps prev when removal would empty scope', () => {
+    expect(shrinkPlanScopeCandidateIds([1], [1])).toEqual([1]);
   });
 });

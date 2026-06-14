@@ -6,6 +6,7 @@ from datetime import date
 from unittest.mock import MagicMock
 
 from app.services.imports.dsi_product_shipment_tiebreak import (
+    ambiguous_product_plan_reason_from_context,
     build_tiebreak_scope_attempts,
     intersect_eligible_with_shipment_ids,
     parse_candidate_shipment_evidence,
@@ -94,7 +95,7 @@ def test_try_shipment_tiebreak_multi_scope_unanimous(monkeypatch) -> None:
     assert calls
 
 
-def test_try_shipment_tiebreak_multi_scope_conflict_returns_none(monkeypatch) -> None:
+def test_try_shipment_tiebreak_multi_scope_conflict_falls_through_to_global(monkeypatch) -> None:
     def fake_disambiguate(_db, dist_id, _ev_date, _raw, _elig, corr_cache=None):
         return dist_id * 10, "distributor_specific"
 
@@ -102,6 +103,7 @@ def test_try_shipment_tiebreak_multi_scope_conflict_returns_none(monkeypatch) ->
         "app.services.imports.distributor_sales_inventory._shipment_disambiguate_product_id",
         fake_disambiguate,
     )
+    idx = _global_index({"other-token": (99,)})
     pick, src = try_shipment_tiebreak_product_id(
         MagicMock(),
         eligible_product_ids=[100, 200],
@@ -112,9 +114,35 @@ def test_try_shipment_tiebreak_multi_scope_conflict_returns_none(monkeypatch) ->
             "unresolved_distributor_ids": [38, 29],
             "dominant_evidence_month": "2025-06",
         },
+        global_product_identity=idx,
     )
     assert pick is None
     assert src is None
+
+
+def test_try_shipment_tiebreak_scope_conflict_global_singleton_wins(monkeypatch) -> None:
+    def fake_disambiguate(_db, dist_id, _ev_date, _raw, _elig, corr_cache=None):
+        return dist_id * 10, "distributor_specific"
+
+    monkeypatch.setattr(
+        "app.services.imports.distributor_sales_inventory._shipment_disambiguate_product_id",
+        fake_disambiguate,
+    )
+    idx = _global_index({"token": (100,)})
+    pick, src = try_shipment_tiebreak_product_id(
+        MagicMock(),
+        eligible_product_ids=[100, 290],
+        raw_token="token",
+        distributor_id=None,
+        evidence_date=None,
+        candidate_context={
+            "unresolved_distributor_ids": [38, 29],
+            "dominant_evidence_month": "2025-06",
+        },
+        global_product_identity=idx,
+    )
+    assert pick == 100
+    assert src == "shipment_global_identity"
 
 
 def _global_index(mapping: dict[str, tuple[int, ...]]) -> GlobalProductIdentityIndex:
@@ -195,3 +223,28 @@ def test_try_shipment_tiebreak_stored_context_wins_over_global(monkeypatch) -> N
     )
     assert pick == 20
     assert src == "stored_context"
+
+
+def test_ambiguous_plan_reason_no_global_evidence() -> None:
+    reason = ambiguous_product_plan_reason_from_context(
+        {
+            "product_ambiguous_eligible": {
+                "product_ids": [1, 2],
+                "eligible_products": [{"product_id": 1}, {"product_id": 2}],
+            }
+        }
+    )
+    assert "No resolved shipment sales-model evidence" in reason
+
+
+def test_ambiguous_plan_reason_multi_global_pid() -> None:
+    reason = ambiguous_product_plan_reason_from_context(
+        {
+            "shipment_global_product_ids": [10, 20],
+            "product_ambiguous_eligible": {
+                "product_ids": [10, 20],
+                "eligible_products": [{"product_id": 10}, {"product_id": 20}],
+            },
+        }
+    )
+    assert "multiple products" in reason.lower()

@@ -52,6 +52,7 @@ from app.services.imports.dsi_steward_geo_catalog import (
     create_region_source_token_alias_sync,
 )
 from app.services.imports.dsi_bulk_provisional_customers_sync import run_dsi_bulk_provisional_customers_sync
+from app.services.imports.dsi_bulk_ignore_sync import run_dsi_bulk_ignore_sync
 from app.services.imports.dsi_resolution_plan_apply_sync import run_dsi_resolution_plan_apply_sync
 from app.services.imports.dsi_steward_task_dispatch import (
     assert_dsi_steward_background_dispatch_allowed,
@@ -880,6 +881,27 @@ async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: Asyn
                 "code": "use_async_bulk_provisional",
             },
         )
+    if body.action == "ignore":
+
+        def _bulk_ignore(session: Session) -> dict[str, Any]:
+            return run_dsi_bulk_ignore_sync(
+                session,
+                job_id,
+                list(body.candidate_ids),
+                notes=body.notes,
+            )
+
+        batch = await db.run_sync(_bulk_ignore)
+        results = list(batch.get("results") or [])
+        ok_n = int(batch.get("applied") or 0)
+        return {
+            "import_job_id": job_id,
+            "action": body.action,
+            "applied": ok_n,
+            "failed": len(results) - ok_n,
+            "results": results,
+            "totals": _dsi_bulk_totals_from_rows(results),
+        }
     results: list[dict[str, Any]] = []
     for cid in body.candidate_ids:
         cand = await db.get(ImportEntityMappingCandidate, cid)
@@ -899,9 +921,7 @@ async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: Asyn
         tu = float(cand.total_units) if cand.total_units is not None else None
         trv = float(cand.total_reported_value) if cand.total_reported_value is not None else None
         try:
-            if body.action == "ignore":
-                out = await execute_ignore_dsi_candidate(db, cand, notes=body.notes)
-            elif body.action == "map_customer":
+            if body.action == "map_customer":
                 out = await execute_map_dsi_customer(
                     db,
                     cand,

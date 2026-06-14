@@ -176,6 +176,9 @@ export function DsiImportJobResolutionSection({
     setBulkMode,
     onInvalidate,
     onBulkClosed: focusWorkspaceToolbar,
+    onPlanRefresh: () => plan.refreshSuggestions(),
+    onEvictResolvedCandidates: plan.evictResolvedCandidates,
+    onShrinkPlanScope: plan.shrinkPlanScope,
     onApplyPlanFallback: async ({ action, regionId, channelId }) => {
       if (action === 'set_plan_fallback_channel') {
         plan.setPlanChannelId(channelId);

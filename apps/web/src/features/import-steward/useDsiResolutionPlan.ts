@@ -14,7 +14,7 @@ import { evictCandidatesFromResolutionPlanCache, removeCandidatesFromDsiCache } 
 import { DSI_STEWARD_CONFIG, invalidateDsiCatalogQueries, invalidateDsiImportJobStewardQueries, invalidateDsiStewardTabCounts } from './dsiSteward.config';
 import type { DsiCatalogOpt, DsiPlanRowOverride, DsiUnresolvedGeoRowDto, PlanApplyFeedback } from './dsiSteward.types';
 import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
-import { nextPlanScopeCandidateIds } from './dsiPlanScope';
+import { nextPlanScopeCandidateIds, shrinkPlanScopeCandidateIds } from './dsiPlanScope';
 import { summarizeApplyAllReadyProvisional } from './dsiResolutionPlanDisplay';
 import { waitForDsiStewardBulkIdle } from './waitForDsiStewardBulkIdle';
 
@@ -93,6 +93,10 @@ export function useDsiResolutionPlan({
     setPlanScopeCandidateIds((prev) => nextPlanScopeCandidateIds(prev, current));
   }, [pageCandidateIds]);
 
+  const shrinkPlanScope = useCallback((removedIds: number[]) => {
+    setPlanScopeCandidateIds((prev) => shrinkPlanScopeCandidateIds(prev, removedIds));
+  }, []);
+
   const candidateIdsKey = useMemo(
     () => [...planScopeCandidateIds].sort((a, b) => a - b).join(','),
     [planScopeCandidateIds]
@@ -136,6 +140,8 @@ export function useDsiResolutionPlan({
       }
     },
   });
+
+  const refreshSuggestions = useCallback(() => suggestionsQuery.refetch(), [suggestionsQuery]);
 
   useEffect(() => {
     if (!suggestionsQuery.data) return;
@@ -446,5 +452,7 @@ export function useDsiResolutionPlan({
     handleOpenSuggestionRow,
     invalidateGeoAndPlan,
     evictResolvedCandidates,
+    shrinkPlanScope,
+    refreshSuggestions,
   };
 }

@@ -361,6 +361,36 @@ _LIFECYCLE_INELIGIBLE_EXACT = frozenset(
 )
 
 
+def _product_evidence_date_outside_launch_retire_window(
+    p: ProductResolutionProductRow | DimProduct,
+    evidence_date: date | None,
+) -> bool:
+    """True when ``evidence_date`` is set and falls outside launch–retire bounds (inclusive window)."""
+    if evidence_date is None:
+        return False
+    rd = getattr(p, "retired_date", None)
+    if rd is not None and rd < evidence_date:
+        return True
+    ld = getattr(p, "launch_date", None)
+    if ld is not None and ld > evidence_date:
+        return True
+    return False
+
+
+def _product_eligible_for_shipment_sku_item_code_anchor(
+    p: ProductResolutionProductRow | DimProduct,
+    evidence_date: date | None,
+) -> bool:
+    """Shipment-only SKU-exact tier: in-window evidence overrides DSI lifecycle / is_active rejection.
+
+    Default OFF — only consulted when ``_resolve_product`` receives
+    ``shipment_sku_item_code_anchor_date``. Does not alter DSI validate/apply eligibility.
+    """
+    if evidence_date is None:
+        return False
+    return not _product_evidence_date_outside_launch_retire_window(p, evidence_date)
+
+
 def _product_eligible_for_dsi_auto(
     p: ProductResolutionProductRow | DimProduct,
     evidence_date: date | None,
@@ -387,13 +417,8 @@ def _product_eligible_for_dsi_auto(
             for frag in ("cancel", "discard", "retire", "obsolete", "inactive", "disabled", "discontinued"):
                 if frag in ls:
                     return False
-        if evidence_date is not None:
-            rd = getattr(p, "retired_date", None)
-            if rd is not None and rd < evidence_date:
-                return False
-            ld = getattr(p, "launch_date", None)
-            if ld is not None and ld > evidence_date:
-                return False
+        if _product_evidence_date_outside_launch_retire_window(p, evidence_date):
+            return False
     return True
 
 
@@ -794,6 +819,7 @@ def _resolve_product(
     evidence_date: date | None = None,
     *,
     relax_inactive_dim_product_for_historical_dsi: bool = False,
+    shipment_sku_item_code_anchor_date: date | None = None,
     db: Session | None = None,
     distributor_id: int | None = None,
     corr_cache: Any = None,
@@ -861,13 +887,22 @@ def _resolve_product(
     pid = idx.sku_to_id.get(key)
     if pid is not None:
         p0 = idx.products_by_id.get(int(pid))
-        if p0 is not None and _product_eligible_for_dsi_auto(
-            p0,
-            evidence_date,
-            relax_inactive_for_historical_dsi=relax_inactive_dim_product_for_historical_dsi,
-        ):
-            return int(pid), None, "product_resolved_sku", None
         if p0 is not None:
+            sku_eligible = _product_eligible_for_dsi_auto(
+                p0,
+                evidence_date,
+                relax_inactive_for_historical_dsi=relax_inactive_dim_product_for_historical_dsi,
+            )
+            if (
+                not sku_eligible
+                and shipment_sku_item_code_anchor_date is not None
+                and _product_eligible_for_shipment_sku_item_code_anchor(
+                    p0, shipment_sku_item_code_anchor_date
+                )
+            ):
+                sku_eligible = True
+            if sku_eligible:
+                return int(pid), None, "product_resolved_sku", None
             accumulated.inactive_hits.extend(_inactive_snapshots("sku", (pid,)))
 
     tier_maps: tuple[tuple[dict[str, tuple[int, ...]], str], ...] = (
@@ -886,8 +921,19 @@ def _resolve_product(
         "ean": "product_resolved_ean",
         "upc": "product_resolved_upc",
     }
+    from app.services.imports.dsi_product_token_identity import product_identity_lookup_keys
+
+    identity_keys = product_identity_lookup_keys(raw)
     for mmap, tier in tier_maps:
-        ids = mmap.get(key)
+        if tier == "sales_model_name":
+            tier_ids: set[int] = set()
+            for lk in identity_keys:
+                found = mmap.get(lk)
+                if found:
+                    tier_ids.update(int(x) for x in found)
+            ids = tuple(sorted(tier_ids)) if tier_ids else None
+        else:
+            ids = mmap.get(key)
         if not ids:
             continue
         elig = _eligible_ids(ids)
@@ -1766,6 +1812,13 @@ def process_distributor_sales_inventory(
         db, lambda: ShipmentCorroborationCache.load(db, _evidence_months)
     )
     _upfront_progress("shipment_corroboration")
+
+    from app.services.imports.dsi_shipment_corroboration import build_global_product_identity_index
+
+    global_product_identity = _dsi_session_read_with_transient_retry(
+        db, build_global_product_identity_index
+    )
+    _upfront_progress("global_product_identity")
 
     # Pre-load distributor + customer master data (eliminates 4–6 per-row DB round-trips)
     res_cache = _build_resolution_cache(db, source_def_id, on_sub_phase=_upfront_progress)
@@ -2668,6 +2721,36 @@ def process_distributor_sales_inventory(
                 "summary": "Resolved shipment evidence lines in the same calendar month may corroborate this token (no auto-resolve).",
             }
             ctx.setdefault("corroboration_markers", []).append("shipment_evidence_product")
+        if etype == "product_identifier":
+            from app.services.imports.dsi_product_shipment_tiebreak import enrich_product_global_identity_context
+
+            raw_sample = (data.get("samples") or [nkey_clean])[0]
+            raw_for_identity = str(raw_sample) if raw_sample is not None else str(nkey_clean)
+            elig_for_global: list[int] = []
+            amb_ctx = ctx.get("product_ambiguous_eligible")
+            if isinstance(amb_ctx, dict):
+                for ep in amb_ctx.get("eligible_products") or []:
+                    if isinstance(ep, dict):
+                        try:
+                            v = int(ep.get("product_id"))
+                            if v > 0:
+                                elig_for_global.append(v)
+                        except (TypeError, ValueError):
+                            pass
+                if not elig_for_global:
+                    for x in amb_ctx.get("product_ids") or []:
+                        try:
+                            v = int(x)
+                            if v > 0:
+                                elig_for_global.append(v)
+                        except (TypeError, ValueError):
+                            pass
+            enrich_product_global_identity_context(
+                ctx,
+                raw_for_identity,
+                global_product_identity=global_product_identity,
+                eligible_product_ids=elig_for_global or None,
+            )
         if etype == "customer_dealer_token" and data.get("shipment_cust_corr_hit"):
             ctx["shipment_evidence_corroboration"] = {
                 "best_match_count": int(data.get("shipment_cust_corr_best") or 0),

@@ -32,6 +32,9 @@ export function useDsiBulkSteward({
   onBulkClosed,
   onApplyPlanFallback,
   applySuggestedRegion,
+  onPlanRefresh,
+  onEvictResolvedCandidates,
+  onShrinkPlanScope,
 }: {
   importJobId: number;
   selectedIds: number[];
@@ -47,6 +50,9 @@ export function useDsiBulkSteward({
     channelId: string;
   }) => Promise<void>;
   applySuggestedRegion?: (args: { candidateIds: number[] }) => Promise<void>;
+  onPlanRefresh?: () => void | Promise<void>;
+  onEvictResolvedCandidates?: (candidateIds: number[]) => void;
+  onShrinkPlanScope?: (candidateIds: number[]) => void;
 }) {
   const qc = useQueryClient();
 
@@ -248,6 +254,7 @@ export function useDsiBulkSteward({
     onMutate: async () => {
       if (
         bulkAction === 'create_provisional_customer' ||
+        bulkAction === 'ignore' ||
         bulkAction === 'set_plan_fallback_region' ||
         bulkAction === 'set_plan_fallback_channel' ||
         bulkAction === 'apply_suggested_region'
@@ -268,6 +275,10 @@ export function useDsiBulkSteward({
       }
     },
     onSuccess: (data) => {
+      const appliedIds = (data.results || [])
+        .filter((r) => r.ok === true && r.candidate_id != null)
+        .map((r) => Number(r.candidate_id))
+        .filter((id) => Number.isFinite(id));
       const planOnly =
         bulkAction === 'set_plan_fallback_region' ||
         bulkAction === 'set_plan_fallback_channel' ||
@@ -286,6 +297,21 @@ export function useDsiBulkSteward({
       setSelectedIds([]);
       invalidateDsiImportJobStewardQueries(qc, importJobId, { includeImportJobsList: true });
       onInvalidate();
+      if (appliedIds.length > 0) {
+        onShrinkPlanScope?.(appliedIds);
+        if (bulkAction === 'ignore') {
+          onEvictResolvedCandidates?.(appliedIds);
+        }
+      }
+      if (
+        !planOnly &&
+        (bulkAction === 'ignore' ||
+          bulkAction === 'map_customer' ||
+          bulkAction === 'map_distributor' ||
+          bulkAction === 'resolve_product')
+      ) {
+        void Promise.resolve(onPlanRefresh?.()).catch(() => {});
+      }
       onBulkClosed?.();
     },
   });

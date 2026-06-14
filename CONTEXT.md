@@ -1,5 +1,37 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 14, 2026 (shipment SKU launch-window anchor for corroboration) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local uncommitted).
+- **Fix:** Shipment evidence `resolve_product_for_evidence` now coalesces logistics dates and passes `evidence_date` into `_resolve_product`. New additive default-OFF `shipment_sku_item_code_anchor_date` on SKU-exact tier only: in-window evidence overrides DSI lifecycle/is_active rejection via `_product_eligible_for_shipment_sku_item_code_anchor` — recovered as `resolved_unique` + `product_id` for corroboration anchors. DSI validate path unchanged (no anchor kwarg).
+- **Tests:** `test_shipment_evidence_product_resolution.py` (4 new) + `test_dsi_product_resolution.py` + `test_product_resolution_index_plain.py` — **24 pass**.
+- **Proven vs unproven:** Unit-tested only; **unproven live** — re-resolve existing `inactive_only` shipment lines then revalidate affected DSI job (documented sequence; not run against cip/Supabase).
+- **Alembic:** unchanged.
+- **Next:** User-directed commit; optional shipment job re-resolve + DSI revalidate soak.
+
+## CURRENT STATE — Jun 14, 2026 (DSI product identity + tie-break root-cause fix) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local uncommitted).
+- **Shipped:** Full plan — token derivation (`dsi_product_token_identity.py`), tie-break scope-conflict fall-through to global identity, validate-time global explainability on product candidates, structured ambiguous plan reasons, steward UX (plan-ready banner, bulk plan refetch + scope shrink).
+- **API:** `try_shipment_tiebreak_product_id` no longer aborts on multi-scope conflict when global singleton exists; `GlobalProductIdentityIndex` + corroboration use derived lookup keys; validate loads `GlobalProductIdentityIndex` once and persists `product_identity_lookup_keys` / `shipment_global_product_ids` / signal-only `shipment_product_tiebreak`.
+- **Web:** `dsi-mapping-steward-panel` shows plan-ready product banner; `useDsiBulkSteward` refetches suggestions + shrinks plan scope after bulk ignore/map/resolve.
+- **Tests:** `test_dsi_product_token_identity.py` (4), `test_dsi_product_shipment_tiebreak.py` (+scope-conflict/global + plan reasons), `test_dsi_product_resolution.py` regression — **35 pass** API; `dsiPlanScope.test.ts` **6 pass** web.
+- **Job #43 verify script:** 86/86 global-singleton ambiguous still plan-ready; derivation lift 8 global hits on 27 candidates with derived keys; scope-conflict synthetic passes; item_code index expansion **deferred**.
+- **Proven vs unproven:** Unit + Supabase read-only script; **unproven live** — job #43 revalidate (populate new context fields), steward UI soak after API restart.
+- **Alembic:** `20260607_0047` unchanged.
+- **Next:** Restart API; revalidate job #43 to populate explainability context; soak products tab plan banner + bulk ignore suggestion refresh.
+
+## CURRENT STATE — Jun 14, 2026 (DSI bulk ignore — single-commit batch writer) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local uncommitted).
+- **Fix:** `dsi-steward-bulk-apply` with `action=ignore` now delegates to `run_dsi_bulk_ignore_sync` (one `commit_session_with_transient_retry` per batch) instead of per-row `execute_ignore_dsi_candidate` + `await db.commit()`. Enriched batch results with `entity_type` + row stats for API totals parity.
+- **Web:** `useDsiBulkSteward` skips optimistic cache patch for bulk ignore (same as provisional) — avoids plan-scope re-render churn during apply.
+- **Tests:** `test_dsi_bulk_ignore_sync.py` (3), `test_dsi_bulk_steward.py` endpoint wiring test — **14 pass** focused.
+- **Proven vs unproven:** Wired + unit-tested; **unproven live** — re-run job #43 bulk ignore 100 products after API restart.
+- **Note:** Prior failed 5-min attempt may have **partially ignored** some candidates (per-row commits); refresh grid/tab counts before re-selecting.
+- **Alembic:** `20260607_0047` unchanged.
+- **Next:** Restart API; soak bulk ignore on job #43 products tab; same per-row pattern remains for bulk map/resolve (follow-up).
+
 ## CURRENT STATE — Jun 11, 2026 (session handoff — DSI steward UX + branch sync) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` @ `02f8b85` (pushed; in sync with `origin`)

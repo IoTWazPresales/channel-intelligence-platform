@@ -218,15 +218,19 @@ class ShipmentCorroborationCache:
                 "distinct_ids_scope": "distributor_specific",
             }
 
-        # raw-token path — needs _product_token_key; lazy import to break circular
-        from app.services.imports.distributor_sales_inventory import _product_token_key
+        # raw-token path — try full token + derived sales-model keys
+        from app.services.imports.dsi_product_token_identity import product_identity_lookup_keys
 
-        pk = _product_token_key(raw_product_token)
-        if not pk:
+        lookup_keys = product_identity_lookup_keys(raw_product_token)
+        if not lookup_keys:
             return None
 
+        def _entry_matches_keys(entry: tuple[int, str, str, str, str]) -> bool:
+            fields = (entry[1], entry[2], entry[3], entry[4])
+            return any(k in fields for k in lookup_keys)
+
         # Distributor-specific
-        dist_tok_matches = [e for e in dist_entries if pk in (e[1], e[2], e[3], e[4])]
+        dist_tok_matches = [e for e in dist_entries if _entry_matches_keys(e)]
         if dist_tok_matches:
             dist_ids = sorted({e[0] for e in dist_tok_matches})[:32]
             return {
@@ -241,7 +245,7 @@ class ShipmentCorroborationCache:
 
         # Cross-distributor fallback
         cross_entries = self._prod_cross.get(em, [])
-        cross_tok_matches = [e for e in cross_entries if pk in (e[1], e[2], e[3], e[4])]
+        cross_tok_matches = [e for e in cross_entries if _entry_matches_keys(e)]
         if not cross_tok_matches:
             return None
         cross_ids = sorted({e[0] for e in cross_tok_matches})[:32]
@@ -355,12 +359,15 @@ class GlobalProductIdentityIndex:
         return cls(frozen)
 
     def distinct_product_ids_for_token(self, raw_token: str | None) -> tuple[int, ...]:
-        from app.services.imports.distributor_sales_inventory import _product_token_key
+        from app.services.imports.dsi_product_token_identity import product_identity_lookup_keys
 
-        tk = _product_token_key(raw_token)
-        if not tk:
-            return ()
-        return self._by_token.get(tk, ())
+        all_pids: set[int] = set()
+        for tk in product_identity_lookup_keys(raw_token):
+            if not tk:
+                continue
+            for pid in self._by_token.get(tk, ()):
+                all_pids.add(int(pid))
+        return tuple(sorted(all_pids))
 
 
 def build_global_product_identity_index(session: Session) -> GlobalProductIdentityIndex:
@@ -423,16 +430,21 @@ def shipment_corroboration_for_product(
             "distinct_ids_scope": "distributor_specific",
         }
 
-    from app.services.imports.distributor_sales_inventory import _product_token_key
+    from app.services.imports.dsi_product_token_identity import product_identity_lookup_keys
 
-    pk = _product_token_key(raw_product_token)
-    if not pk:
+    lookup_keys = product_identity_lookup_keys(raw_product_token)
+    if not lookup_keys:
         return None
     token_match = or_(
-        func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.item_code, ""))) == literal(pk),
-        func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.ean_code, ""))) == literal(pk),
-        func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.upc_code, ""))) == literal(pk),
-        func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.sales_model_name, ""))) == literal(pk),
+        *[
+            or_(
+                func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.item_code, ""))) == literal(k),
+                func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.ean_code, ""))) == literal(k),
+                func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.upc_code, ""))) == literal(k),
+                func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.sales_model_name, ""))) == literal(k),
+            )
+            for k in lookup_keys
+        ]
     )
     mode = "raw_product_token_tiers"
 

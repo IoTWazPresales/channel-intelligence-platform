@@ -3,6 +3,7 @@
 import {
   Alert,
   Box,
+  Button,
   Chip,
   Dialog,
   DialogActions,
@@ -43,6 +44,7 @@ import {
   type DsiStewardRowAction,
 } from './dsiStewardCacheUpdates';
 import { DsiPendingButton } from './DsiPendingButton';
+import { planTargetSummary } from './dsiResolutionPlanDisplay';
 import {
   DsiEligibleProductPicker,
   type DsiEligibleProductSnapshot,
@@ -177,6 +179,7 @@ export function DsiMappingStewardPanel({
   const [pickCustomerId, setPickCustomerId] = useState<number | ''>('');
   const [pickDistributorId, setPickDistributorId] = useState<number | ''>('');
   const [pickProductId, setPickProductId] = useState<number | ''>('');
+  const [showAlternateProductPicker, setShowAlternateProductPicker] = useState(false);
 
   const [displayName, setDisplayName] = useState('');
   const [regionId, setRegionId] = useState<number | ''>('');
@@ -512,6 +515,20 @@ export function DsiMappingStewardPanel({
   const rowActionsBlocked = isDsiStewardRowActionBlocked(candidate.status);
   const stewardActionsDisabled = isTerminal || rowActionsBlocked || actionBusy;
   const planDuplicateBlocked = planRow?.duplicate_review_required === true;
+  const planProductReady =
+    candidate.entity_type === 'product_identifier' &&
+    planRow?.ready === true &&
+    planRow?.suggested_action === 'resolve_product' &&
+    planRow?.suggested_target_id != null &&
+    planRow.suggested_target_id !== '';
+  useEffect(() => {
+    if (!planProductReady) return;
+    const tid = Number(planRow?.suggested_target_id);
+    if (Number.isFinite(tid) && tid > 0) {
+      setPickProductId(tid);
+      setShowAlternateProductPicker(false);
+    }
+  }, [candidate.id, planProductReady, planRow?.suggested_target_id]);
   const dupPeerHintsExcludingSelf = useMemo(() => {
     const own = (candidate.normalized_key || '').trim();
     return dupHints.filter((h) => h.normalized_key.trim() !== own);
@@ -1286,7 +1303,36 @@ export function DsiMappingStewardPanel({
           {typeof ctx?.product_match_summary === 'string' && ctx.product_match_summary.trim() ? (
             <Alert severity="info" data-testid="dsi-product-match-summary">
               <Typography variant="body2">{String(ctx.product_match_summary)}</Typography>
-              {ctx.product_match_status === 'ambiguous_eligible' && Array.isArray(ctx.product_ambiguous_eligible?.eligible_products) ? (
+              {planProductReady ? (
+                <Box sx={{ mt: 1 }} data-testid="dsi-product-plan-ready-banner">
+                  <Alert severity="success" variant="outlined" sx={{ mb: 1 }}>
+                    <Typography variant="body2">
+                      <strong>Resolution plan ready:</strong>{' '}
+                      {planTargetSummary(
+                        'resolve_product',
+                        planRow?.suggested_target_id,
+                        candidate,
+                        planRow ?? undefined
+                      )}
+                    </Typography>
+                    {typeof planRow?.reason === 'string' && planRow.reason.trim() ? (
+                      <Typography variant="caption" component="div" sx={{ mt: 0.5 }}>
+                        {planRow.reason}
+                      </Typography>
+                    ) : null}
+                  </Alert>
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => setShowAlternateProductPicker((v) => !v)}
+                  >
+                    {showAlternateProductPicker ? 'Hide alternate products' : 'Choose different product'}
+                  </Button>
+                </Box>
+              ) : null}
+              {ctx.product_match_status === 'ambiguous_eligible' &&
+              Array.isArray(ctx.product_ambiguous_eligible?.eligible_products) &&
+              (showAlternateProductPicker || !planProductReady) ? (
                 <Box sx={{ mt: 1 }}>
                   <DsiEligibleProductPicker
                     tier={String((ctx.product_ambiguous_eligible as Record<string, unknown>).tier ?? '')}

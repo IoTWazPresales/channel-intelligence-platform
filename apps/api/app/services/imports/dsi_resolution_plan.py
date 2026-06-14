@@ -599,6 +599,7 @@ def plan_dsi_candidate_sync(
                         if v > 0:
                             elig_ids.append(v)
                 from app.services.imports.dsi_product_shipment_tiebreak import (
+                    ambiguous_product_plan_reason_from_context,
                     evidence_date_from_month,
                     parse_candidate_shipment_evidence,
                     try_shipment_tiebreak_product_id,
@@ -691,7 +692,7 @@ def plan_dsi_candidate_sync(
                 "plan_status": "needs_review",
                 "ready": False,
                 "confidence": 0.2,
-                "reason": "Multiple eligible Product Master matches — ambiguous; steward must choose product",
+                "reason": ambiguous_product_plan_reason_from_context(ctx),
                 "suggested_target_id": None,
                 "needs_defaults": False,
                 "needs_confirm_suspicious_distributor": False,

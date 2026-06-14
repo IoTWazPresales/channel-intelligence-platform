@@ -7,3 +7,12 @@ export function nextPlanScopeCandidateIds(prev: number[], current: number[]): nu
   if (isOptimisticSubsetRemoval) return prev;
   return current;
 }
+
+/** Remove steward-resolved or ignored ids from frozen plan scope after bulk apply. */
+export function shrinkPlanScopeCandidateIds(prev: number[], removedIds: number[]): number[] {
+  if (prev.length === 0 || removedIds.length === 0) return prev;
+  const drop = new Set(removedIds.filter((id) => Number.isFinite(id)));
+  if (drop.size === 0) return prev;
+  const next = prev.filter((id) => !drop.has(id));
+  return next.length > 0 ? next : prev;
+}

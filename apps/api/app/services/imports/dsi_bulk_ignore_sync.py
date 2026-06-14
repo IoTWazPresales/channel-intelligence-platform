@@ -33,13 +33,43 @@ def run_dsi_bulk_ignore_sync(
             on_progress(idx + 1, total)
         cand = session.get(ImportEntityMappingCandidate, int(cid))
         if cand is None or cand.import_job_id != int(job_id):
-            results.append({"candidate_id": int(cid), "ok": False, "detail": "Candidate not found for this job"})
+            results.append(
+                {
+                    "candidate_id": int(cid),
+                    "ok": False,
+                    "detail": "Candidate not found for this job",
+                    "row_count": None,
+                    "total_units": None,
+                    "total_reported_value": None,
+                }
+            )
             continue
+        rc = cand.row_count
+        tu = float(cand.total_units) if cand.total_units is not None else None
+        trv = float(cand.total_reported_value) if cand.total_reported_value is not None else None
         if cand.entity_type not in {"customer_dealer_token", "distributor_token", "product_identifier"}:
-            results.append({"candidate_id": int(cid), "ok": False, "detail": "Unsupported entity_type for ignore"})
+            results.append(
+                {
+                    "candidate_id": int(cid),
+                    "ok": False,
+                    "detail": "Unsupported entity_type for ignore",
+                    "row_count": rc,
+                    "total_units": tu,
+                    "total_reported_value": trv,
+                }
+            )
             continue
         if _is_dsi_steward_terminal_status(cand.status):
-            results.append({"candidate_id": int(cid), "ok": False, "detail": "Candidate already terminal"})
+            results.append(
+                {
+                    "candidate_id": int(cid),
+                    "ok": False,
+                    "detail": "Candidate already terminal",
+                    "row_count": rc,
+                    "total_units": tu,
+                    "total_reported_value": trv,
+                }
+            )
             continue
         cand.status = "ignored"
         if notes:
@@ -47,7 +77,17 @@ def run_dsi_bulk_ignore_sync(
             ctx["steward_ignore_notes"] = notes[:2000]
             cand.context = ctx
         pending_commit += 1
-        results.append({"candidate_id": int(cid), "ok": True, "result": {"ok": True, "candidate_id": cand.id}})
+        results.append(
+            {
+                "candidate_id": int(cid),
+                "ok": True,
+                "entity_type": cand.entity_type,
+                "result": {"ok": True, "candidate_id": cand.id, "status": cand.status},
+                "row_count": rc,
+                "total_units": tu,
+                "total_reported_value": trv,
+            }
+        )
 
     if pending_commit > 0:
         commit_session_with_transient_retry(session)
