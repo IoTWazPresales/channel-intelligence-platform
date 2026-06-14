@@ -1,5 +1,22 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 11, 2026 (session handoff — DSI steward UX + branch sync) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` @ `02f8b85` (pushed; in sync with `origin`)
+- **Goal:** DSI steward workspace UX (tab candidates + wizard routing) + prior branch fixes now on GitHub.
+- **What shipped / found:**
+  - **Slice A (`be8eba0`):** Entity-scoped candidate placeholder (`keepDsiCandidatesPageDataIfSameEntity`); tab-aware Clear filters (`defaultDsiStewardFiltersForTab`).
+  - **Slice B (`a0a558e`):** `dsiImportWizardRouting.ts` — stage+status wizard routing; `completed_with_errors` opens steward; PM-style guarded step-sync. PM/shipment revisit untouched.
+  - **Also on branch (pushed):** `c2ce8e6` pipeline dispatch claim; `9264cb4` plain `ProductResolutionIndex`; `5fbbfaf` plain `DSIResolutionCache`.
+  - **Docs (`02f8b85`):** CONTEXT memory-palace entry for steward UX.
+- **Tests:** `dsiEntityTabs.test.ts` (7), `dsiImportWizardRouting.test.ts` (8), `page.test.tsx` (26) — all pass (web, unit). API dispatch-claim suite 21+15 pass (prior session).
+- **Proven vs unproven:**
+  - **Wired + unit-tested:** steward tab/clear/routing fixes; dispatch claim; ORM-detach caches.
+  - **Unproven live:** job #43 manual steward tab soak; `?job=` revisit for `completed_with_errors`; full validate soak post-ORM/dispatch fixes.
+- **Alembic:** `20260607_0047` on local `cip` (unchanged this session).
+- **Next:** Manual UI soak job #43; restart API+worker before validate soak; cloud/local `git pull` on `fix/shipment-steward-performance`.
+- **Blockers:** None for git handoff. Ops restart required before claiming validate hang fixes proven live.
+
 ## CURRENT STATE — Jun 11, 2026 (DSI steward workspace UX — tab candidates + wizard routing) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` @ `a0a558e` (pushed).
