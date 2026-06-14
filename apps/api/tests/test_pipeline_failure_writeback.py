@@ -60,19 +60,10 @@ def test_prepare_dsi_pipeline_dispatch_clears_stale_error_fields() -> None:
         completed_at=datetime.now(timezone.utc),
     )
 
-    mock_session = MagicMock()
-    mock_session.get.return_value = job
-    mock_session.__enter__ = MagicMock(return_value=mock_session)
-    mock_session.__exit__ = MagicMock(return_value=False)
-
-    with (
-        patch("app.api.v1.endpoints.imports.SessionLocal", return_value=mock_session),
-        patch("app.api.v1.endpoints.imports._raise_if_import_pipeline_busy"),
-        patch("app.services.imports.import_job_background_metadata.persist_pipeline_queued_at"),
-    ):
+    with patch(
+        "app.api.v1.endpoints.imports.claim_import_pipeline_dispatch",
+        return_value=job,
+    ) as mock_claim:
         _prepare_dsi_pipeline_dispatch(12)
 
-    assert job.status == "running"
-    assert job.error_summary is None
-    assert job.completed_at is None
-    mock_session.commit.assert_called_once()
+    mock_claim.assert_called_once_with(12, import_mode="validate")

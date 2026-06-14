@@ -102,68 +102,15 @@ def _enqueue_import_pipeline_job(job_id: int, *, log_label: str, in_process_thre
     )
 
 
-# A DSI validate worker writes ``dsi_validate_checkpoint_at`` on every upfront sub-phase and every
-# staging chunk. A checkpoint newer than this proves a live worker even when the Celery result
-# backend has lost the task state — so a duplicate dispatch is still rejected. An older (stale)
-# checkpoint does not block: the worker is presumed dead and the stale-task reaper clears the slot.
-_FRESH_DSI_CHECKPOINT_SECONDS = 120
-
-
-def _dsi_validate_checkpoint_age_seconds(job: ImportJob) -> float | None:
-    """Seconds since the job's last durable DSI validate checkpoint, or None if absent/unparseable."""
-    from datetime import datetime, timezone
-
-    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
-    raw = meta.get("dsi_validate_checkpoint_at")
-    if not raw:
-        return None
-    try:
-        ts = datetime.fromisoformat(str(raw))
-    except (ValueError, TypeError):
-        return None
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=timezone.utc)
-    return (datetime.now(timezone.utc) - ts).total_seconds()
-
-
-def _raise_if_import_pipeline_busy(job: ImportJob) -> None:
-    """Reject a second validate/revalidate while pipeline work is still active.
-
-    Active is proven by either an active Celery state or — when the result backend has dropped the
-    task state — a DSI validate checkpoint written within ``_FRESH_DSI_CHECKPOINT_SECONDS``.
-    """
-    from app.services.imports.import_job_background_metadata import (
-        ACTIVE_CELERY_STATES,
-        pipeline_dispatch_conflict_message,
-        read_main_celery_state,
-    )
-
-    if (job.status or "").strip().lower() != "running":
-        return
-    state = read_main_celery_state(job)
-    if state is not None and state in ACTIVE_CELERY_STATES:
-        raise HTTPException(status_code=409, detail=pipeline_dispatch_conflict_message(int(job.id)))
-    if state is None:
-        age = _dsi_validate_checkpoint_age_seconds(job)
-        if age is not None and age < _FRESH_DSI_CHECKPOINT_SECONDS:
-            raise HTTPException(status_code=409, detail=pipeline_dispatch_conflict_message(int(job.id)))
+from app.services.imports.import_pipeline_dispatch_claim import (
+    claim_import_pipeline_dispatch,
+    raise_if_import_pipeline_busy as _raise_if_import_pipeline_busy,
+)
 
 
 def _prepare_dsi_pipeline_dispatch(job_id: int) -> None:
-    """Mark job running before broker dispatch so progress/background UI stay accurate."""
-    from app.services.imports.import_job_background_metadata import persist_pipeline_queued_at
-
-    with SessionLocal() as sync_db:
-        j = sync_db.get(ImportJob, job_id)
-        if j is None:
-            raise HTTPException(status_code=404, detail="Import job not found")
-        _raise_if_import_pipeline_busy(j)
-        j.import_mode = "validate"
-        j.status = "running"
-        j.error_summary = None
-        j.completed_at = None
-        persist_pipeline_queued_at(sync_db, j)
-        sync_db.commit()
+    """Mark job running and atomically claim pipeline dispatch before broker enqueue."""
+    claim_import_pipeline_dispatch(job_id, import_mode="validate")
 
 
 def _dispatch_dsi_apply(job_id: int) -> tuple[bool, str | None]:
@@ -884,6 +831,8 @@ async def post_retry_import_job(job_id: int, db: AsyncSession = Depends(get_db))
     def _work() -> dict[str, Any]:
         with SessionLocal() as session:
             prepare_import_job_retry_sync(session, job_id)
+            session.commit()
+        claim_import_pipeline_dispatch(job_id)
         dispatched, task_id = _enqueue_import_pipeline_job(
             job_id,
             log_label="Import job retry",
@@ -963,12 +912,7 @@ async def post_shipment_validate(job_id: int, db: AsyncSession = Depends(get_db)
     if gate:
         raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
 
-    with SessionLocal() as sync_db:
-        j = sync_db.get(ImportJob, job_id)
-        if j is None:
-            raise HTTPException(status_code=404, detail="Job not found")
-        j.import_mode = "validate"
-        sync_db.commit()
+    claim_import_pipeline_dispatch(job_id, import_mode="validate")
 
     dispatched, shipment_task_id = _enqueue_import_pipeline_job(
         job_id,
@@ -1168,11 +1112,19 @@ async def post_dsi_apply(
 
 @router.post("/jobs/{job_id}/process")
 async def process_job(job_id: int):
-    dispatched, task_id = _enqueue_import_pipeline_job(
-        job_id,
-        log_label="process_job",
-        in_process_thread_name=f"import-process-{job_id}",
-    )
+    import asyncio
+
+    def _work() -> tuple[bool, str | None]:
+        claim_import_pipeline_dispatch(job_id)
+        return _enqueue_import_pipeline_job(
+            job_id,
+            log_label="process_job",
+            in_process_thread_name=f"import-process-{job_id}",
+        )
+
+    dispatched, task_id = await asyncio.to_thread(_work)
+    if dispatched and task_id:
+        _persist_pipeline_celery_task_id(job_id, task_id)
     return {"async": dispatched, "task_id": task_id, "job_id": job_id}
 
 

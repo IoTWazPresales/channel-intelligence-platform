@@ -1,5 +1,12 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 14, 2026 (import pipeline dispatch idempotency) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (uncommitted). **Do not push** until Warren approves.
+- **Fix:** `import_pipeline_dispatch_claim.py` — `SELECT … FOR UPDATE` claim + `pipeline_queued_at`/`pipeline_dispatch_claim` window blocks duplicate `imports.process_job` on all five enqueue paths (dsi-validate, revalidate, `/process`, shipment-validate, retry). Removed status-only early-return; active Celery OR fresh in-flight claim OR fresh DSI checkpoint blocks regardless of `job.status`. Terminal Celery self-heals stale slots.
+- **Tests:** `test_import_pipeline_dispatch_claim.py` (race + reclaim + busy), updated `test_import_pipeline_busy_guard.py`, `test_pipeline_failure_writeback.py` — **21 pass** focused; `test_dsi_job_progress` + `test_background_tasks` — **15 pass**.
+- **Next:** Job #43 soak with single dispatch; progress_at/reaper slice separate.
+
 ## CURRENT STATE — Jun 13, 2026 (DSI validate — plain ProductResolutionIndex) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (uncommitted). **Do not push** until Warren approves.

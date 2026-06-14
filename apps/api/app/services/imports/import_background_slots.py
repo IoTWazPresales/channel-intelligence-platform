@@ -175,7 +175,7 @@ _SLOTS_BY_KEY: dict[str, SlotDescriptor] = {s.slot_key: s for s in TASK_SLOTS}
 _TASK_META_KEYS: tuple[str, ...] = tuple(s.meta_key for s in TASK_SLOTS)
 
 # Non-slot background-timing keys cleared alongside slots on cancel/retry.
-_PIPELINE_TIMING_KEYS = ("pipeline_queued_at", "pipeline_started_at")
+_PIPELINE_TIMING_KEYS = ("pipeline_queued_at", "pipeline_started_at", "pipeline_dispatch_claim")
 
 
 def slot_meta_keys() -> tuple[str, ...]:
