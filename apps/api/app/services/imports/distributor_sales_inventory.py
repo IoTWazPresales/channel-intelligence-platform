@@ -362,7 +362,7 @@ _LIFECYCLE_INELIGIBLE_EXACT = frozenset(
 
 
 def _product_eligible_for_dsi_auto(
-    p: DimProduct,
+    p: ProductResolutionProductRow | DimProduct,
     evidence_date: date | None,
     *,
     relax_inactive_for_historical_dsi: bool = False,
@@ -397,19 +397,19 @@ def _product_eligible_for_dsi_auto(
     return True
 
 
-def _product_snapshot_for_dsi_context(p: DimProduct) -> dict[str, Any]:
+def _product_snapshot_for_dsi_context(p: ProductResolutionProductRow | DimProduct) -> dict[str, Any]:
     """Compact, JSON-safe row snapshot for mapping-queue / steward context."""
     ld = getattr(p, "launch_date", None)
     rd = getattr(p, "retired_date", None)
     return {
         "product_id": int(p.id),
-        "sku": (p.sku or "")[:128],
-        "part_number": (p.part_number or "")[:128] if p.part_number else None,
-        "sales_model_name": (p.sales_model_name or "")[:160] if p.sales_model_name else None,
-        "is_active": bool(p.is_active),
-        "lifecycle_status": (p.lifecycle_status or "")[:64] if p.lifecycle_status else None,
-        "launch_date": ld.isoformat() if ld else None,
-        "retired_date": rd.isoformat() if rd else None,
+        "sku": (getattr(p, "sku", None) or "")[:128],
+        "part_number": (getattr(p, "part_number", None) or "")[:128] or None,
+        "sales_model_name": (getattr(p, "sales_model_name", None) or "")[:160] or None,
+        "is_active": bool(getattr(p, "is_active", True)),
+        "lifecycle_status": (getattr(p, "lifecycle_status", None) or "")[:64] or None,
+        "launch_date": ld.isoformat() if isinstance(ld, date) else None,
+        "retired_date": rd.isoformat() if isinstance(rd, date) else None,
     }
 
 
@@ -450,6 +450,44 @@ def _multimap_from_pairs(pairs: list[tuple[str, int]]) -> dict[str, tuple[int, .
     return {k: tuple(sorted(set(v))) for k, v in buckets.items()}
 
 
+@dataclass(frozen=True, slots=True)
+class ProductResolutionProductRow:
+    """Detached Product Master identity row for in-memory resolution (DimProduct narrow load)."""
+
+    id: int
+    sku: str
+    part_number: str | None
+    sales_model_name: str | None
+    model_name: str | None
+    marketing_name: str | None
+    ean: str | None
+    upc: str | None
+    is_active: bool
+    lifecycle_status: str | None
+    launch_date: date | None
+    retired_date: date | None
+
+
+def _product_resolution_row_from_dim(p: DimProduct) -> ProductResolutionProductRow:
+    """Snapshot identity + eligibility columns at index build time (no Session attachment)."""
+    ld = getattr(p, "launch_date", None)
+    rd = getattr(p, "retired_date", None)
+    return ProductResolutionProductRow(
+        id=int(p.id),
+        sku=str(p.sku or ""),
+        part_number=str(p.part_number) if p.part_number else None,
+        sales_model_name=str(p.sales_model_name) if p.sales_model_name else None,
+        model_name=str(p.model_name) if p.model_name else None,
+        marketing_name=str(p.marketing_name) if p.marketing_name else None,
+        ean=str(p.ean) if p.ean else None,
+        upc=str(p.upc) if p.upc else None,
+        is_active=bool(getattr(p, "is_active", True)),
+        lifecycle_status=str(p.lifecycle_status) if getattr(p, "lifecycle_status", None) else None,
+        launch_date=ld if isinstance(ld, date) else None,
+        retired_date=rd if isinstance(rd, date) else None,
+    )
+
+
 @dataclass(frozen=True)
 class ProductResolutionIndex:
     """Precomputed DSI product identity lookups (DimProduct + ProductAlias)."""
@@ -462,7 +500,7 @@ class ProductResolutionIndex:
     ean_to_ids: dict[str, tuple[int, ...]]
     upc_to_ids: dict[str, tuple[int, ...]]
     alias_value_to_ids: dict[str, tuple[int, ...]]
-    products_by_id: dict[int, DimProduct]
+    products_by_id: dict[int, ProductResolutionProductRow]
     #: Token key → product_id for steward-approved import aliases (``confidence == "steward_approved"``).
     #: Applied before automatic tiers so explicit steward bindings survive inactive SKU collisions,
     #: ambiguous identity tiers, and historical (inactive) Product Master targets.

@@ -77,13 +77,16 @@ def _load_product_resolution_index_narrow(db: Session) -> "ProductResolutionInde
     from app.services.imports.distributor_sales_inventory import (
         ProductResolutionIndex,
         _multimap_from_pairs,
+        _product_resolution_row_from_dim,
         _product_token_key,
     )
 
     products = list(
         db.scalars(select(DimProduct).options(load_only(*_PRODUCT_LOAD_COLUMNS))).all()
     )
-    products_by_id: dict[int, DimProduct] = {int(p.id): p for p in products}
+    products_by_id: dict[int, ProductResolutionProductRow] = {
+        int(p.id): _product_resolution_row_from_dim(p) for p in products
+    }
     sku_to_id: dict[str, int] = {}
     part_pairs: list[tuple[str, int]] = []
     sm_pairs: list[tuple[str, int]] = []

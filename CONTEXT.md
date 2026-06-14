@@ -1,5 +1,13 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 13, 2026 (DSI validate — plain ProductResolutionIndex) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (uncommitted). **Do not push** until Warren approves.
+- **Fix:** `ProductResolutionIndex.products_by_id` now holds `ProductResolutionProductRow` frozen dataclasses (snapshot at `_load_product_resolution_index_narrow` via `_product_resolution_row_from_dim`). Eliminates `DetachedInstanceError` when held index outlives session/connection reset. `ShipmentCorroborationCache` + `GlobalProductIdentityIndex` were already plain tuples — no change.
+- **Tests:** `test_product_resolution_index_plain.py` + `test_dsi_product_resolution.py` + `test_product_resolution_standard.py` + `test_product_resolution_index_cache.py` + `test_dsi_resolution_cache_plain.py` — **27 pass** (post-fix run).
+- **Job #43 soak:** Not re-run end-to-end in this session (prior run stuck on upfront bulk alias load on Supabase). Restart API/worker on this commit before next validate.
+- **Next:** Commit slice; job #43 full validate + post-validate phase soak; local `cip` move optional.
+
 ## CURRENT STATE — Jun 13, 2026 (DSI validate — plain DSIResolutionCache, no ORM PK refresh) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` @ pushed.

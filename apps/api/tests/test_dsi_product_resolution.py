@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import date
-from types import SimpleNamespace
 
 from app.services.imports.distributor_sales_inventory import (
     ProductResolutionIndex,
+    ProductResolutionProductRow,
     _load_product_resolution_index,
     _product_eligible_for_dsi_auto,
     _resolve_product,
@@ -23,8 +23,8 @@ def _p(
     lifecycle_status: str | None = None,
     launch_date: date | None = None,
     retired_date: date | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
+) -> ProductResolutionProductRow:
+    return ProductResolutionProductRow(
         id=id_,
         sku=sku,
         part_number=part_number,
@@ -51,7 +51,7 @@ def _idx(
     upc_to_ids: dict[str, tuple[int, ...]] | None = None,
     alias_value_to_ids: dict[str, tuple[int, ...]] | None = None,
     steward_alias_by_key: dict[str, int] | None = None,
-    products_by_id: dict[int, SimpleNamespace] | None = None,
+    products_by_id: dict[int, ProductResolutionProductRow] | None = None,
 ) -> ProductResolutionIndex:
     sku_to_id = sku_to_id or {}
     part_number_to_ids = part_number_to_ids or {}
@@ -88,7 +88,7 @@ def _idx(
         ean_to_ids=ean_to_ids,
         upc_to_ids=upc_to_ids,
         alias_value_to_ids=alias_value_to_ids,
-        products_by_id=products_by_id,  # type: ignore[arg-type]
+        products_by_id=products_by_id,
         steward_alias_by_key=steward_alias_by_key,
     )
 
@@ -266,6 +266,9 @@ def test_retired_before_evidence_date_ineligible() -> None:
 
 def test_load_product_resolution_index_builds_maps() -> None:
     """Smoke: index builder maps ORM rows into lookup structures (session mocked)."""
+    from app.services.imports import product_resolution_index_cache as cache_mod
+
+    cache_mod.invalidate_product_resolution_index_cache()
 
     class _P:
         def __init__(self, id_: int, sku: str, sales_model_name: str | None = None):
@@ -315,4 +318,5 @@ def test_load_product_resolution_index_builds_maps() -> None:
     assert idx.sales_model_name_to_ids["model-x"] == (1,)
     assert idx.alias_value_to_ids["distro-code-z"] == (1,)
     assert idx.steward_alias_by_key.get("steward-tok") == 1
+    assert isinstance(idx.products_by_id[1], ProductResolutionProductRow)
     assert idx.products_by_id[1].sku == "SKU-MAIN"
