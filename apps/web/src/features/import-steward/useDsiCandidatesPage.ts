@@ -1,6 +1,6 @@
 'use client';
 
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { apiGet } from '@/lib/api';
@@ -12,6 +12,7 @@ import {
   type DsiMappingCandidatesPageResponse,
 } from './dsiCandidatesQuery';
 import type { DsiStewardCandidateFilterState } from './dsiStewardCandidateFilterLogic';
+import { keepDsiCandidatesPageDataIfSameEntity } from './dsiCandidatesPagePlaceholder';
 import { defaultDsiStewardCandidateFilterState } from './dsiStewardCandidateFilterLogic';
 
 export function useDsiCandidatesPage(
@@ -62,7 +63,8 @@ export function useDsiCandidatesPage(
     queryKey,
     enabled: queryEnabled,
     refetchOnWindowFocus: false,
-    placeholderData: keepPreviousData,
+    placeholderData: (previousData, previousQuery) =>
+      keepDsiCandidatesPageDataIfSameEntity(previousData, previousQuery, serverFilterSlice.entity),
     queryFn: ({ signal }) =>
       apiGet<DsiMappingCandidatesPageResponse>(
         buildDsiCandidatesListUrl(importJobId, skip, pageSize, stewardFilters),

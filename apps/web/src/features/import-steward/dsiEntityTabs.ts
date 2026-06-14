@@ -62,6 +62,22 @@ export function defaultDsiStewardFiltersForTab(tabId: DsiEntityTabId): DsiStewar
   };
 }
 
+/** True when non-entity refine filters match the tab's default (entity scope preserved in tabbed mode). */
+export function dsiStewardFiltersMatchTabDefault(
+  filters: DsiStewardCandidateFilterState,
+  tabId: DsiEntityTabId
+): boolean {
+  const def = defaultDsiStewardFiltersForTab(tabId);
+  return (
+    filters.queue === def.queue &&
+    filters.entity === def.entity &&
+    filters.party === def.party &&
+    filters.verifyNameOnly === def.verifyNameOnly &&
+    filters.specialCategoryOnly === def.specialCategoryOnly &&
+    filters.duplicateUnresolvedOnly === def.duplicateUnresolvedOnly
+  );
+}
+
 export function formatDsiEntityTabLabel(
   tab: DsiEntityTabMeta,
   total: number | null,

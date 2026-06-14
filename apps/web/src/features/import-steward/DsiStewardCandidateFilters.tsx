@@ -11,6 +11,8 @@ export function DsiStewardCandidateFilters({
   totalCount,
   hideEntityFilter = false,
   hidePartyFilter = false,
+  clearToDefault,
+  isAtDefault,
 }: {
   filters: DsiStewardCandidateFilterState;
   onChange: (next: DsiStewardCandidateFilterState) => void;
@@ -20,7 +22,13 @@ export function DsiStewardCandidateFilters({
   hideEntityFilter?: boolean;
   /** Hide Bill To / Ship To when not on the Distributors tab. */
   hidePartyFilter?: boolean;
+  /** Tab-aware clear target; defaults to global all-entity state when omitted. */
+  clearToDefault?: () => DsiStewardCandidateFilterState;
+  /** Tab-aware default check; falls back to global default when omitted. */
+  isAtDefault?: (filters: DsiStewardCandidateFilterState) => boolean;
 }) {
+  const resolveClearTarget = clearToDefault ?? defaultDsiStewardCandidateFilterState;
+  const filtersAreDefault = isAtDefault ?? dsiStewardFiltersAreDefault;
   return (
     <Stack spacing={1} data-testid="dsi-steward-candidate-filters" role="region" aria-label="Filter mapping candidates">
       <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
@@ -36,8 +44,8 @@ export function DsiStewardCandidateFilters({
           <Button
             size="small"
             variant="text"
-            onClick={() => onChange(defaultDsiStewardCandidateFilterState())}
-            disabled={dsiStewardFiltersAreDefault(filters)}
+            onClick={() => onChange(resolveClearTarget())}
+            disabled={filtersAreDefault(filters)}
             data-testid="dsi-steward-filter-clear"
           >
             Clear filters

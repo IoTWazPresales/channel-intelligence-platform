@@ -38,6 +38,7 @@ import {
   computeImportStewardSelectionHeaderState,
   defaultDsiStewardCandidateFilterState,
   defaultDsiStewardFiltersForTab,
+  dsiStewardFiltersMatchTabDefault,
   dsiTabDependencyNudge,
   filterDsiStewardCandidates,
   formatPlanActionLabel,
@@ -128,7 +129,10 @@ export function DsiImportJobResolutionSection({
   });
 
   const candidates = candidatesOverride ?? candidatesPage.candidates;
-  const candidatesLoading = candidatesLoadingOverride ?? candidatesPage.query.isLoading;
+  const candidatesLoading =
+    candidatesLoadingOverride ??
+    (candidatesPage.query.isLoading ||
+      (candidatesPage.query.isFetching && candidatesPage.candidates.length === 0));
   const candidatesError =
     candidatesErrorOverride ?? (candidatesPage.query.isError ? candidatesPage.query.error : null);
   const candidatesTotal = candidatesOverride != null ? candidates.length : candidatesPage.total;
@@ -488,6 +492,14 @@ export function DsiImportJobResolutionSection({
             totalCount={Math.max(candidatesTotal, candidates.length)}
             hideEntityFilter={tabbedMode}
             hidePartyFilter={tabbedMode && activeTab !== 'distributor'}
+            clearToDefault={
+              tabbedMode ? () => defaultDsiStewardFiltersForTab(activeTab) : undefined
+            }
+            isAtDefault={
+              tabbedMode
+                ? (filters) => dsiStewardFiltersMatchTabDefault(filters, activeTab)
+                : undefined
+            }
           />
         )
       }

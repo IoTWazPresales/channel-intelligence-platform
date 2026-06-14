@@ -86,6 +86,7 @@ export {
   DSI_ENTITY_TABS,
   DSI_ENTITY_TAB_ORDER,
   defaultDsiStewardFiltersForTab,
+  dsiStewardFiltersMatchTabDefault,
   formatDsiEntityTabLabel,
   dsiTabDependencyNudge,
   type DsiEntityTabId,
