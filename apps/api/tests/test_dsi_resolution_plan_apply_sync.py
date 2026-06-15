@@ -492,3 +492,52 @@ def test_apply_rows_inactive_historical_deterministic_auto_confirms_at_apply() -
         )
 
     asyncio.run(_run())
+
+
+def test_apply_rows_historical_relaxed_flag_auto_confirms_without_inactive_ctx() -> None:
+    """Job 43 shape: legacy dsi_historical_product_eligibility_relaxed without inactive_only ctx."""
+    cid = 9006
+    target_id = 606
+    effective_row = _effective_resolve_product_row(
+        candidate_id=cid,
+        target_id=target_id,
+        reason="Global shipment identity: sole resolved product across all evidence",
+    )
+    effective_row["baseline_ready"] = True
+    effective_row["baseline_target_id"] = target_id
+    effective_row["baseline_suggested_action"] = "resolve_product"
+    job = MagicMock()
+    job.staged_metadata = {"dsi_historical_product_eligibility_relaxed": True}
+    cand = _product_cand(cid)
+    cand.context = {
+        "product_match_status": "resolved_unique",
+        "product_ambiguous_eligible": {"product_ids": [target_id], "tier": "item_code"},
+    }
+
+    async def _run() -> None:
+        db = AsyncMock()
+        db.get = AsyncMock(side_effect=lambda model, pk: job if pk == 43 else cand)
+
+        with patch(
+            "app.services.imports.dsi_resolution_plan.execute_resolve_dsi_product",
+            new_callable=AsyncMock,
+            return_value={"product_id": target_id},
+        ) as exec_resolve:
+            out = await apply_dsi_resolution_plan_rows(
+                db,
+                43,
+                [cid],
+                default_region_id=None,
+                default_channel_id=None,
+                partner_tier=None,
+                provisional_notes_summary=None,
+                confirm_for_suspicious_distributor_token=False,
+                effective_plan_rows_by_cid={cid: effective_row},
+            )
+
+        assert out["applied"] == 1
+        exec_resolve.assert_awaited_once()
+        assert exec_resolve.await_args.kwargs["confirm_ineligible_product"] is True
+        assert "deterministic unique identity" in (exec_resolve.await_args.kwargs["audit_note"] or "")
+
+    asyncio.run(_run())

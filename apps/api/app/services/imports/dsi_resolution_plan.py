@@ -1386,19 +1386,19 @@ def merge_resolution_plan_row_for_apply(
             blockers.append("target_id_required")
 
     if action == "resolve_product":
-        if _product_resolve_needs_ineligible_confirm(ctx):
-            deterministic_unique = _product_apply_target_is_deterministic_unique_bind(
-                base=base,
-                target_id=target_id,
-            )
-            if (
-                historical_dsi_product_eligibility_relaxed
-                and deterministic_unique
-            ):
-                confirm_ineligible = True
-                if audit_note is None or len(audit_note) < 8:
-                    audit_note = _HISTORICAL_DETERMINISTIC_INELIGIBLE_AUTO_CONFIRM_NOTE
-            elif not confirm_ineligible or audit_note is None or len(audit_note) < 8:
+        deterministic_unique = _product_apply_target_is_deterministic_unique_bind(
+            base=base,
+            target_id=target_id,
+        )
+        if historical_dsi_product_eligibility_relaxed and deterministic_unique:
+            # Validate/plan may admit inactive targets under historical relaxation without
+            # stamping inactive_only on context (e.g. resolved_unique / tie-break). Set confirm
+            # here so execute_resolve_dsi_product → validate_dsi_product_resolve honors the same path.
+            confirm_ineligible = True
+            if audit_note is None or len(audit_note) < 8:
+                audit_note = _HISTORICAL_DETERMINISTIC_INELIGIBLE_AUTO_CONFIRM_NOTE
+        elif _product_resolve_needs_ineligible_confirm(ctx):
+            if not confirm_ineligible or audit_note is None or len(audit_note) < 8:
                 blockers.append("inactive_or_ineligible_product_requires_confirm_and_audit_note")
 
     if action == "create_provisional_customer":

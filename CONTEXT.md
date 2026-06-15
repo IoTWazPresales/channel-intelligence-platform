@@ -1,5 +1,12 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 14, 2026 (DSI apply gate honors historical relaxation) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local uncommitted).
+- **Fix:** `merge_resolution_plan_row_for_apply` now auto-confirms historical deterministic binds **before** the `inactive_only` ctx check. Validate/plan admits lifecycle-ineligible targets under `dsi_historical_product_eligibility_relaxed` with `resolved_unique`/tie-break context (not `inactive_only`); apply was passing merge without `confirm_ineligible_product` and `validate_dsi_product_resolve` rejected. Weekly/strict still blocks via `elif _product_resolve_needs_ineligible_confirm`.
+- **Tests:** `test_dsi_resolution_plan.py` + `test_dsi_resolution_plan_apply_sync.py` — **18 pass** slice.
+- **Alembic:** unchanged.
+
 ## CURRENT STATE — Jun 14, 2026 (DSI historical inactive auto-confirm gate) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local uncommitted).

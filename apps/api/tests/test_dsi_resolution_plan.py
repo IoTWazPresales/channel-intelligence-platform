@@ -417,6 +417,39 @@ def test_merge_product_inactive_historical_deterministic_auto_confirms() -> None
     assert m["audit_note"] == "auto-confirmed ineligible: deterministic unique identity, historical path"
 
 
+def test_merge_product_historical_deterministic_auto_confirms_without_inactive_ctx() -> None:
+    """Validate may stamp resolved_unique / tie-break while target is lifecycle-ineligible."""
+    cand = _cand(
+        entity_type="product_identifier",
+        context={
+            "product_match_status": "resolved_unique",
+            "product_ambiguous_eligible": {"product_ids": [10, 20], "tier": "sales_model_name"},
+        },
+    )
+    base = {
+        "suggested_action": "resolve_product",
+        "suggested_target_id": 10,
+        "ready": True,
+        "plan_status": "ready",
+        "baseline_suggested_action": "resolve_product",
+        "baseline_ready": True,
+        "baseline_target_id": 10,
+        "reason": "Shipment evidence tie-break (shipment) — single Product Master match among eligible rows",
+    }
+    m = merge_resolution_plan_row_for_apply(
+        cand=cand,
+        base=base,
+        ov=None,
+        default_region_id=None,
+        default_channel_id=None,
+        global_confirm_suspicious_distributor=False,
+        historical_dsi_product_eligibility_relaxed=True,
+    )
+    assert m["effective_ready"] is True
+    assert m["confirm_ineligible_product"] is True
+    assert "deterministic unique identity" in (m["audit_note"] or "")
+
+
 def test_merge_product_inactive_historical_steward_override_still_blocked() -> None:
     cand = _cand(entity_type="product_identifier", context={"product_match_status": "inactive_only"})
     base = {
