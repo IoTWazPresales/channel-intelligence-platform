@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 from app.db.session import AsyncSessionLocal
 from app.db.session_sync import SessionLocal
 from app.models.ingestion import ImportJob
-from app.services.imports.distributor_sales_inventory import _load_product_resolution_index
 from app.services.imports.dsi_bulk_db_commit import commit_session_with_transient_retry
 from app.services.imports.dsi_bulk_ignore_sync import run_dsi_bulk_ignore_sync
 from app.services.imports.dsi_bulk_map_customers_sync import run_dsi_bulk_map_customers_sync
@@ -337,9 +336,14 @@ def run_dsi_resolution_plan_apply_orchestrator(
             len(fallback_cids),
         )
 
+        fallback_effective_rows = {
+            int(cid): dict(rows_by_cid[int(cid)])
+            for cid in fallback_cids
+            if int(cid) in rows_by_cid
+        }
+
         async def _fallback_apply() -> dict[str, Any]:
             async with AsyncSessionLocal() as db:
-                prod_idx = await db.run_sync(_load_product_resolution_index)
                 return await apply_dsi_resolution_plan_rows(
                     db,
                     job_id,
@@ -350,7 +354,7 @@ def run_dsi_resolution_plan_apply_orchestrator(
                     provisional_notes_summary=provisional_notes_summary,
                     confirm_for_suspicious_distributor_token=confirm,
                     overrides=overrides,
-                    product_index=prod_idx,
+                    effective_plan_rows_by_cid=fallback_effective_rows,
                 )
 
         fb_out = asyncio.run(_fallback_apply())

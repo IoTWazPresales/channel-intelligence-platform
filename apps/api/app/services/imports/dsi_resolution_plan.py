@@ -1672,10 +1672,18 @@ async def apply_dsi_resolution_plan_rows(
     confirm_for_suspicious_distributor_token: bool,
     overrides: list[dict[str, Any]] | None = None,
     product_index: ProductResolutionIndex | None = None,
+    effective_plan_rows_by_cid: dict[int, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Recompute baseline plan per id, merge overrides, then execute steward ops when effectively ready."""
+    """Merge overrides on plan rows, then execute steward ops when effectively ready.
 
-    if product_index is None:
+    When ``effective_plan_rows_by_cid`` is supplied (orchestrator classify-time effective plan),
+    those rows are used as the plan baseline instead of recomputing per candidate without plan_ctx.
+    """
+
+    precomputed = effective_plan_rows_by_cid or {}
+    needs_replan = any(int(cid) not in precomputed for cid in candidate_ids)
+
+    if needs_replan and product_index is None:
         product_index = await db.run_sync(_load_product_resolution_index)
     shared_prod_idx = product_index
 
@@ -1705,9 +1713,16 @@ async def apply_dsi_resolution_plan_rows(
     skipped_not_ready_n = 0
 
     for cid in candidate_ids:
-        row = await db.run_sync(
-            lambda s, c=cid, j=job_id, dr=default_region_id, dc=default_channel_id: _plan_sync(s, c, j, dr, dc)
-        )
+        icid = int(cid)
+        precomputed_row = precomputed.get(icid)
+        if precomputed_row is not None:
+            row = dict(precomputed_row)
+        else:
+            row = await db.run_sync(
+                lambda s, c=icid, j=job_id, dr=default_region_id, dc=default_channel_id: _plan_sync(
+                    s, c, j, dr, dc
+                )
+            )
         if row is None:
             results.append(
                 {
