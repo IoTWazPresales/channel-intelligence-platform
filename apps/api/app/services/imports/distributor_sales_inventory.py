@@ -379,16 +379,16 @@ def _product_evidence_date_outside_launch_retire_window(
 
 def _product_eligible_for_shipment_sku_item_code_anchor(
     p: ProductResolutionProductRow | DimProduct,
-    evidence_date: date | None,
 ) -> bool:
-    """Shipment-only SKU-exact tier: in-window evidence overrides DSI lifecycle / is_active rejection.
+    """Shipment-only SKU-exact tier: unique ``item_code``→``dim_product.sku`` resolves as identity.
 
-    Default OFF — only consulted when ``_resolve_product`` receives
-    ``shipment_sku_item_code_anchor_date``. Does not alter DSI validate/apply eligibility.
+    Lifecycle, ``is_active``, and launch/retire windows do **not** gate this tier — identity is
+    distinct from sellability. Uniqueness is enforced by ``ProductResolutionIndex.sku_to_id`` (1:1).
+
+    Default OFF — only consulted when ``_resolve_product`` receives ``shipment_sku_item_code_anchor``.
+    Does not alter DSI validate/apply eligibility.
     """
-    if evidence_date is None:
-        return False
-    return not _product_evidence_date_outside_launch_retire_window(p, evidence_date)
+    return p is not None
 
 
 def _product_eligible_for_dsi_auto(
@@ -819,7 +819,7 @@ def _resolve_product(
     evidence_date: date | None = None,
     *,
     relax_inactive_dim_product_for_historical_dsi: bool = False,
-    shipment_sku_item_code_anchor_date: date | None = None,
+    shipment_sku_item_code_anchor: bool = False,
     db: Session | None = None,
     distributor_id: int | None = None,
     corr_cache: Any = None,
@@ -895,10 +895,8 @@ def _resolve_product(
             )
             if (
                 not sku_eligible
-                and shipment_sku_item_code_anchor_date is not None
-                and _product_eligible_for_shipment_sku_item_code_anchor(
-                    p0, shipment_sku_item_code_anchor_date
-                )
+                and shipment_sku_item_code_anchor
+                and _product_eligible_for_shipment_sku_item_code_anchor(p0)
             ):
                 sku_eligible = True
             if sku_eligible:

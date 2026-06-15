@@ -1,4 +1,4 @@
-"""Shipment evidence product resolution: SKU launch-window anchor (no database)."""
+"""Shipment evidence product resolution: SKU-exact identity anchor (no database)."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def _idx(*, sku_to_id: dict[str, int], products_by_id: dict[int, ProductResoluti
     )
 
 
-def test_discarded_sku_in_launch_window_resolves_unique() -> None:
+def test_discarded_sku_exact_match_resolves_unique_in_window() -> None:
     sku = "DISC-SKU-1"
     ev = date(2020, 6, 15)
     idx = _idx(
@@ -71,7 +71,7 @@ def test_discarded_sku_in_launch_window_resolves_unique() -> None:
             ),
         },
     )
-    pid, status, token, detail = resolve_product_for_evidence(
+    pid, status, token, _detail = resolve_product_for_evidence(
         idx,
         item_code=sku,
         ean_code=None,
@@ -83,10 +83,10 @@ def test_discarded_sku_in_launch_window_resolves_unique() -> None:
     assert status == "resolved_unique"
     assert token == sku
     assert _product_eligible_for_dsi_auto(idx.products_by_id[42], ev) is False
-    assert _product_eligible_for_shipment_sku_item_code_anchor(idx.products_by_id[42], ev) is True
+    assert _product_eligible_for_shipment_sku_item_code_anchor(idx.products_by_id[42]) is True
 
 
-def test_discarded_sku_outside_launch_window_stays_inactive_only() -> None:
+def test_discarded_sku_outside_launch_window_still_resolves_unique() -> None:
     sku = "DISC-SKU-2"
     ev = date(2022, 6, 15)
     idx = _idx(
@@ -102,7 +102,7 @@ def test_discarded_sku_outside_launch_window_stays_inactive_only() -> None:
             ),
         },
     )
-    pid, status, token, detail = resolve_product_for_evidence(
+    pid, status, token, _detail = resolve_product_for_evidence(
         idx,
         item_code=sku,
         ean_code=None,
@@ -110,10 +110,64 @@ def test_discarded_sku_outside_launch_window_stays_inactive_only() -> None:
         sales_model_name=None,
         evidence_date=ev,
     )
-    assert pid is None
-    assert status == "inactive_only"
+    assert pid == 7
+    assert status == "resolved_unique"
     assert token == sku
-    assert detail == "unresolved_product_inactive_only"
+
+
+def test_discarded_sku_before_launch_resolves_unique() -> None:
+    sku = "90NX05V1-M01100"
+    ev = date(2023, 4, 19)
+    idx = _idx(
+        sku_to_id={sku.lower(): 14772},
+        products_by_id={
+            14772: _p(
+                14772,
+                sku=sku,
+                sales_model_name="B1402CBA-EK0269X",
+                lifecycle_status="Discarded",
+                launch_date=date(2023, 11, 3),
+                retired_date=date(2024, 6, 28),
+            ),
+        },
+    )
+    pid, status, _token, _detail = resolve_product_for_evidence(
+        idx,
+        item_code=sku,
+        ean_code=None,
+        upc_code=None,
+        sales_model_name="B1402CBA-EK0269X",
+        evidence_date=ev,
+    )
+    assert pid == 14772
+    assert status == "resolved_unique"
+
+
+def test_discarded_sku_inverted_launch_retire_window_resolves_unique() -> None:
+    sku = "INV-WINDOW-SKU"
+    ev = date(2024, 1, 15)
+    idx = _idx(
+        sku_to_id={sku.lower(): 99},
+        products_by_id={
+            99: _p(
+                99,
+                sku=sku,
+                lifecycle_status="Discarded",
+                launch_date=date(2024, 6, 1),
+                retired_date=date(2023, 1, 1),
+            ),
+        },
+    )
+    pid, status, _token, _detail = resolve_product_for_evidence(
+        idx,
+        item_code=sku,
+        ean_code=None,
+        upc_code=None,
+        sales_model_name=None,
+        evidence_date=ev,
+    )
+    assert pid == 99
+    assert status == "resolved_unique"
 
 
 def test_sku_anchor_does_not_loosen_sales_model_tier() -> None:

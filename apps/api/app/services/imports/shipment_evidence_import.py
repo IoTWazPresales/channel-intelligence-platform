@@ -322,7 +322,7 @@ def resolve_product_for_evidence(
             raw,
             idx,
             evidence_date,
-            shipment_sku_item_code_anchor_date=evidence_date if role == "item" else None,
+            shipment_sku_item_code_anchor=(role == "item"),
         )
         if pid is not None and perr is None:
             return int(pid), "resolved_unique", raw, tag or "resolved"

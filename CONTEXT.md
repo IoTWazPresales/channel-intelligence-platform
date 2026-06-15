@@ -1,5 +1,13 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 14, 2026 (shipment SKU identity anchor — no date/lifecycle gate) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local uncommitted).
+- **Change:** `_product_eligible_for_shipment_sku_item_code_anchor` now treats unique exact `item_code`→`dim_product.sku` as identity (lifecycle/window ignored). `_resolve_product` uses bool `shipment_sku_item_code_anchor` (item tier only); DSI path unchanged.
+- **Job 40 dry count (Supabase, read-only):** **1,965** `inactive_only` lines would flip → `resolved_unique` (312 SKUs); includes EK0269X→14772, EK0742X→7661; **9** `inactive_only` remain (no SKU match). **STOP** — awaiting explicit go for Phase 2 re-resolve.
+- **Tests:** `test_shipment_evidence_product_resolution.py` (+before_launch, +inverted_window) + DSI eligibility regression — **26 pass**.
+- **Alembic:** unchanged.
+
 ## CURRENT STATE — Jun 14, 2026 (shipment SKU launch-window anchor for corroboration) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local uncommitted).
