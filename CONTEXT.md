@@ -1,5 +1,13 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 14, 2026 (DSI historical inactive auto-confirm gate) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local uncommitted).
+- **Change:** `merge_resolution_plan_row_for_apply` auto-confirms inactive product binds only when **both** `dsi_historical_product_eligibility_relaxed_from_import_job` (same path as plan relaxation) **and** classify-time deterministic unique bind (`baseline_ready` + `baseline_target_id` or plan `ready` + `suggested_target_id`). Writes system audit note: `auto-confirmed ineligible: deterministic unique identity, historical path`. Weekly/strict and steward overrides unchanged.
+- **Tests:** `test_dsi_resolution_plan.py` (+3 merge) + `test_dsi_resolution_plan_apply_sync.py` (+1 apply) — **16 pass** focused slice.
+- **Alembic:** unchanged.
+- **Next:** User-directed push; job #43 historical apply soak.
+
 ## CURRENT STATE — Jun 14, 2026 (job 40 re-resolve + SKU anchor shipped) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` @ `d54c2b9` (pushed `origin`).

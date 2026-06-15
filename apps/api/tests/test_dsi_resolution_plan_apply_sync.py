@@ -444,3 +444,51 @@ def test_apply_rows_inactive_product_applies_with_confirm_override() -> None:
         assert exec_resolve.await_args.kwargs["audit_note"] == "Steward confirmed inactive bind for historical cleanup."
 
     asyncio.run(_run())
+
+
+def test_apply_rows_inactive_historical_deterministic_auto_confirms_at_apply() -> None:
+    cid = 9005
+    target_id = 505
+    effective_row = _effective_resolve_product_row(
+        candidate_id=cid,
+        target_id=target_id,
+        reason="Single Product Master match (item_code) — propose ProductAlias bind",
+    )
+    effective_row["baseline_ready"] = True
+    effective_row["baseline_target_id"] = target_id
+    effective_row["baseline_suggested_action"] = "resolve_product"
+    job = MagicMock()
+    job.staged_metadata = {"dsi_workflow_mode": "historical"}
+    cand = _product_cand(cid)
+    cand.context = {"product_match_status": "inactive_only", "product_inactive_matches": [{}]}
+
+    async def _run() -> None:
+        db = AsyncMock()
+        db.get = AsyncMock(side_effect=lambda model, pk: job if pk == 43 else cand)
+
+        with patch(
+            "app.services.imports.dsi_resolution_plan.execute_resolve_dsi_product",
+            new_callable=AsyncMock,
+            return_value={"product_id": target_id},
+        ) as exec_resolve:
+            out = await apply_dsi_resolution_plan_rows(
+                db,
+                43,
+                [cid],
+                default_region_id=None,
+                default_channel_id=None,
+                partner_tier=None,
+                provisional_notes_summary=None,
+                confirm_for_suspicious_distributor_token=False,
+                effective_plan_rows_by_cid={cid: effective_row},
+            )
+
+        assert out["applied"] == 1
+        assert out["skipped_not_ready"] == 0
+        exec_resolve.assert_awaited_once()
+        assert exec_resolve.await_args.kwargs["confirm_ineligible_product"] is True
+        assert exec_resolve.await_args.kwargs["audit_note"] == (
+            "auto-confirmed ineligible: deterministic unique identity, historical path"
+        )
+
+    asyncio.run(_run())

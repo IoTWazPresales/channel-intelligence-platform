@@ -394,6 +394,81 @@ def test_merge_product_inactive_ok_with_confirm_and_audit() -> None:
     assert m["effective_ready"] is True
 
 
+def test_merge_product_inactive_historical_deterministic_auto_confirms() -> None:
+    cand = _cand(entity_type="product_identifier", context={"product_match_status": "inactive_only"})
+    base = {
+        "suggested_action": "resolve_product",
+        "suggested_target_id": 99,
+        "ready": True,
+        "plan_status": "ready",
+        "reason": "Single Product Master match (item_code) — propose ProductAlias bind",
+    }
+    m = merge_resolution_plan_row_for_apply(
+        cand=cand,
+        base=base,
+        ov=None,
+        default_region_id=None,
+        default_channel_id=None,
+        global_confirm_suspicious_distributor=False,
+        historical_dsi_product_eligibility_relaxed=True,
+    )
+    assert m["effective_ready"] is True
+    assert m["confirm_ineligible_product"] is True
+    assert m["audit_note"] == "auto-confirmed ineligible: deterministic unique identity, historical path"
+
+
+def test_merge_product_inactive_historical_steward_override_still_blocked() -> None:
+    cand = _cand(entity_type="product_identifier", context={"product_match_status": "inactive_only"})
+    base = {
+        "suggested_action": "resolve_product",
+        "suggested_target_id": None,
+        "ready": False,
+        "plan_status": "needs_review",
+        "baseline_suggested_action": "resolve_product",
+        "baseline_ready": False,
+        "baseline_target_id": None,
+    }
+    m = merge_resolution_plan_row_for_apply(
+        cand=cand,
+        base=base,
+        ov={"action": "resolve_product", "target_id": 99},
+        default_region_id=None,
+        default_channel_id=None,
+        global_confirm_suspicious_distributor=False,
+        historical_dsi_product_eligibility_relaxed=True,
+    )
+    assert m["effective_ready"] is False
+    assert "inactive_or_ineligible_product_requires_confirm_and_audit_note" in m["blockers"]
+
+
+def test_merge_product_ambiguous_historical_still_not_ready_without_classify_target() -> None:
+    cand = _cand(
+        entity_type="product_identifier",
+        context={
+            "product_match_status": "ambiguous_eligible",
+            "product_ambiguous_eligible": {"product_ids": [10, 20], "tier": "sales_model_name"},
+        },
+    )
+    base = {
+        "suggested_action": "resolve_product",
+        "suggested_target_id": None,
+        "ready": False,
+        "plan_status": "needs_review",
+        "reason": "Multiple eligible Product Master matches — steward review required",
+    }
+    m = merge_resolution_plan_row_for_apply(
+        cand=cand,
+        base=base,
+        ov=None,
+        default_region_id=None,
+        default_channel_id=None,
+        global_confirm_suspicious_distributor=False,
+        historical_dsi_product_eligibility_relaxed=True,
+    )
+    assert m["effective_ready"] is False
+    assert m["confirm_ineligible_product"] is False
+
+
 def test_merge_strategic_customer_provisional_requires_ack() -> None:
     cand = _cand(entity_type="customer_dealer_token", context={"strategic_channel_hint": True})
     base = {"suggested_action": "create_provisional_customer", "suggested_target_id": None, "ready": False}

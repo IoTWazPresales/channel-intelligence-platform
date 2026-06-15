@@ -1252,6 +1252,51 @@ def _product_resolve_needs_ineligible_confirm(ctx: dict[str, Any]) -> bool:
     return ctx.get("product_match_status") == "inactive_only" or bool(ctx.get("product_inactive_matches"))
 
 
+_HISTORICAL_DETERMINISTIC_INELIGIBLE_AUTO_CONFIRM_NOTE = (
+    "auto-confirmed ineligible: deterministic unique identity, historical path"
+)
+
+
+def _product_apply_target_is_deterministic_unique_bind(
+    *,
+    base: dict[str, Any],
+    target_id: int | None,
+) -> bool:
+    """True when classify-time plan marked a sole ready resolve_product at this target (not steward guess)."""
+    if target_id is None:
+        return False
+    try:
+        tid = int(target_id)
+    except (TypeError, ValueError):
+        return False
+
+    has_baseline = "baseline_ready" in base or "baseline_suggested_action" in base or "baseline_target_id" in base
+    if has_baseline:
+        if str(base.get("baseline_suggested_action") or "") != "resolve_product":
+            return False
+        if not base.get("baseline_ready"):
+            return False
+        bt = base.get("baseline_target_id")
+        if bt is None:
+            return False
+        try:
+            return int(bt) == tid
+        except (TypeError, ValueError):
+            return False
+
+    if str(base.get("suggested_action") or "") != "resolve_product":
+        return False
+    if not base.get("ready"):
+        return False
+    bt = base.get("suggested_target_id")
+    if bt is None:
+        return False
+    try:
+        return int(bt) == tid
+    except (TypeError, ValueError):
+        return False
+
+
 def merge_resolution_plan_row_for_apply(
     *,
     cand: ImportEntityMappingCandidate,
@@ -1261,6 +1306,7 @@ def merge_resolution_plan_row_for_apply(
     default_channel_id: int | None,
     global_confirm_suspicious_distributor: bool,
     historical_dsi_workflow: bool = False,
+    historical_dsi_product_eligibility_relaxed: bool = False,
 ) -> dict[str, Any]:
     """Single source of truth for effective action + readiness (used by /effective and /apply)."""
     blockers: list[str] = []
@@ -1341,10 +1387,17 @@ def merge_resolution_plan_row_for_apply(
 
     if action == "resolve_product":
         if _product_resolve_needs_ineligible_confirm(ctx):
-            if historical_dsi_workflow:
+            deterministic_unique = _product_apply_target_is_deterministic_unique_bind(
+                base=base,
+                target_id=target_id,
+            )
+            if (
+                historical_dsi_product_eligibility_relaxed
+                and deterministic_unique
+            ):
                 confirm_ineligible = True
                 if audit_note is None or len(audit_note) < 8:
-                    audit_note = "Historical DSI workflow: auto-confirmed ineligible product bind per policy."
+                    audit_note = _HISTORICAL_DETERMINISTIC_INELIGIBLE_AUTO_CONFIRM_NOTE
             elif not confirm_ineligible or audit_note is None or len(audit_note) < 8:
                 blockers.append("inactive_or_ineligible_product_requires_confirm_and_audit_note")
 
@@ -1450,6 +1503,7 @@ def build_dsi_resolution_plan_effective_sync(
     if not job:
         raise ValueError("Import job not found")
     historical_wf = dsi_historical_workflow_from_import_job(job)
+    historical_relaxed = dsi_historical_product_eligibility_relaxed_from_import_job(job)
     by_cid: dict[int, dict[str, Any]] = {}
     for o in overrides:
         cid = int(o["candidate_id"])
@@ -1498,6 +1552,7 @@ def build_dsi_resolution_plan_effective_sync(
             default_channel_id=default_channel_id,
             global_confirm_suspicious_distributor=global_confirm_suspicious_distributor,
             historical_dsi_workflow=historical_wf,
+            historical_dsi_product_eligibility_relaxed=historical_relaxed,
         )
         rows.append(_attach_effective_fields_to_row(base, c, merged))
     ready_n = sum(1 for r in rows if r.get("ready"))
@@ -1705,6 +1760,9 @@ async def apply_dsi_resolution_plan_rows(
 
     job_hdr = await db.get(ImportJob, job_id)
     historical_wf = dsi_historical_workflow_from_import_job(job_hdr) if job_hdr else False
+    historical_relaxed = (
+        dsi_historical_product_eligibility_relaxed_from_import_job(job_hdr) if job_hdr else False
+    )
 
     results: list[dict[str, Any]] = []
     applied_n = 0
@@ -1755,6 +1813,7 @@ async def apply_dsi_resolution_plan_rows(
             default_channel_id=default_channel_id,
             global_confirm_suspicious_distributor=confirm_for_suspicious_distributor_token,
             historical_dsi_workflow=historical_wf,
+            historical_dsi_product_eligibility_relaxed=historical_relaxed,
         )
 
         if merged["hold_for_manual_review"]:
