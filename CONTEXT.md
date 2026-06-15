@@ -1,5 +1,14 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 14, 2026 (job 40 re-resolve + SKU anchor shipped) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` @ `d54c2b9` (pushed `origin`).
+- **Commits on origin:** `6c865ea` SKU-exact `item_code`→SKU identity anchor (lifecycle/window ignored on SKU tier); `d54c2b9` BACKLOG-033/034.
+- **Supabase job 40 applied:** Phase 2 `_resolve_unresolved_shipment_lines_for_job`; single DB commit. Jobs 32/34 unchanged.
+- **Job 40 before → after:** `inactive_only` 1974→**9**; `resolved_unique` 7192→**9157**; `no_match` 151; total 9317. **1,965** flips. Lines 68635→pid **14772**, 68794→pid **7661**.
+- **Not run:** DSI revalidate, inbound fact re-apply.
+- **Next:** Refresh suggestions on DSI job #43 UI (EK0269X/EK0742X Ready soak); BACKLOG-033/034 deferred.
+
 ## CURRENT STATE — Jun 14, 2026 (shipment SKU identity anchor — no date/lifecycle gate) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local uncommitted).
