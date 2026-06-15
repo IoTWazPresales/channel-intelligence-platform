@@ -119,7 +119,10 @@ export function DsiImportJobResolutionSection({
     [activeTab, tabbedMode]
   );
 
-  const { counts: tabCounts, openByTab } = useDsiEntityTabCounts(importJobId, tabbedMode);
+  const { counts: tabCounts, openByTab, productMatchStatusCounts } = useDsiEntityTabCounts(
+    importJobId,
+    tabbedMode
+  );
 
   const isCandidateTab = isDsiEntityCandidateTab(activeTab);
 
@@ -495,6 +498,10 @@ export function DsiImportJobResolutionSection({
             totalCount={Math.max(candidatesTotal, candidates.length)}
             hideEntityFilter={tabbedMode}
             hidePartyFilter={tabbedMode && activeTab !== 'distributor'}
+            showProductMatchStatusChips={tabbedMode && activeTab === 'product'}
+            productMatchStatusCounts={
+              tabbedMode && activeTab === 'product' ? productMatchStatusCounts : undefined
+            }
             clearToDefault={
               tabbedMode ? () => defaultDsiStewardFiltersForTab(activeTab) : undefined
             }

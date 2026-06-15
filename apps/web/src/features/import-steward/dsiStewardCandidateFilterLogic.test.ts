@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
 import {
   classifyDuplicateSameEntityCase,
   contextDistributorMasterCollision,
   contextPossibleDuplicateOf,
+  defaultDsiStewardCandidateFilterState,
+  filterDsiStewardCandidates,
   suggestedCustomerIdForDuplicateSameEntity,
 } from './dsiStewardCandidateFilterLogic';
 
@@ -71,5 +74,79 @@ describe('duplicate peer hint filtering (same entity)', () => {
     const peerHints = hints.filter((h) => h.normalized_key.trim() !== own.trim());
     expect(peerHints).toHaveLength(1);
     expect(peerHints[0]?.normalized_key).toBe('axiom systems africa');
+  });
+});
+
+describe('product match status queue filters', () => {
+  const plan = new Map<number, Record<string, unknown>>();
+
+  function productRow(
+    id: number,
+    context: Record<string, unknown>,
+    matchReason: string | null = null
+  ): DsiCandidateRow {
+    return {
+      id,
+      import_job_id: 43,
+      source_definition_id: null,
+      entity_type: 'product_identifier',
+      normalized_key: `token-${id}`,
+      dealer_group_token: null,
+      row_count: 1,
+      total_units: null,
+      total_reported_value: null,
+      sample_raw_values: [`SKU-${id}`],
+      suggested_entity_id: null,
+      match_reason: matchReason,
+      confidence_score: null,
+      status: 'open',
+      context,
+    };
+  }
+
+  it('no_match is strict product_match_status for products', () => {
+    const rows = [
+      productRow(1, { product_match_status: 'no_match' }),
+      productRow(2, { product_match_status: 'ambiguous_eligible' }),
+      productRow(3, { product_match_status: 'ambiguous_eligible' }, null),
+    ];
+    const filters = { ...defaultDsiStewardCandidateFilterState(), entity: 'product' as const, queue: 'no_match' as const };
+    expect(filterDsiStewardCandidates(rows, filters, plan).map((r) => r.id)).toEqual([1]);
+  });
+
+  it('ambiguous_eligible chip filters only ambiguous_eligible products', () => {
+    const rows = [
+      productRow(1, { product_match_status: 'no_match' }),
+      productRow(2, { product_match_status: 'ambiguous_eligible' }),
+      productRow(3, { product_match_status: 'ambiguous_eligible' }),
+    ];
+    const filters = {
+      ...defaultDsiStewardCandidateFilterState(),
+      entity: 'product' as const,
+      queue: 'ambiguous_eligible' as const,
+    };
+    expect(filterDsiStewardCandidates(rows, filters, plan).map((r) => r.id)).toEqual([2, 3]);
+  });
+
+  it('empty product match_reason without status is not no_match', () => {
+    const rows = [productRow(9, {}, null)];
+    const filters = { ...defaultDsiStewardCandidateFilterState(), entity: 'product' as const, queue: 'no_match' as const };
+    expect(filterDsiStewardCandidates(rows, filters, plan)).toHaveLength(0);
+  });
+
+  it('distributor no_match keeps legacy match_reason heuristic', () => {
+    const row: DsiCandidateRow = {
+      ...productRow(1, {}),
+      id: 10,
+      entity_type: 'distributor_token',
+      context: null,
+      match_reason: null,
+    };
+    const filters = {
+      ...defaultDsiStewardCandidateFilterState(),
+      entity: 'distributor' as const,
+      queue: 'no_match' as const,
+    };
+    expect(filterDsiStewardCandidates([row], filters, plan)).toHaveLength(1);
   });
 });

@@ -18,6 +18,28 @@ _TAB_ENTITY_TYPES: dict[str, str] = {
 }
 
 
+def _product_open_match_status_counts(session: Session, job_id: int) -> dict[str, int]:
+    """Open product_identifier rows grouped by validate-time ``product_match_status``."""
+    rows = session.execute(
+        select(
+            ImportEntityMappingCandidate.context["product_match_status"].astext,
+            func.count(ImportEntityMappingCandidate.id),
+        )
+        .where(
+            ImportEntityMappingCandidate.import_job_id == job_id,
+            ImportEntityMappingCandidate.entity_type == _ENTITY_MAP["product"],
+            ImportEntityMappingCandidate.status.notin_(tuple(TERMINAL_STATUSES)),
+        )
+        .group_by(ImportEntityMappingCandidate.context["product_match_status"].astext)
+    ).all()
+    out = {"no_match": 0, "ambiguous_eligible": 0}
+    for status, cnt in rows:
+        key = str(status or "").strip()
+        if key in out:
+            out[key] = int(cnt or 0)
+    return out
+
+
 def dsi_mapping_candidate_tab_counts_sync(session: Session, job_id: int) -> dict[str, Any]:
     """Return open + needs_review counts per entity tab in one grouped query."""
     rows = session.execute(
@@ -48,5 +70,10 @@ def dsi_mapping_candidate_tab_counts_sync(session: Session, job_id: int) -> dict
             if st == "needs_review":
                 needs_review_n = n
         counts[tab_id] = {"open": open_n, "needs_review": needs_review_n}
+
+    product_match = _product_open_match_status_counts(session, job_id)
+    if "product" in counts:
+        counts["product"]["no_match"] = product_match["no_match"]
+        counts["product"]["ambiguous_eligible"] = product_match["ambiguous_eligible"]
 
     return {"import_job_id": job_id, "counts": counts}

@@ -1,5 +1,11 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 14, 2026 (DSI product match-status filter chips) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local uncommitted).
+- **Change:** Products tab — `No match` chip filters `context.product_match_status === 'no_match'` only (was empty `match_reason` heuristic). New `Ambiguous` chip for `ambiguous_eligible`; counts from existing `tab-counts` response (no new fetch).
+- **Tests:** `dsiStewardCandidateFilterLogic.test.ts` (12) + `test_dsi_mapping_candidates_tab_counts.py` (2).
+
 ## CURRENT STATE — Jun 14, 2026 (DSI apply gate honors historical relaxation) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local uncommitted).

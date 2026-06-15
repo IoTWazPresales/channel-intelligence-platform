@@ -16,7 +16,10 @@ export type DsiEntityTabCounts = Record<DsiEntityTabId, { total: number | null; 
 
 type TabCountsApiResponse = {
   import_job_id: number;
-  counts: Record<string, { open: number; needs_review: number }>;
+  counts: Record<
+    string,
+    { open: number; needs_review: number; no_match?: number; ambiguous_eligible?: number }
+  >;
 };
 
 const emptyCounts = (): DsiEntityTabCounts => ({
@@ -86,5 +89,13 @@ export function useDsiEntityTabCounts(importJobId: number, enabled: boolean) {
 
   const isLoading = tabCountsQuery.isLoading || geoQuery.isLoading;
 
-  return { counts, openByTab, isLoading, unresolvedGeoQuery: geoQuery };
+  const productMatchStatusCounts =
+    tabCountsQuery.isSuccess && tabCountsQuery.data?.counts?.product
+      ? {
+          no_match: tabCountsQuery.data.counts.product.no_match ?? 0,
+          ambiguous_eligible: tabCountsQuery.data.counts.product.ambiguous_eligible ?? 0,
+        }
+      : { no_match: null, ambiguous_eligible: null };
+
+  return { counts, openByTab, isLoading, unresolvedGeoQuery: geoQuery, productMatchStatusCounts };
 }
