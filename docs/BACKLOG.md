@@ -479,6 +479,40 @@
 
 ---
 
+## BACKLOG-033 — Bitemporal shipment evidence model (append-only observations + current-state view)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-14 |
+| **Effort** | Very large (schema + import pipeline + fact layer + consumer migration) |
+| **Source** | Session audit (jobs #32 Jun-1, #34 Jun-3, #40 Jun-4 — same workbook, distinct temporal snapshots); `apps/api/app/services/imports/shipment_evidence_source_keys.py` (`stable_source_key_for_row`, `report_type:state|order_no_or_delivery_no|item`); `apps/api/app/models/shipment_evidence.py` (upsert on `(import_job_id, source_key)`); `apps/api/app/services/imports/shipment_inbound_facts.py` (`fact_inbound_shipment` copies evidence per job); `apps/api/app/services/imports/dsi_soh_reconciliation.py` (aggregates `FactInboundShipment.product_id` / quantity); `apps/api/app/services/imports/dsi_shipment_corroboration.py` (reads `resolved_unique` evidence lines) |
+| **Idea** | Restructure shipment evidence/facts so each import is a dated, append-only **observation** of a shipment line's state (`eta_date`, `est_pod_date`, `promise_date`, `ship_confirm_date`, `pod_date`, `line_state`), keyed by a **stable natural identity** (`order_no` + `order_line` + `item_code`). Derive a **current-state view** = latest observation per key, which feeds volume / corroboration / reconciliation. Never overwrite prior observations. |
+| **Why it matters / deferrable** | **Logistics / ETA-arrival prediction** (roadmap) needs the history of how each shipment's ETA drifts and how predicted ETA compares to actual POD. Proven in data: job #32 (Jun-1) vs job #40 (Jun-4) snapshots of the same orders show `eta_date` drift and `pod_date` going null → actual arrival — that predicted-vs-actual delta is the training signal. Deleting or overwriting snapshots destroys it. **Without a current-state view**, inbound volume double-counts: the same shipment is counted once as `open_order` (keyed by `order_no`) and again as `shipped` (keyed by `delivery_no`), because `source_key` embeds `report_type` + a state-specific id. Inflates inbound totals every week as open orders convert to shipped. Deferrable until weekly shipment cadence or ETA-prediction work is imminent — but **before** either goes live. |
+| **What the work is** | (1) **Observation store**: append-only rows per import with `observation_date` (from `import_job.created_at` or explicit column) + mutable-state columns; stable line identity separate from `source_key`. (2) **Current-state view** (materialized view or query): `DISTINCT ON (order_no, order_line, item_code) ORDER BY observation_date DESC` (or equivalent). (3) **Fact layer**: `fact_inbound_shipment` reads current-state only (or becomes the view). (4) **Migrate consumers**: `dsi_soh_reconciliation`, inbound volume APIs, corroboration cache — all read current-state. (5) **Related guard**: import-time duplicate **detection** — same workbook re-imported with no `duplicate_review_required` flag; flag accidental re-runs (distinct from intentional weekly snapshots). (6) **Preserve** jobs #32 / #34 / #40 as observations once model exists — do not delete. **REJECTED:** idempotent upsert that overwrites in place (erases ETA history). |
+| **Regression traps** | Any consumer summing `quantity` across all fact/evidence rows (`dsi_soh_reconciliation`, inbound volume) **must** read current-state or it double-counts open+shipped and across weeks. Corroboration already dedupes on distinct `product_id` (not broken today) but should read current-state once available. Do **not** filter to shipped-only and lose open-order observations (needed for prediction). `source_key` today is **not** stable across lifecycle (`delivery_no` only exists post-ship). |
+| **Behavior to retain** | Steward / entity resolution on evidence lines; `resolved_unique` corroboration semantics; governance (no silent master creation); historical observation rows immutable after write. |
+| **Out of scope** | DSI sell-out bitemporal model; logistics/ETA ML model training (downstream of this substrate); deleting legacy jobs #32/#34/#40 before migration path exists. |
+| **TRIGGER** | Before the first real **weekly shipment cadence** goes live, **OR** before **logistics/ETA-prediction** (DSI Phase 4/5) work starts — whichever comes first. |
+
+---
+
+## BACKLOG-034 — Product Master launch/retire date integrity
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-14 |
+| **Effort** | Large (audit + governed steward corrections + re-validation plan) |
+| **Source** | Session audit: job #40 unique-SKU `inactive_only` anchor analysis (1,965 lines); `apps/api/app/services/imports/distributor_sales_inventory.py` (`_product_eligible_for_dsi_auto`, launch/retire window); `apps/api/app/models/dimensions.py` (`DimProduct.launch_date`, `retired_date`, `lifecycle_status`); shipment SKU-anchor override commit `6c865ea` (identity routed around bad dates) |
+| **Idea** | Audit and correct `dim_product.launch_date` / `retired_date`. Multiple confirmed corruption classes. |
+| **Why it matters / deferrable** | These dates gate product eligibility in DSI resolution (relaxed/strict) and would gate shipment-evidence, sell-through, and current-assortment views. Bad dates silently mis-classify products. **Confirmed on job-40 unique-SKU inactive_only anchors (1,965 lines):** 319 rows have `retired_date < launch_date` (inverted/impossible); 758 lines ship before `launch_date` (implausible at scale → likely late/wrong launch dates); 268 ship after `retired_date`. Plus: `B1403CVA-S61905W` retired 2025-12-22 before launch 2026-01-19; rows with `is_active=true` AND `lifecycle_status` in (Discarded/Disabled). This is the root cause routed around with the SKU-anchor identity rule. The override is correct for **identity**, but dates stay wrong for every other consumer. Deferrable until commercial outputs depend on lifecycle windows — but **before** SKU-anchor override is reconsidered or assortment/sell-through windows go live. |
+| **What the work is** | (1) Start with the **319 inverted-window** rows — unambiguously wrong, no domain judgment. (2) Resolve `is_active` vs `lifecycle_status` inconsistency: pick the canonical eligibility driver. (3) **before_launch** cases need Warren's domain call: real pre-launch channel-fill vs late launch dates. (4) Correct via governed update; never guess values — derive from OEM/trusted source or steward review. (5) Re-validate affected DSI/shipment jobs after corrections. |
+| **Regression traps** | Fixing dates changes DSI eligibility outcomes → re-validate affected jobs after. Do **not** widen windows blindly; that defeats eligibility purpose. |
+| **Behavior to retain** | SKU-exact shipment identity anchor (identity ≠ sellability); DSI historical vs weekly mode semantics; steward governance on master edits. |
+| **Out of scope** | Auto-correcting dates from import evidence without steward approval; reversing SKU-anchor identity rule. |
+| **TRIGGER** | Before relying on lifecycle/eligibility for any commercial output (assortment, sell-through windows), and before the SKU-anchor override is reconsidered. **Pairs with** BACKLOG-033 (bitemporal shipment cleanup). |
+
+---
+
 ## Unsourced — confirm with Warren
 
 These were on a verification checklist but **no deferral/pending wording** was found in repo docs, comments, or planning files:
