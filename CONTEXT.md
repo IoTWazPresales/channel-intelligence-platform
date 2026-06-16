@@ -5,7 +5,7 @@
 - **Branch:** `fix/shipment-steward-performance` (local commits pending push).
 - **Unit 2b (Supabase `postgres`, governed scripts):** Distributor merge — **32** TMP-DIST losers deleted (15 groups → **21** TMP-DIST remain). Customer name merge — **66** TMP-CUST losers deleted (63 groups). Alias-scope conflicts — **11** groups repointed; **multi-customer conflict keys = 0** (0048 re-add unblocked per BACKLOG-035).
 - **Unit 3 (code + dry-run):** `dsi_distributor_receipt_disambiguation.py` wired into DSI validate after `_resolve_product` for `ambiguous_eligible` rows. Job **#43** preview: **4,576** ambiguous candidate staging rows → **T1 1,517** + **T2 1,975** deterministic (**3,492**), **T4 1,084** steward (**no writes**).
-- **Unit 4:** Not applied — cross-distributor mis-assign preview **~4,220** rows pre-revalidate (expect drop after canonical distributor merge + job revalidate); trace/re-resolve deferred until Unit 3 validate soak approved.
+- **Unit 4:** Not applied — misassign preview (job **#43**): **4,220** candidate rows / **198** scopes; receipt re-resolution would change **120** rows (**T1** only); **4,100** still unresolved without steward. **STOP** before writes.
 - **Alembic applied head:** `20260607_0047` (unchanged). **0048** still out of branch (`8ec5978`).
 
 ## CURRENT STATE — Jun 14, 2026 (CIP close-out Units 1–2a; 2b preview STOP) — supersedes every block below

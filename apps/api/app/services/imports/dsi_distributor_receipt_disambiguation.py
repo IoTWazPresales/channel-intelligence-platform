@@ -268,3 +268,116 @@ def preview_receipt_disambiguation_for_staging_rows(
             tier_counts["still_ambiguous"] += 1
 
     return dict(tier_counts)
+
+
+def preview_cross_distributor_misassignments(
+    db: Session,
+    *,
+    import_job_id: int,
+    receipt_index: DistributorReceiptProductIndex,
+    dist_id_to_canonical: dict[int, str],
+    sample_limit: int = 3,
+) -> dict[str, Any]:
+    """Dry-run Unit 4: rows resolved to a SKU with no receipt for their distributor.
+
+    Re-simulates receipt disambiguation (T1–T4) and counts rows where the tier pick differs
+    from ``resolved_product_id``.
+    """
+    from app.services.imports.distributor_sales_inventory import _load_product_resolution_index, _resolve_product
+
+    rows = db.execute(
+        text(
+            """
+            SELECT s.id,
+                   s.raw_product_token,
+                   s.resolved_product_id,
+                   s.resolved_distributor_id,
+                   s.transaction_date,
+                   s.snapshot_date
+            FROM import_distributor_si_staging_line s
+            WHERE s.import_job_id = :jid
+              AND s.resolved_product_id IS NOT NULL
+              AND s.resolved_distributor_id IS NOT NULL
+              AND btrim(coalesce(s.raw_product_token, '')) <> ''
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM shipment_evidence_line se
+                    WHERE se.product_id = s.resolved_product_id
+                      AND se.distributor_id = s.resolved_distributor_id
+                      AND lower(btrim(coalesce(se.sales_model_name, '')))
+                          = lower(btrim(coalesce(s.raw_product_token, '')))
+                  )
+              AND EXISTS (
+                    SELECT 1
+                    FROM shipment_evidence_line se2
+                    WHERE se2.product_id = s.resolved_product_id
+                      AND se2.distributor_id IS NOT NULL
+                      AND se2.distributor_id <> s.resolved_distributor_id
+                      AND lower(btrim(coalesce(se2.sales_model_name, '')))
+                          = lower(btrim(coalesce(s.raw_product_token, '')))
+                  )
+            """
+        ),
+        {"jid": int(import_job_id)},
+    ).fetchall()
+
+    prod_idx = _load_product_resolution_index(db)
+    counts: dict[str, int] = defaultdict(int)
+    counts["misassign_candidate_rows"] = len(rows)
+    scope_keys: set[tuple[int, str, int]] = set()
+    samples: list[dict[str, Any]] = []
+
+    for row_id, raw, cur_pid, dist_id, tx, snap in rows:
+        cur_pid = int(cur_pid)
+        dist_id = int(dist_id)
+        sm = str(raw or "").strip()
+        scope_keys.add((dist_id, _sales_model_key_from_token(raw), cur_pid))
+        ev_date = tx or snap
+        if ev_date is None:
+            counts["no_evidence_date"] += 1
+            continue
+
+        _rpid, _perr, _tag, pev = _resolve_product(
+            raw,
+            prod_idx,
+            ev_date if isinstance(ev_date, date) else None,
+            relax_inactive_dim_product_for_historical_dsi=True,
+        )
+        elig: list[int] = []
+        if pev and pev.ambiguous_eligible:
+            elig = [int(x) for x in (pev.ambiguous_eligible.get("product_ids") or []) if int(x) > 0]
+        elif cur_pid > 0:
+            elig = [cur_pid]
+
+        res = try_receipt_disambiguate_product(
+            receipt_index,
+            distributor_id=dist_id,
+            dist_id_to_canonical=dist_id_to_canonical,
+            raw_product_token=str(raw) if raw else None,
+            eligible_product_ids=elig,
+            evidence_date=ev_date if isinstance(ev_date, date) else None,
+            ambiguous_eligible=pev.ambiguous_eligible if pev else None,
+        )
+        if res.product_id is not None and int(res.product_id) != cur_pid:
+            counts["would_reassign"] += 1
+            counts[f"reassign_{res.tier}"] += 1
+            if len(samples) < sample_limit:
+                samples.append(
+                    {
+                        "staging_line_id": int(row_id),
+                        "raw_product_token": sm,
+                        "resolved_distributor_id": dist_id,
+                        "current_product_id": cur_pid,
+                        "proposed_product_id": int(res.product_id),
+                        "tier": res.tier,
+                        "evidence_date": str(ev_date),
+                        "provenance": res.provenance,
+                    }
+                )
+        elif res.product_id is not None and int(res.product_id) == cur_pid:
+            counts["receipt_confirms_current"] += 1
+        else:
+            counts["still_unresolved"] += 1
+
+    counts["distinct_scopes"] = len(scope_keys)
+    return {"counts": dict(counts), "sample_traces": samples}
