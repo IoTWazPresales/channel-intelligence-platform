@@ -1,5 +1,15 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 16, 2026 (BACKLOG-036 + corroboration guard + steward evidence; PR pending) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local commits pending push).
+- **Point 1 (BACKLOG-036):** Weekly DSI path (`not historical_relaxed`) enables `shipment_sku_item_code_anchor`; validate emits `weekly_dsi_model_grain_without_sku` / `weekly_dsi_resolved_at_sales_model_grain` when product column is model-grain. Tests: `test_dsi_weekly_sku_strict.py` **4 pass**.
+- **Point 4 (corroboration guard):** `_shipment_disambiguate_product_id` returns `(None, None)` when `distinct_ids_scope == cross_distributor` — blocks auto-resolve leak. Candidate context carries `shipment_cross_distributor_corroboration.auto_resolve_blocked`. Steward UI: `DsiProductResolutionEvidenceCard`. Tests: `test_dsi_shipment_cross_distributor_guard.py` **2 pass** + web **2 pass**.
+- **Job #43 factual (read-only, post Units 1–4):** Misassign preview **4,927** candidate rows (`preview_dsi_cross_distributor_misassignments.py`); **1,183** staging rows already tagged with cross-distributor resolve diagnostics. Guard affects **next** validate/revalidate — does not rewrite existing resolved rows.
+- **Point 3:** Open PR from this branch → `main` (not merged). `gh` CLI unavailable on local Windows host — use GitHub compare UI or install `gh`.
+- **Test slice (post-change):** API DSI tests **24 pass**; web steward + evidence card **4 pass**.
+- **Alembic applied head:** `20260608_0048` (Supabase).
+
 ## CURRENT STATE — Jun 16, 2026 (BACKLOG-035: migration 0048 applied on Supabase) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (push pending).
