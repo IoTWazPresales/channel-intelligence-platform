@@ -16,6 +16,7 @@ import sys
 from sqlalchemy import text
 
 from app.db.session_sync import SessionLocal, sync_engine
+from app.services.imports.cip_db_identity import is_cip_application_database
 from app.services.imports.shipment_evidence_steward_ops import merge_duplicate_shipment_provisional_distributors_by_display_name
 
 
@@ -27,8 +28,8 @@ def main() -> int:
     with sync_engine.connect() as conn:
         dbname = conn.execute(text("select current_database()")).scalar_one()
     print(f"current_database={dbname!r}")
-    if str(dbname).strip().lower() != "cip":
-        print("Refusing to run: expected current_database() == 'cip'.", file=sys.stderr)
+    if not is_cip_application_database(str(dbname)):
+        print("Refusing to run: expected CIP application database (cip or postgres).", file=sys.stderr)
         return 2
 
     with SessionLocal() as db:

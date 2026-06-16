@@ -37,6 +37,7 @@ from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.utils.json_safe import to_jsonable
 from app.services.imports.distributor_sales_inventory import _norm_key
 from app.services.imports.dsi_steward_candidate_ops import DISTRIBUTOR_PROVISIONAL_SUSPICIOUS
+from app.services.imports.provisional_entity_consolidation import _repoint_customer_id_references
 from app.services.imports.provisional_entity_identity import (
     canonical_provisional_entity_name_key,
     find_existing_provisional_customer_by_canonical_name,
@@ -1260,6 +1261,7 @@ def merge_duplicate_shipment_provisional_customers_by_display_name(
             if n_loc > 0 or n_con > 0:
                 skipped.append({"customer_id": lid, "reason": "has_locations_or_contacts"})
                 continue
+            _repoint_customer_id_references(db, loser_id=lid, keeper_id=kid)
             aliases = list(
                 db.scalars(select(CustomerSourceTokenAlias).where(CustomerSourceTokenAlias.customer_id == lid)).all()
             )
@@ -1278,16 +1280,6 @@ def merge_duplicate_shipment_provisional_customers_by_display_name(
                 else:
                     al.customer_id = kid
                     db.add(al)
-            db.execute(
-                update(ShipmentEvidenceLine)
-                .where(ShipmentEvidenceLine.customer_id == lid)
-                .values(customer_id=kid)
-            )
-            db.execute(
-                update(ImportEntityMappingCandidate)
-                .where(ImportEntityMappingCandidate.suggested_entity_id == lid)
-                .values(suggested_entity_id=kid)
-            )
             loser_row = db.get(DimCustomer, lid)
             if loser_row is not None:
                 db.delete(loser_row)
@@ -1320,6 +1312,19 @@ def _repoint_distributor_id_references(db: Session, *, loser_id: int, keeper_id:
         update(ImportDistributorSiStagingLine)
         .where(ImportDistributorSiStagingLine.resolved_distributor_id == loser_id)
         .values(resolved_distributor_id=keeper_id)
+    )
+    db.execute(
+        update(ImportEntityMappingCandidate)
+        .where(
+            ImportEntityMappingCandidate.suggested_entity_id == loser_id,
+            ImportEntityMappingCandidate.entity_type.in_(("distributor_token", "shipment_distributor")),
+        )
+        .values(suggested_entity_id=keeper_id)
+    )
+    db.execute(
+        update(CustomerSourceTokenAlias)
+        .where(CustomerSourceTokenAlias.distributor_id == loser_id)
+        .values(distributor_id=keeper_id)
     )
 
 
@@ -1415,7 +1420,7 @@ def merge_duplicate_shipment_provisional_distributors_by_display_name(
                 update(ImportEntityMappingCandidate)
                 .where(
                     ImportEntityMappingCandidate.suggested_entity_id == lid,
-                    ImportEntityMappingCandidate.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY,
+                    ImportEntityMappingCandidate.entity_type.in_(("distributor_token", "shipment_distributor")),
                 )
                 .values(suggested_entity_id=kid)
             )
