@@ -22,6 +22,10 @@ from app.services.imports.dsi_steward_candidate_ops import (
     _resolved_provisional_display_name,
     _source_customer_alias_raw_for_dsi_candidate,
 )
+from app.services.imports.provisional_entity_identity import (
+    find_existing_provisional_customer_by_canonical_name,
+    is_non_entity_customer_provisional_token,
+)
 
 
 def _generate_tmp_customer_code_sync(session: Session) -> str:
@@ -133,23 +137,32 @@ def _apply_one_provisional_customer_sync(
         raise StewardOpError("Candidate has no usable source customer alias evidence", status_code=400)
 
     proposal = _resolved_provisional_display_name(None, cand)
+    if is_non_entity_customer_provisional_token(raw_token=raw_evidence, display_name=proposal):
+        raise StewardOpError(
+            "Token or display name looks like policy/note text (not a customer entity)",
+            status_code=400,
+        )
     notes = (notes_summary or "").strip() or None
     base_note = f"Provisional customer created from DSI import candidate {cand.id} (job {cand.import_job_id})."
     merged_notes = f"{base_note} {notes}" if notes else base_note
 
-    code = _generate_tmp_customer_code_sync(session)
-    row = DimCustomer(
-        code=code,
-        name=proposal.strip()[:256],
-        customer_status="unverified",
-        partner_tier=tier,
-        notes_summary=merged_notes[:512],
-        region_id=region_id,
-        channel_id=channel_id,
-        preferred_distributor_id=preferred_distributor_id,
-    )
-    session.add(row)
-    session.flush()
+    existing_cust = find_existing_provisional_customer_by_canonical_name(session, proposal)
+    if existing_cust is not None:
+        row = existing_cust
+    else:
+        code = _generate_tmp_customer_code_sync(session)
+        row = DimCustomer(
+            code=code,
+            name=proposal.strip()[:256],
+            customer_status="unverified",
+            partner_tier=tier,
+            notes_summary=merged_notes[:512],
+            region_id=region_id,
+            channel_id=channel_id,
+            preferred_distributor_id=preferred_distributor_id,
+        )
+        session.add(row)
+        session.flush()
 
     raw = raw_evidence
     nt = _norm_key(raw)

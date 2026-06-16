@@ -37,6 +37,12 @@ from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.utils.json_safe import to_jsonable
 from app.services.imports.distributor_sales_inventory import _norm_key
 from app.services.imports.dsi_steward_candidate_ops import DISTRIBUTOR_PROVISIONAL_SUSPICIOUS
+from app.services.imports.provisional_entity_identity import (
+    canonical_provisional_entity_name_key,
+    find_existing_provisional_customer_by_canonical_name,
+    find_existing_provisional_distributor_by_canonical_name,
+    is_non_entity_customer_provisional_token,
+)
 from app.services.imports.shipment_evidence_resolution_plan import (
     SHIPMENT_CANDIDATE_TERMINAL_STATUSES,
     SHIPMENT_CUSTOMER_ENTITY,
@@ -398,9 +404,13 @@ def _apply_create_provisional_shipment_distributor_without_commit(
         raise ShipmentStewardOpError("distributor_code already exists", status_code=409)
 
     name = _display_name_from_context_or_sample(cand, display_name, raw) or code
-    row = DimDistributor(code=code, name=name)
-    db.add(row)
-    db.flush()
+    existing_dist = find_existing_provisional_distributor_by_canonical_name(db, name)
+    if existing_dist is not None:
+        row = existing_dist
+    else:
+        row = DimDistributor(code=code, name=name)
+        db.add(row)
+        db.flush()
 
     alias = DistributorSourceTokenAlias(
         distributor_id=int(row.id),
@@ -669,23 +679,33 @@ def _apply_create_provisional_shipment_customer_without_commit(
     proposal = _display_name_from_context_or_sample(cand, display_name, raw0).strip()
     if not proposal:
         proposal = "Unknown customer"
+    if is_non_entity_customer_provisional_token(raw_token=raw0, display_name=proposal):
+        raise ShipmentStewardOpError(
+            "Token or display name looks like policy/note text (not a customer entity); "
+            "ignore or map to an existing customer instead.",
+            status_code=400,
+        )
     notes = (notes_summary or "").strip() or None
     base_note = f"Provisional customer created from shipment evidence import candidate {cand.id} (job {cand.import_job_id})."
     merged_notes = f"{base_note} {notes}" if notes else base_note
 
-    code = _allocate_tmp_customer_code(db)
-    row = DimCustomer(
-        code=code,
-        name=proposal[:256],
-        customer_status="unverified",
-        partner_tier=tier,
-        notes_summary=merged_notes[:512],
-        region_id=region_id,
-        channel_id=channel_id,
-        preferred_distributor_id=preferred_distributor_id,
-    )
-    db.add(row)
-    db.flush()
+    existing_cust = find_existing_provisional_customer_by_canonical_name(db, proposal)
+    if existing_cust is not None:
+        row = existing_cust
+    else:
+        code = _allocate_tmp_customer_code(db)
+        row = DimCustomer(
+            code=code,
+            name=proposal[:256],
+            customer_status="unverified",
+            partner_tier=tier,
+            notes_summary=merged_notes[:512],
+            region_id=region_id,
+            channel_id=channel_id,
+            preferred_distributor_id=preferred_distributor_id,
+        )
+        db.add(row)
+        db.flush()
 
     alias_note = f"Alias from provisional customer create (shipment evidence candidate {cand.id})"
     try:
@@ -1196,7 +1216,7 @@ def merge_duplicate_shipment_provisional_customers_by_display_name(
     )
     groups: dict[str, list[DimCustomer]] = defaultdict(list)
     for c in rows:
-        nk = _norm_key(c.name or "")
+        nk = canonical_provisional_entity_name_key(c.name or "")
         key = nk if nk else f"__noname_{int(c.id)}"
         groups[key].append(c)
 
@@ -1321,7 +1341,7 @@ def merge_duplicate_shipment_provisional_distributors_by_display_name(
     rows = list(db.scalars(select(DimDistributor).where(DimDistributor.code.like("TMP-DIST-%"))).all())
     groups: dict[str, list[DimDistributor]] = defaultdict(list)
     for d in rows:
-        nk = _norm_key(d.name or "")
+        nk = canonical_provisional_entity_name_key(d.name or "")
         key = nk if nk else f"__noname_{int(d.id)}"
         groups[key].append(d)
 
