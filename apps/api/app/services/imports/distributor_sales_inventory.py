@@ -1815,14 +1815,16 @@ def process_distributor_sales_inventory(
     from app.services.imports.dsi_shipment_corroboration import build_global_product_identity_index
 
     global_product_identity = _dsi_session_read_with_transient_retry(
-        db, build_global_product_identity_index
+        db, lambda: build_global_product_identity_index(db)
     )
     _upfront_progress("global_product_identity")
 
     from app.services.imports.dsi_distributor_receipt_disambiguation import DistributorReceiptProductIndex
     from app.services.imports.provisional_entity_consolidation import build_distributor_id_to_canonical_key
 
-    dist_id_to_canonical = _dsi_session_read_with_transient_retry(db, build_distributor_id_to_canonical_key)
+    dist_id_to_canonical = _dsi_session_read_with_transient_retry(
+        db, lambda: build_distributor_id_to_canonical_key(db)
+    )
     receipt_index = _dsi_session_read_with_transient_retry(
         db, lambda: DistributorReceiptProductIndex.load(db, dist_id_to_canonical)
     )
