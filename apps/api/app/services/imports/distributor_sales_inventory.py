@@ -810,7 +810,10 @@ def _shipment_disambiguate_product_id(
     elig = {int(x) for x in candidate_ids if int(x) > 0}
     inter = elig & {int(x) for x in dps if x is not None}
     if len(inter) == 1:
-        return int(next(iter(inter))), scope
+        pick = int(next(iter(inter)))
+        if scope == "cross_distributor":
+            return None, None
+        return pick, scope
     return None, None
 
 
@@ -1899,6 +1902,7 @@ def process_distributor_sales_inventory(
     # Pre-compute reverse column lookups (mapping is immutable over the loop)
     _c_dist = _col(mapping, "distributor_token")
     _c_prod = _col(mapping, "product_identifier")
+    weekly_workflow = not historical_relaxed
     _c_cust = _col(mapping, "customer_dealer_token")
     _c_dg = _col(mapping, "dealer_group_token")
     _c_open = _col(mapping, "open_channel_evidence")
@@ -2095,6 +2099,7 @@ def process_distributor_sales_inventory(
                 prod_idx,
                 evidence_date,
                 relax_inactive_dim_product_for_historical_dsi=historical_relaxed,
+                shipment_sku_item_code_anchor=weekly_workflow,
                 db=db,
                 distributor_id=rdid,
                 corr_cache=corr_cache,
@@ -2106,6 +2111,19 @@ def process_distributor_sales_inventory(
             elif presolve_tag:
                 prod_diag.append(presolve_tag)
                 diag.append(presolve_tag)
+            from app.services.imports.dsi_weekly_product_resolution import weekly_dsi_product_resolution_warnings
+
+            amb_for_weekly = pev.ambiguous_eligible if pev is not None else None
+            for wcode in weekly_dsi_product_resolution_warnings(
+                weekly_workflow=weekly_workflow,
+                product_source_column=_c_prod,
+                presolve_tag=presolve_tag,
+                product_error=perr,
+                ambiguous_eligible=amb_for_weekly,
+            ):
+                if wcode not in diag:
+                    diag.append(wcode)
+                    prod_diag.append(wcode)
             if rpid is None and prod_raw and pev and pev.ambiguous_eligible:
                 from app.services.imports.dsi_distributor_receipt_disambiguation import try_receipt_disambiguate_product
 
@@ -2437,6 +2455,8 @@ def process_distributor_sales_inventory(
             k = ("product_identifier", _norm_key(prod_raw))
             a = agg[k]
             _merge_product_resolution_evidence(a, pev)
+            if "weekly_dsi_model_grain_without_sku" in diag:
+                a["weekly_model_grain_without_sku"] = True
             if rdistributor_id is not None:
                 ds = a.setdefault("_dist_ids_unresolved", set())
                 if not isinstance(ds, set):
@@ -2468,6 +2488,20 @@ def process_distributor_sales_inventory(
                 if cp:
                     a["shipment_corr_hit"] = True
                     a["shipment_corr_best"] = max(int(a.get("shipment_corr_best") or 0), int(cp.get("match_count") or 0))
+                    cp_scope = cp.get("distinct_ids_scope") if isinstance(cp.get("distinct_ids_scope"), str) else None
+                    if cp_scope == "cross_distributor":
+                        a["shipment_cross_distributor_corroboration"] = {
+                            "distinct_resolved_product_ids": [
+                                int(x) for x in (cp.get("distinct_resolved_product_ids") or []) if x is not None
+                            ][:16],
+                            "match_count": int(cp.get("match_count") or 0),
+                            "evidence_month": evidence_date.strftime("%Y-%m"),
+                            "auto_resolve_blocked": True,
+                            "summary": (
+                                "Shipment evidence for this token exists at other distributors only; "
+                                "cross-distributor auto-resolve is blocked — use receipt tier or steward."
+                            ),
+                        }
                     dps = cp.get("distinct_resolved_product_ids")
                     if isinstance(dps, list):
                         sid_set = a.setdefault("shipment_distinct_product_ids", set())
@@ -2751,6 +2785,13 @@ def process_distributor_sales_inventory(
                 "summary": "Resolved shipment evidence lines in the same calendar month may corroborate this token (no auto-resolve).",
             }
             ctx.setdefault("corroboration_markers", []).append("shipment_evidence_product")
+        if etype == "product_identifier" and isinstance(data.get("shipment_cross_distributor_corroboration"), dict):
+            ctx["shipment_cross_distributor_corroboration"] = dict(
+                data["shipment_cross_distributor_corroboration"]
+            )
+        if etype == "product_identifier" and data.get("weekly_model_grain_without_sku"):
+            ctx["weekly_model_grain_without_sku"] = True
+            ctx.setdefault("weekly_resolution_warnings", []).append("weekly_dsi_model_grain_without_sku")
         if etype == "product_identifier":
             from app.services.imports.dsi_product_shipment_tiebreak import enrich_product_global_identity_context
 

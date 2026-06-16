@@ -27,7 +27,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-14 |
+| **Status / parked** | **Done** · 2026-06-16 (`dsi_weekly_product_resolution.py` + validate warnings; weekly path enables `shipment_sku_item_code_anchor`) |
 | **Effort** | Medium |
 | **Source** | CIP close-out brief; job #43 is historical model-grain; weekly DSI files carry SKU |
 | **Idea** | After distributor-receipt disambiguation tier (Unit 3), tighten weekly-mode imports to prefer `item_code`/SKU tier first and surface explicit steward guidance when weekly files omit SKU. |
