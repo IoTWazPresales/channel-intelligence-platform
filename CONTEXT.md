@@ -1,5 +1,13 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 16, 2026 (CIP close-out Units 3–4 applied on Supabase job #43) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` @ `77812e8` (local, **5 commits ahead** of origin, not pushed).
+- **Unit 3 soak (job #43 revalidate):** Completed `completed_with_errors` / `validated`, **168,839** staging rows rebuilt. **3,844** rows carry `product_receipt_disambiguation_*` diagnostics; unresolved product dropped **39,288 → 19,490**. Remaining ambiguous preview: **1,102** candidates (**T1 29**, **T2 13**, **T4 1,060**).
+- **Unit 4 apply:** **267** cross-distributor misassign rows corrected via receipt T1 (`apply_dsi_cross_distributor_misassignments.py --apply`).
+- **Bugfix:** `77812e8` — validate upfront cache loaders must pass `db` into `build_global_product_identity_index` / `build_distributor_id_to_canonical_key` (first revalidate attempt wiped staging then failed).
+- **Alembic applied head:** `20260607_0047`. **0048** still out; customer conflicts **0** (BACKLOG-035 trigger fired).
+
 ## CURRENT STATE — Jun 14, 2026 (CIP close-out Units 2b–3 applied on Supabase) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local commits pending push).
