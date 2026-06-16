@@ -270,24 +270,7 @@ def preview_receipt_disambiguation_for_staging_rows(
     return dict(tier_counts)
 
 
-def preview_cross_distributor_misassignments(
-    db: Session,
-    *,
-    import_job_id: int,
-    receipt_index: DistributorReceiptProductIndex,
-    dist_id_to_canonical: dict[int, str],
-    sample_limit: int = 3,
-) -> dict[str, Any]:
-    """Dry-run Unit 4: rows resolved to a SKU with no receipt for their distributor.
-
-    Re-simulates receipt disambiguation (T1–T4) and counts rows where the tier pick differs
-    from ``resolved_product_id``.
-    """
-    from app.services.imports.distributor_sales_inventory import _load_product_resolution_index, _resolve_product
-
-    rows = db.execute(
-        text(
-            """
+_MISASSIGN_CANDIDATE_SQL = """
             SELECT s.id,
                    s.raw_product_token,
                    s.resolved_product_id,
@@ -317,9 +300,84 @@ def preview_cross_distributor_misassignments(
                           = lower(btrim(coalesce(s.raw_product_token, '')))
                   )
             """
-        ),
-        {"jid": int(import_job_id)},
-    ).fetchall()
+
+
+def _eligible_ids_for_receipt_reresolve(
+    raw: str | None,
+    prod_idx: Any,
+    ev_date: date | None,
+    *,
+    historical_relaxed: bool,
+) -> tuple[list[int], dict[str, Any] | None]:
+    """Eligible PM ids for receipt re-resolve without shipment corroboration picks."""
+    from app.services.imports.distributor_sales_inventory import _resolve_product
+
+    _rpid, _perr, _tag, pev = _resolve_product(
+        raw,
+        prod_idx,
+        ev_date,
+        relax_inactive_dim_product_for_historical_dsi=historical_relaxed,
+        db=None,
+    )
+    if pev and pev.ambiguous_eligible:
+        elig = [int(x) for x in (pev.ambiguous_eligible.get("product_ids") or []) if int(x) > 0]
+        return elig, pev.ambiguous_eligible
+    return [], None
+
+
+def _propose_misassign_correction(
+    *,
+    raw: str | None,
+    cur_pid: int,
+    dist_id: int,
+    ev_date: date,
+    prod_idx: Any,
+    receipt_index: DistributorReceiptProductIndex,
+    dist_id_to_canonical: dict[int, str],
+    historical_relaxed: bool,
+) -> ReceiptDisambiguationResult | None:
+    elig, amb = _eligible_ids_for_receipt_reresolve(
+        raw, prod_idx, ev_date, historical_relaxed=historical_relaxed
+    )
+    if not elig:
+        return None
+    res = try_receipt_disambiguate_product(
+        receipt_index,
+        distributor_id=dist_id,
+        dist_id_to_canonical=dist_id_to_canonical,
+        raw_product_token=str(raw) if raw else None,
+        eligible_product_ids=elig,
+        evidence_date=ev_date,
+        ambiguous_eligible=amb,
+    )
+    if res.product_id is not None and int(res.product_id) != int(cur_pid):
+        return res
+    return None
+
+
+def preview_cross_distributor_misassignments(
+    db: Session,
+    *,
+    import_job_id: int,
+    receipt_index: DistributorReceiptProductIndex,
+    dist_id_to_canonical: dict[int, str],
+    sample_limit: int = 3,
+) -> dict[str, Any]:
+    """Dry-run Unit 4: rows resolved to a SKU with no receipt for their distributor.
+
+    Re-simulates receipt disambiguation (T1–T4) and counts rows where the tier pick differs
+    from ``resolved_product_id``.
+    """
+    from app.services.imports.distributor_sales_inventory import (
+        _load_product_resolution_index,
+        dsi_historical_product_eligibility_relaxed_from_import_job,
+    )
+    from app.models.ingestion import ImportJob
+
+    job = db.get(ImportJob, int(import_job_id))
+    historical_relaxed = dsi_historical_product_eligibility_relaxed_from_import_job(job) if job else True
+
+    rows = db.execute(text(_MISASSIGN_CANDIDATE_SQL), {"jid": int(import_job_id)}).fetchall()
 
     prod_idx = _load_product_resolution_index(db)
     counts: dict[str, int] = defaultdict(int)
@@ -336,29 +394,20 @@ def preview_cross_distributor_misassignments(
         if ev_date is None:
             counts["no_evidence_date"] += 1
             continue
+        if not isinstance(ev_date, date):
+            ev_date = ev_date
 
-        _rpid, _perr, _tag, pev = _resolve_product(
-            raw,
-            prod_idx,
-            ev_date if isinstance(ev_date, date) else None,
-            relax_inactive_dim_product_for_historical_dsi=True,
-        )
-        elig: list[int] = []
-        if pev and pev.ambiguous_eligible:
-            elig = [int(x) for x in (pev.ambiguous_eligible.get("product_ids") or []) if int(x) > 0]
-        elif cur_pid > 0:
-            elig = [cur_pid]
-
-        res = try_receipt_disambiguate_product(
-            receipt_index,
-            distributor_id=dist_id,
+        res = _propose_misassign_correction(
+            raw=str(raw) if raw else None,
+            cur_pid=cur_pid,
+            dist_id=dist_id,
+            ev_date=ev_date,
+            prod_idx=prod_idx,
+            receipt_index=receipt_index,
             dist_id_to_canonical=dist_id_to_canonical,
-            raw_product_token=str(raw) if raw else None,
-            eligible_product_ids=elig,
-            evidence_date=ev_date if isinstance(ev_date, date) else None,
-            ambiguous_eligible=pev.ambiguous_eligible if pev else None,
+            historical_relaxed=historical_relaxed,
         )
-        if res.product_id is not None and int(res.product_id) != cur_pid:
+        if res is not None and res.product_id is not None and res.tier:
             counts["would_reassign"] += 1
             counts[f"reassign_{res.tier}"] += 1
             if len(samples) < sample_limit:
@@ -374,10 +423,100 @@ def preview_cross_distributor_misassignments(
                         "provenance": res.provenance,
                     }
                 )
-        elif res.product_id is not None and int(res.product_id) == cur_pid:
-            counts["receipt_confirms_current"] += 1
         else:
-            counts["still_unresolved"] += 1
+            elig, _amb = _eligible_ids_for_receipt_reresolve(
+                str(raw) if raw else None,
+                prod_idx,
+                ev_date,
+                historical_relaxed=historical_relaxed,
+            )
+            if elig:
+                counts["still_unresolved"] += 1
+            else:
+                counts["not_ambiguous_eligible"] += 1
 
     counts["distinct_scopes"] = len(scope_keys)
     return {"counts": dict(counts), "sample_traces": samples}
+
+
+def apply_cross_distributor_misassignment_corrections(
+    db: Session,
+    *,
+    import_job_id: int,
+    receipt_index: DistributorReceiptProductIndex,
+    dist_id_to_canonical: dict[int, str],
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Unit 4 governed apply: re-resolve misassigned rows via receipt tiers (not raw DML)."""
+    from app.models.import_distributor_si import ImportDistributorSiStagingLine
+    from app.models.ingestion import ImportJob
+    from app.services.imports.distributor_sales_inventory import (
+        _load_product_resolution_index,
+        dsi_historical_product_eligibility_relaxed_from_import_job,
+    )
+
+    job = db.get(ImportJob, int(import_job_id))
+    if job is None:
+        raise ValueError(f"import job {import_job_id} not found")
+    historical_relaxed = dsi_historical_product_eligibility_relaxed_from_import_job(job)
+
+    rows = db.execute(text(_MISASSIGN_CANDIDATE_SQL), {"jid": int(import_job_id)}).fetchall()
+    prod_idx = _load_product_resolution_index(db)
+    counts: dict[str, int] = defaultdict(int)
+    counts["misassign_candidate_rows"] = len(rows)
+    corrections: list[dict[str, Any]] = []
+
+    for row_id, raw, cur_pid, dist_id, tx, snap in rows:
+        cur_pid = int(cur_pid)
+        dist_id = int(dist_id)
+        ev_date = tx or snap
+        if ev_date is None:
+            counts["no_evidence_date"] += 1
+            continue
+        if not isinstance(ev_date, date):
+            ev_date = ev_date
+
+        res = _propose_misassign_correction(
+            raw=str(raw) if raw else None,
+            cur_pid=cur_pid,
+            dist_id=dist_id,
+            ev_date=ev_date,
+            prod_idx=prod_idx,
+            receipt_index=receipt_index,
+            dist_id_to_canonical=dist_id_to_canonical,
+            historical_relaxed=historical_relaxed,
+        )
+        if res is None or res.product_id is None or not res.tier:
+            counts["skipped"] += 1
+            continue
+
+        counts["applied"] += 1
+        counts[f"applied_{res.tier}"] += 1
+        tag = f"product_receipt_disambiguation_{res.tier.lower()}_misassign_correction"
+        corrections.append(
+            {
+                "staging_line_id": int(row_id),
+                "from_product_id": cur_pid,
+                "to_product_id": int(res.product_id),
+                "tier": res.tier,
+                "provenance": res.provenance,
+            }
+        )
+        if dry_run:
+            continue
+
+        line = db.get(ImportDistributorSiStagingLine, int(row_id))
+        if line is None:
+            counts["missing_line"] += 1
+            continue
+        diag = list(line.diagnostic_codes or [])
+        if tag not in diag:
+            diag.append(tag)
+        line.resolved_product_id = int(res.product_id)
+        line.diagnostic_codes = diag
+        db.add(line)
+
+    if not dry_run and counts["applied"] > 0:
+        db.commit()
+
+    return {"dry_run": dry_run, "counts": dict(counts), "corrections": corrections[:50]}
