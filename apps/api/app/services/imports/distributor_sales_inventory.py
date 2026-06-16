@@ -444,6 +444,7 @@ class ProductResolutionEvidence:
 
     ambiguous_eligible: dict[str, Any] | None = None
     inactive_hits: list[dict[str, Any]] = field(default_factory=list)
+    receipt_disambiguation: dict[str, Any] | None = None
 
 
 def _merge_product_resolution_evidence(bucket: dict[str, Any], ev: ProductResolutionEvidence | None) -> None:
@@ -1818,6 +1819,15 @@ def process_distributor_sales_inventory(
     )
     _upfront_progress("global_product_identity")
 
+    from app.services.imports.dsi_distributor_receipt_disambiguation import DistributorReceiptProductIndex
+    from app.services.imports.provisional_entity_consolidation import build_distributor_id_to_canonical_key
+
+    dist_id_to_canonical = _dsi_session_read_with_transient_retry(db, build_distributor_id_to_canonical_key)
+    receipt_index = _dsi_session_read_with_transient_retry(
+        db, lambda: DistributorReceiptProductIndex.load(db, dist_id_to_canonical)
+    )
+    _upfront_progress("receipt_product_index")
+
     # Pre-load distributor + customer master data (eliminates 4–6 per-row DB round-trips)
     res_cache = _build_resolution_cache(db, source_def_id, on_sub_phase=_upfront_progress)
     # Commit the alias/open-channel read transaction left open by the cache build before the
@@ -2094,6 +2104,26 @@ def process_distributor_sales_inventory(
             elif presolve_tag:
                 prod_diag.append(presolve_tag)
                 diag.append(presolve_tag)
+            if rpid is None and prod_raw and pev and pev.ambiguous_eligible:
+                from app.services.imports.dsi_distributor_receipt_disambiguation import try_receipt_disambiguate_product
+
+                elig_ids = [int(x) for x in (pev.ambiguous_eligible.get("product_ids") or []) if int(x) > 0]
+                receipt_res = try_receipt_disambiguate_product(
+                    receipt_index,
+                    distributor_id=rdid,
+                    dist_id_to_canonical=dist_id_to_canonical,
+                    raw_product_token=prod_raw,
+                    eligible_product_ids=elig_ids,
+                    evidence_date=evidence_date,
+                    ambiguous_eligible=pev.ambiguous_eligible,
+                )
+                if receipt_res.product_id is not None and receipt_res.tier:
+                    rpid = int(receipt_res.product_id)
+                    presolve_tag = f"product_receipt_disambiguation_{receipt_res.tier.lower()}"
+                    pev.receipt_disambiguation = receipt_res.provenance.get("receipt_disambiguation")
+                    prod_diag.append(presolve_tag)
+                    diag.append(presolve_tag)
+                    perr = None
             if rpid is None and prod_raw:
                 from app.services.imports.dsi_weekly_auto_resolution import (
                     check_product_auto_resolution_at_validate,
