@@ -51,5 +51,9 @@ blob-report/
 *.dump
 queryex
 
+# Local agent diagnostics (underscore-prefixed scripts and scratch JSON under apps/api)
+apps/api/scripts/_*
+apps/api/_*.json
+
 # Dev process PID files (generated at runtime by dev-*.js scripts)
 .cip-dev-pids/
