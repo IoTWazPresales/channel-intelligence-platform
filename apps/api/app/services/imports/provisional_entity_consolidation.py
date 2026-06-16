@@ -179,6 +179,71 @@ def resolve_approved_customer_alias_scope_conflicts(
     return out
 
 
+def dedupe_duplicate_approved_customer_alias_rows(
+    db: Session,
+    *,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Delete redundant approved customer alias rows in the same scope (same customer_id).
+
+    Keeps the lowest ``id`` per ``(normalized_token, source_definition_id, distributor_id)``.
+    Required before migration 0048 when duplicate rows share one ``customer_id``.
+    """
+    rows = db.execute(
+        text(
+            """
+            SELECT normalized_token,
+                   COALESCE(source_definition_id, -1) AS scope_src,
+                   COALESCE(distributor_id, -1) AS scope_dist,
+                   array_agg(id ORDER BY id) AS alias_ids,
+                   COUNT(*) AS alias_rows
+            FROM customer_source_token_alias
+            WHERE status = 'approved'
+            GROUP BY 1, 2, 3
+            HAVING COUNT(*) > 1
+            ORDER BY 1, 2, 3
+            """
+        )
+    ).fetchall()
+
+    planned: list[dict[str, Any]] = []
+    loser_ids: list[int] = []
+    for r in rows:
+        ids = [int(x) for x in (r[3] or [])]
+        if len(ids) < 2:
+            continue
+        keeper = int(ids[0])
+        losers = [int(x) for x in ids[1:]]
+        loser_ids.extend(losers)
+        planned.append(
+            {
+                "normalized_token": str(r[0]),
+                "keeper_alias_id": keeper,
+                "delete_alias_ids": losers,
+                "alias_rows": int(r[4] or 0),
+            }
+        )
+
+    out: dict[str, Any] = {
+        "dry_run": dry_run,
+        "duplicate_scope_count": len(planned),
+        "delete_alias_count": len(loser_ids),
+        "planned": planned[:50],
+    }
+    if dry_run:
+        return out
+
+    deleted = 0
+    for aid in loser_ids:
+        row = db.get(CustomerSourceTokenAlias, int(aid))
+        if row is not None:
+            db.delete(row)
+            deleted += 1
+    db.commit()
+    out["deleted_alias_rows"] = deleted
+    return out
+
+
 def build_distributor_id_to_canonical_key(db: Session) -> dict[int, str]:
     """Map every ``dim_distributor.id`` to canonical display-name key (for receipt / merge scope)."""
     out: dict[int, str] = {}

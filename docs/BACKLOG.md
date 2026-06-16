@@ -10,7 +10,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-14 (Unit 1 close-out) |
+| **Status / parked** | **Done** · applied Supabase 2026-06-16 (`662f68f` branch + dedupe pre-step) |
 | **Effort** | Small (migration file restore + apply) |
 | **Source** | CIP close-out brief Unit 1; `apps/api/alembic/versions/20260608_0048_source_token_alias_unique.py` removed @ `8ec5978` |
 | **Idea** | Restore `20260608_0048` partial-unique indexes on approved `distributor_source_token_alias` and `customer_source_token_alias` rows. |

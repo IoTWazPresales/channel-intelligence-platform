@@ -1,5 +1,12 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 16, 2026 (BACKLOG-035: migration 0048 applied on Supabase) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (push pending).
+- **0048 applied:** `alembic_version = 20260608_0048` on Supabase; partial-unique indexes `uq_dist_src_token_alias_approved_scope` + `uq_cust_src_token_alias_approved_scope` live.
+- **Pre-apply data fix:** Deleted **38** redundant approved customer alias rows (`dedupe_duplicate_approved_customer_aliases.py --apply`) — multi-`customer_id` conflicts were already 0; duplicate rows in same scope blocked index creation.
+- **CIP close-out Units 1–4:** Complete (see block below).
+
 ## CURRENT STATE — Jun 16, 2026 (CIP close-out Units 3–4 applied on Supabase job #43) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` @ `77812e8` (local, **5 commits ahead** of origin, not pushed).
