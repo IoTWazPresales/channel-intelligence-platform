@@ -1,5 +1,12 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 16, 2026 (PR #5 open; gh CLI installed locally) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` @ `3aaa97a` (pushed; up to date with origin).
+- **PR:** https://github.com/IoTWazPresales/channel-intelligence-platform/pull/5 — **open**, base `main`, **not merged**.
+- **gh CLI:** Portable install @ `%LOCALAPPDATA%\Programs\GitHub CLI\gh.exe` v2.67.0 (Chocolatey blocked — no admin).
+- **Points 1 + 4:** Shipped in `106f2ef` + `3aaa97a` (BACKLOG-036 weekly warnings; cross-distributor guard; steward evidence card).
+
 ## CURRENT STATE — Jun 16, 2026 (BACKLOG-036 + corroboration guard + steward evidence; PR pending) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local commits pending push).
