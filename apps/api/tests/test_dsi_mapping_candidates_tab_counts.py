@@ -5,7 +5,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from app.services.imports.dsi_mapping_candidates_tab_counts import dsi_mapping_candidate_tab_counts_sync
+from app.services.imports.dsi_mapping_candidates_tab_counts import (
+    dsi_mapping_candidate_tab_counts_sync,
+    product_match_status_count_stmt,
+)
 
 
 def test_tab_counts_aggregates_open_and_needs_review() -> None:
@@ -64,3 +67,18 @@ def test_tab_counts_includes_product_match_status_breakdown() -> None:
 
     assert out["counts"]["product"]["no_match"] == 296
     assert out["counts"]["product"]["ambiguous_eligible"] == 65
+
+
+def test_product_match_status_count_stmt_groups_by_labeled_select_expression() -> None:
+    """GROUP BY must reuse the SELECT JSONB expression (avoid duplicate bind params)."""
+    from sqlalchemy.dialects import postgresql
+
+    stmt = product_match_status_count_stmt(job_id=43)
+    compiled = stmt.compile(dialect=postgresql.dialect())
+    sql = str(compiled)
+    params = compiled.params
+    assert "GROUP BY" in sql
+    assert "product_match_status" in sql
+    # One bind key for the JSON path — not two independent context->>$N fragments.
+    context_param_keys = [k for k in params if k.startswith("context")]
+    assert len(context_param_keys) == 1

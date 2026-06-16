@@ -1,5 +1,11 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 14, 2026 (DSI tab-counts GROUP BY fix) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local uncommitted).
+- **Fix:** `product_match_status_count_stmt` reuses one labeled `context['product_match_status'].astext` in SELECT and GROUP BY (fixes Postgres GroupingError / duplicate bind params).
+- **Tests:** `test_dsi_mapping_candidates_tab_counts.py` — **3 pass** (incl. SQL compile assertion).
+
 ## CURRENT STATE — Jun 14, 2026 (DSI product match-status filter chips) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local uncommitted).

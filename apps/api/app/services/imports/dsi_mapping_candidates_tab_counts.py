@@ -18,11 +18,14 @@ _TAB_ENTITY_TYPES: dict[str, str] = {
 }
 
 
-def _product_open_match_status_counts(session: Session, job_id: int) -> dict[str, int]:
-    """Open product_identifier rows grouped by validate-time ``product_match_status``."""
-    rows = session.execute(
+def product_match_status_count_stmt(*, job_id: int):
+    """SELECT open product rows grouped by ``context.product_match_status`` (for tests / compile)."""
+    product_match_status = ImportEntityMappingCandidate.context["product_match_status"].astext.label(
+        "product_match_status"
+    )
+    return (
         select(
-            ImportEntityMappingCandidate.context["product_match_status"].astext,
+            product_match_status,
             func.count(ImportEntityMappingCandidate.id),
         )
         .where(
@@ -30,8 +33,13 @@ def _product_open_match_status_counts(session: Session, job_id: int) -> dict[str
             ImportEntityMappingCandidate.entity_type == _ENTITY_MAP["product"],
             ImportEntityMappingCandidate.status.notin_(tuple(TERMINAL_STATUSES)),
         )
-        .group_by(ImportEntityMappingCandidate.context["product_match_status"].astext)
-    ).all()
+        .group_by(product_match_status)
+    )
+
+
+def _product_open_match_status_counts(session: Session, job_id: int) -> dict[str, int]:
+    """Open product_identifier rows grouped by validate-time ``product_match_status``."""
+    rows = session.execute(product_match_status_count_stmt(job_id=job_id)).all()
     out = {"no_match": 0, "ambiguous_eligible": 0}
     for status, cnt in rows:
         key = str(status or "").strip()
