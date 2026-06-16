@@ -6,6 +6,40 @@
 
 ---
 
+## BACKLOG-035 — Re-add migration 0048 (approved alias partial-unique indexes)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-14 (Unit 1 close-out) |
+| **Effort** | Small (migration file restore + apply) |
+| **Source** | CIP close-out brief Unit 1; `apps/api/alembic/versions/20260608_0048_source_token_alias_unique.py` removed @ `8ec5978` |
+| **Idea** | Restore `20260608_0048` partial-unique indexes on approved `distributor_source_token_alias` and `customer_source_token_alias` rows. |
+| **Why / deferrable** | Customer-scope pre-check fails today: 16 approved-alias keys map to multiple `customer_id` values; migration `_assert_no_alias_conflicts` will RAISE until Unit 2b consolidation clears them. Distributor scope is clean (0 conflicts). |
+| **What the work is** | Re-commit migration (same revision id / `down_revision` 0047); run conflict diagnostics; `alembic upgrade` on dev Supabase after customer dup aliases repointed. |
+| **Regression traps** | Applying before customer conflicts = 0; changing index scope without updating INT-03 diagnostics. |
+| **Behavior to retain** | INT-03 validate-time conflict surfacing (`source_token_alias_conflicts.py`). |
+| **Out of scope** | Provisional create-path dedup (Unit 2a — shipped). |
+| **TRIGGER** | Supabase `customer_source_token_alias` approved-scope multi-`customer_id` conflict count = **0** after Unit 2b governed merge. |
+
+---
+
+## BACKLOG-036 — DSI weekly SKU-strict product resolution refinement
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-14 |
+| **Effort** | Medium |
+| **Source** | CIP close-out brief; job #43 is historical model-grain; weekly DSI files carry SKU |
+| **Idea** | After distributor-receipt disambiguation tier (Unit 3), tighten weekly-mode imports to prefer `item_code`/SKU tier first and surface explicit steward guidance when weekly files omit SKU. |
+| **Why / deferrable** | Historical backfill needs model-grain receipt disambiguation; weekly path already has SKU column — refinement is UX/validation polish, not blocker for job #43. |
+| **What the work is** | Template/mapping guard for weekly DSI; optional validate warning when `product_identifier` resolves only at `sales_model_name` but mapped SKU column is empty. |
+| **Regression traps** | Applying weekly strict rules to historical relaxed imports. |
+| **Behavior to retain** | Historical `dsi_historical_product_eligibility_relaxed` path; Unit 3 receipt-tier for model-grain. |
+| **Out of scope** | Global `product_alias` distributor dimension. |
+| **TRIGGER** | Unit 3 shipped + job #43 historical apply soak signed off; weekly DSI import template in active use. |
+
+---
+
 ## BACKLOG-001 — Shipment steward panel → shared `ImportStewardCandidateWorkspace` (adapter swap)
 
 | Field | Detail |

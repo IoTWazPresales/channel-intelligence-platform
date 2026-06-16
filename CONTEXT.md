@@ -1,5 +1,14 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 14, 2026 (CIP close-out Units 1–2a; 2b preview STOP) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` @ `dc6d51d` (local, **not pushed**).
+- **Unit 1 (`8ec5978`):** Removed unapplied migration `20260608_0048` from branch; INT-03 diagnostics code retained.
+- **Unit 2a (`dc6d51d`):** `provisional_entity_identity.py` — canonical name dedup on provisional create-path (distributor + customer); non-entity customer token guard; merge helpers use same canonical key.
+- **Unit 2b:** Governed consolidation **preview only** — awaiting explicit approval before any Supabase/cip write (see chat merge plan).
+- **Units 3–4:** Not started (blocked on 2b approval for clean distributor ids; Unit 3 code + job-43 dry-run next).
+- **Alembic applied head:** `20260607_0047` (unchanged).
+
 ## CURRENT STATE — Jun 14, 2026 (DSI tab-counts GROUP BY fix) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local uncommitted).
