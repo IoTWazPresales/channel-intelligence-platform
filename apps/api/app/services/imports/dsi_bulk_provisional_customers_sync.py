@@ -6,7 +6,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,140 @@ from app.services.imports.provisional_entity_identity import (
     find_existing_provisional_customer_by_canonical_name,
     is_non_entity_customer_provisional_token,
 )
+
+
+def _customer_alias_scope_key(
+    normalized_token: str,
+    source_definition_id: int | None,
+    distributor_id: int | None,
+) -> tuple[str, int, int]:
+    """Approved-alias unique scope per migration 0048 (COALESCE sentinels)."""
+    return (
+        normalized_token[:512],
+        int(source_definition_id) if source_definition_id is not None else -1,
+        int(distributor_id) if distributor_id is not None else -1,
+    )
+
+
+def _scope_key_for_dsi_candidate(cand: ImportEntityMappingCandidate) -> tuple[tuple[str, int, int], str] | None:
+    raw = _source_customer_alias_raw_for_dsi_candidate(cand)
+    if not raw.strip():
+        return None
+    nt = _norm_key(raw)[:512]
+    return _customer_alias_scope_key(nt, cand.source_definition_id, None), nt
+
+
+def _lookup_approved_customer_alias_for_scope(
+    session: Session,
+    *,
+    normalized_token: str,
+    source_definition_id: int | None,
+    distributor_id: int | None,
+) -> CustomerSourceTokenAlias | None:
+    scope_src = int(source_definition_id) if source_definition_id is not None else -1
+    scope_dist = int(distributor_id) if distributor_id is not None else -1
+    return session.scalars(
+        select(CustomerSourceTokenAlias)
+        .where(
+            CustomerSourceTokenAlias.status == "approved",
+            CustomerSourceTokenAlias.normalized_token == normalized_token[:512],
+            func.coalesce(CustomerSourceTokenAlias.source_definition_id, -1) == scope_src,
+            func.coalesce(CustomerSourceTokenAlias.distributor_id, -1) == scope_dist,
+        )
+        .limit(1)
+    ).first()
+
+
+def _load_approved_customer_aliases_for_scopes(
+    session: Session,
+    scope_keys: set[tuple[str, int, int]],
+) -> dict[tuple[str, int, int], CustomerSourceTokenAlias]:
+    if not scope_keys:
+        return {}
+    normalized_tokens = {k[0] for k in scope_keys}
+    rows = session.scalars(
+        select(CustomerSourceTokenAlias).where(
+            CustomerSourceTokenAlias.status == "approved",
+            CustomerSourceTokenAlias.normalized_token.in_(normalized_tokens),
+        )
+    ).all()
+    out: dict[tuple[str, int, int], CustomerSourceTokenAlias] = {}
+    for row in rows:
+        key = _customer_alias_scope_key(row.normalized_token, row.source_definition_id, row.distributor_id)
+        if key in scope_keys and key not in out:
+            out[key] = row
+    return out
+
+
+def _insert_approved_customer_alias_on_conflict_do_nothing(
+    session: Session,
+    *,
+    customer_id: int,
+    raw_token: str,
+    normalized_token: str,
+    source_definition_id: int | None,
+    distributor_id: int | None,
+    dealer_group_token: str | None,
+    notes: str,
+    created_from_import_job_id: int,
+    import_entity_mapping_candidate_id: int,
+) -> int | None:
+    """Insert alias; return new id or None when uq_cust_src_token_alias_approved_scope blocks insert."""
+    row = session.execute(
+        text(
+            """
+            INSERT INTO customer_source_token_alias (
+                customer_id, source_definition_id, distributor_id,
+                raw_token, normalized_token, dealer_group_token,
+                status, notes, created_from_import_job_id,
+                import_entity_mapping_candidate_id, created_at, updated_at
+            )
+            VALUES (
+                :customer_id, :source_definition_id, :distributor_id,
+                :raw_token, :normalized_token, :dealer_group_token,
+                'approved', :notes, :created_from_import_job_id,
+                :import_entity_mapping_candidate_id, NOW(), NOW()
+            )
+            ON CONFLICT DO NOTHING
+            RETURNING id
+            """
+        ),
+        {
+            "customer_id": int(customer_id),
+            "source_definition_id": source_definition_id,
+            "distributor_id": distributor_id,
+            "raw_token": raw_token[:512],
+            "normalized_token": normalized_token[:512],
+            "dealer_group_token": dealer_group_token[:512] if dealer_group_token else None,
+            "notes": notes,
+            "created_from_import_job_id": int(created_from_import_job_id),
+            "import_entity_mapping_candidate_id": int(import_entity_mapping_candidate_id),
+        },
+    ).first()
+    if row is not None and row[0] is not None:
+        return int(row[0])
+    return None
+
+
+def _bind_candidate_to_reused_customer(
+    cand: ImportEntityMappingCandidate,
+    customer: DimCustomer,
+    *,
+    alias_id: int | None,
+    reuse_kind: str,
+) -> dict[str, Any]:
+    cand.status = "resolved"
+    cand.suggested_entity_id = int(customer.id)
+    cand.match_reason = "steward_reused_approved_customer_alias"
+    return {
+        "ok": True,
+        "reused": True,
+        "reuse_kind": reuse_kind,
+        "customer_id": customer.id,
+        "customer_code": customer.code,
+        "alias_id": alias_id,
+        "candidate_id": cand.id,
+    }
 
 
 def _generate_tmp_customer_code_sync(session: Session) -> str:
@@ -82,13 +216,16 @@ def _apply_one_provisional_customer_sync(
     notes_summary: str | None,
     explicit_region_id: int | None = None,
     explicit_channel_id: int | None = None,
+    approved_alias_by_scope: dict[tuple[str, int, int], CustomerSourceTokenAlias] | None = None,
+    batch_customer_id_by_scope: dict[tuple[str, int, int], int] | None = None,
 ) -> dict[str, Any]:
     if cand.entity_type != "customer_dealer_token":
         raise StewardOpError("Not customer_dealer_token", status_code=400)
 
     if (
         cand.status == "resolved"
-        and cand.match_reason == "steward_created_provisional_customer"
+        and cand.match_reason
+        in ("steward_created_provisional_customer", "steward_reused_approved_customer_alias")
         and cand.suggested_entity_id
     ):
         cust = session.get(DimCustomer, int(cand.suggested_entity_id))
@@ -98,9 +235,22 @@ def _apply_one_provisional_customer_sync(
                     CustomerSourceTokenAlias.import_entity_mapping_candidate_id == cand.id
                 )
             ).first()
+            if alias_row is None and cand.match_reason == "steward_reused_approved_customer_alias":
+                scope_meta = _scope_key_for_dsi_candidate(cand)
+                if scope_meta is not None:
+                    scope_key, nt = scope_meta
+                    alias_row = _lookup_approved_customer_alias_for_scope(
+                        session,
+                        normalized_token=nt,
+                        source_definition_id=cand.source_definition_id,
+                        distributor_id=None,
+                    )
+                    if alias_row is None and approved_alias_by_scope is not None:
+                        alias_row = approved_alias_by_scope.get(scope_key)
             return {
                 "ok": True,
                 "idempotent": True,
+                "reused": cand.match_reason == "steward_reused_approved_customer_alias",
                 "candidate_id": cand.id,
                 "customer_id": cust.id,
                 "customer_code": cust.code,
@@ -142,6 +292,49 @@ def _apply_one_provisional_customer_sync(
             "Token or display name looks like policy/note text (not a customer entity)",
             status_code=400,
         )
+
+    scope_meta = _scope_key_for_dsi_candidate(cand)
+    if scope_meta is None:
+        raise StewardOpError("Candidate has no usable source customer alias evidence", status_code=400)
+    scope_key, nt = scope_meta
+
+    alias_lookup = approved_alias_by_scope if approved_alias_by_scope is not None else {}
+    batch_lookup = batch_customer_id_by_scope if batch_customer_id_by_scope is not None else {}
+
+    existing_alias = alias_lookup.get(scope_key)
+    if existing_alias is None:
+        existing_alias = _lookup_approved_customer_alias_for_scope(
+            session,
+            normalized_token=nt,
+            source_definition_id=cand.source_definition_id,
+            distributor_id=None,
+        )
+        if existing_alias is not None:
+            alias_lookup[scope_key] = existing_alias
+
+    if existing_alias is not None:
+        cust = session.get(DimCustomer, int(existing_alias.customer_id))
+        if cust is None:
+            raise StewardOpError("Approved alias points at missing customer", status_code=409)
+        return _bind_candidate_to_reused_customer(
+            cand,
+            cust,
+            alias_id=int(existing_alias.id),
+            reuse_kind="existing_alias",
+        )
+
+    batch_customer_id = batch_lookup.get(scope_key)
+    if batch_customer_id is not None:
+        cust = session.get(DimCustomer, int(batch_customer_id))
+        if cust is None:
+            raise StewardOpError("Batch reuse customer missing", status_code=409)
+        return _bind_candidate_to_reused_customer(
+            cand,
+            cust,
+            alias_id=None,
+            reuse_kind="batch",
+        )
+
     notes = (notes_summary or "").strip() or None
     base_note = f"Provisional customer created from DSI import candidate {cand.id} (job {cand.import_job_id})."
     merged_notes = f"{base_note} {notes}" if notes else base_note
@@ -149,6 +342,7 @@ def _apply_one_provisional_customer_sync(
     existing_cust = find_existing_provisional_customer_by_canonical_name(session, proposal)
     if existing_cust is not None:
         row = existing_cust
+        created_new_customer = False
     else:
         code = _generate_tmp_customer_code_sync(session)
         row = DimCustomer(
@@ -163,31 +357,56 @@ def _apply_one_provisional_customer_sync(
         )
         session.add(row)
         session.flush()
+        created_new_customer = True
 
     raw = raw_evidence
-    nt = _norm_key(raw)
-    alias = CustomerSourceTokenAlias(
-        customer_id=row.id,
-        raw_token=raw[:512],
-        normalized_token=nt[:512],
+    alias_notes = f"Alias from provisional customer create (candidate {cand.id})"
+    alias_id = _insert_approved_customer_alias_on_conflict_do_nothing(
+        session,
+        customer_id=int(row.id),
+        raw_token=raw,
+        normalized_token=nt,
         source_definition_id=cand.source_definition_id,
         distributor_id=None,
         dealer_group_token=cand.dealer_group_token,
-        status="approved",
-        notes=f"Alias from provisional customer create (candidate {cand.id})",
+        notes=alias_notes,
         created_from_import_job_id=cand.import_job_id,
         import_entity_mapping_candidate_id=cand.id,
     )
-    session.add(alias)
+    if alias_id is None:
+        race_alias = _lookup_approved_customer_alias_for_scope(
+            session,
+            normalized_token=nt,
+            source_definition_id=cand.source_definition_id,
+            distributor_id=None,
+        )
+        if race_alias is None:
+            raise StewardOpError("Could not create or reuse customer alias for scope", status_code=409)
+        alias_lookup[scope_key] = race_alias
+        keeper = session.get(DimCustomer, int(race_alias.customer_id))
+        if keeper is None:
+            raise StewardOpError("Approved alias points at missing customer", status_code=409)
+        if created_new_customer and row.id != keeper.id:
+            session.delete(row)
+        return _bind_candidate_to_reused_customer(
+            cand,
+            keeper,
+            alias_id=int(race_alias.id),
+            reuse_kind="race",
+        )
+
+    alias_lookup[scope_key] = session.get(CustomerSourceTokenAlias, alias_id)
+    batch_lookup[scope_key] = int(row.id)
     cand.status = "resolved"
     cand.suggested_entity_id = row.id
     cand.match_reason = "steward_created_provisional_customer"
 
     return {
         "ok": True,
+        "created": True,
         "customer_id": row.id,
         "customer_code": row.code,
-        "alias_id": alias.id,
+        "alias_id": alias_id,
         "candidate_id": cand.id,
     }
 
@@ -249,15 +468,29 @@ def run_dsi_bulk_provisional_customers_sync(
     geo_cache = DSIGeoResolutionCache.build(session)
     geo_cache.preload_aliases(collect_geo_tokens_from_candidates(list(found.values()), job))
 
+    scope_keys: set[tuple[str, int, int]] = set()
+    for cand in found.values():
+        if cand.entity_type != "customer_dealer_token":
+            continue
+        meta = _scope_key_for_dsi_candidate(cand)
+        if meta is not None:
+            scope_keys.add(meta[0])
+    approved_alias_by_scope = _load_approved_customer_aliases_for_scopes(session, scope_keys)
+    batch_customer_id_by_scope: dict[tuple[str, int, int], int] = {}
+
     results: list[dict[str, Any]] = []
     total = len(candidate_ids)
     applied_before_commit = 0
+    created_count = 0
+    reused_count = 0
+    skipped_count = 0
 
     for idx, cid in enumerate(candidate_ids):
         if on_progress is not None:
             on_progress(idx + 1, total)
         cand = found.get(cid)
         if cand is None:
+            skipped_count += 1
             results.append(
                 {
                     "candidate_id": cid,
@@ -286,8 +519,16 @@ def run_dsi_bulk_provisional_customers_sync(
                 notes_summary=notes_summary,
                 explicit_region_id=ex_r,
                 explicit_channel_id=ex_c,
+                approved_alias_by_scope=approved_alias_by_scope,
+                batch_customer_id_by_scope=batch_customer_id_by_scope,
             )
             applied_before_commit += 1
+            if out.get("created"):
+                created_count += 1
+            elif out.get("reused") or out.get("idempotent"):
+                reused_count += 1
+            else:
+                created_count += 1
             results.append(
                 {
                     "candidate_id": cid,
@@ -300,6 +541,7 @@ def run_dsi_bulk_provisional_customers_sync(
                 }
             )
         except StewardOpError as exc:
+            skipped_count += 1
             results.append(
                 {
                     "candidate_id": cid,
@@ -328,6 +570,11 @@ def run_dsi_bulk_provisional_customers_sync(
         "action": "create_provisional_customer",
         "applied": ok_n,
         "failed": len(results) - ok_n,
+        "counts": {
+            "created": created_count,
+            "reused": reused_count,
+            "skipped": skipped_count,
+        },
         "results": results,
         "totals": {
             "ok_count": ok_n,
