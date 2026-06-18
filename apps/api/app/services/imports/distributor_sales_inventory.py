@@ -1726,6 +1726,8 @@ def process_distributor_sales_inventory(
         )
 
     preserved_candidate_steward: dict[tuple[str, str], dict[str, Any]] = {}
+    from app.services.imports.dsi_mapping_candidates_list import is_dsi_mapping_candidate_terminal_status
+
     for existing in db.scalars(
         select(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job.id)
     ).all():
@@ -1733,8 +1735,15 @@ def process_distributor_sales_inventory(
         preserved: dict[str, Any] = {}
         if isinstance(ex_ctx.get("duplicate_review"), dict):
             preserved["duplicate_review"] = dict(ex_ctx["duplicate_review"])
-        if (existing.status or "").strip() == "acknowledged_unique":
+        st = (existing.status or "").strip()
+        if st == "acknowledged_unique":
             preserved["status"] = "acknowledged_unique"
+        elif is_dsi_mapping_candidate_terminal_status(st):
+            preserved["status"] = st
+            if existing.suggested_entity_id is not None:
+                preserved["suggested_entity_id"] = int(existing.suggested_entity_id)
+            if existing.match_reason:
+                preserved["match_reason"] = str(existing.match_reason)
         if preserved:
             preserved_candidate_steward[(existing.entity_type, existing.normalized_key)] = preserved
 
@@ -2830,12 +2839,24 @@ def process_distributor_sales_inventory(
             }
             ctx.setdefault("corroboration_markers", []).append("shipment_evidence_customer")
         cand_status = "needs_review"
+        suggested_entity_id: int | None = None
+        match_reason: str | None = None
         pres = preserved_candidate_steward.get((etype, nkey_clean[:512]))
         if pres:
             if isinstance(pres.get("duplicate_review"), dict):
                 ctx["duplicate_review"] = pres["duplicate_review"]
-            if pres.get("status") == "acknowledged_unique":
+            pres_st = pres.get("status")
+            if pres_st == "acknowledged_unique":
                 cand_status = "acknowledged_unique"
+            elif is_dsi_mapping_candidate_terminal_status(str(pres_st or "")):
+                cand_status = str(pres_st).strip()
+                if pres.get("suggested_entity_id") is not None:
+                    try:
+                        suggested_entity_id = int(pres["suggested_entity_id"])
+                    except (TypeError, ValueError):
+                        suggested_entity_id = None
+                if pres.get("match_reason"):
+                    match_reason = str(pres["match_reason"])
         cand = ImportEntityMappingCandidate(
             import_job_id=job.id,
             source_definition_id=source_def_id,
@@ -2846,6 +2867,8 @@ def process_distributor_sales_inventory(
             total_units=float(data["total_units"]) if data["total_units"] else None,
             total_reported_value=float(data["total_value"]) if data["total_value"] else None,
             sample_raw_values=to_jsonable(data["samples"][:5]),
+            suggested_entity_id=suggested_entity_id,
+            match_reason=match_reason,
             status=cand_status,
             context=to_jsonable(ctx),
         )

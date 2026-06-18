@@ -958,3 +958,48 @@ def test_channel_source_token_alias_registered_in_sqlalchemy_metadata() -> None:
     from app.db.base import Base
 
     assert "channel_source_token_alias" in Base.metadata.tables
+
+
+def test_build_dsi_resolution_plan_sync_omits_terminal_candidates_from_summary() -> None:
+    from app.services.imports.dsi_resolution_plan import build_dsi_resolution_plan_sync
+
+    sess = MagicMock()
+    job = MagicMock()
+    job.id = 43
+    job.source = None
+    sess.get.return_value = job
+
+    open_cand = _cand(id=10, status="needs_review", entity_type="customer_dealer_token")
+    resolved = _cand(id=11, status="resolved", entity_type="customer_dealer_token")
+    ignored = _cand(id=12, status="ignored", entity_type="customer_dealer_token")
+    sess.scalars.return_value.all.return_value = [open_cand, resolved, ignored]
+
+    with (
+        patch(
+            "app.services.imports.dsi_resolution_plan.build_dsi_plan_build_context",
+            return_value=MagicMock(prod_idx=MagicMock()),
+        ),
+        patch(
+            "app.services.imports.dsi_customer_region_evidence.build_job_region_evidence_batch",
+            return_value={},
+        ),
+        patch(
+            "app.services.imports.dsi_resolution_plan.plan_dsi_candidate_sync",
+            return_value={
+                "candidate_id": 10,
+                "ready": True,
+                "suggested_action": "map_customer",
+                "plan_status": "ready",
+            },
+        ),
+        patch(
+            "app.services.imports.dsi_plan_target_labels.enrich_plan_rows_with_target_labels",
+            side_effect=lambda _s, rows: rows,
+        ),
+    ):
+        out = build_dsi_resolution_plan_sync(sess, 43, candidate_ids=[10, 11, 12], default_region_id=None, default_channel_id=None)
+
+    assert out["summary"]["total"] == 1
+    assert out["summary"]["ready"] == 1
+    assert out["summary"]["not_ready"] == 0
+    assert [r["candidate_id"] for r in out["rows"]] == [10]

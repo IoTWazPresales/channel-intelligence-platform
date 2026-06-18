@@ -1,5 +1,12 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 14, 2026 (DSI terminal candidates excluded from needs-work / plan) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local commit pending push).
+- **Fix:** Tab-counts API exposes `needs_work` (= non-terminal open count); UI badge uses `needs_work` not raw `needs_review`. Resolution plan build skips terminal rows (`resolved` / `ignored` / `waived_open_channel`). Revalidate preserves terminal steward outcomes on candidate recreate. Plan scope shrinks when steward resolves/ignores (no frozen terminal ids inflating not_ready).
+- **Tests:** `test_dsi_mapping_candidates_tab_counts.py` job-#43 terminal exclusion; `test_build_dsi_resolution_plan_sync_omits_terminal_candidates_from_summary`; web `dsiPlanScope` + `useDsiEntityTabCounts` unit tests.
+- **Alembic head (code):** `20260608_0048` — no migration in this change.
+
 ## CURRENT STATE — Jun 16, 2026 (PR #5 open; gh CLI installed locally) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` @ `3aaa97a` (pushed; up to date with origin).

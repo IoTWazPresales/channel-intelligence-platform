@@ -18,7 +18,7 @@ type TabCountsApiResponse = {
   import_job_id: number;
   counts: Record<
     string,
-    { open: number; needs_review: number; no_match?: number; ambiguous_eligible?: number }
+    { open: number; needs_work: number; needs_review: number; no_match?: number; ambiguous_eligible?: number }
   >;
 };
 
@@ -66,7 +66,7 @@ export function useDsiEntityTabCounts(importJobId: number, enabled: boolean) {
       const row = tabCountsQuery.data.counts[tab.id];
       counts[tab.id] = {
         total: row?.open ?? 0,
-        needsWork: row?.needs_review ?? 0,
+        needsWork: row?.needs_work ?? row?.open ?? 0,
       };
       openByTab[tab.id] = row?.open ?? 0;
     }

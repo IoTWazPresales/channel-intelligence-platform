@@ -391,6 +391,7 @@ export function useDsiResolutionPlan({
       const ids = candidateIds.filter((id) => Number.isFinite(id));
       if (ids.length === 0) return;
       const idSet = new Set(ids);
+      setPlanScopeCandidateIds((prev) => shrinkPlanScopeCandidateIds(prev, ids));
       planEvictSkipRef.current = true;
       setPlanOverrideMap((m) => {
         const next = { ...m };

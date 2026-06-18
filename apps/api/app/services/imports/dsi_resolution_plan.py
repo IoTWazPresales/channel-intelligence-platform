@@ -1206,6 +1206,8 @@ def build_dsi_resolution_plan_sync(
     )
     rows = []
     for c in cands:
+        if _terminal_candidate(c):
+            continue
         base_row = _baseline_annotate(
             plan_dsi_candidate_sync(
                 session,
@@ -1531,6 +1533,8 @@ def build_dsi_resolution_plan_effective_sync(
     )
     rows: list[dict[str, Any]] = []
     for c in cands:
+        if _terminal_candidate(c):
+            continue
         base = plan_dsi_candidate_sync(
             session,
             c,

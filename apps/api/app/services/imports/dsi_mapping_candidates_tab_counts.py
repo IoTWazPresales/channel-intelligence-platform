@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 
-from app.services.imports.dsi_mapping_candidates_list import TERMINAL_STATUSES, _ENTITY_MAP
+from app.services.imports.dsi_mapping_candidates_list import (
+    TERMINAL_STATUSES,
+    _ENTITY_MAP,
+    is_dsi_mapping_candidate_terminal_status,
+)
 
 _TAB_ENTITY_TYPES: dict[str, str] = {
     "distributor": _ENTITY_MAP["distributor"],
@@ -49,7 +53,12 @@ def _product_open_match_status_counts(session: Session, job_id: int) -> dict[str
 
 
 def dsi_mapping_candidate_tab_counts_sync(session: Session, job_id: int) -> dict[str, Any]:
-    """Return open + needs_review counts per entity tab in one grouped query."""
+    """Return open / needs_work / needs_review counts per entity tab in one grouped query.
+
+    ``open`` and ``needs_work`` are the count of non-terminal (actionable) candidates.
+    ``needs_review`` is the subset whose status is exactly ``needs_review``.
+    Terminal statuses (resolved, ignored, waived_open_channel) are excluded from all three.
+    """
     rows = session.execute(
         select(
             ImportEntityMappingCandidate.entity_type,
@@ -72,12 +81,16 @@ def dsi_mapping_candidate_tab_counts_sync(session: Session, job_id: int) -> dict
         open_n = 0
         needs_review_n = 0
         for st, n in status_map.items():
-            if st in TERMINAL_STATUSES:
+            if is_dsi_mapping_candidate_terminal_status(st):
                 continue
             open_n += n
-            if st == "needs_review":
-                needs_review_n = n
-        counts[tab_id] = {"open": open_n, "needs_review": needs_review_n}
+            if (st or "").strip() == "needs_review":
+                needs_review_n += n
+        counts[tab_id] = {
+            "open": open_n,
+            "needs_work": open_n,
+            "needs_review": needs_review_n,
+        }
 
     product_match = _product_open_match_status_counts(session, job_id)
     if "product" in counts:

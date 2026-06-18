@@ -12,6 +12,11 @@ from app.schemas.dsi_mapping_candidates import DsiMappingCandidatesListParams
 
 TERMINAL_STATUSES = frozenset({"resolved", "ignored", "waived_open_channel"})
 
+
+def is_dsi_mapping_candidate_terminal_status(status: str | None) -> bool:
+    """True when steward has closed the candidate (not actionable in open / needs-work counts)."""
+    return (status or "").strip() in TERMINAL_STATUSES
+
 _ENTITY_MAP = {
     "customer": "customer_dealer_token",
     "distributor": "distributor_token",

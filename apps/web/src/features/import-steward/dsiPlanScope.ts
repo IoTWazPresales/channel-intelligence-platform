@@ -14,5 +14,5 @@ export function shrinkPlanScopeCandidateIds(prev: number[], removedIds: number[]
   const drop = new Set(removedIds.filter((id) => Number.isFinite(id)));
   if (drop.size === 0) return prev;
   const next = prev.filter((id) => !drop.has(id));
-  return next.length > 0 ? next : prev;
+  return next;
 }
