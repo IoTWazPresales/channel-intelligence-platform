@@ -1,5 +1,13 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 19, 2026 (task_run ledger dual-write populate) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local uncommitted).
+- **Change:** Added `task_run` table + migration `20260609_0049` (chains `20260608_0048`). Dual-write populate only — no reader/slot/UI changes.
+- **Ledger:** `create_queued_task_run` at every dispatch site (`import_dispatch`, `*_enqueue.py`, PM validate/commit, DSI apply, lineup parse). `LedgerTask` Celery base for broker execution; `task_run_execution` context manager for in-process thread + inline sync. DSI validate heartbeats bump `task_run.heartbeat_at` via fresh `SessionLocal` in `_commit_dsi_validate_*`.
+- **Tests:** `test_task_run_ledger.py` — **4 pass**. Migration `0049` verified upgrade/downgrade/upgrade from stamped `0048` on `cip_alembic_smoke` @ port 5433 (full chain from empty blocked by pre-existing `0001`/`0030` `shipment_evidence_line` duplicate — not introduced here).
+- **Alembic head (code):** `20260609_0049` — **not applied** to `cip` or Supabase.
+
 ## CURRENT STATE — Jun 14, 2026 (DSI terminal candidates excluded from needs-work / plan) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local commit pending push).

@@ -94,6 +94,7 @@ from app.models.commercial_planner import (
     CommercialSkuAssumption,
 )
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
+from app.models.task_run import TaskRun
 
 __all__ = [
     "DimProduct",
@@ -182,4 +183,5 @@ __all__ = [
     "CommercialLineupCase",
     "CommercialLineupLine",
     "ShipmentEvidenceLine",
+    "TaskRun",
 ]

@@ -8,7 +8,7 @@ async dispatch (CST apply is the third caller that triggers extraction per BACKL
 from __future__ import annotations
 
 import logging
-import threading
+import uuid
 from typing import Any, Callable
 
 from sqlalchemy.orm import Session
@@ -37,15 +37,40 @@ def enqueue_import_worker_task(
     from app.core.config import get_settings
     from app.core.dev_celery_logging import DEV_CELERY_LOGGER
     from app.db.session_sync import SessionLocal
+    from app.services.task_run_ledger import (
+        ENTITY_IMPORT_JOB,
+        TRANSPORT_BROKER,
+        TRANSPORT_INLINE_SYNC,
+        TRANSPORT_IN_PROCESS_THREAD,
+        create_queued_task_run,
+        run_inline_with_ledger,
+        spawn_in_process_thread_with_ledger,
+    )
     from app.worker.celery_app import celery_app
 
     settings = get_settings()
     try:
         result = celery_app.send_task(task_name, args=[job_id], ignore_result=True)
+        task_run_id = str(result.id)
+        create_queued_task_run(
+            task_run_id=task_run_id,
+            task_name=task_name,
+            entity_type=ENTITY_IMPORT_JOB,
+            entity_id=job_id,
+            transport=TRANSPORT_BROKER,
+        )
         return True, result.id
     except Exception:
         logger.exception("%s: Celery enqueue failed job_id=%s task=%s", log_label, job_id, task_name)
         if settings.cip_dev_celery_dispatch == "in_process_thread":
+            task_run_id = f"thread-{uuid.uuid4().hex}"
+            create_queued_task_run(
+                task_run_id=task_run_id,
+                task_name=task_name,
+                entity_type=ENTITY_IMPORT_JOB,
+                entity_id=job_id,
+                transport=TRANSPORT_IN_PROCESS_THREAD,
+            )
 
             def _in_process() -> None:
                 try:
@@ -58,14 +83,32 @@ def enqueue_import_worker_task(
                         log_label,
                         job_id,
                     )
+                    raise
 
             DEV_CELERY_LOGGER.warning(
                 "ENQUEUE: %s job_id=%s — in-process thread after broker failure (DEV ONLY).",
                 log_label,
                 job_id,
             )
-            threading.Thread(target=_in_process, name=in_process_thread_name, daemon=True).start()
+            spawn_in_process_thread_with_ledger(
+                task_run_id=task_run_id,
+                thread_name=in_process_thread_name,
+                target=_in_process,
+            )
             return True, None
-        with SessionLocal() as sync_fallback:
-            sync_work(sync_fallback, job_id)
+
+        task_run_id = f"inline-{uuid.uuid4().hex}"
+        create_queued_task_run(
+            task_run_id=task_run_id,
+            task_name=task_name,
+            entity_type=ENTITY_IMPORT_JOB,
+            entity_id=job_id,
+            transport=TRANSPORT_INLINE_SYNC,
+        )
+
+        def _inline() -> None:
+            with SessionLocal() as sync_fallback:
+                sync_work(sync_fallback, job_id)
+
+        run_inline_with_ledger(task_run_id, _inline)
         return False, None

@@ -721,6 +721,16 @@ def _enqueue_dsi_bulk_provisional_customers(
     payload: dict[str, Any],
 ) -> tuple[str, bool]:
     """Return (task_id, async_poll_required). When async_poll_required is False, result is already in dev store."""
+    from app.services.task_run_ledger import (
+        ENTITY_IMPORT_JOB,
+        TRANSPORT_BROKER,
+        TRANSPORT_INLINE_SYNC,
+        TRANSPORT_IN_PROCESS_THREAD,
+        create_queued_task_run,
+        run_inline_with_ledger,
+        spawn_in_process_thread_with_ledger,
+    )
+
     settings = get_settings()
     task_name = "imports.dsi_bulk_provisional_customers"
 
@@ -730,13 +740,28 @@ def _enqueue_dsi_bulk_provisional_customers(
 
     try:
         result = celery_app.send_task(task_name, args=[job_id, payload])
-        return str(result.id), True
+        task_id = str(result.id)
+        create_queued_task_run(
+            task_run_id=task_id,
+            task_name=task_name,
+            entity_type=ENTITY_IMPORT_JOB,
+            entity_id=job_id,
+            transport=TRANSPORT_BROKER,
+        )
+        return task_id, True
     except Exception:
         logger.exception(
             "dsi_bulk_provisional: Celery enqueue failed job_id=%s task=%s", job_id, task_name
         )
         if settings.cip_dev_celery_dispatch == "in_process_thread":
             task_id = f"dev-bulk-prov-{uuid.uuid4().hex}"
+            create_queued_task_run(
+                task_run_id=task_id,
+                task_name=task_name,
+                entity_type=ENTITY_IMPORT_JOB,
+                entity_id=job_id,
+                transport=TRANSPORT_IN_PROCESS_THREAD,
+            )
 
             def _in_process() -> None:
                 try:
@@ -755,21 +780,34 @@ def _enqueue_dsi_bulk_provisional_customers(
                         "state": "FAILURE",
                         "error": str(exc)[:800],
                     }
+                    raise
 
             DEV_CELERY_LOGGER.warning(
                 "ENQUEUE: dsi_bulk_provisional job_id=%s — in-process thread (DEV ONLY).",
                 job_id,
             )
-            threading.Thread(
+            spawn_in_process_thread_with_ledger(
+                task_run_id=task_id,
+                thread_name=f"dsi-bulk-prov-{job_id}",
                 target=_in_process,
-                name=f"dsi-bulk-prov-{job_id}",
-                daemon=True,
-            ).start()
+            )
             return task_id, True
 
-        out = _run_sync()
         task_id = f"sync-bulk-prov-{uuid.uuid4().hex}"
-        _dev_dsi_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
+        create_queued_task_run(
+            task_run_id=task_id,
+            task_name=task_name,
+            entity_type=ENTITY_IMPORT_JOB,
+            entity_id=job_id,
+            transport=TRANSPORT_INLINE_SYNC,
+        )
+
+        def _inline() -> dict[str, Any]:
+            out = _run_sync()
+            _dev_dsi_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
+            return out
+
+        run_inline_with_ledger(task_id, _inline)
         return task_id, False
 
 

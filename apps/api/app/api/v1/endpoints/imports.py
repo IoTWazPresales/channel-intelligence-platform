@@ -121,15 +121,43 @@ def _dispatch_dsi_apply(job_id: int) -> tuple[bool, str | None]:
     thread it runs the apply inline (``False``) so the operation still completes. DSI validate is
     already async; this brings apply to parity without the enqueue-helper dedup (parked in BACKLOG).
     """
+    import uuid
+
+    from app.services.imports.dsi_apply_sync import run_dsi_apply_sync
+    from app.services.task_run_ledger import (
+        ENTITY_IMPORT_JOB,
+        TRANSPORT_BROKER,
+        TRANSPORT_INLINE_SYNC,
+        TRANSPORT_IN_PROCESS_THREAD,
+        create_queued_task_run,
+        run_inline_with_ledger,
+        spawn_in_process_thread_with_ledger,
+    )
+
     settings = get_settings()
+    task_name = "imports.dsi_apply"
     try:
-        result = celery_app.send_task("imports.dsi_apply", args=[job_id], ignore_result=True)
+        result = celery_app.send_task(task_name, args=[job_id], ignore_result=True)
+        task_run_id = str(result.id)
+        create_queued_task_run(
+            task_run_id=task_run_id,
+            task_name=task_name,
+            entity_type=ENTITY_IMPORT_JOB,
+            entity_id=job_id,
+            transport=TRANSPORT_BROKER,
+        )
         return True, result.id
     except Exception:
         logger.exception("DSI apply: Celery enqueue failed job_id=%s", job_id)
-        from app.services.imports.dsi_apply_sync import run_dsi_apply_sync
-
         if settings.cip_dev_celery_dispatch == "in_process_thread":
+            task_run_id = f"thread-{uuid.uuid4().hex}"
+            create_queued_task_run(
+                task_run_id=task_run_id,
+                task_name=task_name,
+                entity_type=ENTITY_IMPORT_JOB,
+                entity_id=job_id,
+                transport=TRANSPORT_IN_PROCESS_THREAD,
+            )
 
             def _in_process() -> None:
                 try:
@@ -140,14 +168,28 @@ def _dispatch_dsi_apply(job_id: int) -> tuple[bool, str | None]:
                         "(CIP_DEV_CELERY_DISPATCH=in_process_thread after broker failure)",
                         job_id,
                     )
+                    raise
 
             DEV_CELERY_LOGGER.warning(
                 "ENQUEUE: DSI apply job_id=%s — in-process thread after broker failure (DEV ONLY).",
                 job_id,
             )
-            threading.Thread(target=_in_process, name=f"dsi-apply-{job_id}", daemon=True).start()
+            spawn_in_process_thread_with_ledger(
+                task_run_id=task_run_id,
+                thread_name=f"dsi-apply-{job_id}",
+                target=_in_process,
+            )
             return True, None
-        run_dsi_apply_sync(job_id)
+
+        task_run_id = f"inline-{uuid.uuid4().hex}"
+        create_queued_task_run(
+            task_run_id=task_run_id,
+            task_name=task_name,
+            entity_type=ENTITY_IMPORT_JOB,
+            entity_id=job_id,
+            transport=TRANSPORT_INLINE_SYNC,
+        )
+        run_inline_with_ledger(task_run_id, lambda: run_dsi_apply_sync(job_id))
         return False, None
 
 

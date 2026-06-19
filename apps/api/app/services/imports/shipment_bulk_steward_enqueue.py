@@ -11,7 +11,6 @@ configured — never silently for normal operation.
 from __future__ import annotations
 
 import logging
-import threading
 import uuid
 from typing import Any, Callable
 
@@ -22,6 +21,15 @@ from app.services.imports.shipment_evidence_steward_ops import (
     execute_bulk_apply_shipment_candidate_plans,
     execute_bulk_create_provisional_shipment_customers,
     execute_bulk_map_shipment_customers,
+)
+from app.services.task_run_ledger import (
+    ENTITY_IMPORT_JOB,
+    TRANSPORT_BROKER,
+    TRANSPORT_INLINE_SYNC,
+    TRANSPORT_IN_PROCESS_THREAD,
+    create_queued_task_run,
+    run_inline_with_ledger,
+    spawn_in_process_thread_with_ledger,
 )
 from app.worker.celery_app import celery_app
 
@@ -125,11 +133,26 @@ def enqueue_shipment_bulk_task(
     settings = get_settings()
     try:
         result = celery_app.send_task(task_name, args=[job_id, payload])
-        return str(result.id), True
+        task_id = str(result.id)
+        create_queued_task_run(
+            task_run_id=task_id,
+            task_name=task_name,
+            entity_type=ENTITY_IMPORT_JOB,
+            entity_id=job_id,
+            transport=TRANSPORT_BROKER,
+        )
+        return task_id, True
     except Exception:
         logger.exception("shipment_bulk: Celery enqueue failed job_id=%s task=%s", job_id, task_name)
         if settings.cip_dev_celery_dispatch == "in_process_thread":
             task_id = f"dev-{dev_prefix}-{uuid.uuid4().hex}"
+            create_queued_task_run(
+                task_run_id=task_id,
+                task_name=task_name,
+                entity_type=ENTITY_IMPORT_JOB,
+                entity_id=job_id,
+                transport=TRANSPORT_IN_PROCESS_THREAD,
+            )
 
             def _in_process() -> None:
                 try:
@@ -140,14 +163,31 @@ def enqueue_shipment_bulk_task(
                         "shipment_bulk in-process thread failed job_id=%s task_id=%s", job_id, task_id
                     )
                     _dev_shipment_bulk_task_results[task_id] = {"state": "FAILURE", "error": str(exc)[:800]}
+                    raise
 
             DEV_CELERY_LOGGER.warning(
                 "ENQUEUE: shipment_bulk %s job_id=%s — in-process thread (DEV ONLY).", task_name, job_id
             )
-            threading.Thread(target=_in_process, name=f"{dev_prefix}-{job_id}", daemon=True).start()
+            spawn_in_process_thread_with_ledger(
+                task_run_id=task_id,
+                thread_name=f"{dev_prefix}-{job_id}",
+                target=_in_process,
+            )
             return task_id, True
 
-        out = run_sync()
         task_id = f"sync-{dev_prefix}-{uuid.uuid4().hex}"
-        _dev_shipment_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
+        create_queued_task_run(
+            task_run_id=task_id,
+            task_name=task_name,
+            entity_type=ENTITY_IMPORT_JOB,
+            entity_id=job_id,
+            transport=TRANSPORT_INLINE_SYNC,
+        )
+
+        def _inline() -> dict[str, Any]:
+            out = run_sync()
+            _dev_shipment_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
+            return out
+
+        run_inline_with_ledger(task_id, _inline)
         return task_id, False

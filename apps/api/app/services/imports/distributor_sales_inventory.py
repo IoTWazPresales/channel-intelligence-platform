@@ -1627,6 +1627,9 @@ def _commit_dsi_validate_heartbeat(
         clear_sub_phase=clear_sub_phase,
     )
     commit_session_with_transient_retry(db)
+    from app.services.task_run_ledger import heartbeat_current_task_run
+
+    heartbeat_current_task_run()
     if profile and profile.enabled:
         profile.commit_s += time.monotonic() - t0
         profile.commit_count += 1
@@ -1652,6 +1655,9 @@ def _commit_dsi_validate_chunk(
         clear_sub_phase=True,
     )
     commit_session_with_transient_retry(db)
+    from app.services.task_run_ledger import heartbeat_current_task_run
+
+    heartbeat_current_task_run()
     if profile and profile.enabled:
         profile.commit_s += time.monotonic() - t0
         profile.commit_count += 1

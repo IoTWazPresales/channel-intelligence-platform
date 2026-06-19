@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import threading
 import uuid
 from typing import Any
 
@@ -16,6 +15,15 @@ from app.services.imports.import_background_slots import (
     SLOT_DSI_VELOCITY,
     set_task_slot_by_job_id,
     set_task_slot_on_job,
+)
+from app.services.task_run_ledger import (
+    ENTITY_IMPORT_JOB,
+    TRANSPORT_BROKER,
+    TRANSPORT_INLINE_SYNC,
+    TRANSPORT_IN_PROCESS_THREAD,
+    create_queued_task_run,
+    run_inline_with_ledger,
+    spawn_in_process_thread_with_ledger,
 )
 from app.worker.celery_app import celery_app
 
@@ -51,12 +59,26 @@ def enqueue_dsi_velocity_compute(
         task_id = None
 
     if task_id:
+        create_queued_task_run(
+            task_run_id=task_id,
+            task_name=task_name,
+            entity_type=ENTITY_IMPORT_JOB,
+            entity_id=job_id,
+            transport=TRANSPORT_BROKER,
+        )
         _persist_velocity_task_metadata(job_id, task_id, async_poll=True)
         return task_id, True
 
     settings = get_settings()
     use_thread = detach_from_caller or settings.cip_dev_celery_dispatch == "in_process_thread"
     task_id = f"dev-velocity-compute-{uuid.uuid4().hex}"
+    create_queued_task_run(
+        task_run_id=task_id,
+        task_name=task_name,
+        entity_type=ENTITY_IMPORT_JOB,
+        entity_id=job_id,
+        transport=TRANSPORT_IN_PROCESS_THREAD if use_thread else TRANSPORT_INLINE_SYNC,
+    )
 
     if use_thread:
 
@@ -70,17 +92,22 @@ def enqueue_dsi_velocity_compute(
                     "state": "FAILURE",
                     "error": str(exc)[:800],
                 }
+                raise
 
-        threading.Thread(
+        spawn_in_process_thread_with_ledger(
+            task_run_id=task_id,
+            thread_name=f"dsi-velocity-compute-{job_id}",
             target=_in_process,
-            name=f"dsi-velocity-compute-{job_id}",
-            daemon=True,
-        ).start()
+        )
         _persist_velocity_task_metadata(job_id, task_id, async_poll=True)
         return task_id, True
 
-    out = _run_sync()
-    _dev_velocity_compute_results[task_id] = {"state": "SUCCESS", "result": out}
+    def _inline() -> dict[str, Any]:
+        out = _run_sync()
+        _dev_velocity_compute_results[task_id] = {"state": "SUCCESS", "result": out}
+        return out
+
+    run_inline_with_ledger(task_id, _inline)
     _persist_velocity_task_metadata(job_id, task_id, async_poll=False)
     return task_id, False
 

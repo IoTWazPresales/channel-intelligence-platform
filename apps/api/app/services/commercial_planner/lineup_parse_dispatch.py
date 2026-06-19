@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import logging
-import threading
 from datetime import datetime, timezone
 from typing import Any
 
@@ -21,6 +20,13 @@ from app.services.commercial_planner.lineup_parse_worker import (
     ASYNC_PARSE_ROW_THRESHOLD,
 )
 from app.services.imports.import_background_slots import SLOT_LINEUP_PARSE, set_task_slot_on_job
+from app.services.task_run_ledger import (
+    ENTITY_IMPORT_JOB,
+    TRANSPORT_BROKER,
+    TRANSPORT_IN_PROCESS_THREAD,
+    create_queued_task_run,
+    spawn_in_process_thread_with_ledger,
+)
 
 logger = logging.getLogger(__name__)
 DEV_CELERY_LOGGER = logging.getLogger("cip.dev_celery")
@@ -97,6 +103,7 @@ def enqueue_lineup_parse_sync(
     settings = get_settings()
     file_b64 = base64.standard_b64encode(file_bytes).decode("ascii")
     celery_task_id: str | None = None
+    task_name = "commercial_planner.parse_lineup_case"
 
     def _run_sync() -> None:
         from app.services.commercial_planner.lineup_parse_worker import run_lineup_case_parse_job
@@ -106,7 +113,7 @@ def enqueue_lineup_parse_sync(
             filename,
             file_b64,
             import_job_id=import_job_id,
-            celery_task_id="dev-in-process-thread",
+            celery_task_id=celery_task_id,
         )
 
     if settings.cip_dev_celery_dispatch == "in_process_thread":
@@ -114,12 +121,19 @@ def enqueue_lineup_parse_sync(
             "ENQUEUE: lineup parse case_id=%s — in_process_thread (DEV ONLY).",
             case_id,
         )
-        threading.Thread(
-            target=_run_sync,
-            name=f"lineup-parse-{case_id}",
-            daemon=True,
-        ).start()
         celery_task_id = "dev-in-process-thread"
+        create_queued_task_run(
+            task_run_id=celery_task_id,
+            task_name=task_name,
+            entity_type=ENTITY_IMPORT_JOB,
+            entity_id=import_job_id,
+            transport=TRANSPORT_IN_PROCESS_THREAD,
+        )
+        spawn_in_process_thread_with_ledger(
+            task_run_id=celery_task_id,
+            thread_name=f"lineup-parse-{case_id}",
+            target=_run_sync,
+        )
     else:
         from app.worker.tasks import commercial_planner_lineup_parse_task
 
@@ -131,6 +145,13 @@ def enqueue_lineup_parse_sync(
                 import_job_id,
             )
             celery_task_id = str(async_result.id)
+            create_queued_task_run(
+                task_run_id=celery_task_id,
+                task_name=task_name,
+                entity_type=ENTITY_IMPORT_JOB,
+                entity_id=import_job_id,
+                transport=TRANSPORT_BROKER,
+            )
         except Exception as exc:
             logger.exception("lineup parse dispatch failed case_id=%s", case_id)
             with SessionLocal() as session:
