@@ -449,12 +449,16 @@ class ProductResolutionEvidence:
 
 def _merge_product_resolution_evidence(bucket: dict[str, Any], ev: ProductResolutionEvidence | None) -> None:
     """Accumulate per-token evidence across staging rows (same normalized product_identifier)."""
-    if ev is None or (not ev.inactive_hits and ev.ambiguous_eligible is None):
+    if ev is None or (
+        not ev.inactive_hits and ev.ambiguous_eligible is None and ev.receipt_disambiguation is None
+    ):
         return
-    acc = bucket.setdefault("_pe_acc", {"inh": [], "amb": None, "seen": set()})
+    acc = bucket.setdefault("_pe_acc", {"inh": [], "amb": None, "receipt": None, "seen": set()})
     seen: set[tuple[str, int]] = acc["seen"]
     if ev.ambiguous_eligible:
         acc["amb"] = ev.ambiguous_eligible
+    if ev.receipt_disambiguation:
+        acc["receipt"] = ev.receipt_disambiguation
     for hit in ev.inactive_hits:
         sid = (str(hit.get("tier") or ""), int(hit.get("product_id") or 0))
         if sid[1] <= 0:
@@ -2139,10 +2143,15 @@ def process_distributor_sales_inventory(
                 if wcode not in diag:
                     diag.append(wcode)
                     prod_diag.append(wcode)
-            if rpid is None and prod_raw and pev and pev.ambiguous_eligible:
+            if rpid is None and prod_raw and pev and pev.ambiguous_eligible and rdid is not None:
                 from app.services.imports.dsi_distributor_receipt_disambiguation import try_receipt_disambiguate_product
 
                 elig_ids = [int(x) for x in (pev.ambiguous_eligible.get("product_ids") or []) if int(x) > 0]
+                sell_out_qty = (
+                    abs(float(qty_sold))
+                    if qty_sold is not None and float(qty_sold) > 0
+                    else None
+                )
                 receipt_res = try_receipt_disambiguate_product(
                     receipt_index,
                     distributor_id=rdid,
@@ -2151,11 +2160,13 @@ def process_distributor_sales_inventory(
                     eligible_product_ids=elig_ids,
                     evidence_date=evidence_date,
                     ambiguous_eligible=pev.ambiguous_eligible,
+                    sell_out_qty=sell_out_qty,
                 )
-                if receipt_res.product_id is not None and receipt_res.tier:
+                if receipt_res.evidence:
+                    pev.receipt_disambiguation = receipt_res.evidence
+                if receipt_res.product_id is not None and receipt_res.resolve_reason:
                     rpid = int(receipt_res.product_id)
-                    presolve_tag = f"product_receipt_disambiguation_{receipt_res.tier.lower()}"
-                    pev.receipt_disambiguation = receipt_res.provenance.get("receipt_disambiguation")
+                    presolve_tag = receipt_res.resolve_reason
                     prod_diag.append(presolve_tag)
                     diag.append(presolve_tag)
                     perr = None
@@ -2765,6 +2776,9 @@ def process_distributor_sales_inventory(
             if isinstance(acc, dict):
                 amb = acc.get("amb")
                 inh = [x for x in (acc.get("inh") or []) if isinstance(x, dict)]
+                receipt_ev = acc.get("receipt")
+                if isinstance(receipt_ev, dict) and receipt_ev:
+                    ctx["receipt_disambiguation"] = receipt_ev
                 if amb:
                     ctx["product_match_status"] = "ambiguous_eligible"
                     ctx["product_ambiguous_eligible"] = amb
