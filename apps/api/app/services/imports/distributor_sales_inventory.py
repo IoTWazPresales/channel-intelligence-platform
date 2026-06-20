@@ -445,20 +445,28 @@ class ProductResolutionEvidence:
     ambiguous_eligible: dict[str, Any] | None = None
     inactive_hits: list[dict[str, Any]] = field(default_factory=list)
     receipt_disambiguation: dict[str, Any] | None = None
+    temporal_supersession: dict[str, Any] | None = None
 
 
 def _merge_product_resolution_evidence(bucket: dict[str, Any], ev: ProductResolutionEvidence | None) -> None:
     """Accumulate per-token evidence across staging rows (same normalized product_identifier)."""
     if ev is None or (
-        not ev.inactive_hits and ev.ambiguous_eligible is None and ev.receipt_disambiguation is None
+        not ev.inactive_hits
+        and ev.ambiguous_eligible is None
+        and ev.receipt_disambiguation is None
+        and ev.temporal_supersession is None
     ):
         return
-    acc = bucket.setdefault("_pe_acc", {"inh": [], "amb": None, "receipt": None, "seen": set()})
+    acc = bucket.setdefault("_pe_acc", {"inh": [], "amb": None, "receipt": None, "temporal": None, "seen": set()})
     seen: set[tuple[str, int]] = acc["seen"]
     if ev.ambiguous_eligible:
         acc["amb"] = ev.ambiguous_eligible
     if ev.receipt_disambiguation:
         acc["receipt"] = ev.receipt_disambiguation
+    if ev.temporal_supersession:
+        acc["temporal"] = ev.temporal_supersession
+        if ev.temporal_supersession.get("fifo_candidate"):
+            acc["fifo_any"] = True
     for hit in ev.inactive_hits:
         sid = (str(hit.get("tier") or ""), int(hit.get("product_id") or 0))
         if sid[1] <= 0:
@@ -1852,6 +1860,13 @@ def process_distributor_sales_inventory(
     )
     _upfront_progress("receipt_product_index")
 
+    from app.services.imports.dsi_temporal_supersession import ProductShipmentWindowIndex
+
+    shipment_window_index = _dsi_session_read_with_transient_retry(
+        db, lambda: ProductShipmentWindowIndex.load(db, dist_id_to_canonical)
+    )
+    _upfront_progress("product_shipment_window_index")
+
     # Pre-load distributor + customer master data (eliminates 4–6 per-row DB round-trips)
     res_cache = _build_resolution_cache(db, source_def_id, on_sub_phase=_upfront_progress)
     # Commit the alias/open-channel read transaction left open by the cache build before the
@@ -2167,6 +2182,33 @@ def process_distributor_sales_inventory(
                 if receipt_res.product_id is not None and receipt_res.resolve_reason:
                     rpid = int(receipt_res.product_id)
                     presolve_tag = receipt_res.resolve_reason
+                    prod_diag.append(presolve_tag)
+                    diag.append(presolve_tag)
+                    perr = None
+            if (
+                rpid is None
+                and prod_raw
+                and pev
+                and pev.ambiguous_eligible
+                and rdid is not None
+                and evidence_date is not None
+            ):
+                from app.services.imports.dsi_temporal_supersession import try_temporal_supersession_product
+
+                elig_ids_ts = [int(x) for x in (pev.ambiguous_eligible.get("product_ids") or []) if int(x) > 0]
+                temporal_res = try_temporal_supersession_product(
+                    shipment_window_index,
+                    distributor_id=rdid,
+                    dist_id_to_canonical=dist_id_to_canonical,
+                    eligible_product_ids=elig_ids_ts,
+                    evidence_date=evidence_date,
+                    ambiguous_eligible=pev.ambiguous_eligible,
+                )
+                if temporal_res.evidence:
+                    pev.temporal_supersession = temporal_res.evidence
+                if temporal_res.product_id is not None and temporal_res.resolve_reason:
+                    rpid = int(temporal_res.product_id)
+                    presolve_tag = temporal_res.resolve_reason
                     prod_diag.append(presolve_tag)
                     diag.append(presolve_tag)
                     perr = None
@@ -2777,8 +2819,13 @@ def process_distributor_sales_inventory(
                 amb = acc.get("amb")
                 inh = [x for x in (acc.get("inh") or []) if isinstance(x, dict)]
                 receipt_ev = acc.get("receipt")
+                temporal_ev = acc.get("temporal")
                 if isinstance(receipt_ev, dict) and receipt_ev:
                     ctx["receipt_disambiguation"] = receipt_ev
+                if isinstance(temporal_ev, dict) and temporal_ev:
+                    ctx["temporal_supersession"] = temporal_ev
+                    if temporal_ev.get("fifo_candidate") or acc.get("fifo_any"):
+                        ctx["fifo_candidate"] = True
                 if amb:
                     ctx["product_match_status"] = "ambiguous_eligible"
                     ctx["product_ambiguous_eligible"] = amb

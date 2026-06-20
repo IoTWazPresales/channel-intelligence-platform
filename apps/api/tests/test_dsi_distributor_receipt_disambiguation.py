@@ -233,3 +233,30 @@ def test_qty_one_sample_line_does_not_pollute_receipt_t1_intersection() -> None:
     assert polluted_res.product_id is None
     assert polluted_res.evidence is not None
     assert polluted_res.evidence["status"] == STATUS_AMBIGUOUS_OVERLAP
+
+
+def test_t1_never_resolves_when_two_volume_shipped_survivors_in_distributor_bucket() -> None:
+    """Two volume-shipped survivors in the strict bucket must fall through to temporal Tier B."""
+    pid_old, pid_new = 4080, 8859
+    idx = _idx_with_lines(
+        "mustek",
+        "fa506ncr-716512b0w",
+        [
+            ReceiptLineEvidence(pid_old, date(2024, 3, 1), date(2024, 4, 30), 120.0),
+            ReceiptLineEvidence(pid_new, date(2024, 6, 1), date(2024, 10, 31), 80.0),
+        ],
+    )
+    res = try_receipt_disambiguate_product(
+        idx,
+        distributor_id=21,
+        dist_id_to_canonical={21: "mustek"},
+        raw_product_token="FA506NCR-716512B0W",
+        eligible_product_ids=[pid_old, pid_new],
+        evidence_date=date(2024, 5, 1),
+        ambiguous_eligible={"product_ids": [pid_old, pid_new], "tier": "sales_model_name"},
+    )
+    assert res.resolve_reason != REASON_SINGLE
+    assert res.resolve_reason != REASON_OVERLAP_REFINED
+    assert res.product_id is None
+    assert res.evidence is not None
+    assert res.evidence["status"] == STATUS_AMBIGUOUS_OVERLAP
