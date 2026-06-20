@@ -42,6 +42,7 @@ import {
   dsiTabDependencyNudge,
   filterDsiStewardCandidates,
   formatPlanActionLabel,
+  paginateDsiStewardCandidateRows,
   useDsiBulkSteward,
   useDsiResolutionPlan,
   type DsiBulkAction,
@@ -211,10 +212,46 @@ export function DsiImportJobResolutionSection({
     focusWorkspaceToolbar();
   }, [bulk, focusWorkspaceToolbar]);
 
-  const displayedCandidates = useMemo(
+  const filteredCandidates = useMemo(
     () => filterDsiStewardCandidates(candidates, activeFilters, plan.planByCandidateId),
     [candidates, activeFilters, plan.planByCandidateId]
   );
+
+  const clientQueueFilterActive = tabbedMode && candidatesPage.clientQueueFilterActive;
+
+  const filteredPageCount = Math.max(
+    1,
+    Math.ceil(filteredCandidates.length / Math.max(1, candidatesPage.pageSize))
+  );
+
+  const gridCandidates = useMemo(() => {
+    if (!clientQueueFilterActive) return filteredCandidates;
+    return paginateDsiStewardCandidateRows(
+      filteredCandidates,
+      candidatesPage.page,
+      candidatesPage.pageSize
+    );
+  }, [
+    filteredCandidates,
+    clientQueueFilterActive,
+    candidatesPage.page,
+    candidatesPage.pageSize,
+  ]);
+
+  useEffect(() => {
+    if (!clientQueueFilterActive || candidatesPage.query.isFetching) return;
+    if (candidatesPage.page > 0 && candidatesPage.page >= filteredPageCount) {
+      candidatesPage.setPage(Math.max(0, filteredPageCount - 1));
+    }
+  }, [
+    clientQueueFilterActive,
+    candidatesPage.page,
+    candidatesPage.setPage,
+    candidatesPage.query.isFetching,
+    filteredPageCount,
+  ]);
+
+  const displayedCandidates = gridCandidates;
 
   const openBulkWorkflow = useCallback(
     (action: DsiBulkAction) => {
@@ -494,8 +531,10 @@ export function DsiImportJobResolutionSection({
           <DsiStewardCandidateFilters
             filters={activeFilters}
             onChange={setActiveFilters}
-            visibleCount={displayedCandidates.length}
-            totalCount={Math.max(candidatesTotal, candidates.length)}
+            visibleCount={
+              clientQueueFilterActive ? filteredCandidates.length : displayedCandidates.length
+            }
+            totalCount={tabbedMode ? candidatesPage.total : Math.max(candidatesTotal, candidates.length)}
             hideEntityFilter={tabbedMode}
             hidePartyFilter={tabbedMode && activeTab !== 'distributor'}
             showProductMatchStatusChips={tabbedMode && activeTab === 'product'}
@@ -805,11 +844,11 @@ export function DsiImportJobResolutionSection({
           {tabbedMode && isCandidateTab ? (
             <DsiCandidatesPagination
               page={candidatesPage.page}
-              pageCount={candidatesPage.pageCount}
+              pageCount={clientQueueFilterActive ? filteredPageCount : candidatesPage.pageCount}
               pageSize={candidatesPage.pageSize}
-              total={candidatesPage.total}
+              total={clientQueueFilterActive ? filteredCandidates.length : candidatesPage.total}
               skip={candidatesPage.skip}
-              pageItemCount={candidates.length}
+              pageItemCount={displayedCandidates.length}
               busy={candidatesPage.query.isFetching}
               onPageChange={candidatesPage.setPage}
               onPageSizeChange={candidatesPage.setPageSize}

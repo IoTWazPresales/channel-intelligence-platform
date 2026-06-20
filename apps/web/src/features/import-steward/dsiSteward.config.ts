@@ -54,6 +54,7 @@ export const DSI_STEWARD_CONFIG = {
       verifyNameOnly: boolean;
       specialCategoryOnly: boolean;
       duplicateUnresolvedOnly: boolean;
+      queue: string;
     }
   ) =>
     [
@@ -67,6 +68,7 @@ export const DSI_STEWARD_CONFIG = {
       filters.verifyNameOnly,
       filters.specialCategoryOnly,
       filters.duplicateUnresolvedOnly,
+      filters.queue,
     ] as const,
   /** Prefix for invalidating all resolution-plan queries for a job (region/channel/candidate variants). */
   resolutionSuggestionsQueryKeyPrefix: (importJobId: number) => ['dsi-resolution-suggestions', importJobId] as const,

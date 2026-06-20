@@ -15,6 +15,8 @@ export {
   defaultDsiStewardCandidateFilterState,
   dsiStewardFiltersAreDefault,
   filterDsiStewardCandidates,
+  paginateDsiStewardCandidateRows,
+  stewardQueueFilterRequiresFullLoad,
   dsiEffectiveSuggestedAction,
   DSI_ENTITY_CUSTOMER,
   DSI_ENTITY_DISTRIBUTOR,

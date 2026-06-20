@@ -30,7 +30,7 @@ export function DsiStewardCandidateFilters({
   isAtDefault?: (filters: DsiStewardCandidateFilterState) => boolean;
   /** Products tab: split validate-time product_match_status filters. */
   showProductMatchStatusChips?: boolean;
-  /** Optional counts for product no_match / ambiguous_eligible (loaded page, same as queue filters). */
+  /** Optional counts for product no_match / ambiguous_eligible (tab-counts API; full job scope). */
   productMatchStatusCounts?: { no_match?: number; ambiguous_eligible?: number };
 }) {
   const resolveClearTarget = clearToDefault ?? defaultDsiStewardCandidateFilterState;

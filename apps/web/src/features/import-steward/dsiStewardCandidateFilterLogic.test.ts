@@ -7,6 +7,8 @@ import {
   contextPossibleDuplicateOf,
   defaultDsiStewardCandidateFilterState,
   filterDsiStewardCandidates,
+  paginateDsiStewardCandidateRows,
+  stewardQueueFilterRequiresFullLoad,
   suggestedCustomerIdForDuplicateSameEntity,
 } from './dsiStewardCandidateFilterLogic';
 
@@ -148,5 +150,81 @@ describe('product match status queue filters', () => {
       queue: 'no_match' as const,
     };
     expect(filterDsiStewardCandidates([row], filters, plan)).toHaveLength(1);
+  });
+});
+
+describe('steward queue filter full-load + client pagination', () => {
+  const plan = new Map<number, Record<string, unknown>>();
+
+  function productRow(id: number, context: Record<string, unknown>): DsiCandidateRow {
+    return {
+      id,
+      import_job_id: 43,
+      source_definition_id: null,
+      entity_type: 'product_identifier',
+      normalized_key: `token-${id}`,
+      dealer_group_token: null,
+      row_count: 1,
+      total_units: null,
+      total_reported_value: null,
+      sample_raw_values: [`SKU-${id}`],
+      suggested_entity_id: null,
+      match_reason: null,
+      confidence_score: null,
+      status: 'open',
+      context,
+    };
+  }
+
+  it('stewardQueueFilterRequiresFullLoad when Plan/match queue is not all', () => {
+    expect(stewardQueueFilterRequiresFullLoad(defaultDsiStewardCandidateFilterState())).toBe(false);
+    expect(
+      stewardQueueFilterRequiresFullLoad({
+        ...defaultDsiStewardCandidateFilterState(),
+        queue: 'ambiguous_eligible',
+      })
+    ).toBe(true);
+  });
+
+  it('ambiguous filter on full tab set returns all matches beyond first server page', () => {
+    const rows = [
+      ...Array.from({ length: 482 }, (_, i) =>
+        productRow(i + 1, { product_match_status: 'no_match' })
+      ),
+      ...Array.from({ length: 63 }, (_, i) =>
+        productRow(500 + i, { product_match_status: 'ambiguous_eligible' })
+      ),
+    ];
+    const filters = {
+      ...defaultDsiStewardCandidateFilterState(),
+      entity: 'product' as const,
+      queue: 'ambiguous_eligible' as const,
+    };
+    const filtered = filterDsiStewardCandidates(rows, filters, plan);
+    expect(filtered).toHaveLength(63);
+    const page0 = paginateDsiStewardCandidateRows(filtered, 0, 100);
+    expect(page0).toHaveLength(63);
+    expect(page0.every((r) => r.context?.product_match_status === 'ambiguous_eligible')).toBe(true);
+  });
+
+  it('no_match filter on full tab set returns all no_match rows at default page size', () => {
+    const rows = [
+      ...Array.from({ length: 482 }, (_, i) =>
+        productRow(i + 1, { product_match_status: 'no_match' })
+      ),
+      ...Array.from({ length: 63 }, (_, i) =>
+        productRow(500 + i, { product_match_status: 'ambiguous_eligible' })
+      ),
+    ];
+    const filters = {
+      ...defaultDsiStewardCandidateFilterState(),
+      entity: 'product' as const,
+      queue: 'no_match' as const,
+    };
+    const filtered = filterDsiStewardCandidates(rows, filters, plan);
+    expect(filtered).toHaveLength(482);
+    expect(paginateDsiStewardCandidateRows(filtered, 0, 100)).toHaveLength(100);
+    expect(paginateDsiStewardCandidateRows(filtered, 1, 100)).toHaveLength(100);
+    expect(paginateDsiStewardCandidateRows(filtered, 4, 100)).toHaveLength(82);
   });
 });

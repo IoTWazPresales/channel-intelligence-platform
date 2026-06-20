@@ -279,3 +279,19 @@ export function dsiStewardFiltersAreDefault(filters: DsiStewardCandidateFilterSt
     !filters.duplicateUnresolvedOnly
   );
 }
+
+/** Plan/match queue chips filter client-side on ``context`` / plan — load full tab set first. */
+export function stewardQueueFilterRequiresFullLoad(filters: DsiStewardCandidateFilterState): boolean {
+  return filters.queue !== 'all';
+}
+
+/** Slice a client-filtered candidate list for grid pagination (stable order preserved). */
+export function paginateDsiStewardCandidateRows<T>(
+  rows: T[],
+  page: number,
+  pageSize: number
+): T[] {
+  if (pageSize <= 0) return [];
+  const start = Math.max(0, page) * pageSize;
+  return rows.slice(start, start + pageSize);
+}
