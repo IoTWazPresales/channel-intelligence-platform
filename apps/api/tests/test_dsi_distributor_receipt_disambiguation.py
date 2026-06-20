@@ -7,6 +7,9 @@ from datetime import date
 from app.services.imports.dsi_distributor_receipt_disambiguation import (
     REASON_OVERLAP_REFINED,
     REASON_SINGLE,
+    STATUS_AMBIGUOUS_OVERLAP,
+    STATUS_NO_RECEIPT_EVIDENCE,
+    STATUS_RESOLVED_SINGLE,
     DistributorReceiptProductIndex,
     ReceiptLineEvidence,
     _refine_overlap_candidates,
@@ -46,7 +49,7 @@ def test_single_receipt_intersection_resolves_distributor_receipt_single() -> No
     assert res.resolve_reason == REASON_SINGLE
     assert res.product_id == 13164
     assert res.evidence is not None
-    assert res.evidence["status"] == "resolved_single"
+    assert res.evidence["status"] == STATUS_RESOLVED_SINGLE
     assert res.evidence["resolve_reason"] == REASON_SINGLE
 
 
@@ -64,7 +67,7 @@ def test_no_receipt_evidence_stays_reviewable_with_marker() -> None:
     assert res.product_id is None
     assert res.resolve_reason is None
     assert res.evidence is not None
-    assert res.evidence["status"] == "no_receipt_evidence"
+    assert res.evidence["status"] == STATUS_NO_RECEIPT_EVIDENCE
 
 
 def test_overlap_refine_resolves_when_window_and_qty_unique() -> None:
@@ -121,8 +124,66 @@ def test_overlap_stays_ambiguous_with_receipt_evidence_attached() -> None:
     )
     assert res.product_id is None
     assert res.evidence is not None
-    assert res.evidence["status"] == "ambiguous_overlap"
+    assert res.evidence["status"] == STATUS_AMBIGUOUS_OVERLAP
     assert len(res.evidence.get("receipt_lines") or []) >= 2
+
+
+def test_two_feasible_skus_both_pass_window_and_qty_stay_ambiguous_not_qty_ranked() -> None:
+    """Qty is a feasibility filter only — never pick the higher-shipped SKU when both survive."""
+    pid_lines = {
+        12862: [ReceiptLineEvidence(12862, date(2024, 8, 1), date(2025, 12, 31), 10.0)],
+        13164: [ReceiptLineEvidence(13164, date(2024, 8, 1), date(2025, 12, 31), 500.0)],
+    }
+    refined = _refine_overlap_candidates(
+        {12862, 13164},
+        pid_lines,
+        evidence_date=date(2024, 10, 1),
+        sell_out_qty=5.0,
+    )
+    assert refined == {12862, 13164}
+
+    idx = _idx_with_lines(
+        "mustek",
+        "fa506ncr-716512b0w",
+        pid_lines[12862] + pid_lines[13164],
+    )
+    res = try_receipt_disambiguate_product(
+        idx,
+        distributor_id=21,
+        dist_id_to_canonical={21: "mustek"},
+        raw_product_token="FA506NCR-716512B0W",
+        eligible_product_ids=[12862, 13164],
+        evidence_date=date(2024, 10, 1),
+        ambiguous_eligible={"product_ids": [12862, 13164], "tier": "sales_model_name"},
+        sell_out_qty=5.0,
+    )
+    assert res.product_id is None
+    assert res.resolve_reason is None
+    assert res.evidence is not None
+    assert res.evidence["status"] == STATUS_AMBIGUOUS_OVERLAP
+    assert set(res.evidence.get("overlap_refine_survivors") or []) == {12862, 13164}
+    assert len(res.evidence.get("receipt_lines") or []) >= 2
+
+
+def test_single_sku_pick_is_deterministic_across_calls() -> None:
+    idx = _idx_with_lines(
+        "mustek",
+        "fa506ncr-716512b0w",
+        [ReceiptLineEvidence(13164, date(2025, 1, 14), date(2025, 2, 1), 50.0)],
+    )
+    kwargs = dict(
+        distributor_id=21,
+        dist_id_to_canonical={21: "mustek"},
+        raw_product_token="FA506NCR-716512B0W",
+        eligible_product_ids=[12862, 13164],
+        evidence_date=date(2025, 3, 1),
+        ambiguous_eligible={"product_ids": [12862, 13164], "tier": "sales_model_name"},
+        sell_out_qty=2.0,
+    )
+    picks = [
+        try_receipt_disambiguate_product(idx, **kwargs).product_id for _ in range(5)
+    ]
+    assert picks == [13164, 13164, 13164, 13164, 13164]
 
 
 def test_window_covers_tx_respects_pod() -> None:

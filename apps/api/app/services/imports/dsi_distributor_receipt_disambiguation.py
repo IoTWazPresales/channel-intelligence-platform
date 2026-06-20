@@ -21,6 +21,12 @@ from app.services.imports.provisional_entity_identity import canonical_provision
 REASON_SINGLE = "distributor_receipt_single"
 REASON_OVERLAP_REFINED = "distributor_receipt_overlap_refined"
 
+STATUS_NO_RECEIPT_EVIDENCE = "no_receipt_evidence"
+STATUS_AMBIGUOUS_OVERLAP = "ambiguous_overlap"
+STATUS_NO_ELIGIBLE_RECEIPT_INTERSECTION = "no_eligible_receipt_intersection"
+STATUS_RESOLVED_SINGLE = "resolved_single"
+STATUS_RESOLVED_OVERLAP_REFINED = "resolved_overlap_refined"
+
 
 @dataclass(frozen=True, slots=True)
 class ReceiptLineEvidence:
@@ -43,7 +49,7 @@ class ReceiptDisambiguationResult:
             return "T1"
         if self.resolve_reason == REASON_OVERLAP_REFINED:
             return "T2"
-        if self.evidence and self.evidence.get("status") == "no_receipt_evidence":
+        if self.evidence and self.evidence.get("status") == STATUS_NO_RECEIPT_EVIDENCE:
             return "T4"
         if self.product_id is None:
             return "T4"
@@ -161,7 +167,7 @@ def _refine_overlap_candidates(
     """Keep SKUs whose shipment window covers tx_date and cumulative qty covers sell-out."""
     refined: set[int] = set()
     need_qty = sell_out_qty is not None and float(sell_out_qty) > 0
-    for pid in survivors:
+    for pid in sorted(survivors):
         lines = pid_lines.get(int(pid)) or []
         if not lines:
             continue
@@ -258,7 +264,7 @@ def try_receipt_disambiguate_product(
             None,
             None,
             evidence=_base_evidence(
-                status="no_receipt_evidence",
+                status=STATUS_NO_RECEIPT_EVIDENCE,
                 canon=canon,
                 sm_key=sm_key,
                 receipt_index=receipt_index,
@@ -270,12 +276,12 @@ def try_receipt_disambiguate_product(
 
     inter = _intersect_eligible(eligible_product_ids, dist_receipt)
     if len(inter) == 1:
-        pick = int(next(iter(inter)))
+        pick = min(inter)
         return ReceiptDisambiguationResult(
             pick,
             REASON_SINGLE,
             evidence=_base_evidence(
-                status="resolved_single",
+                status=STATUS_RESOLVED_SINGLE,
                 canon=canon,
                 sm_key=sm_key,
                 receipt_index=receipt_index,
@@ -296,12 +302,12 @@ def try_receipt_disambiguate_product(
         )
         survivors = sorted(int(x) for x in refined)
         if len(refined) == 1:
-            pick = int(next(iter(refined)))
+            pick = survivors[0]
             return ReceiptDisambiguationResult(
                 pick,
                 REASON_OVERLAP_REFINED,
                 evidence=_base_evidence(
-                    status="resolved_overlap_refined",
+                    status=STATUS_RESOLVED_OVERLAP_REFINED,
                     canon=canon,
                     sm_key=sm_key,
                     receipt_index=receipt_index,
@@ -317,7 +323,7 @@ def try_receipt_disambiguate_product(
             None,
             None,
             evidence=_base_evidence(
-                status="ambiguous_overlap",
+                status=STATUS_AMBIGUOUS_OVERLAP,
                 canon=canon,
                 sm_key=sm_key,
                 receipt_index=receipt_index,
@@ -328,7 +334,9 @@ def try_receipt_disambiguate_product(
             ),
         )
 
-    status = "no_receipt_evidence" if not dist_receipt else "no_eligible_receipt_intersection"
+    status = (
+        STATUS_NO_RECEIPT_EVIDENCE if not dist_receipt else STATUS_NO_ELIGIBLE_RECEIPT_INTERSECTION
+    )
     return ReceiptDisambiguationResult(
         None,
         None,
