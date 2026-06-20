@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-037 — DSI validate/refresh post-resolution orchestrator unification
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-06-19 |
+| **Effort** | Medium (extract shared orchestrator + index loaders + tests) |
+| **Source** | DSI temporal supersession / receipt-tier wiring audit; `refresh_dsi_staging_line_resolution` in `distributor_sales_inventory.py` |
+| **Idea** | Extract `_resolve_dsi_product_post_tiers(...)` shared by bulk validate and `refresh_dsi_staging_line_resolution`: `_resolve_product` → receipt tier → temporal supersession → canonical collapse (as each ships). |
+| **Why / deferrable** | Tier B/C wire validate-only first; wiring new tiers into refresh without receipt upstream would make refresh weaker than validate. Unification is correct but larger than individual tier commits. |
+| **What the work is** | Single orchestrator called from validate row loop and `refresh_dsi_staging_line_resolution`; load `DistributorReceiptProductIndex` + product-id shipment window index once per job/refresh; parity tests that validate and refresh produce identical `resolved_product_id` for the same staging line. |
+| **Regression traps** | Refresh without receipt tier (existing gap today); memo key `(token, evidence_date)` diverging across paths; missing index loaders on steward refresh. |
+| **Behavior to retain** | Validate remains canonical until unified; steward manual alias override unchanged; cross-distributor auto-resolve guard. |
+| **Out of scope** | Changing resolution tier semantics; schema migration. |
+| **TRIGGER** | After Tier B + Tier C validate soak on job #43; or steward refresh bug where post-receipt auto-resolve is expected on re-resolve. |
+
+---
+
 ## BACKLOG-035 — Re-add migration 0048 (approved alias partial-unique indexes)
 
 | Field | Detail |

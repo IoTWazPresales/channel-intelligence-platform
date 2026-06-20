@@ -75,6 +75,7 @@ class DistributorReceiptProductIndex:
 
     @classmethod
     def load(cls, db: Session, dist_id_to_canonical: dict[int, str]) -> "DistributorReceiptProductIndex":
+        """Load receipt evidence for disambiguation (shipped lines with qty>1; no demo sales models)."""
         idx = cls()
         rows = db.execute(
             text(
@@ -90,7 +91,11 @@ class DistributorReceiptProductIndex:
                 WHERE product_resolution_status IN ('resolved', 'resolved_unique')
                   AND product_id IS NOT NULL
                   AND distributor_id IS NOT NULL
+                  AND line_state = 'shipped'
+                  AND COALESCE(quantity, 0) > 1
                   AND btrim(coalesce(sales_model_name, '')) <> ''
+                  AND lower(btrim(coalesce(sales_model_name, ''))) NOT LIKE '%-demo'
+                  AND lower(btrim(coalesce(sales_model_name, ''))) NOT LIKE '%-dem'
                   AND COALESCE(ship_confirm_date, schedule_ship_date, promise_date) IS NOT NULL
                 """
             )

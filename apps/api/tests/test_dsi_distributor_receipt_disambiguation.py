@@ -189,3 +189,47 @@ def test_single_sku_pick_is_deterministic_across_calls() -> None:
 def test_window_covers_tx_respects_pod() -> None:
     assert _window_covers_tx(date(2024, 8, 1), date(2024, 12, 31), date(2024, 10, 1))
     assert not _window_covers_tx(date(2024, 8, 1), date(2024, 9, 30), date(2024, 10, 1))
+
+
+def test_qty_one_sample_line_does_not_pollute_receipt_t1_intersection() -> None:
+    """Only qty>1 shipped lines belong in the receipt bucket (sample/demo units excluded)."""
+    idx = _idx_with_lines(
+        "mustek",
+        "b3402fba-i71610b2x",
+        [
+            ReceiptLineEvidence(4080, date(2024, 3, 1), date(2024, 6, 30), 120.0),
+            # qty=1 sample — must not appear in index built from strict load filters
+        ],
+    )
+    # Simulate pollution: a second pid present only via qty=1 would have been in loose index
+    polluted = _idx_with_lines(
+        "mustek",
+        "b3402fba-i71610b2x",
+        [
+            ReceiptLineEvidence(4080, date(2024, 3, 1), date(2024, 6, 30), 120.0),
+            ReceiptLineEvidence(8858, date(2024, 3, 1), date(2024, 6, 30), 1.0),
+        ],
+    )
+    clean_res = try_receipt_disambiguate_product(
+        idx,
+        distributor_id=21,
+        dist_id_to_canonical={21: "mustek"},
+        raw_product_token="B3402FBA-I71610B2X",
+        eligible_product_ids=[4080, 8858],
+        evidence_date=date(2024, 4, 1),
+        ambiguous_eligible={"product_ids": [4080, 8858], "tier": "sales_model_name"},
+    )
+    polluted_res = try_receipt_disambiguate_product(
+        polluted,
+        distributor_id=21,
+        dist_id_to_canonical={21: "mustek"},
+        raw_product_token="B3402FBA-I71610B2X",
+        eligible_product_ids=[4080, 8858],
+        evidence_date=date(2024, 4, 1),
+        ambiguous_eligible={"product_ids": [4080, 8858], "tier": "sales_model_name"},
+    )
+    assert clean_res.resolve_reason == REASON_SINGLE
+    assert clean_res.product_id == 4080
+    assert polluted_res.product_id is None
+    assert polluted_res.evidence is not None
+    assert polluted_res.evidence["status"] == STATUS_AMBIGUOUS_OVERLAP
