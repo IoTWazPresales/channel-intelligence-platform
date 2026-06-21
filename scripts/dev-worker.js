@@ -4,7 +4,8 @@
  * - Preflight: TCP connect to the host:port from CELERY_BROKER_URL (default 127.0.0.1:6379) so the worker
  *   fails fast with a clear message when Redis is not listening (common no-Docker Windows gap).
  * - Windows: defaults to --pool=solo (prefork is unreliable on Windows). Override with CIP_CELERY_WORKER_POOL.
- * - Local dev: embeds Celery beat via --beat (running-job reaper schedule). Docker/prod uses a separate beat service.
+ * - Local dev beat: Unix/macOS embed via worker --beat; Windows spawns a sibling `celery beat` process
+ *   (Celery rejects --beat on Windows). Docker/prod uses a separate beat service only.
  * - Skip preflight only when explicitly needed: CIP_SKIP_REDIS_PREFLIGHT=1 (not for normal local dev).
  */
 const { spawn } = require('child_process');
@@ -27,14 +28,22 @@ function deletePid() {
   try { fs.unlinkSync(pidFile); } catch { /* already gone */ }
 }
 
-writePid();
-process.on('exit', deletePid);
-process.on('SIGTERM', () => { deletePid(); process.exit(0); });
-process.on('SIGINT', () => { deletePid(); process.exit(0); });
-
 const apiRoot = path.join(__dirname, '..', 'apps', 'api');
 const isWin = process.platform === 'win32';
 const py = path.join(apiRoot, '.venv', isWin ? 'Scripts' : 'bin', isWin ? 'python.exe' : 'python');
+
+/** @type {import('child_process').ChildProcess[]} */
+const children = [];
+let shuttingDown = false;
+
+function shutdownChildren() {
+  shuttingDown = true;
+  for (const child of children) {
+    try {
+      child.kill();
+    } catch { /* already gone */ }
+  }
+}
 
 function brokerTcpTargetFromEnv() {
   const raw = process.env.CELERY_BROKER_URL || 'redis://127.0.0.1:6379/1';
@@ -66,7 +75,35 @@ function checkBrokerTcp({ host, port }, timeoutMs) {
   });
 }
 
+function spawnCelery(subcommand, extraArgs = []) {
+  const args = ['-m', 'celery', '-A', 'app.worker.celery_app', subcommand, '-l', 'info', ...extraArgs];
+  const child = spawn(py, args, { cwd: apiRoot, stdio: 'inherit', env: process.env });
+  children.push(child);
+  return child;
+}
+
+function onChildExit(code, signal) {
+  if (shuttingDown) return;
+  shutdownChildren();
+  deletePid();
+  if (signal) process.kill(process.pid, signal);
+  process.exit(code ?? 1);
+}
+
 async function main() {
+  writePid();
+  process.on('exit', deletePid);
+  process.on('SIGTERM', () => {
+    shutdownChildren();
+    deletePid();
+    process.exit(0);
+  });
+  process.on('SIGINT', () => {
+    shutdownChildren();
+    deletePid();
+    process.exit(130);
+  });
+
   if (!fs.existsSync(py)) {
     console.error(
       `Missing venv at ${py}\n` +
@@ -98,26 +135,31 @@ async function main() {
     }
   }
 
-  const args = ['-m', 'celery', '-A', 'app.worker.celery_app', 'worker', '-l', 'info', '--beat'];
+  const workerExtra = [];
   const poolOverride = process.env.CIP_CELERY_WORKER_POOL;
   if (poolOverride) {
-    args.push('--pool', poolOverride);
+    workerExtra.push('--pool', poolOverride);
     console.error(`[cip-dev-worker] Using Celery --pool=${poolOverride} (from CIP_CELERY_WORKER_POOL).`);
   } else if (isWin) {
-    args.push('--pool', 'solo');
+    workerExtra.push('--pool', 'solo');
     console.error(
       '[cip-dev-worker] Windows: using Celery --pool=solo (reliable default). Override with CIP_CELERY_WORKER_POOL=prefork|threads|gevent|...'
     );
   }
 
-  console.error('[cip-dev-worker] Embedded Celery beat enabled (--beat) for periodic maintenance tasks.');
+  if (isWin) {
+    console.error(
+      '[cip-dev-worker] Windows: spawning sibling celery beat (worker --beat is unsupported on Windows).'
+    );
+    const beat = spawnCelery('beat');
+    beat.on('exit', onChildExit);
+  } else {
+    workerExtra.push('--beat');
+    console.error('[cip-dev-worker] Embedded Celery beat enabled (--beat) for periodic maintenance tasks.');
+  }
 
-  const child = spawn(py, args, { cwd: apiRoot, stdio: 'inherit', env: process.env });
-
-  child.on('exit', (code, signal) => {
-    if (signal) process.kill(process.pid, signal);
-    process.exit(code ?? 1);
-  });
+  const worker = spawnCelery('worker', workerExtra);
+  worker.on('exit', onChildExit);
 }
 
 main().catch((e) => {

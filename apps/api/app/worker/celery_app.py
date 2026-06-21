@@ -17,7 +17,7 @@ celery_app.Task = LedgerTask
 
 celery_app.conf.task_track_started = True
 
-# Periodic maintenance — local dev: `pnpm dev:worker` runs worker with `--beat`.
+# Periodic maintenance — local dev: `pnpm dev:worker` (Unix: worker --beat; Windows: sibling beat process).
 # Docker/prod: separate `beat` service in docker-compose.
 celery_app.conf.beat_schedule = {
     "imports-reap-stale-running-jobs": {

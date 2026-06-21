@@ -17,7 +17,7 @@ console.error(
     '[cip-dev] Local port contract for this repo: web :3000, API :8001.\n' +
     '[cip-dev] The worker expects Redis at CELERY_BROKER_URL (default redis://localhost:6379/1).\n' +
     '[cip-dev] Without Redis, omit the worker: run `pnpm dev:api` and `pnpm dev:web` in two terminals, and see docs/LOCAL_DEV_WINDOWS.md (CIP_DEV_CELERY_DISPATCH for PM commit only).\n' +
-    '[cip-dev] With Redis: `pnpm dev:worker` preflights broker TCP, uses --pool=solo on Windows, and embeds beat (--beat).\n'
+    '[cip-dev] With Redis: `pnpm dev:worker` preflights broker TCP, uses --pool=solo on Windows, and starts beat (embedded on Unix, sibling process on Windows).\n'
 );
 
 const r = spawnSync('pnpm', ['exec', 'npm-run-all', '--parallel', 'dev:api', 'dev:web', 'dev:worker'], {

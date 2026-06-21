@@ -3,7 +3,7 @@
 ## CURRENT STATE — Jun 21, 2026 (dev worker embeds Celery beat) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance`.
-- **Change:** `pnpm dev:worker` now runs `celery worker … --beat` (embedded beat for running-job reaper). Removed `pnpm dev:beat` / `scripts/dev-beat.js`. Docker **`beat`** service unchanged (prod-style separate scheduler).
+- **Change:** `pnpm dev:worker` runs beat locally: Unix `worker --beat`; **Windows** spawns sibling `celery beat` (Celery rejects `--beat` on Windows). Docker **`beat`** service unchanged (prod-only separate scheduler).
 - **Ops:** Restart `dev:worker` after pull — no second beat process locally.
 
 ## CURRENT STATE — Jun 21, 2026 (Celery beat running-job reaper) — supersedes every block below
