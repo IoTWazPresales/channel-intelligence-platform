@@ -7,7 +7,6 @@
     "dev:web": "node scripts/dev-web.js",
     "dev:api": "node scripts/dev-api.js",
     "dev:worker": "node scripts/dev-worker.js",
-    "dev:beat": "node scripts/dev-beat.js",
     "dev:api-web": "node scripts/dev-api-web-stable.cjs",
     "dev:all": "node scripts/dev-all-with-notice.cjs",
     "dev:ports": "node scripts/check-dev-ports.cjs",
