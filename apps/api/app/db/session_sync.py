@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
-from app.db.sync_url import sqlalchemy_sync_engine_url
+from app.db.sync_url import resolve_sync_engine_url
 
 settings = get_settings()
 
@@ -43,7 +43,7 @@ def build_sync_connect_args(settings: Settings) -> dict[str, Any]:
 _SYNC_CONNECT_ARGS = build_sync_connect_args(settings)
 
 sync_engine = create_engine(
-    sqlalchemy_sync_engine_url(settings.database_url_sync),
+    resolve_sync_engine_url(settings),
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,

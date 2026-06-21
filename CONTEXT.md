@@ -1,5 +1,23 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 14, 2026 (BACKLOG-028 sync engine direct primary + read-only retry) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local uncommitted).
+- **Diagnosis:** Celery/import pipeline uses `SessionLocal` → `database_url_sync` on **remote Supabase** (not local `cip`). Async API: `pooler.supabase.com:6543` (transaction pooler). Sync worker **was** on `pooler.supabase.com:5432` (session pooler) — same remote project, not `:6543` misconfig. Mid-run `ReadOnlySqlTransaction` on staging chunk DELETE (job #43 revalidate ~26k rows) = pooler replica routing, not transient blip.
+- **Fix (BACKLOG-028):** `resolve_sync_engine_url()` auto-rewrites pooler `:5432` → `db.<ref>.supabase.co:5432` for `session_sync.py` sync engine; optional `DATABASE_URL_SYNC_WRITABLE` / `CIP_SUPABASE_SYNC_DIRECT_PRIMARY=false`. `commit_session_with_transient_retry` invalidates connection + **one** retry on `ReadOnlySqlTransaction`. Async `NullPool` / `:6543` untouched.
+- **Tests:** `test_sync_url.py` **6 pass**; `test_db_transient_retry.py` readonly retry **2 new**; full slice **14 pass**.
+- **Ops:** **Restart Celery worker** (or API in-process thread mode) after pull — sync engine URL is bound at import.
+- **Not run:** job #43 revalidate soak (await user go-ahead).
+- **Alembic head (code):** unchanged — `env.py` still uses `database_url_sync_migrate` or raw `database_url_sync`.
+
+## CURRENT STATE — Jun 19, 2026 (DSI receipt disambiguation final tier) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` @ `203947c` (local; not pushed).
+- **Change:** Refactored `dsi_distributor_receipt_disambiguation.py` — per-distributor final tier after `_resolve_product` on `ambiguous_eligible` only. Single shipped SKU → `distributor_receipt_single`; overlap → window (ship/pod) + cumulative qty refine → `distributor_receipt_overlap_refined` or `ambiguous_overlap` with `receipt_lines` evidence; zero lines → `no_receipt_evidence`. Removed global T3. Evidence merged onto product candidates via `_pe_acc.receipt` → `context.receipt_disambiguation`.
+- **Tests:** `test_dsi_distributor_receipt_disambiguation.py` — **5 pass**; `test_dsi_product_resolution.py` + tiebreak — **31 pass**. No DB validate run (per instruction).
+- **Uncommitted (separate):** `apps/api/app/worker/tasks.py` celery slot persist fix from prior session.
+- **Alembic head (code):** `20260609_0049`.
+
 ## CURRENT STATE — Jun 19, 2026 (task_run ledger dual-write populate) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local uncommitted).

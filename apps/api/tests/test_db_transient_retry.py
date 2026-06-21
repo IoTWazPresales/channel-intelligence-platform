@@ -7,6 +7,7 @@ import socket
 from unittest.mock import AsyncMock, patch
 
 from app.services.imports.db_transient_retry import (
+    is_readonly_db_error,
     is_transient_db_error,
     retry_async_on_transient_db,
     retry_sync_on_transient_db,
@@ -16,6 +17,49 @@ from app.services.imports.db_transient_retry import (
 
 def test_is_transient_db_error_gaierror() -> None:
     assert is_transient_db_error(socket.gaierror("getaddrinfo failed"))
+
+
+def test_is_readonly_db_error_detects_postgres_message() -> None:
+    assert is_readonly_db_error(Exception("cannot execute DELETE in a read-only transaction"))
+    assert is_readonly_db_error(Exception("ReadOnlySqlTransaction"))
+    assert not is_readonly_db_error(ValueError("constraint violation"))
+
+
+def test_commit_session_with_transient_retry_reconnects_once_on_readonly() -> None:
+    from unittest.mock import MagicMock, patch
+
+    from app.services.imports.dsi_bulk_db_commit import commit_session_with_transient_retry
+
+    session = MagicMock()
+    calls = {"n": 0}
+
+    def flaky_commit() -> None:
+        calls["n"] += 1
+        if calls["n"] < 2:
+            raise Exception("cannot execute DELETE in a read-only transaction")
+
+    session.commit.side_effect = flaky_commit
+    with patch("app.services.imports.dsi_bulk_db_commit.time.sleep"):
+        commit_session_with_transient_retry(session)
+    assert calls["n"] == 2
+    session.rollback.assert_called()
+    session.connection().invalidate.assert_called()
+
+
+def test_commit_session_with_transient_retry_readonly_raises_after_one_retry() -> None:
+    from unittest.mock import MagicMock, patch
+
+    from app.services.imports.dsi_bulk_db_commit import commit_session_with_transient_retry
+
+    session = MagicMock()
+    session.commit.side_effect = Exception("ReadOnlySqlTransaction")
+    with patch("app.services.imports.dsi_bulk_db_commit.time.sleep"):
+        try:
+            commit_session_with_transient_retry(session)
+            raise AssertionError("expected ReadOnlySqlTransaction to propagate")
+        except Exception as exc:
+            assert "ReadOnlySqlTransaction" in str(exc)
+    assert session.commit.call_count == 2
 
 
 def test_retry_sync_on_transient_db_retries_gaierror() -> None:

@@ -12,6 +12,17 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     database_url: str = "postgresql+asyncpg://cip:cip@localhost:5432/cip"
     database_url_sync: str = "postgresql://cip:cip@localhost:5432/cip"
+    # Optional: direct writable primary for Celery/batch sync engine (BACKLOG-028). When unset,
+    # Supabase pooler :5432 session URLs auto-rewrite to db.<project_ref>.supabase.co unless
+    # CIP_SUPABASE_SYNC_DIRECT_PRIMARY=false.
+    database_url_sync_writable: str | None = None
+    cip_supabase_sync_direct_primary: bool = Field(
+        default=True,
+        description=(
+            "When true, rewrite Supabase pooler DATABASE_URL_SYNC (:5432) to direct primary "
+            "db.<ref>.supabase.co for the sync engine (env CIP_SUPABASE_SYNC_DIRECT_PRIMARY)."
+        ),
+    )
     # Optional: sync URL used only by Alembic (see apps/api/alembic/env.py). When tables were created by
     # another role (e.g. first migration run as `postgres`), set this to a superuser DSN for `pnpm local:db:migrate`
     # only, then remove it so the app keeps using `database_url_sync` as the least-privileged role.

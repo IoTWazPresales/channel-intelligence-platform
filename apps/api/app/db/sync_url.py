@@ -1,5 +1,11 @@
 """Normalize Postgres URLs for synchronous SQLAlchemy engines (psycopg v3)."""
 
+from __future__ import annotations
+
+from urllib.parse import quote, unquote, urlparse, urlunparse
+
+from app.core.config import Settings
+
 
 def sqlalchemy_sync_engine_url(url: str) -> str:
     if url.startswith("postgresql+asyncpg://"):
@@ -7,3 +13,59 @@ def sqlalchemy_sync_engine_url(url: str) -> str:
     if url.startswith("postgresql://"):
         return url.replace("postgresql://", "postgresql+psycopg://", 1)
     return url
+
+
+def _normalize_pg_url(url: str) -> str:
+    return url.replace("postgresql+psycopg://", "postgresql://", 1).replace(
+        "postgresql+asyncpg://", "postgresql://", 1
+    )
+
+
+def supabase_direct_primary_sync_url(pooler_sync_url: str) -> str | None:
+    """Rewrite Supabase **session pooler** sync URL to direct primary ``db.<ref>.supabase.co:5432``.
+
+    Returns ``None`` when the URL is not a Supabase pooler host or project ref cannot be parsed.
+    """
+    normalized = _normalize_pg_url(pooler_sync_url)
+    parsed = urlparse(normalized)
+    host = (parsed.hostname or "").lower()
+    if "pooler.supabase.com" not in host:
+        return None
+    user = unquote(parsed.username or "")
+    ref = ""
+    if user.startswith("postgres.") and "." in user:
+        ref = user.split(".", 1)[1]
+    if not ref:
+        return None
+    port = parsed.port or 5432
+    if int(port) != 5432:
+        return None
+    direct_host = f"db.{ref}.supabase.co"
+    netloc = parsed.netloc
+    if "@" in netloc:
+        netloc = f"{netloc.split('@', 1)[0]}@{direct_host}:{port}"
+    else:
+        netloc = f"{direct_host}:{port}"
+    return urlunparse(
+        (
+            "postgresql",
+            netloc,
+            parsed.path or "/postgres",
+            parsed.params,
+            parsed.query,
+            parsed.fragment,
+        )
+    )
+
+
+def resolve_sync_engine_url(settings: Settings) -> str:
+    """URL for Celery / Alembic sync engine — prefer explicit writable primary over pooler."""
+    if settings.database_url_sync_writable:
+        return sqlalchemy_sync_engine_url(settings.database_url_sync_writable)
+    raw = settings.database_url_sync
+    if settings.cip_supabase_sync_direct_primary:
+        direct = supabase_direct_primary_sync_url(raw)
+        if direct:
+            return sqlalchemy_sync_engine_url(direct)
+    return sqlalchemy_sync_engine_url(raw)
+

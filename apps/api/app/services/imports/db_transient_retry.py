@@ -16,6 +16,28 @@ _DEFAULT_ATTEMPTS = 3
 _DEFAULT_BASE_DELAY_S = 1.5
 
 
+def is_readonly_db_error(exc: BaseException) -> bool:
+    """True when Postgres rejected a write on a read-only connection (pooler replica routing)."""
+    if isinstance(exc, (OperationalError, DBAPIError)):
+        orig = getattr(exc, "orig", None)
+        if orig is not None and is_readonly_db_error(orig):
+            return True
+    msg = str(exc).lower()
+    return "readonlysqltransaction" in msg or "read-only transaction" in msg
+
+
+def invalidate_sync_session(session: Session) -> None:
+    """Drop poisoned pool connection after read-only or broken socket."""
+    try:
+        session.rollback()
+    except Exception:
+        pass
+    try:
+        session.connection().invalidate()
+    except Exception:
+        pass
+
+
 def is_transient_db_error(exc: BaseException) -> bool:
     """True for errors that often succeed on immediate retry (not logic/constraint failures)."""
     if isinstance(exc, (socket.gaierror, ConnectionError, TimeoutError, OSError)):

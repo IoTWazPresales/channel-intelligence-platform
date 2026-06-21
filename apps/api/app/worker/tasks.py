@@ -65,9 +65,25 @@ def run_product_master_commit_job(
     return job_id
 
 
+def _persist_process_job_celery_slot(job_id: int, celery_task_id: str | None) -> None:
+    """Ensure ``staged_metadata.celery_task_id`` is set for activity-feed / dsi-progress polling.
+
+    HTTP dispatch writes this slot before the worker starts, but validate heartbeats can
+    overwrite staged_metadata from an in-memory snapshot that predates that write. Re-assert
+    the broker task id at worker entry so the bell and background-tasks list stay wired.
+    """
+    if not celery_task_id or not str(celery_task_id).strip():
+        return
+    from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_by_job_id
+
+    set_task_slot_by_job_id(job_id, SLOT_MAIN, task_id=str(celery_task_id).strip())
+
+
 @celery_app.task(name="imports.process_job", bind=True)
 def process_import_job_task(self, job_id: int) -> int:
     from app.db.session_sync import SessionLocal
+
+    _persist_process_job_celery_slot(job_id, str(self.request.id) if self.request else None)
 
     def _on_progress(phase: str, phase_label: str, current_row: int, total_rows: int) -> None:
         try:

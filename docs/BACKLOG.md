@@ -447,18 +447,18 @@
 
 ---
 
-## BACKLOG-028 — Infra: remote Supabase pooler drops SSL on long-lived apply connections
+## BACKLOG-028 — Infra: sync Celery engine read-only mid-run on Supabase pooler
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Superseded** · 2026-06-09 — sync engine verified on `:5432` session mode; job #43 validate drop was a **~15 min monolithic transaction** (50k-row commit interval + nested savepoints per 2k chunk), not `:6543` misconfig. Fix: per-chunk commit + F-02 on validate (`distributor_sales_inventory.py`); see CONTEXT.md Jun 9 entry. Apply long-transaction risk may still apply separately — chunk apply remains BACKLOG-002/-003 territory. |
+| **Status / parked** | **Done · 2026-06-14** — job #43 revalidate reproduced `ReadOnlySqlTransaction` on staging chunk DELETE (~26k rows, chunk ~13) while primary verified read-write. Root cause: sync engine on **session pooler** (`aws-*.pooler.supabase.com:5432`), not transaction pooler `:6543` (async only). Pooler can route mid-run to read-only replica. **Fix:** `resolve_sync_engine_url()` rewrites pooler `:5432` → direct `db.<ref>.supabase.co:5432` (`sync_url.py`, `session_sync.py`); optional `DATABASE_URL_SYNC_WRITABLE`; `commit_session_with_transient_retry` invalidates connection + retries once on `ReadOnlySqlTransaction`. Async `NullPool` / `:6543` / `statement_cache_size=0` unchanged. |
 | **Effort** | Investigation (infra), then config |
-| **Source** | This branch's DSI-apply live smoke (2026-06-04): `psycopg.OperationalError: SSL connection has been closed unexpectedly` during the long-held `SELECT … FROM dim_product` (17k rows) deep in `complete_dsi_import_job_to_loaded`, then statement timeout; reproducible across two runs. Short isolated scans (~5–8s) succeed. |
-| **Idea** | The session pooler (`:5432`) drops a connection held open for a long apply transaction, which then lingers server-side as `idle in transaction` holding row locks. This caps how large a DSI apply can run synchronously **or** in a single worker transaction, and it (not this branch's code) blocked the Unit 2 end-to-end facts smoke. |
-| **Why / deferrable** | Environmental, not a code defect — the old sync apply hits the same fragility. Backgrounding is still strictly better (no proxy timeout; clean `STAGE_FAILED`). Deferrable to an infra/connection-strategy task. |
-| **What the work is** | Reproduce against the pooler; tune `statement_timeout` / keepalives / `idle_in_transaction_session_timeout`; consider chunking the apply transaction or BACKLOG-002/-003 (session pooler config / EU co-location). Re-run the Unit 2 facts smoke against a stable DB to confirm. |
-| **Regression traps** | Don't disable statement_timeout globally; keep `statement_cache_size=0`/`prepare_threshold` fixes. |
-| **TRIGGER** | An infra/DB-stability task is approved, or DSI apply fails for Warren in normal use. |
+| **Source** | DSI validate job #43 revalidate (2026-06-14): `ReadOnlySqlTransaction` on `_flush_dsi_staging_batch` DELETE; prior Jun 9 supersede assumed `:5432` session pooler was sufficient — partial chunk commits (BACKLOG-030) exposed pooler replica routing. |
+| **Idea** | Long DSI validate/apply holds a sync session open; Supabase **session pooler** can hand a read-only backend mid-run even when `:5432` (not `:6543`). Direct primary DSN avoids replica routing for batch writers. |
+| **Why / deferrable** | Environmental for remote Supabase batch paths — code must not assume pooler session mode is always writable. |
+| **What the work is** | Point `SessionLocal` / Celery sync engine at writable primary; keep async on transaction pooler; chunk-commit read-only retry as backstop. |
+| **Regression traps** | Don't change async engine; don't disable `statement_cache_size=0`/`prepare_threshold`; Alembic still uses `database_url_sync_migrate` or raw `database_url_sync` (not auto-rewrite unless wired separately). |
+| **TRIGGER** | **Met** — job #43 revalidate `ReadOnlySqlTransaction` on remote Supabase with verified RW primary. |
 
 ---
 
