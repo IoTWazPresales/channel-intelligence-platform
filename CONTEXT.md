@@ -21,6 +21,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-06-21 | PR **#5** merged to `main` (`0540435`); new branch `feat/dsi-async-topology` for DSI queue/scheduling work; branch/PR lifecycle + context handover rules added. |
 | 2026-06-21 | Project rules Memory Palace section aligned to `CURRENT.md` / `MEMORY_PALACE.md`. |
 | 2026-06-21 | Memory palace consolidation: `CURRENT.md`, `MEMORY_PALACE.md`, `DEV_TOPOLOGY.md`; full prior CONTEXT → [`docs/memory/CONTEXT-archive-through-2026-06-21.md`](docs/memory/CONTEXT-archive-through-2026-06-21.md); async docs aligned. |
 

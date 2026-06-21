@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-21 (project rules memory palace aligned)
+**Last updated:** 2026-06-21 (PR #5 merged; new branch for DSI async topology)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,9 +9,9 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `fix/shipment-steward-performance` |
-| **HEAD (snapshot)** | `6cb632d` — dev worker embeds Celery beat (Windows sibling beat) |
-| **PR** | **#5** merging to `main` this session (steward perf + close-out + memory palace) |
+| **Branch** | `feat/dsi-async-topology` (from `main` @ `0540435`) |
+| **HEAD (snapshot)** | `0540435` — merge commit for PR #5 (DSI steward perf, close-out Units 1–4, memory palace) |
+| **PR** | **#5 merged** 2026-06-21 — no open PR on current branch |
 | **Alembic (code)** | `20260609_0049` (`task_run` ledger) — **confirm** with `alembic current` before any migration work |
 | **Alembic (Supabase)** | `20260608_0048` applied (alias partial-uniques) per Jun 16 soak |
 
@@ -57,19 +57,19 @@
 
 ## In progress / not proven live
 
-- **Job #96 class:** queue timeout on Customers tab during resolution refresh — scheduling/topology, not broken compute logic.
-- **PR #5** merge and soak on supported topology (Linux worker or co-located stack).
+- **Job #96 class:** queue timeout on Customers tab during resolution refresh — scheduling/topology, not broken compute logic (**next branch theme**).
+- **CI:** PR #5 merged with **failing** `test` workflow on pre-merge run — triage on `main` or next PR.
 - **Import wizard modularization** — `admin/imports/page.tsx` still ~4k lines; BACKLOG-004 Phase 3 not implemented.
 - **`db_transient_retry`** — verify which production paths import it (do not assume all commits use it).
 
 ---
 
-## Next (recommended)
+## Next (recommended) — `feat/dsi-async-topology`
 
-1. **Ops:** Expand Supabase disk or use local `cip` for daily feature work; reserve Supabase for scheduled soaks.
-2. **Topology:** Prefer Docker/WSL Linux worker for long validates, or disable beat/reaper on Windows solo dev.
-3. **Product:** Celery queue split (interactive vs batch) + defer historical auto-apply until steward idle (when implementing).
-4. **Delivery:** Merge or split `fix/shipment-steward-performance` — reduce branch drift.
+1. **Windows solo dev:** env flag to disable beat/reaper on desktop (reduce queue noise).
+2. **Celery:** queue split (interactive steward vs batch validate/apply).
+3. **DSI:** defer historical post-validate auto-apply until steward idle; raise compute poll queue grace / queue-aware UI.
+4. **Soak:** Linux worker or Docker stack for long validates; keep Supabase for scheduled soaks (disk OK — 740 MB, verified MCP 2026-06-21).
 
 ---
 
