@@ -1,4 +1,6 @@
 from celery import Celery
+from celery.schedules import schedule
+import os
 
 from app.core.config import get_settings
 from app.worker.ledger_task import LedgerTask
@@ -14,6 +16,16 @@ celery_app = Celery(
 celery_app.Task = LedgerTask
 
 celery_app.conf.task_track_started = True
+
+# Periodic maintenance — requires a Celery beat process (`pnpm dev:beat` / docker `beat` service).
+celery_app.conf.beat_schedule = {
+    "imports-reap-stale-running-jobs": {
+        "task": "imports.reap_stale_running_jobs",
+        "schedule": schedule(
+            run_every=float(os.environ.get("CIP_RUNNING_JOB_REAPER_INTERVAL_SECONDS", "120"))
+        ),
+    },
+}
 
 # Tasks use explicit ``name=`` (e.g. ``imports.process_job``), not ``app.worker.tasks.*``.
 # Route them to the default worker queue (``celery worker`` without ``-Q`` consumes ``celery``).
@@ -34,6 +46,7 @@ celery_app.conf.task_routes = {
     "imports.dsi_velocity_compute": {"queue": "celery"},
     "imports.dsi_forecasting": {"queue": "celery"},
     "commercial_planner.parse_lineup_case": {"queue": "celery"},
+    "imports.reap_stale_running_jobs": {"queue": "celery"},
 }
 
 import app.worker.tasks  # noqa: E402, F401 — register tasks

@@ -89,6 +89,28 @@ services:
       api:
         condition: service_started
 
+  beat:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.worker.celery_app", "beat", "-l", "info"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cip:cip@postgres:5432/cip
+      DATABASE_URL_SYNC: postgresql://cip:cip@postgres:5432/cip
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_PATH: /app/storage/uploads
+      RUN_DB_MIGRATIONS: "0"
+    volumes:
+      - api_uploads:/app/storage/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
+
   web:
     build:
       context: ../..

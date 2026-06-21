@@ -439,3 +439,11 @@ def product_master_commit_task(self, job_id: int, confirm_destructive: bool) -> 
         confirm_destructive,
         celery_task_id=str(celery_id) if celery_id else None,
     )
+
+
+@celery_app.task(name="imports.reap_stale_running_jobs")
+def reap_stale_running_jobs_task() -> dict:
+    """Beat task: fail import jobs stuck ``running`` when Celery confirms work is dead."""
+    from app.services.imports.running_import_job_reaper import reap_stale_running_import_jobs_sync
+
+    return reap_stale_running_import_jobs_sync()

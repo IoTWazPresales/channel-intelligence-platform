@@ -1,5 +1,13 @@
 # Channel Intelligence Platform — Current Context
 
+## CURRENT STATE — Jun 21, 2026 (Celery beat running-job reaper) — supersedes every block below
+
+- **Branch:** `fix/shipment-steward-performance` (local; push pending).
+- **Change:** Celery beat task `imports.reap_stale_running_jobs` every **120s** (`CIP_RUNNING_JOB_REAPER_INTERVAL_SECONDS`). Scans `import_job` `status=running` with `celery_task_id`; marks **failed** only when `inspect().active()` confirms task is **not** executing (inspect unavailable → no-op). Stale if `dsi_validate_checkpoint_at` older than **5 min** (`CIP_RUNNING_JOB_REAPER_CHECKPOINT_STALE_MINUTES`) or missing; **2 min** dispatch grace. Clears main slot only; no DB connection termination.
+- **Ops:** Run **`pnpm dev:beat`** alongside `dev:worker` (local) or Docker **`beat`** service. Does not replace user cancel; does not touch `idle_in_transaction` timeouts.
+- **Tests:** `test_running_import_job_reaper.py` — **7 pass**.
+- **Alembic:** unchanged.
+
 ## CURRENT STATE — Jun 14, 2026 (BACKLOG-028 sync engine direct primary + read-only retry) — supersedes every block below
 
 - **Branch:** `fix/shipment-steward-performance` (local uncommitted).
