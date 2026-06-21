@@ -7,6 +7,7 @@ from typing import Annotated, Any, Callable
 from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, joinedload
 
@@ -39,6 +40,7 @@ from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, Raw
 from app.storage.local import get_storage_backend
 from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
 from app.services.imports.import_job_bulk_delete import bulk_delete_import_jobs, normalize_job_ids, preview_import_job_bulk_delete
+from app.services.imports.db_transient_retry import is_readonly_db_error
 from app.services.imports.template_definitions import product_master_sample_csv
 from app.utils.json_safe import to_jsonable
 from app.worker.celery_app import celery_app
@@ -421,6 +423,21 @@ async def post_import_jobs_bulk_delete_confirm(
                 delete_semantic_artifacts=body.delete_semantic_artifacts,
             )
             db.commit()
+        except OperationalError as exc:
+            db.rollback()
+            if is_readonly_db_error(exc):
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "database_read_only",
+                        "message": (
+                            "Supabase rejected the delete (database is read-only). "
+                            "In the Supabase dashboard open Disk settings, expand storage or "
+                            "override read-only mode, then retry."
+                        ),
+                    },
+                ) from exc
+            raise
         except ValueError as exc:
             db.rollback()
             code = str(exc)

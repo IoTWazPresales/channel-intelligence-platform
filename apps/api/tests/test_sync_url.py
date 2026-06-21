@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import socket
+from unittest.mock import patch
+
 from app.core.config import Settings
 from app.db.sync_url import (
+    pg_host_resolvable,
     resolve_sync_engine_url,
     sqlalchemy_sync_engine_url,
     supabase_direct_primary_sync_url,
@@ -46,7 +50,22 @@ def test_resolve_sync_engine_url_rewrites_when_direct_primary_enabled() -> None:
         database_url_sync=_POOLER,
         cip_supabase_sync_direct_primary=True,
     )
-    assert resolve_sync_engine_url(settings) == sqlalchemy_sync_engine_url(_DIRECT)
+    with patch("app.db.sync_url.pg_host_resolvable", return_value=True):
+        assert resolve_sync_engine_url(settings) == sqlalchemy_sync_engine_url(_DIRECT)
+
+
+def test_resolve_sync_engine_url_falls_back_to_pooler_when_direct_host_unresolvable() -> None:
+    settings = Settings(
+        database_url_sync=_POOLER,
+        cip_supabase_sync_direct_primary=True,
+    )
+    with patch("app.db.sync_url.pg_host_resolvable", return_value=False):
+        assert resolve_sync_engine_url(settings) == sqlalchemy_sync_engine_url(_POOLER)
+
+
+def test_pg_host_resolvable_false_on_dns_failure() -> None:
+    with patch("app.db.sync_url.socket.getaddrinfo", side_effect=socket.gaierror):
+        assert pg_host_resolvable(_DIRECT) is False
 
 
 def test_resolve_sync_engine_url_keeps_pooler_when_direct_primary_disabled() -> None:
