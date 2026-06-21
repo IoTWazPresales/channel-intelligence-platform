@@ -1,0 +1,64 @@
+---
+description: When to suggest PR merge, new branch, or stay on current branch — based on CURRENT.md, BACKLOG triggers, and git state.
+alwaysApply: true
+---
+
+# Branch and PR lifecycle
+
+Agents must **check git and memory palace** before starting non-trivial work and
+**propose** branch/PR actions to Warren (do not merge to `main` without explicit
+"promote to main" / "merge to main" / "merge the PR").
+
+## Read before proposing
+
+1. `docs/memory/CURRENT.md` — branch, PR, blockers, next steps
+2. `git status`, `git branch --show-current`, `git log origin/main..HEAD --oneline`
+3. `docs/BACKLOG.md` — only entries whose **TRIGGER** fired for the next task
+4. Open PRs (`gh pr list` or GitHub) for the current branch
+
+## Suggest **merge PR → main** when ALL apply
+
+- User explicitly asks to merge/promote, **or**
+- Current feature branch work is **complete** for a coherent unit (tests/lint
+  passing or failures reported separately)
+- `CURRENT.md` "next" items are **different theme** than what shipped (e.g.
+  memory/docs done → next is Celery queue split)
+- Branch has been open **>1 week** or **>15 commits** ahead of `main` without merge
+- No uncommitted work that belongs in the same PR (commit or stash first)
+
+**Proposal format:** PR number, title, summary bullets, test plan gaps, then:
+"Recommend merging PR #N, then branch `feat/...` for &lt;next TRIGGER&gt;."
+
+## Suggest **new branch** when ANY apply
+
+- After merge to `main`: always `git checkout main && git pull` then
+  `git checkout -b feat/<short-topic>`
+- Next task is a **different TRIGGER** or capability area (import parity vs infra
+  vs commercial planner)
+- Current branch name no longer matches work (e.g. steward perf done, starting
+  topology work)
+- Dirty tree mixes unrelated concerns → split via new branch after commit on
+  current branch
+
+**Branch naming:** `feat/`, `fix/`, or `docs/` + kebab-case topic; not
+`cursor/cloud-agent-*` on local desktop unless cloud handoff.
+
+## Suggest **stay on current branch** when
+
+- Same TRIGGER / same importer / same incident in progress
+- PR not yet merged but next commit is clearly part of the same deliverable
+- User said "continue on this branch"
+
+## After merge (agent checklist)
+
+1. Merge PR (or user merges); `git checkout main && git pull origin main`
+2. Update `CURRENT.md`: branch `main`, note merge commit, clear "open PR"
+3. Append `CONTEXT.md` changelog line
+4. Create new feature branch for next work; set `CURRENT.md` branch field
+5. `Run cip-git-handoff` if switching local ↔ cloud
+
+## Never
+
+- Force-push `main`
+- Merge with unexplained dirty tree (untracked smoke DB, beat schedule files)
+- Open a second PR for the same branch without closing/superseding the first

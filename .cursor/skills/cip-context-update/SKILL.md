@@ -1,100 +1,82 @@
 ---
 name: cip-context-update
 description: >-
-  Update CONTEXT.md after significant Channel Intelligence Platform work using
-  insert-only rules. Use when the user asks update CONTEXT, memory palace,
-  record session outcome, or at end of a significant task. Never delete or
-  rewrite prior CONTEXT sections.
+  Update the memory palace after significant Channel Intelligence Platform work.
+  Use when the user asks update CONTEXT, memory palace, record session outcome,
+  or at end of a significant task. Updates CURRENT.md + CONTEXT changelog.
 disable-model-invocation: true
 ---
 
-# CIP CONTEXT.md Update
+# CIP memory palace update
 
-Record **what happened** in the memory palace. `CONTEXT.md` is operational history
-for agents — not user-facing docs.
+Record **what happened** for the next agent. **`docs/memory/CURRENT.md`** is the
+authoritative short state; **`CONTEXT.md`** is router + changelog only.
 
 ## Hard rules
 
-1. **INSERT ONLY** — add a new `## CURRENT STATE` section at the **top** of
-   `CONTEXT.md` (immediately after the `# Channel Intelligence Platform` title line).
-2. **NEVER** delete, rewrite, or reorder prior sections.
-3. **NEVER** replace the file wholesale.
-4. New section **must** include: `— supersedes every block below` in the heading.
-5. Do not update CONTEXT for trivial changes (typo, comment-only) unless user asked.
+1. **Update `docs/memory/CURRENT.md`** — keep under ~120 lines; replace stale sections.
+2. **Append one changelog row** to `CONTEXT.md` (table under `## Changelog`).
+3. **NEVER** restore duplicate `## CURRENT STATE — supersedes every block below` blocks in `CONTEXT.md`.
+4. **NEVER** edit `docs/memory/CONTEXT-archive-*.md`.
+5. If docs conflict with code or each other → **ask Warren** before updating; then fix `CURRENT.md`.
+6. Do not update for trivial changes unless user asked.
 
 ## When to run
 
 - End of significant implementation, audit, or soak
-- User: "update CONTEXT", "record this in memory palace"
-- After merge-worthy commit (note hash if committed/pushed)
+- User: "update CONTEXT", "update memory palace", "record this"
+- After merge-worthy commit (note hash in changelog)
 
 **Defer to user** if unsure whether the task was significant enough.
 
-## Required fields in new top block
+## Required fields in CURRENT.md
 
-Use this checklist — omit only what truly does not apply:
+Keep these sections (edit in place):
 
-```markdown
-## CURRENT STATE — [Mon D, YYYY] ([short title]) — supersedes every block below
-
-- **Branch:** `branch-name` @ `short-hash` ([pushed | local uncommitted | N ahead])
-- **[Incident / goal]:** one-line summary
-- **What shipped / found:**
-  - bullet list
-- **Tests:** what ran, pass/fail counts; note if no DB execution
-- **Proven vs unproven:** label live soak vs unit-tested only
-- **Next:** single concrete next step
-- **Blockers:** ops restart, migration approval, user decision (if any)
-```
+| Section | Content |
+|---------|---------|
+| Branch and delivery | branch, HEAD, PR, Alembic (code + applied if known) |
+| Database and environment | active DB, risks |
+| Dev topology | processes Warren uses |
+| What is working | bullet list |
+| In progress / not proven | open incidents |
+| Next | 1–4 concrete steps |
+| Blockers requiring Warren | migrations, main promotion, rules changes |
 
 ## Language discipline
 
 | Say | When |
 |-----|------|
-| **Proven live** | Soaked on real DB / user confirmed behaviour |
-| **Wired + unit-tested** | Merged, tests pass, failure path not exercised |
+| **Proven live** | Soaked on real DB / user confirmed |
+| **Wired + unit-tested** | Tests pass; live path not exercised |
 | **Planned** | Approved direction, not started |
-| **Ops required** | Code done but needs API/worker restart |
+| **Ops required** | Needs API/worker restart |
 
-Avoid claiming a hang is fixed if only unit tests passed.
+## Git / Alembic
 
-## Git / Alembic fields
+- Branch + `git rev-parse --short HEAD`
+- Push state from `git status`
+- Alembic: file id if created; applied only if user confirmed `alembic current`
 
-- Branch + short HEAD from `git rev-parse --short HEAD`
-- Note push state: `git status` / compare to `origin`
-- Alembic: migration file id if created; **never** claim applied unless user confirmed `alembic current`
+## What NOT to put in CURRENT.md
 
-## What NOT to put in CONTEXT
-
-- Full procedure docs → skills or `docs/`
-- Intentional deferrals → `docs/BACKLOG.md` with TRIGGER
-- Secrets, `.env` values, connection strings
+- Long history → changelog one-liner or leave in archive
+- Deferrals → `docs/BACKLOG.md` with TRIGGER
+- Secrets, `.env` values
 
 ## Procedure
 
-1. Read current top block (do not duplicate unchanged facts unnecessarily).
-2. Draft new section with today's date and accurate status.
-3. **StrReplace** only the insertion point — insert new block **above** the
-   previous top `## CURRENT STATE` section:
-
-```
-# Channel Intelligence Platform — Current Context
-
-## CURRENT STATE — [NEW] ...
-...
-
-## CURRENT STATE — [OLD] ...
-```
-
-4. Verify no prior sections were modified or removed.
-5. Tell user: new top heading title + one-line summary.
+1. Read `docs/memory/CURRENT.md` and `docs/memory/MEMORY_PALACE.md`.
+2. Draft updated `CURRENT.md`.
+3. Add changelog row to `CONTEXT.md`: `| YYYY-MM-DD | summary |`.
+4. If architecture changed, bump `last_verified` in relevant `docs/memory/derived/*.md`.
+5. Tell user: one-line summary of what changed in CURRENT.md.
 
 ## Related skills
 
 | Invoke | When |
 |--------|------|
-| `Run cip-session-handover` | Next chat reads the block you just wrote |
-| `Run cip-git-handoff` | Before CONTEXT update if switching environments |
-| `Run cip-skills-index` | List all CIP skills |
+| `Run cip-session-handover` | Next chat orientation |
+| `Run cip-git-handoff` | Before update if switching environments |
 
-See [reference.md](reference.md) for a filled example.
+See [reference.md](reference.md) for CURRENT.md example.

@@ -34,9 +34,23 @@
 **Recommended next step:** Push commits before switching to cloud, or stash intentionally.
 ```
 
-## CONTEXT.md top-block anatomy
+## CURRENT.md sections (after memory palace consolidation)
 
-A healthy top block usually contains:
+A healthy `docs/memory/CURRENT.md` contains:
+
+- **Branch and delivery** — branch, HEAD, PR, Alembic
+- **Database and environment** — active DB target, risks
+- **Dev topology** — how services run on this machine
+- **What is working** — bullets
+- **In progress / not proven live** — open incidents
+- **Next (recommended)** — 1–4 steps
+- **Blockers requiring Warren**
+
+History: `docs/memory/CONTEXT-archive-through-2026-06-21.md` (frozen).
+
+## Legacy CONTEXT.md top-block anatomy (pre-2026-06-21 — do not recreate)
+
+Older agents used duplicate blocks:
 
 - **Branch** and commit hash
 - **Incident or feature** in one line

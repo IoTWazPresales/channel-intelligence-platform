@@ -20,7 +20,7 @@ in any chat with this repo open.
 | **cip-session-handover** | `Run cip-session-handover` | New chat, continue, what's next, orient from CONTEXT |
 | **cip-fix-protocol-audit** | `Run cip-fix-protocol-audit` | Importer bug/perf — path map **before** code |
 | **cip-read-only-audit** | `Run cip-read-only-audit` | Report only, verify hypothesis, find query emitter |
-| **cip-context-update** | `Run cip-context-update` | End of session — insert-only CONTEXT.md update |
+| **cip-context-update** | `Run cip-context-update` | End of session — update `CURRENT.md` + CONTEXT changelog |
 | **cip-git-handoff** | `Run cip-git-handoff` | Switching local ↔ cloud, push/pull sync |
 
 ## Typical session flows
@@ -85,11 +85,12 @@ Personal skills live in `~/.cursor/skills/` (cross-repo) — not used for these.
 | Mechanism | Holds |
 |-----------|--------|
 | **Skills** | Repeatable *how* (procedure) |
-| **CONTEXT.md** | Current *what* (branch, incident, next step) |
+| **`docs/memory/CURRENT.md`** | Authoritative current *what* |
+| **`CONTEXT.md`** | Router + changelog |
 | **`.cursor/rules/`** | Always-on architecture and safety |
-| **BACKLOG.md** | Deferred work + TRIGGER |
+| **`docs/BACKLOG.md`** | Deferred work + TRIGGER |
 
-Do not put job IDs or current branch inside skills — those go in CONTEXT.
+Do not put job IDs or current branch inside skills — those go in CURRENT.md.
 
 ## Planned skills (not created yet)
 

@@ -1,0 +1,56 @@
+---
+description: Detect context overload and recommend a fresh chat with cip-session-handover instead of continuing a degraded long thread.
+alwaysApply: true
+---
+
+# Context handover discipline
+
+Long threads degrade quality (stale assumptions, wrong topology, repeated audits).
+Agents must **recognize overload** and **recommend handover** before making large
+changes.
+
+## Recommend **start a new chat / handover** when ANY apply
+
+- Conversation has covered **3+ distinct themes** (e.g. Supabase ops + DSI queue
+  bug + import page modularization + on-prem strategy) without a merge between them
+- Same incident was **audited twice** with conflicting conclusions in-thread
+- User pastes **multi-thousand-line logs** again for a problem already diagnosed
+- Agent would need to re-read **>5 core files** plus archive CONTEXT to answer
+- **Token/context pressure:** user or system indicates summarization; prior turns
+  contradict `CURRENT.md`
+- Task shifts to **new branch + new TRIGGER** after merge (clean handover is
+  cheaper than carrying full history)
+- User says "new chat", "handover", "fresh agent", or "context is too long"
+
+## Handover procedure (before ending turn)
+
+1. Ensure `docs/memory/CURRENT.md` is accurate (run `Run cip-context-update` if needed)
+2. Tell user explicitly:
+
+   > **Recommend a new chat.** Run `Run cip-session-handover` in the new session.
+   > Branch: `…` · Next: `…` · Do not re-audit: `…`
+
+3. List **3–5 bullets** only: what shipped, what is proven vs unproven, exact next
+   step, blockers
+4. Do **not** start a large new implementation in the same turn after recommending
+   handover unless user insists
+
+## New chat starter (user can paste)
+
+```
+Run cip-session-handover
+Branch: <branch>
+Next task: <one sentence from CURRENT.md>
+Skip: <what was already decided — do not re-audit>
+```
+
+## Do not handover for
+
+- Single-file typo or one focused fix on known branch
+- User explicitly says "continue in this chat"
+
+## Keep context small ongoing
+
+- Read `MEMORY_PALACE.md` + `CURRENT.md` only — not CONTEXT archive
+- One fix direction per incident (fix protocol)
+- Deferrals → `BACKLOG.md`, not long chat

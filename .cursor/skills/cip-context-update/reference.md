@@ -1,37 +1,40 @@
-# CONTEXT.md update — example top block
+# CURRENT.md update — example
+
+Replace sections in `docs/memory/CURRENT.md` — do not append duplicate blocks.
 
 ```markdown
-## CURRENT STATE — Jun 13, 2026 (example feature) — supersedes every block below
+## Branch and delivery
 
-- **Branch:** `fix/shipment-steward-performance` @ `abc1234` (pushed)
-- **Goal:** Short description of what this session accomplished.
-- **Shipped:**
-  - Module/file: what changed in one line each
-- **Tests:** `pytest apps/api/tests/test_foo.py` — 12 pass; no cip writes
-- **Proven vs unproven:**
-  - Wired + unit-tested: new guard in `imports.py`
-  - Unproven live: needs worker restart + job #43 soak
-- **Next:** Restart API + worker; re-validate job #43.
-- **Alembic:** unchanged at `20260607_0047` on cip
+| Field | Value |
+|-------|--------|
+| **Branch** | `fix/shipment-steward-performance` |
+| **HEAD (snapshot)** | `abc1234` — short subject |
+| **Alembic (code)** | `20260609_0049` — confirm with `alembic current` |
+
+## What is working
+
+- Shipped item one line
+
+## In progress / not proven live
+
+- Unproven live: needs worker restart + job soak
+
+## Next (recommended)
+
+1. Restart API + worker; soak job #N.
 ```
 
-## Insertion anchor (exact pattern)
-
-Find:
+## CONTEXT.md changelog row
 
 ```markdown
-# Channel Intelligence Platform — Current Context
-
-## CURRENT STATE —
+| 2026-06-13 | `abc1234` — short summary of session outcome |
 ```
-
-Replace with new block + preserved old first line of previous state.
 
 ## Common mistakes
 
 | Mistake | Fix |
 |---------|-----|
-| Deleted old CURRENT STATE sections | Restore from git; only insert at top |
-| Rewrote middle of file | Revert; insert-only |
-| "Fixed" without soak | Use wired + unit-tested / unproven live |
-| Backlog item only in chat | Add to `docs/BACKLOG.md` with TRIGGER |
+| Added CURRENT STATE block to CONTEXT.md | Use CURRENT.md + changelog row only |
+| Deleted CONTEXT archive | Never edit archive files |
+| Claimed "fixed" without soak | Use wired + unit-tested / unproven live |
+| Deferral only in chat | Add BACKLOG.md entry with TRIGGER |

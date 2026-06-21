@@ -1,6 +1,6 @@
 # Backlog — intentionally deferred work
 
-**Scope:** Intentionally deferred / future work. Each entry has a **trigger condition** for when to resume. Distinct from `CONTEXT.md` (completed history and current branch state).
+**Scope:** Intentionally deferred / future work. Each entry has a **trigger condition** for when to resume. Distinct from **`docs/memory/CURRENT.md`** (what is true now) and **`CONTEXT.md`** (changelog router).
 
 **Entry template:** ID + title · status/parked-date · effort · the idea · why it matters (and why deferrable) · what the work is · regression traps / hard constraints · behavior to retain · out-of-scope · **TRIGGER**
 

@@ -5,19 +5,27 @@
 Channel Intelligence Platform — supply chain intelligence monorepo.
 
 **Before starting any task, read these files in order:**
-1. `CONTEXT.md` — current branch, Alembic head, what works, what's in progress
-2. `.cursor/rules/Supply-Chain-Intelligence-Project-Rules.mdc` — architecture,
+1. `docs/memory/MEMORY_PALACE.md` — index, read order, conflict rules
+2. `docs/memory/CURRENT.md` — authoritative **now**: branch, DB, topology, blockers
+3. `CONTEXT.md` — router + changelog (not a history dump)
+4. `.cursor/rules/Supply-Chain-Intelligence-Project-Rules.mdc` — architecture,
    domain language, known gotchas, stop conditions
-3. `.cursor/rules/engineering-rules.mdc` — general engineering behaviour rules
-4. `.cursor/rules/cloud-local-git-handoff.mdc` — when switching between
+5. `.cursor/rules/engineering-rules.mdc` — general engineering behaviour rules
+6. `.cursor/rules/cloud-local-git-handoff.mdc` — when switching between
    **local desktop** and **Cursor cloud**: commit, push, pull via GitHub first
 
 Do not skip this. Context loss is the primary cause of regressions in
 AI-assisted development.
 
-**After completing any significant task, update `CONTEXT.md`** to reflect the
-current state — branch, Alembic head, what changed, what's next. The memory
-palace is only useful if it stays current.
+**If docs conflict with code or with each other — stop and ask Warren** which
+source is correct before implementing. Then update `CURRENT.md`.
+
+**After completing any significant task:** update `docs/memory/CURRENT.md` and
+append one line to `CONTEXT.md` changelog. Use `Run cip-context-update` skill.
+Deferrals go to `docs/BACKLOG.md` — not chat-only.
+
+**Worker / queue / timeout bugs:** read `docs/DEV_TOPOLOGY.md` before patch
+stacking poll budgets or reaper logic.
 
 ---
 
@@ -146,7 +154,7 @@ run `pnpm docker:up:detached` from repo root.
 | **API endpoints** | `apps/api/app/api/v1/endpoints/` |
 | **Models** | `apps/api/app/models/` |
 | **Services** | `apps/api/app/services/` |
-| **Migrations** | `apps/api/alembic/versions/` — head tracked in `CONTEXT.md` |
+| **Migrations** | `apps/api/alembic/versions/` — head tracked in `docs/memory/CURRENT.md` |
 | **Web pages** | `apps/web/src/app/(app)/` |
 | **Features** | `apps/web/src/features/` |
 | **Shared UI** | `packages/ui/` — MUI theme |
@@ -284,7 +292,11 @@ pnpm --filter @cip/web lint      # Web only
 
 | File | Purpose |
 |------|---------|
-| `CONTEXT.md` | Current state — branch, head, what works, what's next |
+| `docs/memory/MEMORY_PALACE.md` | Memory index — read order, conflict rules, maintenance |
+| `docs/memory/CURRENT.md` | Authoritative current state (short) |
+| `CONTEXT.md` | Router + session changelog |
+| `docs/DEV_TOPOLOGY.md` | Dev/prod topology matrix and failure modes |
+| `docs/BACKLOG.md` | Deferred work with TRIGGER only |
 | `.cursor/rules/Supply-Chain-Intelligence-Project-Rules.mdc` | Project architecture, domain language, patterns, gotchas |
 | `.cursor/rules/engineering-rules.mdc` | General engineering behaviour rules |
 | `docs/COMMERCIAL_PLANNER_AUDIT.md` | Commercial planner gap analysis |

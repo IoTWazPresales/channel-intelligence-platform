@@ -1,27 +1,84 @@
 # Platform Runtime Truth
 
-## Native local dev truth (current baseline)
-- Primary non-Docker workflow is native API + web (`pnpm dev:api-web`) with local PostgreSQL service.
-- API expects Python 3.12 venv under `apps/api/.venv`.
-- Default API/web ports are documented as 8000/3000 generally, with `dev:api-web` script currently pinning API to 8001 and proxy target to 8001.
-- DB utilities for native path: `pnpm local:db:migrate`, `pnpm local:db:wipe`, `pnpm local:db:seed`.
+**Last verified:** 2026-06-21  
+**Current env snapshot:** `docs/memory/CURRENT.md`  
+**Topology matrix:** `docs/DEV_TOPOLOGY.md`
 
-## Optional Docker truth
-- Compose files and `pnpm docker:*` scripts remain in repo for optional full-stack/dependency use.
-- Docker full stack maps API container 8000 to host 8010 and web to 3000.
-- Docker is optional and not required for current local development path.
+---
 
-## Environment assumptions
-- Postgres reachable at configured `DATABASE_URL`/`DATABASE_URL_SYNC` (defaults point to localhost).
-- Upload storage path must exist (`LOCAL_STORAGE_PATH`, default local directory).
-- CORS includes localhost origins for local Next dev.
-- Stub auth headers (`X-User-Id`, `X-User-Role`) are used by web/API integration.
+## Local development modes
 
-## Worker/Redis runtime truth
-- Default async dispatch expects Redis broker/backend + running Celery worker.
-- If Redis unavailable locally, PM commit can use explicit dev-only in-process thread dispatch via `CIP_DEV_CELERY_DISPATCH=in_process_thread`.
-- This fallback is intentionally scoped and clearly logged as dev-only behavior.
+### Windows native (no Docker) — Warren desktop default
 
-## Operational caveats to keep in view
-- Port/source-of-truth drift can occur if old processes or mixed mode setups are running concurrently.
-- Runtime docs include both 8000 and 8001 references due to script-level stabilization choices; this should be treated as an active alignment checkpoint for future cleanup.
+| Service | Command | Port / notes |
+|---------|---------|----------------|
+| API | `pnpm dev:api` | **8001** (`dev-api.js`; may set `CIP_SKIP_API_PORT_PREFLIGHT=1`) |
+| Web | `pnpm dev:web` | **3000** |
+| Worker | `pnpm dev:worker` | Celery **solo** pool; **sibling beat** on Windows |
+| Redis | OS install / Memurai / WSL | **6379** on host for broker |
+| Postgres | Local **or** remote Supabase | See `apps/api/.env` — not always `cip` |
+
+See `docs/LOCAL_DEV_WINDOWS.md`.
+
+### Docker Compose (cloud agents / optional)
+
+| Service | Host port |
+|---------|-----------|
+| Web | 3000 |
+| API | **8010** → container 8000 |
+| Postgres | 5432 (`cip` / `cip`) |
+| Redis | 6379 |
+| worker | prefork (Linux image) |
+| beat | separate service |
+
+See `infra/docker/README.md`.
+
+---
+
+## Ports (authoritative for agents)
+
+| Service | Local native | Docker |
+|---------|--------------|--------|
+| Web | 3000 | 3000 |
+| API | **8001** | **8010** |
+| Postgres | 5432 | 5432 |
+| Redis | 6379 | 6379 |
+
+Do not assume API is on 8000 on Windows dev — **8001** is the stabilized native port.
+
+---
+
+## Worker / Redis
+
+- Broker dispatch requires Redis unless `CIP_DEV_CELERY_DISPATCH=in_process_thread`.
+- Windows: `dev-worker.js` defaults **`--pool=solo`** (`CIP_CELERY_WORKER_POOL` to override).
+- Solo = one concurrent task — validates, applies, compute, and reaper tasks **serialize**.
+
+---
+
+## Database
+
+- Async API: typically `NullPool` + transaction pooler `:6543` on Supabase.
+- Sync worker: `SessionLocal` / `database_url_sync` — long jobs; BACKLOG-028 direct primary rewrite.
+- **Always** `SELECT current_database()` before destructive ops; project rules expect `cip` for local migrate tests.
+
+---
+
+## Auth (dev)
+
+- Stub headers: `X-User-Id`, `X-User-Role` (web → API).
+
+---
+
+## Operational caveats
+
+- **API `--reload`** during 45+ min validates — avoid; use stable uvicorn for long soaks.
+- Mixed Docker + native on same ports causes `EADDRINUSE` / wrong DB.
+- Remote Supabase + Windows solo worker = **degraded** for steward async (see topology doc).
+
+---
+
+## Related
+
+- `docs/memory/derived/platform_async_and_background_truth.md`
+- `docs/memory/MEMORY_PALACE.md`

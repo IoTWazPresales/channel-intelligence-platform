@@ -46,13 +46,23 @@ docs/              Architecture docs, data contracts, engineering notes
 
 ## Memory Palace
 
-Every task must check for and maintain the memory palace. Read `CONTEXT.md`
-in the repo root at the start of every task. After completing any significant
-task, update `CONTEXT.md` to reflect the current state. If `CONTEXT.md` does
-not exist — create it.
+Every task must check for and maintain the memory palace.
 
-`CONTEXT.md` contains: current branch, current Alembic head, what is working,
-what is in progress, what is next. It is dynamic and updated by agents.
+**Read at task start (in order):**
+
+1. `docs/memory/MEMORY_PALACE.md` — index and conflict rules
+2. `docs/memory/CURRENT.md` — authoritative current state (branch, Alembic, topology, blockers)
+3. `CONTEXT.md` — router + changelog only (not history)
+
+If docs conflict with code or each other — **stop and ask Warren** before implementing.
+
+**After significant work:** update `docs/memory/CURRENT.md` and append one line to
+`CONTEXT.md` changelog. Use skill `Run cip-context-update`. Deferrals go to
+`docs/BACKLOG.md` with TRIGGER — not chat-only.
+
+`CURRENT.md` holds: branch, Alembic head, active DB, dev topology, what works,
+in progress, next. History lives in `docs/memory/CONTEXT-archive-*.md`.
+
 These rules are static and updated only when architecture decisions change.
 
 ---

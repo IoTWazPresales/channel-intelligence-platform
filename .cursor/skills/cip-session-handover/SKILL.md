@@ -23,14 +23,16 @@ enough context (e.g. "fix typo in README.md").
 
 ## Read order (mandatory)
 
-1. **`CONTEXT.md`** — read only the **top `## CURRENT STATE` block** first (newest
-   section supersedes everything below it). Scan older blocks only if the user
-   asks for history or the top block is ambiguous.
-2. **`AGENTS.md`** — operating protocol; note fix-protocol requirement for bug/perf work.
-3. **`docs/BACKLOG.md`** — only entries whose **TRIGGER** appears fired or the user
-   explicitly asked about backlog/outstanding work.
+1. **`docs/memory/MEMORY_PALACE.md`** — index and conflict rules.
+2. **`docs/memory/CURRENT.md`** — authoritative current state (short).
+3. **`CONTEXT.md`** — changelog only; history is in `docs/memory/CONTEXT-archive-*.md`.
+4. **`AGENTS.md`** — operating protocol; fix protocol for bug/perf work.
+5. **`docs/DEV_TOPOLOGY.md`** — if the incident involves workers, queues, or Celery.
+6. **`docs/BACKLOG.md`** — only entries whose **TRIGGER** fired or user asked backlog.
 
-Do **not** read the entire CONTEXT history unless asked — it is append-only and long.
+If **CURRENT.md** conflicts with code or another doc → **ask Warren** before acting.
+
+Do **not** read CONTEXT archive unless the user asks for forensic history.
 
 ## Git orientation (parallel commands)
 
