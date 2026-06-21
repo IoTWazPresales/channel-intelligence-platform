@@ -66,10 +66,9 @@
 
 ## Next (recommended) — `feat/dsi-async-topology`
 
-1. **Windows solo dev:** env flag to disable beat/reaper on desktop (reduce queue noise).
-2. **Celery:** queue split (interactive steward vs batch validate/apply).
-3. **DSI:** defer historical post-validate auto-apply until steward idle; raise compute poll queue grace / queue-aware UI.
-4. **Soak:** Linux worker or Docker stack for long validates; keep Supabase for scheduled soaks (disk OK — 740 MB, verified MCP 2026-06-21).
+**Full phased schedule:** [`docs/memory/ROADMAP.md`](ROADMAP.md) (Phases A–E, done verification).
+
+**Phase A (active):** BACKLOG-038 → 043 — beat/reaper flag, queue split, defer auto-apply, compute poll grace, dedupe error banners, CI triage.
 
 ---
 
@@ -85,6 +84,7 @@
 
 | Topic | Doc |
 |-------|-----|
+| **Roadmap (phased schedule)** | `docs/memory/ROADMAP.md` |
 | Memory index | `docs/memory/MEMORY_PALACE.md` |
 | Topology matrix | `docs/DEV_TOPOLOGY.md` |
 | Async / Celery | `docs/memory/derived/platform_async_and_background_truth.md` |

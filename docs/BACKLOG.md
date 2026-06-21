@@ -1,8 +1,87 @@
 # Backlog — intentionally deferred work
 
-**Scope:** Intentionally deferred / future work. Each entry has a **trigger condition** for when to resume. Distinct from **`docs/memory/CURRENT.md`** (what is true now) and **`CONTEXT.md`** (changelog router).
+**Scope:** Intentionally deferred / future work. Each entry has a **trigger condition** for when to resume. Distinct from **`docs/memory/CURRENT.md`** (what is true now), **`docs/memory/ROADMAP.md`** (phased schedule + done verification), and **`CONTEXT.md`** (changelog router).
 
 **Entry template:** ID + title · status/parked-date · effort · the idea · why it matters (and why deferrable) · what the work is · regression traps / hard constraints · behavior to retain · out-of-scope · **TRIGGER**
+
+---
+
+## BACKLOG-043 — CI: triage failing `test` workflow on `main` (post PR #5)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-06-21 |
+| **Effort** | Small–medium (depends on failure) |
+| **Source** | PR #5 merged with failing GitHub Actions `test` job (run `27911253557`); `docs/memory/ROADMAP.md` Phase A |
+| **Idea** | Restore green CI on `main` before the next large feature PR. |
+| **What the work is** | Reproduce failure locally or from Actions log; fix or quarantine unrelated flakes; document if env-specific. |
+| **TRIGGER** | Before opening next merge PR from `feat/dsi-async-topology` or any branch with CI gate. |
+
+---
+
+## BACKLOG-042 — Dedupe duplicate DSI resolution-plan error banners
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-06-21 |
+| **Effort** | Small (web) |
+| **Source** | Jun 21 modular/UX audit; `DsiImportJobResolutionSection.tsx` + `DsiResolutionPlanToolbar.tsx` both render `suggestionsQuery.isError` |
+| **Idea** | Single error surface for plan compute/load failures (toolbar **or** section, not both). |
+| **Regression traps** | Do not hide errors when toolbar is collapsed; preserve retry actions. |
+| **TRIGGER** | Phase A DSI topology work on `feat/dsi-async-topology` (pairs with BACKLOG-041). |
+
+---
+
+## BACKLOG-041 — DSI resolution-plan compute poll queue grace + queue-aware UI
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-06-21 |
+| **Effort** | Small (web) |
+| **Source** | Job #96 audit; `stewardAsyncPoll.ts` `COMPUTE_QUEUE_GRACE_ATTEMPTS=150` (~120s); apply poll already uses scaled grace |
+| **Idea** | Scale compute queue grace like apply (row count / known long-running validate ahead); distinguish queue-wait vs execution timeout in UI copy. |
+| **Regression traps** | Do not mask true failures; solo worker may need 4+ min behind validate + post-validate apply — grace is a **dev mitigation** until BACKLOG-039. |
+| **TRIGGER** | Phase A on `feat/dsi-async-topology`; or false "timed out while waiting in queue" reported again. |
+
+---
+
+## BACKLOG-040 — Defer DSI historical post-validate auto-apply until steward idle
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-06-21 |
+| **Effort** | Medium (API + metadata) |
+| **Source** | Job #96 audit; `dsi_validate_post_sync.py` enqueues `dsi_resolution_plan_apply` immediately after validate |
+| **Idea** | After historical validate, **hold** auto-apply until no interactive steward task is active (compute/apply/bulk) or user explicitly starts apply. |
+| **Why / deferrable** | Auto-apply is correct for unattended historical backfill; defer only on **interactive** dev paths or via env flag. |
+| **Regression traps** | Do not block unattended historical soak; preserve `dsi_historical_product_eligibility_relaxed` auto-confirm rules at apply time. |
+| **TRIGGER** | Phase A on `feat/dsi-async-topology`. |
+
+---
+
+## BACKLOG-039 — Celery queue split (interactive steward vs batch validate/apply)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-06-21 |
+| **Effort** | Medium (worker config + task routes + dev/prod docs) |
+| **Source** | Strategic audit + `docs/DEV_TOPOLOGY.md`; job #96 solo-worker backlog |
+| **Idea** | Route `dsi_resolution_plan_compute`, steward bulk tasks, and similar to an **interactive** queue; `process_job`, validate, apply chunks, reaper to **batch** queue. Prod: two workers; dev: document limitation on solo. |
+| **Regression traps** | Docker Compose must start worker(s) consuming both queues; do not break `in_process_thread` dev fallback. |
+| **TRIGGER** | Phase A on `feat/dsi-async-topology`; or before on-prem / Docker prod cutover. |
+
+---
+
+## BACKLOG-038 — Windows solo dev: optional disable Celery beat + running-job reaper
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-06-21 |
+| **Effort** | Small |
+| **Source** | Job #96 audit; `scripts/dev-worker.js` spawns sibling beat on Windows; `celery_app.py` `imports.reap_stale_running_jobs` schedule |
+| **Idea** | `CIP_DISABLE_DEV_BEAT=1` (or similar) skips beat/reaper on Windows solo — reaper is no-op when `inspect()` returns no workers but still consumes queue time. |
+| **Regression traps** | Docker/prod beat unchanged; document that stale-job cleanup needs inspect-capable worker in prod. |
+| **TRIGGER** | Phase A on `feat/dsi-async-topology`; default **off** beat on Windows until queue split ships. |
 
 ---
 
@@ -61,7 +140,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-01 (post `fix/shipment-steward-performance` audit) |
+| **Status / parked** | **Open** · TRIGGER partially met 2026-06-21 (PR #5 merged to `main`); awaits Warren steward-perf smoke signoff before workspace swap |
 | **Effort** | Large (web); adapter + tests; no API contract change if done correctly |
 | **Source** | Read-only swap audit (conversation); `apps/web/src/features/import-steward/dsi-mapping-steward-panel.tsx` (lines 94–97); `useInboundEvidenceMappingCandidatesListModel.ts` (lines 11–13); `inboundEvidenceMappingCandidates.domain.ts` (lines 7–8) |
 | **Idea** | Replace the monolithic `ShipmentEntityStewardPanel` list shell with `ImportStewardCandidateWorkspace`, wired through a shipment-specific section adapter (pattern: `DsiImportJobResolutionSection`), while keeping all steward mutations on **shipment-evidence** endpoints. |
@@ -70,7 +149,7 @@
 | **Regression traps** | Wrong API family (`/api/v1/mappings/...` bypasses Phase 2 shipment batching); entity types (`shipment_distributor` / `shipment_customer_token` ≠ DSI tokens); losing 300ms search debounce, bulk-map “Mapping N…”, in-modal errors; double `refetch` after `invalidate`; `steward_rejected` terminal handling. |
 | **Behavior to retain** | All `POST /api/v1/shipment-evidence/import-candidates/...` paths including `bulk-map-customer`, `bulk-create-provisional-customers`, `bulk-apply-confirmed-plans`; governance (no auto-create masters); `created_from_import_job_id` on aliases; resolution/scoring/enrichment logic unchanged. |
 | **Out of scope** | DSI product resolve, duplicate-review, open-channel, ignore bulk, resolution-plan toolbar, region/channel tab, paginated DSI candidate API. |
-| **TRIGGER** | `fix/shipment-steward-performance` merged to `main` and Warren signs off steward perf smoke; then a dedicated “shipment steward workspace swap” task is approved. |
+| **TRIGGER** | PR #5 merged (**met** 2026-06-21) **and** Warren signs off steward perf smoke; then dedicated “shipment steward workspace swap” task approved. See `docs/memory/ROADMAP.md` Phase C. |
 
 ---
 
