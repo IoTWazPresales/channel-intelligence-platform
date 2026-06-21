@@ -11,11 +11,11 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent } from 'react';
 import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 
+import type { PlanApplyFeedback } from '@/features/import-steward/dsiSteward.types';
 import {
   DsiBulkActionInlineForm,
   DsiBulkStewardSection,
@@ -38,10 +38,11 @@ import {
   computeImportStewardSelectionHeaderState,
   defaultDsiStewardCandidateFilterState,
   defaultDsiStewardFiltersForTab,
+  dsiStewardFiltersMatchTabDefault,
   dsiTabDependencyNudge,
   filterDsiStewardCandidates,
   formatPlanActionLabel,
-  invalidateDsiImportJobStewardQueries,
+  paginateDsiStewardCandidateRows,
   useDsiBulkSteward,
   useDsiResolutionPlan,
   type DsiBulkAction,
@@ -49,6 +50,7 @@ import {
   type DsiEntityTabId,
   type DsiStewardCandidateFilterState,
 } from '@/features/import-steward';
+import { useDsiStewardBulkBusy } from '@/features/import-steward/useDsiStewardBulkBusy';
 import { safeDisplayError } from '@/lib/api';
 
 import {
@@ -77,7 +79,6 @@ export function DsiImportJobResolutionSection({
   dsiPipelineRunning?: boolean;
   onAsyncPipelineStarted?: (args: { importJobId: number; taskId?: string | null }) => void;
 }) {
-  const qc = useQueryClient();
   const tabbedMode = candidatesOverride == null;
 
   const [activeTab, setActiveTab] = useState<DsiEntityTabId>('distributor');
@@ -96,7 +97,7 @@ export function DsiImportJobResolutionSection({
   );
   const [bulkMode, setBulkMode] = useState<BulkTableSelectionMode>('normal');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [planApplySummary, setPlanApplySummary] = useState<string | null>(null);
+  const [planApplySummary, setPlanApplySummary] = useState<PlanApplyFeedback | null>(null);
   const selectionAnchorIdRef = useRef<number | null>(null);
   const workspaceToolbarRef = useRef<HTMLDivElement | null>(null);
 
@@ -119,16 +120,23 @@ export function DsiImportJobResolutionSection({
     [activeTab, tabbedMode]
   );
 
-  const { counts: tabCounts, openByTab } = useDsiEntityTabCounts(importJobId, tabbedMode);
+  const { counts: tabCounts, openByTab, productMatchStatusCounts } = useDsiEntityTabCounts(
+    importJobId,
+    tabbedMode
+  );
 
   const isCandidateTab = isDsiEntityCandidateTab(activeTab);
 
   const candidatesPage = useDsiCandidatesPage(importJobId, activeFilters, {
     enabled: tabbedMode && visitedTabs.has(activeTab) && isCandidateTab,
+    tabKey: activeTab,
   });
 
   const candidates = candidatesOverride ?? candidatesPage.candidates;
-  const candidatesLoading = candidatesLoadingOverride ?? candidatesPage.query.isLoading;
+  const candidatesLoading =
+    candidatesLoadingOverride ??
+    (candidatesPage.query.isLoading ||
+      (candidatesPage.query.isFetching && candidatesPage.candidates.length === 0));
   const candidatesError =
     candidatesErrorOverride ?? (candidatesPage.query.isError ? candidatesPage.query.error : null);
   const candidatesTotal = candidatesOverride != null ? candidates.length : candidatesPage.total;
@@ -154,6 +162,17 @@ export function DsiImportJobResolutionSection({
     setPlanApplySummary,
   });
 
+  const stewardBulk = useDsiStewardBulkBusy(importJobId);
+
+  const planComputeBlocking =
+    (plan.suggestionsQuery.isFetching && !plan.suggestionsQuery.data) ||
+    (stewardBulk.computeActive && !plan.applyResolutionPlan.isPending);
+
+  const planApplyBlocked =
+    planComputeBlocking ||
+    stewardBulk.applyActive ||
+    plan.refreshPlanEffective.isPending;
+
   const bulk = useDsiBulkSteward({
     importJobId,
     selectedIds,
@@ -161,6 +180,9 @@ export function DsiImportJobResolutionSection({
     setBulkMode,
     onInvalidate,
     onBulkClosed: focusWorkspaceToolbar,
+    onPlanRefresh: () => plan.refreshSuggestions(),
+    onEvictResolvedCandidates: plan.evictResolvedCandidates,
+    onShrinkPlanScope: plan.shrinkPlanScope,
     onApplyPlanFallback: async ({ action, regionId, channelId }) => {
       if (action === 'set_plan_fallback_channel') {
         plan.setPlanChannelId(channelId);
@@ -190,10 +212,46 @@ export function DsiImportJobResolutionSection({
     focusWorkspaceToolbar();
   }, [bulk, focusWorkspaceToolbar]);
 
-  const displayedCandidates = useMemo(
+  const filteredCandidates = useMemo(
     () => filterDsiStewardCandidates(candidates, activeFilters, plan.planByCandidateId),
     [candidates, activeFilters, plan.planByCandidateId]
   );
+
+  const clientQueueFilterActive = tabbedMode && candidatesPage.clientQueueFilterActive;
+
+  const filteredPageCount = Math.max(
+    1,
+    Math.ceil(filteredCandidates.length / Math.max(1, candidatesPage.pageSize))
+  );
+
+  const gridCandidates = useMemo(() => {
+    if (!clientQueueFilterActive) return filteredCandidates;
+    return paginateDsiStewardCandidateRows(
+      filteredCandidates,
+      candidatesPage.page,
+      candidatesPage.pageSize
+    );
+  }, [
+    filteredCandidates,
+    clientQueueFilterActive,
+    candidatesPage.page,
+    candidatesPage.pageSize,
+  ]);
+
+  useEffect(() => {
+    if (!clientQueueFilterActive || candidatesPage.query.isFetching) return;
+    if (candidatesPage.page > 0 && candidatesPage.page >= filteredPageCount) {
+      candidatesPage.setPage(Math.max(0, filteredPageCount - 1));
+    }
+  }, [
+    clientQueueFilterActive,
+    candidatesPage.page,
+    candidatesPage.setPage,
+    candidatesPage.query.isFetching,
+    filteredPageCount,
+  ]);
+
+  const displayedCandidates = gridCandidates;
 
   const openBulkWorkflow = useCallback(
     (action: DsiBulkAction) => {
@@ -322,12 +380,19 @@ export function DsiImportJobResolutionSection({
     bulk.bulkApply.isPending ||
     plan.applyResolutionPlan.isPending ||
     plan.refreshPlanEffective.isPending ||
+    planComputeBlocking ||
+    (stewardBulk.applyActive && !plan.applyResolutionPlan.isPending) ||
     revalidatePipelineBusy;
 
   const stewardBusyMessage = useMemo(() => {
     if (bulk.bulkApply.isPending) return 'Applying bulk steward actions…';
     if (bulk.bulkPreview.isPending) return 'Building bulk steward preview…';
-    if (plan.applyResolutionPlan.isPending) return 'Applying resolution plan…';
+    if (plan.applyResolutionPlan.isPending || stewardBulk.applyActive) {
+      return 'Applying resolution plan… Large batches can take 10+ minutes — you can keep working; progress appears in the activity bell.';
+    }
+    if (planComputeBlocking) {
+      return 'Computing resolution plan… Apply is disabled until compute finishes.';
+    }
     if (plan.refreshPlanEffective.isPending) return 'Updating resolution plan after your edits…';
     if (revalidatePipelineBusy) return 'Re-running import validation on the server…';
     return undefined;
@@ -335,6 +400,8 @@ export function DsiImportJobResolutionSection({
     bulk.bulkApply.isPending,
     bulk.bulkPreview.isPending,
     plan.applyResolutionPlan.isPending,
+    stewardBulk.applyActive,
+    planComputeBlocking,
     plan.refreshPlanEffective.isPending,
     revalidatePipelineBusy,
   ]);
@@ -411,12 +478,6 @@ export function DsiImportJobResolutionSection({
     });
   }, [plan]);
 
-  const stewardDone = useCallback(() => {
-    invalidateDsiImportJobStewardQueries(qc, importJobId, { includeImportJobsList: true });
-    onInvalidate();
-    setDetailCandidate(null);
-  }, [qc, importJobId, onInvalidate]);
-
   const lookupPeerCandidateByNormalizedKey = useCallback(
     (normalizedKey: string) =>
       candidates.find(
@@ -470,10 +531,24 @@ export function DsiImportJobResolutionSection({
           <DsiStewardCandidateFilters
             filters={activeFilters}
             onChange={setActiveFilters}
-            visibleCount={displayedCandidates.length}
-            totalCount={Math.max(candidatesTotal, candidates.length)}
+            visibleCount={
+              clientQueueFilterActive ? filteredCandidates.length : displayedCandidates.length
+            }
+            totalCount={tabbedMode ? candidatesPage.total : Math.max(candidatesTotal, candidates.length)}
             hideEntityFilter={tabbedMode}
             hidePartyFilter={tabbedMode && activeTab !== 'distributor'}
+            showProductMatchStatusChips={tabbedMode && activeTab === 'product'}
+            productMatchStatusCounts={
+              tabbedMode && activeTab === 'product' ? productMatchStatusCounts : undefined
+            }
+            clearToDefault={
+              tabbedMode ? () => defaultDsiStewardFiltersForTab(activeTab) : undefined
+            }
+            isAtDefault={
+              tabbedMode
+                ? (filters) => dsiStewardFiltersMatchTabDefault(filters, activeTab)
+                : undefined
+            }
           />
         )
       }
@@ -523,7 +598,7 @@ export function DsiImportJobResolutionSection({
                   Plan fallback channel…
                 </Button>
                 <Typography variant="caption" color="text.secondary">
-                  Plan fallbacks only — map file tokens in the panel below.
+                  Plan fallbacks below — use bulk Register ISO regions for geographic channel tokens.
                 </Typography>
               </>
             ) : (
@@ -564,6 +639,7 @@ export function DsiImportJobResolutionSection({
                 onEnabledChange={plan.setPlanRegionFallbackEnabled}
                 onRegionIdChange={plan.setPlanRegionId}
                 disabled={stewardOverlayBusy}
+                catalogRegions={plan.regions}
               />
             ) : null}
             {!isRegionChannelTab ? (
@@ -588,8 +664,8 @@ export function DsiImportJobResolutionSection({
                   pendingLabel="Applying…"
                   disabled={
                     selectedReadyPlanIds.length === 0 ||
-                    plan.refreshPlanEffective.isPending ||
-                    stewardOverlayBusy
+                    planApplyBlocked ||
+                    (stewardOverlayBusy && !plan.applyResolutionPlan.isPending)
                   }
                   onClick={() =>
                     void plan.applyResolutionPlan
@@ -611,8 +687,8 @@ export function DsiImportJobResolutionSection({
                   pendingLabel="Applying…"
                   disabled={
                     plan.readyPlanCandidateIds.length === 0 ||
-                    plan.refreshPlanEffective.isPending ||
-                    stewardOverlayBusy
+                    planApplyBlocked ||
+                    (stewardOverlayBusy && !plan.applyResolutionPlan.isPending)
                   }
                   onClick={() => plan.setApplyAllConfirmOpen(true)}
                   data-testid="dsi-resolution-plan-apply-all"
@@ -660,7 +736,7 @@ export function DsiImportJobResolutionSection({
     <Stack spacing={2} data-testid="dsi-import-job-resolution">
       <Typography variant="subtitle2">Resolve blockers for this import</Typography>
       <Alert severity="info">
-        <Typography variant="body2" component="motion.div">
+        <Typography variant="body2" component="div">
           <strong>Validate → Resolve → Revalidate → Apply</strong>. Use entity tabs for distributors, customers, and
           products; use <strong>Region &amp; channel</strong> when file geography does not match the catalog.{' '}
           <Link component={NextLink} href={`/admin/imports?job=${importJobId}`}>
@@ -748,33 +824,32 @@ export function DsiImportJobResolutionSection({
           }}
         >
           {planApplySummary ? (
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              flexWrap="wrap"
-              useFlexGap
+            <Alert
+              severity={planApplySummary.severity}
               data-testid="dsi-plan-apply-summary"
+              onClose={() => setPlanApplySummary(null)}
             >
-              <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }}>
-                {planApplySummary}
-              </Typography>
-              <Button size="small" variant="text" onClick={() => setPlanApplySummary(null)}>
-                Dismiss
-              </Button>
-            </Stack>
+              {planApplySummary.message}
+            </Alert>
           ) : null}
-          {candidateWorkspace}
+          {plan.applyResolutionPlan.isError && !planApplySummary ? (
+            <Alert severity="error" data-testid="dsi-plan-apply-error">
+              Apply failed. Check the activity bell or try again with a smaller batch.
+            </Alert>
+          ) : null}
+          <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+            {candidateWorkspace}
+          </Box>
 
           {tabbedMode && isCandidateTab ? (
             <DsiCandidatesPagination
               page={candidatesPage.page}
-              pageCount={candidatesPage.pageCount}
+              pageCount={clientQueueFilterActive ? filteredPageCount : candidatesPage.pageCount}
               pageSize={candidatesPage.pageSize}
-              total={candidatesPage.total}
+              total={clientQueueFilterActive ? filteredCandidates.length : candidatesPage.total}
               skip={candidatesPage.skip}
-              pageItemCount={candidates.length}
-              busy={candidatesPage.query.isFetching || stewardOverlayBusy}
+              pageItemCount={displayedCandidates.length}
+              busy={candidatesPage.query.isFetching}
               onPageChange={candidatesPage.setPage}
               onPageSizeChange={candidatesPage.setPageSize}
             />
@@ -789,8 +864,8 @@ export function DsiImportJobResolutionSection({
             onClose={() => setDetailCandidate(null)}
             onRowActionStart={(candidateId) => setRowActionPendingId(candidateId)}
             onRowActionEnd={() => setRowActionPendingId(null)}
-            onDone={stewardDone}
-            onPlanRefresh={refreshResolutionPlanEffective}
+            onDone={() => setDetailCandidate(null)}
+            onStewardFastComplete={plan.evictResolvedCandidates}
             lookupPeerCandidate={lookupPeerCandidateByNormalizedKey}
             onOpenPeerByNormalizedKey={openPeerCandidateByNormalizedKey}
             customerNormalizedKeysOnPage={customerNormalizedKeysOnPage}

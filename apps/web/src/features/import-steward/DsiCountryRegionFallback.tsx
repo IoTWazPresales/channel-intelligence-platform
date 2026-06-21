@@ -14,9 +14,10 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { apiGet, apiPost } from '@/lib/api';
+import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
 import { DSI_STEWARD_CONFIG } from './dsiSteward.config';
+import type { DsiCatalogOpt } from './dsiSteward.types';
 
 export type IsoCountry = { alpha2: string; name: string };
 
@@ -25,12 +26,14 @@ export function DsiCountryRegionFallback({
   onEnabledChange,
   onRegionIdChange,
   disabled,
+  catalogRegions = [],
 }: {
   importJobId: number;
   enabled: boolean;
   onEnabledChange: (v: boolean) => void;
   onRegionIdChange: (regionId: string) => void;
   disabled?: boolean;
+  catalogRegions?: DsiCatalogOpt[];
 }) {
   const qc = useQueryClient();
   const [selectedIso, setSelectedIso] = useState('');
@@ -98,8 +101,14 @@ export function DsiCountryRegionFallback({
           onChange={(e) => {
             const iso = String(e.target.value);
             setSelectedIso(iso);
+            ensureRegion.reset();
             if (!iso) {
               onRegionIdChange('');
+              return;
+            }
+            const existing = catalogRegions.find((r) => r.code.trim().toUpperCase() === iso.toUpperCase());
+            if (existing) {
+              onRegionIdChange(String(existing.id));
               return;
             }
             void ensureRegion.mutateAsync(iso).catch(() => {});
@@ -124,7 +133,7 @@ export function DsiCountryRegionFallback({
       ) : null}
       {ensureRegion.isError ? (
         <Alert severity="error" sx={{ width: '100%' }}>
-          Could not ensure region for selected country.
+          {safeDisplayError(ensureRegion.error) || 'Could not ensure region for selected country.'}
         </Alert>
       ) : null}
     </Stack>

@@ -28,7 +28,7 @@ def job_db_indicates_pipeline_finished(job: ImportJob) -> bool:
     stage = (job.stage or "").strip().lower()
     if stage in ("validated", "loaded", "failed", "pm_committed"):
         return True
-    return status in ("completed", "completed_with_errors", "failed", "commit_failed")
+    return status in ("completed", "completed_with_errors", "failed", "commit_failed", "interrupted")
 
 
 def main_celery_task_id(job: ImportJob) -> str | None:
@@ -56,7 +56,10 @@ def read_main_celery_state(job: ImportJob, *, timeout_s: float = 2.0) -> str | N
 
 
 def pipeline_dispatch_conflict_message(job_id: int) -> str:
-    return f"Import validation is already running for job {job_id}. Wait for completion or cancel the job."
+    return (
+        f"Import pipeline is already queued or running for job {job_id}. "
+        "Wait for completion or cancel the job."
+    )
 
 
 def persist_pipeline_queued_at(session: Session, job: ImportJob) -> None:

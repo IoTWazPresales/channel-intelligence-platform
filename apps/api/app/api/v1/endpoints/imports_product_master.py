@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import threading
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
@@ -251,7 +250,24 @@ async def post_product_master_validate(
     if oc == "enqueued":
         settings = get_settings()
         celery_task_id: str | None = None
+        from app.services.task_run_ledger import (
+            ENTITY_IMPORT_JOB,
+            TRANSPORT_BROKER,
+            TRANSPORT_IN_PROCESS_THREAD,
+            create_queued_task_run,
+            spawn_in_process_thread_with_ledger,
+        )
+
+        task_name = "imports.product_master_validate"
         if settings.cip_dev_celery_dispatch == "in_process_thread":
+            task_run_id = f"thread-{uuid.uuid4().hex}"
+            create_queued_task_run(
+                task_run_id=task_run_id,
+                task_name=task_name,
+                entity_type=ENTITY_IMPORT_JOB,
+                entity_id=job_id,
+                transport=TRANSPORT_IN_PROCESS_THREAD,
+            )
 
             def _in_process_pm_validate() -> None:
                 try:
@@ -264,18 +280,30 @@ async def post_product_master_validate(
                         "product_master validate in-process thread failed job_id=%s (CIP_DEV_CELERY_DISPATCH=in_process_thread)",
                         job_id,
                     )
+                    raise
 
             DEV_CELERY_LOGGER.warning(
                 "ENQUEUE: job_id=%s — CIP_DEV_CELERY_DISPATCH=in_process_thread (DEV ONLY). "
                 "Starting daemon thread for PM validate (no Celery broker).",
                 job_id,
             )
-            threading.Thread(target=_in_process_pm_validate, name=f"pm-validate-{job_id}", daemon=True).start()
+            spawn_in_process_thread_with_ledger(
+                task_run_id=task_run_id,
+                thread_name=f"pm-validate-{job_id}",
+                target=_in_process_pm_validate,
+            )
             celery_task_id = "dev-in-process-thread"
         else:
             try:
                 async_result = product_master_validate_task.delay(job_id)
                 celery_task_id = str(async_result.id)
+                create_queued_task_run(
+                    task_run_id=celery_task_id,
+                    task_name=task_name,
+                    entity_type=ENTITY_IMPORT_JOB,
+                    entity_id=job_id,
+                    transport=TRANSPORT_BROKER,
+                )
             except Exception as e:
                 logger.exception("product_master validate dispatch failed job_id=%s", job_id)
                 with SessionLocal() as sync_db2:
@@ -337,7 +365,24 @@ async def post_product_master_commit(
 
     if oc == "enqueued":
         settings = get_settings()
+        from app.services.task_run_ledger import (
+            ENTITY_IMPORT_JOB,
+            TRANSPORT_BROKER,
+            TRANSPORT_IN_PROCESS_THREAD,
+            create_queued_task_run,
+            spawn_in_process_thread_with_ledger,
+        )
+
+        task_name = "imports.product_master_commit"
         if settings.cip_dev_celery_dispatch == "in_process_thread":
+            task_run_id = f"thread-{uuid.uuid4().hex}"
+            create_queued_task_run(
+                task_run_id=task_run_id,
+                task_name=task_name,
+                entity_type=ENTITY_IMPORT_JOB,
+                entity_id=job_id,
+                transport=TRANSPORT_IN_PROCESS_THREAD,
+            )
 
             def _in_process_pm_commit() -> None:
                 try:
@@ -351,20 +396,33 @@ async def post_product_master_commit(
                         "product_master commit in-process thread failed job_id=%s (CIP_DEV_CELERY_DISPATCH=in_process_thread)",
                         job_id,
                     )
+                    raise
 
             DEV_CELERY_LOGGER.warning(
                 "ENQUEUE: job_id=%s — CIP_DEV_CELERY_DISPATCH=in_process_thread (DEV ONLY). "
                 "Starting daemon thread for PM commit (no Celery broker). Use broker + worker for production-like behavior.",
                 job_id,
             )
-            threading.Thread(target=_in_process_pm_commit, name=f"pm-commit-{job_id}", daemon=True).start()
+            spawn_in_process_thread_with_ledger(
+                task_run_id=task_run_id,
+                thread_name=f"pm-commit-{job_id}",
+                target=_in_process_pm_commit,
+            )
         else:
             try:
                 async_result = product_master_commit_task.delay(job_id, confirm_destructive)
+                celery_task_id = str(async_result.id)
+                create_queued_task_run(
+                    task_run_id=celery_task_id,
+                    task_name=task_name,
+                    entity_type=ENTITY_IMPORT_JOB,
+                    entity_id=job_id,
+                    transport=TRANSPORT_BROKER,
+                )
                 logger.info(
                     "product_master commit dispatched to worker job_id=%s task_id=%s",
                     job_id,
-                    getattr(async_result, "id", None),
+                    celery_task_id,
                 )
             except Exception as e:
                 logger.exception("product_master commit dispatch failed job_id=%s", job_id)

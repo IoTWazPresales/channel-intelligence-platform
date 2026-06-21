@@ -15,6 +15,8 @@ export {
   defaultDsiStewardCandidateFilterState,
   dsiStewardFiltersAreDefault,
   filterDsiStewardCandidates,
+  paginateDsiStewardCandidateRows,
+  stewardQueueFilterRequiresFullLoad,
   dsiEffectiveSuggestedAction,
   DSI_ENTITY_CUSTOMER,
   DSI_ENTITY_DISTRIBUTOR,
@@ -59,6 +61,11 @@ export {
   isDsiEntityCandidateTab,
 } from './dsiEntityTabs';
 export { pollDsiImportPipelineUntilDone } from './dsiImportPipelinePoll';
+export {
+  dsiJobHasValidationComplete,
+  dsiWizardActiveStepFromServer,
+  type DsiWizardJobSnapshot,
+} from './dsiImportWizardRouting';
 export { notifyDsiAsyncPipelineStarted } from './dsiAsyncPipelineRun';
 export { DsiBulkActionInlineForm } from './DsiBulkActionInlineForm';
 export { DsiBulkStewardSection } from './DsiBulkStewardSection';
@@ -86,6 +93,7 @@ export {
   DSI_ENTITY_TABS,
   DSI_ENTITY_TAB_ORDER,
   defaultDsiStewardFiltersForTab,
+  dsiStewardFiltersMatchTabDefault,
   formatDsiEntityTabLabel,
   dsiTabDependencyNudge,
   type DsiEntityTabId,

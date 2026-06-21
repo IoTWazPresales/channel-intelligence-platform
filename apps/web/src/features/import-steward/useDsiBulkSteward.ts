@@ -6,7 +6,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { apiPost } from '@/lib/api';
 
-import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
+import { registerClientBackgroundTask, finishClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 import { pollDsiBulkProvisionalTask } from './dsiBulkProvisionalPoll';
 
 import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
@@ -32,6 +32,9 @@ export function useDsiBulkSteward({
   onBulkClosed,
   onApplyPlanFallback,
   applySuggestedRegion,
+  onPlanRefresh,
+  onEvictResolvedCandidates,
+  onShrinkPlanScope,
 }: {
   importJobId: number;
   selectedIds: number[];
@@ -47,6 +50,9 @@ export function useDsiBulkSteward({
     channelId: string;
   }) => Promise<void>;
   applySuggestedRegion?: (args: { candidateIds: number[] }) => Promise<void>;
+  onPlanRefresh?: () => void | Promise<void>;
+  onEvictResolvedCandidates?: (candidateIds: number[]) => void;
+  onShrinkPlanScope?: (candidateIds: number[]) => void;
 }) {
   const qc = useQueryClient();
 
@@ -218,18 +224,27 @@ export function useDsiBulkSteward({
       }
       const body = buildBulkBody();
       if (bulkAction === 'create_provisional_customer') {
-        const enqueued = await apiPost<DsiBulkProvisionalAsyncEnqueueResponse>(
-          `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-provisional-customers/apply-async`,
-          body
-        );
-        registerClientBackgroundTask({
-          taskId: enqueued.task_id,
-          importJobId,
-          kind: 'dsi_bulk_provisional',
-          label: `Creating provisional customers (DSI job ${importJobId})`,
-        });
-        void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
-        return pollDsiBulkProvisionalTask(importJobId, enqueued.task_id);
+        let taskId: string | undefined;
+        try {
+          const enqueued = await apiPost<DsiBulkProvisionalAsyncEnqueueResponse>(
+            `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-provisional-customers/apply-async`,
+            body
+          );
+          taskId = enqueued.task_id;
+          registerClientBackgroundTask({
+            taskId: enqueued.task_id,
+            importJobId,
+            kind: 'dsi_bulk_provisional',
+            label: `Creating provisional customers (DSI job ${importJobId})`,
+          });
+          void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+          return pollDsiBulkProvisionalTask(importJobId, enqueued.task_id, {
+            rowCount: selectedIds.length,
+          });
+        } finally {
+          if (taskId) finishClientBackgroundTask(taskId);
+          void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+        }
       }
       return apiPost<DsiBulkApplyResponse>(
         `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-apply`,
@@ -239,6 +254,7 @@ export function useDsiBulkSteward({
     onMutate: async () => {
       if (
         bulkAction === 'create_provisional_customer' ||
+        bulkAction === 'ignore' ||
         bulkAction === 'set_plan_fallback_region' ||
         bulkAction === 'set_plan_fallback_channel' ||
         bulkAction === 'apply_suggested_region'
@@ -259,6 +275,10 @@ export function useDsiBulkSteward({
       }
     },
     onSuccess: (data) => {
+      const appliedIds = (data.results || [])
+        .filter((r) => r.ok === true && r.candidate_id != null)
+        .map((r) => Number(r.candidate_id))
+        .filter((id) => Number.isFinite(id));
       const planOnly =
         bulkAction === 'set_plan_fallback_region' ||
         bulkAction === 'set_plan_fallback_channel' ||
@@ -277,6 +297,21 @@ export function useDsiBulkSteward({
       setSelectedIds([]);
       invalidateDsiImportJobStewardQueries(qc, importJobId, { includeImportJobsList: true });
       onInvalidate();
+      if (appliedIds.length > 0) {
+        onShrinkPlanScope?.(appliedIds);
+        if (bulkAction === 'ignore') {
+          onEvictResolvedCandidates?.(appliedIds);
+        }
+      }
+      if (
+        !planOnly &&
+        (bulkAction === 'ignore' ||
+          bulkAction === 'map_customer' ||
+          bulkAction === 'map_distributor' ||
+          bulkAction === 'resolve_product')
+      ) {
+        void Promise.resolve(onPlanRefresh?.()).catch(() => {});
+      }
       onBulkClosed?.();
     },
   });

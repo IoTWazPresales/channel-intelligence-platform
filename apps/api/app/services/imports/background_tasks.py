@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -13,6 +14,8 @@ from sqlalchemy import select
 from app.db.session_sync import SessionLocal
 from app.models.ingestion import ImportJob
 from app.services.imports.import_background_slots import (
+    SLOT_MAIN,
+    SLOT_PM_COMMIT,
     clear_task_slot,
     iter_active_slots,
     jobs_with_possible_background_tasks,
@@ -27,6 +30,17 @@ from app.utils.json_safe import to_jsonable
 from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+STALE_PENDING_SLOT_AGE = timedelta(minutes=20)
+_DEFAULT_STALE_STARTED_PROGRESS_MINUTES = 30
+
+
+def _stale_started_progress_age() -> timedelta:
+    raw = os.environ.get("CIP_STALE_STARTED_PROGRESS_MINUTES", str(_DEFAULT_STALE_STARTED_PROGRESS_MINUTES))
+    try:
+        return timedelta(minutes=max(1, int(raw.strip())))
+    except (TypeError, ValueError):
+        return timedelta(minutes=_DEFAULT_STALE_STARTED_PROGRESS_MINUTES)
 
 
 def _normalize_celery_state(state: str | None) -> str:
@@ -67,6 +81,111 @@ def _job_db_indicates_background_work_finished(job: ImportJob) -> bool:
     return job_db_indicates_pipeline_finished(job)
 
 
+def _parse_iso_datetime(raw: Any) -> datetime | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _slot_dispatch_time(job: ImportJob, task_id: str) -> datetime | None:
+    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    for val in meta.values():
+        if isinstance(val, dict) and str(val.get("task_id") or "") == task_id:
+            dt = _parse_iso_datetime(val.get("queued_at"))
+            if dt is not None:
+                return dt
+    dt = _parse_iso_datetime(meta.get("pipeline_queued_at"))
+    if dt is not None:
+        return dt
+    updated = getattr(job, "updated_at", None)
+    if updated is not None:
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        return updated
+    return None
+
+
+def _clear_slot_when_pipeline_finished(job: ImportJob, slot_key: str) -> bool:
+    """Only pipeline-bound slots clear when job stage indicates that pipeline finished.
+
+    Steward bulk tasks (plan compute/apply on validated DSI jobs) stay visible until
+    Celery reports a terminal state.
+    """
+    if slot_key == SLOT_MAIN:
+        return _job_db_indicates_background_work_finished(job)
+    if slot_key == SLOT_PM_COMMIT:
+        return (job.stage or "").strip().lower() == "pm_committed"
+    return False
+
+
+def _celery_pending_stale(job: ImportJob, task_id: str, task_state: str, info: dict[str, Any]) -> bool:
+    """True when Celery still reports PENDING with no progress long after dispatch."""
+    if task_state != "PENDING" or info:
+        return False
+    dispatch = _slot_dispatch_time(job, task_id)
+    if dispatch is None:
+        return False
+    return (datetime.now(timezone.utc) - dispatch) >= STALE_PENDING_SLOT_AGE
+
+
+def _progress_heartbeat_time(info: dict[str, Any]) -> datetime | None:
+    return _parse_iso_datetime(info.get("progress_at"))
+
+
+def _celery_started_progress_stale(
+    job: ImportJob,
+    task_id: str,
+    task_state: str,
+    info: dict[str, Any],
+) -> bool:
+    """True when STARTED/PROGRESS has no recent progress heartbeat (worker likely dead)."""
+    if task_state not in ("STARTED", "PROGRESS"):
+        return False
+    if (job.status or "").strip().lower() != "running":
+        return False
+    heartbeat = _progress_heartbeat_time(info)
+    if heartbeat is not None:
+        return (datetime.now(timezone.utc) - heartbeat) >= _stale_started_progress_age()
+    dispatch = _slot_dispatch_time(job, task_id)
+    if dispatch is None:
+        return False
+    return (datetime.now(timezone.utc) - dispatch) >= _stale_started_progress_age()
+
+
+def _mark_job_interrupted(session, job: ImportJob, meta: dict[str, Any], slot_key: str) -> None:
+    """Terminal interrupted: preserve validate checkpoint metadata, clear Celery slot."""
+    from app.ingestion.pipeline import STAGE_FAILED
+
+    clear_task_slot(meta, slot_key)
+    job.status = "interrupted"
+    job.stage = STAGE_FAILED
+    if not job.error_summary:
+        job.error_summary = (
+            "Validation interrupted — no worker progress heartbeat. "
+            "Re-dispatch validation to resume from the last checkpoint."
+        )[:500]
+    job.completed_at = datetime.now(timezone.utc)
+    job.staged_metadata = to_jsonable(meta) if meta else None
+    session.add(job)
+
+
+def _steward_bulk_candidate_count(meta: dict[str, Any]) -> int:
+    bulk = meta.get("dsi_bulk_task")
+    if not isinstance(bulk, dict):
+        return 0
+    raw = bulk.get("candidate_count")
+    try:
+        return int(raw) if raw is not None else 0
+    except (TypeError, ValueError):
+        return 0
+
+
 def _progress_from_celery(
     *,
     task_state: str,
@@ -74,7 +193,10 @@ def _progress_from_celery(
     job: ImportJob,
 ) -> dict[str, Any]:
     meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
-    total_rows = int(info.get("total_rows") or meta.get("dsi_validate_total_rows") or 0)
+    steward_total = _steward_bulk_candidate_count(meta)
+    total_rows = int(
+        info.get("total_rows") or steward_total or meta.get("dsi_validate_total_rows") or 0
+    )
     current_row = int(info.get("current_row") or 0)
     pct = int(info.get("pct") or 0)
     phase = str(info.get("phase") or "processing")
@@ -125,7 +247,7 @@ def _build_background_task_records(
             continue
 
         for slot in slots:
-            if _job_db_indicates_background_work_finished(job):
+            if _clear_slot_when_pipeline_finished(job, slot.slot_key):
                 clear_task_slot(meta, slot.slot_key)
                 job.staged_metadata = to_jsonable(meta) if meta else None
                 session.add(job)
@@ -133,6 +255,18 @@ def _build_background_task_records(
                 continue
 
             task_state, info = _read_celery_safe(slot.task_id)
+
+            if _celery_pending_stale(job, slot.task_id, task_state, info):
+                clear_task_slot(meta, slot.slot_key)
+                job.staged_metadata = to_jsonable(meta) if meta else None
+                session.add(job)
+                dirty = True
+                continue
+
+            if _celery_started_progress_stale(job, slot.task_id, task_state, info):
+                _mark_job_interrupted(session, job, meta, slot.slot_key)
+                dirty = True
+                continue
 
             if task_state in TERMINAL_CELERY_STATES or task_state not in ACTIVE_CELERY_STATES:
                 clear_task_slot(meta, slot.slot_key)

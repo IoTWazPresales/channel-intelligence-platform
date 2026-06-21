@@ -42,6 +42,28 @@ def steward_background_dispatch_conflict_message(job_id: int, *, reason: str) ->
     return f"DSI steward background work is already active for job {job_id} ({reason}). Wait for completion."
 
 
+def _dsi_bulk_task_kind(job: ImportJob) -> str | None:
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    bulk = meta.get("dsi_bulk_task")
+    if not isinstance(bulk, dict):
+        return None
+    kind = bulk.get("kind")
+    return str(kind).strip() if isinstance(kind, str) and kind.strip() else None
+
+
+def reusable_dsi_bulk_task_id(job: ImportJob, *, kind: str) -> str | None:
+    """Return existing Celery task id when the same steward bulk kind is still in flight."""
+    tid = dsi_bulk_task_id(job)
+    if not tid:
+        return None
+    if _dsi_bulk_task_kind(job) != kind:
+        return None
+    state = read_dsi_bulk_celery_state(job)
+    if state is not None and state in ACTIVE_CELERY_STATES:
+        return tid
+    return None
+
+
 def assert_dsi_steward_background_dispatch_allowed(session: Session, job: ImportJob) -> None:
     """Raise ValueError when pipeline validate or another dsi_bulk_task is in flight."""
     if (job.status or "").strip().lower() == "running":

@@ -37,6 +37,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
 import { apiGet, apiPost } from '@/lib/api';
+import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
+import { pollShipmentBulkTask } from '@/features/import-steward/shipmentBulkTaskPoll';
+import {
+  confidenceBand,
+  confidenceBandColor,
+  confidenceBandLabel,
+} from '@/features/import-steward/confidenceBand';
 
 import {
   defaultStewardCandidateFilterState,
@@ -285,7 +292,11 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
   const [bulkProvNamesById, setBulkProvNamesById] = useState<Record<number, string>>({});
   const [bulkMapOpen, setBulkMapOpen] = useState(false);
   const [bulkMapSearch, setBulkMapSearch] = useState('');
+  const [bulkMapSearchDebounced, setBulkMapSearchDebounced] = useState('');
   const [bulkMapPickId, setBulkMapPickId] = useState<number | null>(null);
+  const [bulkMapModalError, setBulkMapModalError] = useState<string | null>(null);
+  const [custQDebounced, setCustQDebounced] = useState('');
+  const [distQDebounced, setDistQDebounced] = useState('');
   const [specialCatOpen, setSpecialCatOpen] = useState(false);
   const [specialCatChoice, setSpecialCatChoice] = useState<'noise_only' | 'internal_note'>('noise_only');
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -342,6 +353,21 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       return next;
     });
   }, [filteredRows]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setCustQDebounced(custQ), 300);
+    return () => window.clearTimeout(t);
+  }, [custQ]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDistQDebounced(distQ), 300);
+    return () => window.clearTimeout(t);
+  }, [distQ]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setBulkMapSearchDebounced(bulkMapSearch), 300);
+    return () => window.clearTimeout(t);
+  }, [bulkMapSearch]);
   const allVisibleSelected =
     visibleRowIds.length > 0 && visibleRowIds.every((id) => selectedCandidateIds.has(id));
   const someVisibleSelected = visibleRowIds.some((id) => selectedCandidateIds.has(id));
@@ -358,23 +384,24 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
   );
 
   const { data: distHits = [] } = useQuery({
-    queryKey: ['distributors-search-shipment-steward', distQ],
+    queryKey: ['distributors-search-shipment-steward', distQDebounced],
     queryFn: ({ signal }) =>
       apiGet<{ items: DistributorHit[] }>(
-        `/api/v1/distributors?q=${encodeURIComponent(distQ)}&page_size=20`,
+        `/api/v1/distributors?q=${encodeURIComponent(distQDebounced)}&page_size=20`,
         { signal }
       ),
-    enabled: distQ.trim().length >= 1,
+    enabled: distQDebounced.trim().length >= 1,
     select: (r) => r.items ?? [],
   });
 
   const { data: custHits = [] } = useQuery({
-    queryKey: ['customers-search-shipment-steward', custQ],
+    queryKey: ['customers-search-shipment-steward', custQDebounced],
     queryFn: ({ signal }) =>
-      apiGet<{ items: CustomerHit[] }>(`/api/v1/customers?q=${encodeURIComponent(custQ)}&page_size=20`, {
-        signal,
-      }),
-    enabled: custQ.trim().length >= 1,
+      apiGet<{ items: CustomerHit[] }>(
+        `/api/v1/customers?q=${encodeURIComponent(custQDebounced)}&page_size=20`,
+        { signal }
+      ),
+    enabled: custQDebounced.trim().length >= 1,
     select: (r) => r.items ?? [],
   });
 
@@ -390,13 +417,13 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
   });
 
   const { data: bulkMapSearchHits = [] } = useQuery({
-    queryKey: ['customers-bulk-map-search', bulkMapSearch],
+    queryKey: ['customers-bulk-map-search', bulkMapSearchDebounced],
     queryFn: ({ signal }) =>
       apiGet<{ items: CustomerHit[] }>(
-        `/api/v1/customers?q=${encodeURIComponent(bulkMapSearch.trim())}&page_size=20`,
+        `/api/v1/customers?q=${encodeURIComponent(bulkMapSearchDebounced.trim())}&page_size=20`,
         { signal }
       ),
-    enabled: bulkMapOpen && bulkMapSearch.trim().length >= 1,
+    enabled: bulkMapOpen && bulkMapSearchDebounced.trim().length >= 1,
     select: (r) => r.items ?? [],
   });
 
@@ -441,7 +468,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setMapOpen(false);
       setActive(null);
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -466,7 +492,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setProvOpen(false);
       setActive(null);
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -497,7 +522,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setProvOpen(false);
       setActive(null);
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -532,7 +556,9 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
                 for (const cid of custBulkIds) {
                   display_names[String(cid)] = (bulkProvNamesById[cid] ?? '').trim();
                 }
-                await apiPost<Record<string, unknown>>(
+                // Async: endpoint enqueues a Celery task and returns immediately; poll to completion
+                // (no sync block / proxy-timeout risk on large selections).
+                const enq = await apiPost<{ task_id: string; async_poll: boolean }>(
                   `/api/v1/shipment-evidence/import-jobs/${importJobId}/bulk-create-provisional-customers`,
                   {
                     candidate_ids: custBulkIds,
@@ -544,7 +570,28 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
                     notes_summary: custNotes.trim() || null,
                   }
                 );
-                for (const cid of custBulkIds) successes.push(cid);
+                registerClientBackgroundTask({
+                  taskId: enq.task_id,
+                  importJobId: importJobId as number,
+                  kind: 'shipment_bulk',
+                  label: `Creating provisional customers (job ${importJobId})`,
+                });
+                void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+                const result = await pollShipmentBulkTask<{
+                  ok: boolean;
+                  results: { candidate_id?: number }[];
+                  errors: { candidate_id: number; message: string }[];
+                }>(importJobId as number, enq.task_id);
+                const failedById = new Map(
+                  (result.errors ?? []).map((e) => [e.candidate_id, e.message])
+                );
+                for (const cid of custBulkIds) {
+                  if (failedById.has(cid)) {
+                    failures.push({ id: cid, kind: 'customer', message: failedById.get(cid) ?? 'failed' });
+                  } else {
+                    successes.push(cid);
+                  }
+                }
               } catch (e) {
                 for (const cid of custBulkIds) {
                   failures.push({
@@ -641,17 +688,32 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setBulkProvNamesById({});
       setSelectedCandidateIds(new Set());
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
 
   const bulkMapMut = useMutation({
-    mutationFn: (body: { candidate_ids: number[]; customer_id: number }) =>
-      apiPost<{ mapped: number[]; errors: { candidate_id: number; reason: string }[] }>(
+    mutationFn: async (body: { candidate_ids: number[]; customer_id: number }) => {
+      const enq = await apiPost<{ import_job_id: number | null; task_id: string; async_poll: boolean }>(
         '/api/v1/shipment-evidence/import-candidates/bulk-map-customer',
         body
-      ),
+      );
+      const jid = enq.import_job_id ?? importJobId;
+      if (jid == null) {
+        throw new Error('Bulk map: no import job id returned for polling');
+      }
+      registerClientBackgroundTask({
+        taskId: enq.task_id,
+        importJobId: jid,
+        kind: 'shipment_bulk',
+        label: `Mapping channel partners (job ${jid})`,
+      });
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+      return pollShipmentBulkTask<{ mapped: number[]; errors: { candidate_id: number; reason: string }[] }>(
+        jid,
+        enq.task_id
+      );
+    },
     onSuccess: (data) => {
       const nMap = data.mapped?.length ?? 0;
       const errs = data.errors ?? [];
@@ -661,20 +723,30 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
         .join('; ');
       const suffix = errs.length > 6 ? '…' : '';
       if (errs.length && nMap > 0) {
-        setActionError(`Partial success: mapped ${nMap}. Failed: ${errSummary}${suffix}`);
+        const msg = `Partial success: mapped ${nMap}. Failed: ${errSummary}${suffix}`;
+        setBulkMapModalError(msg);
+        setActionError(msg);
       } else if (errs.length) {
-        setActionError(`Bulk map failed: ${errSummary}${suffix}`);
+        const msg = `Bulk map failed: ${errSummary}${suffix}`;
+        setBulkMapModalError(msg);
+        setActionError(msg);
+        return;
       } else {
+        setBulkMapModalError(null);
         setActionError(null);
+        setBulkMapOpen(false);
+        setBulkMapSearch('');
+        setBulkMapPickId(null);
+        setSelectedCandidateIds(new Set());
       }
-      setBulkMapOpen(false);
-      setBulkMapSearch('');
-      setBulkMapPickId(null);
-      setSelectedCandidateIds(new Set());
-      invalidate();
-      void refetch();
+      if (nMap > 0) {
+        invalidate();
+      }
     },
-    onError: (e: Error) => setActionError(e.message),
+    onError: (e: Error) => {
+      setBulkMapModalError(e.message);
+      setActionError(e.message);
+    },
   });
 
   const manualSpecialMut = useMutation({
@@ -688,7 +760,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setSpecialCatOpen(false);
       setActive(null);
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -701,17 +772,31 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setRejectOpen(false);
       setActive(null);
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
 
   const applyPlanBulkMut = useMutation({
-    mutationFn: (candidate_ids: number[]) =>
-      apiPost<{ applied: number[]; errors: { candidate_id: number; reason: string }[] }>(
+    mutationFn: async (candidate_ids: number[]) => {
+      if (importJobId == null) {
+        throw new Error('Apply with plan: no import job selected');
+      }
+      const enq = await apiPost<{ task_id: string; async_poll: boolean }>(
         `/api/v1/shipment-evidence/import-jobs/${importJobId}/bulk-apply-confirmed-plans`,
         { candidate_ids }
-      ),
+      );
+      registerClientBackgroundTask({
+        taskId: enq.task_id,
+        importJobId,
+        kind: 'shipment_bulk',
+        label: `Applying confirmed plans (job ${importJobId})`,
+      });
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+      return pollShipmentBulkTask<{ applied: number[]; errors: { candidate_id: number; reason: string }[] }>(
+        importJobId,
+        enq.task_id
+      );
+    },
     onSuccess: (data) => {
       const n = data.applied?.length ?? 0;
       const errs = data.errors ?? [];
@@ -736,7 +821,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setSelectedCandidateIds(new Set());
       invalidate();
       if (importJobId != null) void qc.invalidateQueries({ queryKey: ['import-job', importJobId] });
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -751,7 +835,6 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
       setActionError(null);
       setActive(null);
       invalidate();
-      void refetch();
     },
     onError: (e: Error) => setActionError(e.message),
   });
@@ -883,7 +966,9 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
               disabled={selectedCustomerIdsList.length === 0}
               onClick={() => {
                 setBulkMapSearch('');
+                setBulkMapSearchDebounced('');
                 setBulkMapPickId(null);
+                setBulkMapModalError(null);
                 setActionError(null);
                 setBulkMapOpen(true);
               }}
@@ -1234,9 +1319,25 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
                         <Chip size="small" label={r.suggested_action} color={actionChipColor(r.suggested_action)} />
                       ) : null}
                       {r.confidence_score != null ? (
-                        <Typography variant="caption" color="text.secondary">
-                          score {r.confidence_score.toFixed(2)}
-                        </Typography>
+                        (() => {
+                          const band = confidenceBand(r.confidence_score);
+                          return (
+                            <Stack direction="row" spacing={0.5} alignItems="center">
+                              {band ? (
+                                <Chip
+                                  size="small"
+                                  variant="outlined"
+                                  color={confidenceBandColor(band)}
+                                  label={confidenceBandLabel(band)}
+                                  data-testid={`shipment-confidence-band-${r.id}`}
+                                />
+                              ) : null}
+                              <Typography variant="caption" color="text.secondary">
+                                score {r.confidence_score.toFixed(2)}
+                              </Typography>
+                            </Stack>
+                          );
+                        })()
                       ) : null}
                     </Stack>
                   </TableCell>
@@ -1678,10 +1779,33 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
         </DialogActions>
       </Dialog>
 
-      <Dialog open={bulkMapOpen} onClose={() => setBulkMapOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={bulkMapOpen}
+        onClose={() => {
+          if (bulkMapMut.isPending) return;
+          setBulkMapOpen(false);
+          setBulkMapModalError(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Bulk map to customer</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
+            {bulkMapModalError ? (
+              <Alert severity="error" onClose={() => setBulkMapModalError(null)}>
+                {bulkMapModalError}
+              </Alert>
+            ) : null}
+            {bulkMapMut.isPending ? (
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <CircularProgress size={22} />
+                <Typography variant="body2" color="text.secondary">
+                  Mapping {selectedCustomerIdsList.length} candidate
+                  {selectedCustomerIdsList.length === 1 ? '' : 's'}…
+                </Typography>
+              </Stack>
+            ) : null}
             <Typography variant="body2">
               Maps <strong>{selectedCustomerIdsList.length}</strong> selected channel partner candidate(s) to one
               existing customer.
@@ -1724,7 +1848,7 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
               fullWidth
               helperText="Provisional (unverified) matches are listed first when you search."
             />
-            {bulkMapSearch.trim().length >= 1 ? (
+            {bulkMapSearchDebounced.trim().length >= 1 ? (
               bulkMapSearchHits.length === 0 ? (
                 <Typography variant="caption" color="text.secondary">
                   No matches.
@@ -1758,7 +1882,16 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setBulkMapOpen(false)}>Cancel</Button>
+          <Button
+            disabled={bulkMapMut.isPending}
+            onClick={() => {
+              if (bulkMapMut.isPending) return;
+              setBulkMapOpen(false);
+              setBulkMapModalError(null);
+            }}
+          >
+            Cancel
+          </Button>
           <Button
             variant="contained"
             disabled={
@@ -1769,13 +1902,17 @@ export function ShipmentEntityStewardPanel({ importJobId }: { importJobId: numbe
             }
             onClick={() => {
               if (importJobId == null || bulkMapPickId == null) return;
+              setBulkMapModalError(null);
               bulkMapMut.mutate({
                 candidate_ids: selectedCustomerIdsList,
                 customer_id: bulkMapPickId,
               });
             }}
+            startIcon={bulkMapMut.isPending ? <CircularProgress size={18} color="inherit" /> : undefined}
           >
-            Map selected
+            {bulkMapMut.isPending
+              ? `Mapping ${selectedCustomerIdsList.length} candidate${selectedCustomerIdsList.length === 1 ? '' : 's'}…`
+              : 'Map selected'}
           </Button>
         </DialogActions>
       </Dialog>

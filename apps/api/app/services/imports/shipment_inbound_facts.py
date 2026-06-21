@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -12,6 +12,62 @@ from sqlalchemy.orm import Session
 from app.models.facts import FactInboundShipment
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.utils.json_safe import to_jsonable
+
+# Columns refreshed on ``ON CONFLICT (source_key) DO UPDATE`` — every mutable column
+# (i.e. all of them except the surrogate ``id``, the conflict key ``source_key``, and
+# ``created_at``). ``updated_at`` is set to ``now()`` separately. Latest-job-wins is
+# preserved because ``import_job_id`` is among the refreshed columns.
+_UPSERT_REFRESH_COLUMNS: tuple[str, ...] = (
+    "import_job_id",
+    "shipment_evidence_line_id",
+    "source_sheet",
+    "source_row_number",
+    "report_type",
+    "line_state",
+    "raw_source_row",
+    "operating_unit",
+    "bill_to_raw",
+    "ship_to_raw",
+    "order_no",
+    "order_line",
+    "delivery_no",
+    "invoice_line",
+    "item_code",
+    "sales_model_name",
+    "customer_item",
+    "ean_code",
+    "upc_code",
+    "mpor_item_no",
+    "quantity",
+    "unit_price",
+    "amount",
+    "currency_code",
+    "ship_confirm_date",
+    "schedule_ship_date",
+    "promise_date",
+    "exwork_date",
+    "erd_date",
+    "est_pod_date",
+    "pod_date",
+    "product_id",
+    "product_resolution_status",
+    "product_resolution_token",
+    "product_resolution_detail",
+    "distributor_id",
+    "distributor_resolution_status",
+    "distributor_resolution_token",
+    "customer_dealer_token",
+    "customer_id",
+    "customer_resolution_status",
+    "eta_date",
+    "reference",
+    "status",
+)
+
+# Rows per multi-values INSERT. ~45 bound columns/row keeps each statement well under
+# Postgres' 65535-parameter limit (500 × 45 ≈ 22.5k) while collapsing the former
+# per-row round-trips into a handful of statements.
+_UPSERT_CHUNK_SIZE = 500
 
 
 def _coalesce_shipment_dates(line: ShipmentEvidenceLine) -> date | None:
@@ -86,8 +142,27 @@ def _row_values_from_evidence(line: ShipmentEvidenceLine) -> dict[str, Any]:
     }
 
 
-def upsert_inbound_shipment_facts_for_job(db: Session, import_job_id: int) -> int:
-    """Insert/update ``fact_inbound_shipment`` for every evidence line on the job (``ON CONFLICT (source_key)``)."""
+def _conflict_update_set(ins: Any) -> dict[str, Any]:
+    """``ON CONFLICT DO UPDATE`` SET map: refresh every mutable column from the proposed row."""
+    ex = ins.excluded
+    set_ = {col: getattr(ex, col) for col in _UPSERT_REFRESH_COLUMNS}
+    set_["updated_at"] = func.now()
+    return set_
+
+
+def upsert_inbound_shipment_facts_for_job(
+    db: Session,
+    import_job_id: int,
+    *,
+    on_progress: Callable[[int, int], None] | None = None,
+    chunk_size: int = _UPSERT_CHUNK_SIZE,
+) -> int:
+    """Insert/update ``fact_inbound_shipment`` for every evidence line on the job (``ON CONFLICT (source_key)``).
+
+    Writes are batched into chunked multi-row statements (``chunk_size`` rows each) instead of
+    one round-trip per line — the same N+1 fix applied to validate/steward. ``on_progress`` is
+    invoked after each chunk with ``(rows_written_so_far, total_rows)`` for background-task UI.
+    """
     lines = list(
         db.scalars(
             select(ShipmentEvidenceLine)
@@ -95,63 +170,20 @@ def upsert_inbound_shipment_facts_for_job(db: Session, import_job_id: int) -> in
             .order_by(ShipmentEvidenceLine.id)
         ).all()
     )
+    total = len(lines)
     tbl = FactInboundShipment.__table__
     n = 0
-    for line in lines:
-        vals = _row_values_from_evidence(line)
-        ins = pg_insert(tbl).values(**vals)
-        ex = ins.excluded
+    for start in range(0, total, chunk_size):
+        chunk = lines[start : start + chunk_size]
+        rows = [_row_values_from_evidence(line) for line in chunk]
+        ins = pg_insert(tbl).values(rows)
         stmt = ins.on_conflict_do_update(
             constraint="uq_fact_inbound_shipment_source_key",
-            set_={
-                "import_job_id": ex.import_job_id,
-                "shipment_evidence_line_id": ex.shipment_evidence_line_id,
-                "source_sheet": ex.source_sheet,
-                "source_row_number": ex.source_row_number,
-                "report_type": ex.report_type,
-                "line_state": ex.line_state,
-                "raw_source_row": ex.raw_source_row,
-                "operating_unit": ex.operating_unit,
-                "bill_to_raw": ex.bill_to_raw,
-                "ship_to_raw": ex.ship_to_raw,
-                "order_no": ex.order_no,
-                "order_line": ex.order_line,
-                "delivery_no": ex.delivery_no,
-                "invoice_line": ex.invoice_line,
-                "item_code": ex.item_code,
-                "sales_model_name": ex.sales_model_name,
-                "customer_item": ex.customer_item,
-                "ean_code": ex.ean_code,
-                "upc_code": ex.upc_code,
-                "mpor_item_no": ex.mpor_item_no,
-                "quantity": ex.quantity,
-                "unit_price": ex.unit_price,
-                "amount": ex.amount,
-                "currency_code": ex.currency_code,
-                "ship_confirm_date": ex.ship_confirm_date,
-                "schedule_ship_date": ex.schedule_ship_date,
-                "promise_date": ex.promise_date,
-                "exwork_date": ex.exwork_date,
-                "erd_date": ex.erd_date,
-                "est_pod_date": ex.est_pod_date,
-                "pod_date": ex.pod_date,
-                "product_id": ex.product_id,
-                "product_resolution_status": ex.product_resolution_status,
-                "product_resolution_token": ex.product_resolution_token,
-                "product_resolution_detail": ex.product_resolution_detail,
-                "distributor_id": ex.distributor_id,
-                "distributor_resolution_status": ex.distributor_resolution_status,
-                "distributor_resolution_token": ex.distributor_resolution_token,
-                "customer_dealer_token": ex.customer_dealer_token,
-                "customer_id": ex.customer_id,
-                "customer_resolution_status": ex.customer_resolution_status,
-                "eta_date": ex.eta_date,
-                "reference": ex.reference,
-                "status": ex.status,
-                "updated_at": func.now(),
-            },
+            set_=_conflict_update_set(ins),
         )
         db.execute(stmt)
-        n += 1
+        n += len(chunk)
+        if on_progress is not None:
+            on_progress(n, total)
     db.flush()
     return n

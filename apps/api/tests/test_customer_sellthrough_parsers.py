@@ -330,6 +330,7 @@ def test_ai_suggested_below_threshold_status_in_handler() -> None:
     from app.services.imports.customer_sell_through import _apply_ai_resolution_to_line
 
     line = SimpleNamespace(
+        import_job_id=7,
         resolved_product_id=None,
         raw_product_token="UNK",
         raw_location_token=None,
@@ -340,8 +341,10 @@ def test_ai_suggested_below_threshold_status_in_handler() -> None:
     prod_idx = SimpleNamespace(sku_to_id={})
     with patch.dict("os.environ", {"AI_ASSIST_ENABLED": "true"}, clear=False):
         get_settings.cache_clear()
+        # Now routed through the shared try_ai_token_resolution wrapper, which calls
+        # suggest_token_resolution inside ai_resolver_wiring — patch it there.
         with patch(
-            "app.services.imports.customer_sell_through.suggest_token_resolution",
+            "app.services.imports.ai_resolver_wiring.suggest_token_resolution",
             return_value=TokenResolutionSuggestion(
                 best_match_id=1,
                 confidence=0.5,

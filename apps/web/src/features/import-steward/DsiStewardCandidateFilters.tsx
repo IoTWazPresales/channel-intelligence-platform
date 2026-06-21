@@ -11,6 +11,10 @@ export function DsiStewardCandidateFilters({
   totalCount,
   hideEntityFilter = false,
   hidePartyFilter = false,
+  clearToDefault,
+  isAtDefault,
+  showProductMatchStatusChips = false,
+  productMatchStatusCounts,
 }: {
   filters: DsiStewardCandidateFilterState;
   onChange: (next: DsiStewardCandidateFilterState) => void;
@@ -20,7 +24,17 @@ export function DsiStewardCandidateFilters({
   hideEntityFilter?: boolean;
   /** Hide Bill To / Ship To when not on the Distributors tab. */
   hidePartyFilter?: boolean;
+  /** Tab-aware clear target; defaults to global all-entity state when omitted. */
+  clearToDefault?: () => DsiStewardCandidateFilterState;
+  /** Tab-aware default check; falls back to global default when omitted. */
+  isAtDefault?: (filters: DsiStewardCandidateFilterState) => boolean;
+  /** Products tab: split validate-time product_match_status filters. */
+  showProductMatchStatusChips?: boolean;
+  /** Optional counts for product no_match / ambiguous_eligible (tab-counts API; full job scope). */
+  productMatchStatusCounts?: { no_match?: number; ambiguous_eligible?: number };
 }) {
+  const resolveClearTarget = clearToDefault ?? defaultDsiStewardCandidateFilterState;
+  const filtersAreDefault = isAtDefault ?? dsiStewardFiltersAreDefault;
   return (
     <Stack spacing={1} data-testid="dsi-steward-candidate-filters" role="region" aria-label="Filter mapping candidates">
       <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
@@ -36,8 +50,8 @@ export function DsiStewardCandidateFilters({
           <Button
             size="small"
             variant="text"
-            onClick={() => onChange(defaultDsiStewardCandidateFilterState())}
-            disabled={dsiStewardFiltersAreDefault(filters)}
+            onClick={() => onChange(resolveClearTarget())}
+            disabled={filtersAreDefault(filters)}
             data-testid="dsi-steward-filter-clear"
           >
             Clear filters
@@ -56,19 +70,34 @@ export function DsiStewardCandidateFilters({
               ['ready_to_map', 'Ready to map'],
               ['provisional', 'Provisional'],
               ['no_match', 'No match'],
+              ...(showProductMatchStatusChips
+                ? ([['ambiguous_eligible', 'Ambiguous']] as const)
+                : []),
             ] as const
-          ).map(([value, label]) => (
-            <Chip
-              key={value}
-              size="small"
-              label={label}
-              variant={filters.queue === value ? 'filled' : 'outlined'}
-              color={filters.queue === value ? 'primary' : 'default'}
-              onClick={() => onChange({ ...filters, queue: value as DsiStewardQueueFilter })}
-              sx={{ cursor: 'pointer' }}
-              data-testid={`dsi-filter-queue-${value}`}
-            />
-          ))}
+          ).map(([value, label]) => {
+            const count =
+              value === 'no_match'
+                ? productMatchStatusCounts?.no_match
+                : value === 'ambiguous_eligible'
+                  ? productMatchStatusCounts?.ambiguous_eligible
+                  : undefined;
+            const chipLabel =
+              count != null && (value === 'no_match' || value === 'ambiguous_eligible')
+                ? `${label} (${count})`
+                : label;
+            return (
+              <Chip
+                key={value}
+                size="small"
+                label={chipLabel}
+                variant={filters.queue === value ? 'filled' : 'outlined'}
+                color={filters.queue === value ? 'primary' : 'default'}
+                onClick={() => onChange({ ...filters, queue: value as DsiStewardQueueFilter })}
+                sx={{ cursor: 'pointer' }}
+                data-testid={`dsi-filter-queue-${value}`}
+              />
+            );
+          })}
         </Stack>
       </Stack>
       {hideEntityFilter ? null : (

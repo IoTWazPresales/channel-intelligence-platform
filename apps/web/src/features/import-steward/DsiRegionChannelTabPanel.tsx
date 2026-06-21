@@ -32,7 +32,11 @@ export function DsiRegionChannelTabPanel({
     : null;
 
   return (
-    <Stack spacing={2} data-testid="dsi-region-channel-tab-panel" sx={{ py: 1 }}>
+    <Stack
+      spacing={1.5}
+      data-testid="dsi-region-channel-tab-panel"
+      sx={{ py: 1, minHeight: 0 }}
+    >
       <Typography variant="body2" color="text.secondary">
         File region and channel values that did not match the catalog. Map a synonym to an existing row, or create a
         governed catalog entry. Re-run import validation after changes so customer candidates pick up new aliases.

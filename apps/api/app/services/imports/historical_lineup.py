@@ -475,6 +475,10 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
         if _p.sales_model_name and _sales_model_cnt.get(_p.sales_model_name.lower(), 0) == 1
     }
 
+    from app.services.imports.distributor_sales_inventory import _load_product_resolution_index
+
+    product_resolution_index = _load_product_resolution_index(db)
+
     for sheet in parsed_sheets:
         accepted_rows = [r for r in sheet.rows if r.status != "dropped"]
         if not accepted_rows:
@@ -558,8 +562,24 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
                         diagnostics.append("ambiguous_customer_match")
                         errors += 1
                     else:
-                        diagnostics.append("unknown_customer")
-                        errors += 1
+                        from app.services.imports.ai_resolver_wiring import (
+                            customer_candidates,
+                            try_ai_token_resolution,
+                        )
+
+                        ai_cid, _, _ = try_ai_token_resolution(
+                            raw_token=customer_token,
+                            token_type="customer",
+                            candidates=customer_candidates(db, customer_token),
+                            import_type="historical_lineup",
+                            job_id=int(job.id),
+                        )
+                        if ai_cid is not None:
+                            customer_id = int(ai_cid)
+                            diagnostics.append("customer_ai_auto_resolved")
+                        else:
+                            diagnostics.append("unknown_customer")
+                            errors += 1
 
             distributor_token = _clean_str(payload.get("distributor_token"))
             if distributor_token:
@@ -569,8 +589,24 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
                 if distributor:
                     distributor_id = distributor.id
                 else:
-                    diagnostics.append("unknown_distributor")
-                    errors += 1
+                    from app.services.imports.ai_resolver_wiring import (
+                        distributor_candidates,
+                        try_ai_token_resolution,
+                    )
+
+                    ai_did, _, _ = try_ai_token_resolution(
+                        raw_token=distributor_token,
+                        token_type="distributor",
+                        candidates=distributor_candidates(db, distributor_token),
+                        import_type="historical_lineup",
+                        job_id=int(job.id),
+                    )
+                    if ai_did is not None:
+                        distributor_id = int(ai_did)
+                        diagnostics.append("distributor_ai_auto_resolved")
+                    else:
+                        diagnostics.append("unknown_distributor")
+                        errors += 1
 
             channel_token = _clean_str(payload.get("channel_token"))
             if channel_token:
@@ -648,8 +684,27 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
                         diagnostics.append("ambiguous_product_match")
                         errors += 1
                     else:
-                        diagnostics.append("unknown_product")
-                        errors += 1
+                        from app.services.imports.ai_resolver_wiring import (
+                            product_candidates_from_index,
+                            try_ai_token_resolution,
+                        )
+
+                        _ilike_tok = sku_raw or part_number_raw or model_raw
+                        ai_pid, _, _ = try_ai_token_resolution(
+                            raw_token=_ilike_tok or "",
+                            token_type="product",
+                            candidates=product_candidates_from_index(
+                                product_resolution_index, _ilike_tok or ""
+                            ),
+                            import_type="historical_lineup",
+                            job_id=int(job.id),
+                        )
+                        if ai_pid is not None:
+                            product_id = int(ai_pid)
+                            diagnostics.append("product_ai_auto_resolved")
+                        else:
+                            diagnostics.append("unknown_product")
+                            errors += 1
 
             numeric_fields = [
                 "msrp_local",

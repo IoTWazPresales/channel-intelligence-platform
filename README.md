@@ -9,7 +9,7 @@ Monorepo layout:
 - `packages/ui` — shared theme tokens and `AppThemeProvider`
 - `packages/types` — shared TypeScript types (nav, roles)
 - `infra` — Docker Compose, environment examples
-- `docs` — architecture, contracts, [local Windows dev](docs/LOCAL_DEV_WINDOWS.md), [async/broker audit](docs/ASYNC_AND_BROKER_PATHS.md)
+- `docs` — architecture, contracts, [memory palace](docs/memory/MEMORY_PALACE.md) ([current state](docs/memory/CURRENT.md)), [local Windows dev](docs/LOCAL_DEV_WINDOWS.md), [async/broker](docs/ASYNC_AND_BROKER_PATHS.md)
 
 ## Prerequisites
 

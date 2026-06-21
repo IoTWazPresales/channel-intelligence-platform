@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -37,6 +37,13 @@ from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.utils.json_safe import to_jsonable
 from app.services.imports.distributor_sales_inventory import _norm_key
 from app.services.imports.dsi_steward_candidate_ops import DISTRIBUTOR_PROVISIONAL_SUSPICIOUS
+from app.services.imports.provisional_entity_consolidation import _repoint_customer_id_references
+from app.services.imports.provisional_entity_identity import (
+    canonical_provisional_entity_name_key,
+    find_existing_provisional_customer_by_canonical_name,
+    find_existing_provisional_distributor_by_canonical_name,
+    is_non_entity_customer_provisional_token,
+)
 from app.services.imports.shipment_evidence_resolution_plan import (
     SHIPMENT_CANDIDATE_TERMINAL_STATUSES,
     SHIPMENT_CUSTOMER_ENTITY,
@@ -246,10 +253,21 @@ _VALID_SHIPMENT_CUSTOMER_PARTNER_TIERS = frozenset(
 
 
 def _verify_line_scope(db: Session, cand: ImportEntityMappingCandidate, line_ids: list[int]) -> None:
+    if not line_ids:
+        return
     jid = int(cand.import_job_id)
-    for lid in line_ids:
-        row = db.get(ShipmentEvidenceLine, lid)
-        if not row or int(row.import_job_id) != jid:
+    unique_ids = list(dict.fromkeys(int(x) for x in line_ids))
+    found = {
+        int(x)
+        for x in db.scalars(
+            select(ShipmentEvidenceLine.id).where(
+                ShipmentEvidenceLine.id.in_(unique_ids),
+                ShipmentEvidenceLine.import_job_id == jid,
+            )
+        ).all()
+    }
+    for lid in unique_ids:
+        if lid not in found:
             raise ShipmentStewardOpError(f"Line {lid} not in scope for candidate job {jid}", status_code=400)
 
 
@@ -260,20 +278,23 @@ def _update_lines_resolved(
     distributor_id: int,
     resolution_token: str,
 ) -> int:
-    n = 0
+    if not line_ids:
+        return 0
+    unique_ids = list(dict.fromkeys(int(x) for x in line_ids))
     tok = (resolution_token or "")[:512]
-    for lid in line_ids:
-        line = db.get(ShipmentEvidenceLine, lid)
-        if line is None:
-            continue
-        line.distributor_id = int(distributor_id)
-        line.distributor_resolution_status = "resolved"
-        line.distributor_resolution_token = tok
-        n += 1
-    return n
+    result = db.execute(
+        update(ShipmentEvidenceLine)
+        .where(ShipmentEvidenceLine.id.in_(unique_ids))
+        .values(
+            distributor_id=int(distributor_id),
+            distributor_resolution_status="resolved",
+            distributor_resolution_token=tok,
+        )
+    )
+    return int(result.rowcount or 0)
 
 
-def execute_map_shipment_distributor(
+def _apply_map_shipment_distributor_without_commit(
     db: Session,
     cand: ImportEntityMappingCandidate,
     *,
@@ -320,12 +341,33 @@ def execute_map_shipment_distributor(
     cand.suggested_entity_id = int(distributor_id)
     cand.match_reason = "steward_map_existing_distributor"
     db.add(cand)
+    return {
+        "ok": True,
+        "alias_id": int(alias.id),
+        "distributor_id": int(distributor_id),
+        "candidate_id": int(cand.id),
+        "lines_updated": len(line_ids),
+    }
+
+
+def execute_map_shipment_distributor(
+    db: Session,
+    cand: ImportEntityMappingCandidate,
+    *,
+    distributor_id: int,
+    raw_token: str | None,
+) -> dict[str, Any]:
+    out = _apply_map_shipment_distributor_without_commit(
+        db, cand, distributor_id=distributor_id, raw_token=raw_token
+    )
     db.commit()
-    db.refresh(alias)
-    return {"ok": True, "alias_id": int(alias.id), "distributor_id": int(distributor_id), "candidate_id": int(cand.id), "lines_updated": len(line_ids)}
+    alias = db.get(DistributorSourceTokenAlias, int(out["alias_id"]))
+    if alias is not None:
+        db.refresh(alias)
+    return out
 
 
-def execute_create_provisional_shipment_distributor(
+def _apply_create_provisional_shipment_distributor_without_commit(
     db: Session,
     cand: ImportEntityMappingCandidate,
     *,
@@ -363,9 +405,13 @@ def execute_create_provisional_shipment_distributor(
         raise ShipmentStewardOpError("distributor_code already exists", status_code=409)
 
     name = _display_name_from_context_or_sample(cand, display_name, raw) or code
-    row = DimDistributor(code=code, name=name)
-    db.add(row)
-    db.flush()
+    existing_dist = find_existing_provisional_distributor_by_canonical_name(db, name)
+    if existing_dist is not None:
+        row = existing_dist
+    else:
+        row = DimDistributor(code=code, name=name)
+        db.add(row)
+        db.flush()
 
     alias = DistributorSourceTokenAlias(
         distributor_id=int(row.id),
@@ -388,9 +434,6 @@ def execute_create_provisional_shipment_distributor(
     cand.suggested_entity_id = int(row.id)
     cand.match_reason = "steward_created_provisional_distributor"
     db.add(cand)
-    db.commit()
-    db.refresh(row)
-    db.refresh(alias)
     return {
         "ok": True,
         "distributor_id": int(row.id),
@@ -399,6 +442,33 @@ def execute_create_provisional_shipment_distributor(
         "candidate_id": int(cand.id),
         "lines_updated": len(line_ids),
     }
+
+
+def execute_create_provisional_shipment_distributor(
+    db: Session,
+    cand: ImportEntityMappingCandidate,
+    *,
+    display_name: str | None,
+    distributor_code: str | None,
+    confirm_for_suspicious_token: bool,
+    bypass_suspicious_token_gate: bool = False,
+) -> dict[str, Any]:
+    out = _apply_create_provisional_shipment_distributor_without_commit(
+        db,
+        cand,
+        display_name=display_name,
+        distributor_code=distributor_code,
+        confirm_for_suspicious_token=confirm_for_suspicious_token,
+        bypass_suspicious_token_gate=bypass_suspicious_token_gate,
+    )
+    db.commit()
+    dist = db.get(DimDistributor, int(out["distributor_id"]))
+    alias = db.get(DistributorSourceTokenAlias, int(out["alias_id"]))
+    if dist is not None:
+        db.refresh(dist)
+    if alias is not None:
+        db.refresh(alias)
+    return out
 
 
 def _allocate_tmp_customer_code(db: Session) -> str:
@@ -411,9 +481,19 @@ def _allocate_tmp_customer_code(db: Session) -> str:
     raise ShipmentStewardOpError("Could not allocate temporary customer code", status_code=503)
 
 
-def _re_enrich_open_shipment_customer_candidates(db: Session, cand: ImportEntityMappingCandidate) -> None:
+def _re_enrich_shipment_customer_candidates_for_job(
+    db: Session, *, import_job_id: int, source_definition_id: int | None
+) -> None:
     """Rescore non-terminal shipment customer candidates after aliases change (same import job)."""
     enrich_shipment_customer_token_candidates(
+        db,
+        import_job_id=int(import_job_id),
+        source_definition_id=source_definition_id,
+    )
+
+
+def _re_enrich_open_shipment_customer_candidates(db: Session, cand: ImportEntityMappingCandidate) -> None:
+    _re_enrich_shipment_customer_candidates_for_job(
         db,
         import_job_id=int(cand.import_job_id),
         source_definition_id=int(cand.source_definition_id) if cand.source_definition_id is not None else None,
@@ -421,20 +501,19 @@ def _re_enrich_open_shipment_customer_candidates(db: Session, cand: ImportEntity
 
 
 def _mark_customer_lines_resolved(db: Session, line_ids: list[int], customer_id: int) -> int:
-    n = 0
+    if not line_ids:
+        return 0
+    unique_ids = list(dict.fromkeys(int(x) for x in line_ids))
     cid = int(customer_id)
-    for lid in line_ids:
-        line = db.get(ShipmentEvidenceLine, lid)
-        if line is None:
-            continue
-        line.customer_resolution_status = "resolved"
-        line.customer_id = cid
-        db.add(line)
-        n += 1
-    return n
+    result = db.execute(
+        update(ShipmentEvidenceLine)
+        .where(ShipmentEvidenceLine.id.in_(unique_ids))
+        .values(customer_resolution_status="resolved", customer_id=cid)
+    )
+    return int(result.rowcount or 0)
 
 
-def execute_map_shipment_customer(
+def _apply_map_shipment_customer_without_commit(
     db: Session,
     cand: ImportEntityMappingCandidate,
     *,
@@ -486,8 +565,6 @@ def execute_map_shipment_customer(
     cand.suggested_entity_id = int(customer_id)
     cand.match_reason = "steward_map_existing_customer"
     db.add(cand)
-    _re_enrich_open_shipment_customer_candidates(db, cand)
-    db.commit()
     return {
         "ok": True,
         "alias_id": int(alias_ids[0]),
@@ -498,7 +575,27 @@ def execute_map_shipment_customer(
     }
 
 
-def execute_create_provisional_shipment_customer(
+def execute_map_shipment_customer(
+    db: Session,
+    cand: ImportEntityMappingCandidate,
+    *,
+    customer_id: int,
+    raw_token: str | None,
+    bypass_partner_text_guards: bool = False,
+) -> dict[str, Any]:
+    out = _apply_map_shipment_customer_without_commit(
+        db,
+        cand,
+        customer_id=customer_id,
+        raw_token=raw_token,
+        bypass_partner_text_guards=bypass_partner_text_guards,
+    )
+    _re_enrich_open_shipment_customer_candidates(db, cand)
+    db.commit()
+    return out
+
+
+def _apply_create_provisional_shipment_customer_without_commit(
     db: Session,
     cand: ImportEntityMappingCandidate,
     *,
@@ -542,8 +639,6 @@ def execute_create_provisional_shipment_customer(
             )
             line_ids = _line_ids_from_context(cand)
             n_stamp = _mark_customer_lines_resolved(db, line_ids, int(cust.id)) if line_ids else 0
-            _re_enrich_open_shipment_customer_candidates(db, cand)
-            db.commit()
             return {
                 "ok": True,
                 "idempotent": True,
@@ -585,23 +680,33 @@ def execute_create_provisional_shipment_customer(
     proposal = _display_name_from_context_or_sample(cand, display_name, raw0).strip()
     if not proposal:
         proposal = "Unknown customer"
+    if is_non_entity_customer_provisional_token(raw_token=raw0, display_name=proposal):
+        raise ShipmentStewardOpError(
+            "Token or display name looks like policy/note text (not a customer entity); "
+            "ignore or map to an existing customer instead.",
+            status_code=400,
+        )
     notes = (notes_summary or "").strip() or None
     base_note = f"Provisional customer created from shipment evidence import candidate {cand.id} (job {cand.import_job_id})."
     merged_notes = f"{base_note} {notes}" if notes else base_note
 
-    code = _allocate_tmp_customer_code(db)
-    row = DimCustomer(
-        code=code,
-        name=proposal[:256],
-        customer_status="unverified",
-        partner_tier=tier,
-        notes_summary=merged_notes[:512],
-        region_id=region_id,
-        channel_id=channel_id,
-        preferred_distributor_id=preferred_distributor_id,
-    )
-    db.add(row)
-    db.flush()
+    existing_cust = find_existing_provisional_customer_by_canonical_name(db, proposal)
+    if existing_cust is not None:
+        row = existing_cust
+    else:
+        code = _allocate_tmp_customer_code(db)
+        row = DimCustomer(
+            code=code,
+            name=proposal[:256],
+            customer_status="unverified",
+            partner_tier=tier,
+            notes_summary=merged_notes[:512],
+            region_id=region_id,
+            channel_id=channel_id,
+            preferred_distributor_id=preferred_distributor_id,
+        )
+        db.add(row)
+        db.flush()
 
     alias_note = f"Alias from provisional customer create (shipment evidence candidate {cand.id})"
     try:
@@ -624,9 +729,6 @@ def execute_create_provisional_shipment_customer(
     cand.suggested_entity_id = int(row.id)
     cand.match_reason = "steward_created_provisional_customer"
     db.add(cand)
-    _re_enrich_open_shipment_customer_candidates(db, cand)
-    db.commit()
-    db.refresh(row)
     return {
         "ok": True,
         "customer_id": int(row.id),
@@ -636,6 +738,38 @@ def execute_create_provisional_shipment_customer(
         "candidate_id": int(cand.id),
         "lines_updated": len(line_ids),
     }
+
+
+def execute_create_provisional_shipment_customer(
+    db: Session,
+    cand: ImportEntityMappingCandidate,
+    *,
+    display_name: str | None,
+    region_id: int | None,
+    channel_id: int | None,
+    preferred_distributor_id: int | None,
+    partner_tier: str | None,
+    notes_summary: str | None,
+    bypass_partner_text_guards: bool = False,
+) -> dict[str, Any]:
+    out = _apply_create_provisional_shipment_customer_without_commit(
+        db,
+        cand,
+        display_name=display_name,
+        region_id=region_id,
+        channel_id=channel_id,
+        preferred_distributor_id=preferred_distributor_id,
+        partner_tier=partner_tier,
+        notes_summary=notes_summary,
+        bypass_partner_text_guards=bypass_partner_text_guards,
+    )
+    _re_enrich_open_shipment_customer_candidates(db, cand)
+    db.commit()
+    if not out.get("idempotent"):
+        row = db.get(DimCustomer, int(out["customer_id"]))
+        if row is not None:
+            db.refresh(row)
+    return out
 
 
 def _provisional_customer_bulk_group_key(cand: ImportEntityMappingCandidate, per: dict[int, str]) -> str:
@@ -650,7 +784,7 @@ def _provisional_customer_bulk_group_key(cand: ImportEntityMappingCandidate, per
     return f"__singleton_candidate_{int(cand.id)}__"
 
 
-def execute_attach_shipment_customer_candidate_to_existing_customer(
+def _apply_attach_shipment_customer_candidate_without_commit(
     db: Session,
     cand: ImportEntityMappingCandidate,
     *,
@@ -702,8 +836,6 @@ def execute_attach_shipment_customer_candidate_to_existing_customer(
     cand.suggested_entity_id = int(customer_id)
     cand.match_reason = "steward_created_provisional_customer"
     db.add(cand)
-    _re_enrich_open_shipment_customer_candidates(db, cand)
-    db.commit()
     return {
         "ok": True,
         "customer_id": int(customer_id),
@@ -713,6 +845,21 @@ def execute_attach_shipment_customer_candidate_to_existing_customer(
         "lines_updated": len(line_ids),
         "grouped_attach": True,
     }
+
+
+def execute_attach_shipment_customer_candidate_to_existing_customer(
+    db: Session,
+    cand: ImportEntityMappingCandidate,
+    *,
+    customer_id: int,
+    notes_summary: str | None,
+) -> dict[str, Any]:
+    out = _apply_attach_shipment_customer_candidate_without_commit(
+        db, cand, customer_id=customer_id, notes_summary=notes_summary
+    )
+    _re_enrich_open_shipment_customer_candidates(db, cand)
+    db.commit()
+    return out
 
 
 ALLOWED_MANUAL_SPECIAL_CATEGORIES = frozenset({"noise_only", "internal_note"})
@@ -802,17 +949,24 @@ def execute_bulk_apply_shipment_candidate_plans(
     *,
     import_job_id: int,
     candidate_ids: list[int],
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
     """Apply persisted planner ``suggested_action`` for selected ``needs_review`` candidates.
 
     Used after import apply when rows were blocked only by name-review / special-category heuristics:
     partner-text guards are bypassed so the **existing** plan (map or provisional create) can execute.
+
+    ``on_progress(current, total)`` is invoked once per candidate processed (for the background
+    task UI); it is optional and defaults to a no-op so the synchronous call sites are unchanged.
     """
     applied: list[int] = []
     errors: list[dict[str, Any]] = []
     any_customer = False
     any_distributor = False
-    for raw_id in candidate_ids:
+    total = len(candidate_ids)
+    for processed, raw_id in enumerate(candidate_ids, start=1):
+        if on_progress is not None:
+            on_progress(processed, total)
         cid = int(raw_id)
         cand = db.get(ImportEntityMappingCandidate, cid)
         if not cand or int(cand.import_job_id) != int(import_job_id):
@@ -833,12 +987,14 @@ def execute_bulk_apply_shipment_candidate_plans(
                     eid = cand.suggested_entity_id
                     if eid is None:
                         raise ShipmentStewardOpError("plan missing suggested_entity_id", status_code=400)
-                    execute_map_shipment_distributor(db, cand, distributor_id=int(eid), raw_token=None)
+                    _apply_map_shipment_distributor_without_commit(
+                        db, cand, distributor_id=int(eid), raw_token=None
+                    )
                     applied.append(cid)
                 elif action == "create_provisional_distributor":
                     raw = _first_sample_raw(cand)
                     dn = _display_name_from_context_or_sample(cand, None, raw)
-                    execute_create_provisional_shipment_distributor(
+                    _apply_create_provisional_shipment_distributor_without_commit(
                         db,
                         cand,
                         display_name=dn.strip() or None,
@@ -855,14 +1011,18 @@ def execute_bulk_apply_shipment_candidate_plans(
                     eid = cand.suggested_entity_id
                     if eid is None:
                         raise ShipmentStewardOpError("plan missing suggested_entity_id", status_code=400)
-                    execute_map_shipment_customer(
-                        db, cand, customer_id=int(eid), raw_token=None, bypass_partner_text_guards=True
+                    _apply_map_shipment_customer_without_commit(
+                        db,
+                        cand,
+                        customer_id=int(eid),
+                        raw_token=None,
+                        bypass_partner_text_guards=True,
                     )
                     applied.append(cid)
                 elif action == "create_provisional_customer":
                     raw = _first_sample_raw(cand)
                     dn = _display_name_from_context_or_sample(cand, None, raw)
-                    execute_create_provisional_shipment_customer(
+                    _apply_create_provisional_shipment_customer_without_commit(
                         db,
                         cand,
                         display_name=dn.strip() or None,
@@ -909,8 +1069,13 @@ def execute_bulk_create_provisional_shipment_customers(
     preferred_distributor_id: int | None,
     partner_tier: str | None,
     notes_summary: str | None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
-    """Run provisional customer create for many candidates, grouping by effective display name (one DimCustomer per group)."""
+    """Run provisional customer create for many candidates, grouping by effective display name (one DimCustomer per group).
+
+    ``on_progress(current, total)`` is invoked once per group bucket processed (optional, defaults to
+    a no-op) so the background task can surface progress without changing the synchronous call sites.
+    """
     from collections import defaultdict
 
     per = per_candidate_display_name or {}
@@ -932,12 +1097,15 @@ def execute_bulk_create_provisional_shipment_customers(
     for cand in cands:
         buckets[_provisional_customer_bulk_group_key(cand, per)].append(cand)
 
-    for _gk, group in buckets.items():
+    total_groups = len(buckets)
+    for group_index, (_gk, group) in enumerate(buckets.items(), start=1):
+        if on_progress is not None:
+            on_progress(group_index, total_groups)
         group.sort(key=lambda c: int(c.id))
         leader = group[0]
         dn_leader = per.get(int(leader.id))
         try:
-            out = execute_create_provisional_shipment_customer(
+            out = _apply_create_provisional_shipment_customer_without_commit(
                 db,
                 leader,
                 display_name=dn_leader,
@@ -951,7 +1119,7 @@ def execute_bulk_create_provisional_shipment_customers(
             cust_id = int(out["customer_id"])
             for follower in group[1:]:
                 try:
-                    out2 = execute_attach_shipment_customer_candidate_to_existing_customer(
+                    out2 = _apply_attach_shipment_customer_candidate_without_commit(
                         db,
                         follower,
                         customer_id=cust_id,
@@ -964,7 +1132,64 @@ def execute_bulk_create_provisional_shipment_customers(
             for c in group:
                 errors.append({"candidate_id": int(c.id), "message": exc.detail})
 
+    if results:
+        sid: int | None = None
+        for cand in cands:
+            if cand.source_definition_id is not None:
+                sid = int(cand.source_definition_id)
+                break
+        _re_enrich_shipment_customer_candidates_for_job(
+            db, import_job_id=int(job_id), source_definition_id=sid
+        )
+        db.commit()
+
     return {"ok": len(errors) == 0, "results": results, "errors": errors}
+
+
+def execute_bulk_map_shipment_customers(
+    db: Session,
+    *,
+    customer_id: int,
+    candidate_ids: list[int],
+    on_progress: Callable[[int, int], None] | None = None,
+) -> dict[str, Any]:
+    """Map many shipment customer candidates to one customer; enrich and commit once at the end.
+
+    ``on_progress(current, total)`` is invoked once per candidate processed (optional, defaults to a
+    no-op) so the background task can surface progress without changing the synchronous call sites.
+    """
+    mapped: list[int] = []
+    errors: list[dict[str, Any]] = []
+    job_id: int | None = None
+    source_definition_id: int | None = None
+    total = len(candidate_ids)
+    for processed, cid in enumerate(candidate_ids, start=1):
+        if on_progress is not None:
+            on_progress(processed, total)
+        cand = db.get(ImportEntityMappingCandidate, int(cid))
+        if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
+            errors.append({"candidate_id": int(cid), "reason": "candidate_not_found_or_wrong_entity"})
+            continue
+        if job_id is None:
+            job_id = int(cand.import_job_id)
+        elif int(cand.import_job_id) != job_id:
+            errors.append({"candidate_id": int(cid), "reason": "candidate_not_same_import_job"})
+            continue
+        if source_definition_id is None and cand.source_definition_id is not None:
+            source_definition_id = int(cand.source_definition_id)
+        try:
+            _apply_map_shipment_customer_without_commit(
+                db, cand, customer_id=int(customer_id), raw_token=None
+            )
+            mapped.append(int(cid))
+        except ShipmentStewardOpError as exc:
+            errors.append({"candidate_id": int(cid), "reason": str(exc.detail)})
+    if mapped and job_id is not None:
+        _re_enrich_shipment_customer_candidates_for_job(
+            db, import_job_id=int(job_id), source_definition_id=source_definition_id
+        )
+        db.commit()
+    return {"mapped": mapped, "errors": errors}
 
 
 def merge_duplicate_shipment_provisional_customers_by_display_name(
@@ -992,7 +1217,7 @@ def merge_duplicate_shipment_provisional_customers_by_display_name(
     )
     groups: dict[str, list[DimCustomer]] = defaultdict(list)
     for c in rows:
-        nk = _norm_key(c.name or "")
+        nk = canonical_provisional_entity_name_key(c.name or "")
         key = nk if nk else f"__noname_{int(c.id)}"
         groups[key].append(c)
 
@@ -1036,6 +1261,7 @@ def merge_duplicate_shipment_provisional_customers_by_display_name(
             if n_loc > 0 or n_con > 0:
                 skipped.append({"customer_id": lid, "reason": "has_locations_or_contacts"})
                 continue
+            _repoint_customer_id_references(db, loser_id=lid, keeper_id=kid)
             aliases = list(
                 db.scalars(select(CustomerSourceTokenAlias).where(CustomerSourceTokenAlias.customer_id == lid)).all()
             )
@@ -1054,16 +1280,6 @@ def merge_duplicate_shipment_provisional_customers_by_display_name(
                 else:
                     al.customer_id = kid
                     db.add(al)
-            db.execute(
-                update(ShipmentEvidenceLine)
-                .where(ShipmentEvidenceLine.customer_id == lid)
-                .values(customer_id=kid)
-            )
-            db.execute(
-                update(ImportEntityMappingCandidate)
-                .where(ImportEntityMappingCandidate.suggested_entity_id == lid)
-                .values(suggested_entity_id=kid)
-            )
             loser_row = db.get(DimCustomer, lid)
             if loser_row is not None:
                 db.delete(loser_row)
@@ -1097,6 +1313,19 @@ def _repoint_distributor_id_references(db: Session, *, loser_id: int, keeper_id:
         .where(ImportDistributorSiStagingLine.resolved_distributor_id == loser_id)
         .values(resolved_distributor_id=keeper_id)
     )
+    db.execute(
+        update(ImportEntityMappingCandidate)
+        .where(
+            ImportEntityMappingCandidate.suggested_entity_id == loser_id,
+            ImportEntityMappingCandidate.entity_type.in_(("distributor_token", "shipment_distributor")),
+        )
+        .values(suggested_entity_id=keeper_id)
+    )
+    db.execute(
+        update(CustomerSourceTokenAlias)
+        .where(CustomerSourceTokenAlias.distributor_id == loser_id)
+        .values(distributor_id=keeper_id)
+    )
 
 
 def merge_duplicate_shipment_provisional_distributors_by_display_name(
@@ -1117,7 +1346,7 @@ def merge_duplicate_shipment_provisional_distributors_by_display_name(
     rows = list(db.scalars(select(DimDistributor).where(DimDistributor.code.like("TMP-DIST-%"))).all())
     groups: dict[str, list[DimDistributor]] = defaultdict(list)
     for d in rows:
-        nk = _norm_key(d.name or "")
+        nk = canonical_provisional_entity_name_key(d.name or "")
         key = nk if nk else f"__noname_{int(d.id)}"
         groups[key].append(d)
 
@@ -1191,7 +1420,7 @@ def merge_duplicate_shipment_provisional_distributors_by_display_name(
                 update(ImportEntityMappingCandidate)
                 .where(
                     ImportEntityMappingCandidate.suggested_entity_id == lid,
-                    ImportEntityMappingCandidate.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY,
+                    ImportEntityMappingCandidate.entity_type.in_(("distributor_token", "shipment_distributor")),
                 )
                 .values(suggested_entity_id=kid)
             )

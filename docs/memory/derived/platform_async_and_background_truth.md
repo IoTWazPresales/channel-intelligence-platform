@@ -1,34 +1,98 @@
 # Platform Async And Background Truth
 
-## Current async/background paths
-- Celery app configured in `app/worker/celery_app.py` using Redis broker/backend settings.
-- Tasks registered in `app/worker/tasks.py`:
-  - `imports.product_master_commit`
-  - `imports.process_job`
-- Product Master commit endpoint is the main in-repo enqueue path using `.delay()` under broker mode.
+**Last verified:** 2026-06-21  
+**Index:** `docs/ASYNC_AND_BROKER_PATHS.md`  
+**Topology:** `docs/DEV_TOPOLOGY.md`
 
-## Product Master async commit truth
-- API commit endpoint first executes `try_enqueue_pm_commit_sync` under DB lock.
-- Eligible jobs transition to `commit_queued`, then worker transitions to `commit_running`.
-- Worker executes `commit_product_master_sync(..., from_worker=True)`.
-- Success ends in `pm_committed`/`completed` and clears async metadata.
-- Failure marks `commit_failed`, persists top-level message and row-level `pm_commit_worker_failed`.
+---
 
-## Idempotency/concurrency protections now in place
-- API guard: duplicate clicks return clean `already_queued`/`already_running`/`already_completed` outcomes.
-- Worker guard: execution proceeds only if job status is `commit_queued`.
-- Locking: enqueue uses row-level lock to avoid concurrent queue transitions for same job.
-- Validation/mapping edits are blocked while commit is queued/running.
+## Celery configuration
 
-## Stale-running behavior
-- If status remains `commit_running` beyond stale window, enqueue path can recover job to `commit_failed` with warning row entry (`pm_commit_stale_recovered`) and allow retry.
-- This is API-triggered recovery during subsequent enqueue attempts, not a standalone sweeper.
+- App: `app/worker/celery_app.py` — Redis broker/backend from settings.
+- Base task: `LedgerTask` — dual-writes `task_run` on lifecycle events.
+- Beat: `imports.reap_stale_running_jobs` every **120s** (`CIP_RUNNING_JOB_REAPER_INTERVAL_SECONDS`).
+- Default queue: `celery` (single queue today — interactive and batch share it).
 
-## Progress model exposed to UI
-- Server-derived progress object includes phase id/label, rail steps, row result counts, and async commit phase (`queued|running|failed|none`).
-- UI polling remains active while validation/commit external activity is in progress.
+---
 
-## Dev-only dispatch truth
-- With `CIP_DEV_CELERY_DISPATCH=in_process_thread`, API logs startup warning and enqueue warning.
-- Commit execution runs in daemon thread and logs execution warning tagged as dev-only.
-- This mode preserves endpoint async UX but does not provide broker isolation or worker resilience.
+## Registered tasks (`app/worker/tasks.py`)
+
+| Task name | Purpose |
+|-----------|---------|
+| `imports.process_job` | Full import pipeline (DSI validate, etc.) |
+| `imports.dsi_apply` | DSI fact apply |
+| `imports.dsi_resolution_plan_compute` | Steward plan generation (read-only) |
+| `imports.dsi_resolution_plan_apply` | Steward plan apply (+ post-validate historical auto-apply) |
+| `imports.dsi_bulk_provisional_customers` | Bulk provisional customers |
+| `imports.shipment_apply` | Shipment evidence apply |
+| `imports.shipment_bulk_*` | Shipment bulk steward |
+| `imports.product_master_validate` | PM validate |
+| `imports.product_master_commit` | PM commit |
+| `imports.dsi_soh_reconciliation` | SOH reconcile after apply |
+| `imports.dsi_velocity_compute` / `imports.dsi_forecasting` | Intelligence derive |
+| `imports.infer_dsi` | DSI inference scaffold |
+| `imports.reap_stale_running_jobs` | Stuck `running` import_job reaper |
+| `commercial_planner.parse_lineup_case` | Lineup parse |
+
+---
+
+## Dispatch pattern
+
+1. **Broker:** `celery_app.send_task(...)` via `import_dispatch.py` or `*_enqueue.py`.
+2. **Dev thread:** `CIP_DEV_CELERY_DISPATCH=in_process_thread` or `detach_from_caller=True`.
+3. **Inline sync:** rare; returns `async_poll: false`.
+
+Slot registry: `import_background_slots.py` + `import_job_background_metadata.py`.  
+Activity feed: `background_tasks.py` — readers still partially hand-coded per slot kind.
+
+---
+
+## DSI steward async (canonical)
+
+| Step | API | Poll |
+|------|-----|------|
+| Plan compute | `POST .../dsi-resolution-plan/compute-async` | `GET .../dsi-steward-bulk-task/{task_id}` |
+| Plan apply | `POST .../dsi-resolution-plan/apply-async` | same poll route |
+
+Post-validate historical workflow enqueues **`dsi_resolution_plan_apply`** automatically
+after validate (`dsi_validate_post_sync.py`) — competes with interactive compute on
+**solo** workers.
+
+---
+
+## Reaper behaviour
+
+- Module: `running_import_job_reaper.py`
+- Marks `import_job` failed only when `inspect().active()` shows task **not** running.
+- **`inspect()` unavailable → no-op** (`inspected: false`) — common on **Windows solo**.
+- Does not terminate DB sessions.
+
+---
+
+## UI poll budgets (web)
+
+- `stewardAsyncPoll.ts` — compute queue grace **150×800ms**; apply grace higher (450+ scaled).
+- False "worker busy" errors possible when queue wait exceeds compute grace — see `DEV_TOPOLOGY.md`.
+
+---
+
+## Dev-only dispatch
+
+- `CIP_DEV_CELERY_DISPATCH=in_process_thread` — logs warnings; no broker isolation.
+- Must not be set in production or shared environments.
+
+---
+
+## Product Master commit (reference implementation)
+
+- Enqueue under row lock; states `commit_queued` → `commit_running`.
+- Stale `commit_running` recovery on subsequent enqueue attempts.
+- See prior PM-specific docs in archive CONTEXT if needed.
+
+---
+
+## Gaps / backlog
+
+- **Single Celery queue** — no interactive vs batch split (deferred; see BACKLOG / architecture notes in CURRENT.md).
+- **`task_run` ledger** — write path populated; not sole read model for activity feed yet.
+- **`ASYNC_AND_BROKER_PATHS` audit (2025)** listed only PM commit — superseded by table above.

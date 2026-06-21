@@ -10,15 +10,11 @@ import type { DsiCandidateRow } from '@/features/import-steward';
 
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
 
+const mockApiGet = vi.fn();
 const mockApiPost = vi.fn();
 
 vi.mock('@/lib/api', () => ({
-  apiGet: vi.fn(async (path: string) => {
-    if (String(path).includes('dsi-unresolved-geo-tokens')) {
-      return { import_job_id: 7, channels: [], regions: [] };
-    }
-    return [];
-  }),
+  apiGet: (...args: unknown[]) => mockApiGet(...args),
   apiPost: (...args: unknown[]) => mockApiPost(...args),
   safeDisplayError: (e: unknown) => String(e),
 }));
@@ -41,8 +37,73 @@ const hoisted = vi.hoisted(() => {
     status: 'open',
     context: {},
   };
-  return { candidateRow };
+  return { candidateRow, planResult: null as Record<string, unknown> | null };
 });
+
+const PLAN_COMPUTE_TASK_ID = 'test-plan-compute-task';
+
+function defaultApiGet(path: string) {
+  if (String(path).includes('dsi-steward-bulk-task')) {
+    return {
+      import_job_id: 7,
+      task_id: PLAN_COMPUTE_TASK_ID,
+      state: 'SUCCESS',
+      result: hoisted.planResult ?? {
+        import_job_id: 7,
+        rows: [],
+        summary: { total: 0, ready: 0, not_ready: 0, hold: 0 },
+        defaults_used: { region_id: null, channel_id: null },
+      },
+    };
+  }
+  if (String(path).includes('dsi-unresolved-geo-tokens')) {
+    return { import_job_id: 7, channels: [], regions: [] };
+  }
+  if (String(path).includes('/customers?')) {
+    return { items: [{ id: 42, customer_code: 'C42', customer_name: 'Test Co' }] };
+  }
+  return [];
+}
+
+/** Wire apiPost/apiGet for async resolution-plan compute + poll. */
+function installResolutionPlanMocks(
+  planPayload: Record<string, unknown>,
+  extraPost?: (url: string, body?: unknown) => Promise<unknown> | unknown
+) {
+  hoisted.planResult = planPayload;
+  mockApiGet.mockImplementation(async (path: string) => defaultApiGet(path));
+  mockApiPost.mockImplementation(async (url: string, body?: unknown) => {
+    if (extraPost) {
+      const hit = await extraPost(url, body);
+      if (hit !== undefined) return hit;
+    }
+    if (String(url).includes('compute-async')) {
+      return { import_job_id: 7, task_id: PLAN_COMPUTE_TASK_ID, async_poll: true };
+    }
+    if (String(url).includes('dsi-resolution-plan/apply')) {
+      return {
+        import_job_id: 7,
+        applied: 1,
+        failed: 0,
+        skipped_hold: 0,
+        skipped_not_ready: 0,
+        results: [],
+      };
+    }
+    if (String(url).includes('dsi-resolution-plan/effective')) {
+      return planPayload;
+    }
+    if (String(url).includes('dsi-resolution-plan')) {
+      return planPayload;
+    }
+    return {
+      import_job_id: 7,
+      action: 'ignore',
+      results: [],
+      totals: { ok_count: 0, staging_rows_affected: 0 },
+    };
+  });
+}
 
 vi.mock('@/features/import-steward/dsi-mapping-steward-panel', () => ({
   DsiMappingStewardPanel: () => <div data-testid="dsi-steward-panel">steward</div>,
@@ -51,21 +112,12 @@ vi.mock('@/features/import-steward/dsi-mapping-steward-panel', () => ({
 describe('DsiImportJobResolutionSection bulk steward', () => {
   beforeEach(() => {
     mockApiPost.mockReset();
-    mockApiPost.mockImplementation(async (url: string) => {
-      if (String(url).includes('dsi-resolution-plan')) {
-        return {
-          import_job_id: 7,
-          rows: [],
-          summary: { total: 0, ready: 0, not_ready: 0, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      return {
-        import_job_id: 7,
-        action: 'ignore',
-        results: [],
-        totals: { ok_count: 0, staging_rows_affected: 0 },
-      };
+    mockApiGet.mockReset();
+    installResolutionPlanMocks({
+      import_job_id: 7,
+      rows: [],
+      summary: { total: 0, ready: 0, not_ready: 0, hold: 0 },
+      defaults_used: { region_id: null, channel_id: null },
     });
   });
 
@@ -78,6 +130,14 @@ describe('DsiImportJobResolutionSection bulk steward', () => {
     );
   }
 
+  it('opens bulk map form without crashing (DsiBulkActionInlineForm import)', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(screen.getByTestId('dsi-bulk-map-open'));
+    expect(await screen.findByTestId('dsi-bulk-action-form')).toBeInTheDocument();
+    expect(screen.getByTestId('dsi-bulk-customer-search')).toBeInTheDocument();
+  });
+
   it('disables bulk preview when map_customer is chosen without a customer id', async () => {
     const user = userEvent.setup();
     renderSection();
@@ -87,83 +147,37 @@ describe('DsiImportJobResolutionSection bulk steward', () => {
 
     const previewBtn = screen.getByTestId('dsi-bulk-preview-inline');
     await waitFor(() => expect(previewBtn).toBeDisabled());
-
-    const customerField = await screen.findByRole('spinbutton', { name: /customer id/i });
-    await user.clear(customerField);
-    await user.type(customerField, '42');
-    await waitFor(() => expect(previewBtn).not.toBeDisabled());
   });
 });
 
 describe('DsiImportJobResolutionSection resolution plan', () => {
+  const defaultPlanRow = {
+    candidate_id: 101,
+    entity_type: 'customer_dealer_token',
+    candidate_status: 'open',
+    suggested_action: 'map_customer',
+    baseline_suggested_action: 'map_customer',
+    suggested_target_id: 55,
+    baseline_target_id: 55,
+    ready: true,
+    confidence: 0.9,
+    plan_status: 'ready',
+    reason: 'Matched',
+    row_count: 3,
+    total_units: 10,
+    total_reported_value: 100,
+    hold_for_manual_review: false,
+    resolution_blockers: [] as string[],
+  };
+
   beforeEach(() => {
     mockApiPost.mockReset();
-    mockApiPost.mockImplementation(async (url: string) => {
-      if (url.includes('dsi-resolution-plan/apply')) {
-        return {
-          import_job_id: 7,
-          applied: 1,
-          failed: 0,
-          skipped_hold: 0,
-          skipped_not_ready: 0,
-          results: [],
-        };
-      }
-      if (url.includes('dsi-resolution-plan/effective')) {
-        return {
-          import_job_id: 7,
-          rows: [
-            {
-              candidate_id: 101,
-              entity_type: 'customer_dealer_token',
-              candidate_status: 'open',
-              suggested_action: 'map_customer',
-              baseline_suggested_action: 'map_customer',
-              suggested_target_id: 55,
-              baseline_target_id: 55,
-              ready: true,
-              confidence: 0.9,
-              plan_status: 'ready',
-              reason: 'Matched',
-              row_count: 3,
-              total_units: 10,
-              total_reported_value: 100,
-              hold_for_manual_review: false,
-              resolution_blockers: [],
-            },
-          ],
-          summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      if (url.includes('dsi-resolution-plan')) {
-        return {
-          import_job_id: 7,
-          rows: [
-            {
-              candidate_id: 101,
-              entity_type: 'customer_dealer_token',
-              candidate_status: 'open',
-              suggested_action: 'map_customer',
-              baseline_suggested_action: 'map_customer',
-              suggested_target_id: 55,
-              baseline_target_id: 55,
-              ready: true,
-              confidence: 0.9,
-              plan_status: 'ready',
-              reason: 'Matched',
-              row_count: 3,
-              total_units: 10,
-              total_reported_value: 100,
-              hold_for_manual_review: false,
-              resolution_blockers: [],
-            },
-          ],
-          summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
+    mockApiGet.mockReset();
+    installResolutionPlanMocks({
+      import_job_id: 7,
+      rows: [defaultPlanRow],
+      summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
+      defaults_used: { region_id: null, channel_id: null },
     });
   });
 
@@ -178,9 +192,7 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
 
   async function waitForSuggestionsPost() {
     await waitFor(() => {
-      const gen = mockApiPost.mock.calls.filter(
-        (c) => String(c[0]).includes('/dsi-resolution-plan') && !String(c[0]).includes('/effective') && !String(c[0]).includes('/apply')
-      );
+      const gen = mockApiPost.mock.calls.filter((c) => String(c[0]).includes('compute-async'));
       expect(gen.length).toBeGreaterThanOrEqual(1);
     });
   }
@@ -228,55 +240,20 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
   it('Refresh suggestions is clickable again after a failed initial plan request', async () => {
     const user = userEvent.setup();
     mockApiPost.mockReset();
+    mockApiGet.mockReset();
     let genN = 0;
-    const planRow = {
-      candidate_id: 101,
-      entity_type: 'customer_dealer_token',
-      candidate_status: 'open',
-      suggested_action: 'map_customer',
-      baseline_suggested_action: 'map_customer',
-      suggested_target_id: 55,
-      baseline_target_id: 55,
-      ready: true,
-      confidence: 0.9,
-      plan_status: 'ready',
-      reason: 'Matched',
-      row_count: 3,
-      total_units: 10,
-      total_reported_value: 100,
-      hold_for_manual_review: false,
-      resolution_blockers: [],
+    const planPayload = {
+      import_job_id: 7,
+      rows: [defaultPlanRow],
+      summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
+      defaults_used: { region_id: null, channel_id: null },
     };
-    mockApiPost.mockImplementation(async (url: string) => {
-      if (url.includes('dsi-resolution-plan/apply')) {
-        return {
-          import_job_id: 7,
-          applied: 0,
-          failed: 0,
-          skipped_hold: 0,
-          skipped_not_ready: 0,
-          results: [],
-        };
-      }
-      if (url.includes('dsi-resolution-plan/effective')) {
-        return {
-          import_job_id: 7,
-          rows: [planRow],
-          summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      if (url.includes('dsi-resolution-plan')) {
+    installResolutionPlanMocks(planPayload, async (url) => {
+      if (String(url).includes('compute-async')) {
         genN += 1;
         if (genN === 1) throw new Error('network');
-        return {
-          import_job_id: 7,
-          rows: [planRow],
-          summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
       }
-      return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
+      return undefined;
     });
 
     renderPlanSection();
@@ -326,34 +303,11 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
       resolution_blockers: [],
       normalized_key: `k${i}`,
     }));
-    mockApiPost.mockImplementation(async (url: string) => {
-      if (url.includes('dsi-resolution-plan/apply')) {
-        return {
-          import_job_id: 7,
-          applied: 0,
-          failed: 0,
-          skipped_hold: 0,
-          skipped_not_ready: 0,
-          results: [],
-        };
-      }
-      if (url.includes('dsi-resolution-plan/effective')) {
-        return {
-          import_job_id: 7,
-          rows,
-          summary: { total: 12, ready: 12, not_ready: 0, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      if (url.includes('dsi-resolution-plan')) {
-        return {
-          import_job_id: 7,
-          rows,
-          summary: { total: 12, ready: 12, not_ready: 0, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
+    installResolutionPlanMocks({
+      import_job_id: 7,
+      rows,
+      summary: { total: 12, ready: 12, not_ready: 0, hold: 0 },
+      defaults_used: { region_id: null, channel_id: null },
     });
 
     const candidates: DsiCandidateRow[] = rows.map((r, i) => ({
@@ -437,34 +391,11 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
         resolution_blockers: ['x'],
       },
     ];
-    mockApiPost.mockImplementation(async (url: string) => {
-      if (url.includes('dsi-resolution-plan/apply')) {
-        return {
-          import_job_id: 7,
-          applied: 0,
-          failed: 0,
-          skipped_hold: 0,
-          skipped_not_ready: 0,
-          results: [],
-        };
-      }
-      if (url.includes('dsi-resolution-plan/effective')) {
-        return {
-          import_job_id: 7,
-          rows: planRows,
-          summary: { total: 2, ready: 1, not_ready: 1, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      if (url.includes('dsi-resolution-plan')) {
-        return {
-          import_job_id: 7,
-          rows: planRows,
-          summary: { total: 2, ready: 1, not_ready: 1, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
+    installResolutionPlanMocks({
+      import_job_id: 7,
+      rows: planRows,
+      summary: { total: 2, ready: 1, not_ready: 1, hold: 0 },
+      defaults_used: { region_id: null, channel_id: null },
     });
 
     const two: DsiCandidateRow[] = [301, 302].map((id) => ({
@@ -527,16 +458,11 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
         resolution_blockers: [],
       },
     ];
-    mockApiPost.mockImplementation(async (url: string) => {
-      if (url.includes('dsi-resolution-plan/effective') || url.includes('dsi-resolution-plan')) {
-        return {
-          import_job_id: 7,
-          rows: planRows,
-          summary: { total: 2, ready: 2, not_ready: 0, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
+    installResolutionPlanMocks({
+      import_job_id: 7,
+      rows: planRows,
+      summary: { total: 2, ready: 2, not_ready: 0, hold: 0 },
+      defaults_used: { region_id: null, channel_id: null },
     });
 
     const two: DsiCandidateRow[] = [
@@ -572,37 +498,32 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
         source_channel_raw_samples: ['Drug'],
       },
     };
-    mockApiPost.mockImplementation(async (url: string) => {
-      if (url.includes('dsi-resolution-plan/effective') || url.includes('dsi-resolution-plan')) {
-        return {
-          import_job_id: 7,
-          rows: [
-            {
-              candidate_id: 101,
-              entity_type: 'customer_dealer_token',
-              candidate_status: 'open',
-              suggested_action: 'create_provisional_customer',
-              baseline_suggested_action: 'create_provisional_customer',
-              suggested_target_id: null,
-              baseline_target_id: null,
-              ready: true,
-              confidence: 0.9,
-              plan_status: 'ready',
-              reason: 'Matched',
-              row_count: 3,
-              total_units: 10,
-              total_reported_value: 100,
-              hold_for_manual_review: false,
-              resolution_blockers: [],
-              source_region_resolution_message: 'Region resolved from column A',
-              source_channel_resolution_message: 'Channel resolved from column B',
-            },
-          ],
-          summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
+    installResolutionPlanMocks({
+      import_job_id: 7,
+      rows: [
+        {
+          candidate_id: 101,
+          entity_type: 'customer_dealer_token',
+          candidate_status: 'open',
+          suggested_action: 'create_provisional_customer',
+          baseline_suggested_action: 'create_provisional_customer',
+          suggested_target_id: null,
+          baseline_target_id: null,
+          ready: true,
+          confidence: 0.9,
+          plan_status: 'ready',
+          reason: 'Matched',
+          row_count: 3,
+          total_units: 10,
+          total_reported_value: 100,
+          hold_for_manual_review: false,
+          resolution_blockers: [],
+          source_region_resolution_message: 'Region resolved from column A',
+          source_channel_resolution_message: 'Channel resolved from column B',
+        },
+      ],
+      summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
+      defaults_used: { region_id: null, channel_id: null },
     });
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -632,37 +553,32 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
 
   it('shows unassigned geo badge in drawer for ready provisional customer without region/channel', async () => {
     const user = userEvent.setup();
-    mockApiPost.mockImplementation(async (url: string) => {
-      if (url.includes('dsi-resolution-plan/effective') || url.includes('dsi-resolution-plan')) {
-        return {
-          import_job_id: 7,
-          rows: [
-            {
-              candidate_id: 101,
-              entity_type: 'customer_dealer_token',
-              candidate_status: 'open',
-              suggested_action: 'create_provisional_customer',
-              baseline_suggested_action: 'create_provisional_customer',
-              suggested_target_id: null,
-              baseline_target_id: null,
-              ready: true,
-              confidence: 0.8,
-              plan_status: 'ready',
-              reason: 'New',
-              row_count: 1,
-              total_units: 1,
-              total_reported_value: 1,
-              hold_for_manual_review: false,
-              resolution_blockers: [],
-              effective_region_id: null,
-              effective_channel_id: null,
-            },
-          ],
-          summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
+    installResolutionPlanMocks({
+      import_job_id: 7,
+      rows: [
+        {
+          candidate_id: 101,
+          entity_type: 'customer_dealer_token',
+          candidate_status: 'open',
+          suggested_action: 'create_provisional_customer',
+          baseline_suggested_action: 'create_provisional_customer',
+          suggested_target_id: null,
+          baseline_target_id: null,
+          ready: true,
+          confidence: 0.8,
+          plan_status: 'ready',
+          reason: 'New',
+          row_count: 1,
+          total_units: 1,
+          total_reported_value: 1,
+          hold_for_manual_review: false,
+          resolution_blockers: [],
+          effective_region_id: null,
+          effective_channel_id: null,
+        },
+      ],
+      summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
+      defaults_used: { region_id: null, channel_id: null },
     });
 
     renderPlanSection();
@@ -676,47 +592,6 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
 
   it('apply selected ready uses main grid selection when row is ready', async () => {
     const user = userEvent.setup();
-    mockApiPost.mockImplementation(async (url: string) => {
-      if (url.includes('dsi-resolution-plan/apply')) {
-        return {
-          import_job_id: 7,
-          applied: 1,
-          failed: 0,
-          skipped_hold: 0,
-          skipped_not_ready: 0,
-          results: [],
-        };
-      }
-      if (url.includes('dsi-resolution-plan/effective') || url.includes('dsi-resolution-plan')) {
-        return {
-          import_job_id: 7,
-          rows: [
-            {
-              candidate_id: 101,
-              entity_type: 'customer_dealer_token',
-              candidate_status: 'open',
-              suggested_action: 'map_customer',
-              baseline_suggested_action: 'map_customer',
-              suggested_target_id: 55,
-              baseline_target_id: 55,
-              ready: true,
-              confidence: 0.9,
-              plan_status: 'ready',
-              reason: 'Matched',
-              row_count: 3,
-              total_units: 10,
-              total_reported_value: 100,
-              hold_for_manual_review: false,
-              resolution_blockers: [],
-            },
-          ],
-          summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
-    });
-
     renderPlanSection();
     await waitForSuggestionsPost();
     await user.click(screen.getByTestId('dsi-plan-select-visible-ready'));
@@ -735,37 +610,6 @@ describe('DsiImportJobResolutionSection resolution plan', () => {
 
   it('changing an override in the drawer triggers effective refresh', async () => {
     const user = userEvent.setup();
-    mockApiPost.mockImplementation(async (url: string) => {
-      if (url.includes('dsi-resolution-plan/effective') || url.includes('dsi-resolution-plan')) {
-        return {
-          import_job_id: 7,
-          rows: [
-            {
-              candidate_id: 101,
-              entity_type: 'customer_dealer_token',
-              candidate_status: 'open',
-              suggested_action: 'map_customer',
-              baseline_suggested_action: 'map_customer',
-              suggested_target_id: 55,
-              baseline_target_id: 55,
-              ready: true,
-              confidence: 0.9,
-              plan_status: 'ready',
-              reason: 'Matched',
-              row_count: 3,
-              total_units: 10,
-              total_reported_value: 100,
-              hold_for_manual_review: false,
-              resolution_blockers: [],
-            },
-          ],
-          summary: { total: 1, ready: 1, not_ready: 0, hold: 0 },
-          defaults_used: { region_id: null, channel_id: null },
-        };
-      }
-      return { import_job_id: 7, action: 'ignore', results: [], totals: {} };
-    });
-
     renderPlanSection();
     await waitForSuggestionsPost();
     await waitForWorkspaceTable();

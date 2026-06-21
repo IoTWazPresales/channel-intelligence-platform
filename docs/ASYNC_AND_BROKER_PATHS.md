@@ -1,32 +1,55 @@
-# Async, Celery, and Redis usage (audit)
+# Async, Celery, and Redis — index
 
-**Scope:** `apps/api` application code and worker registration. **Purpose:** local dev without Docker Desktop; production architecture unchanged.
+**Last verified:** 2026-06-21
 
-| Path | What it does | Classification |
-|------|----------------|----------------|
-| `scripts/dev-worker.js` (repo root) | Starts Celery worker via `apps/api/.venv`; **TCP preflight** to `CELERY_BROKER_URL` host/port; **Windows default `--pool=solo`** (override `CIP_CELERY_WORKER_POOL`). | **Dev ergonomics**; does not change production deploy. Fails fast if Redis is not listening. |
-| `app/worker/celery_app.py` | Instantiates Celery with `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` (Redis URLs). Imported whenever `app.worker.tasks` loads. | **Requires Redis** for any `.delay()` / worker consumption; app **starts** without connecting until tasks are sent (lazy broker). |
-| `app/worker/tasks.py` → `product_master_commit_task` | Celery task; runs `run_product_master_commit_job`. | **Requires Redis + worker** in normal (`broker`) dispatch. |
-| `app/worker/tasks.py` → `process_import_job_task` | Celery task wrapping `process_import_job_sync`. | **Registered only** — no `.delay()` / `send_task` in this repo. **Works natively** today via sync paths; **would require** Redis+worker if something enqueued it later. |
-| `app/worker/tasks.py` → `run_product_master_commit_job` | Shared body for Celery + dev thread. | **Works natively** when called from thread with DB; **requires** worker process when invoked via Celery. |
-| `app/api/v1/endpoints/imports_product_master.py` → POST commit | `try_enqueue` then `product_master_commit_task.delay()` **or** daemon thread calling `run_product_master_commit_job` when `CIP_DEV_CELERY_DISPATCH=in_process_thread`. | **broker:** **Requires Redis + worker** or enqueue fails → **503** + rollback (clear failure). **in_process_thread:** **Explicit dev-only fallback** (no broker). |
-| `app/api/v1/endpoints/imports.py` → `create_job` | Optional `process_import_job_sync` in request when `run_sync` and not Product Master. | **Works natively** (sync in API process). |
-| `app/api/v1/endpoints/imports.py` → `POST /jobs/{id}/process` | `process_import_job_sync` in request. | **Works natively**. |
-| `app/core/config.py` → `redis_url` | Declared default; **no reads** in `app/` at time of audit. | **Works natively** (unused placeholder for future cache/session). |
-| `app/core/config.py` → `celery_broker_url`, `celery_result_backend` | Used by `celery_app`. | **Requires Redis** for real async tasks. |
-| `app/core/config.py` → `cip_dev_celery_dispatch` | Selects PM commit dispatch mode. | **Dev-only** configuration surface. |
+**Canonical detail:** [`docs/memory/derived/platform_async_and_background_truth.md`](memory/derived/platform_async_and_background_truth.md)
 
-## Summary
+**Topology:** [`docs/DEV_TOPOLOGY.md`](DEV_TOPOLOGY.md)
 
-- **Only production enqueue path** for Celery in this codebase: **Product Master commit** (`product_master_commit_task.delay`).
-- **General imports** use **synchronous** `process_import_job_sync` in the API; no Celery trigger.
-- **`redis_url`:** not wired into runtime paths yet.
-- **`process_import_job_task`:** available for future/async import processing; not triggered from API today.
+---
 
-## Risks still unresolved (by design / ops)
+## Quick reference
 
-| Risk | Mitigation |
-|------|------------|
-| Worker crash / broker down with default `broker` | Existing **503** + job rollback + message; docs list requirement. |
-| `in_process_thread` misuse in shared env | **Startup + per-job WARNING** logs; must not be set in production. |
-| `process_import_job_task` enqueued from outside repo | Out of scope; would need broker + worker. |
+| Path | Role |
+|------|------|
+| `scripts/dev-worker.js` | Dev worker; **Windows → `--pool=solo`**; spawns sibling **beat** on Windows |
+| `app/worker/celery_app.py` | Celery app, beat schedule (reaper every 120s), task routes |
+| `app/worker/tasks.py` | Registered tasks (see derived doc for full list) |
+| `app/services/imports/import_dispatch.py` | Shared enqueue: broker → dev thread → sync fallback |
+| `app/services/imports/*_enqueue.py` | Per-domain dispatch (DSI plan, shipment bulk, PM, etc.) |
+| `app/services/task_run_ledger.py` | `task_run` dual-write at dispatch |
+| `CIP_DEV_CELERY_DISPATCH=in_process_thread` | Dev-only when Redis unavailable |
+
+---
+
+## Enqueue paths (high level)
+
+| Flow | Task name | Trigger |
+|------|-----------|---------|
+| DSI / generic validate | `imports.process_job` | `imports.py` validate / revalidate |
+| DSI apply | `imports.dsi_apply` | DSI apply endpoint |
+| DSI plan compute | `imports.dsi_resolution_plan_compute` | `mappings.py` compute-async |
+| DSI plan apply | `imports.dsi_resolution_plan_apply` | mappings apply-async + post-validate historical |
+| Shipment apply | `imports.shipment_apply` | shipment evidence apply |
+| PM validate / commit | `imports.product_master_validate` / `imports.product_master_commit` | PM endpoints |
+| Maintenance | `imports.reap_stale_running_jobs` | Celery beat |
+
+**Not true anymore:** "Only PM commit uses Celery" — see derived truth doc.
+
+---
+
+## Dev vs prod
+
+| | Dev (Windows native) | Docker / prod |
+|--|-------------------|---------------|
+| Worker pool | `solo` (one task at a time) | `prefork` (configurable concurrency) |
+| Beat | Sibling process on Windows | `beat` service or `worker --beat` |
+| Fallback | `in_process_thread` | Must not use in production |
+
+---
+
+## When debugging async issues
+
+1. Read **`docs/memory/CURRENT.md`** and **`docs/DEV_TOPOLOGY.md`**
+2. Read derived truth doc for the specific importer row
+3. Run fix protocol (`AGENTS.md`) before tuning poll timeouts

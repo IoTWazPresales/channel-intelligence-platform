@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from app.services.imports.background_tasks import list_active_import_background_tasks_sync
@@ -92,7 +93,16 @@ def test_running_revalidate_on_validated_job_lists_active_task() -> None:
         patch("app.services.imports.background_tasks.SessionLocal") as mock_local,
         patch(
             "app.services.imports.background_tasks._read_celery_safe",
-            return_value=("PROGRESS", {"phase": "processing_rows", "pct": 10, "current_row": 10, "total_rows": 100}),
+            return_value=(
+                "PROGRESS",
+                {
+                    "phase": "processing_rows",
+                    "pct": 10,
+                    "current_row": 10,
+                    "total_rows": 100,
+                    "progress_at": datetime.now(timezone.utc).isoformat(),
+                },
+            ),
         ),
     ):
         mock_local.return_value.__enter__.return_value = mock_session
@@ -161,6 +171,46 @@ def test_pm_commit_slot_cleared_once_job_completed() -> None:
     mock_session.commit.assert_called_once()
 
 
+def test_validated_job_lists_active_steward_bulk_task() -> None:
+    """Post-validate plan apply/compute must appear in the activity feed."""
+    mock_session = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = 43
+    mock_job.status = "completed_with_errors"
+    mock_job.stage = "validated"
+    mock_job.template_slug = "distributor_inventory"
+    mock_job.import_mode = "validate"
+    mock_job.file_name = "test.csv"
+    mock_job.staged_metadata = {
+        "dsi_validate_total_rows": 168839,
+        "dsi_bulk_task": {
+            "task_id": "task-apply-live",
+            "kind": "dsi_resolution_plan_apply",
+            "async_poll": True,
+            "candidate_count": 95,
+            "queued_at": datetime.now(timezone.utc).isoformat(),
+        },
+    }
+
+    mock_session.scalars.return_value.all.return_value = [mock_job]
+
+    with (
+        patch("app.services.imports.background_tasks.SessionLocal") as mock_local,
+        patch(
+            "app.services.imports.background_tasks._read_celery_safe",
+            return_value=("PENDING", {}),
+        ),
+    ):
+        mock_local.return_value.__enter__.return_value = mock_session
+        out = list_active_import_background_tasks_sync(limit=10)
+
+    assert len(out) == 1
+    assert out[0]["import_job_id"] == 43
+    assert out[0]["kind"] == "dsi_resolution_plan_apply"
+    assert out[0]["total_rows"] == 95
+    assert out[0]["phase"] == "queued"
+
+
 def test_validated_job_clears_metadata_when_celery_still_pending() -> None:
     mock_session = MagicMock()
     mock_job = MagicMock()
@@ -183,4 +233,74 @@ def test_validated_job_clears_metadata_when_celery_still_pending() -> None:
 
     assert out == []
     assert mock_job.staged_metadata == {"dsi_validate_total_rows": 100}
+    mock_session.commit.assert_called_once()
+
+
+def test_stale_started_progress_marks_job_interrupted() -> None:
+    mock_session = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = 43
+    mock_job.status = "running"
+    mock_job.stage = "mapped"
+    mock_job.template_slug = "distributor_inventory"
+    mock_job.import_mode = "validate"
+    mock_job.file_name = "test.csv"
+    stale_at = (datetime.now(timezone.utc) - timedelta(minutes=35)).isoformat()
+    mock_job.staged_metadata = {
+        "celery_task_id": "task-stale-started",
+        "dsi_validate_rows_committed": 50000,
+        "dsi_validate_total_rows": 169839,
+        "pipeline_queued_at": stale_at,
+    }
+    mock_job.error_summary = "psycopg.OperationalError on SAVEPOINT"
+    mock_job.updated_at = datetime.now(timezone.utc) - timedelta(minutes=35)
+
+    mock_session.scalars.return_value.all.return_value = [mock_job]
+
+    with (
+        patch("app.services.imports.background_tasks.SessionLocal") as mock_local,
+        patch("app.services.imports.background_tasks._read_celery_safe", return_value=("STARTED", {})),
+    ):
+        mock_local.return_value.__enter__.return_value = mock_session
+        out = list_active_import_background_tasks_sync(limit=10)
+
+    assert out == []
+    assert mock_job.status == "interrupted"
+    assert mock_job.staged_metadata is not None
+    assert mock_job.staged_metadata.get("dsi_validate_rows_committed") == 50000
+    assert "celery_task_id" not in (mock_job.staged_metadata or {})
+    mock_session.commit.assert_called_once()
+
+
+def test_stale_pending_slot_cleared_after_dispatch_age() -> None:
+    mock_session = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = 43
+    mock_job.status = "completed_with_errors"
+    mock_job.stage = "validated"
+    mock_job.template_slug = "distributor_inventory"
+    mock_job.import_mode = "validate"
+    mock_job.file_name = "test.csv"
+    stale_at = (datetime.now(timezone.utc) - timedelta(minutes=25)).isoformat()
+    mock_job.staged_metadata = {
+        "dsi_bulk_task": {
+            "task_id": "task-stale-pending",
+            "kind": "dsi_resolution_plan_apply",
+            "async_poll": True,
+            "queued_at": stale_at,
+        }
+    }
+    mock_job.updated_at = datetime.now(timezone.utc) - timedelta(minutes=25)
+
+    mock_session.scalars.return_value.all.return_value = [mock_job]
+
+    with (
+        patch("app.services.imports.background_tasks.SessionLocal") as mock_local,
+        patch("app.services.imports.background_tasks._read_celery", return_value=("PENDING", {})),
+    ):
+        mock_local.return_value.__enter__.return_value = mock_session
+        out = list_active_import_background_tasks_sync(limit=10)
+
+    assert out == []
+    assert not mock_job.staged_metadata
     mock_session.commit.assert_called_once()

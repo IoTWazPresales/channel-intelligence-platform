@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 from sqlalchemy import delete, func, or_, select, text
@@ -360,8 +361,38 @@ _LIFECYCLE_INELIGIBLE_EXACT = frozenset(
 )
 
 
+def _product_evidence_date_outside_launch_retire_window(
+    p: ProductResolutionProductRow | DimProduct,
+    evidence_date: date | None,
+) -> bool:
+    """True when ``evidence_date`` is set and falls outside launch–retire bounds (inclusive window)."""
+    if evidence_date is None:
+        return False
+    rd = getattr(p, "retired_date", None)
+    if rd is not None and rd < evidence_date:
+        return True
+    ld = getattr(p, "launch_date", None)
+    if ld is not None and ld > evidence_date:
+        return True
+    return False
+
+
+def _product_eligible_for_shipment_sku_item_code_anchor(
+    p: ProductResolutionProductRow | DimProduct,
+) -> bool:
+    """Shipment-only SKU-exact tier: unique ``item_code``→``dim_product.sku`` resolves as identity.
+
+    Lifecycle, ``is_active``, and launch/retire windows do **not** gate this tier — identity is
+    distinct from sellability. Uniqueness is enforced by ``ProductResolutionIndex.sku_to_id`` (1:1).
+
+    Default OFF — only consulted when ``_resolve_product`` receives ``shipment_sku_item_code_anchor``.
+    Does not alter DSI validate/apply eligibility.
+    """
+    return p is not None
+
+
 def _product_eligible_for_dsi_auto(
-    p: DimProduct,
+    p: ProductResolutionProductRow | DimProduct,
     evidence_date: date | None,
     *,
     relax_inactive_for_historical_dsi: bool = False,
@@ -386,29 +417,24 @@ def _product_eligible_for_dsi_auto(
             for frag in ("cancel", "discard", "retire", "obsolete", "inactive", "disabled", "discontinued"):
                 if frag in ls:
                     return False
-        if evidence_date is not None:
-            rd = getattr(p, "retired_date", None)
-            if rd is not None and rd < evidence_date:
-                return False
-            ld = getattr(p, "launch_date", None)
-            if ld is not None and ld > evidence_date:
-                return False
+        if _product_evidence_date_outside_launch_retire_window(p, evidence_date):
+            return False
     return True
 
 
-def _product_snapshot_for_dsi_context(p: DimProduct) -> dict[str, Any]:
+def _product_snapshot_for_dsi_context(p: ProductResolutionProductRow | DimProduct) -> dict[str, Any]:
     """Compact, JSON-safe row snapshot for mapping-queue / steward context."""
     ld = getattr(p, "launch_date", None)
     rd = getattr(p, "retired_date", None)
     return {
         "product_id": int(p.id),
-        "sku": (p.sku or "")[:128],
-        "part_number": (p.part_number or "")[:128] if p.part_number else None,
-        "sales_model_name": (p.sales_model_name or "")[:160] if p.sales_model_name else None,
-        "is_active": bool(p.is_active),
-        "lifecycle_status": (p.lifecycle_status or "")[:64] if p.lifecycle_status else None,
-        "launch_date": ld.isoformat() if ld else None,
-        "retired_date": rd.isoformat() if rd else None,
+        "sku": (getattr(p, "sku", None) or "")[:128],
+        "part_number": (getattr(p, "part_number", None) or "")[:128] or None,
+        "sales_model_name": (getattr(p, "sales_model_name", None) or "")[:160] or None,
+        "is_active": bool(getattr(p, "is_active", True)),
+        "lifecycle_status": (getattr(p, "lifecycle_status", None) or "")[:64] or None,
+        "launch_date": ld.isoformat() if isinstance(ld, date) else None,
+        "retired_date": rd.isoformat() if isinstance(rd, date) else None,
     }
 
 
@@ -418,16 +444,29 @@ class ProductResolutionEvidence:
 
     ambiguous_eligible: dict[str, Any] | None = None
     inactive_hits: list[dict[str, Any]] = field(default_factory=list)
+    receipt_disambiguation: dict[str, Any] | None = None
+    temporal_supersession: dict[str, Any] | None = None
 
 
 def _merge_product_resolution_evidence(bucket: dict[str, Any], ev: ProductResolutionEvidence | None) -> None:
     """Accumulate per-token evidence across staging rows (same normalized product_identifier)."""
-    if ev is None or (not ev.inactive_hits and ev.ambiguous_eligible is None):
+    if ev is None or (
+        not ev.inactive_hits
+        and ev.ambiguous_eligible is None
+        and ev.receipt_disambiguation is None
+        and ev.temporal_supersession is None
+    ):
         return
-    acc = bucket.setdefault("_pe_acc", {"inh": [], "amb": None, "seen": set()})
+    acc = bucket.setdefault("_pe_acc", {"inh": [], "amb": None, "receipt": None, "temporal": None, "seen": set()})
     seen: set[tuple[str, int]] = acc["seen"]
     if ev.ambiguous_eligible:
         acc["amb"] = ev.ambiguous_eligible
+    if ev.receipt_disambiguation:
+        acc["receipt"] = ev.receipt_disambiguation
+    if ev.temporal_supersession:
+        acc["temporal"] = ev.temporal_supersession
+        if ev.temporal_supersession.get("fifo_candidate"):
+            acc["fifo_any"] = True
     for hit in ev.inactive_hits:
         sid = (str(hit.get("tier") or ""), int(hit.get("product_id") or 0))
         if sid[1] <= 0:
@@ -449,6 +488,44 @@ def _multimap_from_pairs(pairs: list[tuple[str, int]]) -> dict[str, tuple[int, .
     return {k: tuple(sorted(set(v))) for k, v in buckets.items()}
 
 
+@dataclass(frozen=True, slots=True)
+class ProductResolutionProductRow:
+    """Detached Product Master identity row for in-memory resolution (DimProduct narrow load)."""
+
+    id: int
+    sku: str
+    part_number: str | None
+    sales_model_name: str | None
+    model_name: str | None
+    marketing_name: str | None
+    ean: str | None
+    upc: str | None
+    is_active: bool
+    lifecycle_status: str | None
+    launch_date: date | None
+    retired_date: date | None
+
+
+def _product_resolution_row_from_dim(p: DimProduct) -> ProductResolutionProductRow:
+    """Snapshot identity + eligibility columns at index build time (no Session attachment)."""
+    ld = getattr(p, "launch_date", None)
+    rd = getattr(p, "retired_date", None)
+    return ProductResolutionProductRow(
+        id=int(p.id),
+        sku=str(p.sku or ""),
+        part_number=str(p.part_number) if p.part_number else None,
+        sales_model_name=str(p.sales_model_name) if p.sales_model_name else None,
+        model_name=str(p.model_name) if p.model_name else None,
+        marketing_name=str(p.marketing_name) if p.marketing_name else None,
+        ean=str(p.ean) if p.ean else None,
+        upc=str(p.upc) if p.upc else None,
+        is_active=bool(getattr(p, "is_active", True)),
+        lifecycle_status=str(p.lifecycle_status) if getattr(p, "lifecycle_status", None) else None,
+        launch_date=ld if isinstance(ld, date) else None,
+        retired_date=rd if isinstance(rd, date) else None,
+    )
+
+
 @dataclass(frozen=True)
 class ProductResolutionIndex:
     """Precomputed DSI product identity lookups (DimProduct + ProductAlias)."""
@@ -461,7 +538,7 @@ class ProductResolutionIndex:
     ean_to_ids: dict[str, tuple[int, ...]]
     upc_to_ids: dict[str, tuple[int, ...]]
     alias_value_to_ids: dict[str, tuple[int, ...]]
-    products_by_id: dict[int, DimProduct]
+    products_by_id: dict[int, ProductResolutionProductRow]
     #: Token key → product_id for steward-approved import aliases (``confidence == "steward_approved"``).
     #: Applied before automatic tiers so explicit steward bindings survive inactive SKU collisions,
     #: ambiguous identity tiers, and historical (inactive) Product Master targets.
@@ -469,59 +546,79 @@ class ProductResolutionIndex:
 
 
 def _load_product_resolution_index(db: Session) -> ProductResolutionIndex:
-    """Load Product Master identity fields + ProductAlias for DSI resolution (single pass per import job)."""
-    products = list(db.scalars(select(DimProduct)).all())
-    products_by_id: dict[int, DimProduct] = {int(p.id): p for p in products}
-    sku_to_id: dict[str, int] = {}
-    part_pairs: list[tuple[str, int]] = []
-    sm_pairs: list[tuple[str, int]] = []
-    model_pairs: list[tuple[str, int]] = []
-    mkt_pairs: list[tuple[str, int]] = []
-    ean_pairs: list[tuple[str, int]] = []
-    upc_pairs: list[tuple[str, int]] = []
-    for p in products:
-        sk = _product_token_key(p.sku)
-        if sk:
-            sku_to_id[sk] = int(p.id)
-        pk = _product_token_key(p.part_number)
-        if pk:
-            part_pairs.append((pk, int(p.id)))
-        sm = _product_token_key(p.sales_model_name)
-        if sm:
-            sm_pairs.append((sm, int(p.id)))
-        mn = _product_token_key(p.model_name)
-        if mn:
-            model_pairs.append((mn, int(p.id)))
-        mk = _product_token_key(p.marketing_name)
-        if mk:
-            mkt_pairs.append((mk, int(p.id)))
-        ean = _product_token_key(p.ean)
-        if ean:
-            ean_pairs.append((ean, int(p.id)))
-        upc = _product_token_key(p.upc)
-        if upc:
-            upc_pairs.append((upc, int(p.id)))
-    alias_pairs: list[tuple[str, int]] = []
-    steward_alias_by_key: dict[str, int] = {}
-    for a in db.scalars(select(ProductAlias)).all():
-        av = _product_token_key(a.alias_value)
-        if av:
-            alias_pairs.append((av, int(a.product_id)))
-            if (getattr(a, "confidence", None) or "") == "steward_approved":
-                pid_a = int(a.product_id)
-                if pid_a in products_by_id:
-                    steward_alias_by_key[av] = pid_a
-    return ProductResolutionIndex(
-        sku_to_id=sku_to_id,
-        part_number_to_ids=_multimap_from_pairs(part_pairs),
-        sales_model_name_to_ids=_multimap_from_pairs(sm_pairs),
-        model_name_to_ids=_multimap_from_pairs(model_pairs),
-        marketing_name_to_ids=_multimap_from_pairs(mkt_pairs),
-        ean_to_ids=_multimap_from_pairs(ean_pairs),
-        upc_to_ids=_multimap_from_pairs(upc_pairs),
-        alias_value_to_ids=_multimap_from_pairs(alias_pairs),
-        products_by_id=products_by_id,
-        steward_alias_by_key=steward_alias_by_key,
+    """Load Product Master identity fields + ProductAlias (cached, narrow SELECT — no specs_json)."""
+    from app.services.imports.product_resolution_index_cache import get_product_resolution_index
+
+    return get_product_resolution_index(db)
+
+
+@dataclass(frozen=True, slots=True)
+class DSIResolutionDistributorRow:
+    """Detached distributor master row for in-memory DSI resolution."""
+
+    id: int
+    code: str
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class DSIResolutionCustomerRow:
+    """Detached customer master row for in-memory DSI resolution / AI candidates."""
+
+    id: int
+    code: str
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class DSIResolutionDistAliasRow:
+    """Detached approved distributor alias row."""
+
+    normalized_token: str
+    source_definition_id: int | None
+    distributor_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class DSIResolutionCustAliasRow:
+    """Detached approved customer alias row."""
+
+    normalized_token: str
+    source_definition_id: int | None
+    distributor_id: int | None
+    customer_id: int
+
+
+def _distributor_row_from_orm(row: DimDistributor) -> DSIResolutionDistributorRow:
+    return DSIResolutionDistributorRow(
+        id=int(row.id),
+        code=str(row.code or ""),
+        name=str(row.name or ""),
+    )
+
+
+def _customer_row_from_orm(row: DimCustomer) -> DSIResolutionCustomerRow:
+    return DSIResolutionCustomerRow(
+        id=int(row.id),
+        code=str(row.code or ""),
+        name=str(row.name or ""),
+    )
+
+
+def _dist_alias_row_from_orm(row: DistributorSourceTokenAlias) -> DSIResolutionDistAliasRow:
+    return DSIResolutionDistAliasRow(
+        normalized_token=str(row.normalized_token or ""),
+        source_definition_id=int(row.source_definition_id) if row.source_definition_id is not None else None,
+        distributor_id=int(row.distributor_id),
+    )
+
+
+def _cust_alias_row_from_orm(row: CustomerSourceTokenAlias) -> DSIResolutionCustAliasRow:
+    return DSIResolutionCustAliasRow(
+        normalized_token=str(row.normalized_token or ""),
+        source_definition_id=int(row.source_definition_id) if row.source_definition_id is not None else None,
+        distributor_id=int(row.distributor_id) if row.distributor_id is not None else None,
+        customer_id=int(row.customer_id),
     )
 
 
@@ -534,32 +631,88 @@ class DSIResolutionCache:
     lookup) with in-memory lookups built from a single pre-load before the row
     loop.
 
+    All entity rows are plain dataclasses — never SQLAlchemy ORM instances — so
+    heartbeat commits cannot expire cached objects and trigger per-PK reloads.
+
     Build via ``_build_resolution_cache`` before calling the processing loop.
     """
 
     # Distributors
-    all_distributors: list  # list[DimDistributor]
-    dist_aliases: list  # list[DistributorSourceTokenAlias], status == "approved"
+    all_distributors: list[DSIResolutionDistributorRow]
+    dist_aliases: list[DSIResolutionDistAliasRow]
     # Customers
-    customer_code_to_id: dict  # lower_strip(code) → customer_id
-    customer_name_to_ids: dict  # lower_strip(name) → [customer_id, …]
-    cust_aliases: list  # list[CustomerSourceTokenAlias], status == "approved"
-    open_channel_cid: int | None  # DimCustomer.id where code == OPEN_CHANNEL_CUSTOMER_CODE
+    all_customers: list[DSIResolutionCustomerRow]
+    customer_code_to_id: dict[str, int]
+    customer_name_to_ids: dict[str, list[int]]
+    cust_aliases: list[DSIResolutionCustAliasRow]
+    open_channel_cid: int | None
 
 
-def _build_resolution_cache(db: Session, source_def_id: int | None) -> "DSIResolutionCache":
+_DSI_VALIDATE_SUB_PHASE_LABELS: dict[str, str] = {
+    "prepared": "Preparing validation run",
+    "product_index": "Loading product resolution index",
+    "shipment_corroboration": "Loading shipment corroboration cache",
+    "distributors": "Loading distributor master data",
+    "dist_aliases": "Loading distributor token aliases",
+    "customers": "Loading customer master data",
+    "customer_aliases": "Loading customer token aliases",
+    "resolution_cache_ready": "Resolving primary distributor",
+    "import_intelligence": "Checking import intelligence state",
+    "weekly_historical_customers": "Loading historical customer resolutions",
+}
+
+
+def dsi_validate_sub_phase_label(sub_phase: str | None) -> str | None:
+    key = (sub_phase or "").strip()
+    if not key:
+        return None
+    return _DSI_VALIDATE_SUB_PHASE_LABELS.get(key, key.replace("_", " ").title())
+
+
+def _dsi_session_read_with_transient_retry(db: Session, load: Callable[[], Any]) -> Any:
+    """Transient-retry wrapper for DSI upfront cache reads (rollback + fresh checkout)."""
+    from app.services.imports.dsi_bulk_db_commit import read_session_with_transient_retry
+
+    return read_session_with_transient_retry(db, load)
+
+
+def _build_resolution_cache(
+    db: Session,
+    source_def_id: int | None,
+    *,
+    on_sub_phase: Any = None,
+) -> "DSIResolutionCache":
     """Load all DSI entity-resolution reference tables in one pass before the row loop."""
-    all_distributors = list(db.scalars(select(DimDistributor)).all())
-    dist_aliases = list(
-        db.scalars(
-            select(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.status == "approved")
-        ).all()
-    )
+    _ = source_def_id  # alias rows are filtered per-token at resolve time
 
-    all_customers = list(db.scalars(select(DimCustomer)).all())
+    if on_sub_phase is not None:
+        on_sub_phase("distributors")
+    all_distributors = _dsi_session_read_with_transient_retry(
+        db, lambda: list(db.scalars(select(DimDistributor)).all())
+    )
+    distributor_rows = [_distributor_row_from_orm(d) for d in all_distributors]
+
+    if on_sub_phase is not None:
+        on_sub_phase("dist_aliases")
+    dist_aliases_orm = _dsi_session_read_with_transient_retry(
+        db,
+        lambda: list(
+            db.scalars(
+                select(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.status == "approved")
+            ).all()
+        ),
+    )
+    dist_alias_rows = [_dist_alias_row_from_orm(a) for a in dist_aliases_orm]
+
+    if on_sub_phase is not None:
+        on_sub_phase("customers")
+    all_customers_orm = _dsi_session_read_with_transient_retry(
+        db, lambda: list(db.scalars(select(DimCustomer)).all())
+    )
+    customer_rows = [_customer_row_from_orm(c) for c in all_customers_orm]
     customer_code_to_id: dict[str, int] = {}
     customer_name_to_ids: dict[str, list[int]] = {}
-    for c in all_customers:
+    for c in customer_rows:
         ck = (c.code or "").strip().lower()
         if ck:
             customer_code_to_id[ck] = int(c.id)
@@ -567,29 +720,37 @@ def _build_resolution_cache(db: Session, source_def_id: int | None) -> "DSIResol
         if nk:
             customer_name_to_ids.setdefault(nk, []).append(int(c.id))
 
-    cust_aliases = list(
-        db.scalars(
-            select(CustomerSourceTokenAlias).where(CustomerSourceTokenAlias.status == "approved")
-        ).all()
+    if on_sub_phase is not None:
+        on_sub_phase("customer_aliases")
+    cust_aliases_orm = _dsi_session_read_with_transient_retry(
+        db,
+        lambda: list(
+            db.scalars(
+                select(CustomerSourceTokenAlias).where(CustomerSourceTokenAlias.status == "approved")
+            ).all()
+        ),
     )
+    cust_alias_rows = [_cust_alias_row_from_orm(a) for a in cust_aliases_orm]
 
-    open_channel_cid = db.scalar(
-        select(DimCustomer.id).where(DimCustomer.code == OPEN_CHANNEL_CUSTOMER_CODE)
+    open_channel_cid = _dsi_session_read_with_transient_retry(
+        db,
+        lambda: db.scalar(select(DimCustomer.id).where(DimCustomer.code == OPEN_CHANNEL_CUSTOMER_CODE)),
     )
 
     logger.info(
         "_build_resolution_cache: distributors=%d dist_aliases=%d customers=%d cust_aliases=%d",
-        len(all_distributors),
-        len(dist_aliases),
-        len(all_customers),
-        len(cust_aliases),
+        len(distributor_rows),
+        len(dist_alias_rows),
+        len(customer_rows),
+        len(cust_alias_rows),
     )
     return DSIResolutionCache(
-        all_distributors=all_distributors,
-        dist_aliases=dist_aliases,
+        all_distributors=distributor_rows,
+        dist_aliases=dist_alias_rows,
+        all_customers=customer_rows,
         customer_code_to_id=customer_code_to_id,
         customer_name_to_ids=customer_name_to_ids,
-        cust_aliases=cust_aliases,
+        cust_aliases=cust_alias_rows,
         open_channel_cid=int(open_channel_cid) if open_channel_cid is not None else None,
     )
 
@@ -603,14 +764,15 @@ def _build_distributor_resolution_cache(db: Session, source_def_id: int | None =
     """
     _ = source_def_id  # alias rows are filtered per-token at resolve time
     all_distributors = list(db.scalars(select(DimDistributor)).all())
-    dist_aliases = list(
+    dist_aliases_orm = list(
         db.scalars(
             select(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.status == "approved")
         ).all()
     )
     return DSIResolutionCache(
-        all_distributors=all_distributors,
-        dist_aliases=dist_aliases,
+        all_distributors=[_distributor_row_from_orm(d) for d in all_distributors],
+        dist_aliases=[_dist_alias_row_from_orm(a) for a in dist_aliases_orm],
+        all_customers=[],
         customer_code_to_id={},
         customer_name_to_ids={},
         cust_aliases=[],
@@ -660,7 +822,10 @@ def _shipment_disambiguate_product_id(
     elig = {int(x) for x in candidate_ids if int(x) > 0}
     inter = elig & {int(x) for x in dps if x is not None}
     if len(inter) == 1:
-        return int(next(iter(inter))), scope
+        pick = int(next(iter(inter)))
+        if scope == "cross_distributor":
+            return None, None
+        return pick, scope
     return None, None
 
 
@@ -670,6 +835,7 @@ def _resolve_product(
     evidence_date: date | None = None,
     *,
     relax_inactive_dim_product_for_historical_dsi: bool = False,
+    shipment_sku_item_code_anchor: bool = False,
     db: Session | None = None,
     distributor_id: int | None = None,
     corr_cache: Any = None,
@@ -737,13 +903,20 @@ def _resolve_product(
     pid = idx.sku_to_id.get(key)
     if pid is not None:
         p0 = idx.products_by_id.get(int(pid))
-        if p0 is not None and _product_eligible_for_dsi_auto(
-            p0,
-            evidence_date,
-            relax_inactive_for_historical_dsi=relax_inactive_dim_product_for_historical_dsi,
-        ):
-            return int(pid), None, "product_resolved_sku", None
         if p0 is not None:
+            sku_eligible = _product_eligible_for_dsi_auto(
+                p0,
+                evidence_date,
+                relax_inactive_for_historical_dsi=relax_inactive_dim_product_for_historical_dsi,
+            )
+            if (
+                not sku_eligible
+                and shipment_sku_item_code_anchor
+                and _product_eligible_for_shipment_sku_item_code_anchor(p0)
+            ):
+                sku_eligible = True
+            if sku_eligible:
+                return int(pid), None, "product_resolved_sku", None
             accumulated.inactive_hits.extend(_inactive_snapshots("sku", (pid,)))
 
     tier_maps: tuple[tuple[dict[str, tuple[int, ...]], str], ...] = (
@@ -762,8 +935,19 @@ def _resolve_product(
         "ean": "product_resolved_ean",
         "upc": "product_resolved_upc",
     }
+    from app.services.imports.dsi_product_token_identity import product_identity_lookup_keys
+
+    identity_keys = product_identity_lookup_keys(raw)
     for mmap, tier in tier_maps:
-        ids = mmap.get(key)
+        if tier == "sales_model_name":
+            tier_ids: set[int] = set()
+            for lk in identity_keys:
+                found = mmap.get(lk)
+                if found:
+                    tier_ids.update(int(x) for x in found)
+            ids = tuple(sorted(tier_ids)) if tier_ids else None
+        else:
+            ids = mmap.get(key)
         if not ids:
             continue
         elig = _eligible_ids(ids)
@@ -913,9 +1097,11 @@ def _resolve_distributor_from_cache(
 
     # DimDistributor scan (in memory)
     for d in res_cache.all_distributors:
-        if d.code.strip().lower() == token or d.name.strip().lower() == token:
+        code = (d.code or "").strip().lower()
+        name = (d.name or "").strip().lower()
+        if code == token or name == token:
             return d.id, None
-        if token in d.name.strip().lower() or d.name.strip().lower() in token:
+        if token in name or name in token:
             if len(token) >= 4:
                 return d.id, None
 
@@ -956,7 +1142,9 @@ def _resolve_distributor_strict_from_cache(
             return unique[0], None
 
     for d in res_cache.all_distributors:
-        if d.code.strip().lower() == token or d.name.strip().lower() == token:
+        code = (d.code or "").strip().lower()
+        name = (d.name or "").strip().lower()
+        if code == token or name == token:
             return d.id, None
 
     return None, "unresolved_distributor_token"
@@ -1214,6 +1402,306 @@ def _build_mapped_canonical(
     return out
 
 
+_DSI_STAGING_INSERT_CHUNK = 2000  # pg_insert param cap (~25 cols × 2000 < 65535)
+
+
+@dataclass
+class _DsiValidateProfile:
+    enabled: bool = False
+    upfront_s: float = 0.0
+    row_loop_s: float = 0.0
+    bulk_insert_s: float = 0.0
+    commit_s: float = 0.0
+    bulk_insert_rows: int = 0
+    commit_count: int = 0
+    chunk_row_loop_s: float = 0.0
+    chunk_bulk_insert_s: float = 0.0
+    chunk_commit_s: float = 0.0
+    chunk_start_row: int = 0
+    chunk_end_row: int = 0
+
+    def start_chunk(self, start_row: int) -> None:
+        self.chunk_row_loop_s = 0.0
+        self.chunk_bulk_insert_s = 0.0
+        self.chunk_commit_s = 0.0
+        self.chunk_start_row = start_row
+
+    def finish_chunk(self, end_row: int) -> None:
+        self.chunk_end_row = end_row
+        if not self.enabled:
+            return
+        rows = max(1, end_row - self.chunk_start_row + 1)
+        logger.info(
+            "DSI validate profile chunk rows %d-%d: row_loop=%.2fs bulk_insert=%.2fs commit=%.2fs (%.1f rows/s)",
+            self.chunk_start_row,
+            end_row,
+            self.chunk_row_loop_s,
+            self.chunk_bulk_insert_s,
+            self.chunk_commit_s,
+            rows / max(0.001, self.chunk_row_loop_s + self.chunk_bulk_insert_s + self.chunk_commit_s),
+        )
+
+    def log_summary(self, *, total_rows: int, total_s: float) -> None:
+        if not self.enabled:
+            return
+        logger.info(
+            "DSI validate profile summary job rows=%d total=%.2fs upfront=%.2fs row_loop=%.2fs "
+            "bulk_insert=%.2fs (%d rows) commit=%.2fs (%d commits) overall=%.1f rows/s",
+            total_rows,
+            total_s,
+            self.upfront_s,
+            self.row_loop_s,
+            self.bulk_insert_s,
+            self.bulk_insert_rows,
+            self.commit_s,
+            self.commit_count,
+            total_rows / max(0.001, total_s),
+        )
+
+
+def _dsi_validate_profile_enabled() -> bool:
+    return os.environ.get("CIP_DSI_VALIDATE_PROFILE", "").strip() == "1"
+
+
+def _evidence_months_from_df(df: pd.DataFrame, date_col: str | None) -> set[str]:
+    """Vectorized evidence-month extraction (avoids Python loop over 169k cells)."""
+    if not date_col or date_col not in df.columns:
+        return set()
+    parsed = pd.to_datetime(df[date_col], errors="coerce")
+    months = parsed.dropna().dt.strftime("%Y-%m").unique()
+    return {str(m) for m in months if m}
+
+
+def _raw_payload_at_index(df: pd.DataFrame, row_index: int) -> dict[str, Any]:
+    return {str(c): to_jsonable(df.iat[row_index, j]) for j, c in enumerate(df.columns)}
+
+
+def _build_mapped_canonical_at_index(
+    df: pd.DataFrame,
+    row_index: int,
+    mapping: dict[str, str],
+    ignored_cols: list[str],
+    col_index: dict[str, int],
+) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for src, tgt in mapping.items():
+        if tgt in CANONICAL and tgt != "ignored_shipping_evidence":
+            if src not in col_index:
+                continue
+            v = df.iat[row_index, col_index[src]]
+            if v is not None and not (isinstance(v, float) and pd.isna(v)):
+                out[tgt] = to_jsonable(v)
+    if ignored_cols:
+        ship: dict[str, Any] = {}
+        for c in ignored_cols:
+            if c in col_index:
+                v = df.iat[row_index, col_index[c]]
+                if v is not None and not (isinstance(v, float) and pd.isna(v)):
+                    ship[str(c)] = to_jsonable(v)
+        if ship:
+            out["ignored_shipping_evidence"] = ship
+    return out
+
+
+def _cell_str(df: pd.DataFrame, row_index: int, col: str | None, col_index: dict[str, int]) -> str | None:
+    if not col or col not in col_index:
+        return None
+    return _clean_str(df.iat[row_index, col_index[col]])
+
+
+def _cell_raw(df: pd.DataFrame, row_index: int, col: str | None, col_index: dict[str, int]) -> Any:
+    if not col or col not in col_index:
+        return None
+    return df.iat[row_index, col_index[col]]
+
+
+def _staging_line_row_dict(
+    *,
+    job_id: int,
+    source_row_number: int,
+    raw_payload: dict[str, Any],
+    mapped: dict[str, Any],
+    dist_raw: str | None,
+    cust_raw: str | None,
+    dg_raw: str | None,
+    prod_raw: str | None,
+    rdistributor_id: int | None,
+    rcustomer_id: int | None,
+    rpid: int | None,
+    tx_date: date | None,
+    invoice_no_val: str | None,
+    snap_date: date | None,
+    qty_sold: Decimal | None,
+    soh: Decimal | None,
+    unit_price: Decimal | None,
+    reported_rev: Decimal | None,
+    computed_rev: Decimal | None,
+    cur: str | None,
+    res_status: str,
+    diag: list[str],
+    sev: str,
+) -> dict[str, Any]:
+    return {
+        "import_job_id": job_id,
+        "source_row_number": source_row_number,
+        "raw_row_payload": raw_payload,
+        "mapped_canonical": mapped,
+        "raw_distributor_token": dist_raw,
+        "raw_customer_dealer_token": cust_raw,
+        "raw_dealer_group_token": dg_raw,
+        "raw_product_token": prod_raw,
+        "resolved_distributor_id": rdistributor_id,
+        "resolved_customer_id": rcustomer_id,
+        "resolved_product_id": rpid,
+        "transaction_date": tx_date,
+        "invoice_no": invoice_no_val,
+        "snapshot_date": snap_date,
+        "quantity_sold": float(qty_sold) if qty_sold is not None else None,
+        "stock_on_hand": float(soh) if soh is not None else None,
+        "unit_sellout_price_ex_tax_amount": float(unit_price) if unit_price is not None else None,
+        "reported_revenue_amount": float(reported_rev) if reported_rev is not None else None,
+        "computed_revenue_amount": float(computed_rev) if computed_rev is not None else None,
+        "currency_code": (cur[:8] if cur else None),
+        "resolution_status": res_status,
+        "diagnostic_codes": diag,
+        "severity": sev,
+        "apply_status": "pending",
+    }
+
+
+def _flush_dsi_staging_batch(db: Session, rows: list[dict[str, Any]]) -> None:
+    """Bulk insert staging lines; delete same source_row_numbers first for commit-retry idempotency."""
+    if not rows:
+        return
+    job_id = int(rows[0]["import_job_id"])
+    row_nums = [int(r["source_row_number"]) for r in rows]
+    db.execute(
+        delete(ImportDistributorSiStagingLine).where(
+            ImportDistributorSiStagingLine.import_job_id == job_id,
+            ImportDistributorSiStagingLine.source_row_number.in_(row_nums),
+        )
+    )
+    t = ImportDistributorSiStagingLine.__table__
+    db.execute(pg_insert(t).values(rows))
+
+
+def _update_dsi_validate_checkpoint_metadata(
+    db: Session,
+    job: ImportJob,
+    *,
+    rows_committed: int,
+    phase: str,
+    sub_phase: str | None = None,
+    clear_sub_phase: bool = False,
+) -> None:
+    """In-session checkpoint metadata (no commit) for progress between durable commits."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    meta = dict(job.staged_metadata or {})
+    meta["dsi_validate_rows_committed"] = int(rows_committed)
+    meta["dsi_validate_phase"] = phase
+    meta["dsi_validate_checkpoint_at"] = datetime.now(timezone.utc).isoformat()
+    if clear_sub_phase:
+        meta.pop("dsi_validate_sub_phase", None)
+    elif sub_phase is not None:
+        meta["dsi_validate_sub_phase"] = sub_phase
+    job.staged_metadata = to_jsonable(meta)
+    flag_modified(job, "staged_metadata")
+    db.add(job)
+    db.flush()
+
+
+def _commit_dsi_validate_heartbeat(
+    db: Session,
+    job: ImportJob,
+    *,
+    phase: str,
+    sub_phase: str | None = None,
+    rows_committed: int | None = None,
+    clear_sub_phase: bool = False,
+    profile: _DsiValidateProfile | None = None,
+) -> None:
+    """Durable progress heartbeat — short transaction, no staging rows required."""
+    from app.services.imports.dsi_bulk_db_commit import commit_session_with_transient_retry
+
+    committed = (
+        int(rows_committed)
+        if rows_committed is not None
+        else int((job.staged_metadata or {}).get("dsi_validate_rows_committed") or 0)
+    )
+    t0 = time.monotonic() if profile and profile.enabled else 0.0
+    _update_dsi_validate_checkpoint_metadata(
+        db,
+        job,
+        rows_committed=committed,
+        phase=phase,
+        sub_phase=sub_phase,
+        clear_sub_phase=clear_sub_phase,
+    )
+    commit_session_with_transient_retry(db)
+    from app.services.task_run_ledger import heartbeat_current_task_run
+
+    heartbeat_current_task_run()
+    if profile and profile.enabled:
+        profile.commit_s += time.monotonic() - t0
+        profile.commit_count += 1
+
+
+def _commit_dsi_validate_chunk(
+    db: Session,
+    job: ImportJob,
+    *,
+    rows_committed: int,
+    phase: str,
+    profile: _DsiValidateProfile | None = None,
+) -> None:
+    """Commit staged rows + checkpoint metadata (short transaction per chunk)."""
+    from app.services.imports.dsi_bulk_db_commit import commit_session_with_transient_retry
+
+    t0 = time.monotonic() if profile and profile.enabled else 0.0
+    _update_dsi_validate_checkpoint_metadata(
+        db,
+        job,
+        rows_committed=rows_committed,
+        phase=phase,
+        clear_sub_phase=True,
+    )
+    commit_session_with_transient_retry(db)
+    from app.services.task_run_ledger import heartbeat_current_task_run
+
+    heartbeat_current_task_run()
+    if profile and profile.enabled:
+        profile.commit_s += time.monotonic() - t0
+        profile.commit_count += 1
+        profile.chunk_commit_s += time.monotonic() - t0
+
+
+def _flush_dsi_staging_buffer(
+    db: Session,
+    job: ImportJob,
+    buffer: list[dict[str, Any]],
+    *,
+    last_row_number: int,
+    phase: str = "processing_rows",
+    profile: _DsiValidateProfile | None = None,
+) -> None:
+    """Insert one staging chunk and commit with checkpoint metadata (F-02 retry on commit)."""
+    if not buffer:
+        return
+    row_count = len(buffer)
+    t0 = time.monotonic() if profile and profile.enabled else 0.0
+    _flush_dsi_staging_batch(db, buffer)
+    if profile and profile.enabled:
+        elapsed = time.monotonic() - t0
+        profile.bulk_insert_s += elapsed
+        profile.bulk_insert_rows += row_count
+        profile.chunk_bulk_insert_s += elapsed
+    buffer.clear()
+    _commit_dsi_validate_chunk(
+        db, job, rows_committed=last_row_number, phase=phase, profile=profile
+    )
+
+
 def process_distributor_sales_inventory(
     db: Session,
     job: ImportJob,
@@ -1256,6 +1744,8 @@ def process_distributor_sales_inventory(
         )
 
     preserved_candidate_steward: dict[tuple[str, str], dict[str, Any]] = {}
+    from app.services.imports.dsi_mapping_candidates_list import is_dsi_mapping_candidate_terminal_status
+
     for existing in db.scalars(
         select(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job.id)
     ).all():
@@ -1263,8 +1753,15 @@ def process_distributor_sales_inventory(
         preserved: dict[str, Any] = {}
         if isinstance(ex_ctx.get("duplicate_review"), dict):
             preserved["duplicate_review"] = dict(ex_ctx["duplicate_review"])
-        if (existing.status or "").strip() == "acknowledged_unique":
+        st = (existing.status or "").strip()
+        if st == "acknowledged_unique":
             preserved["status"] = "acknowledged_unique"
+        elif is_dsi_mapping_candidate_terminal_status(st):
+            preserved["status"] = st
+            if existing.suggested_entity_id is not None:
+                preserved["suggested_entity_id"] = int(existing.suggested_entity_id)
+            if existing.match_reason:
+                preserved["match_reason"] = str(existing.match_reason)
         if preserved:
             preserved_candidate_steward[(existing.entity_type, existing.normalized_key)] = preserved
 
@@ -1287,45 +1784,95 @@ def process_distributor_sales_inventory(
     meta["dsi_historical_product_eligibility_relaxed"] = workflow_mode == "historical"
     meta["dsi_predominantly_old_sellout_dates"] = date_majority_historical
     meta["dsi_validate_total_rows"] = len(df)
+    meta["dsi_validate_rows_committed"] = 0
+    meta["dsi_validate_phase"] = "loading_caches"
+    meta["dsi_validate_sub_phase"] = "prepared"
+    meta.pop("dsi_validate_checkpoint_at", None)
     from sqlalchemy.orm.attributes import flag_modified
 
     job.staged_metadata = to_jsonable(meta)
     flag_modified(job, "staged_metadata")
     db.add(job)
-    db.flush()
 
     historical_relaxed = dsi_historical_product_eligibility_relaxed_from_import_job(job)
 
     ignored_src_cols = [k for k, v in mapping.items() if v == "ignored_shipping_evidence"]
 
-    prod_idx = _load_product_resolution_index(db)
     source = job.source
     source_def_id = source.id if source else None
+
+    profile = _DsiValidateProfile(enabled=_dsi_validate_profile_enabled())
+    process_t0 = time.monotonic()
+    upfront_t0 = time.monotonic()
+    total_rows = len(df)
+
+    def _upfront_progress(sub_phase: str) -> None:
+        label = dsi_validate_sub_phase_label(sub_phase) or "Loading resolution caches"
+        _commit_dsi_validate_heartbeat(
+            db,
+            job,
+            phase="loading_caches",
+            sub_phase=sub_phase,
+            rows_committed=0,
+            profile=profile,
+        )
+        if on_progress is not None:
+            on_progress("loading_caches", label, 0, total_rows)
+
+    # End wipe transaction before long-running cache preloads (Supabase idle-in-tx safety).
+    _upfront_progress("prepared")
+
+    prod_idx = _dsi_session_read_with_transient_retry(db, lambda: _load_product_resolution_index(db))
+    _upfront_progress("product_index")
 
     # --- Pre-load shipment corroboration cache (2 batch queries vs N×6 per-row) ---
     from app.services.imports.dsi_shipment_corroboration import ShipmentCorroborationCache
 
     _date_col_for_months = _col(mapping, "transaction_date") or _col(mapping, "snapshot_date")
-    _evidence_months: set[str] = set()
-    if _date_col_for_months and _date_col_for_months in df.columns:
-        for _raw_d in df[_date_col_for_months]:
-            _td = _parse_date(_raw_d)
-            if _td:
-                _evidence_months.add(_td.strftime("%Y-%m"))
+    _evidence_months = _evidence_months_from_df(df, _date_col_for_months)
     logger.info(
         "process_distributor_sales_inventory: job_id=%s rows=%d evidence_months=%s",
         job.id,
-        len(df),
+        total_rows,
         sorted(_evidence_months),
     )
 
-    if on_progress is not None:
-        on_progress("loading_caches", "Loading resolution caches", 0, len(df))
+    corr_cache = _dsi_session_read_with_transient_retry(
+        db, lambda: ShipmentCorroborationCache.load(db, _evidence_months)
+    )
+    _upfront_progress("shipment_corroboration")
 
-    corr_cache = ShipmentCorroborationCache.load(db, _evidence_months)
+    from app.services.imports.dsi_shipment_corroboration import build_global_product_identity_index
+
+    global_product_identity = _dsi_session_read_with_transient_retry(
+        db, lambda: build_global_product_identity_index(db)
+    )
+    _upfront_progress("global_product_identity")
+
+    from app.services.imports.dsi_distributor_receipt_disambiguation import DistributorReceiptProductIndex
+    from app.services.imports.provisional_entity_consolidation import build_distributor_id_to_canonical_key
+
+    dist_id_to_canonical = _dsi_session_read_with_transient_retry(
+        db, lambda: build_distributor_id_to_canonical_key(db)
+    )
+    receipt_index = _dsi_session_read_with_transient_retry(
+        db, lambda: DistributorReceiptProductIndex.load(db, dist_id_to_canonical)
+    )
+    _upfront_progress("receipt_product_index")
+
+    from app.services.imports.dsi_temporal_supersession import ProductShipmentWindowIndex
+
+    shipment_window_index = _dsi_session_read_with_transient_retry(
+        db, lambda: ProductShipmentWindowIndex.load(db, dist_id_to_canonical)
+    )
+    _upfront_progress("product_shipment_window_index")
 
     # Pre-load distributor + customer master data (eliminates 4–6 per-row DB round-trips)
-    res_cache = _build_resolution_cache(db, source_def_id)
+    res_cache = _build_resolution_cache(db, source_def_id, on_sub_phase=_upfront_progress)
+    # Commit the alias/open-channel read transaction left open by the cache build before the
+    # CPU-bound primary-distributor scan + intelligence reads, so the connection is not held
+    # "idle in transaction" across that window (Supabase pooler idle-in-tx safety).
+    _upfront_progress("resolution_cache_ready")
     # -------------------------------------------------------------------------
 
     from app.services.imports.dsi_import_state_awareness import (
@@ -1334,10 +1881,12 @@ def process_distributor_sales_inventory(
         resolve_primary_distributor_id_from_dataframe,
     )
 
-    primary_dist_id = resolve_primary_distributor_id_from_dataframe(db, df, mapping, source_def_id)
+    primary_dist_id = resolve_primary_distributor_id_from_dataframe(
+        db, df, mapping, source_def_id, res_cache=res_cache
+    )
     intel_state = check_dsi_import_state(db, job.id, primary_dist_id)
     persist_intelligence_state_on_job(db, job, intel_state)
-    db.flush()
+    _upfront_progress("import_intelligence")
 
     weekly_historical_customers: dict[tuple[int | None, str], Any] = {}
     if not dsi_historical_workflow_from_import_job(job) and source_def_id is not None:
@@ -1348,13 +1897,46 @@ def process_distributor_sales_inventory(
             source_definition_id=int(source_def_id),
             current_job_id=int(job.id),
         )
+        _upfront_progress("weekly_historical_customers")
 
+    if profile.enabled:
+        profile.upfront_s = time.monotonic() - upfront_t0
+        logger.info(
+            "DSI validate profile upfront: %.2fs (corr_cache + resolution_cache + intel)",
+            profile.upfront_s,
+        )
+
+    _commit_dsi_validate_heartbeat(
+        db,
+        job,
+        phase="processing_rows",
+        rows_committed=0,
+        clear_sub_phase=True,
+        profile=profile,
+    )
     if on_progress is not None:
-        on_progress("processing_rows", "Processing rows", 0, len(df))
+        on_progress("processing_rows", "Processing rows", 0, total_rows)
+
+    staging_buffer: list[dict[str, Any]] = []
+
+    def _maybe_flush_staging(last_rn: int, *, force: bool = False) -> None:
+        if len(staging_buffer) >= _DSI_STAGING_INSERT_CHUNK or (force and staging_buffer):
+            _flush_dsi_staging_buffer(
+                db,
+                job,
+                staging_buffer,
+                last_row_number=last_rn,
+                phase="processing_rows",
+                profile=profile,
+            )
+            if profile.enabled:
+                profile.finish_chunk(last_rn)
+                profile.start_chunk(last_rn + 1)
 
     # Pre-compute reverse column lookups (mapping is immutable over the loop)
     _c_dist = _col(mapping, "distributor_token")
     _c_prod = _col(mapping, "product_identifier")
+    weekly_workflow = not historical_relaxed
     _c_cust = _col(mapping, "customer_dealer_token")
     _c_dg = _col(mapping, "dealer_group_token")
     _c_open = _col(mapping, "open_channel_evidence")
@@ -1366,6 +1948,9 @@ def process_distributor_sales_inventory(
     _c_price = _col(mapping, "unit_sellout_price_ex_tax_amount")
     _c_rev = _col(mapping, "reported_revenue_amount")
     _c_cur = _col(mapping, "currency_code")
+    _c_channel = _col(mapping, "channel_key_token") or _col(mapping, "channel_code")
+    _c_region = _col(mapping, "region_or_province_token") or _col(mapping, "region_code")
+    col_index = {str(c): i for i, c in enumerate(df.columns)}
 
     agg: dict[tuple[str, str], dict[str, Any]] = defaultdict(
         lambda: {
@@ -1398,9 +1983,23 @@ def process_distributor_sales_inventory(
     _progress_next = time.monotonic()  # fire immediately on first eligible check
     _PROGRESS_INTERVAL = 3.0
 
-    for idx, row in df.iterrows():
-        rn = int(idx) + 1
-        if rn == 1 or rn % 100 == 0:
+    _memo_dist: dict[str, tuple[int | None, str | None, list[str]]] = {}
+    _memo_prod: dict[
+        tuple[str, str | None],
+        tuple[int | None, str | None, list[str], str | None, ProductResolutionEvidence | None],
+    ] = {}
+    _memo_cust: dict[
+        tuple[Any, ...],
+        tuple[int | None, list[str], dict[str, Any] | None, list[str]],
+    ] = {}
+
+    if profile.enabled:
+        profile.start_chunk(1)
+
+    for i in range(total_rows):
+        row_t0 = time.monotonic() if profile.enabled else 0.0
+        rn = i + 1
+        if rn == 1 or rn % 10000 == 0:
             logger.info(
                 "process_distributor_sales_inventory: job_id=%s processing row %d / %d",
                 job.id,
@@ -1411,40 +2010,40 @@ def process_distributor_sales_inventory(
         if on_progress is not None and _now >= _progress_next:
             on_progress("processing_rows", "Processing rows", rn, total_rows)
             _progress_next = _now + _PROGRESS_INTERVAL
-        raw_payload = {str(k): to_jsonable(row[k]) for k in row.index}
-        mapped = _build_mapped_canonical(row, mapping, ignored_src_cols)
+        raw_payload = _raw_payload_at_index(df, i)
+        mapped = _build_mapped_canonical_at_index(df, i, mapping, ignored_src_cols, col_index)
         verify_json_serializable("raw_row_payload", raw_payload)
         verify_json_serializable("mapped_canonical", mapped)
 
-        dist_raw = _clean_str(row.get(_c_dist)) if _c_dist else None
-        prod_raw = _clean_str(row.get(_c_prod)) if _c_prod else None
-        cust_raw = _clean_str(row.get(_c_cust)) if _c_cust else None
-        dg_raw = _clean_str(row.get(_c_dg)) if _c_dg else None
-        ch_raw = _channel_raw_for_dsi(row, mapping)
-        reg_raw = _region_raw_for_dsi(row, mapping)
-        open_raw = row.get(_c_open) if _c_open else None
+        dist_raw = _cell_str(df, i, _c_dist, col_index)
+        prod_raw = _cell_str(df, i, _c_prod, col_index)
+        cust_raw = _cell_str(df, i, _c_cust, col_index)
+        dg_raw = _cell_str(df, i, _c_dg, col_index)
+        ch_raw = _cell_str(df, i, _c_channel, col_index)
+        reg_raw = _cell_str(df, i, _c_region, col_index)
+        open_raw = _cell_raw(df, i, _c_open, col_index)
 
-        tx_date = _parse_date(row.get(_c_tx)) if _c_tx else None
-        snap_date = _parse_date(row.get(_c_snap)) if _c_snap else None
+        tx_date = _parse_date(_cell_raw(df, i, _c_tx, col_index)) if _c_tx else None
+        snap_date = _parse_date(_cell_raw(df, i, _c_snap, col_index)) if _c_snap else None
         if tx_date is None and snap_date is not None:
             tx_date = snap_date
         if snap_date is None and tx_date is not None:
             snap_date = tx_date
 
-        qty_sold = _parse_decimal(row.get(_c_qty)) if _c_qty else None
-        soh = _parse_decimal(row.get(_c_soh)) if _c_soh else None
+        qty_sold = _parse_decimal(_cell_raw(df, i, _c_qty, col_index)) if _c_qty else None
+        soh = _parse_decimal(_cell_raw(df, i, _c_soh, col_index)) if _c_soh else None
         unit_price = (
-            _parse_decimal(row.get(_c_price))
+            _parse_decimal(_cell_raw(df, i, _c_price, col_index))
             if _c_price
             else None
         )
         reported_rev = (
-            _parse_decimal(row.get(_c_rev))
+            _parse_decimal(_cell_raw(df, i, _c_rev, col_index))
             if _c_rev
             else None
         )
-        cur = _clean_str(row.get(_c_cur)) if _c_cur else None
-        inv_raw = _clean_str(row.get(_c_inv)) if _c_inv else None
+        cur = _cell_str(df, i, _c_cur, col_index)
+        inv_raw = _cell_str(df, i, _c_inv, col_index)
         invoice_no_val = normalize_dsi_invoice_no(inv_raw)
 
         computed_rev: Decimal | None = None
@@ -1454,98 +2053,209 @@ def process_distributor_sales_inventory(
         diag: list[str] = []
         customer_auto_conflict: dict[str, Any] | None = None
 
-        rdid, derr = _resolve_distributor_from_cache(dist_raw, source_def_id, res_cache)
-        if derr:
-            diag.append(derr)
-        if rdid is None and dist_raw:
-            from app.services.imports.dsi_weekly_auto_resolution import (
-                check_distributor_auto_resolution_at_validate,
-            )
-
-            dist_auto = check_distributor_auto_resolution_at_validate(
-                db,
-                job=job,
-                source_definition_id=source_def_id,
-                normalized_key=_norm_key(dist_raw),
-                resolved_distributor_id=rdid,
-            )
-            if dist_auto.outcome == "resolved" and dist_auto.entity_id is not None:
-                rdid = int(dist_auto.entity_id)
-                diag.append("distributor_resolved_weekly_auto")
-
-        if rdid is None and dist_raw:
-            from app.services.imports.ai_resolver_wiring import (
-                append_ai_diagnostic,
-                distributor_candidates,
-                try_ai_token_resolution,
-            )
-
-            ai_id, ai_tag, ai_suggestion = try_ai_token_resolution(
-                raw_token=dist_raw,
-                token_type="distributor",
-                candidates=distributor_candidates(db, dist_raw),
-                import_type="distributor_sales_inventory",
-                job_id=int(job.id),
-            )
-            if ai_id is not None:
-                rdid = ai_id
-                diag.append("distributor_ai_auto_resolved")
-            elif ai_suggestion is not None and ai_tag == "ai_suggested":
-                diag = append_ai_diagnostic(diag, token_type="distributor", suggestion=ai_suggestion)
-
+        dist_memo_key = _norm_key(dist_raw) if dist_raw else ""
         evidence_date = tx_date or snap_date
-        rpid, perr, presolve_tag, pev = _resolve_product(
-            prod_raw,
-            prod_idx,
-            evidence_date,
-            relax_inactive_dim_product_for_historical_dsi=historical_relaxed,
-            db=db,
-            distributor_id=rdid,
-            corr_cache=corr_cache,
-        )
-        if perr:
-            diag.append(perr)
-        elif presolve_tag:
-            diag.append(presolve_tag)
-        if rpid is None and prod_raw:
-            from app.services.imports.dsi_weekly_auto_resolution import (
-                check_product_auto_resolution_at_validate,
-            )
+        ev_month_key = evidence_date.isoformat() if evidence_date else None
 
-            prod_auto = check_product_auto_resolution_at_validate(
-                db,
-                job=job,
-                source_definition_id=source_def_id,
+        if dist_memo_key and dist_memo_key in _memo_dist:
+            rdid, derr, dist_diag = _memo_dist[dist_memo_key]
+            diag.extend(dist_diag)
+        else:
+            rdid, derr = _resolve_distributor_from_cache(dist_raw, source_def_id, res_cache)
+            dist_diag: list[str] = []
+            if derr:
+                dist_diag.append(derr)
+                diag.append(derr)
+            if rdid is None and dist_raw:
+                from app.services.imports.source_token_alias_conflicts import (
+                    distributor_alias_conflict_reason_from_cache,
+                )
+
+                alias_conflict = distributor_alias_conflict_reason_from_cache(
+                    res_cache,
+                    source_definition_id=source_def_id,
+                    normalized_token=_norm_key(dist_raw) or "",
+                )
+                if alias_conflict:
+                    dist_diag.append(alias_conflict)
+                    diag.append(alias_conflict)
+            if rdid is None and dist_raw:
+                from app.services.imports.dsi_weekly_auto_resolution import (
+                    check_distributor_auto_resolution_at_validate,
+                )
+
+                dist_auto = check_distributor_auto_resolution_at_validate(
+                    db,
+                    job=job,
+                    source_definition_id=source_def_id,
+                    normalized_key=_norm_key(dist_raw),
+                    resolved_distributor_id=rdid,
+                )
+                if dist_auto.outcome == "resolved" and dist_auto.entity_id is not None:
+                    rdid = int(dist_auto.entity_id)
+                    dist_diag.append("distributor_resolved_weekly_auto")
+                    diag.append("distributor_resolved_weekly_auto")
+
+            if rdid is None and dist_raw:
+                from app.services.imports.ai_resolver_wiring import (
+                    append_ai_diagnostic,
+                    distributor_candidates_from_cache,
+                    try_ai_token_resolution,
+                )
+
+                ai_id, ai_tag, ai_suggestion = try_ai_token_resolution(
+                    raw_token=dist_raw,
+                    token_type="distributor",
+                    candidates=distributor_candidates_from_cache(res_cache, dist_raw),
+                    import_type="distributor_sales_inventory",
+                    job_id=int(job.id),
+                )
+                if ai_id is not None:
+                    rdid = ai_id
+                    dist_diag.append("distributor_ai_auto_resolved")
+                    diag.append("distributor_ai_auto_resolved")
+                elif ai_suggestion is not None and ai_tag == "ai_suggested":
+                    diag = append_ai_diagnostic(diag, token_type="distributor", suggestion=ai_suggestion)
+
+            if dist_memo_key:
+                _memo_dist[dist_memo_key] = (rdid, derr, list(dist_diag))
+
+        prod_memo_key = (_norm_key(prod_raw) if prod_raw else "", ev_month_key)
+        pev: ProductResolutionEvidence | None = None
+        presolve_tag: str | None = None
+        perr: str | None = None
+        if prod_memo_key[0] and prod_memo_key in _memo_prod:
+            rpid, perr, prod_diag, presolve_tag, pev = _memo_prod[prod_memo_key]
+            diag.extend(prod_diag)
+        else:
+            rpid, perr, presolve_tag, pev = _resolve_product(
+                prod_raw,
+                prod_idx,
+                evidence_date,
+                relax_inactive_dim_product_for_historical_dsi=historical_relaxed,
+                shipment_sku_item_code_anchor=weekly_workflow,
+                db=db,
                 distributor_id=rdid,
-                normalized_key=_norm_key(prod_raw),
+                corr_cache=corr_cache,
             )
-            if prod_auto.outcome == "resolved" and prod_auto.entity_id is not None:
-                rpid = int(prod_auto.entity_id)
-                diag.append("product_resolved_weekly_auto")
-            elif prod_auto.outcome == "conflict":
-                pev = pev or {}
-                pev["weekly_auto_conflict"] = True
-                pev["prior_resolution_conflict"] = prod_auto.conflict_prior
+            prod_diag: list[str] = []
+            if perr:
+                prod_diag.append(perr)
+                diag.append(perr)
+            elif presolve_tag:
+                prod_diag.append(presolve_tag)
+                diag.append(presolve_tag)
+            from app.services.imports.dsi_weekly_product_resolution import weekly_dsi_product_resolution_warnings
 
-        if rpid is None and prod_raw:
-            from app.services.imports.ai_resolver_wiring import (
-                append_ai_diagnostic,
-                product_candidates_from_index,
-                try_ai_token_resolution,
-            )
+            amb_for_weekly = pev.ambiguous_eligible if pev is not None else None
+            for wcode in weekly_dsi_product_resolution_warnings(
+                weekly_workflow=weekly_workflow,
+                product_source_column=_c_prod,
+                presolve_tag=presolve_tag,
+                product_error=perr,
+                ambiguous_eligible=amb_for_weekly,
+            ):
+                if wcode not in diag:
+                    diag.append(wcode)
+                    prod_diag.append(wcode)
+            if rpid is None and prod_raw and pev and pev.ambiguous_eligible and rdid is not None:
+                from app.services.imports.dsi_distributor_receipt_disambiguation import try_receipt_disambiguate_product
 
-            ai_id, ai_tag, ai_suggestion = try_ai_token_resolution(
-                raw_token=prod_raw,
-                token_type="product",
-                candidates=product_candidates_from_index(prod_idx, prod_raw),
-                import_type="distributor_sales_inventory",
-                job_id=int(job.id),
-            )
-            if ai_id is not None:
-                rpid = ai_id
-                diag.append("product_ai_auto_resolved")
-            elif ai_suggestion is not None and ai_tag == "ai_suggested":
-                diag = append_ai_diagnostic(diag, token_type="product", suggestion=ai_suggestion)
+                elig_ids = [int(x) for x in (pev.ambiguous_eligible.get("product_ids") or []) if int(x) > 0]
+                sell_out_qty = (
+                    abs(float(qty_sold))
+                    if qty_sold is not None and float(qty_sold) > 0
+                    else None
+                )
+                receipt_res = try_receipt_disambiguate_product(
+                    receipt_index,
+                    distributor_id=rdid,
+                    dist_id_to_canonical=dist_id_to_canonical,
+                    raw_product_token=prod_raw,
+                    eligible_product_ids=elig_ids,
+                    evidence_date=evidence_date,
+                    ambiguous_eligible=pev.ambiguous_eligible,
+                    sell_out_qty=sell_out_qty,
+                )
+                if receipt_res.evidence:
+                    pev.receipt_disambiguation = receipt_res.evidence
+                if receipt_res.product_id is not None and receipt_res.resolve_reason:
+                    rpid = int(receipt_res.product_id)
+                    presolve_tag = receipt_res.resolve_reason
+                    prod_diag.append(presolve_tag)
+                    diag.append(presolve_tag)
+                    perr = None
+            if (
+                rpid is None
+                and prod_raw
+                and pev
+                and pev.ambiguous_eligible
+                and rdid is not None
+                and evidence_date is not None
+            ):
+                from app.services.imports.dsi_temporal_supersession import try_temporal_supersession_product
+
+                elig_ids_ts = [int(x) for x in (pev.ambiguous_eligible.get("product_ids") or []) if int(x) > 0]
+                temporal_res = try_temporal_supersession_product(
+                    shipment_window_index,
+                    distributor_id=rdid,
+                    dist_id_to_canonical=dist_id_to_canonical,
+                    eligible_product_ids=elig_ids_ts,
+                    evidence_date=evidence_date,
+                    ambiguous_eligible=pev.ambiguous_eligible,
+                )
+                if temporal_res.evidence:
+                    pev.temporal_supersession = temporal_res.evidence
+                if temporal_res.product_id is not None and temporal_res.resolve_reason:
+                    rpid = int(temporal_res.product_id)
+                    presolve_tag = temporal_res.resolve_reason
+                    prod_diag.append(presolve_tag)
+                    diag.append(presolve_tag)
+                    perr = None
+            if rpid is None and prod_raw:
+                from app.services.imports.dsi_weekly_auto_resolution import (
+                    check_product_auto_resolution_at_validate,
+                )
+
+                prod_auto = check_product_auto_resolution_at_validate(
+                    db,
+                    job=job,
+                    source_definition_id=source_def_id,
+                    distributor_id=rdid,
+                    normalized_key=_norm_key(prod_raw),
+                )
+                if prod_auto.outcome == "resolved" and prod_auto.entity_id is not None:
+                    rpid = int(prod_auto.entity_id)
+                    prod_diag.append("product_resolved_weekly_auto")
+                    diag.append("product_resolved_weekly_auto")
+                elif prod_auto.outcome == "conflict":
+                    pev = pev or {}
+                    pev["weekly_auto_conflict"] = True
+                    pev["prior_resolution_conflict"] = prod_auto.conflict_prior
+
+            if rpid is None and prod_raw:
+                from app.services.imports.ai_resolver_wiring import (
+                    append_ai_diagnostic,
+                    product_candidates_from_index,
+                    try_ai_token_resolution,
+                )
+
+                ai_id, ai_tag, ai_suggestion = try_ai_token_resolution(
+                    raw_token=prod_raw,
+                    token_type="product",
+                    candidates=product_candidates_from_index(prod_idx, prod_raw),
+                    import_type="distributor_sales_inventory",
+                    job_id=int(job.id),
+                )
+                if ai_id is not None:
+                    rpid = ai_id
+                    prod_diag.append("product_ai_auto_resolved")
+                    diag.append("product_ai_auto_resolved")
+                elif ai_suggestion is not None and ai_tag == "ai_suggested":
+                    diag = append_ai_diagnostic(diag, token_type="product", suggestion=ai_suggestion)
+
+            if prod_memo_key[0]:
+                _memo_prod[prod_memo_key] = (rpid, perr, list(prod_diag), presolve_tag, pev)
 
         rdistributor_id = rdid
         rcustomer_id: int | None = None
@@ -1562,60 +2272,95 @@ def process_distributor_sales_inventory(
             cust_res_raw, cust_res_notes = effective_dsi_customer_primary_for_resolution(cust_raw, dg_raw)
 
         if sellout_or_return_attempt:
-            rcustomer_id, cd = _resolve_customer_from_cache(
-                source_id=source_def_id,
-                distributor_id=rdistributor_id,
-                customer_raw=cust_res_raw,
-                dealer_group_raw=dg_raw,
-                channel_raw=ch_raw,
-                open_flag_raw=open_raw,
-                res_cache=res_cache,
+            cust_memo_key = (
+                rdistributor_id,
+                _norm_key(cust_res_raw or ""),
+                _norm_key(dg_raw or ""),
+                _norm_key(ch_raw or ""),
+                str(open_raw),
             )
-            diag.extend(cd)
-            if rcustomer_id is None:
-                from app.services.imports.dsi_weekly_auto_resolution import (
-                    check_customer_auto_resolution_at_validate,
-                )
-
-                ckey_probe = _customer_candidate_identity_norm(cust_raw, dg_raw)
-                cust_auto = check_customer_auto_resolution_at_validate(
-                    db,
-                    job=job,
-                    source_definition_id=source_def_id,
+            if cust_memo_key in _memo_cust:
+                rcustomer_id, cust_diag, customer_auto_conflict, cust_res_notes = _memo_cust[cust_memo_key]
+                diag.extend(cust_diag)
+                diag.extend(cust_res_notes)
+            else:
+                rcustomer_id, cd = _resolve_customer_from_cache(
+                    source_id=source_def_id,
                     distributor_id=rdistributor_id,
-                    normalized_key=ckey_probe,
                     customer_raw=cust_res_raw,
                     dealer_group_raw=dg_raw,
-                    historical_index=weekly_historical_customers or None,
+                    channel_raw=ch_raw,
+                    open_flag_raw=open_raw,
+                    res_cache=res_cache,
                 )
-                if cust_auto.outcome == "resolved" and cust_auto.entity_id is not None:
-                    rcustomer_id = int(cust_auto.entity_id)
-                    diag.append("customer_resolved_weekly_auto")
-                elif cust_auto.outcome == "conflict":
-                    customer_auto_conflict = {
-                        "conflict_flag": True,
-                        "prior_resolution_conflict": cust_auto.conflict_prior,
-                    }
-            if rcustomer_id is None and cust_res_raw:
-                from app.services.imports.ai_resolver_wiring import (
-                    append_ai_diagnostic,
-                    customer_candidates,
-                    try_ai_token_resolution,
-                )
+                cust_diag = list(cd)
+                diag.extend(cust_diag)
+                if rcustomer_id is None and cust_res_raw:
+                    from app.services.imports.source_token_alias_conflicts import (
+                        customer_alias_conflict_reason_from_cache,
+                    )
 
-                ai_id, ai_tag, ai_suggestion = try_ai_token_resolution(
-                    raw_token=cust_res_raw,
-                    token_type="customer",
-                    candidates=customer_candidates(db, cust_res_raw),
-                    import_type="distributor_sales_inventory",
-                    job_id=int(job.id),
+                    cust_alias_conflict = customer_alias_conflict_reason_from_cache(
+                        res_cache,
+                        source_definition_id=source_def_id,
+                        distributor_id=rdistributor_id,
+                        normalized_token=_norm_key(cust_res_raw) or "",
+                    )
+                    if cust_alias_conflict:
+                        cust_diag.append(cust_alias_conflict)
+                        diag.append(cust_alias_conflict)
+                if rcustomer_id is None:
+                    from app.services.imports.dsi_weekly_auto_resolution import (
+                        check_customer_auto_resolution_at_validate,
+                    )
+
+                    ckey_probe = _customer_candidate_identity_norm(cust_raw, dg_raw)
+                    cust_auto = check_customer_auto_resolution_at_validate(
+                        db,
+                        job=job,
+                        source_definition_id=source_def_id,
+                        distributor_id=rdistributor_id,
+                        normalized_key=ckey_probe,
+                        customer_raw=cust_res_raw,
+                        dealer_group_raw=dg_raw,
+                        historical_index=weekly_historical_customers or None,
+                    )
+                    if cust_auto.outcome == "resolved" and cust_auto.entity_id is not None:
+                        rcustomer_id = int(cust_auto.entity_id)
+                        cust_diag.append("customer_resolved_weekly_auto")
+                        diag.append("customer_resolved_weekly_auto")
+                    elif cust_auto.outcome == "conflict":
+                        customer_auto_conflict = {
+                            "conflict_flag": True,
+                            "prior_resolution_conflict": cust_auto.conflict_prior,
+                        }
+                if rcustomer_id is None and cust_res_raw:
+                    from app.services.imports.ai_resolver_wiring import (
+                        append_ai_diagnostic,
+                        customer_candidates_from_cache,
+                        try_ai_token_resolution,
+                    )
+
+                    ai_id, ai_tag, ai_suggestion = try_ai_token_resolution(
+                        raw_token=cust_res_raw,
+                        token_type="customer",
+                        candidates=customer_candidates_from_cache(res_cache, cust_res_raw),
+                        import_type="distributor_sales_inventory",
+                        job_id=int(job.id),
+                    )
+                    if ai_id is not None:
+                        rcustomer_id = ai_id
+                        cust_diag.append("customer_ai_auto_resolved")
+                        diag.append("customer_ai_auto_resolved")
+                    elif ai_suggestion is not None and ai_tag == "ai_suggested":
+                        diag = append_ai_diagnostic(diag, token_type="customer", suggestion=ai_suggestion)
+                diag.extend(cust_res_notes)
+                _memo_cust[cust_memo_key] = (
+                    rcustomer_id,
+                    list(cust_diag),
+                    customer_auto_conflict,
+                    list(cust_res_notes),
                 )
-                if ai_id is not None:
-                    rcustomer_id = ai_id
-                    diag.append("customer_ai_auto_resolved")
-                elif ai_suggestion is not None and ai_tag == "ai_suggested":
-                    diag = append_ai_diagnostic(diag, token_type="customer", suggestion=ai_suggestion)
-            diag.extend(cust_res_notes)
 
         hard_row = bool((derr and rdid is None) or (perr and rpid is None))
         sellout_blocked_no_customer = bool(sellout_or_return_attempt and rcustomer_id is None)
@@ -1733,33 +2478,33 @@ def process_distributor_sales_inventory(
             cache=corr_cache,
         )
 
-        line = ImportDistributorSiStagingLine(
-            import_job_id=job.id,
-            source_row_number=rn,
-            raw_row_payload=raw_payload,
-            mapped_canonical=mapped,
-            raw_distributor_token=dist_raw,
-            raw_customer_dealer_token=cust_raw,
-            raw_dealer_group_token=dg_raw,
-            raw_product_token=prod_raw,
-            resolved_distributor_id=rdistributor_id,
-            resolved_customer_id=rcustomer_id,
-            resolved_product_id=rpid,
-            transaction_date=tx_date,
-            invoice_no=invoice_no_val,
-            snapshot_date=snap_date,
-            quantity_sold=float(qty_sold) if qty_sold is not None else None,
-            stock_on_hand=float(soh) if soh is not None else None,
-            unit_sellout_price_ex_tax_amount=float(unit_price) if unit_price is not None else None,
-            reported_revenue_amount=float(reported_rev) if reported_rev is not None else None,
-            computed_revenue_amount=float(computed_rev) if computed_rev is not None else None,
-            currency_code=(cur[:8] if cur else None),
-            resolution_status=res_status,
-            diagnostic_codes=diag,
-            severity=sev,
-            apply_status="pending",
+        staging_buffer.append(
+            _staging_line_row_dict(
+                job_id=int(job.id),
+                source_row_number=rn,
+                raw_payload=raw_payload,
+                mapped=mapped,
+                dist_raw=dist_raw,
+                cust_raw=cust_raw,
+                dg_raw=dg_raw,
+                prod_raw=prod_raw,
+                rdistributor_id=rdistributor_id,
+                rcustomer_id=rcustomer_id,
+                rpid=rpid,
+                tx_date=tx_date,
+                invoice_no_val=invoice_no_val,
+                snap_date=snap_date,
+                qty_sold=qty_sold,
+                soh=soh,
+                unit_price=unit_price,
+                reported_rev=reported_rev,
+                computed_rev=computed_rev,
+                cur=cur,
+                res_status=res_status,
+                diag=diag,
+                sev=sev,
+            )
         )
-        db.add(line)
 
         if sev == "error":
             blocking += 1
@@ -1770,12 +2515,16 @@ def process_distributor_sales_inventory(
             k = ("distributor_token", _norm_key(dist_raw))
             a = agg[k]
             a["row_count"] += 1
+            if "multiple_approved_distributor_aliases_for_token" in diag:
+                a["alias_conflict_reason"] = "multiple_approved_distributor_aliases_for_token"
             if len(a["samples"]) < 5:
                 a["samples"].append(dist_raw)
         if rpid is None and prod_raw:
             k = ("product_identifier", _norm_key(prod_raw))
             a = agg[k]
             _merge_product_resolution_evidence(a, pev)
+            if "weekly_dsi_model_grain_without_sku" in diag:
+                a["weekly_model_grain_without_sku"] = True
             if rdistributor_id is not None:
                 ds = a.setdefault("_dist_ids_unresolved", set())
                 if not isinstance(ds, set):
@@ -1792,6 +2541,11 @@ def process_distributor_sales_inventory(
             if isinstance(pev, dict) and pev.get("weekly_auto_conflict"):
                 a["conflict_flag"] = True
                 a["prior_resolution_conflict"] = pev.get("prior_resolution_conflict")
+            if evidence_date is not None:
+                em_dsi = evidence_date.strftime("%Y-%m")
+                dsi_mc = a.setdefault("dsi_evidence_month_counts", {})
+                if isinstance(dsi_mc, dict):
+                    dsi_mc[em_dsi] = int(dsi_mc.get(em_dsi) or 0) + 1
             if rdistributor_id and evidence_date:
                 cp = corr_cache.product_corroboration(
                     int(rdistributor_id),
@@ -1802,6 +2556,20 @@ def process_distributor_sales_inventory(
                 if cp:
                     a["shipment_corr_hit"] = True
                     a["shipment_corr_best"] = max(int(a.get("shipment_corr_best") or 0), int(cp.get("match_count") or 0))
+                    cp_scope = cp.get("distinct_ids_scope") if isinstance(cp.get("distinct_ids_scope"), str) else None
+                    if cp_scope == "cross_distributor":
+                        a["shipment_cross_distributor_corroboration"] = {
+                            "distinct_resolved_product_ids": [
+                                int(x) for x in (cp.get("distinct_resolved_product_ids") or []) if x is not None
+                            ][:16],
+                            "match_count": int(cp.get("match_count") or 0),
+                            "evidence_month": evidence_date.strftime("%Y-%m"),
+                            "auto_resolve_blocked": True,
+                            "summary": (
+                                "Shipment evidence for this token exists at other distributors only; "
+                                "cross-distributor auto-resolve is blocked — use receipt tier or steward."
+                            ),
+                        }
                     dps = cp.get("distinct_resolved_product_ids")
                     if isinstance(dps, list):
                         sid_set = a.setdefault("shipment_distinct_product_ids", set())
@@ -1832,6 +2600,8 @@ def process_distributor_sales_inventory(
                 else:
                     a["primary_source"] = "blank"
             a["row_count"] += 1
+            if "multiple_approved_customer_aliases_for_token" in diag:
+                a["alias_conflict_reason"] = "multiple_approved_customer_aliases_for_token"
             if qty_sold is not None:
                 a["total_units"] += abs(qty_sold)
             if reported_rev is not None:
@@ -1915,6 +2685,27 @@ def process_distributor_sales_inventory(
                     if tch and tch not in sch and len(sch) < 8:
                         sch.append(tch)
 
+        _maybe_flush_staging(rn)
+        if profile.enabled:
+            elapsed = time.monotonic() - row_t0
+            profile.row_loop_s += elapsed
+            profile.chunk_row_loop_s += elapsed
+
+    if profile.enabled:
+        profile.finish_chunk(total_rows)
+    _maybe_flush_staging(total_rows, force=True)
+
+    if profile.enabled:
+        profile.log_summary(total_rows=total_rows, total_s=time.monotonic() - process_t0)
+
+    _commit_dsi_validate_heartbeat(
+        db,
+        job,
+        phase="building_candidates",
+        rows_committed=total_rows,
+        clear_sub_phase=True,
+        profile=profile,
+    )
     if on_progress is not None:
         on_progress("building_candidates", "Building candidates", total_rows, total_rows)
 
@@ -1923,6 +2714,9 @@ def process_distributor_sales_inventory(
 
     for (etype, nkey), data in agg.items():
         ctx: dict[str, Any] = {"aggregated": True}
+        acr = data.get("alias_conflict_reason")
+        if isinstance(acr, str) and acr.strip():
+            ctx["alias_conflict_reason"] = acr.strip()
         dealer_token_col: str | None = None
         nkey_clean = nkey
         if etype == "customer_dealer_token":
@@ -1986,20 +2780,52 @@ def process_distributor_sales_inventory(
                 if data.get("prior_resolution_conflict") is not None:
                     ctx["prior_resolution_conflict"] = data.get("prior_resolution_conflict")
             dist_unresolved = data.pop("_dist_ids_unresolved", None)
-            if isinstance(dist_unresolved, set) and len(dist_unresolved) == 1:
-                ctx["dominant_unresolved_distributor_id"] = int(next(iter(dist_unresolved)))
+            if isinstance(dist_unresolved, set) and dist_unresolved:
+                dist_sorted = sorted(int(x) for x in dist_unresolved if int(x) > 0)[:8]
+                if dist_sorted:
+                    ctx["unresolved_distributor_ids"] = dist_sorted
+                if len(dist_sorted) == 1:
+                    ctx["dominant_unresolved_distributor_id"] = int(dist_sorted[0])
             ship_ids = data.pop("shipment_distinct_product_ids", None)
             if isinstance(ship_ids, set) and ship_ids:
                 ctx["shipment_distinct_product_ids"] = sorted(int(x) for x in ship_ids if int(x) > 0)[:32]
             month_counts = data.pop("shipment_evidence_month_counts", None)
+            dsi_month_counts = data.pop("dsi_evidence_month_counts", None)
+            combined_month_counts: dict[str, int] = {}
+            for mc_src in (month_counts, dsi_month_counts):
+                if isinstance(mc_src, dict):
+                    for mk, mv in mc_src.items():
+                        if isinstance(mk, str) and mk.strip():
+                            em = mk.strip()[:7]
+                            combined_month_counts[em] = int(combined_month_counts.get(em) or 0) + int(mv or 0)
+            if combined_month_counts:
+                ctx["dominant_evidence_month"] = max(
+                    combined_month_counts.items(), key=lambda kv: int(kv[1] or 0)
+                )[0]
             if isinstance(month_counts, dict) and month_counts:
-                dom_month = max(month_counts.items(), key=lambda kv: int(kv[1] or 0))[0]
-                if isinstance(dom_month, str) and dom_month.strip():
-                    ctx["dominant_evidence_month"] = dom_month.strip()[:7]
+                ctx["shipment_evidence_month_counts"] = {
+                    str(k).strip()[:7]: int(v or 0)
+                    for k, v in month_counts.items()
+                    if str(k).strip()
+                }
+            if isinstance(dsi_month_counts, dict) and dsi_month_counts:
+                ctx["dsi_evidence_month_counts"] = {
+                    str(k).strip()[:7]: int(v or 0)
+                    for k, v in dsi_month_counts.items()
+                    if str(k).strip()
+                }
             acc = data.pop("_pe_acc", None)
             if isinstance(acc, dict):
                 amb = acc.get("amb")
                 inh = [x for x in (acc.get("inh") or []) if isinstance(x, dict)]
+                receipt_ev = acc.get("receipt")
+                temporal_ev = acc.get("temporal")
+                if isinstance(receipt_ev, dict) and receipt_ev:
+                    ctx["receipt_disambiguation"] = receipt_ev
+                if isinstance(temporal_ev, dict) and temporal_ev:
+                    ctx["temporal_supersession"] = temporal_ev
+                    if temporal_ev.get("fifo_candidate") or acc.get("fifo_any"):
+                        ctx["fifo_candidate"] = True
                 if amb:
                     ctx["product_match_status"] = "ambiguous_eligible"
                     ctx["product_ambiguous_eligible"] = amb
@@ -2035,6 +2861,43 @@ def process_distributor_sales_inventory(
                 "summary": "Resolved shipment evidence lines in the same calendar month may corroborate this token (no auto-resolve).",
             }
             ctx.setdefault("corroboration_markers", []).append("shipment_evidence_product")
+        if etype == "product_identifier" and isinstance(data.get("shipment_cross_distributor_corroboration"), dict):
+            ctx["shipment_cross_distributor_corroboration"] = dict(
+                data["shipment_cross_distributor_corroboration"]
+            )
+        if etype == "product_identifier" and data.get("weekly_model_grain_without_sku"):
+            ctx["weekly_model_grain_without_sku"] = True
+            ctx.setdefault("weekly_resolution_warnings", []).append("weekly_dsi_model_grain_without_sku")
+        if etype == "product_identifier":
+            from app.services.imports.dsi_product_shipment_tiebreak import enrich_product_global_identity_context
+
+            raw_sample = (data.get("samples") or [nkey_clean])[0]
+            raw_for_identity = str(raw_sample) if raw_sample is not None else str(nkey_clean)
+            elig_for_global: list[int] = []
+            amb_ctx = ctx.get("product_ambiguous_eligible")
+            if isinstance(amb_ctx, dict):
+                for ep in amb_ctx.get("eligible_products") or []:
+                    if isinstance(ep, dict):
+                        try:
+                            v = int(ep.get("product_id"))
+                            if v > 0:
+                                elig_for_global.append(v)
+                        except (TypeError, ValueError):
+                            pass
+                if not elig_for_global:
+                    for x in amb_ctx.get("product_ids") or []:
+                        try:
+                            v = int(x)
+                            if v > 0:
+                                elig_for_global.append(v)
+                        except (TypeError, ValueError):
+                            pass
+            enrich_product_global_identity_context(
+                ctx,
+                raw_for_identity,
+                global_product_identity=global_product_identity,
+                eligible_product_ids=elig_for_global or None,
+            )
         if etype == "customer_dealer_token" and data.get("shipment_cust_corr_hit"):
             ctx["shipment_evidence_corroboration"] = {
                 "best_match_count": int(data.get("shipment_cust_corr_best") or 0),
@@ -2043,12 +2906,24 @@ def process_distributor_sales_inventory(
             }
             ctx.setdefault("corroboration_markers", []).append("shipment_evidence_customer")
         cand_status = "needs_review"
+        suggested_entity_id: int | None = None
+        match_reason: str | None = None
         pres = preserved_candidate_steward.get((etype, nkey_clean[:512]))
         if pres:
             if isinstance(pres.get("duplicate_review"), dict):
                 ctx["duplicate_review"] = pres["duplicate_review"]
-            if pres.get("status") == "acknowledged_unique":
+            pres_st = pres.get("status")
+            if pres_st == "acknowledged_unique":
                 cand_status = "acknowledged_unique"
+            elif is_dsi_mapping_candidate_terminal_status(str(pres_st or "")):
+                cand_status = str(pres_st).strip()
+                if pres.get("suggested_entity_id") is not None:
+                    try:
+                        suggested_entity_id = int(pres["suggested_entity_id"])
+                    except (TypeError, ValueError):
+                        suggested_entity_id = None
+                if pres.get("match_reason"):
+                    match_reason = str(pres["match_reason"])
         cand = ImportEntityMappingCandidate(
             import_job_id=job.id,
             source_definition_id=source_def_id,
@@ -2059,6 +2934,8 @@ def process_distributor_sales_inventory(
             total_units=float(data["total_units"]) if data["total_units"] else None,
             total_reported_value=float(data["total_value"]) if data["total_value"] else None,
             sample_raw_values=to_jsonable(data["samples"][:5]),
+            suggested_entity_id=suggested_entity_id,
+            match_reason=match_reason,
             status=cand_status,
             context=to_jsonable(ctx),
         )

@@ -269,6 +269,31 @@ def _decimal_or_none(v: Any) -> Decimal | None:
         return None
 
 
+def coalesce_shipment_evidence_date(
+    *,
+    pod_date: date | None = None,
+    est_pod_date: date | None = None,
+    promise_date: date | None = None,
+    schedule_ship_date: date | None = None,
+    ship_confirm_date: date | None = None,
+    erd_date: date | None = None,
+    exwork_date: date | None = None,
+) -> date | None:
+    """First non-null logistics date (pod-first), matching inbound fact apply path."""
+    for d in (
+        pod_date,
+        est_pod_date,
+        promise_date,
+        schedule_ship_date,
+        ship_confirm_date,
+        erd_date,
+        exwork_date,
+    ):
+        if d is not None:
+            return d
+    return None
+
+
 def resolve_product_for_evidence(
     idx: ProductResolutionIndex,
     *,
@@ -276,6 +301,7 @@ def resolve_product_for_evidence(
     ean_code: str | None,
     upc_code: str | None,
     sales_model_name: str | None,
+    evidence_date: date | None = None,
 ) -> tuple[int | None, str, str | None, str | None]:
     """(product_id, status, token_used, detail)."""
     tokens: list[tuple[str, str]] = []
@@ -291,8 +317,13 @@ def resolve_product_for_evidence(
         return None, "no_identifier", None, None
 
     last_detail: str | None = None
-    for _role, raw in tokens:
-        pid, perr, tag, ev = _resolve_product(raw, idx, None)
+    for role, raw in tokens:
+        pid, perr, tag, ev = _resolve_product(
+            raw,
+            idx,
+            evidence_date,
+            shipment_sku_item_code_anchor=(role == "item"),
+        )
         if pid is not None and perr is None:
             return int(pid), "resolved_unique", raw, tag or "resolved"
         if perr in ("ambiguous_product_match", "ambiguous_product_alias"):
@@ -820,12 +851,22 @@ def _resolve_unresolved_shipment_lines_for_job(
     )
     for line in lines:
         if line.product_id is None:
+            evidence_date = coalesce_shipment_evidence_date(
+                pod_date=line.pod_date,
+                est_pod_date=line.est_pod_date,
+                promise_date=line.promise_date,
+                schedule_ship_date=line.schedule_ship_date,
+                ship_confirm_date=line.ship_confirm_date,
+                erd_date=line.erd_date,
+                exwork_date=line.exwork_date,
+            )
             pid, pstatus, ptoken, pdetail = resolve_product_for_evidence(
                 idx,
                 item_code=line.item_code,
                 ean_code=line.ean_code,
                 upc_code=line.upc_code,
                 sales_model_name=line.sales_model_name,
+                evidence_date=evidence_date,
             )
             if ai_enabled and pid is None and pstatus in ("no_match", "ambiguous", "inactive_only", "no_identifier"):
                 from app.services.imports.ai_resolver_wiring import (
@@ -1043,12 +1084,22 @@ def process_shipment_evidence_import(
                 ex = _extract_common(series, header_by_canonical)
                 source_key = stable_source_key_for_row(report_type=report_type, sheet_name=sheet_name, ex=ex)
 
+                evidence_date = coalesce_shipment_evidence_date(
+                    pod_date=ex["pod_date"],
+                    est_pod_date=ex["est_pod_date"],
+                    promise_date=ex["promise_date"],
+                    schedule_ship_date=ex["schedule_ship_date"],
+                    ship_confirm_date=ex["ship_confirm_date"],
+                    erd_date=ex["erd_date"],
+                    exwork_date=ex["exwork_date"],
+                )
                 pid, pstatus, ptoken, pdetail = resolve_product_for_evidence(
                     idx,
                     item_code=ex["item_code"],
                     ean_code=ex["ean_code"],
                     upc_code=ex["upc_code"],
                     sales_model_name=ex["sales_model_name"],
+                    evidence_date=evidence_date,
                 )
                 did, dstatus, dtoken = resolve_distributor_for_evidence(
                     db,

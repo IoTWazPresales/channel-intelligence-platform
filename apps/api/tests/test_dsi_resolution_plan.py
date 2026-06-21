@@ -394,6 +394,114 @@ def test_merge_product_inactive_ok_with_confirm_and_audit() -> None:
     assert m["effective_ready"] is True
 
 
+def test_merge_product_inactive_historical_deterministic_auto_confirms() -> None:
+    cand = _cand(entity_type="product_identifier", context={"product_match_status": "inactive_only"})
+    base = {
+        "suggested_action": "resolve_product",
+        "suggested_target_id": 99,
+        "ready": True,
+        "plan_status": "ready",
+        "reason": "Single Product Master match (item_code) — propose ProductAlias bind",
+    }
+    m = merge_resolution_plan_row_for_apply(
+        cand=cand,
+        base=base,
+        ov=None,
+        default_region_id=None,
+        default_channel_id=None,
+        global_confirm_suspicious_distributor=False,
+        historical_dsi_product_eligibility_relaxed=True,
+    )
+    assert m["effective_ready"] is True
+    assert m["confirm_ineligible_product"] is True
+    assert m["audit_note"] == "auto-confirmed ineligible: deterministic unique identity, historical path"
+
+
+def test_merge_product_historical_deterministic_auto_confirms_without_inactive_ctx() -> None:
+    """Validate may stamp resolved_unique / tie-break while target is lifecycle-ineligible."""
+    cand = _cand(
+        entity_type="product_identifier",
+        context={
+            "product_match_status": "resolved_unique",
+            "product_ambiguous_eligible": {"product_ids": [10, 20], "tier": "sales_model_name"},
+        },
+    )
+    base = {
+        "suggested_action": "resolve_product",
+        "suggested_target_id": 10,
+        "ready": True,
+        "plan_status": "ready",
+        "baseline_suggested_action": "resolve_product",
+        "baseline_ready": True,
+        "baseline_target_id": 10,
+        "reason": "Shipment evidence tie-break (shipment) — single Product Master match among eligible rows",
+    }
+    m = merge_resolution_plan_row_for_apply(
+        cand=cand,
+        base=base,
+        ov=None,
+        default_region_id=None,
+        default_channel_id=None,
+        global_confirm_suspicious_distributor=False,
+        historical_dsi_product_eligibility_relaxed=True,
+    )
+    assert m["effective_ready"] is True
+    assert m["confirm_ineligible_product"] is True
+    assert "deterministic unique identity" in (m["audit_note"] or "")
+
+
+def test_merge_product_inactive_historical_steward_override_still_blocked() -> None:
+    cand = _cand(entity_type="product_identifier", context={"product_match_status": "inactive_only"})
+    base = {
+        "suggested_action": "resolve_product",
+        "suggested_target_id": None,
+        "ready": False,
+        "plan_status": "needs_review",
+        "baseline_suggested_action": "resolve_product",
+        "baseline_ready": False,
+        "baseline_target_id": None,
+    }
+    m = merge_resolution_plan_row_for_apply(
+        cand=cand,
+        base=base,
+        ov={"action": "resolve_product", "target_id": 99},
+        default_region_id=None,
+        default_channel_id=None,
+        global_confirm_suspicious_distributor=False,
+        historical_dsi_product_eligibility_relaxed=True,
+    )
+    assert m["effective_ready"] is False
+    assert "inactive_or_ineligible_product_requires_confirm_and_audit_note" in m["blockers"]
+
+
+def test_merge_product_ambiguous_historical_still_not_ready_without_classify_target() -> None:
+    cand = _cand(
+        entity_type="product_identifier",
+        context={
+            "product_match_status": "ambiguous_eligible",
+            "product_ambiguous_eligible": {"product_ids": [10, 20], "tier": "sales_model_name"},
+        },
+    )
+    base = {
+        "suggested_action": "resolve_product",
+        "suggested_target_id": None,
+        "ready": False,
+        "plan_status": "needs_review",
+        "reason": "Multiple eligible Product Master matches — steward review required",
+    }
+    m = merge_resolution_plan_row_for_apply(
+        cand=cand,
+        base=base,
+        ov=None,
+        default_region_id=None,
+        default_channel_id=None,
+        global_confirm_suspicious_distributor=False,
+        historical_dsi_product_eligibility_relaxed=True,
+    )
+    assert m["effective_ready"] is False
+    assert m["confirm_ineligible_product"] is False
+
+
 def test_merge_strategic_customer_provisional_requires_ack() -> None:
     cand = _cand(entity_type="customer_dealer_token", context={"strategic_channel_hint": True})
     base = {"suggested_action": "create_provisional_customer", "suggested_target_id": None, "ready": False}
@@ -850,3 +958,48 @@ def test_channel_source_token_alias_registered_in_sqlalchemy_metadata() -> None:
     from app.db.base import Base
 
     assert "channel_source_token_alias" in Base.metadata.tables
+
+
+def test_build_dsi_resolution_plan_sync_omits_terminal_candidates_from_summary() -> None:
+    from app.services.imports.dsi_resolution_plan import build_dsi_resolution_plan_sync
+
+    sess = MagicMock()
+    job = MagicMock()
+    job.id = 43
+    job.source = None
+    sess.get.return_value = job
+
+    open_cand = _cand(id=10, status="needs_review", entity_type="customer_dealer_token")
+    resolved = _cand(id=11, status="resolved", entity_type="customer_dealer_token")
+    ignored = _cand(id=12, status="ignored", entity_type="customer_dealer_token")
+    sess.scalars.return_value.all.return_value = [open_cand, resolved, ignored]
+
+    with (
+        patch(
+            "app.services.imports.dsi_resolution_plan.build_dsi_plan_build_context",
+            return_value=MagicMock(prod_idx=MagicMock()),
+        ),
+        patch(
+            "app.services.imports.dsi_customer_region_evidence.build_job_region_evidence_batch",
+            return_value={},
+        ),
+        patch(
+            "app.services.imports.dsi_resolution_plan.plan_dsi_candidate_sync",
+            return_value={
+                "candidate_id": 10,
+                "ready": True,
+                "suggested_action": "map_customer",
+                "plan_status": "ready",
+            },
+        ),
+        patch(
+            "app.services.imports.dsi_plan_target_labels.enrich_plan_rows_with_target_labels",
+            side_effect=lambda _s, rows: rows,
+        ),
+    ):
+        out = build_dsi_resolution_plan_sync(sess, 43, candidate_ids=[10, 11, 12], default_region_id=None, default_channel_id=None)
+
+    assert out["summary"]["total"] == 1
+    assert out["summary"]["ready"] == 1
+    assert out["summary"]["not_ready"] == 0
+    assert [r["candidate_id"] for r in out["rows"]] == [10]

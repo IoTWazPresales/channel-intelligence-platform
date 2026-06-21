@@ -7,6 +7,9 @@ import { dsiStewardFiltersAreDefault } from './dsiStewardCandidateFilterLogic';
 export const DSI_CANDIDATE_PAGE_SIZE_OPTIONS = [100, 250, 500, 1000] as const;
 export type DsiCandidatePageSize = (typeof DSI_CANDIDATE_PAGE_SIZE_OPTIONS)[number];
 
+/** Max server page size — used when Plan/match queue filter requires a full tab load. */
+export const DSI_CANDIDATE_FULL_LOAD_LIMIT = 1000 as const;
+
 export type DsiMappingCandidatesPageResponse = {
   items: DsiCandidateRow[];
   total: number;

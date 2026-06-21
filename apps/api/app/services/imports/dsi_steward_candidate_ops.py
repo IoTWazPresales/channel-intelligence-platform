@@ -20,6 +20,11 @@ from app.models.import_distributor_si import (
 from app.models.mapping import ProductAlias
 from app.services.imports.distributor_sales_inventory import _norm_key
 from app.services.imports.dsi_product_steward import raw_product_token_for_dsi_candidate, validate_dsi_product_resolve
+from app.services.imports.provisional_entity_identity import (
+    find_existing_provisional_customer_by_canonical_name_async,
+    find_existing_provisional_distributor_by_canonical_name_async,
+    is_non_entity_customer_provisional_token,
+)
 
 # Normalized distributor tokens that look like placeholders (single-row + bulk use the same rule).
 DISTRIBUTOR_PROVISIONAL_SUSPICIOUS = frozenset(
@@ -234,6 +239,9 @@ async def execute_resolve_dsi_product(
         db.add(alias_row)
     try:
         await db.flush()
+        from app.services.imports.product_resolution_index_cache import invalidate_product_resolution_index_cache
+
+        invalidate_product_resolution_index_cache()
         cand.status = "resolved"
         cand.suggested_entity_id = int(product_id)
         cand.match_reason = "steward_resolve_product_alias"
@@ -341,7 +349,6 @@ async def execute_map_dsi_customer(
     )
     try:
         await db.commit()
-        await db.refresh(cand)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError("Could not create alias (duplicate or invalid reference)", status_code=409) from None
@@ -404,7 +411,6 @@ async def execute_map_dsi_distributor(
         cand.suggested_entity_id = distributor_id
         cand.match_reason = "steward_map_existing_distributor"
         await db.commit()
-        await db.refresh(alias)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError("Could not create distributor alias", status_code=409) from None
@@ -514,6 +520,18 @@ async def preview_create_provisional_dsi_customer(
     if _is_dsi_steward_terminal_status(cand.status):
         return {"ok": False, "skip_reason": "terminal_status", "detail": "Candidate already terminal"}
 
+    proposal = _resolved_provisional_display_name(display_name_override, cand)
+    raw_preview = _source_customer_alias_raw_for_dsi_candidate(cand)
+    if is_non_entity_customer_provisional_token(raw_token=raw_preview, display_name=proposal):
+        return {
+            "ok": False,
+            "skip_reason": "non_entity_customer_token",
+            "detail": (
+                "Token or display name looks like policy/note text (not a dealer/customer entity); "
+                "ignore or map to an existing customer instead of creating a provisional."
+            ),
+        }
+
     region: DimRegion | None = None
     channel: DimChannel | None = None
     if region_id is not None:
@@ -617,19 +635,25 @@ async def execute_create_provisional_dsi_customer(
     base_note = f"Provisional customer created from DSI import candidate {cand.id} (job {cand.import_job_id})."
     merged_notes = f"{base_note} {notes}" if notes else base_note
 
-    code = await generate_tmp_customer_code(db)
-    row = DimCustomer(
-        code=code,
-        name=proposal.strip()[:256],
-        customer_status="unverified",
-        partner_tier=tier,
-        notes_summary=merged_notes[:512],
-        region_id=region_id,
-        channel_id=channel_id,
-        preferred_distributor_id=preferred_distributor_id,
-    )
-    db.add(row)
-    await db.flush()
+    existing = await find_existing_provisional_customer_by_canonical_name_async(db, proposal)
+    if existing is not None:
+        row = existing
+        reused_provisional = True
+    else:
+        code = await generate_tmp_customer_code(db)
+        row = DimCustomer(
+            code=code,
+            name=proposal.strip()[:256],
+            customer_status="unverified",
+            partner_tier=tier,
+            notes_summary=merged_notes[:512],
+            region_id=region_id,
+            channel_id=channel_id,
+            preferred_distributor_id=preferred_distributor_id,
+        )
+        db.add(row)
+        await db.flush()
+        reused_provisional = False
     raw = _source_customer_alias_raw_for_dsi_candidate(cand)
     nt = _norm_key(raw)
     alias = CustomerSourceTokenAlias(
@@ -650,8 +674,6 @@ async def execute_create_provisional_dsi_customer(
         cand.suggested_entity_id = row.id
         cand.match_reason = "steward_created_provisional_customer"
         await db.commit()
-        await db.refresh(row)
-        await db.refresh(alias)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError("Could not create customer or alias", status_code=409) from None
@@ -662,6 +684,7 @@ async def execute_create_provisional_dsi_customer(
         "customer_code": row.code,
         "alias_id": alias.id,
         "candidate_id": cand.id,
+        "reused_provisional": reused_provisional,
     }
 
 
@@ -779,18 +802,23 @@ async def execute_create_provisional_dsi_distributor(
             status_code=400,
         )
 
-    code = (distributor_code_override or "").strip() or await generate_tmp_distributor_code(db)
-    existing = await db.execute(select(DimDistributor.id).where(DimDistributor.code == code))
-    if existing.scalar_one_or_none() is not None:
-        raise StewardOpError(
-            "distributor_code already exists; omit distributor_code to auto-generate",
-            status_code=409,
-        )
-
     proposal = _resolved_provisional_distributor_display_name(display_name_override, cand)
-    row = DimDistributor(code=code[:32], name=proposal.strip()[:256])
-    db.add(row)
-    await db.flush()
+    existing_dist = await find_existing_provisional_distributor_by_canonical_name_async(db, proposal)
+    if existing_dist is not None:
+        row = existing_dist
+        reused_provisional = True
+    else:
+        code = (distributor_code_override or "").strip() or await generate_tmp_distributor_code(db)
+        dup_code = await db.execute(select(DimDistributor.id).where(DimDistributor.code == code))
+        if dup_code.scalar_one_or_none() is not None:
+            raise StewardOpError(
+                "distributor_code already exists; omit distributor_code to auto-generate",
+                status_code=409,
+            )
+        row = DimDistributor(code=code[:32], name=proposal.strip()[:256])
+        db.add(row)
+        await db.flush()
+        reused_provisional = False
     raw = _first_sample_raw(cand)
     nt = _norm_key(raw)
     alias = DistributorSourceTokenAlias(
@@ -808,8 +836,6 @@ async def execute_create_provisional_dsi_distributor(
         cand.suggested_entity_id = row.id
         cand.match_reason = "steward_created_provisional_distributor"
         await db.commit()
-        await db.refresh(row)
-        await db.refresh(alias)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError("Could not create distributor or alias", status_code=409) from None
@@ -820,6 +846,7 @@ async def execute_create_provisional_dsi_distributor(
         "distributor_code": row.code,
         "alias_id": alias.id,
         "candidate_id": cand.id,
+        "reused_provisional": reused_provisional,
     }
 
 
@@ -875,11 +902,10 @@ async def execute_acknowledge_dsi_duplicate_different_entity(
     cand.status = "acknowledged_unique"
     cand.match_reason = "steward_acknowledged_unique_duplicate"
     await db.commit()
-    await db.refresh(cand)
     return {
         "ok": True,
         "candidate_id": cand.id,
-        "status": cand.status,
+        "status": "acknowledged_unique",
         "peer_candidate_id": peer.id,
         "duplicate_review": review,
     }
@@ -1105,8 +1131,6 @@ async def execute_dsi_duplicate_same_entity(
         _merge_duplicate_review_context(cand, review_primary)
         _merge_duplicate_review_context(peer, review_peer)
         await db.commit()
-        await db.refresh(cand)
-        await db.refresh(peer)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError("Could not complete same-entity mapping (duplicate or invalid reference)", status_code=409) from None
@@ -1229,8 +1253,6 @@ async def execute_dsi_duplicate_cluster_same_entity(
             _merge_duplicate_review_context(cand, review)
 
         await db.commit()
-        for cand in active:
-            await db.refresh(cand)
     except IntegrityError:
         await db.rollback()
         raise StewardOpError(

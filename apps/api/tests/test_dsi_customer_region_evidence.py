@@ -18,6 +18,10 @@ def test_resolve_alpha2_from_token_country_names() -> None:
     assert resolve_alpha2_from_token("ZA") == "ZA"
     assert resolve_alpha2_from_token("south africa") == "ZA"
     assert resolve_alpha2_from_token("BB_Open Channel") is None
+    assert resolve_alpha2_from_token("SADC_Botswana") == "BW"
+    assert resolve_alpha2_from_token("SADC_Eswatini") == "SZ"
+    assert resolve_alpha2_from_token("SADC Botswana") == "BW"
+    assert resolve_alpha2_from_token("Lesotho") == "LS"
 
 
 def test_suggest_region_id_for_iso_code_matches_dim_code() -> None:

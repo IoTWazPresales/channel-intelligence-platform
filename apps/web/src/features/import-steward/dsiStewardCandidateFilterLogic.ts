@@ -6,7 +6,13 @@ export const DSI_ENTITY_CUSTOMER = 'customer_dealer_token' as const;
 export const DSI_ENTITY_DISTRIBUTOR = 'distributor_token' as const;
 export const DSI_ENTITY_PRODUCT = 'product_identifier' as const;
 
-export type DsiStewardQueueFilter = 'all' | 'needs_review' | 'ready_to_map' | 'provisional' | 'no_match';
+export type DsiStewardQueueFilter =
+  | 'all'
+  | 'needs_review'
+  | 'ready_to_map'
+  | 'provisional'
+  | 'no_match'
+  | 'ambiguous_eligible';
 export type DsiStewardEntityFilter = 'all' | 'customer' | 'distributor' | 'product';
 export type DsiStewardPartyFilter = 'all' | 'bill_to' | 'ship_to';
 
@@ -169,10 +175,29 @@ function rowProvisionalPath(r: FilterSlice): boolean {
   return act === 'create_provisional_customer' || act === 'create_provisional_distributor';
 }
 
+export function productMatchStatusFromContext(ctx: Record<string, unknown> | null): string | null {
+  if (!ctx || typeof ctx.product_match_status !== 'string') return null;
+  const t = ctx.product_match_status.trim();
+  return t || null;
+}
+
+function rowProductNoMatch(r: FilterSlice): boolean {
+  return r.entity_type === DSI_ENTITY_PRODUCT && productMatchStatusFromContext(r.context) === 'no_match';
+}
+
+function rowProductAmbiguousEligible(r: FilterSlice): boolean {
+  return (
+    r.entity_type === DSI_ENTITY_PRODUCT &&
+    productMatchStatusFromContext(r.context) === 'ambiguous_eligible'
+  );
+}
+
 function rowNoMatch(r: FilterSlice): boolean {
+  if (r.entity_type === DSI_ENTITY_PRODUCT) {
+    return rowProductNoMatch(r);
+  }
   const mr = (r.match_reason || '').trim();
   if (mr === 'no_alias_or_exact_dim_match') return true;
-  if (r.entity_type === DSI_ENTITY_PRODUCT && !mr) return true;
   if (r.entity_type === DSI_ENTITY_DISTRIBUTOR && !mr) return true;
   return false;
 }
@@ -183,7 +208,21 @@ function matchesQueue(r: FilterSlice, queue: DsiStewardQueueFilter): boolean {
   if (queue === 'ready_to_map') return rowReadyToMap(r);
   if (queue === 'provisional') return rowProvisionalPath(r);
   if (queue === 'no_match') return rowNoMatch(r);
+  if (queue === 'ambiguous_eligible') return rowProductAmbiguousEligible(r);
   return true;
+}
+
+/** Client-side queue counts for the loaded candidate page (same mechanism as queue chip filters). */
+export function countDsiStewardCandidatesForQueue(
+  rows: DsiCandidateRow[],
+  queue: DsiStewardQueueFilter,
+  planByCandidateId: Map<number, Record<string, unknown>>
+): number {
+  if (queue === 'all') return rows.length;
+  return rows.filter((row) => {
+    const slice = toFilterSlice(row, planByCandidateId.get(row.id));
+    return matchesQueue(slice, queue);
+  }).length;
 }
 
 function matchesEntity(r: FilterSlice, entity: DsiStewardEntityFilter): boolean {
@@ -239,4 +278,20 @@ export function dsiStewardFiltersAreDefault(filters: DsiStewardCandidateFilterSt
     !filters.specialCategoryOnly &&
     !filters.duplicateUnresolvedOnly
   );
+}
+
+/** Plan/match queue chips filter client-side on ``context`` / plan — load full tab set first. */
+export function stewardQueueFilterRequiresFullLoad(filters: DsiStewardCandidateFilterState): boolean {
+  return filters.queue !== 'all';
+}
+
+/** Slice a client-filtered candidate list for grid pagination (stable order preserved). */
+export function paginateDsiStewardCandidateRows<T>(
+  rows: T[],
+  page: number,
+  pageSize: number
+): T[] {
+  if (pageSize <= 0) return [];
+  const start = Math.max(0, page) * pageSize;
+  return rows.slice(start, start + pageSize);
 }

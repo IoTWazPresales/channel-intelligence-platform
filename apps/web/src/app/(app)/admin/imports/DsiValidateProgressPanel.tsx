@@ -20,12 +20,14 @@ export type DsiValidateProgress = {
   status?: string;
   phase?: string;
   phase_label?: string;
+  sub_phase?: string | null;
   current_row?: number;
   total_rows?: number;
   pct?: number;
   task_state?: string | null;
   pipeline_queued_at?: string | null;
   pipeline_started_at?: string | null;
+  progress_at?: string | null;
 };
 
 const DSI_PROGRESS_PHASES = [
@@ -115,9 +117,14 @@ export function DsiValidateProgressPanel({
         ? null
         : null;
 
+  const subPhase = String(progress?.sub_phase ?? '').trim();
   const phaseDescription =
     phaseDescriptions?.[rawPhase] ??
-    (rawPhase === 'loading_caches'
+    (rawPhase === 'loading_caches' && subPhase
+      ? progress?.phase_label
+        ? `${progress.phase_label}. One-time preload before row processing.`
+        : 'Pre-loading entity resolution caches. One-time preload before row processing.'
+      : rawPhase === 'loading_caches'
       ? 'Pre-loading entity resolution caches (distributors, products, customers). This is a one-time cost per job.'
       : rawPhase === 'processing_rows'
         ? totalRows > 0

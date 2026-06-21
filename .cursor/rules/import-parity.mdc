@@ -1,0 +1,53 @@
+---
+description: Canonical cross-importer patterns every importer must conform to (steward, apply, resolution, mapping, writes)
+alwaysApply: true
+---
+
+# Import parity standard
+
+Every importer (`product_master`, `distributor_master`, `customer_master`,
+`distributor_inventory`/DSI, `inbound_shipments`, `historical_lineup`, `current_lineup`,
+`customer_sell_through`, scaffolds) shares one conceptual pipeline
+(`upload → parse → map → validate → steward → apply → derive`). Past drift came from each
+importer hand-rolling its own version of each step. When adding or changing an importer, **level up
+to the existing bar — do not invent a new pattern.** The canonical implementations:
+
+1. **Steward surface = shared `ImportStewardCandidateWorkspace` + entity tabs.**
+   Reference: DSI (`DsiImportJobResolutionSection` + `DsiEntityTabsBar` + the candidate-list adapter).
+   Group by entity (distributor / customer / product) with per-tab counts; band confidence with the
+   shared `confidenceBand` helper (≥0.90 high / ≥0.70 medium). The shared workspace is **layout
+   only** — port each importer's search debounce (300ms), bulk-action progress, and in-modal /
+   partial-success error summaries into its section. Do **not** fork a bespoke steward panel.
+
+2. **Apply = async dispatch (broker → dev in-process thread → sync fallback) with progress.**
+   Reference: shipment `_dispatch_shipment_apply` / DSI `_dispatch_dsi_apply`. The endpoint marks the
+   job `running` + `pipeline_queued_at`, dispatches, writes the task slot, and returns immediately
+   with `{async, task_id}`; the worker runs the sync orchestrator with `update_state` progress; the
+   UI fires-and-polls (`dsi-progress` / a bulk-task status route). No synchronous long-running write
+   in the request path (proxy-timeout risk). Register every background task in
+   `import_background_slots.py` so `clear_all_task_slots` clears it on cancel/retry (never write a
+   slot without a registry entry — that reintroduces the orphan-slot bug).
+
+3. **Entity resolution = the shared `try_ai_token_resolution` wrapper.**
+   Deterministic-first; AI only on miss and only auto-resolves at confidence ≥ `AI_AUTO_RESOLVE_THRESHOLD`
+   (0.90); no-op when AI is disabled. Use the shared candidates helpers
+   (`ai_resolver_wiring.{distributor,customer,product}_candidates*`) and
+   `stash_ai_suggestion_on_payload` / `append_ai_diagnostic`. Do **not** call
+   `suggest_token_resolution` directly from an importer.
+
+4. **Column mapping = shared `CanonicalColumnMappingPanel`.**
+   Reference: DSI + shipment. New importers needing an explicit mapping step mount this component
+   (with a `testIdPrefix` + canonical target options), not a bespoke mapping table.
+
+5. **Fact/master writes = set-based, chunked `INSERT … ON CONFLICT`.**
+   No per-row round-trips. Preserve the importer's conflict semantics (e.g. `source_key` upsert /
+   latest-job-wins; sell-out transaction-immutable) — batch the *mechanism* only. De-dup by conflict
+   key within a chunk (Postgres rejects touching the same key twice in one statement).
+
+**Governance (always):** provisional master creation stays steward-initiated (no auto-create on
+apply); SOH is calculated-not-stored; fact tables are current truth while evidence/staging are
+preserved.
+
+**Locked, not subject to this rule:** async DB config (NullPool / `:6543` / `statement_cache_size=0`)
+— only sync-session writes get batched. See `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` for the
+per-importer matrix and `docs/BACKLOG.md` for the deferred alignment items (with triggers).

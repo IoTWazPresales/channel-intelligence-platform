@@ -10,26 +10,32 @@ import {
   FormControl,
   InputLabel,
   MenuItem,
+  Paper,
   Select,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
+  TablePagination,
   TextField,
   Typography,
 } from '@mui/material';
+import type { ColDef, GridOptions, ValueFormatterParams } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { apiGet } from '@/lib/api';
+import { toQueryError } from '@/lib/queryError';
 
+import { buildShippingLinesUrl, type ShippingFilterParams } from './buildShippingLinesUrl';
 import { InboundShipmentsColumnsDialog, type OptionalColumnMeta } from './InboundShipmentsColumnsDialog';
 import { ShippingCommercialSummary } from './ShippingCommercialSummary';
+import { fmtCellForKey, fmtShortDate } from './shippingGridFormatters';
+import type { SmartPresetId } from './shippingSmartPresets';
 
 const LS_GRID = 'cip.commercial.inbound-shipments.grid.optional.v1';
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500] as const;
 
 const DATE_FIELD_OPTIONS: { value: string; label: string }[] = [
   { value: 'eta_date', label: 'ETA date' },
@@ -44,8 +50,6 @@ const DATE_FIELD_OPTIONS: { value: string; label: string }[] = [
   { value: 'updated_at', label: 'Updated at (day, UTC)' },
 ];
 
-type SmartPresetId = 'arriving_week' | 'overdue' | 'landed_week' | 'outstanding';
-
 type CountBucket = { key: string; count: number };
 
 type ShippingSummary = {
@@ -55,12 +59,40 @@ type ShippingSummary = {
   by_distributor: CountBucket[];
 };
 
-type ShippingLine = Record<string, unknown> & { id: number };
+export type ShippingLine = {
+  id: number;
+  distributor_display?: string | null;
+  distributor_name?: string | null;
+  distributor_code?: string | null;
+  channel_partner_label?: string | null;
+  channel_partner_caption?: string | null;
+  sales_model_name?: string | null;
+  product_name?: string | null;
+  item_code?: string | null;
+  product_sku?: string | null;
+  line_state?: string | null;
+  status?: string | null;
+  eta_date?: string | null;
+  promise_date?: string | null;
+  pod_date?: string | null;
+  quantity?: number | null;
+  amount?: number | null;
+  currency_code?: string | null;
+  [key: string]: unknown;
+};
 
 type LinesResponse = { total: number; skip: number; limit: number; items: ShippingLine[] };
 
 type DistHit = { id: number; distributor_code: string; distributor_name: string };
 type CustHit = { id: number; customer_code: string; customer_name: string };
+
+type DeliveryLensId = 'delivered' | 'in_transit';
+
+function cargoStatusLabel(key: string): string {
+  if (key === 'received') return 'Delivered';
+  if (key === 'scheduled') return 'In transit';
+  return key;
+}
 
 function localDateYMD(d: Date): string {
   const y = d.getFullYear();
@@ -83,32 +115,8 @@ function addDaysCal(d: Date, n: number): Date {
   return x;
 }
 
-function fmtShortDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-function fmtOptionalCell(value: unknown): string {
-  if (value == null || value === '') return '—';
-  if (typeof value === 'object') {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return '—';
-    }
-  }
-  return String(value);
-}
-
-function fmtCellForKey(key: string, value: unknown): string {
-  if (value == null || value === '') return '—';
-  if (key.includes('date') || key.endsWith('_at')) {
-    const s = typeof value === 'string' ? value : String(value);
-    if (s && /^\d{4}-\d{2}-\d{2}/.test(s)) return fmtShortDate(s);
-  }
-  return fmtOptionalCell(value);
+function dateColFormatter(p: ValueFormatterParams<ShippingLine>): string {
+  return fmtShortDate(p.value as string | undefined);
 }
 
 export default function InboundShipmentsPage() {
@@ -126,10 +134,17 @@ export default function InboundShipmentsPage() {
   const [operatingUnit, setOperatingUnit] = useState('');
   const [podDateFilter, setPodDateFilter] = useState<'' | 'true' | 'false'>('');
   const [smartPreset, setSmartPreset] = useState<SmartPresetId | null>(null);
+  const [deliveryLens, setDeliveryLens] = useState<DeliveryLensId | null>(null);
+  const [skip, setSkip] = useState(0);
+  const [limit, setLimit] = useState<number>(50);
 
   const [colDialogOpen, setColDialogOpen] = useState(false);
   const [optionalFields, setOptionalFields] = useState<string[]>([]);
   const [persistReady, setPersistReady] = useState(false);
+
+  const gridSectionRef = useRef<HTMLDivElement | null>(null);
+
+  const resetPagination = useCallback(() => setSkip(0), []);
 
   const { data: colMeta, isLoading: colMetaLoading } = useQuery({
     queryKey: ['shipping-inbound-optional-columns'],
@@ -141,9 +156,12 @@ export default function InboundShipmentsPage() {
     try {
       const raw = localStorage.getItem(LS_GRID);
       if (raw) {
-        const p = JSON.parse(raw) as { optionalFields?: string[] };
+        const p = JSON.parse(raw) as { optionalFields?: string[]; pageSize?: number };
         if (Array.isArray(p.optionalFields)) {
           setOptionalFields(p.optionalFields);
+        }
+        if (typeof p.pageSize === 'number' && PAGE_SIZE_OPTIONS.includes(p.pageSize as (typeof PAGE_SIZE_OPTIONS)[number])) {
+          setLimit(p.pageSize);
         }
       }
     } catch {
@@ -161,11 +179,11 @@ export default function InboundShipmentsPage() {
   useEffect(() => {
     if (!persistReady) return;
     try {
-      localStorage.setItem(LS_GRID, JSON.stringify({ optionalFields }));
+      localStorage.setItem(LS_GRID, JSON.stringify({ optionalFields, pageSize: limit }));
     } catch {
       /* ignore */
     }
-  }, [optionalFields, persistReady]);
+  }, [optionalFields, limit, persistReady]);
 
   const optionalSet = useMemo(() => new Set(optionalFields), [optionalFields]);
   const allowedOptional = colMeta?.items ?? [];
@@ -176,62 +194,113 @@ export default function InboundShipmentsPage() {
     [optionalFields, optionalSet, allowedSet]
   );
 
-  const clearSmartPreset = () => {
+  const clearSmartPreset = useCallback(() => {
     setSmartPreset(null);
+    setDeliveryLens(null);
     setLineState('');
     setCargoStatus('');
     setDateField('eta_date');
     setDateFrom('');
     setDateTo('');
     setPodDateFilter('');
+    resetPagination();
+  }, [resetPagination]);
+
+  const applyDeliveryLens = useCallback(
+    (id: DeliveryLensId) => {
+      setSmartPreset(null);
+      setDeliveryLens(id);
+      resetPagination();
+      setDateField('eta_date');
+      setDateFrom('');
+      setDateTo('');
+      setLineState('');
+      if (id === 'delivered') {
+        setCargoStatus('received');
+        setPodDateFilter('false');
+      } else {
+        setCargoStatus('scheduled');
+        setPodDateFilter('true');
+      }
+      gridSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    [resetPagination]
+  );
+
+  const toggleDeliveryLens = (id: DeliveryLensId) => {
+    if (deliveryLens === id) {
+      clearSmartPreset();
+      return;
+    }
+    applyDeliveryLens(id);
   };
 
-  const applySmartPreset = (id: SmartPresetId) => {
+  const applySmartPreset = useCallback(
+    (id: SmartPresetId) => {
+      const today = new Date();
+      const w0 = startOfISOWeek(today);
+      const w6 = addDaysCal(w0, 6);
+      const yest = addDaysCal(today, -1);
+      setSmartPreset(id);
+      setDeliveryLens(null);
+      resetPagination();
+      switch (id) {
+        case 'arriving_week':
+          setDateField('eta_date');
+          setDateFrom(localDateYMD(w0));
+          setDateTo(localDateYMD(w6));
+          setCargoStatus('scheduled');
+          setLineState('');
+          setPodDateFilter('');
+          break;
+        case 'overdue':
+          setDateField('promise_date');
+          setDateFrom('');
+          setDateTo(localDateYMD(yest));
+          setCargoStatus('scheduled');
+          setLineState('');
+          setPodDateFilter('true');
+          break;
+        case 'landed_week':
+          setDateField('pod_date');
+          setDateFrom(localDateYMD(w0));
+          setDateTo(localDateYMD(w6));
+          setCargoStatus('received');
+          setLineState('');
+          setPodDateFilter('false');
+          break;
+        case 'outstanding':
+          setLineState('open_order');
+          setDateField('eta_date');
+          setDateFrom('');
+          setDateTo('');
+          setCargoStatus('');
+          setPodDateFilter('');
+          break;
+        default:
+          break;
+      }
+      gridSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    [resetPagination]
+  );
+
+  const filterScheduledPipeline = useCallback(() => {
+    clearSmartPreset();
+    setDeliveryLens(null);
+    setCargoStatus('scheduled');
+    setLineState('');
+    setPodDateFilter('');
+    resetPagination();
+    gridSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [clearSmartPreset, resetPagination]);
+
+  const toggleSmartPreset = (id: SmartPresetId) => {
     if (smartPreset === id) {
       clearSmartPreset();
       return;
     }
-    const today = new Date();
-    const w0 = startOfISOWeek(today);
-    const w6 = addDaysCal(w0, 6);
-    const yest = addDaysCal(today, -1);
-    setSmartPreset(id);
-    switch (id) {
-      case 'arriving_week':
-        setDateField('eta_date');
-        setDateFrom(localDateYMD(w0));
-        setDateTo(localDateYMD(w6));
-        setCargoStatus('scheduled');
-        setLineState('');
-        setPodDateFilter('');
-        break;
-      case 'overdue':
-        setDateField('promise_date');
-        setDateFrom('');
-        setDateTo(localDateYMD(yest));
-        setCargoStatus('scheduled');
-        setLineState('');
-        setPodDateFilter('true');
-        break;
-      case 'landed_week':
-        setDateField('pod_date');
-        setDateFrom(localDateYMD(w0));
-        setDateTo(localDateYMD(w6));
-        setCargoStatus('received');
-        setLineState('');
-        setPodDateFilter('false');
-        break;
-      case 'outstanding':
-        setLineState('open_order');
-        setDateField('eta_date');
-        setDateFrom('');
-        setDateTo('');
-        setCargoStatus('');
-        setPodDateFilter('');
-        break;
-      default:
-        break;
-    }
+    applySmartPreset(id);
   };
 
   const { data: summary } = useQuery({
@@ -250,25 +319,22 @@ export default function InboundShipmentsPage() {
 
   const includeRawRow = displayOptionalFields.includes('raw_source_row');
 
-  const queryKey = useMemo(
-    () =>
-      [
-        'shipping-lines',
-        lineState,
-        cargoStatus,
-        distributorPick?.id ?? null,
-        customerPick?.id ?? null,
-        search,
-        dateField,
-        dateFrom,
-        dateTo,
-        productFamily,
-        productModel,
-        currencyCode,
-        operatingUnit,
-        podDateFilter,
-        includeRawRow,
-      ] as const,
+  const filterParams = useMemo<ShippingFilterParams>(
+    () => ({
+      lineState,
+      cargoStatus,
+      distributorId: distributorPick?.id ?? null,
+      customerId: customerPick?.id ?? null,
+      search,
+      dateField,
+      dateFrom,
+      dateTo,
+      productFamily,
+      productModel,
+      currencyCode,
+      operatingUnit,
+      podDateFilter,
+    }),
     [
       lineState,
       cargoStatus,
@@ -283,33 +349,81 @@ export default function InboundShipmentsPage() {
       currencyCode,
       operatingUnit,
       podDateFilter,
-      includeRawRow,
     ]
   );
 
-  const { data: lines, isLoading: linesLoading } = useQuery({
-    queryKey,
-    queryFn: ({ signal }) => {
-      const params = new URLSearchParams();
-      params.set('limit', '50');
-      if (lineState) params.set('line_state', lineState);
-      if (cargoStatus) params.set('status', cargoStatus);
-      if (distributorPick != null) params.set('distributor_id', String(distributorPick.id));
-      if (customerPick != null) params.set('customer_id', String(customerPick.id));
-      if (search.trim()) params.set('search', search.trim());
-      if (dateField) params.set('date_field', dateField);
-      if (dateFrom.trim()) params.set('date_from', dateFrom.trim());
-      if (dateTo.trim()) params.set('date_to', dateTo.trim());
-      if (productFamily.trim()) params.set('product_family', productFamily.trim());
-      if (productModel.trim()) params.set('product_model', productModel.trim());
-      if (currencyCode.trim()) params.set('currency_code', currencyCode.trim());
-      if (operatingUnit.trim()) params.set('operating_unit', operatingUnit.trim());
-      if (podDateFilter === 'true') params.set('pod_date_is_null', 'true');
-      if (podDateFilter === 'false') params.set('pod_date_is_null', 'false');
-      if (includeRawRow) params.set('include_raw_row', 'true');
-      return apiGet<LinesResponse>(`/api/v1/shipping/lines?${params.toString()}`, { signal });
-    },
+  const listUrl = useMemo(
+    () => buildShippingLinesUrl({ ...filterParams, skip, limit, includeRawRow }),
+    [filterParams, skip, limit, includeRawRow]
+  );
+
+  const { data: lines, isLoading: linesLoading, isError: linesIsError, error: linesError, refetch } = useQuery({
+    queryKey: ['shipping-lines', listUrl],
+    queryFn: ({ signal }) => apiGet<LinesResponse>(listUrl, { signal }),
   });
+
+  const baseColDefs: ColDef<ShippingLine>[] = useMemo(
+    () => [
+      { field: 'id', headerName: 'ID', width: 88, pinned: 'left' },
+      {
+        headerName: 'Distributor',
+        minWidth: 160,
+        valueGetter: (p) => {
+          const label = (p.data?.distributor_display ?? p.data?.distributor_name ?? '—') as string;
+          const code = p.data?.distributor_code;
+          if (code && p.data?.distributor_name) return `${label}\n${code}`;
+          return label;
+        },
+      },
+      {
+        headerName: 'Channel partner',
+        minWidth: 160,
+        valueGetter: (p) => (p.data?.channel_partner_label ?? '—') as string,
+      },
+      {
+        headerName: 'Product (sales model)',
+        minWidth: 180,
+        valueGetter: (p) =>
+          (p.data?.sales_model_name ?? p.data?.product_name ?? p.data?.item_code ?? '—') as string,
+      },
+      { field: 'line_state', headerName: 'Line state', minWidth: 120 },
+      { field: 'status', headerName: 'Cargo status', minWidth: 120 },
+      { field: 'eta_date', headerName: 'ETA', minWidth: 118, valueFormatter: dateColFormatter },
+      { field: 'promise_date', headerName: 'Promise', minWidth: 118, valueFormatter: dateColFormatter },
+      { field: 'pod_date', headerName: 'POD', minWidth: 118, valueFormatter: dateColFormatter },
+      { field: 'quantity', headerName: 'Qty', width: 90 },
+      { field: 'amount', headerName: 'Amount', width: 100 },
+      { field: 'currency_code', headerName: 'CCY', width: 72 },
+    ],
+    []
+  );
+
+  const optionalColDefs: ColDef<ShippingLine>[] = useMemo(
+    () =>
+      displayOptionalFields.map((f) => ({
+        field: f,
+        headerName: columnLabels.get(f) ?? f,
+        minWidth: f === 'raw_source_row' ? 220 : 130,
+        valueFormatter: (p: ValueFormatterParams<ShippingLine>) => fmtCellForKey(f, p.value),
+        wrapText: f === 'raw_source_row',
+        autoHeight: f === 'raw_source_row',
+      })),
+    [displayOptionalFields, columnLabels]
+  );
+
+  const colDefs = useMemo(() => [...baseColDefs, ...optionalColDefs], [baseColDefs, optionalColDefs]);
+
+  const gridOptions = useMemo(
+    () => ({
+      getRowId: (p: { data: ShippingLine }) => String(p.data.id),
+      defaultColDef: { sortable: true, filter: true, resizable: true },
+    }),
+    []
+  );
+
+  const total = lines?.total ?? 0;
+  const page = limit > 0 ? Math.floor(skip / limit) : 0;
+  const pageCount = Math.max(0, Math.ceil(total / limit) - 1);
 
   return (
     <>
@@ -318,7 +432,11 @@ export default function InboundShipmentsPage() {
         Truth layer from <strong>fact_inbound_shipment</strong> (populated when an inbound import job is applied).
         Steward raw imports under <strong>Admin → Shipment evidence</strong>.
       </Alert>
-      <ShippingCommercialSummary />
+      <ShippingCommercialSummary
+        filterParams={filterParams}
+        onApplySmartPreset={applySmartPreset}
+        onFilterScheduledPipeline={filterScheduledPipeline}
+      />
 
       <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
         Smart views
@@ -329,288 +447,299 @@ export default function InboundShipmentsPage() {
           size="small"
           variant={smartPreset === 'arriving_week' ? 'filled' : 'outlined'}
           color={smartPreset === 'arriving_week' ? 'primary' : 'default'}
-          onClick={() => applySmartPreset('arriving_week')}
+          onClick={() => toggleSmartPreset('arriving_week')}
         />
         <Chip
           label="Overdue (promise passed, not landed)"
           size="small"
           variant={smartPreset === 'overdue' ? 'filled' : 'outlined'}
           color={smartPreset === 'overdue' ? 'primary' : 'default'}
-          onClick={() => applySmartPreset('overdue')}
+          onClick={() => toggleSmartPreset('overdue')}
         />
         <Chip
-          label="Landed this week"
+          label="Delivered this week"
           size="small"
           variant={smartPreset === 'landed_week' ? 'filled' : 'outlined'}
           color={smartPreset === 'landed_week' ? 'primary' : 'default'}
-          onClick={() => applySmartPreset('landed_week')}
+          onClick={() => toggleSmartPreset('landed_week')}
+        />
+        <Chip
+          label="Delivered (all)"
+          size="small"
+          variant={deliveryLens === 'delivered' ? 'filled' : 'outlined'}
+          color={deliveryLens === 'delivered' ? 'success' : 'default'}
+          onClick={() => toggleDeliveryLens('delivered')}
+        />
+        <Chip
+          label="In transit"
+          size="small"
+          variant={deliveryLens === 'in_transit' ? 'filled' : 'outlined'}
+          color={deliveryLens === 'in_transit' ? 'info' : 'default'}
+          onClick={() => toggleDeliveryLens('in_transit')}
         />
         <Chip
           label="Outstanding orders"
           size="small"
           variant={smartPreset === 'outstanding' ? 'filled' : 'outlined'}
           color={smartPreset === 'outstanding' ? 'primary' : 'default'}
-          onClick={() => applySmartPreset('outstanding')}
+          onClick={() => toggleSmartPreset('outstanding')}
         />
-        {smartPreset ? (
+        {smartPreset || deliveryLens ? (
           <Button size="small" onClick={clearSmartPreset}>
             Clear view
           </Button>
         ) : null}
       </Stack>
 
-      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap alignItems="flex-start">
-        <TextField
-          size="small"
-          label="Search"
-          placeholder="Distributor, product, SKU, sales model, order #, channel partner…"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setSmartPreset(null);
-          }}
-          sx={{ minWidth: 260, flex: 1 }}
-        />
-        <Autocomplete
-          sx={{ minWidth: 280, flex: 1 }}
-          size="small"
-          loading={!filterOptions}
-          options={distOptions}
-          value={distributorPick}
-          onChange={(_e, v) => {
-            setDistributorPick(v);
-            setSmartPreset(null);
-          }}
-          getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
-          isOptionEqualToValue={(a, b) => a.id === b.id}
-          renderInput={(params) => (
-            <TextField {...params} label="Distributor (canonical)" placeholder="All distributors · type to filter" />
-          )}
-        />
-        <Autocomplete
-          sx={{ minWidth: 260, flex: 1 }}
-          size="small"
-          loading={!filterOptions}
-          options={custOptions}
-          value={customerPick}
-          onChange={(_e, v) => {
-            setCustomerPick(v);
-            setSmartPreset(null);
-          }}
-          getOptionLabel={(o) => `${o.customer_name} (${o.customer_code})`}
-          isOptionEqualToValue={(a, b) => a.id === b.id}
-          renderInput={(params) => (
-            <TextField {...params} label="Channel partner (customer)" placeholder="All customers · type to filter" />
-          )}
-        />
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel id="flt-line-state">Line state</InputLabel>
-          <Select
-            labelId="flt-line-state"
-            label="Line state"
-            value={lineState}
+      <Paper ref={gridSectionRef} sx={{ p: 2, mb: 2 }}>
+        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap alignItems="flex-start">
+          <TextField
+            size="small"
+            label="Search"
+            placeholder="Distributor, product, SKU, sales model, order #, channel partner…"
+            value={search}
             onChange={(e) => {
-              setLineState(String(e.target.value));
+              setSearch(e.target.value);
               setSmartPreset(null);
+              setDeliveryLens(null);
+              resetPagination();
             }}
-          >
-            <MenuItem value="">(any)</MenuItem>
-            {(summary?.by_line_state ?? []).map((b) => (
-              <MenuItem key={b.key} value={b.key}>
-                {b.key}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel id="flt-cargo">Cargo status</InputLabel>
-          <Select
-            labelId="flt-cargo"
-            label="Cargo status"
-            value={cargoStatus}
-            onChange={(e) => {
-              setCargoStatus(String(e.target.value));
+            sx={{ minWidth: 260, flex: 1 }}
+          />
+          <Autocomplete
+            sx={{ minWidth: 280, flex: 1 }}
+            size="small"
+            loading={!filterOptions}
+            options={distOptions}
+            value={distributorPick}
+            onChange={(_e, v) => {
+              setDistributorPick(v);
               setSmartPreset(null);
+              setDeliveryLens(null);
+              resetPagination();
             }}
-          >
-            <MenuItem value="">(any)</MenuItem>
-            {(summary?.by_status ?? []).map((b) => (
-              <MenuItem key={b.key} value={b.key}>
-                {b.key}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl size="small" sx={{ minWidth: 180 }}>
-          <InputLabel id="flt-date-field">Date field</InputLabel>
-          <Select
-            labelId="flt-date-field"
-            label="Date field"
-            value={dateField}
-            onChange={(e) => {
-              setDateField(String(e.target.value));
+            getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            renderInput={(params) => (
+              <TextField {...params} label="Distributor (canonical)" placeholder="All distributors · type to filter" />
+            )}
+          />
+          <Autocomplete
+            sx={{ minWidth: 260, flex: 1 }}
+            size="small"
+            loading={!filterOptions}
+            options={custOptions}
+            value={customerPick}
+            onChange={(_e, v) => {
+              setCustomerPick(v);
               setSmartPreset(null);
+              setDeliveryLens(null);
+              resetPagination();
             }}
-          >
-            {DATE_FIELD_OPTIONS.map((o) => (
-              <MenuItem key={o.value} value={o.value}>
-                {o.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <TextField
-          size="small"
-          label="Date from"
-          type="date"
-          InputLabelProps={{ shrink: true }}
-          value={dateFrom}
-          onChange={(e) => {
-            setDateFrom(e.target.value);
-            setSmartPreset(null);
-          }}
-          sx={{ width: 160 }}
-        />
-        <TextField
-          size="small"
-          label="Date to"
-          type="date"
-          InputLabelProps={{ shrink: true }}
-          value={dateTo}
-          onChange={(e) => {
-            setDateTo(e.target.value);
-            setSmartPreset(null);
-          }}
-          sx={{ width: 160 }}
-        />
-        <TextField
-          size="small"
-          label="Product family"
-          placeholder="Category / line / series"
-          value={productFamily}
-          onChange={(e) => {
-            setProductFamily(e.target.value);
-            setSmartPreset(null);
-          }}
-          sx={{ minWidth: 160 }}
-        />
-        <TextField
-          size="small"
-          label="Product model"
-          placeholder="Model, marketing name, SKU…"
-          value={productModel}
-          onChange={(e) => {
-            setProductModel(e.target.value);
-            setSmartPreset(null);
-          }}
-          sx={{ minWidth: 160 }}
-        />
-        <TextField
-          size="small"
-          label="Currency"
-          placeholder="e.g. USD"
-          value={currencyCode}
-          onChange={(e) => {
-            setCurrencyCode(e.target.value);
-            setSmartPreset(null);
-          }}
-          sx={{ width: 100 }}
-        />
-        <TextField
-          size="small"
-          label="Operating unit"
-          value={operatingUnit}
-          onChange={(e) => {
-            setOperatingUnit(e.target.value);
-            setSmartPreset(null);
-          }}
-          sx={{ minWidth: 140 }}
-        />
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<ViewColumnIcon />}
-          onClick={() => setColDialogOpen(true)}
-          sx={{ flexShrink: 0, alignSelf: 'center' }}
-        >
-          Additional columns
-        </Button>
-      </Stack>
-
-      <Box sx={{ overflowX: 'auto' }}>
-        {linesLoading ? (
-          <Typography color="text.secondary">Loading rows…</Typography>
-        ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Distributor</TableCell>
-                <TableCell>Channel partner</TableCell>
-                <TableCell>Product (sales model)</TableCell>
-                <TableCell>Line state</TableCell>
-                <TableCell>Cargo status</TableCell>
-                <TableCell>ETA</TableCell>
-                <TableCell>Promise</TableCell>
-                <TableCell>POD</TableCell>
-                {displayOptionalFields.map((f) => (
-                  <TableCell key={f}>{columnLabels.get(f) ?? f}</TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {(lines?.items ?? []).map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>
-                    <Typography variant="body2">
-                      {(row.distributor_display ?? row.distributor_name ?? '—') as string}
-                    </Typography>
-                    {row.distributor_code && row.distributor_name ? (
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {String(row.distributor_code)}
-                      </Typography>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
-                      {(row.channel_partner_label ?? '—') as string}
-                    </Typography>
-                    {row.channel_partner_caption ? (
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {String(row.channel_partner_caption)}
-                      </Typography>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
-                      {(row.sales_model_name ?? row.product_name ?? row.item_code ?? '—') as string}
-                    </Typography>
-                    {row.product_sku ? (
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        SKU {String(row.product_sku)}
-                      </Typography>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>{String(row.line_state ?? '—')}</TableCell>
-                  <TableCell>{String(row.status ?? '—')}</TableCell>
-                  <TableCell>{fmtShortDate(row.eta_date as string | undefined)}</TableCell>
-                  <TableCell>{fmtShortDate(row.promise_date as string | undefined)}</TableCell>
-                  <TableCell>{fmtShortDate(row.pod_date as string | undefined)}</TableCell>
-                  {displayOptionalFields.map((f) => (
-                    <TableCell key={f} sx={{ maxWidth: 260, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {fmtCellForKey(f, row[f])}
-                    </TableCell>
-                  ))}
-                </TableRow>
+            getOptionLabel={(o) => `${o.customer_name} (${o.customer_code})`}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            renderInput={(params) => (
+              <TextField {...params} label="Channel partner (customer)" placeholder="All customers · type to filter" />
+            )}
+          />
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel id="flt-line-state">Line state</InputLabel>
+            <Select
+              labelId="flt-line-state"
+              label="Line state"
+              value={lineState}
+              onChange={(e) => {
+                setLineState(String(e.target.value));
+                setSmartPreset(null);
+                setDeliveryLens(null);
+                resetPagination();
+              }}
+            >
+              <MenuItem value="">(any)</MenuItem>
+              {(summary?.by_line_state ?? []).map((b) => (
+                <MenuItem key={b.key} value={b.key}>
+                  {b.key}
+                </MenuItem>
               ))}
-            </TableBody>
-          </Table>
-        )}
-        {lines && !linesLoading ? (
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            Showing {lines.items.length} of {lines.total} (skip {lines.skip}, limit {lines.limit})
-          </Typography>
-        ) : null}
-      </Box>
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel id="flt-cargo">Cargo status</InputLabel>
+            <Select
+              labelId="flt-cargo"
+              label="Cargo status"
+              value={cargoStatus}
+              onChange={(e) => {
+                setCargoStatus(String(e.target.value));
+                setSmartPreset(null);
+                setDeliveryLens(null);
+                resetPagination();
+              }}
+            >
+              <MenuItem value="">(any)</MenuItem>
+              {(summary?.by_status ?? []).map((b) => (
+                <MenuItem key={b.key} value={b.key}>
+                  {cargoStatusLabel(b.key)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <InputLabel id="flt-date-field">Date field</InputLabel>
+            <Select
+              labelId="flt-date-field"
+              label="Date field"
+              value={dateField}
+              onChange={(e) => {
+                setDateField(String(e.target.value));
+                setSmartPreset(null);
+                setDeliveryLens(null);
+                resetPagination();
+              }}
+            >
+              {DATE_FIELD_OPTIONS.map((o) => (
+                <MenuItem key={o.value} value={o.value}>
+                  {o.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            size="small"
+            label="Date from"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={dateFrom}
+            onChange={(e) => {
+              setDateFrom(e.target.value);
+              setSmartPreset(null);
+              setDeliveryLens(null);
+              resetPagination();
+            }}
+            sx={{ width: 160 }}
+          />
+          <TextField
+            size="small"
+            label="Date to"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={dateTo}
+            onChange={(e) => {
+              setDateTo(e.target.value);
+              setSmartPreset(null);
+              setDeliveryLens(null);
+              resetPagination();
+            }}
+            sx={{ width: 160 }}
+          />
+          <TextField
+            size="small"
+            label="Product family"
+            placeholder="Category / line / series"
+            value={productFamily}
+            onChange={(e) => {
+              setProductFamily(e.target.value);
+              setSmartPreset(null);
+              setDeliveryLens(null);
+              resetPagination();
+            }}
+            sx={{ minWidth: 160 }}
+          />
+          <TextField
+            size="small"
+            label="Product model"
+            placeholder="Model, marketing name, SKU…"
+            value={productModel}
+            onChange={(e) => {
+              setProductModel(e.target.value);
+              setSmartPreset(null);
+              setDeliveryLens(null);
+              resetPagination();
+            }}
+            sx={{ minWidth: 160 }}
+          />
+          <TextField
+            size="small"
+            label="Currency"
+            placeholder="e.g. USD"
+            value={currencyCode}
+            onChange={(e) => {
+              setCurrencyCode(e.target.value);
+              setSmartPreset(null);
+              setDeliveryLens(null);
+              resetPagination();
+            }}
+            sx={{ width: 100 }}
+          />
+          <TextField
+            size="small"
+            label="Operating unit"
+            value={operatingUnit}
+            onChange={(e) => {
+              setOperatingUnit(e.target.value);
+              setSmartPreset(null);
+              setDeliveryLens(null);
+              resetPagination();
+            }}
+            sx={{ minWidth: 140 }}
+          />
+        </Stack>
+
+        <TablePagination
+          component="div"
+          count={total}
+          page={total === 0 ? 0 : Math.min(page, pageCount)}
+          onPageChange={(_, nextPage) => {
+            setSkip(nextPage * limit);
+          }}
+          rowsPerPage={limit}
+          onRowsPerPageChange={(e) => {
+            const next = Number(e.target.value);
+            setLimit(next);
+            setSkip(0);
+          }}
+          rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`}
+          sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}
+        />
+
+        <ModuleDataSection
+          intro="Sort and filter in the grid. Pagination applies to the server query — change filters to narrow the full result set."
+          introWhen="always"
+          isLoading={linesLoading}
+          isError={linesIsError}
+          error={toQueryError(linesError)}
+          onRetry={() => void refetch()}
+          isEmpty={!linesLoading && (lines?.items?.length ?? 0) === 0}
+          empty={{
+            title: 'No shipment lines match',
+            description: 'Adjust filters or run an inbound import apply to populate fact_inbound_shipment.',
+            primary: { label: 'Data imports', href: '/admin/imports?template=inbound_shipments' },
+            secondary: { label: 'Shipment evidence', href: '/admin/shipment-evidence' },
+          }}
+          toolbar={
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 2 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<ViewColumnIcon />}
+                onClick={() => setColDialogOpen(true)}
+                data-testid="shipping-additional-columns"
+              >
+                Additional columns
+              </Button>
+              <ModuleGridToolbar onRefresh={() => void refetch()} importsHref="/admin/imports?template=inbound_shipments" />
+            </Stack>
+          }
+        >
+          <EnterpriseDataGrid
+            rowData={lines?.items ?? []}
+            columnDefs={colDefs as ColDef[]}
+            gridOptions={gridOptions as GridOptions}
+            height={520}
+          />
+        </ModuleDataSection>
+      </Paper>
 
       <InboundShipmentsColumnsDialog
         open={colDialogOpen}

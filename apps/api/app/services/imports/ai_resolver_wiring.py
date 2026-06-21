@@ -19,7 +19,7 @@ from app.services.imports.ai_import_resolver import (
     detect_format_drift,
     suggest_token_resolution,
 )
-from app.services.imports.distributor_sales_inventory import ProductResolutionIndex
+from app.services.imports.distributor_sales_inventory import DSIResolutionCache, ProductResolutionIndex
 from app.utils.json_safe import to_jsonable
 
 
@@ -69,14 +69,38 @@ def _dim_record_candidates(
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for row in rows:
+        rid = getattr(row, "id", None)
+        if rid is None:
+            continue
         out.append(
             {
-                "id": int(row.id),
+                "id": int(rid),
                 "code": str(getattr(row, code_attr, "") or ""),
                 "name": str(getattr(row, name_attr, "") or ""),
             }
         )
     return out
+
+
+def distributor_candidates_from_dim_list(
+    distributors: list[Any],
+    raw_token: str,
+    *,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """In-memory distributor candidates (e.g. distributor_master preload) — no DB round-trip."""
+    key = (raw_token or "").strip().lower()
+    rows = list(distributors)
+    if key:
+        filtered = [
+            d
+            for d in rows
+            if key in (getattr(d, "code", None) or "").lower() or key in (getattr(d, "name", None) or "").lower()
+        ]
+        rows = filtered[:limit] if filtered else rows[:limit]
+    else:
+        rows = rows[:limit]
+    return _dim_record_candidates(rows, code_attr="code", name_attr="name")
 
 
 def distributor_candidates(db: Session, raw_token: str, *, limit: int = 20) -> list[dict[str, Any]]:
@@ -108,6 +132,51 @@ def customer_candidates(db: Session, raw_token: str, *, limit: int = 20) -> list
             if key in (c.code or "").lower() or key in (c.name or "").lower()
         ]
         rows = (filtered or rows)[:limit]
+    else:
+        rows = rows[:limit]
+    return _dim_record_candidates(rows, code_attr="code", name_attr="name")
+
+
+def customer_candidates_from_cache(
+    res_cache: DSIResolutionCache,
+    raw_token: str,
+    *,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """In-memory ``customer_candidates`` — no per-row ``SELECT dim_customer``."""
+    key = (raw_token or "").strip().lower()
+    rows = res_cache.all_customers
+    if key:
+        filtered = [
+            c
+            for c in rows
+            if key in (c.code or "").lower() or key in (c.name or "").lower()
+        ]
+        rows = (filtered or rows)[:limit]
+    else:
+        rows = rows[:limit]
+    return _dim_record_candidates(rows, code_attr="code", name_attr="name")
+
+
+def distributor_candidates_from_cache(
+    res_cache: DSIResolutionCache,
+    raw_token: str,
+    *,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """In-memory ``distributor_candidates`` — no per-row ``SELECT dim_distributor``."""
+    key = (raw_token or "").strip().lower()
+    rows = res_cache.all_distributors
+    if key:
+        filtered = [
+            d
+            for d in rows
+            if key in (d.code or "").lower() or key in (d.name or "").lower()
+        ]
+        if filtered:
+            rows = filtered[:limit]
+        else:
+            rows = rows[:limit]
     else:
         rows = rows[:limit]
     return _dim_record_candidates(rows, code_attr="code", name_attr="name")

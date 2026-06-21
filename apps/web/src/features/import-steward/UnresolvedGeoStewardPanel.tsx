@@ -1,26 +1,298 @@
-"use client";
+'use client';
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
-  Divider,
+  Box,
+  Button,
+  Checkbox,
+  Chip,
+  Collapse,
   FormControl,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
-} from "@mui/material";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+} from '@mui/material';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { apiPost, safeDisplayError } from "@/lib/api";
+import { apiPost, safeDisplayError } from '@/lib/api';
 
-import { DSI_STEWARD_CONFIG, invalidateDsiCatalogQueries, invalidateDsiImportJobStewardQueries } from "./dsiSteward.config";
-import { DsiPendingButton } from "./DsiPendingButton";
-import { GeoStewardRegisterFromFile } from "./GeoStewardRegisterFromFile";
-import type { DsiCatalogOpt, DsiUnresolvedGeoRowDto } from "./dsiSteward.types";
+import { invalidateDsiCatalogQueries, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
+import { DsiPendingButton } from './DsiPendingButton';
+import { prefillGeoCreateFromFileToken } from './geoStewardFilePrefill';
+import { GeoStewardRegisterFromFile } from './GeoStewardRegisterFromFile';
+import { geoRowHasRegionHint, geoRowIsoHint, geoRowRegionAliasRegistered } from './geoStewardHints';
+import type {
+  DsiCatalogOpt,
+  DsiGeoStewardBulkApplyResponse,
+  DsiGeoStewardBulkItem,
+  DsiUnresolvedGeoRowDto,
+} from './dsiSteward.types';
+
+type GeoRowKind = 'channel' | 'region';
+
+type GeoTableRow = DsiUnresolvedGeoRowDto & { kind: GeoRowKind; rowKey: string };
+
+const DETAIL_COL_SPAN = 6;
+
+function GeoStewardTableRow({
+  row,
+  kind,
+  rowKey,
+  selected,
+  onToggleSelected,
+  catalogOptions,
+  mapId,
+  onMapIdChange,
+  overrideOpen,
+  onToggleOverride,
+  code,
+  name,
+  onCodeChange,
+  onNameChange,
+  geoBusy,
+  onSaveAlias,
+  aliasPending,
+  onRegisterFromFile,
+  registerPending,
+  onRegisterChannelFromFile,
+  onRegisterFromHint,
+  hintPending,
+  isGeographicChannel,
+  regionAliasRegistered,
+}: {
+  row: DsiUnresolvedGeoRowDto;
+  kind: GeoRowKind;
+  rowKey: string;
+  selected: boolean;
+  onToggleSelected: () => void;
+  catalogOptions: DsiCatalogOpt[];
+  mapId: string;
+  onMapIdChange: (value: string) => void;
+  overrideOpen: boolean;
+  onToggleOverride: () => void;
+  code: string;
+  name: string;
+  onCodeChange: (value: string) => void;
+  onNameChange: (value: string) => void;
+  geoBusy: boolean;
+  onSaveAlias: () => void;
+  aliasPending: boolean;
+  onRegisterFromFile: () => void;
+  registerPending: boolean;
+  onRegisterChannelFromFile?: (args: { raw_token: string; code: string; name: string }) => void | Promise<void>;
+  onRegisterFromHint?: () => void;
+  hintPending?: boolean;
+  isGeographicChannel: boolean;
+  regionAliasRegistered: boolean;
+}) {
+  const mapLabel = kind === 'channel' ? 'Map to channel' : 'Map to region';
+  const canRegister = Boolean(code.trim() && name.trim());
+
+  return (
+    <>
+      <TableRow
+        data-testid={`dsi-geo-row-${row.normalized_token}`}
+        hover
+        selected={selected}
+        sx={isGeographicChannel ? { bgcolor: 'action.hover' } : undefined}
+      >
+        <TableCell padding="checkbox" sx={{ verticalAlign: 'top' }}>
+          <Checkbox
+            size="small"
+            checked={selected}
+            onChange={onToggleSelected}
+            inputProps={{ 'aria-label': `Select ${row.raw_token}` }}
+          />
+        </TableCell>
+        <TableCell sx={{ verticalAlign: 'top', maxWidth: 180 }}>
+          <Typography variant="body2" sx={{ wordBreak: 'break-word', fontWeight: 500 }}>
+            {row.raw_token}
+          </Typography>
+          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              {kind === 'channel' ? 'Channel' : 'Region'}
+            </Typography>
+            {isGeographicChannel ? (
+              <Chip label="Geographic" size="small" color="info" variant="outlined" sx={{ height: 20 }} />
+            ) : null}
+          </Stack>
+        </TableCell>
+        <TableCell sx={{ verticalAlign: 'top', maxWidth: 160 }}>
+          <Typography variant="caption" color="text.secondary" display="block">
+            {row.resolution_detail}
+          </Typography>
+          <Typography variant="caption" display="block">
+            {row.row_count} rows
+          </Typography>
+        </TableCell>
+        <TableCell sx={{ verticalAlign: 'top', minWidth: 160 }}>
+          {isGeographicChannel ? (
+            <Stack spacing={0.5}>
+              <Typography variant="caption" display="block">
+                Region: {geoRowIsoHint(row) ?? '—'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block">
+                {regionAliasRegistered
+                  ? 'Region alias registered for this file token'
+                  : row.geographic_hint?.matched_catalog
+                    ? 'ISO region in catalog — register alias to link token'
+                    : 'Create/link region alias'}
+              </Typography>
+              {regionAliasRegistered ? (
+                <Chip label="Registered" size="small" color="success" variant="outlined" sx={{ height: 22 }} />
+              ) : onRegisterFromHint ? (
+                <DsiPendingButton
+                  size="small"
+                  variant="contained"
+                  pending={Boolean(hintPending)}
+                  pendingLabel="Registering…"
+                  disabled={geoBusy && !hintPending}
+                  onClick={() => void onRegisterFromHint()}
+                  data-testid={`dsi-geo-hint-region-${row.normalized_token}`}
+                >
+                  Register ISO region
+                </DsiPendingButton>
+              ) : null}
+            </Stack>
+          ) : (
+            <Typography variant="caption" color="text.secondary">
+              —
+            </Typography>
+          )}
+        </TableCell>
+        <TableCell sx={{ verticalAlign: 'top', minWidth: 200 }}>
+          <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+            <FormControl size="small" sx={{ minWidth: 160, flex: '1 1 140px' }}>
+              <InputLabel id={`${rowKey}-map`}>{mapLabel}</InputLabel>
+              <Select
+                labelId={`${rowKey}-map`}
+                label={mapLabel}
+                value={mapId}
+                onChange={(e) => onMapIdChange(String(e.target.value))}
+              >
+                <MenuItem value="">
+                  <em>Select…</em>
+                </MenuItem>
+                {catalogOptions.map((opt) => (
+                  <MenuItem key={opt.id} value={String(opt.id)}>
+                    {opt.code} — {opt.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <DsiPendingButton
+              size="small"
+              variant="outlined"
+              pending={aliasPending}
+              pendingLabel="Saving…"
+              disabled={(geoBusy && !aliasPending) || !mapId.trim()}
+              onClick={() => void onSaveAlias()}
+              data-testid={`dsi-geo-${kind === 'channel' ? 'ch' : 'rg'}-alias-${row.normalized_token}`}
+            >
+              Save alias
+            </DsiPendingButton>
+          </Stack>
+        </TableCell>
+        <TableCell sx={{ verticalAlign: 'top', minWidth: 200 }}>
+          {!isGeographicChannel ? (
+            <>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                {code} — {name}
+              </Typography>
+              <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                <DsiPendingButton
+                  size="small"
+                  variant="contained"
+                  pending={registerPending}
+                  pendingLabel="Registering…"
+                  disabled={(geoBusy && !registerPending) || !canRegister}
+                  onClick={() => void onRegisterFromFile()}
+                  data-testid={`dsi-geo-${kind === 'channel' ? 'ch' : 'rg'}-${row.normalized_token}-register-btn`}
+                >
+                  Register from file
+                </DsiPendingButton>
+                <Typography
+                  component="button"
+                  type="button"
+                  variant="caption"
+                  color="primary"
+                  onClick={onToggleOverride}
+                  sx={{
+                    border: 0,
+                    bgcolor: 'transparent',
+                    cursor: 'pointer',
+                    p: 0,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  {overrideOpen ? 'Hide override' : 'Override code/name'}
+                </Typography>
+              </Stack>
+            </>
+          ) : (
+            <Stack spacing={0.75}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                {regionAliasRegistered
+                  ? 'ISO region alias saved. Re-run validation to refresh the customer plan.'
+                  : 'Primary path: register as ISO region (left). These values sit in the file Channel column but encode countries, not RTM routes like Mass Retail.'}
+              </Typography>
+              <GeoStewardRegisterFromFile
+                row={row}
+                dimension="channel"
+                pending={registerPending}
+                geoBusy={geoBusy}
+                onRegister={async (args) => {
+                  if (onRegisterChannelFromFile) {
+                    await onRegisterChannelFromFile(args);
+                  }
+                }}
+                testIdPrefix={`dsi-geo-ch-rtm-${row.normalized_token}`}
+              />
+            </Stack>
+          )}
+        </TableCell>
+      </TableRow>
+      {!isGeographicChannel ? (
+        <TableRow>
+          <TableCell colSpan={DETAIL_COL_SPAN} sx={{ py: 0, borderBottom: overrideOpen ? undefined : 0 }}>
+            <Collapse in={overrideOpen} unmountOnExit>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ py: 1.5 }}>
+                <TextField
+                  size="small"
+                  label={kind === 'channel' ? 'Channel code' : 'Region code'}
+                  value={code}
+                  onChange={(e) => onCodeChange(e.target.value)}
+                  inputProps={{
+                    'data-testid': `dsi-geo-${kind === 'channel' ? 'ch' : 'rg'}-${row.normalized_token}-code`,
+                  }}
+                />
+                <TextField
+                  size="small"
+                  label={kind === 'channel' ? 'Channel name' : 'Region name'}
+                  value={name}
+                  onChange={(e) => onNameChange(e.target.value)}
+                  inputProps={{
+                    'data-testid': `dsi-geo-${kind === 'channel' ? 'ch' : 'rg'}-${row.normalized_token}-name`,
+                  }}
+                />
+              </Stack>
+            </Collapse>
+          </TableCell>
+        </TableRow>
+      ) : null}
+    </>
+  );
+}
 
 export function UnresolvedGeoStewardPanel({
   importJobId,
@@ -39,14 +311,81 @@ export function UnresolvedGeoStewardPanel({
 }) {
   const qc = useQueryClient();
   const [msg, setMsg] = useState<string | null>(null);
+  const [bulkSummary, setBulkSummary] = useState<string | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [chMapId, setChMapId] = useState<Record<string, string>>({});
   const [rgMapId, setRgMapId] = useState<Record<string, string>>({});
+  const [overrideOpen, setOverrideOpen] = useState<Record<string, boolean>>({});
+  const [draftCode, setDraftCode] = useState<Record<string, string>>({});
+  const [draftName, setDraftName] = useState<Record<string, string>>({});
+
+  const tableRows = useMemo((): GeoTableRow[] => {
+    const out: GeoTableRow[] = [];
+    for (const row of channels) {
+      out.push({ ...row, kind: 'channel', rowKey: `ch:${row.normalized_token}` });
+    }
+    for (const row of regions) {
+      out.push({ ...row, kind: 'region', rowKey: `rg:${row.normalized_token}` });
+    }
+    return out.sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === 'channel' ? -1 : 1;
+      return a.normalized_token.localeCompare(b.normalized_token);
+    });
+  }, [channels, regions]);
+
+  const selectedRows = useMemo(
+    () => tableRows.filter((row) => selectedKeys.has(row.rowKey)),
+    [selectedKeys, tableRows]
+  );
+
+  const geographicChannelRows = useMemo(
+    () =>
+      selectedRows.filter(
+        (row) => row.kind === 'channel' && geoRowHasRegionHint(row) && !geoRowRegionAliasRegistered(row)
+      ),
+    [selectedRows]
+  );
+
+  const registerFromFileRows = useMemo(
+    () => selectedRows.filter((row) => row.kind === 'channel' || row.kind === 'region'),
+    [selectedRows]
+  );
+
+  const prefillFor = useCallback(
+    (row: GeoTableRow) => {
+      const existingCode = draftCode[row.rowKey];
+      const existingName = draftName[row.rowKey];
+      if (existingCode != null && existingName != null) {
+        return { code: existingCode, name: existingName };
+      }
+      return prefillGeoCreateFromFileToken(row.raw_token, row.normalized_token, row.kind);
+    },
+    [draftCode, draftName]
+  );
 
   const invalidateGeo = useCallback(() => {
     invalidateDsiImportJobStewardQueries(qc, importJobId);
     invalidateDsiCatalogQueries(qc);
     onInvalidate();
   }, [importJobId, onInvalidate, qc]);
+
+  const bulkApplyMut = useMutation({
+    mutationFn: async (body: { action: 'register_region_from_hint' | 'register_from_file'; items: DsiGeoStewardBulkItem[] }) =>
+      apiPost<DsiGeoStewardBulkApplyResponse>(
+        `/api/v1/mappings/import-jobs/${importJobId}/dsi-geo-steward/bulk-apply`,
+        body
+      ),
+    onSuccess: (data) => {
+      setBulkSummary(`Bulk ${data.action}: ${data.applied} applied, ${data.failed} failed.`);
+      if (data.failed === 0) {
+        setMsg('Bulk geo stewardship complete. Re-run validation when ready.');
+      } else {
+        setMsg(`Bulk completed with ${data.failed} failure(s). Successful rows were saved.`);
+      }
+      setSelectedKeys(new Set());
+      invalidateGeo();
+    },
+  });
 
   const chAliasMut = useMutation({
     mutationFn: async (args: { raw_token: string; channel_id: number }) =>
@@ -116,11 +455,51 @@ export function UnresolvedGeoStewardPanel({
   });
 
   const geoBusy =
+    bulkApplyMut.isPending ||
     chAliasMut.isPending ||
     chCreateMut.isPending ||
     rgAliasMut.isPending ||
     rgCreateMut.isPending ||
     hintRegionMut.isPending;
+
+  const allSelected = tableRows.length > 0 && selectedKeys.size === tableRows.length;
+  const someSelected = selectedKeys.size > 0 && !allSelected;
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedKeys(new Set());
+    } else {
+      setSelectedKeys(new Set(tableRows.map((row) => row.rowKey)));
+    }
+  };
+
+  const runBulkRegionHints = () => {
+    if (geographicChannelRows.length === 0) return;
+    const items: DsiGeoStewardBulkItem[] = geographicChannelRows.map((row) => ({
+      kind: 'channel',
+      raw_token: row.raw_token,
+      normalized_token: row.normalized_token,
+      iso_alpha2: geoRowIsoHint(row),
+    }));
+    void bulkApplyMut.mutateAsync({ action: 'register_region_from_hint', items }).catch(() => {});
+  };
+
+  const runBulkRegisterFromFile = () => {
+    if (registerFromFileRows.length === 0) return;
+    const items: DsiGeoStewardBulkItem[] = registerFromFileRows.map((row) => {
+      const prefill = prefillFor(row);
+      const code = (draftCode[row.rowKey] ?? prefill.code).trim();
+      const name = (draftName[row.rowKey] ?? prefill.name).trim();
+      return {
+        kind: row.kind,
+        raw_token: row.raw_token,
+        normalized_token: row.normalized_token,
+        code,
+        name,
+      };
+    });
+    void bulkApplyMut.mutateAsync({ action: 'register_from_file', items }).catch(() => {});
+  };
 
   if (channels.length === 0 && regions.length === 0) {
     return (
@@ -131,179 +510,197 @@ export function UnresolvedGeoStewardPanel({
   }
 
   return (
-    <Stack spacing={2} data-testid="dsi-unresolved-geo-steward">
+    <Stack spacing={1.5} data-testid="dsi-unresolved-geo-steward">
       {msg ? (
         <Alert severity="success" onClose={() => setMsg(null)}>
           {msg}
         </Alert>
       ) : null}
-      {(chAliasMut.isError || chCreateMut.isError || rgAliasMut.isError || rgCreateMut.isError) && (
+      {bulkSummary ? (
+        <Alert severity="info" onClose={() => setBulkSummary(null)} data-testid="dsi-geo-bulk-summary">
+          {bulkSummary}
+        </Alert>
+      ) : null}
+      {(bulkApplyMut.isError ||
+        chAliasMut.isError ||
+        chCreateMut.isError ||
+        rgAliasMut.isError ||
+        rgCreateMut.isError ||
+        hintRegionMut.isError) && (
         <Alert severity="error">
-          {safeDisplayError(chAliasMut.error || chCreateMut.error || rgAliasMut.error || rgCreateMut.error)}
+          {safeDisplayError(
+            bulkApplyMut.error ||
+              chAliasMut.error ||
+              chCreateMut.error ||
+              rgAliasMut.error ||
+              rgCreateMut.error ||
+              hintRegionMut.error
+          )}
         </Alert>
       )}
-      {channels.length ? (
-        <Stack spacing={1.5}>
-          <Typography variant="subtitle2">Unresolved route-to-market / channel (file evidence)</Typography>
-          {channels.map((row) => {
-            const k = `ch:${row.normalized_token}`;
-            return (
-              <Paper key={k} variant="outlined" sx={{ p: 1.5 }}>
-                <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                  <strong>Raw:</strong> {row.raw_token}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  Detail: {row.resolution_detail} · rows in file (candidates): {row.row_count}
-                </Typography>
-                {row.geographic_hint ? (
-                  <Alert severity="info" variant="outlined" sx={{ mt: 1 }}>
-                    Geographic hint (not RTM): {row.geographic_hint.guessed_region_code ?? '—'}
-                    {row.geographic_hint.matched_catalog ? ' · catalog match' : ' · no catalog match yet'}
-                  </Alert>
-                ) : null}
-                {row.geographic_hint ? (
-                  <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} flexWrap="wrap" useFlexGap>
-                    <DsiPendingButton
-                      size="small"
-                      variant="contained"
-                      pending={hintRegionMut.isPending}
-                      pendingLabel="Registering…"
-                      disabled={geoBusy && !hintRegionMut.isPending}
-                      onClick={() =>
-                        void hintRegionMut
-                          .mutateAsync({
-                            raw_token: row.raw_token,
-                            iso_alpha2: row.geographic_hint?.guessed_region_code ?? undefined,
-                          })
-                          .catch(() => {})
+
+      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap data-testid="dsi-geo-bulk-toolbar">
+        <Typography variant="caption" color="text.secondary">
+          {selectedKeys.size} selected
+        </Typography>
+        <Button size="small" variant="text" onClick={toggleAll} disabled={geoBusy || tableRows.length === 0}>
+          {allSelected ? 'Deselect all' : 'Select all'}
+        </Button>
+        <DsiPendingButton
+          size="small"
+          variant="contained"
+          pending={bulkApplyMut.isPending}
+          pendingLabel="Applying…"
+          disabled={geoBusy && !bulkApplyMut.isPending || geographicChannelRows.length === 0}
+          onClick={runBulkRegionHints}
+          data-testid="dsi-geo-bulk-register-regions"
+        >
+          Register ISO regions ({geographicChannelRows.length})
+        </DsiPendingButton>
+        <DsiPendingButton
+          size="small"
+          variant="outlined"
+          pending={bulkApplyMut.isPending}
+          pendingLabel="Applying…"
+          disabled={geoBusy && !bulkApplyMut.isPending || registerFromFileRows.length === 0}
+          onClick={runBulkRegisterFromFile}
+          data-testid="dsi-geo-bulk-register-from-file"
+        >
+          Register from file ({registerFromFileRows.length})
+        </DsiPendingButton>
+        <Typography variant="caption" color="text.secondary">
+          Geographic tokens: bulk ISO region (left) or bulk channel create (Register from file). Per-row
+          actions work the same.
+        </Typography>
+      </Stack>
+
+      <Box sx={{ overflowX: 'auto' }}>
+        <TableContainer data-testid="dsi-unresolved-geo-table">
+          <Table size="small" stickyHeader sx={{ minWidth: 980 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    size="small"
+                    indeterminate={someSelected}
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    inputProps={{ 'aria-label': 'Select all geo tokens' }}
+                  />
+                </TableCell>
+                <TableCell>File token</TableCell>
+                <TableCell>Detail</TableCell>
+                <TableCell>Geographic hint</TableCell>
+                <TableCell>Map to catalog</TableCell>
+                <TableCell>Register from file</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {tableRows.map((row) => {
+                const prefill = prefillFor(row);
+                const code = draftCode[row.rowKey] ?? prefill.code;
+                const name = draftName[row.rowKey] ?? prefill.name;
+                const mapRecord = row.kind === 'channel' ? chMapId : rgMapId;
+                const mapId = mapRecord[row.rowKey] ?? '';
+                const isGeographicChannel = row.kind === 'channel' && geoRowHasRegionHint(row);
+                const regionAliasRegistered = geoRowRegionAliasRegistered(row);
+
+                return (
+                  <GeoStewardTableRow
+                    key={row.rowKey}
+                    row={row}
+                    kind={row.kind}
+                    rowKey={row.rowKey}
+                    selected={selectedKeys.has(row.rowKey)}
+                    onToggleSelected={() =>
+                      setSelectedKeys((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(row.rowKey)) next.delete(row.rowKey);
+                        else next.add(row.rowKey);
+                        return next;
+                      })
+                    }
+                    catalogOptions={row.kind === 'channel' ? catalogChannels : catalogRegions}
+                    mapId={mapId}
+                    onMapIdChange={(value) => {
+                      if (row.kind === 'channel') {
+                        setChMapId((m) => ({ ...m, [row.rowKey]: value }));
+                      } else {
+                        setRgMapId((m) => ({ ...m, [row.rowKey]: value }));
                       }
-                      data-testid={`dsi-geo-hint-region-${row.normalized_token}`}
-                    >
-                      Register ISO region from hint
-                    </DsiPendingButton>
-                  </Stack>
-                ) : null}
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }} alignItems={{ sm: 'center' }}>
-                  <FormControl size="small" sx={{ minWidth: 200 }}>
-                    <InputLabel id={`${k}-map`}>Map to existing channel</InputLabel>
-                    <Select
-                      labelId={`${k}-map`}
-                      label="Map to existing channel"
-                      value={chMapId[k] ?? ''}
-                      onChange={(e) => setChMapId((m) => ({ ...m, [k]: String(e.target.value) }))}
-                    >
-                      <MenuItem value="">
-                        <em>Select…</em>
-                      </MenuItem>
-                      {catalogChannels.map((c) => (
-                        <MenuItem key={c.id} value={String(c.id)}>
-                          {c.code} — {c.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <DsiPendingButton
-                    size="small"
-                    variant="outlined"
-                    pending={chAliasMut.isPending}
-                    pendingLabel="Saving…"
-                    disabled={(geoBusy && !chAliasMut.isPending) || !(chMapId[k] || '').trim()}
-                    onClick={() => {
-                      const id = Number(chMapId[k]);
-                      if (!Number.isFinite(id)) return;
-                      void chAliasMut.mutateAsync({ raw_token: row.raw_token, channel_id: id }).catch(() => {});
                     }}
-                    data-testid={`dsi-geo-ch-alias-${row.normalized_token}`}
-                  >
-                    Save alias
-                  </DsiPendingButton>
-                </Stack>
-                <GeoStewardRegisterFromFile
-                  row={row}
-                  dimension="channel"
-                  pending={chCreateMut.isPending}
-                  geoBusy={geoBusy}
-                  testIdPrefix={`dsi-geo-ch-${row.normalized_token}`}
-                  onRegister={async ({ raw_token, code, name }) => {
-                    await chCreateMut.mutateAsync({
-                      raw_token,
-                      channel_code: code,
-                      channel_name: name,
-                    });
-                  }}
-                />
-              </Paper>
-            );
-          })}
-        </Stack>
-      ) : null}
-      {regions.length ? (
-        <Stack spacing={1.5}>
-          <Typography variant="subtitle2">Unresolved region / province (file evidence)</Typography>
-          {regions.map((row) => {
-            const k = `rg:${row.normalized_token}`;
-            return (
-              <Paper key={k} variant="outlined" sx={{ p: 1.5 }}>
-                <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                  <strong>Raw:</strong> {row.raw_token}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  Detail: {row.resolution_detail} · rows in file (candidates): {row.row_count}
-                </Typography>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }} alignItems={{ sm: 'center' }}>
-                  <FormControl size="small" sx={{ minWidth: 200 }}>
-                    <InputLabel id={`${k}-map`}>Map to existing region</InputLabel>
-                    <Select
-                      labelId={`${k}-map`}
-                      label="Map to existing region"
-                      value={rgMapId[k] ?? ''}
-                      onChange={(e) => setRgMapId((m) => ({ ...m, [k]: String(e.target.value) }))}
-                    >
-                      <MenuItem value="">
-                        <em>Select…</em>
-                      </MenuItem>
-                      {catalogRegions.map((r) => (
-                        <MenuItem key={r.id} value={String(r.id)}>
-                          {r.code} — {r.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <DsiPendingButton
-                    size="small"
-                    variant="outlined"
-                    pending={rgAliasMut.isPending}
-                    pendingLabel="Saving…"
-                    disabled={(geoBusy && !rgAliasMut.isPending) || !(rgMapId[k] || '').trim()}
-                    onClick={() => {
-                      const id = Number(rgMapId[k]);
+                    overrideOpen={Boolean(overrideOpen[row.rowKey])}
+                    onToggleOverride={() =>
+                      setOverrideOpen((m) => ({ ...m, [row.rowKey]: !m[row.rowKey] }))
+                    }
+                    code={code}
+                    name={name}
+                    onCodeChange={(value) => setDraftCode((m) => ({ ...m, [row.rowKey]: value }))}
+                    onNameChange={(value) => setDraftName((m) => ({ ...m, [row.rowKey]: value }))}
+                    geoBusy={geoBusy}
+                    isGeographicChannel={isGeographicChannel}
+                    regionAliasRegistered={regionAliasRegistered}
+                    aliasPending={row.kind === 'channel' ? chAliasMut.isPending : rgAliasMut.isPending}
+                    onSaveAlias={() => {
+                      const id = Number(mapId);
                       if (!Number.isFinite(id)) return;
-                      void rgAliasMut.mutateAsync({ raw_token: row.raw_token, region_id: id }).catch(() => {});
+                      if (row.kind === 'channel') {
+                        void chAliasMut.mutateAsync({ raw_token: row.raw_token, channel_id: id }).catch(() => {});
+                      } else {
+                        void rgAliasMut.mutateAsync({ raw_token: row.raw_token, region_id: id }).catch(() => {});
+                      }
                     }}
-                    data-testid={`dsi-geo-rg-alias-${row.normalized_token}`}
-                  >
-                    Save alias
-                  </DsiPendingButton>
-                </Stack>
-                <GeoStewardRegisterFromFile
-                  row={row}
-                  dimension="region"
-                  pending={rgCreateMut.isPending}
-                  geoBusy={geoBusy}
-                  testIdPrefix={`dsi-geo-rg-${row.normalized_token}`}
-                  onRegister={async ({ raw_token, code, name }) => {
-                    await rgCreateMut.mutateAsync({
-                      raw_token,
-                      region_code: code,
-                      region_name: name,
-                    });
-                  }}
-                />
-              </Paper>
-            );
-          })}
-        </Stack>
-      ) : null}
+                    registerPending={row.kind === 'channel' ? chCreateMut.isPending : rgCreateMut.isPending}
+                    onRegisterFromFile={() => {
+                      const payload = {
+                        raw_token: row.raw_token,
+                        code: code.trim(),
+                        name: name.trim(),
+                      };
+                      if (row.kind === 'channel') {
+                        void chCreateMut
+                          .mutateAsync({
+                            raw_token: payload.raw_token,
+                            channel_code: payload.code,
+                            channel_name: payload.name,
+                          })
+                          .catch(() => {});
+                      } else {
+                        void rgCreateMut
+                          .mutateAsync({
+                            raw_token: payload.raw_token,
+                            region_code: payload.code,
+                            region_name: payload.name,
+                          })
+                          .catch(() => {});
+                      }
+                    }}
+                    onRegisterChannelFromFile={(args) =>
+                      chCreateMut.mutateAsync({
+                        raw_token: args.raw_token,
+                        channel_code: args.code,
+                        channel_name: args.name,
+                      })
+                    }
+                    onRegisterFromHint={
+                      isGeographicChannel && !regionAliasRegistered
+                        ? () =>
+                            void hintRegionMut
+                              .mutateAsync({
+                                raw_token: row.raw_token,
+                                iso_alpha2: geoRowIsoHint(row) ?? undefined,
+                              })
+                              .catch(() => {})
+                        : undefined
+                    }
+                    hintPending={hintRegionMut.isPending}
+                  />
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
     </Stack>
   );
 }

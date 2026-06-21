@@ -1,5 +1,6 @@
 import { fetchBulkProvisionalTaskProgress } from '@/features/background-tasks/fetchImportJobProgress';
 
+import { stewardAsyncPollOptions } from './stewardAsyncPoll';
 import type { DsiBulkApplyResponse, DsiBulkTaskStatusResponse } from './dsiSteward.types';
 
 const TERMINAL = new Set(['SUCCESS', 'FAILURE']);
@@ -12,10 +13,11 @@ function sleep(ms: number): Promise<void> {
 export async function pollDsiBulkProvisionalTask(
   importJobId: number,
   taskId: string,
-  options?: { intervalMs?: number; maxAttempts?: number }
+  options?: { intervalMs?: number; maxAttempts?: number; rowCount?: number }
 ): Promise<DsiBulkApplyResponse> {
-  const intervalMs = options?.intervalMs ?? 800;
-  const maxAttempts = options?.maxAttempts ?? 600;
+  const scaled = stewardAsyncPollOptions(options?.rowCount ?? 1);
+  const intervalMs = options?.intervalMs ?? scaled.intervalMs;
+  const maxAttempts = options?.maxAttempts ?? scaled.maxAttempts;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const status = await fetchBulkProvisionalTaskProgress(importJobId, taskId);

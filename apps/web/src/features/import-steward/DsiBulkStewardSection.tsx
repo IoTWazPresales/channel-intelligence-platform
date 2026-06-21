@@ -23,8 +23,6 @@ import {
 } from "@mui/material";
 import type { BulkTableSelectionMode } from "@/components/bulkTable/BulkSelectionToolbar";
 
-import { safeDisplayError } from "@/lib/api";
-
 import { DsiPendingButton } from "./DsiPendingButton";
 
 import { bulkPreviewAliasEvidence, bulkPreviewProposedLabel } from "./dsiBulkStewardDisplay";
@@ -118,9 +116,6 @@ export function DsiBulkStewardSection({
                   {bulkApplySummary}
                 </Alert>
               ) : null}
-      {applyResolutionPlan.isError ? (
-        <Alert severity="error">{safeDisplayError(applyResolutionPlan.error)}</Alert>
-      ) : null}
 
       <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} fullWidth maxWidth="lg">
               <DialogTitle>Bulk steward preview</DialogTitle>

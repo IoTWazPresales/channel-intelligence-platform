@@ -17,13 +17,13 @@ from app.models.ingestion import ImportJob, ImportTemplate, RawFileMetadata
 from app.services.imports.distributor_sales_inventory import (
     ProductResolutionIndex,
     _load_product_resolution_index,
-    _product_token_key,
 )
+from app.services.imports.product_resolution_standard import resolve_product_id_single_match
 from app.core.config import get_settings
-from app.services.imports.ai_import_resolver import (
-    AI_AUTO_RESOLVE_THRESHOLD,
-    detect_format_drift,
-    suggest_token_resolution,
+from app.services.imports.ai_import_resolver import detect_format_drift
+from app.services.imports.ai_resolver_wiring import (
+    stash_ai_suggestion_on_payload,
+    try_ai_token_resolution,
 )
 from app.services.imports.parsers.customer_sell_through_flat import (
     EXPECTED_COLUMNS_META_KEY,
@@ -136,25 +136,8 @@ def resolve_customer_id_for_job(db: Session, job: ImportJob) -> int | None:
 
 
 def resolve_product_id_for_sellthrough(idx: ProductResolutionIndex, token: str) -> int | None:
-    """Item/material → EAN/UPC → sales model (single match only)."""
-    key = _product_token_key(token)
-    if not key:
-        return None
-    if key in idx.sku_to_id:
-        return int(idx.sku_to_id[key])
-    part_ids = idx.part_number_to_ids.get(key)
-    if part_ids and len(part_ids) == 1:
-        return int(part_ids[0])
-    ean_ids = idx.ean_to_ids.get(key)
-    if ean_ids and len(ean_ids) == 1:
-        return int(ean_ids[0])
-    upc_ids = idx.upc_to_ids.get(key)
-    if upc_ids and len(upc_ids) == 1:
-        return int(upc_ids[0])
-    sm_ids = idx.sales_model_name_to_ids.get(key)
-    if sm_ids and len(sm_ids) == 1:
-        return int(sm_ids[0])
-    return None
+    """Item/material → EAN/UPC → sales model (single match only; shared standard tiers)."""
+    return resolve_product_id_single_match(idx, token)
 
 
 def _upsert_customer_report_config(
@@ -282,29 +265,27 @@ def _apply_ai_resolution_to_line(
     ai_assist_used: list[bool],
 ) -> tuple[bool, bool]:
     product_ok = line.resolved_product_id is not None
+    job_id = int(getattr(line, "import_job_id", 0) or 0)
 
-    if not product_ok and line.raw_product_token and get_settings().ai_assist_enabled:
-        suggestion = suggest_token_resolution(
-            line.raw_product_token,
-            "product",
-            _product_candidates(prod_idx, line.raw_product_token),
-            {"customer_id": customer_id},
+    # Deterministic-first is already done by the caller (resolved_product_id set on exact match);
+    # this runs only on miss, and goes through the SHARED resolver wrapper (deterministic→AI≥0.90),
+    # same as DSI / shipment — not the bespoke direct call. Wrapper no-ops when AI is disabled.
+    if not product_ok and line.raw_product_token:
+        ai_id, ai_tag, suggestion = try_ai_token_resolution(
+            raw_token=line.raw_product_token,
+            token_type="product",
+            candidates=_product_candidates(prod_idx, line.raw_product_token),
+            import_type="customer_sell_through",
+            job_id=job_id,
+            extra_context={"customer_id": customer_id},
         )
-        if suggestion:
+        if suggestion is not None:
             ai_assist_used[0] = True
-            payload = dict(line.raw_row_payload or {})
-            payload["_ai_resolution"] = {
-                "token_type": "product",
-                "suggestion": {
-                    "best_match_id": suggestion.best_match_id,
-                    "confidence": suggestion.confidence,
-                    "reasoning": suggestion.reasoning,
-                    "alternatives": suggestion.alternatives,
-                },
-            }
-            line.raw_row_payload = to_jsonable(payload)
-            if suggestion.best_match_id is not None and suggestion.confidence >= AI_AUTO_RESOLVE_THRESHOLD:
-                line.resolved_product_id = int(suggestion.best_match_id)
+            line.raw_row_payload = stash_ai_suggestion_on_payload(
+                line.raw_row_payload, token_type="product", suggestion=suggestion
+            )
+            if ai_id is not None and ai_tag == "ai_auto_resolved":
+                line.resolved_product_id = int(ai_id)
                 line.resolution_status = "ai_auto_resolved"
                 product_ok = True
             else:
@@ -320,36 +301,28 @@ def _apply_ai_resolution_to_line(
         )
         if loc_id is not None:
             line.resolved_location_id = int(loc_id)
-        elif get_settings().ai_assist_enabled:
-            suggestion = suggest_token_resolution(
-                line.raw_location_token,
-                "location",
-                _location_candidates(db, customer_id, line.raw_location_token),
-                {"customer_id": customer_id},
+        else:
+            ai_id, ai_tag, suggestion = try_ai_token_resolution(
+                raw_token=line.raw_location_token,
+                token_type="location",
+                candidates=_location_candidates(db, customer_id, line.raw_location_token),
+                import_type="customer_sell_through",
+                job_id=job_id,
+                extra_context={"customer_id": customer_id},
             )
-            if suggestion:
+            if suggestion is not None:
                 ai_assist_used[0] = True
-                payload = dict(line.raw_row_payload or {})
-                ai_block = payload.get("_ai_resolution")
-                if not isinstance(ai_block, dict):
-                    ai_block = {}
-                ai_block["location"] = {
-                    "best_match_id": suggestion.best_match_id,
-                    "confidence": suggestion.confidence,
-                    "reasoning": suggestion.reasoning,
-                }
-                payload["_ai_resolution"] = ai_block
-                line.raw_row_payload = to_jsonable(payload)
-                if suggestion.best_match_id is not None and suggestion.confidence >= AI_AUTO_RESOLVE_THRESHOLD:
-                    line.resolved_location_id = int(suggestion.best_match_id)
+                line.raw_row_payload = stash_ai_suggestion_on_payload(
+                    line.raw_row_payload, token_type="location", suggestion=suggestion
+                )
+                if ai_id is not None and ai_tag == "ai_auto_resolved":
+                    line.resolved_location_id = int(ai_id)
                 else:
                     location_ok = False
                     if line.resolution_status == "pending":
                         line.resolution_status = "ai_suggested"
             else:
                 location_ok = False
-        else:
-            location_ok = False
 
     return product_ok, location_ok
 
@@ -375,6 +348,12 @@ def _ingest_parse_result(
     )
     db.flush()
 
+    from app.services.imports.cst_mapping_candidates import (
+        load_resolved_cst_candidates,
+        upsert_cst_mapping_candidates,
+    )
+
+    resolved_products, resolved_locations = load_resolved_cst_candidates(db, job.id)
     prod_idx = _load_product_resolution_index(db)
     resolved_n = 0
     unresolved_n = 0
@@ -403,6 +382,18 @@ def _ingest_parse_result(
                 line.resolved_product_id = pid
                 product_ok = True
 
+        # Candidate resolution fallback (steward-resolved tokens from a prior validate pass)
+        if not product_ok and line.raw_product_token:
+            key = _product_token_key(line.raw_product_token)
+            if key and key in resolved_products:
+                line.resolved_product_id = resolved_products[key]
+                product_ok = True
+        if not location_ok and line.raw_location_token:
+            loc_key = (line.raw_location_token or "").strip().lower()
+            if loc_key and loc_key in resolved_locations:
+                line.resolved_location_id = resolved_locations[loc_key]
+                location_ok = True
+
         if product_ok and location_ok and line.resolution_status in ("pending", "unresolved"):
             line.resolution_status = "resolved"
 
@@ -421,6 +412,7 @@ def _ingest_parse_result(
         db.add(line)
 
     db.flush()
+    upsert_cst_mapping_candidates(db, job.id)
 
     warnings = list(result.warnings or [])
     if drift_warnings:
@@ -549,6 +541,12 @@ def _handle_flat(
     )
     db.flush()
 
+    from app.services.imports.cst_mapping_candidates import (
+        load_resolved_cst_candidates,
+        upsert_cst_mapping_candidates,
+    )
+
+    resolved_products, resolved_locations = load_resolved_cst_candidates(db, job.id)
     prod_idx = _load_product_resolution_index(db)
     resolved_n = 0
     unresolved_n = 0
@@ -560,6 +558,9 @@ def _handle_flat(
         product_ok = False
         if line.raw_product_token:
             pid = resolve_product_id_for_sellthrough(prod_idx, line.raw_product_token)
+            if pid is None:
+                key = _product_token_key(line.raw_product_token)
+                pid = resolved_products.get(key)
             if pid is not None:
                 line.resolved_product_id = pid
                 product_ok = True
@@ -572,6 +573,9 @@ def _handle_flat(
                     CustomerLocation.location_code == line.raw_location_token,
                 )
             )
+            if loc_id is None:
+                loc_key = (line.raw_location_token or "").strip().lower()
+                loc_id = resolved_locations.get(loc_key)
             if loc_id is not None:
                 line.resolved_location_id = int(loc_id)
             else:
@@ -587,6 +591,7 @@ def _handle_flat(
         db.add(line)
 
     db.flush()
+    upsert_cst_mapping_candidates(db, job.id)
 
     meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
     meta["customer_sellthrough_flat"] = to_jsonable(

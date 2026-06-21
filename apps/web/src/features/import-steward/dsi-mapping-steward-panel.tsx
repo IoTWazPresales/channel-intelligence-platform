@@ -3,6 +3,7 @@
 import {
   Alert,
   Box,
+  Button,
   Chip,
   Dialog,
   DialogActions,
@@ -23,7 +24,7 @@ import { apiGet, apiPost } from '@/lib/api';
 
 import { notifyDsiAsyncPipelineStarted } from './dsiAsyncPipelineRun';
 import { detectSuffixTokenFamily } from './dsiDuplicateCluster';
-import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries, isDsiStewardRowActionBlocked } from './dsiSteward.config';
+import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries, invalidateDsiStewardTabCounts, isDsiStewardRowActionBlocked } from './dsiSteward.config';
 import { DsiDuplicatePeerCompare } from './dsiDuplicatePeerCompare';
 import { DsiDuplicateClusterSameEntityDialog } from './DsiDuplicateClusterSameEntityDialog';
 import { DsiDuplicateSameEntityDialog } from './DsiDuplicateSameEntityDialog';
@@ -35,14 +36,20 @@ import {
   hasUnresolvedDuplicateReview,
 } from './dsiStewardCandidateFilterLogic';
 import {
-  optimisticallyApplyStewardAction,
+  type DsiCandidatesCacheSnapshot,
+  optimisticallyApplyStewardBulk,
+  patchCandidateStatusInDsiCache,
+  removeCandidatesFromDsiCache,
+  restoreDsiCandidatesCache,
   type DsiStewardRowAction,
 } from './dsiStewardCacheUpdates';
 import { DsiPendingButton } from './DsiPendingButton';
+import { planTargetSummary } from './dsiResolutionPlanDisplay';
 import {
   DsiEligibleProductPicker,
   type DsiEligibleProductSnapshot,
 } from './DsiEligibleProductPicker';
+import { DsiProductResolutionEvidenceCard } from './DsiProductResolutionEvidenceCard';
 import { toQueryError } from '@/lib/queryError';
 
 export type DsiCandidateRow = {
@@ -95,26 +102,29 @@ function blankishCustomerKey(norm: string): boolean {
  * Shared DSI mapping-queue steward workspace (single selected candidate).
  * Shipment evidence steward remains in `ShipmentEntityStewardPanel` under admin/shipment-evidence.
  */
-type StewardMutationContext = { previous?: DsiCandidateRow[] };
+type StewardMutationContext = { snapshot?: DsiCandidatesCacheSnapshot };
 
 function buildStewardMutationLifecycle(
-  action: DsiStewardRowAction,
   candidateId: number | undefined,
   importJobId: number,
   qc: ReturnType<typeof useQueryClient>,
   onRowActionStart?: (candidateId: number) => void,
-  onRowActionEnd?: () => void
+  onRowActionEnd?: () => void,
+  onStewardFastComplete?: (candidateIds: number[]) => void
 ) {
-  const cacheKey = DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId);
   return {
     onMutate: async () => {
       if (candidateId == null) return undefined;
       onRowActionStart?.(candidateId);
-      const previous = optimisticallyApplyStewardAction(qc, importJobId, candidateId, action);
-      return { previous } satisfies StewardMutationContext;
+      const snapshot = removeCandidatesFromDsiCache(qc, importJobId, [candidateId]);
+      onStewardFastComplete?.([candidateId]);
+      return { snapshot } satisfies StewardMutationContext;
     },
     onError: (_err: unknown, _vars: unknown, ctx: StewardMutationContext | undefined) => {
-      if (ctx?.previous) qc.setQueryData(cacheKey, ctx.previous);
+      restoreDsiCandidatesCache(qc, ctx?.snapshot);
+      void qc.invalidateQueries({
+        queryKey: DSI_STEWARD_CONFIG.resolutionSuggestionsQueryKeyPrefix(importJobId),
+      });
       onRowActionEnd?.();
     },
     onSettled: () => {
@@ -132,7 +142,7 @@ export function DsiMappingStewardPanel({
   onRowActionStart,
   onRowActionEnd,
   onDone,
-  onPlanRefresh,
+  onStewardFastComplete,
   lookupPeerCandidate,
   onOpenPeerByNormalizedKey,
   customerNormalizedKeysOnPage,
@@ -144,8 +154,8 @@ export function DsiMappingStewardPanel({
   onRowActionStart?: (candidateId: number) => void;
   onRowActionEnd?: () => void;
   onDone: () => void;
-  /** Local resolution-plan refresh only — never full DSI revalidate. */
-  onPlanRefresh?: () => void | Promise<void>;
+  /** Drop resolved rows from in-memory plan without a full page replan. */
+  onStewardFastComplete?: (candidateIds: number[]) => void;
   /** Resolve peer row on current candidates page for inline compare (no scroll jump). */
   lookupPeerCandidate?: (normalizedKey: string) => DsiCandidateRow | null;
   /** Optional: open peer in full steward drawer (replaces selection). */
@@ -170,6 +180,7 @@ export function DsiMappingStewardPanel({
   const [pickCustomerId, setPickCustomerId] = useState<number | ''>('');
   const [pickDistributorId, setPickDistributorId] = useState<number | ''>('');
   const [pickProductId, setPickProductId] = useState<number | ''>('');
+  const [showAlternateProductPicker, setShowAlternateProductPicker] = useState(false);
 
   const [displayName, setDisplayName] = useState('');
   const [regionId, setRegionId] = useState<number | ''>('');
@@ -231,20 +242,43 @@ export function DsiMappingStewardPanel({
     select: (r) => r.items ?? [],
   });
 
-  const invalidate = useCallback(() => {
-    invalidateDsiImportJobStewardQueries(qc, importJobId);
+  const finishStewardAction = useCallback(() => {
+    invalidateDsiStewardTabCounts(qc, importJobId);
     onDone();
   }, [qc, importJobId, onDone]);
 
-  const afterDuplicateAction = useCallback(async () => {
-    invalidateDsiImportJobStewardQueries(qc, importJobId);
-    onDone();
-    if (onPlanRefresh) await onPlanRefresh();
-  }, [qc, importJobId, onDone, onPlanRefresh]);
+  const finishResolvedCandidates = useCallback(
+    (candidateIds: number[]) => {
+      const ids = candidateIds.filter((id) => Number.isFinite(id));
+      if (ids.length > 0) {
+        removeCandidatesFromDsiCache(qc, importJobId, ids);
+        onStewardFastComplete?.(ids);
+      }
+      invalidateDsiStewardTabCounts(qc, importJobId);
+      onDone();
+    },
+    [qc, importJobId, onDone, onStewardFastComplete]
+  );
+
+  const finishDifferentEntityAcknowledged = useCallback(
+    (candidateId: number) => {
+      patchCandidateStatusInDsiCache(qc, importJobId, candidateId, 'acknowledged_unique');
+      invalidateDsiStewardTabCounts(qc, importJobId);
+      onDone();
+    },
+    [qc, importJobId, onDone]
+  );
 
   const candidateId = candidate?.id;
-  const stewardLife = (action: DsiStewardRowAction) =>
-    buildStewardMutationLifecycle(action, candidateId, importJobId, qc, onRowActionStart, onRowActionEnd);
+  const stewardLife = () =>
+    buildStewardMutationLifecycle(
+      candidateId,
+      importJobId,
+      qc,
+      onRowActionStart,
+      onRowActionEnd,
+      onStewardFastComplete
+    );
 
   const duplicateRowLifecycle = {
     onMutate: async () => {
@@ -263,9 +297,10 @@ export function DsiMappingStewardPanel({
         body
       ),
     ...duplicateRowLifecycle,
-    onSuccess: async () => {
+    onSuccess: () => {
       setLastSuccessLabel('Confirmed different entity — duplicate review recorded.');
-      await afterDuplicateAction();
+      if (candidate?.id != null) finishDifferentEntityAcknowledged(candidate.id);
+      else finishStewardAction();
     },
   });
 
@@ -282,10 +317,13 @@ export function DsiMappingStewardPanel({
         body
       ),
     ...duplicateRowLifecycle,
-    onSuccess: async () => {
+    onSuccess: (data) => {
       setDupSameOpen(false);
       setLastSuccessLabel('Same entity — both tokens mapped to the selected customer.');
-      await afterDuplicateAction();
+      const ids = [data.candidate_id, data.peer_candidate_id].filter(
+        (id): id is number => id != null && Number.isFinite(Number(id))
+      );
+      finishResolvedCandidates(ids);
     },
   });
 
@@ -297,27 +335,30 @@ export function DsiMappingStewardPanel({
       plan_suggested_target_id?: number;
       audit_note?: string;
     }) =>
-      apiPost<{ ok: boolean; mapped_count?: number }>(
+      apiPost<{ ok: boolean; mapped_count?: number; maps?: Array<{ candidate_id?: number }> }>(
         `/api/v1/mappings/import-jobs/${importJobId}/duplicate-review/cluster-same-entity`,
         body
       ),
     ...duplicateRowLifecycle,
-    onSuccess: async (data) => {
+    onSuccess: (data) => {
       setDupClusterOpen(false);
       const n = data?.mapped_count ?? 0;
       setLastSuccessLabel(`Cluster mapped — ${n} token(s) linked to one customer.`);
-      await afterDuplicateAction();
+      const ids = (data.maps ?? [])
+        .map((m) => Number((m as { candidate_id?: number }).candidate_id))
+        .filter((id) => Number.isFinite(id));
+      finishResolvedCandidates(ids);
     },
   });
 
   const mapCustomer = useMutation({
     mutationFn: (body: { customer_id: number }) =>
       apiPost<{ ok: boolean }>(`/api/v1/mappings/import-candidates/${candidate?.id}/map-customer`, body),
-    ...stewardLife('map_customer'),
+    ...stewardLife(),
     onSuccess: () => {
       setMapCustOpen(false);
       setLastSuccessLabel('Customer mapped — row updated.');
-      invalidate();
+      finishStewardAction();
     },
   });
 
@@ -332,43 +373,43 @@ export function DsiMappingStewardPanel({
         `/api/v1/mappings/import-candidates/${candidate?.id}/create-provisional-customer`,
         body
       ),
-    ...stewardLife('create_provisional_customer'),
+    ...stewardLife(),
     onSuccess: () => {
       setCreateCustOpen(false);
       setLastSuccessLabel('Provisional customer created — row updated.');
-      invalidate();
+      finishStewardAction();
     },
   });
 
   const markOpenChannel = useMutation({
     mutationFn: (body: { confirm_for_named_dealer: boolean; confirm_for_strategic_channel_hint: boolean }) =>
       apiPost<{ ok: boolean }>(`/api/v1/mappings/import-candidates/${candidate?.id}/mark-open-channel`, body),
-    ...stewardLife('mark_open_channel'),
+    ...stewardLife(),
     onSuccess: () => {
       setOcOpen(false);
       setLastSuccessLabel('Marked Open Channel — row updated.');
-      invalidate();
+      finishStewardAction();
     },
   });
 
   const ignoreCand = useMutation({
     mutationFn: (body: { notes?: string | null }) =>
       apiPost<{ ok: boolean }>(`/api/v1/mappings/import-candidates/${candidate?.id}/ignore`, body),
-    ...stewardLife('ignore'),
+    ...stewardLife(),
     onSuccess: () => {
       setLastSuccessLabel('Candidate ignored — row updated.');
-      invalidate();
+      finishStewardAction();
     },
   });
 
   const mapDistributor = useMutation({
     mutationFn: (body: { distributor_id: number }) =>
       apiPost<{ ok: boolean }>(`/api/v1/mappings/import-candidates/${candidate?.id}/map-distributor`, body),
-    ...stewardLife('map_distributor'),
+    ...stewardLife(),
     onSuccess: () => {
       setMapDistOpen(false);
       setLastSuccessLabel('Distributor mapped — row updated.');
-      invalidate();
+      finishStewardAction();
     },
   });
 
@@ -378,11 +419,11 @@ export function DsiMappingStewardPanel({
         `/api/v1/mappings/import-candidates/${candidate?.id}/create-provisional-distributor`,
         body
       ),
-    ...stewardLife('create_provisional_distributor'),
+    ...stewardLife(),
     onSuccess: () => {
       setCreateDistOpen(false);
       setLastSuccessLabel('Provisional distributor created — row updated.');
-      invalidate();
+      finishStewardAction();
     },
   });
 
@@ -394,11 +435,11 @@ export function DsiMappingStewardPanel({
       audit_note?: string | null;
     }) =>
       apiPost<{ ok: boolean }>(`/api/v1/mappings/import-candidates/${candidate?.id}/resolve-product`, body),
-    ...stewardLife('resolve_product'),
+    ...stewardLife(),
     onSuccess: () => {
       setMapProdOpen(false);
       setLastSuccessLabel('Product resolved — row updated.');
-      invalidate();
+      finishStewardAction();
     },
   });
 
@@ -413,7 +454,7 @@ export function DsiMappingStewardPanel({
       return res;
     },
     onSuccess: (res) => {
-      if (!res.async) invalidate();
+      if (!res.async) invalidateDsiImportJobStewardQueries(qc, importJobId);
       else void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
     },
   });
@@ -475,6 +516,20 @@ export function DsiMappingStewardPanel({
   const rowActionsBlocked = isDsiStewardRowActionBlocked(candidate.status);
   const stewardActionsDisabled = isTerminal || rowActionsBlocked || actionBusy;
   const planDuplicateBlocked = planRow?.duplicate_review_required === true;
+  const planProductReady =
+    candidate.entity_type === 'product_identifier' &&
+    planRow?.ready === true &&
+    planRow?.suggested_action === 'resolve_product' &&
+    planRow?.suggested_target_id != null &&
+    planRow.suggested_target_id !== '';
+  useEffect(() => {
+    if (!planProductReady) return;
+    const tid = Number(planRow?.suggested_target_id);
+    if (Number.isFinite(tid) && tid > 0) {
+      setPickProductId(tid);
+      setShowAlternateProductPicker(false);
+    }
+  }, [candidate.id, planProductReady, planRow?.suggested_target_id]);
   const dupPeerHintsExcludingSelf = useMemo(() => {
     const own = (candidate.normalized_key || '').trim();
     return dupHints.filter((h) => h.normalized_key.trim() !== own);
@@ -1249,7 +1304,37 @@ export function DsiMappingStewardPanel({
           {typeof ctx?.product_match_summary === 'string' && ctx.product_match_summary.trim() ? (
             <Alert severity="info" data-testid="dsi-product-match-summary">
               <Typography variant="body2">{String(ctx.product_match_summary)}</Typography>
-              {ctx.product_match_status === 'ambiguous_eligible' && Array.isArray(ctx.product_ambiguous_eligible?.eligible_products) ? (
+              <DsiProductResolutionEvidenceCard context={ctx} />
+              {planProductReady ? (
+                <Box sx={{ mt: 1 }} data-testid="dsi-product-plan-ready-banner">
+                  <Alert severity="success" variant="outlined" sx={{ mb: 1 }}>
+                    <Typography variant="body2">
+                      <strong>Resolution plan ready:</strong>{' '}
+                      {planTargetSummary(
+                        'resolve_product',
+                        planRow?.suggested_target_id,
+                        candidate,
+                        planRow ?? undefined
+                      )}
+                    </Typography>
+                    {typeof planRow?.reason === 'string' && planRow.reason.trim() ? (
+                      <Typography variant="caption" component="div" sx={{ mt: 0.5 }}>
+                        {planRow.reason}
+                      </Typography>
+                    ) : null}
+                  </Alert>
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => setShowAlternateProductPicker((v) => !v)}
+                  >
+                    {showAlternateProductPicker ? 'Hide alternate products' : 'Choose different product'}
+                  </Button>
+                </Box>
+              ) : null}
+              {ctx.product_match_status === 'ambiguous_eligible' &&
+              Array.isArray(ctx.product_ambiguous_eligible?.eligible_products) &&
+              (showAlternateProductPicker || !planProductReady) ? (
                 <Box sx={{ mt: 1 }}>
                   <DsiEligibleProductPicker
                     tier={String((ctx.product_ambiguous_eligible as Record<string, unknown>).tier ?? '')}

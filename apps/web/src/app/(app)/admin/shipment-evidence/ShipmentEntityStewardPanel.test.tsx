@@ -75,6 +75,15 @@ describe('ShipmentEntityStewardPanel', () => {
     expect(rejectButtons.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('bands confidence scores (0.2 -> Low) on candidate rows', async () => {
+    wrap(<ShipmentEntityStewardPanel importJobId={9} />);
+    await screen.findByText('ACME Pty');
+    // Both seeded rows have confidence_score 0.2 -> Low band chip + raw score.
+    expect(screen.getByTestId('shipment-confidence-band-101')).toHaveTextContent('Low');
+    expect(screen.getByTestId('shipment-confidence-band-102')).toHaveTextContent('Low');
+    expect(screen.getAllByText('score 0.20').length).toBeGreaterThanOrEqual(2);
+  });
+
   it('filters candidate rows via chip strip without crashing', async () => {
     wrap(<ShipmentEntityStewardPanel importJobId={9} />);
     await screen.findByText('ACME Pty');

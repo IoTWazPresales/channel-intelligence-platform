@@ -9,6 +9,8 @@ import { useBackgroundTaskRegistry } from './backgroundTaskRegistry';
 import type { BackgroundTaskRecord } from './importJobProgress.types';
 
 const POLL_MS = 3000;
+/** Do not show client-only tasks as fake Queued after this age if the server never picked them up. */
+const CLIENT_ORPHAN_STALE_MS = 90_000;
 
 function mergeTasks(
   server: BackgroundTaskRecord[],
@@ -18,9 +20,11 @@ function mergeTasks(
   for (const t of server) {
     byId.set(t.task_id, t);
   }
+  const now = Date.now();
   for (const c of Object.values(client)) {
-    if (!byId.has(c.taskId)) {
-      byId.set(c.taskId, {
+    if (byId.has(c.taskId)) continue;
+    if (now - c.registeredAt > CLIENT_ORPHAN_STALE_MS) continue;
+    byId.set(c.taskId, {
         task_id: c.taskId,
         import_job_id: c.importJobId,
         kind: c.kind,
@@ -32,7 +36,6 @@ function mergeTasks(
         total_rows: 0,
         pct: 0,
       });
-    }
   }
   return [...byId.values()].sort((a, b) => b.import_job_id - a.import_job_id);
 }
@@ -89,9 +92,16 @@ export function useGlobalBackgroundTasks() {
 
   useEffect(() => {
     for (const t of listQuery.data?.tasks ?? []) {
-      if (t.status === 'running') removeClient(t.task_id);
+      if (t.status === 'running' || t.status === 'failed') removeClient(t.task_id);
     }
   }, [listQuery.data?.tasks, removeClient]);
+
+  useEffect(() => {
+    const stale = Object.values(clientTasks).filter(
+      (c) => Date.now() - c.registeredAt > CLIENT_ORPHAN_STALE_MS
+    );
+    for (const c of stale) removeClient(c.taskId);
+  }, [clientTasks, listQuery.dataUpdatedAt, removeClient]);
 
   useEffect(() => {
     clearOlder(30 * 60 * 1000);

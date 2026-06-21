@@ -22,6 +22,115 @@ class CandidateShipmentEvidence:
     stored_distinct_product_ids: tuple[int, ...]
 
 
+def _parse_int_list(ctx: dict[str, Any], key: str, *, limit: int = 8) -> list[int]:
+    raw = ctx.get(key)
+    out: list[int] = []
+    if not isinstance(raw, list):
+        return out
+    for x in raw:
+        try:
+            v = int(x)
+        except (TypeError, ValueError):
+            continue
+        if v > 0 and v not in out:
+            out.append(v)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _parse_month_list(ctx: dict[str, Any], *, limit: int = 6) -> list[str]:
+    months: list[str] = []
+    for key in ("dominant_evidence_month",):
+        m = ctx.get(key)
+        if isinstance(m, str) and m.strip():
+            em = m.strip()[:7]
+            if em not in months:
+                months.append(em)
+    for counts_key in ("shipment_evidence_month_counts", "dsi_evidence_month_counts"):
+        mc = ctx.get(counts_key)
+        if isinstance(mc, dict):
+            for k in sorted(mc.keys(), key=lambda x: int(mc.get(x) or 0), reverse=True):
+                if isinstance(k, str) and k.strip():
+                    em = k.strip()[:7]
+                    if em not in months:
+                        months.append(em)
+                if len(months) >= limit:
+                    break
+        if len(months) >= limit:
+            break
+    return months[:limit]
+
+
+def build_tiebreak_scope_attempts(
+    ctx: dict[str, Any] | None,
+    *,
+    normalized_key: str | None = None,
+    staging_scopes: dict[str, list[tuple[int, str]]] | None = None,
+    fallback_distributor_id: int | None = None,
+    fallback_evidence_date: date | None = None,
+    max_attempts: int = 24,
+) -> list[tuple[int, date]]:
+    """Distinct (distributor_id, evidence_date) pairs to try for live shipment corroboration."""
+    if not ctx and fallback_distributor_id is None and not staging_scopes:
+        if fallback_distributor_id is not None and fallback_evidence_date is not None:
+            return [(int(fallback_distributor_id), fallback_evidence_date)]
+        return []
+
+    c = ctx or {}
+    dist_ids = _parse_int_list(c, "unresolved_distributor_ids")
+    dom = c.get("dominant_unresolved_distributor_id")
+    if dom is not None:
+        try:
+            dv = int(dom)
+            if dv > 0 and dv not in dist_ids:
+                dist_ids.insert(0, dv)
+        except (TypeError, ValueError):
+            pass
+    if fallback_distributor_id is not None:
+        fd = int(fallback_distributor_id)
+        if fd > 0 and fd not in dist_ids:
+            dist_ids.insert(0, fd)
+
+    nk = (normalized_key or c.get("normalized_key") or "").strip().lower()
+    if staging_scopes and nk:
+        for dist_id, em in staging_scopes.get(nk, []):
+            if dist_id > 0 and dist_id not in dist_ids:
+                dist_ids.append(dist_id)
+
+    months = _parse_month_list(c)
+    if fallback_evidence_date is not None:
+        em = fallback_evidence_date.strftime("%Y-%m")
+        if em not in months:
+            months.insert(0, em)
+
+    if staging_scopes and nk:
+        for dist_id, em in staging_scopes.get(nk, []):
+            if em not in months:
+                months.append(em)
+
+    if not dist_ids or not months:
+        if fallback_distributor_id is not None and fallback_evidence_date is not None:
+            return [(int(fallback_distributor_id), fallback_evidence_date)]
+        return []
+
+    attempts: list[tuple[int, date]] = []
+    seen: set[tuple[int, str]] = set()
+    for dist_id in dist_ids:
+        for em in months:
+            ev = evidence_date_from_month(em)
+            if ev is None:
+                continue
+            key = (dist_id, em)
+            if key in seen:
+                continue
+            seen.add(key)
+            attempts.append((dist_id, ev))
+            if len(attempts) >= max_attempts:
+                return attempts
+    return attempts
+
+
 def parse_candidate_shipment_evidence(ctx: dict[str, Any] | None) -> CandidateShipmentEvidence:
     if not ctx:
         return CandidateShipmentEvidence(None, None, ())
@@ -80,37 +189,149 @@ def try_shipment_tiebreak_product_id(
     evidence_date: date | None,
     stored_distinct_product_ids: tuple[int, ...] = (),
     corr_cache: Any = None,
+    candidate_context: dict[str, Any] | None = None,
+    normalized_key: str | None = None,
+    staging_scopes: dict[str, list[tuple[int, str]]] | None = None,
+    global_product_identity: Any = None,
 ) -> tuple[int | None, str | None]:
-    """Pick one PM id via stored validate-time ids first, then live shipment corroboration lookup.
+    """Pick one PM id via stored validate-time ids first, then scoped corroboration, then global identity.
 
     Returns ``(product_id, tiebreak_source)`` where source is ``stored_context``,
-    ``shipment_disambiguate``, or None.
+    ``shipment_disambiguate`` (variants), ``shipment_global_identity``, or None.
     """
     pick = intersect_eligible_with_shipment_ids(eligible_product_ids, stored_distinct_product_ids)
     if pick is not None:
         return pick, "stored_context"
 
-    if session is None and corr_cache is None:
-        return None, None
-    if distributor_id is None or evidence_date is None or not eligible_product_ids:
+    if not eligible_product_ids:
         return None, None
 
-    from app.services.imports.distributor_sales_inventory import _shipment_disambiguate_product_id
+    if session is not None or corr_cache is not None:
+        from app.services.imports.distributor_sales_inventory import _shipment_disambiguate_product_id
 
-    live_pick, scope = _shipment_disambiguate_product_id(
-        session,
-        distributor_id,
-        evidence_date,
-        raw_token,
-        eligible_product_ids,
-        corr_cache=corr_cache,
-    )
-    if live_pick is not None:
-        src = "shipment_disambiguate"
-        if scope == "cross_distributor":
-            src = f"{src}_cross_distributor"
-        return int(live_pick), src
+        scope_attempts = build_tiebreak_scope_attempts(
+            candidate_context,
+            normalized_key=normalized_key,
+            staging_scopes=staging_scopes,
+            fallback_distributor_id=distributor_id,
+            fallback_evidence_date=evidence_date,
+        )
+        if not scope_attempts and distributor_id is not None and evidence_date is not None:
+            scope_attempts = [(int(distributor_id), evidence_date)]
+
+        unanimous: set[int] = set()
+        last_scope: str | None = None
+        scope_conflict = False
+        for dist_id, ev_date in scope_attempts:
+            live_pick, ship_scope = _shipment_disambiguate_product_id(
+                session,
+                dist_id,
+                ev_date,
+                raw_token,
+                eligible_product_ids,
+                corr_cache=corr_cache,
+            )
+            if live_pick is None:
+                continue
+            unanimous.add(int(live_pick))
+            last_scope = ship_scope
+            if len(unanimous) > 1:
+                scope_conflict = True
+                break
+
+        if not scope_conflict and len(unanimous) == 1:
+            src = "shipment_disambiguate"
+            if last_scope == "cross_distributor":
+                src = f"{src}_cross_distributor"
+            if len(scope_attempts) > 1:
+                src = f"{src}_multi_scope"
+            return int(next(iter(unanimous))), src
+
+    if global_product_identity is not None:
+        global_ids = global_product_identity.distinct_product_ids_for_token(raw_token)
+        global_pick = intersect_eligible_with_shipment_ids(eligible_product_ids, global_ids)
+        if global_pick is not None:
+            return global_pick, "shipment_global_identity"
+
     return None, None
+
+
+def enrich_product_global_identity_context(
+    ctx: dict[str, Any],
+    raw_token: str | None,
+    *,
+    global_product_identity: Any | None,
+    eligible_product_ids: list[int] | None = None,
+) -> None:
+    """Persist signal-only global shipment identity explainability on candidate context."""
+    from app.services.imports.dsi_product_token_identity import product_identity_lookup_keys
+
+    keys = product_identity_lookup_keys(raw_token)
+    if keys:
+        ctx["product_identity_lookup_keys"] = list(keys)
+    if global_product_identity is None:
+        return
+    global_ids = global_product_identity.distinct_product_ids_for_token(raw_token)
+    if global_ids:
+        ctx["shipment_global_product_ids"] = [int(x) for x in global_ids]
+    elig = [int(x) for x in (eligible_product_ids or []) if int(x) > 0]
+    if not elig:
+        return
+    pick = intersect_eligible_with_shipment_ids(elig, global_ids)
+    if pick is not None:
+        ctx["shipment_product_tiebreak"] = {
+            "resolved_product_id": int(pick),
+            "source": "shipment_global_identity",
+            "signal_only": True,
+        }
+
+
+def ambiguous_product_plan_reason_from_context(ctx: dict[str, Any] | None) -> str:
+    """Structured plan reason when ambiguous_eligible tie-break cannot auto-pick."""
+    if not ctx:
+        return "Multiple eligible Product Master matches — ambiguous; steward must choose product"
+    global_ids = ctx.get("shipment_global_product_ids")
+    gset: set[int] = set()
+    if isinstance(global_ids, list):
+        for x in global_ids:
+            try:
+                v = int(x)
+            except (TypeError, ValueError):
+                continue
+            if v > 0:
+                gset.add(v)
+    amb = ctx.get("product_ambiguous_eligible")
+    elig: set[int] = set()
+    if isinstance(amb, dict):
+        for ep in amb.get("eligible_products") or []:
+            if isinstance(ep, dict):
+                try:
+                    v = int(ep.get("product_id"))
+                    if v > 0:
+                        elig.add(v)
+                except (TypeError, ValueError):
+                    pass
+        if not elig:
+            for x in amb.get("product_ids") or []:
+                try:
+                    v = int(x)
+                    if v > 0:
+                        elig.add(v)
+                except (TypeError, ValueError):
+                    pass
+    overlap = elig & gset
+    if not gset:
+        return (
+            "No resolved shipment sales-model evidence for this token — "
+            "steward must choose among eligible Product Master rows"
+        )
+    if len(gset) > 1 and len(overlap) > 1:
+        ids_s = ", ".join(str(x) for x in sorted(overlap)[:8])
+        return (
+            f"Shipment evidence maps this sales model to multiple products ({ids_s}) — "
+            "steward must choose"
+        )
+    return "Multiple eligible Product Master matches — ambiguous; steward must choose product"
 
 
 def corroboration_chip_label_from_context(ctx: dict[str, Any] | None) -> str | None:

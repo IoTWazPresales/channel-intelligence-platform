@@ -599,6 +599,7 @@ def plan_dsi_candidate_sync(
                         if v > 0:
                             elig_ids.append(v)
                 from app.services.imports.dsi_product_shipment_tiebreak import (
+                    ambiguous_product_plan_reason_from_context,
                     evidence_date_from_month,
                     parse_candidate_shipment_evidence,
                     try_shipment_tiebreak_product_id,
@@ -611,6 +612,11 @@ def plan_dsi_candidate_sync(
                 except (TypeError, ValueError):
                     dist_id = ship_ev.dominant_unresolved_distributor_id
                 ev_date = evidence_date_from_month(ship_ev.dominant_evidence_month)
+                corr_cache = plan_ctx.shipment_corr_cache if plan_ctx is not None else None
+                staging_scopes = plan_ctx.product_staging_scopes if plan_ctx is not None else None
+                global_identity = (
+                    plan_ctx.global_product_identity if plan_ctx is not None else None
+                )
                 pick, tie_src = try_shipment_tiebreak_product_id(
                     session,
                     eligible_product_ids=elig_ids,
@@ -618,18 +624,30 @@ def plan_dsi_candidate_sync(
                     distributor_id=dist_id,
                     evidence_date=ev_date,
                     stored_distinct_product_ids=ship_ev.stored_distinct_product_ids,
+                    corr_cache=corr_cache,
+                    candidate_context=ctx,
+                    normalized_key=cand.normalized_key,
+                    staging_scopes=staging_scopes,
+                    global_product_identity=global_identity,
                 )
                 if pick is not None:
+                    if tie_src == "shipment_global_identity":
+                        reason = (
+                            "Global shipment identity: sole resolved product across all evidence — "
+                            "propose ProductAlias bind"
+                        )
+                    else:
+                        reason = (
+                            f"Shipment evidence tie-break ({tie_src or 'shipment'}) — single Product Master "
+                            f"match among eligible rows — propose ProductAlias bind"
+                        )
                     return {
                         **base,
                         "suggested_action": "resolve_product",
                         "plan_status": "ready",
                         "ready": True,
                         "confidence": 0.78,
-                        "reason": (
-                            f"Shipment evidence tie-break ({tie_src or 'shipment'}) — single Product Master "
-                            f"match among eligible rows — propose ProductAlias bind"
-                        ),
+                        "reason": reason,
                         "suggested_target_id": int(pick),
                         "needs_defaults": False,
                         "needs_confirm_suspicious_distributor": False,
@@ -674,7 +692,7 @@ def plan_dsi_candidate_sync(
                 "plan_status": "needs_review",
                 "ready": False,
                 "confidence": 0.2,
-                "reason": "Multiple eligible Product Master matches — ambiguous; steward must choose product",
+                "reason": ambiguous_product_plan_reason_from_context(ctx),
                 "suggested_target_id": None,
                 "needs_defaults": False,
                 "needs_confirm_suspicious_distributor": False,
@@ -1188,6 +1206,8 @@ def build_dsi_resolution_plan_sync(
     )
     rows = []
     for c in cands:
+        if _terminal_candidate(c):
+            continue
         base_row = _baseline_annotate(
             plan_dsi_candidate_sync(
                 session,
@@ -1234,6 +1254,51 @@ def _product_resolve_needs_ineligible_confirm(ctx: dict[str, Any]) -> bool:
     return ctx.get("product_match_status") == "inactive_only" or bool(ctx.get("product_inactive_matches"))
 
 
+_HISTORICAL_DETERMINISTIC_INELIGIBLE_AUTO_CONFIRM_NOTE = (
+    "auto-confirmed ineligible: deterministic unique identity, historical path"
+)
+
+
+def _product_apply_target_is_deterministic_unique_bind(
+    *,
+    base: dict[str, Any],
+    target_id: int | None,
+) -> bool:
+    """True when classify-time plan marked a sole ready resolve_product at this target (not steward guess)."""
+    if target_id is None:
+        return False
+    try:
+        tid = int(target_id)
+    except (TypeError, ValueError):
+        return False
+
+    has_baseline = "baseline_ready" in base or "baseline_suggested_action" in base or "baseline_target_id" in base
+    if has_baseline:
+        if str(base.get("baseline_suggested_action") or "") != "resolve_product":
+            return False
+        if not base.get("baseline_ready"):
+            return False
+        bt = base.get("baseline_target_id")
+        if bt is None:
+            return False
+        try:
+            return int(bt) == tid
+        except (TypeError, ValueError):
+            return False
+
+    if str(base.get("suggested_action") or "") != "resolve_product":
+        return False
+    if not base.get("ready"):
+        return False
+    bt = base.get("suggested_target_id")
+    if bt is None:
+        return False
+    try:
+        return int(bt) == tid
+    except (TypeError, ValueError):
+        return False
+
+
 def merge_resolution_plan_row_for_apply(
     *,
     cand: ImportEntityMappingCandidate,
@@ -1243,6 +1308,7 @@ def merge_resolution_plan_row_for_apply(
     default_channel_id: int | None,
     global_confirm_suspicious_distributor: bool,
     historical_dsi_workflow: bool = False,
+    historical_dsi_product_eligibility_relaxed: bool = False,
 ) -> dict[str, Any]:
     """Single source of truth for effective action + readiness (used by /effective and /apply)."""
     blockers: list[str] = []
@@ -1322,12 +1388,19 @@ def merge_resolution_plan_row_for_apply(
             blockers.append("target_id_required")
 
     if action == "resolve_product":
-        if _product_resolve_needs_ineligible_confirm(ctx):
-            if historical_dsi_workflow:
-                confirm_ineligible = True
-                if audit_note is None or len(audit_note) < 8:
-                    audit_note = "Historical DSI workflow: auto-confirmed ineligible product bind per policy."
-            elif not confirm_ineligible or audit_note is None or len(audit_note) < 8:
+        deterministic_unique = _product_apply_target_is_deterministic_unique_bind(
+            base=base,
+            target_id=target_id,
+        )
+        if historical_dsi_product_eligibility_relaxed and deterministic_unique:
+            # Validate/plan may admit inactive targets under historical relaxation without
+            # stamping inactive_only on context (e.g. resolved_unique / tie-break). Set confirm
+            # here so execute_resolve_dsi_product → validate_dsi_product_resolve honors the same path.
+            confirm_ineligible = True
+            if audit_note is None or len(audit_note) < 8:
+                audit_note = _HISTORICAL_DETERMINISTIC_INELIGIBLE_AUTO_CONFIRM_NOTE
+        elif _product_resolve_needs_ineligible_confirm(ctx):
+            if not confirm_ineligible or audit_note is None or len(audit_note) < 8:
                 blockers.append("inactive_or_ineligible_product_requires_confirm_and_audit_note")
 
     if action == "create_provisional_customer":
@@ -1432,6 +1505,7 @@ def build_dsi_resolution_plan_effective_sync(
     if not job:
         raise ValueError("Import job not found")
     historical_wf = dsi_historical_workflow_from_import_job(job)
+    historical_relaxed = dsi_historical_product_eligibility_relaxed_from_import_job(job)
     by_cid: dict[int, dict[str, Any]] = {}
     for o in overrides:
         cid = int(o["candidate_id"])
@@ -1459,6 +1533,8 @@ def build_dsi_resolution_plan_effective_sync(
     )
     rows: list[dict[str, Any]] = []
     for c in cands:
+        if _terminal_candidate(c):
+            continue
         base = plan_dsi_candidate_sync(
             session,
             c,
@@ -1480,6 +1556,7 @@ def build_dsi_resolution_plan_effective_sync(
             default_channel_id=default_channel_id,
             global_confirm_suspicious_distributor=global_confirm_suspicious_distributor,
             historical_dsi_workflow=historical_wf,
+            historical_dsi_product_eligibility_relaxed=historical_relaxed,
         )
         rows.append(_attach_effective_fields_to_row(base, c, merged))
     ready_n = sum(1 for r in rows if r.get("ready"))
@@ -1609,11 +1686,15 @@ def collect_dsi_job_unresolved_geo_tokens_sync(session: Session, job_id: int) ->
             if ent["dimension"] == "channel":
                 iso = resolve_alpha2_from_token(str(ent["raw_token"]))
                 if iso:
-                    rid = region_code_lower.get(iso.lower())
+                    alias_region_ids = geo_cache.approved_region_alias_region_ids(ent["normalized_token"])
+                    catalog_rid = region_code_lower.get(iso.lower())
+                    registered_rid = alias_region_ids[0] if len(alias_region_ids) == 1 else None
                     item["geographic_hint"] = {
                         "guessed_region_code": iso,
-                        "matched_catalog": rid is not None,
-                        "region_id": rid,
+                        "matched_catalog": catalog_rid is not None,
+                        "region_id": catalog_rid,
+                        "alias_registered": len(alias_region_ids) > 0,
+                        "registered_region_id": registered_rid,
                     }
             out.append(item)
         out.sort(key=lambda x: (x["dimension"], x["normalized_token"]))
@@ -1650,10 +1731,18 @@ async def apply_dsi_resolution_plan_rows(
     confirm_for_suspicious_distributor_token: bool,
     overrides: list[dict[str, Any]] | None = None,
     product_index: ProductResolutionIndex | None = None,
+    effective_plan_rows_by_cid: dict[int, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Recompute baseline plan per id, merge overrides, then execute steward ops when effectively ready."""
+    """Merge overrides on plan rows, then execute steward ops when effectively ready.
 
-    if product_index is None:
+    When ``effective_plan_rows_by_cid`` is supplied (orchestrator classify-time effective plan),
+    those rows are used as the plan baseline instead of recomputing per candidate without plan_ctx.
+    """
+
+    precomputed = effective_plan_rows_by_cid or {}
+    needs_replan = any(int(cid) not in precomputed for cid in candidate_ids)
+
+    if needs_replan and product_index is None:
         product_index = await db.run_sync(_load_product_resolution_index)
     shared_prod_idx = product_index
 
@@ -1675,6 +1764,9 @@ async def apply_dsi_resolution_plan_rows(
 
     job_hdr = await db.get(ImportJob, job_id)
     historical_wf = dsi_historical_workflow_from_import_job(job_hdr) if job_hdr else False
+    historical_relaxed = (
+        dsi_historical_product_eligibility_relaxed_from_import_job(job_hdr) if job_hdr else False
+    )
 
     results: list[dict[str, Any]] = []
     applied_n = 0
@@ -1683,9 +1775,16 @@ async def apply_dsi_resolution_plan_rows(
     skipped_not_ready_n = 0
 
     for cid in candidate_ids:
-        row = await db.run_sync(
-            lambda s, c=cid, j=job_id, dr=default_region_id, dc=default_channel_id: _plan_sync(s, c, j, dr, dc)
-        )
+        icid = int(cid)
+        precomputed_row = precomputed.get(icid)
+        if precomputed_row is not None:
+            row = dict(precomputed_row)
+        else:
+            row = await db.run_sync(
+                lambda s, c=icid, j=job_id, dr=default_region_id, dc=default_channel_id: _plan_sync(
+                    s, c, j, dr, dc
+                )
+            )
         if row is None:
             results.append(
                 {
@@ -1718,6 +1817,7 @@ async def apply_dsi_resolution_plan_rows(
             default_channel_id=default_channel_id,
             global_confirm_suspicious_distributor=confirm_for_suspicious_distributor_token,
             historical_dsi_workflow=historical_wf,
+            historical_dsi_product_eligibility_relaxed=historical_relaxed,
         )
 
         if merged["hold_for_manual_review"]:

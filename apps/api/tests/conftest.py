@@ -19,6 +19,7 @@ import pytest
 _IMPORT_PIPELINE_DB_TEST_MODULES: frozenset[str] = frozenset(
     {
         "test_distributor_sales_inventory_import.py",
+        "test_dsi_validate_bulk_staging.py",
         "test_historical_lineup_import.py",
         "test_historical_lineup_resolution.py",
     }

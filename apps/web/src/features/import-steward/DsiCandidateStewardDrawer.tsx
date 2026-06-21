@@ -13,7 +13,7 @@ export function DsiCandidateStewardDrawer({
   onRowActionStart,
   onRowActionEnd,
   onDone,
-  onPlanRefresh,
+  onStewardFastComplete,
   lookupPeerCandidate,
   onOpenPeerByNormalizedKey,
   customerNormalizedKeysOnPage,
@@ -26,7 +26,8 @@ export function DsiCandidateStewardDrawer({
   onRowActionStart: (candidateId: number) => void;
   onRowActionEnd: () => void;
   onDone: () => void;
-  onPlanRefresh?: () => void | Promise<void>;
+  /** Drop resolved rows from in-memory plan without a full page replan. */
+  onStewardFastComplete?: (candidateIds: number[]) => void;
   lookupPeerCandidate?: (normalizedKey: string) => DsiCandidateRow | null;
   onOpenPeerByNormalizedKey?: (normalizedKey: string) => void;
   customerNormalizedKeysOnPage?: readonly string[];
@@ -81,7 +82,7 @@ export function DsiCandidateStewardDrawer({
           onRowActionStart={onRowActionStart}
           onRowActionEnd={onRowActionEnd}
           onDone={onDone}
-          onPlanRefresh={onPlanRefresh}
+          onStewardFastComplete={onStewardFastComplete}
           lookupPeerCandidate={lookupPeerCandidate}
           onOpenPeerByNormalizedKey={onOpenPeerByNormalizedKey}
           customerNormalizedKeysOnPage={customerNormalizedKeysOnPage}

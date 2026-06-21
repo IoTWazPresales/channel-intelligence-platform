@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from pydantic import ValidationError
 def test_dsi_bulk_totals_helper() -> None:
@@ -25,6 +27,54 @@ def test_dsi_bulk_body_ignore_ok() -> None:
 
     b = DsiBulkStewardBody(action="ignore", candidate_ids=[1, 2])
     assert b.action == "ignore"
+
+
+def test_dsi_steward_bulk_apply_ignore_uses_batch_writer() -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.api.v1.endpoints.mappings import DsiBulkStewardBody, dsi_steward_bulk_apply
+
+    async def _run() -> None:
+        db = MagicMock()
+        db.run_sync = AsyncMock(
+            return_value={
+                "import_job_id": 43,
+                "action": "ignore",
+                "applied": 2,
+                "failed": 0,
+                "results": [
+                    {
+                        "candidate_id": 1,
+                        "ok": True,
+                        "entity_type": "product_identifier",
+                        "result": {"ok": True, "candidate_id": 1, "status": "ignored"},
+                        "row_count": 1,
+                        "total_units": None,
+                        "total_reported_value": None,
+                    },
+                    {
+                        "candidate_id": 2,
+                        "ok": True,
+                        "entity_type": "product_identifier",
+                        "result": {"ok": True, "candidate_id": 2, "status": "ignored"},
+                        "row_count": 2,
+                        "total_units": None,
+                        "total_reported_value": None,
+                    },
+                ],
+            }
+        )
+
+        with patch("app.api.v1.endpoints.mappings._assert_dsi_import_job", new=AsyncMock()):
+            body = DsiBulkStewardBody(action="ignore", candidate_ids=[1, 2])
+            out = await dsi_steward_bulk_apply(43, body, db)
+
+        assert out["applied"] == 2
+        assert out["failed"] == 0
+        db.run_sync.assert_awaited_once()
+        assert db.get.call_count == 0
+
+    asyncio.run(_run())
 
 
 def test_dsi_bulk_body_map_customer_requires_customer_id() -> None:
@@ -104,3 +154,20 @@ def test_dsi_bulk_body_create_provisional_distributor_ok() -> None:
         confirm_for_suspicious_distributor_token=True,
     )
     assert b.confirm_for_suspicious_distributor_token is True
+
+
+def test_effective_geo_prefers_explicit_over_fallback() -> None:
+    from app.services.imports.dsi_bulk_provisional_customers_sync import _effective_geo_for_bulk
+
+    er, ec = _effective_geo_for_bulk(
+        None,
+        None,
+        None,
+        None,
+        fallback_region_id=99,
+        fallback_channel_id=88,
+        explicit_region_id=5,
+        explicit_channel_id=6,
+    )
+    assert er == 5
+    assert ec == 6

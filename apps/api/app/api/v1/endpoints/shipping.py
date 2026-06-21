@@ -269,6 +269,104 @@ def _apply_fact_where_clause(
     return stmt
 
 
+def _build_shipping_fact_filters(
+    *,
+    import_job_id: int | None = None,
+    distributor_id: int | None = None,
+    customer_id: int | None = None,
+    line_state: str | None = None,
+    report_type: str | None = None,
+    product_resolution_status: str | None = None,
+    distributor_resolution_status: str | None = None,
+    customer_resolution_status: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    eta_from: str | None = None,
+    eta_to: str | None = None,
+    date_field: str = "eta_date",
+    date_from: str | None = None,
+    date_to: str | None = None,
+    pod_date_is_null: bool | None = None,
+    currency_code: str | None = None,
+    operating_unit: str | None = None,
+    product_family: str | None = None,
+    product_model: str | None = None,
+) -> dict[str, Any]:
+    """Shared filter kwargs for ``/lines`` and ``/commercial-summary`` (must stay aligned)."""
+    df = str(date_field or "eta_date").strip()
+    if df not in DATE_FIELD_MAP:
+        df = "eta_date"
+    return {
+        "import_job_id": import_job_id,
+        "distributor_id": distributor_id,
+        "customer_id": customer_id,
+        "line_state": line_state,
+        "report_type": report_type,
+        "product_resolution_status": product_resolution_status,
+        "distributor_resolution_status": distributor_resolution_status,
+        "customer_resolution_status": customer_resolution_status,
+        "status": status,
+        "search": search,
+        "eta_from": _parse_opt_date(eta_from),
+        "eta_to": _parse_opt_date(eta_to),
+        "date_field": df,
+        "date_from": _parse_opt_date(date_from),
+        "date_to": _parse_opt_date(date_to),
+        "pod_date_is_null": pod_date_is_null,
+        "currency_code": currency_code,
+        "operating_unit": operating_unit,
+        "product_family": product_family,
+        "product_model": product_model,
+    }
+
+
+def _shipping_filters_active(filt: dict[str, Any]) -> bool:
+    if filt.get("import_job_id") is not None:
+        return True
+    if filt.get("distributor_id") is not None:
+        return True
+    if filt.get("customer_id") is not None:
+        return True
+    for key in (
+        "line_state",
+        "report_type",
+        "product_resolution_status",
+        "distributor_resolution_status",
+        "customer_resolution_status",
+        "status",
+        "search",
+        "currency_code",
+        "operating_unit",
+        "product_family",
+        "product_model",
+    ):
+        if (filt.get(key) or "").strip():
+            return True
+    if filt.get("eta_from") is not None or filt.get("eta_to") is not None:
+        return True
+    if filt.get("date_from") is not None or filt.get("date_to") is not None:
+        return True
+    if filt.get("pod_date_is_null") is not None:
+        return True
+    return False
+
+
+async def _count_shipment_facts(db: AsyncSession, filt: dict[str, Any], *extra_where: Any) -> int:
+    need_dist, need_prod, need_cust = _dim_join_flags(filt)
+    stmt = select(func.count(FactInboundShipment.id)).select_from(FactInboundShipment)
+    stmt = _apply_outer_joins(stmt, need_dist, need_prod, need_cust)
+    stmt = _apply_fact_where_clause(
+        stmt,
+        join_distributor=need_dist,
+        join_product=need_prod,
+        join_customer=need_cust,
+        **filt,
+    )
+    for clause in extra_where:
+        stmt = stmt.where(clause)
+    return int((await db.execute(stmt)).scalar_one() or 0)
+
+
 def _fmt_date(d: Any) -> str | None:
     if d is None:
         return None
@@ -376,7 +474,9 @@ async def inbound_optional_columns() -> dict[str, Any]:
     }
 
 
-async def _eta_shift_metrics(db: AsyncSession, *, sample_limit: int) -> dict[str, Any]:
+async def _eta_shift_metrics(
+    db: AsyncSession, *, sample_limit: int, filt: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Compare current fact-linked evidence line vs prior job line for same ``source_key`` (LAG)."""
     lag_est = func.lag(ShipmentEvidenceLine.est_pod_date).over(
         partition_by=ShipmentEvidenceLine.source_key,
@@ -415,6 +515,18 @@ async def _eta_shift_metrics(db: AsyncSession, *, sample_limit: int) -> dict[str
         .join(FactInboundShipment, FactInboundShipment.shipment_evidence_line_id == line_win.c.id)
         .where(prev_eff.is_not(None), cur_eff.is_not(None))
     )
+    if filt is not None and _shipping_filters_active(filt):
+        need_dist, need_prod, need_cust = _dim_join_flags(filt)
+        scoped_ids = select(FactInboundShipment.id).select_from(FactInboundShipment)
+        scoped_ids = _apply_outer_joins(scoped_ids, need_dist, need_prod, need_cust)
+        scoped_ids = _apply_fact_where_clause(
+            scoped_ids,
+            join_distributor=need_dist,
+            join_product=need_prod,
+            join_customer=need_cust,
+            **filt,
+        )
+        base = base.where(FactInboundShipment.id.in_(scoped_ids))
 
     slipped_sub = base.where(cur_eff > prev_eff).subquery()
     improved_sub = base.where(cur_eff < prev_eff).subquery()
@@ -502,35 +614,86 @@ async def shipping_filter_options(
 
 
 @router.get("/commercial-summary")
-async def shipping_commercial_summary(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
-    """KPI payloads for inbound commercial dashboard cards."""
+async def shipping_commercial_summary(
+    db: AsyncSession = Depends(get_db),
+    import_job_id: int | None = None,
+    distributor_id: int | None = None,
+    customer_id: int | None = None,
+    line_state: str | None = None,
+    report_type: str | None = None,
+    product_resolution_status: str | None = None,
+    distributor_resolution_status: str | None = None,
+    customer_resolution_status: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    eta_from: str | None = None,
+    eta_to: str | None = None,
+    date_field: str = Query("eta_date"),
+    date_from: str | None = None,
+    date_to: str | None = None,
+    pod_date_is_null: bool | None = None,
+    currency_code: str | None = None,
+    operating_unit: str | None = None,
+    product_family: str | None = None,
+    product_model: str | None = None,
+) -> dict[str, Any]:
+    """KPI payloads for inbound commercial dashboard cards (same filter contract as ``/lines``)."""
+    filt = _build_shipping_fact_filters(
+        import_job_id=import_job_id,
+        distributor_id=distributor_id,
+        customer_id=customer_id,
+        line_state=line_state,
+        report_type=report_type,
+        product_resolution_status=product_resolution_status,
+        distributor_resolution_status=distributor_resolution_status,
+        customer_resolution_status=customer_resolution_status,
+        status=status,
+        search=search,
+        eta_from=eta_from,
+        eta_to=eta_to,
+        date_field=date_field,
+        date_from=date_from,
+        date_to=date_to,
+        pod_date_is_null=pod_date_is_null,
+        currency_code=currency_code,
+        operating_unit=operating_unit,
+        product_family=product_family,
+        product_model=product_model,
+    )
+    filters_active = _shipping_filters_active(filt)
     today = _utc_today()
     w0, w1 = _iso_week_bounds(today)
 
-    total_lines = int(await db.scalar(select(func.count()).select_from(FactInboundShipment)) or 0)
+    total_lines = await _count_shipment_facts(db, filt)
 
-    pipe_rows = await db.execute(
+    need_dist, need_prod, need_cust = _dim_join_flags(filt)
+    pipe_stmt = (
         select(FactInboundShipment.currency_code, func.coalesce(func.sum(FactInboundShipment.amount), 0))
+        .select_from(FactInboundShipment)
         .where(FactInboundShipment.status == "scheduled", FactInboundShipment.amount.is_not(None))
-        .group_by(FactInboundShipment.currency_code)
     )
+    pipe_stmt = _apply_outer_joins(pipe_stmt, need_dist, need_prod, need_cust)
+    pipe_stmt = _apply_fact_where_clause(
+        pipe_stmt,
+        join_distributor=need_dist,
+        join_product=need_prod,
+        join_customer=need_cust,
+        **filt,
+    )
+    pipe_stmt = pipe_stmt.group_by(FactInboundShipment.currency_code)
+    pipe_rows = await db.execute(pipe_stmt)
     pipeline_by_currency = [
         {"currency_code": (r[0] or "").strip() or "—", "amount": float(r[1] or 0)} for r in pipe_rows.all()
     ]
-    pipeline_lines = int(
-        await db.scalar(
-            select(func.count())
-            .select_from(FactInboundShipment)
-            .where(FactInboundShipment.status == "scheduled", FactInboundShipment.amount.is_not(None))
-        )
-        or 0
+    pipeline_lines = await _count_shipment_facts(
+        db, filt, FactInboundShipment.status == "scheduled", FactInboundShipment.amount.is_not(None)
     )
 
     dist_lbl = func.left(
         func.coalesce(DimDistributor.name, FactInboundShipment.bill_to_raw, literal("Unknown")),
         48,
     )
-    arr_rows = await db.execute(
+    arr_stmt = (
         select(dist_lbl, func.count())
         .select_from(FactInboundShipment)
         .outerjoin(DimDistributor, FactInboundShipment.distributor_id == DimDistributor.id)
@@ -540,50 +703,59 @@ async def shipping_commercial_summary(db: AsyncSession = Depends(get_db)) -> dic
             FactInboundShipment.eta_date >= w0,
             FactInboundShipment.eta_date <= w1,
         )
-        .group_by(dist_lbl)
-        .order_by(desc(func.count()))
-        .limit(12)
     )
+    arr_stmt = _apply_outer_joins(arr_stmt, need_dist, need_prod, need_cust)
+    arr_stmt = _apply_fact_where_clause(
+        arr_stmt,
+        join_distributor=need_dist,
+        join_product=need_prod,
+        join_customer=need_cust,
+        **filt,
+    )
+    arr_stmt = arr_stmt.group_by(dist_lbl).order_by(desc(func.count())).limit(12)
+    arr_rows = await db.execute(arr_stmt)
     arriving_by_distributor = [
         {"label": str(r[0]), "count": int(r[1])} for r in arr_rows.all() if r[0] is not None
     ]
-    arriving_total = int(
-        await db.scalar(
-            select(func.count())
-            .select_from(FactInboundShipment)
-            .where(
-                FactInboundShipment.status == "scheduled",
-                FactInboundShipment.eta_date.is_not(None),
-                FactInboundShipment.eta_date >= w0,
-                FactInboundShipment.eta_date <= w1,
-            )
-        )
-        or 0
+    arriving_total = await _count_shipment_facts(
+        db,
+        filt,
+        FactInboundShipment.status == "scheduled",
+        FactInboundShipment.eta_date.is_not(None),
+        FactInboundShipment.eta_date >= w0,
+        FactInboundShipment.eta_date <= w1,
     )
 
-    overdue_count = int(
-        await db.scalar(
-            select(func.count())
-            .select_from(FactInboundShipment)
-            .where(
-                FactInboundShipment.status == "scheduled",
-                FactInboundShipment.promise_date.is_not(None),
-                FactInboundShipment.promise_date < today,
-                FactInboundShipment.pod_date.is_(None),
-            )
-        )
-        or 0
+    scheduled_pipeline = await _count_shipment_facts(db, filt, FactInboundShipment.status == "scheduled")
+
+    overdue_count = await _count_shipment_facts(
+        db,
+        filt,
+        FactInboundShipment.status == "scheduled",
+        FactInboundShipment.promise_date.is_not(None),
+        FactInboundShipment.promise_date < today,
+        FactInboundShipment.pod_date.is_(None),
     )
     overdue_pct = (overdue_count / total_lines) if total_lines else 0.0
+    overdue_pct_of_scheduled = (overdue_count / scheduled_pipeline) if scheduled_pipeline else 0.0
 
-    shifts = await _eta_shift_metrics(db, sample_limit=0)
-    # Re-fetch without heavy samples for card
+    delivered_week_total = await _count_shipment_facts(
+        db,
+        filt,
+        FactInboundShipment.status == "received",
+        FactInboundShipment.pod_date.is_not(None),
+        FactInboundShipment.pod_date >= w0,
+        FactInboundShipment.pod_date <= w1,
+    )
+
+    shifts = await _eta_shift_metrics(db, sample_limit=0, filt=filt)
     shifts_light = {k: shifts[k] for k in ("slipped_count", "improved_count", "net_direction")}
 
     return {
         "reference_date": today.isoformat(),
         "week_start": w0.isoformat(),
         "week_end": w1.isoformat(),
+        "filter_scope": {"active": filters_active, "cohort_line_count": total_lines},
         "total_lines": total_lines,
         "pipeline_in_transit": {
             "line_count": pipeline_lines,
@@ -593,7 +765,14 @@ async def shipping_commercial_summary(db: AsyncSession = Depends(get_db)) -> dic
             "total": arriving_total,
             "by_distributor": arriving_by_distributor,
         },
-        "overdue": {"count": overdue_count, "pct_of_total_lines": overdue_pct},
+        "overdue": {
+            "count": overdue_count,
+            "pct_of_total_lines": overdue_pct,
+            "pct_of_scheduled_pipeline": overdue_pct_of_scheduled,
+            "scheduled_pipeline_lines": scheduled_pipeline,
+        },
+        "landed_this_week": {"total": delivered_week_total},
+        "delivered_this_week": {"total": delivered_week_total},
         "eta_shifts": shifts_light,
     }
 
@@ -602,9 +781,51 @@ async def shipping_commercial_summary(db: AsyncSession = Depends(get_db)) -> dic
 async def shipping_eta_shifts(
     db: AsyncSession = Depends(get_db),
     sample_limit: int = Query(15, ge=1, le=50),
+    import_job_id: int | None = None,
+    distributor_id: int | None = None,
+    customer_id: int | None = None,
+    line_state: str | None = None,
+    report_type: str | None = None,
+    product_resolution_status: str | None = None,
+    distributor_resolution_status: str | None = None,
+    customer_resolution_status: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    eta_from: str | None = None,
+    eta_to: str | None = None,
+    date_field: str = Query("eta_date"),
+    date_from: str | None = None,
+    date_to: str | None = None,
+    pod_date_is_null: bool | None = None,
+    currency_code: str | None = None,
+    operating_unit: str | None = None,
+    product_family: str | None = None,
+    product_model: str | None = None,
 ) -> dict[str, Any]:
     """ETA / promise slip vs prior inbound job per ``source_key`` (evidence line LAG)."""
-    return await _eta_shift_metrics(db, sample_limit=sample_limit)
+    filt = _build_shipping_fact_filters(
+        import_job_id=import_job_id,
+        distributor_id=distributor_id,
+        customer_id=customer_id,
+        line_state=line_state,
+        report_type=report_type,
+        product_resolution_status=product_resolution_status,
+        distributor_resolution_status=distributor_resolution_status,
+        customer_resolution_status=customer_resolution_status,
+        status=status,
+        search=search,
+        eta_from=eta_from,
+        eta_to=eta_to,
+        date_field=date_field,
+        date_from=date_from,
+        date_to=date_to,
+        pod_date_is_null=pod_date_is_null,
+        currency_code=currency_code,
+        operating_unit=operating_unit,
+        product_family=product_family,
+        product_model=product_model,
+    )
+    return await _eta_shift_metrics(db, sample_limit=sample_limit, filt=filt)
 
 
 @router.get("/summary")
@@ -680,46 +901,32 @@ async def shipping_evidence_lines(
     if df not in DATE_FIELD_MAP:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid date_field: {date_field!r}")
 
-    eta_d0 = _parse_opt_date(eta_from)
-    eta_d1 = _parse_opt_date(eta_to)
-    d0 = _parse_opt_date(date_from)
-    d1 = _parse_opt_date(date_to)
-
-    filt: dict[str, Any] = {
-        "import_job_id": import_job_id,
-        "distributor_id": distributor_id,
-        "customer_id": customer_id,
-        "line_state": line_state,
-        "report_type": report_type,
-        "product_resolution_status": product_resolution_status,
-        "distributor_resolution_status": distributor_resolution_status,
-        "customer_resolution_status": customer_resolution_status,
-        "status": status,
-        "search": search,
-        "eta_from": eta_d0,
-        "eta_to": eta_d1,
-        "date_field": df,
-        "date_from": d0,
-        "date_to": d1,
-        "pod_date_is_null": pod_date_is_null,
-        "currency_code": currency_code,
-        "operating_unit": operating_unit,
-        "product_family": product_family,
-        "product_model": product_model,
-    }
+    filt = _build_shipping_fact_filters(
+        import_job_id=import_job_id,
+        distributor_id=distributor_id,
+        customer_id=customer_id,
+        line_state=line_state,
+        report_type=report_type,
+        product_resolution_status=product_resolution_status,
+        distributor_resolution_status=distributor_resolution_status,
+        customer_resolution_status=customer_resolution_status,
+        status=status,
+        search=search,
+        eta_from=eta_from,
+        eta_to=eta_to,
+        date_field=df,
+        date_from=date_from,
+        date_to=date_to,
+        pod_date_is_null=pod_date_is_null,
+        currency_code=currency_code,
+        operating_unit=operating_unit,
+        product_family=product_family,
+        product_model=product_model,
+    )
 
     need_dist, need_prod, need_cust = _dim_join_flags(filt)
 
-    count_stmt = select(func.count(FactInboundShipment.id)).select_from(FactInboundShipment)
-    count_stmt = _apply_outer_joins(count_stmt, need_dist, need_prod, need_cust)
-    count_stmt = _apply_fact_where_clause(
-        count_stmt,
-        join_distributor=need_dist,
-        join_product=need_prod,
-        join_customer=need_cust,
-        **filt,
-    )
-    total = int((await db.execute(count_stmt)).scalar_one())
+    total = await _count_shipment_facts(db, filt)
 
     q = select(FactInboundShipment).order_by(FactInboundShipment.updated_at.desc())
     q = _apply_outer_joins(q, need_dist, need_prod, need_cust)

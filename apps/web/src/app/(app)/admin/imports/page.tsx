@@ -1,6 +1,5 @@
 'use client';
 
-import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import Autocomplete from '@mui/material/Autocomplete';
@@ -61,12 +60,18 @@ import {
 import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
+import { ImportFileUploadZone } from './ImportFileUploadZone';
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
 import {
   DSI_STEWARD_CONFIG,
   notifyDsiAsyncPipelineStarted,
   refetchDsiImportJobStewardQueries,
 } from '@/features/import-steward';
+import { deriveDsiJobDisplayState } from '@/features/import-steward/dsiJobDisplayState';
+import {
+  dsiJobHasValidationComplete,
+  dsiWizardActiveStepFromServer,
+} from '@/features/import-steward/dsiImportWizardRouting';
 
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 
@@ -379,6 +384,14 @@ const SHIPMENT_MAPPING_REQUIRED_GROUPS: CanonicalRequiredGroup[] = [
   { id: 'distributor_party', label: 'Distributor party', anyOf: ['bill_to_raw', 'ship_to_raw', 'distributor_token'] },
 ];
 
+/** Live "still needs" requirements for DSI mapping — mirrors `dsi_mapping_gate_errors`. */
+const DSI_MAPPING_REQUIRED_GROUPS: CanonicalRequiredGroup[] = [
+  { id: 'distributor', label: 'Distributor', anyOf: ['distributor_token'] },
+  { id: 'product', label: 'Product identifier', anyOf: ['product_identifier'] },
+  { id: 'date', label: 'Date', anyOf: ['transaction_date', 'snapshot_date'] },
+  { id: 'quantity', label: 'Quantity or inventory', anyOf: ['quantity_sold', 'stock_on_hand'] },
+];
+
 /** Phase rail + copy for the inbound-shipment validate progress panel (reads `imports.process_job` progress). */
 const SHIPMENT_PROGRESS_PHASES = [
   { id: 'processing_rows', label: 'Resolve rows' },
@@ -484,7 +497,8 @@ function AdminImportsPageContent() {
   const [sourceId, setSourceId] = useState<number | ''>('');
   const [importMode, setImportMode] = useState<'validate' | 'apply'>('validate');
   const [confirmDestructive, setConfirmDestructive] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
+  /** When a job exists, the large drop zone collapses; user can expand to start a new upload. */
+  const [uploadZoneExpanded, setUploadZoneExpanded] = useState(false);
   const [lastJobId, setLastJobId] = useState<number | null>(null);
   const [lastGenericFile, setLastGenericFile] = useState<File | null>(null);
   const [historicalValidatedJobId, setHistoricalValidatedJobId] = useState<number | null>(null);
@@ -511,6 +525,10 @@ function AdminImportsPageContent() {
   const [shipmentMapDraft, setShipmentMapDraft] = useState<Record<string, string>>({});
   const [shipmentValidateAsync, setShipmentValidateAsync] = useState(false);
   const [dsiValidateAsync, setDsiValidateAsync] = useState(false);
+  // DSI apply runs async on the worker too. Tracked separately from validate because apply transits
+  // through stage `validated` on its way to `loaded` — the validate poll would mis-read that
+  // transient `validated` as "done", so apply needs its own poll terminal on `loaded`/`failed`.
+  const [dsiApplyAsync, setDsiApplyAsync] = useState(false);
   const [dsiWorkflowMode, setDsiWorkflowMode] = useState<'auto' | 'historical' | 'weekly'>('auto');
 
   const jobIdParam = useMemo(() => {
@@ -692,14 +710,11 @@ function AdminImportsPageContent() {
     }
     if (jobDetail.template_slug !== 'product_master') {
       if (jobDetail.template_slug === 'distributor_inventory') {
-        const stage = (jobDetail.stage || '').trim();
-        if (stage === 'dsi_mapping_ready') {
-          setActiveStep(5);
-        } else if (stage === 'validated' || stage === 'failed') {
-          setActiveStep(6);
-        } else {
-          setActiveStep(4);
-        }
+        const derived = dsiWizardActiveStepFromServer({
+          stage: jobDetail.stage ?? '',
+          status: jobDetail.status ?? '',
+        });
+        if (derived != null) setActiveStep(derived);
       } else if (jobDetail.template_slug === 'inbound_shipments') {
         setActiveStep(3);
       } else {
@@ -869,6 +884,16 @@ function AdminImportsPageContent() {
     [dsiMappingState?.canonical_targets]
   );
 
+  const dsiMappingTargetOptions = useMemo<CanonicalTargetOption[]>(
+    () =>
+      (dsiMappingState?.canonical_targets ?? []).map((t) => ({
+        value: t,
+        label: dsiTargetLabel(t),
+        description: dsiTargetDescription(t) ?? dsiMappingState?.field_target_descriptions?.[t],
+      })),
+    [dsiMappingState?.canonical_targets, dsiMappingState?.field_target_descriptions]
+  );
+
   const dsiServerMappingKey = useMemo(
     () => stableFieldMappingJson(dsiMappingState?.field_mapping),
     [dsiMappingState?.field_mapping]
@@ -994,8 +1019,25 @@ function AdminImportsPageContent() {
     },
   });
 
+  // Apply poll: terminal on `loaded`/`failed` (apply's terminal stage), NOT `validated` — apply
+  // passes through `validated` before the worker's complete step upserts facts and promotes to `loaded`.
+  const { data: dsiApplyPollJob } = useQuery({
+    queryKey: ['dsi-async-apply-import-job', lastJobId],
+    queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${lastJobId!}`, { signal }),
+    enabled: Boolean(isDsi && lastJobId != null && dsiApplyAsync),
+    refetchInterval: (q) => {
+      const j = q.state.data;
+      if (!j) return 1500;
+      const status = (j.status || '').trim().toLowerCase();
+      const st = (j.stage || '').trim();
+      if (st === 'loaded' || st === 'failed') return false;
+      if (status === 'failed' || status === 'completed' || status === 'completed_with_errors') return false;
+      return 1500;
+    },
+  });
+
   const { data: dsiProgress } = useImportJobProgressQuery(lastJobId ?? undefined, {
-    enabled: Boolean(isDsi && lastJobId != null && dsiValidateAsync),
+    enabled: Boolean(isDsi && lastJobId != null && (dsiValidateAsync || dsiApplyAsync)),
   });
 
   useEffect(() => {
@@ -1026,6 +1068,24 @@ function AdminImportsPageContent() {
     }
   }, [dsiValidateAsync, dsiValidatePollJob, dsiProgress?.phase, qc, refetchDsiMapping, refetchPreview]);
 
+  useEffect(() => {
+    if (!dsiApplyAsync) return;
+    const j = dsiApplyPollJob;
+    if (!j) return;
+    const status = (j.status || '').trim().toLowerCase();
+    const st = (j.stage || '').trim();
+    if (status === 'running' && st !== 'loaded' && st !== 'failed') return;
+    if (st === 'loaded' || st === 'failed' || status === 'completed' || status === 'completed_with_errors' || status === 'failed') {
+      setDsiApplyAsync(false);
+      void (async () => {
+        await refetchDsiImportJobStewardQueries(qc, j.id, { includeImportJobsList: true });
+        void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+        await refetchDsiMapping();
+        await refetchPreview();
+      })();
+    }
+  }, [dsiApplyAsync, dsiApplyPollJob, qc, refetchDsiMapping, refetchPreview]);
+
   const handleDsiAsyncPipelineStarted = useCallback(
     (args: { importJobId: number; taskId?: string | null }) => {
       if (args.importJobId !== lastJobId) return;
@@ -1038,15 +1098,16 @@ function AdminImportsPageContent() {
   );
 
   const dsiPipelineInFlight = useMemo(() => {
-    if (dsiValidateAsync) return true;
-    const j = dsiValidatePollJob;
+    if (dsiValidateAsync || dsiApplyAsync) return true;
+    const j = dsiValidatePollJob ?? dsiApplyPollJob;
     if (!j) return false;
     return (j.status || '').trim().toLowerCase() === 'running';
-  }, [dsiValidateAsync, dsiValidatePollJob]);
+  }, [dsiValidateAsync, dsiApplyAsync, dsiValidatePollJob, dsiApplyPollJob]);
 
   useEffect(() => {
     dsiValidate.reset();
     setDsiValidateAsync(false);
+    setDsiApplyAsync(false);
   }, [lastJobId]);
 
   const dsiApply = useMutation({
@@ -1063,13 +1124,19 @@ function AdminImportsPageContent() {
         headers: defaultHeaders,
       });
       if (!res.ok) throw new Error(await readFetchError(res));
-      return res.json() as Promise<DsiMappingState>;
+      // Apply now dispatches to the worker and returns immediately with {async:true,...}; the
+      // dedicated apply poll drives the lifecycle to `loaded`. (Sync fallback returns DsiMappingState.)
+      return res.json() as Promise<DsiMappingState & { async?: boolean; task_id?: string | null }>;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data && (data as { async?: boolean }).async) {
+        setDsiApplyAsync(true);
+      }
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
     },
     onError: () => {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
@@ -1132,7 +1199,74 @@ function AdminImportsPageContent() {
     return (dsiMappingState?.stage || '').trim();
   }, [dsiValidatePollJob?.stage, dsiMappingState?.stage]);
 
-  const dsiValidationComplete = dsiValidateStage === 'validated' || dsiValidateStage === 'failed';
+  const dsiJobSnapshotForRouting = useMemo(() => {
+    const job =
+      (dsiValidatePollJob?.id === lastJobId ? dsiValidatePollJob : null) ??
+      (dsiApplyPollJob?.id === lastJobId ? dsiApplyPollJob : null) ??
+      (jobDetail?.id === lastJobId && jobDetail.template_slug === 'distributor_inventory'
+        ? jobDetail
+        : null) ??
+      (dsiMappingState?.id === lastJobId ? dsiMappingState : null);
+    if (!job) {
+      return { stage: dsiValidateStage, status: '' };
+    }
+    return {
+      stage: String(job.stage ?? dsiValidateStage ?? ''),
+      status: String(job.status ?? ''),
+    };
+  }, [
+    dsiValidatePollJob,
+    dsiApplyPollJob,
+    jobDetail,
+    dsiMappingState,
+    lastJobId,
+    dsiValidateStage,
+  ]);
+
+  const dsiValidationComplete = useMemo(
+    () => dsiJobHasValidationComplete(dsiJobSnapshotForRouting),
+    [dsiJobSnapshotForRouting]
+  );
+
+  const dsiDerivedStepRef = useRef<{ jobId: number | null; step: number | null }>({ jobId: null, step: null });
+  useEffect(() => {
+    if (!isDsi || lastJobId == null) return;
+    const job =
+      (dsiValidatePollJob?.id === lastJobId ? dsiValidatePollJob : null) ??
+      (dsiApplyPollJob?.id === lastJobId ? dsiApplyPollJob : null) ??
+      (jobDetail?.id === lastJobId && jobDetail.template_slug === 'distributor_inventory'
+        ? jobDetail
+        : null) ??
+      (dsiMappingState?.id === lastJobId ? dsiMappingState : null);
+    if (!job) return;
+    if (activeStep < 4 && jobIdParam !== lastJobId) return;
+
+    const derived = dsiWizardActiveStepFromServer({
+      stage: String(job.stage ?? ''),
+      status: String(job.status ?? ''),
+    });
+    if (derived == null) return;
+
+    if ((dsiPipelineInFlight || dsiValidateAsync) && activeStep >= 6 && derived < 6) return;
+
+    if (dsiDerivedStepRef.current.jobId !== lastJobId) {
+      dsiDerivedStepRef.current = { jobId: lastJobId, step: null };
+    }
+    if (dsiDerivedStepRef.current.step === derived) return;
+    dsiDerivedStepRef.current = { jobId: lastJobId, step: derived };
+    setActiveStep((prev) => (prev === derived ? prev : derived));
+  }, [
+    isDsi,
+    lastJobId,
+    jobIdParam,
+    activeStep,
+    dsiValidatePollJob,
+    dsiApplyPollJob,
+    jobDetail,
+    dsiMappingState,
+    dsiPipelineInFlight,
+    dsiValidateAsync,
+  ]);
 
   const { data: dsiJobIntelligence } = useQuery({
     queryKey: ['dsi-job-intelligence', lastJobId],
@@ -1162,12 +1296,69 @@ function AdminImportsPageContent() {
 
   const dsiGateOk = useMemo(() => dsiGateFromMapping(dsiMapDraft), [dsiMapDraft]);
 
-  const dsiJobFailedAlert =
-    isDsi && dsiMappingState?.status === 'failed' && dsiMappingState.error_summary ? (
-      <Alert severity="error" data-testid="dsi-job-failed-banner">
-        Import job failed: {dsiMappingState.error_summary}
-      </Alert>
-    ) : null;
+  const dsiJobDisplay = useMemo(
+    () =>
+      deriveDsiJobDisplayState({
+        status: dsiMappingState?.status,
+        stage: dsiMappingState?.stage,
+        errorSummary: dsiMappingState?.error_summary,
+        progressPhase: dsiProgress?.phase,
+        taskState: dsiProgress?.task_state,
+        progressAt: dsiProgress?.progress_at,
+        pipelineStartedAt: dsiProgress?.pipeline_started_at,
+      }),
+    [
+      dsiMappingState?.status,
+      dsiMappingState?.stage,
+      dsiMappingState?.error_summary,
+      dsiProgress?.phase,
+      dsiProgress?.task_state,
+      dsiProgress?.progress_at,
+      dsiProgress?.pipeline_started_at,
+    ]
+  );
+
+  const handleDsiJobStateRecovery = useCallback(() => {
+    void refetchDsiMapping();
+    if (lastJobId != null) {
+      void qc.invalidateQueries({ queryKey: ['import-job-pipeline-progress', lastJobId] });
+      void qc.invalidateQueries({ queryKey: ['dsi-async-validate-import-job', lastJobId] });
+    }
+  }, [lastJobId, qc, refetchDsiMapping]);
+
+  const dsiJobFailedAlert = useMemo(() => {
+    if (!isDsi) return null;
+    if (dsiJobDisplay.kind === 'failed') {
+      return (
+        <Alert severity="error" data-testid="dsi-job-failed-banner">
+          Import job failed: {dsiJobDisplay.message}
+        </Alert>
+      );
+    }
+    if (dsiJobDisplay.kind === 'interrupted') {
+      return (
+        <Alert severity="warning" data-testid="dsi-job-interrupted-banner">
+          {dsiJobDisplay.message}
+        </Alert>
+      );
+    }
+    if (dsiJobDisplay.kind === 'running_stale') {
+      return (
+        <Alert
+          severity="warning"
+          data-testid="dsi-job-stale-banner"
+          action={
+            <Button color="inherit" size="small" onClick={handleDsiJobStateRecovery}>
+              Check now
+            </Button>
+          }
+        >
+          {dsiJobDisplay.message}
+        </Alert>
+      );
+    }
+    return null;
+  }, [dsiJobDisplay, handleDsiJobStateRecovery, isDsi]);
 
   // Derived data for the HL mapping review panel.
   const hlSheetDetail: HlSheetDetail | null =
@@ -1263,6 +1454,10 @@ function AdminImportsPageContent() {
       const st = (j.stage || '').trim();
       const sts = (j.status || '').trim();
       if (sts === 'running') return 1500;
+      // Keep polling through async validate while still at mapping_ready — otherwise the job
+      // record never refreshes after the worker commits and the progress panel spins forever.
+      if (shipmentValidateAsync && st === 'shipment_mapping_ready') return 1500;
+      if (sts === 'completed' || sts === 'completed_with_errors') return 1500;
       if (st === 'validated' || st === 'loaded' || st === 'failed') return false;
       if (st === 'shipment_mapping_ready') return false;
       return 1500;
@@ -1272,8 +1467,18 @@ function AdminImportsPageContent() {
   useEffect(() => {
     if (!isShipmentEvidence || !shipmentImportJob) return;
     const st = (shipmentImportJob.stage || '').trim();
-    if (st === 'validated' || st === 'failed') setShipmentValidateAsync(false);
-  }, [isShipmentEvidence, shipmentImportJob?.stage]);
+    const sts = (shipmentImportJob.status || '').trim();
+    if (
+      st === 'validated' ||
+      st === 'loaded' ||
+      st === 'failed' ||
+      sts === 'completed' ||
+      sts === 'completed_with_errors' ||
+      sts === 'failed'
+    ) {
+      setShipmentValidateAsync(false);
+    }
+  }, [isShipmentEvidence, shipmentImportJob?.stage, shipmentImportJob?.status]);
 
   /** Job id for shipment column mapping + validate (matches steward poll id). */
   const shipmentMappingJobId: number | null = shipmentEvidencePollJobId ?? lastJobId ?? null;
@@ -1389,16 +1594,40 @@ function AdminImportsPageContent() {
     },
   });
 
-  const shipmentValidating = Boolean(
+  const shipmentStage = (shipmentImportJob?.stage || '').trim();
+  const shipmentStatus = (shipmentImportJob?.status || '').trim();
+  const shipmentValidatePollEnabled = Boolean(
     isShipmentEvidence &&
-      (shipmentValidateRun.isPending ||
-        shipmentValidateAsync ||
-        (shipmentImportJob?.status || '').trim() === 'running') &&
-      (shipmentImportJob?.stage || '').trim() === 'shipment_mapping_ready'
+      shipmentMappingJobId != null &&
+      (shipmentValidateRun.isPending || shipmentValidateAsync || shipmentStatus === 'running')
   );
   const { data: shipmentProgress } = useImportJobProgressQuery(shipmentMappingJobId ?? undefined, {
-    enabled: shipmentValidating,
+    enabled: shipmentValidatePollEnabled,
   });
+  const shipmentProgressPhase = (shipmentProgress?.phase ?? '').trim();
+  const shipmentPipelineFinished =
+    shipmentStage === 'validated' ||
+    shipmentStage === 'loaded' ||
+    shipmentStage === 'failed' ||
+    shipmentStatus === 'failed' ||
+    shipmentProgressPhase === 'complete' ||
+    shipmentProgressPhase === 'failed';
+  const shipmentValidating = Boolean(
+    shipmentValidatePollEnabled &&
+      !shipmentPipelineFinished &&
+      shipmentStage === 'shipment_mapping_ready'
+  );
+
+  useEffect(() => {
+    if (!isShipmentEvidence || shipmentMappingJobId == null) return;
+    const phase = (shipmentProgress?.phase ?? '').trim();
+    if (phase !== 'complete' && phase !== 'failed') return;
+    setShipmentValidateAsync(false);
+    void qc.invalidateQueries({ queryKey: ['import-job', shipmentMappingJobId] });
+    void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', shipmentMappingJobId] });
+    void qc.invalidateQueries({ queryKey: ['import-job-rows', shipmentMappingJobId] });
+  }, [isShipmentEvidence, shipmentMappingJobId, shipmentProgress?.phase, qc]);
 
   const shipmentMappingDraftDirty = useMemo(() => {
     if (!shipmentMappingState?.file_headers?.length) return false;
@@ -1798,6 +2027,27 @@ function AdminImportsPageContent() {
     sourceId !== '';
 
   const canGoUpload = isPm ? canPmUpload : canGoUploadGeneric;
+
+  const boundImportJobId = lastJobId ?? (isJobRevisitMode && jobIdParam != null ? jobIdParam : null);
+
+  const boundImportJobMeta = useMemo(() => {
+    if (boundImportJobId == null) return null;
+    if (jobDetail?.id === boundImportJobId) {
+      return {
+        id: boundImportJobId,
+        file_name: jobDetail.file_name,
+        stage: jobDetail.stage,
+      };
+    }
+    if (shipmentImportJob && shipmentEvidencePollJobId === boundImportJobId) {
+      return {
+        id: boundImportJobId,
+        file_name: shipmentImportJob.file_name,
+        stage: shipmentImportJob.stage,
+      };
+    }
+    return { id: boundImportJobId, file_name: null as string | null, stage: null as string | null };
+  }, [boundImportJobId, jobDetail, shipmentImportJob, shipmentEvidencePollJobId]);
 
   const identityTargetSet = useMemo(
     () => new Set(pmJobState?.identity_targets ?? ['technical_product_id']),
@@ -2242,55 +2492,16 @@ function AdminImportsPageContent() {
               immediately; mapping and validate/commit follow in the next steps.
             </Typography>
             {!canGoUpload ? <Alert severity="warning">Select a data provider before uploading.</Alert> : null}
-            <Box
-              onDragEnter={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-              }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-                const f = e.dataTransfer.files?.[0];
-                onFile(f);
-              }}
-              sx={{
-                border: '2px dashed',
-                borderColor: dragActive ? 'primary.main' : 'divider',
-                borderRadius: 2,
-                px: 3,
-                py: 4,
-                textAlign: 'center',
-                bgcolor: dragActive ? 'action.selected' : 'action.hover',
-              }}
-            >
-              <CloudUploadOutlinedIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
-              <Typography variant="subtitle1" fontWeight={600}>
-                Drop CSV or XLSX here
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Or choose a file. No catalog writes until you pass validation and commit on the last step.
-              </Typography>
-              <Button variant="contained" component="label" disabled={!canGoUpload || pmUpload.isPending}>
-                Choose file
-                <input
-                  hidden
-                  type="file"
-                  accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-                  onChange={(e) => {
-                    onFile(e.target.files?.[0]);
-                    e.target.value = '';
-                  }}
-                />
-              </Button>
-            </Box>
-            {pmUpload.isPending ? <LinearProgress /> : null}
-            {pmUpload.isError ? (
-              <Alert severity="error">{safeDisplayError(pmUpload.error)}</Alert>
-            ) : null}
+            <ImportFileUploadZone
+              expanded
+              onExpandedChange={() => {}}
+              canUpload={!!canGoUpload}
+              pending={pmUpload.isPending}
+              error={pmUpload.isError ? safeDisplayError(pmUpload.error) : null}
+              onFile={onFile}
+              subtitle="Or choose a file. No catalog writes until you pass validation and commit on the last step."
+              testIdPrefix="pm-upload"
+            />
             {pmUpload.isSuccess && lastJobId != null ? (
               <Alert severity="success">
                 Job <strong>#{lastJobId}</strong> staged. File headers:{' '}
@@ -3005,53 +3216,16 @@ function AdminImportsPageContent() {
               </Select>
             </FormControl>
             {!canGoUpload ? <Alert severity="warning">Complete provider, mode, and confirmations before uploading.</Alert> : null}
-            <Box
-              onDragEnter={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-              }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-                const f = e.dataTransfer.files?.[0];
-                onFile(f);
-              }}
-              sx={{
-                border: '2px dashed',
-                borderColor: dragActive ? 'primary.main' : 'divider',
-                borderRadius: 2,
-                px: 3,
-                py: 4,
-                textAlign: 'center',
-                bgcolor: dragActive ? 'action.selected' : 'action.hover',
-              }}
-            >
-              <CloudUploadOutlinedIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
-              <Typography variant="subtitle1" fontWeight={600}>
-                Drop CSV or XLSX here
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Or choose a file. Validation and apply run only after you confirm mappings.
-              </Typography>
-              <Button variant="contained" component="label" disabled={!canGoUpload || upload.isPending}>
-                Choose file
-                <input
-                  hidden
-                  type="file"
-                  accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-                  onChange={(e) => {
-                    onFile(e.target.files?.[0]);
-                    e.target.value = '';
-                  }}
-                />
-              </Button>
-            </Box>
-            {upload.isPending ? <LinearProgress /> : null}
-            {upload.isError ? <Alert severity="error">{safeDisplayError(upload.error)}</Alert> : null}
+            <ImportFileUploadZone
+              expanded
+              onExpandedChange={() => {}}
+              canUpload={!!canGoUpload}
+              pending={upload.isPending}
+              error={upload.isError ? safeDisplayError(upload.error) : null}
+              onFile={onFile}
+              subtitle="Or choose a file. Validation and apply run only after you confirm mappings."
+              testIdPrefix="dsi-upload"
+            />
             {upload.isSuccess && lastJobId != null ? (
               <Alert severity="success" data-testid="dsi-upload-success">
                 Job <strong>#{lastJobId}</strong> created. Continue to column mapping.
@@ -3109,96 +3283,21 @@ function AdminImportsPageContent() {
                 ))}
               </Alert>
             ) : null}
-            <Table size="small" data-testid="dsi-mapping-table">
-              <TableHead>
-                <TableRow>
-                  <TableCell>File column</TableCell>
-                  <TableCell sx={{ minWidth: 280 }}>Maps to</TableCell>
-                  <TableCell sx={{ minWidth: 220 }}>Why / confidence</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(dsiMappingState?.file_headers ?? []).map((h) => (
-                  <TableRow key={h}>
-                    <TableCell>
-                      <Typography fontWeight={600}>{h}</Typography>
-                      <Typography variant="caption" color="text.secondary" display="block" data-testid={`dsi-samples-${h}`}>
-                        Examples: {formatDsiSamples(dsiMappingState?.column_samples?.[h])}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Auto: {dsiMappingState?.field_mapping?.[h] ? dsiTargetLabel(dsiMappingState.field_mapping[h]) : '—'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <FormControl size="small" fullWidth>
-                        <InputLabel id={`dsi-map-${h}`}>Target</InputLabel>
-                        <Select
-                          labelId={`dsi-map-${h}`}
-                          label="Target"
-                          value={dsiSelectValue(dsiMapDraft[h], dsiCanonSet)}
-                          displayEmpty
-                          renderValue={(selected) => {
-                            const v = String(selected ?? '');
-                            if (!v) return <em>— Unmapped —</em>;
-                            return dsiTargetLabel(v);
-                          }}
-                          onChange={(e) => {
-                            const v = e.target.value as string;
-                            setDsiMapDraft((prev) => {
-                              const next = { ...prev };
-                              if (!v) delete next[h];
-                              else next[h] = v;
-                              return next;
-                            });
-                          }}
-                        >
-                          <MenuItem value="">
-                            <em>— Unmapped —</em>
-                          </MenuItem>
-                          {(dsiMappingState?.canonical_targets ?? []).map((t) => (
-                            <MenuItem key={t} value={t} sx={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
-                              <ListItemText
-                                primary={dsiTargetLabel(t)}
-                                secondary={
-                                  dsiTargetDescription(t) ??
-                                  dsiMappingState?.field_target_descriptions?.[t] ??
-                                  undefined
-                                }
-                                primaryTypographyProps={{ variant: 'body2' }}
-                                secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
-                              />
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        const hint = dsiMappingState?.column_mapping_hints?.[h];
-                        if (!hint) return <Typography variant="caption" color="text.secondary">—</Typography>;
-                        const conf = hint.confidence != null ? Math.round(Number(hint.confidence) * 100) : null;
-                        const sug = hint.suggested_target ? dsiTargetLabel(hint.suggested_target) : null;
-                        return (
-                          <Stack spacing={0.25}>
-                            <Typography variant="body2">{hint.reason_summary ?? '—'}</Typography>
-                            {sug ? (
-                              <Typography variant="caption" color="text.secondary">
-                                Suggested: {sug}
-                                {conf != null ? ` · ${conf}%` : ''}
-                              </Typography>
-                            ) : conf != null ? (
-                              <Typography variant="caption" color="text.secondary">
-                                Confidence: {conf}%
-                              </Typography>
-                            ) : null}
-                          </Stack>
-                        );
-                      })()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            {!dsiMappingState?.file_headers?.length ? null : (
+              <CanonicalColumnMappingPanel
+                testIdPrefix="dsi"
+                fileHeaders={dsiMappingState.file_headers}
+                draft={dsiMapDraft}
+                onChange={(next) => setDsiMapDraft(next)}
+                targetOptions={dsiMappingTargetOptions}
+                columnSamples={dsiMappingState.column_samples}
+                blockingErrors={dsiMappingState.blocking_mapping_errors}
+                adjustmentNotices={dsiMappingState.mapping_adjustment_notices}
+                requiredGroups={DSI_MAPPING_REQUIRED_GROUPS}
+                formatSamples={formatDsiSamples}
+                dirty={dsiMappingDraftDirty}
+              />
+            )}
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Button onClick={() => setActiveStep(4)}>Back</Button>
               <Button
@@ -3479,55 +3578,16 @@ function AdminImportsPageContent() {
             {!canGoUpload && !isJobRevisitMode ? (
               <Alert severity="warning">Complete provider, mode, and confirmations before uploading.</Alert>
             ) : null}
-            <Box
-              onDragEnter={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-              }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-                const f = e.dataTransfer.files?.[0];
-                onFile(f);
-              }}
-              sx={{
-                border: '2px dashed',
-                borderColor: dragActive ? 'primary.main' : 'divider',
-                borderRadius: 2,
-                px: 3,
-                py: 4,
-                textAlign: 'center',
-                bgcolor: dragActive ? 'action.selected' : 'action.hover',
-              }}
-            >
-              <CloudUploadOutlinedIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
-              <Typography variant="subtitle1" fontWeight={600}>
-                Drop CSV or XLSX here
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Or choose a file. Pipeline runs according to import mode.
-              </Typography>
-              <Button variant="contained" component="label" disabled={!canGoUpload || upload.isPending}>
-                Choose file
-                <input
-                  hidden
-                  type="file"
-                  accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-                  onChange={(e) => {
-                    onFile(e.target.files?.[0]);
-                    e.target.value = '';
-                  }}
-                />
-              </Button>
-            </Box>
-            {upload.isPending ? <LinearProgress /> : null}
-            {upload.isError ? (
-              <Alert severity="error">{safeDisplayError(upload.error)}</Alert>
-            ) : null}
+            <ImportFileUploadZone
+              expanded
+              onExpandedChange={() => {}}
+              canUpload={!!canGoUpload}
+              pending={upload.isPending}
+              error={upload.isError ? safeDisplayError(upload.error) : null}
+              onFile={onFile}
+              subtitle="Or choose a file. Pipeline runs according to import mode."
+              testIdPrefix="generic-upload"
+            />
             {upload.isSuccess && lastJobId != null && upload.data?.import_mode !== 'apply' ? (
               <Alert severity="success">
                 Job <strong>#{lastJobId}</strong> created.{' '}

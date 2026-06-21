@@ -426,3 +426,25 @@ rewrite §5 history silently — note what changed and why.
 
 - **2026-05-31** — Initial contract committed with decisions D1–D5 applied (§9). Matrix
   in §5 is the canonical starting point. No corrections yet.
+
+- **2026-06-04** — Cross-importer alignment pass (branch `fix/shipment-steward-performance`).
+  Canonical patterns are now recorded as an enforced rule in `.cursor/rules/import-parity.mdc`
+  (steward = shared `ImportStewardCandidateWorkspace` + tabs + `confidenceBand`; apply = async
+  dispatch broker→dev-thread→sync-fallback with progress + registered task slot; resolution =
+  shared `try_ai_token_resolution`; mapping = `CanonicalColumnMappingPanel`; writes = set-based
+  chunked `INSERT…ON CONFLICT`). Shipped on this branch:
+  - **Shipment bulk steward → async** (commit `f4f327d`): `bulk-map-customer`,
+    `bulk-apply-confirmed-plans`, `bulk-create-provisional-customers` now run as Celery tasks with
+    progress; new `shipment_bulk_task` registered slot (orphan-slot fix); fire-and-poll + confidence
+    banding in the panel. *(Structural panel→workspace swap still BACKLOG-001.)*
+  - **DSI apply → async** (commit `c079cc6`, backend): `post_dsi_apply` dispatches `imports.dsi_apply`
+    (pipeline-apply → complete-to-loaded) instead of running inline; SOH/velocity/forecasting stay
+    their own tasks. Frontend `dsiApplyAsync` poll wired in the working tree (commit pending — see
+    BACKLOG).
+  - **customer_sell_through** (commit `09d21ef`, backend): added the missing `IMPORT_TEMPLATE_ROWS`
+    entry (§1d closed — now in the declarative source, matching migration 0045); batched the per-row
+    fact upsert; normalized its AI calls onto the shared wrapper. Minimal drivable web surface still
+    deferred (BACKLOG).
+  - **Out-of-scope alignment gaps** (AI resolver for `distributor_master` + `historical_lineup`;
+    generic-pipeline async apply; PM two-pipeline consolidation; PM/historical mapping-UI fork;
+    slot-registration / enqueue-helper dedup) captured in `docs/BACKLOG.md` with triggers.

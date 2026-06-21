@@ -1,3 +1,22 @@
+export type DsiGeoStewardBulkAction = 'register_region_from_hint' | 'register_from_file';
+
+export type DsiGeoStewardBulkItem = {
+  kind: 'channel' | 'region';
+  raw_token: string;
+  normalized_token?: string | null;
+  code?: string | null;
+  name?: string | null;
+  iso_alpha2?: string | null;
+};
+
+export type DsiGeoStewardBulkApplyResponse = {
+  import_job_id: number;
+  action: DsiGeoStewardBulkAction;
+  applied: number;
+  failed: number;
+  results: Array<Record<string, unknown>>;
+};
+
 export type DsiBulkAction =
   | 'ignore'
   | 'map_customer'
@@ -11,6 +30,12 @@ export type DsiBulkAction =
 
 export type DsiCatalogOpt = { id: number; code: string; name: string };
 
+/** Resolution-plan apply feedback shown above the steward workspace. */
+export type PlanApplyFeedback = {
+  message: string;
+  severity: 'success' | 'warning' | 'error';
+};
+
 export type DsiUnresolvedGeoRowDto = {
   dimension: string;
   normalized_token: string;
@@ -22,6 +47,8 @@ export type DsiUnresolvedGeoRowDto = {
     guessed_region_code: string;
     matched_catalog: boolean;
     region_id: number | null;
+    alias_registered?: boolean;
+    registered_region_id?: number | null;
   };
 };
 

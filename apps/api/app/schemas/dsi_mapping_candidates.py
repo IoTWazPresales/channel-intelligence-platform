@@ -49,3 +49,13 @@ class DsiMappingCandidatesPageResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+class DsiEntityTabCountPair(BaseModel):
+    open: int = 0
+    needs_review: int = 0
+
+
+class DsiMappingCandidatesTabCountsResponse(BaseModel):
+    import_job_id: int
+    counts: dict[str, DsiEntityTabCountPair]

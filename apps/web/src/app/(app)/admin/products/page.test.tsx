@@ -97,6 +97,14 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
             getColDef: () => ({ field: col.colId, headerName: headerByField[col.colId] ?? col.colId }),
             isVisible: () => !col.hide,
           })),
+        getDisplayedRowCount: () => rowData.length,
+        deselectAll: () => undefined,
+        getSelectedRows: () => [] as typeof rowData,
+        forEachNodeAfterFilterAndSort: (
+          cb: (node: { data?: (typeof rowData)[number]; setSelected: (v: boolean) => void }) => void
+        ) => {
+          rowData.forEach((row) => cb({ data: row, setSelected: () => undefined }));
+        },
       };
       gridOptions?.onGridReady?.({ api: gridReadyApi });
       try {
