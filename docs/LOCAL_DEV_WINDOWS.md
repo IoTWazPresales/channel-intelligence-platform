@@ -167,6 +167,22 @@ Other code paths that assume Redis (caching, future tasks) may still require a b
 
 ---
 
+## Clone Supabase into local `cip` (read-only remote)
+
+Use when daily dev should run on **topology B** (local Postgres) while Supabase stays an untouched backup.
+
+1. **Preflight:** Windows `pg_dump`/`pg_restore` **18+** ≥ Supabase server major; WSL worker must reach `127.0.0.1:5432`.
+2. **Backup local `cip`:** `pg_dump -Fc -d postgresql://cip:cip@127.0.0.1:5432/cip -f local_cip_backup.dump`
+3. **Dump Supabase (read-only):** `pg_dump -Fc --schema=public -d "$DATABASE_URL_SYNC" -f supabase_public.dump` (from `apps/api/.env` session pooler URL).
+4. **Recreate DB** as local `postgres` superuser: terminate backends → `DROP DATABASE cip` → `CREATE DATABASE cip OWNER cip`.
+5. **Restore:** `pg_restore --no-owner --no-privileges -d postgresql://cip:cip@127.0.0.1:5432/cip supabase_public.dump` (benign `CREATE SCHEMA public` already exists is OK on fresh DB).
+6. **Verify anchors:** `dim_product` count, `alembic_version`, and 5 other key tables match Supabase before repointing `.env`.
+7. **Repoint `apps/api/.env`:** set `DATABASE_URL` / `DATABASE_URL_SYNC` to `127.0.0.1`; comment Supabase URLs for rollback. Restart API + worker.
+
+**Do not commit** `.env`, `*.dump`, or restore logs. See `docs/memory/CURRENT.md` for Warren's verified anchors and rollback file names.
+
+---
+
 ## Database utilities without Docker
 
 From repo root (uses `apps/api/.venv`):

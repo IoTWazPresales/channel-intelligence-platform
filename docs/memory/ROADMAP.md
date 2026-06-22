@@ -4,7 +4,7 @@
 and backlog items. **`docs/BACKLOG.md`** holds full entry detail + TRIGGERs; this file
 holds **priority order** and **done vs open** (verified against `main` @ PR #5 merge).
 
-**Last verified:** 2026-06-21 · **Active branch:** `feat/dsi-async-topology`  
+**Last verified:** 2026-06-22 · **Active branch:** `feat/dsi-async-topology`  
 **How to use:** Pick the lowest open phase item whose TRIGGER is met (or waived by Warren).
 Update status here + `CURRENT.md` when items complete; add deferrals to `BACKLOG.md`.
 
@@ -51,7 +51,7 @@ compute (task often succeeds after UI gives up). Structural fixes, not poll-only
 
 | ID | Item | Status | Evidence / notes |
 |----|------|--------|------------------|
-| — | Daily dev on **local `cip`**; Supabase for **scheduled soaks** | **Open** (policy) | Documented in `DEV_TOPOLOGY.md`; Warren still on remote Supabase in `CURRENT.md`. |
+| — | Daily dev on **local `cip`**; Supabase for **scheduled soaks** | **Partial** | Warren on **local `cip`** since 2026-06-22 (Supabase clone + `.env` repoint). Supabase remains rollback backup; periodic remote soaks still optional. |
 | **BACKLOG-002** | Async connection pooling (`:5432` session pooler + modest pool) | **Parked** | Async still `NullPool` / `:6543` per project rules. TRIGGER: explicit approval + staged test. |
 | **BACKLOG-003** | EU **co-location** API + worker with Supabase | **Parked** | Infra-only. TRIGGER: hosting region pinned + team approval. |
 | **BACKLOG-028** | Sync Celery engine off pooler replica routing | **Done** | `sync_url.py`, `resolve_sync_engine_url()`; `commit_session_with_transient_retry`. |
@@ -139,10 +139,10 @@ Verified on `main` after merge `0540435` (2026-06-21).
 
 ## Suggested execution order (next 3 sprints)
 
-1. **Phase A** (all six BACKLOG-038–043) on `feat/dsi-async-topology` — fixes daily Windows+Supabase dev UX.
-2. **BACKLOG-043** CI green on `main` before next large merge.
+1. **Phase A soak** on **local `cip`** (`feat/dsi-async-topology`) — job #96 class compute queue timeout.
+2. **Open PR** for Phase A when soak passes.
 3. **BACKLOG-001** shipment workspace swap after Phase A soak + Warren signoff.
-4. **BACKLOG-031** data health when operating remote Supabase routinely.
+4. **BACKLOG-031** data health when operating remote Supabase for periodic soaks.
 5. **BACKLOG-004** only after explicit PM core-loop re-run + approval.
 
 ---

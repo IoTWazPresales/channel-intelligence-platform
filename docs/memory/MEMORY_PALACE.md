@@ -81,5 +81,5 @@ Never silently pick the older block in an archive or a session handover.
 ## Topology reminder
 
 Before debugging **worker busy**, **queue timeout**, or **Celery inspect** issues, read
-**`docs/DEV_TOPOLOGY.md`**. Windows solo worker + remote Supabase is a **supported but
-degraded** dev mode — not production topology.
+**`docs/DEV_TOPOLOGY.md`**. Warren daily dev is **Mode B** (local `cip` since 2026-06-22).
+Windows solo worker + **remote** Supabase (Mode A) remains supported but **degraded** — not production topology.
