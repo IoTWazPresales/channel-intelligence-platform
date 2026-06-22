@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-21 (PR #5 merged; new branch for DSI async topology)
+**Last updated:** 2026-06-21 (Phase A BACKLOG-038–043 implemented on `feat/dsi-async-topology`)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,11 +9,11 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/dsi-async-topology` (from `main` @ `0540435`) |
-| **HEAD (snapshot)** | `0540435` — merge commit for PR #5 (DSI steward perf, close-out Units 1–4, memory palace) |
-| **PR** | **#5 merged** 2026-06-21 — no open PR on current branch |
-| **Alembic (code)** | `20260609_0049` (`task_run` ledger) — **confirm** with `alembic current` before any migration work |
-| **Alembic (Supabase)** | `20260608_0048` applied (alias partial-uniques) per Jun 16 soak |
+| **Branch** | `feat/dsi-async-topology` |
+| **HEAD (snapshot)** | uncommitted Phase A — beat/queue split, defer auto-apply, poll grace, CI test fix |
+| **PR** | None open — ready to open after soak |
+| **Alembic (code)** | `20260609_0049` (`task_run` ledger) |
+| **Alembic (DB via `.env`)** | `20260609_0049` @ `alembic current` 2026-06-21 |
 
 ---
 
@@ -21,9 +21,9 @@
 
 | Field | Value |
 |-------|--------|
-| **Active DB** | Remote **Supabase EU** via pooler (`DATABASE_URL` / `DATABASE_URL_SYNC` in `apps/api/.env`) — not local `cip` unless URLs swapped |
-| **Risk** | ~~Disk quota / read-only~~ **Verified 2026-06-21 via Supabase MCP:** project `ACTIVE_HEALTHY`, DB **740 MB**, `default_transaction_read_only=off` |
-| **Sync engine** | BACKLOG-028: pooler → direct primary rewrite when host resolvable; Windows may keep pooler if `db.*.supabase.co` fails DNS |
+| **Active DB** | Remote **Supabase EU** via pooler (`DATABASE_URL` / `DATABASE_URL_SYNC` in `apps/api/.env`) |
+| **Supabase health** | **740 MB**, `read_only=off`, `ACTIVE_HEALTHY` (2026-06-21 MCP) |
+| **Sync engine** | BACKLOG-028 direct-primary rewrite when host resolvable |
 
 ---
 
@@ -33,48 +33,47 @@
 |---------|------|
 | API | `pnpm dev:api` → **:8001** |
 | Web | `pnpm dev:web` → **:3000** |
-| Worker | `pnpm dev:worker` → Celery **`--pool=solo`** on Windows + **sibling beat** |
+| Worker | `pnpm dev:worker` → Celery **solo**, **no beat by default** on Windows, `-Q interactive,batch,celery` |
 | Redis | `localhost:6379` required for broker dispatch |
-| Docker | **Not used** on Windows desktop (see `docs/DEV_TOPOLOGY.md`) |
+| Docker | **Not used** on Windows desktop |
 
-**Known degraded dev constraints:**
+**Phase A changes (structural, not poll-only):**
 
-- Solo worker = **one task at a time** (validate, apply, compute, reaper queue behind each other).
-- Celery `inspect()` often returns **no workers** on Windows solo → reaper is **no-op** but still **consumes queue time**.
-- DSI plan compute UI queue grace ≈ **120s**; historical post-validate auto-apply can hold worker **4+ min** → false **"timed out while waiting in queue"** even when task later succeeds.
+- Beat + reaper **off by default** on Windows solo (`CIP_ENABLE_DEV_BEAT=1` to re-enable).
+- **Queue split:** interactive steward tasks vs batch validate/apply/reaper.
+- Historical post-validate auto-apply **deferred** on Windows until steward idle (`CIP_DEFER_DSI_POST_VALIDATE_AUTO_APPLY=0` for immediate).
+- Compute poll queue grace **scaled** like apply (base 450 attempts + row scaling).
+
+**Restart worker after pull** to pick up queue subscription and beat change.
 
 ---
 
 ## What is working
 
-- DSI validate via Celery `imports.process_job` (large files — tens of minutes on remote DB).
-- DSI steward: async plan **compute** + **apply**, bulk orchestrators, tab counts, shared `ImportStewardCandidateWorkspace` (DSI).
-- Shipment / PM import paths (see capability contract per `template_slug`).
-- Celery beat reaper `imports.reap_stale_running_jobs` (fail-safe when inspect unavailable).
-- `task_run` ledger dual-write at dispatch (read path not fully unified with activity feed).
+- Phase A code complete (038–043) — **soak not yet run** on job #96 scenario.
+- DSI validate/steward async paths; shipment/PM imports per capability contract.
+- `task_run` ledger dual-write at dispatch.
 
 ---
 
 ## In progress / not proven live
 
-- **Job #96 class:** queue timeout on Customers tab during resolution refresh — scheduling/topology, not broken compute logic (**next branch theme**).
-- **CI:** PR #5 merged with **failing** `test` workflow on pre-merge run — triage on `main` or next PR.
-- **Import wizard modularization** — `admin/imports/page.tsx` still ~4k lines; BACKLOG-004 Phase 3 not implemented.
-- **`db_transient_retry`** — verify which production paths import it (do not assume all commits use it).
+- **Job #96 soak** — verify compute no longer false-queue-timeouts after worker restart.
+- **Web CI flakes** — `api.test.ts`, `wipeAvailability.test.ts`, `DsiCandidateStewardPanel` timeout (pre-existing; separate from Phase A).
+- **Import wizard modularization** — BACKLOG-004 Phase 3 not started.
 
 ---
 
-## Next (recommended) — `feat/dsi-async-topology`
+## Next (recommended)
 
-**Full phased schedule:** [`docs/memory/ROADMAP.md`](ROADMAP.md) (Phases A–E, done verification).
-
-**Phase A (active):** BACKLOG-038 → 043 — beat/reaper flag, queue split, defer auto-apply, compute poll grace, dedupe error banners, CI triage.
+1. **Soak:** restart `pnpm dev:worker`, re-run DSI historical validate + Customers tab compute (job #96 class).
+2. **Open PR** from `feat/dsi-async-topology` when soak passes.
+3. **Phase B/C** per [`docs/memory/ROADMAP.md`](ROADMAP.md) — local `cip` policy, BACKLOG-001 shipment workspace.
 
 ---
 
 ## Blockers requiring Warren
 
-- `alembic upgrade` on `cip` or Supabase without explicit approval.
 - Promotion to `main` — only on explicit "promote to main" / "merge to main".
 - `.cursor/rules/` changes — explicit approval.
 
@@ -84,9 +83,7 @@
 
 | Topic | Doc |
 |-------|-----|
-| **Roadmap (phased schedule)** | `docs/memory/ROADMAP.md` |
-| Memory index | `docs/memory/MEMORY_PALACE.md` |
+| **Roadmap** | `docs/memory/ROADMAP.md` |
 | Topology matrix | `docs/DEV_TOPOLOGY.md` |
 | Async / Celery | `docs/memory/derived/platform_async_and_background_truth.md` |
 | Deferred work | `docs/BACKLOG.md` |
-| Import parity | `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` |

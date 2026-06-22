@@ -790,12 +790,6 @@ export function DsiImportJobResolutionSection({
         />
       ) : null}
 
-      {plan.suggestionsQuery.isError ? (
-        <Alert severity="error" data-testid="dsi-resolution-plan-error">
-          {safeDisplayError(plan.suggestionsQuery.error)}
-        </Alert>
-      ) : null}
-
       {candidatesError ? (
         <Alert severity="error" data-testid="dsi-candidates-load-error">
           {safeDisplayError(candidatesError)}

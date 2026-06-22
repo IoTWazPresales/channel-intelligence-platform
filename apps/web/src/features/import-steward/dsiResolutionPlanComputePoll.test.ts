@@ -45,7 +45,7 @@ describe('pollDsiResolutionPlanComputeTask', () => {
     });
 
     const expectation = expect(promise).rejects.toThrow(
-      'Resolution plan compute timed out while waiting in queue (worker busy)'
+      'Resolution plan compute timed out while waiting in queue (worker busy with validate or apply — try again shortly)'
     );
 
     await vi.runAllTimersAsync();

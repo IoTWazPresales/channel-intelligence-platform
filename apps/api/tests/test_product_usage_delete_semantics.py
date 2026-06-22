@@ -3,11 +3,23 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from app.services.product_usage import _hard_reference_checks, cleanup_soft_product_references
+from app.services.product_usage import _SPECS, cleanup_soft_product_references
+
+
+def _hard_blocker_labels() -> set[str]:
+    labels = {label for label, _col in _SPECS}
+    labels.update(
+        {
+            "Product roadmap",
+            "Lineup plan items",
+            "Import mapping candidates (product)",
+        }
+    )
+    return labels
 
 
 def test_hard_blocker_labels_exclude_derived_and_alias_sources() -> None:
-    labels = {t[0] for t in _hard_reference_checks(1)}
+    labels = _hard_blocker_labels()
     assert "Sell-out" in labels
     assert "Lineup plan items" in labels
     assert "Pricing" in labels

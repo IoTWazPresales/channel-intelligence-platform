@@ -21,6 +21,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-06-21 | Phase A DSI async topology (BACKLOG-038–043): beat off Windows solo, interactive/batch queues, defer post-validate auto-apply, scaled compute poll grace, dedupe error banners, CI test fix. |
 | 2026-06-21 | Added `docs/memory/ROADMAP.md` (phased schedule + done verification); BACKLOG-038–043 for Phase A DSI topology; BACKLOG-001 trigger updated post PR #5. |
 | 2026-06-21 | PR **#5** merged to `main` (`0540435`); new branch `feat/dsi-async-topology` for DSI queue/scheduling work; branch/PR lifecycle + context handover rules added. |
 | 2026-06-21 | Project rules Memory Palace section aligned to `CURRENT.md` / `MEMORY_PALACE.md`. |

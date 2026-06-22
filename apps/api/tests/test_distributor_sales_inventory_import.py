@@ -1039,13 +1039,12 @@ def test_dsi_inventory_upserts_by_source_key(dsi_source_id: int) -> None:
 def test_dsi_weekly_validate_skips_post_validate_auto_apply(dsi_source_id: int, monkeypatch) -> None:
     calls: list = []
 
-    def _fake_enqueue(*args, **kwargs):  # type: ignore[no-untyped-def]
+    def _fake_schedule(*args, **kwargs):  # type: ignore[no-untyped-def]
         calls.append(1)
-        return "task-x", True
 
     monkeypatch.setattr(
-        "app.ingestion.dsi_validate_post_sync.enqueue_dsi_resolution_plan_apply",
-        _fake_enqueue,
+        "app.ingestion.dsi_validate_post_sync.schedule_or_enqueue_dsi_post_validate_auto_apply",
+        _fake_schedule,
     )
     csv = "distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-07-06,1,CUST-1001,1\n"
     _run_dsi_job(
@@ -1061,9 +1060,12 @@ def test_dsi_weekly_validate_skips_post_validate_auto_apply(dsi_source_id: int, 
 def test_dsi_historical_validate_enqueues_ready_candidates_only(dsi_source_id: int, monkeypatch) -> None:
     captured: list[tuple] = []
 
-    def _fake_enqueue(job_id, payload, **kwargs):  # type: ignore[no-untyped-def]
-        captured.append((job_id, payload, kwargs))
-        return "task-hist", True
+    def _fake_schedule(sync_db, job, *, candidate_ids, detach_from_caller):  # type: ignore[no-untyped-def]
+        captured.append((job.id, candidate_ids, detach_from_caller))
+        job.staged_metadata = {
+            **(job.staged_metadata or {}),
+            "dsi_post_validate_auto_apply": {"candidate_count": len(candidate_ids)},
+        }
 
     def _fake_plan(session, job_id, **kwargs):  # type: ignore[no-untyped-def]
         return {
@@ -1074,9 +1076,10 @@ def test_dsi_historical_validate_enqueues_ready_candidates_only(dsi_source_id: i
             ]
         }
 
+    monkeypatch.setenv("CIP_DEFER_DSI_POST_VALIDATE_AUTO_APPLY", "0")
     monkeypatch.setattr(
-        "app.ingestion.dsi_validate_post_sync.enqueue_dsi_resolution_plan_apply",
-        _fake_enqueue,
+        "app.ingestion.dsi_validate_post_sync.schedule_or_enqueue_dsi_post_validate_auto_apply",
+        _fake_schedule,
     )
     monkeypatch.setattr(
         "app.ingestion.dsi_validate_post_sync.build_dsi_resolution_plan_sync",
@@ -1091,8 +1094,8 @@ def test_dsi_historical_validate_enqueues_ready_candidates_only(dsi_source_id: i
         dsi_workflow_mode_explicit="historical",
     )
     assert len(captured) == 1
-    assert captured[0][1]["candidate_ids"] == [99]
-    assert captured[0][2].get("detach_from_caller") is True
+    assert captured[0][1] == [99]
+    assert captured[0][2] is True
     with SessionLocal() as db:
         j = db.get(ImportJob, job.id)
         assert j is not None

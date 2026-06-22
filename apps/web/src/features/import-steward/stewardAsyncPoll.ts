@@ -9,10 +9,11 @@ const MS_PER_ROW_BUDGET = 1200;
 const MS_PER_ROW_APPLY_BUDGET = 4000;
 
 /** Extra poll cycles while Celery stays PENDING (solo-pool queue wait). Resolution-plan compute. */
-export const COMPUTE_QUEUE_GRACE_ATTEMPTS = 150;
+export const COMPUTE_QUEUE_GRACE_ATTEMPTS = 450;
 /** Longer queue grace for apply — waits behind compute on solo worker (base; scales with row count). */
 export const APPLY_QUEUE_GRACE_ATTEMPTS = 450;
 const APPLY_QUEUE_GRACE_MAX_ATTEMPTS = 7200;
+const COMPUTE_QUEUE_GRACE_MAX_ATTEMPTS = 7200;
 
 export function stewardAsyncPollMaxAttempts(
   rowCount: number,
@@ -54,9 +55,14 @@ export function stewardAsyncPollApplyOptions(rowCount: number) {
 /** Compute poll: execution budget (row-scaled) plus queue grace while state stays PENDING. */
 export function stewardAsyncPollComputeOptions(rowCount: number) {
   const intervalMs = DEFAULT_INTERVAL_MS;
+  const rows = Math.max(1, rowCount);
+  const scaledQueueGrace = Math.ceil((rows * 2000) / intervalMs);
   return {
     intervalMs,
     executionMaxAttempts: stewardAsyncPollMaxAttempts(rowCount, { intervalMs }),
-    queueGraceAttempts: COMPUTE_QUEUE_GRACE_ATTEMPTS,
+    queueGraceAttempts: Math.min(
+      COMPUTE_QUEUE_GRACE_MAX_ATTEMPTS,
+      Math.max(COMPUTE_QUEUE_GRACE_ATTEMPTS, scaledQueueGrace)
+    ),
   };
 }

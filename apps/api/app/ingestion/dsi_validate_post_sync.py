@@ -10,15 +10,13 @@ unavailable) so ``asyncio.run`` runs outside the validate pipeline thread.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
 from app.models.ingestion import ImportJob
 from app.services.imports.distributor_sales_inventory import dsi_historical_workflow_from_import_job
+from app.services.imports.dsi_post_validate_auto_apply import schedule_or_enqueue_dsi_post_validate_auto_apply
 from app.services.imports.dsi_resolution_plan import build_dsi_resolution_plan_sync
-from app.services.imports.dsi_resolution_plan_enqueue import enqueue_dsi_resolution_plan_apply
-from app.utils.json_safe import to_jsonable
 
 logger = logging.getLogger(__name__)
 
@@ -68,27 +66,9 @@ def run_dsi_validate_post_import_orchestration(sync_db: Session, job_id: int) ->
         logger.info("DSI post-validate auto-apply: no ready candidates job_id=%s", job_id)
         return
 
-    payload = {"candidate_ids": candidate_ids}
-    task_id, async_poll = enqueue_dsi_resolution_plan_apply(
-        job_id,
-        payload,
+    schedule_or_enqueue_dsi_post_validate_auto_apply(
+        sync_db,
+        job,
+        candidate_ids=candidate_ids,
         detach_from_caller=True,
-    )
-    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
-    meta["dsi_post_validate_auto_apply"] = to_jsonable(
-        {
-            "task_id": task_id,
-            "async_poll": async_poll,
-            "candidate_count": len(candidate_ids),
-            "queued_at": datetime.now(timezone.utc).isoformat(),
-        }
-    )
-    job.staged_metadata = to_jsonable(meta)
-    sync_db.add(job)
-    sync_db.flush()
-    logger.info(
-        "DSI post-validate enqueued historical auto-apply job_id=%s task_id=%s candidates=%d",
-        job_id,
-        task_id,
-        len(candidate_ids),
     )

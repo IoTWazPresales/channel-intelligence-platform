@@ -29,12 +29,12 @@ compute (task often succeeds after UI gives up). Structural fixes, not poll-only
 
 | ID | Item | Status | Evidence / notes |
 |----|------|--------|------------------|
-| **BACKLOG-038** | Env flag: disable Celery beat + `reap_stale_running_jobs` on Windows solo dev | **Open** | Beat always on: `scripts/dev-worker.js` spawns sibling beat; `celery_app.py` beat_schedule unchanged. Reaper no-op when `inspect()` empty but still queues. |
-| **BACKLOG-039** | Celery **queue split**: interactive steward vs batch validate/apply | **Open** | All tasks on default `celery` queue (`celery_app.py`). No `interactive` / `batch` routes. |
-| **BACKLOG-040** | Defer historical **post-validate auto-apply** until steward idle | **Open** | Still enqueues immediately: `dsi_validate_post_sync.py` → `dsi_resolution_plan_apply`. |
-| **BACKLOG-041** | Raise compute **poll queue grace** + queue-aware UI messaging | **Open** | Fixed **120s** grace: `COMPUTE_QUEUE_GRACE_ATTEMPTS=150` × 800ms in `stewardAsyncPoll.ts`. Apply poll already has scaled grace (450+). |
-| **BACKLOG-042** | Dedupe duplicate resolution-plan error banners | **Open** | Both render `suggestionsQuery.isError`: `DsiImportJobResolutionSection.tsx`, `DsiResolutionPlanToolbar.tsx`. |
-| **BACKLOG-043** | Triage **CI `test` failure** on `main` post PR #5 | **Open** | PR #5 merged with failing workflow run; root cause not triaged in repo docs. |
+| **BACKLOG-038** | Env flag: disable Celery beat + `reap_stale_running_jobs` on Windows solo dev | **Done** | `celery_queues.dev_beat_disabled()`; `dev-worker.js` skips beat by default on Windows solo; reaper task no-op when disabled. |
+| **BACKLOG-039** | Celery **queue split**: interactive steward vs batch validate/apply | **Done** | `celery_queues.py` routes; worker `-Q interactive,batch,celery` in dev-worker + docker-compose. |
+| **BACKLOG-040** | Defer historical **post-validate auto-apply** until steward idle | **Done** | `dsi_post_validate_auto_apply.py`; Windows default defer; flush task + steward completion hooks. |
+| **BACKLOG-041** | Raise compute **poll queue grace** + queue-aware UI messaging | **Done** | Scaled compute grace in `stewardAsyncPoll.ts`; clearer queue-timeout copy. |
+| **BACKLOG-042** | Dedupe duplicate resolution-plan error banners | **Done** | Error only in `DsiResolutionPlanToolbar.tsx`. |
+| **BACKLOG-043** | Triage **CI `test` failure** on `main` post PR #5 | **Done** | Fixed `test_product_usage_delete_semantics.py` import after `_SPECS` refactor. |
 
 **Done (related, do not re-implement):**
 

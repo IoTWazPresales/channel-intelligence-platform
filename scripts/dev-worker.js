@@ -4,8 +4,9 @@
  * - Preflight: TCP connect to the host:port from CELERY_BROKER_URL (default 127.0.0.1:6379) so the worker
  *   fails fast with a clear message when Redis is not listening (common no-Docker Windows gap).
  * - Windows: defaults to --pool=solo (prefork is unreliable on Windows). Override with CIP_CELERY_WORKER_POOL.
- * - Local dev beat: Unix/macOS embed via worker --beat; Windows spawns a sibling `celery beat` process
- *   (Celery rejects --beat on Windows). Docker/prod uses a separate beat service only.
+ * - Local dev beat: disabled by default on Windows solo (BACKLOG-038). Set CIP_ENABLE_DEV_BEAT=1 to spawn beat.
+ *   Unix/macOS embed via worker --beat unless CIP_DISABLE_DEV_BEAT=1.
+ * - Worker subscribes to -Q interactive,batch,celery (interactive first).
  * - Skip preflight only when explicitly needed: CIP_SKIP_REDIS_PREFLIGHT=1 (not for normal local dev).
  */
 const { spawn } = require('child_process');
@@ -137,6 +138,11 @@ async function main() {
 
   const workerExtra = [];
   const poolOverride = process.env.CIP_CELERY_WORKER_POOL;
+  const soloPool = !poolOverride || poolOverride === 'solo';
+  const disableBeat =
+    process.env.CIP_DISABLE_DEV_BEAT === '1' ||
+    (isWin && soloPool && process.env.CIP_ENABLE_DEV_BEAT !== '1');
+
   if (poolOverride) {
     workerExtra.push('--pool', poolOverride);
     console.error(`[cip-dev-worker] Using Celery --pool=${poolOverride} (from CIP_CELERY_WORKER_POOL).`);
@@ -147,7 +153,16 @@ async function main() {
     );
   }
 
-  if (isWin) {
+  workerExtra.push('-Q', 'interactive,batch,celery');
+  console.error(
+    '[cip-dev-worker] Subscribing to queues interactive,batch,celery (interactive first for steward work).'
+  );
+
+  if (disableBeat) {
+    console.error(
+      '[cip-dev-worker] Celery beat disabled (Windows solo default). Set CIP_ENABLE_DEV_BEAT=1 to run periodic reaper locally.'
+    );
+  } else if (isWin) {
     console.error(
       '[cip-dev-worker] Windows: spawning sibling celery beat (worker --beat is unsupported on Windows).'
     );

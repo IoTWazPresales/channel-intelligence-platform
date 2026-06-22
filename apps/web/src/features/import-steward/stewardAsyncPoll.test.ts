@@ -21,10 +21,15 @@ describe('stewardAsyncPollMaxAttempts', () => {
 });
 
 describe('stewardAsyncPollComputeOptions', () => {
-  it('adds queue grace attempts for compute polling', () => {
+  it('scales queue grace for compute polling', () => {
     const opts = stewardAsyncPollComputeOptions(100);
-    expect(opts.queueGraceAttempts).toBe(COMPUTE_QUEUE_GRACE_ATTEMPTS);
+    expect(opts.queueGraceAttempts).toBeGreaterThanOrEqual(COMPUTE_QUEUE_GRACE_ATTEMPTS);
     expect(opts.executionMaxAttempts).toBe(stewardAsyncPollMaxAttempts(100));
+  });
+
+  it('allows long queue wait for large compute batches on solo worker', () => {
+    const opts = stewardAsyncPollComputeOptions(980);
+    expect(opts.queueGraceAttempts).toBeGreaterThan(2000);
   });
 });
 

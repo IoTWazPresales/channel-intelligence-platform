@@ -270,9 +270,15 @@ def dsi_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dic
 
     try:
         with SessionLocal() as db:
-            return run_dsi_bulk_provisional_customers_sync(
+            result = run_dsi_bulk_provisional_customers_sync(
                 db, job_id, payload, on_progress=_on_progress
             )
+        from app.services.imports.dsi_post_validate_auto_apply import try_flush_deferred_dsi_post_validate_auto_apply
+
+        with SessionLocal() as flush_db:
+            if try_flush_deferred_dsi_post_validate_auto_apply(flush_db, job_id):
+                flush_db.commit()
+        return result
     except Exception:
         logger.exception("dsi_bulk_provisional_customers failed job_id=%s", job_id)
         raise
@@ -281,7 +287,9 @@ def dsi_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dic
 @celery_app.task(name="imports.dsi_resolution_plan_apply", bind=True, ack_late=True)
 def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
     """Apply DSI resolution-plan rows (steward map/provisional/product) with progress updates."""
+    from app.services.imports.dsi_post_validate_auto_apply import try_flush_deferred_dsi_post_validate_auto_apply
     from app.services.imports.dsi_resolution_plan_apply_sync import run_dsi_resolution_plan_apply_sync
+    from app.db.session_sync import SessionLocal
 
     candidate_ids = payload.get("candidate_ids") or []
     total_rows = len(candidate_ids) if isinstance(candidate_ids, list) else 0
@@ -303,7 +311,11 @@ def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
 
     try:
         _on_progress(0, total_rows or 1)
-        return run_dsi_resolution_plan_apply_sync(job_id, payload, on_progress=_on_progress)
+        result = run_dsi_resolution_plan_apply_sync(job_id, payload, on_progress=_on_progress)
+        with SessionLocal() as db:
+            if try_flush_deferred_dsi_post_validate_auto_apply(db, job_id):
+                db.commit()
+        return result
     except Exception:
         logger.exception("dsi_resolution_plan_apply failed job_id=%s", job_id)
         raise
@@ -312,7 +324,9 @@ def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
 @celery_app.task(name="imports.dsi_resolution_plan_compute", bind=True, ack_late=True)
 def dsi_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
     """Build DSI steward resolution plan off the HTTP request path."""
+    from app.services.imports.dsi_post_validate_auto_apply import try_flush_deferred_dsi_post_validate_auto_apply
     from app.services.imports.dsi_resolution_plan_compute_sync import run_dsi_resolution_plan_compute_sync
+    from app.db.session_sync import SessionLocal
 
     def _on_progress(current: int, total: int) -> None:
         try:
@@ -330,7 +344,11 @@ def dsi_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
             pass
 
     try:
-        return run_dsi_resolution_plan_compute_sync(job_id, payload, on_progress=_on_progress)
+        result = run_dsi_resolution_plan_compute_sync(job_id, payload, on_progress=_on_progress)
+        with SessionLocal() as db:
+            if try_flush_deferred_dsi_post_validate_auto_apply(db, job_id):
+                db.commit()
+        return result
     except Exception:
         logger.exception("dsi_resolution_plan_compute failed job_id=%s", job_id)
         raise
@@ -445,5 +463,19 @@ def product_master_commit_task(self, job_id: int, confirm_destructive: bool) -> 
 def reap_stale_running_jobs_task() -> dict:
     """Beat task: fail import jobs stuck ``running`` when Celery confirms work is dead."""
     from app.services.imports.running_import_job_reaper import reap_stale_running_import_jobs_sync
+    from app.worker.celery_queues import dev_beat_disabled
+
+    if dev_beat_disabled():
+        return {"skipped": True, "reason": "dev_beat_disabled"}
 
     return reap_stale_running_import_jobs_sync()
+
+
+@celery_app.task(name="imports.flush_deferred_dsi_post_validate_auto_apply")
+def flush_deferred_dsi_post_validate_auto_apply_task(job_id: int) -> dict:
+    """Batch-queue task: enqueue deferred historical auto-apply when steward is idle."""
+    from app.services.imports.dsi_post_validate_auto_apply import (
+        run_flush_deferred_dsi_post_validate_auto_apply_sync,
+    )
+
+    return run_flush_deferred_dsi_post_validate_auto_apply_sync(job_id)
