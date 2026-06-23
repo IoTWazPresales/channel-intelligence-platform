@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/dsi-async-topology` |
-| **HEAD (snapshot)** | Push pending — DSI alias-scope map fix, customer duplicate groups read-only admin, BACKLOG-044 |
+| **HEAD (snapshot)** | `7fc8109` — pushed; alias-scope map fix, customer duplicate groups admin, BACKLOG-044 |
 | **PR** | None open |
 | **Alembic (code)** | `20260609_0049` (`task_run` ledger) |
 | **Alembic (DB)** | `20260609_0049` on local `cip` |
