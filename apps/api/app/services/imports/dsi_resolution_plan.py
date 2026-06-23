@@ -957,6 +957,28 @@ def plan_dsi_candidate_sync(
                 customer_raw=primary,
                 dealer_group_raw=dg_raw,
             )
+            if rcid is None and primary:
+                sim_key = normalize_customer_name_for_similarity(primary)
+                if sim_key:
+                    sim_ids = list(
+                        dict.fromkeys(plan_ctx.res_cache.customer_sim_name_to_ids.get(sim_key, []))
+                    )
+                    if len(sim_ids) == 1:
+                        return _fin({
+                            **base,
+                            "suggested_action": "map_customer",
+                            "plan_status": "ready",
+                            "ready": True,
+                            "confidence": 0.9,
+                            "reason": (
+                                "Matched existing customer on normalized name "
+                                "(legal-suffix/punctuation-insensitive)"
+                            ),
+                            "suggested_target_id": int(sim_ids[0]),
+                            "needs_defaults": False,
+                            "needs_confirm_suspicious_distributor": False,
+                            "resolution_signal": "similar_customer_name",
+                        })
         else:
             rcid, diag = _resolve_customer(
                 session,

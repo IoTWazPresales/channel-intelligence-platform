@@ -41,7 +41,10 @@ from app.services.imports.dsi_customer_intelligence import (
     annotate_dsi_customer_candidate_duplicates,
     annotate_dsi_customer_distributor_name_collisions,
 )
-from app.services.imports.dsi_customer_name_normalization import normalize_customer_name_token
+from app.services.imports.dsi_customer_name_normalization import (
+    normalize_customer_name_for_similarity,
+    normalize_customer_name_token,
+)
 from app.services.imports.dsi_shipment_corroboration import (
     shipment_corroboration_for_customer,
     shipment_corroboration_for_product,
@@ -644,6 +647,7 @@ class DSIResolutionCache:
     all_customers: list[DSIResolutionCustomerRow]
     customer_code_to_id: dict[str, int]
     customer_name_to_ids: dict[str, list[int]]
+    customer_sim_name_to_ids: dict[str, list[int]]
     cust_aliases: list[DSIResolutionCustAliasRow]
     open_channel_cid: int | None
 
@@ -712,6 +716,7 @@ def _build_resolution_cache(
     customer_rows = [_customer_row_from_orm(c) for c in all_customers_orm]
     customer_code_to_id: dict[str, int] = {}
     customer_name_to_ids: dict[str, list[int]] = {}
+    customer_sim_name_to_ids: dict[str, list[int]] = {}
     for c in customer_rows:
         ck = (c.code or "").strip().lower()
         if ck:
@@ -719,6 +724,9 @@ def _build_resolution_cache(
         nk = (c.name or "").strip().lower()
         if nk:
             customer_name_to_ids.setdefault(nk, []).append(int(c.id))
+        sk = normalize_customer_name_for_similarity(c.name)
+        if sk:
+            customer_sim_name_to_ids.setdefault(sk, []).append(int(c.id))
 
     if on_sub_phase is not None:
         on_sub_phase("customer_aliases")
@@ -750,6 +758,7 @@ def _build_resolution_cache(
         all_customers=customer_rows,
         customer_code_to_id=customer_code_to_id,
         customer_name_to_ids=customer_name_to_ids,
+        customer_sim_name_to_ids=customer_sim_name_to_ids,
         cust_aliases=cust_alias_rows,
         open_channel_cid=int(open_channel_cid) if open_channel_cid is not None else None,
     )
@@ -775,6 +784,7 @@ def _build_distributor_resolution_cache(db: Session, source_def_id: int | None =
         all_customers=[],
         customer_code_to_id={},
         customer_name_to_ids={},
+        customer_sim_name_to_ids={},
         cust_aliases=[],
         open_channel_cid=None,
     )

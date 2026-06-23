@@ -22,6 +22,7 @@ def _dist_cache(*aliases) -> DSIResolutionCache:
         all_customers=[],
         customer_code_to_id={},
         customer_name_to_ids={},
+        customer_sim_name_to_ids={},
         cust_aliases=[],
         open_channel_cid=None,
     )
@@ -52,6 +53,7 @@ def test_customer_multi_alias_conflict_detected() -> None:
         all_customers=[],
         customer_code_to_id={},
         customer_name_to_ids={},
+        customer_sim_name_to_ids={},
         cust_aliases=[
             DSIResolutionCustAliasRow(
                 normalized_token="dealer1", source_definition_id=None, distributor_id=5, customer_id=100
