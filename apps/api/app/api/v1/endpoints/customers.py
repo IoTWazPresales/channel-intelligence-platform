@@ -20,6 +20,7 @@ from app.models.dimensions import (
 )
 from app.models.import_distributor_si import CustomerSourceTokenAlias
 from app.models.ingestion import ImportJob
+from app.services.customer_duplicate_groups import list_customer_duplicate_groups
 from app.services.customer_usage import (
     cleanup_soft_customer_references,
     customer_hard_reference_breakdown,
@@ -399,6 +400,16 @@ async def list_customers(
         "sort_by": sort_by if sort_by in allowed_sort else "code",
         "sort_dir": sort_dir,
     }
+
+
+@router.get("/duplicate-groups")
+async def list_customer_duplicate_groups_endpoint(
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+):
+    """Read-only: groups of customers sharing a similarity-normalised name key (2+ members)."""
+    return await list_customer_duplicate_groups(db, page=page, page_size=page_size)
 
 
 @router.post("", status_code=201)

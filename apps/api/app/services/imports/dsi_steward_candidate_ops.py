@@ -312,29 +312,17 @@ async def _apply_map_dsi_customer_without_commit(
     raw_token: str | None,
 ) -> dict[str, Any]:
     """Map candidate to customer in the current session; caller must commit."""
+    from app.services.imports.dsi_customer_alias_scope import apply_map_dsi_customer_scoped_async
+
     pv = await preview_map_dsi_customer(db, cand, customer_id=customer_id, raw_token=raw_token)
     if not pv.get("ok"):
         raise StewardOpError(pv.get("detail") or "preview failed", status_code=400)
-    raw = (raw_token or _source_customer_alias_raw_for_dsi_candidate(cand)).strip()
-    nt = _norm_key(raw)
-    alias = CustomerSourceTokenAlias(
-        customer_id=customer_id,
-        raw_token=raw[:512],
-        normalized_token=nt[:512],
-        source_definition_id=cand.source_definition_id,
-        distributor_id=None,
-        dealer_group_token=cand.dealer_group_token,
-        status="approved",
-        notes=f"Mapped from import candidate {cand.id} (job {cand.import_job_id})",
-        created_from_import_job_id=cand.import_job_id,
-        import_entity_mapping_candidate_id=cand.id,
+    return await apply_map_dsi_customer_scoped_async(
+        db,
+        cand,
+        customer_id=int(customer_id),
+        raw_token=raw_token,
     )
-    db.add(alias)
-    await db.flush()
-    cand.status = "resolved"
-    cand.suggested_entity_id = customer_id
-    cand.match_reason = "steward_map_existing_customer"
-    return {"ok": True, "alias_id": alias.id, "customer_id": customer_id, "candidate_id": cand.id}
 
 
 async def execute_map_dsi_customer(

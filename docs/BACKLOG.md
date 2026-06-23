@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-044 — Shipment import: steward UX + resolution intelligence parity with DSI
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-06-23 |
+| **Effort** | Large (web + API services); likely phased after BACKLOG-001 workspace swap |
+| **Source** | Warren session audit (2023 vs 2026 ACZA backfill — evidence vs fact confusion, manual per-row steward); `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` (`steward_surface`: `shipment_evidence_admin` vs `dsi_resolution_section`); `apps/web/src/app/(app)/admin/shipment-evidence/ShipmentEntityStewardPanel.tsx` (bespoke panel); `apps/web/src/app/(app)/admin/imports/DsiImportJobResolutionSection.tsx` + `ImportStewardCandidateWorkspace` (DSI reference); `apps/api/app/services/imports/dsi_resolution_plan.py` (no shipment equivalent); `apps/web/src/features/import-steward/dsi-mapping-steward-panel.tsx` (comment: shipment remains separate); **BACKLOG-001** (workspace adapter only — does not cover plan intelligence) |
+| **Idea** | Shipment evidence import still uses a **different steward surface** and **weaker resolution intelligence** than DSI / other import-parity importers. Operators lack entity tabs, resolution-plan suggestions, ready vs needs-work queues, bulk “apply all ready”, historical/previously-resolved hints at the same bar, and the shared steward workspace patterns documented in `.cursor/rules/import-parity.mdc`. |
+| **Why it matters / deferrable** | Blocks efficient backfill + current-report workflows (historical landed lines, product corroboration gaps, per-row confirm loops). Deferrable while DSI steward and alias-scope work completes and until shipment bitemporal/backfill model (BACKLOG-033) is scoped — but **steward/intelligence gap is independent of schema** and should be audited before scaling shipment uploads. |
+| **What the work is** | (1) **Steward surface:** complete BACKLOG-001 (`ImportStewardCandidateWorkspace` adapter for shipment) — entity-grouped tabs, confidence bands, bulk progress, shared invalidate/refetch. (2) **Resolution intelligence:** shipment-specific plan builder (or shared abstraction): suggested map/provisional/ignore, ready vs needs_review, blockers, target labels — aligned with `dsi_resolution_plan` patterns where domain fits; wire `try_ai_token_resolution` / shared candidates helpers per import-parity rule. (3) **Apply orchestration:** bulk grouped writers + async apply + tab-count coherence (shipment bulk paths exist but UX/plan layer lags DSI). (4) **Operator docs:** evidence (all snapshots per job) vs `fact_inbound_shipment` (current keyed row) — when to apply, backfill vs current. (5) **Audit session findings:** corroboration reads evidence not fact; upload alone insufficient; product `resolved_unique` still required. |
+| **Regression traps** | Wrong API family (`/mappings/` vs `/shipment-evidence/`); entity type mismatch (`shipment_*` tokens); breaking Phase 2 shipment batching; conflating evidence append with fact latest-job-wins (BACKLOG-033); auto-create masters from evidence. |
+| **Behavior to retain** | Evidence preserved per import job; fact upsert on global `source_key`; steward governance (no silent master creation); existing shipment-evidence endpoints until deliberately migrated. |
+| **Out of scope** | Full bitemporal observation store (BACKLOG-033); ETA prediction ML; changing corroboration tier order or DSI eligibility. |
+| **TRIGGER** | Warren requests shipment import parity audit; **or** second production backfill/current shipment workflow (e.g. ACZA historical + rolling current) before BACKLOG-033 ships; **or** BACKLOG-001 workspace swap signed off and next import-parity sprint starts. |
+
+---
+
 ## BACKLOG-043 — CI: triage failing `test` workflow on `main` (post PR #5)
 
 | Field | Detail |

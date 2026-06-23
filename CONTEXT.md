@@ -21,6 +21,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-06-23 | DSI customer alias-scope module (`dsi_customer_alias_scope.py`) wired to bulk map + provisional + async steward; steward tab-count/cache fixes; read-only customer duplicate groups API + admin page; BACKLOG-044 shipment parity parked. |
 | 2026-06-22 | DSI customer sim-name plan tier (`575276f`); provisional create-path similarity reuse (`38b2c9e`); ambiguous product plan crash fix (`9f3206f`); HEAD `9f3206f`, **2 commits unpushed**. |
 | 2026-06-22 | Warren local dev on **topology B**: Supabase `public` cloned read-only into local `cip` (pg_dump/pg_restore); `.env` repointed to `127.0.0.1`; anchors verified (`dim_product` 18158, alembic `20260609_0049`); rollback dumps in repo root (untracked). |
 | 2026-06-21 | Phase A DSI async topology (BACKLOG-038–043): beat off Windows solo, interactive/batch queues, defer post-validate auto-apply, scaled compute poll grace, dedupe error banners, CI test fix. |

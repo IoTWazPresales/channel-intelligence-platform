@@ -34,6 +34,7 @@ import type {
   GridReadyEvent,
 } from 'ag-grid-community';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
@@ -961,6 +962,13 @@ function AdminCustomersPageContent() {
           }}
         >
           Add customer
+        </Button>
+        <Button
+          variant="outlined"
+          component={Link}
+          href="/admin/customers/duplicates"
+        >
+          Potential duplicates
         </Button>
         <Button
           variant="outlined"

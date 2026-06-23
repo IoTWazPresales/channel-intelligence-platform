@@ -105,6 +105,7 @@ export function invalidateDsiImportJobStewardQueries(
   void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.resolutionSuggestionsQueryKeyPrefix(importJobId) });
   void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.unresolvedGeoTokensQueryKey(importJobId) });
   void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId) });
+  invalidateDsiStewardTabCounts(qc, importJobId);
   void qc.invalidateQueries({ queryKey: ['distributor-si-candidates', importJobId] });
   void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.importJobRowsQueryKey(importJobId) });
   void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.mappingCandidatesListQueryKey(importJobId) });
@@ -124,6 +125,7 @@ export async function refetchDsiImportJobStewardQueries(
     qc.refetchQueries({ queryKey: DSI_STEWARD_CONFIG.resolutionSuggestionsQueryKeyPrefix(importJobId) }),
     qc.refetchQueries({ queryKey: DSI_STEWARD_CONFIG.unresolvedGeoTokensQueryKey(importJobId) }),
     qc.refetchQueries({ queryKey: ['distributor-si-candidates', importJobId] }),
+    qc.refetchQueries({ queryKey: DSI_STEWARD_CONFIG.candidateTabCountsQueryKey(importJobId) }),
     qc.refetchQueries({ queryKey: DSI_STEWARD_CONFIG.importJobRowsQueryKey(importJobId) }),
     qc.refetchQueries({ queryKey: DSI_STEWARD_CONFIG.mappingCandidatesListQueryKey(importJobId) }),
     qc.refetchQueries({ queryKey: ['import-job-pipeline-progress', importJobId] }),

@@ -68,6 +68,7 @@ compute (task often succeeds after UI gives up). Structural fixes, not poll-only
 |----|------|--------|------------------|
 | **BACKLOG-004** | Import Flow **Phase 3**: capability-driven wizard; split `admin/imports/page.tsx` | **Parked** | Page still **~4,015 lines**; no `ImportFlowCapability` in `packages/types/`. TRIGGER: PM core-loop re-run + approval. |
 | **BACKLOG-001** | Shipment steward → shared `ImportStewardCandidateWorkspace` | **Open** | DSI uses workspace (`DsiImportJobResolutionSection.tsx`). Shipment still `ShipmentEntityStewardPanel` — no `ImportStewardCandidateWorkspace` on shipment paths. **TRIGGER partially met:** PR #5 merged 2026-06-21; awaits Warren steward-perf smoke signoff. |
+| **BACKLOG-044** | Shipment steward UX + resolution intelligence parity (plan/ready/bulk vs DSI) | **Parked** | Session 2026-06-23 (ACZA backfill); extends BACKLOG-001 — workspace swap alone insufficient. TRIGGER: shipment parity audit or backfill workflow scale-up. |
 | **BACKLOG-005** | DSI → `CanonicalColumnMappingPanel` | **Done** | BACKLOG entry 2026-06-06. |
 | **BACKLOG-006** | Slim shipment `mapping-candidates` API (paginate / omit `line_ids`) | **Parked** | TRIGGER: steward GET still slow on 100+ candidates post-merge smoke. |
 | **BACKLOG-007** | Shipment post-validation re-map + `source_key` stability | **Parked** | TRIGGER: operator story approved. |

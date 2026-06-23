@@ -261,7 +261,7 @@ export function useDsiResolutionPlan({
         .map((r) => Number((r as { candidate_id?: unknown }).candidate_id))
         .filter((id) => Number.isFinite(id));
 
-      if (appliedIds.length > 0) {
+      if (!partial && appliedIds.length > 0) {
         removeCandidatesFromDsiCache(qc, importJobId, appliedIds);
         evictCandidatesFromResolutionPlanCache(qc, importJobId, appliedIds);
       }

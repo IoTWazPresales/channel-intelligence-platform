@@ -62,6 +62,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: 'Products', href: '/admin/products' },
       { label: 'Customers', href: '/admin/customers' },
+      { label: 'Customer duplicates', href: '/admin/customers/duplicates' },
       { label: 'Distributors', href: '/admin/distributors' },
       { label: 'Channels & Regions', href: '/admin/channels-regions' },
     ],

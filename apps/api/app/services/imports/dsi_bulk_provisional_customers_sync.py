@@ -6,15 +6,21 @@ import secrets
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from sqlalchemy import func, select, text
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimRegion
 from app.models.import_distributor_si import CustomerSourceTokenAlias, ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
-from app.services.imports.distributor_sales_inventory import _norm_key
 from app.services.imports.dsi_bulk_db_commit import commit_session_with_transient_retry
+from app.services.imports.dsi_customer_alias_scope import (
+    bind_candidate_to_reused_customer,
+    insert_approved_customer_alias_on_conflict_do_nothing,
+    load_approved_customer_aliases_for_scopes,
+    lookup_approved_customer_alias_for_scope,
+    scope_key_for_dsi_candidate,
+)
 from app.services.imports.dsi_geo_resolution_cache import DSIGeoResolutionCache, collect_geo_tokens_from_candidates
 from app.services.imports.dsi_resolution_plan import derive_effective_provisional_customer_geo_sync
 from app.services.imports.dsi_steward_candidate_ops import (
@@ -26,140 +32,6 @@ from app.services.imports.provisional_entity_identity import (
     find_existing_provisional_customer_by_canonical_name,
     is_non_entity_customer_provisional_token,
 )
-
-
-def _customer_alias_scope_key(
-    normalized_token: str,
-    source_definition_id: int | None,
-    distributor_id: int | None,
-) -> tuple[str, int, int]:
-    """Approved-alias unique scope per migration 0048 (COALESCE sentinels)."""
-    return (
-        normalized_token[:512],
-        int(source_definition_id) if source_definition_id is not None else -1,
-        int(distributor_id) if distributor_id is not None else -1,
-    )
-
-
-def _scope_key_for_dsi_candidate(cand: ImportEntityMappingCandidate) -> tuple[tuple[str, int, int], str] | None:
-    raw = _source_customer_alias_raw_for_dsi_candidate(cand)
-    if not raw.strip():
-        return None
-    nt = _norm_key(raw)[:512]
-    return _customer_alias_scope_key(nt, cand.source_definition_id, None), nt
-
-
-def _lookup_approved_customer_alias_for_scope(
-    session: Session,
-    *,
-    normalized_token: str,
-    source_definition_id: int | None,
-    distributor_id: int | None,
-) -> CustomerSourceTokenAlias | None:
-    scope_src = int(source_definition_id) if source_definition_id is not None else -1
-    scope_dist = int(distributor_id) if distributor_id is not None else -1
-    return session.scalars(
-        select(CustomerSourceTokenAlias)
-        .where(
-            CustomerSourceTokenAlias.status == "approved",
-            CustomerSourceTokenAlias.normalized_token == normalized_token[:512],
-            func.coalesce(CustomerSourceTokenAlias.source_definition_id, -1) == scope_src,
-            func.coalesce(CustomerSourceTokenAlias.distributor_id, -1) == scope_dist,
-        )
-        .limit(1)
-    ).first()
-
-
-def _load_approved_customer_aliases_for_scopes(
-    session: Session,
-    scope_keys: set[tuple[str, int, int]],
-) -> dict[tuple[str, int, int], CustomerSourceTokenAlias]:
-    if not scope_keys:
-        return {}
-    normalized_tokens = {k[0] for k in scope_keys}
-    rows = session.scalars(
-        select(CustomerSourceTokenAlias).where(
-            CustomerSourceTokenAlias.status == "approved",
-            CustomerSourceTokenAlias.normalized_token.in_(normalized_tokens),
-        )
-    ).all()
-    out: dict[tuple[str, int, int], CustomerSourceTokenAlias] = {}
-    for row in rows:
-        key = _customer_alias_scope_key(row.normalized_token, row.source_definition_id, row.distributor_id)
-        if key in scope_keys and key not in out:
-            out[key] = row
-    return out
-
-
-def _insert_approved_customer_alias_on_conflict_do_nothing(
-    session: Session,
-    *,
-    customer_id: int,
-    raw_token: str,
-    normalized_token: str,
-    source_definition_id: int | None,
-    distributor_id: int | None,
-    dealer_group_token: str | None,
-    notes: str,
-    created_from_import_job_id: int,
-    import_entity_mapping_candidate_id: int,
-) -> int | None:
-    """Insert alias; return new id or None when uq_cust_src_token_alias_approved_scope blocks insert."""
-    row = session.execute(
-        text(
-            """
-            INSERT INTO customer_source_token_alias (
-                customer_id, source_definition_id, distributor_id,
-                raw_token, normalized_token, dealer_group_token,
-                status, notes, created_from_import_job_id,
-                import_entity_mapping_candidate_id, created_at, updated_at
-            )
-            VALUES (
-                :customer_id, :source_definition_id, :distributor_id,
-                :raw_token, :normalized_token, :dealer_group_token,
-                'approved', :notes, :created_from_import_job_id,
-                :import_entity_mapping_candidate_id, NOW(), NOW()
-            )
-            ON CONFLICT DO NOTHING
-            RETURNING id
-            """
-        ),
-        {
-            "customer_id": int(customer_id),
-            "source_definition_id": source_definition_id,
-            "distributor_id": distributor_id,
-            "raw_token": raw_token[:512],
-            "normalized_token": normalized_token[:512],
-            "dealer_group_token": dealer_group_token[:512] if dealer_group_token else None,
-            "notes": notes,
-            "created_from_import_job_id": int(created_from_import_job_id),
-            "import_entity_mapping_candidate_id": int(import_entity_mapping_candidate_id),
-        },
-    ).first()
-    if row is not None and row[0] is not None:
-        return int(row[0])
-    return None
-
-
-def _bind_candidate_to_reused_customer(
-    cand: ImportEntityMappingCandidate,
-    customer: DimCustomer,
-    *,
-    alias_id: int | None,
-    reuse_kind: str,
-) -> dict[str, Any]:
-    cand.status = "resolved"
-    cand.suggested_entity_id = int(customer.id)
-    cand.match_reason = "steward_reused_approved_customer_alias"
-    return {
-        "ok": True,
-        "reused": True,
-        "reuse_kind": reuse_kind,
-        "customer_id": customer.id,
-        "customer_code": customer.code,
-        "alias_id": alias_id,
-        "candidate_id": cand.id,
-    }
 
 
 def _generate_tmp_customer_code_sync(session: Session) -> str:
@@ -236,10 +108,10 @@ def _apply_one_provisional_customer_sync(
                 )
             ).first()
             if alias_row is None and cand.match_reason == "steward_reused_approved_customer_alias":
-                scope_meta = _scope_key_for_dsi_candidate(cand)
+                scope_meta = scope_key_for_dsi_candidate(cand)
                 if scope_meta is not None:
                     scope_key, nt = scope_meta
-                    alias_row = _lookup_approved_customer_alias_for_scope(
+                    alias_row = lookup_approved_customer_alias_for_scope(
                         session,
                         normalized_token=nt,
                         source_definition_id=cand.source_definition_id,
@@ -293,7 +165,7 @@ def _apply_one_provisional_customer_sync(
             status_code=400,
         )
 
-    scope_meta = _scope_key_for_dsi_candidate(cand)
+    scope_meta = scope_key_for_dsi_candidate(cand)
     if scope_meta is None:
         raise StewardOpError("Candidate has no usable source customer alias evidence", status_code=400)
     scope_key, nt = scope_meta
@@ -303,7 +175,7 @@ def _apply_one_provisional_customer_sync(
 
     existing_alias = alias_lookup.get(scope_key)
     if existing_alias is None:
-        existing_alias = _lookup_approved_customer_alias_for_scope(
+        existing_alias = lookup_approved_customer_alias_for_scope(
             session,
             normalized_token=nt,
             source_definition_id=cand.source_definition_id,
@@ -316,7 +188,7 @@ def _apply_one_provisional_customer_sync(
         cust = session.get(DimCustomer, int(existing_alias.customer_id))
         if cust is None:
             raise StewardOpError("Approved alias points at missing customer", status_code=409)
-        return _bind_candidate_to_reused_customer(
+        return bind_candidate_to_reused_customer(
             cand,
             cust,
             alias_id=int(existing_alias.id),
@@ -328,7 +200,7 @@ def _apply_one_provisional_customer_sync(
         cust = session.get(DimCustomer, int(batch_customer_id))
         if cust is None:
             raise StewardOpError("Batch reuse customer missing", status_code=409)
-        return _bind_candidate_to_reused_customer(
+        return bind_candidate_to_reused_customer(
             cand,
             cust,
             alias_id=None,
@@ -361,7 +233,7 @@ def _apply_one_provisional_customer_sync(
 
     raw = raw_evidence
     alias_notes = f"Alias from provisional customer create (candidate {cand.id})"
-    alias_id = _insert_approved_customer_alias_on_conflict_do_nothing(
+    alias_id = insert_approved_customer_alias_on_conflict_do_nothing(
         session,
         customer_id=int(row.id),
         raw_token=raw,
@@ -374,7 +246,7 @@ def _apply_one_provisional_customer_sync(
         import_entity_mapping_candidate_id=cand.id,
     )
     if alias_id is None:
-        race_alias = _lookup_approved_customer_alias_for_scope(
+        race_alias = lookup_approved_customer_alias_for_scope(
             session,
             normalized_token=nt,
             source_definition_id=cand.source_definition_id,
@@ -388,7 +260,7 @@ def _apply_one_provisional_customer_sync(
             raise StewardOpError("Approved alias points at missing customer", status_code=409)
         if created_new_customer and row.id != keeper.id:
             session.delete(row)
-        return _bind_candidate_to_reused_customer(
+        return bind_candidate_to_reused_customer(
             cand,
             keeper,
             alias_id=int(race_alias.id),
@@ -472,10 +344,10 @@ def run_dsi_bulk_provisional_customers_sync(
     for cand in found.values():
         if cand.entity_type != "customer_dealer_token":
             continue
-        meta = _scope_key_for_dsi_candidate(cand)
+        meta = scope_key_for_dsi_candidate(cand)
         if meta is not None:
             scope_keys.add(meta[0])
-    approved_alias_by_scope = _load_approved_customer_aliases_for_scopes(session, scope_keys)
+    approved_alias_by_scope = load_approved_customer_aliases_for_scopes(session, scope_keys)
     batch_customer_id_by_scope: dict[tuple[str, int, int], int] = {}
 
     results: list[dict[str, Any]] = []
