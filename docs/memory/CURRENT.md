@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-22 (Supabase → local `cip` clone; Warren on topology **B**)
+**Last updated:** 2026-06-22 (DSI customer sim + provisional dedup + product plan fix; topology **B**)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/dsi-async-topology` |
-| **HEAD (snapshot)** | `fa49f86` — Phase A BACKLOG-038–043 pushed; docs update for local DB migration |
+| **HEAD (snapshot)** | `9f3206f` — Phase A + local DB docs pushed; **2 commits unpushed** (`38b2c9e` provisional dedup, `9f3206f` product plan fix) |
 | **PR** | None open — ready to open after soak |
 | **Alembic (code)** | `20260609_0049` (`task_run` ledger) |
 | **Alembic (DB)** | `20260609_0049` on local `cip` (verified post-restore 2026-06-22) |
@@ -64,6 +64,9 @@
 
 - **Local `cip`** — full Supabase `public` clone; row-count parity verified vs remote (7 anchor tables).
 - Phase A code complete (038–043) on branch — **soak not yet run** on job #96 scenario.
+- **DSI customer sim-name plan tier** (`575276f`) — `customer_sim_name_to_ids` cache + unique match before provisional; **wired + unit-tested**, not proven live.
+- **Provisional create-path dedup** (`38b2c9e`) — `pick_provisional_customer_for_reuse` via `normalize_customer_name_for_similarity`; 2+ → log + create; **wired + unit-tested**.
+- **Ambiguous product plan** (`9f3206f`) — no crash when `product_ambiguous_eligible` absent; **unit-tested**.
 - DSI validate/steward async paths; shipment/PM imports per capability contract.
 - `task_run` ledger dual-write at dispatch.
 
@@ -79,9 +82,10 @@
 
 ## Next (recommended)
 
-1. **Soak:** restart `pnpm dev:worker`, re-run DSI historical validate + Customers tab compute (job #96 class) against **local `cip`**.
-2. **Open PR** from `feat/dsi-async-topology` when soak passes.
-3. **BACKLOG-001** shipment steward workspace (Phase C) per [`docs/memory/ROADMAP.md`](ROADMAP.md).
+1. **`git push`** — publish `38b2c9e` + `9f3206f` to `origin/feat/dsi-async-topology`.
+2. **Soak:** restart `pnpm dev:worker`, re-run DSI historical validate + Customers tab compute (job #96 class) on **local `cip`**.
+3. **Open PR** from `feat/dsi-async-topology` when soak passes.
+4. **BACKLOG-001** shipment steward workspace (Phase C) per [`docs/memory/ROADMAP.md`](ROADMAP.md).
 
 ---
 
