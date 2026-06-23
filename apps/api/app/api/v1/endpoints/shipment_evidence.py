@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.db.session_sync import SessionLocal
@@ -274,6 +275,199 @@ async def list_shipment_import_job_mapping_candidates(
             }
         )
     return out
+
+
+@router.get("/import-jobs/{job_id}/mapping-candidates/paginated")
+async def list_shipment_import_job_mapping_candidates_paginated(
+    job_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    entity: str = "all",
+    party: str = "all",
+    verify_name_only: bool = False,
+    special_category_only: bool = False,
+    possible_duplicates_only: bool = False,
+    duplicate_unresolved_only: bool = False,
+    status: str = "open",
+    db: AsyncSession = Depends(get_db),
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    """Paginated shipment mapping candidates (default limit 100, max 1000)."""
+    _require_admin(x_user_role)
+    job = await db.get(ImportJob, job_id)
+    if not job or (job.template_slug or "") != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Shipment import job not found")
+    from app.schemas.shipment_mapping_candidates import ShipmentMappingCandidatesListParams
+    from app.services.imports.shipment_mapping_candidates_list import list_shipment_mapping_candidates_sync
+
+    params = ShipmentMappingCandidatesListParams(
+        skip=skip,
+        limit=limit,
+        entity=entity,  # type: ignore[arg-type]
+        party=party,  # type: ignore[arg-type]
+        verify_name_only=verify_name_only,
+        special_category_only=special_category_only,
+        possible_duplicates_only=possible_duplicates_only,
+        duplicate_unresolved_only=duplicate_unresolved_only,
+        status=status,  # type: ignore[arg-type]
+    )
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return list_shipment_mapping_candidates_sync(sess, job_id, params)
+
+    from app.db.session_sync import SessionLocal
+
+    with SessionLocal() as sess:
+        return _work(sess)
+
+
+@router.get("/import-jobs/{job_id}/mapping-candidates/tab-counts")
+async def shipment_mapping_candidate_tab_counts(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    job = await db.get(ImportJob, job_id)
+    if not job or (job.template_slug or "") != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Shipment import job not found")
+    from app.services.imports.shipment_mapping_candidates_tab_counts import (
+        shipment_mapping_candidate_tab_counts_sync,
+    )
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return shipment_mapping_candidate_tab_counts_sync(sess, job_id)
+
+    from app.db.session_sync import SessionLocal
+
+    with SessionLocal() as sess:
+        return _work(sess)
+
+
+class ShipmentResolutionPlanGenerateBody(BaseModel):
+    candidate_ids: list[int] | None = None
+
+
+class ShipmentResolutionPlanOverride(BaseModel):
+    candidate_id: int
+    suggested_action: str | None = None
+    suggested_target_id: int | None = None
+    hold_for_manual_review: bool | None = None
+    confirm_previously_resolved: bool | None = None
+
+
+class ShipmentResolutionPlanEffectiveBody(BaseModel):
+    candidate_ids: list[int] | None = None
+    overrides: list[ShipmentResolutionPlanOverride] = Field(default_factory=list)
+
+
+class ShipmentResolutionPlanApplyBody(BaseModel):
+    candidate_ids: list[int] = Field(..., min_length=1)
+    overrides: list[ShipmentResolutionPlanOverride] = Field(default_factory=list)
+
+
+@router.post("/import-jobs/{job_id}/resolution-plan/compute-async", status_code=202)
+async def shipment_resolution_plan_compute_async(
+    job_id: int,
+    body: ShipmentResolutionPlanGenerateBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    with SessionLocal() as s:
+        job = s.get(ImportJob, job_id)
+        if not job or (job.template_slug or "") != "inbound_shipments":
+            raise HTTPException(status_code=404, detail="Shipment import job not found")
+    payload = {"candidate_ids": list(body.candidate_ids) if body.candidate_ids else None}
+    from app.services.imports.shipment_bulk_steward_enqueue import (
+        TASK_SHIPMENT_RESOLUTION_PLAN_COMPUTE,
+        enqueue_shipment_bulk_task,
+        run_shipment_resolution_plan_compute_sync,
+    )
+
+    task_id, async_poll = enqueue_shipment_bulk_task(
+        task_name=TASK_SHIPMENT_RESOLUTION_PLAN_COMPUTE,
+        job_id=job_id,
+        payload=payload,
+        run_sync=lambda: run_shipment_resolution_plan_compute_sync(job_id, payload),
+        dev_prefix="ship-plan-compute",
+    )
+    _write_shipment_bulk_slot(job_id, task_id, async_poll=async_poll, label="Computing resolution plan…")
+    return {"import_job_id": job_id, "task_id": task_id, "async_poll": async_poll, "async": True}
+
+
+@router.post("/import-jobs/{job_id}/resolution-plan", status_code=200)
+async def shipment_resolution_plan_generate(
+    job_id: int,
+    body: ShipmentResolutionPlanGenerateBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    from app.services.imports.shipment_resolution_plan import build_shipment_resolution_plan_sync
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return build_shipment_resolution_plan_sync(sess, job_id, candidate_ids=body.candidate_ids)
+
+    with SessionLocal() as sess:
+        try:
+            return _work(sess)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/import-jobs/{job_id}/resolution-plan/effective", status_code=200)
+async def shipment_resolution_plan_effective(
+    job_id: int,
+    body: ShipmentResolutionPlanEffectiveBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    from app.services.imports.shipment_resolution_plan import build_shipment_resolution_plan_effective_sync
+
+    def _work(sess: Session) -> dict[str, Any]:
+        return build_shipment_resolution_plan_effective_sync(
+            sess,
+            job_id,
+            candidate_ids=body.candidate_ids,
+            overrides=[o.model_dump(exclude_unset=True) for o in body.overrides],
+        )
+
+    with SessionLocal() as sess:
+        try:
+            return _work(sess)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/import-jobs/{job_id}/resolution-plan/apply-async", status_code=202)
+async def shipment_resolution_plan_apply_async(
+    job_id: int,
+    body: ShipmentResolutionPlanApplyBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    with SessionLocal() as s:
+        job = s.get(ImportJob, job_id)
+        if not job or (job.template_slug or "") != "inbound_shipments":
+            raise HTTPException(status_code=404, detail="Shipment import job not found")
+    payload = {
+        "candidate_ids": [int(x) for x in body.candidate_ids],
+        "overrides": [o.model_dump(exclude_unset=True) for o in body.overrides],
+    }
+    from app.services.imports.shipment_bulk_steward_enqueue import (
+        TASK_SHIPMENT_RESOLUTION_PLAN_APPLY,
+        enqueue_shipment_bulk_task,
+        run_shipment_resolution_plan_apply_sync,
+    )
+
+    task_id, async_poll = enqueue_shipment_bulk_task(
+        task_name=TASK_SHIPMENT_RESOLUTION_PLAN_APPLY,
+        job_id=job_id,
+        payload=payload,
+        run_sync=lambda: run_shipment_resolution_plan_apply_sync(job_id, payload),
+        dev_prefix="ship-plan-apply",
+    )
+    _write_shipment_bulk_slot(job_id, task_id, async_poll=async_poll, label="Applying resolution plan…")
+    return {"import_job_id": job_id, "task_id": task_id, "async_poll": async_poll, "async": True}
 
 
 class ShipmentMapDistributorBody(BaseModel):

@@ -208,6 +208,36 @@ def shipment_bulk_provisional_customers_task(self, job_id: int, payload: dict) -
         raise
 
 
+@celery_app.task(name="imports.shipment_resolution_plan_compute", bind=True, ack_late=True)
+def shipment_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
+    from app.services.imports.shipment_resolution_plan_compute_sync import run_shipment_resolution_plan_compute_sync
+
+    try:
+        return run_shipment_resolution_plan_compute_sync(
+            job_id,
+            payload,
+            on_progress=_shipment_bulk_progress(self, "computing_plan", "Computing resolution plan"),
+        )
+    except Exception:
+        logger.exception("shipment_resolution_plan_compute failed job_id=%s", job_id)
+        raise
+
+
+@celery_app.task(name="imports.shipment_resolution_plan_apply", bind=True, ack_late=True)
+def shipment_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
+    from app.services.imports.shipment_resolution_plan_apply_sync import run_shipment_resolution_plan_apply_sync
+
+    try:
+        return run_shipment_resolution_plan_apply_sync(
+            job_id,
+            payload,
+            on_progress=_shipment_bulk_progress(self, "applying_plan", "Applying resolution plan"),
+        )
+    except Exception:
+        logger.exception("shipment_resolution_plan_apply failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.dsi_apply", bind=True, ack_late=True)
 def dsi_apply_task(self, job_id: int) -> dict:
     """Background apply for a ``distributor_inventory`` job (pipeline apply → complete-to-loaded)."""

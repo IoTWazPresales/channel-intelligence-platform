@@ -17,6 +17,8 @@ INTERACTIVE_TASK_NAMES: frozenset[str] = frozenset(
         "imports.shipment_bulk_map_customer",
         "imports.shipment_bulk_apply_plans",
         "imports.shipment_bulk_provisional_customers",
+        "imports.shipment_resolution_plan_compute",
+        "imports.shipment_resolution_plan_apply",
     }
 )
 

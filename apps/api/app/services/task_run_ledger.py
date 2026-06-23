@@ -39,6 +39,8 @@ TASK_CLASS_BY_NAME: dict[str, str] = {
     "imports.shipment_bulk_map_customer": "steward",
     "imports.shipment_bulk_apply_plans": "steward",
     "imports.shipment_bulk_provisional_customers": "steward",
+    "imports.shipment_resolution_plan_compute": "steward",
+    "imports.shipment_resolution_plan_apply": "steward",
     "imports.dsi_soh_reconciliation": "derive",
     "imports.dsi_velocity_compute": "derive",
     "imports.dsi_forecasting": "derive",

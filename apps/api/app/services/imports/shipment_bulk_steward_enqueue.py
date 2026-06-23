@@ -39,6 +39,8 @@ logger = logging.getLogger(__name__)
 TASK_SHIPMENT_BULK_MAP_CUSTOMER = "imports.shipment_bulk_map_customer"
 TASK_SHIPMENT_BULK_APPLY_PLANS = "imports.shipment_bulk_apply_plans"
 TASK_SHIPMENT_BULK_PROVISIONAL_CUSTOMERS = "imports.shipment_bulk_provisional_customers"
+TASK_SHIPMENT_RESOLUTION_PLAN_COMPUTE = "imports.shipment_resolution_plan_compute"
+TASK_SHIPMENT_RESOLUTION_PLAN_APPLY = "imports.shipment_resolution_plan_apply"
 
 # Dev/sync-fallback result store (mirrors dsi bulk dev store), keyed by synthetic task id.
 _dev_shipment_bulk_task_results: dict[str, dict[str, Any]] = {}
@@ -77,21 +79,6 @@ def run_shipment_bulk_map_customer_sync(
         )
 
 
-def run_shipment_bulk_apply_plans_sync(
-    job_id: int,
-    payload: dict[str, Any],
-    *,
-    on_progress: Callable[[int, int], None] | None = None,
-) -> dict[str, Any]:
-    with SessionLocal() as db:
-        return execute_bulk_apply_shipment_candidate_plans(
-            db,
-            import_job_id=int(job_id),
-            candidate_ids=[int(x) for x in payload.get("candidate_ids", [])],
-            on_progress=on_progress,
-        )
-
-
 def run_shipment_bulk_provisional_customers_sync(
     job_id: int,
     payload: dict[str, Any],
@@ -111,6 +98,47 @@ def run_shipment_bulk_provisional_customers_sync(
             notes_summary=payload.get("notes_summary"),
             on_progress=on_progress,
         )
+
+
+def run_shipment_bulk_apply_plans_sync(
+    job_id: int,
+    payload: dict[str, Any],
+    *,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> dict[str, Any]:
+    with SessionLocal() as db:
+        return execute_bulk_apply_shipment_candidate_plans(
+            db,
+            import_job_id=int(job_id),
+            candidate_ids=[int(x) for x in payload.get("candidate_ids", [])],
+            on_progress=on_progress,
+        )
+
+
+def run_shipment_resolution_plan_compute_sync(
+    job_id: int,
+    payload: dict[str, Any],
+    *,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> dict[str, Any]:
+    from app.services.imports.shipment_resolution_plan_compute_sync import (
+        run_shipment_resolution_plan_compute_sync as _compute,
+    )
+
+    return _compute(job_id, payload, on_progress=on_progress)
+
+
+def run_shipment_resolution_plan_apply_sync(
+    job_id: int,
+    payload: dict[str, Any],
+    *,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> dict[str, Any]:
+    from app.services.imports.shipment_resolution_plan_apply_sync import (
+        run_shipment_resolution_plan_apply_sync as _apply,
+    )
+
+    return _apply(job_id, payload, on_progress=on_progress)
 
 
 # --- Enqueue (broker → dev thread → sync fallback) ------------------------------

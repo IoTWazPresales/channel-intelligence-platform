@@ -1259,6 +1259,8 @@ def process_shipment_evidence_import(
     _rebuild_shipment_customer_candidates(db, job)
 
     meta = dict(job.staged_metadata or {})
+    if not str(meta.get("import_purpose") or "").strip():
+        meta["import_purpose"] = "current"
     meta["shipment_evidence"] = to_jsonable(
         {
             "processed_at": datetime.now(timezone.utc).isoformat(),
