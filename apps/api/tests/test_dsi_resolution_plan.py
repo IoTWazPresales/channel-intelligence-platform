@@ -153,8 +153,11 @@ def test_plan_product_ambiguous_not_ready() -> None:
     )
     with patch("app.services.imports.dsi_resolution_plan.dsi_first_sample", return_value="SKU-X"):
         out = plan_dsi_candidate_sync(sess, cand, job, prod_idx, default_region_id=None, default_channel_id=None)
+    assert out["suggested_action"] == "resolve_product"
     assert out["ready"] is False
     assert out["plan_status"] == "needs_review"
+    assert isinstance(out["reason"], str) and out["reason"]
+    assert "ambiguous" in out["reason"].lower() or "eligible" in out["reason"].lower()
 
 
 def test_plan_customer_maps_existing() -> None:

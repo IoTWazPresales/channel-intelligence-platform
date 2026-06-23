@@ -654,6 +654,7 @@ def plan_dsi_candidate_sync(
                     }
             dom = ctx.get("dominant_unresolved_distributor_id")
             from app.services.imports.dsi_product_shipment_tiebreak import (
+                ambiguous_product_plan_reason_from_context,
                 evidence_date_from_month,
                 parse_candidate_shipment_evidence,
             )
