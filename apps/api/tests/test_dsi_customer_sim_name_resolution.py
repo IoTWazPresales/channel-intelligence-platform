@@ -35,7 +35,7 @@ def _customer_plan_ctx(*, cache: DSIResolutionCache) -> DSIPlanBuildContext:
     )
 
 
-def _customer_cand(*, primary: str) -> MagicMock:
+def _customer_cand(*, primary: str, dealer_group: str = "tbd") -> MagicMock:
     cand = MagicMock()
     cand.id = 1
     cand.entity_type = "customer_dealer_token"
@@ -43,7 +43,7 @@ def _customer_cand(*, primary: str) -> MagicMock:
     cand.normalized_key = primary.lower()
     cand.context = {
         "source_customer_name_raw_samples": [primary],
-        "dealer_group_account_raw": "tbd",
+        "dealer_group_account_raw": dealer_group,
     }
     cand.row_count = 1
     cand.total_units = None
@@ -132,3 +132,41 @@ def test_plan_customer_similar_name_ambiguous_falls_through_to_provisional() -> 
     assert out["suggested_action"] == "create_provisional_customer"
     assert out["plan_status"] == "ready"
     assert out.get("suggested_target_id") is None
+
+
+def test_plan_customer_dealer_group_suffix_variant_matches_master() -> None:
+    """Non-placeholder DG is resolution primary; sim tier matches legal-suffix master name."""
+    master_name = "Acme Trading Pty Ltd"
+    dealer_group = "Acme Trading"
+    sim_key = normalize_customer_name_for_similarity(master_name)
+    assert sim_key == normalize_customer_name_for_similarity(dealer_group)
+
+    cache = DSIResolutionCache(
+        all_distributors=[],
+        dist_aliases=[],
+        all_customers=[DSIResolutionCustomerRow(id=200, code="ACME", name=master_name)],
+        customer_code_to_id={},
+        customer_name_to_ids={master_name.strip().lower(): [200]},
+        customer_sim_name_to_ids={sim_key: [200]},
+        cust_aliases=[],
+        open_channel_cid=None,
+    )
+    plan_ctx = _customer_plan_ctx(cache=cache)
+    job = MagicMock()
+    job.source.id = 9
+    job.staged_metadata = {}
+
+    cand = _customer_cand(primary="Store Branch 7", dealer_group=dealer_group)
+    out = plan_dsi_candidate_sync(
+        MagicMock(),
+        cand,
+        job,
+        MagicMock(),
+        default_region_id=None,
+        default_channel_id=None,
+        plan_ctx=plan_ctx,
+    )
+    assert out["suggested_action"] == "map_customer"
+    assert out["ready"] is True
+    assert out["suggested_target_id"] == 200
+    assert out.get("resolution_signal") == "similar_customer_name"
