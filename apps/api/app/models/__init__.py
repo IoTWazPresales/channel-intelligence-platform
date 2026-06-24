@@ -41,6 +41,7 @@ from app.models.import_distributor_si import (
     RegionSourceTokenAlias,
 )
 from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
 from app.models.promo_export import PromoPlanExport, PromoPlanExportEvent
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough

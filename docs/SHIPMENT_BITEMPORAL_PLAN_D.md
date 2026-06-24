@@ -1,6 +1,6 @@
 # Plan D — Bitemporal shipment evidence (BACKLOG-033 design)
 
-**Status:** Design only — no migration in Plan C.  
+**Status:** D1–D3 implemented (migration + dual-write + corroboration read switch behind flags). D4–D5 deferred.  
 **Backlog:** BACKLOG-033  
 **Trigger:** Weekly shipment cadence, ETA prediction, or evidence/fact reconciliation at scale.
 

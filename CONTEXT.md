@@ -21,6 +21,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-06-24 | **Plan D bitemporal shipment evidence (D1–D3):** migration `20260623_0050` (`shipment_evidence_observation` + `shipment_evidence_current` view + backfill); dual-write on validate (`CIP_SHIPMENT_BITEMPORAL_DUAL_WRITE`); corroboration read switch (`CIP_SHIPMENT_BITEMPORAL_READ`). Flags default off. D4–D5 deferred. |
 | 2026-06-23 | **Plan C shipment steward parity:** workspace section, resolution plan API, paginated candidates + tab-counts, alias-scope port, operator docs; Plan D bitemporal design doc (no migration). Legacy panel retained in dialog. |
 | 2026-06-23 | DSI customer alias-scope module (`dsi_customer_alias_scope.py`) wired to bulk map + provisional + async steward; steward tab-count/cache fixes; read-only customer duplicate groups API + admin page; BACKLOG-044 shipment parity parked. |
 | 2026-06-22 | DSI customer sim-name plan tier (`575276f`); provisional create-path similarity reuse (`38b2c9e`); ambiguous product plan crash fix (`9f3206f`); HEAD `9f3206f`, **2 commits unpushed**. |

@@ -1255,6 +1255,9 @@ def process_shipment_evidence_import(
         )
 
     db.flush()
+    from app.services.imports.shipment_evidence_observations import sync_job_observations_after_validate
+
+    sync_job_observations_after_validate(db, job)
     _rebuild_shipment_distributor_candidates(db, job)
     _rebuild_shipment_customer_candidates(db, job)
 

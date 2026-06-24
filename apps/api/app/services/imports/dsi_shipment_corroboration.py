@@ -27,6 +27,7 @@ from sqlalchemy import Date, and_, func, literal, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_observations import corroboration_evidence_relation
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +102,9 @@ class ShipmentCorroborationCache:
         # Filter by product_resolution_status='resolved_unique' (has an index).
         # Restrict evidence months in SQL so remote validate does not pull the full table.
         month_set = set(month_list)
+        rel = corroboration_evidence_relation()
         prod_rows = db.execute(
-            text("""
+            text(f"""
                 SELECT
                     distributor_id,
                     product_id,
@@ -115,7 +117,7 @@ class ShipmentCorroborationCache:
                     lower(btrim(coalesce(ean_code,         ''))) AS ean_key,
                     lower(btrim(coalesce(upc_code,         ''))) AS upc_key,
                     lower(btrim(coalesce(sales_model_name, ''))) AS sm_key
-                FROM shipment_evidence_line
+                FROM {rel}
                 WHERE product_resolution_status = 'resolved_unique'
                   AND product_id IS NOT NULL
                   AND COALESCE(ship_confirm_date, schedule_ship_date, promise_date) IS NOT NULL
@@ -146,7 +148,7 @@ class ShipmentCorroborationCache:
         # --- customer corroboration rows ---
         # Restrict to distributor-resolved rows that also have customer_id.
         cust_rows = db.execute(
-            text("""
+            text(f"""
                 SELECT
                     distributor_id,
                     customer_id,
@@ -158,7 +160,7 @@ class ShipmentCorroborationCache:
                     lower(btrim(coalesce(customer_dealer_token, ''))) AS cust_token_key,
                     lower(coalesce(bill_to_raw,  '')) AS bill_to_lower,
                     lower(coalesce(ship_to_raw,  '')) AS ship_to_lower
-                FROM shipment_evidence_line
+                FROM {rel}
                 WHERE customer_id IS NOT NULL
                   AND customer_resolution_status IN ('resolved', 'resolved_unique')
                   AND distributor_id IS NOT NULL
@@ -331,13 +333,14 @@ class GlobalProductIdentityIndex:
     def load(cls, db: Session) -> "GlobalProductIdentityIndex":
         from app.services.imports.distributor_sales_inventory import _product_token_key
 
+        rel = corroboration_evidence_relation()
         rows = db.execute(
             text(
-                """
+                f"""
                 SELECT DISTINCT
                     lower(btrim(coalesce(sales_model_name, ''))) AS sm_key,
                     product_id
-                FROM shipment_evidence_line
+                FROM {rel}
                 WHERE product_resolution_status = 'resolved_unique'
                   AND product_id IS NOT NULL
                   AND btrim(coalesce(sales_model_name, '')) <> ''
