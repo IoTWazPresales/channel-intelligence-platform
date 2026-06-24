@@ -1482,6 +1482,11 @@ function AdminImportsPageContent() {
 
   /** Job id for shipment column mapping + validate (matches steward poll id). */
   const shipmentMappingJobId: number | null = shipmentEvidencePollJobId ?? lastJobId ?? null;
+  const shipmentStageTrim = (shipmentImportJob?.stage || '').trim();
+  const shipmentPostValidateRemap =
+    Boolean(isJobRevisitMode) && ['validated', 'loaded'].includes(shipmentStageTrim);
+  const shipmentMappingPanelEnabled =
+    shipmentStageTrim === 'shipment_mapping_ready' || shipmentPostValidateRemap;
 
   type ShipmentMappingState = {
     id: number;
@@ -1511,7 +1516,7 @@ function AdminImportsPageContent() {
       isShipmentEvidence &&
         shipmentMappingJobId != null &&
         shipmentImportJob &&
-        (shipmentImportJob.stage || '').trim() === 'shipment_mapping_ready'
+        shipmentMappingPanelEnabled
     ),
   });
 
@@ -1615,7 +1620,7 @@ function AdminImportsPageContent() {
   const shipmentValidating = Boolean(
     shipmentValidatePollEnabled &&
       !shipmentPipelineFinished &&
-      shipmentStage === 'shipment_mapping_ready'
+      (shipmentStage === 'shipment_mapping_ready' || shipmentStatus === 'running')
   );
 
   useEffect(() => {
@@ -3564,10 +3569,17 @@ function AdminImportsPageContent() {
             {isJobRevisitMode &&
             lastJobId != null &&
             isShipmentEvidence &&
-            (shipmentImportJob?.stage || '').trim() === 'shipment_mapping_ready' ? (
+            shipmentStageTrim === 'shipment_mapping_ready' ? (
               <Alert severity="info" data-testid="revisit-banner">
                 Revisiting job <strong>#{lastJobId}</strong>. This job has not been validated yet — you can adjust the
                 column mapping below, save, and run validation without re-uploading.
+              </Alert>
+            ) : isJobRevisitMode && lastJobId != null && isShipmentEvidence && shipmentPostValidateRemap ? (
+              <Alert severity="info" data-testid="revisit-banner-post-validate-remap">
+                Revisiting job <strong>#{lastJobId}</strong>. You can adjust column mapping and{' '}
+                <strong>re-run validation</strong> without re-uploading. Re-validate replaces evidence lines for keys in
+                the new parse and removes orphan lines whose keys no longer appear (steward mappings on surviving keys
+                are preserved).
               </Alert>
             ) : isJobRevisitMode && lastJobId != null ? (
               <Alert severity="info" data-testid="revisit-banner">
@@ -3600,14 +3612,15 @@ function AdminImportsPageContent() {
             shipmentEvidencePollJobId != null &&
             shipmentEvidenceJobPollUnlocked &&
             shipmentImportJob &&
-            (shipmentImportJob.stage || '').trim() === 'shipment_mapping_ready' ? (
+            shipmentMappingPanelEnabled ? (
               <Stack spacing={1.5} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2 }}>
                 <Typography variant="subtitle2" fontWeight={600}>
-                  Column mapping (required before validation)
+                  Column mapping {shipmentPostValidateRemap ? '(re-map & re-validate)' : '(required before validation)'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Map each file column to a canonical shipment field. Save your mapping, then run validation (same flow as
-                  distributor sales & inventory mapping).
+                  {shipmentPostValidateRemap
+                    ? 'Fix column mapping on this validated job, save, then re-run validation. Evidence lines upsert on source_key; lines absent from the new parse are removed.'
+                    : 'Map each file column to a canonical shipment field. Save your mapping, then run validation (same flow as distributor sales & inventory mapping).'}
                 </Typography>
                 {shipmentMappingStateQueryError ? (
                   <Alert severity="error">{safeDisplayError(shipmentMappingStateQueryErr)}</Alert>
@@ -3653,7 +3666,7 @@ function AdminImportsPageContent() {
                         }
                         onClick={() => void shipmentValidateRun.mutateAsync()}
                       >
-                        {shipmentValidateRun.isPending || shipmentValidateAsync ? 'Validating…' : 'Run validation'}
+                        {shipmentValidateRun.isPending || shipmentValidateAsync ? 'Validating…' : shipmentPostValidateRemap ? 'Re-run validation' : 'Run validation'}
                       </Button>
                     </Stack>
                     {shipmentValidating ? (

@@ -806,6 +806,23 @@ def _execute_shipment_line_upsert(db: Session, values: dict[str, Any]) -> None:
             db.execute(_shipment_evidence_line_upsert_statement(cleared))
 
 
+def _purge_orphan_shipment_evidence_lines(db: Session, job_id: int, seen_source_keys: set[str]) -> int:
+    """Remove evidence lines from a prior validate pass whose ``source_key`` no longer appears.
+
+    Runs after a successful re-validate when column mapping changes shift business keys.
+    Steward resolution on surviving keys is preserved via upsert-on-conflict semantics.
+    """
+    if not seen_source_keys:
+        return 0
+    result = db.execute(
+        delete(ShipmentEvidenceLine).where(
+            ShipmentEvidenceLine.import_job_id == job_id,
+            ShipmentEvidenceLine.source_key.notin_(sorted(seen_source_keys)),
+        )
+    )
+    return int(result.rowcount or 0)
+
+
 def _flush_shipment_line_batch(db: Session, rows: list[dict[str, Any]]) -> None:
     """Bulk upsert a batch of evidence lines in one statement.
 
@@ -1042,9 +1059,14 @@ def process_shipment_evidence_import(
             total_rows += len(_frame)
 
     line_buffer: list[dict[str, Any]] = []
+    seen_source_keys: set[str] = set()
 
     def _flush_buffer() -> None:
         if line_buffer:
+            for row in line_buffer:
+                sk = row.get("source_key")
+                if isinstance(sk, str) and sk:
+                    seen_source_keys.add(sk)
             _flush_shipment_line_batch(db, line_buffer)
             line_buffer.clear()
 
@@ -1253,6 +1275,9 @@ def process_shipment_evidence_import(
                 message="Could not detect a supported shipment / order report from headers.",
             )
         )
+
+    if blocking == 0 and seen_source_keys:
+        _purge_orphan_shipment_evidence_lines(db, int(job.id), seen_source_keys)
 
     db.flush()
     from app.services.imports.shipment_evidence_observations import sync_job_observations_after_validate

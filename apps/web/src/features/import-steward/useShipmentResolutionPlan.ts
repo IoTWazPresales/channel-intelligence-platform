@@ -41,10 +41,11 @@ export function useShipmentResolutionPlan({
     [planScopeCandidateIds]
   );
 
-  const   suggestionsQuery = useQuery({
+  const suggestionsQuery = useQuery({
     queryKey: SHIPMENT_STEWARD_CONFIG.resolutionSuggestionsQueryKey(importJobId, candidateIdsKey),
-    enabled: false,
+    enabled: importJobId > 0 && planScopeCandidateIds.length > 0,
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
     staleTime: 10 * 60 * 1000,
     queryFn: async ({ signal }) => {
       const enqueued = await apiPost<{
@@ -60,7 +61,8 @@ export function useShipmentResolutionPlan({
         return pollShipmentBulkTask<Record<string, unknown>>(importJobId, enqueued.task_id);
       }
       registerClientBackgroundTask({
-        id: enqueued.task_id,
+        taskId: enqueued.task_id,
+        importJobId,
         kind: 'shipment_bulk',
         label: 'Computing shipment resolution plan',
       });
@@ -110,7 +112,8 @@ export function useShipmentResolutionPlan({
         return { result: await pollShipmentBulkTask<Record<string, unknown>>(importJobId, enqueued.task_id) };
       }
       registerClientBackgroundTask({
-        id: enqueued.task_id,
+        taskId: enqueued.task_id,
+        importJobId,
         kind: 'shipment_bulk',
         label: 'Applying shipment resolution plan',
       });

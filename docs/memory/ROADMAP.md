@@ -71,7 +71,7 @@ compute (task often succeeds after UI gives up). Structural fixes, not poll-only
 | **BACKLOG-044** | Shipment steward UX + resolution intelligence parity (plan/ready/bulk vs DSI) | **Parked** | Session 2026-06-23 (ACZA backfill); extends BACKLOG-001 — workspace swap alone insufficient. TRIGGER: shipment parity audit or backfill workflow scale-up. |
 | **BACKLOG-005** | DSI → `CanonicalColumnMappingPanel` | **Done** | BACKLOG entry 2026-06-06. |
 | **BACKLOG-006** | Slim shipment `mapping-candidates` API (paginate / omit `line_ids`) | **Parked** | TRIGGER: steward GET still slow on 100+ candidates post-merge smoke. |
-| **BACKLOG-007** | Shipment post-validation re-map + `source_key` stability | **Parked** | TRIGGER: operator story approved. |
+| **BACKLOG-007** | Shipment post-validation re-map + `source_key` stability | **Addressed** (operator soak pending) | UI + orphan purge shipped 2026-06-24. |
 | **BACKLOG-022** | Unified `import_dispatch.enqueue_import_worker_task` | **Done** | `import_dispatch.py` exists; imports + shipment delegate. |
 | **BACKLOG-025** | Generic pipeline apply → async | **Partial** | `/process` async (2026-06-05). **Remaining:** frontend progress for CST/masters (`BACKLOG-029` part b). |
 | **BACKLOG-026** | PM: consolidate dual apply pipelines | **Parked** | `product_master_workflow.py` vs `pipeline.py::_process_product_master`. |
