@@ -6,6 +6,57 @@
 
 ---
 
+## BACKLOG-048 — Import Celery + background-task parity audit (dispatch, slots, polls, cancel)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-06-24 |
+| **Effort** | Medium–large (audit doc + phased fixes); overlaps BACKLOG-039 queue split |
+| **Source** | Warren session (2026-06-24): request for Celery and task parity audit in backlog. `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` §1b–1c (per-importer slot copy-paste, orphan slots on cancel); `apps/api/app/services/imports/import_background_slots.py` (`TASK_SLOTS` registry — partial Phase 2); `background_tasks.py` discovery readers; `import_job_task_control.py` + `import_job_background_metadata.py` (`clear_background_task_metadata` legacy gaps); `docs/memory/derived/platform_async_and_background_truth.md`; `.cursor/rules/import-parity.mdc` (apply = async dispatch + registered slot); existing poll/queue items **BACKLOG-039** (queue split), **BACKLOG-041** (compute poll grace), **BACKLOG-038** (dev beat/reaper), **BACKLOG-015** (cancel revoke all tasks); shipment vs DSI dispatch (`_dispatch_shipment_apply`, `_dispatch_dsi_apply`, `dsi_resolution_plan_enqueue`, `product_master_workflow` PM validate/commit slots) |
+| **Idea** | Background work across importers is **not at one parity bar**: Celery task names, enqueue helpers, `staged_metadata` slot keys/kinds, activity-feed registration, cancel/retry slot clearing, dev `in_process_thread` fallback, and frontend poll budgets differ per template. Orphan slots, invisible progress, and false queue-timeout UX recur when a new path writes a slot without registry entry or poll wiring. |
+| **Why it matters / deferrable** | Solo-worker dev topology masks some gaps; shipment backfill and DSI historical soak exposed queue-wait vs execution confusion. Deferrable as an **audit-first** deliverable before wide refactors — but should run before scaling imports or on-prem cutover. |
+| **What the work is** | (1) **Audit matrix** (per `template_slug` / pipeline): validate dispatch, apply/commit dispatch, steward bulk, plan compute, derive side-effects (velocity/SOH/forecast/lineup parse); Celery task id; slot key + kind; sync fallback; progress callback; frontend poll route + grace. (2) **Registry gaps:** any writer not using `import_background_slots`; any clearer not using `clear_all_task_slots`; duplicate enqueue helpers (e.g. velocity). (3) **Cancel/retry:** full revoke list vs slot registry; confirm no orphan feed entries after cancel. (4) **Parity targets:** shipment apply/bulk/validate aligned with DSI; PM commit/validate visible in feed; generic `process_job` vs dedicated tasks documented. (5) **Output:** update `IMPORT_FLOW_CAPABILITY_CONTRACT.md` + `platform_async_and_background_truth.md` with as-built table; phased fix list (may feed BACKLOG-039). |
+| **Regression traps** | Breaking `in_process_thread` dev path; revoking wrong Celery ids; clearing slots before worker finishes; changing poll semantics without `DEV_TOPOLOGY` doc; DSI historical auto-apply timing (BACKLOG-040). |
+| **Behavior to retain** | Broker → dev in-process thread → sync fallback chain; every background task registered in activity feed; import-parity governance; latest-job-wins / evidence semantics unchanged. |
+| **Out of scope** | Full Phase 3 declarative wizard (`page.tsx` contract codegen); production multi-worker provisioning (unless audit TRIGGERs infra sprint); changing DSI resolution tier order. |
+| **TRIGGER** | Warren requests Celery/task parity audit; **or** new background task added without `import_background_slots` entry; **or** orphan-slot / invisible-progress incident on any importer; **or** BACKLOG-039 queue split starts (audit is prerequisite). |
+
+---
+
+## BACKLOG-047 — Import wizard: stale column-mapping UI after Back + re-upload
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-06-24 |
+| **Effort** | Small–medium (web); may touch shared `CanonicalColumnMappingPanel` |
+| **Source** | Warren session (2026-06-24): on inbound shipment import, click **Back**, re-upload a **new** file — dropdown mapping UI still reflects the **previous** file (column/target selections stale) while validate/apply still proceeds on the new job. `apps/web/src/app/(app)/admin/imports/page.tsx` (`shipmentMapDraft`, `shipment-mapping-state` query, upload `onSuccess` invalidation, wizard Back handlers without full draft reset); `CanonicalColumnMappingPanel.tsx` (Autocomplete sections: “Selected for this column”, “Already mapped in this file”); parallel DSI path (`dsiMapDraft`, `dsi-mapping-state`) likely same class of bug |
+| **Idea** | Wizard **client state** (mapping draft, query cache, panel local filter) is not fully reset when the operator navigates back to upload and creates a **new** job with different headers. UI misleads (old column names / targets in Maps-to dropdown); server uses new job file — **silent mismatch** until operator notices or validate surfaces errors. |
+| **Why it matters / deferrable** | Confusing for weekly ACZA re-uploads and BOM-tab workbook iterations; risk of wrong mappings saved if operator trusts stale UI. Deferrable while operators can hard-refresh or avoid Back+re-upload (upload once per session); fix should be shared across shipment + DSI mapping steps. |
+| **What the work is** | (1) **Repro matrix:** shipment + DSI (+ PM if applicable) — Back from mapping → re-upload → Next; with/without `?job=` deep link. (2) **Reset contract:** on new `lastJobId` from upload — clear `shipmentMapDraft` / `dsiMapDraft` immediately; `removeQueries` or `resetQueries` for prior job mapping-state keys; reset `upload.isSuccess` gate if it pins poll job id; optional `key={lastJobId}` on `CanonicalColumnMappingPanel` to remount. (3) **Loading guard:** do not render mapping table until `shipment-mapping-state` / `dsi-mapping-state` matches current `lastJobId` and infer complete (spinner, not stale rows). (4) **Tests:** vitest for draft reset + query key on re-upload. (5) **UX:** banner “New file — previous mapping cleared” when job id changes mid-wizard. |
+| **Regression traps** | Breaking revisit `?job=` remap flow (`shipmentPostValidateRemap`); wiping intentional draft edits on same job; race with server-derived step auto-advance (`shipmentDerivedStepRef`); DSI `dsiContinueToApplyAllowed` gate keys. |
+| **Behavior to retain** | Post-validate re-map without re-upload; server `field_mapping` as source of truth after load; save-before-validate gate; deep-link job revisit. |
+| **Out of scope** | Server-side re-upload on same job id; full wizard contract refactor (IMPORT_FLOW_CAPABILITY_CONTRACT Phase 3). |
+| **TRIGGER** | Warren reports stale mapping UI again after ACZA/BOM workbook iteration; **or** BACKLOG-046 sheet-policy work touches mapping infer; **or** import UX hardening sprint (BACKLOG-045/044). |
+
+---
+
+## BACKLOG-046 — Shipment ACZA workbook: exclude / handle non-operational sheets (e.g. BOM Not Ready)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-06-24 |
+| **Effort** | Small–medium (API + web mapping UX); optional phase 2 if BOM tab becomes first-class feed |
+| **Source** | Warren session (2026-06-24): `ACZA Shipped Unshipped 20260623.xlsx` new **BOM Not Ready** tab pollutes shipment column-mapping stage (different columns); research in chat (no code). `apps/api/app/services/imports/shipment_evidence_import.py` (`_load_frames_for_job` — all sheets); `shipment_field_mapping.py` (`_union_frame_headers` — unions headers from every sheet for mapping UI); `shipment_evidence_report_detect.py` (`detect_report_type` — `REPORT_UNKNOWN` skipped at validate); CST precedent: `customer_sell_through_period.py` (`is_summary_sheet_name`); `docs/platform_import_system_truth.md` / BACKLOG-001 area (multi-sheet mapping deferred) |
+| **Idea** | ACZA shipment workbooks can include **non-operational tabs** (e.g. **BOM Not Ready** — BOM / readiness exception queue) alongside **Shipped** and **Unship**. CIP unions **all** sheet headers into one mapping surface but only ingests sheets that pass `detect_report_type`. Operators see confusing extra columns at map time; risk that a tab with Unship-like headers is **misclassified and ingested** as open-order evidence. |
+| **Why it matters / deferrable** | Blocks clean weekly ACZA uploads without manual Excel surgery. Deferrable while operators can trim workbooks (Shipped + Unship only) for current uploads; product fix should follow explicit business rule on whether BOM-hold rows belong in inbound shipment facts. |
+| **What the work is** | (1) **Business rule (Warren):** confirm BOM Not Ready is **out of scope** for `fact_inbound_shipment` / standard ACZA apply (recommended default: exclude). (2) **Sheet inclusion policy:** ACZA allowlist (`Shipped`, `Unship`) and/or denylist patterns (`BOM`, `Not Ready`, summary/index) — mirror CST `is_summary_sheet_name` pattern in shipment load path. (3) **Mapping UX:** union headers **only from in-scope sheets**; surface skipped sheets in `inferred_schema.sheets` / validate summary with `report_type: unknown` + “ignored” badge (extend `CanonicalColumnMappingPanel` manifest if needed). (4) **Safety:** audit `detect_report_type` column heuristics so exception tabs sharing Unship/Shipped headers cannot silently ingest (sheet name + allowlist guard). (5) **Optional phase 2:** dedicated `report_type` + per-sheet mapping only if planning needs BOM-hold rows in-platform. |
+| **Regression traps** | Dropping real Shipped/Unship rows; breaking historical ACZA backfill jobs that relied on full workbook; changing `source_key` / line_status for ingested rows; mapping saved on job that no longer matches unioned headers after rule change. |
+| **Behavior to retain** | Shipped + Unship ingest semantics; `REPORT_UNKNOWN` skip at validate; evidence preserved per job; no auto-create masters; latest-job-wins fact upsert. |
+| **Out of scope** | Full per-sheet mapping parity with historical lineup (unless TRIGGER fires for broader multi-sheet mapping); BOM / configurator as separate product module; changing DSI corroboration tier order. |
+| **TRIGGER** | Warren approves product direction after BOM-tab business sign-off; **or** second ACZA upload blocked by mapping noise / wrong-sheet ingest; **or** ASUS workbook adds more non-operational tabs; **or** shipment import parity sprint (BACKLOG-044) starts and sheet policy is prerequisite. |
+
+---
+
 ## BACKLOG-045 — Import steward UI parity audit (side drawer + workspace layout)
 
 | Field | Detail |
