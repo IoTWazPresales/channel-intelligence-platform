@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-045 — Import steward UI parity audit (side drawer + workspace layout)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-06-24 |
+| **Effort** | Medium–large (web); audit-first then phased fixes |
+| **Source** | Warren session (2026-06-24): shipment apply step UX; steward side panel vs DSI; `ShipmentCandidateStewardDrawer` + `ShipmentMappingStewardPanel` vs `DsiCandidateStewardDrawer` + `DsiMappingStewardPanel`; `ShipmentImportJobResolutionSection` vs `DsiImportJobResolutionSection`; `.cursor/rules/import-parity.mdc` steward surface rule; partial parity shipped on `feat/dsi-async-topology` (tabs, toolbar, plan apply, drawer apply banner) — **gaps remain** |
+| **Idea** | Several import steward surfaces are **not fully component-paritied** with DSI. Operators see slight layout/behaviour differences: side steward drawer (duplicate review, open channel, peer compare, row-action lifecycle), workspace chrome (pagination placement, bulk slot, plan toolbar), entity-type API wiring (`/mappings/` vs `/shipment-evidence/`), and apply-step completion UX (shipment now has `ImportJobLoadedSuccessCallout`; DSI/historical lineup not unified). |
+| **Why it matters / deferrable** | Shipment backfill (#147) is unblocked enough to apply; full UI parity is polish + regression-risk reduction before scaling steward work across importers. Deferrable until a dedicated UX parity sprint — but **audit should be explicit** so drift does not accumulate. |
+| **What the work is** | (1) **Audit matrix:** per importer row in `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` — side drawer component, workspace layout, plan toolbar, bulk section, apply-loaded callout, row actions (Review vs inline), API family. (2) **Extract shared primitives** where duplication is stable: steward drawer shell, plan-ready banner, apply-complete callout (extend `ImportJobLoadedSuccessCallout`), duplicate-review blocks (shipment may need shipment API adapters). (3) **Close shipment gaps:** wire `DsiMappingStewardPanel`-equivalent behaviours still missing on shipment (duplicate cluster dialogs, open channel if applicable, `onStewardFastComplete` cache eviction, peer lookup). (4) **DSI apply step:** adopt same loaded success callout pattern. |
+| **Regression traps** | Wrong steward API paths; breaking shipment entity types (`shipment_customer_token` vs `customer_dealer_token`); removing shipment-only special-category / reject flows; forked bespoke panels instead of shared layout. |
+| **Behavior to retain** | Shipment-evidence steward API family; governance (no auto-create); evidence vs fact semantics; import-parity locked async DB config. |
+| **Out of scope** | Full `DsiMappingStewardPanel` → single mega-component for all importers without adapter layer; product steward on shipment. |
+| **TRIGGER** | Warren requests steward UI parity audit; **or** second importer steward surface added without shared drawer/workspace; **or** shipment parity PR merged and next sprint is import UX hardening. |
+
+---
+
 ## BACKLOG-044 — Shipment import: steward UX + resolution intelligence parity with DSI
 
 | Field | Detail |

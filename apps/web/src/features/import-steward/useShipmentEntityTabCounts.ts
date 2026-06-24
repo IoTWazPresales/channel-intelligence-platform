@@ -5,13 +5,10 @@ import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api';
 
 import { SHIPMENT_STEWARD_CONFIG } from './shipmentSteward.config';
+import { SHIPMENT_ENTITY_TAB_DEFS, type ShipmentEntityTabId } from './shipmentEntityTabs';
 
-export type ShipmentEntityTabId = 'distributor' | 'customer';
-
-export const SHIPMENT_ENTITY_TABS: { id: ShipmentEntityTabId; label: string }[] = [
-  { id: 'distributor', label: 'Distributors' },
-  { id: 'customer', label: 'Channel partners' },
-];
+export type { ShipmentEntityTabId };
+export const SHIPMENT_ENTITY_TABS = SHIPMENT_ENTITY_TAB_DEFS;
 
 type TabCountsApiResponse = {
   import_job_id: number;

@@ -189,7 +189,7 @@ The exact current step arrays map cleanly:
 
 - **PM** → `[import_type, data_provider, template_details, upload, column_mapping, validate, commit]`
 - **DSI** → `[import_type, data_provider, template_details, import_mode, upload, column_mapping, validate, apply]`
-- **Shipment** → `[import_type, data_provider, template_details, upload]` *(mapping + validate happen via the shipment steward admin, not extra wizard steps — see `steward_surface`)*
+- **Shipment** → `[import_type, data_provider, template_details, upload, column_mapping, validate_resolve, apply]` *(DSI-aligned wizard; steward on validate step — 2026-06-24)*
 - **Default (masters/historical)** → `[import_type, data_provider, template_details, import_mode, upload]`
 
 ---
@@ -203,18 +203,16 @@ The exact current step arrays map cleanly:
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | **product_master** | type,provider,details,upload,mapping,validate,commit | yes | `pm_columns` | no | — | `pm_commit` | yes | **no** | no | no | `product_master_validate`, `product_master_commit` |
 | **distributor_inventory** (DSI) | type,provider,details,mode,upload,mapping,validate,apply | yes | `dsi_canonical` | **yes** | `dsi_resolution_section` | `fact_upsert_after_steward` | yes | **no** | yes (auto/historical/weekly) | no | `dsi_pipeline`, `dsi_bulk_provisional`, `dsi_resolution_plan_apply`, `dsi_soh_reconciliation`, `dsi_velocity_compute`, `dsi_forecasting` |
-| **inbound_shipments** | type,provider,details,upload | yes (post-upload) | `shipment_canonical` | **yes** | `inline_wizard` † | `fact_upsert_after_steward` | no | no | no | no | `shipment_import` |
+| **inbound_shipments** | type,provider,details,upload,mapping,validate,apply | yes | `shipment_canonical` | **yes** | `dsi_resolution_section` † | `fact_upsert_after_steward` | no | no | no | no | `shipment_import` |
 | **distributor_master** | type,provider,details,mode,upload | no | `none` | no | — | `master_upsert` | no | no | yes (validate/apply) | no | *(none — inline sync)* |
 | **customer_master** | type,provider,details,mode,upload | no | `none` | no | — | `master_upsert` | no | no | yes (validate/apply) | no | *(none — inline sync)* |
 | **historical_lineup** (admin) | type,provider,details,mode,upload | yes (override) | `historical_lineup` | no | — | `parse_to_history` | no | no | yes | no | *(none — inline sync)* |
 | **customer_sell_through** | *(own surface)* | yes | own surface (deferred) | **yes** | own surface (deferred) | `fact_upsert_after_steward` | no | no | own surface (deferred) | **yes** | *(own surface — parsers, see §1d / §10 D1)* |
 | **current_lineup** (hidden) | *(Commercial Planner upload)* | yes (parse) | external | no | — | `external_surface` | no | n/a | n/a | **yes** | `commercial_planner_lineup_parse` |
 
-> † **`inbound_shipments` = "4-step-with-inline-steward"** (decision D4): the contract
-> encodes today's 4-step wizard where column mapping + validate happen after upload and
-> the entity steward runs inline to that flow (surfaced via the shipment evidence admin
-> today). Whether to promote mapping/validate to explicit wizard steps is **revisited in
-> Phase 3**, not now.
+> † **`inbound_shipments` steward surface** (updated 2026-06-24): 7-step wizard aligned with DSI
+> (upload → mapping → validate & resolve → apply). Steward uses `ImportStewardCandidateWorkspace`
+> + `ShipmentImportJobResolutionSection` on the validate step (`dsi_resolution_section` parity).
 
 Scaffold/`stub_noop` templates (`customer_channel_mapping`, `customer_inventory_sales`,
 `pricing_support`, `lineup_plan`, `promotion_plan`) all collapse to:
@@ -412,7 +410,7 @@ These answer the original open questions and are now binding for Phase 2/3 plann
 | **D1** | **`customer_sell_through` = its own surface** (like `current_lineup`), not the generic wizard. | `hidden_from_generic_ui = yes`. Its `mapping_ui` / `steward_surface` / `import_mode_choice` are **deferred to its own surface design**; `needs_steward = yes`, `apply_mode = fact_upsert_after_steward`, `apply_requires_confirm = no`. |
 | **D2** | **Static client map first** for delivering the contract to the web app. | Phase 3 reads a static `ImportFlowCapability` map (§6b). Documented **upgrade path**: promote to a `capability` field on `GET /api/v1/imports/templates` *if* app complexity/size makes the static map drift — additive, no shape change. |
 | **D3** | **TS types live in `packages/types/`** (shared), per recommendation. | §6b types target `packages/types/`; web + any future tooling import from there. |
-| **D4** | **`inbound_shipments` = "4-step-with-inline-steward"**; revisit promoting mapping/validate to explicit steps in **Phase 3**. | Shipment row keeps 4 steps, `steward_surface = inline_wizard` (see † note in §5). |
+| **D4** | **`inbound_shipments` wizard** promoted to explicit mapping / validate / apply steps (shipped 2026-06-24). | Shipment row: 7 steps; `steward_surface = dsi_resolution_section` (see §5 †). |
 | **D5** | **§5 matrix committed as-is** — it is a **living document**, corrected during review, not code. | Matrix is canonical; edit in place as understanding sharpens. |
 
 > §10 captures any matrix corrections made after this commit (add-only log).

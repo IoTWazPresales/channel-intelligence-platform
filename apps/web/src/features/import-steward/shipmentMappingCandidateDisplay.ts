@@ -24,6 +24,17 @@ export type ShipmentMappingCandidateRow = {
 export const SHIPMENT_ENTITY_DIST = 'shipment_distributor';
 export const SHIPMENT_ENTITY_CUST = 'shipment_customer_token';
 
+/** Legacy DSI entity_type strings still present on some shipment candidate rows. */
+export function isShipmentDistributorEntity(entityType: string | null | undefined): boolean {
+  const et = (entityType || '').trim();
+  return et === SHIPMENT_ENTITY_DIST || et === 'distributor_token' || et === 'shipment_distributor';
+}
+
+export function isShipmentCustomerEntity(entityType: string | null | undefined): boolean {
+  const et = (entityType || '').trim();
+  return et === SHIPMENT_ENTITY_CUST || et === 'customer_dealer_token';
+}
+
 export function shipmentPartyLabel(party: string): string {
   return party === 'bill_to' ? 'Bill To' : party === 'ship_to' ? 'Ship To' : party;
 }
@@ -78,8 +89,8 @@ export function shipmentContextPossibleDuplicateOf(ctx: Record<string, unknown> 
 }
 
 export function shipmentEntityChipLabel(entityType: string): string {
-  if (entityType === SHIPMENT_ENTITY_DIST) return 'Distributor';
-  if (entityType === SHIPMENT_ENTITY_CUST) return 'Channel partner';
+  if (isShipmentDistributorEntity(entityType)) return 'Distributor';
+  if (isShipmentCustomerEntity(entityType)) return 'Channel partner';
   return entityType;
 }
 

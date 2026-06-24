@@ -27,11 +27,14 @@ import {
   type ReactNode,
 } from 'react';
 
+import { DsiPendingButton } from './DsiPendingButton';
 import { apiGet, apiPost } from '@/lib/api';
 import { invalidateShipmentImportJobStewardQueries, isShipmentStewardRowActionBlocked } from './shipmentSteward.config';
 import {
   SHIPMENT_ENTITY_CUST,
   SHIPMENT_ENTITY_DIST,
+  isShipmentCustomerEntity,
+  isShipmentDistributorEntity,
   shipmentCanClearSpecialCategory,
   shipmentCustomerSpecialCategoryBlocksProvisional,
   shipmentEntityChipLabel,
@@ -257,8 +260,17 @@ export function ShipmentStewardActionsProvider({
     setActive(r);
     setPickDistId('');
     setPickCustId('');
-    setDistQ('');
-    setCustQ('');
+    const tok = shipmentSampleToken(r);
+    const sug =
+      (r.context && typeof r.context.suggested_name === 'string' ? r.context.suggested_name : '') ||
+      (r.suggested_distributor_name || '').trim();
+    if (isShipmentDistributorEntity(r.entity_type)) {
+      setDistQ(sug || (tok !== '—' ? tok : ''));
+      setCustQ('');
+    } else {
+      setCustQ(tok !== '—' ? tok : '');
+      setDistQ('');
+    }
     setActionError(null);
     setMapOpen(true);
   }, []);
@@ -321,7 +333,9 @@ export function ShipmentStewardActionsProvider({
 
       <Dialog open={mapOpen} onClose={() => setMapOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {active?.entity_type === SHIPMENT_ENTITY_CUST ? 'Map token to customer' : 'Map token to distributor'}
+          {active && isShipmentCustomerEntity(active.entity_type)
+            ? 'Map token to customer'
+            : 'Map token to distributor'}
         </DialogTitle>
         <DialogContent>
           {active ? (
@@ -330,7 +344,7 @@ export function ShipmentStewardActionsProvider({
                 Candidate {active.id} · <Chip size="small" label={shipmentEntityChipLabel(active.entity_type)} /> ·{' '}
                 <strong>{shipmentSampleToken(active)}</strong>
               </Typography>
-              {active.entity_type === SHIPMENT_ENTITY_DIST ? (
+              {isShipmentDistributorEntity(active.entity_type) ? (
                 <>
                   <TextField label="Search distributors" size="small" value={distQ} onChange={(e) => setDistQ(e.target.value)} fullWidth />
                   <TextField
@@ -383,20 +397,20 @@ export function ShipmentStewardActionsProvider({
             disabled={
               !active ||
               mapMut.isPending ||
-              (active.entity_type === SHIPMENT_ENTITY_DIST && pickDistId === '') ||
-              (active.entity_type === SHIPMENT_ENTITY_CUST && pickCustId === '')
+              (active && isShipmentDistributorEntity(active.entity_type) && pickDistId === '') ||
+              (active && isShipmentCustomerEntity(active.entity_type) && pickCustId === '')
             }
             onClick={() => {
               if (!active) return;
               const tok = shipmentSampleToken(active) !== '—' ? shipmentSampleToken(active) : null;
-              if (active.entity_type === SHIPMENT_ENTITY_DIST && pickDistId !== '') {
+              if (isShipmentDistributorEntity(active.entity_type) && pickDistId !== '') {
                 mapMut.mutate({
                   candidate_id: active.id,
                   mode: 'distributor',
                   distributor_id: Number(pickDistId),
                   raw_token: tok,
                 });
-              } else if (active.entity_type === SHIPMENT_ENTITY_CUST && pickCustId !== '') {
+              } else if (isShipmentCustomerEntity(active.entity_type) && pickCustId !== '') {
                 mapMut.mutate({
                   candidate_id: active.id,
                   mode: 'customer',
@@ -534,7 +548,7 @@ export function useShipmentStewardActions(): ShipmentStewardActionsApi {
   return ctx;
 }
 
-export function ShipmentCandidateInlineActions({ row }: { row: ShipmentMappingCandidateRow }) {
+export function ShipmentCandidateDrawerActions({ row }: { row: ShipmentMappingCandidateRow }) {
   const { openMap, openProv, openSpecialCat, openReject, clearSpecial, actionBusy } = useShipmentStewardActions();
   const blocked = isShipmentStewardRowActionBlocked(row.status);
 
@@ -547,11 +561,11 @@ export function ShipmentCandidateInlineActions({ row }: { row: ShipmentMappingCa
   }
 
   return (
-    <Stack direction="row" spacing={0.5} flexWrap="wrap" justifyContent="flex-end" data-testid={`shipment-row-actions-${row.id}`}>
+    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap data-testid={`shipment-drawer-actions-${row.id}`}>
       <Button size="small" variant="outlined" disabled={actionBusy} onClick={() => openMap(row)}>
         Map
       </Button>
-      {row.entity_type === SHIPMENT_ENTITY_CUST && shipmentCustomerSpecialCategoryBlocksProvisional(row.context) ? (
+      {isShipmentCustomerEntity(row.entity_type) && shipmentCustomerSpecialCategoryBlocksProvisional(row.context) ? (
         <Button size="small" variant="outlined" disabled>
           Prov
         </Button>
@@ -572,5 +586,47 @@ export function ShipmentCandidateInlineActions({ row }: { row: ShipmentMappingCa
         Reject
       </Button>
     </Stack>
+  );
+}
+
+export function ShipmentCandidateInlineActions({
+  row,
+  onReview,
+  pending,
+}: {
+  row: ShipmentMappingCandidateRow;
+  onReview: (row: ShipmentMappingCandidateRow) => void;
+  pending?: boolean;
+}) {
+  const blocked = isShipmentStewardRowActionBlocked(row.status);
+
+  if (pending) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        Saving…
+      </Typography>
+    );
+  }
+
+  if (blocked) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        —
+      </Typography>
+    );
+  }
+
+  return (
+    <DsiPendingButton
+      size="small"
+      variant="outlined"
+      onClick={(ev) => {
+        ev.stopPropagation();
+        onReview(row);
+      }}
+      data-testid={`shipment-action-review-${row.id}`}
+    >
+      Review…
+    </DsiPendingButton>
   );
 }

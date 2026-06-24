@@ -17,12 +17,15 @@ export function useShipmentResolutionPlan({
   importJobId,
   candidates,
   onInvalidate,
+  onAsyncPipelineStarted,
   setSelectedIds,
   setPlanApplySummary,
 }: {
   importJobId: number;
   candidates: InboundEvidenceMappingCandidateRow[];
   onInvalidate: () => void;
+  /** Called when shipment validate/revalidate is dispatched async (imports wizard poll). */
+  onAsyncPipelineStarted?: (args: { importJobId: number; taskId?: string | null }) => void;
   setSelectedIds: (ids: number[] | ((prev: number[]) => number[])) => void;
   setPlanApplySummary: (msg: ShipmentPlanApplyFeedback | null) => void;
 }) {
@@ -149,12 +152,43 @@ export function useShipmentResolutionPlan({
     },
   });
 
+  const shipmentRevalidateFromServer = useMutation({
+    mutationFn: async () => {
+      const res = await apiPost<{
+        async?: boolean;
+        id?: number;
+        message?: string;
+      }>(`/api/v1/imports/jobs/${importJobId}/shipment-validate`, {});
+      return res;
+    },
+    onSuccess: (res) => {
+      if (res.async) {
+        onAsyncPipelineStarted?.({ importJobId, taskId: null });
+      } else {
+        invalidateShipmentImportJobStewardQueries(qc, importJobId);
+        onInvalidate();
+      }
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+      void qc.invalidateQueries({ queryKey: ['import-job', importJobId] });
+    },
+  });
+
+  const evictResolvedCandidates = useCallback(
+    (candidateIds: number[]) => {
+      const drop = new Set(candidateIds);
+      setPlanScopeCandidateIds((prev) => prev.filter((id) => !drop.has(id)));
+    },
+    []
+  );
+
   return {
     suggestionsQuery,
     planByCandidateId,
     readyPlanCandidateIds,
     refreshSuggestions,
     applyResolutionPlan,
+    shipmentRevalidateFromServer,
+    evictResolvedCandidates,
     applyAllConfirmOpen,
     setApplyAllConfirmOpen,
     planOverrideMap,

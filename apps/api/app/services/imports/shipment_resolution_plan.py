@@ -242,8 +242,10 @@ def plan_shipment_candidate_sync(
         return _score_to_plan_row(cand, score)
 
     if cand.entity_type == SHIPMENT_CUSTOMER_ENTITY:
+        score = score_shipment_customer_token_candidate(
+            session, cand, source_definition_id=source_def_id, refs=refs
+        )
         if historical_index is not None:
-            ctx_party = ctx.get("party")
             dist_id = None
             dom = ctx.get("dominant_unresolved_distributor_id")
             if dom is not None:
@@ -259,24 +261,45 @@ def plan_shipment_candidate_sync(
                 dealer_group_raw=cand.dealer_group_token,
             )
             if hist is not None:
-                historical = {
-                    "label": "previously_resolved",
-                    "import_job_id": hist.import_job_id,
-                    "customer_id": hist.customer_id,
-                    "match_reason": hist.match_reason,
-                    "resolution_kind": hist.resolution_kind,
-                    "confidence": float(hist.confidence),
-                    "reason": (
-                        f"Previously resolved on import job {hist.import_job_id} "
-                        f"({hist.resolution_kind}) — confirm before applying"
-                    ),
-                }
-                score = score_shipment_customer_token_candidate(
-                    session, cand, source_definition_id=source_def_id, refs=refs
-                )
-                return _score_to_plan_row(cand, score, historical=historical)
+                hist_cid = int(hist.customer_id)
+                score_cid = score.get("suggested_entity_id")
+                score_action = str(score.get("suggested_action") or "")
 
-        score = score_shipment_customer_token_candidate(session, cand, source_definition_id=source_def_id, refs=refs)
+                if score_action == "map_customer" and score_cid is not None and int(score_cid) == hist_cid:
+                    boosted = dict(score)
+                    boosted["confidence_score"] = max(float(score.get("confidence_score") or 0), 1.0)
+                    mr = str(boosted.get("match_reason") or "")
+                    if "corroborated" not in mr:
+                        boosted["match_reason"] = (
+                            f"{mr}_corroborated_prior_shipment" if mr else "corroborated_prior_shipment"
+                        )
+                    return _score_to_plan_row(cand, boosted)
+
+                if score_action == "map_customer" and score_cid is not None and int(score_cid) != hist_cid:
+                    historical = {
+                        "label": "previously_resolved",
+                        "import_job_id": hist.import_job_id,
+                        "customer_id": hist.customer_id,
+                        "match_reason": hist.match_reason,
+                        "resolution_kind": hist.resolution_kind,
+                        "confidence": float(hist.confidence),
+                        "reason": (
+                            f"Previously resolved on import job {hist.import_job_id} "
+                            f"({hist.resolution_kind}) conflicts with current match — review required"
+                        ),
+                    }
+                    return _score_to_plan_row(cand, score, historical=historical)
+
+                return _score_to_plan_row(
+                    cand,
+                    {
+                        "suggested_action": "map_customer",
+                        "suggested_entity_id": hist_cid,
+                        "match_reason": "prior_shipment_steward_resolution",
+                        "confidence_score": 0.95,
+                    },
+                )
+
         return _score_to_plan_row(cand, score)
 
     base = _plan_common(cand)

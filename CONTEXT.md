@@ -21,6 +21,9 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-06-24 | **Shipment apply loaded UX:** shared `ImportJobLoadedSuccessCallout` on imports wizard step 6 when job stage `loaded`; BACKLOG-045 steward UI parity audit parked. |
+| 2026-06-24 | **Shipment wizard + steward DSI parity (Phases 1–3):** 7-step wizard; validate progress fix; entity filter fix; `ShipmentImportJobResolutionSection` rework (tabs in workspace, plan toolbar, bulk steward, server re-validate); contract D4 updated. |
+| 2026-06-24 | **Local merge:** fast-forward `feat/dsi-async-topology` to `0e61744` from `cursor/cloud-agent-1782231728131-em82n` (Plan C + D + BACKLOG-007). Local `cip` still at alembic `20260609_0049`. |
 | 2026-06-24 | **Shipment steward UX + BACKLOG-007:** inline row actions + drawer (DSI parity); auto resolution plan compute on scope change; post-validate re-map UI on imports page; orphan `source_key` purge on re-validate (`test_shipment_evidence_orphan_purge.py`). |
 | 2026-06-24 | **Plan D bitemporal shipment evidence (D1–D3):** migration `20260623_0050` (`shipment_evidence_observation` + `shipment_evidence_current` view + backfill); dual-write on validate (`CIP_SHIPMENT_BITEMPORAL_DUAL_WRITE`); corroboration read switch (`CIP_SHIPMENT_BITEMPORAL_READ`). Flags default off. D4–D5 deferred. |
 | 2026-06-23 | **Plan C shipment steward parity:** workspace section, resolution plan API, paginated candidates + tab-counts, alias-scope port, operator docs; Plan D bitemporal design doc (no migration). Legacy panel retained in dialog. |
