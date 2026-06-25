@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-049 — Unresolved module (ignore → unresolved worklist)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-06-25 |
+| **Effort** | Medium (read model + steward UI worklist surface) |
+| **Source** | Warren session (2026-06-25): DSI steward legibility + auto-exclude at validate. `apps/api/app/services/imports/dsi_product_running_change.py` (`steward_ignored_line:<reason>`, `build_dsi_apply_exclusion_summary`); `dsi_apply_completion.py` (`apply_exclusion` in completion payload); candidate `context.steward_ignore_reason_code` JSONB; `docs/BACKLOG.md` TRIGGER defers full module until PM catalogue or operational reporting need |
+| **Idea** | **Reader** over reasoned exclusions (`apply_exclusion` summary + candidate `steward_ignore_reason_code` / staging `steward_ignored_line:<reason>`). Surfaces excluded volume as a **tracked worklist**, grouped by reason: `ignore_no_catalogue` → re-attempt when PM catalogue loads; `ignore_no_receipt_evidence` → re-attempt as shipment coverage grows; `ignore_sku_indeterminate` → stays parked (genuinely undecidable; needs SKU in feed). |
+| **Why it matters / deferrable** | Excluded lines carry real units/value; this is the path to reclaim them, not lose them. Reason codes are the contract — already split three ways. Deferrable until PM consolidated catalogue loads or first operational need to report/action excluded volume. |
+| **What the work is** | (1) Read model aggregating `apply_exclusion` + per-job excluded tokens from staging diagnostics and ignored candidates. (2) Worklist UI (module or steward tab) with reason-grouped rows, units, value, dominant month, re-attempt triggers. (3) Wire `apply_exclusion` into imports wizard apply-complete step (API-only today). (4) Optional: reverse ignore → needs_review using `steward_ignore_remap_context`. |
+| **Regression traps** | Treating auto-excluded-at-validate lines as silent (must stay in `apply_exclusion`); conflating parked indeterminate with reclaimable no-catalogue; migration for reason codes (not needed — JSONB + diagnostics). |
+| **Behavior to retain** | Reason codes in candidate `context` + staging diagnostics; no fact write for `rpid is None`; steward-ignore demotion semantics; apply_exclusion as honest counterpart to resolution-quality denominator. |
+| **Out of scope** | Resolver tier/eligibility edits; new facts; auto-exclude logic itself (shipped separately on validate). |
+| **TRIGGER** | PM consolidated catalogue loaded; **or** first need to report/action excluded volume operationally; **or** build **after** job #96 applied (need real exclusion data to read). |
+
+---
+
 ## BACKLOG-048 — Import Celery + background-task parity audit (dispatch, slots, polls, cancel)
 
 | Field | Detail |
