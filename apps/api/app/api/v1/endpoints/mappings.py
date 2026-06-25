@@ -292,6 +292,10 @@ class MarkOpenChannelBody(BaseModel):
 
 class IgnoreCandidateBody(BaseModel):
     notes: str | None = None
+    reason_code: str | None = Field(
+        default=None,
+        description="DSI product ignore reason: ignore_sku_indeterminate | ignore_no_catalogue",
+    )
 
 
 class MapDistributorBody(BaseModel):
@@ -510,7 +514,7 @@ async def mark_dsi_candidate_open_channel(
 async def ignore_dsi_candidate(candidate_id: int, body: IgnoreCandidateBody, db: AsyncSession = Depends(get_db)):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
     try:
-        return await execute_ignore_dsi_candidate(db, cand, notes=body.notes)
+        return await execute_ignore_dsi_candidate(db, cand, notes=body.notes, reason_code=body.reason_code)
     except StewardOpError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 

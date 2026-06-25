@@ -409,12 +409,32 @@ async def preview_ignore_dsi_candidate(
     cand: ImportEntityMappingCandidate,
     *,
     notes: str | None,
+    reason_code: str | None = None,
 ) -> dict[str, Any]:
     if cand.entity_type not in {"customer_dealer_token", "distributor_token", "product_identifier"}:
         return {"ok": False, "skip_reason": "wrong_entity_type", "detail": "Unsupported entity_type for ignore"}
     if _is_dsi_steward_terminal_status(cand.status):
         return {"ok": False, "skip_reason": "terminal_status", "detail": "Candidate already terminal"}
-    return {"ok": True, "detail": "Would set status ignored", "notes": notes}
+    from app.services.imports.dsi_product_running_change import (
+        DSI_IGNORE_REASON_CODES,
+        build_steward_ignore_remap_context,
+        infer_dsi_ignore_reason_code,
+    )
+
+    ctx = cand.context if isinstance(cand.context, dict) else {}
+    inferred = infer_dsi_ignore_reason_code(ctx) if cand.entity_type == "product_identifier" else None
+    rc = (reason_code or inferred or "").strip() or None
+    if rc is not None and rc not in DSI_IGNORE_REASON_CODES:
+        return {
+            "ok": False,
+            "skip_reason": "invalid_reason_code",
+            "detail": f"Unsupported ignore reason_code {rc!r}",
+        }
+    out: dict[str, Any] = {"ok": True, "detail": "Would set status ignored", "notes": notes}
+    if rc:
+        out["reason_code"] = rc
+        out["remap_context_keys"] = list(build_steward_ignore_remap_context(ctx).keys())
+    return out
 
 
 async def execute_ignore_dsi_candidate(
@@ -422,17 +442,48 @@ async def execute_ignore_dsi_candidate(
     cand: ImportEntityMappingCandidate,
     *,
     notes: str | None,
+    reason_code: str | None = None,
 ) -> dict[str, Any]:
-    pv = await preview_ignore_dsi_candidate(cand, notes=notes)
+    pv = await preview_ignore_dsi_candidate(cand, notes=notes, reason_code=reason_code)
     if not pv.get("ok"):
         raise StewardOpError(pv.get("detail") or "preview failed", status_code=400)
+    from app.services.imports.dsi_product_running_change import (
+        build_product_resolution_quality,
+        build_steward_ignore_remap_context,
+        infer_dsi_ignore_reason_code,
+    )
+
     cand.status = "ignored"
+    ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
     if notes:
-        ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
         ctx["steward_ignore_notes"] = notes[:2000]
-        cand.context = ctx
+    rc = (reason_code or pv.get("reason_code") or infer_dsi_ignore_reason_code(ctx) or "").strip() or None
+    if rc:
+        ctx["steward_ignore_reason_code"] = rc
+    remap = build_steward_ignore_remap_context(ctx)
+    if remap:
+        ctx["steward_ignore_remap_context"] = remap
+    quality = ctx.get("product_resolution_quality")
+    if isinstance(quality, dict) and cand.entity_type == "product_identifier":
+        ignored_rows = int(cand.row_count or 0)
+        updated = build_product_resolution_quality(
+            {
+                "total_rows": int(quality.get("total_rows") or 0),
+                "resolved_receipt_temporal": int(quality.get("resolved_receipt_temporal") or 0),
+                "resolved_other": int(quality.get("resolved_other") or 0),
+                "unresolved_rows": int(quality.get("unresolved_rows") or 0),
+            },
+            ignored_rows=ignored_rows,
+        )
+        ctx["product_resolution_quality"] = updated
+    cand.context = ctx
     await db.commit()
-    return {"ok": True, "candidate_id": cand.id, "status": cand.status}
+    return {
+        "ok": True,
+        "candidate_id": cand.id,
+        "status": cand.status,
+        "reason_code": rc,
+    }
 
 
 def _resolved_provisional_display_name(display_name_override: str | None, cand: ImportEntityMappingCandidate) -> str:

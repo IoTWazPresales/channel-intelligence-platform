@@ -19,6 +19,7 @@ export type DsiProductResolutionEvidenceContext = {
     auto_resolve_blocked?: boolean;
   };
   receipt_disambiguation?: {
+    status?: string;
     tier?: string;
     receipt_line_count?: number;
     receipt_product_ids?: number[];
@@ -26,6 +27,21 @@ export type DsiProductResolutionEvidenceContext = {
     sales_model_key?: string;
     scope?: string;
   };
+  temporal_supersession?: {
+    status?: string;
+    fifo_candidate?: boolean;
+    summary?: string;
+    canonical_distributor_key?: string;
+  };
+  fifo_candidate?: boolean;
+  product_resolution_quality?: {
+    total_rows?: number;
+    resolved_receipt_temporal?: number;
+    indeterminate_rows?: number;
+    ignored_rows?: number;
+    quality_denominator?: number;
+  };
+  product_running_change_received_both?: boolean;
   weekly_model_grain_without_sku?: boolean;
   weekly_resolution_warnings?: string[];
 };
@@ -53,6 +69,9 @@ export function DsiProductResolutionEvidenceCard({
   const dsiMonths = formatMonthCounts(context.dsi_evidence_month_counts);
   const cross = context.shipment_cross_distributor_corroboration;
   const receipt = context.receipt_disambiguation;
+  const temporal = context.temporal_supersession;
+  const fifo = context.fifo_candidate === true || temporal?.fifo_candidate === true;
+  const quality = context.product_resolution_quality;
   const weekly = Boolean(context.weekly_model_grain_without_sku);
 
   const hasBody =
@@ -60,6 +79,9 @@ export function DsiProductResolutionEvidenceCard({
     Boolean(shipMonths || dsiMonths) ||
     Boolean(cross) ||
     Boolean(receipt) ||
+    Boolean(temporal) ||
+    fifo ||
+    Boolean(quality) ||
     weekly;
 
   if (!hasBody) return null;
@@ -102,9 +124,34 @@ export function DsiProductResolutionEvidenceCard({
         ) : null}
         {receipt ? (
           <Typography variant="caption" component="div">
-            Receipt tier {receipt.tier ?? '—'} · scope {receipt.scope ?? '—'} · lines{' '}
-            {receipt.receipt_line_count ?? 0}
+            Receipt: {receipt.status ?? receipt.tier ?? '—'}
+            {typeof receipt.receipt_line_count === 'number' ? ` · ${receipt.receipt_line_count} lines` : ''}
+            {Array.isArray(receipt.receipt_product_ids) && receipt.receipt_product_ids.length > 0
+              ? ` · product ids ${receipt.receipt_product_ids.join(', ')}`
+              : ''}
             {receipt.canonical_distributor_key ? ` · dist ${receipt.canonical_distributor_key}` : ''}
+          </Typography>
+        ) : null}
+        {temporal ? (
+          <Typography variant="caption" component="div">
+            Temporal: {temporal.status ?? '—'}
+            {temporal.summary ? ` — ${temporal.summary}` : ''}
+          </Typography>
+        ) : null}
+        {fifo ? (
+          <Typography variant="caption" component="div" color="warning.main">
+            FIFO candidate — multiple date-feasible SKUs; steward must choose per date cluster.
+          </Typography>
+        ) : null}
+        {quality && typeof quality.total_rows === 'number' && quality.total_rows > 0 ? (
+          <Typography variant="caption" component="div">
+            Quality: {quality.resolved_receipt_temporal ?? 0} of {quality.total_rows} receipt/temporal resolved
+            {typeof quality.indeterminate_rows === 'number'
+              ? ` · ${quality.indeterminate_rows} indeterminate`
+              : ''}
+            {typeof quality.ignored_rows === 'number' && quality.ignored_rows > 0
+              ? ` · ${quality.ignored_rows} ignored (excluded from denominator)`
+              : ''}
           </Typography>
         ) : null}
         {weekly ? (

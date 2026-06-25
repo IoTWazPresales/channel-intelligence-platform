@@ -1983,6 +1983,14 @@ def process_distributor_sales_inventory(
         }
     )
 
+    from app.services.imports.dsi_product_running_change import (
+        accumulate_product_running_change_stat,
+        new_product_running_change_stats_bucket,
+        strip_ambiguous_product_match_from_diags,
+    )
+
+    product_running_change_stats: dict[str, dict[str, int]] = {}
+
     blocking = 0
     warnings = 0
     first_unresolved_dist_raw: str | None = None
@@ -2195,6 +2203,7 @@ def process_distributor_sales_inventory(
                     prod_diag.append(presolve_tag)
                     diag.append(presolve_tag)
                     perr = None
+                    strip_ambiguous_product_match_from_diags(diag, prod_diag)
             if (
                 rpid is None
                 and prod_raw
@@ -2222,6 +2231,7 @@ def process_distributor_sales_inventory(
                     prod_diag.append(presolve_tag)
                     diag.append(presolve_tag)
                     perr = None
+                    strip_ambiguous_product_match_from_diags(diag, prod_diag)
             if rpid is None and prod_raw:
                 from app.services.imports.dsi_weekly_auto_resolution import (
                     check_product_auto_resolution_at_validate,
@@ -2266,6 +2276,18 @@ def process_distributor_sales_inventory(
 
             if prod_memo_key[0]:
                 _memo_prod[prod_memo_key] = (rpid, perr, list(prod_diag), presolve_tag, pev)
+
+        if prod_raw:
+            pk_stat = _norm_key(prod_raw)
+            if pk_stat:
+                st_bucket = product_running_change_stats.setdefault(
+                    pk_stat, new_product_running_change_stats_bucket()
+                )
+                accumulate_product_running_change_stat(
+                    st_bucket,
+                    resolved_product_id=rpid,
+                    presolve_tag=presolve_tag,
+                )
 
         rdistributor_id = rdid
         rcustomer_id: int | None = None
@@ -2837,14 +2859,22 @@ def process_distributor_sales_inventory(
                     if temporal_ev.get("fifo_candidate") or acc.get("fifo_any"):
                         ctx["fifo_candidate"] = True
                 if amb:
+                    from app.services.imports.dsi_product_running_change import (
+                        enrich_product_candidate_running_change_context,
+                    )
+
                     ctx["product_match_status"] = "ambiguous_eligible"
                     ctx["product_ambiguous_eligible"] = amb
                     ids = amb.get("product_ids") or []
                     tier = amb.get("tier") or ""
-                    ctx["product_match_summary"] = (
-                        f"Ambiguous: {len(ids)} eligible Product Master rows in tier "
-                        f"{tier}; auto-resolve blocked."
-                    )
+                    stats_entry = product_running_change_stats.get(nkey_clean)
+                    if isinstance(stats_entry, dict) and int(stats_entry.get("total_rows") or 0) > 0:
+                        enrich_product_candidate_running_change_context(ctx, stats_entry)
+                    else:
+                        ctx["product_match_summary"] = (
+                            f"Ambiguous: {len(ids)} eligible Product Master rows in tier "
+                            f"{tier}; auto-resolve blocked."
+                        )
                 elif inh:
                     ctx["product_match_status"] = "inactive_only"
                     ctx["product_inactive_matches"] = inh[:16]

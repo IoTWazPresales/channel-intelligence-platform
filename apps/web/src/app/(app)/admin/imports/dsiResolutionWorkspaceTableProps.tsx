@@ -15,6 +15,11 @@ import {
   formatPlanRulePathLabel,
   type DsiPlanWhy,
 } from '@/features/import-steward/dsiPlanExplainabilityDisplay';
+import { DsiProductResolutionEvidenceCard } from '@/features/import-steward/DsiProductResolutionEvidenceCard';
+import {
+  formatDsiProductRunningChangeSummary,
+  type DsiProductRunningChangeContext,
+} from '@/features/import-steward/dsiProductRunningChangeDisplay';
 import {
   formatDsiPlanFileChannelLabel,
   formatDsiPlanFileRegionLabel,
@@ -72,13 +77,18 @@ function DsiMatchCell({
     ) : null;
 
   if (row.entity_type === DSI_ENTITY_PRODUCT) {
-    const sum = row.context && typeof row.context.product_match_summary === 'string' ? row.context.product_match_summary.trim() : '';
+    const ctx = (row.context ?? null) as DsiProductRunningChangeContext | null;
+    const runningSummary = formatDsiProductRunningChangeSummary(ctx);
+    const sum =
+      runningSummary ||
+      (ctx && typeof ctx.product_match_summary === 'string' ? ctx.product_match_summary.trim() : '');
     if (sum) {
       return (
-        <Stack spacing={0.25} alignItems="flex-start">
+        <Stack spacing={0.5} alignItems="flex-start">
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} title={sum}>
             {sum}
           </Typography>
+          <DsiProductResolutionEvidenceCard context={ctx} />
           {corroborationChip}
         </Stack>
       );
@@ -279,10 +289,11 @@ export function buildDsiResolutionWorkspaceColumns(
             ) : null}
             {r.entity_type === DSI_ENTITY_PRODUCT &&
             ctx &&
-            typeof ctx.product_match_summary === 'string' &&
-            ctx.product_match_summary.trim() ? (
+            (formatDsiProductRunningChangeSummary(ctx as DsiProductRunningChangeContext) ||
+              (typeof ctx.product_match_summary === 'string' && ctx.product_match_summary.trim())) ? (
               <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 200 }}>
-                {ctx.product_match_summary.trim()}
+                {formatDsiProductRunningChangeSummary(ctx as DsiProductRunningChangeContext) ||
+                  String(ctx.product_match_summary).trim()}
               </Typography>
             ) : null}
           </Stack>

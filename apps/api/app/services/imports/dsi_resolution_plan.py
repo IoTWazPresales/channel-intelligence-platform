@@ -653,11 +653,41 @@ def plan_dsi_candidate_sync(
                         "needs_confirm_suspicious_distributor": False,
                     }
             dom = ctx.get("dominant_unresolved_distributor_id")
+            from app.services.imports.dsi_product_running_change import (
+                IGNORE_REASON_NO_CATALOGUE,
+                IGNORE_REASON_SKU_INDETERMINATE,
+                is_dsi_running_change_ambiguous_context,
+            )
             from app.services.imports.dsi_product_shipment_tiebreak import (
                 ambiguous_product_plan_reason_from_context,
                 evidence_date_from_month,
                 parse_candidate_shipment_evidence,
             )
+
+            if is_dsi_running_change_ambiguous_context(ctx):
+                rc = (
+                    IGNORE_REASON_SKU_INDETERMINATE
+                    if ctx.get("product_match_status") == "ambiguous_eligible"
+                    else IGNORE_REASON_NO_CATALOGUE
+                )
+                return {
+                    **base,
+                    "suggested_action": "ignore",
+                    "plan_status": "needs_review",
+                    "ready": False,
+                    "confidence": 0.35,
+                    "reason": (
+                        "Running-change / supersession token — receipt/temporal split rows by date; "
+                        "token-level ProductAlias bind is blocked. Ignore indeterminate remainder or "
+                        "resolve per date cluster after review."
+                    ),
+                    "suggested_target_id": None,
+                    "needs_defaults": False,
+                    "needs_confirm_suspicious_distributor": False,
+                    "resolution_blockers": ["running_change_token_alias_blocked"],
+                    "suggested_ignore_reason_code": rc,
+                    "token_level_resolve_product_blocked": True,
+                }
 
             ship_ev = parse_candidate_shipment_evidence(ctx)
             ev_date_plan = evidence_date_from_month(ship_ev.dominant_evidence_month)

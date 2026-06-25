@@ -72,10 +72,34 @@ def run_dsi_bulk_ignore_sync(
             )
             continue
         cand.status = "ignored"
+        ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
         if notes:
-            ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
             ctx["steward_ignore_notes"] = notes[:2000]
-            cand.context = ctx
+        from app.services.imports.dsi_product_running_change import (
+            build_product_resolution_quality,
+            build_steward_ignore_remap_context,
+            infer_dsi_ignore_reason_code,
+        )
+
+        rc = infer_dsi_ignore_reason_code(ctx) if cand.entity_type == "product_identifier" else None
+        if rc:
+            ctx["steward_ignore_reason_code"] = rc
+        remap = build_steward_ignore_remap_context(ctx)
+        if remap:
+            ctx["steward_ignore_remap_context"] = remap
+        quality = ctx.get("product_resolution_quality")
+        if isinstance(quality, dict) and cand.entity_type == "product_identifier":
+            updated = build_product_resolution_quality(
+                {
+                    "total_rows": int(quality.get("total_rows") or 0),
+                    "resolved_receipt_temporal": int(quality.get("resolved_receipt_temporal") or 0),
+                    "resolved_other": int(quality.get("resolved_other") or 0),
+                    "unresolved_rows": int(quality.get("unresolved_rows") or 0),
+                },
+                ignored_rows=int(cand.row_count or 0),
+            )
+            ctx["product_resolution_quality"] = updated
+        cand.context = ctx
         pending_commit += 1
         results.append(
             {
