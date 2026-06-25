@@ -26,6 +26,15 @@ export type DsiProductRunningChangeContext = DsiProductResolutionEvidenceContext
   token_level_resolve_product_blocked?: boolean;
 };
 
+export function formatDsiProductMatchFifoWarning(
+  ctx: DsiProductRunningChangeContext | null | undefined
+): string | null {
+  if (!ctx || typeof ctx !== 'object') return null;
+  const fifo = ctx.fifo_candidate === true || ctx.temporal_supersession?.fifo_candidate === true;
+  if (!fifo) return null;
+  return 'FIFO candidate — multiple date-feasible SKUs; steward must choose per date cluster.';
+}
+
 export function formatDsiProductRunningChangeSummary(
   ctx: DsiProductRunningChangeContext | null | undefined
 ): string | null {
@@ -70,5 +79,6 @@ export function dsiIgnoreReasonCodeLabel(code: string | null | undefined): strin
   if (!code) return null;
   if (code === 'ignore_sku_indeterminate') return 'Ignore — SKU indeterminate (received-both)';
   if (code === 'ignore_no_catalogue') return 'Ignore — no catalogue match';
+  if (code === 'ignore_no_receipt_evidence') return 'Ignore — no receipt evidence';
   return code.replace(/_/g, ' ');
 }

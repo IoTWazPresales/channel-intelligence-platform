@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   dsiIgnoreReasonCodeLabel,
+  formatDsiProductMatchFifoWarning,
   formatDsiProductRunningChangeSummary,
   isDsiTokenLevelResolveProductBlocked,
 } from './dsiProductRunningChangeDisplay';
@@ -44,5 +45,15 @@ describe('dsiProductRunningChangeDisplay', () => {
   it('labels ignore reason codes', () => {
     expect(dsiIgnoreReasonCodeLabel('ignore_sku_indeterminate')).toContain('indeterminate');
     expect(dsiIgnoreReasonCodeLabel('ignore_no_catalogue')).toContain('no catalogue');
+    expect(dsiIgnoreReasonCodeLabel('ignore_no_receipt_evidence')).toContain('receipt');
+  });
+
+  it('formats fifo warning for match cell', () => {
+    expect(
+      formatDsiProductMatchFifoWarning({
+        fifo_candidate: true,
+        temporal_supersession: { fifo_candidate: false },
+      })
+    ).toContain('FIFO candidate');
   });
 });

@@ -121,6 +121,13 @@ export {
 export type { DsiMappingCandidatesPageResponse, DsiCandidatePageSize, DsiCandidateListStatus } from './dsiCandidatesQuery';
 export { DSI_CANDIDATE_PAGE_SIZE_OPTIONS } from './dsiCandidatesQuery';
 export { DsiPendingButton } from './DsiPendingButton';
+export { DsiProductCandidateExportToolbar } from './DsiProductCandidateExportToolbar';
+export {
+  buildDsiProductCandidateExportRows,
+  copyDsiProductCandidateCsvToClipboard,
+  downloadDsiProductCandidateCsv,
+  dsiProductCandidateExportToCsv,
+} from './dsiProductCandidateExport';
 export { DsiStewardLoadingCallout } from './DsiStewardLoadingCallout';
 export { ImportStewardCandidateWorkspaceSkeleton } from './ImportStewardCandidateWorkspaceSkeleton';
 export {

@@ -44,7 +44,7 @@ def run_dsi_bulk_ignore_sync(
                 }
             )
             continue
-        rc = cand.row_count
+        row_count = cand.row_count
         tu = float(cand.total_units) if cand.total_units is not None else None
         trv = float(cand.total_reported_value) if cand.total_reported_value is not None else None
         if cand.entity_type not in {"customer_dealer_token", "distributor_token", "product_identifier"}:
@@ -53,7 +53,7 @@ def run_dsi_bulk_ignore_sync(
                     "candidate_id": int(cid),
                     "ok": False,
                     "detail": "Unsupported entity_type for ignore",
-                    "row_count": rc,
+                    "row_count": row_count,
                     "total_units": tu,
                     "total_reported_value": trv,
                 }
@@ -65,7 +65,7 @@ def run_dsi_bulk_ignore_sync(
                     "candidate_id": int(cid),
                     "ok": False,
                     "detail": "Candidate already terminal",
-                    "row_count": rc,
+                    "row_count": row_count,
                     "total_units": tu,
                     "total_reported_value": trv,
                 }
@@ -78,12 +78,13 @@ def run_dsi_bulk_ignore_sync(
         from app.services.imports.dsi_product_running_change import (
             build_product_resolution_quality,
             build_steward_ignore_remap_context,
+            demote_product_staging_lines_for_ignored_candidate,
             infer_dsi_ignore_reason_code,
         )
 
-        rc = infer_dsi_ignore_reason_code(ctx) if cand.entity_type == "product_identifier" else None
-        if rc:
-            ctx["steward_ignore_reason_code"] = rc
+        ignore_reason = infer_dsi_ignore_reason_code(ctx) if cand.entity_type == "product_identifier" else None
+        if ignore_reason:
+            ctx["steward_ignore_reason_code"] = ignore_reason
         remap = build_steward_ignore_remap_context(ctx)
         if remap:
             ctx["steward_ignore_remap_context"] = remap
@@ -100,6 +101,13 @@ def run_dsi_bulk_ignore_sync(
             )
             ctx["product_resolution_quality"] = updated
         cand.context = ctx
+        if cand.entity_type == "product_identifier" and ignore_reason:
+            demote_product_staging_lines_for_ignored_candidate(
+                session,
+                int(job_id),
+                cand.normalized_key or "",
+                ignore_reason,
+            )
         pending_commit += 1
         results.append(
             {
@@ -107,7 +115,7 @@ def run_dsi_bulk_ignore_sync(
                 "ok": True,
                 "entity_type": cand.entity_type,
                 "result": {"ok": True, "candidate_id": cand.id, "status": cand.status},
-                "row_count": rc,
+                "row_count": row_count,
                 "total_units": tu,
                 "total_reported_value": trv,
             }

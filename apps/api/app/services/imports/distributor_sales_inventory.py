@@ -1985,7 +1985,9 @@ def process_distributor_sales_inventory(
 
     from app.services.imports.dsi_product_running_change import (
         accumulate_product_running_change_stat,
+        compute_dsi_hard_row_with_product_auto_exclude,
         new_product_running_change_stats_bucket,
+        product_auto_exclude_terminal_status,
         strip_ambiguous_product_match_from_diags,
     )
 
@@ -2394,7 +2396,14 @@ def process_distributor_sales_inventory(
                     list(cust_res_notes),
                 )
 
-        hard_row = bool((derr and rdid is None) or (perr and rpid is None))
+        hard_row, product_auto_exclude_reason = compute_dsi_hard_row_with_product_auto_exclude(
+            derr=derr,
+            rdid=rdid,
+            perr=perr,
+            rpid=rpid,
+            pev=pev,
+            diag=diag,
+        )
         sellout_blocked_no_customer = bool(sellout_or_return_attempt and rcustomer_id is None)
         sellout_blocked_no_tx = bool(
             qty_f is not None and qty_f != 0 and tx_date is None
@@ -2496,6 +2505,9 @@ def process_distributor_sales_inventory(
             res_status = "ready_inventory"
         else:
             res_status = "staged_only"
+
+        if product_auto_exclude_reason:
+            sev, res_status = product_auto_exclude_terminal_status()
 
         _append_shipment_corroboration_signals_dsi(
             db,
@@ -3193,7 +3205,19 @@ def refresh_dsi_staging_line_resolution(
         diag.extend(cd)
         diag.extend(cust_res_notes)
 
-    hard_row = bool(derr or perr)
+    from app.services.imports.dsi_product_running_change import (
+        compute_dsi_hard_row_with_product_auto_exclude,
+        product_auto_exclude_terminal_status,
+    )
+
+    hard_row, product_auto_exclude_reason = compute_dsi_hard_row_with_product_auto_exclude(
+        derr=derr,
+        rdid=rdistributor_id,
+        perr=perr,
+        rpid=rpid,
+        pev=pev,
+        diag=diag,
+    )
     sellout_blocked_no_customer = bool(sellout_attempt and rcustomer_id is None)
     sellout_blocked_no_tx = bool(qty_sold is not None and qty_sold != 0 and tx_date is None)
     inv_ready = bool(inv_attempt and snap_date is not None and soh is not None)
@@ -3270,6 +3294,9 @@ def refresh_dsi_staging_line_resolution(
         res_status = "ready_inventory"
     else:
         res_status = "staged_only"
+
+    if product_auto_exclude_reason:
+        sev, res_status = product_auto_exclude_terminal_status()
 
     _append_shipment_corroboration_signals_dsi(
         db,

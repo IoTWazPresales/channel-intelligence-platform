@@ -15,8 +15,8 @@ import {
   formatPlanRulePathLabel,
   type DsiPlanWhy,
 } from '@/features/import-steward/dsiPlanExplainabilityDisplay';
-import { DsiProductResolutionEvidenceCard } from '@/features/import-steward/DsiProductResolutionEvidenceCard';
 import {
+  formatDsiProductMatchFifoWarning,
   formatDsiProductRunningChangeSummary,
   type DsiProductRunningChangeContext,
 } from '@/features/import-steward/dsiProductRunningChangeDisplay';
@@ -82,14 +82,20 @@ function DsiMatchCell({
     const sum =
       runningSummary ||
       (ctx && typeof ctx.product_match_summary === 'string' ? ctx.product_match_summary.trim() : '');
-    if (sum) {
+    const fifoWarning = formatDsiProductMatchFifoWarning(ctx);
+    if (sum || fifoWarning) {
       return (
-        <Stack spacing={0.5} alignItems="flex-start">
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} title={sum}>
-            {sum}
-          </Typography>
-          <DsiProductResolutionEvidenceCard context={ctx} />
-          {corroborationChip}
+        <Stack spacing={0.25} alignItems="flex-start">
+          {sum ? (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} title={sum}>
+              {sum}
+            </Typography>
+          ) : null}
+          {fifoWarning ? (
+            <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
+              {fifoWarning}
+            </Typography>
+          ) : null}
         </Stack>
       );
     }

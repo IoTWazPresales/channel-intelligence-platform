@@ -23,6 +23,7 @@ import {
   DsiCandidatesPagination,
   DsiEntityTabsBar,
   DsiPendingButton,
+  DsiProductCandidateExportToolbar,
   DsiCountryRegionFallback,
   DsiRegionChannelTabPanel,
   DsiResolutionPlanToolbar,
@@ -632,6 +633,9 @@ export function DsiImportJobResolutionSection({
             </Button>
               </>
             )}
+            {tabbedMode && activeTab === 'product' && bulkMode !== 'selecting' && !isRegionChannelTab ? (
+              <DsiProductCandidateExportToolbar candidates={displayedCandidates} />
+            ) : null}
             {activeTab === 'customer' && bulkMode !== 'selecting' ? (
               <DsiCountryRegionFallback
                 importJobId={importJobId}

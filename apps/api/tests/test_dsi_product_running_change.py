@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.services.imports.dsi_product_running_change import (
     IGNORE_REASON_NO_CATALOGUE,
+    IGNORE_REASON_NO_RECEIPT_EVIDENCE,
     IGNORE_REASON_SKU_INDETERMINATE,
     accumulate_product_running_change_stat,
     build_product_resolution_quality,
@@ -57,6 +58,12 @@ def test_ignore_reason_inference() -> None:
     }
     assert infer_dsi_ignore_reason_code(amb_ctx) == IGNORE_REASON_SKU_INDETERMINATE
     assert infer_dsi_ignore_reason_code({"product_match_status": "no_match"}) == IGNORE_REASON_NO_CATALOGUE
+    no_receipt = {
+        "product_match_status": "ambiguous_eligible",
+        "product_ambiguous_eligible": {"product_ids": [1, 2]},
+        "receipt_disambiguation": {"status": "no_receipt_evidence"},
+    }
+    assert infer_dsi_ignore_reason_code(no_receipt) == IGNORE_REASON_NO_RECEIPT_EVIDENCE
 
 
 def test_is_running_change_blocks_token_alias() -> None:

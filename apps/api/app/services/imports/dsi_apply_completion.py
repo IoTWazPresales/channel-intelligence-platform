@@ -60,11 +60,21 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
     for line in lines:
         refresh_dsi_staging_line_resolution(db, job, line, prod_idx)
 
+    from app.services.imports.dsi_product_running_change import (
+        build_dsi_apply_exclusion_summary,
+        reapply_dsi_steward_ignored_product_staging_lines,
+    )
+
+    reapply_dsi_steward_ignored_product_staging_lines(db, int(job.id))
+    db.flush()
+
     blocked = [ln for ln in lines if (ln.resolution_status or "") == "blocked"]
     if blocked:
         raise DsiApplyCompletionError(
             f"{len(blocked)} staging line(s) still blocked after refresh (e.g. row {blocked[0].source_row_number})"
         )
+
+    apply_exclusion = build_dsi_apply_exclusion_summary(db, int(job.id), lines)
 
     db.flush()
     _sell, _inv, _ret, apply_errors = upsert_dsi_facts_for_staging_job(db, job)
@@ -121,4 +131,5 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
         "stage": job.stage,
         "status": job.status,
         "staging_rows": len(lines),
+        "apply_exclusion": apply_exclusion,
     }

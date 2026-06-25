@@ -478,6 +478,20 @@ async def execute_ignore_dsi_candidate(
         ctx["product_resolution_quality"] = updated
     cand.context = ctx
     await db.commit()
+    if cand.entity_type == "product_identifier" and rc:
+        from app.db.session_sync import SessionLocal
+        from app.services.imports.dsi_product_running_change import (
+            demote_product_staging_lines_for_ignored_candidate,
+        )
+
+        with SessionLocal() as sync_db:
+            demote_product_staging_lines_for_ignored_candidate(
+                sync_db,
+                int(cand.import_job_id),
+                cand.normalized_key or "",
+                rc,
+            )
+            sync_db.commit()
     return {
         "ok": True,
         "candidate_id": cand.id,
