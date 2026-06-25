@@ -11,6 +11,12 @@ import { pollDsiBulkProvisionalTask } from './dsiBulkProvisionalPoll';
 
 import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
 import {
+  chunkDsiBulkCandidateIds,
+  dsiBulkStewardChunkSize,
+  mergeDsiBulkApplyResponses,
+  mergeDsiBulkPreviewResponses,
+} from './dsiBulkStewardChunking';
+import {
   bulkActionToStewardAction,
   optimisticallyApplyStewardBulk,
   type DsiStewardRowAction,
@@ -180,10 +186,17 @@ export function useDsiBulkSteward({
         } satisfies DsiBulkPreviewResponse;
       }
       const body = buildBulkBody();
-      return apiPost<DsiBulkPreviewResponse>(
-        `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-preview`,
-        body
-      );
+      const chunkSize = dsiBulkStewardChunkSize(bulkAction);
+      const chunks = chunkDsiBulkCandidateIds(selectedIds, chunkSize);
+      const parts: DsiBulkPreviewResponse[] = [];
+      for (const candidate_ids of chunks) {
+        const part = await apiPost<DsiBulkPreviewResponse>(
+          `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-preview`,
+          { ...body, candidate_ids }
+        );
+        parts.push(part);
+      }
+      return mergeDsiBulkPreviewResponses(importJobId, bulkAction, parts);
     },
     onSuccess: (data) => {
       setBulkApplySummary(null);
@@ -246,10 +259,17 @@ export function useDsiBulkSteward({
           void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
         }
       }
-      return apiPost<DsiBulkApplyResponse>(
-        `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-apply`,
-        body
-      );
+      const chunkSize = dsiBulkStewardChunkSize(bulkAction);
+      const chunks = chunkDsiBulkCandidateIds(selectedIds, chunkSize);
+      const parts: DsiBulkApplyResponse[] = [];
+      for (const candidate_ids of chunks) {
+        const part = await apiPost<DsiBulkApplyResponse>(
+          `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-apply`,
+          { ...body, candidate_ids }
+        );
+        parts.push(part);
+      }
+      return mergeDsiBulkApplyResponses(importJobId, bulkAction, parts);
     },
     onMutate: async () => {
       if (

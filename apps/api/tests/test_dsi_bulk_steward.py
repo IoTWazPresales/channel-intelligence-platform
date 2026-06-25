@@ -77,6 +77,28 @@ def test_dsi_steward_bulk_apply_ignore_uses_batch_writer() -> None:
     asyncio.run(_run())
 
 
+def test_dsi_bulk_body_ignore_accepts_up_to_1000_candidates() -> None:
+    from app.api.v1.endpoints.mappings import DsiBulkStewardBody
+
+    ids = list(range(1, 506))
+    b = DsiBulkStewardBody(action="ignore", candidate_ids=ids)
+    assert len(b.candidate_ids) == 505
+
+
+def test_dsi_bulk_body_ignore_rejects_over_1000_candidates() -> None:
+    from app.api.v1.endpoints.mappings import DsiBulkStewardBody
+
+    with pytest.raises(ValidationError):
+        DsiBulkStewardBody(action="ignore", candidate_ids=list(range(1, 1002)))
+
+
+def test_dsi_bulk_body_map_customer_still_capped_at_200() -> None:
+    from app.api.v1.endpoints.mappings import DsiBulkStewardBody
+
+    with pytest.raises(ValidationError):
+        DsiBulkStewardBody(action="map_customer", candidate_ids=list(range(1, 202)), customer_id=1)
+
+
 def test_dsi_bulk_body_map_customer_requires_customer_id() -> None:
     from app.api.v1.endpoints.mappings import DsiBulkStewardBody
 

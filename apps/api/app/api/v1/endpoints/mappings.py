@@ -558,6 +558,10 @@ async def _assert_dsi_import_job(db: AsyncSession, job_id: int) -> ImportJob:
     return job
 
 
+DSI_BULK_STEWARD_MAX_CANDIDATE_IDS = 200
+DSI_BULK_STEWARD_MAX_IGNORE_CANDIDATE_IDS = 1000
+
+
 class DsiBulkStewardBody(BaseModel):
     """Bulk steward preview/apply: same validation rules as single-row endpoints."""
 
@@ -569,7 +573,7 @@ class DsiBulkStewardBody(BaseModel):
         "create_provisional_customer",
         "create_provisional_distributor",
     ]
-    candidate_ids: list[int] = Field(..., min_length=1, max_length=200)
+    candidate_ids: list[int] = Field(..., min_length=1)
     notes: str | None = Field(default=None, max_length=2000)
     customer_id: int | None = Field(default=None, ge=1)
     distributor_id: int | None = Field(default=None, ge=1)
@@ -589,6 +593,16 @@ class DsiBulkStewardBody(BaseModel):
 
     @model_validator(mode="after")
     def _payload_for_action(self) -> Self:
+        cap = (
+            DSI_BULK_STEWARD_MAX_IGNORE_CANDIDATE_IDS
+            if self.action == "ignore"
+            else DSI_BULK_STEWARD_MAX_CANDIDATE_IDS
+        )
+        if len(self.candidate_ids) > cap:
+            raise ValueError(
+                f"candidate_ids exceeds maximum of {cap} for action {self.action!r} "
+                f"(received {len(self.candidate_ids)})"
+            )
         if self.action == "map_customer":
             if self.customer_id is None:
                 raise ValueError("customer_id is required for map_customer")
