@@ -298,14 +298,38 @@ def demote_product_staging_lines_for_ignored_candidate(
     normalized_key: str,
     reason_code: str,
 ) -> int:
+    nk = _norm_key_for_steward_ignore_token(normalized_key or "")
+    if not nk:
+        return 0
+    return batch_demote_steward_ignored_product_staging_lines(db, int(job_id), {nk: reason_code})
+
+
+def _norm_key_for_steward_ignore_token(token: str) -> str:
+    from app.services.imports.distributor_sales_inventory import _norm_key
+
+    return _norm_key(token or "")
+
+
+def batch_demote_steward_ignored_product_staging_lines(
+    db: Any,
+    job_id: int,
+    token_to_reason: dict[str, str],
+) -> int:
+    """One staging scan per bulk ignore — demote all ignored product tokens in a single pass."""
+    if not token_to_reason:
+        return 0
     from sqlalchemy import select
 
     from app.models.import_distributor_si import ImportDistributorSiStagingLine
-    from app.services.imports.distributor_sales_inventory import _norm_key
 
-    nk = _norm_key(normalized_key or "")
-    if not nk:
+    reason_by_token = {
+        _norm_key_for_steward_ignore_token(k): str(v).strip()
+        for k, v in token_to_reason.items()
+        if _norm_key_for_steward_ignore_token(k) and str(v).strip()
+    }
+    if not reason_by_token:
         return 0
+
     lines = db.scalars(
         select(ImportDistributorSiStagingLine).where(
             ImportDistributorSiStagingLine.import_job_id == int(job_id),
@@ -314,10 +338,11 @@ def demote_product_staging_lines_for_ignored_candidate(
     ).all()
     n = 0
     for line in lines:
-        raw = _norm_key(line.raw_product_token or "")
-        if raw != nk:
+        nk = _norm_key_for_steward_ignore_token(line.raw_product_token or "")
+        reason = reason_by_token.get(nk)
+        if not reason:
             continue
-        demote_staging_line_for_steward_product_ignore(line, reason_code)
+        demote_staging_line_for_steward_product_ignore(line, reason)
         db.add(line)
         n += 1
     return n
@@ -336,16 +361,16 @@ def reapply_dsi_steward_ignored_product_staging_lines(db: Any, job_id: int) -> i
             ImportEntityMappingCandidate.status == "ignored",
         )
     ).all()
-    total = 0
+    token_to_reason: dict[str, str] = {}
     for cand in cands:
         ctx = cand.context if isinstance(cand.context, dict) else {}
         rc = str(ctx.get("steward_ignore_reason_code") or infer_dsi_ignore_reason_code(ctx) or "").strip()
         if not rc:
             continue
-        total += demote_product_staging_lines_for_ignored_candidate(
-            db, job_id, cand.normalized_key or "", rc
-        )
-    return total
+        nk = _norm_key_for_steward_ignore_token(cand.normalized_key or "")
+        if nk:
+            token_to_reason[nk] = rc
+    return batch_demote_steward_ignored_product_staging_lines(db, int(job_id), token_to_reason)
 
 
 def _staging_line_units(line: Any) -> float:

@@ -33,6 +33,7 @@ KIND_PRODUCT_MASTER_VALIDATE = "product_master_validate"
 KIND_PRODUCT_MASTER_COMMIT = "product_master_commit"
 KIND_DSI_PIPELINE = "dsi_pipeline"
 KIND_DSI_BULK_PROVISIONAL = "dsi_bulk_provisional"
+KIND_DSI_BULK_IGNORE = "dsi_bulk_ignore"
 KIND_DSI_RESOLUTION_PLAN_APPLY = "dsi_resolution_plan_apply"
 KIND_DSI_RESOLUTION_PLAN_COMPUTE = "dsi_resolution_plan_compute"
 KIND_DSI_SOH_RECONCILIATION = "dsi_soh_reconciliation"
@@ -47,6 +48,7 @@ KIND_COMMERCIAL_PLANNER_LINEUP_PARSE = "commercial_planner_lineup_parse"
 # normalized to ``dsi_bulk_provisional`` — preserving the prior discovery behavior.
 _DSI_BULK_ALLOWED_KINDS = (
     KIND_DSI_BULK_PROVISIONAL,
+    KIND_DSI_BULK_IGNORE,
     KIND_DSI_RESOLUTION_PLAN_APPLY,
     KIND_DSI_RESOLUTION_PLAN_COMPUTE,
 )
@@ -193,6 +195,8 @@ def task_label(job: ImportJob, *, kind: str) -> str:
     mode = (job.import_mode or "").strip().lower()
     if kind == KIND_DSI_BULK_PROVISIONAL:
         return f"Creating provisional customers (DSI job {jid})"
+    if kind == KIND_DSI_BULK_IGNORE:
+        return f"Ignoring steward candidates (DSI job {jid})"
     if kind == KIND_DSI_RESOLUTION_PLAN_APPLY:
         return f"Applying resolution plan (DSI job {jid})"
     if kind == KIND_DSI_RESOLUTION_PLAN_COMPUTE:

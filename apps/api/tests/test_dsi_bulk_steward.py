@@ -29,52 +29,35 @@ def test_dsi_bulk_body_ignore_ok() -> None:
     assert b.action == "ignore"
 
 
-def test_dsi_steward_bulk_apply_ignore_uses_batch_writer() -> None:
+def test_dsi_steward_bulk_apply_ignore_rejects_sync_path() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
+
+    from fastapi import HTTPException
 
     from app.api.v1.endpoints.mappings import DsiBulkStewardBody, dsi_steward_bulk_apply
 
     async def _run() -> None:
         db = MagicMock()
-        db.run_sync = AsyncMock(
-            return_value={
-                "import_job_id": 43,
-                "action": "ignore",
-                "applied": 2,
-                "failed": 0,
-                "results": [
-                    {
-                        "candidate_id": 1,
-                        "ok": True,
-                        "entity_type": "product_identifier",
-                        "result": {"ok": True, "candidate_id": 1, "status": "ignored"},
-                        "row_count": 1,
-                        "total_units": None,
-                        "total_reported_value": None,
-                    },
-                    {
-                        "candidate_id": 2,
-                        "ok": True,
-                        "entity_type": "product_identifier",
-                        "result": {"ok": True, "candidate_id": 2, "status": "ignored"},
-                        "row_count": 2,
-                        "total_units": None,
-                        "total_reported_value": None,
-                    },
-                ],
-            }
-        )
 
         with patch("app.api.v1.endpoints.mappings._assert_dsi_import_job", new=AsyncMock()):
             body = DsiBulkStewardBody(action="ignore", candidate_ids=[1, 2])
-            out = await dsi_steward_bulk_apply(43, body, db)
-
-        assert out["applied"] == 2
-        assert out["failed"] == 0
-        db.run_sync.assert_awaited_once()
-        assert db.get.call_count == 0
+            try:
+                await dsi_steward_bulk_apply(43, body, db)
+                raise AssertionError("expected HTTPException")
+            except HTTPException as exc:
+                assert exc.status_code == 400
+                detail = exc.detail if isinstance(exc.detail, dict) else {}
+                assert detail.get("code") == "use_async_bulk_ignore"
 
     asyncio.run(_run())
+
+
+def test_dsi_bulk_ignore_payload_from_body() -> None:
+    from app.api.v1.endpoints.mappings import DsiBulkStewardBody, _dsi_bulk_ignore_payload_from_body
+
+    b = DsiBulkStewardBody(action="ignore", candidate_ids=[1, 2], notes="nope")
+    p = _dsi_bulk_ignore_payload_from_body(b)
+    assert p == {"candidate_ids": [1, 2], "notes": "nope"}
 
 
 def test_dsi_bulk_body_ignore_accepts_up_to_1000_candidates() -> None:

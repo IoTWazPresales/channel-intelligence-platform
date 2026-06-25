@@ -277,6 +277,44 @@ def infer_dsi_import_job_task(job_id: int) -> int:
     return job_id
 
 
+@celery_app.task(name="imports.dsi_bulk_ignore", bind=True, ack_late=True)
+def dsi_bulk_ignore_task(self, job_id: int, payload: dict) -> dict:
+    """Batch ignore DSI mapping candidates (single commit; one staging demotion pass)."""
+    from app.db.session_sync import SessionLocal
+    from app.services.imports.dsi_bulk_ignore_sync import run_dsi_bulk_ignore_sync
+
+    candidate_ids = payload.get("candidate_ids") or []
+    notes = payload.get("notes")
+
+    def _on_progress(current: int, total: int) -> None:
+        try:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "phase": "ignoring_candidates",
+                    "phase_label": "Ignoring steward candidates",
+                    "current_row": current,
+                    "total_rows": total,
+                    "pct": round(current / total * 100) if total else 0,
+                },
+            )
+        except Exception:
+            pass
+
+    try:
+        with SessionLocal() as db:
+            return run_dsi_bulk_ignore_sync(
+                db,
+                job_id,
+                list(candidate_ids),
+                notes=notes,
+                on_progress=_on_progress,
+            )
+    except Exception:
+        logger.exception("dsi_bulk_ignore failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.dsi_bulk_provisional_customers", bind=True, ack_late=True)
 def dsi_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dict:
     """Batch provisional customer creates for DSI bulk steward (single commit, one replan on client)."""

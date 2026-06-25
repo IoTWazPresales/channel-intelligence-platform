@@ -27,6 +27,7 @@ def run_dsi_bulk_ignore_sync(
     results: list[dict[str, Any]] = []
     pending_commit = 0
     total = len(candidate_ids)
+    product_tokens_to_demote: dict[str, str] = {}
 
     for idx, cid in enumerate(candidate_ids):
         if on_progress is not None:
@@ -76,9 +77,10 @@ def run_dsi_bulk_ignore_sync(
         if notes:
             ctx["steward_ignore_notes"] = notes[:2000]
         from app.services.imports.dsi_product_running_change import (
+            _norm_key_for_steward_ignore_token,
+            batch_demote_steward_ignored_product_staging_lines,
             build_product_resolution_quality,
             build_steward_ignore_remap_context,
-            demote_product_staging_lines_for_ignored_candidate,
             infer_dsi_ignore_reason_code,
         )
 
@@ -102,12 +104,9 @@ def run_dsi_bulk_ignore_sync(
             ctx["product_resolution_quality"] = updated
         cand.context = ctx
         if cand.entity_type == "product_identifier" and ignore_reason:
-            demote_product_staging_lines_for_ignored_candidate(
-                session,
-                int(job_id),
-                cand.normalized_key or "",
-                ignore_reason,
-            )
+            nk = _norm_key_for_steward_ignore_token(cand.normalized_key or "")
+            if nk:
+                product_tokens_to_demote[nk] = ignore_reason
         pending_commit += 1
         results.append(
             {
@@ -119,6 +118,11 @@ def run_dsi_bulk_ignore_sync(
                 "total_units": tu,
                 "total_reported_value": trv,
             }
+        )
+
+    if pending_commit > 0 and product_tokens_to_demote:
+        batch_demote_steward_ignored_product_staging_lines(
+            session, int(job_id), product_tokens_to_demote
         )
 
     if pending_commit > 0:

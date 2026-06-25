@@ -236,6 +236,29 @@ export function useDsiBulkSteward({
         } satisfies DsiBulkApplyResponse;
       }
       const body = buildBulkBody();
+      if (bulkAction === 'ignore') {
+        let taskId: string | undefined;
+        try {
+          const enqueued = await apiPost<DsiBulkProvisionalAsyncEnqueueResponse>(
+            `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-ignore/apply-async`,
+            body
+          );
+          taskId = enqueued.task_id;
+          registerClientBackgroundTask({
+            taskId: enqueued.task_id,
+            importJobId,
+            kind: 'dsi_bulk_ignore',
+            label: `Ignoring steward candidates (DSI job ${importJobId})`,
+          });
+          void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+          return pollDsiBulkProvisionalTask(importJobId, enqueued.task_id, {
+            rowCount: selectedIds.length,
+          });
+        } finally {
+          if (taskId) finishClientBackgroundTask(taskId);
+          void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+        }
+      }
       if (bulkAction === 'create_provisional_customer') {
         let taskId: string | undefined;
         try {

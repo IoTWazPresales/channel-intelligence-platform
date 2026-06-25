@@ -15,6 +15,8 @@ def _cand(
     entity_type: str = "product_identifier",
     status: str = "open",
     row_count: int = 5,
+    normalized_key: str = "sku",
+    context: dict | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=cid,
@@ -24,7 +26,8 @@ def _cand(
         row_count=row_count,
         total_units=2.0,
         total_reported_value=10.0,
-        context={},
+        normalized_key=normalized_key,
+        context=context if context is not None else {},
     )
 
 
@@ -101,3 +104,33 @@ def test_bulk_ignore_no_commit_when_nothing_pending() -> None:
 
     assert out["applied"] == 0
     mock_commit.assert_not_called()
+
+
+def test_bulk_ignore_demotes_staging_in_one_pass() -> None:
+    session = MagicMock()
+    ctx = {"product_match_status": "no_match"}
+    c1 = _cand(1, normalized_key="SKU-A", context=ctx)
+    c2 = _cand(2, normalized_key="SKU-B", context=dict(ctx))
+    cands = {1: c1, 2: c2}
+
+    def _get(model, cid: int):
+        if getattr(model, "__name__", "") == "ImportJob":
+            return SimpleNamespace(id=43)
+        return cands.get(int(cid))
+
+    session.get.side_effect = _get
+
+    with patch(
+        "app.services.imports.dsi_bulk_ignore_sync.commit_session_with_transient_retry"
+    ) as mock_commit:
+        with patch(
+            "app.services.imports.dsi_product_running_change.batch_demote_steward_ignored_product_staging_lines"
+        ) as mock_demote:
+            mock_demote.return_value = 0
+            out = run_dsi_bulk_ignore_sync(session, 43, [1, 2], notes="batch note")
+
+    assert out["applied"] == 2
+    mock_commit.assert_called_once_with(session)
+    mock_demote.assert_called_once()
+    token_map = mock_demote.call_args[0][2]
+    assert len(token_map) == 2

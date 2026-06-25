@@ -34,6 +34,7 @@ TASK_CLASS_BY_NAME: dict[str, str] = {
     "imports.product_master_validate": "master",
     "imports.product_master_commit": "master",
     "imports.dsi_bulk_provisional_customers": "steward",
+    "imports.dsi_bulk_ignore": "steward",
     "imports.dsi_resolution_plan_apply": "steward",
     "imports.dsi_resolution_plan_compute": "steward",
     "imports.shipment_bulk_map_customer": "steward",

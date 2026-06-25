@@ -12,6 +12,7 @@ from app.models.ingestion import ImportJob
 from app.services.imports.background_tasks import _read_celery_safe
 from app.services.imports.dsi_resolution_plan_enqueue import enqueue_dsi_resolution_plan_apply
 from app.services.imports.import_background_slots import (
+    KIND_DSI_BULK_IGNORE,
     KIND_DSI_BULK_PROVISIONAL,
     KIND_DSI_RESOLUTION_PLAN_APPLY,
     KIND_DSI_RESOLUTION_PLAN_COMPUTE,
@@ -31,6 +32,7 @@ _INTERACTIVE_KINDS = frozenset(
         KIND_DSI_RESOLUTION_PLAN_COMPUTE,
         KIND_DSI_RESOLUTION_PLAN_APPLY,
         KIND_DSI_BULK_PROVISIONAL,
+        KIND_DSI_BULK_IGNORE,
     }
 )
 _MAX_FLUSH_RESCHEDULES = 120

@@ -35,7 +35,12 @@ from app.schemas.dsi_resolution_plan_requests import (
 )
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
 from app.services.imports.distributor_sales_inventory import _norm_key
-from app.services.imports.import_background_slots import SLOT_DSI_BULK, KIND_DSI_RESOLUTION_PLAN_COMPUTE, set_task_slot_on_job
+from app.services.imports.import_background_slots import (
+    KIND_DSI_BULK_IGNORE,
+    KIND_DSI_RESOLUTION_PLAN_COMPUTE,
+    SLOT_DSI_BULK,
+    set_task_slot_on_job,
+)
 from app.services.imports.dsi_apply_completion import DsiApplyCompletionError, complete_dsi_import_job_to_loaded
 from app.services.imports.dsi_resolution_plan import (
     build_dsi_resolution_plan_effective_sync,
@@ -829,6 +834,111 @@ def _enqueue_dsi_bulk_provisional_customers(
         return task_id, False
 
 
+def _dsi_bulk_ignore_payload_from_body(body: DsiBulkStewardBody) -> dict[str, Any]:
+    return {
+        "candidate_ids": list(body.candidate_ids),
+        "notes": body.notes,
+    }
+
+
+def _enqueue_dsi_bulk_ignore(
+    job_id: int,
+    payload: dict[str, Any],
+) -> tuple[str, bool]:
+    """Return (task_id, async_poll_required). When async_poll_required is False, result is already in dev store."""
+    from app.services.task_run_ledger import (
+        ENTITY_IMPORT_JOB,
+        TRANSPORT_BROKER,
+        TRANSPORT_INLINE_SYNC,
+        TRANSPORT_IN_PROCESS_THREAD,
+        create_queued_task_run,
+        run_inline_with_ledger,
+        spawn_in_process_thread_with_ledger,
+    )
+
+    settings = get_settings()
+    task_name = "imports.dsi_bulk_ignore"
+
+    def _run_sync() -> dict[str, Any]:
+        with SessionLocal() as session:
+            return run_dsi_bulk_ignore_sync(
+                session,
+                job_id,
+                list(payload.get("candidate_ids") or []),
+                notes=payload.get("notes"),
+            )
+
+    try:
+        result = celery_app.send_task(task_name, args=[job_id, payload])
+        task_id = str(result.id)
+        create_queued_task_run(
+            task_run_id=task_id,
+            task_name=task_name,
+            entity_type=ENTITY_IMPORT_JOB,
+            entity_id=job_id,
+            transport=TRANSPORT_BROKER,
+        )
+        return task_id, True
+    except Exception:
+        logger.exception("dsi_bulk_ignore: Celery enqueue failed job_id=%s task=%s", job_id, task_name)
+        if settings.cip_dev_celery_dispatch == "in_process_thread":
+            task_id = f"dev-bulk-ignore-{uuid.uuid4().hex}"
+            create_queued_task_run(
+                task_run_id=task_id,
+                task_name=task_name,
+                entity_type=ENTITY_IMPORT_JOB,
+                entity_id=job_id,
+                transport=TRANSPORT_IN_PROCESS_THREAD,
+            )
+
+            def _in_process() -> None:
+                try:
+                    out = _run_sync()
+                    _dev_dsi_bulk_task_results[task_id] = {
+                        "state": "SUCCESS",
+                        "result": out,
+                    }
+                except Exception as exc:
+                    logger.exception(
+                        "dsi_bulk_ignore in-process thread failed job_id=%s task_id=%s",
+                        job_id,
+                        task_id,
+                    )
+                    _dev_dsi_bulk_task_results[task_id] = {
+                        "state": "FAILURE",
+                        "error": str(exc)[:800],
+                    }
+                    raise
+
+            DEV_CELERY_LOGGER.warning(
+                "ENQUEUE: dsi_bulk_ignore job_id=%s — in-process thread (DEV ONLY).",
+                job_id,
+            )
+            spawn_in_process_thread_with_ledger(
+                task_run_id=task_id,
+                thread_name=f"dsi-bulk-ignore-{job_id}",
+                target=_in_process,
+            )
+            return task_id, True
+
+        task_id = f"sync-bulk-ignore-{uuid.uuid4().hex}"
+        create_queued_task_run(
+            task_run_id=task_id,
+            task_name=task_name,
+            entity_type=ENTITY_IMPORT_JOB,
+            entity_id=job_id,
+            transport=TRANSPORT_INLINE_SYNC,
+        )
+
+        def _inline() -> dict[str, Any]:
+            out = _run_sync()
+            _dev_dsi_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
+            return out
+
+        run_inline_with_ledger(task_id, _inline)
+        return task_id, False
+
+
 @router.post("/import-jobs/{job_id}/dsi-steward-bulk-provisional-customers/apply-async", status_code=202)
 async def dsi_steward_bulk_provisional_apply_async(
     job_id: int, body: DsiBulkStewardBody, db: AsyncSession = Depends(get_db)
@@ -850,6 +960,37 @@ async def dsi_steward_bulk_provisional_apply_async(
             task_id=task_id,
             async_poll=async_poll,
             kind="dsi_bulk_provisional_customers",
+        )
+        await db.commit()
+    return {
+        "import_job_id": job_id,
+        "task_id": task_id,
+        "async_poll": async_poll,
+        "action": body.action,
+    }
+
+
+@router.post("/import-jobs/{job_id}/dsi-steward-bulk-ignore/apply-async", status_code=202)
+async def dsi_steward_bulk_ignore_apply_async(
+    job_id: int, body: DsiBulkStewardBody, db: AsyncSession = Depends(get_db)
+):
+    """Enqueue batch ignore (single DB commit + one staging demotion pass; poll task for completion)."""
+    await _assert_dsi_import_job(db, job_id)
+    if body.action != "ignore":
+        raise HTTPException(
+            status_code=400,
+            detail="action must be ignore for this endpoint",
+        )
+    payload = _dsi_bulk_ignore_payload_from_body(body)
+    task_id, async_poll = _enqueue_dsi_bulk_ignore(job_id, payload)
+    job = await db.get(ImportJob, job_id)
+    if job:
+        set_task_slot_on_job(
+            job,
+            SLOT_DSI_BULK,
+            task_id=task_id,
+            async_poll=async_poll,
+            kind=KIND_DSI_BULK_IGNORE,
         )
         await db.commit()
     return {
@@ -938,26 +1079,17 @@ async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: Asyn
             },
         )
     if body.action == "ignore":
-
-        def _bulk_ignore(session: Session) -> dict[str, Any]:
-            return run_dsi_bulk_ignore_sync(
-                session,
-                job_id,
-                list(body.candidate_ids),
-                notes=body.notes,
-            )
-
-        batch = await db.run_sync(_bulk_ignore)
-        results = list(batch.get("results") or [])
-        ok_n = int(batch.get("applied") or 0)
-        return {
-            "import_job_id": job_id,
-            "action": body.action,
-            "applied": ok_n,
-            "failed": len(results) - ok_n,
-            "results": results,
-            "totals": _dsi_bulk_totals_from_rows(results),
-        }
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": (
+                    "Bulk ignore apply must use "
+                    "POST .../dsi-steward-bulk-ignore/apply-async and poll "
+                    ".../dsi-steward-bulk-task/{task_id}."
+                ),
+                "code": "use_async_bulk_ignore",
+            },
+        )
     results: list[dict[str, Any]] = []
     for cid in body.candidate_ids:
         cand = await db.get(ImportEntityMappingCandidate, cid)
