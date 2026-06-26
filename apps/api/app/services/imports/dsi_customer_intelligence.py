@@ -19,6 +19,7 @@ from app.services.imports.dsi_customer_name_normalization import (
     normalize_customer_name_for_similarity,
     normalize_customer_name_token,
 )
+from app.services.imports.provisional_entity_identity import customer_source_token_alias_key
 
 
 def _norm_key(s: str | None) -> str:
@@ -675,12 +676,12 @@ def resolve_customer_id_distributor_scoped_alias(
     """Approved alias match restricted to the same distributor (stronger than global alias)."""
     if not normalized_customer or distributor_id is None:
         return None
-    nt = _norm_key(normalized_customer)
-    if not nt:
+    lookup_key = customer_source_token_alias_key(normalized_customer)
+    if not lookup_key:
         return None
     matches: list[int] = []
     for a in res_cache.cust_aliases:
-        if a.normalized_token != nt:
+        if a.match_key != lookup_key:
             continue
         if a.distributor_id is None or int(a.distributor_id) != int(distributor_id):
             continue

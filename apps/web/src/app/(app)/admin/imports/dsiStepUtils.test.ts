@@ -67,6 +67,26 @@ describe('dsiStepUtils', () => {
     expect(parseDistributorSiSummaryFromRows(rows)?.blocking_rows).toBe(0);
   });
 
+  it('parseDistributorSiSummaryFromRows uses the latest summary when multiple exist', () => {
+    const rows = [
+      {
+        id: 10,
+        row_number: 0,
+        code: 'distributor_si_summary',
+        message: JSON.stringify({ staging_rows: 178067, blocking_rows: 22522, warning_rows: 1, aggregated_candidates: 799 }),
+      },
+      {
+        id: 99,
+        row_number: 0,
+        code: 'distributor_si_summary',
+        message: JSON.stringify({ staging_rows: 178067, blocking_rows: 194, warning_rows: 10722, aggregated_candidates: 542 }),
+      },
+    ];
+    const s = parseDistributorSiSummaryFromRows(rows);
+    expect(s?.blocking_rows).toBe(194);
+    expect(s?.aggregated_candidates).toBe(542);
+  });
+
   it('parseDistributorSiSummaryFromRows reads extended DSI counters', () => {
     const rows = [
       {

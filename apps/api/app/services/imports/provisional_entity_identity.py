@@ -74,6 +74,14 @@ def canonical_provisional_entity_name_key(name: str | None) -> str:
     return _WS_COLLAPSE.sub(" ", t).strip()
 
 
+def customer_source_token_alias_key(raw: str | None) -> str:
+    """SSOT lookup key for approved ``customer_source_token_alias`` rows (DSI validate + steward write).
+
+    Reconciles punctuation variants such as ``(pty)`` vs bare ``pty`` that ``_norm_key`` does not unify.
+    """
+    return canonical_provisional_entity_name_key(raw)[:512]
+
+
 def is_non_entity_customer_provisional_token(
     *,
     raw_token: str | None = None,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.services.imports.provisional_entity_identity import customer_source_token_alias_key
 from app.services.imports.distributor_sales_inventory import (
     DSIResolutionCache,
     DSIResolutionCustAliasRow,
@@ -56,10 +57,18 @@ def test_customer_multi_alias_conflict_detected() -> None:
         customer_sim_name_to_ids={},
         cust_aliases=[
             DSIResolutionCustAliasRow(
-                normalized_token="dealer1", source_definition_id=None, distributor_id=5, customer_id=100
+                normalized_token="dealer1",
+                match_key=customer_source_token_alias_key("dealer1"),
+                source_definition_id=None,
+                distributor_id=5,
+                customer_id=100,
             ),
             DSIResolutionCustAliasRow(
-                normalized_token="dealer1", source_definition_id=None, distributor_id=5, customer_id=101
+                normalized_token="dealer1",
+                match_key=customer_source_token_alias_key("dealer1"),
+                source_definition_id=None,
+                distributor_id=5,
+                customer_id=101,
             ),
         ],
         open_channel_cid=None,

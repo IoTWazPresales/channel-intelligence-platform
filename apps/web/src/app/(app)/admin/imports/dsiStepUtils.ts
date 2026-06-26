@@ -80,12 +80,20 @@ export type DistributorSiSummary = {
 
 /** Parse distributor_si_summary row from import job preview rows (DSI validate). */
 export function parseDistributorSiSummaryFromRows(
-  previewRows: Array<{ row_number: number; code?: string; message?: string | null }> | undefined
+  previewRows: Array<{ row_number: number; code?: string; message?: string | null; id?: number }> | undefined
 ): DistributorSiSummary | null {
   if (!previewRows?.length) return null;
-  const row = previewRows.find((r) => r.row_number === 0 && r.code === 'distributor_si_summary');
-  if (!row?.message) return null;
+  const summaries = previewRows.filter(
+    (r) => r.row_number === 0 && r.code === 'distributor_si_summary' && r.message
+  );
+  if (!summaries.length) return null;
+  const withId = summaries.filter((r) => r.id != null);
+  const row =
+    withId.length > 0
+      ? withId.reduce((best, r) => ((r.id ?? 0) > (best.id ?? 0) ? r : best))
+      : summaries[summaries.length - 1];
   const raw = row.message;
+  if (!raw) return null;
   const cut = raw.indexOf(' Applied sell-out');
   const jsonPart = cut === -1 ? raw : raw.slice(0, cut);
   try {

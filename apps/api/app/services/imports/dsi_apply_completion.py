@@ -62,10 +62,12 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
 
     from app.services.imports.dsi_product_running_change import (
         build_dsi_apply_exclusion_summary,
+        reapply_dsi_steward_ignored_customer_staging_lines,
         reapply_dsi_steward_ignored_product_staging_lines,
     )
 
     reapply_dsi_steward_ignored_product_staging_lines(db, int(job.id))
+    reapply_dsi_steward_ignored_customer_staging_lines(db, int(job.id))
     db.flush()
 
     blocked = [ln for ln in lines if (ln.resolution_status or "") == "blocked"]

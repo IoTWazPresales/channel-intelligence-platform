@@ -10,9 +10,15 @@ from typing import Any
 IGNORE_REASON_SKU_INDETERMINATE = "ignore_sku_indeterminate"
 IGNORE_REASON_NO_CATALOGUE = "ignore_no_catalogue"
 IGNORE_REASON_NO_RECEIPT_EVIDENCE = "ignore_no_receipt_evidence"
+IGNORE_REASON_NO_CUSTOMER = "ignore_no_customer"
 
 DSI_IGNORE_REASON_CODES = frozenset(
-    {IGNORE_REASON_SKU_INDETERMINATE, IGNORE_REASON_NO_CATALOGUE, IGNORE_REASON_NO_RECEIPT_EVIDENCE}
+    {
+        IGNORE_REASON_SKU_INDETERMINATE,
+        IGNORE_REASON_NO_CATALOGUE,
+        IGNORE_REASON_NO_RECEIPT_EVIDENCE,
+        IGNORE_REASON_NO_CUSTOMER,
+    }
 )
 
 STEWARD_IGNORED_LINE_DIAG_PREFIX = "steward_ignored_line:"
@@ -262,6 +268,92 @@ def compute_dsi_hard_row_with_product_auto_exclude(
     return hard_row, None
 
 
+CUSTOMER_AUTO_EXCLUDE_DIAGNOSTICS = frozenset(
+    {
+        "dealer_group_placeholder",
+        "missing_customer_token",
+    }
+)
+
+
+def infer_validate_auto_exclude_customer_reason(
+    *,
+    sellout_or_return_attempt: bool,
+    rcustomer_id: int | None,
+    cust_diag: list[str],
+    normalized_candidate_key: str,
+    customer_dealer_raw: str | None = None,
+    dealer_group_raw: str | None = None,
+) -> str | None:
+    """Genuinely blank/placeholder customer on sellout/return — not an unmapped real dealer token."""
+    if not sellout_or_return_attempt or rcustomer_id is not None:
+        return None
+    nk = (normalized_candidate_key or "").strip().lower()
+    if nk == "__blank__":
+        return IGNORE_REASON_NO_CUSTOMER
+    diag_set = set(cust_diag or [])
+    if "dealer_group_placeholder" in diag_set:
+        return IGNORE_REASON_NO_CUSTOMER
+    if "missing_customer_token" not in diag_set:
+        return None
+    from app.services.imports.distributor_sales_inventory import (
+        SENTINEL_CUSTOMER_TOKENS,
+        _customer_token_is_placeholder,
+        _dealer_group_is_placeholder,
+        _norm_key,
+    )
+
+    cu_nt = _norm_key(customer_dealer_raw)
+    if not cu_nt and _dealer_group_is_placeholder(dealer_group_raw):
+        return IGNORE_REASON_NO_CUSTOMER
+    if cu_nt in SENTINEL_CUSTOMER_TOKENS:
+        return None
+    if _customer_token_is_placeholder(cu_nt, customer_dealer_raw) and cu_nt not in SENTINEL_CUSTOMER_TOKENS:
+        return IGNORE_REASON_NO_CUSTOMER
+    if not cu_nt:
+        return IGNORE_REASON_NO_CUSTOMER
+    return None
+
+
+def infer_dsi_customer_ignore_reason_code(
+    normalized_key: str | None,
+    cand_context: dict[str, Any] | None = None,
+) -> str | None:
+    """Steward-ignore reason for customer candidates (blank/placeholder bucket only)."""
+    _ = cand_context
+    if (normalized_key or "").strip().lower() == "__blank__":
+        return IGNORE_REASON_NO_CUSTOMER
+    return None
+
+
+def compute_dsi_sellout_block_with_customer_auto_exclude(
+    *,
+    sellout_or_return_attempt: bool,
+    rcustomer_id: int | None,
+    cust_diag: list[str],
+    normalized_candidate_key: str,
+    customer_dealer_raw: str | None,
+    dealer_group_raw: str | None,
+    diag: list[str],
+) -> tuple[bool, str | None]:
+    """Returns (sellout_blocked_no_customer, auto_exclude_reason)."""
+    sellout_blocked_no_customer = bool(sellout_or_return_attempt and rcustomer_id is None)
+    if not sellout_blocked_no_customer:
+        return False, None
+    auto_reason = infer_validate_auto_exclude_customer_reason(
+        sellout_or_return_attempt=sellout_or_return_attempt,
+        rcustomer_id=rcustomer_id,
+        cust_diag=cust_diag,
+        normalized_candidate_key=normalized_candidate_key,
+        customer_dealer_raw=customer_dealer_raw,
+        dealer_group_raw=dealer_group_raw,
+    )
+    if auto_reason:
+        apply_product_auto_exclude_diagnostic(diag, auto_reason)
+        return False, auto_reason
+    return True, None
+
+
 def product_auto_exclude_terminal_status() -> tuple[str, str]:
     """Non-blocking terminal status for auto-excluded product lines (matches steward-ignore demotion)."""
     return "info", "staged_only"
@@ -283,6 +375,17 @@ def demote_staging_line_for_steward_product_ignore(line: Any, reason_code: str) 
     """Terminal steward ignore — status/severity only; never clears resolved_product_id."""
     if line.resolved_product_id is not None:
         return
+    diag = list(line.diagnostic_codes or [])
+    sd = steward_ignored_line_diagnostic(reason_code)
+    if sd not in diag:
+        diag.append(sd)
+    line.diagnostic_codes = diag
+    line.resolution_status = "staged_only"
+    line.severity = "info"
+
+
+def demote_staging_line_for_steward_customer_ignore(line: Any, reason_code: str) -> None:
+    """Terminal steward ignore — status/severity only; never clears resolved_customer_id."""
     diag = list(line.diagnostic_codes or [])
     sd = steward_ignored_line_diagnostic(reason_code)
     if sd not in diag:
@@ -371,6 +474,81 @@ def reapply_dsi_steward_ignored_product_staging_lines(db: Any, job_id: int) -> i
         if nk:
             token_to_reason[nk] = rc
     return batch_demote_steward_ignored_product_staging_lines(db, int(job_id), token_to_reason)
+
+
+def batch_demote_steward_ignored_customer_staging_lines(
+    db: Any,
+    job_id: int,
+    token_to_reason: dict[str, str],
+) -> int:
+    """One staging scan per bulk ignore — demote sellout lines for ignored customer tokens."""
+    if not token_to_reason:
+        return 0
+    from sqlalchemy import select
+
+    from app.models.import_distributor_si import ImportDistributorSiStagingLine
+    from app.services.imports.distributor_sales_inventory import _customer_candidate_identity_norm
+
+    reason_by_token = {
+        str(k).strip().lower(): str(v).strip()
+        for k, v in token_to_reason.items()
+        if str(k).strip().lower() and str(v).strip()
+    }
+    if not reason_by_token:
+        return 0
+
+    lines = db.scalars(
+        select(ImportDistributorSiStagingLine).where(
+            ImportDistributorSiStagingLine.import_job_id == int(job_id),
+            ImportDistributorSiStagingLine.resolved_customer_id.is_(None),
+        )
+    ).all()
+    n = 0
+    for line in lines:
+        qs = line.quantity_sold
+        qty_f = float(qs) if qs is not None else None
+        if qty_f is None or qty_f == 0 or line.transaction_date is None:
+            continue
+        nk = _customer_candidate_identity_norm(
+            line.raw_customer_dealer_token,
+            line.raw_dealer_group_token,
+        )
+        reason = reason_by_token.get(nk)
+        if not reason:
+            continue
+        demote_staging_line_for_steward_customer_ignore(line, reason)
+        db.add(line)
+        n += 1
+    return n
+
+
+def reapply_dsi_steward_ignored_customer_staging_lines(db: Any, job_id: int) -> int:
+    """Re-apply steward-ignore terminal status after staging refresh (refresh would re-block)."""
+    from sqlalchemy import select
+
+    from app.models.import_distributor_si import ImportEntityMappingCandidate
+
+    cands = db.scalars(
+        select(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.import_job_id == int(job_id),
+            ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+            ImportEntityMappingCandidate.status == "ignored",
+        )
+    ).all()
+    token_to_reason: dict[str, str] = {}
+    for cand in cands:
+        ctx = cand.context if isinstance(cand.context, dict) else {}
+        rc = str(
+            ctx.get("steward_ignore_reason_code")
+            or infer_dsi_customer_ignore_reason_code(cand.normalized_key, ctx)
+            or ""
+        ).strip()
+        if not rc:
+            continue
+        nk = str(cand.normalized_key or "").strip().lower()
+        if nk:
+            token_to_reason[nk] = rc
+    return batch_demote_steward_ignored_customer_staging_lines(db, int(job_id), token_to_reason)
 
 
 def _staging_line_units(line: Any) -> float:
@@ -474,15 +652,30 @@ def build_dsi_apply_exclusion_summary(db: Any, job_id: int, lines: list[Any]) ->
         IGNORE_REASON_NO_CATALOGUE: {"line_count": 0, "units": 0.0, "value": 0.0},
         IGNORE_REASON_SKU_INDETERMINATE: {"line_count": 0, "units": 0.0, "value": 0.0},
         IGNORE_REASON_NO_RECEIPT_EVIDENCE: {"line_count": 0, "units": 0.0, "value": 0.0},
+        IGNORE_REASON_NO_CUSTOMER: {"line_count": 0, "units": 0.0, "value": 0.0},
     }
 
     for line in lines:
         units = abs(_staging_line_units(line))
         value = abs(_staging_line_value(line))
+        diag = line.diagnostic_codes if isinstance(line.diagnostic_codes, list) else []
+        steward_rc = parse_steward_ignored_line_reason(diag)
         if _line_qualifies_for_dsi_fact_write(line):
             applied_lines += 1
             applied_units += units
             applied_value += value
+            continue
+        if steward_rc:
+            excluded_lines += 1
+            excluded_units += units
+            excluded_value += value
+            bucket = by_reason.get(steward_rc)
+            if bucket is None:
+                bucket = {"line_count": 0, "units": 0.0, "value": 0.0}
+                by_reason[steward_rc] = bucket
+            bucket["line_count"] = int(bucket["line_count"]) + 1
+            bucket["units"] = float(bucket["units"]) + units
+            bucket["value"] = float(bucket["value"]) + value
             continue
         if line.resolved_product_id is not None:
             continue

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from app.services.imports.provisional_entity_identity import customer_source_token_alias_key
+
 if TYPE_CHECKING:
     from app.services.imports.distributor_sales_inventory import DSIResolutionCache
 
@@ -46,12 +48,12 @@ def customer_alias_conflict_reason_from_cache(
     normalized_token: str,
 ) -> str | None:
     """Return a diagnostic when >1 distinct customer_id matches an approved alias token."""
-    nt = (normalized_token or "").strip()
-    if not nt:
+    lookup_key = customer_source_token_alias_key(normalized_token)
+    if not lookup_key:
         return None
     matches: list[int] = []
     for a in res_cache.cust_aliases:
-        if a.normalized_token != nt:
+        if a.match_key != lookup_key:
             continue
         if (
             source_definition_id is not None

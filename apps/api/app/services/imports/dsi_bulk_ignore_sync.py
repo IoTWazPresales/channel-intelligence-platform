@@ -28,6 +28,7 @@ def run_dsi_bulk_ignore_sync(
     pending_commit = 0
     total = len(candidate_ids)
     product_tokens_to_demote: dict[str, str] = {}
+    customer_tokens_to_demote: dict[str, str] = {}
 
     for idx, cid in enumerate(candidate_ids):
         if on_progress is not None:
@@ -78,13 +79,20 @@ def run_dsi_bulk_ignore_sync(
             ctx["steward_ignore_notes"] = notes[:2000]
         from app.services.imports.dsi_product_running_change import (
             _norm_key_for_steward_ignore_token,
+            batch_demote_steward_ignored_customer_staging_lines,
             batch_demote_steward_ignored_product_staging_lines,
             build_product_resolution_quality,
             build_steward_ignore_remap_context,
+            infer_dsi_customer_ignore_reason_code,
             infer_dsi_ignore_reason_code,
         )
 
-        ignore_reason = infer_dsi_ignore_reason_code(ctx) if cand.entity_type == "product_identifier" else None
+        if cand.entity_type == "product_identifier":
+            ignore_reason = infer_dsi_ignore_reason_code(ctx)
+        elif cand.entity_type == "customer_dealer_token":
+            ignore_reason = infer_dsi_customer_ignore_reason_code(cand.normalized_key, ctx)
+        else:
+            ignore_reason = None
         if ignore_reason:
             ctx["steward_ignore_reason_code"] = ignore_reason
         remap = build_steward_ignore_remap_context(ctx)
@@ -107,6 +115,10 @@ def run_dsi_bulk_ignore_sync(
             nk = _norm_key_for_steward_ignore_token(cand.normalized_key or "")
             if nk:
                 product_tokens_to_demote[nk] = ignore_reason
+        if cand.entity_type == "customer_dealer_token" and ignore_reason:
+            nk = str(cand.normalized_key or "").strip().lower()
+            if nk:
+                customer_tokens_to_demote[nk] = ignore_reason
         pending_commit += 1
         results.append(
             {
@@ -123,6 +135,10 @@ def run_dsi_bulk_ignore_sync(
     if pending_commit > 0 and product_tokens_to_demote:
         batch_demote_steward_ignored_product_staging_lines(
             session, int(job_id), product_tokens_to_demote
+        )
+    if pending_commit > 0 and customer_tokens_to_demote:
+        batch_demote_steward_ignored_customer_staging_lines(
+            session, int(job_id), customer_tokens_to_demote
         )
 
     if pending_commit > 0:
