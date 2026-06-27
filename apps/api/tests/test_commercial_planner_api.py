@@ -804,6 +804,227 @@ def test_suggestions_batched_endpoint_returns_meta_structure():
     assert pricing["confidence"] == "low"
 
 
+def test_plan_suggestions_includes_historical_lineup_evidence():
+    """Historical lineup MSRP/promo/qty flows into suggestions when latest apply job resolves."""
+    from decimal import Decimal
+
+    fake_line = SimpleNamespace(
+        id=11,
+        commercial_plan_id=1,
+        customer_id=1,
+        product_id=42,
+        target_srp_local=Decimal("1000"),
+        promo_mix_pct=Decimal("0.5"),
+    )
+    fake_lineup_row = SimpleNamespace(
+        product_id=42,
+        msrp_local=Decimal("1299"),
+        promo_price_local=Decimal("1099"),
+        total_quantity_units=Decimal("48"),
+        period_label="2025-H1",
+    )
+
+    execute_count = 0
+
+    async def fake_db():
+        sess = MagicMock()
+        nonlocal execute_count
+        execute_count = 0
+
+        async def execute_side(stmt):
+            nonlocal execute_count
+            execute_count += 1
+            result = MagicMock()
+            if execute_count == 1:
+                result.scalars.return_value.all.return_value = [fake_line]
+            elif execute_count == 7:
+                result.all.return_value = [fake_lineup_row]
+            else:
+                result.all.return_value = []
+                result.scalars.return_value.all.return_value = []
+            return result
+
+        sess.execute = AsyncMock(side_effect=execute_side)
+        sess.scalar = AsyncMock(return_value=77)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/plans/1/suggestions")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data) == 1
+    meta = data[0]["_meta"]
+    assert meta["lineup_job_id"] == 77
+    assert meta["lineup_period_label"] == "2025-H1"
+    assert meta["data_sources"]["lineup"] is True
+
+    qty = next(s for s in data[0]["suggestions"] if s["type"] == "target_units")
+    assert qty["factors"]["lineup_quantity_units"] == pytest.approx(48.0)
+    assert qty["factors"]["lineup_job_id"] == 77
+
+    pricing = next(s for s in data[0]["suggestions"] if s["type"] == "pricing_band")
+    assert pricing["factors"]["lineup_msrp_local"] == pytest.approx(1299.0)
+    assert pricing["factors"]["lineup_promo_price_local"] == pytest.approx(1099.0)
+
+
+def test_plan_suggestions_latest_historical_job_subquery_joins_header():
+    """Latest-job scalar must join line.header_id to header.id (self-join returns NULL)."""
+    import secrets
+    from datetime import date
+    from decimal import Decimal
+
+    from sqlalchemy import func, select, text
+
+    from app.db.session_sync import SessionLocal
+    from app.models.commercial_planner import CommercialPlan, CommercialPlanLine
+    from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
+    from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
+    from app.models.ingestion import ImportJob, SourceDefinition
+    from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
+    from app.services.commercial_planner.reference_bootstrap import ensure_commercial_planner_system_reference_data_sync
+    from app.services.commercial_planner.unassigned_distributor import UNASSIGNED_DISTRIBUTOR_CODE
+
+    token = secrets.token_hex(4)
+    job_id: int | None = None
+    plan_id: int | None = None
+    product_id: int | None = None
+
+    def _latest_job_query(session, pids: list[int]):
+        return session.scalar(
+            select(func.max(HistoricalLineupImportHeader.import_job_id))
+            .join(
+                HistoricalLineupImportLine,
+                HistoricalLineupImportLine.header_id == HistoricalLineupImportHeader.id,
+            )
+            .join(ImportJob, ImportJob.id == HistoricalLineupImportHeader.import_job_id)
+            .where(
+                HistoricalLineupImportLine.product_id.in_(pids),
+                ImportJob.import_mode == "apply",
+                ImportJob.template_slug == "historical_lineup",
+            )
+        )
+
+    try:
+        with SessionLocal() as db:
+            assert db.scalar(text("SELECT current_database()")) == "cip"
+            ensure_commercial_planner_system_reference_data_sync(db.connection())
+            db.commit()
+
+            customer_id = db.scalar(
+                select(DimCustomer.id).where(DimCustomer.code == OPEN_CHANNEL_CUSTOMER_CODE)
+            )
+            distributor_id = db.scalar(
+                select(DimDistributor.id).where(DimDistributor.code == UNASSIGNED_DISTRIBUTOR_CODE)
+            )
+            source_id = db.scalar(
+                select(SourceDefinition.id).where(SourceDefinition.code == "historical_lineup_default")
+            )
+            assert customer_id and distributor_id and source_id
+
+            product = DimProduct(
+                sku=f"SUG-JOIN-{token.upper()}",
+                name=f"Suggestions join test {token}",
+            )
+            db.add(product)
+            db.flush()
+            product_id = int(product.id)
+            assert _latest_job_query(db, [product_id]) is None
+
+            job = ImportJob(
+                source_id=source_id,
+                template_slug="historical_lineup",
+                import_mode="apply",
+                status="completed",
+                stage="loaded",
+                file_name=f"suggestions_join_{token}.xlsx",
+            )
+            db.add(job)
+            db.flush()
+            job_id = int(job.id)
+
+            header = HistoricalLineupImportHeader(
+                import_job_id=job_id,
+                source_id=source_id,
+                workbook_name=f"suggestions_join_{token}.xlsx",
+                sheet_name="NB",
+                period_label=f"TEST-{token}",
+                currency_code="ZAR",
+            )
+            db.add(header)
+            db.flush()
+
+            db.add(
+                HistoricalLineupImportLine(
+                    header_id=int(header.id),
+                    source_row_number=1,
+                    product_id=int(product_id),
+                    msrp_local=Decimal("1999"),
+                    promo_price_local=Decimal("1799"),
+                    quantity_units=Decimal("12"),
+                    row_status="accepted",
+                )
+            )
+
+            plan = CommercialPlan(
+                plan_name=f"Suggestions join test {token}",
+                status="draft",
+                period_start=date(2026, 1, 1),
+                currency_code="ZAR",
+            )
+            db.add(plan)
+            db.flush()
+            plan_id = int(plan.id)
+            db.add(
+                CommercialPlanLine(
+                    commercial_plan_id=plan_id,
+                    customer_id=int(customer_id),
+                    distributor_id=int(distributor_id),
+                    product_id=int(product_id),
+                    target_units=10,
+                    target_srp_local=1500,
+                    promo_mix_pct=0.5,
+                )
+            )
+            db.commit()
+
+            assert _latest_job_query(db, [int(product_id)]) == job_id
+
+        with TestClient(app) as api_client:
+            r = api_client.get(f"/api/v1/commercial-planner/plans/{plan_id}/suggestions")
+            assert r.status_code == 200
+            body = r.json()
+            assert len(body) == 1
+            assert body[0]["_meta"]["lineup_job_id"] == job_id
+            assert body[0]["_meta"]["data_sources"]["lineup"] is True
+            pricing = next(s for s in body[0]["suggestions"] if s["type"] == "pricing_band")
+            assert pricing["factors"]["lineup_msrp_local"] == pytest.approx(1999.0)
+            assert pricing["factors"]["lineup_promo_price_local"] == pytest.approx(1799.0)
+    finally:
+        if job_id is not None:
+            with SessionLocal() as db:
+                db.execute(
+                    text(
+                        "DELETE FROM historical_lineup_import_line WHERE header_id IN "
+                        "(SELECT id FROM historical_lineup_import_header WHERE import_job_id = :jid)"
+                    ),
+                    {"jid": job_id},
+                )
+                db.execute(
+                    text("DELETE FROM historical_lineup_import_header WHERE import_job_id = :jid"),
+                    {"jid": job_id},
+                )
+                db.execute(text("DELETE FROM import_job WHERE id = :jid"), {"jid": job_id})
+                if plan_id is not None:
+                    db.execute(
+                        text("DELETE FROM commercial_plan_line WHERE commercial_plan_id = :pid"),
+                        {"pid": plan_id},
+                    )
+                    db.execute(text("DELETE FROM commercial_plan WHERE id = :pid"), {"pid": plan_id})
+                if product_id is not None:
+                    db.execute(text("DELETE FROM dim_product WHERE id = :pid"), {"pid": product_id})
+                db.commit()
+
+
 def test_patch_plan_line_rejects_unknown_customer_id():
     from app.models.commercial_planner import CommercialPlanLine
     from app.models.dimensions import DimCustomer

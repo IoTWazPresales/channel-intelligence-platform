@@ -1000,7 +1000,7 @@ async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db))
     # ── 5. Batch lineup evidence per product_id (latest apply job) ───────────
     latest_job_id = await db.scalar(
         select(func.max(HistoricalLineupImportHeader.import_job_id))
-        .join(HistoricalLineupImportLine, HistoricalLineupImportLine.header_id == HistoricalLineupImportLine.id)
+        .join(HistoricalLineupImportLine, HistoricalLineupImportLine.header_id == HistoricalLineupImportHeader.id)
         .join(ImportJob, ImportJob.id == HistoricalLineupImportHeader.import_job_id)
         .where(
             HistoricalLineupImportLine.product_id.in_(product_ids),
