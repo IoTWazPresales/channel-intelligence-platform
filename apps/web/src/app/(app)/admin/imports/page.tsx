@@ -947,7 +947,7 @@ function AdminImportsPageContent() {
   }, [isDsi, dsiMapDraft, dsiMappingState?.field_mapping, dsiMappingState?.file_headers]);
 
   useEffect(() => {
-    if (!isDsi || activeStep !== 5 || !dsiMappingState?.file_headers?.length) return;
+    if (!isDsi || activeStep < 5 || !dsiMappingState?.file_headers?.length) return;
     const server = dsiMappingState.field_mapping ?? {};
     const next: Record<string, string> = {};
     for (const h of dsiMappingState.file_headers) {
