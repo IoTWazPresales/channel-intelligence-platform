@@ -17,8 +17,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from sqlalchemy import func, select
+
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import STAGE_FAILED, STAGE_LOADED, STAGE_VALIDATED, process_import_job_sync
+from app.models.import_distributor_si import ImportDistributorSiStagingLine
 from app.models.ingestion import ImportJob
 from app.services.imports.dsi_apply_completion import (
     DsiApplyCompletionError,
@@ -49,10 +52,26 @@ def run_dsi_apply_sync(job_id: int, *, on_progress: ProgressFn | None = None) ->
         job = db.get(ImportJob, job_id)
         if job is None or (job.template_slug or "") != "distributor_inventory":
             return {"id": job_id, "outcome": "not_found"}
+        # Normal flow: the job was just validated and the user clicked "Continue to apply".
+        # Step 2 (complete_dsi_import_job_to_loaded) re-resolves every staging line against
+        # current master data and upserts facts on its own, so re-running the entire
+        # parse + 178k-row resolution pipeline here is pure redundant work — it is exactly
+        # the "why does apply revalidate again" problem. Only run the pipeline when the job
+        # is NOT already validated with staging present (defensive fallback for an apply on
+        # a job that never went through validate).
+        already_validated = (job.stage or "") == STAGE_VALIDATED and bool(
+            db.scalar(
+                select(func.count())
+                .select_from(ImportDistributorSiStagingLine)
+                .where(ImportDistributorSiStagingLine.import_job_id == job_id)
+            )
+        )
 
     # Step 1 — DSI pipeline in apply mode (refresh staging → validated), with row progress.
-    with SessionLocal() as db:
-        process_import_job_sync(db, job_id, on_progress=on_progress)
+    # Skipped on the normal validated→apply path; Step 2 does the resolution refresh + fact upsert.
+    if not already_validated:
+        with SessionLocal() as db:
+            process_import_job_sync(db, job_id, on_progress=on_progress)
 
     # Step 2 — finalize: fact upsert + promote to loaded + dispatch derivation tasks.
     _emit("finalizing_apply", "Finalizing DSI apply", 0, 0)
