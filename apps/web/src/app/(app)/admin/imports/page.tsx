@@ -732,6 +732,7 @@ function AdminImportsPageContent() {
         const derived = dsiWizardActiveStepFromServer({
           stage: jobDetail.stage ?? '',
           status: jobDetail.status ?? '',
+          import_mode: jobDetail.import_mode ?? '',
         });
         if (derived != null) setActiveStep(derived);
       } else if (jobDetail.template_slug === 'inbound_shipments') {
@@ -1043,10 +1044,8 @@ function AdminImportsPageContent() {
     refetchInterval: (q) => {
       const j = q.state.data;
       if (!j) return 1500;
-      const status = (j.status || '').trim().toLowerCase();
       const st = (j.stage || '').trim();
       if (st === 'loaded' || st === 'failed') return false;
-      if (status === 'failed' || status === 'completed' || status === 'completed_with_errors') return false;
       return 1500;
     },
   });
@@ -1090,7 +1089,9 @@ function AdminImportsPageContent() {
     const status = (j.status || '').trim().toLowerCase();
     const st = (j.stage || '').trim();
     if (status === 'running' && st !== 'loaded' && st !== 'failed') return;
-    if (st === 'loaded' || st === 'failed' || status === 'completed' || status === 'completed_with_errors' || status === 'failed') {
+    // Terminal for apply is ``loaded`` or ``failed`` only. Step 1 of apply leaves the job at
+    // ``validated`` + ``completed`` — that is NOT apply-complete; Step 2 still has to upsert facts.
+    if (st === 'loaded' || st === 'failed') {
       setDsiApplyAsync(false);
       void (async () => {
         await refetchDsiImportJobStewardQueries(qc, j.id, { includeImportJobsList: true });
@@ -1287,10 +1288,13 @@ function AdminImportsPageContent() {
     const derived = dsiWizardActiveStepFromServer({
       stage: String(job.stage ?? ''),
       status: String(job.status ?? ''),
+      import_mode: String((job as { import_mode?: string | null }).import_mode ?? ''),
     });
     if (derived == null) return;
 
     if ((dsiPipelineInFlight || dsiValidateAsync) && activeStep >= 6 && derived < 6) return;
+    // Apply in flight or on apply step — do not yank back to steward while finalize runs.
+    if (dsiApplyAsync && activeStep >= 7 && derived === 6) return;
 
     if (dsiDerivedStepRef.current.jobId !== lastJobId) {
       dsiDerivedStepRef.current = { jobId: lastJobId, step: null };
@@ -1309,6 +1313,7 @@ function AdminImportsPageContent() {
     dsiMappingState,
     dsiPipelineInFlight,
     dsiValidateAsync,
+    dsiApplyAsync,
   ]);
 
   const { data: dsiJobIntelligence } = useQuery({

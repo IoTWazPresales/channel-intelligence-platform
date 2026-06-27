@@ -52,24 +52,21 @@ def run_dsi_apply_sync(job_id: int, *, on_progress: ProgressFn | None = None) ->
         job = db.get(ImportJob, job_id)
         if job is None or (job.template_slug or "") != "distributor_inventory":
             return {"id": job_id, "outcome": "not_found"}
-        # Normal flow: the job was just validated and the user clicked "Continue to apply".
-        # Step 2 (complete_dsi_import_job_to_loaded) re-resolves every staging line against
-        # current master data and upserts facts on its own, so re-running the entire
-        # parse + 178k-row resolution pipeline here is pure redundant work — it is exactly
-        # the "why does apply revalidate again" problem. Only run the pipeline when the job
-        # is NOT already validated with staging present (defensive fallback for an apply on
-        # a job that never went through validate).
-        already_validated = (job.stage or "") == STAGE_VALIDATED and bool(
-            db.scalar(
-                select(func.count())
-                .select_from(ImportDistributorSiStagingLine)
-                .where(ImportDistributorSiStagingLine.import_job_id == job_id)
-            )
-        )
+        # Normal flow: validate already built ``import_distributor_si_staging_line``. Step 2
+        # (``complete_dsi_import_job_to_loaded``) re-resolves those rows against current master
+        # data and upserts facts — re-parsing the file here is redundant and destructive (wiping
+        # staging mid-apply if interrupted). Skip Step 1 whenever staging already exists, including
+        # recovery from a prior failed/interrupted apply that left rows behind.
+        staging_count = db.scalar(
+            select(func.count())
+            .select_from(ImportDistributorSiStagingLine)
+            .where(ImportDistributorSiStagingLine.import_job_id == job_id)
+        ) or 0
+        skip_full_pipeline = staging_count > 0
 
-    # Step 1 — DSI pipeline in apply mode (refresh staging → validated), with row progress.
-    # Skipped on the normal validated→apply path; Step 2 does the resolution refresh + fact upsert.
-    if not already_validated:
+    # Step 1 — DSI pipeline in apply mode (parse file → staging → validated). Fallback only when
+    # there is no staging yet (apply without a prior validate).
+    if not skip_full_pipeline:
         with SessionLocal() as db:
             process_import_job_sync(db, job_id, on_progress=on_progress)
 

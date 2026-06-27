@@ -40,6 +40,12 @@ describe('dsiWizardActiveStepFromServer', () => {
     expect(dsiWizardActiveStepFromServer({ stage: 'validated', status: 'completed_with_errors' })).toBe(6);
   });
 
+  it('routes validated + apply import_mode to apply step (not steward)', () => {
+    expect(
+      dsiWizardActiveStepFromServer({ stage: 'validated', status: 'completed', import_mode: 'apply' })
+    ).toBe(7);
+  });
+
   it('routes loaded stage to apply step', () => {
     expect(dsiWizardActiveStepFromServer({ stage: 'loaded', status: 'completed' })).toBe(7);
   });
