@@ -15,7 +15,6 @@ from app.services.imports.dsi_soh_reconciliation_sync import run_dsi_soh_reconci
 from app.services.imports.import_background_slots import (
     SLOT_DSI_SOH,
     set_task_slot_by_job_id,
-    set_task_slot_on_job,
 )
 from app.services.task_run_ledger import (
     ENTITY_IMPORT_JOB,
@@ -132,12 +131,15 @@ def dispatch_dsi_soh_reconciliation_after_apply(
             job.id,
         )
         return
-    task_id, async_poll = enqueue_dsi_soh_reconciliation(
+    # Single-writer: the slot is persisted inside ``enqueue_*`` via
+    # ``set_task_slot_by_job_id`` (its own short-lived, committed session). Do NOT also
+    # write it on the caller's session and flush — that would hold an uncommitted row
+    # lock on ``import_job`` across the *next* dispatch's own-session write, deadlocking
+    # two connections on the same thread. ``complete_dsi_import_job_to_loaded`` refreshes
+    # the job afterwards, so the in-memory copy still reflects the persisted slot.
+    enqueue_dsi_soh_reconciliation(
         int(job.id),
         distributor_id=int(distributor_id),
         period_end_date=period_end_date,
         detach_from_caller=True,
     )
-    set_task_slot_on_job(job, SLOT_DSI_SOH, task_id=task_id, async_poll=async_poll)
-    session.add(job)
-    session.flush()

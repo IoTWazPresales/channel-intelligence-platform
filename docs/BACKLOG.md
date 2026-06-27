@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-050 — DSI derivation dispatch wrapper deadlocks on `import_job.staged_metadata`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **RESOLVED** · 2026-06-27 — single-writer fix shipped on `feat/dsi-async-topology`. `dispatch_dsi_soh_reconciliation_after_apply` / `dispatch_dsi_velocity_after_apply` no longer write/flush the slot on the caller session; `enqueue_*` (`set_task_slot_by_job_id`, own committed session) is the sole writer. Derivation dispatch in `complete_dsi_import_job_to_loaded` wrapped in try/except (loaded job never reverts to failed). Test asserts `session.flush` not called. Proven deadlock-free on fresh job #199 (full SOH+velocity+forecast derive chain). Remaining sub-item below kept only if a multi-concurrency worker reopens it. |
+| **Effort** | Small–medium (session/transaction boundary fix + concurrency test) |
+| **Source** | Warren session (2026-06-27) job #96 finalize recovery: when `complete_dsi_import_job_to_loaded` dispatched SOH reconciliation + velocity, two connections both ran `UPDATE import_job SET staged_metadata=...` and **app-level deadlocked** (one `idle in transaction` holding the row lock, the other `Lock/transactionid` waiting). The `run_*_sync` work itself is trivially fast (SOH 0.4s, velocity 3.5s inline). Files: `dsi_apply_completion.py` (dispatch tail), `dsi_soh_reconciliation_enqueue.py` / `dsi_velocity_enqueue.py` (`set_task_slot_on_job` + `_persist_*_metadata` open separate sessions), `import_background_slots.py`. |
+| **Idea** | The derivation **dispatch wrapper** writes task-slot bookkeeping to `import_job.staged_metadata` from multiple concurrent sessions (caller session still holding the row lock pre-commit + helper sessions + the picked-up worker task), producing a lock-ordering deadlock on a single hot row. Only manifests when dispatch runs while another writer holds the `import_job` row (out-of-band finalize, or two derivation tasks racing on a multi-slot worker). |
+| **Why it matters / deferrable** | Did not corrupt data (job #96 reached `loaded`; facts intact) and the dev solo worker normally serializes, so it is masked day-to-day. Deferrable until a multi-concurrency worker or another out-of-band finalize is needed; but it is a latent hang risk for the canonical worker path under concurrency. |
+| **What the work is** | (1) Ensure the caller **commits the stage flip + releases the `import_job` row lock before** dispatching derivations (or dispatch after commit). (2) Make slot writes single-session / use a short autonomous transaction, or batch SOH+velocity slot writes into one update. (3) Consider `SELECT ... FOR UPDATE` ordering or advisory lock keyed on job id. (4) Concurrency test: two derivations dispatched for the same job must not deadlock. |
+| **Regression traps** | Don't drop activity-feed slot registration (import-parity); don't reintroduce orphan slots; keep broker → in-process-thread → sync fallback intact; preserve idempotent derivations. |
+| **Behavior to retain** | Every background task registered in `import_background_slots`; `clear_all_task_slots` on cancel/retry; SOH/velocity idempotency. |
+| **Out of scope** | Rewriting the derivation tasks themselves; queue split (BACKLOG-039); broad async refactor (BACKLOG-048). |
+| **TRIGGER** | Worker concurrency raised above solo; **or** another `staged_metadata` deadlock / finalize hang observed; **or** BACKLOG-048 background-parity audit starts. |
+
+---
+
 ## BACKLOG-049 — Unresolved module (ignore → unresolved worklist)
 
 | Field | Detail |

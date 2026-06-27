@@ -114,21 +114,37 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
             )
         )
     if dist_id is not None and period_end is not None:
-        from app.services.imports.dsi_soh_reconciliation_enqueue import (
-            dispatch_dsi_soh_reconciliation_after_apply,
-        )
+        # Facts are already committed and the job is LOADED (above). Downstream
+        # derivation dispatch (SOH reconciliation, velocity) is best-effort: any
+        # failure here must NOT revert a successfully loaded job, so it is isolated
+        # in its own try/except. A derivation hiccup leaves the job ``loaded`` with
+        # facts applied — never ``failed``.
+        try:
+            from app.services.imports.dsi_soh_reconciliation_enqueue import (
+                dispatch_dsi_soh_reconciliation_after_apply,
+            )
 
-        dispatch_dsi_soh_reconciliation_after_apply(
-            db,
-            job,
-            distributor_id=int(dist_id),
-            period_end_date=period_end if isinstance(period_end, date) else period_end,
-        )
-        from app.services.imports.dsi_velocity_enqueue import dispatch_dsi_velocity_after_apply
+            dispatch_dsi_soh_reconciliation_after_apply(
+                db,
+                job,
+                distributor_id=int(dist_id),
+                period_end_date=period_end if isinstance(period_end, date) else period_end,
+            )
+            from app.services.imports.dsi_velocity_enqueue import dispatch_dsi_velocity_after_apply
 
-        dispatch_dsi_velocity_after_apply(db, job, int(dist_id))
-        db.commit()
-        db.refresh(job)
+            dispatch_dsi_velocity_after_apply(db, job, int(dist_id))
+            db.commit()
+            db.refresh(job)
+        except Exception:
+            logger.exception(
+                "DSI post-load derivation dispatch failed job_id=%s; facts applied and "
+                "job remains loaded",
+                job.id,
+            )
+            try:
+                db.rollback()
+            except Exception:
+                logger.exception("DSI post-load rollback failed job_id=%s", job.id)
 
     return {
         "ok": True,

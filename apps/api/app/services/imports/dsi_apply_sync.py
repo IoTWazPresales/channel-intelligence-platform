@@ -100,6 +100,14 @@ def run_dsi_apply_sync(job_id: int, *, on_progress: ProgressFn | None = None) ->
         outcome = "applied"
         if job is not None:
             if (job.stage or "") == STAGE_LOADED:
+                # Idempotent re-apply: a job already at ``loaded`` skips
+                # ``complete_dsi_import_job_to_loaded`` (it requires ``validated``), so the
+                # endpoint's ``status=running`` would otherwise stick forever on a
+                # double-click / re-apply. A job at ``loaded`` is, by definition, completed.
+                if (job.status or "") != "completed":
+                    job.status = "completed"
+                    if getattr(job, "completed_at", None) is None:
+                        job.completed_at = datetime.now(timezone.utc)
                 persist_clear_background_task_metadata(db, job)
                 db.commit()
             else:

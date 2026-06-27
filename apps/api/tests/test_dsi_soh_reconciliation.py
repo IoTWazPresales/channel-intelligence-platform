@@ -107,5 +107,12 @@ def test_dispatch_after_apply_enqueues(mock_enqueue: MagicMock) -> None:
         distributor_id=3,
         period_end_date=date(2024, 7, 1),
     )
-    mock_enqueue.assert_called_once()
-    assert job.staged_metadata.get("dsi_soh_reconcile_task") is not None
+    # Single-writer contract: dispatch delegates persistence to ``enqueue_*`` (which
+    # writes the slot via its own committed session). The dispatch wrapper must NOT
+    # also write the slot on the caller's session / flush it — doing so held an
+    # uncommitted ``import_job`` row lock across the next dispatch's own-session write
+    # and self-deadlocked the worker. So no caller-side flush should occur here.
+    mock_enqueue.assert_called_once_with(
+        50, distributor_id=3, period_end_date=date(2024, 7, 1), detach_from_caller=True
+    )
+    session.flush.assert_not_called()

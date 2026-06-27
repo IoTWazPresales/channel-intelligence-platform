@@ -1162,21 +1162,34 @@ function AdminImportsPageContent() {
   });
 
   const dsiApplyComplete = useMutation({
+    // Finalize to loaded must NOT run synchronously in the request path — the full re-resolve +
+    // fact upsert for large jobs exceeds the proxy headers timeout (~300s) and returns a spurious
+    // 500 even though the worker committed facts. Dispatch through the same async worker as Apply
+    // (run_dsi_apply_sync → complete_dsi_import_job_to_loaded) and let the apply poll drive to loaded.
     mutationFn: async () => {
       if (lastJobId == null) throw new Error('No job');
-      return apiPost<{
-        ok?: boolean;
-        stage?: string;
-        status?: string;
-        import_job_id?: number;
-        staging_rows?: number;
-      }>(`/api/v1/mappings/import-jobs/${lastJobId}/dsi-apply-complete`);
+      const fd = new FormData();
+      const cd =
+        !selectedTemplate?.destructive_apply_requires_confirm ||
+        (selectedTemplate.destructive_apply_requires_confirm && confirmDestructive);
+      fd.append('confirm_destructive', cd ? 'true' : 'false');
+      const res = await fetch(apiUrl(`/api/v1/imports/jobs/${lastJobId}/dsi-apply`), {
+        method: 'POST',
+        body: fd,
+        headers: defaultHeaders,
+      });
+      if (!res.ok) throw new Error(await readFetchError(res));
+      return res.json() as Promise<DsiMappingState & { async?: boolean; task_id?: string | null }>;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data && (data as { async?: boolean }).async) {
+        setDsiApplyAsync(true);
+      }
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
     },
     onError: () => {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
@@ -3874,6 +3887,30 @@ function AdminImportsPageContent() {
         {activeStep === 7 && isDsi && selectedTemplate ? (
           <Stack spacing={2}>
             <Typography variant="subtitle2">Apply to canonical facts (upsert)</Typography>
+            {importJobApplyIsLoaded(dsiJobSnapshotForRouting.stage, dsiJobSnapshotForRouting.status) ? (
+              <ImportJobLoadedSuccessCallout
+                importJobId={lastJobId ?? 0}
+                templateLabel={selectedTemplate.display_name}
+                fileName={jobDetail?.file_name}
+                status={dsiJobSnapshotForRouting.status}
+                stage={dsiJobSnapshotForRouting.stage}
+                factLayerLabel="distributor sell-out & inventory facts (`fact_sales_sellout`, `fact_inventory_distributor`)"
+                onStartNewImport={() => {
+                  setActiveStep(0);
+                  setSelectedSlug(null);
+                  setSourceId('');
+                  setLastJobId(null);
+                  setLastGenericFile(null);
+                  setHistoricalValidatedJobId(null);
+                  setIsJobRevisitMode(false);
+                  setDsiValidateAsync(false);
+                  setDsiApplyAsync(false);
+                  void router.replace('/admin/imports');
+                }}
+                testId="dsi-import-loaded-success"
+              />
+            ) : (
+              <>
             {dsiJobFailedAlert}
             <Alert severity="warning">
               Apply upserts sell-out and distributor inventory using natural keys (distributor + customer + product + period
@@ -3905,8 +3942,13 @@ function AdminImportsPageContent() {
             {dsiApplyComplete.isError ? (
               <Alert severity="error">{safeDisplayError(dsiApplyComplete.error)}</Alert>
             ) : null}
-            {dsiApply.isPending ? <LinearProgress /> : null}
-            {dsiApplyComplete.isPending ? <LinearProgress /> : null}
+            {dsiApply.isPending || dsiApplyComplete.isPending || dsiApplyAsync ? <LinearProgress /> : null}
+            {dsiApplyAsync ? (
+              <Alert severity="info" data-testid="dsi-apply-running">
+                Applying facts and finalizing to <strong>loaded</strong> in the background worker. This can take a few
+                minutes for large files — you can leave this page and the job will continue.
+              </Alert>
+            ) : null}
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Button onClick={() => setActiveStep(6)}>Back</Button>
               <Button
@@ -3915,6 +3957,7 @@ function AdminImportsPageContent() {
                 disabled={
                   dsiApply.isPending ||
                   dsiApplyComplete.isPending ||
+                  dsiApplyAsync ||
                   (selectedTemplate.destructive_apply_requires_confirm && !confirmDestructive)
                 }
                 onClick={() => void dsiApply.mutateAsync()}
@@ -3925,7 +3968,7 @@ function AdminImportsPageContent() {
                 <Button
                   variant="outlined"
                   color="success"
-                  disabled={dsiApply.isPending || dsiApplyComplete.isPending}
+                  disabled={dsiApply.isPending || dsiApplyComplete.isPending || dsiApplyAsync}
                   onClick={() => void dsiApplyComplete.mutateAsync()}
                   data-testid="dsi-apply-complete"
                 >
@@ -3939,6 +3982,8 @@ function AdminImportsPageContent() {
                 to re-resolve rows, run fact upserts, and set the job to <strong>loaded</strong>.
               </Alert>
             ) : null}
+              </>
+            )}
           </Stack>
         ) : null}
 
