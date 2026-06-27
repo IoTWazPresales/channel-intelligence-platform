@@ -83,3 +83,18 @@ Never silently pick the older block in an archive or a session handover.
 Before debugging **worker busy**, **queue timeout**, or **Celery inspect** issues, read
 **`docs/DEV_TOPOLOGY.md`**. Warren daily dev is **Mode B** (local `cip` since 2026-06-22).
 Windows solo worker + **remote** Supabase (Mode A) remains supported but **degraded** — not production topology.
+
+### Local dev preflights (2026-06-27)
+
+| Service | Script | What it does |
+|---------|--------|--------------|
+| API | `scripts/dev-api.js` | Kills stale process on :8001 if CIP API already listening |
+| Worker | `scripts/dev-worker.js` | Redis TCP check; **kills orphan Celery** (`app.worker.celery_app`) before spawn |
+
+Skip only when intentional: `CIP_SKIP_API_PORT_PREFLIGHT=1` · `CIP_SKIP_REDIS_PREFLIGHT=1` · `CIP_SKIP_WORKER_PREFLIGHT=1`.
+
+**Windows ops:** node wrappers for API/worker can exit after long runs or sleep/resume — restart `pnpm dev:api` / `pnpm dev:worker`. Worker changes require worker restart (uvicorn reload does not cover Celery).
+
+### Recently resolved (do not re-audit)
+
+- **BACKLOG-050** — DSI post-apply `staged_metadata` dual-writer deadlock → single-writer fix in `b2b81ea`.
