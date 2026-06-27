@@ -88,6 +88,7 @@ import { DsiValidateProgressPanel } from './DsiValidateProgressPanel';
 import type { DsiValidateProgress } from './DsiValidateProgressPanel';
 import type { DsiCandidateRow } from '../mappings/DsiCandidateStewardPanel';
 import {
+  computeDsiContinueGateKey,
   dsiContinueToApplyAllowed,
   dsiGateFromMapping,
   dsiHumanFixableBlockingRows,
@@ -1004,16 +1005,8 @@ function AdminImportsPageContent() {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', jid] });
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(jid) });
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(jid) });
-      const { data: rows } = await refetchPreview();
+      await refetchPreview();
       await refetchDsiMapping();
-      const summ = parseDistributorSiSummaryFromRows(rows ?? undefined);
-      const fm = dsiMappingStateRef.current?.field_mapping ?? {};
-      const key = `${jid ?? ''}::${stableFieldMappingJson(fm)}`;
-      if (summ && dsiHumanFixableBlockingRows(summ) === 0) {
-        setDsiContinueGateKey(key);
-      } else {
-        setDsiContinueGateKey(null);
-      }
     },
     onError: () => {
       setDsiContinueGateKey(null);
@@ -1335,6 +1328,35 @@ function AdminImportsPageContent() {
   }, [dsiValidatePollJob?.staged_metadata, dsiJobIntelligence?.staged_metadata]);
 
   const dsiHasValidateResult = dsiValidationComplete || Boolean(distributorSiSummary);
+
+  // Unlock “Continue to apply” whenever the latest server summary clears blockers — not only
+  // when the main Validate button’s mutation onSuccess runs (server revalidate + async poll
+  // also refresh preview rows but previously left dsiContinueGateKey null).
+  useEffect(() => {
+    if (!isDsi) return;
+    if (dsiMappingDraftDirty) {
+      setDsiContinueGateKey(null);
+      return;
+    }
+    if (dsiPipelineInFlight || dsiValidate.isPending) {
+      setDsiContinueGateKey(null);
+      return;
+    }
+    if (!dsiValidationComplete || !dsiServerMappingGateOk) return;
+    setDsiContinueGateKey(
+      computeDsiContinueGateKey(lastJobId, dsiMappingState?.field_mapping, distributorSiSummary)
+    );
+  }, [
+    isDsi,
+    lastJobId,
+    distributorSiSummary,
+    dsiValidationComplete,
+    dsiPipelineInFlight,
+    dsiValidate.isPending,
+    dsiMappingDraftDirty,
+    dsiServerMappingGateOk,
+    dsiMappingState?.field_mapping,
+  ]);
 
   useEffect(() => {
     if (!isDsi || !dsiMappingDraftDirty) return;

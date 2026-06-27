@@ -137,3 +137,15 @@ export function dsiContinueToApplyAllowed(
   if (dsiHumanFixableBlockingRows(summary) > 0) return false;
   return (summary.master_merge_excluded_rows ?? 0) === 0;
 }
+
+/** Gate key after a successful validate when blockers are cleared (null when apply must stay blocked). */
+export function computeDsiContinueGateKey(
+  jobId: number | null,
+  fieldMapping: Record<string, string> | undefined,
+  summary: DistributorSiSummary | null
+): string | null {
+  if (jobId == null || summary == null) return null;
+  if (dsiHumanFixableBlockingRows(summary) > 0) return null;
+  if ((summary.master_merge_excluded_rows ?? 0) > 0) return null;
+  return `${jobId}::${stableFieldMappingJson(fieldMapping)}`;
+}

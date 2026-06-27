@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  computeDsiContinueGateKey,
   dsiContinueToApplyAllowed,
   dsiGateFromMapping,
   dsiHumanFixableBlockingRows,
@@ -107,6 +108,27 @@ describe('dsiStepUtils', () => {
     const s = parseDistributorSiSummaryFromRows(rows);
     expect(s?.sellout_issue_rows).toBe(2);
     expect(s?.rows_inventory_ready_with_sellout_warnings).toBe(2);
+  });
+
+  it('computeDsiContinueGateKey returns null when blockers remain', () => {
+    const fm = { a: 'distributor_token' };
+    expect(computeDsiContinueGateKey(7, fm, { blocking_rows: 3, human_fixable_blocking_rows: 3 })).toBeNull();
+    expect(
+      computeDsiContinueGateKey(7, fm, {
+        blocking_rows: 0,
+        human_fixable_blocking_rows: 0,
+        master_merge_excluded_rows: 2,
+      })
+    ).toBeNull();
+    const key = computeDsiContinueGateKey(7, fm, {
+      blocking_rows: 0,
+      human_fixable_blocking_rows: 0,
+      master_merge_excluded_rows: 0,
+    });
+    expect(key).toBe(`7::${stableFieldMappingJson(fm)}`);
+    expect(dsiContinueToApplyAllowed(key, 7, fm, { blocking_rows: 0, human_fixable_blocking_rows: 0 }, { isValidating: false, hasServerGate: true })).toBe(
+      true
+    );
   });
 
   it('dsiContinueToApplyAllowed gates on human-fixable blocking rows', () => {
