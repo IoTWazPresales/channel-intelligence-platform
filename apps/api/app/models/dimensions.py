@@ -78,8 +78,15 @@ class DimCustomer(Base, TimestampMixin):
     preferred_distributor_id: Mapped[int | None] = mapped_column(
         ForeignKey("dim_distributor.id"), nullable=True
     )
+    merged_into_customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True, index=False
+    )
 
     region: Mapped["DimRegion | None"] = relationship()
+    merged_into_customer: Mapped["DimCustomer | None"] = relationship(
+        foreign_keys=[merged_into_customer_id],
+        remote_side="DimCustomer.id",
+    )
     channel: Mapped["DimChannel | None"] = relationship()
     preferred_distributor: Mapped["DimDistributor | None"] = relationship()
 

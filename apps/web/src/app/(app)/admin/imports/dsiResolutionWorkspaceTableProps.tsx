@@ -2,6 +2,7 @@
 
 import type { MouseEvent } from 'react';
 import { Chip, CircularProgress, Stack, Typography } from '@mui/material';
+import NextLink from 'next/link';
 import { DsiPendingButton } from '@/features/import-steward/DsiPendingButton';
 import type { DsiCandidateRow, ImportStewardWorkspaceColumn } from '@/features/import-steward';
 import {
@@ -58,15 +59,35 @@ function strategicHint(ctx: Record<string, unknown> | null): boolean {
   return Boolean(ctx && ctx.strategic_channel_hint === true);
 }
 
+function masterDataAliasScopeConflict(ctx: Record<string, unknown> | null | undefined): boolean {
+  return ctx?.resolution_blocker === 'master_data_alias_scope_conflict';
+}
+
 function DsiMatchCell({
   row,
   planRow,
+  jobId,
 }: {
   row: DsiCandidateRow;
   planRow?: Record<string, unknown>;
+  jobId?: number | null;
 }) {
   const act = dsiEffectiveSuggestedAction(row, planRow);
   const mr = (row.match_reason || '').trim();
+  const ctx = (row.context ?? null) as Record<string, unknown> | null;
+  const aliasScopeChip =
+    row.entity_type === DSI_ENTITY_CUSTOMER && masterDataAliasScopeConflict(ctx) ? (
+      <Chip
+        size="small"
+        color="warning"
+        variant="outlined"
+        label="Master-data conflict — merge required"
+        component={NextLink}
+        href={`/admin/customers/duplicates?tab=alias_scope&token=${encodeURIComponent(row.normalized_key)}${jobId != null ? `&return_job=${jobId}` : ''}`}
+        clickable
+        data-testid="dsi-master-data-alias-scope-chip"
+      />
+    ) : null;
   const needsReview =
     act === 'needs_review' || ((!act || act === '') && (row.status || '').trim() === 'needs_review');
   const corrLabel = dsiCandidateCorroborationChipLabel(row.context);
@@ -145,6 +166,7 @@ function DsiMatchCell({
     return (
       <Stack spacing={0.25} alignItems="flex-start">
         <Typography variant="body2">Needs review</Typography>
+        {aliasScopeChip}
         {cap ? (
           <Typography variant="caption" color="text.secondary">
             {cap}
@@ -183,12 +205,13 @@ export type DsiResolutionWorkspaceColumnOptions = {
   onFocusRow: (row: DsiCandidateRow) => void;
   onOpenPlanDrawer: (candidateId: number) => void;
   rowActionPendingId?: number | null;
+  jobId?: number | null;
 };
 
 export function buildDsiResolutionWorkspaceColumns(
   opts: DsiResolutionWorkspaceColumnOptions
 ): ImportStewardWorkspaceColumn<DsiCandidateRow>[] {
-  const { planByCandidateId, formatPlanActionLabel, isTerminal, onFocusRow, onOpenPlanDrawer, rowActionPendingId } =
+  const { planByCandidateId, formatPlanActionLabel, isTerminal, onFocusRow, onOpenPlanDrawer, rowActionPendingId, jobId } =
     opts;
 
   const cols: ImportStewardWorkspaceColumn<DsiCandidateRow>[] = [
@@ -395,7 +418,7 @@ export function buildDsiResolutionWorkspaceColumns(
       id: 'match',
       header: 'Match',
       cellSx: { maxWidth: 220 },
-      cell: (r) => <DsiMatchCell row={r} planRow={planByCandidateId.get(r.id)} />,
+      cell: (r) => <DsiMatchCell row={r} planRow={planByCandidateId.get(r.id)} jobId={jobId} />,
     },
     {
       id: 'actions',

@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   dsiContinueToApplyAllowed,
   dsiGateFromMapping,
+  dsiHumanFixableBlockingRows,
   dsiSelectValue,
   dsiTargetDescription,
   dsiTargetLabel,
+  formatDsiBlockerSummaryLine,
   parseDistributorSiSummaryFromRows,
   stableFieldMappingJson,
 } from './dsiStepUtils';
@@ -107,19 +109,45 @@ describe('dsiStepUtils', () => {
     expect(s?.rows_inventory_ready_with_sellout_warnings).toBe(2);
   });
 
-  it('dsiContinueToApplyAllowed gates on job, mapping key, and blocking rows', () => {
+  it('dsiContinueToApplyAllowed gates on human-fixable blocking rows', () => {
     const fm = { a: 'distributor_token' };
     const key = `7::${stableFieldMappingJson(fm)}`;
-    const summary = { staging_rows: 1, blocking_rows: 0 };
+    const summary = { staging_rows: 1, blocking_rows: 0, human_fixable_blocking_rows: 0, master_merge_excluded_rows: 21 };
     expect(
       dsiContinueToApplyAllowed(key, 7, fm, summary, { isValidating: false, hasServerGate: true })
+    ).toBe(false);
+    expect(
+      dsiContinueToApplyAllowed(
+        key,
+        7,
+        fm,
+        { ...summary, master_merge_excluded_rows: 0 },
+        { isValidating: false, hasServerGate: true }
+      )
     ).toBe(true);
     expect(
-      dsiContinueToApplyAllowed(key, 7, fm, { ...summary, blocking_rows: 2 }, { isValidating: false, hasServerGate: true })
+      dsiContinueToApplyAllowed(
+        key,
+        7,
+        fm,
+        { ...summary, human_fixable_blocking_rows: 2, blocking_rows: 2 },
+        { isValidating: false, hasServerGate: true }
+      )
     ).toBe(false);
     expect(dsiContinueToApplyAllowed(key, 7, { ...fm, b: 'x' }, summary, { isValidating: false, hasServerGate: true })).toBe(
       false
     );
     expect(dsiContinueToApplyAllowed(key, 7, fm, summary, { isValidating: true, hasServerGate: true })).toBe(false);
+  });
+
+  it('formatDsiBlockerSummaryLine splits master-merge vs steward-map vs auto-excluded', () => {
+    expect(
+      formatDsiBlockerSummaryLine({
+        master_merge_excluded_rows: 21,
+        steward_map_blocking_rows: 40,
+        auto_excluded_rows: 121,
+      })
+    ).toBe('21 master-merge · 40 steward-map · 121 auto-excluded');
+    expect(dsiHumanFixableBlockingRows({ human_fixable_blocking_rows: 40, blocking_rows: 61 })).toBe(40);
   });
 });

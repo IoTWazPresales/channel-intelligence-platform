@@ -21,6 +21,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-06-27 | **DSI customer alias resolution-key fix (root cause):** steward map/provisional/open-channel wrote approved aliases keyed on the customer-name column while staging resolves on the Dealer Name Group → permanent `customer_unresolved` + phantom `resolved` candidates hidden from Customers tab. Routed all alias writes through `dsi_customer_alias_normalized_token` (= candidate resolution identity); preserve logic no longer carries stale `resolved` onto regenerated customer candidates. Job #96 remediated + full revalidate → **0 blocking rows**. Pre-existing dev-DB-pollution test failures unrelated. Uncommitted on `feat/dsi-async-topology`. |
 | 2026-06-24 | **Context refresh:** cloud→local chat loss recovered via `git pull`; HEAD `1e51c76` pushed (BACKLOG-046–048); alembic `20260623_0050` applied on local `cip`; Warren mid ACZA workflow — soak + steward mapping issues not re-verified this session. |
 | 2026-06-24 | **Shipment apply loaded UX:** shared `ImportJobLoadedSuccessCallout` on imports wizard step 6 when job stage `loaded`; BACKLOG-045 steward UI parity audit parked. |
 | 2026-06-24 | **Shipment wizard + steward DSI parity (Phases 1–3):** 7-step wizard; validate progress fix; entity filter fix; `ShipmentImportJobResolutionSection` rework (tabs in workspace, plan toolbar, bulk steward, server re-validate); contract D4 updated. |

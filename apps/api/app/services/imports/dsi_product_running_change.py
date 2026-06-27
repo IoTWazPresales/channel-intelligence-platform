@@ -11,6 +11,7 @@ IGNORE_REASON_SKU_INDETERMINATE = "ignore_sku_indeterminate"
 IGNORE_REASON_NO_CATALOGUE = "ignore_no_catalogue"
 IGNORE_REASON_NO_RECEIPT_EVIDENCE = "ignore_no_receipt_evidence"
 IGNORE_REASON_NO_CUSTOMER = "ignore_no_customer"
+IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT = "master_data_alias_scope_conflict"
 
 DSI_IGNORE_REASON_CODES = frozenset(
     {
@@ -18,6 +19,14 @@ DSI_IGNORE_REASON_CODES = frozenset(
         IGNORE_REASON_NO_CATALOGUE,
         IGNORE_REASON_NO_RECEIPT_EVIDENCE,
         IGNORE_REASON_NO_CUSTOMER,
+        IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT,
+    }
+)
+
+DSI_STRUCTURAL_EXCLUDE_REASON_CODES = frozenset(
+    {
+        IGNORE_REASON_NO_CUSTOMER,
+        IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT,
     }
 )
 
@@ -326,6 +335,21 @@ def infer_dsi_customer_ignore_reason_code(
     return None
 
 
+def infer_validate_auto_exclude_alias_scope_reason(
+    *,
+    sellout_or_return_attempt: bool,
+    cust_diag: list[str],
+) -> str | None:
+    """Master-data alias-scope collision — merge on duplicates page, not in-job steward map."""
+    if not sellout_or_return_attempt:
+        return None
+    from app.services.imports.source_token_alias_conflicts import MULTIPLE_CUSTOMER_ALIASES
+
+    if MULTIPLE_CUSTOMER_ALIASES in set(cust_diag or []):
+        return IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT
+    return None
+
+
 def compute_dsi_sellout_block_with_customer_auto_exclude(
     *,
     sellout_or_return_attempt: bool,
@@ -340,6 +364,13 @@ def compute_dsi_sellout_block_with_customer_auto_exclude(
     sellout_blocked_no_customer = bool(sellout_or_return_attempt and rcustomer_id is None)
     if not sellout_blocked_no_customer:
         return False, None
+    alias_scope_reason = infer_validate_auto_exclude_alias_scope_reason(
+        sellout_or_return_attempt=sellout_or_return_attempt,
+        cust_diag=cust_diag,
+    )
+    if alias_scope_reason:
+        apply_product_auto_exclude_diagnostic(diag, alias_scope_reason)
+        return False, alias_scope_reason
     auto_reason = infer_validate_auto_exclude_customer_reason(
         sellout_or_return_attempt=sellout_or_return_attempt,
         rcustomer_id=rcustomer_id,
@@ -352,6 +383,19 @@ def compute_dsi_sellout_block_with_customer_auto_exclude(
         apply_product_auto_exclude_diagnostic(diag, auto_reason)
         return False, auto_reason
     return True, None
+
+
+def is_human_fixable_dsi_blocked_staging_line(line: Any) -> bool:
+    """True when a blocked staging line still requires steward action on this import job."""
+    if (getattr(line, "resolution_status", None) or "").strip() != "blocked":
+        return False
+    diag = getattr(line, "diagnostic_codes", None)
+    if not isinstance(diag, list):
+        return True
+    steward_rc = parse_steward_ignored_line_reason(diag)
+    if steward_rc in DSI_IGNORE_REASON_CODES:
+        return False
+    return True
 
 
 def product_auto_exclude_terminal_status() -> tuple[str, str]:
@@ -653,6 +697,7 @@ def build_dsi_apply_exclusion_summary(db: Any, job_id: int, lines: list[Any]) ->
         IGNORE_REASON_SKU_INDETERMINATE: {"line_count": 0, "units": 0.0, "value": 0.0},
         IGNORE_REASON_NO_RECEIPT_EVIDENCE: {"line_count": 0, "units": 0.0, "value": 0.0},
         IGNORE_REASON_NO_CUSTOMER: {"line_count": 0, "units": 0.0, "value": 0.0},
+        IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT: {"line_count": 0, "units": 0.0, "value": 0.0},
     }
 
     for line in lines:

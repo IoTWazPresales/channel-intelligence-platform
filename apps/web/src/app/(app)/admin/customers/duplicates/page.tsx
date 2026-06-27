@@ -11,6 +11,8 @@ import {
   Paper,
   Select,
   Stack,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -29,6 +31,8 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { apiGet } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
+
+import { AliasScopeConflictsSection } from './AliasScopeConflictsSection';
 
 type ReferenceCount = {
   label: string;
@@ -79,6 +83,20 @@ function AdminCustomerDuplicatesPageContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  const tabParam = searchParams.get('tab');
+  const activeTab = tabParam === 'alias_scope' ? 'alias_scope' : 'name_similarity';
+
+  const setTab = useCallback(
+    (tab: 'name_similarity' | 'alias_scope') => {
+      const sp = new URLSearchParams(searchParams.toString());
+      sp.set('tab', tab);
+      if (!sp.get('page')) sp.set('page', '1');
+      if (!sp.get('page_size')) sp.set('page_size', String(DEFAULT_PAGE_SIZE));
+      router.replace(`${pathname}?${sp.toString()}`);
+    },
+    [pathname, router, searchParams]
+  );
+
   const page = Number(searchParams.get('page') || '1') || 1;
   const pageSize = Number(searchParams.get('page_size') || `${DEFAULT_PAGE_SIZE}`) || DEFAULT_PAGE_SIZE;
 
@@ -96,12 +114,27 @@ function AdminCustomerDuplicatesPageContent() {
   );
 
   useEffect(() => {
-    if (!searchParams.toString()) {
-      const sp = new URLSearchParams();
+    const sp = new URLSearchParams(searchParams.toString());
+    let changed = false;
+    if (!sp.get('page')) {
       sp.set('page', '1');
-      sp.set('page_size', String(DEFAULT_PAGE_SIZE));
-      router.replace(`${pathname}?${sp.toString()}`);
+      changed = true;
     }
+    if (!sp.get('page_size')) {
+      sp.set('page_size', String(DEFAULT_PAGE_SIZE));
+      changed = true;
+    }
+    const token = sp.get('token');
+    const returnJob = sp.get('return_job') ?? sp.get('job');
+    if ((token || returnJob) && sp.get('tab') !== 'alias_scope') {
+      sp.set('tab', 'alias_scope');
+      changed = true;
+    }
+    if (!sp.get('tab')) {
+      sp.set('tab', 'name_similarity');
+      changed = true;
+    }
+    if (changed) router.replace(`${pathname}?${sp.toString()}`);
   }, [pathname, router, searchParams]);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -122,12 +155,23 @@ function AdminCustomerDuplicatesPageContent() {
     <>
       <PageHeader
         crumbs={[{ label: 'Admin' }, { label: 'Customers', href: '/admin/customers' }, { label: 'Duplicates' }]}
-        title="Potential duplicate customers"
+        title="Customer duplicates & alias conflicts"
       />
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Read-only decision support. Groups share a similarity-normalised name key (
-        <code>normalize_customer_name_for_similarity</code>). The first member in each group is a display-only survivor
-        hint (verified status preferred, else oldest). No merge or writes are performed from this view.
+      <Tabs value={activeTab} onChange={(_e, v) => setTab(v)} sx={{ mb: 2 }} aria-label="Customer duplicate views">
+        <Tab value="alias_scope" label="Alias-scope conflicts (merge)" />
+        <Tab value="name_similarity" label="Name similarity (read-only)" />
+      </Tabs>
+      {activeTab === 'alias_scope' ? (
+        <AliasScopeConflictsSection />
+      ) : (
+        <>
+      <Alert severity="warning" sx={{ mb: 2 }}>
+        <strong>This tab is read-only.</strong> It groups customers with similar names — it does not fix DSI import
+        alias-scope conflicts. For job #96 and steward &quot;Master-data conflict&quot; chips, use the{' '}
+        <Button size="small" variant="outlined" onClick={() => setTab('alias_scope')} sx={{ ml: 0.5, verticalAlign: 'middle' }}>
+          Alias-scope conflicts (merge)
+        </Button>{' '}
+        tab or sidebar link <strong>Master Data → Alias-scope conflicts</strong>.
       </Alert>
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
         <Button component={Link} href="/admin/customers" variant="outlined">
@@ -241,6 +285,8 @@ function AdminCustomerDuplicatesPageContent() {
           </Stack>
         </ModuleDataSection>
       </Paper>
+        </>
+      )}
     </>
   );
 }

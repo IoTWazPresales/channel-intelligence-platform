@@ -33,7 +33,8 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
     - Template ``distributor_inventory``
     - Stage ``validated``
     - ``import_mode == apply``
-    - No staging line with ``resolution_status == blocked`` after refresh
+    - No human-fixable staging line with ``resolution_status == blocked`` after refresh
+      (structural / master-data exclusions and auto-excludes do not gate apply)
     - Fact upsert completes without recorded errors
     """
     job = db.get(ImportJob, int(job_id))
@@ -62,6 +63,7 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
 
     from app.services.imports.dsi_product_running_change import (
         build_dsi_apply_exclusion_summary,
+        is_human_fixable_dsi_blocked_staging_line,
         reapply_dsi_steward_ignored_customer_staging_lines,
         reapply_dsi_steward_ignored_product_staging_lines,
     )
@@ -70,10 +72,11 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
     reapply_dsi_steward_ignored_customer_staging_lines(db, int(job.id))
     db.flush()
 
-    blocked = [ln for ln in lines if (ln.resolution_status or "") == "blocked"]
+    blocked = [ln for ln in lines if is_human_fixable_dsi_blocked_staging_line(ln)]
     if blocked:
         raise DsiApplyCompletionError(
-            f"{len(blocked)} staging line(s) still blocked after refresh (e.g. row {blocked[0].source_row_number})"
+            f"{len(blocked)} staging line(s) still human-fixable blocked after refresh "
+            f"(e.g. row {blocked[0].source_row_number})"
         )
 
     apply_exclusion = build_dsi_apply_exclusion_summary(db, int(job.id), lines)

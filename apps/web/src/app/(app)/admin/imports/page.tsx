@@ -90,9 +90,11 @@ import type { DsiCandidateRow } from '../mappings/DsiCandidateStewardPanel';
 import {
   dsiContinueToApplyAllowed,
   dsiGateFromMapping,
+  dsiHumanFixableBlockingRows,
   dsiSelectValue,
   dsiTargetDescription,
   dsiTargetLabel,
+  formatDsiBlockerSummaryLine,
   formatDsiSamples,
   parseDistributorSiSummaryFromRows,
   stableFieldMappingJson,
@@ -1007,7 +1009,7 @@ function AdminImportsPageContent() {
       const summ = parseDistributorSiSummaryFromRows(rows ?? undefined);
       const fm = dsiMappingStateRef.current?.field_mapping ?? {};
       const key = `${jid ?? ''}::${stableFieldMappingJson(fm)}`;
-      if (summ && (summ.blocking_rows ?? 0) === 0) {
+      if (summ && dsiHumanFixableBlockingRows(summ) === 0) {
         setDsiContinueGateKey(key);
       } else {
         setDsiContinueGateKey(null);
@@ -3708,7 +3710,7 @@ function AdminImportsPageContent() {
             {dsiValidationComplete && !dsiPipelineInFlight ? (
               <Alert
                 severity={
-                  distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0
+                  distributorSiSummary != null && dsiHumanFixableBlockingRows(distributorSiSummary) > 0
                     ? 'warning'
                     : distributorSiSummary != null &&
                         ((distributorSiSummary.warning_rows ?? 0) > 0 ||
@@ -3718,8 +3720,8 @@ function AdminImportsPageContent() {
                 }
                 data-testid="dsi-validate-finished"
               >
-                {distributorSiSummary != null && (distributorSiSummary.blocking_rows ?? 0) > 0 ? (
-                  'Validation finished with blocking issues. Fix mappings or source data, then re-run validation before applying.'
+                {distributorSiSummary != null && dsiHumanFixableBlockingRows(distributorSiSummary) > 0 ? (
+                  'Validation finished with steward-map blockers. Resolve unmapped customers below, or merge master-data alias conflicts on the duplicates page, then re-run validation before applying.'
                 ) : distributorSiSummary != null &&
                   ((distributorSiSummary.warning_rows ?? 0) > 0 ||
                     (distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0) ? (
@@ -3745,10 +3747,15 @@ function AdminImportsPageContent() {
               <Alert severity="info" data-testid="dsi-preview-summary">
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
                   Import summary: {distributorSiSummary.staging_rows ?? '—'} rows processed;{' '}
-                  <strong>{distributorSiSummary.blocking_rows ?? 0}</strong> blocking;{' '}
+                  <strong>{dsiHumanFixableBlockingRows(distributorSiSummary)}</strong> steward-map blocking;{' '}
                   <strong>{distributorSiSummary.warning_rows ?? 0}</strong> warnings;{' '}
                   <strong>{distributorSiSummary.aggregated_candidates ?? 0}</strong> aggregated mapping candidate groups.
                 </Typography>
+                {formatDsiBlockerSummaryLine(distributorSiSummary) ? (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                    Blocker split: {formatDsiBlockerSummaryLine(distributorSiSummary)}
+                  </Typography>
+                ) : null}
                 {(distributorSiSummary?.aggregated_candidates ?? 0) > 0 ? (
                   <Typography variant="caption" color="text.secondary" display="block">
                     Resolve grouped tokens below on this page (paginated), or open the global{' '}
@@ -3771,6 +3778,7 @@ function AdminImportsPageContent() {
             {lastJobId != null && dsiValidationComplete ? (
               <DsiImportJobResolutionSection
                 importJobId={lastJobId}
+                validateSummary={distributorSiSummary}
                 dsiPipelineRunning={dsiPipelineInFlight}
                 onAsyncPipelineStarted={handleDsiAsyncPipelineStarted}
                 onInvalidate={() => {

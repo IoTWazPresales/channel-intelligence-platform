@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy import BigInteger, ColumnElement, Select, cast, func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 
 def count_subquery_for_columns(
@@ -57,6 +58,30 @@ async def batch_counts_multi_table(
         return out
     combined = union_all(*subqueries)
     rows = (await db.execute(combined)).all()
+    for row in rows:
+        mapping = row._mapping
+        entity_id = mapping.get("entity_id")
+        if entity_id is None:
+            continue
+        eid = int(entity_id)
+        cnt = int(mapping.get("cnt") or 0)
+        if eid in out and cnt > 0:
+            out[eid].append({"label": str(mapping.get("lbl")), "count": cnt})
+    return out
+
+
+def batch_counts_multi_table_sync(
+    db: Session,
+    subqueries: list[Select],
+    entity_ids: list[int],
+) -> dict[int, list[dict[str, int | str]]]:
+    """Sync variant of :func:`batch_counts_multi_table` for steward merge preview/apply."""
+    ids = [int(i) for i in entity_ids if isinstance(i, int) and i > 0]
+    out: dict[int, list[dict[str, int | str]]] = {i: [] for i in ids}
+    if not ids or not subqueries:
+        return out
+    combined = union_all(*subqueries)
+    rows = db.execute(combined).all()
     for row in rows:
         mapping = row._mapping
         entity_id = mapping.get("entity_id")

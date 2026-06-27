@@ -62,7 +62,14 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: 'Products', href: '/admin/products' },
       { label: 'Customers', href: '/admin/customers' },
-      { label: 'Customer duplicates', href: '/admin/customers/duplicates' },
+      {
+        label: 'Alias-scope conflicts',
+        href: '/admin/customers/duplicates?tab=alias_scope',
+      },
+      {
+        label: 'Name-similarity duplicates',
+        href: '/admin/customers/duplicates?tab=name_similarity',
+      },
       { label: 'Distributors', href: '/admin/distributors' },
       { label: 'Channels & Regions', href: '/admin/channels-regions' },
     ],
@@ -94,10 +101,27 @@ export function defaultGroupExpandedState(): Record<string, boolean> {
   return out;
 }
 
+function duplicatesTabFromSearch(search: string): string {
+  const raw = search.startsWith('?') ? search.slice(1) : search;
+  const tab = new URLSearchParams(raw).get('tab');
+  if (tab === 'alias_scope' || tab === 'name_similarity') return tab;
+  return 'name_similarity';
+}
+
 export function navHrefMatches(pathname: string, search: string, href: string): boolean {
   const qIdx = href.indexOf('?');
+  const path = qIdx >= 0 ? href.slice(0, qIdx) : href;
+  const hrefQuery = qIdx >= 0 ? href.slice(qIdx + 1) : '';
+
+  if (path === '/admin/customers/duplicates') {
+    if (pathname !== path) return false;
+    const expectedTab = hrefQuery
+      ? new URLSearchParams(hrefQuery).get('tab') || 'name_similarity'
+      : 'name_similarity';
+    return duplicatesTabFromSearch(search) === expectedTab;
+  }
+
   if (qIdx >= 0) {
-    const path = href.slice(0, qIdx);
     const query = href.slice(qIdx);
     return pathname === path && search === query;
   }

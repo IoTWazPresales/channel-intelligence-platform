@@ -60,6 +60,8 @@ import {
 } from '@/features/import-steward/dsiDuplicateCluster';
 
 import { buildDsiResolutionWorkspaceColumns } from './dsiResolutionWorkspaceTableProps';
+import type { DistributorSiSummary } from './dsiStepUtils';
+import { dsiHumanFixableBlockingRows } from './dsiStepUtils';
 
 export function DsiImportJobResolutionSection({
   importJobId,
@@ -69,6 +71,7 @@ export function DsiImportJobResolutionSection({
   onInvalidate,
   dsiPipelineRunning = false,
   onAsyncPipelineStarted,
+  validateSummary = null,
 }: {
   importJobId: number;
   /** Test / story override — skips paginated fetch when provided. */
@@ -79,6 +82,8 @@ export function DsiImportJobResolutionSection({
   /** True while validate/revalidate Celery pipeline is in flight (imports page). */
   dsiPipelineRunning?: boolean;
   onAsyncPipelineStarted?: (args: { importJobId: number; taskId?: string | null }) => void;
+  /** Latest distributor_si_summary for blocker empty-state copy. */
+  validateSummary?: DistributorSiSummary | null;
 }) {
   const tabbedMode = candidatesOverride == null;
 
@@ -461,6 +466,7 @@ export function DsiImportJobResolutionSection({
         onFocusRow: openStewardDrawer,
         onOpenPlanDrawer: (id) => plan.handleOpenSuggestionRow(id),
         rowActionPendingId,
+        jobId: importJobId,
       }),
     [
       plan.planByCandidateId,
@@ -468,6 +474,7 @@ export function DsiImportJobResolutionSection({
       openStewardDrawer,
       plan.handleOpenSuggestionRow,
       rowActionPendingId,
+      importJobId,
     ]
   );
 
@@ -495,6 +502,17 @@ export function DsiImportJobResolutionSection({
     },
     [lookupPeerCandidateByNormalizedKey]
   );
+
+  const openActionableCandidates = useMemo(
+    () => candidates.filter((c) => !DSI_STEWARD_CONFIG.terminalStatuses.has((c.status || '').trim())),
+    [candidates]
+  );
+  const masterMergeExcluded = validateSummary?.master_merge_excluded_rows ?? 0;
+  const humanFixableBlockers = dsiHumanFixableBlockingRows(validateSummary);
+  const showBlockerEmptyState =
+    !candidatesLoading &&
+    (humanFixableBlockers > 0 || masterMergeExcluded > 0) &&
+    openActionableCandidates.length === 0;
 
   const candidateWorkspace = (
     <ImportStewardCandidateWorkspace<DsiCandidateRow>
@@ -753,6 +771,34 @@ export function DsiImportJobResolutionSection({
           .
         </Typography>
       </Alert>
+
+      {showBlockerEmptyState ? (
+        <Alert severity="warning" data-testid="dsi-blocker-empty-state">
+          <Typography variant="body2" component="div">
+            {humanFixableBlockers > 0 ? (
+              <>
+                <strong>{humanFixableBlockers}</strong> row(s) still need steward mapping (unmapped customers or other
+                fixable errors). Open the <strong>Customers</strong> tab and clear default filters, or use the global{' '}
+                <Link component={NextLink} href={`/admin/mappings?import_job_id=${importJobId}`}>
+                  mapping queue
+                </Link>
+                .
+              </>
+            ) : null}
+            {masterMergeExcluded > 0 ? (
+              <>
+                {humanFixableBlockers > 0 ? ' ' : null}
+                <strong>{masterMergeExcluded}</strong> sell-out row(s) are held for master-data alias conflicts — merge
+                duplicate customers on{' '}
+                <Link component={NextLink} href="/admin/customers/duplicates?tab=alias_scope">
+                  Alias-scope conflicts
+                </Link>
+                , then re-validate this job.
+              </>
+            ) : null}
+          </Typography>
+        </Alert>
+      ) : null}
 
       <DsiResolutionPlanToolbar
         candidatesCount={candidatesTotal}

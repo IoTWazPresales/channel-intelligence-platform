@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import secrets
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
@@ -410,6 +411,143 @@ async def list_customer_duplicate_groups_endpoint(
 ):
     """Read-only: groups of customers sharing a similarity-normalised name key (2+ members)."""
     return await list_customer_duplicate_groups(db, page=page, page_size=page_size)
+
+
+class CustomerAliasScopeMergeBody(BaseModel):
+    normalized_token: str = Field(min_length=1, max_length=512)
+    source_definition_id: int | None = None
+    distributor_id: int | None = None
+    survivor_id: int | None = None
+    audit_note: str = Field(min_length=1, max_length=2000)
+    return_import_job_id: int | None = None
+
+
+@router.get("/alias-scope-conflicts")
+async def list_customer_alias_scope_conflicts_endpoint(
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    normalized_token: str | None = Query(default=None),
+):
+    from app.services.customer_alias_scope_conflicts import list_customer_alias_scope_conflicts
+
+    return await list_customer_alias_scope_conflicts(
+        db,
+        page=page,
+        page_size=page_size,
+        normalized_token=normalized_token,
+    )
+
+
+@router.post("/alias-scope-conflicts/merge-preview")
+async def customer_alias_scope_merge_preview_endpoint(body: CustomerAliasScopeMergeBody):
+    import asyncio
+
+    from app.db.session_sync import SessionLocal
+    from app.services.customer_alias_scope_merge import (
+        CustomerAliasScopeMergeError,
+        preview_customer_alias_scope_merge,
+    )
+
+    def _run() -> dict:
+        with SessionLocal() as db:
+            return preview_customer_alias_scope_merge(
+                db,
+                normalized_token=body.normalized_token,
+                source_definition_id=body.source_definition_id,
+                distributor_id=body.distributor_id,
+                survivor_id=body.survivor_id,
+                audit_note=body.audit_note,
+            )
+
+    try:
+        return await asyncio.to_thread(_run)
+    except CustomerAliasScopeMergeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/alias-scope-conflicts/merge-confirm", status_code=202)
+async def customer_alias_scope_merge_confirm_endpoint(body: CustomerAliasScopeMergeBody):
+    from app.services.customer_alias_scope_merge import CustomerAliasScopeMergeError
+    from app.services.customer_alias_scope_merge_enqueue import enqueue_customer_alias_scope_merge_confirm
+
+    if body.survivor_id is None:
+        raise HTTPException(status_code=400, detail="survivor_id is required for merge-confirm")
+
+    payload = {
+        "normalized_token": body.normalized_token,
+        "source_definition_id": body.source_definition_id,
+        "distributor_id": body.distributor_id,
+        "survivor_id": int(body.survivor_id),
+        "audit_note": body.audit_note,
+        "return_import_job_id": body.return_import_job_id,
+    }
+    try:
+        task_id, async_poll = enqueue_customer_alias_scope_merge_confirm(payload)
+    except CustomerAliasScopeMergeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    out: dict = {
+        "task_id": task_id,
+        "async_poll": async_poll,
+        "scope": {
+            "normalized_token": body.normalized_token,
+            "source_definition_id": body.source_definition_id,
+            "distributor_id": body.distributor_id,
+        },
+        "survivor_id": body.survivor_id,
+    }
+    if body.return_import_job_id is not None:
+        out["revalidate_import_job_id"] = body.return_import_job_id
+        out["revalidate_href"] = f"/admin/imports?job={body.return_import_job_id}"
+    return out
+
+
+@router.get("/alias-scope-conflicts/merge-task/{task_id}")
+async def customer_alias_scope_merge_task_status(task_id: str):
+    import asyncio
+
+    from app.services.customer_alias_scope_merge_enqueue import dev_customer_alias_scope_merge_results
+    from app.services.task_run_ledger import (
+        POLL_STATE_FAILURE,
+        POLL_STATE_SUCCESS,
+        read_task_run_poll_progress_sync,
+    )
+
+    dev_hit = dev_customer_alias_scope_merge_results().get(task_id)
+    if dev_hit is not None:
+        state = dev_hit.get("state", POLL_STATE_SUCCESS)
+        if state in (POLL_STATE_SUCCESS, POLL_STATE_FAILURE):
+            dev_customer_alias_scope_merge_results().pop(task_id, None)
+        progress: dict = {"task_id": task_id, "state": state}
+        if state == POLL_STATE_SUCCESS:
+            progress["result"] = dev_hit.get("result")
+        else:
+            progress["error"] = dev_hit.get("error")
+        return progress
+
+    ledger_progress = await asyncio.to_thread(read_task_run_poll_progress_sync, task_id)
+    if ledger_progress is not None:
+        return ledger_progress
+
+    from celery.result import AsyncResult
+
+    from app.worker.celery_app import celery_app
+
+    def _read() -> tuple[str, Any]:
+        r = AsyncResult(task_id, app=celery_app)
+        return r.state, r.info
+
+    task_state, info = await asyncio.to_thread(_read)
+    progress = {"task_id": task_id, "state": task_state}
+    if task_state == POLL_STATE_SUCCESS:
+        from celery.result import AsyncResult as _AR
+
+        raw_result = await asyncio.to_thread(lambda: _AR(task_id, app=celery_app).result)
+        progress["result"] = raw_result if isinstance(raw_result, dict) else None
+    elif task_state == POLL_STATE_FAILURE:
+        progress["error"] = str(info)[:800] if info is not None else "Task failed"
+    return progress
 
 
 @router.post("", status_code=201)

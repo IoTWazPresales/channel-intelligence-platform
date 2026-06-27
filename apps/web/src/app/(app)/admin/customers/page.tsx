@@ -966,9 +966,16 @@ function AdminCustomersPageContent() {
         <Button
           variant="outlined"
           component={Link}
-          href="/admin/customers/duplicates"
+          href="/admin/customers/duplicates?tab=alias_scope"
         >
-          Potential duplicates
+          Alias-scope conflicts
+        </Button>
+        <Button
+          variant="outlined"
+          component={Link}
+          href="/admin/customers/duplicates?tab=name_similarity"
+        >
+          Name-similarity duplicates
         </Button>
         <Button
           variant="outlined"

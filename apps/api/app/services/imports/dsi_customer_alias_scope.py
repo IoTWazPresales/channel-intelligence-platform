@@ -10,11 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.models.dimensions import DimCustomer
 from app.models.import_distributor_si import CustomerSourceTokenAlias, ImportEntityMappingCandidate
-from app.services.imports.distributor_sales_inventory import _norm_key
 from app.services.imports.dsi_steward_candidate_ops import (
     StewardOpError,
     _is_dsi_steward_terminal_status,
     _source_customer_alias_raw_for_dsi_candidate,
+    dsi_customer_alias_normalized_token,
 )
 
 
@@ -32,10 +32,11 @@ def customer_alias_scope_key(
 
 
 def scope_key_for_dsi_candidate(cand: ImportEntityMappingCandidate) -> tuple[tuple[str, int, int], str] | None:
-    raw = _source_customer_alias_raw_for_dsi_candidate(cand)
-    if not raw.strip():
+    # The alias key is the candidate's resolution identity (dealer-group primary), NOT the
+    # customer-name evidence — otherwise the resolver never finds the alias it just wrote.
+    nt = dsi_customer_alias_normalized_token(cand)
+    if not nt.strip():
         return None
-    nt = _norm_key(raw)[:512]
     return customer_alias_scope_key(nt, cand.source_definition_id, None), nt
 
 

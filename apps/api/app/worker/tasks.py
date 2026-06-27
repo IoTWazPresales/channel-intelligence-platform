@@ -458,6 +458,24 @@ def dsi_forecasting_task(self, job_id: int, payload: dict) -> dict:
         raise
 
 
+@celery_app.task(name="customers.alias_scope_merge_confirm", bind=True, ack_late=True)
+def customer_alias_scope_merge_confirm_task(self, payload: dict) -> dict:
+    """Steward-confirmed customer alias-scope merge."""
+    from app.db.session_sync import SessionLocal
+    from app.services.customer_alias_scope_merge import confirm_customer_alias_scope_merge_sync
+
+    with SessionLocal() as db:
+        return confirm_customer_alias_scope_merge_sync(
+            db,
+            normalized_token=str(payload["normalized_token"]),
+            source_definition_id=payload.get("source_definition_id"),
+            distributor_id=payload.get("distributor_id"),
+            survivor_id=int(payload["survivor_id"]),
+            audit_note=str(payload["audit_note"]),
+            performed_by=payload.get("performed_by"),
+        )
+
+
 def run_product_master_validate_job(job_id: int, *, celery_task_id: str | None) -> int:
     """Shared implementation for Celery worker and explicit dev-only dispatch paths."""
     from app.services.imports.pm_validate_sync import run_product_master_validate_sync

@@ -1748,6 +1748,43 @@ def process_distributor_sales_inventory(
         )
         return 1
 
+    from app.services.imports.dsi_workbook import (
+        DSI_SHEET_META_KEY,
+        build_combined_dsi_dataframe,
+        is_nested_dsi_field_mapping,
+        iter_dsi_dataframes_for_job,
+        persist_dsi_workbook_on_job,
+    )
+
+    sheet_frames = iter_dsi_dataframes_for_job(db, job, df)
+    skipped_sheets: list[dict[str, str]] = []
+    if len(sheet_frames) > 1 or is_nested_dsi_field_mapping(job.field_mapping):
+        df, mapping, skipped_sheets = build_combined_dsi_dataframe(sheet_frames)
+        wb_meta = dict((job.staged_metadata or {}).get(DSI_SHEET_META_KEY) or {})
+        wb_meta["skipped_sheets"] = skipped_sheets
+        persist_dsi_workbook_on_job(job, wb_meta)
+        if df.empty:
+            db.add(
+                ImportRowResult(
+                    job_id=job.id,
+                    row_number=0,
+                    severity="error",
+                    code="dsi_no_mapped_sheets",
+                    message="No mapped DSI sheets to process. Map at least one sheet with distributor and product columns.",
+                )
+            )
+            return 1
+        for skip in skipped_sheets:
+            db.add(
+                ImportRowResult(
+                    job_id=job.id,
+                    row_number=0,
+                    severity="warning",
+                    code="dsi_sheet_skipped",
+                    message=f"Sheet {skip['sheet_name']!r} skipped: {skip['reason']}",
+                )
+            )
+
     if job.source and isinstance(job.source.column_mapping_memory, dict):
         from app.services.imports.ai_resolver_wiring import record_format_drift_on_job
 
@@ -1992,6 +2029,8 @@ def process_distributor_sales_inventory(
         accumulate_product_running_change_stat,
         compute_dsi_hard_row_with_product_auto_exclude,
         compute_dsi_sellout_block_with_customer_auto_exclude,
+        IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT,
+        IGNORE_REASON_NO_CUSTOMER,
         new_product_running_change_stats_bucket,
         product_auto_exclude_terminal_status,
         strip_ambiguous_product_match_from_diags,
@@ -2001,6 +2040,8 @@ def process_distributor_sales_inventory(
 
     blocking = 0
     warnings = 0
+    master_merge_excluded_rows = 0
+    auto_excluded_rows = 0
     first_unresolved_dist_raw: str | None = None
     dsi_sellout_issue_rows = 0
     dsi_inv_ready_with_sellout_issue_rows = 0
@@ -2526,8 +2567,13 @@ def process_distributor_sales_inventory(
 
         if customer_auto_exclude_reason:
             sev, res_status = product_auto_exclude_terminal_status()
+            if customer_auto_exclude_reason == IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT:
+                master_merge_excluded_rows += 1
+            elif customer_auto_exclude_reason == IGNORE_REASON_NO_CUSTOMER:
+                auto_excluded_rows += 1
         elif product_auto_exclude_reason:
             sev, res_status = product_auto_exclude_terminal_status()
+            auto_excluded_rows += 1
 
         _append_shipment_corroboration_signals_dsi(
             db,
@@ -2977,18 +3023,46 @@ def process_distributor_sales_inventory(
                 "summary": "Resolved shipment evidence lines in the same calendar month may corroborate this bucket (no auto-resolve).",
             }
             ctx.setdefault("corroboration_markers", []).append("shipment_evidence_customer")
+        from app.services.imports.source_token_alias_conflicts import MULTIPLE_CUSTOMER_ALIASES
+
+        alias_scope_conflict = (
+            etype == "customer_dealer_token"
+            and data.get("alias_conflict_reason") == MULTIPLE_CUSTOMER_ALIASES
+        )
+        if alias_scope_conflict:
+            ctx["resolution_blocker"] = "master_data_alias_scope_conflict"
+            ctx["hold_for_manual_review"] = True
+            ctx["plan_status"] = "needs_review"
         cand_status = "needs_review"
         suggested_entity_id: int | None = None
         match_reason: str | None = None
         pres = preserved_candidate_steward.get((etype, nkey_clean[:512]))
+        if alias_scope_conflict:
+            pres = None
         if pres:
             if isinstance(pres.get("duplicate_review"), dict):
                 ctx["duplicate_review"] = pres["duplicate_review"]
-            pres_st = pres.get("status")
+            pres_st = (pres.get("status") or "").strip()
+            # A candidate only regenerates when at least one of its rows is still
+            # unresolved this run (the aggregator adds it only when the FK is None).
+            # Carrying a stale ``resolved`` status forward onto a regenerated
+            # customer candidate marks it terminal — hiding it from the steward
+            # queue while staging stays blocked (phantom-resolved). Re-open such a
+            # candidate so the work is visible; keep the prior target as a hint.
+            stale_resolved_customer = (
+                etype == "customer_dealer_token" and pres_st == "resolved"
+            )
             if pres_st == "acknowledged_unique":
                 cand_status = "acknowledged_unique"
-            elif is_dsi_mapping_candidate_terminal_status(str(pres_st or "")):
-                cand_status = str(pres_st).strip()
+            elif stale_resolved_customer:
+                cand_status = "needs_review"
+                if pres.get("suggested_entity_id") is not None:
+                    try:
+                        ctx["prior_resolved_customer_id"] = int(pres["suggested_entity_id"])
+                    except (TypeError, ValueError):
+                        pass
+            elif is_dsi_mapping_candidate_terminal_status(pres_st):
+                cand_status = pres_st
                 if pres.get("suggested_entity_id") is not None:
                     try:
                         suggested_entity_id = int(pres["suggested_entity_id"])
@@ -3057,6 +3131,10 @@ def process_distributor_sales_inventory(
     summary = {
         "staging_rows": int(len(df)),
         "blocking_rows": blocking,
+        "human_fixable_blocking_rows": blocking,
+        "master_merge_excluded_rows": master_merge_excluded_rows,
+        "steward_map_blocking_rows": blocking,
+        "auto_excluded_rows": auto_excluded_rows,
         "warning_rows": warnings,
         "aggregated_candidates": len(agg),
         "import_mode": job.import_mode,
@@ -3225,6 +3303,20 @@ def refresh_dsi_staging_line_resolution(
         )
         cust_diag = list(cd)
         diag.extend(cust_diag)
+        if rcustomer_id is None and cust_res_raw:
+            from app.services.imports.source_token_alias_conflicts import (
+                customer_alias_conflict_reason_from_db,
+            )
+
+            cust_alias_conflict = customer_alias_conflict_reason_from_db(
+                db,
+                source_definition_id=source_def_id,
+                distributor_id=rdistributor_id,
+                raw_or_normalized_token=cust_res_raw,
+            )
+            if cust_alias_conflict:
+                cust_diag.append(cust_alias_conflict)
+                diag.append(cust_alias_conflict)
         diag.extend(cust_res_notes)
 
     from app.services.imports.dsi_product_running_change import (

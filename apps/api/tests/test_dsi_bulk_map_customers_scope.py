@@ -76,16 +76,20 @@ def _make_customer_candidate(
     region_id: int,
     channel_id: int,
     normalized_key_suffix: str | None = None,
+    dealer_group_token: str | None = None,
+    normalized_key_override: str | None = None,
 ) -> ImportEntityMappingCandidate:
     nk = _norm_key(token)[:512]
-    if normalized_key_suffix:
+    if normalized_key_override is not None:
+        nk = normalized_key_override[:512]
+    elif normalized_key_suffix:
         nk = f"{nk}-{normalized_key_suffix}"[:512]
     cand = ImportEntityMappingCandidate(
         import_job_id=job_id,
         source_definition_id=source_id,
         entity_type="customer_dealer_token",
         normalized_key=nk,
-        dealer_group_token=None,
+        dealer_group_token=dealer_group_token,
         row_count=1,
         sample_raw_values=[token],
         context={"source_customer_name_raw_samples": [token]},
@@ -135,10 +139,13 @@ def dsi_bulk_map_ctx() -> dict:
         }
 
 
-def test_bulk_map_batch_dedupes_same_scope(dsi_bulk_map_ctx: dict) -> None:
-    """Two candidates with different raw keys but same normalized alias scope map without UniqueViolation."""
+def test_bulk_map_distinct_candidates_key_alias_on_resolution_identity(dsi_bulk_map_ctx: dict) -> None:
+    """Two distinct candidates map to one customer; each alias is keyed on the candidate
+    resolution identity (normalized_key), not the customer-name evidence. No UniqueViolation."""
     token = f"Res Q IT Map {secrets.token_hex(4)}"
     nt = _norm_key(token)
+    nt_a = f"{nt}-a"[:512]
+    nt_b = f"{nt}-b"[:512]
     source_id = dsi_bulk_map_ctx["source_id"]
     job_id = dsi_bulk_map_ctx["job_id"]
 
@@ -181,13 +188,16 @@ def test_bulk_map_batch_dedupes_same_scope(dsi_bulk_map_ctx: dict) -> None:
             customer_id=target_id,
             candidate_ids=[id1, id2],
         )
-        alias_n = _alias_count_for_scope(session, normalized_token=nt, source_id=source_id)
+        # Alias is keyed on the candidate resolution identity (normalized_key), so the
+        # customer-name scope must NOT be used as the lookup key.
+        assert _alias_count_for_scope(session, normalized_token=nt, source_id=source_id) == 0
+        assert _alias_count_for_scope(session, normalized_token=nt_a, source_id=source_id) == 1
+        assert _alias_count_for_scope(session, normalized_token=nt_b, source_id=source_id) == 1
         cand1 = session.get(ImportEntityMappingCandidate, id1)
         cand2 = session.get(ImportEntityMappingCandidate, id2)
 
     assert out["applied"] == 2
     assert out["failed"] == 0
-    assert alias_n == 1
     assert cand1 is not None and cand2 is not None
     assert cand1.status == "resolved"
     assert cand2.status == "resolved"
@@ -195,6 +205,65 @@ def test_bulk_map_batch_dedupes_same_scope(dsi_bulk_map_ctx: dict) -> None:
     assert cand2.suggested_entity_id == target_id
     reasons = {cand1.match_reason, cand2.match_reason}
     assert "steward_map_existing_customer" in reasons or "steward_reused_approved_customer_alias" in reasons
+
+
+def test_bulk_map_keys_alias_on_dealer_group_not_customer_name(dsi_bulk_map_ctx: dict) -> None:
+    """Regression: when a candidate carries a Dealer Name Group, the approved alias must be
+    keyed on the dealer-group resolution token (== normalized_key) so DSI staging resolution
+    finds it. Keying on the customer-name column was the root cause of permanent
+    customer_unresolved blockers (job #96)."""
+    suffix = secrets.token_hex(4)
+    dealer_group = f"NEVILLE HAMMAN COMPUTERS CC T/A FURNWORLD {suffix}"
+    customer_name = f"Neville Hamman Computers t/a Furnworld Computers {suffix}"
+    nk = _norm_key(dealer_group)[:512]
+    customer_name_key = _norm_key(customer_name)[:512]
+    source_id = dsi_bulk_map_ctx["source_id"]
+    job_id = dsi_bulk_map_ctx["job_id"]
+
+    with SessionLocal() as session:
+        target = DimCustomer(
+            code=f"DG-{secrets.token_hex(3).upper()}",
+            name=dealer_group,
+            customer_status="verified",
+            region_id=dsi_bulk_map_ctx["region_id"],
+            channel_id=dsi_bulk_map_ctx["channel_id"],
+        )
+        session.add(target)
+        session.flush()
+        cand = _make_customer_candidate(
+            session,
+            job_id=job_id,
+            source_id=source_id,
+            token=customer_name,
+            region_id=dsi_bulk_map_ctx["region_id"],
+            channel_id=dsi_bulk_map_ctx["channel_id"],
+            dealer_group_token=dealer_group,
+            normalized_key_override=nk,
+        )
+        target_id = int(target.id)
+        cand_id = cand.id
+        session.commit()
+
+    with SessionLocal() as session:
+        out = run_dsi_bulk_map_customers_sync(
+            session,
+            job_id,
+            customer_id=target_id,
+            candidate_ids=[cand_id],
+        )
+        # Alias keyed on dealer-group resolution identity, NOT the customer-name column.
+        alias = session.scalars(
+            select(CustomerSourceTokenAlias).where(
+                CustomerSourceTokenAlias.status == "approved",
+                CustomerSourceTokenAlias.customer_id == target_id,
+            )
+        ).all()
+
+    assert out["applied"] == 1
+    assert out["failed"] == 0
+    assert len(alias) == 1
+    assert alias[0].normalized_token == nk
+    assert alias[0].normalized_token != customer_name_key
 
 
 def test_bulk_map_reuses_existing_approved_alias(dsi_bulk_map_ctx: dict) -> None:

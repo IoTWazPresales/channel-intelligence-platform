@@ -117,6 +117,30 @@ def _source_customer_alias_raw_for_dsi_candidate(candidate: ImportEntityMappingC
     return _first_sample_raw(candidate)
 
 
+def dsi_customer_alias_normalized_token(candidate: ImportEntityMappingCandidate) -> str:
+    """Approved-alias lookup key for a DSI customer candidate.
+
+    This MUST equal the candidate's resolution identity. DSI staging resolves a customer
+    on the Dealer Name Group when present, falling back to the customer/dealer name column
+    only when the group is blank (``effective_dsi_customer_primary_for_resolution``). The
+    candidate ``normalized_key`` is built with the exact same dealer-group-primary rule
+    (``_customer_candidate_identity_norm``), so it is the single source of truth for the
+    alias key.
+
+    Historically the alias was keyed on the customer-name evidence
+    (``_source_customer_alias_raw_for_dsi_candidate``). When a row carried a dealer group
+    that differed from the customer-name column, the resolver looked up the dealer-group
+    token while the approved alias was stored under the customer-name token — so the alias
+    was never found and the row stayed ``customer_unresolved`` forever, even though the
+    candidate was marked ``resolved``. Keying on ``normalized_key`` fixes that at source.
+    """
+    nk = (candidate.normalized_key or "").strip()
+    if nk and nk != "__blank__":
+        return nk[:512]
+    # No usable dealer-group/customer identity key — fall back to the customer-name evidence.
+    return _norm_key(_source_customer_alias_raw_for_dsi_candidate(candidate))[:512]
+
+
 async def preview_resolve_dsi_product(
     db: AsyncSession,
     cand: ImportEntityMappingCandidate,
@@ -291,7 +315,7 @@ async def preview_map_dsi_customer(
     raw = (raw_token or _source_customer_alias_raw_for_dsi_candidate(cand)).strip()
     if not raw:
         return {"ok": False, "skip_reason": "missing_token", "detail": "raw_token required"}
-    nt = _norm_key(raw)
+    nt = dsi_customer_alias_normalized_token(cand)
     if not nt:
         return {"ok": False, "skip_reason": "empty_norm", "detail": "raw_token empty after normalization"}
     return {
@@ -301,6 +325,7 @@ async def preview_map_dsi_customer(
         "customer_code": cust.code,
         "customer_name": cust.name,
         "alias_raw_preview": raw[:160],
+        "alias_normalized_token": nt[:160],
     }
 
 
@@ -708,7 +733,7 @@ async def execute_create_provisional_dsi_customer(
         await db.flush()
         reused_provisional = False
     raw = _source_customer_alias_raw_for_dsi_candidate(cand)
-    nt = _norm_key(raw)
+    nt = dsi_customer_alias_normalized_token(cand)
     alias = CustomerSourceTokenAlias(
         customer_id=row.id,
         raw_token=raw[:512],

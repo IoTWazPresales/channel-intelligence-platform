@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy.orm import Session
+
 from app.services.imports.provisional_entity_identity import customer_source_token_alias_key
 
 if TYPE_CHECKING:
@@ -37,6 +39,49 @@ def distributor_alias_conflict_reason_from_cache(
     unique = list(dict.fromkeys(matches))
     if len(unique) > 1:
         return MULTIPLE_DISTRIBUTOR_ALIASES
+    return None
+
+
+def customer_alias_conflict_reason_from_db(
+    db: "Session",
+    *,
+    source_definition_id: int | None,
+    distributor_id: int | None,
+    raw_or_normalized_token: str,
+) -> str | None:
+    """DB-backed alias-scope conflict check (apply refresh / single-line paths)."""
+    from sqlalchemy import select
+
+    from app.models.import_distributor_si import CustomerSourceTokenAlias
+
+    lookup_key = customer_source_token_alias_key(raw_or_normalized_token)
+    if not lookup_key:
+        return None
+    matches: list[int] = []
+    for row in db.scalars(
+        select(CustomerSourceTokenAlias).where(
+            CustomerSourceTokenAlias.status == "approved",
+        )
+    ).all():
+        row_key = customer_source_token_alias_key(row.normalized_token or "")
+        if row_key != lookup_key:
+            continue
+        if (
+            source_definition_id is not None
+            and row.source_definition_id is not None
+            and row.source_definition_id != source_definition_id
+        ):
+            continue
+        if (
+            distributor_id is not None
+            and row.distributor_id is not None
+            and row.distributor_id != distributor_id
+        ):
+            continue
+        matches.append(int(row.customer_id))
+    unique = list(dict.fromkeys(matches))
+    if len(unique) > 1:
+        return MULTIPLE_CUSTOMER_ALIASES
     return None
 
 

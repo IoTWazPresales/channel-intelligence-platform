@@ -69,6 +69,10 @@ export function stableFieldMappingJson(fieldMapping: Record<string, string> | un
 export type DistributorSiSummary = {
   staging_rows?: number;
   blocking_rows?: number;
+  human_fixable_blocking_rows?: number;
+  master_merge_excluded_rows?: number;
+  steward_map_blocking_rows?: number;
+  auto_excluded_rows?: number;
   warning_rows?: number;
   aggregated_candidates?: number;
   import_mode?: string;
@@ -77,6 +81,21 @@ export type DistributorSiSummary = {
   /** Subset: inventory path is valid (SOH + snapshot) but sell-out still blocked — inventory may apply on apply. */
   rows_inventory_ready_with_sellout_warnings?: number;
 };
+
+/** Human-fixable blockers that still require steward action before apply. */
+export function dsiHumanFixableBlockingRows(summary: DistributorSiSummary | null | undefined): number {
+  if (!summary) return 0;
+  return summary.human_fixable_blocking_rows ?? summary.blocking_rows ?? 0;
+}
+
+export function formatDsiBlockerSummaryLine(summary: DistributorSiSummary | null | undefined): string | null {
+  if (!summary) return null;
+  const master = summary.master_merge_excluded_rows ?? 0;
+  const steward = summary.steward_map_blocking_rows ?? summary.human_fixable_blocking_rows ?? summary.blocking_rows ?? 0;
+  const auto = summary.auto_excluded_rows ?? 0;
+  if (master === 0 && steward === 0 && auto === 0) return null;
+  return `${master} master-merge · ${steward} steward-map · ${auto} auto-excluded`;
+}
 
 /** Parse distributor_si_summary row from import job preview rows (DSI validate). */
 export function parseDistributorSiSummaryFromRows(
@@ -115,5 +134,6 @@ export function dsiContinueToApplyAllowed(
   if (jobId == null || gateKey === null || summary == null) return false;
   const key = `${jobId}::${stableFieldMappingJson(fieldMapping)}`;
   if (gateKey !== key) return false;
-  return (summary.blocking_rows ?? 0) === 0;
+  if (dsiHumanFixableBlockingRows(summary) > 0) return false;
+  return (summary.master_merge_excluded_rows ?? 0) === 0;
 }

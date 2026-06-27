@@ -67,6 +67,7 @@ from app.services.imports.dsi_steward_candidate_ops import (
     StewardOpError,
     _first_sample_raw,
     _source_customer_alias_raw_for_dsi_candidate,
+    dsi_customer_alias_normalized_token,
     execute_create_provisional_dsi_customer,
     execute_create_provisional_dsi_distributor,
     execute_ignore_dsi_candidate,
@@ -487,7 +488,9 @@ async def mark_dsi_candidate_open_channel(
     raw = _source_customer_alias_raw_for_dsi_candidate(cand)
     if not raw:
         raw = cand.normalized_key or "open-channel"
-    nt = _norm_key(raw)
+    # Key the alias on the candidate resolution identity (dealer-group primary) so future
+    # rows for this token resolve to Open Channel — matches the customer resolver lookup.
+    nt = dsi_customer_alias_normalized_token(cand)
     if not nt:
         nt = "open-channel-token"
     alias = CustomerSourceTokenAlias(
