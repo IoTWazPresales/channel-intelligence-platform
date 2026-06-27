@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-27 (DSI customer alias resolution-key fix; job #96 unblocked)
+**Last updated:** 2026-06-27 (DSI gate-key revisit fix; job #96 unblocked end-to-end)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/dsi-async-topology` |
-| **HEAD (snapshot)** | `cac1919` — local working tree has uncommitted DSI alias-key fix |
+| **HEAD (snapshot)** | `468c239` — gate-key revisit fix committed + pushed |
 | **PR** | None open — open when soak complete |
 | **Alembic (code)** | `20260623_0050` |
 | **Alembic (DB)** | **`20260623_0050`** on local `cip` (migration run 2026-06-24) |
@@ -34,6 +34,30 @@ Local desktop (no Docker): `pnpm dev:api` :8001, `pnpm dev:web` :3000, worker or
 
 ## What is working
 
+### DSI apply no longer re-validates the whole file (2026-06-27, commit `e4c30bc`)
+- **Root cause:** `run_dsi_apply_sync` ran TWO full passes — Step 1 `process_import_job_sync`
+  (apply mode) re-parsed the file + re-resolved all 178k rows (wiping & rebuilding staging),
+  then Step 2 `complete_dsi_import_job_to_loaded` re-resolved every staging line again + upserted
+  facts. Step 1's full re-pipeline was the "why does apply revalidate again" problem AND it is
+  destructive: if interrupted it leaves partial staging + `stage=failed`.
+- **Fix:** Step 1 is skipped when the job is already `validated` with staging present
+  (`already_validated`). Step 2 alone re-resolves staging against current master data and upserts
+  facts. Step 1 retained only as fallback for an apply on a never-validated job.
+- **Dispatch is `broker`** (apps/api/.env) → DSI apply runs in the **Celery worker process**;
+  the worker must be **restarted** to load this fix (uvicorn hot-reload does not cover the worker).
+
+### DSI import wizard gate-key revisit fix (2026-06-27, commit `468c239`)
+- mapping-draft sync effect changed from `activeStep !== 5` → `activeStep < 5`. On revisit
+  (deep-link to validated job at step 6), `dsiMapDraft` was never synced → `dsiMappingDraftDirty`
+  stuck true → "Continue to apply" never showed. Fixed.
+
+### DSI customer alias resolution-key fix (2026-06-27)
+- Root cause: DSI staging resolves customers on Dealer Name Group token; aliases were keyed on
+  customer-name column → phantom-resolved loop ("40 rows" forever unresolved in staging).
+- Fix: `dsi_customer_alias_normalized_token(cand)` = `normalized_key` (dealer-group primary).
+  All alias write paths routed through it. Job #96 remediated + revalidated → 0 blocking rows.
+- Safety net: regenerated customer candidates re-open as `needs_review` (not phantom-resolved).
+
 ### Shipment import wizard (DSI-aligned — wired + unit-tested)
 - **7 steps:** upload → column mapping → validate & resolve → apply.
 - **Apply step:** `ImportJobLoadedSuccessCallout` when job stage `loaded`.
@@ -43,32 +67,6 @@ Local desktop (no Docker): `pnpm dev:api` :8001, `pnpm dev:web` :3000, worker or
 
 ### Plan C / D / BACKLOG-007 (prior)
 - Resolution plan API, paginated candidates, bitemporal D1–D3 (schema + dual-write wired; flags off), post-validate re-map + orphan purge.
-
-### DSI customer alias resolution-key fix (2026-06-27) — uncommitted
-- **Root cause:** DSI staging resolves customers on the **Dealer Name Group** token
-  (`effective_dsi_customer_primary_for_resolution`), but the steward map / provisional /
-  open-channel apply paths wrote the approved alias keyed on the **customer-name** column
-  (`_source_customer_alias_raw_for_dsi_candidate`). When the two columns differed, the
-  resolver looked up a token the alias was never stored under → permanent
-  `customer_unresolved`, while the candidate was marked `resolved` (terminal) and hidden
-  from the Customers tab. Phantom-resolved loop = "40 rows still need fixing, nothing in
-  Customers tab".
-- **Fix (Part A, source):** new `dsi_customer_alias_normalized_token(cand)` = candidate
-  resolution identity (`normalized_key`, dealer-group primary). Routed `scope_key_for_dsi_candidate`,
-  map sync/async, provisional create, open-channel, preview through it. Alias `normalized_token`
-  now matches the resolver lookup.
-- **Fix (Part B, safety net):** `process_distributor_sales_inventory` preserve logic no longer
-  carries a stale `resolved` status onto a regenerated `customer_dealer_token` candidate
-  (regeneration ⇒ row still unresolved). Re-opens as `needs_review` with
-  `ctx.prior_resolved_customer_id` hint; `ignored`/`waived_open_channel`/`acknowledged_unique`
-  still preserved. Dormant on healthy jobs (correctly-resolved candidates do not regenerate).
-- **Job #96 remediation:** re-wrote the 4 phantom aliases under the dealer-group key via the
-  fixed canonical writer; full revalidate (178k rows) → **blocking_rows = 0**
-  (human_fixable / master_merge / steward_map all 0). Ready for Continue to apply → SOH load.
-- **Tests:** `test_dsi_bulk_map_customers_scope.py` (added dealer-group keying regression +
-  distinct-identity), `test_dsi_bulk_provisional_customers_reuse.py` (distinct dealer groups).
-  Pre-existing dev-DB-pollution failures in `test_distributor_sales_inventory_import.py` are
-  unrelated (see `.pytest_cache lastfailed`).
 
 ### Docs / backlog (2026-06-24)
 - **BACKLOG-046** — ACZA BOM Not Ready sheet handling (operator workaround: upload Shipped + Unship only).
@@ -80,6 +78,13 @@ Local desktop (no Docker): `pnpm dev:api` :8001, `pnpm dev:web` :3000, worker or
 
 ## In progress / not proven live
 
+- **Job #96 is currently BROKEN** — `stage=failed status=interrupted import_mode=apply`, staging
+  partial (~144k of 178k). The old apply re-pipeline wiped validated staging and was interrupted
+  mid-rebuild. **Recovery:** (1) restart Celery worker (load apply fix); (2) re-validate job #96
+  to rebuild full staging → `validated`; (3) Continue to apply (now skips Step 1, just upserts
+  facts + loads SOH).
+- Apply fast-path (skip Step 1) committed but **not yet proven end-to-end** — needs worker restart
+  + a real validated→apply run.
 - Warren **actively working through** ACZA shipment upload / steward workflow (20260623 file; BOM tab deferred per BACKLOG-046).
 - Browser soak on shipment wizard end-to-end not yet confirmed this session.
 - Rectron / distributor-vs-customer mapping and 0.85 auto-apply threshold — reported in lost session; **not re-verified** after `a04e4d5`.
@@ -90,9 +95,9 @@ Local desktop (no Docker): `pnpm dev:api` :8001, `pnpm dev:web` :3000, worker or
 
 ## Next (recommended)
 
-1. Finish current ACZA upload workflow (trim workbook to **Shipped + Unship** until BACKLOG-046).
-2. **Smoke:** shipment wizard upload → map → validate → steward → apply on local.
-3. **ACZA 2023 backfill** per `docs/SHIPMENT_EVIDENCE_OPERATOR.md` (latest-job-wins; older file won't overwrite newer `source_key` rows).
+1. **Confirm** "Continue to apply" appears on job #96 (hard-refresh page if needed).
+2. **Apply** job #96 → SOH load → verify fact tables populated.
+3. Finish ACZA upload workflow (trim workbook to **Shipped + Unship** until BACKLOG-046).
 4. Open PR on `feat/dsi-async-topology` when soak passes.
 
 ---
