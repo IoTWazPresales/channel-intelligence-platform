@@ -146,6 +146,9 @@ class FactInboundShipment(Base, TimestampMixin):
 
     order_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
     customer_po: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    purchase_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_order.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     order_line: Mapped[str | None] = mapped_column(String(64), nullable=True)
     delivery_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
     invoice_line: Mapped[str | None] = mapped_column(String(64), nullable=True)

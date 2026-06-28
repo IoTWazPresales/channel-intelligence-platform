@@ -1294,6 +1294,9 @@ def process_shipment_evidence_import(
         _purge_orphan_shipment_evidence_lines(db, int(job.id), seen_source_keys)
 
     db.flush()
+    from app.services.imports.shipment_purchase_order_materialize import materialize_purchase_orders_for_shipment_job
+
+    materialize_purchase_orders_for_shipment_job(db, int(job.id))
     from app.services.imports.shipment_evidence_observations import sync_job_observations_after_validate
 
     sync_job_observations_after_validate(db, job)

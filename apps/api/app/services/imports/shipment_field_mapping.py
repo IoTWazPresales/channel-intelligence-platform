@@ -90,6 +90,37 @@ def _norm_header(h: str) -> str:
     return (h or "").strip().lower()
 
 
+CUSTOMER_PO_HEADER_ALIASES_NORMALIZED: frozenset[str] = frozenset(
+    {
+        "customer po",
+        "cust po",
+        "customer p/o",
+        "purchase order",
+        "po no",
+        "po no.",
+        "po number",
+        "customer_po",
+    }
+)
+
+
+def extract_customer_po_from_raw_row(raw: dict | None) -> str | None:
+    """Read customer PO from a stored ``raw_source_row`` using Unit 1 alias spellings."""
+    if not isinstance(raw, dict):
+        return None
+    for key, value in raw.items():
+        if not isinstance(key, str):
+            continue
+        if _norm_header(key) not in CUSTOMER_PO_HEADER_ALIASES_NORMALIZED:
+            continue
+        from app.services.imports.shipment_evidence_text_normalize import normalize_shipment_cell_value
+
+        cell = normalize_shipment_cell_value(value)
+        if cell:
+            return cell
+    return None
+
+
 def merge_shipment_mapping_memory(db: Session, *, source_id: int, field_mapping: dict[str, str]) -> None:
     """Persist confirmed shipment column → canonical mappings on the source (by normalized header)."""
     src = db.get(SourceDefinition, source_id)

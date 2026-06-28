@@ -413,6 +413,7 @@ def _fact_to_dict(
         "ship_to_raw": row.ship_to_raw,
         "order_no": row.order_no,
         "customer_po": row.customer_po,
+        "purchase_order_id": row.purchase_order_id,
         "order_line": row.order_line,
         "delivery_no": row.delivery_no,
         "invoice_line": row.invoice_line,
