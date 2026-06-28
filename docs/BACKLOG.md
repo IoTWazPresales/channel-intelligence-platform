@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-051 — Post-apply import reconciliation report (file vs facts)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-06-28 |
+| **Effort** | Medium (API read model + DSI UI panel + export); small follow-on per importer |
+| **Source** | Warren session (2026-06-28): manual RAW.xlsx vs `import_job #96` facts audit after large-volume DSI apply. Script: `.tmp/audit_raw_vs_db.py` / `.tmp/audit_raw_vs_db_summary.json`. Job #96: 178,067 staged rows; 20,618 Excel rows expected facts but not applied (mostly unresolved product; 111 unresolved customer). Distributor SOH snapshots (no customer name + disti + SOH): 63,408 rows, 54,435 applied inventory, 8,275 blocked on product. Chat: Warren asked whether system should automate this — agreed good feature, deferred to backlog. |
+| **Idea** | **Post-apply reconciliation** on an import job: compare stored raw file + staging lines + committed facts; report what from the file did **not** land as facts and **why** (unresolved product/customer, auto-excluded, deduped by `source_key`, staged-only). Aggregated by default; CSV export for steward action. |
+| **Why it matters / deferrable** | Operators need trust after large applies (“did my SOH / sell-out actually load?”). Data already exists on the job (raw bytes, `import_distributor_si_staging_line`, facts). Deferrable while one-off script + steward workflow closes job #96 gaps; becomes essential at volume and for on-prem handoff. |
+| **What the work is** | (1) **API** `GET /import-jobs/{id}/reconciliation` (DSI first): row counts by expectation type (sell-out, return, disti SOH snapshot), applied vs missing, top blocked tokens, volume sums. (2) **Semantics:** document disti SOH snapshot rule (no customer + distributor + SOH → `fact_inventory_distributor` at `as_of_date`); separate row-level from `source_key` dedup. (3) **UI** on DSI apply-complete / loaded step: summary panel + “Download gap report”. (4) **Reuse raw on job** — no re-upload. (5) Port pattern to shipment after DSI proves shape. |
+| **Regression traps** | Treating `source_key` dedup as data loss; comparing Excel tokens to fact IDs without staging join; loading 178k-row detail in browser (aggregate + export only); conflating validate blockers with apply gaps. |
+| **Behavior to retain** | Staging `source_row_number` as join key; `apply_status` + `diagnostic_codes` as reason source; transaction-immutable / latest-job-wins fact semantics unchanged. |
+| **Out of scope** | Auto-fixing unresolved entities; re-apply; changing resolution tiers; BACKLOG-049 unresolved worklist (complementary — reconciliation is per-job, worklist is cross-job). |
+| **TRIGGER** | Warren requests reconciliation UI; **or** second large DSI apply needs gap audit; **or** BACKLOG-049 unresolved worklist starts (reconciliation feeds worklist inputs). |
+
+---
+
 ## BACKLOG-050 — DSI derivation dispatch wrapper deadlocks on `import_job.staged_metadata`
 
 | Field | Detail |
