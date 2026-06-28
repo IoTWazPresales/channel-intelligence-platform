@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-28 (Session B Units 5/7/8 shipped — unified lineup importer + iterations + per-customer export)
+**Last updated:** 2026-06-28 (Session B Unit 6 shipped — Import-Centre unified multi-file uploader + CurrentLineupSection upload read-only)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,9 +9,9 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/dsi-async-topology` |
-| **HEAD** | `4d195e0` — Session B Units 7-8 (iterations + line annotations + per-customer XLSX export), on top of `693efb9` (Unit 5 unified importer) (**pushed**, synced with `origin`) |
-| **PR** | None open — branch ready for PR after Unit 6 (frontend) lands |
+| **Branch** | `feat/unit-6-unified-lineup-import-centre` (cut from `feat/dsi-async-topology` + BACKLOG-051 docs) |
+| **HEAD** | Unit 6 frontend (unified import dialog + read-only embedded upload) on top of `6952a2f` (BACKLOG-051 docs) / `5418ff4` (memory) / `4d195e0` (Units 7-8) / `693efb9` (Unit 5) |
+| **PR** | None open — branch ready for PR (Session B complete: Units 1-8) |
 | **Alembic (code)** | `20260628_0056` |
 | **Alembic (DB)** | **`20260628_0056`** on local `cip` |
 
@@ -74,11 +74,27 @@ upload and the admin `historical_lineup` workbook, with full pricing chain + neg
   calculated cost-ccy, **not** PM bottom). `lineup_customer_export.py`.
 - **Tests:** 113 unit/API pass; Units 5/7/8 also proven by real `cip` e2e (scripts cleaned up).
 
-**NOT DONE — Unit 6 (frontend):** Import-Centre multi-file upload UI wired to `/lineup/unified-import`
-with per-file progress; make `CurrentLineupSection` embedded upload **read-only** (point users at the
-unified importer). Surfaces: `apps/web/src/app/(app)/admin/imports/page.tsx`,
-`apps/web/src/features/commercial-planner/CurrentLineupSection.tsx`. `unified_lineup` template is
-`hidden=true` (dedicated surface, not the generic wizard) — Unit 6 adds the explicit Import-Centre card.
+### Unit 6 (frontend) — DONE (wired + unit-tested; not yet browser-soaked)
+Import-Centre multi-file uploader for the unified lineup importer + embedded upload made read-only.
+- **New `UnifiedLineupImportDialog`** (`apps/web/src/app/(app)/admin/imports/UnifiedLineupImportDialog.tsx`):
+  multi-file dropzone + plan/period/country/currency fields → `POST /api/v1/commercial-planner/lineup/unified-import`
+  via `apiPostFormData` (repeated `files` field + form fields). On 202 it registers each returned
+  `task_id` with the nav-bell activity feed (kind `commercial_planner_lineup_parse`) so progress is
+  visible per file, and renders a per-file dispatch outcome table. Plan dropdown reads
+  `GET /commercial-planner/plans`; selecting a plan prefills country/currency.
+- **Import-Centre page** (`admin/imports/page.tsx`): added explicit primary card
+  (`unified-lineup-import-card`) opening the dialog; `ImportTemplate` type gained `hidden?`; the
+  `visibleTemplates` filter now excludes `hidden` templates so `unified_lineup` stays out of the
+  generic wizard (it has its own surface).
+- **`CurrentLineupSection`** read-only: new `allowUpload` prop (default **false**). When read-only the
+  "Upload current lineup" button is replaced by an "Import lineups in Import Centre" link (→
+  `/admin/imports`), the per-case "Upload file to this case" retry is hidden, and the
+  `UploadLineupDialog`/`RetryParseDialog` are not mounted. Legacy upload retained behind `allowUpload`.
+- **Tests:** new `UnifiedLineupImportDialog.test.tsx` (3) proves multipart `files` wiring +
+  task registration + disabled-until-valid-file; existing `CurrentLineupSection.test.tsx` (7) and
+  `commercial-planner/page.test.tsx` (83) still green. Lint clean for touched files.
+- **NOT verified:** browser soak of the dialog against a running API (per-file progress in the bell,
+  cases landing under the plan's Current lineups).
 
 ### DSI apply — proven fresh E2E on job #199 (`b2b81ea`, 2026-06-27)
 - `import_job 199` → `completed` / `loaded` / `apply`.
@@ -119,11 +135,11 @@ unified importer). Surfaces: `apps/web/src/app/(app)/admin/imports/page.tsx`,
 
 ## Next (recommended)
 
-1. **Unit 6 (frontend)** — Import-Centre multi-file uploader → `POST /commercial-planner/lineup/unified-import`
-   (FormData: `files[]` + commercial_plan_id/period_label/country_code/currency_code), per-file
-   progress via activity feed / case list; make `CurrentLineupSection` upload read-only. Backend is
-   live and e2e-proven; this is the last Session B unit.
-2. **Open PR** on `feat/dsi-async-topology` (DSI large-volume + Session B unified importer).
+1. **Browser-soak Unit 6** — open `/admin/imports`, use the "Lineup (unified import)" card to upload
+   2+ files against a running API; confirm per-file progress in the nav bell and cases appearing under
+   the plan's Current lineups. (Wired + unit-tested; not yet soaked.)
+2. **Open PR** for `feat/unit-6-unified-lineup-import-centre` → merges DSI large-volume work + full
+   Session B unified importer (Units 1-8). Branch cut from `feat/dsi-async-topology`.
 3. Fix `dsi-mapping-steward-panel.tsx` rules-of-hooks lint (unblocks `pnpm lint`).
 4. Finish ACZA upload (trim to **Shipped + Unship** until BACKLOG-046).
 

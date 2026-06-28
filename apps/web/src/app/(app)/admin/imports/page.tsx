@@ -61,6 +61,7 @@ import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib
 import { toQueryError } from '@/lib/queryError';
 
 import { ImportFileUploadZone } from './ImportFileUploadZone';
+import { UnifiedLineupImportDialog } from './UnifiedLineupImportDialog';
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
 import {
   DSI_STEWARD_CONFIG,
@@ -127,6 +128,7 @@ type ImportTemplate = {
   optional_fields: string[];
   pipeline_ready: boolean;
   destructive_apply_requires_confirm: boolean;
+  hidden?: boolean;
 };
 
 type Source = {
@@ -511,6 +513,7 @@ function AdminImportsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeStep, setActiveStep] = useState(0);
+  const [unifiedLineupOpen, setUnifiedLineupOpen] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [sourceId, setSourceId] = useState<number | ''>('');
   const [importMode, setImportMode] = useState<'validate' | 'apply'>('validate');
@@ -563,7 +566,9 @@ function AdminImportsPageContent() {
     queryFn: ({ signal }) => apiGet<ImportTemplate[]>('/api/v1/imports/templates', { signal }),
   });
   const visibleTemplates = useMemo(
-    () => (templates ?? []).filter((t) => !DEFERRED_TEMPLATE_SLUGS.has(t.slug)),
+    // Exclude deferred slugs and any `hidden` template (e.g. `unified_lineup`, which has its own
+    // dedicated Import-Centre card + dialog rather than the generic wizard).
+    () => (templates ?? []).filter((t) => !DEFERRED_TEMPLATE_SLUGS.has(t.slug) && !t.hidden),
     [templates]
   );
 
@@ -2368,6 +2373,7 @@ function AdminImportsPageContent() {
   return (
     <>
       <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Imports' }]} title="Data & imports" />
+      <UnifiedLineupImportDialog open={unifiedLineupOpen} onClose={() => setUnifiedLineupOpen(false)} />
       <Alert severity="info" sx={{ mb: 2 }}>
         <strong>Guided import:</strong> pick an <strong>import type</strong> first (what the file means), then a{' '}
         <strong>data provider</strong> (which feed or instance). Product Master uses a{' '}
@@ -2410,6 +2416,30 @@ function AdminImportsPageContent() {
               Choose the import <strong>type</strong> that matches your file (not the low-level parser id).
             </Typography>
             <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+              <Card
+                variant="outlined"
+                sx={{ width: 280, borderColor: 'primary.main' }}
+                data-testid="unified-lineup-import-card"
+              >
+                <CardActionArea onClick={() => setUnifiedLineupOpen(true)}>
+                  <CardContent>
+                    <Typography variant="subtitle1" fontWeight={600}>
+                      Lineup (unified import)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                      unified_lineup · multi-file
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Upload several lineup files at once. Each file becomes its own case, parsed
+                      async with the full backwards pricing chain and period inference.
+                    </Typography>
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                      <Chip size="small" label="Multi-file" color="primary" variant="outlined" />
+                      <Chip size="small" label="Async per file" variant="outlined" />
+                    </Stack>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
               {visibleTemplates.map((t) => (
                 <Card key={t.slug} variant="outlined" sx={{ width: 280 }}>
                   <CardActionArea

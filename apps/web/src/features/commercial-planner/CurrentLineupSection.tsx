@@ -31,11 +31,13 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import NextLink from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
@@ -1965,6 +1967,7 @@ export function CurrentLineupSection({
   planCurrencyCode,
   onSyncComplete,
   onStagedLineupSummary,
+  allowUpload = false,
 }: {
   activePlanId: number | null;
   planLineCount?: number;
@@ -1972,6 +1975,12 @@ export function CurrentLineupSection({
   planCurrencyCode?: string | null;
   onSyncComplete?: (info: { planId: number; caseId: number }) => void;
   onStagedLineupSummary?: (summary: { caseId: number | null; lineCount: number }) => void;
+  /**
+   * When false (default), the embedded lineup upload is read-only: the section points users to the
+   * unified importer in the Import Centre instead. The legacy in-section upload dialogs are retained
+   * behind this flag so existing flows/tests can still opt in.
+   */
+  allowUpload?: boolean;
 }) {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(true);
@@ -2364,16 +2373,29 @@ export function CurrentLineupSection({
             Current lineups
           </Button>
           {count > 0 && <Chip label={count} size="small" />}
-          {activePlanId != null && (
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={() => setUploadOpen(true)}
-              data-testid="upload-current-lineup-btn"
-            >
-              Upload current lineup
-            </Button>
-          )}
+          {activePlanId != null &&
+            (allowUpload ? (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => setUploadOpen(true)}
+                data-testid="upload-current-lineup-btn"
+              >
+                Upload current lineup
+              </Button>
+            ) : (
+              <Tooltip title="Lineup uploads now run through the unified multi-file importer in the Import Centre.">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  component={NextLink}
+                  href="/admin/imports"
+                  data-testid="upload-current-lineup-link"
+                >
+                  Import lineups in Import Centre
+                </Button>
+              </Tooltip>
+            ))}
         </Stack>
 
         <Collapse in={expanded}>
@@ -2423,7 +2445,7 @@ export function CurrentLineupSection({
                     <Button size="small" onClick={() => setViewLinesCase(c)}>
                       Details
                     </Button>
-                    {c.commercial_status === 'draft_imported' && c.line_count === 0 && (
+                    {allowUpload && c.commercial_status === 'draft_imported' && c.line_count === 0 && (
                       <Button
                         size="small"
                         variant="outlined"
@@ -2754,14 +2776,16 @@ export function CurrentLineupSection({
         )}
       </Box>
 
-      <UploadLineupDialog
-        open={uploadOpen}
-        onClose={() => setUploadOpen(false)}
-        activePlanId={activePlanId}
-        planCountryCode={planCountryCode}
-        planCurrencyCode={planCurrencyCode}
-        onCreated={() => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] })}
-      />
+      {allowUpload && (
+        <UploadLineupDialog
+          open={uploadOpen}
+          onClose={() => setUploadOpen(false)}
+          activePlanId={activePlanId}
+          planCountryCode={planCountryCode}
+          planCurrencyCode={planCurrencyCode}
+          onCreated={() => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] })}
+        />
+      )}
 
       {viewLinesCase && (
         <CaseLinesDialog
@@ -2795,7 +2819,7 @@ export function CurrentLineupSection({
         />
       )}
 
-      {retryParseCase && (
+      {allowUpload && retryParseCase && (
         <RetryParseDialog
           open={retryParseCase != null}
           onClose={() => setRetryParseCase(null)}
