@@ -40,6 +40,7 @@ from app.models.import_distributor_si import (
     ImportEntityMappingCandidate,
     RegionSourceTokenAlias,
 )
+from app.models.purchase_order import PurchaseOrder
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
 from app.models.promo_export import PromoPlanExport, PromoPlanExportEvent
@@ -183,6 +184,7 @@ __all__ = [
     "DistributorSourceTokenAlias",
     "CommercialLineupCase",
     "CommercialLineupLine",
+    "PurchaseOrder",
     "ShipmentEvidenceLine",
     "TaskRun",
 ]
