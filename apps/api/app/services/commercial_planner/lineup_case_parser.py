@@ -28,9 +28,8 @@ from app.models.commercial_planner import (
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
 from app.services.commercial_planner.lineup_period_inference import (
+    infer_case_product_line,
     infer_period_start,
-    infer_product_line,
-    infer_product_line_from_catalogue_values,
 )
 from app.services.commercial_planner.lineup_pricing_resolution import (
     LineupTradeTermDefaults,
@@ -587,8 +586,8 @@ async def parse_current_lineup_file(
 
         await db.flush()
 
-        # Infer reporting period (label x month columns) and product line (majority column value);
-        # never overwrite a value a steward already set on the case.
+        # Infer reporting period (label x month columns) and product line (catalogue majority,
+        # filename fallback); never overwrite a value a steward already set on the case.
         inferred_start, period_flags = infer_period_start(case.period_label, header_cols)
         if inferred_start is not None and case.inferred_period_start is None:
             case.inferred_period_start = inferred_start
@@ -596,29 +595,32 @@ async def parse_current_lineup_file(
             for f in period_flags:
                 if f not in warnings:
                     warnings.append(f)
-        if case.product_line is None:
-            uploaded_rows = [
-                rd.get("raw_row_payload", {}).get("uploaded", {}) for rd in row_dicts
-            ]
-            inferred_line = infer_product_line(header_cols, uploaded_rows)
-            if inferred_line:
-                case.product_line = inferred_line
         if case.product_line is None and lines_to_add:
             resolved_pids = sorted({int(l.product_id) for l in lines_to_add if l.product_id})
+            pline_by_id: dict[int, str | None] = {}
             if resolved_pids:
                 cat_rows = (
                     await db.execute(
-                        select(DimProduct.product_line, DimProduct.business_unit).where(
+                        select(DimProduct.id, DimProduct.product_line).where(
                             DimProduct.id.in_(resolved_pids)
                         )
                     )
                 ).all()
-                inferred_cat = infer_product_line_from_catalogue_values(
-                    [r[0] for r in cat_rows],
-                    [r[1] for r in cat_rows],
-                )
-                if inferred_cat:
-                    case.product_line = inferred_cat
+                pline_by_id = {int(r[0]): r[1] for r in cat_rows}
+            resolved_plines: list[str] = []
+            for line in lines_to_add:
+                if not line.product_id:
+                    continue
+                pl = pline_by_id.get(int(line.product_id))
+                if pl and str(pl).strip():
+                    resolved_plines.append(str(pl).strip())
+            inferred_line = infer_case_product_line(
+                filename=filename,
+                total_rows=len(lines_to_add),
+                resolved_product_lines=resolved_plines,
+            )
+            if inferred_line:
+                case.product_line = inferred_line
 
         job.status = "completed"
         job.completed_at = datetime.now(tz=timezone.utc)

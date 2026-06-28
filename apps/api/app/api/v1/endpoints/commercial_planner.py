@@ -2147,6 +2147,20 @@ async def get_lineup_entity_resolution_candidates(case_id: int, db: AsyncSession
     return await collect_entity_resolution_candidates(db, case_id)
 
 
+def _workbench_calc_field_metadata() -> list[dict[str, str]]:
+    """Derived pricing chain outputs stored on lineup lines (pricing_chain_json.outputs)."""
+    specs = [
+        ("dealer_price", "Dealer price (calc)", "calc_dealer_price_local"),
+        ("net_price", "Net price (calc)", "calc_net_price_local"),
+        ("disti_cost", "Disti cost (calc)", "calc_disti_cost_local"),
+        ("dap", "DAP (calc)", "calc_dap_cost_currency"),
+        ("profit", "Profit total (calc)", "calc_profit_total"),
+    ]
+    return [
+        {"id": f"calc:{k}", "group": "calculated", "label": lab, "field": field} for k, lab, field in specs
+    ]
+
+
 def _workbench_parsed_field_metadata() -> list[dict[str, str]]:
     """Stable ids for lineup staging fields (not DB migration — API contract only)."""
     specs = [
@@ -2247,6 +2261,7 @@ async def get_lineup_workbench_column_metadata(case_id: int, db: AsyncSession = 
         "catalogue_spec_keys": sorted(spec_keys),
         "processor_spec_key_hints": proc_hints,
         "sync_fields": _workbench_sync_field_metadata(),
+        "calc_fields": _workbench_calc_field_metadata(),
     }
 
 
@@ -2635,6 +2650,11 @@ async def list_lineup_case_lines(
             "row_status": ln.row_status,
             "mapping_confidence": float(ln.mapping_confidence) if ln.mapping_confidence is not None else None,
             "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE,
+            "pricing_chain_json": ln.pricing_chain_json if isinstance(ln.pricing_chain_json, dict) else None,
+            "calc_dap_cost_currency": float(ln.calc_dap_cost_currency)
+            if ln.calc_dap_cost_currency is not None
+            else None,
+            "calc_profit_total": float(ln.calc_profit_total) if ln.calc_profit_total is not None else None,
             "staging_open_channel": raw_payload.get(STAGING_OPEN_CHANNEL_KEY) is True,
             "channel_route_uploaded_cell": raw_payload.get(CHANNEL_ROUTE_UPLOADED_CELL_KEY)
             if isinstance(raw_payload.get(CHANNEL_ROUTE_UPLOADED_CELL_KEY), str)

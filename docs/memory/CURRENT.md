@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-28 (lineup workbench defaults + catalogue product_line backfill)
+**Last updated:** 2026-06-28 (catalogue-authoritative product_line + workbench derived chain)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -149,14 +149,17 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
 - **Tests:** +3 API (list-all, attach, detach) · +3 UI (grouped unlinked list, plan filter, unlinked
   workbench) · pct sanitize unit tests. 100 API + 11 CurrentLineupSection vitest green.
 
-### Lineup workbench defaults + catalogue product_line (2026-06-28)
-- **Workbench:** default columns follow unified_lineup commercial template (margins, rebate, VAT,
-  ROE, catalogue product line/BU/series) — CPU/spec columns no longer auto-injected; optional
-  **Processor details** preset in column picker; per-case localStorage v3 (no cross-case bleed).
-- **product_line:** parse-time fallback from majority `dim_product.product_line` / `business_unit`;
-  lazy backfill on `GET /lineup-cases` for existing unclassified cases.
-- **API:** extended parsed field metadata; `lineup_evidence_from_uploaded` enriches line rows for
-  workbench display. Tests: 19 API + 11 CurrentLineupSection vitest green.
+### Lineup workbench + catalogue product_line (2026-06-28)
+- **product_line inference:** catalogue-majority PRIMARY (`dim_product.product_line`, row-weighted);
+  filename fallback ONLY when &lt;25% rows resolved; sheet category/BU column removed as signal.
+  Steward-set `product_line` never overwritten. **Warren:** re-parse cases 3/4/5 to fix mislabels
+  (Gaming NR→Gaming, Consumer/NB/NV per catalogue).
+- **Workbench grid:** default columns = identity (part #, model, series, processor) + qty/SRP +
+  margin % (display ×100) + **calculated** pricing chain (`pricing_chain_json` / calc_*); no dead
+  raw upload price columns; `sku_raw` out of defaults (still in picker). localStorage v4 per case.
+  Plan-optional workbench always requests `include_product_specs` + `include_line_uploaded`.
+- **API:** lines expose `pricing_chain_json`, `calc_dap_cost_currency`, `calc_profit_total`;
+  `calc_fields` in workbench-column-metadata. Tests: 16 inference + 12 CurrentLineupSection vitest.
 
 ### DSI apply — proven fresh E2E on job #199 (`b2b81ea`, 2026-06-27)
 - `import_job 199` → `completed` / `loaded` / `apply`.
@@ -197,13 +200,15 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
 
 ## Next (recommended)
 
-1. **Browser-soak Unit 6** — open `/admin/imports`, use the "Lineup (unified import)" card to upload
+1. **Re-parse lineup cases 3/4/5** — confirm product_line labels + workbench grid in running app
+   after catalogue-authoritative inference (Gaming NR→Gaming, etc.).
+2. **Browser-soak Unit 6** — open `/admin/imports`, use the "Lineup (unified import)" card to upload
    2+ files against a running API; confirm per-file progress in the nav bell and cases appearing under
    the plan's Current lineups. (Wired + unit-tested; not yet soaked.)
-2. **Open PR** for `feat/unit-6-unified-lineup-import-centre` → merges DSI large-volume work + full
+3. **Open PR** for `feat/unit-6-unified-lineup-import-centre` → merges DSI large-volume work + full
    Session B unified importer (Units 1-8). Branch cut from `feat/dsi-async-topology`.
-3. Fix `dsi-mapping-steward-panel.tsx` rules-of-hooks lint (unblocks `pnpm lint`).
-4. Finish ACZA upload (trim to **Shipped + Unship** until BACKLOG-046).
+4. Fix `dsi-mapping-steward-panel.tsx` rules-of-hooks lint (unblocks `pnpm lint`).
+5. Finish ACZA upload (trim to **Shipped + Unship** until BACKLOG-046).
 
 ---
 

@@ -730,4 +730,98 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     // Working grid renders for an unlinked case.
     expect(await screen.findByTestId('current-lineup-working-grid')).toBeInTheDocument();
   });
+
+  it('default workbench columns omit SKU but show calc chain and formatted pct', async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const draftCase = {
+      id: 50,
+      import_job_id: null,
+      commercial_plan_id: 5,
+      file_name: 'gaming.xlsx',
+      period_label: null,
+      country_code: 'US',
+      currency_code: 'USD',
+      commercial_status: 'draft_imported',
+      notes: null,
+      accepted_at: null,
+      accepted_by: null,
+      line_count: 1,
+      created_at: null,
+    };
+    const line = {
+      ...lineupLineOpenChannel(),
+      case_id: 50,
+      id: 99,
+      sku_raw: 'SKU-RAW-1',
+      part_number_raw: 'PN-1',
+      product_model_name: 'ROG Strix G16',
+      product_spec_processor: 'Intel Core i9',
+      catalogue_series_name: 'ROG Strix',
+      rebate_pct_evidence: 0.06,
+      vat_pct_evidence: 0.15,
+      pricing_chain_json: {
+        outputs: {
+          calc_dealer_price_local: 1200.5,
+          calc_net_price_local: 1100,
+          calc_disti_cost_local: 950.25,
+          calc_dap_cost_currency: 800,
+          calc_profit_total: 4000,
+        },
+      },
+      calc_dap_cost_currency: 800,
+      calc_profit_total: 4000,
+    };
+    apiGetMock.mockImplementation(async (url: string) => {
+      if (url.includes('/lineup-cases?')) return [draftCase];
+      if (url.includes('/workbench-column-metadata')) {
+        return {
+          case_id: 50,
+          raw_columns: ['Dealer price'],
+          parsed_fields: [
+            { id: 'parsed:rebate_pct_evidence', group: 'parsed', label: 'Rebate % (evidence)', field: 'rebate_pct_evidence' },
+            { id: 'parsed:vat_pct_evidence', group: 'parsed', label: 'VAT % (evidence)', field: 'vat_pct_evidence' },
+            { id: 'parsed:sku_raw', group: 'parsed', label: 'SKU (raw)', field: 'sku_raw' },
+          ],
+          catalogue_product_fields: [
+            { id: 'cat:product_model_name', group: 'catalogue', label: 'Model name (catalogue)', field: 'product_model_name' },
+            { id: 'cat:product_spec_processor', group: 'catalogue', label: 'Processor (catalogue spec)', field: 'product_spec_processor' },
+            { id: 'cat:catalogue_series_name', group: 'catalogue', label: 'Series (catalogue)', field: 'catalogue_series_name' },
+          ],
+          catalogue_spec_keys: [],
+          calc_fields: [
+            { id: 'calc:dealer_price', group: 'calculated', label: 'Dealer price (calc)', field: 'calc_dealer_price_local' },
+            { id: 'calc:net_price', group: 'calculated', label: 'Net price (calc)', field: 'calc_net_price_local' },
+            { id: 'calc:disti_cost', group: 'calculated', label: 'Disti cost (calc)', field: 'calc_disti_cost_local' },
+            { id: 'calc:dap', group: 'calculated', label: 'DAP (calc)', field: 'calc_dap_cost_currency' },
+            { id: 'calc:profit', group: 'calculated', label: 'Profit total (calc)', field: 'calc_profit_total' },
+          ],
+          sync_fields: [],
+        };
+      }
+      if (url.includes('/lineup-cases/50/lines')) {
+        return { lines: [line], dap_semantics_note: 'DAP is evidence-only.' };
+      }
+      return [];
+    });
+
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CurrentLineupSection activePlanId={5} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByTestId('current-lineup-section-toggle'));
+    await user.click(await screen.findByTestId('lineup-workbench-50'));
+
+    expect(screen.queryByRole('columnheader', { name: /^SKU$/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole('columnheader', { name: /Dealer price \(calc\)/i })).toBeInTheDocument();
+    expect(await screen.findByRole('columnheader', { name: /DAP \(calc\)/i })).toBeInTheDocument();
+    expect(await screen.findByText('6%')).toBeInTheDocument();
+    expect(await screen.findByText('15%')).toBeInTheDocument();
+    expect(await screen.findByText(/800/)).toBeInTheDocument();
+    expect(await screen.findByRole('columnheader', { name: /Model name \(catalogue\)/i })).toBeInTheDocument();
+    expect(await screen.findByRole('columnheader', { name: /Processor \(catalogue spec\)/i })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /Upload:\s*Dealer price/i })).not.toBeInTheDocument();
+  });
 });

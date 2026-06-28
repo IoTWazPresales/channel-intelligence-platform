@@ -7,13 +7,21 @@ Pure, deterministic helpers (no DB/I-O):
   (Jan/Feb/Mar -> Q1, ...) to produce the first day of the inferred quarter/month.
   The label supplies the year; the columns (or the label's own quarter token) supply the
   quarter. When they disagree a ``period_quarter_mismatch`` flag is raised and the label wins.
-- ``infer_product_line`` picks the majority non-empty value from a product-line-style column.
+- ``infer_case_product_line`` picks product line from resolved ``dim_product.product_line``
+  (catalogue majority), with filename fallback when too few rows are resolved.
+  Sheet column values are **not** used — they are often misleading.
 """
 from __future__ import annotations
 
 import re
 from datetime import date
 from typing import Any
+
+# Canonical dim_product.product_line labels (ground truth — do not invent new values).
+CANONICAL_PRODUCT_LINES: frozenset[str] = frozenset({"Gaming", "Consumer", "NV", "NB"})
+
+# Minimum share of case lines that must have a resolved product_id to trust catalogue majority.
+CATALOGUE_MIN_RESOLVED_FRACTION: float = 0.25
 
 _MONTH_TO_NUM: dict[str, int] = {
     "jan": 1, "january": 1,
@@ -170,15 +178,9 @@ def infer_product_line(columns: list[str], rows: list[dict[str, Any]]) -> str | 
     return best[:64]
 
 
-def infer_product_line_from_catalogue_values(
-    product_lines: list[str | None],
-    business_units: list[str | None],
-) -> str | None:
-    """Majority vote on resolved dim_product.product_line / business_unit when the upload has no line column."""
+def _majority_nonempty(values: list[str]) -> str | None:
     counts: dict[str, int] = {}
-    for val in (*product_lines, *business_units):
-        if val is None:
-            continue
+    for val in values:
         text = str(val).strip()
         if text and text.lower() not in ("nan", "none"):
             key = text[:64]
@@ -186,3 +188,49 @@ def infer_product_line_from_catalogue_values(
     if not counts:
         return None
     return max(counts.items(), key=lambda kv: kv[1])[0]
+
+
+def infer_product_line_from_catalogue_values(product_lines: list[str | None]) -> str | None:
+    """Majority vote on resolved dim_product.product_line values (row-weighted caller input)."""
+    cleaned = [str(v).strip() for v in product_lines if v is not None and str(v).strip()]
+    return _majority_nonempty(cleaned)
+
+
+def infer_product_line_from_filename(filename: str | None) -> str | None:
+    """Map filename tokens to canonical dim_product.product_line labels."""
+    if not filename:
+        return None
+    n = str(filename).lower()
+    tokens = [t for t in re.split(r"[\s_\-\.]+", n) if t]
+    if "gaming" in n:
+        return "Gaming"
+    if "nv ally" in n or "nv" in tokens:
+        return "NV"
+    if "consumer" in n:
+        return "Consumer"
+    if "nb" in tokens or "notebook" in n:
+        return "NB"
+    return None
+
+
+def infer_case_product_line(
+    *,
+    filename: str | None,
+    total_rows: int,
+    resolved_product_lines: list[str],
+) -> str | None:
+    """Infer case product_line: catalogue majority (primary), filename (fallback when under-resolved).
+
+    ``resolved_product_lines`` must be one entry per resolved line (row-weighted), containing only
+    non-empty dim_product.product_line strings.
+    """
+    if total_rows <= 0:
+        return infer_product_line_from_filename(filename)
+
+    resolved_count = len(resolved_product_lines)
+    if resolved_count / total_rows >= CATALOGUE_MIN_RESOLVED_FRACTION:
+        majority = _majority_nonempty(resolved_product_lines)
+        if majority:
+            return majority
+
+    return infer_product_line_from_filename(filename)

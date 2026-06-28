@@ -6,38 +6,50 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
 from app.models.dimensions import DimProduct
-from app.services.commercial_planner.lineup_period_inference import infer_product_line_from_catalogue_values
+from app.services.commercial_planner.lineup_period_inference import infer_case_product_line
 
 
 async def ensure_case_product_line_from_catalogue(
     db: AsyncSession, case: CommercialLineupCase
 ) -> bool:
-    """When case.product_line is unset, derive it from majority dim_product line/BU on resolved rows.
+    """When case.product_line is unset, derive it from resolved dim_product lines (row-weighted).
 
     Returns True when the case was updated (caller should commit).
     """
     if case.product_line is not None:
         return False
-    product_ids = (
+
+    product_ids_per_row = (
         await db.execute(
-            select(CommercialLineupLine.product_id)
-            .where(CommercialLineupLine.case_id == case.id)
-            .where(CommercialLineupLine.product_id.isnot(None))
+            select(CommercialLineupLine.product_id).where(CommercialLineupLine.case_id == case.id)
         )
     ).scalars().all()
-    unique_ids = sorted({int(pid) for pid in product_ids if pid is not None})
-    if not unique_ids:
+    total_rows = len(product_ids_per_row)
+    if total_rows == 0:
         return False
-    rows = (
-        await db.execute(
-            select(DimProduct.product_line, DimProduct.business_unit).where(
-                DimProduct.id.in_(unique_ids)
+
+    unique_ids = sorted({int(pid) for pid in product_ids_per_row if pid is not None})
+    pline_by_id: dict[int, str | None] = {}
+    if unique_ids:
+        rows = (
+            await db.execute(
+                select(DimProduct.id, DimProduct.product_line).where(DimProduct.id.in_(unique_ids))
             )
-        )
-    ).all()
-    inferred = infer_product_line_from_catalogue_values(
-        [r[0] for r in rows],
-        [r[1] for r in rows],
+        ).all()
+        pline_by_id = {int(r[0]): r[1] for r in rows}
+
+    resolved_plines: list[str] = []
+    for pid in product_ids_per_row:
+        if pid is None:
+            continue
+        pl = pline_by_id.get(int(pid))
+        if pl and str(pl).strip():
+            resolved_plines.append(str(pl).strip())
+
+    inferred = infer_case_product_line(
+        filename=case.file_name,
+        total_rows=total_rows,
+        resolved_product_lines=resolved_plines,
     )
     if not inferred:
         return False

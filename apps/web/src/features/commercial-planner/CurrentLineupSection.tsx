@@ -145,6 +145,17 @@ type CommercialLineupLine = {
   product_spec_processor?: string | null;
   /** Flattened, non-empty specs_json map — same keys as workbench-column-metadata catalogue_spec_keys. */
   product_specs_flat?: Record<string, string>;
+  pricing_chain_json?: {
+    outputs?: Record<string, number | null>;
+  } | null;
+  calc_dap_cost_currency?: number | null;
+  calc_profit_total?: number | null;
+  rebate_pct_evidence?: number | null;
+  dealer_margin_pct_evidence?: number | null;
+  distributor_margin_pct_evidence?: number | null;
+  import_tax_pct_evidence?: number | null;
+  vat_pct_evidence?: number | null;
+  roe_evidence?: number | null;
 };
 
 type WorkbenchLineCounts = {
@@ -171,11 +182,13 @@ type WorkbenchColumnMetadata = {
   /** Server-derived spec_json keys matching processor/CPU aliases (metadata-driven). */
   processor_spec_key_hints?: string[];
   sync_fields: { id: string; group: string; label: string; field: string }[];
+  calc_fields?: { id: string; group: string; label: string; field: string }[];
 };
 
 const WB_STORAGE_V1 = 'cip.commercial-planner.currentLineupWorkbench.columns.v1';
 const WB_STORAGE_V2 = 'cip.commercial-planner.currentLineupWorkbench.columns.v2';
 const WB_STORAGE_V3 = 'cip.commercial-planner.currentLineupWorkbench.columns.v3';
+const WB_STORAGE_V4 = 'cip.commercial-planner.currentLineupWorkbench.columns.v4';
 
 /** Parsed evidence fields aligned with unified_lineup template (commercial chain, not CPU specs). */
 const UNIFIED_LINEUP_PARSED_DEFAULTS = [
@@ -187,40 +200,21 @@ const UNIFIED_LINEUP_PARSED_DEFAULTS = [
   'parsed:roe_evidence',
 ] as const;
 
-/** Raw upload headers to surface when present (normalized match against workbook headers). */
-const UNIFIED_LINEUP_RAW_HEADER_NEEDLES: readonly { needles: string[] }[] = [
-  { needles: ['dealerprice'] },
-  { needles: ['netprice', 'net'] },
-  { needles: ['disticost', 'distributorcost'] },
-  { needles: ['actualdap'] },
-  { needles: ['oldsrp', 'previoussrp'] },
-];
-
-const UNIFIED_LINEUP_CATALOGUE_DEFAULTS = [
-  'cat:catalogue_product_line',
-  'cat:catalogue_business_unit',
-  'cat:catalogue_series_name',
+/** Derived pricing chain columns (pricing_chain_json.outputs + persisted calc_* fields). */
+const UNIFIED_LINEUP_CALC_DEFAULTS = [
+  'calc:dealer_price',
+  'calc:net_price',
+  'calc:disti_cost',
+  'calc:dap',
+  'calc:profit',
 ] as const;
 
-function normWorkbenchHeader(value: string): string {
-  return value.replace(/[\s\-_]+/g, '').toLowerCase();
-}
-
-function pickUnifiedLineupRawColumnIds(meta: WorkbenchColumnMetadata): string[] {
-  const out: string[] = [];
-  const rawColumns = meta.raw_columns ?? [];
-  for (const { needles } of UNIFIED_LINEUP_RAW_HEADER_NEEDLES) {
-    for (const c of rawColumns) {
-      const n = normWorkbenchHeader(c);
-      if (needles.some((nd) => n === nd || n.includes(nd))) {
-        const id = `raw:${c}`;
-        if (!out.includes(id)) out.push(id);
-        break;
-      }
-    }
-  }
-  return out;
-}
+const UNIFIED_LINEUP_CATALOGUE_DEFAULTS = [
+  'cat:product_model_name',
+  'cat:product_spec_processor',
+  'cat:catalogue_series_name',
+  'cat:catalogue_product_line',
+] as const;
 
 /** Default visible columns for unified lineup workbench — commercial template first. */
 function defaultUnifiedLineupWorkbenchIds(
@@ -233,7 +227,9 @@ function defaultUnifiedLineupWorkbenchIds(
   for (const id of UNIFIED_LINEUP_PARSED_DEFAULTS) {
     if (allow.has(id)) extras.push(id);
   }
-  if (meta) extras.push(...pickUnifiedLineupRawColumnIds(meta).filter((id) => allow.has(id)));
+  for (const id of UNIFIED_LINEUP_CALC_DEFAULTS) {
+    if (allow.has(id)) extras.push(id);
+  }
   for (const id of UNIFIED_LINEUP_CATALOGUE_DEFAULTS) {
     if (allow.has(id)) extras.push(id);
   }
@@ -275,7 +271,7 @@ const CORE_WORKBENCH_LABELS: Record<CoreWorkbenchId, string> = {
   units: 'Units',
   msrp: 'MSRP / list',
   promo: 'Promo evidence',
-  dap: 'DAP evidence',
+  dap: 'DAP (evidence)',
   issues: 'Status / issues',
   sync: 'Sync preview (plan)',
 };
@@ -310,7 +306,6 @@ function defaultWorkbenchVisible(hasPlan: boolean): string[] {
   const base = [
     'num',
     'product',
-    'sku',
     'part',
     'cust',
     'dist',
@@ -336,6 +331,11 @@ function mergeWorkbenchAllowedIds(meta: WorkbenchColumnMetadata | undefined, has
     'promo',
     'dap',
     'issues',
+    'calc:dealer_price',
+    'calc:net_price',
+    'calc:disti_cost',
+    'calc:dap',
+    'calc:profit',
   ]);
   if (hasPlan) s.add('sync');
   if (!meta) return s;
@@ -349,13 +349,15 @@ function mergeWorkbenchAllowedIds(meta: WorkbenchColumnMetadata | undefined, has
   for (const c of catFs) s.add(c.id);
   const syncFs = Array.isArray(meta.sync_fields) ? meta.sync_fields : [];
   for (const f of syncFs) s.add(f.id);
+  const calcFs = Array.isArray(meta.calc_fields) ? meta.calc_fields : [];
+  for (const c of calcFs) s.add(c.id);
   return s;
 }
 
 function readCaseWorkbenchStorage(caseId: number): string[] | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(WB_STORAGE_V3);
+    const raw = localStorage.getItem(WB_STORAGE_V4);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
@@ -372,14 +374,14 @@ function readCaseWorkbenchStorage(caseId: number): string[] | null {
 function saveCaseWorkbenchStorage(caseId: number, cols: string[]): void {
   if (typeof window === 'undefined' || !cols.length) return;
   try {
-    const raw = localStorage.getItem(WB_STORAGE_V3);
+    const raw = localStorage.getItem(WB_STORAGE_V4);
     let cases: Record<string, string[]> = {};
     if (raw) {
       const parsed = JSON.parse(raw) as { cases?: Record<string, string[]> };
       if (parsed?.cases && typeof parsed.cases === 'object') cases = { ...parsed.cases };
     }
     cases[String(caseId)] = cols;
-    localStorage.setItem(WB_STORAGE_V3, JSON.stringify({ version: 1, cases }));
+    localStorage.setItem(WB_STORAGE_V4, JSON.stringify({ version: 1, cases }));
   } catch {
     /* ignore quota / private mode */
   }
@@ -425,9 +427,59 @@ function humanizeSpecKey(k: string): string {
   return SPEC_KEY_HUMAN_LABELS[k.toLowerCase()] ?? k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const CALC_COLUMN_LABELS: Record<string, string> = {
+  'calc:dealer_price': 'Dealer price (calc)',
+  'calc:net_price': 'Net price (calc)',
+  'calc:disti_cost': 'Disti cost (calc)',
+  'calc:dap': 'DAP (calc)',
+  'calc:profit': 'Profit total (calc)',
+};
+
+const PCT_EVIDENCE_FIELDS = new Set([
+  'rebate_pct_evidence',
+  'dealer_margin_pct_evidence',
+  'distributor_margin_pct_evidence',
+  'import_tax_pct_evidence',
+  'vat_pct_evidence',
+]);
+
+function formatPctEvidenceValue(value: unknown): string {
+  if (value == null) return '—';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  const pct = Math.abs(n) <= 1 ? n * 100 : n;
+  const dp = pct >= 10 ? 1 : 2;
+  const text = pct.toFixed(dp).replace(/\.?0+$/, '');
+  return `${text}%`;
+}
+
+function formatMoneyWorkbenchValue(value: unknown): string {
+  if (value == null) return '—';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function calcChainOutput(ln: CommercialLineupLine, outputKey: string): number | null {
+  const chain = ln.pricing_chain_json;
+  if (!chain || typeof chain !== 'object') return null;
+  const outputs = (chain as { outputs?: Record<string, unknown> }).outputs;
+  if (!outputs || typeof outputs !== 'object') return null;
+  const raw = outputs[outputKey];
+  if (raw == null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 function workbenchColumnLabel(colId: string, meta: WorkbenchColumnMetadata | undefined): string {
   if ((CORE_WORKBENCH_IDS as readonly string[]).includes(colId)) {
     return CORE_WORKBENCH_LABELS[colId as CoreWorkbenchId];
+  }
+  if (colId in CALC_COLUMN_LABELS) return CALC_COLUMN_LABELS[colId]!;
+  if (colId.startsWith('calc:') && meta) {
+    const calcFs = Array.isArray(meta.calc_fields) ? meta.calc_fields : [];
+    const hit = calcFs.find((p) => p.id === colId);
+    if (hit) return hit.label;
   }
   if (colId.startsWith('raw:')) return `Upload: ${colId.slice(4)}`;
   if (colId.startsWith('spec:')) {
@@ -458,6 +510,7 @@ function workbenchColumnLabel(colId: string, meta: WorkbenchColumnMetadata | und
 function formatParsedFieldForWorkbench(ln: CommercialLineupLine, field: string): string {
   const v = (ln as Record<string, unknown>)[field];
   if (v == null) return '—';
+  if (PCT_EVIDENCE_FIELDS.has(field)) return formatPctEvidenceValue(v);
   if (Array.isArray(v)) return v.length ? JSON.stringify(v) : '—';
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
@@ -587,10 +640,10 @@ function buildCaseLinesSearchParams(opts: {
   workbenchScope: 'active' | 'synced' | 'ready' | 'blocked' | 'all';
 }): string {
   const p = new URLSearchParams();
-  if (!opts.commercialPlanId) return '';
-  p.set('include_sync_eligibility', 'true');
   p.set('include_product_specs', 'true');
   p.set('include_line_uploaded', 'true');
+  if (!opts.commercialPlanId) return p.toString();
+  p.set('include_sync_eligibility', 'true');
   p.set('workbench_scope', opts.workbenchScope);
   const fc = Number(opts.fallbackCustomerId.trim());
   if (Number.isFinite(fc) && fc > 0) p.set('fallback_customer_id', String(Math.trunc(fc)));
@@ -2431,6 +2484,8 @@ export function CurrentLineupSection({
         wbMeta.raw_columns.map((c) => `raw:${c}`),
       );
     if (wbMeta?.parsed_fields?.length) push('Parsed staging fields', wbMeta.parsed_fields.map((p) => p.id));
+    if (wbMeta?.calc_fields?.length)
+      push('Calculated pricing chain', wbMeta.calc_fields.map((f) => f.id));
     if (wbMeta?.catalogue_product_fields?.length)
       push(
         'Matched catalogue / product fields',
@@ -2583,7 +2638,30 @@ export function CurrentLineupSection({
           />
         );
       if (colId === 'dap')
-        return ln.dap_evidence_local != null ? ln.dap_evidence_local.toLocaleString() : '—';
+        return ln.dap_evidence_local != null
+          ? formatMoneyWorkbenchValue(ln.dap_evidence_local)
+          : '—';
+      if (colId.startsWith('calc:')) {
+        const key = colId.slice(5);
+        if (key === 'dap') {
+          const v = ln.calc_dap_cost_currency ?? calcChainOutput(ln, 'calc_dap_cost_currency');
+          return formatMoneyWorkbenchValue(v);
+        }
+        if (key === 'profit') {
+          const v = ln.calc_profit_total ?? calcChainOutput(ln, 'calc_profit_total');
+          return formatMoneyWorkbenchValue(v);
+        }
+        const outputKey =
+          key === 'dealer_price'
+            ? 'calc_dealer_price_local'
+            : key === 'net_price'
+              ? 'calc_net_price_local'
+              : key === 'disti_cost'
+                ? 'calc_disti_cost_local'
+                : null;
+        if (outputKey) return formatMoneyWorkbenchValue(calcChainOutput(ln, outputKey));
+        return '—';
+      }
       if (colId === 'issues')
         return <Typography variant="caption">{lineupIssuesCell(ln)}</Typography>;
       if (colId === 'sync') {

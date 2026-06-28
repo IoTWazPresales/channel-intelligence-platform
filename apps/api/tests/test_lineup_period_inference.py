@@ -3,9 +3,13 @@
 from datetime import date
 
 from app.services.commercial_planner.lineup_period_inference import (
+    CANONICAL_PRODUCT_LINES,
     detect_quarter_from_columns,
+    infer_case_product_line,
     infer_period_start,
     infer_product_line,
+    infer_product_line_from_catalogue_values,
+    infer_product_line_from_filename,
 )
 
 
@@ -48,7 +52,8 @@ def test_explicit_month_label():
     assert start == date(2026, 1, 1)
 
 
-def test_product_line_majority_value():
+def test_product_line_majority_value_legacy_sheet_helper():
+    """infer_product_line (sheet column) remains for legacy callers — parser no longer uses it."""
     cols = ["SKU", "Product Line", "Qty"]
     rows = [
         {"SKU": "A", "Product Line": "Notebook", "Qty": "10"},
@@ -65,22 +70,54 @@ def test_product_line_absent_column_returns_none():
 
 
 def test_product_line_from_catalogue_majority_product_line():
-    from app.services.commercial_planner.lineup_period_inference import (
-        infer_product_line_from_catalogue_values,
+    assert infer_product_line_from_catalogue_values(["Gaming", "Gaming", "NB"]) == "Gaming"
+
+
+def test_catalogue_primary_even_when_filename_suggests_consumer():
+    """Gaming NR file: resolved catalogue rows are Gaming — must not infer Consumer from sheet/filename."""
+    resolved = ["Gaming"] * 10
+    assert (
+        infer_case_product_line(
+            filename="ACZA_Consumer_NR_Q2.xlsx",
+            total_rows=10,
+            resolved_product_lines=resolved,
+        )
+        == "Gaming"
     )
 
-    assert infer_product_line_from_catalogue_values(
-        ["Gaming", "Gaming", "NB"],
-        [None, None, None],
-    ) == "Gaming"
 
-
-def test_product_line_from_catalogue_falls_back_to_business_unit():
-    from app.services.commercial_planner.lineup_period_inference import (
-        infer_product_line_from_catalogue_values,
+def test_filename_fallback_when_under_resolved():
+    assert (
+        infer_case_product_line(
+            filename="Gaming_NR_Q2.xlsx",
+            total_rows=20,
+            resolved_product_lines=["Gaming"],
+        )
+        == "Gaming"
     )
 
-    assert infer_product_line_from_catalogue_values(
-        [None, None],
-        ["NB", "NB", "Gaming"],
-    ) == "NB"
+
+def test_filename_fallback_nv_ally():
+    assert infer_product_line_from_filename("NV_Ally_lineup.xlsx") == "NV"
+
+
+def test_filename_fallback_consumer_and_nb():
+    assert infer_product_line_from_filename("consumer_26Q2.xlsx") == "Consumer"
+    assert infer_product_line_from_filename("NB_refresh.xlsx") == "NB"
+
+
+def test_canonical_product_line_labels():
+    assert CANONICAL_PRODUCT_LINES == frozenset({"Gaming", "Consumer", "NV", "NB"})
+
+
+def test_case_inference_ignores_sheet_category_mislabel_scenario():
+    """Catalogue majority Gaming wins; misleading category column would have said Consumer."""
+    gaming_rows = ["Gaming"] * 8 + ["Gaming"]  # 9/10 resolved
+    assert (
+        infer_case_product_line(
+            filename="misleading_consumer_category.xlsx",
+            total_rows=10,
+            resolved_product_lines=gaming_rows,
+        )
+        == "Gaming"
+    )
