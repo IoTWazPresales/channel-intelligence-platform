@@ -27,6 +27,10 @@ from app.models.commercial_planner import (
 )
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
+from app.services.commercial_planner.lineup_period_inference import (
+    infer_period_start,
+    infer_product_line,
+)
 from app.services.commercial_planner.lineup_pricing_resolution import (
     LineupTradeTermDefaults,
     resolve_lineup_pricing,
@@ -218,8 +222,8 @@ def _parse_file_to_row_dicts(
     customer_map: dict[str, DimCustomer],
     distributor_map: dict[str, DimDistributor],
     row_limit: int | None = None,
-) -> tuple[list[dict[str, Any]], list[str], int, int, int, int]:
-    """Parse tabular file into serialisable row dicts. Returns rows, warnings, counts."""
+) -> tuple[list[dict[str, Any]], list[str], int, int, int, int, list[str]]:
+    """Parse tabular file into serialisable row dicts. Returns rows, warnings, counts, header."""
     warnings: list[str] = []
     raw_df = _load_df(filename, file_bytes)
     header_row = _find_header_row(raw_df)
@@ -380,6 +384,7 @@ def _parse_file_to_row_dicts(
         unresolved_products,
         unknown_customer_rows,
         unknown_distributor_rows,
+        list(data_df.columns),
     )
 
 
@@ -398,13 +403,15 @@ async def preview_current_lineup_file(
     customer_map = _build_customer_map(list(customers))
     distributor_map = _build_distributor_map(list(distributors))
 
-    rows, warnings, total_rows, resolved_products, unresolved_products, unk_cust, unk_dist = _parse_file_to_row_dicts(
-        filename,
-        file_bytes,
-        product_map=product_map,
-        customer_map=customer_map,
-        distributor_map=distributor_map,
-        row_limit=sample_limit,
+    rows, warnings, total_rows, resolved_products, unresolved_products, unk_cust, unk_dist, _header = (
+        _parse_file_to_row_dicts(
+            filename,
+            file_bytes,
+            product_map=product_map,
+            customer_map=customer_map,
+            distributor_map=distributor_map,
+            row_limit=sample_limit,
+        )
     )
     return LineupParsePreview(
         total_rows=total_rows,
@@ -497,13 +504,15 @@ async def parse_current_lineup_file(
         customer_map = _build_customer_map(list(customers))
         distributor_map = _build_distributor_map(list(distributors))
 
-        row_dicts, warnings, total_rows, resolved_products, unresolved_products, _, _ = _parse_file_to_row_dicts(
-            filename,
-            file_bytes,
-            product_map=product_map,
-            customer_map=customer_map,
-            distributor_map=distributor_map,
-            row_limit=None,
+        row_dicts, warnings, total_rows, resolved_products, unresolved_products, _, _, header_cols = (
+            _parse_file_to_row_dicts(
+                filename,
+                file_bytes,
+                product_map=product_map,
+                customer_map=customer_map,
+                distributor_map=distributor_map,
+                row_limit=None,
+            )
         )
 
         # Trade-term / sku-assumption fallback maps for backwards pricing (one query each).
@@ -558,6 +567,23 @@ async def parse_current_lineup_file(
             lines_to_add.append(line)
 
         await db.flush()
+
+        # Infer reporting period (label x month columns) and product line (majority column value);
+        # never overwrite a value a steward already set on the case.
+        inferred_start, period_flags = infer_period_start(case.period_label, header_cols)
+        if inferred_start is not None and case.inferred_period_start is None:
+            case.inferred_period_start = inferred_start
+        if period_flags:
+            for f in period_flags:
+                if f not in warnings:
+                    warnings.append(f)
+        if case.product_line is None:
+            uploaded_rows = [
+                rd.get("raw_row_payload", {}).get("uploaded", {}) for rd in row_dicts
+            ]
+            inferred_line = infer_product_line(header_cols, uploaded_rows)
+            if inferred_line:
+                case.product_line = inferred_line
 
         job.status = "completed"
         job.completed_at = datetime.now(tz=timezone.utc)

@@ -1759,7 +1759,9 @@ def test_parse_upload_creates_import_job_with_correct_source():
     from app.services.commercial_planner.lineup_case_parser import parse_current_lineup_file
 
     fake_source = SimpleNamespace(id=77)
-    fake_case = SimpleNamespace(id=10, import_job_id=None, file_name=None)
+    fake_case = SimpleNamespace(
+        id=10, import_job_id=None, file_name=None, period_label=None, inferred_period_start=None, product_line=None
+    )
     added: list[object] = []
 
     async def run():
@@ -1885,7 +1887,9 @@ def test_parse_upload_unknown_distributor_diagnostic():
     from app.models.commercial_lineup import CommercialLineupLine
 
     fake_source = SimpleNamespace(id=5)
-    fake_case = SimpleNamespace(id=12, import_job_id=None, file_name=None)
+    fake_case = SimpleNamespace(
+        id=12, import_job_id=None, file_name=None, period_label=None, inferred_period_start=None, product_line=None
+    )
     added: list[object] = []
 
     async def run():
