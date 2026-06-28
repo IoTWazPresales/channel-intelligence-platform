@@ -51,6 +51,7 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
     ship_to_raw: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     order_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    customer_po: Mapped[str | None] = mapped_column(String(128), nullable=True)
     order_line: Mapped[str | None] = mapped_column(String(64), nullable=True)
     delivery_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
     invoice_line: Mapped[str | None] = mapped_column(String(64), nullable=True)

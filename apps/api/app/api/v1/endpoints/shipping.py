@@ -239,6 +239,7 @@ def _apply_fact_where_clause(
             FactInboundShipment.item_code.ilike(term),
             FactInboundShipment.sales_model_name.ilike(term),
             FactInboundShipment.order_no.ilike(term),
+            FactInboundShipment.customer_po.ilike(term),
             FactInboundShipment.delivery_no.ilike(term),
         ]
         if join_distributor:
@@ -411,6 +412,7 @@ def _fact_to_dict(
         "bill_to_raw": row.bill_to_raw,
         "ship_to_raw": row.ship_to_raw,
         "order_no": row.order_no,
+        "customer_po": row.customer_po,
         "order_line": row.order_line,
         "delivery_no": row.delivery_no,
         "invoice_line": row.invoice_line,

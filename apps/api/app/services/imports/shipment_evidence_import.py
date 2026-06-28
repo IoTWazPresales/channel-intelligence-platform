@@ -198,6 +198,18 @@ def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None =
             by_canon("order_no")
             or col("Order No.", "Order No", "order no.", "order no", "ORDER NO", "Order number")
         ),
+        "customer_po": normalize_shipment_cell_value(
+            by_canon("customer_po")
+            or col(
+                "Customer PO",
+                "Cust PO",
+                "Customer P/O",
+                "Purchase Order",
+                "PO No",
+                "PO No.",
+                "PO Number",
+            )
+        ),
         "order_line": normalize_shipment_cell_value(by_canon("order_line") or col("Order Line", "order line")),
         "delivery_no": normalize_shipment_cell_value(
             by_canon("delivery_no")
@@ -739,6 +751,7 @@ def _shipment_line_conflict_set(ex: Any) -> dict[str, Any]:
         "bill_to_raw": ex.bill_to_raw,
         "ship_to_raw": ex.ship_to_raw,
         "order_no": ex.order_no,
+        "customer_po": ex.customer_po,
         "order_line": ex.order_line,
         "delivery_no": ex.delivery_no,
         "invoice_line": ex.invoice_line,
@@ -1195,6 +1208,7 @@ def process_shipment_evidence_import(
                     "bill_to_raw": ex["bill_to_raw"],
                     "ship_to_raw": ex["ship_to_raw"],
                     "order_no": ex["order_no"],
+                    "customer_po": ex["customer_po"],
                     "order_line": ex["order_line"],
                     "delivery_no": ex["delivery_no"],
                     "invoice_line": ex["invoice_line"],

@@ -37,6 +37,7 @@ _LINE_TO_OBSERVATION_COLS = (
     "bill_to_raw",
     "ship_to_raw",
     "order_no",
+    "customer_po",
     "order_line",
     "delivery_no",
     "invoice_line",

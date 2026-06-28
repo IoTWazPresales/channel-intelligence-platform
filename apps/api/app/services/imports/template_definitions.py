@@ -434,6 +434,18 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                 "aliases": ["Order No.", "Order No", "ORDER NO", "Order number", "order no.", "order no"],
                 "required": False,
             },
+            "customer_po": {
+                "aliases": [
+                    "Customer PO",
+                    "Cust PO",
+                    "Customer P/O",
+                    "Purchase Order",
+                    "PO No",
+                    "PO No.",
+                    "PO Number",
+                ],
+                "required": False,
+            },
             "order_line": {"aliases": ["Order Line", "order line"], "required": False},
             "delivery_no": {
                 "aliases": [
