@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,6 +35,9 @@ class CommercialLineupCase(Base, TimestampMixin):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     accepted_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    product_line: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    inferred_period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    iteration_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
 
 class CommercialLineupLine(Base, TimestampMixin):
@@ -65,3 +68,8 @@ class CommercialLineupLine(Base, TimestampMixin):
     raw_row_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     row_status: Mapped[str] = mapped_column(String(32), nullable=False, default="imported")
     mapping_confidence: Mapped[float | None] = mapped_column(Numeric(6, 4), nullable=True)
+    customer_feedback: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    internal_notes: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    pricing_chain_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    calc_dap_cost_currency: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    calc_profit_total: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
