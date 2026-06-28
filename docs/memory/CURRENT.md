@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-27 (memory palace refresh — `b2b81ea` pushed)
+**Last updated:** 2026-06-28 (Session B Units 5/7/8 shipped — unified lineup importer + iterations + per-customer export)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,10 +10,10 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/dsi-async-topology` |
-| **HEAD** | `b2b81ea` — DSI staged_metadata deadlock fix + loaded callout + dev-worker preflight (**pushed**, synced with `origin`) |
-| **PR** | None open — branch ready for PR after large-volume apply soak |
-| **Alembic (code)** | `20260623_0050` |
-| **Alembic (DB)** | **`20260623_0050`** on local `cip` |
+| **HEAD** | `4d195e0` — Session B Units 7-8 (iterations + line annotations + per-customer XLSX export), on top of `693efb9` (Unit 5 unified importer) (**pushed**, synced with `origin`) |
+| **PR** | None open — branch ready for PR after Unit 6 (frontend) lands |
+| **Alembic (code)** | `20260628_0056` |
+| **Alembic (DB)** | **`20260628_0056`** on local `cip` |
 
 ---
 
@@ -43,6 +43,43 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 ## What is working
 
+### Session B — Unified lineup import path (Units 1-5, 7-8) — backend done, e2e-proven on `cip`
+Goal: one unified, multi-file lineup importer that supersedes the embedded Commercial-Planner
+upload and the admin `historical_lineup` workbook, with full pricing chain + negotiation tracking.
+
+- **Unit 1 — backwards pricing calc** (`lineup_pricing.py`): SRP→DAP chain (SRP/(1+VAT) → dealer →
+  net(rebate) → disti_cost → /(1+import_tax) → /ROE = DAP cost-ccy; profit = DAP − controlled_cost).
+- **Unit 2 — model + migration `20260628_0055`**: case `product_line` / `inferred_period_start` /
+  `iteration_number`; line `customer_feedback` / `internal_notes` / `pricing_chain_json` /
+  `calc_dap_cost_currency` / `calc_profit_total`.
+- **Unit 3 — pricing alias map + resolution** (`lineup_pricing_resolution.py`): file evidence over
+  trade-term defaults (customer/distributor terms + `commercial_sku_assumption`); stores calc_* +
+  `pricing_chain_json` (inputs/sources/outputs/flags); `missing_pm_bottom` flag when no PM bottom.
+- **Unit 4 — period/product-line inference** (`lineup_period_inference.py`): `26Q1`/month-column →
+  `inferred_period_start`; product line from majority column. User-supplied values win.
+- **Unit 5 — first-class `unified_lineup` importer** (`693efb9`): own template + `unified_lineup_system`
+  source (seed migration `20260628_0056`, applied to `cip`). Lineup seed generalized over
+  (template_slug, source_code); threaded through parser/dispatch/worker/Celery task so jobs are
+  audited `template_slug='unified_lineup'`. `unified_lineup_import.dispatch_unified_lineup_import`
+  fans out **one CommercialLineupCase + one always-async parse job per file** (per-file activity-feed
+  progress, per-file failure isolation). Endpoint `POST /commercial-planner/lineup/unified-import`
+  (multipart, N files + shared period/country/currency/plan). **Real e2e on cip:** job tagged
+  unified_lineup, DAP 39.6622, period 2026-01-01, `missing_pm_bottom`, chain persisted.
+- **Unit 7 — negotiation iterations + annotations** (`4d195e0`): `iteration_number` advances on
+  `pending_review→validated` (customer bounce-back = new round; first send = round 1).
+  `customer_feedback`/`internal_notes` editable through review loop (draft/validated/pending_review);
+  pricing/qty edits stay draft-only. Case payload exposes iteration/product_line/inferred_period_start.
+- **Unit 8 — per-customer XLSX export** (`4d195e0`): `GET /commercial-planner/lineup-cases/{id}/export?customer_id=`
+  streams one customer's slice with the full persisted pricing chain (recomputes nothing; DAP =
+  calculated cost-ccy, **not** PM bottom). `lineup_customer_export.py`.
+- **Tests:** 113 unit/API pass; Units 5/7/8 also proven by real `cip` e2e (scripts cleaned up).
+
+**NOT DONE — Unit 6 (frontend):** Import-Centre multi-file upload UI wired to `/lineup/unified-import`
+with per-file progress; make `CurrentLineupSection` embedded upload **read-only** (point users at the
+unified importer). Surfaces: `apps/web/src/app/(app)/admin/imports/page.tsx`,
+`apps/web/src/features/commercial-planner/CurrentLineupSection.tsx`. `unified_lineup` template is
+`hidden=true` (dedicated surface, not the generic wizard) — Unit 6 adds the explicit Import-Centre card.
+
 ### DSI apply — proven fresh E2E on job #199 (`b2b81ea`, 2026-06-27)
 - `import_job 199` → `completed` / `loaded` / `apply`.
 - Facts (`source_import_job_id=199`): `fact_sales_sellout`=2 · `fact_inventory_distributor`=2.
@@ -56,9 +93,10 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 ### dev-worker duplicate-consumer preflight (`b2b81ea`)
 - Kills stray `app.worker.celery_app` before spawn; fresh start logs `mingle: all alone`.
 
-### Job #96 — APPLIED to `loaded` (facts in DSI DB)
-- `fact_sales_sellout`=35,582 · `fact_inventory_distributor`=47,411 · `fact_returns`=3,175 (aggregated by `source_key` — correct).
-- Achieved via surgical out-of-band finalize after sync Finalize endpoint timed proxy (~303s); facts had already committed.
+### Job #96 — large-volume apply PROVEN LIVE (`loaded`, channel operations)
+- Full **178k-row** RAW workbook applied; facts visible in channel operations (Warren confirmed 2026-06-28).
+- `fact_sales_sellout`=35,582 · `fact_inventory_distributor`=47,411 · `fact_returns`=3,175 (unique `source_key` grain — multiple Excel rows collapse per key).
+- Apply path: async worker + poll; `staged_metadata` deadlock fix (`b2b81ea`) holds at volume.
 
 ### DSI apply pipeline (prior commits on branch)
 - **No re-validate on apply** (`e4c30bc`): skip Step 1 when job already `validated` with staging.
@@ -72,8 +110,6 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 ---
 
 ## In progress / not proven live
-
-- **Large-volume apply re-soak** — job #96-scale (178k) through **Apply** button not re-run since `b2b81ea`; mechanism proven on small job #199 only.
 - **Pre-existing lint** — 7 `rules-of-hooks` errors in `dsi-mapping-steward-panel.tsx` block clean `pnpm lint` (not introduced by DSI apply work).
 - **Billiard quirk** — solo worker spawns one child under system Python (single logical consumer; interpreter mismatch latent).
 - Warren **actively working through** ACZA shipment upload (BOM tab deferred per BACKLOG-046).
@@ -83,8 +119,11 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 ## Next (recommended)
 
-1. **Re-soak** large DSI apply (178k) through Apply button — confirm no proxy timeout + deadlock-free derive at volume.
-2. **Open PR** on `feat/dsi-async-topology` when soak passes (or waive soak for merge with follow-up).
+1. **Unit 6 (frontend)** — Import-Centre multi-file uploader → `POST /commercial-planner/lineup/unified-import`
+   (FormData: `files[]` + commercial_plan_id/period_label/country_code/currency_code), per-file
+   progress via activity feed / case list; make `CurrentLineupSection` upload read-only. Backend is
+   live and e2e-proven; this is the last Session B unit.
+2. **Open PR** on `feat/dsi-async-topology` (DSI large-volume + Session B unified importer).
 3. Fix `dsi-mapping-steward-panel.tsx` rules-of-hooks lint (unblocks `pnpm lint`).
 4. Finish ACZA upload (trim to **Shipped + Unship** until BACKLOG-046).
 
