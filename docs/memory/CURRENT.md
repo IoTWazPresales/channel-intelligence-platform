@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-28 (plan-optional lineup browse + pct overflow guard; migration `0057` applied to local `cip`)
+**Last updated:** 2026-06-28 (lineup workbench defaults + catalogue product_line backfill)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -148,6 +148,15 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
   instead of `Numeric(8,4)` overflow. Margin **amount** columns deferred → **BACKLOG-052**.
 - **Tests:** +3 API (list-all, attach, detach) · +3 UI (grouped unlinked list, plan filter, unlinked
   workbench) · pct sanitize unit tests. 100 API + 11 CurrentLineupSection vitest green.
+
+### Lineup workbench defaults + catalogue product_line (2026-06-28)
+- **Workbench:** default columns follow unified_lineup commercial template (margins, rebate, VAT,
+  ROE, catalogue product line/BU/series) — CPU/spec columns no longer auto-injected; optional
+  **Processor details** preset in column picker; per-case localStorage v3 (no cross-case bleed).
+- **product_line:** parse-time fallback from majority `dim_product.product_line` / `business_unit`;
+  lazy backfill on `GET /lineup-cases` for existing unclassified cases.
+- **API:** extended parsed field metadata; `lineup_evidence_from_uploaded` enriches line rows for
+  workbench display. Tests: 19 API + 11 CurrentLineupSection vitest green.
 
 ### DSI apply — proven fresh E2E on job #199 (`b2b81ea`, 2026-06-27)
 - `import_job 199` → `completed` / `loaded` / `apply`.

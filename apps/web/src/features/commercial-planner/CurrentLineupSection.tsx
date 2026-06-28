@@ -38,7 +38,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import NextLink from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { apiDelete, apiGet, apiPatch, apiPost, safeDisplayError } from '@/lib/api';
 import { EntitySearchAutocomplete } from './EntitySearchAutocomplete';
@@ -175,6 +175,78 @@ type WorkbenchColumnMetadata = {
 
 const WB_STORAGE_V1 = 'cip.commercial-planner.currentLineupWorkbench.columns.v1';
 const WB_STORAGE_V2 = 'cip.commercial-planner.currentLineupWorkbench.columns.v2';
+const WB_STORAGE_V3 = 'cip.commercial-planner.currentLineupWorkbench.columns.v3';
+
+/** Parsed evidence fields aligned with unified_lineup template (commercial chain, not CPU specs). */
+const UNIFIED_LINEUP_PARSED_DEFAULTS = [
+  'parsed:rebate_pct_evidence',
+  'parsed:dealer_margin_pct_evidence',
+  'parsed:distributor_margin_pct_evidence',
+  'parsed:import_tax_pct_evidence',
+  'parsed:vat_pct_evidence',
+  'parsed:roe_evidence',
+] as const;
+
+/** Raw upload headers to surface when present (normalized match against workbook headers). */
+const UNIFIED_LINEUP_RAW_HEADER_NEEDLES: readonly { needles: string[] }[] = [
+  { needles: ['dealerprice'] },
+  { needles: ['netprice', 'net'] },
+  { needles: ['disticost', 'distributorcost'] },
+  { needles: ['actualdap'] },
+  { needles: ['oldsrp', 'previoussrp'] },
+];
+
+const UNIFIED_LINEUP_CATALOGUE_DEFAULTS = [
+  'cat:catalogue_product_line',
+  'cat:catalogue_business_unit',
+  'cat:catalogue_series_name',
+] as const;
+
+function normWorkbenchHeader(value: string): string {
+  return value.replace(/[\s\-_]+/g, '').toLowerCase();
+}
+
+function pickUnifiedLineupRawColumnIds(meta: WorkbenchColumnMetadata): string[] {
+  const out: string[] = [];
+  const rawColumns = meta.raw_columns ?? [];
+  for (const { needles } of UNIFIED_LINEUP_RAW_HEADER_NEEDLES) {
+    for (const c of rawColumns) {
+      const n = normWorkbenchHeader(c);
+      if (needles.some((nd) => n === nd || n.includes(nd))) {
+        const id = `raw:${c}`;
+        if (!out.includes(id)) out.push(id);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/** Default visible columns for unified lineup workbench — commercial template first. */
+function defaultUnifiedLineupWorkbenchIds(
+  meta: WorkbenchColumnMetadata | undefined,
+  hasPlan: boolean,
+): string[] {
+  const allow = mergeWorkbenchAllowedIds(meta, hasPlan);
+  const core = defaultWorkbenchVisible(hasPlan).filter((id) => allow.has(id));
+  const extras: string[] = [];
+  for (const id of UNIFIED_LINEUP_PARSED_DEFAULTS) {
+    if (allow.has(id)) extras.push(id);
+  }
+  if (meta) extras.push(...pickUnifiedLineupRawColumnIds(meta).filter((id) => allow.has(id)));
+  for (const id of UNIFIED_LINEUP_CATALOGUE_DEFAULTS) {
+    if (allow.has(id)) extras.push(id);
+  }
+  const withoutSync = core.filter((id) => id !== 'sync');
+  const msrpIdx = withoutSync.indexOf('msrp');
+  const insertAt = msrpIdx >= 0 ? msrpIdx + 1 : withoutSync.length;
+  const merged = [
+    ...withoutSync.slice(0, insertAt),
+    ...extras.filter((id) => !withoutSync.includes(id)),
+    ...withoutSync.slice(insertAt),
+  ];
+  return hasPlan && allow.has('sync') ? [...merged, 'sync'] : merged;
+}
 
 const CORE_WORKBENCH_IDS = [
   'num',
@@ -215,8 +287,8 @@ function rawHeaderMatchesProcessorAliases(header: string): boolean {
   return needles.some((t) => n === t || n.includes(t));
 }
 
-/** Raw upload columns + resolved spec keys (from metadata hints) to show by default when present. */
-function pickDefaultProcessorWorkbenchIds(meta: WorkbenchColumnMetadata): string[] {
+/** Optional column preset — processor/upload CPU specs (never auto-injected). */
+function pickProcessorPresetWorkbenchIds(meta: WorkbenchColumnMetadata): string[] {
   const out: string[] = [];
   const rawColumns = meta.raw_columns ?? [];
   const byLower = new Map(rawColumns.map((c) => [c.toLowerCase(), c]));
@@ -280,24 +352,49 @@ function mergeWorkbenchAllowedIds(meta: WorkbenchColumnMetadata | undefined, has
   return s;
 }
 
-function readInitialWorkbenchVisible(hasPlan: boolean): string[] {
-  const fallback = defaultWorkbenchVisible(hasPlan);
-  if (typeof window === 'undefined') return fallback;
+function readCaseWorkbenchStorage(caseId: number): string[] | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const v2 = localStorage.getItem(WB_STORAGE_V2);
-    if (v2) {
-      const arr = JSON.parse(v2) as unknown;
-      if (Array.isArray(arr) && arr.every((x) => typeof x === 'string') && arr.length) return arr;
-    }
-    const raw = localStorage.getItem(WB_STORAGE_V1);
-    if (!raw) return fallback;
-    const arr = JSON.parse(raw) as unknown;
-    if (!Array.isArray(arr)) return fallback;
-    const next = arr.filter((x): x is string => typeof x === 'string');
-    return next.length ? next : fallback;
+    const raw = localStorage.getItem(WB_STORAGE_V3);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const cases = (parsed as { cases?: Record<string, unknown> }).cases;
+    if (!cases || typeof cases !== 'object') return null;
+    const entry = cases[String(caseId)];
+    if (!Array.isArray(entry) || !entry.every((x) => typeof x === 'string') || !entry.length) return null;
+    return entry as string[];
   } catch {
-    return fallback;
+    return null;
   }
+}
+
+function saveCaseWorkbenchStorage(caseId: number, cols: string[]): void {
+  if (typeof window === 'undefined' || !cols.length) return;
+  try {
+    const raw = localStorage.getItem(WB_STORAGE_V3);
+    let cases: Record<string, string[]> = {};
+    if (raw) {
+      const parsed = JSON.parse(raw) as { cases?: Record<string, string[]> };
+      if (parsed?.cases && typeof parsed.cases === 'object') cases = { ...parsed.cases };
+    }
+    cases[String(caseId)] = cols;
+    localStorage.setItem(WB_STORAGE_V3, JSON.stringify({ version: 1, cases }));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function readInitialWorkbenchVisible(
+  caseId: number | null,
+  meta: WorkbenchColumnMetadata | undefined,
+  hasPlan: boolean,
+): string[] {
+  const fallback = defaultUnifiedLineupWorkbenchIds(meta, hasPlan);
+  if (caseId == null) return fallback;
+  const stored = readCaseWorkbenchStorage(caseId);
+  if (stored) return stored;
+  return fallback;
 }
 
 const SPEC_KEY_HUMAN_LABELS: Record<string, string> = {
@@ -2298,55 +2395,24 @@ export function CurrentLineupSection({
   );
 
   const [visibleCols, setVisibleCols] = useState<string[]>([]);
-  const processorRawInjectedKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (activeCaseId == null) {
       setVisibleCols([]);
       return;
     }
-    const stored = readInitialWorkbenchVisible(hasWorkbenchPlan);
-    const baseAllow = mergeWorkbenchAllowedIds(undefined, hasWorkbenchPlan);
-    const prelim = stored.filter((id) => baseAllow.has(id));
-    setVisibleCols(prelim.length ? prelim : defaultWorkbenchVisible(hasWorkbenchPlan));
-  }, [activeCaseId, hasWorkbenchPlan]);
-
-  useEffect(() => {
-    if (activeCaseId == null || !wbMetaReady) return;
-    setVisibleCols((prev) => {
-      const allow = mergeWorkbenchAllowedIds(wbMeta, hasWorkbenchPlan);
-      const next = prev.filter((id) => allow.has(id));
-      return next.length ? next : defaultWorkbenchVisible(hasWorkbenchPlan);
-    });
-  }, [wbMetaReady, wbMeta, activeCaseId, hasWorkbenchPlan]);
-
-  useEffect(() => {
-    if (activeCaseId == null || !wbMetaReady || !wbMeta) return;
-    const rawCols = wbMeta.raw_columns ?? [];
-    const hintPart = (wbMeta.processor_spec_key_hints ?? []).join('\u0002');
-    const digest = `${activeCaseId}:${rawCols.join('\u0001')}:${hintPart}`;
-    if (processorRawInjectedKey.current === digest) return;
-    const hints = pickDefaultProcessorWorkbenchIds(wbMeta);
-    processorRawInjectedKey.current = digest;
-    if (!hints.length) return;
-    setVisibleCols((prev) => {
-      const allow = mergeWorkbenchAllowedIds(wbMeta, hasWorkbenchPlan);
-      const toAdd = hints.filter((id) => allow.has(id) && !prev.includes(id));
-      if (!toAdd.length) return prev;
-      const dapIdx = prev.indexOf('dap');
-      if (dapIdx >= 0) {
-        const copy = [...prev];
-        copy.splice(dapIdx, 0, ...toAdd);
-        return copy;
-      }
-      return [...toAdd, ...prev];
-    });
+    if (!wbMetaReady) return;
+    const allow = mergeWorkbenchAllowedIds(wbMeta, hasWorkbenchPlan);
+    const defaults = defaultUnifiedLineupWorkbenchIds(wbMeta, hasWorkbenchPlan);
+    const stored = readInitialWorkbenchVisible(activeCaseId, wbMeta, hasWorkbenchPlan);
+    const chosen = stored.filter((id) => allow.has(id));
+    setVisibleCols(chosen.length ? chosen : defaults.filter((id) => allow.has(id)));
   }, [activeCaseId, wbMetaReady, wbMeta, hasWorkbenchPlan]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !visibleCols.length) return;
-    localStorage.setItem(WB_STORAGE_V2, JSON.stringify(visibleCols));
-  }, [visibleCols]);
+    if (activeCaseId == null || !visibleCols.length) return;
+    saveCaseWorkbenchStorage(activeCaseId, visibleCols);
+  }, [activeCaseId, visibleCols]);
 
   const columnMenuEntries = useMemo(() => {
     const rows: Array<{ kind: 'header'; label: string } | { kind: 'col'; id: string }> = [];
@@ -3041,15 +3107,30 @@ export function CurrentLineupSection({
                   })}
                 </Stack>
               </DialogContent>
-              <DialogActions>
+              <DialogActions sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                 <Button
                   size="small"
                   onClick={() => {
-                    setVisibleCols(defaultWorkbenchVisible(hasWorkbenchPlan));
+                    setVisibleCols(defaultUnifiedLineupWorkbenchIds(wbMeta, hasWorkbenchPlan));
                   }}
+                  data-testid="lineup-columns-preset-commercial"
                 >
-                  Reset to defaults
+                  Lineup template
                 </Button>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    if (!wbMeta) return;
+                    const allow = mergeWorkbenchAllowedIds(wbMeta, hasWorkbenchPlan);
+                    const core = defaultWorkbenchVisible(hasWorkbenchPlan).filter((id) => allow.has(id));
+                    const proc = pickProcessorPresetWorkbenchIds(wbMeta).filter((id) => allow.has(id));
+                    setVisibleCols([...core, ...proc.filter((id) => !core.includes(id))]);
+                  }}
+                  data-testid="lineup-columns-preset-processor"
+                >
+                  Processor details
+                </Button>
+                <Box sx={{ flex: 1 }} />
                 <Button size="small" variant="contained" onClick={() => setColSelectorOpen(false)}>
                   Done
                 </Button>

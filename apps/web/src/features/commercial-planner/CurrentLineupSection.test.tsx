@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -93,6 +93,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
   beforeEach(() => {
     apiGetMock.mockReset();
     apiPostMock.mockReset();
+    localStorage.clear();
   });
 
   it('shows Open Channel customer as Unassigned (not unresolved token)', async () => {
@@ -203,7 +204,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     expect(await screen.findByText('Laptops')).toBeInTheDocument();
   });
 
-  it('auto-shows uploaded CPU column when metadata lists a CPU header', async () => {
+  it('does not auto-show CPU columns; Processor details preset adds them', async () => {
     const user = userEvent.setup();
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const draftCase = {
@@ -232,7 +233,9 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
           case_id: 3,
           raw_columns: ['CPU', 'Dealer rebate'],
           parsed_fields: [],
-          catalogue_product_fields: [],
+          catalogue_product_fields: [
+            { id: 'cat:catalogue_product_line', group: 'catalogue', label: 'Product line (catalogue)', field: 'catalogue_product_line' },
+          ],
           catalogue_spec_keys: [],
           sync_fields: [],
         };
@@ -252,7 +255,16 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     await user.click(await screen.findByTestId('current-lineup-section-toggle'));
     await user.click(await screen.findByTestId('lineup-workbench-3'));
 
-    expect(await screen.findByText(/Upload:\s*CPU/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Upload:\s*CPU/i)).not.toBeInTheDocument();
+
+    await user.click(await screen.findByTestId('lineup-workbench-columns'));
+    await user.click(await screen.findByTestId('lineup-columns-preset-processor'));
+    await user.click(screen.getByRole('button', { name: /^Done$/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    expect(await screen.findByRole('columnheader', { name: /Upload:\s*CPU/i })).toBeInTheDocument();
     expect(await screen.findByText('Ultra 7 155H')).toBeInTheDocument();
   });
 
@@ -311,7 +323,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     expect(await screen.findByText('Distributor unassigned')).toBeInTheDocument();
   });
 
-  it('auto-shows spec:cpu from processor_spec_key_hints when catalogue has key', async () => {
+  it('Processor details preset shows spec:cpu when catalogue has key', async () => {
     const user = userEvent.setup();
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const draftCase = {
@@ -334,8 +346,8 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       case_id: 5,
       id: 2,
       product_specs: { cpu: 'Intel i7' },
-      // product_specs_flat is the flattened map used by wbCellContent for spec: columns
       product_specs_flat: { cpu: 'Intel i7' },
+      catalogue_product_line: 'NB',
     };
     apiGetMock.mockImplementation(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [draftCase];
@@ -343,8 +355,12 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
         return {
           case_id: 5,
           raw_columns: [],
-          parsed_fields: [],
-          catalogue_product_fields: [],
+          parsed_fields: [
+            { id: 'parsed:rebate_pct_evidence', group: 'parsed', label: 'Rebate % (evidence)', field: 'rebate_pct_evidence' },
+          ],
+          catalogue_product_fields: [
+            { id: 'cat:catalogue_product_line', group: 'catalogue', label: 'Product line (catalogue)', field: 'catalogue_product_line' },
+          ],
           catalogue_spec_keys: ['cpu'],
           processor_spec_key_hints: ['cpu'],
           sync_fields: [],
@@ -365,7 +381,17 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     await user.click(await screen.findByTestId('current-lineup-section-toggle'));
     await user.click(await screen.findByTestId('lineup-workbench-5'));
 
-    expect(await screen.findByText('Spec: CPU')).toBeInTheDocument();
+    expect(screen.queryByText('Spec: CPU')).not.toBeInTheDocument();
+    expect(await screen.findByText('NB')).toBeInTheDocument();
+
+    await user.click(await screen.findByTestId('lineup-workbench-columns'));
+    await user.click(await screen.findByTestId('lineup-columns-preset-processor'));
+    await user.click(screen.getByRole('button', { name: /^Done$/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    expect(await screen.findByRole('columnheader', { name: /Spec:\s*CPU/i })).toBeInTheDocument();
     expect(await screen.findByText('Intel i7')).toBeInTheDocument();
   });
 

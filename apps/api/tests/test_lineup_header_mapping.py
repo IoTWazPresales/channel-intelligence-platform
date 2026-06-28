@@ -72,3 +72,19 @@ def test_full_pricing_chain_columns_map():
     assert m.get("disti_cost_evidence_local") == "Disti Cost"
     assert m.get("dealer_price_evidence_local") == "Dealer price"
     assert m.get("actual_dap_evidence_local") == "Actual DAP"
+
+
+def test_lineup_evidence_from_uploaded_maps_canonical_fields():
+    from app.services.commercial_planner.lineup_header_mapping import lineup_evidence_from_uploaded
+
+    uploaded = {
+        "Dealer margin": "0.08",
+        "Disti margin": "0.06",
+        "Rebate": "0.02",
+        "ROE": "18.5",
+    }
+    ev = lineup_evidence_from_uploaded(uploaded)
+    assert ev["dealer_margin_pct_evidence"] == "0.08"
+    assert ev["distributor_margin_pct_evidence"] == "0.06"
+    assert ev["rebate_pct_evidence"] == "0.02"
+    assert ev["roe_evidence"] == "18.5"

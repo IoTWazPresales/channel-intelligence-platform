@@ -66,6 +66,8 @@ from app.services.commercial_planner.lineup_case_parser import (
     parse_current_lineup_file,
     preview_current_lineup_file,
 )
+from app.services.commercial_planner.lineup_case_product_line import ensure_case_product_line_from_catalogue
+from app.services.commercial_planner.lineup_header_mapping import lineup_evidence_from_uploaded
 from app.services.commercial_planner.lineup_open_channel import (
     CHANNEL_ROUTE_UPLOADED_CELL_KEY,
     STAGING_OPEN_CHANNEL_KEY,
@@ -2083,6 +2085,12 @@ async def list_lineup_cases(
     if plan_id is not None:
         stmt = stmt.where(CommercialLineupCase.commercial_plan_id == plan_id)
     cases = (await db.execute(stmt)).scalars().all()
+    catalogue_dirty = False
+    for case in cases:
+        if await ensure_case_product_line_from_catalogue(db, case):
+            catalogue_dirty = True
+    if catalogue_dirty:
+        await db.commit()
     pos_by_case = await list_case_pos_bulk(db, [int(c.id) for c in cases])
     out = []
     for case in cases:
@@ -2152,7 +2160,10 @@ def _workbench_parsed_field_metadata() -> list[dict[str, str]]:
         ("promo_price_evidence_local", "Promo price (evidence)"),
         ("dap_evidence_local", "DAP (evidence only)"),
         ("rebate_pct_evidence", "Rebate % (evidence)"),
-        ("distributor_margin_pct_evidence", "Dealer margin % (evidence)"),
+        ("dealer_margin_pct_evidence", "Dealer margin % (evidence)"),
+        ("distributor_margin_pct_evidence", "Disti margin % (evidence)"),
+        ("import_tax_pct_evidence", "Import tax % (evidence)"),
+        ("roe_evidence", "ROE / FX rate (evidence)"),
         ("vat_pct_evidence", "VAT % (evidence)"),
         ("customer_token", "Customer token (parsed column)"),
         ("distributor_token_raw", "Distributor token (from upload)"),
@@ -2652,6 +2663,18 @@ async def list_lineup_case_lines(
         if include_line_uploaded:
             up = raw_payload.get("uploaded")
             d["uploaded"] = up if isinstance(up, dict) else {}
+        uploaded_for_evidence = (
+            d.get("uploaded")
+            if isinstance(d.get("uploaded"), dict)
+            else (
+                raw_payload.get("uploaded")
+                if isinstance(raw_payload.get("uploaded"), dict)
+                else {}
+            )
+        )
+        for field, val in lineup_evidence_from_uploaded(uploaded_for_evidence).items():
+            if d.get(field) is None:
+                d[field] = val
         if include_raw_row_payload:
             d["raw_row_payload"] = ln.raw_row_payload if isinstance(ln.raw_row_payload, dict) else {}
         rows_payload.append((ln, d))

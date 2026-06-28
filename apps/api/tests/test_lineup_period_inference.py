@@ -62,3 +62,25 @@ def test_product_line_absent_column_returns_none():
     cols = ["SKU", "Qty"]
     rows = [{"SKU": "A", "Qty": "10"}]
     assert infer_product_line(cols, rows) is None
+
+
+def test_product_line_from_catalogue_majority_product_line():
+    from app.services.commercial_planner.lineup_period_inference import (
+        infer_product_line_from_catalogue_values,
+    )
+
+    assert infer_product_line_from_catalogue_values(
+        ["Gaming", "Gaming", "NB"],
+        [None, None, None],
+    ) == "Gaming"
+
+
+def test_product_line_from_catalogue_falls_back_to_business_unit():
+    from app.services.commercial_planner.lineup_period_inference import (
+        infer_product_line_from_catalogue_values,
+    )
+
+    assert infer_product_line_from_catalogue_values(
+        [None, None],
+        ["NB", "NB", "Gaming"],
+    ) == "NB"

@@ -103,3 +103,19 @@ def build_commercial_lineup_column_map(columns: list[str]) -> dict[str, str]:
                         break
 
     return mapping
+
+
+def lineup_evidence_from_uploaded(uploaded: dict[str, Any] | None) -> dict[str, Any]:
+    """Map raw upload header cells to canonical lineup evidence field names (for workbench display)."""
+    if not uploaded or not isinstance(uploaded, dict):
+        return {}
+    col_map = build_commercial_lineup_column_map(list(uploaded.keys()))
+    out: dict[str, Any] = {}
+    for target, header in col_map.items():
+        val = uploaded.get(header)
+        if val is None:
+            continue
+        if isinstance(val, str) and not val.strip():
+            continue
+        out[target] = val
+    return out

@@ -30,6 +30,7 @@ from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
 from app.services.commercial_planner.lineup_period_inference import (
     infer_period_start,
     infer_product_line,
+    infer_product_line_from_catalogue_values,
 )
 from app.services.commercial_planner.lineup_pricing_resolution import (
     LineupTradeTermDefaults,
@@ -602,6 +603,22 @@ async def parse_current_lineup_file(
             inferred_line = infer_product_line(header_cols, uploaded_rows)
             if inferred_line:
                 case.product_line = inferred_line
+        if case.product_line is None and lines_to_add:
+            resolved_pids = sorted({int(l.product_id) for l in lines_to_add if l.product_id})
+            if resolved_pids:
+                cat_rows = (
+                    await db.execute(
+                        select(DimProduct.product_line, DimProduct.business_unit).where(
+                            DimProduct.id.in_(resolved_pids)
+                        )
+                    )
+                ).all()
+                inferred_cat = infer_product_line_from_catalogue_values(
+                    [r[0] for r in cat_rows],
+                    [r[1] for r in cat_rows],
+                )
+                if inferred_cat:
+                    case.product_line = inferred_cat
 
         job.status = "completed"
         job.completed_at = datetime.now(tz=timezone.utc)

@@ -168,3 +168,21 @@ def infer_product_line(columns: list[str], rows: list[dict[str, Any]]) -> str | 
         return None
     best = max(counts.items(), key=lambda kv: kv[1])[0]
     return best[:64]
+
+
+def infer_product_line_from_catalogue_values(
+    product_lines: list[str | None],
+    business_units: list[str | None],
+) -> str | None:
+    """Majority vote on resolved dim_product.product_line / business_unit when the upload has no line column."""
+    counts: dict[str, int] = {}
+    for val in (*product_lines, *business_units):
+        if val is None:
+            continue
+        text = str(val).strip()
+        if text and text.lower() not in ("nan", "none"):
+            key = text[:64]
+            counts[key] = counts.get(key, 0) + 1
+    if not counts:
+        return None
+    return max(counts.items(), key=lambda kv: kv[1])[0]
