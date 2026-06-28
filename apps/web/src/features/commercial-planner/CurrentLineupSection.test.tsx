@@ -567,4 +567,141 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       }),
     );
   });
+
+  it('plan-optional: lists unlinked cases grouped by period + product line when no plan selected', async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const caseA = {
+      id: 31,
+      import_job_id: null,
+      commercial_plan_id: null,
+      file_name: 'consumer.xlsx',
+      period_label: '26Q2',
+      country_code: 'ZA',
+      currency_code: 'ZAR',
+      commercial_status: 'draft_imported',
+      notes: null,
+      accepted_at: null,
+      accepted_by: null,
+      line_count: 168,
+      iteration_number: 1,
+      product_line: 'NB',
+      inferred_period_start: '2026-04-01',
+      linked_pos: [],
+      po_count: 0,
+      created_at: null,
+    };
+    const caseB = {
+      ...caseA,
+      id: 32,
+      file_name: 'gaming.xlsx',
+      product_line: 'Gaming',
+      line_count: 146,
+    };
+    let requestedUrl = '';
+    apiGetMock.mockImplementation(async (url: string) => {
+      if (url.includes('/lineup-cases') && !url.includes('/lines') && !url.includes('metadata')) {
+        requestedUrl = url;
+        return [caseA, caseB];
+      }
+      return [];
+    });
+
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CurrentLineupSection activePlanId={null} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByTestId('current-lineup-section-toggle'));
+
+    // No plan_id sent when there is no plan.
+    expect(requestedUrl).toContain('/lineup-cases');
+    expect(requestedUrl).not.toContain('plan_id');
+
+    // Two product-line groups, both showing the period and Unlinked badge.
+    const groups = await screen.findAllByTestId('lineup-case-group');
+    expect(groups.length).toBe(2);
+    expect(screen.getAllByTestId('lineup-group-period')[0]).toHaveTextContent('26Q2');
+    expect(screen.getByTestId('lineup-case-link-31')).toHaveTextContent('Unlinked');
+    expect(screen.getByTestId('lineup-case-link-32')).toHaveTextContent('Unlinked');
+  });
+
+  it('plan filter still sends plan_id when a plan is selected', async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let requestedUrl = '';
+    apiGetMock.mockImplementation(async (url: string) => {
+      if (url.includes('/lineup-cases') && !url.includes('/lines') && !url.includes('metadata')) {
+        requestedUrl = url;
+        return [];
+      }
+      return [];
+    });
+
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CurrentLineupSection activePlanId={5} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByTestId('current-lineup-section-toggle'));
+    expect(requestedUrl).toContain('plan_id=5');
+  });
+
+  it('workbench opens from an unlinked case (no plan required)', async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const unlinked = {
+      id: 40,
+      import_job_id: null,
+      commercial_plan_id: null,
+      file_name: 'unlinked.xlsx',
+      period_label: '26Q2',
+      country_code: 'ZA',
+      currency_code: 'ZAR',
+      commercial_status: 'draft_imported',
+      notes: null,
+      accepted_at: null,
+      accepted_by: null,
+      line_count: 1,
+      iteration_number: 1,
+      product_line: 'NB',
+      inferred_period_start: '2026-04-01',
+      linked_pos: [],
+      po_count: 0,
+      created_at: null,
+    };
+    apiGetMock.mockImplementation(async (url: string) => {
+      if (url.includes('/workbench-column-metadata')) {
+        return {
+          case_id: 40,
+          raw_columns: [],
+          parsed_fields: [{ id: 'parsed:sku_raw', group: 'parsed', label: 'SKU (raw)', field: 'sku_raw' }],
+          catalogue_product_fields: [],
+          catalogue_spec_keys: [],
+          sync_fields: [],
+        };
+      }
+      if (url.includes('/lineup-cases/40/lines')) {
+        return { lines: [lineupLineOpenChannel()], dap_semantics_note: 'DAP is evidence-only.' };
+      }
+      if (url.includes('/lineup-cases') && !url.includes('/lines') && !url.includes('metadata')) {
+        return [unlinked];
+      }
+      return [];
+    });
+
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CurrentLineupSection activePlanId={null} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByTestId('current-lineup-section-toggle'));
+    await user.click(await screen.findByTestId('lineup-workbench-40'));
+
+    // Working grid renders for an unlinked case.
+    expect(await screen.findByTestId('current-lineup-working-grid')).toBeInTheDocument();
+  });
 });

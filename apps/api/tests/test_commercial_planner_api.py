@@ -1388,6 +1388,87 @@ def test_commercial_lineup_case_list_by_plan():
     assert body[1]["period_label"] == "Q2 2026"
 
 
+def test_commercial_lineup_case_list_no_plan_returns_all():
+    """GET /lineup-cases with no plan_id returns ALL cases (plan-optional browse)."""
+    linked = _make_case(id=1, commercial_plan_id=5, period_label="26Q1")
+    unlinked = _make_case(id=2, commercial_plan_id=None, period_label="26Q2")
+
+    call_count = {"n": 0}
+
+    async def fake_db():
+        sess = MagicMock()
+        cases_result = MagicMock()
+        cases_result.scalars = MagicMock(
+            return_value=MagicMock(all=MagicMock(return_value=[unlinked, linked]))
+        )
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=0)
+
+        async def _execute(stmt):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return cases_result
+            return count_result
+
+        sess.execute = _execute
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.get("/api/v1/commercial-planner/lineup-cases")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == 2
+    plan_ids = {c["commercial_plan_id"] for c in body}
+    assert None in plan_ids and 5 in plan_ids
+
+
+def test_commercial_lineup_case_attach_plan():
+    """PATCH /lineup-cases/{id}/plan sets commercial_plan_id (optional enrichment)."""
+    case = _make_case(id=7, commercial_plan_id=None, period_label="26Q2")
+
+    async def fake_db():
+        sess = MagicMock()
+        # get(case) then get(plan) both return truthy; refresh no-op.
+        sess.get = AsyncMock(side_effect=[case, object()])
+        sess.commit = AsyncMock()
+        sess.refresh = AsyncMock()
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=0)
+        sess.execute = AsyncMock(return_value=count_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.patch(
+        "/api/v1/commercial-planner/lineup-cases/7/plan",
+        json={"commercial_plan_id": 5},
+    )
+    assert r.status_code == 200
+    assert r.json()["commercial_plan_id"] == 5
+
+
+def test_commercial_lineup_case_detach_plan():
+    """PATCH /lineup-cases/{id}/plan with null detaches the case."""
+    case = _make_case(id=8, commercial_plan_id=5, period_label="26Q2")
+
+    async def fake_db():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=case)
+        sess.commit = AsyncMock()
+        sess.refresh = AsyncMock()
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=0)
+        sess.execute = AsyncMock(return_value=count_result)
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    r = client.patch(
+        "/api/v1/commercial-planner/lineup-cases/8/plan",
+        json={"commercial_plan_id": None},
+    )
+    assert r.status_code == 200
+    assert r.json()["commercial_plan_id"] is None
+
+
 def test_commercial_lineup_case_status_transition_valid():
     """PATCH /lineup-cases/{id}/status from pending_review→accepted sets accepted_at."""
     case = _make_case(id=10, commercial_status="pending_review")

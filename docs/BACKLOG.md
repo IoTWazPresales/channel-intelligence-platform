@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-052 — Lineup margin-amount evidence capture (when a margin column holds currency, not a %)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-06-28 |
+| **Effort** | Small (migration: 3 nullable Numeric columns on `commercial_lineup_line` + parser routing + tests) |
+| **Source** | Warren session (2026-06-28) lineup fix pass. Guard shipped: `apps/api/app/services/commercial_planner/lineup_pricing_resolution.py` (`sanitize_pct_evidence`) + `lineup_case_parser.py` (`_PCT_EVIDENCE_FIELDS`, `pct_evidence_out_of_range` diagnostic). Discovery DB evidence: in live cases #3/#4/#5 the `Dealer margin` / `Disti margin` / `Rebate` columns are genuine fractions (`0.08`, `0.0724`, `0.06`); the only currency-in-margin-column case was the corrupt case #6 file (now ignored). No live file pairs a margin **pct** with a margin **amount**, so building amount-capture now has no real driver. |
+| **Idea** | When a margin/rebate column value is out-of-range for a percentage (the `sanitize_pct_evidence` trigger), route the **amount** to a dedicated `*_amount_evidence` column instead of only dropping it. Today the guard drops it (keeping it in `raw_row_payload` + flags `pct_evidence_out_of_range`) to prevent `Numeric(8,4)` overflow. |
+| **Why it matters / deferrable** | Captures real Rand margin evidence without overflow and without it silently becoming a pct. Deferrable because **no current real file** carries margin amounts in the margin columns (they carry pct + separate price columns `Dealer price` / `Net price` / `Disti Cost`). Acting now risks adding columns + a migration to capture values that only appeared in a known-corrupt file. |
+| **What the work is** | (1) **Migration (STOP/report first):** add `dealer_margin_amount_evidence`, `rebate_amount_evidence`, `distributor_margin_amount_evidence` (Numeric(18,4), nullable, local currency) on `commercial_lineup_line`. (2) **Parser:** in `lineup_case_parser`, when `sanitize_pct_evidence` rejects a value as a pct, write the amount to the matching `*_amount_evidence` column instead of only dropping; keep `sanitize` as the overflow guard; genuine pcts still populate the `*_pct_evidence` columns. (3) **Tests:** Rand amount in margin column → amount lands in `*_amount_evidence`, pct column null, no overflow; true pct → pct populated, amount null. |
+| **Regression traps** | Do not let an amount silently become a pct (no `/100`); keep `sanitize_pct_evidence` as the guard; do not change trade-term fallback (pricing still falls back to `commercial_customer_term` / `commercial_distributor_term` when pct absent); preserve `raw_row_payload` audit. |
+| **Behavior to retain** | `pct_evidence_out_of_range` diagnostic; overflow-safe parse; pricing chain fallback to trade-term defaults; DAP evidence-only. |
+| **Out of scope** | Header detection / wrong-header-row fixes for malformed workbooks (that is a per-file data issue, e.g. case #6); changing the pct normalisation rule; any qty mapping change for files without a separate `Total Qty` column. |
+| **TRIGGER** | A real lineup workbook arrives that carries margin/rebate **amounts** (Rand) in the margin columns (with or without a separate pct), **and** Warren wants those amounts persisted as evidence; **or** pricing needs amount-based margin evidence for a customer/period where pct is unavailable. |
+
+---
+
 ## BACKLOG-051 — Post-apply import reconciliation report (file vs facts)
 
 | Field | Detail |

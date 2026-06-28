@@ -5,11 +5,20 @@ import math
 from app.services.commercial_planner.lineup_pricing_resolution import (
     LineupTradeTermDefaults,
     resolve_lineup_pricing,
+    sanitize_pct_evidence,
 )
 
 
 def _close(a, b, tol=1e-6):
     return a is not None and b is not None and math.isclose(a, b, rel_tol=tol, abs_tol=tol)
+
+
+def test_sanitize_pct_evidence_rejects_currency_amounts():
+    """Dealer margin / rebate columns are often currency amounts, not percentages."""
+    assert sanitize_pct_evidence(0.15) == 0.15
+    assert sanitize_pct_evidence(15.0) == 15.0
+    assert sanitize_pct_evidence(72860.10, reference_price=94999.0) is None
+    assert sanitize_pct_evidence(74347.04, reference_price=94999.0) is None
 
 
 def test_file_value_overrides_trade_term():

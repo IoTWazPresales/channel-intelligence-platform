@@ -1982,6 +1982,12 @@ class LineupCaseStatusPatch(BaseModel):
     accepted_by: str | None = None
 
 
+class LineupCaseAttachPlanPatch(BaseModel):
+    # None detaches the case from any plan. Plan linkage is optional enrichment for forward
+    # buy-planning, never a precondition for viewing or working a lineup case.
+    commercial_plan_id: int | None = None
+
+
 class ConfirmWithPoBody(BaseModel):
     po_numbers: list[str] = Field(min_length=1, description="One or more PO numbers to link")
     notes: str | None = Field(default=None, max_length=1024)
@@ -2311,6 +2317,33 @@ async def patch_lineup_case_status(case_id: int, body: LineupCaseStatusPatch, db
     if body.status == "accepted":
         case.accepted_at = datetime.now(tz=timezone.utc)
         case.accepted_by = body.accepted_by
+    await db.commit()
+    await db.refresh(case)
+    line_count = (
+        await db.execute(
+            select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
+        )
+    ).scalar_one()
+    return _case_payload(case, int(line_count))
+
+
+@router.patch("/lineup-cases/{case_id}/plan")
+async def patch_lineup_case_plan(
+    case_id: int, body: LineupCaseAttachPlanPatch, db: AsyncSession = Depends(get_db)
+):
+    """Attach (or detach) a lineup case to a commercial plan.
+
+    Plan linkage is optional enrichment — a case is browsable and workable on its own. Pass
+    ``commercial_plan_id`` to attach, or ``null`` to detach.
+    """
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    if body.commercial_plan_id is not None and not await db.get(CommercialPlan, body.commercial_plan_id):
+        raise HTTPException(
+            status_code=400, detail=f"Unknown commercial_plan_id={body.commercial_plan_id}"
+        )
+    case.commercial_plan_id = body.commercial_plan_id
     await db.commit()
     await db.refresh(case)
     line_count = (

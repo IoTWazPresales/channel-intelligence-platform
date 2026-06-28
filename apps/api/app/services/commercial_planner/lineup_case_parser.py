@@ -34,6 +34,15 @@ from app.services.commercial_planner.lineup_period_inference import (
 from app.services.commercial_planner.lineup_pricing_resolution import (
     LineupTradeTermDefaults,
     resolve_lineup_pricing,
+    sanitize_pct_evidence,
+)
+
+_PCT_EVIDENCE_FIELDS = (
+    "rebate_pct_evidence",
+    "dealer_margin_pct_evidence",
+    "distributor_margin_pct_evidence",
+    "import_tax_pct_evidence",
+    "vat_pct_evidence",
 )
 
 from app.services.commercial_planner.current_lineup_seed import (
@@ -343,6 +352,15 @@ def _parse_file_to_row_dicts(
                 raw_row_payload[CHANNEL_ROUTE_UPLOADED_CELL_KEY] = channel_uploaded_cell
                 raw_row_payload["customer_token"] = channel_uploaded_cell
 
+        msrp_local = _safe_float(raw.get("msrp_local"))
+        pct_evidence: dict[str, float | None] = {}
+        for field in _PCT_EVIDENCE_FIELDS:
+            raw_pct = _safe_float(raw.get(field))
+            clean_pct = sanitize_pct_evidence(raw_pct, reference_price=msrp_local)
+            if raw_pct is not None and clean_pct is None and "pct_evidence_out_of_range" not in diag:
+                diag.append("pct_evidence_out_of_range")
+            pct_evidence[field] = clean_pct
+
         out.append(
             {
                 "source_row_number": int(row_idx) + 1,
@@ -356,7 +374,7 @@ def _parse_file_to_row_dicts(
                 "model_raw": model_raw,
                 "base_unit_raw": base_unit_raw,
                 "quantity_units": _safe_float(raw.get("quantity_units")),
-                "msrp_local": _safe_float(raw.get("msrp_local")),
+                "msrp_local": msrp_local,
                 "old_srp_local": _safe_float(raw.get("old_srp_local")),
                 "promo_price_evidence_local": _safe_float(raw.get("promo_price_evidence_local")),
                 "dap_evidence_local": _safe_float(raw.get("dap_evidence_local")),
@@ -364,12 +382,12 @@ def _parse_file_to_row_dicts(
                 "dealer_price_evidence_local": _safe_float(raw.get("dealer_price_evidence_local")),
                 "net_price_evidence_local": _safe_float(raw.get("net_price_evidence_local")),
                 "disti_cost_evidence_local": _safe_float(raw.get("disti_cost_evidence_local")),
-                "rebate_pct_evidence": _safe_float(raw.get("rebate_pct_evidence")),
-                "dealer_margin_pct_evidence": _safe_float(raw.get("dealer_margin_pct_evidence")),
-                "distributor_margin_pct_evidence": _safe_float(raw.get("distributor_margin_pct_evidence")),
-                "import_tax_pct_evidence": _safe_float(raw.get("import_tax_pct_evidence")),
+                "rebate_pct_evidence": pct_evidence["rebate_pct_evidence"],
+                "dealer_margin_pct_evidence": pct_evidence["dealer_margin_pct_evidence"],
+                "distributor_margin_pct_evidence": pct_evidence["distributor_margin_pct_evidence"],
+                "import_tax_pct_evidence": pct_evidence["import_tax_pct_evidence"],
                 "roe_evidence": _safe_float(raw.get("roe_evidence")),
-                "vat_pct_evidence": _safe_float(raw.get("vat_pct_evidence")),
+                "vat_pct_evidence": pct_evidence["vat_pct_evidence"],
                 "diagnostic_codes": diag,
                 "row_status": "resolved" if resolved_product else "unresolved",
                 "raw_row_payload": raw_row_payload,

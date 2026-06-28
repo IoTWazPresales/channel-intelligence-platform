@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-28 (Session C Unit 2d + Unit 3 shipped — Confirm-with-PO, reconciliation, gap worklist, PO Management; `0057` migration NOT yet applied to cip)
+**Last updated:** 2026-06-28 (plan-optional lineup browse + pct overflow guard; migration `0057` applied to local `cip`)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -13,7 +13,7 @@
 | **HEAD** | Session C Unit 3 (reconciliation + gap worklist + PO Management) on top of Unit 2d (confirm-with-PO) / Unit 6 frontend / Session B Units 1-8 |
 | **PR** | None open |
 | **Alembic (code)** | `20260628_0057` (commercial_lineup_case_po) |
-| **Alembic (DB)** | **`20260628_0056`** on local `cip` — **`0057` pending: Warren must run `alembic upgrade head`** before confirm-with-PO works at runtime |
+| **Alembic (DB)** | **`20260628_0057`** on local `cip` (`commercial_lineup_case_po` applied 2026-06-28) |
 
 ---
 
@@ -99,8 +99,8 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
 ### Session C Unit 2d — Confirm-with-PO + `commercial_lineup_case_po` — code done, migration pending
 - **Migration `20260628_0057`** (`commercial_lineup_case_po`): m2m join (one lineup→many POs, one
   PO→many lineups). `case_id` FK `commercial_lineup_case` CASCADE; `purchase_order_id` FK
-  `purchase_order`; `UniqueConstraint(case_id, purchase_order_id)` for idempotency. **NOT applied to
-  cip — Warren runs `alembic upgrade head`.** Model `CommercialLineupCasePo` + `models/__init__`.
+  `purchase_order`; `UniqueConstraint(case_id, purchase_order_id)` for idempotency. **Applied to cip
+  (2026-06-28).** Model `CommercialLineupCasePo` + `models/__init__`.
 - **Service** `lineup_case_po_confirm.py`: `confirm_case_with_po` validates status (accepted/po_pending/
   po_issued), normalizes+dedups PO numbers, infers distributor from case lines, lookup/upsert
   `purchase_order` (status `raised`, source `lineup_declared`), inserts `case_po` links idempotently,
@@ -135,7 +135,19 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
 - **Tests:** `test_lineup_po_reconciliation.py` (all 7 flags + FX-missing + UoM), `test_lineup_po_gap.py`,
   `PoManagementView.test.tsx` (first-run/linked/dismiss), `buildShippingLinesUrl.test.ts` (+PO filter).
   22 backend + 3 PO-mgmt UI + 3 shipping-url + 3 dialog green; lint clean for touched files.
-- **NOT verified:** real-DB reconciliation e2e (needs `0057` applied) and browser soak.
+- **Real-DB e2e:** migration `0057` applied to `cip`; browser soak still open.
+
+### Plan-optional lineup browse + pct evidence guard (2026-06-28)
+- **Problem:** Uploaded lineup cases (e.g. historical periods) were invisible in Commercial Planner
+  when no plan was selected — UI gated `GET /lineup-cases` on `activePlanId`.
+- **Fix:** `CurrentLineupSection` always fetches cases; optional **Show all (ignore plan)** toggle when
+  a plan is selected; cases grouped by period → product line with Linked/Unlinked chips; workbench
+  line grid + column metadata open for unlinked cases. `PATCH /lineup-cases/{id}/plan` attach/detach.
+- **Parser guard:** `sanitize_pct_evidence` in `lineup_pricing_resolution.py` — currency amounts
+  mapped to pct columns (case #6 corrupt file) dropped with `pct_evidence_out_of_range` diagnostic
+  instead of `Numeric(8,4)` overflow. Margin **amount** columns deferred → **BACKLOG-052**.
+- **Tests:** +3 API (list-all, attach, detach) · +3 UI (grouped unlinked list, plan filter, unlinked
+  workbench) · pct sanitize unit tests. 100 API + 11 CurrentLineupSection vitest green.
 
 ### DSI apply — proven fresh E2E on job #199 (`b2b81ea`, 2026-06-27)
 - `import_job 199` → `completed` / `loaded` / `apply`.

@@ -2248,14 +2248,21 @@ export function CurrentLineupSection({
   const [colSelectorOpen, setColSelectorOpen] = useState(false);
   const [colSelectorSearch, setColSelectorSearch] = useState('');
 
+  // Plan-optional browse: a lineup case is viewable on its own. When a plan is selected we filter to
+  // it by default, but the user can toggle "Show all" to see every case (linked or unlinked). When no
+  // plan exists at all, we always list everything.
+  const [showAllCases, setShowAllCases] = useState(false);
+  const effectivePlanId = showAllCases ? null : activePlanId;
+
   const { data: cases, isLoading } = useQuery<CommercialLineupCase[]>({
-    queryKey: ['commercial-lineup-cases', activePlanId],
+    queryKey: ['commercial-lineup-cases', effectivePlanId],
     queryFn: ({ signal }) =>
       apiGet<CommercialLineupCase[]>(
-        `/api/v1/commercial-planner/lineup-cases?plan_id=${activePlanId}`,
-        { signal }
+        effectivePlanId != null
+          ? `/api/v1/commercial-planner/lineup-cases?plan_id=${effectivePlanId}`
+          : '/api/v1/commercial-planner/lineup-cases',
+        { signal },
       ),
-    enabled: activePlanId != null,
   });
 
   useEffect(() => {
@@ -2281,7 +2288,8 @@ export function CurrentLineupSection({
         `/api/v1/commercial-planner/lineup-cases/${activeCaseId}/workbench-column-metadata`,
         { signal },
       ),
-    enabled: activeCaseId != null && activePlanId != null,
+    // Case-scoped metadata; load it whenever a case is active, with or without a plan.
+    enabled: activeCaseId != null,
   });
 
   const allowedWorkbenchIds = useMemo(
@@ -2398,7 +2406,10 @@ export function CurrentLineupSection({
   const { data: workingLinesData } = useQuery<CaseLinesResponse>({
     queryKey: ['commercial-lineup-case-lines', activeCaseId, caseLinesSuffix],
     queryFn: ({ signal }) => apiGet<CaseLinesResponse>(workingLinesUrl!, { signal }),
-    enabled: activeCaseId != null && activePlanId != null && workingLinesUrl != null,
+    // Plan-optional: the lines endpoint is case-scoped, so the workbench grid opens even for a
+    // case not yet attached to a plan. Plan-specific extras (sync, sync diagnostics) stay gated on
+    // activeCase.commercial_plan_id below.
+    enabled: activeCaseId != null && workingLinesUrl != null,
   });
 
   const workingLines = useMemo(() => workingLinesData?.lines ?? [], [workingLinesData?.lines]);
@@ -2431,7 +2442,7 @@ export function CurrentLineupSection({
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', activeCaseId] });
       await qc.invalidateQueries({ queryKey: ['lineup-workbench-column-metadata', activeCaseId] });
-      await qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] });
+      await qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
     },
   });
 
@@ -2595,13 +2606,21 @@ export function CurrentLineupSection({
         notes: notes || null,
         accepted_by: acceptedBy ?? null,
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (caseId: number) =>
       apiDelete(`/api/v1/commercial-planner/lineup-cases/${caseId}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] }),
+  });
+
+  const attachPlanMutation = useMutation({
+    mutationFn: ({ caseId, planId }: { caseId: number; planId: number | null }) =>
+      apiPatch(`/api/v1/commercial-planner/lineup-cases/${caseId}/plan`, {
+        commercial_plan_id: planId,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] }),
   });
 
   const confirmMutation = useMutation({
@@ -2611,13 +2630,40 @@ export function CurrentLineupSection({
         notes: notes || null,
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] });
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
       void qc.invalidateQueries({ queryKey: ['po-reconciliation'] });
       setConfirmCase(null);
     },
   });
 
   const count = cases?.length ?? 0;
+
+  // Group for browse: period (period_label, falling back to inferred_period_start month) then
+  // product_line. Derived only — no stored active flag. Newest period first.
+  const groupedCases = useMemo(() => {
+    const list = cases ?? [];
+    const groups = new Map<
+      string,
+      { periodLabel: string; productLine: string; cases: CommercialLineupCase[] }
+    >();
+    for (const c of list) {
+      const periodLabel =
+        c.period_label ?? (c.inferred_period_start ? c.inferred_period_start.slice(0, 7) : 'No period');
+      const productLine = c.product_line ?? 'Unclassified';
+      const key = `${periodLabel}\u0000${productLine}`;
+      let g = groups.get(key);
+      if (!g) {
+        g = { periodLabel, productLine, cases: [] };
+        groups.set(key, g);
+      }
+      g.cases.push(c);
+    }
+    return Array.from(groups.values()).sort((a, b) =>
+      a.periodLabel !== b.periodLabel
+        ? b.periodLabel.localeCompare(a.periodLabel)
+        : a.productLine.localeCompare(b.productLine),
+    );
+  }, [cases]);
 
   return (
     <>
@@ -2633,6 +2679,20 @@ export function CurrentLineupSection({
             Current lineups
           </Button>
           {count > 0 && <Chip label={count} size="small" />}
+          {activePlanId != null && (
+            <FormControlLabel
+              sx={{ ml: 0.5 }}
+              control={
+                <Checkbox
+                  size="small"
+                  checked={showAllCases}
+                  onChange={(e) => setShowAllCases(e.target.checked)}
+                  data-testid="lineup-show-all-toggle"
+                />
+              }
+              label={<Typography variant="caption">Show all (ignore plan)</Typography>}
+            />
+          )}
           {activePlanId != null &&
             (allowUpload ? (
               <Button
@@ -2663,12 +2723,31 @@ export function CurrentLineupSection({
             {isLoading ? (
               <CircularProgress size={20} />
             ) : count === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No current lineup cases for this plan.
+              <Typography variant="body2" color="text.secondary" data-testid="lineup-empty-state">
+                {effectivePlanId != null
+                  ? 'No lineup cases for this plan. Toggle “Show all (ignore plan)” to browse every uploaded lineup.'
+                  : 'No lineup cases uploaded yet. Upload lineups in the Import Centre.'}
               </Typography>
             ) : (
-              <Stack spacing={1}>
-                {cases!.map((c) => (
+              <Stack spacing={2} data-testid="lineup-case-groups">
+                {groupedCases.map((g) => (
+                  <Box key={`${g.periodLabel}\u0000${g.productLine}`} data-testid="lineup-case-group">
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ mb: 0.5, mt: 0.5 }}
+                    >
+                      <Typography variant="subtitle2" data-testid="lineup-group-period">
+                        {g.periodLabel}
+                      </Typography>
+                      <Chip label={g.productLine} size="small" variant="outlined" />
+                      <Typography variant="caption" color="text.secondary">
+                        {g.cases.length} case{g.cases.length === 1 ? '' : 's'}
+                      </Typography>
+                    </Stack>
+                    <Stack spacing={1}>
+                      {g.cases.map((c) => (
                   <Box
                     key={c.id}
                     sx={{
@@ -2703,6 +2782,13 @@ export function CurrentLineupSection({
                     <Typography variant="caption" color="text.secondary">
                       {c.line_count} line{c.line_count === 1 ? '' : 's'}
                     </Typography>
+                    <Chip
+                      label={c.commercial_plan_id != null ? `Plan #${c.commercial_plan_id}` : 'Unlinked'}
+                      size="small"
+                      variant="outlined"
+                      color={c.commercial_plan_id != null ? 'success' : 'default'}
+                      data-testid={`lineup-case-link-${c.id}`}
+                    />
                     {(c.po_count ?? 0) > 0 && (
                       <Tooltip
                         title={(c.linked_pos ?? [])
@@ -2729,6 +2815,29 @@ export function CurrentLineupSection({
                     <Button size="small" onClick={() => setViewLinesCase(c)}>
                       Details
                     </Button>
+                    {activePlanId != null && c.commercial_plan_id !== activePlanId && (
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => attachPlanMutation.mutate({ caseId: c.id, planId: activePlanId })}
+                        disabled={attachPlanMutation.isPending}
+                        data-testid={`lineup-attach-plan-${c.id}`}
+                      >
+                        Attach to plan
+                      </Button>
+                    )}
+                    {c.commercial_plan_id != null && (
+                      <Button
+                        size="small"
+                        variant="text"
+                        color="inherit"
+                        onClick={() => attachPlanMutation.mutate({ caseId: c.id, planId: null })}
+                        disabled={attachPlanMutation.isPending}
+                        data-testid={`lineup-detach-plan-${c.id}`}
+                      >
+                        Detach
+                      </Button>
+                    )}
                     {allowUpload && c.commercial_status === 'draft_imported' && c.line_count === 0 && (
                       <Button
                         size="small"
@@ -2781,6 +2890,9 @@ export function CurrentLineupSection({
                         <CaseReconciliationInline caseId={c.id} />
                       </Box>
                     )}
+                  </Box>
+                      ))}
+                    </Stack>
                   </Box>
                 ))}
               </Stack>

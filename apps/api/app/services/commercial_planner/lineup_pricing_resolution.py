@@ -14,8 +14,14 @@ Hard constraints:
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
+
+# ``commercial_lineup_line.*_pct_evidence`` columns are Numeric(8, 4). Whole-number percents
+# (e.g. 15 for 15%) and fractions (0.15) are valid; currency amounts mis-labelled as margin/rebate
+# (e.g. 74_347 on a 94_999 SRP row) must be dropped before persistence.
+_MAX_WHOLE_NUMBER_PCT_EVIDENCE = 100.0
 
 from app.services.commercial_planner.lineup_pricing import (
     LineupPricingInputs,
@@ -41,6 +47,30 @@ class LineupPricingResolution:
     result: LineupPricingResult
     pricing_chain: dict[str, Any]
     flags: list[str]
+
+
+def sanitize_pct_evidence(
+    value: float | None,
+    *,
+    reference_price: float | None = None,
+) -> float | None:
+    """Reject file values that cannot plausibly be a margin/rebate/VAT percentage.
+
+    Lineup workbooks often label currency amounts as "Dealer margin" or "Rebate". Those values
+    remain in ``raw_row_payload`` for audit; only plausible percentages are stored on
+    ``*_pct_evidence`` columns.
+    """
+    if value is None:
+        return None
+    v = float(value)
+    if not math.isfinite(v):
+        return None
+    av = abs(v)
+    if av <= _MAX_WHOLE_NUMBER_PCT_EVIDENCE:
+        return v
+    if reference_price is not None and reference_price > 0 and av <= reference_price:
+        return None
+    return None
 
 
 def _as_fraction(value: float | None) -> float | None:
