@@ -20,8 +20,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
+from app.models.commercial_planner import (
+    CommercialCustomerTerm,
+    CommercialDistributorTerm,
+    CommercialSkuAssumption,
+)
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
+from app.services.commercial_planner.lineup_pricing_resolution import (
+    LineupTradeTermDefaults,
+    resolve_lineup_pricing,
+)
 
 from app.services.commercial_planner.current_lineup_seed import (
     CurrentLineupSourceNotConfiguredError,
@@ -138,6 +147,69 @@ def _build_distributor_map(distributors: list[DimDistributor]) -> dict[str, DimD
     return m
 
 
+def _resolve_pricing_for_row_dict(
+    rd: dict[str, Any],
+    *,
+    sku_assumptions: dict[int, CommercialSkuAssumption],
+    customer_terms: dict[int, CommercialCustomerTerm],
+    distributor_terms: dict[int, CommercialDistributorTerm],
+) -> tuple[float | None, float | None, dict[str, Any] | None, list[str]]:
+    """Run the backwards SRP -> DAP calculator for one parsed row.
+
+    Uses file evidence first, then trade-term / sku-assumption fallbacks. Returns
+    (calc_dap_cost_currency, calc_profit_total, pricing_chain_json, pricing_flags).
+    No-op (all None) when there is no SRP to price from.
+    """
+    srp = rd.get("msrp_local")
+    if srp is None:
+        return None, None, None, []
+
+    product_id = rd.get("product_id")
+    customer_id = rd.get("customer_id")
+    distributor_id = rd.get("distributor_id")
+
+    assumption = sku_assumptions.get(product_id) if product_id is not None else None
+    cust_term = customer_terms.get(customer_id) if customer_id is not None else None
+    dist_term = distributor_terms.get(distributor_id) if distributor_id is not None else None
+
+    defaults = LineupTradeTermDefaults(
+        dealer_margin_pct=float(cust_term.customer_margin_pct) if cust_term else None,
+        rebate_pct=float(cust_term.customer_rebate_pct) if cust_term else None,
+        distributor_margin_pct=float(dist_term.distributor_margin_pct) if dist_term else None,
+        vat_rate_pct=float(assumption.vat_rate_pct) if assumption else None,
+        roe_local_per_cost_currency=(
+            float(assumption.fx_plan_currency_per_cost_currency) if assumption else None
+        ),
+        controlled_cost_amount=float(assumption.controlled_cost_amount) if assumption else None,
+    )
+
+    resolution = resolve_lineup_pricing(
+        srp_inc_vat_local=srp,
+        quantity_units=rd.get("quantity_units"),
+        file_vat_pct=rd.get("vat_pct_evidence"),
+        file_dealer_margin_pct=rd.get("dealer_margin_pct_evidence"),
+        file_rebate_pct=rd.get("rebate_pct_evidence"),
+        file_distributor_margin_pct=rd.get("distributor_margin_pct_evidence"),
+        file_import_tax_pct=rd.get("import_tax_pct_evidence"),
+        file_roe=rd.get("roe_evidence"),
+        defaults=defaults,
+        evidence={
+            "actual_dap_evidence_local": rd.get("actual_dap_evidence_local"),
+            "dap_evidence_local": rd.get("dap_evidence_local"),
+            "dealer_price_evidence_local": rd.get("dealer_price_evidence_local"),
+            "net_price_evidence_local": rd.get("net_price_evidence_local"),
+            "disti_cost_evidence_local": rd.get("disti_cost_evidence_local"),
+            "old_srp_local": rd.get("old_srp_local"),
+        },
+    )
+    return (
+        resolution.result.calc_dap_cost_currency,
+        resolution.result.calc_profit_total,
+        resolution.pricing_chain,
+        resolution.flags,
+    )
+
+
 def _parse_file_to_row_dicts(
     filename: str,
     file_bytes: bytes,
@@ -242,10 +314,18 @@ def _parse_file_to_row_dicts(
             "distributor_token",
             "quantity_units",
             "msrp_local",
+            "old_srp_local",
             "promo_price_evidence_local",
             "dap_evidence_local",
+            "actual_dap_evidence_local",
+            "dealer_price_evidence_local",
+            "net_price_evidence_local",
+            "disti_cost_evidence_local",
             "rebate_pct_evidence",
+            "dealer_margin_pct_evidence",
             "distributor_margin_pct_evidence",
+            "import_tax_pct_evidence",
+            "roe_evidence",
             "vat_pct_evidence",
             "base_unit_raw",
         }
@@ -273,8 +353,19 @@ def _parse_file_to_row_dicts(
                 "base_unit_raw": base_unit_raw,
                 "quantity_units": _safe_float(raw.get("quantity_units")),
                 "msrp_local": _safe_float(raw.get("msrp_local")),
+                "old_srp_local": _safe_float(raw.get("old_srp_local")),
                 "promo_price_evidence_local": _safe_float(raw.get("promo_price_evidence_local")),
                 "dap_evidence_local": _safe_float(raw.get("dap_evidence_local")),
+                "actual_dap_evidence_local": _safe_float(raw.get("actual_dap_evidence_local")),
+                "dealer_price_evidence_local": _safe_float(raw.get("dealer_price_evidence_local")),
+                "net_price_evidence_local": _safe_float(raw.get("net_price_evidence_local")),
+                "disti_cost_evidence_local": _safe_float(raw.get("disti_cost_evidence_local")),
+                "rebate_pct_evidence": _safe_float(raw.get("rebate_pct_evidence")),
+                "dealer_margin_pct_evidence": _safe_float(raw.get("dealer_margin_pct_evidence")),
+                "distributor_margin_pct_evidence": _safe_float(raw.get("distributor_margin_pct_evidence")),
+                "import_tax_pct_evidence": _safe_float(raw.get("import_tax_pct_evidence")),
+                "roe_evidence": _safe_float(raw.get("roe_evidence")),
+                "vat_pct_evidence": _safe_float(raw.get("vat_pct_evidence")),
                 "diagnostic_codes": diag,
                 "row_status": "resolved" if resolved_product else "unresolved",
                 "raw_row_payload": raw_row_payload,
@@ -415,9 +506,29 @@ async def parse_current_lineup_file(
             row_limit=None,
         )
 
+        # Trade-term / sku-assumption fallback maps for backwards pricing (one query each).
+        sku_assumptions = {
+            a.product_id: a for a in (await db.execute(select(CommercialSkuAssumption))).scalars().all()
+        }
+        customer_terms = {
+            t.customer_id: t for t in (await db.execute(select(CommercialCustomerTerm))).scalars().all()
+        }
+        distributor_terms = {
+            t.distributor_id: t for t in (await db.execute(select(CommercialDistributorTerm))).scalars().all()
+        }
+
         lines_to_add: list[CommercialLineupLine] = []
         for rd in row_dicts:
-            diag = rd.get("diagnostic_codes") or []
+            diag = list(rd.get("diagnostic_codes") or [])
+            calc_dap, calc_profit, pricing_chain, pricing_flags = _resolve_pricing_for_row_dict(
+                rd,
+                sku_assumptions=sku_assumptions,
+                customer_terms=customer_terms,
+                distributor_terms=distributor_terms,
+            )
+            for flag in pricing_flags:
+                if flag not in diag:
+                    diag.append(flag)
             line = CommercialLineupLine(
                 case_id=case_id,
                 source_row_number=rd["source_row_number"],
@@ -433,9 +544,15 @@ async def parse_current_lineup_file(
                 msrp_local=rd.get("msrp_local"),
                 promo_price_evidence_local=rd.get("promo_price_evidence_local"),
                 dap_evidence_local=rd.get("dap_evidence_local"),
+                rebate_pct_evidence=rd.get("rebate_pct_evidence"),
+                distributor_margin_pct_evidence=rd.get("distributor_margin_pct_evidence"),
+                vat_pct_evidence=rd.get("vat_pct_evidence"),
                 raw_row_payload=rd.get("raw_row_payload"),
                 row_status=rd.get("row_status") or "imported",
                 diagnostic_codes=diag if diag else None,
+                pricing_chain_json=pricing_chain,
+                calc_dap_cost_currency=calc_dap,
+                calc_profit_total=calc_profit,
             )
             db.add(line)
             lines_to_add.append(line)

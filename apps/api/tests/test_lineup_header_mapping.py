@@ -35,3 +35,40 @@ def test_list_price_pattern_msrp_without_promo_qualifier():
     m = build_commercial_lineup_column_map(cols)
     assert m.get("msrp_local") == "List Price"
     assert m.get("promo_price_evidence_local") == "Deal Price"
+
+
+def test_old_srp_does_not_steal_current_srp():
+    cols = ["SKU", "Old SRP", "New SRP", "Qty"]
+    m = build_commercial_lineup_column_map(cols)
+    assert m.get("old_srp_local") == "Old SRP"
+    assert m.get("msrp_local") == "New SRP"
+
+
+def test_full_pricing_chain_columns_map():
+    cols = [
+        "SKU",
+        "SRP",
+        "Dealer margin",
+        "Rebate",
+        "Disti margin",
+        "Import Tax",
+        "ROE",
+        "VAT",
+        "Net price",
+        "Disti Cost",
+        "Dealer price",
+        "Actual DAP",
+        "Qty",
+    ]
+    m = build_commercial_lineup_column_map(cols)
+    assert m.get("msrp_local") == "SRP"
+    assert m.get("dealer_margin_pct_evidence") == "Dealer margin"
+    assert m.get("rebate_pct_evidence") == "Rebate"
+    assert m.get("distributor_margin_pct_evidence") == "Disti margin"
+    assert m.get("import_tax_pct_evidence") == "Import Tax"
+    assert m.get("roe_evidence") == "ROE"
+    assert m.get("vat_pct_evidence") == "VAT"
+    assert m.get("net_price_evidence_local") == "Net price"
+    assert m.get("disti_cost_evidence_local") == "Disti Cost"
+    assert m.get("dealer_price_evidence_local") == "Dealer price"
+    assert m.get("actual_dap_evidence_local") == "Actual DAP"
