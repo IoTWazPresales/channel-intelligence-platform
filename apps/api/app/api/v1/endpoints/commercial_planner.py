@@ -52,6 +52,7 @@ from app.services.commercial_planner.lineup_case_po_confirm import (
     list_case_pos,
     list_case_pos_bulk,
 )
+from app.services.commercial_planner.lineup_case_suggested_pos import suggest_pos_for_case
 from app.services.commercial_planner.lineup_po_reconciliation import (
     CaseNotFoundError as ReconCaseNotFoundError,
     reconcile_case,
@@ -2380,12 +2381,22 @@ async def patch_lineup_case_plan(
     return _case_payload(case, int(line_count))
 
 
+@router.get("/lineup-cases/{case_id}/suggested-pos")
+async def get_lineup_case_suggested_pos(case_id: int, db: AsyncSession = Depends(get_db)):
+    """Observed purchase orders ranked by product overlap with this case (read-only)."""
+    try:
+        return await suggest_pos_for_case(db, case_id)
+    except CaseNotFoundError:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+
+
 @router.post("/lineup-cases/{case_id}/confirm-with-po", status_code=200)
 async def confirm_lineup_case_with_po(
     case_id: int, body: ConfirmWithPoBody, db: AsyncSession = Depends(get_db)
 ):
     """Confirm a lineup case with PO number(s); case -> po_issued. Idempotent and amendment-aware.
 
+    Available from any case status except ``cancelled`` — no forward approval ladder required.
     Each PO is normalized then looked up / created on ``purchase_order`` (distributor inferred from
     the case lines) and linked via ``commercial_lineup_case_po``. Re-confirming the same PO is a
     no-op; confirming a new PO appends a link.
@@ -2400,11 +2411,8 @@ async def confirm_lineup_case_with_po(
         raise HTTPException(
             status_code=409,
             detail={
-                "message": (
-                    f"Cannot confirm a case in status '{exc.status}'. "
-                    "Accept the lineup first (must be accepted, po_pending, or po_issued)."
-                ),
-                "remediation": "Move the case to 'accepted' before confirming with a PO.",
+                "message": f"Cannot confirm a case in status '{exc.status}'.",
+                "remediation": "Cancelled cases cannot be confirmed with a PO.",
             },
         )
     except ValueError as exc:

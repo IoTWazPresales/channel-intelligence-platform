@@ -64,6 +64,19 @@ function formatHttpErrorDetail(detail: unknown): string {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+type SuggestedPo = {
+  purchase_order_id: number;
+  po_number: string;
+  po_number_norm: string;
+  distributor_id: number | null;
+  distributor_code: string | null;
+  distributor_name: string | null;
+  matched_product_count: number;
+  total_shipped_units: number;
+  already_linked: boolean;
+  status: string;
+};
+
 type LinkedPo = {
   purchase_order_id: number;
   po_number_raw: string;
@@ -92,6 +105,9 @@ type CommercialLineupCase = {
   po_count?: number;
   created_at: string | null;
 };
+
+/** Case statuses where PO confirm is terminal — hide forward sync prompts. */
+const PO_LINKED_STATUSES = new Set(['po_issued', 'in_fulfillment', 'received_closed']);
 
 type CommercialLineupLine = {
   id: number;
@@ -600,6 +616,7 @@ function lineupCaseStatusLabel(status: string): string {
     pending_review: 'Needs review',
     accepted: 'Ready to sync',
     synced: 'Synced to planner',
+    po_issued: 'PO issued',
     cancelled: 'Cancelled',
   };
   return m[status] ?? status;
@@ -1788,6 +1805,27 @@ function ConfirmWithPoDialog({
   const [pos, setPos] = useState<string[]>([]);
   const [input, setInput] = useState('');
   const [notes, setNotes] = useState('');
+  const [selectedNorms, setSelectedNorms] = useState<Set<string>>(new Set());
+
+  const { data: suggestedData, isLoading: suggestionsLoading } = useQuery({
+    queryKey: ['lineup-suggested-pos', currentCase.id],
+    queryFn: ({ signal }) =>
+      apiGet<{ case_id: number; suggestions: SuggestedPo[] }>(
+        `/api/v1/commercial-planner/lineup-cases/${currentCase.id}/suggested-pos`,
+        { signal },
+      ),
+    enabled: open,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    setPos([]);
+    setInput('');
+    setNotes('');
+    setSelectedNorms(new Set());
+  }, [open, currentCase.id]);
+
+  const suggestions = suggestedData?.suggestions ?? [];
 
   const addTokens = (raw: string) => {
     const tokens = raw
@@ -1811,19 +1849,47 @@ function ConfirmWithPoDialog({
 
   const removePo = (idx: number) => setPos((prev) => prev.filter((_, i) => i !== idx));
 
+  const toggleSuggestion = (s: SuggestedPo) => {
+    if (s.already_linked) return;
+    setSelectedNorms((prev) => {
+      const next = new Set(prev);
+      if (next.has(s.po_number_norm)) next.delete(s.po_number_norm);
+      else next.add(s.po_number_norm);
+      return next;
+    });
+  };
+
+  const collectPoNumbers = (): string[] => {
+    const fromSuggestions = suggestions
+      .filter((s) => selectedNorms.has(s.po_number_norm))
+      .map((s) => s.po_number);
+    const all = [...fromSuggestions, ...pos];
+    const trailing = input.trim();
+    if (trailing) all.push(trailing);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const p of all) {
+      const key = p.toUpperCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(p);
+      }
+    }
+    return out;
+  };
+
   const alreadyLinked = currentCase.linked_pos ?? [];
+  const hasLinked = (currentCase.po_count ?? 0) > 0 || alreadyLinked.length > 0;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        {currentCase.commercial_status === 'po_issued' ? 'Add purchase order(s)' : 'Confirm lineup with PO(s)'}
-      </DialogTitle>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>{hasLinked ? 'Add purchase order(s)' : 'Confirm with PO'}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            Confirming sets the case status to <strong>PO issued</strong>. Enter one or more PO
-            numbers (press Enter, comma, or paste a list). Re-adding an existing PO is a no-op;
-            new POs are appended.
+            Links one or more PO numbers to this case and sets status to <strong>PO issued</strong>.
+            No review-step ladder required — use this for historical lineups already fulfilled.
+            Re-adding an existing PO is a no-op; new POs append.
           </Typography>
 
           {alreadyLinked.length > 0 && (
@@ -1839,9 +1905,77 @@ function ConfirmWithPoDialog({
             </Box>
           )}
 
+          {suggestionsLoading && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CircularProgress size={18} />
+              <Typography variant="body2" color="text.secondary">
+                Loading observed PO suggestions…
+              </Typography>
+            </Box>
+          )}
+
+          {!suggestionsLoading && suggestions.length > 0 && (
+            <Box data-testid="confirm-po-suggestions">
+              <Typography variant="subtitle2" gutterBottom>
+                Suggested from shipment evidence
+              </Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox" />
+                    <TableCell>PO number</TableCell>
+                    <TableCell>Distributor</TableCell>
+                    <TableCell align="right">Products matched</TableCell>
+                    <TableCell align="right">Shipped units</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {suggestions.map((s) => (
+                    <TableRow
+                      key={s.purchase_order_id}
+                      hover={!s.already_linked}
+                      sx={{ opacity: s.already_linked ? 0.6 : 1 }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          size="small"
+                          checked={s.already_linked || selectedNorms.has(s.po_number_norm)}
+                          disabled={s.already_linked || isPending}
+                          onChange={() => toggleSuggestion(s)}
+                          inputProps={{
+                            'aria-label': `Include PO ${s.po_number}`,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {s.po_number}
+                        {s.already_linked && (
+                          <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                            (linked)
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {[s.distributor_code, s.distributor_name].filter(Boolean).join(' — ') || '—'}
+                      </TableCell>
+                      <TableCell align="right">{s.matched_product_count}</TableCell>
+                      <TableCell align="right">{s.total_shipped_units.toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
+          )}
+
+          {!suggestionsLoading && suggestions.length === 0 && (
+            <Typography variant="body2" color="text.secondary">
+              No observed POs match this case&apos;s distributor and products. Enter a PO number manually below.
+            </Typography>
+          )}
+
           <TextField
             size="small"
-            label="PO number(s)"
+            label="PO number(s) — manual entry"
             placeholder="e.g. PO-12345"
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -1888,11 +2022,9 @@ function ConfirmWithPoDialog({
         <Button
           size="small"
           variant="contained"
-          disabled={isPending || (pos.length === 0 && input.trim() === '')}
+          disabled={isPending || collectPoNumbers().length === 0}
           onClick={() => {
-            const all = [...pos];
-            const trailing = input.trim();
-            if (trailing) all.push(trailing);
+            const all = collectPoNumbers();
             if (!all.length) return;
             onConfirm(all, notes);
           }}
@@ -3008,15 +3140,15 @@ export function CurrentLineupSection({
                         Sync to plan
                       </Button>
                     )}
-                    {['accepted', 'po_pending', 'po_issued'].includes(c.commercial_status) && (
+                    {c.commercial_status !== 'cancelled' && (
                       <Button
                         size="small"
-                        variant={c.commercial_status === 'po_issued' ? 'outlined' : 'contained'}
+                        variant={(c.po_count ?? 0) > 0 ? 'outlined' : 'contained'}
                         color="primary"
                         onClick={() => setConfirmCase(c)}
                         data-testid={`confirm-with-po-btn-${c.id}`}
                       >
-                        {c.commercial_status === 'po_issued' ? 'Add PO' : 'Confirm lineup'}
+                        {(c.po_count ?? 0) > 0 ? 'Add PO' : 'Confirm with PO'}
                       </Button>
                     )}
                     {c.commercial_status === 'draft_imported' && (
@@ -3046,7 +3178,9 @@ export function CurrentLineupSection({
 
         {activeCaseId != null && activeCase && (
           <Box sx={{ mt: 2 }} data-testid="current-lineup-working-grid">
-            {planLineCount === 0 && workingLines.length > 0 && (
+            {planLineCount === 0 &&
+              workingLines.length > 0 &&
+              !PO_LINKED_STATUSES.has(activeCase.commercial_status) && (
               <Alert severity="info" sx={{ mb: 1 }}>
                 This plan has no commercial planner lines yet. Lineup rows below are staged on this case. Mark the
                 case as Ready to sync, then use Sync to plan to create planner lines from eligible rows.

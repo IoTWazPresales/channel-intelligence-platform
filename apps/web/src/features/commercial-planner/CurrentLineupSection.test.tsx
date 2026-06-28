@@ -464,6 +464,78 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     );
   });
 
+  it('confirm-with-po: draft case shows Confirm with PO without status ladder', async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const draftCase = {
+      id: 15,
+      import_job_id: null,
+      commercial_plan_id: 5,
+      file_name: 'historical.xlsx',
+      period_label: '26Q1',
+      country_code: 'ZA',
+      currency_code: 'ZAR',
+      commercial_status: 'draft_imported',
+      notes: null,
+      accepted_at: null,
+      accepted_by: null,
+      line_count: 10,
+      iteration_number: 1,
+      product_line: 'Gaming',
+      linked_pos: [],
+      po_count: 0,
+      created_at: null,
+    };
+    apiGetMock.mockImplementation(async (url: string) => {
+      if (url.includes('/lineup-cases?')) return [draftCase];
+      if (url.includes('/suggested-pos')) {
+        return {
+          case_id: 15,
+          case_distributor_id: 7,
+          suggestions: [
+            {
+              purchase_order_id: 100,
+              po_number: 'PO-SHIP-1',
+              po_number_norm: 'SHIP1',
+              distributor_id: 7,
+              distributor_code: 'D1',
+              distributor_name: 'Dist',
+              matched_product_count: 3,
+              total_shipped_units: 50,
+              already_linked: false,
+              status: 'observed',
+            },
+          ],
+        };
+      }
+      return [];
+    });
+    apiPostMock.mockResolvedValue({
+      case_id: 15,
+      commercial_status: 'po_issued',
+      po_count: 1,
+      newly_linked_count: 1,
+      linked_pos: [],
+    });
+
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CurrentLineupSection activePlanId={5} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByTestId('current-lineup-section-toggle'));
+    expect(await screen.findByTestId('confirm-with-po-btn-15')).toHaveTextContent('Confirm with PO');
+    await user.click(screen.getByTestId('confirm-with-po-btn-15'));
+    expect(await screen.findByTestId('confirm-po-suggestions')).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: /Include PO PO-SHIP-1/i }));
+    await user.click(screen.getByTestId('confirm-po-submit'));
+    expect(apiPostMock).toHaveBeenCalledWith(
+      '/api/v1/commercial-planner/lineup-cases/15/confirm-with-po',
+      expect.objectContaining({ po_numbers: ['PO-SHIP-1'] }),
+    );
+  });
+
   it('confirm-with-PO: accepted case sends po_numbers list to confirm endpoint', async () => {
     const user = userEvent.setup();
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -489,6 +561,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     };
     apiGetMock.mockImplementation(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [acceptedCase];
+      if (url.includes('/suggested-pos')) return { case_id: 12, case_distributor_id: null, suggestions: [] };
       return [];
     });
     apiPostMock.mockResolvedValue({
@@ -509,7 +582,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     await user.click(await screen.findByTestId('current-lineup-section-toggle'));
     await user.click(await screen.findByTestId('confirm-with-po-btn-12'));
 
-    await user.type(screen.getByLabelText('PO number(s)'), 'PO-1001,PO-1002');
+    await user.type(screen.getByLabelText(/PO number\(s\) — manual entry/i), 'PO-1001,PO-1002');
     await user.click(screen.getByTestId('confirm-po-submit'));
 
     expect(apiPostMock).toHaveBeenCalledWith(

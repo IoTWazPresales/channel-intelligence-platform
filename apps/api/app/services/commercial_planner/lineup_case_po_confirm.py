@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import (
+    COMMERCIAL_LINEUP_STATUSES,
     CommercialLineupCase,
     CommercialLineupCasePo,
     CommercialLineupLine,
@@ -23,9 +24,13 @@ from app.models.commercial_lineup import (
 from app.models.purchase_order import PurchaseOrder
 from app.services.imports.shipment_po_normalization import normalize_po_number
 
-# Confirm telescopes the accepted -> po_pending -> po_issued part of the case state machine.
-# Re-confirm (already po_issued) is allowed so additional/amended POs can be appended.
-CONFIRM_ALLOWED_STATUSES: frozenset[str] = frozenset({"accepted", "po_pending", "po_issued"})
+# Direct PO confirm is allowed from any non-terminal-cancelled status (historical shortcut).
+# Forward ladder (draft -> accepted) remains for plan-anchored workflows; confirm jumps to po_issued.
+CONFIRM_BLOCKED_STATUSES: frozenset[str] = frozenset({"cancelled"})
+
+
+def confirm_allowed_for_status(status: str) -> bool:
+    return status in COMMERCIAL_LINEUP_STATUSES and status not in CONFIRM_BLOCKED_STATUSES
 
 
 class CaseNotFoundError(Exception):
@@ -93,7 +98,7 @@ async def confirm_case_with_po(
     case = await db.get(CommercialLineupCase, case_id)
     if case is None:
         raise CaseNotFoundError(str(case_id))
-    if case.commercial_status not in CONFIRM_ALLOWED_STATUSES:
+    if not confirm_allowed_for_status(case.commercial_status):
         raise CaseStatusNotConfirmableError(case.commercial_status)
 
     # De-dup + drop blanks, preserving the first raw spelling seen for each normalized key.

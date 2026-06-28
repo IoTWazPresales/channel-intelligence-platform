@@ -124,8 +124,22 @@ def test_add_new_po_appends_link():
     assert sum(1 for o in db._added if isinstance(o, CommercialLineupCasePo)) == 1
 
 
-def test_confirm_rejected_for_non_confirmable_status():
+def test_confirm_from_draft_imported_skips_ladder():
     case = SimpleNamespace(id=3, commercial_status="draft_imported", iteration_number=1)
+    results = [
+        _Res(scalar_list=[7]),
+        _Res(scalar_list=[]),
+        _Res(scalar_list=[]),
+        _Res(scalar_one_value=1),
+    ]
+    db = _make_db(case, results)
+    out = asyncio.run(mod.confirm_case_with_po(db, 3, po_numbers=["PO-2001"]))
+    assert case.commercial_status == "po_issued"
+    assert out["po_count"] == 1
+
+
+def test_confirm_rejected_for_cancelled_status():
+    case = SimpleNamespace(id=3, commercial_status="cancelled", iteration_number=1)
     db = _make_db(case, [])
     with pytest.raises(mod.CaseStatusNotConfirmableError):
         asyncio.run(mod.confirm_case_with_po(db, 3, po_numbers=["PO-1"]))

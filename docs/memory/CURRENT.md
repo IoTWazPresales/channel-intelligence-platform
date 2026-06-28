@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-28 (catalogue-authoritative product_line + workbench derived chain)
+**Last updated:** 2026-06-28 (direct confirm-with-PO + suggested POs)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -149,6 +149,14 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
 - **Tests:** +3 API (list-all, attach, detach) · +3 UI (grouped unlinked list, plan filter, unlinked
   workbench) · pct sanitize unit tests. 100 API + 11 CurrentLineupSection vitest green.
 
+### Direct confirm-with-PO + suggested POs (2026-06-28)
+- **Confirm with PO** on case card at **any status except cancelled** — no forward ladder required;
+  reuses `confirm_case_with_po` → `po_issued` + `commercial_lineup_case_po` links (idempotent).
+- **GET `/lineup-cases/{id}/suggested-pos`** — observed POs ranked by product overlap (distributor +
+  `shipment_evidence_line`); modal shows selectable suggestions + manual entry.
+- Workbench hides "Ready to sync" alert when case is `po_issued` / fulfillment terminal.
+- Tests: 11 PO API + 13 CurrentLineupSection vitest green.
+
 ### Lineup workbench + catalogue product_line (2026-06-28)
 - **product_line inference:** catalogue-majority PRIMARY (`dim_product.product_line`, row-weighted);
   filename fallback ONLY when &lt;25% rows resolved; sheet category/BU column removed as signal.
@@ -200,9 +208,9 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
 
 ## Next (recommended)
 
-1. **Re-parse lineup cases 3/4/5** — confirm product_line labels + workbench grid in running app
-   after catalogue-authoritative inference (Gaming NR→Gaming, etc.).
-2. **Browser-soak Unit 6** — open `/admin/imports`, use the "Lineup (unified import)" card to upload
+1. **Warren smoke-test** — one historical `draft_imported` case: Confirm with PO → pick suggested PO →
+   verify `po_issued` + linked PO chip, no sync ladder prompt.
+2. **Re-parse lineup cases 3/4/5** — if product_line labels still wrong after catalogue inference fix.
    2+ files against a running API; confirm per-file progress in the nav bell and cases appearing under
    the plan's Current lineups. (Wired + unit-tested; not yet soaked.)
 3. **Open PR** for `feat/unit-6-unified-lineup-import-centre` → merges DSI large-volume work + full
