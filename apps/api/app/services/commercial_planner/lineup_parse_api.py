@@ -26,6 +26,9 @@ async def execute_lineup_parse_upload(
     case_id: int,
     filename: str,
     file_bytes: bytes,
+    *,
+    template_slug: str = "current_lineup",
+    source_code: str = "current_lineup_system",
 ) -> dict | JSONResponse:
     """Parse upload: sync 200 or async 202 when file exceeds thresholds."""
     case = await db.get(CommercialLineupCase, case_id)
@@ -70,7 +73,13 @@ async def execute_lineup_parse_upload(
 
     if should_parse_lineup_async(file_bytes=file_bytes, preview_total_rows=preview.total_rows):
         with SessionLocal() as sync_db:
-            job = prepare_lineup_parse_import_job_sync(sync_db, case_id=case_id, filename=filename)
+            job = prepare_lineup_parse_import_job_sync(
+                sync_db,
+                case_id=case_id,
+                filename=filename,
+                template_slug=template_slug,
+                source_code=source_code,
+            )
             sync_db.commit()
             import_job_id = int(job.id)
         out = enqueue_lineup_parse_sync(
@@ -78,6 +87,8 @@ async def execute_lineup_parse_upload(
             filename=filename,
             file_bytes=file_bytes,
             import_job_id=import_job_id,
+            template_slug=template_slug,
+            source_code=source_code,
         )
         if out.get("outcome") == "dispatch_failed":
             raise HTTPException(
@@ -106,7 +117,9 @@ async def execute_lineup_parse_upload(
         )
 
     try:
-        result = await parse_current_lineup_file(db, case_id, filename, file_bytes)
+        result = await parse_current_lineup_file(
+            db, case_id, filename, file_bytes, template_slug=template_slug, source_code=source_code
+        )
     except CurrentLineupSourceNotConfiguredError as exc:
         raise HTTPException(
             status_code=422,

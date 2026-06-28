@@ -293,6 +293,50 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         },
     },
     {
+        # Unified lineup importer — first-class, own multi-file Import-Centre surface (not the generic
+        # single-file wizard). Supersedes the embedded Commercial-Planner upload (made read-only) and the
+        # admin historical_lineup workbook for go-forward lineups. Each uploaded file becomes one
+        # CommercialLineupCase + one async parse job (template_slug=unified_lineup), running the full
+        # pricing chain (backwards SRP->DAP) + period/product-line inference.
+        "slug": "unified_lineup",
+        "display_name": "Lineup (unified import)",
+        "description": (
+            "Unified multi-file lineup import. Accepts several .csv/.xlsx/.xlsm files in one session and "
+            "dispatches one parse job per file. Maps the full pricing chain (SRP, dealer/disti margin, "
+            "rebate, VAT, ROE, import tax, net/disti/dealer price, DAP), applies trade-term defaults, runs "
+            "the backwards SRP->DAP calculator, and infers reporting period + product line."
+        ),
+        "enabled": True,
+        "hidden": True,  # dedicated multi-file surface in the Import Centre, not the generic wizard
+        "admin_only": False,
+        "requires_provider": False,
+        "pipeline_handler": "stub_noop",
+        "destructive_apply_requires_confirm": False,
+        "accepted_file_types": [".csv", ".xlsx", ".xlsm"],
+        "expected_columns": {
+            "sku_raw": {"aliases": ["sku", "item", "product_sku"], "required": False},
+            "part_number_raw": {"aliases": ["part_number", "mpn", "part no"], "required": False},
+            "model_raw": {"aliases": ["model", "model_name", "series"], "required": False},
+            "customer_token": {"aliases": ["customer", "account", "end customer", "sold to"], "required": False},
+            "distributor_token": {"aliases": ["distributor", "disti", "channel_partner"], "required": False},
+            "quantity_units": {"aliases": ["qty", "quantity", "units"], "required": False},
+            "msrp_local": {"aliases": ["msrp", "srp", "rrp", "new srp", "list_price"], "required": False},
+            "old_srp_local": {"aliases": ["old srp", "previous srp", "old rrp"], "required": False},
+            "dealer_price_evidence_local": {"aliases": ["dealer price"], "required": False},
+            "net_price_evidence_local": {"aliases": ["net price", "net"], "required": False},
+            "disti_cost_evidence_local": {"aliases": ["disti cost", "distributor cost"], "required": False},
+            "actual_dap_evidence_local": {"aliases": ["actual dap"], "required": False},
+            "dap_evidence_local": {"aliases": ["dap", "local dap"], "required": False},
+            "dealer_margin_pct_evidence": {"aliases": ["dealer margin", "retail margin"], "required": False},
+            "rebate_pct_evidence": {"aliases": ["rebate"], "required": False},
+            "distributor_margin_pct_evidence": {"aliases": ["disti margin", "distributor margin"], "required": False},
+            "import_tax_pct_evidence": {"aliases": ["import tax", "import duty", "duty"], "required": False},
+            "roe_evidence": {"aliases": ["roe", "rate of exchange", "exchange rate", "fx rate"], "required": False},
+            "vat_pct_evidence": {"aliases": ["vat", "tax_pct"], "required": False},
+            "promo_price_evidence_local": {"aliases": ["promo_price", "promo", "deal_price"], "required": False},
+        },
+    },
+    {
         "slug": "customer_channel_mapping",
         "display_name": "Customer/channel mapping",
         "description": "Customer classification mapping import (intentionally deferred; not wired for apply yet).",
@@ -561,6 +605,7 @@ DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
     ),
     ("promotion_plan_default", "Default promotion plan feed", "promotion_plan", "promo_extract"),
     ("current_lineup_system", "Current working lineup (Commercial Planner upload)", "current_lineup", "planning_extract"),
+    ("unified_lineup_system", "Unified lineup import (Import Centre, multi-file)", "unified_lineup", "planning_extract"),
 ]
 
 

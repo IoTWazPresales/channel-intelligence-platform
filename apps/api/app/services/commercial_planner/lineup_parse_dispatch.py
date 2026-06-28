@@ -14,7 +14,7 @@ from app.core.config import get_settings
 from app.db.session_sync import SessionLocal
 from app.models.commercial_lineup import CommercialLineupCase
 from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
-from app.services.commercial_planner.current_lineup_seed import ensure_current_lineup_import_seed_sync
+from app.services.commercial_planner.current_lineup_seed import ensure_lineup_import_seed_sync
 from app.services.commercial_planner.lineup_parse_worker import (
     ASYNC_PARSE_BYTE_THRESHOLD,
     ASYNC_PARSE_ROW_THRESHOLD,
@@ -62,26 +62,28 @@ def prepare_lineup_parse_import_job_sync(
     *,
     case_id: int,
     filename: str,
+    template_slug: str = "current_lineup",
+    source_code: str = "current_lineup_system",
 ) -> ImportJob:
-    """Create a running ImportJob audit row for an async lineup parse."""
+    """Create a running ImportJob audit row for an async lineup parse (per template/source)."""
     case = session.get(CommercialLineupCase, case_id)
     if case is None:
         raise ValueError(f"Lineup case {case_id} not found")
 
-    ensure_current_lineup_import_seed_sync(session.connection())
+    ensure_lineup_import_seed_sync(session.connection(), template_slug=template_slug, source_code=source_code)
     source = session.scalar(
         select(SourceDefinition)
         .join(ImportTemplate, ImportTemplate.id == SourceDefinition.import_template_id)
-        .where(ImportTemplate.slug == "current_lineup", SourceDefinition.code == "current_lineup_system")
+        .where(ImportTemplate.slug == template_slug, SourceDefinition.code == source_code)
         .limit(1)
     )
     if source is None:
-        raise ValueError("current_lineup_system source is not configured")
+        raise ValueError(f"{source_code} source is not configured")
 
     now = datetime.now(timezone.utc)
     job = ImportJob(
         source_id=source.id,
-        template_slug="current_lineup",
+        template_slug=template_slug,
         import_mode="apply",
         status="running",
         file_name=filename,
@@ -98,6 +100,8 @@ def enqueue_lineup_parse_sync(
     filename: str,
     file_bytes: bytes,
     import_job_id: int,
+    template_slug: str = "current_lineup",
+    source_code: str = "current_lineup_system",
 ) -> dict[str, Any]:
     """Dispatch lineup parse to Celery; returns outcome dict for HTTP layer."""
     settings = get_settings()
@@ -114,6 +118,8 @@ def enqueue_lineup_parse_sync(
             file_b64,
             import_job_id=import_job_id,
             celery_task_id=celery_task_id,
+            template_slug=template_slug,
+            source_code=source_code,
         )
 
     if settings.cip_dev_celery_dispatch == "in_process_thread":
@@ -143,6 +149,8 @@ def enqueue_lineup_parse_sync(
                 filename,
                 file_b64,
                 import_job_id,
+                template_slug,
+                source_code,
             )
             celery_task_id = str(async_result.id)
             create_queued_task_run(

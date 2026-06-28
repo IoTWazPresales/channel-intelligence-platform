@@ -511,8 +511,10 @@ def commercial_planner_lineup_parse_task(
     filename: str,
     file_b64: str,
     import_job_id: int,
+    template_slug: str = "current_lineup",
+    source_code: str = "current_lineup_system",
 ) -> dict:
-    """Background current lineup parse for large uploads."""
+    """Background lineup parse for large uploads (current_lineup or unified_lineup)."""
     from app.services.commercial_planner.lineup_parse_worker import run_lineup_case_parse_job
 
     celery_id = getattr(getattr(self, "request", None), "id", None)
@@ -528,6 +530,8 @@ def commercial_planner_lineup_parse_task(
             file_b64,
             import_job_id,
             celery_task_id=str(celery_id) if celery_id else None,
+            template_slug=template_slug,
+            source_code=source_code,
         )
     except Exception:
         logger.exception("lineup parse failed case_id=%s", case_id)

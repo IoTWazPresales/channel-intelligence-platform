@@ -38,7 +38,7 @@ from app.services.commercial_planner.lineup_pricing_resolution import (
 
 from app.services.commercial_planner.current_lineup_seed import (
     CurrentLineupSourceNotConfiguredError,
-    ensure_current_lineup_import_seed,
+    ensure_lineup_import_seed,
 )
 from app.services.commercial_planner.lineup_header_mapping import build_commercial_lineup_column_map
 from app.services.commercial_planner.lineup_open_channel import (
@@ -432,10 +432,13 @@ async def parse_current_lineup_file(
     file_bytes: bytes,
     *,
     existing_import_job_id: int | None = None,
+    template_slug: str = "current_lineup",
+    source_code: str = "current_lineup_system",
 ) -> ParseResult:
     """Parse an uploaded lineup file and write CommercialLineupLine rows.
 
-    Creates an ImportJob audit record.
+    Creates an ImportJob audit record tagged ``template_slug`` (default ``current_lineup``; the
+    unified Import-Centre path passes ``unified_lineup``).
     dap_evidence_local is stored as evidence only — never written to controlled_cost_amount.
     """
     now = datetime.now(tz=timezone.utc)
@@ -444,34 +447,31 @@ async def parse_current_lineup_file(
     if case is None:
         raise ValueError(f"CommercialLineupCase id={case_id} not found")
 
-    # Idempotent seed: upsert template + insert current_lineup_system source if missing.
-    await ensure_current_lineup_import_seed(db)
+    # Idempotent seed: upsert template + insert the system source if missing.
+    await ensure_lineup_import_seed(db, template_slug=template_slug, source_code=source_code)
 
-    # Resolve source_definition for the current_lineup template (required FK).
+    # Resolve source_definition for the lineup template (required FK).
     source = await db.scalar(
         select(SourceDefinition)
         .join(ImportTemplate, ImportTemplate.id == SourceDefinition.import_template_id)
-        .where(ImportTemplate.slug == "current_lineup", SourceDefinition.code == "current_lineup_system")
+        .where(ImportTemplate.slug == template_slug, SourceDefinition.code == source_code)
         .limit(1)
     )
     if source is None:
-        tpl = await db.scalar(select(ImportTemplate).where(ImportTemplate.slug == "current_lineup"))
+        tpl = await db.scalar(select(ImportTemplate).where(ImportTemplate.slug == template_slug))
+        remediation = (
+            "From the apps/api directory run: alembic upgrade head "
+            "(current_lineup seed 20260428_0021 / unified_lineup seed 20260628_0056 or later). "
+            "If developing locally, ensure PYTHONPATH includes the app package."
+        )
         if tpl is None:
             raise CurrentLineupSourceNotConfiguredError(
-                "Import template 'current_lineup' is missing after seed attempt.",
-                remediation=(
-                    "From the apps/api directory run: alembic upgrade head "
-                    "(revision 20260428_0021_current_lineup_template_source_seed or later). "
-                    "If developing locally, ensure PYTHONPATH includes the app package."
-                ),
+                f"Import template {template_slug!r} is missing after seed attempt.",
+                remediation=remediation,
             )
         raise CurrentLineupSourceNotConfiguredError(
-            "SourceDefinition 'current_lineup_system' is missing after seed attempt.",
-            remediation=(
-                "From the apps/api directory run: alembic upgrade head "
-                "(revision 20260428_0021_current_lineup_template_source_seed or later). "
-                "Verify import_template.slug='current_lineup' exists and re-run upgrade."
-            ),
+            f"SourceDefinition {source_code!r} is missing after seed attempt.",
+            remediation=remediation,
         )
     source_id = source.id
 
@@ -487,7 +487,7 @@ async def parse_current_lineup_file(
     else:
         job = ImportJob(
             source_id=source_id,
-            template_slug="current_lineup",
+            template_slug=template_slug,
             import_mode="apply",
             status="running",
             file_name=filename,

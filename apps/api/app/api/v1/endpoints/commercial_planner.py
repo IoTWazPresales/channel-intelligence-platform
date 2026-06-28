@@ -2757,6 +2757,43 @@ async def parse_lineup_case_apply(
     return await execute_lineup_parse_upload(db, case_id, filename, file_bytes)
 
 
+@router.post("/lineup/unified-import", status_code=202)
+async def unified_lineup_import(
+    files: list[UploadFile] = File(..., description="One or more .csv/.xlsx/.xlsm lineup files"),
+    commercial_plan_id: int | None = Form(default=None),
+    period_label: str | None = Form(default=None),
+    country_code: str | None = Form(default=None),
+    currency_code: str | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unified multi-file lineup import: one CommercialLineupCase + one async parse job per file.
+
+    Each file runs the full pricing chain (backwards SRP->DAP) + period/product-line inference via
+    the shared lineup parser, tagged template_slug='unified_lineup'. Per-file progress is visible in
+    the activity feed; a single bad file does not abort the batch. DAP stays evidence-only.
+    """
+    from app.services.commercial_planner.unified_lineup_import import dispatch_unified_lineup_import
+
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one file is required.")
+
+    payloads: list[tuple[str, bytes]] = []
+    for f in files:
+        payloads.append((f.filename or "upload", await f.read()))
+
+    try:
+        return await dispatch_unified_lineup_import(
+            db,
+            payloads,
+            commercial_plan_id=commercial_plan_id,
+            period_label=period_label,
+            country_code=country_code,
+            currency_code=currency_code,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/lineup-cases/{case_id}/parse-upload")
 async def parse_lineup_case_upload(
     case_id: int,
