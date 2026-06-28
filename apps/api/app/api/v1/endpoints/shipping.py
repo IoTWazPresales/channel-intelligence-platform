@@ -133,6 +133,7 @@ def _apply_fact_where_clause(
     import_job_id = kwargs.get("import_job_id")
     distributor_id = kwargs.get("distributor_id")
     customer_id = kwargs.get("customer_id")
+    purchase_order_id = kwargs.get("purchase_order_id")
     line_state = kwargs.get("line_state")
     report_type = kwargs.get("report_type")
     product_resolution_status = kwargs.get("product_resolution_status")
@@ -157,6 +158,8 @@ def _apply_fact_where_clause(
         stmt = stmt.where(FactInboundShipment.distributor_id == int(distributor_id))
     if customer_id is not None:
         stmt = stmt.where(FactInboundShipment.customer_id == int(customer_id))
+    if purchase_order_id is not None:
+        stmt = stmt.where(FactInboundShipment.purchase_order_id == int(purchase_order_id))
     if line_state:
         stmt = stmt.where(FactInboundShipment.line_state == line_state)
     if report_type:
@@ -275,6 +278,7 @@ def _build_shipping_fact_filters(
     import_job_id: int | None = None,
     distributor_id: int | None = None,
     customer_id: int | None = None,
+    purchase_order_id: int | None = None,
     line_state: str | None = None,
     report_type: str | None = None,
     product_resolution_status: str | None = None,
@@ -301,6 +305,7 @@ def _build_shipping_fact_filters(
         "import_job_id": import_job_id,
         "distributor_id": distributor_id,
         "customer_id": customer_id,
+        "purchase_order_id": purchase_order_id,
         "line_state": line_state,
         "report_type": report_type,
         "product_resolution_status": product_resolution_status,
@@ -327,6 +332,8 @@ def _shipping_filters_active(filt: dict[str, Any]) -> bool:
     if filt.get("distributor_id") is not None:
         return True
     if filt.get("customer_id") is not None:
+        return True
+    if filt.get("purchase_order_id") is not None:
         return True
     for key in (
         "line_state",
@@ -881,6 +888,7 @@ async def shipping_evidence_lines(
     import_job_id: int | None = None,
     distributor_id: int | None = None,
     customer_id: int | None = None,
+    purchase_order_id: int | None = None,
     line_state: str | None = None,
     report_type: str | None = None,
     product_resolution_status: str | None = None,
@@ -908,6 +916,7 @@ async def shipping_evidence_lines(
         import_job_id=import_job_id,
         distributor_id=distributor_id,
         customer_id=customer_id,
+        purchase_order_id=purchase_order_id,
         line_state=line_state,
         report_type=report_type,
         product_resolution_status=product_resolution_status,

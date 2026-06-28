@@ -1522,6 +1522,102 @@ function StatusTransitionDialog({
   );
 }
 
+// ── Reconciliation inline summary (Session C Unit 3) ──────────────────────────
+
+type ReconProduct = {
+  product_id: number;
+  product_name: string | null;
+  units_flag: string;
+};
+
+type ReconResponse = {
+  case_id: number;
+  linked_po_count: number;
+  products: ReconProduct[];
+  po_flags: { purchase_order_id: number; po_number_raw: string | null; flag: string }[];
+  summary: Record<string, number>;
+  data_unavailable?: boolean;
+};
+
+const RECON_FLAG_COLORS: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
+  matched: 'success',
+  short: 'warning',
+  over: 'warning',
+  unshipped: 'error',
+  unplanned: 'info',
+  amended: 'info',
+  po_no_match: 'error',
+};
+
+const RECON_FLAG_LABELS: Record<string, string> = {
+  matched: 'matched',
+  short: 'short',
+  over: 'over',
+  unshipped: 'unshipped',
+  unplanned: 'unplanned',
+  amended: 'amended',
+  po_no_match: 'po no match',
+};
+
+function CaseReconciliationInline({ caseId }: { caseId: number }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['lineup-po-reconciliation', caseId],
+    queryFn: ({ signal }) =>
+      apiGet<ReconResponse>(`/api/v1/commercial-planner/lineup/po-reconciliation?case_id=${caseId}`, { signal }),
+  });
+
+  if (isLoading) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        Loading reconciliation…
+      </Typography>
+    );
+  }
+  if (!data || data.data_unavailable) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        Reconciliation unavailable.
+      </Typography>
+    );
+  }
+
+  const summary = data.summary ?? {};
+  const order = ['matched', 'short', 'over', 'unshipped', 'unplanned', 'amended', 'po_no_match'];
+  const active = order.filter((f) => (summary[f] ?? 0) > 0);
+
+  return (
+    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap data-testid={`recon-inline-${caseId}`}>
+      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+        Reconciliation:
+      </Typography>
+      {active.length === 0 ? (
+        <Typography variant="caption" color="text.secondary">
+          no shipments matched yet
+        </Typography>
+      ) : (
+        active.map((f) => (
+          <Chip
+            key={f}
+            size="small"
+            color={RECON_FLAG_COLORS[f] ?? 'default'}
+            label={`${summary[f]} ${RECON_FLAG_LABELS[f] ?? f}`}
+            data-testid={`recon-inline-${caseId}-${f}`}
+          />
+        ))
+      )}
+      <Button
+        size="small"
+        variant="text"
+        component={NextLink}
+        href={`/admin/po-management`}
+        data-testid={`recon-drill-${caseId}`}
+      >
+        View PO management
+      </Button>
+    </Stack>
+  );
+}
+
 // ── Confirm lineup with PO(s) (Session C Unit 2d) ─────────────────────────────
 
 function ConfirmWithPoDialog({
@@ -2679,6 +2775,11 @@ export function CurrentLineupSection({
                       >
                         Delete
                       </Button>
+                    )}
+                    {(c.po_count ?? 0) > 0 && (
+                      <Box sx={{ flexBasis: '100%' }}>
+                        <CaseReconciliationInline caseId={c.id} />
+                      </Box>
                     )}
                   </Box>
                 ))}

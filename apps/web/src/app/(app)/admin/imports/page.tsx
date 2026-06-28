@@ -514,6 +514,7 @@ function AdminImportsPageContent() {
   const searchParams = useSearchParams();
   const [activeStep, setActiveStep] = useState(0);
   const [unifiedLineupOpen, setUnifiedLineupOpen] = useState(false);
+  const [unifiedPeriodPrefill, setUnifiedPeriodPrefill] = useState<string | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [sourceId, setSourceId] = useState<number | ''>('');
   const [importMode, setImportMode] = useState<'validate' | 'apply'>('validate');
@@ -599,6 +600,14 @@ function AdminImportsPageContent() {
     setIsJobRevisitMode(false);
     setActiveStep(1);
   }, [visibleTemplates, searchParams]);
+
+  // Deep-link from PO Management / gap worklist: ?unified=1&period=26Q1 opens the unified importer
+  // with the period pre-filled.
+  useEffect(() => {
+    if (searchParams.get('unified') !== '1') return;
+    setUnifiedPeriodPrefill(searchParams.get('period'));
+    setUnifiedLineupOpen(true);
+  }, [searchParams]);
 
   const { data: sources } = useQuery({
     queryKey: ['import-sources', selectedSlug],
@@ -2373,7 +2382,11 @@ function AdminImportsPageContent() {
   return (
     <>
       <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Imports' }]} title="Data & imports" />
-      <UnifiedLineupImportDialog open={unifiedLineupOpen} onClose={() => setUnifiedLineupOpen(false)} />
+      <UnifiedLineupImportDialog
+        open={unifiedLineupOpen}
+        onClose={() => setUnifiedLineupOpen(false)}
+        initialPeriodLabel={unifiedPeriodPrefill}
+      />
       <Alert severity="info" sx={{ mb: 2 }}>
         <strong>Guided import:</strong> pick an <strong>import type</strong> first (what the file means), then a{' '}
         <strong>data provider</strong> (which feed or instance). Product Master uses a{' '}

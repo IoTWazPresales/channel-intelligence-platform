@@ -52,6 +52,16 @@ from app.services.commercial_planner.lineup_case_po_confirm import (
     list_case_pos,
     list_case_pos_bulk,
 )
+from app.services.commercial_planner.lineup_po_reconciliation import (
+    CaseNotFoundError as ReconCaseNotFoundError,
+    reconcile_case,
+)
+from app.services.commercial_planner.lineup_po_gap import (
+    PurchaseOrderNotFoundError,
+    dismiss_gap_po,
+    po_gap_worklist,
+    restore_gap_po,
+)
 from app.services.commercial_planner.lineup_case_parser import (
     parse_current_lineup_file,
     preview_current_lineup_file,
@@ -2340,6 +2350,50 @@ async def confirm_lineup_case_with_po(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/lineup/po-reconciliation")
+async def get_po_reconciliation(
+    case_id: int = Query(..., description="Lineup case to reconcile against its confirmed POs"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Units-primary reconciliation per (case x product); FX-bridged value is secondary/display."""
+    try:
+        return await reconcile_case(db, case_id)
+    except ReconCaseNotFoundError:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+
+
+class GapDismissBody(BaseModel):
+    purchase_order_id: int = Field(ge=1)
+    reason_code: str = Field(min_length=1, max_length=64)
+
+
+@router.get("/lineup/po-gap-worklist")
+async def get_po_gap_worklist(
+    include_dismissed: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    """POs with shipments but no covering confirmed lineup, grouped by quarter/year."""
+    return await po_gap_worklist(db, include_dismissed=include_dismissed)
+
+
+@router.post("/lineup/po-gap-worklist/dismiss", status_code=200)
+async def dismiss_po_gap(body: GapDismissBody, db: AsyncSession = Depends(get_db)):
+    try:
+        return await dismiss_gap_po(db, body.purchase_order_id, body.reason_code)
+    except PurchaseOrderNotFoundError:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+
+@router.post("/lineup/po-gap-worklist/restore", status_code=200)
+async def restore_po_gap(
+    purchase_order_id: int = Query(..., ge=1), db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await restore_gap_po(db, purchase_order_id)
+    except PurchaseOrderNotFoundError:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
 
 
 def _lineup_row_needs_resolution(ln: CommercialLineupLine, raw_payload: dict) -> bool:

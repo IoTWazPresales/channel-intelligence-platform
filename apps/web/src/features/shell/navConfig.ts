@@ -80,6 +80,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: 'Import Center', href: '/admin/imports' },
       { label: 'Shipment Evidence', href: '/admin/shipment-evidence' },
+      { label: 'PO Management', href: '/admin/po-management' },
       { label: 'Customer Reports', href: '/admin/imports?template=customer_sell_through' },
     ],
   },

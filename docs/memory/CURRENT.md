@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-28 (Session C Unit 2d shipped — Confirm-with-PO + commercial_lineup_case_po; migration NOT yet applied to cip)
+**Last updated:** 2026-06-28 (Session C Unit 2d + Unit 3 shipped — Confirm-with-PO, reconciliation, gap worklist, PO Management; `0057` migration NOT yet applied to cip)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` (now also carries Session C; cut from `feat/dsi-async-topology` + BACKLOG-051 docs) |
-| **HEAD** | Session C Unit 2d (confirm-with-PO) on top of `d208e1a` (Unit 6 frontend) / Session B Units 1-8 |
+| **HEAD** | Session C Unit 3 (reconciliation + gap worklist + PO Management) on top of Unit 2d (confirm-with-PO) / Unit 6 frontend / Session B Units 1-8 |
 | **PR** | None open |
 | **Alembic (code)** | `20260628_0057` (commercial_lineup_case_po) |
 | **Alembic (DB)** | **`20260628_0056`** on local `cip` — **`0057` pending: Warren must run `alembic upgrade head`** before confirm-with-PO works at runtime |
@@ -95,6 +95,47 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
   `commercial-planner/page.test.tsx` (83) still green. Lint clean for touched files.
 - **NOT verified:** browser soak of the dialog against a running API (per-file progress in the bell,
   cases landing under the plan's Current lineups).
+
+### Session C Unit 2d — Confirm-with-PO + `commercial_lineup_case_po` — code done, migration pending
+- **Migration `20260628_0057`** (`commercial_lineup_case_po`): m2m join (one lineup→many POs, one
+  PO→many lineups). `case_id` FK `commercial_lineup_case` CASCADE; `purchase_order_id` FK
+  `purchase_order`; `UniqueConstraint(case_id, purchase_order_id)` for idempotency. **NOT applied to
+  cip — Warren runs `alembic upgrade head`.** Model `CommercialLineupCasePo` + `models/__init__`.
+- **Service** `lineup_case_po_confirm.py`: `confirm_case_with_po` validates status (accepted/po_pending/
+  po_issued), normalizes+dedups PO numbers, infers distributor from case lines, lookup/upsert
+  `purchase_order` (status `raised`, source `lineup_declared`), inserts `case_po` links idempotently,
+  sets `commercial_status='po_issued'`. `list_case_pos` / `list_case_pos_bulk` (no N+1).
+- **API** `POST /commercial-planner/lineup-cases/{id}/confirm-with-po {po_numbers[], notes?}`
+  (404/409/400). `_case_payload` now returns `linked_pos` + `po_count`.
+- **UI** `CurrentLineupSection`: "Confirm lineup"/"Add PO" button → `ConfirmWithPoDialog` (multi-value
+  PO input + chips + notes); status chip → po_issued; PO-count chip + iteration "Round N".
+- **Tests:** `test_lineup_case_po_confirm.py` (mock) — 2 POs, idempotent re-confirm, append; + UI test.
+
+### Session C Unit 3 — Reconciliation + gap worklist + PO Management — code done (derived; no migration)
+- **Reconciliation** `lineup_po_reconciliation.py` `reconcile_case` (derived on read): per (case×product)
+  aggregate `shipment_evidence_line` where `purchase_order_id IN {case POs}` & `product_id` matches a
+  lineup line. PRIMARY **units** flag — matched/short/over/unshipped/unplanned/amended/po_no_match.
+  SECONDARY **value** bridged via `commercial_sku_assumption.fx_plan_currency_per_cost_currency`
+  (display only; `fx_unavailable` when no bridge — never errors). UoM eaches assertion → warning.
+  API `GET /commercial-planner/lineup/po-reconciliation?case_id`.
+- **Gap worklist** `lineup_po_gap.py`: shipment (PO,product) not covered by any confirmed case →
+  grouped by quarter (from `ship_confirm_date`/`schedule_ship_date`). Dismiss-with-reason reuses
+  `purchase_order.dismiss_reason_code`. APIs `GET .../lineup/po-gap-worklist`, `POST .../dismiss`,
+  `POST .../restore`.
+- **PO Management** `po_management.py` + endpoints `/po-management/coverage` & `/backlog`: observed POs
+  (from shipment evidence) grouped by quarter→product line; coverage meter (observed vs linked,
+  `first_run`); linked groups roll up reconciliation summary; unlinked groups get an upload prompt.
+- **UI:** new `/admin/po-management` page + `PoManagementView` (coverage meter, backlog groups with
+  recon chips / upload prompt, gap worklist table with dismiss/restore + "Show dismissed"); nav entry
+  under Data Imports. Lineup case card shows inline `CaseReconciliationInline` when POs linked.
+  `/shipping` grid: **Customer PO column** (click → filter) + `?purchase_order_id=&po_label=` deep-link
+  banner; backend `/shipping/lines` + commercial-summary accept `purchase_order_id` filter. Upload
+  prompts deep-link `/admin/imports?unified=1&period=` → `UnifiedLineupImportDialog` `initialPeriodLabel`.
+  Shipment-evidence page cross-links to PO Management.
+- **Tests:** `test_lineup_po_reconciliation.py` (all 7 flags + FX-missing + UoM), `test_lineup_po_gap.py`,
+  `PoManagementView.test.tsx` (first-run/linked/dismiss), `buildShippingLinesUrl.test.ts` (+PO filter).
+  22 backend + 3 PO-mgmt UI + 3 shipping-url + 3 dialog green; lint clean for touched files.
+- **NOT verified:** real-DB reconciliation e2e (needs `0057` applied) and browser soak.
 
 ### DSI apply — proven fresh E2E on job #199 (`b2b81ea`, 2026-06-27)
 - `import_job 199` → `completed` / `loaded` / `apply`.

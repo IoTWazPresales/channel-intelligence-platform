@@ -29,7 +29,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 import { apiGet, apiPostFormData, safeDisplayError } from '@/lib/api';
@@ -71,6 +71,8 @@ function outcomeChip(r: UnifiedImportFileResult) {
 export type UnifiedLineupImportDialogProps = {
   open: boolean;
   onClose: () => void;
+  /** Pre-fill the period label (e.g. from a PO Management / gap "Upload lineup for this period" prompt). */
+  initialPeriodLabel?: string | null;
 };
 
 /**
@@ -85,13 +87,22 @@ export type UnifiedLineupImportDialogProps = {
  * The `unified_lineup` template is `hidden=true` (dedicated surface, not the generic wizard), so
  * this dialog is opened from an explicit Import-Centre card rather than the template grid.
  */
-export function UnifiedLineupImportDialog({ open, onClose }: UnifiedLineupImportDialogProps) {
+export function UnifiedLineupImportDialog({
+  open,
+  onClose,
+  initialPeriodLabel,
+}: UnifiedLineupImportDialogProps) {
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [planId, setPlanId] = useState<number | ''>('');
   const [periodLabel, setPeriodLabel] = useState('');
+
+  // Seed the period label from the caller (e.g. PO Management upload prompt) when the dialog opens.
+  useEffect(() => {
+    if (open && initialPeriodLabel) setPeriodLabel((cur) => cur || initialPeriodLabel);
+  }, [open, initialPeriodLabel]);
   const [countryCode, setCountryCode] = useState('');
   const [currencyCode, setCurrencyCode] = useState('');
   const [results, setResults] = useState<UnifiedImportResponse | null>(null);

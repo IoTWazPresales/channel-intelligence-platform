@@ -480,7 +480,9 @@ export default function ShipmentEvidenceAdminPage() {
           click <strong>Apply import</strong> to mark the job <strong>loaded</strong>. Re-run the import from Data
           imports to refresh evidence lines. Open{' '}
           <Link href="/admin/shipment-evidence?importJobId=">this page with <code>?importJobId=&lt;id&gt;</code></Link> to
-          pre-fill the job filter.
+          pre-fill the job filter. Purchase orders observed in applied shipments roll up under{' '}
+          <Link href="/admin/po-management">PO management</Link>, where you can reconcile them against confirmed
+          lineups or upload a covering lineup.
         </Alert>
 
         <Paper sx={{ p: 2 }}>

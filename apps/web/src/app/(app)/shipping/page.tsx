@@ -78,6 +78,8 @@ export type ShippingLine = {
   quantity?: number | null;
   amount?: number | null;
   currency_code?: string | null;
+  customer_po?: string | null;
+  purchase_order_id?: number | null;
   [key: string]: unknown;
 };
 
@@ -133,6 +135,8 @@ export default function InboundShipmentsPage() {
   const [currencyCode, setCurrencyCode] = useState('');
   const [operatingUnit, setOperatingUnit] = useState('');
   const [podDateFilter, setPodDateFilter] = useState<'' | 'true' | 'false'>('');
+  const [purchaseOrderId, setPurchaseOrderId] = useState<number | null>(null);
+  const [poFilterLabel, setPoFilterLabel] = useState<string | null>(null);
   const [smartPreset, setSmartPreset] = useState<SmartPresetId | null>(null);
   const [deliveryLens, setDeliveryLens] = useState<DeliveryLensId | null>(null);
   const [skip, setSkip] = useState(0);
@@ -319,12 +323,24 @@ export default function InboundShipmentsPage() {
 
   const includeRawRow = displayOptionalFields.includes('raw_source_row');
 
+  // Deep-link: ?purchase_order_id=&po_label= filters the grid to one PO (from PO Management / lineup card).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sp = new URLSearchParams(window.location.search);
+    const poId = sp.get('purchase_order_id');
+    if (poId && /^\d+$/.test(poId)) {
+      setPurchaseOrderId(Number(poId));
+      setPoFilterLabel(sp.get('po_label'));
+    }
+  }, []);
+
   const filterParams = useMemo<ShippingFilterParams>(
     () => ({
       lineState,
       cargoStatus,
       distributorId: distributorPick?.id ?? null,
       customerId: customerPick?.id ?? null,
+      purchaseOrderId,
       search,
       dateField,
       dateFrom,
@@ -340,6 +356,7 @@ export default function InboundShipmentsPage() {
       cargoStatus,
       distributorPick?.id,
       customerPick?.id,
+      purchaseOrderId,
       search,
       dateField,
       dateFrom,
@@ -391,11 +408,28 @@ export default function InboundShipmentsPage() {
       { field: 'eta_date', headerName: 'ETA', minWidth: 118, valueFormatter: dateColFormatter },
       { field: 'promise_date', headerName: 'Promise', minWidth: 118, valueFormatter: dateColFormatter },
       { field: 'pod_date', headerName: 'POD', minWidth: 118, valueFormatter: dateColFormatter },
+      {
+        field: 'customer_po',
+        headerName: 'Customer PO',
+        minWidth: 140,
+        valueFormatter: (p: ValueFormatterParams<ShippingLine>) => (p.value ? String(p.value) : '—'),
+        onCellClicked: (p) => {
+          const poId = p.data?.purchase_order_id;
+          if (poId == null) return;
+          setPurchaseOrderId(Number(poId));
+          setPoFilterLabel(p.data?.customer_po ?? null);
+          resetPagination();
+        },
+        cellStyle: (p) =>
+          p.data?.purchase_order_id != null
+            ? { cursor: 'pointer', color: '#1565c0', textDecoration: 'underline' }
+            : undefined,
+      },
       { field: 'quantity', headerName: 'Qty', width: 90 },
       { field: 'amount', headerName: 'Amount', width: 100 },
       { field: 'currency_code', headerName: 'CCY', width: 72 },
     ],
-    []
+    [resetPagination]
   );
 
   const optionalColDefs: ColDef<ShippingLine>[] = useMemo(
@@ -432,6 +466,28 @@ export default function InboundShipmentsPage() {
         Truth layer from <strong>fact_inbound_shipment</strong> (populated when an inbound import job is applied).
         Steward raw imports under <strong>Admin → Shipment evidence</strong>.
       </Alert>
+      {purchaseOrderId != null && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Chip
+              label="Clear PO filter"
+              size="small"
+              onClick={() => {
+                setPurchaseOrderId(null);
+                setPoFilterLabel(null);
+                resetPagination();
+              }}
+              data-testid="clear-po-filter"
+            />
+          }
+          data-testid="po-filter-banner"
+        >
+          Filtered to purchase order{poFilterLabel ? ` ${poFilterLabel}` : ` #${purchaseOrderId}`} — showing only
+          shipment lines under this PO.
+        </Alert>
+      )}
       <ShippingCommercialSummary
         filterParams={filterParams}
         onApplySmartPreset={applySmartPreset}

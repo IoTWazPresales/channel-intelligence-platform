@@ -3,6 +3,7 @@ export type ShippingFilterParams = {
   cargoStatus: string;
   distributorId: number | null;
   customerId: number | null;
+  purchaseOrderId: number | null;
   search: string;
   dateField: string;
   dateFrom: string;
@@ -26,6 +27,7 @@ export function appendShippingFilterParams(params: URLSearchParams, p: ShippingF
   if (p.cargoStatus) params.set('status', p.cargoStatus);
   if (p.distributorId != null) params.set('distributor_id', String(p.distributorId));
   if (p.customerId != null) params.set('customer_id', String(p.customerId));
+  if (p.purchaseOrderId != null) params.set('purchase_order_id', String(p.purchaseOrderId));
   if (p.search.trim()) params.set('search', p.search.trim());
   if (p.dateField) params.set('date_field', p.dateField);
   if (p.dateFrom.trim()) params.set('date_from', p.dateFrom.trim());
