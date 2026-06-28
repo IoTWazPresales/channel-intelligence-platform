@@ -40,7 +40,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import NextLink from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost, safeDisplayError } from '@/lib/api';
 import { EntitySearchAutocomplete } from './EntitySearchAutocomplete';
 
 function formatHttpErrorDetail(detail: unknown): string {
@@ -64,6 +64,14 @@ function formatHttpErrorDetail(detail: unknown): string {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+type LinkedPo = {
+  purchase_order_id: number;
+  po_number_raw: string;
+  po_number_norm: string;
+  distributor_id: number | null;
+  status: string;
+};
+
 type CommercialLineupCase = {
   id: number;
   import_job_id: number | null;
@@ -77,6 +85,11 @@ type CommercialLineupCase = {
   accepted_at: string | null;
   accepted_by: string | null;
   line_count: number;
+  iteration_number?: number;
+  product_line?: string | null;
+  inferred_period_start?: string | null;
+  linked_pos?: LinkedPo[];
+  po_count?: number;
   created_at: string | null;
 };
 
@@ -1509,6 +1522,143 @@ function StatusTransitionDialog({
   );
 }
 
+// ── Confirm lineup with PO(s) (Session C Unit 2d) ─────────────────────────────
+
+function ConfirmWithPoDialog({
+  open,
+  onClose,
+  currentCase,
+  isPending,
+  error,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: () => void;
+  currentCase: CommercialLineupCase;
+  isPending: boolean;
+  error: string | null;
+  onConfirm: (poNumbers: string[], notes: string) => void;
+}) {
+  const [pos, setPos] = useState<string[]>([]);
+  const [input, setInput] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const addTokens = (raw: string) => {
+    const tokens = raw
+      .split(/[\n,;\t]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (!tokens.length) return;
+    setPos((prev) => {
+      const seen = new Set(prev.map((p) => p.toUpperCase()));
+      const merged = [...prev];
+      for (const t of tokens) {
+        if (!seen.has(t.toUpperCase())) {
+          seen.add(t.toUpperCase());
+          merged.push(t);
+        }
+      }
+      return merged;
+    });
+    setInput('');
+  };
+
+  const removePo = (idx: number) => setPos((prev) => prev.filter((_, i) => i !== idx));
+
+  const alreadyLinked = currentCase.linked_pos ?? [];
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        {currentCase.commercial_status === 'po_issued' ? 'Add purchase order(s)' : 'Confirm lineup with PO(s)'}
+      </DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Confirming sets the case status to <strong>PO issued</strong>. Enter one or more PO
+            numbers (press Enter, comma, or paste a list). Re-adding an existing PO is a no-op;
+            new POs are appended.
+          </Typography>
+
+          {alreadyLinked.length > 0 && (
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                Already linked:
+              </Typography>
+              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+                {alreadyLinked.map((p) => (
+                  <Chip key={p.purchase_order_id} size="small" variant="outlined" label={p.po_number_raw} />
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          <TextField
+            size="small"
+            label="PO number(s)"
+            placeholder="e.g. PO-12345"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                addTokens(input);
+              }
+            }}
+            onBlur={() => addTokens(input)}
+            fullWidth
+            data-testid="confirm-po-input"
+          />
+
+          {pos.length > 0 && (
+            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap data-testid="confirm-po-chips">
+              {pos.map((p, idx) => (
+                <Chip key={`${p}:${idx}`} size="small" color="primary" label={p} onDelete={() => removePo(idx)} />
+              ))}
+            </Stack>
+          )}
+
+          <TextField
+            size="small"
+            label="Notes (optional)"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            multiline
+            rows={2}
+            fullWidth
+          />
+
+          {error && (
+            <Alert severity="error" data-testid="confirm-po-error">
+              {error}
+            </Alert>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button size="small" onClick={onClose} disabled={isPending}>
+          Cancel
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
+          disabled={isPending || (pos.length === 0 && input.trim() === '')}
+          onClick={() => {
+            const all = [...pos];
+            const trailing = input.trim();
+            if (trailing) all.push(trailing);
+            if (!all.length) return;
+            onConfirm(all, notes);
+          }}
+          data-testid="confirm-po-submit"
+        >
+          {isPending ? 'Confirming…' : 'Confirm'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 // ── Retry parse on empty draft case ───────────────────────────────────────────
 
 function RetryParseDialog({
@@ -1988,6 +2138,7 @@ export function CurrentLineupSection({
   const [viewLinesCase, setViewLinesCase] = useState<CommercialLineupCase | null>(null);
   const [statusCase, setStatusCase] = useState<CommercialLineupCase | null>(null);
   const [syncCase, setSyncCase] = useState<CommercialLineupCase | null>(null);
+  const [confirmCase, setConfirmCase] = useState<CommercialLineupCase | null>(null);
   const [retryParseCase, setRetryParseCase] = useState<CommercialLineupCase | null>(null);
   const [activeCaseId, setActiveCaseId] = useState<number | null>(null);
   const [resolutionCase, setResolutionCase] = useState<CommercialLineupCase | null>(null);
@@ -2357,6 +2508,19 @@ export function CurrentLineupSection({
     onSuccess: () => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] }),
   });
 
+  const confirmMutation = useMutation({
+    mutationFn: ({ caseId, poNumbers, notes }: { caseId: number; poNumbers: string[]; notes: string }) =>
+      apiPost(`/api/v1/commercial-planner/lineup-cases/${caseId}/confirm-with-po`, {
+        po_numbers: poNumbers,
+        notes: notes || null,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] });
+      void qc.invalidateQueries({ queryKey: ['po-reconciliation'] });
+      setConfirmCase(null);
+    },
+  });
+
   const count = cases?.length ?? 0;
 
   return (
@@ -2430,10 +2594,34 @@ export function CurrentLineupSection({
                       label={lineupCaseStatusLabel(c.commercial_status)}
                       size="small"
                       color={STATUS_COLORS[c.commercial_status] ?? 'default'}
+                      data-testid={`lineup-case-status-${c.id}`}
                     />
+                    {(c.iteration_number ?? 1) > 1 && (
+                      <Chip
+                        label={`Round ${c.iteration_number}`}
+                        size="small"
+                        variant="outlined"
+                        data-testid={`lineup-case-iteration-${c.id}`}
+                      />
+                    )}
                     <Typography variant="caption" color="text.secondary">
                       {c.line_count} line{c.line_count === 1 ? '' : 's'}
                     </Typography>
+                    {(c.po_count ?? 0) > 0 && (
+                      <Tooltip
+                        title={(c.linked_pos ?? [])
+                          .map((p) => p.po_number_raw)
+                          .join(', ')}
+                      >
+                        <Chip
+                          label={`${c.po_count} PO${(c.po_count ?? 0) === 1 ? '' : 's'}`}
+                          size="small"
+                          color="secondary"
+                          variant="outlined"
+                          data-testid={`lineup-case-po-count-${c.id}`}
+                        />
+                      </Tooltip>
+                    )}
                     <Button
                       size="small"
                       variant={activeCaseId === c.id ? 'contained' : 'outlined'}
@@ -2469,6 +2657,17 @@ export function CurrentLineupSection({
                         data-testid="sync-to-plan-btn"
                       >
                         Sync to plan
+                      </Button>
+                    )}
+                    {['accepted', 'po_pending', 'po_issued'].includes(c.commercial_status) && (
+                      <Button
+                        size="small"
+                        variant={c.commercial_status === 'po_issued' ? 'outlined' : 'contained'}
+                        color="primary"
+                        onClick={() => setConfirmCase(c)}
+                        data-testid={`confirm-with-po-btn-${c.id}`}
+                      >
+                        {c.commercial_status === 'po_issued' ? 'Add PO' : 'Confirm lineup'}
                       </Button>
                     )}
                     {c.commercial_status === 'draft_imported' && (
@@ -2816,6 +3015,19 @@ export function CurrentLineupSection({
           onClose={() => setSyncCase(null)}
           caseItem={syncCase}
           onSyncComplete={onSyncComplete}
+        />
+      )}
+
+      {confirmCase && (
+        <ConfirmWithPoDialog
+          open={confirmCase != null}
+          onClose={() => setConfirmCase(null)}
+          currentCase={confirmCase}
+          isPending={confirmMutation.isPending}
+          error={confirmMutation.isError ? safeDisplayError(confirmMutation.error) : null}
+          onConfirm={(poNumbers, notes) =>
+            confirmMutation.mutate({ caseId: confirmCase.id, poNumbers, notes })
+          }
         />
       )}
 

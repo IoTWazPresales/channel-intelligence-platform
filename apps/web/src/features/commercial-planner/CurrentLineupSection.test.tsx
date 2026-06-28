@@ -438,6 +438,60 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     );
   });
 
+  it('confirm-with-PO: accepted case sends po_numbers list to confirm endpoint', async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const acceptedCase = {
+      id: 12,
+      import_job_id: null,
+      commercial_plan_id: 5,
+      file_name: 'lineup.csv',
+      period_label: '26Q1',
+      country_code: 'ZA',
+      currency_code: 'ZAR',
+      commercial_status: 'accepted',
+      notes: null,
+      accepted_at: null,
+      accepted_by: null,
+      line_count: 2,
+      iteration_number: 1,
+      product_line: null,
+      inferred_period_start: null,
+      linked_pos: [],
+      po_count: 0,
+      created_at: null,
+    };
+    apiGetMock.mockImplementation(async (url: string) => {
+      if (url.includes('/lineup-cases?')) return [acceptedCase];
+      return [];
+    });
+    apiPostMock.mockResolvedValue({
+      case_id: 12,
+      commercial_status: 'po_issued',
+      iteration_number: 1,
+      linked_pos: [],
+      po_count: 2,
+      newly_linked_count: 2,
+    });
+
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CurrentLineupSection activePlanId={5} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByTestId('current-lineup-section-toggle'));
+    await user.click(await screen.findByTestId('confirm-with-po-btn-12'));
+
+    await user.type(screen.getByLabelText('PO number(s)'), 'PO-1001,PO-1002');
+    await user.click(screen.getByTestId('confirm-po-submit'));
+
+    expect(apiPostMock).toHaveBeenCalledWith(
+      '/api/v1/commercial-planner/lineup-cases/12/confirm-with-po',
+      expect.objectContaining({ po_numbers: ['PO-1001', 'PO-1002'] }),
+    );
+  });
+
   it('entity resolution: customer-column token mapped as distributor sends redirect kind', async () => {
     const user = userEvent.setup();
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

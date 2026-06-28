@@ -45,6 +45,13 @@ from app.services.commercial_planner.lineup_entity_resolution import (
     collect_entity_resolution_candidates,
 )
 from app.services.commercial_planner.intelligence.product_rankings import rank_products_for_customer
+from app.services.commercial_planner.lineup_case_po_confirm import (
+    CaseNotFoundError,
+    CaseStatusNotConfirmableError,
+    confirm_case_with_po,
+    list_case_pos,
+    list_case_pos_bulk,
+)
 from app.services.commercial_planner.lineup_case_parser import (
     parse_current_lineup_file,
     preview_current_lineup_file,
@@ -1965,6 +1972,11 @@ class LineupCaseStatusPatch(BaseModel):
     accepted_by: str | None = None
 
 
+class ConfirmWithPoBody(BaseModel):
+    po_numbers: list[str] = Field(min_length=1, description="One or more PO numbers to link")
+    notes: str | None = Field(default=None, max_length=1024)
+
+
 class CommercialLineupLinePatch(BaseModel):
     quantity_units: float | None = None
     msrp_local: float | None = None
@@ -2016,7 +2028,10 @@ class EntityResolutionApplyBody(BaseModel):
     resolutions: list[EntityResolutionItem] = Field(min_length=1)
 
 
-def _case_payload(case: CommercialLineupCase, line_count: int) -> dict:
+def _case_payload(
+    case: CommercialLineupCase, line_count: int, linked_pos: list[dict] | None = None
+) -> dict:
+    pos = linked_pos or []
     return {
         "id": case.id,
         "import_job_id": case.import_job_id,
@@ -2037,6 +2052,8 @@ def _case_payload(case: CommercialLineupCase, line_count: int) -> dict:
         "accepted_at": case.accepted_at.isoformat() if case.accepted_at else None,
         "accepted_by": case.accepted_by,
         "line_count": line_count,
+        "linked_pos": pos,
+        "po_count": len(pos),
         "created_at": case.created_at.isoformat() if case.created_at else None,
     }
 
@@ -2050,6 +2067,7 @@ async def list_lineup_cases(
     if plan_id is not None:
         stmt = stmt.where(CommercialLineupCase.commercial_plan_id == plan_id)
     cases = (await db.execute(stmt)).scalars().all()
+    pos_by_case = await list_case_pos_bulk(db, [int(c.id) for c in cases])
     out = []
     for case in cases:
         line_count = (
@@ -2057,7 +2075,7 @@ async def list_lineup_cases(
                 select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case.id)
             )
         ).scalar_one()
-        out.append(_case_payload(case, int(line_count)))
+        out.append(_case_payload(case, int(line_count), pos_by_case.get(int(case.id), [])))
     return out
 
 
@@ -2091,7 +2109,8 @@ async def get_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
             select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
         )
     ).scalar_one()
-    return _case_payload(case, int(line_count))
+    linked_pos = await list_case_pos(db, case_id)
+    return _case_payload(case, int(line_count), linked_pos)
 
 
 @router.get("/lineup-cases/{case_id}/entity-resolution-candidates")
@@ -2290,6 +2309,37 @@ async def patch_lineup_case_status(case_id: int, body: LineupCaseStatusPatch, db
         )
     ).scalar_one()
     return _case_payload(case, int(line_count))
+
+
+@router.post("/lineup-cases/{case_id}/confirm-with-po", status_code=200)
+async def confirm_lineup_case_with_po(
+    case_id: int, body: ConfirmWithPoBody, db: AsyncSession = Depends(get_db)
+):
+    """Confirm a lineup case with PO number(s); case -> po_issued. Idempotent and amendment-aware.
+
+    Each PO is normalized then looked up / created on ``purchase_order`` (distributor inferred from
+    the case lines) and linked via ``commercial_lineup_case_po``. Re-confirming the same PO is a
+    no-op; confirming a new PO appends a link.
+    """
+    try:
+        return await confirm_case_with_po(
+            db, case_id, po_numbers=body.po_numbers, notes=body.notes
+        )
+    except CaseNotFoundError:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    except CaseStatusNotConfirmableError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    f"Cannot confirm a case in status '{exc.status}'. "
+                    "Accept the lineup first (must be accepted, po_pending, or po_issued)."
+                ),
+                "remediation": "Move the case to 'accepted' before confirming with a PO.",
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 def _lineup_row_needs_resolution(ln: CommercialLineupLine, raw_payload: dict) -> bool:

@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-28 (Session B Unit 6 shipped — Import-Centre unified multi-file uploader + CurrentLineupSection upload read-only)
+**Last updated:** 2026-06-28 (Session C Unit 2d shipped — Confirm-with-PO + commercial_lineup_case_po; migration NOT yet applied to cip)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,11 +9,11 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/unit-6-unified-lineup-import-centre` (cut from `feat/dsi-async-topology` + BACKLOG-051 docs) |
-| **HEAD** | Unit 6 frontend (unified import dialog + read-only embedded upload) on top of `6952a2f` (BACKLOG-051 docs) / `5418ff4` (memory) / `4d195e0` (Units 7-8) / `693efb9` (Unit 5) |
-| **PR** | None open — branch ready for PR (Session B complete: Units 1-8) |
-| **Alembic (code)** | `20260628_0056` |
-| **Alembic (DB)** | **`20260628_0056`** on local `cip` |
+| **Branch** | `feat/unit-6-unified-lineup-import-centre` (now also carries Session C; cut from `feat/dsi-async-topology` + BACKLOG-051 docs) |
+| **HEAD** | Session C Unit 2d (confirm-with-PO) on top of `d208e1a` (Unit 6 frontend) / Session B Units 1-8 |
+| **PR** | None open |
+| **Alembic (code)** | `20260628_0057` (commercial_lineup_case_po) |
+| **Alembic (DB)** | **`20260628_0056`** on local `cip` — **`0057` pending: Warren must run `alembic upgrade head`** before confirm-with-PO works at runtime |
 
 ---
 

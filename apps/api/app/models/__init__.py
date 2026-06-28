@@ -95,7 +95,11 @@ from app.models.commercial_planner import (
     CommercialPlanLine,
     CommercialSkuAssumption,
 )
-from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
+from app.models.commercial_lineup import (
+    CommercialLineupCase,
+    CommercialLineupCasePo,
+    CommercialLineupLine,
+)
 from app.models.task_run import TaskRun
 
 __all__ = [
@@ -183,6 +187,7 @@ __all__ = [
     "CustomerSourceTokenAlias",
     "DistributorSourceTokenAlias",
     "CommercialLineupCase",
+    "CommercialLineupCasePo",
     "CommercialLineupLine",
     "PurchaseOrder",
     "ShipmentEvidenceLine",

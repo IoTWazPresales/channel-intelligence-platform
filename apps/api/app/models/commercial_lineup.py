@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -73,3 +73,26 @@ class CommercialLineupLine(Base, TimestampMixin):
     pricing_chain_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     calc_dap_cost_currency: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     calc_profit_total: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+
+
+class CommercialLineupCasePo(Base, TimestampMixin):
+    """Join: confirmed lineup case <-> purchase order (many-to-many).
+
+    One lineup can issue many POs; one PO can cover many lineups (split delivery / amendments).
+    Unique (case_id, purchase_order_id) keeps Confirm-with-PO idempotent. PO is shared shipment
+    evidence, so only case_id cascades on delete.
+    """
+
+    __tablename__ = "commercial_lineup_case_po"
+    __table_args__ = (
+        UniqueConstraint("case_id", "purchase_order_id", name="uq_case_po_case_purchase_order"),
+        Index("ix_clcp_case_id", "case_id"),
+        Index("ix_clcp_purchase_order_id", "purchase_order_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    case_id: Mapped[int] = mapped_column(
+        ForeignKey("commercial_lineup_case.id", ondelete="CASCADE"), nullable=False
+    )
+    purchase_order_id: Mapped[int] = mapped_column(ForeignKey("purchase_order.id"), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
