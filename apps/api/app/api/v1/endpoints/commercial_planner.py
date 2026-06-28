@@ -1969,6 +1969,14 @@ class CommercialLineupLinePatch(BaseModel):
     quantity_units: float | None = None
     msrp_local: float | None = None
     promo_price_evidence_local: float | None = None
+    customer_feedback: str | None = Field(default=None, max_length=1024)
+    internal_notes: str | None = Field(default=None, max_length=1024)
+
+
+# Pricing/quantity edits are draft-only (pre-sync staging). Negotiation annotations
+# (customer feedback / internal notes) stay editable through the review loop.
+LINEUP_LINE_PRICING_EDIT_STATUSES = {"draft_imported"}
+LINEUP_LINE_ANNOTATION_EDIT_STATUSES = {"draft_imported", "validated", "pending_review"}
 
 
 class EntityResolutionItem(BaseModel):
@@ -2020,6 +2028,11 @@ def _case_payload(case: CommercialLineupCase, line_count: int) -> dict:
         "import_intent": case.import_intent,
         "source_context": case.source_context,
         "commercial_status": case.commercial_status,
+        "iteration_number": case.iteration_number,
+        "product_line": case.product_line,
+        "inferred_period_start": case.inferred_period_start.isoformat()
+        if case.inferred_period_start
+        else None,
         "notes": case.notes,
         "accepted_at": case.accepted_at.isoformat() if case.accepted_at else None,
         "accepted_by": case.accepted_by,
@@ -2258,6 +2271,11 @@ async def patch_lineup_case_status(case_id: int, body: LineupCaseStatusPatch, db
                 f"Allowed: {allowed or 'none (terminal state)'}"
             ),
         )
+    # Negotiation round counter: the first send (validated -> pending_review) is round 1.
+    # When the customer bounces it back for revision (pending_review -> validated), a new
+    # round begins, so increment then.
+    if case.commercial_status == "pending_review" and body.status == "validated":
+        case.iteration_number = (case.iteration_number or 1) + 1
     case.commercial_status = body.status
     if body.notes is not None:
         case.notes = body.notes
@@ -2590,18 +2608,35 @@ async def patch_lineup_case_line(
     body: CommercialLineupLinePatch,
     db: AsyncSession = Depends(get_db),
 ):
-    """Edit draft current-lineup row fields (units, MSRP, promo evidence). Safe for pre-sync staging only."""
+    """Edit lineup row fields. Pricing/qty edits are draft-only (pre-sync staging);
+    customer feedback / internal notes stay editable through the review loop."""
     case = await db.get(CommercialLineupCase, case_id)
     if not case:
         raise HTTPException(status_code=404, detail="Lineup case not found")
-    if case.commercial_status != "draft_imported":
+
+    wants_pricing_edit = any(
+        v is not None
+        for v in (body.quantity_units, body.msrp_local, body.promo_price_evidence_local)
+    )
+    wants_annotation_edit = body.customer_feedback is not None or body.internal_notes is not None
+
+    if wants_pricing_edit and case.commercial_status not in LINEUP_LINE_PRICING_EDIT_STATUSES:
         raise HTTPException(
             status_code=409,
             detail=(
-                f"Can only edit lineup lines on cases with status 'draft_imported'. "
+                "Can only edit pricing/quantity on cases with status 'draft_imported'. "
                 f"Current: '{case.commercial_status}'"
             ),
         )
+    if wants_annotation_edit and case.commercial_status not in LINEUP_LINE_ANNOTATION_EDIT_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Can only edit customer feedback / internal notes while the case is in "
+                f"{sorted(LINEUP_LINE_ANNOTATION_EDIT_STATUSES)}. Current: '{case.commercial_status}'"
+            ),
+        )
+
     ln = await db.get(CommercialLineupLine, line_id)
     if ln is None or ln.case_id != case_id:
         raise HTTPException(status_code=404, detail="Lineup line not found")
@@ -2612,6 +2647,10 @@ async def patch_lineup_case_line(
         ln.msrp_local = body.msrp_local
     if body.promo_price_evidence_local is not None:
         ln.promo_price_evidence_local = body.promo_price_evidence_local
+    if body.customer_feedback is not None:
+        ln.customer_feedback = body.customer_feedback.strip() or None
+    if body.internal_notes is not None:
+        ln.internal_notes = body.internal_notes.strip() or None
 
     await db.commit()
     await db.refresh(ln)
@@ -2686,11 +2725,41 @@ async def patch_lineup_case_line(
         if ln2.distributor_margin_pct_evidence is not None
         else None,
         "vat_pct_evidence": float(ln2.vat_pct_evidence) if ln2.vat_pct_evidence is not None else None,
+        "customer_feedback": ln2.customer_feedback,
+        "internal_notes": ln2.internal_notes,
         "diagnostic_codes": ln2.diagnostic_codes or [],
         "row_status": ln2.row_status,
         "mapping_confidence": float(ln2.mapping_confidence) if ln2.mapping_confidence is not None else None,
         "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE,
     }
+
+
+@router.get("/lineup-cases/{case_id}/export")
+async def export_lineup_case_customer_slice(
+    case_id: int,
+    customer_id: int = Query(..., description="Resolved DimCustomer id to slice the lineup for"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download a single customer's slice of a lineup case as XLSX (full pricing chain).
+
+    Presents persisted calc_* / pricing_chain_json values — never recomputes. DAP shown is the
+    calculated cost-currency DAP, not PM bottom.
+    """
+    from app.services.commercial_planner.lineup_customer_export import (
+        LineupExportNotFoundError,
+        build_customer_lineup_slice_xlsx,
+    )
+
+    try:
+        data, filename, _row_count = await build_customer_lineup_slice_xlsx(db, case_id, customer_id)
+    except LineupExportNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/lineup-cases/{case_id}", status_code=204)

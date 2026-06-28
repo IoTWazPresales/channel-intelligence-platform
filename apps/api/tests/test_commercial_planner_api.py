@@ -1301,6 +1301,9 @@ def _make_case(
     accepted_at=None,
     accepted_by=None,
     created_at=None,
+    iteration_number=1,
+    product_line=None,
+    inferred_period_start=None,
 ):
     from types import SimpleNamespace
     return SimpleNamespace(
@@ -1314,6 +1317,9 @@ def _make_case(
         import_intent="current_working_lineup",
         source_context="commercial_planner",
         commercial_status=commercial_status,
+        iteration_number=iteration_number,
+        product_line=product_line,
+        inferred_period_start=inferred_period_start,
         notes=notes,
         accepted_at=accepted_at,
         accepted_by=accepted_by,
