@@ -15,7 +15,7 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
+from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine, CommercialLineupPoAutoLinkDismiss
 from app.models.dimensions import DimCustomer, DimDistributor
 from app.models.purchase_order import PurchaseOrder
 from app.models.shipment_evidence import ShipmentEvidenceLine
@@ -132,6 +132,7 @@ async def po_auto_link_proposals(
     customer_id: int | None = None,
     confidence: ConfidenceTier | None = None,
     limit: int = 500,
+    include_dismissed: bool = False,
 ) -> dict[str, Any]:
     """Build auto-link proposals (read-only; does not write ``commercial_lineup_case_po``)."""
     try:
@@ -141,10 +142,11 @@ async def po_auto_link_proposals(
             customer_id=customer_id,
             confidence=confidence,
             limit=limit,
+            include_dismissed=include_dismissed,
         )
     except Exception:
         logger.exception("po-auto-link proposals failed")
-        return {"proposals": [], "total": 0, "data_unavailable": True}
+        return {"proposals": [], "total": 0, "data_unavailable": True, "dismissed": []}
 
 
 async def _po_auto_link_proposals_inner(
@@ -154,6 +156,7 @@ async def _po_auto_link_proposals_inner(
     customer_id: int | None,
     confidence: ConfidenceTier | None,
     limit: int,
+    include_dismissed: bool,
 ) -> dict[str, Any]:
     cases = list(
         (
@@ -166,7 +169,26 @@ async def _po_auto_link_proposals_inner(
     )
     cases = [c for c in cases if _period_label_matches(c, period)]
     if not cases:
-        return {"proposals": [], "total": 0, "data_unavailable": False}
+        return {"proposals": [], "total": 0, "data_unavailable": False, "dismissed": []}
+
+    dismissed_rows: list[CommercialLineupPoAutoLinkDismiss] = []
+    try:
+        async with db.begin_nested():
+            dismissed_rows = list(
+                (await db.execute(select(CommercialLineupPoAutoLinkDismiss))).scalars().all()
+            )
+    except Exception:
+        logger.warning("po-auto-link dismiss table unavailable — showing all proposals", exc_info=True)
+    dismissed_keys = {str(r.proposal_key) for r in dismissed_rows}
+    dismissed_out = [
+        {
+            "proposal_key": r.proposal_key,
+            "case_id": int(r.case_id),
+            "purchase_order_id": int(r.purchase_order_id),
+            "reason_code": r.reason_code,
+        }
+        for r in dismissed_rows
+    ]
 
     case_ids = [int(c.id) for c in cases]
     case_by_id = {int(c.id): c for c in cases}
@@ -263,6 +285,8 @@ async def _po_auto_link_proposals_inner(
                     date_source=date_src,
                 )
                 key = acc.proposal_key()
+                if key in dismissed_keys and not include_dismissed:
+                    continue
                 existing = proposals_map.get(key)
                 if existing is None:
                     proposals_map[key] = acc
@@ -339,6 +363,7 @@ async def _po_auto_link_proposals_inner(
                 "reason": acc.reason,
                 "date_source": acc.date_source,
                 "already_linked": (acc.case_id, acc.purchase_order_id) in linked_pairs,
+                "dismissed": acc.proposal_key() in dismissed_keys,
                 "matched_products": [
                     {
                         "product_id": m.product_id,
@@ -361,4 +386,6 @@ async def _po_auto_link_proposals_inner(
         "total": total,
         "returned": len(out),
         "data_unavailable": False,
+        "dismissed": dismissed_out if include_dismissed else [],
+        "dismissed_count": len(dismissed_keys),
     }

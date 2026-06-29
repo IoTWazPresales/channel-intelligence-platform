@@ -96,3 +96,24 @@ class CommercialLineupCasePo(Base, TimestampMixin):
     )
     purchase_order_id: Mapped[int] = mapped_column(ForeignKey("purchase_order.id"), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class CommercialLineupPoAutoLinkDismiss(Base, TimestampMixin):
+    """Steward-dismissed PO↔lineup auto-link proposal (Unit 4)."""
+
+    __tablename__ = "commercial_lineup_po_auto_link_dismiss"
+    __table_args__ = (
+        UniqueConstraint("proposal_key", name="uq_po_auto_link_dismiss_proposal_key"),
+        Index("ix_po_auto_link_dismiss_case_id", "case_id"),
+        Index("ix_po_auto_link_dismiss_purchase_order_id", "purchase_order_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    proposal_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    case_id: Mapped[int] = mapped_column(
+        ForeignKey("commercial_lineup_case.id", ondelete="CASCADE"), nullable=False
+    )
+    purchase_order_id: Mapped[int] = mapped_column(
+        ForeignKey("purchase_order.id", ondelete="CASCADE"), nullable=False
+    )
+    reason_code: Mapped[str | None] = mapped_column(String(256), nullable=True)

@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-29 (PO↔lineup Unit 0 discovery approved; fresh chat for Unit 1)
+**Last updated:** 2026-06-29 (PO↔lineup Units 1–4 shipped; Unit 5 deferred)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,10 +10,10 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` (now also carries Session C; cut from `feat/dsi-async-topology` + BACKLOG-051 docs) |
-| **HEAD** | PO↔lineup Unit 0 discovery approved · Unit A/B lineup work on branch · next = **Unit 1 build** |
+| **HEAD** | Unit 4 pushed (`commercial-planner: PO auto-link review UI`) |
 | **PR** | None open |
-| **Alembic (code)** | `20260628_0057` (commercial_lineup_case_po) |
-| **Alembic (DB)** | **`20260628_0057`** on local `cip` (`commercial_lineup_case_po` applied 2026-06-28) |
+| **Alembic (code)** | `20260629_0059` (po auto-link dismiss) |
+| **Alembic (DB)** | **`20260629_0059`** on local `cip` (grants to `cip` role applied) |
 
 ---
 
@@ -157,44 +157,40 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
 - Workbench hides "Ready to sync" alert when case is `po_issued` / fulfillment terminal.
 - Tests: 11 PO API + 13 CurrentLineupSection vitest green.
 
-### PO↔lineup auto-alignment — Unit 0 discovery APPROVED (2026-06-29); Unit 1 next
+### PO↔lineup auto-alignment — Units 1–4 DONE on `cip`
 **Spec:** ONE SPEC, five units (0–5), build/commit/push **one unit at a time** on current branch.
-**cip is read-only** for agents except migrations Warren approves; never run alembic/validate/apply/backfill
-against cip — Warren runs those. Data-mapping gate applies.
 
-**Unit 0 findings (cip evidence, 49,981 `shipment_evidence_line` rows):**
-- No `resolved_customer_id` / `resolved_distributor_id` today — shipment uses `customer_id` /
-  `distributor_id` on line + raw `customer_dealer_token` / `bill_to_raw`. Customer stamped via steward
-  (`_mark_customer_lines_resolved`); distributor at validate via `_resolve_distributor_strict` +
-  `distributor_source_token_alias`. DSI staging has `resolved_*`; shipment does not.
-- Branch suffixes: **no automatic root collapse** in resolver. MUSTEK-ZA-BB + MUSTEK-ZA-C both →
-  `distributor_id=21` (TMP-DIST Mustek) via **separate approved aliases** (`mustek-za-bb`, `mustek-za-c`).
-- **CRAD:** only in `raw_source_row['CRAD']` (49,793/49,981 ≈99.6%); **not** a typed column. Typed
-  dates: `schedule_ship_date` 99.6%, `ship_confirm_date` 96%, etc. Current coalesce is pod-first (no CRAD).
-- **PO duplication root cause:** `purchase_order` unique on `(po_number_norm, distributor_id)` but
-  materialize uses `line.distributor_id` — when NULL, Postgres allows unlimited dup rows. cip: 11,088 PO
-  rows / 2,265 distinct norms / **8,822 rows with NULL distributor** covering **1,634 norms** (~Warren's
-  ~1,645). When `distributor_id` set: 2,266 rows = 2,266 unique pairs (zero dup pairs).
+**Unit 1 (`8cd5a20`) — resolved entities + CRAD:**
+- Migration `20260629_0058`: `resolved_customer_id`, `resolved_distributor_id`, `crad_date` on
+  `shipment_evidence_line` + `fact_inbound_shipment`.
+- `shipment_resolved_entities.py` populates at validate/steward/apply; backfill script run on cip
+  (~49,981 lines).
 
-**Warren approvals (all four + Unit 2 addition):**
-1. Add `resolved_customer_id` + `resolved_distributor_id`; **keep in sync** with existing `customer_id` /
-   `distributor_id`.
-2. Root = **alias-target collapse**; **no** `parent_id` on `dim_distributor` in this build.
-3. **`crad_date`** in Unit 1 migration (parse from `"CRAD"` header).
-4. Unit 2 primary scope = **NULL-dist preview-first merge** (not branch-variant merge — nearly absent on cip).
-5. **Unit 2 materialize rule (approved):** when `resolved_distributor_id` is null, **do NOT mint** a
-   NULL-keyed `purchase_order` — defer materialization until steward resolves distributor (prevents
-   duplication regenerating after cleanup).
+**Unit 2 (`d46dd8a`) — NULL-dist PO merge + deferred materialize:**
+- Materialize skips mint when `resolved_distributor_id` is null.
+- NULL-dist merge: 8,822 → 1,634 rows (one per norm); 7,188 losers deleted + evidence repointed.
 
-**Unit 1 scope (NEXT — fresh chat):** migration adds `resolved_customer_id`, `resolved_distributor_id`,
-`crad_date` to `shipment_evidence_line` + `fact_inbound_shipment`; populate at validate/steward/apply
-using **same** alias resolution paths (no second resolver); preserve raw tokens; backfill script
-(dry-run default, `--confirm`); tests. **STOP/report migration revision before Warren runs upgrade.**
+**Unit 3 (`3fbc12d`) — auto-link proposals (derived-on-read):**
+- `lineup_po_auto_link.py` — CRAD-primary period match; HIGH = customer+product+CRAD-in-quarter;
+  MEDIUM = date fallback or unresolved customer.
+- `GET /commercial-planner/lineup/po-auto-link/proposals` (`period`, `customer_id`, `confidence`, `limit`).
+- Proposes only — never writes `commercial_lineup_case_po`.
+- Tests: `test_lineup_po_auto_link.py` (9 pass incl. cip smoke ~10s).
 
-**Units 2–5 (deferred):** PO dedup + deferred materialize · auto-link engine (CRAD-primary) · review
-surface · period-derived importer.
+**Unit 4 — review UI + dismiss/apply:**
+- Migration `20260629_0059`: `commercial_lineup_po_auto_link_dismiss` (+ GRANT to `cip` role).
+- `POST .../po-auto-link/dismiss`, `.../restore`, `.../apply` (bulk link via `link_case_to_existing_po`).
+- UI: `/admin/po-management` → **Suggested PO ↔ lineup links** (`PoAutoLinkProposalsSection`).
+  Period/confidence filters, Review dialog (customer-grain), bulk link, dismiss/restore.
+- Tests: `test_lineup_po_auto_link_actions.py` + `PoAutoLinkProposalsSection.test.tsx` (3).
+
+**Unit 5 (deferred):** period-derived importer.
 
 **Limiter:** 23 TMP-DIST / 4,960 TMP-CUST on cip — auto-link match rate capped; unmatched → exception queue.
+
+**Unit 0 findings (reference — pre-Unit 1):** shipment had no `resolved_*` columns; customer via steward,
+distributor via `_resolve_distributor_strict` + aliases; CRAD only in `raw_source_row`; PO dup from NULL
+`distributor_id` materialize (fixed in Unit 2).
 
 ### Unit A — case-level distributor assignment (tokenless lines) (2026-06-28) — code done, browser soak open
 - **Gap closed:** entity resolution is token-keyed, so lineup lines with no `distributor_token_raw`
@@ -284,7 +280,7 @@ surface · period-derived importer.
 ---
 
 ## In progress / not proven live
-- **PO↔lineup Unit 1** — resolved columns + `crad_date` migration + backfill script (approved; fresh chat).
+- **PO↔lineup Unit 4 browser soak** — live review/link/dismiss on `/admin/po-management`.
 - **Pre-existing lint** — 7 `rules-of-hooks` errors in `dsi-mapping-steward-panel.tsx` block clean `pnpm lint` (not introduced by DSI apply work).
 - **Billiard quirk** — solo worker spawns one child under system Python (single logical consumer; interpreter mismatch latent).
 - Warren **actively working through** ACZA shipment upload (BOM tab deferred per BACKLOG-046).
@@ -294,10 +290,8 @@ surface · period-derived importer.
 
 ## Next (recommended)
 
-1. **PO↔lineup Unit 1 (fresh chat)** — migration `resolved_customer_id`, `resolved_distributor_id`,
-   `crad_date` on evidence + fact lines; populate via existing alias paths; backfill script; tests;
-   commit + push. See handover prompt in latest chat.
-2. **Warren smoke-test (lineup Unit A + B)** — assign distributor + workbench grid (optional parallel).
+1. **Browser soak** PO auto-link section on `/admin/po-management`.
+2. **PO↔lineup Unit 5** — period-derived importer (when Warren asks).
 3. **Open PR** for `feat/unit-6-unified-lineup-import-centre` when lineup + PO units are ready.
 4. Fix `dsi-mapping-steward-panel.tsx` rules-of-hooks lint (unblocks `pnpm lint`).
 5. Finish ACZA upload (trim to **Shipped + Unship** until BACKLOG-046).

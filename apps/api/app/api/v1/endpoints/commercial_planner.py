@@ -74,6 +74,12 @@ from app.services.commercial_planner.lineup_po_gap import (
     restore_gap_po,
 )
 from app.services.commercial_planner.lineup_po_auto_link import po_auto_link_proposals
+from app.services.commercial_planner.lineup_po_auto_link_actions import (
+    ProposalNotFoundError,
+    apply_auto_link_proposals,
+    dismiss_auto_link_proposal,
+    restore_auto_link_proposal,
+)
 from app.services.commercial_planner.lineup_case_parser import (
     parse_current_lineup_file,
     preview_current_lineup_file,
@@ -2007,6 +2013,24 @@ class ConfirmWithPoBody(BaseModel):
     notes: str | None = Field(default=None, max_length=1024)
 
 
+class PoAutoLinkDismissBody(BaseModel):
+    proposal_key: str = Field(min_length=1, max_length=128)
+    case_id: int = Field(ge=1)
+    purchase_order_id: int = Field(ge=1)
+    reason_code: str = Field(min_length=1, max_length=256)
+
+
+class PoAutoLinkApplyItem(BaseModel):
+    case_id: int = Field(ge=1)
+    purchase_order_id: int = Field(ge=1)
+    notes: str | None = Field(default=None, max_length=1024)
+
+
+class PoAutoLinkApplyBody(BaseModel):
+    items: list[PoAutoLinkApplyItem] = Field(min_length=1, max_length=100)
+    notes: str | None = Field(default=None, max_length=1024)
+
+
 class CommercialLineupLinePatch(BaseModel):
     quantity_units: float | None = None
     msrp_local: float | None = None
@@ -2558,6 +2582,7 @@ async def get_po_auto_link_proposals(
     customer_id: int | None = Query(default=None, ge=1),
     confidence: Literal["high", "medium"] | None = Query(default=None),
     limit: int = Query(default=500, ge=1, le=5000),
+    include_dismissed: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
 ):
     """Derived PO↔lineup link proposals (CRAD-primary period match). Proposes only — never confirms."""
@@ -2567,7 +2592,50 @@ async def get_po_auto_link_proposals(
         customer_id=customer_id,
         confidence=confidence,
         limit=limit,
+        include_dismissed=include_dismissed,
     )
+
+
+@router.post("/lineup/po-auto-link/dismiss", status_code=200)
+async def post_po_auto_link_dismiss(body: PoAutoLinkDismissBody, db: AsyncSession = Depends(get_db)):
+    """Dismiss a proposal so it no longer appears in the default review list."""
+    try:
+        return await dismiss_auto_link_proposal(
+            db,
+            proposal_key=body.proposal_key,
+            case_id=body.case_id,
+            purchase_order_id=body.purchase_order_id,
+            reason_code=body.reason_code,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/lineup/po-auto-link/restore", status_code=200)
+async def post_po_auto_link_restore(
+    proposal_key: str = Query(..., min_length=1, max_length=128),
+    db: AsyncSession = Depends(get_db),
+):
+    """Restore a previously dismissed auto-link proposal."""
+    try:
+        return await restore_auto_link_proposal(db, proposal_key=proposal_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except ProposalNotFoundError:
+        raise HTTPException(status_code=404, detail="Dismissed proposal not found")
+
+
+@router.post("/lineup/po-auto-link/apply", status_code=200)
+async def post_po_auto_link_apply(body: PoAutoLinkApplyBody, db: AsyncSession = Depends(get_db)):
+    """Link selected proposals (writes ``commercial_lineup_case_po``; case -> po_issued)."""
+    try:
+        return await apply_auto_link_proposals(
+            db,
+            items=[item.model_dump() for item in body.items],
+            notes=body.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 def _lineup_row_needs_resolution(ln: CommercialLineupLine, raw_payload: dict) -> bool:

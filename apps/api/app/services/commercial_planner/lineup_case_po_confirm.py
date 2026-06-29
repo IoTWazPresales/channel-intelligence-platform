@@ -160,6 +160,68 @@ async def confirm_case_with_po(
     }
 
 
+async def link_case_to_existing_po(
+    db: AsyncSession,
+    case_id: int,
+    purchase_order_id: int,
+    *,
+    notes: str | None = None,
+    commit: bool = True,
+) -> dict[str, Any]:
+    """Link a case to an existing purchase order (auto-link apply / bulk confirm)."""
+    case = await db.get(CommercialLineupCase, case_id)
+    if case is None:
+        raise CaseNotFoundError(str(case_id))
+    if not confirm_allowed_for_status(case.commercial_status):
+        raise CaseStatusNotConfirmableError(case.commercial_status)
+
+    po = await db.get(PurchaseOrder, purchase_order_id)
+    if po is None:
+        raise ValueError(f"Purchase order {purchase_order_id} not found")
+
+    existing_link = (
+        await db.execute(
+            select(CommercialLineupCasePo).where(
+                CommercialLineupCasePo.case_id == case_id,
+                CommercialLineupCasePo.purchase_order_id == purchase_order_id,
+            )
+        )
+    ).scalars().first()
+    newly_linked = existing_link is None
+    if newly_linked:
+        db.add(
+            CommercialLineupCasePo(
+                case_id=case_id,
+                purchase_order_id=purchase_order_id,
+                notes=notes,
+            )
+        )
+
+    case.commercial_status = "po_issued"
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
+
+    total = (
+        await db.execute(
+            select(func.count(CommercialLineupCasePo.id)).where(
+                CommercialLineupCasePo.case_id == case_id
+            )
+        )
+    ).scalar_one()
+
+    return {
+        "case_id": case_id,
+        "commercial_status": case.commercial_status,
+        "purchase_order_id": int(purchase_order_id),
+        "po_number_raw": po.po_number_raw,
+        "po_number_norm": po.po_number_norm,
+        "newly_linked": newly_linked,
+        "po_count": int(total),
+    }
+
+
 async def list_case_pos_bulk(
     db: AsyncSession, case_ids: list[int]
 ) -> dict[int, list[dict[str, Any]]]:
