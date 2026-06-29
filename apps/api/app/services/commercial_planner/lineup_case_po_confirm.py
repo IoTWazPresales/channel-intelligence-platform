@@ -43,11 +43,22 @@ class CaseStatusNotConfirmableError(Exception):
         super().__init__(status)
 
 
+class UnresolvedCaseDistributorError(Exception):
+    """Raised when PO confirm cannot proceed without a resolved case distributor."""
+
+    def __init__(self, case_id: int):
+        self.case_id = case_id
+        super().__init__(
+            f"Case {case_id} has no single resolved distributor on lineup lines; "
+            "cannot confirm purchase order until distributor is known."
+        )
+
+
 async def _infer_case_distributor_id(db: AsyncSession, case_id: int) -> int | None:
     """A case's PO distributor = the single distinct distributor on its lineup lines, else None.
 
-    Ambiguous (multiple distributors) or unknown -> None, so the PO is anchored distributor-agnostic
-    rather than guessing. This matches the shipment materialize behaviour (PO may have null dist).
+    Ambiguous (multiple distributors) or unknown -> None. Confirm-with-PO defers when unresolved
+    (no NULL-keyed ``purchase_order`` mint), matching shipment materialize defer behaviour.
     """
     rows = (
         await db.execute(
@@ -64,14 +75,16 @@ async def _infer_case_distributor_id(db: AsyncSession, case_id: int) -> int | No
 
 
 async def _lookup_or_create_po(
-    db: AsyncSession, *, po_number_raw: str, po_number_norm: str, distributor_id: int | None
+    db: AsyncSession, *, po_number_raw: str, po_number_norm: str, distributor_id: int
 ) -> tuple[PurchaseOrder, bool]:
-    """Return (purchase_order, created). Reuses an existing PO on (norm, distributor) including NULL."""
-    stmt = select(PurchaseOrder).where(PurchaseOrder.po_number_norm == po_number_norm)
-    if distributor_id is None:
-        stmt = stmt.where(PurchaseOrder.distributor_id.is_(None))
-    else:
-        stmt = stmt.where(PurchaseOrder.distributor_id == distributor_id)
+    """Return (purchase_order, created). Reuses an existing PO on (norm, distributor_id)."""
+    stmt = (
+        select(PurchaseOrder)
+        .where(
+            PurchaseOrder.po_number_norm == po_number_norm,
+            PurchaseOrder.distributor_id == distributor_id,
+        )
+    )
     existing = (await db.execute(stmt)).scalars().first()
     if existing is not None:
         return existing, False
@@ -111,11 +124,16 @@ async def confirm_case_with_po(
         raise ValueError("At least one non-empty PO number is required.")
 
     distributor_id = await _infer_case_distributor_id(db, case_id)
+    if distributor_id is None:
+        raise UnresolvedCaseDistributorError(case_id)
 
     linked: list[dict[str, Any]] = []
     for norm, raw in normalized.items():
         po, created = await _lookup_or_create_po(
-            db, po_number_raw=raw or norm, po_number_norm=norm, distributor_id=distributor_id
+            db,
+            po_number_raw=raw or norm,
+            po_number_norm=norm,
+            distributor_id=int(distributor_id),
         )
         existing_link = (
             await db.execute(

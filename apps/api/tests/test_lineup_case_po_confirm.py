@@ -145,6 +145,21 @@ def test_confirm_rejected_for_cancelled_status():
         asyncio.run(mod.confirm_case_with_po(db, 3, po_numbers=["PO-1"]))
 
 
+def test_confirm_unresolved_distributor_does_not_mint_null_po():
+    case = SimpleNamespace(id=3, commercial_status="accepted", iteration_number=1)
+    results = [
+        _Res(scalar_list=[]),  # distributor inference -> none / ambiguous
+    ]
+    db = _make_db(case, results)
+
+    with pytest.raises(mod.UnresolvedCaseDistributorError):
+        asyncio.run(mod.confirm_case_with_po(db, 3, po_numbers=["PO-3001"]))
+
+    assert sum(1 for o in db._added if isinstance(o, PurchaseOrder)) == 0
+    assert sum(1 for o in db._added if isinstance(o, CommercialLineupCasePo)) == 0
+    db.commit.assert_not_called()
+
+
 def test_confirm_case_not_found():
     db = _make_db(None, [])
     with pytest.raises(mod.CaseNotFoundError):

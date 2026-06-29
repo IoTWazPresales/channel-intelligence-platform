@@ -173,7 +173,9 @@ def test_backfill_confirm_updates_and_dedupes_normalized_po():
                         source_key=f"bf-dup-{token}-{i}",
                         raw_source_row={"Customer PO": po, "Item": f"Z{i}"},
                         product_resolution_status="no_identifier",
-                        distributor_resolution_status="unresolved",
+                        distributor_resolution_status="resolved",
+                        distributor_id=1,
+                        resolved_distributor_id=1,
                     )
                 )
             db.commit()
@@ -209,4 +211,72 @@ def test_backfill_confirm_updates_and_dedupes_normalized_po():
                     text("DELETE FROM purchase_order WHERE po_number_norm = :n"),
                     {"n": "77"},
                 )
+                db.commit()
+
+
+def test_backfill_defers_when_resolved_distributor_null():
+    token = secrets.token_hex(4)
+    job_id: int | None = None
+    try:
+        with SessionLocal() as db:
+            _require_schema(db)
+            source_id = db.scalar(
+                select(SourceDefinition.id).where(SourceDefinition.code == "inbound_default")
+            )
+            assert source_id
+            job = ImportJob(
+                source_id=int(source_id),
+                template_slug="inbound_shipments",
+                import_mode="validate",
+                status="pending",
+                stage="uploaded",
+                file_name=f"bf_defer_{token}.csv",
+            )
+            db.add(job)
+            db.flush()
+            job_id = int(job.id)
+            db.add(
+                ShipmentEvidenceLine(
+                    import_job_id=job_id,
+                    source_row_number=1,
+                    report_type="shipped",
+                    line_state="shipped",
+                    source_key=f"bf-defer-{token}",
+                    raw_source_row={"Customer PO": "PO-9999", "Item": "Z"},
+                    product_resolution_status="no_identifier",
+                    distributor_resolution_status="unresolved",
+                    distributor_id=1,
+                    resolved_distributor_id=None,
+                )
+            )
+            db.commit()
+
+        stats = run(confirm=True)
+        assert stats["deferred_unresolved_distributor"] >= 1
+        assert stats["purchase_orders_upserted"] == 0
+
+        with SessionLocal() as db:
+            line = db.scalar(
+                select(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id == job_id)
+            )
+            assert line is not None
+            assert line.customer_po is None
+            assert line.purchase_order_id is None
+            null_po = db.scalar(
+                select(func.count())
+                .select_from(PurchaseOrder)
+                .where(
+                    PurchaseOrder.po_number_norm == "9999",
+                    PurchaseOrder.distributor_id.is_(None),
+                )
+            )
+            assert int(null_po or 0) == 0
+    finally:
+        if job_id is not None:
+            with SessionLocal() as db:
+                db.execute(
+                    text("DELETE FROM shipment_evidence_line WHERE import_job_id = :jid"),
+                    {"jid": job_id},
+                )
+                db.execute(text("DELETE FROM import_job WHERE id = :jid"), {"jid": job_id})
                 db.commit()

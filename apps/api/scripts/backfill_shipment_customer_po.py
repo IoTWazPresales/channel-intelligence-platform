@@ -24,6 +24,7 @@ def run(*, confirm: bool) -> dict[str, int]:
         "purchase_orders_upserted": 0,
         "lines_updated": 0,
         "no_po_column": 0,
+        "deferred_unresolved_distributor": 0,
     }
     with SessionLocal() as db:
         dbname = db.scalar(text("SELECT current_database()"))
@@ -52,13 +53,16 @@ def run(*, confirm: bool) -> dict[str, int]:
             norm = normalize_po_number(extracted)
             if not norm:
                 continue
+            if line.resolved_distributor_id is None:
+                stats["deferred_unresolved_distributor"] += 1
+                continue
             if not confirm:
                 continue
             po_id = upsert_observed_purchase_order(
                 db,
                 po_number_raw=extracted,
                 po_number_norm=norm,
-                distributor_id=int(line.distributor_id) if line.distributor_id is not None else None,
+                distributor_id=int(line.resolved_distributor_id),
             )
             stats["purchase_orders_upserted"] += 1
             line.customer_po = extracted
