@@ -138,7 +138,7 @@ def test_customer_remark_alias_resolves_resolved_customer_id():
             )
             assert source_id is not None
 
-            cust = DimCustomer(code=f"CUST-{token}", name=f"Customer {token}", status="active")
+            cust = DimCustomer(code=f"CUST-{token}", name=f"Customer {token}")
             db.add(cust)
             db.flush()
             cust_id = int(cust.id)
