@@ -48,6 +48,7 @@ from app.services.commercial_planner.intelligence.product_rankings import rank_p
 from app.services.commercial_planner.lineup_case_po_confirm import (
     CaseNotFoundError,
     CaseStatusNotConfirmableError,
+    UnresolvedCaseDistributorError,
     confirm_case_with_po,
     list_case_pos,
     list_case_pos_bulk,
@@ -2476,6 +2477,17 @@ async def confirm_lineup_case_with_po(
             detail={
                 "message": f"Cannot confirm a case in status '{exc.status}'.",
                 "remediation": "Cancelled cases cannot be confirmed with a PO.",
+            },
+        )
+    except UnresolvedCaseDistributorError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": str(exc),
+                "remediation": (
+                    "Assign a single distributor on lineup lines (or use distributor assign) "
+                    "before confirming with a PO."
+                ),
             },
         )
     except ValueError as exc:
