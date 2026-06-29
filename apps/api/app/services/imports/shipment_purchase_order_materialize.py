@@ -41,8 +41,19 @@ def upsert_observed_purchase_order(
     return int(rid)
 
 
+def _resolved_distributor_for_materialize(line: ShipmentEvidenceLine) -> int | None:
+    """Distributor key for PO upsert — alias-collapsed ``resolved_distributor_id`` only."""
+    if line.resolved_distributor_id is not None:
+        return int(line.resolved_distributor_id)
+    return None
+
+
 def materialize_purchase_orders_for_shipment_job(db: Session, import_job_id: int) -> int:
-    """Link ``customer_po`` lines to ``purchase_order``; returns lines updated."""
+    """Link ``customer_po`` lines to ``purchase_order``; returns lines updated.
+
+    Uses ``resolved_distributor_id`` (not raw ``distributor_id``). When distributor is still
+    unresolved, **defers** materialization — no NULL-keyed ``purchase_order`` rows are minted.
+    """
     jid = int(import_job_id)
     lines = list(
         db.scalars(
@@ -53,6 +64,7 @@ def materialize_purchase_orders_for_shipment_job(db: Session, import_job_id: int
         ).all()
     )
     updated = 0
+    deferred = 0
     for line in lines:
         raw = (line.customer_po or "").strip()
         if not raw:
@@ -60,11 +72,15 @@ def materialize_purchase_orders_for_shipment_job(db: Session, import_job_id: int
         norm = normalize_po_number(raw)
         if not norm:
             continue
+        dist_id = _resolved_distributor_for_materialize(line)
+        if dist_id is None:
+            deferred += 1
+            continue
         po_id = upsert_observed_purchase_order(
             db,
             po_number_raw=raw,
             po_number_norm=norm,
-            distributor_id=int(line.distributor_id) if line.distributor_id is not None else None,
+            distributor_id=dist_id,
         )
         if line.purchase_order_id != po_id:
             line.purchase_order_id = po_id
