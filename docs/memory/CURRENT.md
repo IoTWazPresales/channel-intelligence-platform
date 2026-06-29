@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-28 (direct confirm-with-PO + suggested POs)
+**Last updated:** 2026-06-29 (PO↔lineup Unit 0 discovery approved; fresh chat for Unit 1)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` (now also carries Session C; cut from `feat/dsi-async-topology` + BACKLOG-051 docs) |
-| **HEAD** | Session C Unit 3 (reconciliation + gap worklist + PO Management) on top of Unit 2d (confirm-with-PO) / Unit 6 frontend / Session B Units 1-8 |
+| **HEAD** | PO↔lineup Unit 0 discovery approved · Unit A/B lineup work on branch · next = **Unit 1 build** |
 | **PR** | None open |
 | **Alembic (code)** | `20260628_0057` (commercial_lineup_case_po) |
 | **Alembic (DB)** | **`20260628_0057`** on local `cip` (`commercial_lineup_case_po` applied 2026-06-28) |
@@ -157,6 +157,91 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
 - Workbench hides "Ready to sync" alert when case is `po_issued` / fulfillment terminal.
 - Tests: 11 PO API + 13 CurrentLineupSection vitest green.
 
+### PO↔lineup auto-alignment — Unit 0 discovery APPROVED (2026-06-29); Unit 1 next
+**Spec:** ONE SPEC, five units (0–5), build/commit/push **one unit at a time** on current branch.
+**cip is read-only** for agents except migrations Warren approves; never run alembic/validate/apply/backfill
+against cip — Warren runs those. Data-mapping gate applies.
+
+**Unit 0 findings (cip evidence, 49,981 `shipment_evidence_line` rows):**
+- No `resolved_customer_id` / `resolved_distributor_id` today — shipment uses `customer_id` /
+  `distributor_id` on line + raw `customer_dealer_token` / `bill_to_raw`. Customer stamped via steward
+  (`_mark_customer_lines_resolved`); distributor at validate via `_resolve_distributor_strict` +
+  `distributor_source_token_alias`. DSI staging has `resolved_*`; shipment does not.
+- Branch suffixes: **no automatic root collapse** in resolver. MUSTEK-ZA-BB + MUSTEK-ZA-C both →
+  `distributor_id=21` (TMP-DIST Mustek) via **separate approved aliases** (`mustek-za-bb`, `mustek-za-c`).
+- **CRAD:** only in `raw_source_row['CRAD']` (49,793/49,981 ≈99.6%); **not** a typed column. Typed
+  dates: `schedule_ship_date` 99.6%, `ship_confirm_date` 96%, etc. Current coalesce is pod-first (no CRAD).
+- **PO duplication root cause:** `purchase_order` unique on `(po_number_norm, distributor_id)` but
+  materialize uses `line.distributor_id` — when NULL, Postgres allows unlimited dup rows. cip: 11,088 PO
+  rows / 2,265 distinct norms / **8,822 rows with NULL distributor** covering **1,634 norms** (~Warren's
+  ~1,645). When `distributor_id` set: 2,266 rows = 2,266 unique pairs (zero dup pairs).
+
+**Warren approvals (all four + Unit 2 addition):**
+1. Add `resolved_customer_id` + `resolved_distributor_id`; **keep in sync** with existing `customer_id` /
+   `distributor_id`.
+2. Root = **alias-target collapse**; **no** `parent_id` on `dim_distributor` in this build.
+3. **`crad_date`** in Unit 1 migration (parse from `"CRAD"` header).
+4. Unit 2 primary scope = **NULL-dist preview-first merge** (not branch-variant merge — nearly absent on cip).
+5. **Unit 2 materialize rule (approved):** when `resolved_distributor_id` is null, **do NOT mint** a
+   NULL-keyed `purchase_order` — defer materialization until steward resolves distributor (prevents
+   duplication regenerating after cleanup).
+
+**Unit 1 scope (NEXT — fresh chat):** migration adds `resolved_customer_id`, `resolved_distributor_id`,
+`crad_date` to `shipment_evidence_line` + `fact_inbound_shipment`; populate at validate/steward/apply
+using **same** alias resolution paths (no second resolver); preserve raw tokens; backfill script
+(dry-run default, `--confirm`); tests. **STOP/report migration revision before Warren runs upgrade.**
+
+**Units 2–5 (deferred):** PO dedup + deferred materialize · auto-link engine (CRAD-primary) · review
+surface · period-derived importer.
+
+**Limiter:** 23 TMP-DIST / 4,960 TMP-CUST on cip — auto-link match rate capped; unmatched → exception queue.
+
+### Unit A — case-level distributor assignment (tokenless lines) (2026-06-28) — code done, browser soak open
+- **Gap closed:** entity resolution is token-keyed, so lineup lines with no `distributor_token_raw`
+  (e.g. an Amazon file that simply has no distributor column) could never be assigned a distributor —
+  they showed **Unassigned** forever. Unit A adds a **case-level** assign path that does not need a token.
+- **Suggest** `lineup_case_suggested_pos.py::suggest_distributors_for_case`: ranks distributors from
+  **shipment-evidence product corroboration** (which distributors actually shipped the case's resolved
+  products) → `{converged, converged_distributor_id, distinct_count, suggested_distributors[],
+  already_assigned_distributor_ids[]}`. `converged` = exactly one distinct distributor across evidence.
+- **Assign** `lineup_case_distributor_assign.py::assign_case_distributor`: sets `distributor_id` on the
+  case's lines (`only_unassigned=True` by default). Either links an **existing** `dim_distributor` OR
+  creates one — but **only** via steward-confirmed path (`new_code` + `new_name` + `confirm_create`);
+  rejects duplicate code / unknown id / non-resolvable case status. **No silent master creation** —
+  governance boundary preserved. Tags a diagnostic on touched lines.
+- **API:** `GET /commercial-planner/lineup-cases/{id}/suggested-distributors` ·
+  `POST /commercial-planner/lineup-cases/{id}/assign-distributor`
+  (`AssignDistributorBody`: `distributor_id` | `new_code`+`new_name`+`confirm_create`; `only_unassigned`).
+- **UI** `CurrentLineupSection`: "Assign distributor" button on the case card (guarded by
+  `RESOLUTION_UI_STATUSES`) → `AssignDistributorDialog`: shows evidence suggestions (converged auto-pick
+  vs ambiguous pick-list), `EntitySearchAutocomplete` to find an existing dim, or a create-new form
+  requiring confirm. Invalidates cases/lines/suggested-distributors/suggested-pos on success.
+- **Tests:** `test_lineup_case_distributor_suggest_assign.py` (10: suggest not-found/no-products/
+  converged/ambiguous; assign existing/create-new/reject dup-code/unknown-id/bad-status/not-found) +
+  3 UI tests (converged assign, ambiguous pick, create-new confirm). Read-only suggest e2e run against
+  real `cip`. **Not soaked:** live click-through assign in browser.
+
+### Unit B — lineup workbench migrated to EnterpriseDataGrid (AG Grid) (2026-06-28) — code done, browser soak open
+- **Replaces** the bespoke MUI `<Table>` workbench with the repo-standard `EnterpriseDataGrid`
+  (AG Grid wrapper used by Plans/admin grids) → native **movable / resizable / sortable / filterable**
+  columns, matching the rest of the app. (The read-only `CaseLinesDialog` and the suggested-PO table
+  stay plain MUI tables — out of scope.)
+- **Column model:** `wbColumnDefs` maps `visibleColsFiltered` → `ColDef[]`. `wbCellValue` extracts a
+  primitive (string|number|null) for sort/filter; rich display reuses existing `wbCellContent` as a
+  `cellRenderer`. Editable numeric cells (`units`→`quantity_units`, `msrp`→`msrp_local`,
+  `promo`→`promo_price_evidence_local`) only when `activeCase.commercial_status === 'draft_imported'`
+  (`type: 'numericColumn'`, `singleClickEdit`).
+- **Edit persistence:** `onCellValueChanged` ignores null/invalid/no-op commits (mirrors prior inline
+  editor) then `patchLineMutation.mutate`. **Column-order persistence:** `onDragStopped` writes the new
+  order back into `visibleCols` (localStorage v4 per case).
+- **Typing note:** `EnterpriseDataGrid` is a `forwardRef` fixing `T=unknown`, so defs are typed
+  `ColDef[]` / `GridOptions` (not `<CommercialLineupLine>`) with `as CommercialLineupLine` casts in
+  getters/renderers — same pattern as the Plans grid.
+- **Tests:** `CurrentLineupSection.test.tsx` 16/16 green (grid mocked the repo-standard way, asserting
+  columnheaders + cell content via cellRenderer/valueFormatter/valueGetter). Lint clean; tsc clean for
+  the file. **Not proven in jsdom:** real AG Grid inline-edit → `onCellValueChanged` → PATCH, and
+  drag-reorder persistence — needs a quick browser smoke.
+
 ### Lineup workbench + catalogue product_line (2026-06-28)
 - **product_line inference:** catalogue-majority PRIMARY (`dim_product.product_line`, row-weighted);
   filename fallback ONLY when &lt;25% rows resolved; sheet category/BU column removed as signal.
@@ -199,6 +284,7 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
 ---
 
 ## In progress / not proven live
+- **PO↔lineup Unit 1** — resolved columns + `crad_date` migration + backfill script (approved; fresh chat).
 - **Pre-existing lint** — 7 `rules-of-hooks` errors in `dsi-mapping-steward-panel.tsx` block clean `pnpm lint` (not introduced by DSI apply work).
 - **Billiard quirk** — solo worker spawns one child under system Python (single logical consumer; interpreter mismatch latent).
 - Warren **actively working through** ACZA shipment upload (BOM tab deferred per BACKLOG-046).
@@ -208,13 +294,11 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
 
 ## Next (recommended)
 
-1. **Warren smoke-test** — one historical `draft_imported` case: Confirm with PO → pick suggested PO →
-   verify `po_issued` + linked PO chip, no sync ladder prompt.
-2. **Re-parse lineup cases 3/4/5** — if product_line labels still wrong after catalogue inference fix.
-   2+ files against a running API; confirm per-file progress in the nav bell and cases appearing under
-   the plan's Current lineups. (Wired + unit-tested; not yet soaked.)
-3. **Open PR** for `feat/unit-6-unified-lineup-import-centre` → merges DSI large-volume work + full
-   Session B unified importer (Units 1-8). Branch cut from `feat/dsi-async-topology`.
+1. **PO↔lineup Unit 1 (fresh chat)** — migration `resolved_customer_id`, `resolved_distributor_id`,
+   `crad_date` on evidence + fact lines; populate via existing alias paths; backfill script; tests;
+   commit + push. See handover prompt in latest chat.
+2. **Warren smoke-test (lineup Unit A + B)** — assign distributor + workbench grid (optional parallel).
+3. **Open PR** for `feat/unit-6-unified-lineup-import-centre` when lineup + PO units are ready.
 4. Fix `dsi-mapping-steward-panel.tsx` rules-of-hooks lint (unblocks `pnpm lint`).
 5. Finish ACZA upload (trim to **Shipped + Unship** until BACKLOG-046).
 
