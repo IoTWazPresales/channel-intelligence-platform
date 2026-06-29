@@ -167,3 +167,84 @@ async def suggest_pos_for_case(db: AsyncSession, case_id: int) -> dict[str, Any]
         "case_distributor_id": case_distributor_id,
         "suggestions": suggestions,
     }
+
+
+async def suggest_distributors_for_case(db: AsyncSession, case_id: int) -> dict[str, Any]:
+    """Suggest distributor(s) for a case from shipment-evidence product corroboration.
+
+    Every suggestion is an existing ``dim_distributor`` (sourced via ``purchase_order.distributor_id``),
+    so an assignment always links to a real master record. Ranked by matched-product count then
+    shipped units. ``converged`` is true only when the evidence points to exactly one distinct
+    distributor (mirrors the DSI cross-distributor corroboration rule — multiple distributors stay
+    ambiguous rather than guessing). Read-only.
+    """
+    case = await db.get(CommercialLineupCase, case_id)
+    if case is None:
+        raise CaseNotFoundError(str(case_id))
+
+    product_ids = await _case_product_ids(db, case_id)
+    already_assigned = await _case_line_distributor_ids(db, case_id)
+
+    if not product_ids:
+        return {
+            "case_id": case_id,
+            "converged": False,
+            "converged_distributor_id": None,
+            "distinct_count": 0,
+            "suggested_distributors": [],
+            "already_assigned_distributor_ids": already_assigned,
+        }
+
+    stmt = (
+        select(
+            PurchaseOrder.distributor_id,
+            DimDistributor.code.label("distributor_code"),
+            DimDistributor.name.label("distributor_name"),
+            func.count(func.distinct(ShipmentEvidenceLine.product_id)).label("matched_product_count"),
+            func.coalesce(func.sum(ShipmentEvidenceLine.quantity), 0).label("total_shipped_units"),
+            func.count(func.distinct(PurchaseOrder.id)).label("po_count"),
+        )
+        # INNER join on DimDistributor: only real master records can be suggested/linked.
+        .join(ShipmentEvidenceLine, ShipmentEvidenceLine.purchase_order_id == PurchaseOrder.id)
+        .join(DimDistributor, DimDistributor.id == PurchaseOrder.distributor_id)
+        .where(
+            ShipmentEvidenceLine.purchase_order_id.isnot(None),
+            ShipmentEvidenceLine.product_id.in_(product_ids),
+            PurchaseOrder.distributor_id.isnot(None),
+        )
+        .group_by(
+            PurchaseOrder.distributor_id,
+            DimDistributor.code,
+            DimDistributor.name,
+        )
+        .order_by(
+            func.count(func.distinct(ShipmentEvidenceLine.product_id)).desc(),
+            func.coalesce(func.sum(ShipmentEvidenceLine.quantity), 0).desc(),
+        )
+    )
+
+    rows = (await db.execute(stmt)).all()
+    suggested: list[dict[str, Any]] = []
+    for dist_id, dist_code, dist_name, matched_count, shipped_units, po_count in rows:
+        suggested.append(
+            {
+                "distributor_id": int(dist_id),
+                "distributor_code": dist_code,
+                "distributor_name": dist_name,
+                "matched_product_count": int(matched_count or 0),
+                "total_shipped_units": float(shipped_units or 0),
+                "po_count": int(po_count or 0),
+                "already_assigned": int(dist_id) in set(already_assigned),
+            }
+        )
+
+    distinct_count = len(suggested)
+    converged = distinct_count == 1
+    return {
+        "case_id": case_id,
+        "converged": converged,
+        "converged_distributor_id": suggested[0]["distributor_id"] if converged else None,
+        "distinct_count": distinct_count,
+        "suggested_distributors": suggested,
+        "already_assigned_distributor_ids": already_assigned,
+    }

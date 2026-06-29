@@ -52,7 +52,17 @@ from app.services.commercial_planner.lineup_case_po_confirm import (
     list_case_pos,
     list_case_pos_bulk,
 )
-from app.services.commercial_planner.lineup_case_suggested_pos import suggest_pos_for_case
+from app.services.commercial_planner.lineup_case_suggested_pos import (
+    suggest_distributors_for_case,
+    suggest_pos_for_case,
+)
+from app.services.commercial_planner.lineup_case_distributor_assign import (
+    CaseNotFoundError as AssignCaseNotFoundError,
+    CaseStatusNotResolvableError as AssignCaseStatusNotResolvableError,
+    DistributorCodeExistsError,
+    DistributorNotFoundError,
+    assign_case_distributor,
+)
 from app.services.commercial_planner.lineup_po_reconciliation import (
     CaseNotFoundError as ReconCaseNotFoundError,
     reconcile_case,
@@ -2047,6 +2057,34 @@ class EntityResolutionApplyBody(BaseModel):
     resolutions: list[EntityResolutionItem] = Field(min_length=1)
 
 
+class AssignDistributorBody(BaseModel):
+    """Assign a distributor to a case's lines.
+
+    Provide exactly one of: ``distributor_id`` (an existing dim, e.g. a shipment-evidence
+    suggestion) OR ``new_code`` + ``new_name`` + ``confirm_create=true`` to create a new
+    ``dim_distributor`` (steward-confirmed). ``only_unassigned`` (default true) writes only lines
+    without a distributor.
+    """
+
+    distributor_id: int | None = Field(default=None, ge=1)
+    new_code: str | None = Field(default=None, max_length=32)
+    new_name: str | None = Field(default=None, max_length=256)
+    confirm_create: bool = False
+    only_unassigned: bool = True
+
+    @model_validator(mode="after")
+    def _validate(self) -> AssignDistributorBody:
+        if self.distributor_id is not None:
+            if self.new_code or self.new_name:
+                raise ValueError("Provide either distributor_id or new_code+new_name, not both.")
+            return self
+        if not (self.new_code and self.new_name):
+            raise ValueError("distributor_id, or new_code + new_name (to create), is required.")
+        if not self.confirm_create:
+            raise ValueError("confirm_create must be true to create a new distributor.")
+        return self
+
+
 def _case_payload(
     case: CommercialLineupCase, line_count: int, linked_pos: list[dict] | None = None
 ) -> dict:
@@ -2415,6 +2453,56 @@ async def confirm_lineup_case_with_po(
                 "remediation": "Cancelled cases cannot be confirmed with a PO.",
             },
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/lineup-cases/{case_id}/suggested-distributors")
+async def get_lineup_case_suggested_distributors(case_id: int, db: AsyncSession = Depends(get_db)):
+    """Distributors suggested from shipment-evidence product corroboration (read-only).
+
+    Every suggestion is an existing ``dim_distributor``. ``converged`` is true only when exactly one
+    distinct distributor is found across the corroborating evidence.
+    """
+    try:
+        return await suggest_distributors_for_case(db, case_id)
+    except CaseNotFoundError:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+
+
+@router.post("/lineup-cases/{case_id}/assign-distributor", status_code=200)
+async def post_lineup_case_assign_distributor(
+    case_id: int, body: AssignDistributorBody, db: AsyncSession = Depends(get_db)
+):
+    """Assign a distributor to a case's lines (existing dim or steward-confirmed create).
+
+    Fills the gap left by token-keyed entity resolution for lines that carry no distributor token.
+    Writes only ``distributor_id``; cost / DAP / SKU assumptions are untouched.
+    """
+    try:
+        return await assign_case_distributor(
+            db,
+            case_id,
+            distributor_id=body.distributor_id,
+            new_code=body.new_code,
+            new_name=body.new_name,
+            only_unassigned=body.only_unassigned,
+        )
+    except AssignCaseNotFoundError:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    except AssignCaseStatusNotResolvableError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Distributor assignment is only allowed while the case is in draft/review "
+                f"(statuses: {', '.join(sorted(RESOLUTION_ALLOWED_CASE_STATUSES))}). "
+                f"Current: '{exc.status}'"
+            ),
+        )
+    except DistributorNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=f"Unknown distributor_id={exc}")
+    except DistributorCodeExistsError as exc:
+        raise HTTPException(status_code=400, detail=f"Distributor code already exists: {exc.code}")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

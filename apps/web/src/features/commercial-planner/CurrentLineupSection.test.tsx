@@ -1,6 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
@@ -12,6 +13,47 @@ vi.mock('@/lib/api', () => ({
   apiPost: vi.fn(),
   apiPatch: vi.fn(),
   apiDelete: vi.fn(),
+}));
+
+// Mirror the repo pattern (see commercial-planner/page.test.tsx): mock the grid and render cells
+// from columnDefs so header/cell assertions work without AG Grid's real (layout-dependent) DOM.
+vi.mock('@/components/EnterpriseDataGrid', () => ({
+  EnterpriseDataGrid: ({
+    rowData,
+    columnDefs,
+  }: {
+    rowData: Array<Record<string, unknown>>;
+    columnDefs?: Array<Record<string, unknown>>;
+  }) => (
+    <div data-testid="lineup-wb-grid-mock">
+      <div role="row">
+        {columnDefs?.map((c, i) => (
+          <div role="columnheader" key={(c.colId as string) ?? i}>
+            {c.headerName as string}
+          </div>
+        ))}
+      </div>
+      {rowData.map((row, ri) => (
+        <div role="row" key={(row.id as number) ?? ri}>
+          {columnDefs?.map((c, ci) => {
+            const params = {
+              data: row,
+              value: typeof c.valueGetter === 'function' ? (c.valueGetter as (p: unknown) => unknown)({ data: row }) : undefined,
+            };
+            let content: unknown;
+            if (typeof c.cellRenderer === 'function') content = (c.cellRenderer as (p: unknown) => unknown)(params);
+            else if (typeof c.valueFormatter === 'function') content = (c.valueFormatter as (p: unknown) => unknown)(params);
+            else content = params.value;
+            return (
+              <div role="cell" key={(c.colId as string) ?? ci}>
+                {content as ReactNode}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock('./EntitySearchAutocomplete', () => ({
@@ -802,6 +844,231 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
 
     // Working grid renders for an unlinked case.
     expect(await screen.findByTestId('current-lineup-working-grid')).toBeInTheDocument();
+  });
+
+  it('assign distributor: converged suggestion assigns the existing dim', async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const draftCase = {
+      id: 15,
+      import_job_id: null,
+      commercial_plan_id: 5,
+      file_name: 'amazon.xlsx',
+      period_label: '26Q1',
+      country_code: 'ZA',
+      currency_code: 'ZAR',
+      commercial_status: 'draft_imported',
+      notes: null,
+      accepted_at: null,
+      accepted_by: null,
+      line_count: 10,
+      iteration_number: 1,
+      product_line: 'NB',
+      linked_pos: [],
+      po_count: 0,
+      created_at: null,
+    };
+    apiGetMock.mockImplementation(async (url: string) => {
+      if (url.includes('/suggested-distributors')) {
+        return {
+          case_id: 15,
+          converged: true,
+          converged_distributor_id: 21,
+          distinct_count: 1,
+          suggested_distributors: [
+            {
+              distributor_id: 21,
+              distributor_code: 'MUSTEK',
+              distributor_name: 'Mustek',
+              matched_product_count: 3,
+              total_shipped_units: 240,
+              po_count: 2,
+              already_assigned: false,
+            },
+          ],
+          already_assigned_distributor_ids: [],
+        };
+      }
+      if (url.includes('/lineup-cases') && !url.includes('/lines') && !url.includes('metadata')) {
+        return [draftCase];
+      }
+      return [];
+    });
+    apiPostMock.mockResolvedValue({
+      case_id: 15,
+      distributor_id: 21,
+      distributor_created: false,
+      updated_lines: 10,
+    });
+
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CurrentLineupSection activePlanId={5} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByTestId('current-lineup-section-toggle'));
+    await user.click(await screen.findByTestId('assign-distributor-btn-15'));
+    expect(await screen.findByTestId('assign-dist-converged')).toBeInTheDocument();
+    await user.click(await screen.findByTestId('assign-dist-suggestion-21'));
+    await user.click(screen.getByTestId('assign-dist-submit'));
+
+    expect(apiPostMock).toHaveBeenCalledWith(
+      '/api/v1/commercial-planner/lineup-cases/15/assign-distributor',
+      { distributor_id: 21 },
+    );
+  });
+
+  it('assign distributor: ambiguous evidence lets you pick a candidate', async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const draftCase = {
+      id: 16,
+      import_job_id: null,
+      commercial_plan_id: 5,
+      file_name: 'amazon.xlsx',
+      period_label: '26Q1',
+      country_code: 'ZA',
+      currency_code: 'ZAR',
+      commercial_status: 'draft_imported',
+      notes: null,
+      accepted_at: null,
+      accepted_by: null,
+      line_count: 10,
+      iteration_number: 1,
+      product_line: 'NB',
+      linked_pos: [],
+      po_count: 0,
+      created_at: null,
+    };
+    apiGetMock.mockImplementation(async (url: string) => {
+      if (url.includes('/suggested-distributors')) {
+        return {
+          case_id: 16,
+          converged: false,
+          converged_distributor_id: null,
+          distinct_count: 2,
+          suggested_distributors: [
+            {
+              distributor_id: 29,
+              distributor_code: 'PINNACLE',
+              distributor_name: 'Pinnacle',
+              matched_product_count: 2,
+              total_shipped_units: 90,
+              po_count: 1,
+              already_assigned: false,
+            },
+            {
+              distributor_id: 21,
+              distributor_code: 'MUSTEK',
+              distributor_name: 'Mustek',
+              matched_product_count: 1,
+              total_shipped_units: 40,
+              po_count: 1,
+              already_assigned: false,
+            },
+          ],
+          already_assigned_distributor_ids: [],
+        };
+      }
+      if (url.includes('/lineup-cases') && !url.includes('/lines') && !url.includes('metadata')) {
+        return [draftCase];
+      }
+      return [];
+    });
+    apiPostMock.mockResolvedValue({
+      case_id: 16,
+      distributor_id: 21,
+      distributor_created: false,
+      updated_lines: 10,
+    });
+
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CurrentLineupSection activePlanId={5} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByTestId('current-lineup-section-toggle'));
+    await user.click(await screen.findByTestId('assign-distributor-btn-16'));
+    expect(await screen.findByTestId('assign-dist-ambiguous')).toBeInTheDocument();
+    await user.click(await screen.findByTestId('assign-dist-suggestion-21'));
+    await user.click(screen.getByTestId('assign-dist-submit'));
+
+    expect(apiPostMock).toHaveBeenCalledWith(
+      '/api/v1/commercial-planner/lineup-cases/16/assign-distributor',
+      { distributor_id: 21 },
+    );
+  });
+
+  it('assign distributor: create-new requires confirm and posts create payload', async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const draftCase = {
+      id: 17,
+      import_job_id: null,
+      commercial_plan_id: 5,
+      file_name: 'amazon.xlsx',
+      period_label: '26Q1',
+      country_code: 'ZA',
+      currency_code: 'ZAR',
+      commercial_status: 'draft_imported',
+      notes: null,
+      accepted_at: null,
+      accepted_by: null,
+      line_count: 10,
+      iteration_number: 1,
+      product_line: 'NB',
+      linked_pos: [],
+      po_count: 0,
+      created_at: null,
+    };
+    apiGetMock.mockImplementation(async (url: string) => {
+      if (url.includes('/suggested-distributors')) {
+        return {
+          case_id: 17,
+          converged: false,
+          converged_distributor_id: null,
+          distinct_count: 0,
+          suggested_distributors: [],
+          already_assigned_distributor_ids: [],
+        };
+      }
+      if (url.includes('/lineup-cases') && !url.includes('/lines') && !url.includes('metadata')) {
+        return [draftCase];
+      }
+      return [];
+    });
+    apiPostMock.mockResolvedValue({
+      case_id: 17,
+      distributor_id: 99,
+      distributor_created: true,
+      updated_lines: 10,
+    });
+
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CurrentLineupSection activePlanId={5} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByTestId('current-lineup-section-toggle'));
+    await user.click(await screen.findByTestId('assign-distributor-btn-17'));
+    expect(await screen.findByTestId('assign-dist-none')).toBeInTheDocument();
+
+    await user.click(await screen.findByTestId('assign-dist-create-toggle'));
+    await user.type(screen.getByTestId('assign-dist-new-code').querySelector('input')!, 'AMZ');
+    await user.type(screen.getByTestId('assign-dist-new-name').querySelector('input')!, 'Amazon Direct');
+
+    // Submit is disabled until confirmation is ticked.
+    expect(screen.getByTestId('assign-dist-submit')).toBeDisabled();
+    await user.click(await screen.findByTestId('assign-dist-confirm-create'));
+    await user.click(screen.getByTestId('assign-dist-submit'));
+
+    expect(apiPostMock).toHaveBeenCalledWith(
+      '/api/v1/commercial-planner/lineup-cases/17/assign-distributor',
+      { new_code: 'AMZ', new_name: 'Amazon Direct', confirm_create: true },
+    );
   });
 
   it('default workbench columns omit SKU but show calc chain and formatted pct', async () => {

@@ -37,10 +37,12 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { CellValueChangedEvent, ColDef, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import NextLink from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { apiDelete, apiGet, apiPatch, apiPost, safeDisplayError } from '@/lib/api';
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { EntitySearchAutocomplete } from './EntitySearchAutocomplete';
 
 function formatHttpErrorDetail(detail: unknown): string {
@@ -83,6 +85,25 @@ type LinkedPo = {
   po_number_norm: string;
   distributor_id: number | null;
   status: string;
+};
+
+type SuggestedDistributor = {
+  distributor_id: number;
+  distributor_code: string | null;
+  distributor_name: string | null;
+  matched_product_count: number;
+  total_shipped_units: number;
+  po_count: number;
+  already_assigned: boolean;
+};
+
+type SuggestedDistributorsResponse = {
+  case_id: number;
+  converged: boolean;
+  converged_distributor_id: number | null;
+  distinct_count: number;
+  suggested_distributors: SuggestedDistributor[];
+  already_assigned_distributor_ids: number[];
 };
 
 type CommercialLineupCase = {
@@ -1787,6 +1808,233 @@ function CaseReconciliationInline({ caseId }: { caseId: number }) {
 
 // ── Confirm lineup with PO(s) (Session C Unit 2d) ─────────────────────────────
 
+function AssignDistributorDialog({
+  open,
+  onClose,
+  currentCase,
+  isPending,
+  error,
+  onAssign,
+}: {
+  open: boolean;
+  onClose: () => void;
+  currentCase: CommercialLineupCase;
+  isPending: boolean;
+  error: string | null;
+  onAssign: (payload: {
+    distributor_id?: number;
+    new_code?: string;
+    new_name?: string;
+    confirm_create?: boolean;
+  }) => void;
+}) {
+  const [chosen, setChosen] = useState<DistributorPick | null>(null);
+  const [createMode, setCreateMode] = useState(false);
+  const [newCode, setNewCode] = useState('');
+  const [newName, setNewName] = useState('');
+  const [confirmCreate, setConfirmCreate] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['lineup-suggested-distributors', currentCase.id],
+    queryFn: ({ signal }) =>
+      apiGet<SuggestedDistributorsResponse>(
+        `/api/v1/commercial-planner/lineup-cases/${currentCase.id}/suggested-distributors`,
+        { signal },
+      ),
+    enabled: open,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    setChosen(null);
+    setCreateMode(false);
+    setNewCode('');
+    setNewName('');
+    setConfirmCreate(false);
+  }, [open, currentCase.id]);
+
+  const suggestions = data?.suggested_distributors ?? [];
+  const converged = data?.converged ?? false;
+
+  const canCreate =
+    createMode && newCode.trim().length > 0 && newName.trim().length > 0 && confirmCreate;
+  const canAssign = !isPending && (canCreate || (!createMode && chosen != null));
+
+  const handleAssign = () => {
+    if (canCreate) {
+      onAssign({ new_code: newCode.trim(), new_name: newName.trim(), confirm_create: true });
+    } else if (chosen) {
+      onAssign({ distributor_id: chosen.id });
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>Assign distributor</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Assigns a distributor to this case&apos;s lines that do not yet have one. Suggestions come
+            from shipment evidence (products in this lineup that were shipped under a distributor&apos;s
+            POs) and are always existing distributor records. If the right distributor is not listed,
+            search for it or create a new one.
+          </Typography>
+
+          {isLoading && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CircularProgress size={18} />
+              <Typography variant="body2" color="text.secondary">
+                Loading shipment-evidence suggestions…
+              </Typography>
+            </Box>
+          )}
+
+          {!isLoading && converged && suggestions[0] && (
+            <Alert severity="success" data-testid="assign-dist-converged">
+              Shipment evidence points to a single distributor:{' '}
+              <strong>{suggestions[0].distributor_name ?? suggestions[0].distributor_code}</strong> (
+              {suggestions[0].matched_product_count} matched product
+              {suggestions[0].matched_product_count === 1 ? '' : 's'}).
+            </Alert>
+          )}
+          {!isLoading && !converged && suggestions.length > 1 && (
+            <Alert severity="info" data-testid="assign-dist-ambiguous">
+              Shipment evidence is ambiguous — these products were shipped under{' '}
+              {data?.distinct_count} different distributors. Pick the correct one, or search / create.
+            </Alert>
+          )}
+          {!isLoading && suggestions.length === 0 && (
+            <Alert severity="info" data-testid="assign-dist-none">
+              No distributor could be suggested from shipment evidence for this case. Search for a
+              distributor or create a new one.
+            </Alert>
+          )}
+
+          {suggestions.length > 0 && !createMode && (
+            <Box data-testid="assign-dist-suggestions">
+              <Typography variant="subtitle2" gutterBottom>
+                Suggested from shipment evidence
+              </Typography>
+              <Stack spacing={1}>
+                {suggestions.map((s) => (
+                  <Button
+                    key={s.distributor_id}
+                    fullWidth
+                    variant={chosen?.id === s.distributor_id ? 'contained' : 'outlined'}
+                    onClick={() =>
+                      setChosen({
+                        id: s.distributor_id,
+                        distributor_code: s.distributor_code ?? '',
+                        distributor_name: s.distributor_name ?? '',
+                      })
+                    }
+                    sx={{ justifyContent: 'space-between', textTransform: 'none' }}
+                    data-testid={`assign-dist-suggestion-${s.distributor_id}`}
+                  >
+                    <span>
+                      {s.distributor_name ?? s.distributor_code}
+                      {s.already_assigned ? ' (already on some lines)' : ''}
+                    </span>
+                    <span>
+                      {s.matched_product_count} product{s.matched_product_count === 1 ? '' : 's'} ·{' '}
+                      {s.po_count} PO{s.po_count === 1 ? '' : 's'}
+                    </span>
+                  </Button>
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          {!createMode && (
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>
+                Or search all distributors
+              </Typography>
+              <EntitySearchAutocomplete<DistributorPick>
+                label="Search distributors"
+                value={chosen}
+                onChange={(next) => setChosen(next)}
+                fetchOptions={async (q) => {
+                  const res = await apiGet<{ items: DistributorPick[] }>(
+                    `/api/v1/distributors?page=1&page_size=25&q=${encodeURIComponent(q)}`,
+                  );
+                  return res.items;
+                }}
+                getOptionLabel={(o) => `${o.distributor_code} — ${o.distributor_name}`}
+              />
+            </Box>
+          )}
+
+          <Divider />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={createMode}
+                onChange={(e) => {
+                  setCreateMode(e.target.checked);
+                  setChosen(null);
+                }}
+                data-testid="assign-dist-create-toggle"
+              />
+            }
+            label="Create a new distributor instead"
+          />
+          {createMode && (
+            <Stack spacing={2}>
+              <TextField
+                label="New distributor code"
+                value={newCode}
+                onChange={(e) => setNewCode(e.target.value)}
+                size="small"
+                inputProps={{ maxLength: 32 }}
+                data-testid="assign-dist-new-code"
+              />
+              <TextField
+                label="New distributor name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                size="small"
+                inputProps={{ maxLength: 256 }}
+                data-testid="assign-dist-new-name"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={confirmCreate}
+                    onChange={(e) => setConfirmCreate(e.target.checked)}
+                    data-testid="assign-dist-confirm-create"
+                  />
+                }
+                label="I confirm creating this distributor in master data"
+              />
+            </Stack>
+          )}
+
+          {error && (
+            <Alert severity="error" data-testid="assign-dist-error">
+              {error}
+            </Alert>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={isPending}>
+          Cancel
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleAssign}
+          disabled={!canAssign}
+          data-testid="assign-dist-submit"
+        >
+          {isPending ? 'Assigning…' : 'Assign distributor'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+
 function ConfirmWithPoDialog({
   open,
   onClose,
@@ -2517,6 +2765,7 @@ export function CurrentLineupSection({
   const [statusCase, setStatusCase] = useState<CommercialLineupCase | null>(null);
   const [syncCase, setSyncCase] = useState<CommercialLineupCase | null>(null);
   const [confirmCase, setConfirmCase] = useState<CommercialLineupCase | null>(null);
+  const [assignDistCase, setAssignDistCase] = useState<CommercialLineupCase | null>(null);
   const [retryParseCase, setRetryParseCase] = useState<CommercialLineupCase | null>(null);
   const [activeCaseId, setActiveCaseId] = useState<number | null>(null);
   const [resolutionCase, setResolutionCase] = useState<CommercialLineupCase | null>(null);
@@ -2865,6 +3114,147 @@ export function CurrentLineupSection({
     [activeCaseId, patchLineMutation, showSyncWorkbenchCol],
   );
 
+  // Primitive value for AG Grid sort/filter (cellRenderer below handles rich display). Mirrors the
+  // value branches of wbCellContent so sorting matches what the user sees.
+  const wbCellValue = useCallback(
+    (ln: CommercialLineupLine, colId: string): string | number | null => {
+      if (colId === 'num') return ln.source_row_number ?? ln.id;
+      if (colId === 'product') return lineupProductLabel(ln);
+      if (colId === 'sku') return ln.product_sku ?? ln.sku_raw ?? '—';
+      if (colId === 'part') return ln.product_part_number ?? ln.part_number_raw ?? '—';
+      if (colId === 'cust') return lineupCustomerCell(ln);
+      if (colId === 'dist') return lineupDistributorCell(ln);
+      if (colId === 'units') return ln.quantity_units ?? null;
+      if (colId === 'msrp') return ln.msrp_local ?? null;
+      if (colId === 'promo') return ln.promo_price_evidence_local ?? null;
+      if (colId === 'dap') return ln.dap_evidence_local ?? null;
+      if (colId.startsWith('calc:')) {
+        const key = colId.slice(5);
+        if (key === 'dap') return ln.calc_dap_cost_currency ?? calcChainOutput(ln, 'calc_dap_cost_currency');
+        if (key === 'profit') return ln.calc_profit_total ?? calcChainOutput(ln, 'calc_profit_total');
+        const outputKey =
+          key === 'dealer_price'
+            ? 'calc_dealer_price_local'
+            : key === 'net_price'
+              ? 'calc_net_price_local'
+              : key === 'disti_cost'
+                ? 'calc_disti_cost_local'
+                : null;
+        return outputKey ? calcChainOutput(ln, outputKey) : null;
+      }
+      if (colId === 'issues') return lineupIssuesCell(ln);
+      if (colId === 'sync') return showSyncWorkbenchCol ? (ln.sync_eligible ? 'eligible' : 'skipped') : '—';
+      if (colId.startsWith('raw:')) {
+        const key = colId.slice(4);
+        const up =
+          ln.uploaded && typeof ln.uploaded === 'object' && !Array.isArray(ln.uploaded)
+            ? (ln.uploaded as Record<string, unknown>)[key]
+            : undefined;
+        if (up == null || (typeof up === 'string' && !up.trim())) return '—';
+        return String(up);
+      }
+      if (colId.startsWith('parsed:')) return formatParsedFieldForWorkbench(ln, colId.slice(7));
+      if (colId.startsWith('cat:')) return formatParsedFieldForWorkbench(ln, colId.slice(4));
+      if (colId.startsWith('spec:')) {
+        const k = colId.slice(5);
+        const flat = ln.product_specs_flat;
+        if (!flat) return '—';
+        const direct = flat[k];
+        if (direct?.trim()) return direct;
+        const lower = k.toLowerCase();
+        const matchKey = Object.keys(flat).find((fk) => fk.toLowerCase() === lower);
+        const fallback = matchKey ? flat[matchKey] : undefined;
+        return fallback?.trim() ? fallback : '—';
+      }
+      if (colId.startsWith('sync:')) return formatSyncFieldForWorkbench(ln, colId.slice(5));
+      return '—';
+    },
+    [showSyncWorkbenchCol],
+  );
+
+  const wbCanEdit = activeCase?.commercial_status === 'draft_imported';
+
+  const wbColumnDefs = useMemo<ColDef[]>(() => {
+    return visibleColsFiltered.map((colId) => {
+      const headerName = workbenchColumnLabel(colId, wbMeta);
+      const editableField =
+        colId === 'units'
+          ? 'quantity_units'
+          : colId === 'msrp'
+            ? 'msrp_local'
+            : colId === 'promo'
+              ? 'promo_price_evidence_local'
+              : null;
+      if (wbCanEdit && editableField) {
+        return {
+          colId,
+          headerName,
+          editable: true,
+          type: 'numericColumn',
+          minWidth: 100,
+          valueGetter: (p) =>
+            p.data ? ((p.data as Record<string, unknown>)[editableField] as number | null) ?? null : null,
+          valueFormatter: (p) => (p.value == null || p.value === '' ? '' : String(p.value)),
+        } satisfies ColDef;
+      }
+      return {
+        colId,
+        headerName,
+        minWidth: colId === 'num' ? 72 : 120,
+        valueGetter: (p) => (p.data ? wbCellValue(p.data as CommercialLineupLine, colId) : null),
+        cellRenderer: (p: ICellRendererParams<CommercialLineupLine>) =>
+          p.data ? wbCellContent(p.data, colId, false) : null,
+      } satisfies ColDef;
+    });
+  }, [visibleColsFiltered, wbMeta, wbCanEdit, wbCellValue, wbCellContent]);
+
+  const onWbCellValueChanged = useCallback(
+    (e: CellValueChangedEvent) => {
+      if (!activeCaseId || !e.data) return;
+      const colId = e.column.getColId();
+      const field =
+        colId === 'units'
+          ? 'quantity_units'
+          : colId === 'msrp'
+            ? 'msrp_local'
+            : colId === 'promo'
+              ? 'promo_price_evidence_local'
+              : null;
+      if (!field) return;
+      const raw = e.newValue;
+      const next = raw == null || raw === '' ? null : Number(raw);
+      // Mirror the prior inline editor: ignore null/invalid commits and no-ops.
+      if (next == null || !Number.isFinite(next)) return;
+      const current = (e.data as Record<string, unknown>)[field] as number | null;
+      if (next === current) return;
+      patchLineMutation.mutate({ caseId: activeCaseId, lineId: (e.data as CommercialLineupLine).id, body: { [field]: next } });
+    },
+    [activeCaseId, patchLineMutation],
+  );
+
+  const wbGridOptions = useMemo<GridOptions>(
+    () => ({
+      singleClickEdit: true,
+      enableBrowserTooltips: true,
+      onCellValueChanged: (e) => onWbCellValueChanged(e),
+      // Persist user column reordering back into visibleCols (which is saved to localStorage).
+      onDragStopped: (e) => {
+        const order = e.api.getAllDisplayedColumns().map((c) => c.getColId());
+        if (!order.length) return;
+        setVisibleCols((prev) => {
+          const displayed = new Set(order);
+          const rest = prev.filter((id) => !displayed.has(id));
+          const nextOrder = [...order, ...rest];
+          if (nextOrder.length === prev.length && nextOrder.every((id, i) => id === prev[i])) {
+            return prev;
+          }
+          return nextOrder;
+        });
+      },
+    }),
+    [onWbCellValueChanged],
+  );
+
   const statusMutation = useMutation({
     mutationFn: ({
       caseId,
@@ -2909,6 +3299,24 @@ export function CurrentLineupSection({
       void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
       void qc.invalidateQueries({ queryKey: ['po-reconciliation'] });
       setConfirmCase(null);
+    },
+  });
+
+  const assignDistributorMutation = useMutation({
+    mutationFn: ({
+      caseId,
+      payload,
+    }: {
+      caseId: number;
+      payload: { distributor_id?: number; new_code?: string; new_name?: string; confirm_create?: boolean };
+    }) =>
+      apiPost(`/api/v1/commercial-planner/lineup-cases/${caseId}/assign-distributor`, payload),
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', vars.caseId] });
+      void qc.invalidateQueries({ queryKey: ['lineup-suggested-distributors', vars.caseId] });
+      void qc.invalidateQueries({ queryKey: ['lineup-suggested-pos', vars.caseId] });
+      setAssignDistCase(null);
     },
   });
 
@@ -3138,6 +3546,16 @@ export function CurrentLineupSection({
                         data-testid="sync-to-plan-btn"
                       >
                         Sync to plan
+                      </Button>
+                    )}
+                    {RESOLUTION_UI_STATUSES.has(c.commercial_status) && (
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => setAssignDistCase(c)}
+                        data-testid={`assign-distributor-btn-${c.id}`}
+                      >
+                        Assign distributor
                       </Button>
                     )}
                     {c.commercial_status !== 'cancelled' && (
@@ -3453,28 +3871,13 @@ export function CurrentLineupSection({
                 </Typography>
               )
             ) : (
-              <Box sx={{ overflowX: 'auto' }}>
-                <Table size="small" stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      {visibleColsFiltered.map((colId) => (
-                        <TableCell key={colId}>{workbenchColumnLabel(colId, wbMeta)}</TableCell>
-                      ))}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {workingLines.map((ln) => {
-                      const canEdit = activeCase.commercial_status === 'draft_imported';
-                      return (
-                        <TableRow key={ln.id}>
-                          {visibleColsFiltered.map((colId) => (
-                            <TableCell key={`${ln.id}-${colId}`}>{wbCellContent(ln, colId, canEdit)}</TableCell>
-                          ))}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+              <Box data-testid="lineup-workbench-grid">
+                <EnterpriseDataGrid
+                  rowData={workingLines}
+                  columnDefs={wbColumnDefs}
+                  gridOptions={wbGridOptions}
+                  height={560}
+                />
               </Box>
             )}
           </Box>
@@ -3533,6 +3936,23 @@ export function CurrentLineupSection({
           error={confirmMutation.isError ? safeDisplayError(confirmMutation.error) : null}
           onConfirm={(poNumbers, notes) =>
             confirmMutation.mutate({ caseId: confirmCase.id, poNumbers, notes })
+          }
+        />
+      )}
+
+      {assignDistCase && (
+        <AssignDistributorDialog
+          open={assignDistCase != null}
+          onClose={() => setAssignDistCase(null)}
+          currentCase={assignDistCase}
+          isPending={assignDistributorMutation.isPending}
+          error={
+            assignDistributorMutation.isError
+              ? safeDisplayError(assignDistributorMutation.error)
+              : null
+          }
+          onAssign={(payload) =>
+            assignDistributorMutation.mutate({ caseId: assignDistCase.id, payload })
           }
         />
       )}

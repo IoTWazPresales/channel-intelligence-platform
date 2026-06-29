@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-053 — Per-line ROE (rate of exchange) override on lineup lines
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-06-28 |
+| **Effort** | Small (explicit override field on `commercial_lineup_line` + pricing-chain source tag + UI affordance + tests; migration if persisted) |
+| **Source** | Warren session (2026-06-28) lineup workbench review. Question raised: "should rate of exchange be editable?" Current behaviour: ROE is resolved (file evidence → trade-term defaults) and stored in `pricing_chain_json`, edited only via Planner defaults. Code: `apps/api/app/services/commercial_planner/lineup_pricing_resolution.py` (`roe_local_per_cost_currency`, `_pick(file_roe, defaults.roe_local_per_cost_currency, normalise_pct=False)`); defaults editable in `PlannerDefaultsMaintenance.tsx`. Deferred explicitly by Warren: "PUT ROE on backlog because we are still working on what's already approved/shipped." |
+| **Idea** | Allow a **deliberate, labelled** per-line ROE override (e.g. a deal locked at a specific FX rate) instead of the resolved default. Recorded in the pricing chain as `source: line_override` so it stays auditable. NOT an anonymous editable cell. |
+| **Why it matters / deferrable** | Real deals sometimes lock an FX rate that differs from the standing default. Deferrable because: (1) no confirmed business case yet that a per-line locked rate is needed; (2) a free-typed per-line ROE invites silent inconsistency across a lineup and can undermine the value-reconciliation FX bridge (`commercial_sku_assumption.fx_plan_currency_per_cost_currency`); (3) current work is focused on already-approved/shipped scope (confirm-with-PO, suggested POs, distributor suggestion, grid migration). |
+| **What the work is** | (1) Add an explicit override input (and, if persisted, a nullable `roe_override_local_per_cost_currency` column on `commercial_lineup_line` — STOP/report before migration). (2) `resolve_line_pricing` prefers the override and records `sources["roe_local_per_cost_currency"] = "line_override"` in `pricing_chain_json`. (3) UI: an explicit "Override ROE" action on the line that visibly marks the line as overridden and shows the default it replaced — never a silently-editable number. (4) Tests: override wins over default + file; chain records `line_override`; clearing override falls back to resolved value. |
+| **Regression traps** | Don't turn ROE into an unlabelled editable cell (breaks explainability); don't `/100` or otherwise mutate the rate; don't break the FX-bridge value reconciliation when an override is present; preserve trade-term default fallback when no override. |
+| **Behavior to retain** | ROE default-driven by Planner defaults; every pricing input carries its source in the chain; DAP evidence-only; value reconciliation FX bridge intact. |
+| **Out of scope** | Changing the standing default editing surface; per-line overrides of other pricing inputs (margins/rebate) — those follow their own decision; any change to the value-reconciliation bridge itself. |
+| **TRIGGER** | Business confirms a real need for per-deal locked FX on a lineup (a deal negotiated at a fixed rate that must override the standing default); **or** Warren explicitly approves building the override. |
+
+---
+
 ## BACKLOG-052 — Lineup margin-amount evidence capture (when a margin column holds currency, not a %)
 
 | Field | Detail |
