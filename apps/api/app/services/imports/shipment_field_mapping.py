@@ -55,6 +55,7 @@ SHIPMENT_CANONICAL_TARGETS: tuple[str, ...] = (
     "erd_date",
     "est_pod_date",
     "pod_date",
+    "crad_date",
     "customer_dealer_token",
 )
 
@@ -82,6 +83,10 @@ SHIPMENT_FIELD_TARGET_DESCRIPTIONS: dict[str, str] = {
     ),
     "pod_date": (
         "Actual Proof of Delivery: the confirmed delivery date once the shipment is delivered (null until known)."
+    ),
+    "crad_date": (
+        "Customer Required Arrival Date from the workbook CRAD column (commercial planning anchor; "
+        "distinct from logistics POD/ship-confirm dates)."
     ),
 }
 

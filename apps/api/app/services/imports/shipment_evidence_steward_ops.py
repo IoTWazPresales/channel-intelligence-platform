@@ -222,6 +222,7 @@ def _update_lines_resolved(
         .where(ShipmentEvidenceLine.id.in_(unique_ids))
         .values(
             distributor_id=int(distributor_id),
+            resolved_distributor_id=int(distributor_id),
             distributor_resolution_status="resolved",
             distributor_resolution_token=tok,
         )
@@ -443,7 +444,7 @@ def _mark_customer_lines_resolved(db: Session, line_ids: list[int], customer_id:
     result = db.execute(
         update(ShipmentEvidenceLine)
         .where(ShipmentEvidenceLine.id.in_(unique_ids))
-        .values(customer_resolution_status="resolved", customer_id=cid)
+        .values(customer_resolution_status="resolved", customer_id=cid, resolved_customer_id=cid)
     )
     return int(result.rowcount or 0)
 

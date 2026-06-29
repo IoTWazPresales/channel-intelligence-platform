@@ -91,3 +91,11 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
     customer_dealer_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True)
     customer_resolution_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    resolved_customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    resolved_distributor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_distributor.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    crad_date: Mapped[date | None] = mapped_column(Date, nullable=True)

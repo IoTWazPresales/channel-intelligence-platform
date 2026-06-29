@@ -259,6 +259,7 @@ def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None =
                 "Delivery Confirmed Date",
             )
         ),
+        "crad_date": _parse_date(by_canon("crad_date") or col("CRAD", "crad")),
         "customer_dealer_token": normalize_shipment_cell_value(
             by_canon("customer_dealer_token")
             or col(
@@ -725,6 +726,7 @@ _SHIPMENT_LINE_DATE_COLS = (
     "erd_date",
     "est_pod_date",
     "pod_date",
+    "crad_date",
 )
 
 
@@ -772,6 +774,7 @@ def _shipment_line_conflict_set(ex: Any) -> dict[str, Any]:
         "erd_date": ex.erd_date,
         "est_pod_date": ex.est_pod_date,
         "pod_date": ex.pod_date,
+        "crad_date": ex.crad_date,
         "customer_dealer_token": ex.customer_dealer_token,
         "updated_at": func.now(),
     }
@@ -955,8 +958,13 @@ def _resolve_unresolved_shipment_lines_for_job(
             line.distributor_id = did
             line.distributor_resolution_status = dstatus
             line.distributor_resolution_token = dtoken
+            if did is not None:
+                line.resolved_distributor_id = int(did)
             db.add(line)
     db.flush()
+    from app.services.imports.shipment_resolved_entities import populate_resolved_entities_for_job
+
+    populate_resolved_entities_for_job(db, job, res_cache=res_cache)
 
 
 def _openpyxl_sheet_to_dataframe(ws: Any) -> pd.DataFrame:
@@ -1229,9 +1237,12 @@ def process_shipment_evidence_import(
                     "erd_date": ex["erd_date"],
                     "est_pod_date": ex["est_pod_date"],
                     "pod_date": ex["pod_date"],
+                    "crad_date": ex["crad_date"],
                     "customer_dealer_token": ex["customer_dealer_token"],
                     "customer_resolution_status": None,
                     "customer_id": None,
+                    "resolved_customer_id": None,
+                    "resolved_distributor_id": int(did) if did is not None else None,
                     "product_id": pid,
                     "product_resolution_status": pstatus,
                     "product_resolution_token": ptoken,

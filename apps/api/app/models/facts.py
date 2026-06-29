@@ -186,6 +186,14 @@ class FactInboundShipment(Base, TimestampMixin):
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True)
     customer_resolution_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    resolved_customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    resolved_distributor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_distributor.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    crad_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
     eta_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="scheduled", nullable=False)

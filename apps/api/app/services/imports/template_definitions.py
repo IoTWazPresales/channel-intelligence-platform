@@ -536,6 +536,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                 ],
                 "required": False,
             },
+            "crad_date": {"aliases": ["CRAD", "crad"], "required": False},
             "customer_dealer_token": {
                 "aliases": ["Customer Remarks", "Customer Remark", "CUSTOMER REMARKS", "customer remarks"],
                 "required": False,

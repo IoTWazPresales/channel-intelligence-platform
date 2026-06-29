@@ -25,12 +25,16 @@ def _require_po_schema(db) -> None:
         for r in db.execute(
             text(
                 "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'shipment_evidence_line' AND column_name IN ('customer_po', 'purchase_order_id')"
+                "WHERE table_name = 'shipment_evidence_line' AND column_name IN "
+                "('customer_po', 'purchase_order_id', 'resolved_customer_id', "
+                "'resolved_distributor_id', 'crad_date')"
             )
         )
     }
-    if cols != {"customer_po", "purchase_order_id"}:
+    if "customer_po" not in cols or "purchase_order_id" not in cols:
         pytest.skip("shipment customer_po / purchase_order_id columns not migrated (0052+0054)")
+    if not {"resolved_customer_id", "resolved_distributor_id", "crad_date"}.issubset(cols):
+        pytest.skip("shipment resolved_* / crad_date columns not migrated (0058)")
 
 
 def test_extract_customer_po_from_raw_row():
