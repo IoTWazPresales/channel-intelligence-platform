@@ -99,14 +99,88 @@ class _ProposalAcc:
     case_id: int
     customer_id: int | None
     distributor_id: int | None
+    po_number_norm: str
     purchase_order_id: int
     confidence: ConfidenceTier
     reason: str
     date_source: DateSource
     products: dict[int, _ProductMatch] = field(default_factory=dict)
+    po_ids_seen: set[int] = field(default_factory=set)
 
     def proposal_key(self) -> str:
-        return f"{self.case_id}:{self.customer_id or 0}:{self.distributor_id or 0}:{self.purchase_order_id}"
+        return f"{self.case_id}:{self.customer_id or 0}:{self.po_number_norm}"
+
+
+def _case_norm_already_linked(
+    case_id: int,
+    po_number_norm: str,
+    linked_pairs: set[tuple[int, int]],
+    po_norm_by_id: dict[int, str],
+) -> bool:
+    for linked_case_id, linked_po_id in linked_pairs:
+        if linked_case_id == case_id and po_norm_by_id.get(linked_po_id) == po_number_norm:
+            return True
+    return False
+
+
+def _pick_canonical_po_id(
+    po_ids: set[int],
+    po_meta: dict[int, PurchaseOrder],
+    *,
+    preferred_distributor_id: int | None,
+) -> int:
+    """Prefer distributor-assigned PO row over legacy NULL-dist duplicate."""
+    if not po_ids:
+        raise ValueError("po_ids required")
+    if preferred_distributor_id is not None:
+        for pid in sorted(po_ids):
+            po = po_meta.get(pid)
+            if po is not None and po.distributor_id == preferred_distributor_id:
+                return pid
+    for pid in sorted(po_ids):
+        po = po_meta.get(pid)
+        if po is not None and po.distributor_id is not None:
+            return pid
+    return min(po_ids)
+
+
+def _best_lineup_match_for_product(
+    case_lines: list[CommercialLineupLine],
+    *,
+    product_id: int,
+    ship_customer_id: int | None,
+    date_source: DateSource,
+) -> tuple[CommercialLineupLine | None, ConfidenceTier | None, str | None, CustomerAlign | None]:
+    """Return at most one lineup line match per shipment product (avoids duplicate qty)."""
+    best_line: CommercialLineupLine | None = None
+    best_align: CustomerAlign | None = None
+    best_conf: ConfidenceTier | None = None
+    best_reason: str | None = None
+
+    for ln in case_lines:
+        if int(ln.product_id) != product_id:  # type: ignore[arg-type]
+            continue
+        lineup_cust = int(ln.customer_id) if ln.customer_id is not None else None
+        align = classify_customer_alignment(ship_customer_id, lineup_cust)
+        conf, reason = classify_match_confidence(
+            customer_align=align,
+            date_source=date_source,
+            in_period=True,
+        )
+        if conf is None:
+            continue
+        if best_line is None:
+            best_line, best_align, best_conf, best_reason = ln, align, conf, reason
+            continue
+        # Prefer exact customer match over unresolved when both qualify.
+        if best_align != "exact" and align == "exact":
+            best_line, best_align, best_conf, best_reason = ln, align, conf, reason
+        elif align == best_align and conf == "high" and best_conf == "medium":
+            best_line, best_align, best_conf, best_reason = ln, align, conf, reason
+
+    if best_line is None:
+        return None, None, None, None
+    return best_line, best_conf, best_reason, best_align
 
 
 def _period_label_matches(case: CommercialLineupCase, period_filter: str | None) -> bool:
@@ -221,19 +295,33 @@ async def _po_auto_link_proposals_inner(
         )
     ).scalars().all()
 
-    # Lineup index: case_id -> list of lines
+    ship_po_ids = sorted({int(s.purchase_order_id) for s in shipment_rows if s.purchase_order_id is not None})
+    po_meta: dict[int, PurchaseOrder] = {}
+    po_norm_by_id: dict[int, str] = {}
+    if ship_po_ids:
+        for po in (await db.execute(select(PurchaseOrder).where(PurchaseOrder.id.in_(ship_po_ids)))).scalars().all():
+            pid = int(po.id)
+            po_meta[pid] = po
+            po_norm_by_id[pid] = (po.po_number_norm or po.po_number_raw or str(pid)).strip()
+
+    # Lineup index: case_id -> list of lines; product_id -> lines on case
     lineup_by_case: dict[int, list[CommercialLineupLine]] = defaultdict(list)
+    lineup_by_case_product: dict[tuple[int, int], list[CommercialLineupLine]] = defaultdict(list)
     planned_by_case_product: dict[tuple[int, int], float] = defaultdict(float)
     for ln in lineup_rows:
         cid = int(ln.case_id)
         pid = int(ln.product_id)  # type: ignore[arg-type]
         lineup_by_case[cid].append(ln)
+        lineup_by_case_product[(cid, pid)].append(ln)
         planned_by_case_product[(cid, pid)] += float(ln.quantity_units or 0)
 
     proposals_map: dict[str, _ProposalAcc] = {}
 
     for ship in shipment_rows:
         po_id = int(ship.purchase_order_id)  # type: ignore[arg-type]
+        po_number_norm = po_norm_by_id.get(po_id)
+        if not po_number_norm:
+            continue
         product_id = int(ship.product_id)  # type: ignore[arg-type]
         ship_cust = int(ship.resolved_customer_id) if ship.resolved_customer_id is not None else None
         ship_dist = int(ship.resolved_distributor_id) if ship.resolved_distributor_id is not None else None
@@ -245,66 +333,70 @@ async def _po_auto_link_proposals_inner(
         )
 
         for case_id, case_lines in lineup_by_case.items():
-            if (case_id, po_id) in linked_pairs:
+            if _case_norm_already_linked(case_id, po_number_norm, linked_pairs, po_norm_by_id):
                 continue
             case = case_by_id[case_id]
             period_start = case.inferred_period_start
-            in_period = date_in_case_period(ev_date, period_start)
-            if not in_period:
+            if not date_in_case_period(ev_date, period_start):
                 continue
 
-            for ln in case_lines:
-                if int(ln.product_id) != product_id:  # type: ignore[arg-type]
-                    continue
-                lineup_cust = int(ln.customer_id) if ln.customer_id is not None else None
-                cust_align = classify_customer_alignment(ship_cust, lineup_cust)
-                conf, reason = classify_match_confidence(
-                    customer_align=cust_align,
-                    date_source=date_src,
-                    in_period=True,
-                )
-                if conf is None or reason is None:
-                    continue
+            product_lines = lineup_by_case_product.get((case_id, product_id), [])
+            if not product_lines:
+                continue
 
-                prop_cust = ship_cust if ship_cust is not None else lineup_cust
-                if customer_id is not None and prop_cust is not None and int(prop_cust) != int(customer_id):
-                    continue
-                if confidence is not None and conf != confidence:
-                    continue
+            match_ln, conf, reason, _align = _best_lineup_match_for_product(
+                case_lines,
+                product_id=product_id,
+                ship_customer_id=ship_cust,
+                date_source=date_src,
+            )
+            if match_ln is None or conf is None or reason is None:
+                continue
+            lineup_cust = int(match_ln.customer_id) if match_ln.customer_id is not None else None
+            prop_cust = ship_cust if ship_cust is not None else lineup_cust
+            lineup_dist = int(match_ln.distributor_id) if match_ln.distributor_id is not None else None
+            dist_id = ship_dist if ship_dist is not None else lineup_dist
+            if customer_id is not None and prop_cust is not None and int(prop_cust) != int(customer_id):
+                continue
+            if confidence is not None and conf != confidence:
+                continue
 
-                lineup_dist = int(ln.distributor_id) if ln.distributor_id is not None else None
-                dist_id = ship_dist if ship_dist is not None else lineup_dist
+            key = f"{case_id}:{prop_cust or 0}:{po_number_norm}"
+            if key in dismissed_keys and not include_dismissed:
+                continue
 
-                acc = _ProposalAcc(
+            existing = proposals_map.get(key)
+            if existing is None:
+                existing = _ProposalAcc(
                     case_id=case_id,
                     customer_id=prop_cust,
                     distributor_id=dist_id,
+                    po_number_norm=po_number_norm,
                     purchase_order_id=po_id,
                     confidence=conf,
                     reason=reason,
                     date_source=date_src,
                 )
-                key = acc.proposal_key()
-                if key in dismissed_keys and not include_dismissed:
-                    continue
-                existing = proposals_map.get(key)
-                if existing is None:
-                    proposals_map[key] = acc
-                    existing = acc
-                elif existing.confidence == "medium" and conf == "high":
+                proposals_map[key] = existing
+            else:
+                if existing.confidence == "medium" and conf == "high":
                     existing.confidence = conf
                     existing.reason = reason
                     existing.date_source = date_src
+                if existing.distributor_id is None and dist_id is not None:
+                    existing.distributor_id = dist_id
 
-                pm = existing.products.setdefault(product_id, _ProductMatch(product_id=product_id))
-                pm.shipped_units += ship_qty
-                pm.planned_units = planned_by_case_product.get((case_id, product_id), 0.0)
+            existing.po_ids_seen.add(po_id)
+            pm = existing.products.setdefault(product_id, _ProductMatch(product_id=product_id))
+            pm.shipped_units += ship_qty
+            pm.planned_units = planned_by_case_product.get((case_id, product_id), 0.0)
 
-    po_ids = sorted({p.purchase_order_id for p in proposals_map.values()})
-    po_meta: dict[int, PurchaseOrder] = {}
-    if po_ids:
-        for po in (await db.execute(select(PurchaseOrder).where(PurchaseOrder.id.in_(po_ids)))).scalars().all():
-            po_meta[int(po.id)] = po
+    for acc in proposals_map.values():
+        acc.purchase_order_id = _pick_canonical_po_id(
+            acc.po_ids_seen,
+            po_meta,
+            preferred_distributor_id=acc.distributor_id,
+        )
 
     cust_ids = sorted({p.customer_id for p in proposals_map.values() if p.customer_id is not None})
     dist_ids = sorted({p.distributor_id for p in proposals_map.values() if p.distributor_id is not None})
@@ -362,7 +454,10 @@ async def _po_auto_link_proposals_inner(
                 "confidence": acc.confidence,
                 "reason": acc.reason,
                 "date_source": acc.date_source,
-                "already_linked": (acc.case_id, acc.purchase_order_id) in linked_pairs,
+                "already_linked": _case_norm_already_linked(
+                    acc.case_id, acc.po_number_norm, linked_pairs, po_norm_by_id
+                ),
+                "alternate_purchase_order_ids": sorted(acc.po_ids_seen - {acc.purchase_order_id}),
                 "dismissed": acc.proposal_key() in dismissed_keys,
                 "matched_products": [
                     {

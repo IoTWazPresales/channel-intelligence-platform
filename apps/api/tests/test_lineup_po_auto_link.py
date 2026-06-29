@@ -87,6 +87,43 @@ def test_out_of_period_no_match():
     assert not date_in_case_period(date(2026, 5, 1), date(2026, 1, 1))
 
 
+def test_best_lineup_match_counts_once_per_product():
+    """Multiple lineup rows for the same product must not create multiple matches."""
+    from types import SimpleNamespace
+
+    from app.services.commercial_planner.lineup_po_auto_link import _best_lineup_match_for_product
+
+    lines = [
+        SimpleNamespace(product_id=100, customer_id=5, distributor_id=10),
+        SimpleNamespace(product_id=100, customer_id=5, distributor_id=10),
+        SimpleNamespace(product_id=100, customer_id=5, distributor_id=10),
+    ]
+    ln, conf, reason, align = _best_lineup_match_for_product(
+        lines,
+        product_id=100,
+        ship_customer_id=5,
+        date_source="crad",
+    )
+    assert ln is not None
+    assert conf == "high"
+    assert align == "exact"
+
+
+@pytest.mark.anyio
+async def test_purmidr_not_duplicated_per_po_norm_on_26q2():
+    """Regression: one proposal per case+customer+PO norm (not per duplicate purchase_order id)."""
+    pytest.importorskip("asyncpg")
+    from app.db.session import AsyncSessionLocal
+    from app.services.commercial_planner.lineup_po_auto_link import po_auto_link_proposals
+
+    async with AsyncSessionLocal() as db:
+        r = await po_auto_link_proposals(db, period="26Q2", limit=500)
+    hits = [p for p in r["proposals"] if p.get("po_number") == "PURMIDR26010748" and "Game" in (p.get("customer_label") or "")]
+    assert len(hits) == 1
+    row = hits[0]
+    assert row["total_shipped_units"] <= 7000  # was inflated to 21276 before fix
+
+
 @pytest.mark.anyio
 async def test_proposals_endpoint_smoke_on_cip():
     """Integration smoke when resolved columns + lineup data exist."""
