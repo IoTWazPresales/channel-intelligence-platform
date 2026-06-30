@@ -550,6 +550,136 @@ async def customer_alias_scope_merge_task_status(task_id: str):
     return progress
 
 
+class CustomerFullMergeBody(BaseModel):
+    similarity_key: str = Field(min_length=1, max_length=512)
+    survivor_id: int | None = None
+    customer_ids: list[int] | None = None
+    audit_note: str = Field(min_length=1, max_length=2000)
+
+
+class CustomerFullMergeBulkPreviewBody(BaseModel):
+    groups: list[dict[str, Any]]
+    audit_note: str = Field(min_length=1, max_length=2000)
+
+
+@router.post("/duplicate-groups/merge-preview")
+async def customer_full_merge_preview_endpoint(body: CustomerFullMergeBody):
+    import asyncio
+
+    from app.db.session_sync import SessionLocal
+    from app.services.customer_full_merge import CustomerFullMergeError, preview_customer_full_merge
+
+    def _run() -> dict:
+        with SessionLocal() as db:
+            return preview_customer_full_merge(
+                db,
+                similarity_key=body.similarity_key,
+                survivor_id=body.survivor_id,
+                audit_note=body.audit_note,
+                customer_ids=body.customer_ids,
+            )
+
+    try:
+        return await asyncio.to_thread(_run)
+    except CustomerFullMergeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/duplicate-groups/merge-preview-bulk")
+async def customer_full_merge_bulk_preview_endpoint(body: CustomerFullMergeBulkPreviewBody):
+    import asyncio
+
+    from app.db.session_sync import SessionLocal
+    from app.services.customer_full_merge import CustomerFullMergeError, preview_customer_full_merge_bulk
+
+    def _run() -> dict:
+        with SessionLocal() as db:
+            return preview_customer_full_merge_bulk(
+                db,
+                groups=body.groups,
+                audit_note=body.audit_note,
+            )
+
+    try:
+        return await asyncio.to_thread(_run)
+    except CustomerFullMergeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/duplicate-groups/merge-confirm", status_code=202)
+async def customer_full_merge_confirm_endpoint(body: CustomerFullMergeBody):
+    from app.services.customer_full_merge import CustomerFullMergeError
+    from app.services.customer_full_merge_enqueue import enqueue_customer_full_merge_confirm
+
+    if body.survivor_id is None:
+        raise HTTPException(status_code=400, detail="survivor_id is required for merge-confirm")
+
+    payload = {
+        "similarity_key": body.similarity_key,
+        "survivor_id": int(body.survivor_id),
+        "audit_note": body.audit_note,
+        "customer_ids": body.customer_ids,
+    }
+    try:
+        task_id, async_poll = enqueue_customer_full_merge_confirm(payload)
+    except CustomerFullMergeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "task_id": task_id,
+        "async_poll": async_poll,
+        "similarity_key": body.similarity_key,
+        "survivor_id": body.survivor_id,
+    }
+
+
+@router.get("/duplicate-groups/merge-task/{task_id}")
+async def customer_full_merge_task_status(task_id: str):
+    import asyncio
+
+    from app.services.customer_full_merge_enqueue import dev_customer_full_merge_results
+    from app.services.task_run_ledger import (
+        POLL_STATE_FAILURE,
+        POLL_STATE_SUCCESS,
+        read_task_run_poll_progress_sync,
+    )
+
+    dev_hit = dev_customer_full_merge_results().get(task_id)
+    if dev_hit is not None:
+        state = dev_hit.get("state", POLL_STATE_SUCCESS)
+        if state in (POLL_STATE_SUCCESS, POLL_STATE_FAILURE):
+            dev_customer_full_merge_results().pop(task_id, None)
+        progress: dict = {"task_id": task_id, "state": state}
+        if state == POLL_STATE_SUCCESS:
+            progress["result"] = dev_hit.get("result")
+        else:
+            progress["error"] = dev_hit.get("error")
+        return progress
+
+    ledger_progress = await asyncio.to_thread(read_task_run_poll_progress_sync, task_id)
+    if ledger_progress is not None:
+        return ledger_progress
+
+    from celery.result import AsyncResult
+
+    from app.worker.celery_app import celery_app
+
+    def _read() -> tuple[str, Any]:
+        r = AsyncResult(task_id, app=celery_app)
+        return r.state, r.info
+
+    task_state, info = await asyncio.to_thread(_read)
+    progress = {"task_id": task_id, "state": task_state}
+    if task_state == POLL_STATE_SUCCESS:
+        from celery.result import AsyncResult as _AR
+
+        raw_result = await asyncio.to_thread(lambda: _AR(task_id, app=celery_app).result)
+        progress["result"] = raw_result if isinstance(raw_result, dict) else None
+    elif task_state == POLL_STATE_FAILURE:
+        progress["error"] = str(info)[:800] if info is not None else "Task failed"
+    return progress
+
+
 @router.post("", status_code=201)
 async def create_customer(body: CustomerCreate, db: AsyncSession = Depends(get_db)):
     customer_name = body.customer_name.strip()

@@ -458,6 +458,23 @@ def dsi_forecasting_task(self, job_id: int, payload: dict) -> dict:
         raise
 
 
+@celery_app.task(name="customers.full_merge_confirm", bind=True, ack_late=True)
+def customer_full_merge_confirm_task(self, payload: dict) -> dict:
+    """Steward-confirmed full customer merge (name-similarity group)."""
+    from app.db.session_sync import SessionLocal
+    from app.services.customer_full_merge import confirm_customer_full_merge_sync
+
+    with SessionLocal() as db:
+        return confirm_customer_full_merge_sync(
+            db,
+            similarity_key=str(payload["similarity_key"]),
+            survivor_id=int(payload["survivor_id"]),
+            audit_note=str(payload["audit_note"]),
+            performed_by=payload.get("performed_by"),
+            customer_ids=payload.get("customer_ids"),
+        )
+
+
 @celery_app.task(name="customers.alias_scope_merge_confirm", bind=True, ack_late=True)
 def customer_alias_scope_merge_confirm_task(self, payload: dict) -> dict:
     """Steward-confirmed customer alias-scope merge."""
