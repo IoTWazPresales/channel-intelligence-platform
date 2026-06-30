@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` (now also carries Session C; cut from `feat/dsi-async-topology` + BACKLOG-051 docs) |
-| **HEAD** | Unit 4 pushed (`commercial-planner: PO auto-link review UI`) |
+| **HEAD** | `878f3d2` — PO auto-link planned/shipped read-model fix |
 | **PR** | None open |
 | **Alembic (code)** | `20260629_0059` (po auto-link dismiss) |
 | **Alembic (DB)** | **`20260629_0059`** on local `cip` (grants to `cip` role applied) |
@@ -290,7 +290,7 @@ distributor via `_resolve_distributor_strict` + aliases; CRAD only in `raw_sourc
 
 ## Next (recommended)
 
-1. **Browser soak** PO auto-link section on `/admin/po-management`.
+1. **Browser soak** PO auto-link after planned/shipped fix (`878f3d2`) on `/admin/po-management`.
 2. **PO↔lineup Unit 5** — period-derived importer (when Warren asks).
 3. **Open PR** for `feat/unit-6-unified-lineup-import-centre` when lineup + PO units are ready.
 4. Fix `dsi-mapping-steward-panel.tsx` rules-of-hooks lint (unblocks `pnpm lint`).
