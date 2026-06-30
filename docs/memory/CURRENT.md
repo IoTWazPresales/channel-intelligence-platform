@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-30 (PO-inclusive shipped fact_upsert_key; 0061 applied on cip)
+**Last updated:** 2026-06-30 (`ee743de` — customer + distributor full merge, PO read-model, ops scripts)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,11 +9,11 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/unit-6-unified-lineup-import-centre` (now also carries Session C; cut from `feat/dsi-async-topology` + BACKLOG-051 docs) |
-| **HEAD** | PO-inclusive `fact_upsert_key` + collapse merge + `0061` on `cip` |
+| **Branch** | `feat/unit-6-unified-lineup-import-centre` (Session B/C lineup + PO units + master merge) |
+| **HEAD** | `ee743de` — distributor full merge + ops script housekeeping |
 | **PR** | None open |
-| **Alembic (code)** | `20260630_0061` (head) |
-| **Alembic (DB)** | **`20260630_0061`** on local `cip` |
+| **Alembic (code)** | `20260630_0063` (head) |
+| **Alembic (DB)** | **`20260630_0063`** on local `cip` |
 
 ---
 
@@ -192,6 +192,48 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
 distributor via `_resolve_distributor_strict` + aliases; CRAD only in `raw_source_row`; PO dup from NULL
 `distributor_id` materialize (fixed in Unit 2).
 
+### Customer full merge — name-similarity duplicates (`ebfa936`, `a05f88e`) — code done, migration on cip
+- **Mirror of shipment/customer-merge pattern:** runtime FK discovery (`customer_fk_discovery.py`),
+  preview-first merge (`customer_full_merge.py`), set-based repoint (`customer_full_repoint.py`),
+  async Celery enqueue (`customer_full_merge_enqueue.py`).
+- **API** `/customers/duplicate-groups/*` — preview, confirm (async task + poll), list groups.
+- **UI** `/admin/customers/duplicates` — `NameSimilarityMergeSection` (preview counts, confirm dialog,
+  activity-feed progress).
+- **Tombstone scan fix (`a05f88e`):** merged-into customers excluded from duplicate-group discovery.
+- **Tests:** `test_customer_full_merge.py` (252 lines). Uses existing `merged_into_customer_id` on
+  `dim_customer` (no new migration this unit).
+
+### Distributor full merge — name-similarity duplicates (`361d138`) — code done, `0063` on cip
+- **Customer-merge mirror for `dim_distributor`:** FK discovery, PO row consolidation
+  (`distributor_merge_po_consolidation.py`), full repoint, preview/confirm, async enqueue.
+- **Migration `20260630_0063`:** `distributor_status`, `merged_into_distributor_id`, `merge_note` on
+  `dim_distributor` (**applied to `cip`**).
+- **API** `/distributors/duplicate-groups/*` — preview, confirm, list.
+- **UI** `/admin/distributors/duplicates` — `DistributorNameSimilarityMergeSection` + nav link.
+- **Deprecation:** legacy provisional distributor merge in `shipment_evidence_steward_ops.py` marked
+  superseded.
+- **Tests:** `test_distributor_full_merge.py` (8 pass on disposable DB). **Browser soak open** on
+  `/admin/distributors/duplicates` (API smoke: 200, 0 groups / 25 distributors scanned).
+
+### PO Management read-model refresh (`878f3d2`, `f2b987e`, `b9b8701`) — code done, browser soak open
+- **Read-model fix (`878f3d2`):** planned at (case×customer×product) grain; shipped/open from
+  `fact_inbound_shipment` (not stacked evidence).
+- **Unified totals (`f2b987e`):** coverage/backlog/gap shipped totals on `fact_inbound_shipment`;
+  globally linked POs excluded from auto-link proposals; matched products enriched with `dim_product`
+  labels; auto-link section lazy-loaded with `EnterpriseDataGrid` + dismiss dialogs.
+- **Match quality (`b9b8701`):** PO auto-link passes product-filtered lineup lines into matcher.
+- **Task-run ledger (`1763471`):** enqueue/worker race upsert made idempotent.
+
+### Shipped fact identity (`0060`–`0062`, `0061` unique) — applied on `cip`
+- **`fact_upsert_key`:** invoice-line-agnostic shipped key (`0060`), PO-inclusive key
+  `ship:OU|delivery|item|purchase_order_id` (`0062`), collapse merge + unique constraint (`0061`).
+- Amazon `PURMIDR26009978` shipped count corrected after backfill/collapse (see `CONTEXT.md` changelog).
+
+### Ops scripts housekeeping (`ee743de`)
+- Reusable maintenance scripts under `apps/api/scripts/ops/` (`resync_shipment_facts_customer_po.py`,
+  `cleanup_test_fixture_customers.py`).
+- Deleted obsolete one-shot `apply_20260626_0051_manual.py`.
+
 ### Unit A — case-level distributor assignment (tokenless lines) (2026-06-28) — code done, browser soak open
 - **Gap closed:** entity resolution is token-keyed, so lineup lines with no `distributor_token_raw`
   (e.g. an Amazon file that simply has no distributor column) could never be assigned a distributor —
@@ -265,8 +307,12 @@ distributor via `_resolve_distributor_strict` + aliases; CRAD only in `raw_sourc
 
 ### Job #96 — large-volume apply PROVEN LIVE (`loaded`, channel operations)
 - Full **178k-row** RAW workbook applied; facts visible in channel operations (Warren confirmed 2026-06-28).
-- `fact_sales_sellout`=35,582 · `fact_inventory_distributor`=47,411 · `fact_returns`=3,175 (unique `source_key` grain — multiple Excel rows collapse per key).
+- **Read-only re-audit (2026-06-30):** `status=completed` · `stage=loaded` ·
+  `staged_metadata.distributor_si.applied_at` **2026-06-27T18:13:07Z** · **0** staging blockers.
+- Facts (`source_import_job_id=96`): `fact_sales_sellout` **35,582** (178,196 units) ·
+  `fact_inventory_distributor` **47,411** (1,533,553 SOH) · `fact_returns` **3,175**.
 - Apply path: async worker + poll; `staged_metadata` deadlock fix (`b2b81ea`) holds at volume.
+- Predates customer full merge (`ebfa936`, 2026-06-29) — no re-apply needed for merge remediation.
 
 ### DSI apply pipeline (prior commits on branch)
 - **No re-validate on apply** (`e4c30bc`): skip Step 1 when job already `validated` with staging.
@@ -280,7 +326,9 @@ distributor via `_resolve_distributor_strict` + aliases; CRAD only in `raw_sourc
 ---
 
 ## In progress / not proven live
-- **PO↔lineup Unit 4 browser soak** — live review/link/dismiss on `/admin/po-management`.
+- **PO Management browser soak** — lazy auto-link grid + dismiss on `/admin/po-management` (`f2b987e`).
+- **Distributor duplicates browser soak** — live merge preview/confirm on `/admin/distributors/duplicates`.
+- **Customer duplicates browser soak** — live merge on `/admin/customers/duplicates` (`ebfa936`).
 - **Pre-existing lint** — 7 `rules-of-hooks` errors in `dsi-mapping-steward-panel.tsx` block clean `pnpm lint` (not introduced by DSI apply work).
 - **Billiard quirk** — solo worker spawns one child under system Python (single logical consumer; interpreter mismatch latent).
 - Warren **actively working through** ACZA shipment upload (BOM tab deferred per BACKLOG-046).
@@ -290,9 +338,9 @@ distributor via `_resolve_distributor_strict` + aliases; CRAD only in `raw_sourc
 
 ## Next (recommended)
 
-1. **Browser soak** PO auto-link after planned/shipped fix (`878f3d2`) on `/admin/po-management`.
-2. **PO↔lineup Unit 5** — period-derived importer (when Warren asks).
-3. **Open PR** for `feat/unit-6-unified-lineup-import-centre` when lineup + PO units are ready.
+1. **Browser soak** PO Management + customer/distributor duplicate merge UIs.
+2. **Open PR** for `feat/unit-6-unified-lineup-import-centre` (`ee743de` — lineup, PO, master merge).
+3. **PO↔lineup Unit 5** — period-derived importer (when Warren asks).
 4. Fix `dsi-mapping-steward-panel.tsx` rules-of-hooks lint (unblocks `pnpm lint`).
 5. Finish ACZA upload (trim to **Shipped + Unship** until BACKLOG-046).
 
