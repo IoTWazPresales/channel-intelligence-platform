@@ -1,8 +1,9 @@
 """PO↔lineup auto-link proposal engine (Unit 3). Derived on read — proposes only, never confirms.
 
-Matches shipment evidence to lineup cases on ``resolved_customer_id`` + ``product_id`` + period.
-Period anchor is **CRAD-primary** (``crad_date``); fallback ``schedule_ship_date`` then
-``ship_confirm_date`` when CRAD is absent.
+Matches inbound shipment facts to lineup cases on ``resolved_customer_id`` + ``product_id`` + period.
+Shipped totals use ``fact_inbound_shipment`` (``source_key`` deduped, latest-job-wins); open pipeline
+is reported separately. Period anchor is **CRAD-primary** (``crad_date``); fallback ``schedule_ship_date``
+then ``ship_confirm_date`` when CRAD is absent.
 """
 from __future__ import annotations
 
@@ -17,8 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine, CommercialLineupPoAutoLinkDismiss
 from app.models.dimensions import DimCustomer, DimDistributor
+from app.models.facts import FactInboundShipment
 from app.models.purchase_order import PurchaseOrder
-from app.models.shipment_evidence import ShipmentEvidenceLine
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,7 @@ class _ProductMatch:
     product_id: int
     planned_units: float = 0.0
     shipped_units: float = 0.0
+    open_order_units: float = 0.0
 
 
 @dataclass
@@ -286,11 +288,13 @@ async def _po_auto_link_proposals_inner(
     ).all():
         linked_pairs.add((int(case_id), int(po_id)))
 
+    # Truth layer: global ``source_key`` upsert (latest-job-wins). Evidence rows are per-job and
+    # must not be summed for shipped totals — see ``shipment_inbound_facts.upsert_inbound_shipment_facts_for_job``.
     shipment_rows = (
         await db.execute(
-            select(ShipmentEvidenceLine).where(
-                ShipmentEvidenceLine.purchase_order_id.isnot(None),
-                ShipmentEvidenceLine.product_id.isnot(None),
+            select(FactInboundShipment).where(
+                FactInboundShipment.purchase_order_id.isnot(None),
+                FactInboundShipment.product_id.isnot(None),
             )
         )
     ).scalars().all()
@@ -307,13 +311,14 @@ async def _po_auto_link_proposals_inner(
     # Lineup index: case_id -> list of lines; product_id -> lines on case
     lineup_by_case: dict[int, list[CommercialLineupLine]] = defaultdict(list)
     lineup_by_case_product: dict[tuple[int, int], list[CommercialLineupLine]] = defaultdict(list)
-    planned_by_case_product: dict[tuple[int, int], float] = defaultdict(float)
+    planned_by_case_customer_product: dict[tuple[int, int, int], float] = defaultdict(float)
     for ln in lineup_rows:
         cid = int(ln.case_id)
         pid = int(ln.product_id)  # type: ignore[arg-type]
         lineup_by_case[cid].append(ln)
         lineup_by_case_product[(cid, pid)].append(ln)
-        planned_by_case_product[(cid, pid)] += float(ln.quantity_units or 0)
+        if ln.customer_id is not None:
+            planned_by_case_customer_product[(cid, int(ln.customer_id), pid)] += float(ln.quantity_units or 0)
 
     proposals_map: dict[str, _ProposalAcc] = {}
 
@@ -326,6 +331,7 @@ async def _po_auto_link_proposals_inner(
         ship_cust = int(ship.resolved_customer_id) if ship.resolved_customer_id is not None else None
         ship_dist = int(ship.resolved_distributor_id) if ship.resolved_distributor_id is not None else None
         ship_qty = float(ship.quantity or 0)
+        line_state = (ship.line_state or "").strip().lower()
         ev_date, date_src = evidence_date_for_period_match(
             crad_date=ship.crad_date,
             schedule_ship_date=ship.schedule_ship_date,
@@ -388,8 +394,15 @@ async def _po_auto_link_proposals_inner(
 
             existing.po_ids_seen.add(po_id)
             pm = existing.products.setdefault(product_id, _ProductMatch(product_id=product_id))
-            pm.shipped_units += ship_qty
-            pm.planned_units = planned_by_case_product.get((case_id, product_id), 0.0)
+            if line_state == "shipped":
+                pm.shipped_units += ship_qty
+            elif line_state == "open_order":
+                pm.open_order_units += ship_qty
+            if prop_cust is not None:
+                pm.planned_units = planned_by_case_customer_product.get(
+                    (case_id, int(prop_cust), product_id),
+                    0.0,
+                )
 
     for acc in proposals_map.values():
         acc.purchase_order_id = _pick_canonical_po_id(
@@ -464,11 +477,13 @@ async def _po_auto_link_proposals_inner(
                         "product_id": m.product_id,
                         "planned_units": round(m.planned_units, 4),
                         "shipped_units": round(m.shipped_units, 4),
+                        "open_order_units": round(m.open_order_units, 4),
                     }
                     for m in products
                 ],
                 "total_planned_units": round(sum(m.planned_units for m in products), 4),
                 "total_shipped_units": round(sum(m.shipped_units for m in products), 4),
+                "total_open_order_units": round(sum(m.open_order_units for m in products), 4),
             }
         )
 

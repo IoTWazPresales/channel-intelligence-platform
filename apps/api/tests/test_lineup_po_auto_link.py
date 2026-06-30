@@ -125,6 +125,31 @@ async def test_purmidr_not_duplicated_per_po_norm_on_26q2():
 
 
 @pytest.mark.anyio
+async def test_purmidr_09978_amazon_customer_planned_and_fact_shipped_grain():
+    """Regression: Amazon planned is customer-scoped; shipped uses fact layer (not stacked evidence)."""
+    pytest.importorskip("asyncpg")
+    from app.db.session import AsyncSessionLocal
+    from app.services.commercial_planner.lineup_po_auto_link import po_auto_link_proposals
+
+    async with AsyncSessionLocal() as db:
+        r = await po_auto_link_proposals(db, period="26Q2", customer_id=26, limit=500)
+    hits = [
+        p
+        for p in r["proposals"]
+        if p.get("po_number_norm") == "PURMIDR26009978"
+        and p.get("case_id") == 9
+        and p.get("customer_id") == 26
+    ]
+    assert len(hits) == 1
+    row = hits[0]
+    # Was 11500 planned (whole-case product totals) and 2000 shipped (evidence + open_order).
+    assert row["total_planned_units"] < 1000
+    assert row["total_shipped_units"] < 1500
+    assert row["total_open_order_units"] >= 0
+    assert row["total_shipped_units"] + row["total_open_order_units"] < 2000
+
+
+@pytest.mark.anyio
 async def test_proposals_endpoint_smoke_on_cip():
     """Integration smoke when resolved columns + lineup data exist."""
     pytest.importorskip("asyncpg")
