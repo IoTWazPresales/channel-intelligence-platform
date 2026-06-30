@@ -228,7 +228,7 @@ def upsert_inbound_shipment_facts_for_job(
 ) -> int:
     """Insert/update ``fact_inbound_shipment`` for every evidence line on the job.
 
-    Shipped rows replace by ``fact_upsert_key`` (invoice-line-agnostic). Open-order rows
+    Shipped rows replace by PO-inclusive ``fact_upsert_key`` (invoice lines within PO sum).
     keep per-job ``source_key`` upsert semantics.
     """
     lines = list(

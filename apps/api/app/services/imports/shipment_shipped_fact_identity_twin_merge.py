@@ -1,14 +1,14 @@
 """Collapse shipped ``fact_inbound_shipment`` rows sharing ``fact_upsert_key``.
 
-Invoice lines are real separate system-generated lines and must be summed. Legacy rows
-(jobs 32/40, ``invoice_line`` null) are incomplete under-counts; the latest import job's
-invoice-line set is truth. Every key with >1 shipped row collapses to one survivor unless
-multiple distinct ``purchase_order_id`` values would corrupt PO attribution.
+Shipped keys are PO-inclusive: ``ship:{OU|delivery|item|purchase_order_id}``. Invoice lines
+on the same (delivery, item, PO) sum into one fact; different POs on one delivery stay separate.
+Legacy rows (jobs 32/40, ``invoice_line`` null) are incomplete under-counts; the latest import
+job's invoice-line set is truth for each PO-specific key.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from sqlalchemy import delete, func, select, text, update
@@ -56,10 +56,33 @@ class ShippedFactCollapseGroup:
 class ShippedFactCollapseSkip:
     fact_upsert_key: str
     reason: str
-    purchase_order_ids: tuple[int | None, ...] = ()
     fact_ids: tuple[int, ...] = ()
     rows: int = 0
     units: float = 0.0
+
+
+def regenerate_shipped_fact_upsert_keys(db: Session) -> int:
+    """Recompute PO-inclusive ``fact_upsert_key`` on all shipped facts."""
+    facts = list(
+        db.scalars(
+            select(FactInboundShipment).where(FactInboundShipment.line_state == "shipped")
+        ).all()
+    )
+    updated = 0
+    for f in facts:
+        key = stable_shipped_fact_upsert_key_from_fields(
+            operating_unit=f.operating_unit,
+            delivery_no=f.delivery_no,
+            item_code=f.item_code,
+            purchase_order_id=f.purchase_order_id,
+        )
+        if not key:
+            continue
+        if f.fact_upsert_key != key:
+            f.fact_upsert_key = key
+            updated += 1
+    db.flush()
+    return updated
 
 
 def _qty(f: FactInboundShipment) -> float:
@@ -79,10 +102,11 @@ def _job_id(f: FactInboundShipment) -> int:
 def _fact_stable_key(f: FactInboundShipment) -> str | None:
     if (f.line_state or "").strip().lower() != "shipped":
         return None
-    return f.fact_upsert_key or stable_shipped_fact_upsert_key_from_fields(
+    return stable_shipped_fact_upsert_key_from_fields(
         operating_unit=f.operating_unit,
         delivery_no=f.delivery_no,
         item_code=f.item_code,
+        purchase_order_id=f.purchase_order_id,
     )
 
 
@@ -99,17 +123,6 @@ def _is_legacy_shipped_fact(f: FactInboundShipment) -> bool:
     if f.invoice_line is None and not shipped_source_key_has_invoice_segment(f.source_key):
         return True
     return False
-
-
-def _po_attribution_skip_reason(facts: list[FactInboundShipment]) -> str | None:
-    """Return skip reason when rows on one key would corrupt PO attribution."""
-    non_null = {int(f.purchase_order_id) for f in facts if f.purchase_order_id is not None}
-    null_count = sum(1 for f in facts if f.purchase_order_id is None)
-    if len(non_null) > 1:
-        return "multiple_distinct_purchase_order_ids"
-    if non_null and null_count:
-        return "mixed_null_and_non_null_purchase_order_id"
-    return None
 
 
 def _report_bucket(
@@ -140,32 +153,12 @@ def _pick_keeper(latest_rows: list[FactInboundShipment]) -> FactInboundShipment:
 def _build_collapse_group(
     stable_key: str,
     facts: list[FactInboundShipment],
-) -> ShippedFactCollapseGroup | ShippedFactCollapseSkip:
-    po_skip = _po_attribution_skip_reason(facts)
-    if po_skip:
-        po_ids = tuple(
-            int(f.purchase_order_id) if f.purchase_order_id is not None else None for f in facts
-        )
-        return ShippedFactCollapseSkip(
-            fact_upsert_key=stable_key,
-            reason=po_skip,
-            purchase_order_ids=po_ids,
-            fact_ids=tuple(int(f.id) for f in facts),
-            rows=len(facts),
-            units=sum(_qty(f) for f in facts),
-        )
-
+) -> ShippedFactCollapseGroup:
     max_job = max(_job_id(f) for f in facts)
     latest_rows = [f for f in facts if _job_id(f) == max_job]
     older_rows = [f for f in facts if _job_id(f) != max_job]
     if not latest_rows:
-        return ShippedFactCollapseSkip(
-            fact_upsert_key=stable_key,
-            reason="no_rows_for_max_import_job",
-            fact_ids=tuple(int(f.id) for f in facts),
-            rows=len(facts),
-            units=sum(_qty(f) for f in facts),
-        )
+        raise ValueError(f"no rows for max import_job_id on key {stable_key!r}")
 
     keeper = _pick_keeper(latest_rows)
     survivor_qty = sum(_qty(f) for f in latest_rows)
@@ -218,11 +211,7 @@ def plan_shipped_fact_identity_twin_merges(
     for stable, members in sorted(groups.items(), key=lambda x: x[0]):
         if len(members) < 2:
             continue
-        outcome = _build_collapse_group(stable, members)
-        if isinstance(outcome, ShippedFactCollapseGroup):
-            plans.append(outcome)
-        else:
-            skipped.append(outcome)
+        plans.append(_build_collapse_group(stable, members))
 
     return plans, skipped
 
@@ -425,7 +414,6 @@ def shipped_fact_twin_skip_to_dict(s: ShippedFactCollapseSkip) -> dict[str, Any]
     return {
         "fact_upsert_key": s.fact_upsert_key,
         "reason": s.reason,
-        "purchase_order_ids": list(s.purchase_order_ids),
         "fact_ids": list(s.fact_ids),
         "rows": s.rows,
         "units": s.units,
@@ -476,7 +464,7 @@ def twin_blast_radius(
         "collapse_distinct_pos": len(po_ids),
         "bucket_rows_before": bucket_rows,
         "bucket_units_before": {k: round(v, 4) for k, v in bucket_units.items()},
-        "multi_po_skipped_groups": len(skipped),
+        "skipped_groups": len(skipped),
     }
 
 
@@ -486,6 +474,6 @@ ShippedFactTwinSkip = ShippedFactCollapseSkip
 TwinBucket = CollapseBucket
 
 
-def _classify_group(stable_key: str, facts: list[FactInboundShipment]) -> ShippedFactCollapseGroup | ShippedFactCollapseSkip:
+def _classify_group(stable_key: str, facts: list[FactInboundShipment]) -> ShippedFactCollapseGroup:
     """Backward-compatible entry for unit tests."""
     return _build_collapse_group(stable_key, facts)

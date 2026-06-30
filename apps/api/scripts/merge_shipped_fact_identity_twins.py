@@ -1,8 +1,7 @@
 """Preview-first collapse of shipped fact rows sharing ``fact_upsert_key``.
 
-Dry-run by default; ``--confirm`` executes all collapses (latest job wins, invoice lines
-summed). Warren runs against ``cip``. Run after migration ``20260630_0060`` and before
-``0061`` (unique on ``fact_upsert_key``).
+Dry-run by default; ``--confirm`` regenerates PO-inclusive keys, collapses duplicates,
+then commits. Run after ``20260630_0062`` and before ``0061`` (unique on ``fact_upsert_key``).
 """
 from __future__ import annotations
 
@@ -17,6 +16,7 @@ from app.services.imports.shipment_shipped_fact_identity_twin_merge import (
     amazon_po_shipped_stats,
     execute_all_shipped_fact_collapses,
     plan_shipped_fact_identity_twin_merges,
+    regenerate_shipped_fact_upsert_keys,
     shipped_fact_twin_plan_to_dict,
     shipped_fact_twin_skip_to_dict,
     shipped_fact_twin_summary_stats,
@@ -33,6 +33,12 @@ def run(*, dry_run: bool, limit: int | None, sample: int) -> dict:
 
         out["before"] = shipped_fact_twin_summary_stats(db)
         out["amazon_before"] = amazon_po_shipped_stats(db, "PURMIDR26009978", 26)
+
+        keys_regenerated = regenerate_shipped_fact_upsert_keys(db)
+        out["keys_regenerated"] = int(keys_regenerated)
+        if not dry_run:
+            db.flush()
+
         plans, skipped = plan_shipped_fact_identity_twin_merges(db)
         if limit is not None:
             plans = plans[: int(limit)]
@@ -42,7 +48,7 @@ def run(*, dry_run: bool, limit: int | None, sample: int) -> dict:
             "clean": sum(1 for g in plans if g.bucket == "clean"),
             "multi_invoice": sum(1 for g in plans if g.bucket == "multi_invoice"),
             "multi_import": sum(1 for g in plans if g.bucket == "multi_import"),
-            "multi_po_skipped": len(skipped),
+            "skipped": len(skipped),
         }
         out["losers_to_delete"] = sum(len(g.loser_ids) for g in plans)
         out["sample_clean"] = [
@@ -54,15 +60,20 @@ def run(*, dry_run: bool, limit: int | None, sample: int) -> dict:
         out["sample_multi_import"] = [
             shipped_fact_twin_plan_to_dict(g) for g in plans if g.bucket == "multi_import"
         ][:sample]
-        out["sample_multi_po_skipped"] = [shipped_fact_twin_skip_to_dict(s) for s in skipped][:sample]
+        out["sample_skipped"] = [shipped_fact_twin_skip_to_dict(s) for s in skipped][:sample]
 
         if dry_run:
+            db.rollback()
             amazon_po_id = out["amazon_before"].get("purchase_order_id")
-            stale = sum(g.units_before - g.survivor_qty for g in plans if g.purchase_order_id == amazon_po_id)
+            stale = sum(
+                g.units_before - g.survivor_qty
+                for g in plans
+                if g.purchase_order_id == amazon_po_id
+            )
             out["amazon_after_estimated"] = {
                 **out["amazon_before"],
                 "shipped_units": out["amazon_before"]["shipped_units"] - stale,
-                "note": "estimate after full collapse",
+                "note": "estimate after key regen + collapse (transaction rolled back)",
             }
             return out
 
@@ -76,8 +87,8 @@ def run(*, dry_run: bool, limit: int | None, sample: int) -> dict:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--confirm", action="store_true", help="Execute all collapses (default preview only)")
-    p.add_argument("--limit", type=int, default=None, help="Cap number of collapse groups (confirm only)")
+    p.add_argument("--confirm", action="store_true", help="Execute key regen + collapses")
+    p.add_argument("--limit", type=int, default=None, help="Cap collapse groups on confirm")
     p.add_argument("--sample", type=int, default=10, help="Preview sample size in output")
     args = p.parse_args()
     result = run(dry_run=not args.confirm, limit=args.limit, sample=max(0, int(args.sample)))

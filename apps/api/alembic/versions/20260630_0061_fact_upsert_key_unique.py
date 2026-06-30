@@ -3,8 +3,8 @@
 Revision ID: 20260630_0061
 Revises: 20260630_0060
 
-Requires ``merge_shipped_fact_identity_twins.py --confirm`` first when duplicate
-``fact_upsert_key`` rows exist (invoice_line drift twins).
+Requires ``merge_shipped_fact_identity_twins.py --confirm`` after ``20260630_0062`` when
+duplicate ``fact_upsert_key`` rows exist (invoice_line drift twins).
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260630_0061"
-down_revision: Union[str, Sequence[str], None] = "20260630_0060"
+down_revision: Union[str, Sequence[str], None] = "20260630_0062"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

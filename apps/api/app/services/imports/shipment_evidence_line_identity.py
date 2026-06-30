@@ -78,13 +78,19 @@ def stable_shipped_fact_upsert_key_from_fields(
     operating_unit: Any = None,
     delivery_no: Any = None,
     item_code: Any = None,
+    purchase_order_id: Any = None,
 ) -> str | None:
-    """Invoice-line-agnostic shipped fact upsert identity (OU + delivery + item).
+    """PO-inclusive shipped fact upsert identity (OU + delivery + item + purchase_order_id).
 
+    One delivery line may ship against multiple customer POs; invoice lines on the same
+    (delivery, item, PO) sum into one fact. Different POs on the same delivery stay separate.
     Used for ``fact_inbound_shipment`` conflict resolution only — not for open-order rows
     and not for bitemporal ``line_identity_key`` (which retains invoice_line).
     """
-    body = _pipe(operating_unit, delivery_no, item_code)
+    po_seg = ""
+    if purchase_order_id is not None and str(purchase_order_id).strip():
+        po_seg = str(int(purchase_order_id))
+    body = _pipe(operating_unit, delivery_no, item_code, po_seg)
     if not body or not _norm_seg(delivery_no):
         return None
     return f"ship:{body}"[:256]
@@ -95,11 +101,13 @@ def stable_shipped_fact_upsert_key_from_line(
     operating_unit: Any = None,
     delivery_no: Any = None,
     item_code: Any = None,
+    purchase_order_id: Any = None,
 ) -> str | None:
     return stable_shipped_fact_upsert_key_from_fields(
         operating_unit=operating_unit,
         delivery_no=delivery_no,
         item_code=item_code,
+        purchase_order_id=purchase_order_id,
     )
 
 
@@ -111,6 +119,7 @@ def fact_upsert_key_for_evidence_values(values: dict[str, Any]) -> str:
             operating_unit=values.get("operating_unit"),
             delivery_no=values.get("delivery_no"),
             item_code=values.get("item_code"),
+            purchase_order_id=values.get("purchase_order_id"),
         )
         if stable:
             return stable

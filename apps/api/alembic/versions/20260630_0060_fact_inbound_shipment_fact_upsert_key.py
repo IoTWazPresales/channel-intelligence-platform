@@ -34,7 +34,7 @@ def _backfill_fact_upsert_keys(connection) -> None:
         sa.text(
             """
             SELECT id, line_state, source_key, operating_unit, delivery_no, item_code,
-                   order_no, order_line
+                   order_no, order_line, purchase_order_id
             FROM fact_inbound_shipment
             """
         )
@@ -46,6 +46,7 @@ def _backfill_fact_upsert_keys(connection) -> None:
                 operating_unit=row["operating_unit"],
                 delivery_no=row["delivery_no"],
                 item_code=row["item_code"],
+                purchase_order_id=row["purchase_order_id"],
             )
             key = stable or str(row["source_key"])
         else:

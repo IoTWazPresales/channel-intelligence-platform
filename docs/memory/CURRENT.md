@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-30 (shipped fact collapse merge executed on cip; 0061 blocked)
+**Last updated:** 2026-06-30 (PO-inclusive shipped fact_upsert_key; 0061 applied on cip)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,10 +10,10 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` (now also carries Session C; cut from `feat/dsi-async-topology` + BACKLOG-051 docs) |
-| **HEAD** | collapse merge executed on `cip`; code commit pending push |
+| **HEAD** | PO-inclusive `fact_upsert_key` + collapse merge + `0061` on `cip` |
 | **PR** | None open |
-| **Alembic (code)** | `20260630_0061` (fact upsert key unique swap) |
-| **Alembic (DB)** | **`20260630_0060`** on local `cip`; **`0061` blocked** — 394 duplicate `fact_upsert_key` groups remain (multi-PO skip) |
+| **Alembic (code)** | `20260630_0061` (head) |
+| **Alembic (DB)** | **`20260630_0061`** on local `cip` |
 
 ---
 
