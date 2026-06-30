@@ -28,6 +28,28 @@ vi.mock('@/lib/api', () => ({
   safeDisplayError: (e: unknown) => String(e),
 }));
 
+vi.mock('@/components/EnterpriseDataGrid', () => ({
+  EnterpriseDataGrid: ({
+    rowData,
+    columnDefs,
+  }: {
+    rowData: Array<Record<string, unknown>>;
+    columnDefs?: Array<Record<string, unknown>>;
+  }) => (
+    <div data-testid="po-gap-grid-mock">
+      {rowData.map((row) => (
+        <div key={String(row.row_key ?? row.purchase_order_id)}>
+          {columnDefs?.map((c, idx) =>
+            c?.cellRenderer ? (
+              <div key={idx}>{(c.cellRenderer as (p: { data: typeof row }) => React.ReactNode)({ data: row })}</div>
+            ) : null
+          )}
+        </div>
+      ))}
+    </div>
+  ),
+}));
+
 import { apiGet, apiPost } from '@/lib/api';
 
 const apiGetMock = vi.mocked(apiGet);
@@ -128,15 +150,17 @@ describe('PoManagementView', () => {
     expect(screen.getByText('1 short')).toBeInTheDocument();
   });
 
-  it('dismisses a gap PO with a reason', async () => {
+  it('dismisses a gap PO via reason dialog', async () => {
     wireApi({ firstRun: false });
     apiPostMock.mockResolvedValue({ purchase_order_id: 42, dismiss_reason_code: 'no lineup needed' });
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('no lineup needed');
+    const user = userEvent.setup();
 
     renderView();
 
     const dismissBtn = await screen.findByTestId('gap-dismiss-42');
-    await userEvent.click(dismissBtn);
+    await user.click(dismissBtn);
+    expect(await screen.findByTestId('po-dismiss-reason-dialog')).toBeInTheDocument();
+    await user.click(screen.getByTestId('po-dismiss-reason-submit'));
 
     await waitFor(() =>
       expect(apiPostMock).toHaveBeenCalledWith(
@@ -144,6 +168,5 @@ describe('PoManagementView', () => {
         { purchase_order_id: 42, reason_code: 'no lineup needed' }
       )
     );
-    promptSpy.mockRestore();
   });
 });

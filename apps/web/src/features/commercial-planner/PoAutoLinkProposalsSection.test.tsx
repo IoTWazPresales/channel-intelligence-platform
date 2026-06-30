@@ -13,13 +13,50 @@ vi.mock('@/lib/api', () => ({
   safeDisplayError: (e: unknown) => String(e),
 }));
 
+vi.mock('@/components/EnterpriseDataGrid', () => ({
+  EnterpriseDataGrid: ({
+    rowData,
+    columnDefs,
+    gridOptions,
+  }: {
+    rowData: Array<Record<string, unknown>>;
+    columnDefs?: Array<Record<string, unknown>>;
+    gridOptions?: { onSelectionChanged?: (e: { api: { getSelectedRows: () => unknown[] } }) => void };
+  }) => (
+    <div data-testid="po-auto-link-grid-mock">
+      {rowData.map((row) => (
+        <div key={String(row.proposal_key)} data-testid={`grid-row-${row.proposal_key}`}>
+          {columnDefs?.map((c, idx) =>
+            c?.cellRenderer ? (
+              <div key={`${String(row.proposal_key)}-${idx}`}>
+                {(c.cellRenderer as (p: { data: typeof row }) => React.ReactNode)({ data: row })}
+              </div>
+            ) : null
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        data-testid="mock-select-row"
+        onClick={() =>
+          gridOptions?.onSelectionChanged?.({
+            api: { getSelectedRows: () => rowData },
+          })
+        }
+      >
+        mock select
+      </button>
+    </div>
+  ),
+}));
+
 import { apiGet, apiPost } from '@/lib/api';
 
 const apiGetMock = vi.mocked(apiGet);
 const apiPostMock = vi.mocked(apiPost);
 
 const sampleProposal = {
-  proposal_key: '10:5:21:99',
+  proposal_key: '10:5:PO99',
   case_id: 10,
   case_period_label: '26Q1',
   inferred_period_start: '2026-01-01',
@@ -35,7 +72,16 @@ const sampleProposal = {
   reason: 'customer_product_crad_in_period',
   date_source: 'crad',
   dismissed: false,
-  matched_products: [{ product_id: 7, planned_units: 100, shipped_units: 80 }],
+  matched_products: [
+    {
+      product_id: 7,
+      sku: 'SKU-7',
+      sales_model_name: 'Model Seven',
+      marketing_name: 'Seven Marketing',
+      planned_units: 100,
+      shipped_units: 80,
+    },
+  ],
   total_planned_units: 100,
   total_shipped_units: 80,
 };
@@ -67,21 +113,38 @@ describe('PoAutoLinkProposalsSection', () => {
     apiPostMock.mockResolvedValue({ applied_count: 1, applied: [], error_count: 0, errors: [] });
   });
 
-  it('renders proposal table with confidence chip', async () => {
+  it('does not fetch proposals until expanded', async () => {
     renderSection();
-    expect(await screen.findByTestId('po-auto-link-table')).toBeInTheDocument();
-    expect(screen.getByText('high')).toBeInTheDocument();
-    expect(screen.getByText('PO-99')).toBeInTheDocument();
-    expect(screen.getByText('CUST — Acme')).toBeInTheDocument();
+    expect(apiGetMock).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByTestId('po-auto-link-expand'));
+    await waitFor(() => expect(apiGetMock).toHaveBeenCalledWith(expect.stringContaining('/po-auto-link/proposals'), expect.anything()));
   });
 
-  it('opens customer-grain confirm dialog and applies link', async () => {
+  it('renders proposal grid after expand with confidence chip', async () => {
+    renderSection();
+    await userEvent.click(screen.getByTestId('po-auto-link-expand'));
+    expect(await screen.findByTestId('po-auto-link-table')).toBeInTheDocument();
+    expect(screen.getByText('high')).toBeInTheDocument();
+    expect(screen.getByTestId('grid-row-10:5:PO99')).toBeInTheDocument();
+  });
+
+  it('opens confirm dialog with sales_model_name and sku for matched products', async () => {
     const user = userEvent.setup();
     renderSection();
+    await user.click(screen.getByTestId('po-auto-link-expand'));
     await screen.findByTestId('po-auto-link-table');
-    await user.click(screen.getByTestId('po-auto-link-review-10:5:21:99'));
+    await user.click(screen.getByTestId('po-auto-link-review-10:5:PO99'));
     expect(await screen.findByTestId('po-auto-link-confirm-dialog')).toBeInTheDocument();
-    expect(screen.getByTestId('confirm-customer-label')).toHaveTextContent('CUST — Acme');
+    expect(screen.getByTestId('matched-product-label-7')).toHaveTextContent('Model Seven · SKU-7');
+    expect(screen.queryByText(/^7$/)).not.toBeInTheDocument();
+  });
+
+  it('applies link from confirm dialog', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(screen.getByTestId('po-auto-link-expand'));
+    await screen.findByTestId('po-auto-link-table');
+    await user.click(screen.getByTestId('po-auto-link-review-10:5:PO99'));
     await user.click(screen.getByTestId('po-auto-link-confirm-submit'));
     await waitFor(() => {
       expect(apiPostMock).toHaveBeenCalledWith('/api/v1/commercial-planner/lineup/po-auto-link/apply', {
@@ -93,9 +156,9 @@ describe('PoAutoLinkProposalsSection', () => {
   it('bulk apply selected proposals', async () => {
     const user = userEvent.setup();
     renderSection();
+    await user.click(screen.getByTestId('po-auto-link-expand'));
     await screen.findByTestId('po-auto-link-table');
-    const checkbox = screen.getByRole('checkbox', { name: /Select 10:5:21:99/i });
-    await user.click(checkbox);
+    await user.click(screen.getByTestId('mock-select-row'));
     await user.click(screen.getByTestId('po-auto-link-bulk-apply'));
     await waitFor(() => {
       expect(apiPostMock).toHaveBeenCalledWith('/api/v1/commercial-planner/lineup/po-auto-link/apply', {

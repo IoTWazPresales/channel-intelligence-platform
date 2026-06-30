@@ -6,9 +6,8 @@ import {
   Button,
   Card,
   CardContent,
-  Checkbox,
   Chip,
-  CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -27,15 +26,24 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import type { ColDef, GridApi, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
+
+import { PoDismissReasonDialog } from './PoDismissReasonDialog';
+import { currentQuarterLabel } from './poPeriodUtils';
 
 type MatchedProduct = {
   product_id: number;
+  sku?: string | null;
+  sales_model_name?: string | null;
+  marketing_name?: string | null;
   planned_units: number;
   shipped_units: number;
+  open_order_units?: number;
 };
 
 export type PoAutoLinkProposal = {
@@ -87,6 +95,13 @@ function reasonLabel(reason: string): string {
     product_period_customer_unresolved: 'Product + period (customer unresolved)',
   };
   return map[reason] ?? reason;
+}
+
+function productDisplayLabel(m: MatchedProduct): string {
+  const parts = [m.sales_model_name, m.sku].filter(Boolean);
+  if (parts.length) return parts.join(' · ');
+  if (m.marketing_name) return m.marketing_name;
+  return `Product #${m.product_id}`;
 }
 
 function PoAutoLinkConfirmDialog({
@@ -155,18 +170,27 @@ function PoAutoLinkConfirmDialog({
               <Typography variant="subtitle2" gutterBottom>
                 Matched products ({proposal.matched_products.length})
               </Typography>
-              <Table size="small">
+              <Table size="small" data-testid="po-auto-link-matched-products-table">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Product ID</TableCell>
+                    <TableCell>Product</TableCell>
                     <TableCell align="right">Planned</TableCell>
                     <TableCell align="right">Shipped</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {proposal.matched_products.map((m) => (
-                    <TableRow key={m.product_id}>
-                      <TableCell>{m.product_id}</TableCell>
+                    <TableRow key={m.product_id} data-testid={`matched-product-${m.product_id}`}>
+                      <TableCell>
+                        <Tooltip title={`Product ID ${m.product_id}`}>
+                          <span data-testid={`matched-product-label-${m.product_id}`}>{productDisplayLabel(m)}</span>
+                        </Tooltip>
+                        {m.marketing_name && m.sales_model_name ? (
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {m.marketing_name}
+                          </Typography>
+                        ) : null}
+                      </TableCell>
                       <TableCell align="right">{fmtUnits(m.planned_units)}</TableCell>
                       <TableCell align="right">{fmtUnits(m.shipped_units)}</TableCell>
                     </TableRow>
@@ -211,17 +235,21 @@ function PoAutoLinkConfirmDialog({
 
 export function PoAutoLinkProposalsSection() {
   const qc = useQueryClient();
-  const [period, setPeriod] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  const [period, setPeriod] = useState(() => currentQuarterLabel());
   const [confidence, setConfidence] = useState<'all' | 'high' | 'medium'>('all');
   const [showDismissed, setShowDismissed] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmProposal, setConfirmProposal] = useState<PoAutoLinkProposal | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
+  const [dismissTarget, setDismissTarget] = useState<PoAutoLinkProposal | null>(null);
+  const gridApiRef = useRef<GridApi<PoAutoLinkProposal> | null>(null);
 
   const queryKey = ['po-auto-link', period, confidence, showDismissed] as const;
 
   const proposalsQ = useQuery({
     queryKey,
+    enabled: expanded,
     queryFn: ({ signal }) => {
       const params = new URLSearchParams({ limit: '200' });
       if (period.trim()) params.set('period', period.trim());
@@ -241,6 +269,7 @@ export function PoAutoLinkProposalsSection() {
       setApplyError(data.error_count ? data.errors?.map((e) => e.error).join('; ') ?? 'Some links failed' : null);
       setConfirmProposal(null);
       setSelected(new Set());
+      gridApiRef.current?.deselectAll();
       void qc.invalidateQueries({ queryKey: ['po-auto-link'] });
       void qc.invalidateQueries({ queryKey: ['po-management'] });
       void qc.invalidateQueries({ queryKey: ['lineup-cases'] });
@@ -256,6 +285,7 @@ export function PoAutoLinkProposalsSection() {
       reason_code: string;
     }) => apiPost('/api/v1/commercial-planner/lineup/po-auto-link/dismiss', vars),
     onSuccess: () => {
+      setDismissTarget(null);
       void qc.invalidateQueries({ queryKey: ['po-auto-link'] });
     },
   });
@@ -278,19 +308,6 @@ export function PoAutoLinkProposalsSection() {
     [proposals, showDismissed]
   );
 
-  const toggleSelect = (key: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const selectAllHigh = () => {
-    setSelected(new Set(activeProposals.filter((p) => p.confidence === 'high' && !p.dismissed).map((p) => p.proposal_key)));
-  };
-
   const bulkApply = () => {
     const items = activeProposals
       .filter((p) => selected.has(p.proposal_key) && !p.dismissed)
@@ -300,19 +317,13 @@ export function PoAutoLinkProposalsSection() {
     applyMut.mutate({ items });
   };
 
-  const handleDismiss = (p: PoAutoLinkProposal) => {
-    const reason = window.prompt(
-      `Dismiss proposal PO ${p.po_number ?? p.purchase_order_id} ↔ case ${p.case_id}?\nReason:`,
-      'wrong match'
-    );
-    if (reason == null) return;
-    const trimmed = reason.trim();
-    if (!trimmed) return;
-    dismissMut.mutate({
-      proposal_key: p.proposal_key,
-      case_id: p.case_id,
-      purchase_order_id: p.purchase_order_id,
-      reason_code: trimmed,
+  const selectAllHigh = () => {
+    const keys = activeProposals.filter((p) => p.confidence === 'high' && !p.dismissed).map((p) => p.proposal_key);
+    setSelected(new Set(keys));
+    if (!gridApiRef.current) return;
+    gridApiRef.current.forEachNode((node) => {
+      if (node.data && keys.includes(node.data.proposal_key)) node.setSelected(true);
+      else node.setSelected(false);
     });
   };
 
@@ -330,183 +341,249 @@ export function PoAutoLinkProposalsSection() {
     });
   };
 
+  const columnDefs = useMemo<ColDef<PoAutoLinkProposal>[]>(
+    () => [
+      {
+        headerName: 'Confidence',
+        field: 'confidence',
+        width: 110,
+        cellRenderer: (p: ICellRendererParams<PoAutoLinkProposal>) =>
+          p.data ? (
+            <Tooltip title={reasonLabel(p.data.reason)}>
+              <Chip size="small" color={confidenceColor(p.data.confidence)} label={p.data.confidence} />
+            </Tooltip>
+          ) : null,
+      },
+      {
+        headerName: 'Period',
+        width: 100,
+        valueGetter: (p) => p.data?.case_period_label ?? p.data?.inferred_period_start ?? '—',
+      },
+      { headerName: 'Customer', flex: 1, minWidth: 140, field: 'customer_label' },
+      {
+        headerName: 'PO',
+        width: 130,
+        valueGetter: (p) => p.data?.po_number ?? (p.data ? `#${p.data.purchase_order_id}` : ''),
+      },
+      {
+        headerName: 'Distributor',
+        flex: 1,
+        minWidth: 120,
+        valueGetter: (p) =>
+          p.data
+            ? [p.data.distributor_code, p.data.distributor_name].filter(Boolean).join(' — ') || '—'
+            : '',
+      },
+      {
+        headerName: 'Planned',
+        width: 100,
+        type: 'numericColumn',
+        valueGetter: (p) => p.data?.total_planned_units ?? null,
+        valueFormatter: (p) => fmtUnits(p.value as number),
+      },
+      {
+        headerName: 'Shipped',
+        width: 100,
+        type: 'numericColumn',
+        valueGetter: (p) => p.data?.total_shipped_units ?? null,
+        valueFormatter: (p) => fmtUnits(p.value as number),
+      },
+      {
+        headerName: 'Actions',
+        colId: 'actions',
+        width: 160,
+        pinned: 'right',
+        sortable: false,
+        filter: false,
+        cellRenderer: (p: ICellRendererParams<PoAutoLinkProposal>) => {
+          const row = p.data;
+          if (!row) return null;
+          if (row.dismissed) {
+            return (
+              <Button
+                size="small"
+                onClick={() => restoreMut.mutate(row.proposal_key)}
+                disabled={restoreMut.isPending}
+              >
+                Restore
+              </Button>
+            );
+          }
+          return (
+            <Stack direction="row" spacing={0.5}>
+              <Button
+                size="small"
+                onClick={() => {
+                  setApplyError(null);
+                  setConfirmProposal(row);
+                }}
+                data-testid={`po-auto-link-review-${row.proposal_key}`}
+              >
+                Review
+              </Button>
+              <Button size="small" color="warning" onClick={() => setDismissTarget(row)}>
+                Dismiss
+              </Button>
+            </Stack>
+          );
+        },
+      },
+    ],
+    [restoreMut]
+  );
+
+  const gridOptions = useMemo<GridOptions<PoAutoLinkProposal>>(
+    () => ({
+      getRowId: (p) => p.data.proposal_key,
+      rowSelection: {
+        mode: 'multiRow',
+        checkboxes: true,
+        headerCheckbox: true,
+        enableClickSelection: false,
+        isRowSelectable: (p) => !p.data?.dismissed,
+      },
+      onGridReady: (e) => {
+        gridApiRef.current = e.api;
+      },
+      onSelectionChanged: (e) => {
+        const keys = e.api.getSelectedRows().map((r) => r.proposal_key);
+        setSelected(new Set(keys));
+      },
+    }),
+    []
+  );
+
+  const requestExpand = useCallback(() => {
+    setExpanded(true);
+  }, []);
+
   return (
     <Card variant="outlined" data-testid="po-auto-link-section">
       <CardContent>
         <Stack spacing={2}>
-          <Box>
-            <Typography variant="h6" gutterBottom>
-              Suggested PO ↔ lineup links
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              CRAD-primary matches between shipment evidence and uploaded lineups. Review and link — or dismiss bad
-              suggestions.
-            </Typography>
-          </Box>
-
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap>
-            <TextField
-              size="small"
-              label="Period filter"
-              placeholder="e.g. 26Q1"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              sx={{ minWidth: 140 }}
-              data-testid="po-auto-link-period"
-            />
-            <FormControl size="small" sx={{ minWidth: 140 }}>
-              <InputLabel id="po-auto-link-confidence-label">Confidence</InputLabel>
-              <Select
-                labelId="po-auto-link-confidence-label"
-                label="Confidence"
-                value={confidence}
-                onChange={(e) => setConfidence(e.target.value as 'all' | 'high' | 'medium')}
-                data-testid="po-auto-link-confidence"
+          <Stack direction="row" spacing={1} alignItems="flex-start" justifyContent="space-between" flexWrap="wrap" useFlexGap>
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                Suggested PO ↔ lineup links
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Triage tool — compute CRAD-matched proposals on demand. Review and link, or dismiss bad suggestions.
+              </Typography>
+            </Box>
+            {!expanded ? (
+              <Button
+                variant="contained"
+                size="small"
+                onClick={requestExpand}
+                data-testid="po-auto-link-expand"
               >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="high">High only</MenuItem>
-                <MenuItem value="medium">Medium only</MenuItem>
-              </Select>
-            </FormControl>
-            <Button size="small" onClick={() => void proposalsQ.refetch()} disabled={proposalsQ.isFetching}>
-              Refresh
-            </Button>
-            <Button size="small" onClick={() => setShowDismissed((v) => !v)} data-testid="po-auto-link-toggle-dismissed">
-              {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
-            </Button>
-            <Button size="small" onClick={selectAllHigh} disabled={!activeProposals.some((p) => p.confidence === 'high')}>
-              Select all high
-            </Button>
-            <Button
-              size="small"
-              variant="contained"
-              disabled={selected.size === 0 || applyMut.isPending}
-              onClick={bulkApply}
-              data-testid="po-auto-link-bulk-apply"
-            >
-              Link selected ({selected.size})
-            </Button>
+                Compute / show suggested links
+              </Button>
+            ) : (
+              <Button size="small" variant="outlined" onClick={() => setExpanded(false)} data-testid="po-auto-link-collapse">
+                Collapse
+              </Button>
+            )}
           </Stack>
 
-          {proposalsQ.isLoading ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CircularProgress size={20} />
-              <Typography variant="body2" color="text.secondary">
-                Computing proposals… (may take ~10s on full history)
-              </Typography>
-            </Box>
-          ) : proposalsQ.data?.data_unavailable ? (
-            <Alert severity="info">Auto-link proposals are temporarily unavailable.</Alert>
-          ) : !activeProposals.length && !showDismissed ? (
-            <Alert severity="info" data-testid="po-auto-link-empty">
-              No link proposals for the current filters. Try clearing the period filter or lowering confidence.
-            </Alert>
-          ) : (
-            <>
-              <Typography variant="caption" color="text.secondary">
-                Showing {activeProposals.length} of {proposalsQ.data?.total ?? 0} proposals
-                {(proposalsQ.data?.dismissed_count ?? 0) > 0
-                  ? ` · ${proposalsQ.data?.dismissed_count} dismissed`
-                  : ''}
-              </Typography>
-              <Table size="small" data-testid="po-auto-link-table">
-                <TableHead>
-                  <TableRow>
-                    <TableCell padding="checkbox" />
-                    <TableCell>Confidence</TableCell>
-                    <TableCell>Period</TableCell>
-                    <TableCell>Customer</TableCell>
-                    <TableCell>PO</TableCell>
-                    <TableCell>Distributor</TableCell>
-                    <TableCell align="right">Planned</TableCell>
-                    <TableCell align="right">Shipped</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {activeProposals.map((p) => (
-                    <TableRow key={p.proposal_key} sx={{ opacity: p.dismissed ? 0.55 : 1 }}>
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          size="small"
-                          checked={selected.has(p.proposal_key)}
-                          disabled={!!p.dismissed || applyMut.isPending}
-                          onChange={() => toggleSelect(p.proposal_key)}
-                          inputProps={{ 'aria-label': `Select ${p.proposal_key}` }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip title={reasonLabel(p.reason)}>
-                          <Chip size="small" color={confidenceColor(p.confidence)} label={p.confidence} />
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell>{p.case_period_label ?? p.inferred_period_start ?? '—'}</TableCell>
-                      <TableCell>{p.customer_label ?? (p.customer_id ? `#${p.customer_id}` : '—')}</TableCell>
-                      <TableCell>{p.po_number ?? `#${p.purchase_order_id}`}</TableCell>
-                      <TableCell>
-                        {[p.distributor_code, p.distributor_name].filter(Boolean).join(' — ') || '—'}
-                      </TableCell>
-                      <TableCell align="right">{fmtUnits(p.total_planned_units)}</TableCell>
-                      <TableCell align="right">{fmtUnits(p.total_shipped_units)}</TableCell>
-                      <TableCell>
-                        <Stack direction="row" spacing={0.5}>
-                          {!p.dismissed ? (
-                            <>
-                              <Button
-                                size="small"
-                                onClick={() => {
-                                  setApplyError(null);
-                                  setConfirmProposal(p);
-                                }}
-                                data-testid={`po-auto-link-review-${p.proposal_key}`}
-                              >
-                                Review
-                              </Button>
-                              <Button size="small" color="warning" onClick={() => handleDismiss(p)}>
-                                Dismiss
-                              </Button>
-                            </>
-                          ) : (
-                            <Button
-                              size="small"
-                              onClick={() => restoreMut.mutate(p.proposal_key)}
-                              disabled={restoreMut.isPending}
-                            >
-                              Restore
-                            </Button>
-                          )}
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </>
-          )}
-
-          {showDismissed && dismissedList.length > 0 && (
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Dismissed ({dismissedList.length})
-              </Typography>
-              <Stack spacing={0.5}>
-                {dismissedList.map((d) => (
-                  <Stack key={d.proposal_key} direction="row" spacing={1} alignItems="center">
-                    <Typography variant="body2" color="text.secondary">
-                      {d.proposal_key} — {d.reason_code}
-                    </Typography>
-                    <Button size="small" onClick={() => restoreMut.mutate(d.proposal_key)}>
-                      Restore
-                    </Button>
-                  </Stack>
-                ))}
+          <Collapse in={expanded}>
+            <Stack spacing={2}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap>
+                <TextField
+                  size="small"
+                  label="Period filter"
+                  placeholder="e.g. 26Q1"
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value)}
+                  sx={{ minWidth: 140 }}
+                  data-testid="po-auto-link-period"
+                />
+                <FormControl size="small" sx={{ minWidth: 140 }}>
+                  <InputLabel id="po-auto-link-confidence-label">Confidence</InputLabel>
+                  <Select
+                    labelId="po-auto-link-confidence-label"
+                    label="Confidence"
+                    value={confidence}
+                    onChange={(e) => setConfidence(e.target.value as 'all' | 'high' | 'medium')}
+                    data-testid="po-auto-link-confidence"
+                  >
+                    <MenuItem value="all">All</MenuItem>
+                    <MenuItem value="high">High only</MenuItem>
+                    <MenuItem value="medium">Medium only</MenuItem>
+                  </Select>
+                </FormControl>
+                <Button size="small" onClick={() => void proposalsQ.refetch()} disabled={proposalsQ.isFetching}>
+                  Refresh
+                </Button>
+                <Button size="small" onClick={() => setShowDismissed((v) => !v)} data-testid="po-auto-link-toggle-dismissed">
+                  {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
+                </Button>
+                <Button size="small" onClick={selectAllHigh} disabled={!activeProposals.some((p) => p.confidence === 'high')}>
+                  Select all high
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  disabled={selected.size === 0 || applyMut.isPending}
+                  onClick={bulkApply}
+                  data-testid="po-auto-link-bulk-apply"
+                >
+                  Link selected ({selected.size})
+                </Button>
               </Stack>
-            </Box>
-          )}
 
-          {applyError && !confirmProposal && (
-            <Alert severity="error">{applyError}</Alert>
-          )}
+              {proposalsQ.isLoading ? (
+                <Typography variant="body2" color="text.secondary" data-testid="po-auto-link-loading">
+                  Computing proposals…
+                </Typography>
+              ) : proposalsQ.data?.data_unavailable ? (
+                <Alert severity="info">Auto-link proposals are temporarily unavailable.</Alert>
+              ) : !activeProposals.length && !showDismissed ? (
+                <Alert severity="info" data-testid="po-auto-link-empty">
+                  No link proposals for the current filters. Try clearing the period filter or lowering confidence.
+                </Alert>
+              ) : (
+                <>
+                  <Typography variant="caption" color="text.secondary">
+                    Showing {activeProposals.length} of {proposalsQ.data?.total ?? 0} proposals
+                    {(proposalsQ.data?.dismissed_count ?? 0) > 0
+                      ? ` · ${proposalsQ.data?.dismissed_count} dismissed`
+                      : ''}
+                  </Typography>
+                  <Box data-testid="po-auto-link-table">
+                    <EnterpriseDataGrid
+                      rowData={activeProposals}
+                      columnDefs={columnDefs}
+                      gridOptions={gridOptions}
+                      height={420}
+                    />
+                  </Box>
+                </>
+              )}
+
+              {showDismissed && dismissedList.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Dismissed ({dismissedList.length})
+                  </Typography>
+                  <Stack spacing={0.5}>
+                    {dismissedList.map((d) => (
+                      <Stack key={d.proposal_key} direction="row" spacing={1} alignItems="center">
+                        <Typography variant="body2" color="text.secondary">
+                          {d.proposal_key} — {d.reason_code}
+                        </Typography>
+                        <Button size="small" onClick={() => restoreMut.mutate(d.proposal_key)}>
+                          Restore
+                        </Button>
+                      </Stack>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
+              {applyError && !confirmProposal && <Alert severity="error">{applyError}</Alert>}
+            </Stack>
+          </Collapse>
         </Stack>
       </CardContent>
 
@@ -520,6 +597,29 @@ export function PoAutoLinkProposalsSection() {
         onConfirm={handleSingleConfirm}
         isPending={applyMut.isPending}
         error={applyError}
+      />
+
+      <PoDismissReasonDialog
+        open={!!dismissTarget}
+        title="Dismiss link proposal"
+        description={
+          dismissTarget
+            ? `PO ${dismissTarget.po_number ?? dismissTarget.purchase_order_id} ↔ case ${dismissTarget.case_id}`
+            : undefined
+        }
+        defaultReason="wrong match"
+        isPending={dismissMut.isPending}
+        error={dismissMut.isError ? safeDisplayError(dismissMut.error) : null}
+        onClose={() => setDismissTarget(null)}
+        onConfirm={(reason) => {
+          if (!dismissTarget) return;
+          dismissMut.mutate({
+            proposal_key: dismissTarget.proposal_key,
+            case_id: dismissTarget.case_id,
+            purchase_order_id: dismissTarget.purchase_order_id,
+            reason_code: reason,
+          });
+        }}
       />
     </Card>
   );

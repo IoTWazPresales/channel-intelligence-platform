@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine, CommercialLineupPoAutoLinkDismiss
-from app.models.dimensions import DimCustomer, DimDistributor
+from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactInboundShipment
 from app.models.purchase_order import PurchaseOrder
 
@@ -111,6 +111,18 @@ class _ProposalAcc:
 
     def proposal_key(self) -> str:
         return f"{self.case_id}:{self.customer_id or 0}:{self.po_number_norm}"
+
+
+def _po_norm_already_linked_anywhere(
+    po_number_norm: str,
+    linked_pairs: set[tuple[int, int]],
+    po_norm_by_id: dict[int, str],
+) -> bool:
+    """True when this PO norm is linked to any lineup case (not only the proposal case)."""
+    for _linked_case_id, linked_po_id in linked_pairs:
+        if po_norm_by_id.get(linked_po_id) == po_number_norm:
+            return True
+    return False
 
 
 def _case_norm_already_linked(
@@ -280,11 +292,7 @@ async def _po_auto_link_proposals_inner(
 
     linked_pairs: set[tuple[int, int]] = set()
     for case_id, po_id in (
-        await db.execute(
-            select(CommercialLineupCasePo.case_id, CommercialLineupCasePo.purchase_order_id).where(
-                CommercialLineupCasePo.case_id.in_(case_ids)
-            )
-        )
+        await db.execute(select(CommercialLineupCasePo.case_id, CommercialLineupCasePo.purchase_order_id))
     ).all():
         linked_pairs.add((int(case_id), int(po_id)))
 
@@ -300,10 +308,12 @@ async def _po_auto_link_proposals_inner(
     ).scalars().all()
 
     ship_po_ids = sorted({int(s.purchase_order_id) for s in shipment_rows if s.purchase_order_id is not None})
+    linked_po_ids = sorted({po_id for _cid, po_id in linked_pairs})
+    all_po_ids = sorted(set(ship_po_ids) | set(linked_po_ids))
     po_meta: dict[int, PurchaseOrder] = {}
     po_norm_by_id: dict[int, str] = {}
-    if ship_po_ids:
-        for po in (await db.execute(select(PurchaseOrder).where(PurchaseOrder.id.in_(ship_po_ids)))).scalars().all():
+    if all_po_ids:
+        for po in (await db.execute(select(PurchaseOrder).where(PurchaseOrder.id.in_(all_po_ids)))).scalars().all():
             pid = int(po.id)
             po_meta[pid] = po
             po_norm_by_id[pid] = (po.po_number_norm or po.po_number_raw or str(pid)).strip()
@@ -338,9 +348,10 @@ async def _po_auto_link_proposals_inner(
             ship_confirm_date=ship.ship_confirm_date,
         )
 
+        if _po_norm_already_linked_anywhere(po_number_norm, linked_pairs, po_norm_by_id):
+            continue
+
         for case_id, case_lines in lineup_by_case.items():
-            if _case_norm_already_linked(case_id, po_number_norm, linked_pairs, po_norm_by_id):
-                continue
             case = case_by_id[case_id]
             period_start = case.inferred_period_start
             if not date_in_case_period(ev_date, period_start):
@@ -411,6 +422,25 @@ async def _po_auto_link_proposals_inner(
             preferred_distributor_id=acc.distributor_id,
         )
 
+    product_ids = sorted({m.product_id for acc in proposals_map.values() for m in acc.products.values()})
+    prod_meta: dict[int, dict[str, str | None]] = {}
+    if product_ids:
+        for pid, sku, smn, mname in (
+            await db.execute(
+                select(
+                    DimProduct.id,
+                    DimProduct.sku,
+                    DimProduct.sales_model_name,
+                    DimProduct.marketing_name,
+                ).where(DimProduct.id.in_(product_ids))
+            )
+        ).all():
+            prod_meta[int(pid)] = {
+                "sku": str(sku) if sku is not None else None,
+                "sales_model_name": str(smn) if smn is not None else None,
+                "marketing_name": str(mname) if mname is not None else None,
+            }
+
     cust_ids = sorted({p.customer_id for p in proposals_map.values() if p.customer_id is not None})
     dist_ids = sorted({p.distributor_id for p in proposals_map.values() if p.distributor_id is not None})
     cust_names: dict[int, str] = {}
@@ -475,6 +505,9 @@ async def _po_auto_link_proposals_inner(
                 "matched_products": [
                     {
                         "product_id": m.product_id,
+                        "sku": prod_meta.get(m.product_id, {}).get("sku"),
+                        "sales_model_name": prod_meta.get(m.product_id, {}).get("sales_model_name"),
+                        "marketing_name": prod_meta.get(m.product_id, {}).get("marketing_name"),
                         "planned_units": round(m.planned_units, 4),
                         "shipped_units": round(m.shipped_units, 4),
                         "open_order_units": round(m.open_order_units, 4),

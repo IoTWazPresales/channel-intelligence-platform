@@ -87,6 +87,15 @@ def test_out_of_period_no_match():
     assert not date_in_case_period(date(2026, 5, 1), date(2026, 1, 1))
 
 
+def test_po_norm_already_linked_anywhere_skips_other_cases():
+    from app.services.commercial_planner.lineup_po_auto_link import _po_norm_already_linked_anywhere
+
+    linked = {(9, 100), (8, 200)}
+    norms = {100: "PURMIDR26009978", 200: "OTHERPO"}
+    assert _po_norm_already_linked_anywhere("PURMIDR26009978", linked, norms)
+    assert not _po_norm_already_linked_anywhere("NEWPO", linked, norms)
+
+
 def test_best_lineup_match_counts_once_per_product():
     """Multiple lineup rows for the same product must not create multiple matches."""
     from types import SimpleNamespace
@@ -135,8 +144,8 @@ async def test_purmidr_not_duplicated_per_po_norm_on_26q2():
 
 
 @pytest.mark.anyio
-async def test_purmidr_09978_amazon_customer_planned_and_fact_shipped_grain():
-    """Regression: Amazon planned is customer-scoped; shipped uses fact layer (not stacked evidence)."""
+async def test_purmidr_09978_excluded_when_already_linked_to_any_case():
+    """Regression: PO norm linked to one case must not be proposed for other cases."""
     pytest.importorskip("asyncpg")
     from sqlalchemy import text
 
@@ -153,20 +162,8 @@ async def test_purmidr_09978_amazon_customer_planned_and_fact_shipped_grain():
         if not has_col:
             pytest.skip("migration 20260630_0060 not applied")
         r = await po_auto_link_proposals(db, period="26Q2", customer_id=26, limit=500)
-    hits = [
-        p
-        for p in r["proposals"]
-        if p.get("po_number_norm") == "PURMIDR26009978"
-        and p.get("case_id") == 9
-        and p.get("customer_id") == 26
-    ]
-    assert len(hits) == 1
-    row = hits[0]
-    # Was 11500 planned (whole-case product totals) and 2000 shipped (evidence + open_order).
-    assert row["total_planned_units"] < 1000
-    assert row["total_shipped_units"] < 1500
-    assert row["total_open_order_units"] >= 0
-    assert row["total_shipped_units"] + row["total_open_order_units"] < 2000
+    hits = [p for p in r["proposals"] if p.get("po_number_norm") == "PURMIDR26009978"]
+    assert len(hits) == 0
 
 
 @pytest.mark.anyio

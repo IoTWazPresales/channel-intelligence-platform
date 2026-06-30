@@ -34,6 +34,10 @@ def _db(results):
     return db
 
 
+def test_shipment_quantity_source_is_fact_layer():
+    assert mod.SHIPMENT_QUANTITY_SOURCE == "fact_inbound_shipment"
+
+
 def test_gap_detected_for_uncovered_po_product():
     results = [
         _R([]),                                  # covered pairs -> none

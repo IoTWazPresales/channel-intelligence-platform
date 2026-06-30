@@ -7,23 +7,21 @@ import {
   Card,
   CardContent,
   Chip,
-  CircularProgress,
   Divider,
   LinearProgress,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   Tooltip,
   Typography,
 } from '@mui/material';
+import type { ColDef, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
+
+import { PoDismissReasonDialog } from './PoDismissReasonDialog';
 
 type ReconSummary = {
   matched?: number;
@@ -70,6 +68,8 @@ type GapRow = {
   shipped_units: number;
   period_label: string;
   dismissed: boolean;
+  quarter_label?: string;
+  row_key?: string;
 };
 
 type GapGroup = {
@@ -124,6 +124,7 @@ export function PoManagementView() {
   const router = useRouter();
   const qc = useQueryClient();
   const [showDismissed, setShowDismissed] = useState(false);
+  const [dismissTarget, setDismissTarget] = useState<GapRow | null>(null);
 
   const coverageQ = useQuery({
     queryKey: ['po-management', 'coverage'],
@@ -146,6 +147,7 @@ export function PoManagementView() {
     mutationFn: (vars: { purchase_order_id: number; reason_code: string }) =>
       apiPost('/api/v1/commercial-planner/lineup/po-gap-worklist/dismiss', vars),
     onSuccess: () => {
+      setDismissTarget(null);
       void qc.invalidateQueries({ queryKey: ['po-management', 'gap'] });
     },
   });
@@ -172,25 +174,104 @@ export function PoManagementView() {
     router.push(`/shipping?${params.toString()}`);
   };
 
-  const handleDismiss = (row: GapRow) => {
-    const reason = window.prompt(
-      `Dismiss PO ${row.po_number_raw ?? `#${row.purchase_order_id}`} (no covering lineup)?\nReason (e.g. "no lineup needed", "out of scope"):`,
-      'no lineup needed'
-    );
-    if (reason == null) return;
-    const trimmed = reason.trim();
-    if (!trimmed) return;
-    dismissMut.mutate({ purchase_order_id: row.purchase_order_id, reason_code: trimmed });
-  };
-
   const coverage = coverageQ.data;
   const backlog = backlogQ.data;
   const gap = gapQ.data;
   const loading = coverageQ.isLoading || backlogQ.isLoading;
 
+  const gapRows = useMemo<GapRow[]>(() => {
+    if (!gap?.groups.length) return [];
+    return gap.groups.flatMap((g) =>
+      g.rows.map((r) => ({
+        ...r,
+        quarter_label: g.quarter_label,
+        row_key: `${g.year}-${g.quarter}-${r.purchase_order_id}-${r.product_id}`,
+      }))
+    );
+  }, [gap]);
+
+  const gapColumnDefs = useMemo<ColDef<GapRow>[]>(
+    () => [
+      { headerName: 'Period', field: 'quarter_label', width: 90 },
+      {
+        headerName: 'PO',
+        width: 130,
+        cellRenderer: (p: ICellRendererParams<GapRow>) => {
+          const row = p.data;
+          if (!row) return null;
+          return (
+            <Button
+              size="small"
+              variant="text"
+              onClick={() => viewShipmentsForPo(row.purchase_order_id, row.po_number_raw)}
+            >
+              {row.po_number_raw ?? `#${row.purchase_order_id}`}
+            </Button>
+          );
+        },
+      },
+      {
+        headerName: 'Product',
+        flex: 1,
+        minWidth: 140,
+        valueGetter: (p) => p.data?.product_name ?? (p.data ? `#${p.data.product_id}` : ''),
+      },
+      { headerName: 'Line', field: 'product_line', width: 120 },
+      {
+        headerName: 'Units',
+        width: 100,
+        type: 'numericColumn',
+        field: 'shipped_units',
+        valueFormatter: (p) => fmtUnits(p.value as number),
+      },
+      {
+        headerName: 'Actions',
+        colId: 'actions',
+        width: 110,
+        pinned: 'right',
+        sortable: false,
+        filter: false,
+        cellRenderer: (p: ICellRendererParams<GapRow>) => {
+          const row = p.data;
+          if (!row) return null;
+          if (row.dismissed) {
+            return (
+              <Button
+                size="small"
+                onClick={() => restoreMut.mutate(row.purchase_order_id)}
+                disabled={restoreMut.isPending}
+                data-testid={`gap-restore-${row.purchase_order_id}`}
+              >
+                Restore
+              </Button>
+            );
+          }
+          return (
+            <Button
+              size="small"
+              color="warning"
+              onClick={() => setDismissTarget(row)}
+              disabled={dismissMut.isPending}
+              data-testid={`gap-dismiss-${row.purchase_order_id}`}
+            >
+              Dismiss
+            </Button>
+          );
+        },
+      },
+    ],
+    [dismissMut.isPending, restoreMut]
+  );
+
+  const gapGridOptions = useMemo<GridOptions<GapRow>>(
+    () => ({
+      getRowId: (p) => p.data.row_key ?? `${p.data.purchase_order_id}-${p.data.product_id}`,
+    }),
+    []
+  );
+
   return (
     <Stack spacing={3}>
-      {/* Coverage meter */}
       <Card variant="outlined">
         <CardContent>
           <Typography variant="h6" gutterBottom>
@@ -226,7 +307,6 @@ export function PoManagementView() {
         </CardContent>
       </Card>
 
-      {/* Backlog: observed PO groups */}
       <Box>
         <Typography variant="h6" gutterBottom>
           Observed purchase orders by period & product line
@@ -310,7 +390,6 @@ export function PoManagementView() {
         )}
       </Box>
 
-      {/* Gap worklist */}
       <Box>
         <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
           <Typography variant="h6">POs with shipments but no covering lineup</Typography>
@@ -327,87 +406,49 @@ export function PoManagementView() {
           <Alert severity="success">No gaps — every shipment PO is covered by a confirmed lineup.</Alert>
         ) : (
           <Stack spacing={1.5}>
-            {gap.groups.map((g) => (
-              <Card key={`gap-${g.year}-${g.quarter}`} variant="outlined">
-                <CardContent>
-                  <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Chip size="small" label={g.quarter_label} />
-                      <Typography variant="body2" color="text.secondary">
-                        {g.po_count} PO{g.po_count === 1 ? '' : 's'} · {g.product_count} product
-                        {g.product_count === 1 ? '' : 's'} · {fmtUnits(g.shipped_units)} units
-                      </Typography>
-                    </Stack>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => startUpload(g.quarter_label)}
-                      data-testid={`gap-upload-${g.year}-${g.quarter}`}
-                    >
-                      Upload lineup
-                    </Button>
-                  </Stack>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>PO</TableCell>
-                        <TableCell>Product</TableCell>
-                        <TableCell>Line</TableCell>
-                        <TableCell align="right">Units</TableCell>
-                        <TableCell align="right">Actions</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {g.rows.map((r) => (
-                        <TableRow
-                          key={`${r.purchase_order_id}-${r.product_id}`}
-                          sx={r.dismissed ? { opacity: 0.5 } : undefined}
-                        >
-                          <TableCell>
-                            <Button
-                              size="small"
-                              variant="text"
-                              onClick={() => viewShipmentsForPo(r.purchase_order_id, r.po_number_raw)}
-                            >
-                              {r.po_number_raw ?? `#${r.purchase_order_id}`}
-                            </Button>
-                          </TableCell>
-                          <TableCell>{r.product_name ?? `#${r.product_id}`}</TableCell>
-                          <TableCell>{r.product_line ?? '—'}</TableCell>
-                          <TableCell align="right">{fmtUnits(r.shipped_units)}</TableCell>
-                          <TableCell align="right">
-                            {r.dismissed ? (
-                              <Button
-                                size="small"
-                                onClick={() => restoreMut.mutate(r.purchase_order_id)}
-                                disabled={restoreMut.isPending}
-                                data-testid={`gap-restore-${r.purchase_order_id}`}
-                              >
-                                Restore
-                              </Button>
-                            ) : (
-                              <Button
-                                size="small"
-                                color="warning"
-                                onClick={() => handleDismiss(r)}
-                                disabled={dismissMut.isPending}
-                                startIcon={dismissMut.isPending ? <CircularProgress size={14} /> : undefined}
-                                data-testid={`gap-dismiss-${r.purchase_order_id}`}
-                              >
-                                Dismiss
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            ))}
+            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+              <Typography variant="body2" color="text.secondary">
+                {gap.total_gap_rows} gap row{gap.total_gap_rows === 1 ? '' : 's'} across {gap.groups.length} period
+                {gap.groups.length === 1 ? '' : 's'}
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => startUpload(gap.groups[0]?.quarter_label ?? null)}
+                data-testid="gap-upload-top"
+              >
+                Upload lineup
+              </Button>
+            </Stack>
+            <Box data-testid="po-gap-grid">
+              <EnterpriseDataGrid
+                rowData={gapRows}
+                columnDefs={gapColumnDefs}
+                gridOptions={gapGridOptions}
+                height={Math.min(480, 120 + gapRows.length * 42)}
+              />
+            </Box>
           </Stack>
         )}
       </Box>
+
+      <PoDismissReasonDialog
+        open={!!dismissTarget}
+        title="Dismiss gap PO"
+        description={
+          dismissTarget
+            ? `PO ${dismissTarget.po_number_raw ?? `#${dismissTarget.purchase_order_id}`} has no covering lineup.`
+            : undefined
+        }
+        defaultReason="no lineup needed"
+        isPending={dismissMut.isPending}
+        error={dismissMut.isError ? safeDisplayError(dismissMut.error) : null}
+        onClose={() => setDismissTarget(null)}
+        onConfirm={(reason) => {
+          if (!dismissTarget) return;
+          dismissMut.mutate({ purchase_order_id: dismissTarget.purchase_order_id, reason_code: reason });
+        }}
+      />
     </Stack>
   );
 }

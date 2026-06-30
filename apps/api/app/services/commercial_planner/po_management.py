@@ -12,16 +12,19 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo
 from app.models.commercial_planner import CommercialSkuAssumption
 from app.models.dimensions import DimProduct
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.models.facts import FactInboundShipment
 from app.services.commercial_planner.lineup_po_reconciliation import UNITS_FLAGS, reconcile_case
 
 logger = logging.getLogger(__name__)
+
+# Read-model contract: shipped quantities on PO Management come from the truth layer only.
+SHIPMENT_QUANTITY_SOURCE = "fact_inbound_shipment"
 
 
 def _quarter_label(year: int, q: int) -> str:
@@ -32,27 +35,39 @@ def _quarter_label(year: int, q: int) -> str:
 
 async def _observed_groups(db: AsyncSession) -> dict[tuple[int, int, str], dict[str, Any]]:
     """Group observed POs by (year, quarter, product_line). One PO can span several groups."""
-    rep_date = func.coalesce(ShipmentEvidenceLine.ship_confirm_date, ShipmentEvidenceLine.schedule_ship_date)
+    rep_date = func.coalesce(
+        FactInboundShipment.ship_confirm_date,
+        FactInboundShipment.schedule_ship_date,
+        FactInboundShipment.crad_date,
+    )
+    shipped_qty = case(
+        (FactInboundShipment.line_state == "shipped", FactInboundShipment.quantity),
+        else_=0,
+    )
+    shipped_value = case(
+        (
+            FactInboundShipment.line_state == "shipped",
+            func.coalesce(
+                FactInboundShipment.amount,
+                func.coalesce(FactInboundShipment.quantity, 0) * func.coalesce(FactInboundShipment.unit_price, 0),
+            ),
+        ),
+        else_=0,
+    )
     rows = (
         await db.execute(
             select(
-                ShipmentEvidenceLine.purchase_order_id,
-                ShipmentEvidenceLine.product_id,
-                func.coalesce(func.sum(ShipmentEvidenceLine.quantity), 0),
-                func.coalesce(
-                    func.sum(
-                        func.coalesce(
-                            ShipmentEvidenceLine.amount,
-                            func.coalesce(ShipmentEvidenceLine.quantity, 0)
-                            * func.coalesce(ShipmentEvidenceLine.unit_price, 0),
-                        )
-                    ),
-                    0,
-                ),
+                FactInboundShipment.purchase_order_id,
+                FactInboundShipment.product_id,
+                func.coalesce(func.sum(shipped_qty), 0),
+                func.coalesce(func.sum(shipped_value), 0),
                 func.max(rep_date),
             )
-            .where(ShipmentEvidenceLine.purchase_order_id.isnot(None))
-            .group_by(ShipmentEvidenceLine.purchase_order_id, ShipmentEvidenceLine.product_id)
+            .where(
+                FactInboundShipment.purchase_order_id.isnot(None),
+                FactInboundShipment.product_id.isnot(None),
+            )
+            .group_by(FactInboundShipment.purchase_order_id, FactInboundShipment.product_id)
         )
     ).all()
 

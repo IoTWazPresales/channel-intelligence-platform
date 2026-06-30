@@ -11,15 +11,18 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCasePo, CommercialLineupLine
 from app.models.dimensions import DimProduct
+from app.models.facts import FactInboundShipment
 from app.models.purchase_order import PurchaseOrder
-from app.models.shipment_evidence import ShipmentEvidenceLine
 
 logger = logging.getLogger(__name__)
+
+# Read-model contract: gap shipped quantities come from the truth layer only.
+SHIPMENT_QUANTITY_SOURCE = "fact_inbound_shipment"
 
 
 def _quarter(year: int, month: int) -> tuple[int, int, str]:
@@ -60,28 +63,36 @@ async def _po_gap_worklist_inner(db: AsyncSession, *, include_dismissed: bool) -
     ).all()
     dismissed_ids = {int(r[0]) for r in dismissed_rows}
 
-    # Shipment (po, product) aggregates with a representative quarter date.
-    rep_date = func.coalesce(ShipmentEvidenceLine.ship_confirm_date, ShipmentEvidenceLine.schedule_ship_date)
+    # Shipment (po, product) aggregates with a representative quarter date (shipped lines only).
+    rep_date = func.coalesce(
+        FactInboundShipment.ship_confirm_date,
+        FactInboundShipment.schedule_ship_date,
+        FactInboundShipment.crad_date,
+    )
+    shipped_qty = case(
+        (FactInboundShipment.line_state == "shipped", FactInboundShipment.quantity),
+        else_=0,
+    )
     ship_rows = (
         await db.execute(
             select(
-                ShipmentEvidenceLine.purchase_order_id,
-                ShipmentEvidenceLine.product_id,
-                func.coalesce(func.sum(ShipmentEvidenceLine.quantity), 0),
+                FactInboundShipment.purchase_order_id,
+                FactInboundShipment.product_id,
+                func.coalesce(func.sum(shipped_qty), 0),
                 func.max(rep_date),
             )
             .where(
-                ShipmentEvidenceLine.purchase_order_id.isnot(None),
-                ShipmentEvidenceLine.product_id.isnot(None),
+                FactInboundShipment.purchase_order_id.isnot(None),
+                FactInboundShipment.product_id.isnot(None),
             )
-            .group_by(ShipmentEvidenceLine.purchase_order_id, ShipmentEvidenceLine.product_id)
+            .group_by(FactInboundShipment.purchase_order_id, FactInboundShipment.product_id)
         )
     ).all()
 
     gap_pairs = [
         (int(po), int(pid), float(units), rep)
         for po, pid, units, rep in ship_rows
-        if (int(po), int(pid)) not in covered
+        if (int(po), int(pid)) not in covered and float(units) > 0
     ]
 
     # Metadata for PO numbers + product names/lines.

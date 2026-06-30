@@ -19,8 +19,8 @@ export default function AdminPoManagementPage() {
         upload a covering lineup or dismiss a PO that needs no lineup. Use <strong>Suggested PO ↔ lineup links</strong>{' '}
         to review CRAD-matched proposals before linking.
       </Alert>
-      <PoAutoLinkProposalsSection />
       <PoManagementView />
+      <PoAutoLinkProposalsSection />
     </>
   );
 }

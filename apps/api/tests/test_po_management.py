@@ -31,6 +31,10 @@ def _db(results):
     return db
 
 
+def test_shipment_quantity_source_is_fact_layer():
+    assert mod.SHIPMENT_QUANTITY_SOURCE == "fact_inbound_shipment"
+
+
 def test_coverage_first_run_groups_by_quarter_and_product_line():
     results = [
         _R([(500, 10, 100.0, 1000.0, dt.date(2026, 2, 15))]),  # observed shipment aggregate
