@@ -67,3 +67,10 @@ def test_paginate_groups():
     assert total == 5
     assert len(page) == 2
     assert page[0]["similarity_key"] == "k2"
+
+
+def test_build_duplicate_groups_excludes_singleton_after_tombstone_removed():
+    """Active-only scan: once a loser is soft-redirected it is not grouped (see list filter)."""
+    survivor = _row(1, "Acme Corp Pty Ltd", status="active")
+    groups = build_duplicate_groups([survivor])
+    assert groups == []

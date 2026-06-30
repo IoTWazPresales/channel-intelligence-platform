@@ -41,7 +41,9 @@ def _load_all_customer_rows(db: Session) -> list[_CustomerRow]:
             DimCustomer.name,
             DimCustomer.customer_status,
             DimCustomer.created_at,
-        ).order_by(DimCustomer.id.asc())
+        )
+        .where(DimCustomer.merged_into_customer_id.is_(None))
+        .order_by(DimCustomer.id.asc())
     ).all()
     return [
         _CustomerRow(
