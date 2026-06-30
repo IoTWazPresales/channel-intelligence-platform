@@ -20,6 +20,7 @@ T = TypeVar("T")
 ENTITY_IMPORT_JOB = "import_job"
 ENTITY_CUSTOMER_ALIAS_SCOPE_MERGE = "customer_alias_scope_merge"
 ENTITY_CUSTOMER_FULL_MERGE = "customer_full_merge"
+ENTITY_DISTRIBUTOR_FULL_MERGE = "distributor_full_merge"
 
 TRANSPORT_BROKER = "broker"
 TRANSPORT_IN_PROCESS_THREAD = "in_process_thread"
@@ -57,6 +58,7 @@ TASK_CLASS_BY_NAME: dict[str, str] = {
     "imports.dsi_forecasting": "derive",
     "customers.alias_scope_merge_confirm": "master",
     "customers.full_merge_confirm": "master",
+    "distributors.full_merge_confirm": "master",
     "commercial_planner.parse_lineup_case": "lineup",
 }
 
@@ -126,6 +128,15 @@ def entity_from_task_args(task_name: str, args: tuple[Any, ...]) -> tuple[str, i
                 survivor_id = 0
             return ENTITY_CUSTOMER_FULL_MERGE, survivor_id
         return ENTITY_CUSTOMER_FULL_MERGE, 0
+    if task_name == "distributors.full_merge_confirm":
+        if args and isinstance(args[0], dict):
+            payload = args[0]
+            try:
+                survivor_id = int(payload.get("survivor_id") or 0)
+            except (TypeError, ValueError):
+                survivor_id = 0
+            return ENTITY_DISTRIBUTOR_FULL_MERGE, survivor_id
+        return ENTITY_DISTRIBUTOR_FULL_MERGE, 0
     if args:
         return ENTITY_IMPORT_JOB, int(args[0])
     return ENTITY_IMPORT_JOB, 0

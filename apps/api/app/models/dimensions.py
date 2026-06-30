@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +29,17 @@ class DimDistributor(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
+    distributor_status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
+    merged_into_distributor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_distributor.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    merge_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    merged_into: Mapped["DimDistributor | None"] = relationship(
+        remote_side="DimDistributor.id",
+        foreign_keys=[merged_into_distributor_id],
+    )
 
 
 class DistributorLocation(Base, TimestampMixin):

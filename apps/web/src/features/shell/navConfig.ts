@@ -71,6 +71,10 @@ export const navGroups: NavGroup[] = [
         href: '/admin/customers/duplicates?tab=name_similarity',
       },
       { label: 'Distributors', href: '/admin/distributors' },
+      {
+        label: 'Distributor name-similarity duplicates',
+        href: '/admin/distributors/duplicates',
+      },
       { label: 'Channels & Regions', href: '/admin/channels-regions' },
     ],
   },

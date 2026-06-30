@@ -1269,7 +1269,12 @@ def merge_duplicate_shipment_provisional_distributors_by_display_name(
     *,
     dry_run: bool = True,
 ) -> dict[str, Any]:
-    """Merge ``TMP-DIST-%`` distributors that share the same normalised display ``name``.
+    """DEPRECATED — use ``distributor_full_merge`` (preview + all-or-nothing repoint + PO consolidation).
+
+    Do not run this legacy path and the full merge engine on the same duplicate group.
+    This function performs a partial hard-delete merge and does not consolidate PO rows.
+
+    Merge ``TMP-DIST-%`` distributors that share the same normalised display ``name``.
 
     For each duplicate group the lowest ``id`` is kept. Aliases and ``ShipmentEvidenceLine.distributor_id``
     are moved to the survivor; common FK references are repointed; duplicate rows are deleted when they

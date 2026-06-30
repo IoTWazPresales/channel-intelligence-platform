@@ -475,6 +475,23 @@ def customer_full_merge_confirm_task(self, payload: dict) -> dict:
         )
 
 
+@celery_app.task(name="distributors.full_merge_confirm", bind=True, ack_late=True)
+def distributor_full_merge_confirm_task(self, payload: dict) -> dict:
+    """Steward-confirmed full distributor merge (name-similarity group)."""
+    from app.db.session_sync import SessionLocal
+    from app.services.distributor_full_merge import confirm_distributor_full_merge_sync
+
+    with SessionLocal() as db:
+        return confirm_distributor_full_merge_sync(
+            db,
+            similarity_key=str(payload["similarity_key"]),
+            survivor_id=int(payload["survivor_id"]),
+            audit_note=str(payload["audit_note"]),
+            performed_by=payload.get("performed_by"),
+            distributor_ids=payload.get("distributor_ids"),
+        )
+
+
 @celery_app.task(name="customers.alias_scope_merge_confirm", bind=True, ack_late=True)
 def customer_alias_scope_merge_confirm_task(self, payload: dict) -> dict:
     """Steward-confirmed customer alias-scope merge."""

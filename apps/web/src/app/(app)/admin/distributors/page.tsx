@@ -35,6 +35,7 @@ import type {
   GridReadyEvent,
 } from 'ag-grid-community';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Suspense, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
@@ -863,7 +864,10 @@ function AdminDistributorsPageContent() {
       />
       <Alert severity="info" sx={{ mb: 2 }}>
         Maintain distributor master records first, then monitor linkage health across sell-out and inbound feeds.
-        Transitional fact-mapping tabs remain available below while import and routing maturity catches up.
+        Transitional fact-mapping tabs remain available below while import and routing maturity catches up.{' '}
+        <Button component={Link} href="/admin/distributors/duplicates" size="small" sx={{ ml: 1 }}>
+          Name-similarity duplicates
+        </Button>
       </Alert>
       {delDist.isError ? (
         <Alert severity="warning" sx={{ mb: 2 }} onClose={() => delDist.reset()}>
