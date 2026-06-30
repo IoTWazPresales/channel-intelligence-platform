@@ -121,7 +121,7 @@ class FactInventoryReconciliation(Base, TimestampMixin):
 
 
 class FactInboundShipment(Base, TimestampMixin):
-    """Inbound shipment / order truth layer, fed from ``ShipmentEvidenceLine`` on apply (global ``source_key``)."""
+    """Inbound shipment / order truth layer, fed from ``ShipmentEvidenceLine`` on apply."""
 
     __tablename__ = "fact_inbound_shipment"
     __table_args__ = (Index("ix_fact_inbound_shipment_import_job_id", "import_job_id"),)
@@ -129,7 +129,8 @@ class FactInboundShipment(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     import_job_id: Mapped[int | None] = mapped_column(ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True)
-    source_key: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
+    source_key: Mapped[str] = mapped_column(String(256), nullable=False)
+    fact_upsert_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
     shipment_evidence_line_id: Mapped[int | None] = mapped_column(
         ForeignKey("shipment_evidence_line.id", ondelete="SET NULL"), nullable=True
     )

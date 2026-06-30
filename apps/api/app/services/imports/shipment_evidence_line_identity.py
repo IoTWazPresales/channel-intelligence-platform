@@ -73,6 +73,84 @@ def stable_line_identity_key_from_mapping(values: dict[str, Any]) -> str:
     )
 
 
+def stable_shipped_fact_upsert_key_from_fields(
+    *,
+    operating_unit: Any = None,
+    delivery_no: Any = None,
+    item_code: Any = None,
+) -> str | None:
+    """Invoice-line-agnostic shipped fact upsert identity (OU + delivery + item).
+
+    Used for ``fact_inbound_shipment`` conflict resolution only — not for open-order rows
+    and not for bitemporal ``line_identity_key`` (which retains invoice_line).
+    """
+    body = _pipe(operating_unit, delivery_no, item_code)
+    if not body or not _norm_seg(delivery_no):
+        return None
+    return f"ship:{body}"[:256]
+
+
+def stable_shipped_fact_upsert_key_from_line(
+    *,
+    operating_unit: Any = None,
+    delivery_no: Any = None,
+    item_code: Any = None,
+) -> str | None:
+    return stable_shipped_fact_upsert_key_from_fields(
+        operating_unit=operating_unit,
+        delivery_no=delivery_no,
+        item_code=item_code,
+    )
+
+
+def fact_upsert_key_for_evidence_values(values: dict[str, Any]) -> str:
+    """Global fact upsert key: shipped-stable identity; open-order uses per-job ``source_key``."""
+    line_state = (values.get("line_state") or "").strip().lower()
+    if line_state == "shipped":
+        stable = stable_shipped_fact_upsert_key_from_fields(
+            operating_unit=values.get("operating_unit"),
+            delivery_no=values.get("delivery_no"),
+            item_code=values.get("item_code"),
+        )
+        if stable:
+            return stable
+    sk = values.get("source_key")
+    if sk:
+        return str(sk)[:256]
+    return stable_line_identity_key_from_fields(
+        operating_unit=values.get("operating_unit"),
+        order_no=values.get("order_no"),
+        order_line=values.get("order_line"),
+        delivery_no=values.get("delivery_no"),
+        invoice_line=values.get("invoice_line"),
+        item_code=values.get("item_code"),
+        raw_source_row=values.get("raw_source_row")
+        if isinstance(values.get("raw_source_row"), dict)
+        else None,
+    )
+
+
+def is_legacy_shipped_source_key(source_key: str | None) -> bool:
+    """True when shipped ``source_key`` omits the invoice-line segment (pre-job-153 shape)."""
+    if not source_key or ":" not in source_key:
+        return False
+    _report, biz = source_key.split(":", 1)
+    parts = [p for p in biz.split("|") if p]
+    # Populated shipped keys: sheet|delivery|invoice_line|item (4+ segments).
+    if len(parts) >= 4:
+        return False
+    return len(parts) == 3
+
+
+def shipped_source_key_has_invoice_segment(source_key: str | None) -> bool:
+    """True when shipped ``source_key`` includes an invoice-line segment."""
+    if not source_key or ":" not in source_key:
+        return False
+    _report, biz = source_key.split(":", 1)
+    parts = [p for p in biz.split("|") if p]
+    return len(parts) >= 4
+
+
 _OBSERVATION_HASH_COLS = (
     "source_sheet",
     "source_row_number",

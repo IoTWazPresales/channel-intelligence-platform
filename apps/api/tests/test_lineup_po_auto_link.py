@@ -113,10 +113,20 @@ def test_best_lineup_match_counts_once_per_product():
 async def test_purmidr_not_duplicated_per_po_norm_on_26q2():
     """Regression: one proposal per case+customer+PO norm (not per duplicate purchase_order id)."""
     pytest.importorskip("asyncpg")
+    from sqlalchemy import text
+
     from app.db.session import AsyncSessionLocal
     from app.services.commercial_planner.lineup_po_auto_link import po_auto_link_proposals
 
     async with AsyncSessionLocal() as db:
+        has_col = await db.scalar(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name='fact_inbound_shipment' AND column_name='fact_upsert_key'"
+            )
+        )
+        if not has_col:
+            pytest.skip("migration 20260630_0060 not applied")
         r = await po_auto_link_proposals(db, period="26Q2", limit=500)
     hits = [p for p in r["proposals"] if p.get("po_number") == "PURMIDR26010748" and "Game" in (p.get("customer_label") or "")]
     assert len(hits) == 1
@@ -128,10 +138,20 @@ async def test_purmidr_not_duplicated_per_po_norm_on_26q2():
 async def test_purmidr_09978_amazon_customer_planned_and_fact_shipped_grain():
     """Regression: Amazon planned is customer-scoped; shipped uses fact layer (not stacked evidence)."""
     pytest.importorskip("asyncpg")
+    from sqlalchemy import text
+
     from app.db.session import AsyncSessionLocal
     from app.services.commercial_planner.lineup_po_auto_link import po_auto_link_proposals
 
     async with AsyncSessionLocal() as db:
+        has_col = await db.scalar(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name='fact_inbound_shipment' AND column_name='fact_upsert_key'"
+            )
+        )
+        if not has_col:
+            pytest.skip("migration 20260630_0060 not applied")
         r = await po_auto_link_proposals(db, period="26Q2", customer_id=26, limit=500)
     hits = [
         p
@@ -153,11 +173,21 @@ async def test_purmidr_09978_amazon_customer_planned_and_fact_shipped_grain():
 async def test_proposals_endpoint_smoke_on_cip():
     """Integration smoke when resolved columns + lineup data exist."""
     pytest.importorskip("asyncpg")
+    from sqlalchemy import text
+
     from app.db.session import AsyncSessionLocal
     from app.services.commercial_planner.lineup_po_auto_link import po_auto_link_proposals
 
     try:
         async with AsyncSessionLocal() as db:
+            has_col = await db.scalar(
+                text(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name='fact_inbound_shipment' AND column_name='fact_upsert_key'"
+                )
+            )
+            if not has_col:
+                pytest.skip("migration 20260630_0060 not applied")
             result = await po_auto_link_proposals(db, limit=5)
     except Exception as exc:
         pytest.skip(f"DB not available: {exc}")

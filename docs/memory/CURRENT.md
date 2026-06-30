@@ -12,8 +12,8 @@
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` (now also carries Session C; cut from `feat/dsi-async-topology` + BACKLOG-051 docs) |
 | **HEAD** | `878f3d2` — PO auto-link planned/shipped read-model fix |
 | **PR** | None open |
-| **Alembic (code)** | `20260629_0059` (po auto-link dismiss) |
-| **Alembic (DB)** | **`20260629_0059`** on local `cip` (grants to `cip` role applied) |
+| **Alembic (code)** | `20260630_0061` (fact upsert key unique swap — run twin merge `--confirm` first) |
+| **Alembic (DB)** | **`20260630_0060`** on local `cip` (`fact_upsert_key` backfill); **`0061` pending** until twin merge |
 
 ---
 

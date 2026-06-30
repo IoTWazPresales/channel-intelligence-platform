@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.services.imports.shipment_evidence_line_identity import (
     observation_payload_hash,
     stable_line_identity_key_from_fields,
+    stable_shipped_fact_upsert_key_from_fields,
 )
 
 
@@ -31,6 +32,15 @@ def test_line_identity_key_shipped_fallback() -> None:
 def test_line_identity_key_digest_when_no_business_segments() -> None:
     key = stable_line_identity_key_from_fields(raw_source_row={"foo": "bar"})
     assert key.startswith("digest:")
+
+
+def test_shipped_fact_upsert_key_from_fields() -> None:
+    key = stable_shipped_fact_upsert_key_from_fields(
+        operating_unit="OU",
+        delivery_no="D1",
+        item_code="SKU",
+    )
+    assert key == "ship:OU|D1|SKU"
 
 
 def test_observation_payload_hash_stable() -> None:

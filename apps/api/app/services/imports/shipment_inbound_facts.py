@@ -2,23 +2,26 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import date
 from typing import Any, Callable
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.facts import FactInboundShipment
 from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_line_identity import fact_upsert_key_for_evidence_values
 from app.utils.json_safe import to_jsonable
 
-# Columns refreshed on ``ON CONFLICT (source_key) DO UPDATE`` — every mutable column
-# (i.e. all of them except the surrogate ``id``, the conflict key ``source_key``, and
-# ``created_at``). ``updated_at`` is set to ``now()`` separately. Latest-job-wins is
-# preserved because ``import_job_id`` is among the refreshed columns.
+# Columns refreshed on ``ON CONFLICT (fact_upsert_key) DO UPDATE`` — every mutable column
+# except ``id``, ``fact_upsert_key``, and ``created_at``. ``source_key`` is refreshed from the
+# latest evidence row (per-job lineage); conflict identity is ``fact_upsert_key`` (shipped-stable
+# or open-order ``source_key``). Latest-job-wins via ``import_job_id``.
 _UPSERT_REFRESH_COLUMNS: tuple[str, ...] = (
     "import_job_id",
+    "source_key",
     "shipment_evidence_line_id",
     "source_sheet",
     "source_row_number",
@@ -64,20 +67,17 @@ _UPSERT_REFRESH_COLUMNS: tuple[str, ...] = (
     "customer_resolution_status",
     "resolved_customer_id",
     "resolved_distributor_id",
-    "crad_date",
     "eta_date",
     "reference",
     "status",
 )
 
-# Rows per multi-values INSERT. ~45 bound columns/row keeps each statement well under
-# Postgres' 65535-parameter limit (500 × 45 ≈ 22.5k) while collapsing the former
-# per-row round-trips into a handful of statements.
 _UPSERT_CHUNK_SIZE = 500
+_FACT_UPSERT_CONSTRAINT = "uq_fact_inbound_shipment_fact_upsert_key"
+_SOURCE_KEY_CONSTRAINT = "uq_fact_inbound_shipment_source_key"
 
 
 def _coalesce_shipment_dates(line: ShipmentEvidenceLine) -> date | None:
-    """Match apply-path rule: first non-null among the seven logistics dates (pod-first)."""
     for d in (
         line.pod_date,
         line.est_pod_date,
@@ -99,7 +99,7 @@ def _derive_inbound_status(line: ShipmentEvidenceLine) -> str:
 def _row_values_from_evidence(line: ShipmentEvidenceLine) -> dict[str, Any]:
     eta = _coalesce_shipment_dates(line)
     raw = line.raw_source_row if isinstance(line.raw_source_row, dict) else {}
-    return {
+    base = {
         "import_job_id": int(line.import_job_id),
         "source_key": line.source_key,
         "shipment_evidence_line_id": int(line.id),
@@ -153,14 +153,70 @@ def _row_values_from_evidence(line: ShipmentEvidenceLine) -> dict[str, Any]:
         "reference": line.order_no,
         "status": _derive_inbound_status(line),
     }
+    base["fact_upsert_key"] = fact_upsert_key_for_evidence_values(base)
+    return base
+
+
+def _merge_shipped_row_into(target: dict[str, Any], incoming: dict[str, Any]) -> None:
+    """Sum measures for duplicate shipped ``fact_upsert_key`` within one apply batch."""
+    for measure in ("quantity", "amount"):
+        t = target.get(measure)
+        i = incoming.get(measure)
+        if t is not None or i is not None:
+            target[measure] = float(t or 0) + float(i or 0)
+    for col in _UPSERT_REFRESH_COLUMNS:
+        if col in ("quantity", "amount"):
+            continue
+        if col in incoming:
+            target[col] = incoming[col]
+
+
+def _dedupe_rows_for_fact_upsert(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse rows sharing ``fact_upsert_key`` within a chunk (shipped sums qty)."""
+    order: list[str] = []
+    by_key: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        key = str(row["fact_upsert_key"])
+        if key not in by_key:
+            by_key[key] = dict(row)
+            order.append(key)
+            continue
+        existing = by_key[key]
+        if (existing.get("line_state") or "").strip().lower() == "shipped" and (
+            row.get("line_state") or ""
+        ).strip().lower() == "shipped":
+            _merge_shipped_row_into(existing, row)
+        else:
+            by_key[key] = dict(row)
+    return [by_key[k] for k in order]
 
 
 def _conflict_update_set(ins: Any) -> dict[str, Any]:
-    """``ON CONFLICT DO UPDATE`` SET map: refresh every mutable column from the proposed row."""
     ex = ins.excluded
     set_ = {col: getattr(ex, col) for col in _UPSERT_REFRESH_COLUMNS}
     set_["updated_at"] = func.now()
     return set_
+
+
+def _upsert_open_order_chunk(db: Session, tbl: Any, rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        return
+    ins = pg_insert(tbl).values(rows)
+    stmt = ins.on_conflict_do_update(
+        constraint=_SOURCE_KEY_CONSTRAINT,
+        set_=_conflict_update_set(ins),
+    )
+    db.execute(stmt)
+
+
+def _upsert_shipped_chunk(db: Session, tbl: Any, rows: list[dict[str, Any]]) -> None:
+    """Replace shipped facts by stable ``fact_upsert_key`` (latest job wins for the chunk)."""
+    if not rows:
+        return
+    aggregated = _dedupe_rows_for_fact_upsert(rows)
+    keys = [str(r["fact_upsert_key"]) for r in aggregated]
+    db.execute(delete(FactInboundShipment).where(FactInboundShipment.fact_upsert_key.in_(keys)))
+    db.execute(pg_insert(tbl).values(aggregated))
 
 
 def upsert_inbound_shipment_facts_for_job(
@@ -170,11 +226,10 @@ def upsert_inbound_shipment_facts_for_job(
     on_progress: Callable[[int, int], None] | None = None,
     chunk_size: int = _UPSERT_CHUNK_SIZE,
 ) -> int:
-    """Insert/update ``fact_inbound_shipment`` for every evidence line on the job (``ON CONFLICT (source_key)``).
+    """Insert/update ``fact_inbound_shipment`` for every evidence line on the job.
 
-    Writes are batched into chunked multi-row statements (``chunk_size`` rows each) instead of
-    one round-trip per line — the same N+1 fix applied to validate/steward. ``on_progress`` is
-    invoked after each chunk with ``(rows_written_so_far, total_rows)`` for background-task UI.
+    Shipped rows replace by ``fact_upsert_key`` (invoice-line-agnostic). Open-order rows
+    keep per-job ``source_key`` upsert semantics.
     """
     lines = list(
         db.scalars(
@@ -188,13 +243,11 @@ def upsert_inbound_shipment_facts_for_job(
     n = 0
     for start in range(0, total, chunk_size):
         chunk = lines[start : start + chunk_size]
-        rows = [_row_values_from_evidence(line) for line in chunk]
-        ins = pg_insert(tbl).values(rows)
-        stmt = ins.on_conflict_do_update(
-            constraint="uq_fact_inbound_shipment_source_key",
-            set_=_conflict_update_set(ins),
-        )
-        db.execute(stmt)
+        row_values = [_row_values_from_evidence(line) for line in chunk]
+        shipped_rows = [r for r in row_values if (r.get("line_state") or "").strip().lower() == "shipped"]
+        open_rows = [r for r in row_values if (r.get("line_state") or "").strip().lower() != "shipped"]
+        _upsert_shipped_chunk(db, tbl, shipped_rows)
+        _upsert_open_order_chunk(db, tbl, open_rows)
         n += len(chunk)
         if on_progress is not None:
             on_progress(n, total)

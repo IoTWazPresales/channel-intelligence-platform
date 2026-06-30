@@ -25,7 +25,13 @@ def _db_with_lines(n: int) -> MagicMock:
 
 def test_upsert_batches_into_chunked_statements(monkeypatch) -> None:
     # Replace per-line value extraction with a constant row so no real ORM line is needed.
-    monkeypatch.setattr(facts_mod, "_row_values_from_evidence", lambda line: {"source_key": "k", "import_job_id": 1})
+    monkeypatch.setattr(
+        facts_mod,
+        "_row_values_from_evidence",
+        lambda line: {"source_key": "k", "fact_upsert_key": "k", "import_job_id": 1, "line_state": "open_order"},
+    )
+    monkeypatch.setattr(facts_mod, "_upsert_shipped_chunk", lambda db, tbl, rows: None)
+    monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: db.execute(MagicMock()) or None)
     db = _db_with_lines(1200)
     progress: list[tuple[int, int]] = []
 
@@ -41,7 +47,13 @@ def test_upsert_batches_into_chunked_statements(monkeypatch) -> None:
 
 
 def test_upsert_single_chunk_and_empty(monkeypatch) -> None:
-    monkeypatch.setattr(facts_mod, "_row_values_from_evidence", lambda line: {"source_key": "k", "import_job_id": 1})
+    monkeypatch.setattr(
+        facts_mod,
+        "_row_values_from_evidence",
+        lambda line: {"source_key": "k", "fact_upsert_key": "k", "import_job_id": 1, "line_state": "open_order"},
+    )
+    monkeypatch.setattr(facts_mod, "_upsert_shipped_chunk", lambda db, tbl, rows: None)
+    monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: db.execute(MagicMock()) or None)
 
     db = _db_with_lines(3)
     progress: list[tuple[int, int]] = []
