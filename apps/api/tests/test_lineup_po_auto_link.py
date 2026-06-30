@@ -118,6 +118,27 @@ def test_best_lineup_match_counts_once_per_product():
     assert align == "exact"
 
 
+def test_best_lineup_match_product_filter_equivalent_to_full_case_lines():
+    """Quick-win: pre-filtered product lines must yield the same match as all case lines."""
+    from types import SimpleNamespace
+
+    from app.services.commercial_planner.lineup_po_auto_link import _best_lineup_match_for_product
+
+    lines = [
+        SimpleNamespace(product_id=100, customer_id=5, distributor_id=10),
+        SimpleNamespace(product_id=200, customer_id=6, distributor_id=11),
+        SimpleNamespace(product_id=100, customer_id=5, distributor_id=10),
+    ]
+    product_lines = [ln for ln in lines if int(ln.product_id) == 100]
+    full = _best_lineup_match_for_product(
+        lines, product_id=100, ship_customer_id=5, date_source="crad"
+    )
+    filtered = _best_lineup_match_for_product(
+        product_lines, product_id=100, ship_customer_id=5, date_source="crad"
+    )
+    assert full == filtered
+
+
 @pytest.mark.anyio
 async def test_purmidr_not_duplicated_per_po_norm_on_26q2():
     """Regression: one proposal per case+customer+PO norm (not per duplicate purchase_order id)."""

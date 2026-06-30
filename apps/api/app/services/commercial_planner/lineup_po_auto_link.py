@@ -362,7 +362,7 @@ async def _po_auto_link_proposals_inner(
                 continue
 
             match_ln, conf, reason, _align = _best_lineup_match_for_product(
-                case_lines,
+                product_lines,
                 product_id=product_id,
                 ship_customer_id=ship_cust,
                 date_source=date_src,
