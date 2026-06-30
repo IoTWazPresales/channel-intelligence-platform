@@ -99,6 +99,55 @@ def test_mark_task_run_running_updates_existing_row() -> None:
     db.commit.assert_called_once()
 
 
+def test_ensure_task_run_running_promotes_when_row_already_queued() -> None:
+    from app.services.task_run_ledger import ensure_task_run_running
+
+    session_cm, db = _mock_session_local()
+    row = MagicMock()
+    row.state = STATE_QUEUED
+    row.started_at = None
+    db.get.return_value = row
+    with patch("app.db.session_sync.SessionLocal", return_value=session_cm):
+        ensure_task_run_running(
+            "task-race",
+            task_name="customers.full_merge_confirm",
+            entity_type="customer_full_merge",
+            entity_id=42,
+            transport=TRANSPORT_BROKER,
+        )
+    assert row.state == STATE_RUNNING
+    assert row.started_at is not None
+    db.commit.assert_called_once()
+
+
+def test_ensure_task_run_running_recovers_from_insert_race() -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    from app.services.task_run_ledger import ensure_task_run_running
+
+    session_cm, db = _mock_session_local()
+    existing = MagicMock()
+    existing.state = STATE_QUEUED
+    existing.started_at = None
+    db.get.side_effect = [None, existing]
+    db.begin_nested.return_value.__enter__.return_value = None
+    db.begin_nested.return_value.__exit__.return_value = False
+    db.flush.side_effect = IntegrityError("insert", {}, Exception("dup"))
+
+    with patch("app.db.session_sync.SessionLocal", return_value=session_cm):
+        ensure_task_run_running(
+            "task-race-2",
+            task_name="customers.full_merge_confirm",
+            entity_type="customer_full_merge",
+            entity_id=99,
+            transport=TRANSPORT_BROKER,
+        )
+
+    assert existing.state == STATE_RUNNING
+    assert existing.started_at is not None
+    db.commit.assert_called_once()
+
+
 def test_task_run_execution_marks_terminal_states() -> None:
     session_cm, db = _mock_session_local()
     row = MagicMock()

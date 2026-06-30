@@ -9,6 +9,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterator, TypeVar
 
+from sqlalchemy.exc import IntegrityError
+
 from app.models.task_run import TaskRun
 
 logger = logging.getLogger(__name__)
@@ -145,6 +147,14 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _promote_task_run_to_running(row: TaskRun, now: datetime) -> None:
+    if row.state in (STATE_SUCCEEDED, STATE_FAILED):
+        return
+    row.state = STATE_RUNNING
+    if row.started_at is None:
+        row.started_at = now
+
+
 def _fresh_session_commit(fn: Callable[[Any], None]) -> None:
     from app.db.session_sync import SessionLocal
 
@@ -169,17 +179,22 @@ def create_queued_task_run(
     def _write(db) -> None:
         if db.get(TaskRun, task_run_id) is not None:
             return
-        db.add(
-            TaskRun(
-                id=task_run_id,
-                task_name=task_name,
-                task_class=task_class_for(task_name),
-                transport=transport,
-                entity_type=entity_type,
-                entity_id=int(entity_id),
-                state=STATE_QUEUED,
-            )
+        row = TaskRun(
+            id=task_run_id,
+            task_name=task_name,
+            task_class=task_class_for(task_name),
+            transport=transport,
+            entity_type=entity_type,
+            entity_id=int(entity_id),
+            state=STATE_QUEUED,
         )
+        db.add(row)
+        try:
+            with db.begin_nested():
+                db.flush()
+        except IntegrityError:
+            # Race with worker LedgerTask or duplicate enqueue — row already exists.
+            return
 
     _fresh_session_commit(_write)
 
@@ -198,25 +213,31 @@ def ensure_task_run_running(
 
     def _write(db) -> None:
         row = db.get(TaskRun, task_run_id)
-        if row is None:
-            row = TaskRun(
-                id=task_run_id,
-                task_name=task_name,
-                task_class=task_class_for(task_name),
-                transport=transport,
-                entity_type=entity_type,
-                entity_id=int(entity_id),
-                state=STATE_RUNNING,
-                started_at=now,
-            )
+        if row is not None:
+            _promote_task_run_to_running(row, now)
             db.add(row)
             return
-        if row.state in (STATE_SUCCEEDED, STATE_FAILED):
-            return
-        row.state = STATE_RUNNING
-        if row.started_at is None:
-            row.started_at = now
+        row = TaskRun(
+            id=task_run_id,
+            task_name=task_name,
+            task_class=task_class_for(task_name),
+            transport=transport,
+            entity_type=entity_type,
+            entity_id=int(entity_id),
+            state=STATE_RUNNING,
+            started_at=now,
+        )
         db.add(row)
+        try:
+            with db.begin_nested():
+                db.flush()
+        except IntegrityError:
+            # Race with create_queued_task_run on fast broker pickup — promote existing row.
+            existing = db.get(TaskRun, task_run_id)
+            if existing is None:
+                raise
+            _promote_task_run_to_running(existing, now)
+            db.add(existing)
 
     _fresh_session_commit(_write)
 
