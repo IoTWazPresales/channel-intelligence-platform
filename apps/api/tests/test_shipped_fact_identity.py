@@ -1,4 +1,4 @@
-"""Shipped fact identity: stable upsert keys, twin merge classification, fact upsert dedupe."""
+"""Shipped fact identity: stable upsert keys, collapse planning, fact upsert dedupe."""
 
 from __future__ import annotations
 
@@ -18,10 +18,45 @@ from app.services.imports.shipment_inbound_facts import (
     _row_values_from_evidence,
 )
 from app.services.imports.shipment_shipped_fact_identity_twin_merge import (
-    ShippedFactTwinGroup,
+    ShippedFactCollapseGroup,
+    ShippedFactCollapseSkip,
+    _build_collapse_group,
     _classify_group,
     plan_shipped_fact_identity_twin_merges,
 )
+
+
+def _fact(
+    *,
+    id: int,
+    job: int,
+    qty: float,
+    legacy: bool,
+    po_id: int | None = 10,
+    delivery: str = "D",
+    item: str = "ITEM",
+) -> SimpleNamespace:
+    if legacy:
+        sk = f"acza_workbook_shipped:Shipped|{delivery}|{item}"
+        inv = None
+    else:
+        sk = f"acza_workbook_shipped:Shipped|{delivery}|{id}|{item}"
+        inv = str(id)
+    return SimpleNamespace(
+      id=id,
+      fact_upsert_key=f"ship:Shipped|{delivery}|{item}",
+      line_state="shipped",
+      source_key=sk,
+      invoice_line=inv,
+      quantity=qty,
+      amount=None,
+      import_job_id=job,
+      purchase_order_id=po_id,
+      resolved_customer_id=26,
+      delivery_no=delivery,
+      item_code=item,
+      operating_unit="Shipped",
+  )
 
 
 def test_shipped_fact_upsert_key_ignores_invoice_line() -> None:
@@ -87,82 +122,45 @@ def test_dedupe_does_not_merge_open_order_rows() -> None:
 
 
 def test_classify_clean_1_1_legacy_populated() -> None:
-    legacy = SimpleNamespace(
-        id=1,
-        line_state="shipped",
-        source_key="acza_workbook_shipped:Shipped|D1|ITEM",
-        invoice_line=None,
-        quantity=108.0,
-        import_job_id=40,
-        purchase_order_id=10,
-        resolved_customer_id=26,
-        delivery_no="D1",
-        item_code="ITEM",
-        operating_unit="Shipped",
-    )
-    populated = SimpleNamespace(
-        id=2,
-        line_state="shipped",
-        source_key="acza_workbook_shipped:Shipped|D1|1|ITEM",
-        invoice_line="1",
-        quantity=108.0,
-        import_job_id=153,
-        purchase_order_id=10,
-        resolved_customer_id=26,
-        delivery_no="D1",
-        item_code="ITEM",
-        operating_unit="Shipped",
-    )
+    legacy = _fact(id=1, job=40, qty=108.0, legacy=True, delivery="D1")
+    populated = _fact(id=2, job=153, qty=108.0, legacy=False, delivery="D1")
     outcome = _classify_group("ship:Shipped|D1|ITEM", [legacy, populated])
-    assert isinstance(outcome, ShippedFactTwinGroup)
+    assert isinstance(outcome, ShippedFactCollapseGroup)
     assert outcome.bucket == "clean"
     assert outcome.keeper_id == 2
+    assert outcome.survivor_qty == 108.0
     assert outcome.loser_ids == (1,)
 
 
-def test_classify_split_legacy_vs_two_populated() -> None:
-    legacy = SimpleNamespace(
-        id=1,
-        line_state="shipped",
-        source_key="acza_workbook_shipped:Shipped|D2|ITEM",
-        invoice_line=None,
-        quantity=36.0,
-        import_job_id=40,
-        purchase_order_id=10,
-        resolved_customer_id=26,
-        delivery_no="D2",
-        item_code="ITEM",
-        operating_unit="Shipped",
-    )
-    pop_a = SimpleNamespace(
-        id=2,
-        line_state="shipped",
-        source_key="acza_workbook_shipped:Shipped|D2|1|ITEM",
-        invoice_line="1",
-        quantity=36.0,
-        import_job_id=153,
-        purchase_order_id=10,
-        resolved_customer_id=26,
-        delivery_no="D2",
-        item_code="ITEM",
-        operating_unit="Shipped",
-    )
-    pop_b = SimpleNamespace(
-        id=3,
-        line_state="shipped",
-        source_key="acza_workbook_shipped:Shipped|D2|2|ITEM",
-        invoice_line="2",
-        quantity=36.0,
-        import_job_id=153,
-        purchase_order_id=10,
-        resolved_customer_id=26,
-        delivery_no="D2",
-        item_code="ITEM",
-        operating_unit="Shipped",
-    )
+def test_classify_multi_invoice_legacy_vs_two_populated() -> None:
+    legacy = _fact(id=1, job=40, qty=36.0, legacy=True, delivery="D2")
+    pop_a = _fact(id=2, job=153, qty=36.0, legacy=False, delivery="D2")
+    pop_b = _fact(id=3, job=153, qty=36.0, legacy=False, delivery="D2")
     outcome = _classify_group("ship:Shipped|D2|ITEM", [legacy, pop_a, pop_b])
-    assert outcome.bucket == "split"  # type: ignore[union-attr]
-    assert outcome.reason == "legacy_vs_multiple_populated_invoice_lines"  # type: ignore[union-attr]
+    assert isinstance(outcome, ShippedFactCollapseGroup)
+    assert outcome.bucket == "multi_invoice"
+    assert outcome.survivor_qty == 72.0
+    assert set(outcome.loser_ids) == {1, 2}
+
+
+def test_classify_multi_import_multiple_legacy_jobs() -> None:
+    pop = _fact(id=1, job=147, qty=216.0, legacy=False, delivery="D3", po_id=None)
+    leg_a = _fact(id=2, job=153, qty=216.0, legacy=True, delivery="D3", po_id=None)
+    leg_b = _fact(id=3, job=154, qty=216.0, legacy=True, delivery="D3", po_id=None)
+    outcome = _classify_group("ship:Shipped|D3|ITEM", [pop, leg_a, leg_b])
+    assert isinstance(outcome, ShippedFactCollapseGroup)
+    assert outcome.bucket == "multi_import"
+    assert outcome.max_import_job_id == 154
+    assert outcome.survivor_qty == 216.0
+    assert set(outcome.loser_ids) == {1, 2}
+
+
+def test_skip_multi_po_on_one_key() -> None:
+    a = _fact(id=1, job=40, qty=10.0, legacy=True, delivery="D4", po_id=100)
+    b = _fact(id=2, job=153, qty=10.0, legacy=False, delivery="D4", po_id=200)
+    outcome = _build_collapse_group("ship:Shipped|D4|ITEM", [a, b])
+    assert isinstance(outcome, ShippedFactCollapseSkip)
+    assert outcome.reason == "multiple_distinct_purchase_order_ids"
 
 
 def test_row_values_from_evidence_sets_fact_upsert_key() -> None:
@@ -221,8 +219,6 @@ def test_row_values_from_evidence_sets_fact_upsert_key() -> None:
 
 
 def test_upsert_splits_shipped_and_open_order_paths(monkeypatch) -> None:
-    from unittest.mock import MagicMock
-
     from app.services.imports import shipment_inbound_facts as facts_mod
 
     calls: list[str] = []
@@ -255,51 +251,14 @@ def test_upsert_splits_shipped_and_open_order_paths(monkeypatch) -> None:
     assert calls == ["shipped:1", "open:1"]
 
 
-def test_plan_merge_skips_split_groups(monkeypatch) -> None:
+def test_plan_merge_collapses_split_groups(monkeypatch) -> None:
     db = MagicMock()
-    legacy = SimpleNamespace(
-        id=10,
-        fact_upsert_key="ship:Shipped|D|I",
-        line_state="shipped",
-        source_key="acza_workbook_shipped:Shipped|D|I",
-        invoice_line=None,
-        quantity=36.0,
-        import_job_id=40,
-        purchase_order_id=1,
-        resolved_customer_id=26,
-        delivery_no="D",
-        item_code="I",
-        operating_unit="Shipped",
-    )
-    pop1 = SimpleNamespace(
-        id=11,
-        fact_upsert_key="ship:Shipped|D|I",
-        line_state="shipped",
-        source_key="acza_workbook_shipped:Shipped|D|1|I",
-        invoice_line="1",
-        quantity=36.0,
-        import_job_id=153,
-        purchase_order_id=1,
-        resolved_customer_id=26,
-        delivery_no="D",
-        item_code="I",
-        operating_unit="Shipped",
-    )
-    pop2 = SimpleNamespace(
-        id=12,
-        fact_upsert_key="ship:Shipped|D|I",
-        line_state="shipped",
-        source_key="acza_workbook_shipped:Shipped|D|2|I",
-        invoice_line="2",
-        quantity=36.0,
-        import_job_id=153,
-        purchase_order_id=1,
-        resolved_customer_id=26,
-        delivery_no="D",
-        item_code="I",
-        operating_unit="Shipped",
-    )
+    legacy = _fact(id=10, job=40, qty=36.0, legacy=True)
+    pop1 = _fact(id=11, job=153, qty=36.0, legacy=False)
+    pop2 = _fact(id=12, job=153, qty=36.0, legacy=False)
     db.scalars.return_value.all.return_value = [legacy, pop1, pop2]
     plans, skipped = plan_shipped_fact_identity_twin_merges(db)
-    assert plans == []
-    assert any(s.bucket == "split" for s in skipped)
+    assert len(plans) == 1
+    assert plans[0].bucket == "multi_invoice"
+    assert plans[0].survivor_qty == 72.0
+    assert skipped == []

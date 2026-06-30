@@ -1,8 +1,8 @@
-"""Preview-first collapse of shipped fact twins from invoice_line source_key drift.
+"""Preview-first collapse of shipped fact rows sharing ``fact_upsert_key``.
 
-Dry-run by default; ``--confirm`` executes clean 1:1 merges only. Warren runs against ``cip``.
-Run after migration ``20260630_0060`` (``fact_upsert_key`` backfill) and before ``0061`` (unique swap)
-if duplicates remain.
+Dry-run by default; ``--confirm`` executes all collapses (latest job wins, invoice lines
+summed). Warren runs against ``cip``. Run after migration ``20260630_0060`` and before
+``0061`` (unique on ``fact_upsert_key``).
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from app.db.session_sync import SessionLocal
 from app.services.imports.cip_db_identity import is_cip_application_database
 from app.services.imports.shipment_shipped_fact_identity_twin_merge import (
     amazon_po_shipped_stats,
-    execute_shipped_fact_identity_twin_merge,
+    execute_all_shipped_fact_collapses,
     plan_shipped_fact_identity_twin_merges,
     shipped_fact_twin_plan_to_dict,
     shipped_fact_twin_skip_to_dict,
@@ -39,42 +39,34 @@ def run(*, dry_run: bool, limit: int | None, sample: int) -> dict:
 
         out["blast_radius"] = twin_blast_radius(db, plans, skipped)
         out["bucket_counts"] = {
-            "clean": len(plans),
-            "split": sum(1 for s in skipped if s.bucket == "split"),
-            "non_reconciling": sum(1 for s in skipped if s.bucket == "non_reconciling"),
+            "clean": sum(1 for g in plans if g.bucket == "clean"),
+            "multi_invoice": sum(1 for g in plans if g.bucket == "multi_invoice"),
+            "multi_import": sum(1 for g in plans if g.bucket == "multi_import"),
+            "multi_po_skipped": len(skipped),
         }
         out["losers_to_delete"] = sum(len(g.loser_ids) for g in plans)
-        out["sample_clean"] = [shipped_fact_twin_plan_to_dict(g) for g in plans[:sample]]
-        out["sample_split"] = [
-            shipped_fact_twin_skip_to_dict(s) for s in skipped if s.bucket == "split"
+        out["sample_clean"] = [
+            shipped_fact_twin_plan_to_dict(g) for g in plans if g.bucket == "clean"
         ][:sample]
-        out["sample_non_reconciling"] = [
-            shipped_fact_twin_skip_to_dict(s) for s in skipped if s.bucket == "non_reconciling"
+        out["sample_multi_invoice"] = [
+            shipped_fact_twin_plan_to_dict(g) for g in plans if g.bucket == "multi_invoice"
         ][:sample]
-        out["amazon_split"] = [
-            shipped_fact_twin_skip_to_dict(s)
-            for s in skipped
-            if s.bucket == "split" and "15260158606" in (s.fact_upsert_key or "")
-        ]
+        out["sample_multi_import"] = [
+            shipped_fact_twin_plan_to_dict(g) for g in plans if g.bucket == "multi_import"
+        ][:sample]
+        out["sample_multi_po_skipped"] = [shipped_fact_twin_skip_to_dict(s) for s in skipped][:sample]
 
         if dry_run:
+            amazon_po_id = out["amazon_before"].get("purchase_order_id")
+            stale = sum(g.units_before - g.survivor_qty for g in plans if g.purchase_order_id == amazon_po_id)
             out["amazon_after_estimated"] = {
                 **out["amazon_before"],
-                "shipped_units": out["amazon_before"]["shipped_units"]
-                - sum(
-                    g.legacy_qty
-                    for g in plans
-                    if g.purchase_order_id == out["amazon_before"].get("purchase_order_id")
-                    and g.resolved_customer_id == 26
-                ),
-                "note": "estimate if all clean Amazon merges run; split rows remain",
+                "shipped_units": out["amazon_before"]["shipped_units"] - stale,
+                "note": "estimate after full collapse",
             }
             return out
 
-        totals = {"facts_deleted": 0}
-        for group in plans:
-            stats = execute_shipped_fact_identity_twin_merge(db, group)
-            totals["facts_deleted"] += int(stats.get("facts_deleted", 0))
+        totals = execute_all_shipped_fact_collapses(db, plans)
         db.commit()
         out["execute"] = totals
         out["after"] = shipped_fact_twin_summary_stats(db)
@@ -84,8 +76,8 @@ def run(*, dry_run: bool, limit: int | None, sample: int) -> dict:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--confirm", action="store_true", help="Execute clean merges (default preview only)")
-    p.add_argument("--limit", type=int, default=None, help="Cap number of clean groups merged")
+    p.add_argument("--confirm", action="store_true", help="Execute all collapses (default preview only)")
+    p.add_argument("--limit", type=int, default=None, help="Cap number of collapse groups (confirm only)")
     p.add_argument("--sample", type=int, default=10, help="Preview sample size in output")
     args = p.parse_args()
     result = run(dry_run=not args.confirm, limit=args.limit, sample=max(0, int(args.sample)))

@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-29 (PO↔lineup Units 1–4 shipped; Unit 5 deferred)
+**Last updated:** 2026-06-30 (shipped fact collapse merge executed on cip; 0061 blocked)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,10 +10,10 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` (now also carries Session C; cut from `feat/dsi-async-topology` + BACKLOG-051 docs) |
-| **HEAD** | `878f3d2` — PO auto-link planned/shipped read-model fix |
+| **HEAD** | collapse merge executed on `cip`; code commit pending push |
 | **PR** | None open |
-| **Alembic (code)** | `20260630_0061` (fact upsert key unique swap — run twin merge `--confirm` first) |
-| **Alembic (DB)** | **`20260630_0060`** on local `cip` (`fact_upsert_key` backfill); **`0061` pending** until twin merge |
+| **Alembic (code)** | `20260630_0061` (fact upsert key unique swap) |
+| **Alembic (DB)** | **`20260630_0060`** on local `cip`; **`0061` blocked** — 394 duplicate `fact_upsert_key` groups remain (multi-PO skip) |
 
 ---
 
