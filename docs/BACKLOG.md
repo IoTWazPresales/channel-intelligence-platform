@@ -50,12 +50,29 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-01 |
+| **Status / parked** | **Resolved** · 2026-07-01 (`feat/unit-6-unified-lineup-import-centre`) |
 | **Effort** | Small–medium (dialog controls + wire `manual_overrides` / `supersession_confirmations` to preview re-run) |
 | **Source** | Spec C Step B delivery (`BulkLineupBackfillDialog.tsx`, `execute_bulk_lineup_preview` / `execute_bulk_lineup_apply`). |
 | **Idea** | API accepts `manual_overrides` for period/BU and collision winner selection; dialog ships auto-path only. Editable overrides are the enhancement before stewards rely on bulk backfill for conflict-heavy archives. |
-| **Why it matters / deferrable** | Auto-detection covers the happy path; defer until stewards hit frequent conflicts. |
-| **TRIGGER** | Before first steward runs a backfill where auto-detection conflicts are frequent. |
+| **Resolution** | `BulkLineupBackfillDialog` — editable period/BU per proposal, collision winner radio groups, re-run preview with overrides, apply wires `supersession_confirmations`. API preview/apply routes accept `manual_overrides` + `supersession_confirmations`. |
+| **TRIGGER** | ~~Before first steward runs a backfill where auto-detection conflicts are frequent.~~ **Fired** — production-ready panel pass (2026-07-01). |
+
+---
+
+## BACKLOG-059 — Catalogue upload: explicit column semantic mapping + cross-check fallback
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-01 |
+| **Effort** | Medium (mapping UI + validation + fallback cross-check rules) |
+| **Source** | Spec C production-ready pass (2026-07-01): `dim_product.business_unit` (division) vs `product_line` (folder-grain BU) trap exposed by bulk backfill BU resolver fix; same class of error one level up on catalogue import column mapping. |
+| **Idea** | On catalogue (Product Master) import, each source column must be **explicitly mapped** to its semantic role — product line / folder-grain BU vs division (`business_unit`) vs series vs other attributes — so relationships build correctly. Add a **fallback cross-check** against a second mapped column when the primary mapped column looks mislabelled or gamed (e.g. division values in a product_line slot). |
+| **Why it matters / deferrable** | Silent mis-mapping poisons entity resolution, BU inference, and lineup backfill product-tier corroboration. Deferrable until second-tenant catalogue onboarding when column layouts may diverge from ACZA conventions. |
+| **What the work is** | (1) Extend catalogue import mapping to require semantic role per column (not just field name). (2) Post-map validation: flag when mapped `product_line` values look like division codes or vice versa. (3) Optional second-column majority cross-check when primary column fails sanity rules. (4) Steward surface to confirm/correct before commit. |
+| **Regression traps** | Do not auto-rewrite mapped values; do not conflate `product_line` with `business_unit` in persistence; preserve existing PM upsert keys and steward governance. |
+| **Behavior to retain** | PM owns products; import evidence is evidence; no auto-create without steward approval. |
+| **Out of scope** | Lineup bulk backfill resolver; DSI product tiers. |
+| **TRIGGER** | Before **second-tenant catalogue onboarding**; **or** steward reports division/product_line mis-mapping on a new catalogue file layout. |
 
 ---
 

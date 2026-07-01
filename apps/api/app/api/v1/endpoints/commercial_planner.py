@@ -3242,9 +3242,13 @@ async def unified_lineup_import(
 async def bulk_lineup_backfill_preview(
     files: list[UploadFile] = File(..., description="Historical lineup workbooks"),
     folder_paths: list[str] | None = Form(default=None),
+    manual_overrides: str | None = Form(default=None, description="JSON map of proposal_key or file_key overrides"),
+    persist_session: bool = Form(default=True, description="When false, in-memory preview only (no ImportJob row)"),
     db: AsyncSession = Depends(get_db),
 ):
     """File-grain preview for bulk historical lineup backfill (no lineup table writes)."""
+    import json
+
     from app.services.commercial_planner.lineup_bulk_backfill_api import execute_bulk_lineup_preview
 
     if not files:
@@ -3254,8 +3258,20 @@ async def bulk_lineup_backfill_preview(
     for i, f in enumerate(files):
         folder = paths[i] if i < len(paths) else None
         payloads.append((f.filename or "upload", await f.read(), folder))
+    overrides: dict | None = None
+    if manual_overrides and manual_overrides.strip():
+        try:
+            parsed = json.loads(manual_overrides)
+            overrides = parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail=f"manual_overrides must be JSON: {exc}") from exc
     try:
-        return await execute_bulk_lineup_preview(db, payloads)
+        return await execute_bulk_lineup_preview(
+            db,
+            payloads,
+            manual_overrides=overrides,
+            persist_session=persist_session,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -3266,6 +3282,7 @@ async def bulk_lineup_backfill_apply(
     confirm: bool = Form(default=False),
     approved_proposal_keys: str | None = Form(default=None),
     excluded_proposal_keys: str | None = Form(default=None),
+    supersession_confirmations: str | None = Form(default=None),
     commercial_plan_id: int | None = Form(default=None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -3288,12 +3305,24 @@ async def bulk_lineup_backfill_apply(
             return [k.strip() for k in raw.split(",") if k.strip()]
         return None
 
+    def _parse_confirmations(raw: str | None) -> dict[str, str] | None:
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return {str(k): str(v) for k, v in parsed.items()}
+        except json.JSONDecodeError:
+            return None
+        return None
+
     try:
         return await execute_bulk_lineup_apply(
             db,
             session_import_job_id,
             approved_proposal_keys=_parse_keys(approved_proposal_keys),
             excluded_proposal_keys=_parse_keys(excluded_proposal_keys),
+            supersession_confirmations=_parse_confirmations(supersession_confirmations),
             commercial_plan_id=commercial_plan_id,
         )
     except ValueError as exc:

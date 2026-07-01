@@ -17,7 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-## Current state (2026-07-01)
+- 2026-07-01 — **lineup bulk backfill production-ready:** BU resolver uses `product_line`; steward period/BU overrides + collision picker UI; archive config; re-preview 27 files (`bu_label_product_mismatch` 33→9); BACKLOG-056 resolved, BACKLOG-059 catalogue mapping added.
 
 - **Branch:** `feat/unit-6-unified-lineup-import-centre`
 - **Spec C Step A:** **DONE** — `20260701_0064` on `cip` (`business_unit` + 5-tier BU resolver).

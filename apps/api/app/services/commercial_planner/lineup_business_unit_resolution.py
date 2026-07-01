@@ -24,8 +24,55 @@ from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.distributor_sales_inventory import ProductResolutionIndex, _product_token_key
 from app.services.imports.product_resolution_standard import resolve_product_id_single_match
 
-# Sheet / folder label codes used in ACZA archive layout (Spec C §3.5).
+# Default sheet/folder BU codes when no tenant config is supplied (unit tests / legacy).
 CANONICAL_SHEET_BU_CODES: frozenset[str] = frozenset({"NB", "NR", "NX", "NV"})
+
+
+def _bu_codes(tenant_bu_codes: frozenset[str] | None) -> frozenset[str]:
+    return tenant_bu_codes if tenant_bu_codes is not None else CANONICAL_SHEET_BU_CODES
+
+
+def _norm_sheet_bu(
+    value: str | None,
+    *,
+    tenant_bu_codes: frozenset[str] | None = None,
+) -> str | None:
+    if not value:
+        return None
+    codes = _bu_codes(tenant_bu_codes)
+    text = str(value).strip().upper()
+    if not text or text in ("SHEET1", "SHEET2", "DATA"):
+        return None
+    # Exact sheet tab codes.
+    if text in codes:
+        return text
+    # Leading token before space/punctuation, e.g. "NB Consumer" -> NB.
+    head = re.split(r"[\s_\-]+", text, maxsplit=1)[0]
+    return head if head in codes else None
+
+
+def infer_business_unit_from_sheet_code(
+    sheet_name: str | None,
+    *,
+    tenant_bu_codes: frozenset[str] | None = None,
+) -> str | None:
+    return _norm_sheet_bu(sheet_name, tenant_bu_codes=tenant_bu_codes)
+
+
+def infer_business_unit_from_folder_path(
+    folder_path: str | None,
+    *,
+    tenant_bu_codes: frozenset[str] | None = None,
+) -> str | None:
+    """Return the first path segment that matches a tenant BU code."""
+    if not folder_path:
+        return None
+    for segment in re.split(r"[\\/]+", str(folder_path).strip()):
+        bu = _norm_sheet_bu(segment, tenant_bu_codes=tenant_bu_codes)
+        if bu:
+            return bu
+    return None
+
 
 # Below this resolved-row fraction the sheet is likely a spec-dump / non-lineup shape (job #217).
 LIKELY_NOT_LINEUP_RESOLUTION_RATE: float = 0.05
@@ -67,35 +114,6 @@ class LineupRowProductTokens:
     sku_raw: str | None = None
     part_number_raw: str | None = None
     model_raw: str | None = None
-
-
-def _norm_sheet_bu(value: str | None) -> str | None:
-    if not value:
-        return None
-    text = str(value).strip().upper()
-    if not text or text in ("SHEET1", "SHEET2", "DATA"):
-        return None
-    # Exact sheet tab codes.
-    if text in CANONICAL_SHEET_BU_CODES:
-        return text
-    # Leading token before space/punctuation, e.g. "NB Consumer" -> NB.
-    head = re.split(r"[\s_\-]+", text, maxsplit=1)[0]
-    return head if head in CANONICAL_SHEET_BU_CODES else None
-
-
-def infer_business_unit_from_sheet_code(sheet_name: str | None) -> str | None:
-    return _norm_sheet_bu(sheet_name)
-
-
-def infer_business_unit_from_folder_path(folder_path: str | None) -> str | None:
-    """Return the first path segment that matches a canonical sheet BU code."""
-    if not folder_path:
-        return None
-    for segment in re.split(r"[\\/]+", str(folder_path).strip()):
-        bu = _norm_sheet_bu(segment)
-        if bu:
-            return bu
-    return None
 
 
 def _majority_vote(counts: dict[str, int]) -> tuple[str | None, dict[str, int]]:
@@ -171,8 +189,15 @@ def _derive_shipment_tier(shipment_business_units: list[str]) -> str | None:
     return winner
 
 
-def _label_bu(sheet_name: str | None, folder_path: str | None) -> str | None:
-    return infer_business_unit_from_sheet_code(sheet_name) or infer_business_unit_from_folder_path(folder_path)
+def _label_bu(
+    sheet_name: str | None,
+    folder_path: str | None,
+    *,
+    tenant_bu_codes: frozenset[str] | None = None,
+) -> str | None:
+    return infer_business_unit_from_sheet_code(sheet_name, tenant_bu_codes=tenant_bu_codes) or infer_business_unit_from_folder_path(
+        folder_path, tenant_bu_codes=tenant_bu_codes
+    )
 
 
 def resolve_lineup_business_unit(
@@ -184,12 +209,13 @@ def resolve_lineup_business_unit(
     sheet_name: str | None = None,
     folder_path: str | None = None,
     manual_business_unit: str | None = None,
+    tenant_bu_codes: frozenset[str] | None = None,
 ) -> LineupBuResolutionReport:
     """Ordered fallback BU resolver. Never raises; low confidence → flags only."""
     flags: list[str] = []
     per_tier: dict[str, Any] = {}
 
-    label = _label_bu(sheet_name, folder_path)
+    label = _label_bu(sheet_name, folder_path, tenant_bu_codes=tenant_bu_codes)
 
     if manual_business_unit and str(manual_business_unit).strip():
         bu = str(manual_business_unit).strip()[:64]
@@ -244,7 +270,7 @@ def resolve_lineup_business_unit(
             per_tier=per_tier,
         )
 
-    sheet_bu = infer_business_unit_from_sheet_code(sheet_name)
+    sheet_bu = infer_business_unit_from_sheet_code(sheet_name, tenant_bu_codes=tenant_bu_codes)
     per_tier["sheet"] = {"candidate_bu": sheet_bu, "sheet_name": sheet_name}
     if sheet_bu:
         if product_bu and product_bu != sheet_bu:
@@ -260,7 +286,7 @@ def resolve_lineup_business_unit(
             per_tier=per_tier,
         )
 
-    folder_bu = infer_business_unit_from_folder_path(folder_path)
+    folder_bu = infer_business_unit_from_folder_path(folder_path, tenant_bu_codes=tenant_bu_codes)
     per_tier["folder"] = {"candidate_bu": folder_bu, "folder_path": folder_path}
     if folder_bu:
         if product_bu and product_bu != folder_bu:
@@ -300,11 +326,15 @@ def _dedupe_flags(flags: list[str]) -> list[str]:
 
 
 async def load_business_unit_by_product_id(db: AsyncSession) -> dict[int, str]:
-    rows = (await db.execute(select(DimProduct.id, DimProduct.business_unit))).all()
+    """Folder-grain BU (NB/NR/NV/PF/XB) from ``dim_product.product_line`` for resolver product tier.
+
+    ``dim_product.business_unit`` is division-level (CONSUMER/COMMERCIAL) — not used here.
+    """
+    rows = (await db.execute(select(DimProduct.id, DimProduct.product_line))).all()
     out: dict[int, str] = {}
-    for pid, bu in rows:
-        if bu and str(bu).strip():
-            out[int(pid)] = str(bu).strip()
+    for pid, product_line in rows:
+        if product_line and str(product_line).strip():
+            out[int(pid)] = str(product_line).strip()
     return out
 
 
@@ -347,10 +377,9 @@ async def load_shipment_business_unit_hints(
         )
 
     hints: list[str] = []
-    for bu, pline in (await db.execute(stmt)).all():
-        if bu and str(bu).strip():
-            hints.append(str(bu).strip())
-        elif pline and str(pline).strip():
-            # Product-line signal when business_unit absent on dim_product.
-            hints.append(str(pline).strip())
+    for division_bu, product_line in (await db.execute(stmt)).all():
+        if product_line and str(product_line).strip():
+            hints.append(str(product_line).strip())
+        elif division_bu and str(division_bu).strip():
+            hints.append(str(division_bu).strip())
     return hints

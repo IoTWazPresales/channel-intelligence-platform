@@ -25,6 +25,7 @@ from app.services.commercial_planner.lineup_bulk_period_inference import (
 )
 from app.services.commercial_planner.lineup_business_unit_resolution import (
     LineupRowProductTokens,
+    load_business_unit_by_product_id,
     resolve_lineup_business_unit,
 )
 from app.services.imports.distributor_sales_inventory import ProductResolutionIndex
@@ -40,6 +41,7 @@ class BulkFileInput:
     filename: str
     file_bytes: bytes
     folder_path: str | None = None
+    source_absolute_path: str | None = None
 
 
 @dataclass
@@ -233,6 +235,8 @@ def build_case_proposals_for_file(
     customer_map: dict[str, DimCustomer],
     manual_period_label: str | None = None,
     manual_business_unit: str | None = None,
+    tenant_bu_codes: frozenset[str] | None = None,
+    manual_overrides: dict[str, Any] | None = None,
 ) -> tuple[list[CaseProposal], list[dict[str, Any]], dict[str, Any]]:
     """Parse one workbook into case proposals + per-file catalogue misses."""
     parsed_sheets, schema = parse_historical_workbook(spec.filename, spec.file_bytes)
@@ -240,6 +244,7 @@ def build_case_proposals_for_file(
         "file_key": file_key,
         "filename": spec.filename,
         "folder_path": spec.folder_path,
+        "source_absolute_path": spec.source_absolute_path,
         "schema": schema,
     }
     proposals: list[CaseProposal] = []
@@ -300,6 +305,7 @@ def build_case_proposals_for_file(
             sheet_name=sheet.sheet_name,
             folder_path=spec.folder_path,
             manual_business_unit=manual_business_unit,
+            tenant_bu_codes=tenant_bu_codes,
         )
         bu_dict = bu_report.to_dict()
         sheet_bu_flags = list(bu_dict.get("flags") or [])
@@ -340,23 +346,51 @@ def build_case_proposals_for_file(
                 sheet_name=sheet.sheet_name,
                 folder_path=spec.folder_path,
                 manual_business_unit=manual_business_unit or (bu_slice if bu_slice not in ("_unresolved", sheet.sheet_name) else None),
+                tenant_bu_codes=tenant_bu_codes,
             )
             for period in period_assignments:
                 pk = f"{file_key}:{sheet.sheet_name}:{bu_slice}:{period.period_label or 'unknown'}"
-                flags = list(slice_bu_report.flags) + list(period.flags) + [
-                    f for f in sheet_bu_flags if f not in slice_bu_report.flags
+                pk_over = (manual_overrides or {}).get(pk) or {}
+                effective_period = period
+                if pk_over.get("period_label"):
+                    ov_assignments, _ = resolve_layered_period(
+                        folder_path=spec.folder_path,
+                        filename=spec.filename,
+                        title_band=title_band,
+                        manual_period_label=str(pk_over["period_label"]),
+                    )
+                    if ov_assignments:
+                        effective_period = ov_assignments[0]
+
+                effective_bu_report = slice_bu_report
+                manual_bu = pk_over.get("business_unit") or manual_business_unit
+                if manual_bu or pk_over.get("business_unit"):
+                    effective_bu_report = resolve_lineup_business_unit(
+                        rows=_rows_to_product_tokens(slice_rows),
+                        product_index=product_index,
+                        business_unit_by_product_id=business_unit_by_product_id,
+                        sheet_name=sheet.sheet_name,
+                        folder_path=spec.folder_path,
+                        manual_business_unit=str(manual_bu) if manual_bu else None,
+                        tenant_bu_codes=tenant_bu_codes,
+                    )
+
+                flags = list(effective_bu_report.flags) + list(effective_period.flags) + [
+                    f for f in sheet_bu_flags if f not in effective_bu_report.flags
                 ]
+                if pk_over:
+                    flags.append("steward_manual_override")
                 prop_status = status
                 prop_attention = list(attention)
-                if prop_status == "ready" and "period_unknown" in period.flags:
+                if prop_status == "ready" and "period_unknown" in effective_period.flags:
                     prop_status = "needs_attention"
                     prop_attention.append("period_unknown")
                 sgk = _supersession_group_key(
-                    period_start=period.period_start.isoformat() if period.period_start else None,
-                    period_label=period.period_label,
+                    period_start=effective_period.period_start.isoformat() if effective_period.period_start else None,
+                    period_label=effective_period.period_label,
                     customer_id=cust_id,
                     customer_token=cust_token,
-                    business_unit=slice_bu_report.business_unit,
+                    business_unit=effective_bu_report.business_unit,
                 )
                 proposals.append(
                     CaseProposal(
@@ -365,12 +399,12 @@ def build_case_proposals_for_file(
                         filename=spec.filename,
                         folder_path=spec.folder_path,
                         sheet_name=sheet.sheet_name,
-                        period_label=period.period_label,
-                        period_start=period.period_start.isoformat() if period.period_start else None,
-                        period_source_tier=period.source_tier,
-                        period_flags=list(period.flags),
-                        business_unit=slice_bu_report.business_unit,
-                        bu_report=slice_bu_report.to_dict(),
+                        period_label=effective_period.period_label,
+                        period_start=effective_period.period_start.isoformat() if effective_period.period_start else None,
+                        period_source_tier=effective_period.source_tier if not pk_over.get("period_label") else "manual",
+                        period_flags=list(effective_period.flags),
+                        business_unit=effective_bu_report.business_unit,
+                        bu_report=effective_bu_report.to_dict(),
                         customer_token=cust_token,
                         customer_id=cust_id,
                         row_count=len(slice_rows),
@@ -467,11 +501,12 @@ async def build_bulk_lineup_preview(
     files: list[BulkFileInput],
     *,
     manual_overrides: dict[str, Any] | None = None,
+    tenant_bu_codes: frozenset[str] | None = None,
+    include_file_manifest_b64: bool = True,
 ) -> dict[str, Any]:
     """Build full file-grain preview (no lineup table writes)."""
     product_index = await asyncio.to_thread(_load_product_index_sync)
-    bu_rows = (await db.execute(select(DimProduct.id, DimProduct.business_unit))).all()
-    bu_by_pid = {int(r[0]): str(r[1]).strip() for r in bu_rows if r[1] and str(r[1]).strip()}
+    bu_by_pid = await load_business_unit_by_product_id(db)
 
     customers = (await db.execute(select(DimCustomer))).scalars().all()
     customer_map: dict[str, DimCustomer] = {}
@@ -494,8 +529,13 @@ async def build_bulk_lineup_preview(
                 "file_key": file_key,
                 "filename": spec.filename,
                 "folder_path": spec.folder_path,
+                "source_absolute_path": spec.source_absolute_path,
                 "size_bytes": len(spec.file_bytes),
-                "b64": base64.standard_b64encode(spec.file_bytes).decode("ascii"),
+                **(
+                    {"b64": base64.standard_b64encode(spec.file_bytes).decode("ascii")}
+                    if include_file_manifest_b64
+                    else {}
+                ),
             }
         )
         fo = overrides.get(file_key) or overrides.get(spec.filename) or {}
@@ -507,6 +547,8 @@ async def build_bulk_lineup_preview(
             customer_map=customer_map,
             manual_period_label=fo.get("period_label"),
             manual_business_unit=fo.get("business_unit"),
+            tenant_bu_codes=tenant_bu_codes,
+            manual_overrides=overrides,
         )
         all_proposals.extend(proposals)
         all_misses.extend(misses)

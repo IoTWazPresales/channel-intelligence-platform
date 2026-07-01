@@ -121,12 +121,11 @@ def _loser_proposal_keys(preview: dict[str, Any], winners: set[str]) -> set[str]
     for group in preview.get("supersession_collisions") or []:
         if not isinstance(group, dict):
             continue
-        winner = str(group.get("winner_proposal_key") or "")
         for member in group.get("members") or []:
             if not isinstance(member, dict):
                 continue
             pk = str(member.get("proposal_key") or "")
-            if pk and pk != winner and pk not in winners:
+            if pk and pk not in winners:
                 losers.add(pk)
     return losers
 

@@ -36,17 +36,31 @@ async def execute_bulk_lineup_preview(
     files: list[tuple[str, bytes, str | None]],
     *,
     manual_overrides: dict[str, Any] | None = None,
+    persist_session: bool = True,
+    tenant_bu_codes: frozenset[str] | None = None,
 ) -> dict[str, Any]:
-    """Parse files in-memory, persist preview session on ImportJob (no lineup writes)."""
+    """Parse files in-memory; optionally persist preview session on ImportJob (no lineup writes)."""
     inputs = [
         BulkFileInput(filename=name, file_bytes=data, folder_path=folder)
         for name, data, folder in files
     ]
-    preview = await build_bulk_lineup_preview(db, inputs, manual_overrides=manual_overrides)
+    preview = await build_bulk_lineup_preview(
+        db,
+        inputs,
+        manual_overrides=manual_overrides,
+        tenant_bu_codes=tenant_bu_codes,
+    )
+    if not persist_session:
+        return {
+            "session_import_job_id": None,
+            "preview": preview,
+            "persisted": False,
+        }
     session_job = await persist_preview_session(db, preview)
     return {
         "session_import_job_id": int(session_job.id),
         "preview": preview,
+        "persisted": True,
     }
 
 

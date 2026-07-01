@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-01 (Spec C Step B bulk backfill panel + migration `20260701_0065`)
+**Last updated:** 2026-07-01 (bulk backfill panel production-ready: BU `product_line` resolver + steward UI)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -325,11 +325,12 @@ distributor via `_resolve_distributor_strict` + aliases; CRAD only in `raw_sourc
 
 ---
 
-### Spec C — Bulk lineup backfill (Step B DONE 2026-07-01)
-- **Step A:** `20260701_0064` (`business_unit`) + `lineup_business_unit_resolution.py` on `cip`.
-- **Step B:** `BulkLineupBackfillDialog` + `lineup_bulk_*` services; soft supersession `20260701_0065` (`superseded_by_case_id`, `commercial_status=superseded`); apply integration test on disposable `cip_bulk_smoke` (22 tests green).
-- **Step C open:** full archive backfill + link-apply; confirm corpus location (~30 files on disk may be subset).
-- **Browser soak:** bulk backfill dialog not yet manually exercised.
+### Spec C — Bulk lineup backfill (panel production-ready 2026-07-01)
+- **Step A:** `20260701_0064` (`business_unit`) + `lineup_business_unit_resolution.py` on `cip`; product tier reads **`dim_product.product_line`** (folder-grain NB/NR/NV/PF/XB), not division `business_unit`.
+- **Step B:** `BulkLineupBackfillDialog` + steward overrides (period/BU per row, collision winner picker, re-preview with `manual_overrides`); `lineup_backfill_archive_config.py` for tenant archive roots; soft supersession `20260701_0065`.
+- **Step C.1 preview (read-only):** 27 archive files, `bu_label_product_mismatch` 33→9 after resolver fix; 24 clean auto-resolved files; 2 collision groups; 0 unreadable (OneDrive locks cleared).
+- **Step C operator apply:** Warren drives through UI — **no agent apply**.
+- **Browser soak:** bulk backfill dialog steward controls not yet manually exercised.
 
 ---
 
@@ -346,7 +347,7 @@ distributor via `_resolve_distributor_strict` + aliases; CRAD only in `raw_sourc
 
 ## Next (recommended)
 
-1. **Spec C Step C** — confirm full archive path, then operator backfill session + period-by-period link-apply.
+1. **Spec C operator backfill** — Warren stewards via `BulkLineupBackfillDialog` (preview → overrides → apply); period-by-period link-apply after cases exist.
 2. **Browser soak** — `BulkLineupBackfillDialog` + PO Management + duplicate merge UIs.
 3. Fix `dsi-mapping-steward-panel.tsx` rules-of-hooks lint (unblocks `pnpm lint`).
 
