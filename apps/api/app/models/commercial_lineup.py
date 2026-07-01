@@ -36,6 +36,7 @@ class CommercialLineupCase(Base, TimestampMixin):
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     accepted_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     product_line: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    business_unit: Mapped[str | None] = mapped_column(String(64), nullable=True)
     inferred_period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     iteration_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
