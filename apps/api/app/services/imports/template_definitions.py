@@ -337,6 +337,22 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         },
     },
     {
+        "slug": "bulk_lineup_backfill",
+        "display_name": "Bulk historical lineup backfill",
+        "description": (
+            "File-grain steward panel for historical lineup archive backfill. Multi-file upload, "
+            "layered period inference, per-sheet BU fan-out, supersession preview, and batch apply."
+        ),
+        "enabled": True,
+        "hidden": True,
+        "admin_only": False,
+        "requires_provider": False,
+        "pipeline_handler": "stub_noop",
+        "destructive_apply_requires_confirm": True,
+        "accepted_file_types": [".csv", ".xlsx", ".xlsm"],
+        "expected_columns": {},
+    },
+    {
         "slug": "customer_channel_mapping",
         "display_name": "Customer/channel mapping",
         "description": "Customer classification mapping import (intentionally deferred; not wired for apply yet).",
@@ -607,6 +623,12 @@ DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
     ("promotion_plan_default", "Default promotion plan feed", "promotion_plan", "promo_extract"),
     ("current_lineup_system", "Current working lineup (Commercial Planner upload)", "current_lineup", "planning_extract"),
     ("unified_lineup_system", "Unified lineup import (Import Centre, multi-file)", "unified_lineup", "planning_extract"),
+    (
+        "bulk_lineup_backfill_system",
+        "Bulk historical lineup backfill (Import Centre steward panel)",
+        "bulk_lineup_backfill",
+        "planning_extract",
+    ),
 ]
 
 

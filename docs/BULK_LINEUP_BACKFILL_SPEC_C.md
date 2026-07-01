@@ -1,8 +1,8 @@
 # Spec C — Bulk historical lineup backfill
 
-**Status:** Design locked (2026-06-30). Implementation not started.  
+**Status:** Step A **DONE** (2026-07-01) · Step B **DONE** (2026-07-01) · Step C open.  
 **Purpose:** Proposed-vs-executed intelligence asset — backfill all historical commercial lineup workbooks into `CommercialLineupCase` / `CommercialLineupLine`, then link to PO/shipment truth.  
-**Branch context:** `feat/unit-6-unified-lineup-import-centre` (Session B unified importer is operational baseline; bulk panel is net-new).
+**Branch context:** `feat/unit-6-unified-lineup-import-centre` (Session B unified importer is operational baseline; bulk panel shipped in Step B).
 
 ---
 
@@ -114,11 +114,11 @@ Bulk backfill needs:
 
 **Amended 2026-06-30.**
 
-| Step | Deliverable | Blocks |
+| Step | Deliverable | Status |
 |------|-------------|--------|
-| **A — Schema prereq** | `business_unit` as first-class column on `commercial_lineup_case` + BU derivation resolver wired at parse/preview. Supersession key `(period, customer, BU)` is undefined without it (today only `product_line` exists). | Step B |
-| **B — Bulk file-grain steward panel** | New surface reusing DSI lifecycle/ledger/preview/collision **engine** (async apply, activity feed, idempotent commit). File-grain review, not row-grain. Handles §3 period/BU/collision rules + parse-failure rejection. | Step C |
-| **C — Backfill session** | Operator-run import of full archive → period-by-period link-apply (PO auto-link / confirm). **Confirm full archive path** before execution (~30 files found in OneDrive `Product Lineup`; 2021–2024 tree not in sample). | — |
+| **A — Schema prereq** | `business_unit` on `commercial_lineup_case` + 5-tier BU resolver (`20260701_0064`). | **DONE** (2026-07-01) |
+| **B — Bulk file-grain steward panel** | Multi-file upload, layered period + `1H` split, BU fan-out, collision preview, soft supersession (`20260701_0065`), catalogue-miss worklist, preview-first apply (`BulkLineupBackfillDialog`). Apply proven on disposable `cip_bulk_smoke`. | **DONE** (2026-07-01) |
+| **C — Backfill session** | Operator-run import of full archive → period-by-period link-apply. **Confirm full archive path** before execution (~30 files in OneDrive `Product Lineup` sample; 2021–2024 tree not in sample). | **Open** |
 
 **This spec update (2026-06-30) precedes Step B implementation.**
 
@@ -153,12 +153,13 @@ Over-ship vs lineup planned qty is **expected** when PM deal-stock inflates real
 
 ## 7. Supersession
 
-**Resolved 2026-06-30.**
+**Resolved 2026-07-01 — SOFT latest-wins (amended from hard-replace draft).**
 
 - **Key:** `(period, customer, business_unit)` — requires Step A `business_unit` column.
-- **Rule:** Latest-wins — a later file for the same key **replaces** the earlier case (mirrors `source_key` fact-table pattern).
-- **Revised replaces original** — no dual-retention of superseded planned-qty history (Warren decision).
-- Bulk panel must surface collision groups **pre-commit** (discovery: 18 groups in 30-file sample at customer grain).
+- **Rule:** Latest-wins — a later file for the same key is the **active** case for reconciliation.
+- **Soft redirect:** The superseded case **remains** in `commercial_lineup_case` with `commercial_status='superseded'` and `superseded_by_case_id` pointing at the winner (mirrors `dim_customer.merged_into_customer_id` / `dim_distributor.merged_into_distributor_id`). Superseded cases are excluded from active reconciliation — **not deleted**, **not double-counted**.
+- Losers in a collision group do not enqueue parse (no duplicate planned-qty lines).
+- Bulk panel surfaces collision groups **pre-commit** (discovery: 18 groups in 30-file sample at customer grain).
 
 ---
 
@@ -194,4 +195,6 @@ Over-ship vs lineup planned qty is **expected** when PM deal-stock inflates real
 
 | Date | Change |
 |------|--------|
+| 2026-07-01 | **Soft supersession** — latest-wins retains superseded case with `superseded_by_case_id`; add-only audit (consistent with merge soft-redirect). |
+| 2026-07-01 | **Step A DONE** — migration `20260701_0064` (`business_unit`), 5-tier BU resolver. **Step B DONE** — bulk backfill panel, migration `20260701_0065`, apply integration test on `cip_bulk_smoke`. Step C remains open. |
 | 2026-06-30 | First committed version. Locked Q2, §3.4, §4 (non-goal→in-scope), §5 sequencing (A→B→C), Step A `business_unit` prereq, supersession, catalogue-independent linking, advisory worklist, parse-failure shapes. |

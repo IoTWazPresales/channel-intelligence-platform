@@ -61,6 +61,7 @@ import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib
 import { toQueryError } from '@/lib/queryError';
 
 import { ImportFileUploadZone } from './ImportFileUploadZone';
+import { BulkLineupBackfillDialog } from './BulkLineupBackfillDialog';
 import { UnifiedLineupImportDialog } from './UnifiedLineupImportDialog';
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
 import {
@@ -514,6 +515,7 @@ function AdminImportsPageContent() {
   const searchParams = useSearchParams();
   const [activeStep, setActiveStep] = useState(0);
   const [unifiedLineupOpen, setUnifiedLineupOpen] = useState(false);
+  const [bulkLineupBackfillOpen, setBulkLineupBackfillOpen] = useState(false);
   const [unifiedPeriodPrefill, setUnifiedPeriodPrefill] = useState<string | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [sourceId, setSourceId] = useState<number | ''>('');
@@ -2387,6 +2389,10 @@ function AdminImportsPageContent() {
         onClose={() => setUnifiedLineupOpen(false)}
         initialPeriodLabel={unifiedPeriodPrefill}
       />
+      <BulkLineupBackfillDialog
+        open={bulkLineupBackfillOpen}
+        onClose={() => setBulkLineupBackfillOpen(false)}
+      />
       <Alert severity="info" sx={{ mb: 2 }}>
         <strong>Guided import:</strong> pick an <strong>import type</strong> first (what the file means), then a{' '}
         <strong>data provider</strong> (which feed or instance). Product Master uses a{' '}
@@ -2449,6 +2455,30 @@ function AdminImportsPageContent() {
                     <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
                       <Chip size="small" label="Multi-file" color="primary" variant="outlined" />
                       <Chip size="small" label="Async per file" variant="outlined" />
+                    </Stack>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+              <Card
+                variant="outlined"
+                sx={{ width: 280, borderColor: 'secondary.main' }}
+                data-testid="bulk-lineup-backfill-card"
+              >
+                <CardActionArea onClick={() => setBulkLineupBackfillOpen(true)}>
+                  <CardContent>
+                    <Typography variant="subtitle1" fontWeight={600}>
+                      Bulk historical lineup backfill
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                      bulk_lineup_backfill · steward preview
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Multi-file archive upload with file-grain period/BU detection, sheet fan-out,
+                      supersession preview, and batch apply. Flagged files never block good ones.
+                    </Typography>
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                      <Chip size="small" label="Preview-first" color="secondary" variant="outlined" />
+                      <Chip size="small" label="Supersession" variant="outlined" />
                     </Stack>
                   </CardContent>
                 </CardActionArea>

@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-06-30 (`ee743de` — customer + distributor full merge, PO read-model, ops scripts)
+**Last updated:** 2026-07-01 (Spec C Step B bulk backfill panel + migration `20260701_0065`)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -12,8 +12,8 @@
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` (Session B/C lineup + PO units + master merge) |
 | **HEAD** | `ee743de` — distributor full merge + ops script housekeeping |
 | **PR** | None open |
-| **Alembic (code)** | `20260630_0063` (head) |
-| **Alembic (DB)** | **`20260630_0063`** on local `cip` |
+| **Alembic (code)** | `20260701_0065` (head) |
+| **Alembic (DB)** | **`20260701_0065`** on local `cip` |
 
 ---
 
@@ -325,6 +325,14 @@ distributor via `_resolve_distributor_strict` + aliases; CRAD only in `raw_sourc
 
 ---
 
+### Spec C — Bulk lineup backfill (Step B DONE 2026-07-01)
+- **Step A:** `20260701_0064` (`business_unit`) + `lineup_business_unit_resolution.py` on `cip`.
+- **Step B:** `BulkLineupBackfillDialog` + `lineup_bulk_*` services; soft supersession `20260701_0065` (`superseded_by_case_id`, `commercial_status=superseded`); apply integration test on disposable `cip_bulk_smoke` (22 tests green).
+- **Step C open:** full archive backfill + link-apply; confirm corpus location (~30 files on disk may be subset).
+- **Browser soak:** bulk backfill dialog not yet manually exercised.
+
+---
+
 ## In progress / not proven live
 - **PO Management browser soak** — lazy auto-link grid + dismiss on `/admin/po-management` (`f2b987e`).
 - **Distributor duplicates browser soak** — live merge preview/confirm on `/admin/distributors/duplicates`.
@@ -338,11 +346,9 @@ distributor via `_resolve_distributor_strict` + aliases; CRAD only in `raw_sourc
 
 ## Next (recommended)
 
-1. **Browser soak** PO Management + customer/distributor duplicate merge UIs.
-2. **Open PR** for `feat/unit-6-unified-lineup-import-centre` (`ee743de` — lineup, PO, master merge).
-3. **PO↔lineup Unit 5** — period-derived importer (when Warren asks).
-4. Fix `dsi-mapping-steward-panel.tsx` rules-of-hooks lint (unblocks `pnpm lint`).
-5. Finish ACZA upload (trim to **Shipped + Unship** until BACKLOG-046).
+1. **Spec C Step C** — confirm full archive path, then operator backfill session + period-by-period link-apply.
+2. **Browser soak** — `BulkLineupBackfillDialog` + PO Management + duplicate merge UIs.
+3. Fix `dsi-mapping-steward-panel.tsx` rules-of-hooks lint (unblocks `pnpm lint`).
 
 ---
 

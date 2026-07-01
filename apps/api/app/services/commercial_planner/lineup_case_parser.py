@@ -113,18 +113,21 @@ def _find_header_row(df: pd.DataFrame) -> int | None:
     return None
 
 
-def _load_df(filename: str, file_bytes: bytes) -> pd.DataFrame:
+def _load_df(filename: str, file_bytes: bytes, *, sheet_name: str | None = None) -> pd.DataFrame:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext in ("xlsx", "xlsm"):
         xl = pd.ExcelFile(io.BytesIO(file_bytes))
         sheets = xl.sheet_names
-        chosen = sheets[0]
-        for name in sheets:
-            sample = xl.parse(name, header=None, nrows=15)
-            vals = " ".join(str(v).lower() for v in sample.values.flatten() if pd.notna(v))
-            if "sku" in vals or "model" in vals:
-                chosen = name
-                break
+        if sheet_name and sheet_name in sheets:
+            chosen = sheet_name
+        else:
+            chosen = sheets[0]
+            for name in sheets:
+                sample = xl.parse(name, header=None, nrows=15)
+                vals = " ".join(str(v).lower() for v in sample.values.flatten() if pd.notna(v))
+                if "sku" in vals or "model" in vals:
+                    chosen = name
+                    break
         return xl.parse(chosen, header=None)
     return pd.read_csv(io.BytesIO(file_bytes), header=None, dtype=str)
 
@@ -231,10 +234,11 @@ def _parse_file_to_row_dicts(
     customer_map: dict[str, DimCustomer],
     distributor_map: dict[str, DimDistributor],
     row_limit: int | None = None,
-) -> tuple[list[dict[str, Any]], list[str], int, int, int, int, list[str]]:
+    sheet_name: str | None = None,
+) -> tuple[list[dict[str, Any]], list[str], int, int, int, int, int, list[str]]:
     """Parse tabular file into serialisable row dicts. Returns rows, warnings, counts, header."""
     warnings: list[str] = []
-    raw_df = _load_df(filename, file_bytes)
+    raw_df = _load_df(filename, file_bytes, sheet_name=sheet_name)
     header_row = _find_header_row(raw_df)
     if header_row is None:
         header_row = 0
@@ -452,6 +456,8 @@ async def parse_current_lineup_file(
     existing_import_job_id: int | None = None,
     template_slug: str = "current_lineup",
     source_code: str = "current_lineup_system",
+    sheet_name: str | None = None,
+    folder_path: str | None = None,
 ) -> ParseResult:
     """Parse an uploaded lineup file and write CommercialLineupLine rows.
 
@@ -514,6 +520,14 @@ async def parse_current_lineup_file(
         db.add(job)
     await db.flush()
 
+    parse_opts: dict[str, Any] = {}
+    if isinstance(job.staged_metadata, dict):
+        raw_opts = job.staged_metadata.get("lineup_parse_options")
+        if isinstance(raw_opts, dict):
+            parse_opts = raw_opts
+    effective_sheet = sheet_name or parse_opts.get("sheet_name")
+    effective_folder = folder_path or parse_opts.get("folder_path")
+
     try:
         products = (await db.execute(select(DimProduct))).scalars().all()
         customers = (await db.execute(select(DimCustomer))).scalars().all()
@@ -530,6 +544,7 @@ async def parse_current_lineup_file(
                 customer_map=customer_map,
                 distributor_map=distributor_map,
                 row_limit=None,
+                sheet_name=effective_sheet,
             )
         )
 
@@ -621,6 +636,49 @@ async def parse_current_lineup_file(
             )
             if inferred_line:
                 case.product_line = inferred_line
+
+        if case.business_unit is None and lines_to_add:
+            import asyncio
+
+            from app.db.session_sync import SessionLocal as SyncSessionLocal
+            from app.services.commercial_planner.lineup_business_unit_resolution import (
+                LineupRowProductTokens,
+                load_business_unit_by_product_id,
+                resolve_lineup_business_unit,
+            )
+            from app.services.imports.product_resolution_index_cache import get_product_resolution_index
+
+            bu_by_pid = await load_business_unit_by_product_id(db)
+
+            def _load_index() -> Any:
+                with SyncSessionLocal() as sync_db:
+                    return get_product_resolution_index(sync_db)
+
+            product_index = await asyncio.to_thread(_load_index)
+            token_rows = [
+                LineupRowProductTokens(
+                    sku_raw=ln.sku_raw,
+                    part_number_raw=ln.part_number_raw,
+                    model_raw=ln.model_raw,
+                )
+                for ln in lines_to_add
+            ]
+            bu_report = resolve_lineup_business_unit(
+                rows=token_rows,
+                product_index=product_index,
+                business_unit_by_product_id=bu_by_pid,
+                sheet_name=effective_sheet,
+                folder_path=effective_folder,
+                manual_business_unit=parse_opts.get("business_unit"),
+            )
+            if bu_report.business_unit:
+                case.business_unit = bu_report.business_unit
+            for flag in bu_report.flags:
+                if flag not in warnings:
+                    warnings.append(flag)
+            meta = dict(job.staged_metadata) if isinstance(job.staged_metadata, dict) else {}
+            meta["lineup_bu_resolution"] = bu_report.to_dict()
+            job.staged_metadata = meta
 
         job.status = "completed"
         job.completed_at = datetime.now(tz=timezone.utc)

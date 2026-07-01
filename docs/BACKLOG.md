@@ -40,6 +40,49 @@
 
 ---
 
+### Q4 — Supersession retention
+
+**RESOLVED 2026-07-01.** Soft latest-wins — superseded case retained + flagged, not deleted. See §7.
+
+---
+
+## BACKLOG-056 — Bulk backfill UI steward overrides (period/BU + collision winner)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-01 |
+| **Effort** | Small–medium (dialog controls + wire `manual_overrides` / `supersession_confirmations` to preview re-run) |
+| **Source** | Spec C Step B delivery (`BulkLineupBackfillDialog.tsx`, `execute_bulk_lineup_preview` / `execute_bulk_lineup_apply`). |
+| **Idea** | API accepts `manual_overrides` for period/BU and collision winner selection; dialog ships auto-path only. Editable overrides are the enhancement before stewards rely on bulk backfill for conflict-heavy archives. |
+| **Why it matters / deferrable** | Auto-detection covers the happy path; defer until stewards hit frequent conflicts. |
+| **TRIGGER** | Before first steward runs a backfill where auto-detection conflicts are frequent. |
+
+---
+
+## BACKLOG-057 — Bulk preview persists ImportJob on live API (not read-only)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-01 |
+| **Effort** | Small (in-memory preview session **or** loud docs + size guard) |
+| **Source** | Step B `persist_preview_session` — writes `ImportJob.staged_metadata` + base64 file manifest; ~60 files may be heavy. |
+| **Idea** | "Preview is read-only" is false against lineup tables but still writes coordinator `ImportJob` rows on live API. Fix: non-persisting preview **or** document loudly + optional manifest externalization. |
+| **TRIGGER** | Before first live-API backfill session. |
+
+---
+
+## BACKLOG-058 — Bulk apply `import_background_slots` dedicated registry entry
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-01 |
+| **Effort** | Small |
+| **Source** | `lineup_bulk_backfill_api.py` uses `SLOT_MAIN`; DSI apply uses dedicated slot + registry. |
+| **Idea** | Dedicated slot/registry entry for bulk lineup apply to match DSI parity and avoid orphan-slot clears. |
+| **TRIGGER** | If bulk apply contends with DSI for the main slot. |
+
+---
+
 ## BACKLOG-053 — Per-line ROE (rate of exchange) override on lineup lines
 
 | Field | Detail |

@@ -3238,6 +3238,83 @@ async def unified_lineup_import(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.post("/lineup/bulk-backfill/preview")
+async def bulk_lineup_backfill_preview(
+    files: list[UploadFile] = File(..., description="Historical lineup workbooks"),
+    folder_paths: list[str] | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """File-grain preview for bulk historical lineup backfill (no lineup table writes)."""
+    from app.services.commercial_planner.lineup_bulk_backfill_api import execute_bulk_lineup_preview
+
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one file is required.")
+    paths = list(folder_paths or [])
+    payloads: list[tuple[str, bytes, str | None]] = []
+    for i, f in enumerate(files):
+        folder = paths[i] if i < len(paths) else None
+        payloads.append((f.filename or "upload", await f.read(), folder))
+    try:
+        return await execute_bulk_lineup_preview(db, payloads)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/lineup/bulk-backfill/apply", status_code=202)
+async def bulk_lineup_backfill_apply(
+    session_import_job_id: int = Form(...),
+    confirm: bool = Form(default=False),
+    approved_proposal_keys: str | None = Form(default=None),
+    excluded_proposal_keys: str | None = Form(default=None),
+    commercial_plan_id: int | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Batch-apply steward-approved bulk lineup preview (async; good files only)."""
+    import json
+
+    from app.services.commercial_planner.lineup_bulk_backfill_api import execute_bulk_lineup_apply
+
+    if not confirm:
+        raise HTTPException(status_code=400, detail="confirm=true is required to apply bulk backfill.")
+
+    def _parse_keys(raw: str | None) -> list[str] | None:
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed]
+        except json.JSONDecodeError:
+            return [k.strip() for k in raw.split(",") if k.strip()]
+        return None
+
+    try:
+        return await execute_bulk_lineup_apply(
+            db,
+            session_import_job_id,
+            approved_proposal_keys=_parse_keys(approved_proposal_keys),
+            excluded_proposal_keys=_parse_keys(excluded_proposal_keys),
+            commercial_plan_id=commercial_plan_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/lineup/bulk-backfill/preview/{session_import_job_id}")
+async def bulk_lineup_backfill_get_preview(
+    session_import_job_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reload a persisted bulk lineup preview session."""
+    from app.services.commercial_planner.lineup_bulk_backfill_apply import load_preview_session
+
+    try:
+        preview = await load_preview_session(db, session_import_job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"session_import_job_id": session_import_job_id, "preview": preview}
+
+
 @router.post("/lineup-cases/{case_id}/parse-upload")
 async def parse_lineup_case_upload(
     case_id: int,

@@ -16,6 +16,7 @@ COMMERCIAL_LINEUP_STATUSES = {
     "in_fulfillment",
     "received_closed",
     "cancelled",
+    "superseded",
 }
 
 
@@ -39,6 +40,11 @@ class CommercialLineupCase(Base, TimestampMixin):
     business_unit: Mapped[str | None] = mapped_column(String(64), nullable=True)
     inferred_period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     iteration_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    superseded_by_case_id: Mapped[int | None] = mapped_column(
+        ForeignKey("commercial_lineup_case.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
 
 class CommercialLineupLine(Base, TimestampMixin):
