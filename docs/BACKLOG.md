@@ -6,6 +6,40 @@
 
 ---
 
+## BACKLOG-054 — Disposable-smoke migrate safety gap (`DATABASE_URL_SYNC_MIGRATE` fall-through)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-01 |
+| **Effort** | Small (env override checklist + optional guard in alembic preflight or smoke helper script) |
+| **Source** | Spec C Step A session (2026-07-01): disposable `cip_alembic_smoke` migration smoke briefly applied `20260701_0064` to `cip` because `DATABASE_URL_SYNC` alone was overridden while `DATABASE_URL_SYNC_MIGRATE` in `.env` still pointed at `cip`. Caught and downgraded before review; approved apply to `cip` followed in a separate step. |
+| **Idea** | Disposable-smoke migrate runs must **never** fall through to `.env`'s `DATABASE_URL_SYNC_MIGRATE` (which points at `cip` for local dev). Require **both** `DATABASE_URL_SYNC` and `DATABASE_URL_SYNC_MIGRATE` in the smoke override set; optionally refuse `alembic upgrade` when a smoke-run marker is set and the resolved migrate DB is `cip`. |
+| **Why it matters / deferrable** | A single missed override can mutate the shared dev DB during what was meant to be a read-only or disposable clone test. Deferrable until the next disposable-smoke migration — but the inverse mistake (smoke env left set → downgrade hits wrong DB) is equally dangerous. |
+| **What the work is** | (1) Document in `AGENTS.md` / dev notes: smoke migrate requires **both** sync URLs overridden to the disposable DB name. (2) Optional: `scripts/ops/` or `.tmp/` helper that prints resolved migrate URL + `current_database()` and aborts if target is `cip` when `CIP_SMOKE_MIGRATE=1`. (3) Update migration smoke test docs to set `DATABASE_URL_SYNC_MIGRATE` explicitly. |
+| **Regression traps** | Do not block legitimate `cip` upgrades when env is clean; do not change default `.env` migrate URL semantics for normal dev; `get_settings()` LRU cache must be cleared or subprocess used when testing overrides. |
+| **Behavior to retain** | `database_url_sync_migrate` optional override for postgres-superuser migrations on `cip`; disposable clone workflow via `cip_alembic_smoke` template. |
+| **Out of scope** | Changing Alembic revision chain; auto-creating smoke DB in CI. |
+| **TRIGGER** | Before the **next** disposable-smoke migration run; **or** any session that runs `alembic upgrade` with partial env overrides. |
+
+---
+
+## BACKLOG-055 — Lineup BU resolver thresholds provisional (25% / 5% guesses)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-01 |
+| **Effort** | Small (distribution audit + constant retune + tests; no schema) |
+| **Source** | Spec C Step A (`lineup_business_unit_resolution.py`): `PRODUCT_DERIVED_MIN_RESOLVED_FRACTION = 0.25` and `LIKELY_NOT_LINEUP_RESOLUTION_RATE = 0.05` mirror product-line inference guesses, not empirical lineup-archive rates. |
+| **Idea** | Retune product-tier win threshold and `bu_likely_not_lineup` cutoff from **real** resolution-rate distribution after bulk backfill — thin-catalogue BUs (accessories, networking) may legitimately resolve low without being PF spec-dumps. |
+| **Why it matters / deferrable** | Wrong thresholds either false-flag real lineups as `bu_likely_not_lineup` or let spec-dumps through on sheet/folder fallback. Deferrable until Step C produces a resolution-rate histogram across ~30+ archive files. |
+| **What the work is** | (1) After Step C backfill, aggregate per-sheet `product_resolution_rate` + flag rates by BU/folder. (2) Adjust `PRODUCT_DERIVED_MIN_RESOLVED_FRACTION` / `LIKELY_NOT_LINEUP_RESOLUTION_RATE` with documented percentiles. (3) Add regression tests for thin-catalogue BU files if any exist in archive sample. |
+| **Regression traps** | Do not block linking/reconcile on low resolution (flags only); do not conflate `product_line` majority with `business_unit`; preserve multi-BU and label-mismatch flags independent of threshold retune. |
+| **Behavior to retain** | BU derivation tier order (product → shipment → sheet → folder → manual); flag ≠ block. |
+| **Out of scope** | Changing product resolution tiers; DSI eligibility. |
+| **TRIGGER** | After **first full lineup backfill** (Spec C Step C) produces a resolution-rate distribution; **or** steward reports systematic false `bu_likely_not_lineup` / wrong product-tier wins on thin-catalogue files. |
+
+---
+
 ## BACKLOG-053 — Per-line ROE (rate of exchange) override on lineup lines
 
 | Field | Detail |
