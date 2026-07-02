@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-01 (bulk backfill panel production-ready: BU `product_line` resolver + steward UI)
+**Last updated:** 2026-07-02 (lineup customer alias resolution + cip backfill)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -136,6 +136,12 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
   `PoManagementView.test.tsx` (first-run/linked/dismiss), `buildShippingLinesUrl.test.ts` (+PO filter).
   22 backend + 3 PO-mgmt UI + 3 shipping-url + 3 dialog green; lint clean for touched files.
 - **Real-DB e2e:** migration `0057` applied to `cip`; browser soak still open.
+
+- **Lineup customer alias resolution (2026-07-02):** `lineup_case_parser` consults approved
+  `CustomerSourceTokenAlias` after dim name/code miss (same preload shape as shipment enrich refs;
+  unique-token-only). Backfill on `cip`: 5 tokens / 430 lines / 27 cases (IC → `customer_id=12`).
+  Merge-safety: `commercial_lineup_line.customer_id` covered by customer FK repoint. BACKLOG-061
+  entity verification / promote-in-place deferred.
 
 ### Plan-optional lineup browse + pct evidence guard (2026-06-28)
 - **Problem:** Uploaded lineup cases (e.g. historical periods) were invisible in Commercial Planner

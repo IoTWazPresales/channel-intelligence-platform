@@ -49,6 +49,10 @@ from app.services.commercial_planner.current_lineup_seed import (
     CurrentLineupSourceNotConfiguredError,
     ensure_lineup_import_seed,
 )
+from app.services.commercial_planner.lineup_customer_alias_resolution import (
+    load_approved_customer_alias_id_by_token_async,
+    resolve_lineup_customer_id_from_token,
+)
 from app.services.commercial_planner.lineup_header_mapping import build_commercial_lineup_column_map
 from app.services.commercial_planner.lineup_open_channel import (
     CHANNEL_ROUTE_UPLOADED_CELL_KEY,
@@ -233,6 +237,8 @@ def _parse_file_to_row_dicts(
     product_map: dict[str, DimProduct],
     customer_map: dict[str, DimCustomer],
     distributor_map: dict[str, DimDistributor],
+    customer_alias_map: dict[str, int] | None = None,
+    customers_by_id: dict[int, DimCustomer] | None = None,
     row_limit: int | None = None,
     sheet_name: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[str], int, int, int, int, int, list[str]]:
@@ -258,6 +264,8 @@ def _parse_file_to_row_dicts(
     unresolved_products = 0
     unknown_customer_rows = 0
     unknown_distributor_rows = 0
+    alias_map = customer_alias_map or {}
+    cust_by_id = customers_by_id or {}
 
     for row_idx, row in data_df.iterrows():
         if row_limit is not None and len(out) >= row_limit:
@@ -300,7 +308,14 @@ def _parse_file_to_row_dicts(
 
         resolved_customer: DimCustomer | None = None
         if customer_token_val:
-            resolved_customer = customer_map.get(customer_token_val.lower())
+            resolved_cid = resolve_lineup_customer_id_from_token(
+                customer_token_val,
+                customer_map=customer_map,
+                customer_alias_map=alias_map,
+                customers_by_id=cust_by_id,
+            )
+            if resolved_cid is not None:
+                resolved_customer = cust_by_id.get(resolved_cid)
             if resolved_customer is None:
                 diag.append("unknown_customer")
                 unknown_customer_rows += 1
@@ -423,6 +438,8 @@ async def preview_current_lineup_file(
     distributors = (await db.execute(select(DimDistributor))).scalars().all()
     product_map = _build_product_map(list(products))
     customer_map = _build_customer_map(list(customers))
+    customers_by_id = {int(c.id): c for c in customers}
+    customer_alias_map = await load_approved_customer_alias_id_by_token_async(db)
     distributor_map = _build_distributor_map(list(distributors))
 
     rows, warnings, total_rows, resolved_products, unresolved_products, unk_cust, unk_dist, _header = (
@@ -432,6 +449,8 @@ async def preview_current_lineup_file(
             product_map=product_map,
             customer_map=customer_map,
             distributor_map=distributor_map,
+            customer_alias_map=customer_alias_map,
+            customers_by_id=customers_by_id,
             row_limit=sample_limit,
         )
     )
@@ -534,6 +553,8 @@ async def parse_current_lineup_file(
         distributors = (await db.execute(select(DimDistributor))).scalars().all()
         product_map = _build_product_map(list(products))
         customer_map = _build_customer_map(list(customers))
+        customers_by_id = {int(c.id): c for c in customers}
+        customer_alias_map = await load_approved_customer_alias_id_by_token_async(db)
         distributor_map = _build_distributor_map(list(distributors))
 
         row_dicts, warnings, total_rows, resolved_products, unresolved_products, _, _, header_cols = (
@@ -543,6 +564,8 @@ async def parse_current_lineup_file(
                 product_map=product_map,
                 customer_map=customer_map,
                 distributor_map=distributor_map,
+                customer_alias_map=customer_alias_map,
+                customers_by_id=customers_by_id,
                 row_limit=None,
                 sheet_name=effective_sheet,
             )

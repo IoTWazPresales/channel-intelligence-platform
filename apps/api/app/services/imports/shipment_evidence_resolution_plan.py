@@ -6,6 +6,7 @@ steward apply paths remain strict (approved alias + explicit dimension choice).
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 
 from sqlalchemy import or_, select
@@ -72,6 +73,22 @@ def build_shipment_enrich_refs(db: Session) -> "ShipmentEnrichRefs":
         dist_aliases=dist_aliases,
         cust_aliases=cust_aliases,
     )
+
+
+def build_unique_approved_customer_alias_id_by_token(
+    cust_aliases: list[tuple[str, int, int | None]] | list[tuple[str, int]],
+) -> dict[str, int]:
+    """Map ``normalized_token`` → ``customer_id`` when exactly one distinct id is approved.
+
+    Used by lineup parse/backfill and any path that must not guess on ambiguous alias scope.
+    """
+    by_token: dict[str, set[int]] = defaultdict(set)
+    for row in cust_aliases:
+        nt = str(row[0] or "").strip()
+        if not nt:
+            continue
+        by_token[nt].add(int(row[1]))
+    return {nt: next(iter(ids)) for nt, ids in by_token.items() if len(ids) == 1}
 
 
 def _alias_source_match(alias_source_id: int | None, source_definition_id: int | None) -> bool:

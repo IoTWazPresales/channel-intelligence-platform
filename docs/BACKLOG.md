@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-061 — Entity verification / promote-in-place module (customers + distributors)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-02 |
+| **Effort** | Medium (API promote endpoint, admin UI, status taxonomy cleanup, distributor parity) |
+| **Source** | Read-only audits (2026-07-02): IC/lineup alias gap; provisional customer promote investigation (`dim_customer` 4,886 unverified `TMP-CUST-%`; distributors ~23 `TMP-DIST-%`). No promote-in-place exists — only merge (soft redirect) or ad-hoc PATCH without code reassignment. |
+| **Idea** | Governed **promote-in-place**: same `dim_customer` / `dim_distributor` id, flip `unverified` → verified master (`active` or canonical `verified`), assign real business code on the row, audit trail — distinct from merge-into-existing-master. |
+| **Why it matters / deferrable** | Stable ids + merge soft-redirect already protect fact integrity; deferral is safe for **data corruption** risk. Costs without promotion: duplicate provisional minting on code-keyed imports (`bulk` upsert mints new rows while old rows keep `TMP-*` codes), merge-survivor UX noise, operator confusion. `verified` status is **orphaned** (7 rows in DB, not in API `ALLOWED_CUSTOMER_STATUS`, gates nothing at runtime). |
+| **What the work is** | (1) **Design first** — decide what `verified` gates: stop provisional reuse, merge-survivor preference, reporting eligibility, import filters. (2) Customer promote API + admin action (code reassignment on same id, uniqueness checks). (3) Distributor parity (`TMP-DIST-%`, 23 rows). (4) Align API allow-list vs DB statuses; remove or formalize orphaned `verified`. (5) Document interaction with alias tables (no auto-repoint on promote — same id). |
+| **Regression traps** | Do not break `merged_into_*` soft redirect; do not auto-create on promote; code uniqueness; bulk upsert-by-code must not silently duplicate when steward intended promote; lineup/shipment resolution must keep using aliases + dim codes regardless of status until gates are defined. |
+| **Behavior to retain** | Merge repoint (`customer_full_merge`, `customer_alias_scope_merge`); provisional reuse only for `unverified` + `TMP-*`; PATCH provisional-reuse warning (2026-07-02). |
+| **Out of scope** | Building promote in the IC/lineup alias pass; changing DSI resolution tier order. |
+| **TRIGGER** | Before **tagged-customer sell-through reporting** starts; **or** before **second-tenant onboarding** — whichever comes first. |
+
+---
+
 ## BACKLOG-054 — Disposable-smoke migrate safety gap (`DATABASE_URL_SYNC_MIGRATE` fall-through)
 
 | Field | Detail |
@@ -73,6 +90,23 @@
 | **Behavior to retain** | PM owns products; import evidence is evidence; no auto-create without steward approval. |
 | **Out of scope** | Lineup bulk backfill resolver; DSI product tiers. |
 | **TRIGGER** | Before **second-tenant catalogue onboarding**; **or** steward reports division/product_line mis-mapping on a new catalogue file layout. |
+
+---
+
+## BACKLOG-060 — Bulk backfill post-apply completion UX (progress, summary, next-step CTAs)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-02 |
+| **Effort** | Medium (dialog apply-step state machine + read-only session status endpoint + activity-feed registration fix; optional bell aggregation) |
+| **Source** | Warren session (2026-07-02): first live bulk backfill apply on `cip` — 31 `parse_lineup_case` tasks succeeded in Celery worker, but `BulkLineupBackfillDialog` closed immediately with no success signal; operator had to read worker logs. Chat proposal (same session): layered completion UX vs `UnifiedLineupImportDialog` (stays open with per-file results + bell guidance). Paths: `BulkLineupBackfillDialog.tsx`, `lineup_bulk_backfill_api.py`, `lineup_bulk_backfill_apply.py`, `backgroundTaskRegistry.ts`, `GlobalBackgroundTasksIndicator.tsx`, `PoManagementView.tsx` / `/admin/po-management`. |
+| **Idea** | After bulk backfill **Apply**, steward must see **in-app** progress and a **completion summary** with explicit **next steps** — not silence + dialog close. Minimum: applying/parsing/done phases in dialog (or persistent snackbar), counts (cases created, parses ok/failed, superseded), primary CTA **Link POs** → `/admin/po-management`, secondary **Review lineup cases** → Commercial Planner. Activity bell should show one aggregated session job (`importJobId` = session job) with parse progress; fix current `registerClientBackgroundTask` call missing `importJobId`. Optional read-only `GET …/bulk-backfill/sessions/{id}/status` aggregating `staged_metadata.bulk_lineup_backfill_apply` + child parse outcomes. **No auto-redirect** to PO Management. |
+| **Why it matters / deferrable** | Without completion UX, operators cannot tell apply succeeded, how many cases parsed, or that Spec C Step C continues with period-by-period PO link-apply. Deferrable immediately after first successful apply proved the pipeline works — but before a second steward session or onboarding another operator. |
+| **What the work is** | (1) **Apply step UI** — replace instant `onClose()` with dispatched → parsing → complete/failed; optional "run in background". (2) **Completion panel** — case id range, applied/superseded/unresolved line counts, collision losers noted. (3) **Next-step CTAs** — PO auto-link (primary), lineup cases, import session `job_id`. (4) **Bell parity** — register session with `importJobId`; poll aggregated status; label e.g. `Bulk lineup backfill · 18/31 parsed`. (5) **Status endpoint** (read-only) for dialog + bell poll. Reference bar: `UnifiedLineupImportDialog` post-upload results table + `ImportJobLoadedSuccessCallout` pattern on other importers. |
+| **Regression traps** | Do not block navigation; do not auto-run PO link-apply; do not spam 31 separate bell entries; preserve async apply + per-case parse enqueue; fix `registerClientBackgroundTask` without breaking DSI/shipment kinds. |
+| **Behavior to retain** | Preview-first apply; soft supersession; parse jobs async via worker; PO link-apply remains separate steward workflow on PO Management page. |
+| **Out of scope** | Auto-filter PO Management by earliest period; email/push notifications; post-apply reconciliation report (see BACKLOG-051). |
+| **TRIGGER** | Before **second** steward bulk backfill session **or** onboarding another operator to backfill; **or** any report of "did apply work?" without checking Celery logs; **or** when starting PO link-apply UX polish (pair with Spec C Step C). |
 
 ---
 

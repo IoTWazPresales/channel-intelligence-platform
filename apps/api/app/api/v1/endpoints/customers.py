@@ -45,6 +45,9 @@ class MasterBulkIdsBody(BaseModel):
 ALLOWED_CUSTOMER_STATUS = {"active", "inactive", "onboarding", "blocked", "unverified", "needs_review"}
 ALLOWED_PARTNER_TIER = {"strategic", "tier_1", "tier_2", "tier_3", "core", "long_tail", "unmanaged"}
 TMP_CUSTOMER_CODE_PREFIX = "TMP-CUST"
+PROVISIONAL_REUSE_STATUS_WARNING = (
+    "Leaving unverified stops provisional reuse for this row; future imports may mint a duplicate."
+)
 ALLOWED_LOCATION_TYPE = {"hq", "store", "warehouse", "branch", "online", "other"}
 ALLOWED_CONTACT_ROLE = {"procurement", "sales", "operations", "finance", "support", "executive", "general"}
 
@@ -126,6 +129,21 @@ def _normalize_customer_status(raw_value: str | None) -> str:
     if raw not in ALLOWED_CUSTOMER_STATUS:
         raise HTTPException(status_code=400, detail="Invalid customer_status")
     return raw
+
+
+def _provisional_reuse_status_warning(row: DimCustomer, new_status: str | None) -> str | None:
+    """Warn when a TMP-CUST provisional leaves ``unverified`` (stops reuse; may duplicate)."""
+    if new_status is None:
+        return None
+    prior = (row.customer_status or "").strip().lower()
+    if prior != "unverified":
+        return None
+    if new_status.strip().lower() == "unverified":
+        return None
+    code = (row.code or "").strip()
+    if not code.startswith(f"{TMP_CUSTOMER_CODE_PREFIX}-"):
+        return None
+    return PROVISIONAL_REUSE_STATUS_WARNING
 
 
 def _normalize_partner_tier(raw_value: str | None) -> str | None:
@@ -791,6 +809,9 @@ async def patch_customer(customer_id: int, body: CustomerPatch, db: AsyncSession
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
     data = body.model_dump(exclude_unset=True)
+    status_warning = _provisional_reuse_status_warning(
+        row, data.get("customer_status") if "customer_status" in data else None
+    )
     if "name" in data and data["name"] is not None:
         row.name = data["name"].strip()
     if "customer_status" in data:
@@ -824,7 +845,7 @@ async def patch_customer(customer_id: int, body: CustomerPatch, db: AsyncSession
         row.preferred_distributor_id = did
     await db.commit()
     await db.refresh(row)
-    return {
+    payload = {
         "id": row.id,
         "customer_code": row.code,
         "customer_name": row.name,
@@ -836,6 +857,9 @@ async def patch_customer(customer_id: int, body: CustomerPatch, db: AsyncSession
         "channel_id": row.channel_id,
         "preferred_distributor_id": row.preferred_distributor_id,
     }
+    if status_warning:
+        payload["warnings"] = [status_warning]
+    return payload
 
 
 @router.post("/bulk", status_code=200)

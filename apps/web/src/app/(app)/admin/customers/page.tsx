@@ -173,7 +173,7 @@ const STATIC_CUSTOMER_COLUMN_GROUPS: { label: string; fields: CustomerColumnFiel
   { label: 'Import & alias linkage', fields: ['alias_count', 'last_import_at', 'alias_link_status'] },
   { label: 'dim_customer — timestamps', fields: ['created_at', 'updated_at'] },
 ];
-const STATUS_OPTIONS = ['', 'active', 'inactive', 'onboarding', 'blocked'];
+const STATUS_OPTIONS = ['', 'active', 'inactive', 'onboarding', 'blocked', 'unverified', 'needs_review'];
 const PARTNER_TIER_OPTIONS = ['', 'strategic', 'tier_1', 'tier_2', 'tier_3', 'core', 'long_tail'];
 const LOCATION_TYPE_OPTIONS = ['hq', 'store', 'warehouse', 'branch', 'online', 'other'];
 const CONTACT_ROLE_OPTIONS = ['general', 'procurement', 'sales', 'operations', 'finance', 'support', 'executive'];
@@ -274,6 +274,7 @@ function AdminCustomersPageContent() {
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState('');
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
+  const [statusPatchWarning, setStatusPatchWarning] = useState<string | null>(null);
 
   const page = Number(searchParams.get('page') || '1') || 1;
   const pageSize = Number(searchParams.get('page_size') || `${DEFAULT_PAGE_SIZE}`) || DEFAULT_PAGE_SIZE;
@@ -556,7 +557,11 @@ function AdminCustomersPageContent() {
         if (field === 'customer_name') {
           await apiPatch(`/api/v1/customers/${id}`, { name: String(e.newValue ?? '') });
         } else if (field === 'customer_status') {
-          await apiPatch(`/api/v1/customers/${id}`, { customer_status: String(e.newValue ?? '') });
+          const body = await apiPatch<{ warnings?: string[] }>(`/api/v1/customers/${id}`, {
+            customer_status: String(e.newValue ?? ''),
+          });
+          const warn = body.warnings?.[0];
+          setStatusPatchWarning(warn ?? null);
         } else if (field === 'partner_tier') {
           await apiPatch(`/api/v1/customers/${id}`, { partner_tier: String(e.newValue ?? '') || null });
         } else if (field === 'account_owner_internal') {
@@ -933,6 +938,11 @@ function AdminCustomersPageContent() {
         Customer account master is governed here. For bulk updates use Data & imports; use this table for operational
         maintenance, filters, and classification edits.
       </Alert>
+      {statusPatchWarning ? (
+        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setStatusPatchWarning(null)}>
+          {statusPatchWarning}
+        </Alert>
+      ) : null}
       {delCustomer.isError ? (
         <Alert severity="warning" sx={{ mb: 2 }} onClose={() => delCustomer.reset()}>
           {HttpConflictError.is(delCustomer.error) ? (
