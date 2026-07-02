@@ -212,18 +212,7 @@ def _workbook_title_rows(file_bytes: bytes, sheet_name: str) -> list[list[Any]]:
         return []
 
 
-def _supersession_group_key(
-    *,
-    period_start: str | None,
-    period_label: str | None,
-    customer_id: int | None,
-    customer_token: str | None,
-    business_unit: str | None,
-) -> str:
-    cust = str(customer_id) if customer_id is not None else _norm_customer_token(customer_token) or "unknown"
-    period = period_start or period_label or "unknown"
-    bu = (business_unit or "unknown").strip().upper()
-    return f"{period}|{cust}|{bu}"
+from app.services.commercial_planner.lineup_period_canonical import supersession_group_key_from_period_start
 
 
 def build_case_proposals_for_file(
@@ -385,12 +374,12 @@ def build_case_proposals_for_file(
                 if prop_status == "ready" and "period_unknown" in effective_period.flags:
                     prop_status = "needs_attention"
                     prop_attention.append("period_unknown")
-                sgk = _supersession_group_key(
-                    period_start=effective_period.period_start.isoformat() if effective_period.period_start else None,
-                    period_label=effective_period.period_label,
+                sgk = supersession_group_key_from_period_start(
+                    effective_period.period_start.isoformat() if effective_period.period_start else None,
                     customer_id=cust_id,
                     customer_token=cust_token,
                     business_unit=effective_bu_report.business_unit,
+                    normalize_customer_token=_norm_customer_token,
                 )
                 proposals.append(
                     CaseProposal(

@@ -12,6 +12,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from datetime import date
+
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +21,11 @@ from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupC
 from app.models.commercial_planner import CommercialSkuAssumption
 from app.models.dimensions import DimProduct
 from app.models.facts import FactInboundShipment
+from app.services.commercial_planner.lineup_period_canonical import (
+    active_lineup_case_filters,
+    case_coverage_key,
+    quarter_key_from_period_start,
+)
 from app.services.commercial_planner.lineup_po_reconciliation import UNITS_FLAGS, reconcile_case
 
 logger = logging.getLogger(__name__)
@@ -30,7 +37,8 @@ SHIPMENT_QUANTITY_SOURCE = "fact_inbound_shipment"
 def _quarter_label(year: int, q: int) -> str:
     if year == 0:
         return "Undated"
-    return f"{str(year)[-2:]}Q{q}"
+    start_month = 3 * (q - 1) + 1
+    return quarter_key_from_period_start(date(year, start_month, 1))
 
 
 async def _observed_groups(db: AsyncSession) -> dict[tuple[int, int, str], dict[str, Any]]:
@@ -128,8 +136,31 @@ async def _observed_groups(db: AsyncSession) -> dict[tuple[int, int, str], dict[
     return groups
 
 
+async def _active_lineup_coverage_keys(db: AsyncSession) -> set[tuple[int, int, str]]:
+    """(year, quarter, product_line) slices with at least one active lineup case."""
+    rows = (
+        await db.execute(
+            select(CommercialLineupCase).where(
+                CommercialLineupCase.inferred_period_start.isnot(None),
+                *active_lineup_case_filters(),
+            )
+        )
+    ).scalars().all()
+    keys: set[tuple[int, int, str]] = set()
+    for case in rows:
+        keys |= case_coverage_key(case)
+    return keys
+
+
 async def _linked_po_ids(db: AsyncSession) -> set[int]:
-    rows = (await db.execute(select(CommercialLineupCasePo.purchase_order_id).distinct())).scalars().all()
+    rows = (
+        await db.execute(
+            select(CommercialLineupCasePo.purchase_order_id)
+            .join(CommercialLineupCase, CommercialLineupCase.id == CommercialLineupCasePo.case_id)
+            .where(*active_lineup_case_filters())
+            .distinct()
+        )
+    ).scalars().all()
     return {int(x) for x in rows if x is not None}
 
 
@@ -167,10 +198,13 @@ async def backlog(db: AsyncSession) -> dict[str, Any]:
     try:
         groups = await _observed_groups(db)
         linked = await _linked_po_ids(db)
-        # PO -> linked case ids (for reconciliation rollup on linked groups).
+        lineup_coverage = await _active_lineup_coverage_keys(db)
+        # PO -> linked active case ids (for reconciliation rollup on linked groups).
         case_links = (
             await db.execute(
                 select(CommercialLineupCasePo.purchase_order_id, CommercialLineupCasePo.case_id)
+                .join(CommercialLineupCase, CommercialLineupCase.id == CommercialLineupCasePo.case_id)
+                .where(*active_lineup_case_filters())
             )
         ).all()
     except Exception:
@@ -208,11 +242,14 @@ async def backlog(db: AsyncSession) -> dict[str, Any]:
             entry["reconciliation_summary"] = summary
             entry["linked_case_ids"] = sorted(case_ids)
         else:
-            # Upload prompt pre-fill for the import wizard.
-            entry["upload_prompt"] = {
-                "period_label": g["quarter_label"] if g["year"] else None,
-                "product_line": g["product_line"],
-            }
+            coverage_key = (int(g["year"]), int(g["quarter"]), str(g["product_line"]))
+            if coverage_key in lineup_coverage:
+                entry["lineup_case_exists"] = True
+            else:
+                entry["upload_prompt"] = {
+                    "period_label": g["quarter_label"] if g["year"] else None,
+                    "product_line": g["product_line"],
+                }
         out_groups.append(entry)
 
     out_groups.sort(key=lambda x: (x["year"], x["quarter"], x["product_line"]), reverse=True)

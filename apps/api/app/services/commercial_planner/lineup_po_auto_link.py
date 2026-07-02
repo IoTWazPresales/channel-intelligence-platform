@@ -28,16 +28,12 @@ DateSource = Literal["crad", "schedule_ship", "ship_confirm", "none"]
 CustomerAlign = Literal["exact", "unresolved", "mismatch"]
 
 
-def quarter_bounds_from_period_start(period_start: date) -> tuple[date, date]:
-    """Inclusive start, exclusive end for the calendar quarter of ``period_start``."""
-    q = (period_start.month - 1) // 3 + 1
-    start_month = 3 * (q - 1) + 1
-    start = date(period_start.year, start_month, 1)
-    if q == 4:
-        end = date(period_start.year + 1, 1, 1)
-    else:
-        end = date(period_start.year, start_month + 3, 1)
-    return start, end
+from app.services.commercial_planner.lineup_period_canonical import (
+    active_lineup_case_filters,
+    is_active_lineup_case,
+    period_filter_matches_period_start,
+    quarter_bounds_from_period_start,
+)
 
 
 def evidence_date_for_period_match(
@@ -198,19 +194,8 @@ def _best_lineup_match_for_product(
 
 
 def _period_label_matches(case: CommercialLineupCase, period_filter: str | None) -> bool:
-    if not period_filter or not str(period_filter).strip():
-        return True
-    needle = str(period_filter).strip().lower()
-    label = (case.period_label or "").strip().lower()
-    if label and needle in label:
-        return True
-    start = case.inferred_period_start
-    if start is not None:
-        q = (start.month - 1) // 3 + 1
-        yy = str(start.year)[-2:]
-        if needle in f"{yy}q{q}" or needle in f"{start.year}q{q}":
-            return True
-    return False
+    """Period filter uses quarter derived from ``inferred_period_start`` (not label strings)."""
+    return period_filter_matches_period_start(period_filter, case.inferred_period_start)
 
 
 async def po_auto_link_proposals(
@@ -246,10 +231,14 @@ async def _po_auto_link_proposals_inner(
     limit: int,
     include_dismissed: bool,
 ) -> dict[str, Any]:
+    active_filters = active_lineup_case_filters()
     cases = list(
         (
             await db.execute(
-                select(CommercialLineupCase).where(CommercialLineupCase.commercial_status != "cancelled")
+                select(CommercialLineupCase).where(
+                    CommercialLineupCase.commercial_status != "cancelled",
+                    *active_filters,
+                )
             )
         )
         .scalars()
@@ -292,7 +281,11 @@ async def _po_auto_link_proposals_inner(
 
     linked_pairs: set[tuple[int, int]] = set()
     for case_id, po_id in (
-        await db.execute(select(CommercialLineupCasePo.case_id, CommercialLineupCasePo.purchase_order_id))
+        await db.execute(
+            select(CommercialLineupCasePo.case_id, CommercialLineupCasePo.purchase_order_id)
+            .join(CommercialLineupCase, CommercialLineupCase.id == CommercialLineupCasePo.case_id)
+            .where(*active_filters)
+        )
     ).all():
         linked_pairs.add((int(case_id), int(po_id)))
 

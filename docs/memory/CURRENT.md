@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-02 (lineup customer alias resolution + cip backfill)
+**Last updated:** 2026-07-02 (lineup PO consumers: canonical period + superseded exclusion)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -182,6 +182,10 @@ Import-Centre multi-file uploader for the unified lineup importer + embedded upl
 - `GET /commercial-planner/lineup/po-auto-link/proposals` (`period`, `customer_id`, `confidence`, `limit`).
 - Proposes only — never writes `commercial_lineup_case_po`.
 - Tests: `test_lineup_po_auto_link.py` (9 pass incl. cip smoke ~10s).
+- **Post-backfill fix (2026-07-02):** consumers key on quarter from `inferred_period_start`
+  (`lineup_period_canonical.py`); `period_label` display-only; superseded cases excluded from
+  auto-link/coverage/gap/upload-prompt; steward collision worklist (`lineup_supersession_worklist.py`).
+  cip: 3 labels normalized `26Q2`→`2026 Q2`; proposals 722 (duplicate active cases remain for steward).
 
 **Unit 4 — review UI + dismiss/apply:**
 - Migration `20260629_0059`: `commercial_lineup_po_auto_link_dismiss` (+ GRANT to `cip` role).

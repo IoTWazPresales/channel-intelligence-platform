@@ -14,10 +14,11 @@ from typing import Any
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.commercial_lineup import CommercialLineupCasePo, CommercialLineupLine
+from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
 from app.models.dimensions import DimProduct
 from app.models.facts import FactInboundShipment
 from app.models.purchase_order import PurchaseOrder
+from app.services.commercial_planner.lineup_period_canonical import active_lineup_case_filters
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,11 @@ async def _po_gap_worklist_inner(db: AsyncSession, *, include_dismissed: bool) -
         await db.execute(
             select(CommercialLineupCasePo.purchase_order_id, CommercialLineupLine.product_id)
             .join(CommercialLineupLine, CommercialLineupLine.case_id == CommercialLineupCasePo.case_id)
-            .where(CommercialLineupLine.product_id.isnot(None))
+            .join(CommercialLineupCase, CommercialLineupCase.id == CommercialLineupCasePo.case_id)
+            .where(
+                CommercialLineupLine.product_id.isnot(None),
+                *active_lineup_case_filters(),
+            )
             .distinct()
         )
     ).all()

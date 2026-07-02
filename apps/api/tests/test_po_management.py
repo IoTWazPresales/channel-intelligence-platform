@@ -72,6 +72,7 @@ def test_backlog_unlinked_group_has_upload_prompt():
         _R([(10, "Laptops", "PC")]),                            # product line
         _R([(10, 18.5)]),                                       # fx
         _R([]),                                                 # linked po ids
+        _R([]),                                                 # active lineup coverage keys
         _R([]),                                                 # case links
     ]
     out = asyncio.run(mod.backlog(_db(results)))
@@ -79,3 +80,25 @@ def test_backlog_unlinked_group_has_upload_prompt():
     assert g["status"] == "unlinked"
     assert g["upload_prompt"]["product_line"] == "Laptops"
     assert g["upload_prompt"]["period_label"] == "26Q1"
+
+
+def test_backlog_suppresses_upload_prompt_when_active_lineup_exists(monkeypatch):
+    results = [
+        _R([(500, 10, 100.0, 1000.0, dt.date(2026, 4, 20))]),
+        _R([(10, "Laptops", "PC")]),
+        _R([(10, 18.5)]),
+        _R([]),
+        _R([]),
+        _R([]),
+    ]
+    db = _db(results)
+
+    async def _fake_coverage(_db):
+        return {(2026, 2, "Laptops")}
+
+    monkeypatch.setattr(mod, "_active_lineup_coverage_keys", _fake_coverage)
+    out = asyncio.run(mod.backlog(db))
+    g = out["groups"][0]
+    assert g["status"] == "unlinked"
+    assert g.get("lineup_case_exists") is True
+    assert "upload_prompt" not in g

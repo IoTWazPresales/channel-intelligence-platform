@@ -18,6 +18,7 @@ from app.services.commercial_planner.lineup_bulk_backfill_preview import (
     BULK_SOURCE_CODE,
     BULK_TEMPLATE_SLUG,
 )
+from app.services.commercial_planner.lineup_period_canonical import display_period_label_from_period_start
 from app.services.commercial_planner.lineup_parse_dispatch import (
     enqueue_lineup_parse_sync,
     prepare_lineup_parse_import_job_sync,
@@ -175,11 +176,16 @@ def _create_case_and_maybe_parse(
     sheet_name = str(prop.get("sheet_name") or "") or None
     status = "superseded" if superseded_by_case_id is not None else "draft_imported"
 
+    ps = _parse_iso_date(prop.get("period_start"))
+    display_label = (
+        display_period_label_from_period_start(ps) if ps is not None else prop.get("period_label")
+    )
+
     case = CommercialLineupCase(
         commercial_plan_id=commercial_plan_id,
         file_name=filename,
-        period_label=prop.get("period_label"),
-        inferred_period_start=_parse_iso_date(prop.get("period_start")),
+        period_label=display_label,
+        inferred_period_start=ps,
         business_unit=prop.get("business_unit"),
         product_line=None,
         commercial_status=status,
