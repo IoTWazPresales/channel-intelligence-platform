@@ -3256,7 +3256,8 @@ async def bulk_lineup_backfill_preview(
     paths = list(folder_paths or [])
     payloads: list[tuple[str, bytes, str | None]] = []
     for i, f in enumerate(files):
-        folder = paths[i] if i < len(paths) else None
+        raw_folder = paths[i] if i < len(paths) else None
+        folder = raw_folder.strip() if raw_folder and str(raw_folder).strip() else None
         payloads.append((f.filename or "upload", await f.read(), folder))
     overrides: dict | None = None
     if manual_overrides and manual_overrides.strip():

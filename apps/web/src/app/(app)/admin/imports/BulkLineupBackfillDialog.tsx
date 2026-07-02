@@ -2,6 +2,7 @@
 
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import {
   Alert,
@@ -30,6 +31,20 @@ import {
 import { useMutation } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import {
+  mergeStagedLineupFiles,
+  type StagedLineupFile,
+  stageLineupFilesFromList,
+} from '@/features/commercial-planner/lineupBackfillArchivePath';
+import {
+  buildAutoBaseline,
+  buildCumulativeStewardPayload,
+  displayFieldsFromPreview,
+  hasPendingStewardDeltas,
+  mergeCollisionWinners,
+  type AutoBaseline,
+  type StewardOverrides,
+} from '@/features/commercial-planner/lineupBackfillStewardOverrides';
 import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 import { apiPostFormData, safeDisplayError } from '@/lib/api';
 
@@ -78,32 +93,19 @@ type PreviewPayload = {
   };
 };
 
-type StewardOverrides = Record<string, { period_label?: string; business_unit?: string }>;
-
 function statusChip(status: string) {
   if (status === 'ready') return <Chip size="small" color="success" label="Ready" />;
   if (status === 'needs_attention') return <Chip size="small" color="warning" label="Needs attention" />;
   return <Chip size="small" variant="outlined" label={status} />;
 }
 
-function buildManualOverrides(
-  periodOverrides: Record<string, string>,
-  buOverrides: Record<string, string>,
-  proposals: CaseProposal[],
-): StewardOverrides | undefined {
-  const out: StewardOverrides = {};
-  for (const p of proposals) {
-    const period = periodOverrides[p.proposal_key]?.trim();
-    const bu = buOverrides[p.proposal_key]?.trim();
-    const periodChanged = period && period !== (p.period_label ?? '');
-    const buChanged = bu && bu.toUpperCase() !== (p.business_unit ?? '').toUpperCase();
-    if (periodChanged || buChanged) {
-      out[p.proposal_key] = {};
-      if (periodChanged) out[p.proposal_key].period_label = period;
-      if (buChanged) out[p.proposal_key].business_unit = bu.toUpperCase();
-    }
-  }
-  return Object.keys(out).length ? out : undefined;
+function appendFolderPaths(fd: FormData, staged: StagedLineupFile[], globalFolderOverride: string) {
+  const globalOverride = globalFolderOverride.trim();
+  staged.forEach((s) => {
+    fd.append('files', s.file);
+    const folderPath = globalOverride || s.folderPath || '';
+    fd.append('folder_paths', folderPath);
+  });
 }
 
 export type BulkLineupBackfillDialogProps = {
@@ -112,67 +114,89 @@ export type BulkLineupBackfillDialogProps = {
 };
 
 export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDialogProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [files, setFiles] = useState<File[]>([]);
-  const [folderPath, setFolderPath] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const [stagedFiles, setStagedFiles] = useState<StagedLineupFile[]>([]);
+  const [folderPathOverride, setFolderPathOverride] = useState('');
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
   const [confirmApply, setConfirmApply] = useState(false);
   const [periodOverrides, setPeriodOverrides] = useState<Record<string, string>>({});
   const [buOverrides, setBuOverrides] = useState<Record<string, string>>({});
+  const [autoBaseline, setAutoBaseline] = useState<AutoBaseline>({});
   const [collisionWinners, setCollisionWinners] = useState<Record<string, string>>({});
+  const [loadNotice, setLoadNotice] = useState<string | null>(null);
 
-  const syncOverrideFields = useCallback((data: PreviewPayload) => {
+  const resetPreviewState = useCallback(() => {
+    setPreview(null);
+    setPeriodOverrides({});
+    setBuOverrides({});
+    setAutoBaseline({});
+    setCollisionWinners({});
+    setConfirmApply(false);
+  }, []);
+
+  const syncAfterFreshPreview = useCallback((data: PreviewPayload) => {
+    const proposals = data.preview.case_proposals;
+    setAutoBaseline(buildAutoBaseline(proposals));
     const periods: Record<string, string> = {};
     const bus: Record<string, string> = {};
-    for (const p of data.preview.case_proposals) {
+    for (const p of proposals) {
       periods[p.proposal_key] = p.period_label ?? '';
       bus[p.proposal_key] = p.business_unit ?? '';
     }
     setPeriodOverrides(periods);
     setBuOverrides(bus);
+    setCollisionWinners(mergeCollisionWinners(data.preview.supersession_collisions ?? [], {}));
+  }, []);
 
-    const winners: Record<string, string> = {};
-    for (const g of data.preview.supersession_collisions ?? []) {
-      winners[g.supersession_group_key] = g.winner_proposal_key;
-    }
-    setCollisionWinners(winners);
+  const syncAfterRerunPreview = useCallback((data: PreviewPayload, cumulativePayload: StewardOverrides) => {
+    const proposals = data.preview.case_proposals;
+    const display = displayFieldsFromPreview(proposals, cumulativePayload);
+    setPeriodOverrides(display.periodOverrides);
+    setBuOverrides(display.buOverrides);
+    setCollisionWinners((prev) =>
+      mergeCollisionWinners(data.preview.supersession_collisions ?? [], prev),
+    );
   }, []);
 
   const runPreview = useCallback(
-    async (selected: File[], overrides?: StewardOverrides) => {
+    async (staged: StagedLineupFile[], overrides?: StewardOverrides) => {
       const fd = new FormData();
-      selected.forEach((f) => fd.append('files', f));
-      if (folderPath.trim()) {
-        selected.forEach(() => fd.append('folder_paths', folderPath.trim()));
-      }
+      appendFolderPaths(fd, staged, folderPathOverride);
       if (overrides && Object.keys(overrides).length) {
         fd.append('manual_overrides', JSON.stringify(overrides));
       }
       return apiPostFormData<PreviewPayload>('/api/v1/commercial-planner/lineup/bulk-backfill/preview', fd);
     },
-    [folderPath],
+    [folderPathOverride],
   );
 
   const previewMutation = useMutation({
-    mutationFn: (selected: File[]) => runPreview(selected),
+    mutationFn: (staged: StagedLineupFile[]) => runPreview(staged),
     onSuccess: (data) => {
       setPreview(data);
-      syncOverrideFields(data);
+      syncAfterFreshPreview(data);
     },
   });
 
   const rerunWithOverridesMutation = useMutation({
-    mutationFn: (selected: File[]) => {
-      const overrides = buildManualOverrides(
+    mutationFn: async (staged: StagedLineupFile[]) => {
+      const proposals = preview?.preview.case_proposals ?? [];
+      const cumulativePayload = buildCumulativeStewardPayload(
+        proposals,
         periodOverrides,
         buOverrides,
-        preview?.preview.case_proposals ?? [],
+        autoBaseline,
       );
-      return runPreview(selected, overrides);
+      const data = await runPreview(
+        staged,
+        Object.keys(cumulativePayload).length ? cumulativePayload : undefined,
+      );
+      return { data, cumulativePayload };
     },
-    onSuccess: (data) => {
+    onSuccess: ({ data, cumulativePayload }) => {
       setPreview(data);
-      syncOverrideFields(data);
+      syncAfterRerunPreview(data, cumulativePayload);
     },
   });
 
@@ -221,8 +245,10 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
 
   const hasPendingOverrides = useMemo(() => {
     if (!preview) return false;
-    return Boolean(
-      buildManualOverrides(periodOverrides, buOverrides, preview.preview.case_proposals),
+    return hasPendingStewardDeltas(
+      preview.preview.case_proposals,
+      periodOverrides,
+      buOverrides,
     );
   }, [preview, periodOverrides, buOverrides]);
 
@@ -234,18 +260,43 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
     return keys;
   }, [preview]);
 
-  const onFiles = useCallback((list: FileList | null) => {
-    if (!list?.length) return;
-    setFiles((prev) => [...prev, ...Array.from(list)]);
-    setPreview(null);
-    setPeriodOverrides({});
-    setBuOverrides({});
-    setCollisionWinners({});
-  }, []);
+  const onAddFiles = useCallback(
+    (list: FileList | null) => {
+      if (!list?.length) return;
+      const incoming = stageLineupFilesFromList(list);
+      if (!incoming.length) {
+        setLoadNotice('No lineup spreadsheets found in selection (need .xlsx / .xlsm / .csv).');
+        return;
+      }
+      setStagedFiles((prev) => mergeStagedLineupFiles(prev, incoming, 'append'));
+      setLoadNotice(`Added ${incoming.length} file(s).`);
+      resetPreviewState();
+    },
+    [resetPreviewState],
+  );
+
+  const onSelectArchiveFolder = useCallback(
+    (list: FileList | null) => {
+      if (!list?.length) return;
+      const incoming = stageLineupFilesFromList(list);
+      if (!incoming.length) {
+        setLoadNotice('No lineup spreadsheets found under that folder.');
+        return;
+      }
+      setStagedFiles((prev) => mergeStagedLineupFiles(prev, incoming, 'replace'));
+      const withPaths = incoming.filter((s) => s.folderPath).length;
+      setLoadNotice(
+        `Loaded ${incoming.length} lineup file(s) from archive tree (${withPaths} with NB/NR/…/year/quarter paths).`,
+      );
+      resetPreviewState();
+    },
+    [resetPreviewState],
+  );
 
   useEffect(() => {
     if (!open) {
       setConfirmApply(false);
+      setLoadNotice(null);
     }
   }, [open]);
 
@@ -255,25 +306,12 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            File-grain steward preview: edit period/BU overrides per case, pick collision winners,
-            then re-run preview before apply. Nothing writes to lineup tables until you confirm apply.
+            Select your <strong>Product Lineup</strong> root once — all NB/NR/NV/PF/XB subfolders are
+            included. Period/BU paths are inferred from each file&apos;s place in the tree. Edit overrides
+            after preview; nothing writes until you confirm apply.
           </Typography>
 
-          <TextField
-            label="Archive folder path (optional)"
-            placeholder="NB\2025\Q1"
-            value={folderPath}
-            onChange={(e) => setFolderPath(e.target.value)}
-            size="small"
-            fullWidth
-          />
-
           <Box
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              onFiles(e.dataTransfer.files);
-            }}
             sx={{
               border: '1px dashed',
               borderColor: 'divider',
@@ -283,36 +321,88 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
             }}
           >
             <input
-              ref={inputRef}
+              ref={folderInputRef}
+              type="file"
+              // @ts-expect-error webkitdirectory is supported in Chromium/Edge folder picker
+              webkitdirectory=""
+              directory=""
+              multiple
+              hidden
+              onChange={(e) => {
+                onSelectArchiveFolder(e.target.files);
+                e.target.value = '';
+              }}
+            />
+            <input
+              ref={fileInputRef}
               type="file"
               accept={ACCEPT}
               multiple
               hidden
-              onChange={(e) => onFiles(e.target.files)}
+              onChange={(e) => {
+                onAddFiles(e.target.files);
+                e.target.value = '';
+              }}
             />
-            <Button startIcon={<CloudUploadOutlinedIcon />} onClick={() => inputRef.current?.click()}>
-              Add lineup files
-            </Button>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="center">
+              <Button
+                variant="contained"
+                startIcon={<FolderOpenOutlinedIcon />}
+                onClick={() => folderInputRef.current?.click()}
+              >
+                Select archive folder
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<CloudUploadOutlinedIcon />}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Add individual files
+              </Button>
+            </Stack>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+              Use <em>Select archive folder</em> on Product Lineup (or any parent) — not per-BU file picking.
+            </Typography>
           </Box>
 
-          {files.length > 0 && (
+          {loadNotice && (
+            <Alert severity="info" onClose={() => setLoadNotice(null)}>
+              {loadNotice}
+            </Alert>
+          )}
+
+          <TextField
+            label="Override folder path for all files (optional)"
+            placeholder="NB\2025\Q1 — only if not using archive folder picker"
+            value={folderPathOverride}
+            onChange={(e) => setFolderPathOverride(e.target.value)}
+            size="small"
+            fullWidth
+          />
+
+          {stagedFiles.length > 0 && (
             <Table size="small">
               <TableHead>
                 <TableRow>
                   <TableCell>File</TableCell>
+                  <TableCell>Inferred path</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {files.map((f, i) => (
-                  <TableRow key={`${f.name}-${i}`}>
-                    <TableCell>{f.name}</TableCell>
+                {stagedFiles.map((s, i) => (
+                  <TableRow key={`${s.relativePath}-${i}`}>
+                    <TableCell title={s.relativePath}>{s.file.name}</TableCell>
+                    <TableCell>{s.folderPath ?? '—'}</TableCell>
                     <TableCell align="right">
                       <Button
                         size="small"
                         color="inherit"
                         startIcon={<DeleteOutlineIcon />}
-                        onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                        onClick={() => {
+                          setStagedFiles((prev) => prev.filter((_, j) => j !== i));
+                          resetPreviewState();
+                        }}
                       >
                         Remove
                       </Button>
@@ -334,7 +424,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
           {preview && (
             <>
               <Alert severity="info">
-                Preview session #{sessionId ?? 'in-memory'}: {preview.preview.totals?.files ?? files.length}{' '}
+                Preview session #{sessionId ?? 'in-memory'}: {preview.preview.totals?.files ?? stagedFiles.length}{' '}
                 files → {preview.preview.totals?.cases_ready ?? readyCount} ready cases,{' '}
                 {preview.preview.totals?.cases_needs_attention ?? 0} needs attention,{' '}
                 {preview.preview.totals?.collision_groups ?? 0} collision groups.
@@ -489,15 +579,17 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
         <Button onClick={onClose}>Close</Button>
         <Button
           variant="outlined"
-          disabled={!files.length || previewMutation.isPending}
-          onClick={() => previewMutation.mutate(files)}
+          disabled={!stagedFiles.length || previewMutation.isPending}
+          onClick={() => previewMutation.mutate(stagedFiles)}
         >
           {previewMutation.isPending ? <CircularProgress size={20} /> : 'Run preview'}
         </Button>
         <Button
           variant="outlined"
           color="secondary"
-          disabled={!preview || !files.length || rerunWithOverridesMutation.isPending || !hasPendingOverrides}
+          disabled={
+            !preview || !stagedFiles.length || rerunWithOverridesMutation.isPending || !hasPendingOverrides
+          }
           startIcon={
             rerunWithOverridesMutation.isPending ? (
               <CircularProgress size={16} />
@@ -505,7 +597,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
               <RefreshOutlinedIcon />
             )
           }
-          onClick={() => rerunWithOverridesMutation.mutate(files)}
+          onClick={() => rerunWithOverridesMutation.mutate(stagedFiles)}
         >
           Re-run with overrides
         </Button>
