@@ -1,8 +1,8 @@
 # Plan D — Bitemporal shipment evidence (BACKLOG-033 design)
 
-**Status:** D1–D3 implemented (migration + dual-write + corroboration read switch behind flags). D4–D5 deferred.  
-**Backlog:** BACKLOG-033  
-**Trigger:** Weekly shipment cadence, ETA prediction, or evidence/fact reconciliation at scale.
+**Status:** D1–D3 **done** on `cip` (2026-07-02). D4–D5 deferred (BACKLOG-057/058). Change-event derivation v1 shipped (phase 4).  
+**Backlog:** BACKLOG-033 **closed** — see BACKLOG-057/058 for legacy column deprecation.  
+**Trigger:** ~~Weekly shipment cadence~~ **fired** — cutover complete.
 
 ## Problem
 
@@ -69,11 +69,25 @@ New table (conceptual) `shipment_evidence_observation`:
 
 ## Migration phases (when approved)
 
-1. **D1 — Schema:** Add observation table + identity function; backfill from existing `shipment_evidence_line` (one observation per line, `valid_from = job.completed_at`).
-2. **D2 — Dual-write:** Validate path writes observations + legacy lines (feature flag).
-3. **D3 — Read switch:** Corroboration + admin grid read from observations/current view behind flag.
-4. **D4 — Deprecate:** Stop writing `shipment_evidence_line` columns that duplicate observation payload; keep job-scoped staging for candidate generation.
-5. **D5 — Cleanup:** Drop redundant columns after soak.
+1. **D1 — Schema:** ✅ `20260628_0059` observation table + `20260702_0066` current-state view + grants.
+2. **D2 — Dual-write:** ✅ Default ON (`CIP_SHIPMENT_BITEMPORAL_DUAL_WRITE`); validate appends observations idempotently per `(import_job_id, source_row_hash)`.
+3. **D3 — Read switch:** ✅ Default ON (`CIP_SHIPMENT_BITEMPORAL_READ`); all inventoried consumers read `shipment_evidence_current`; legacy dupes soft-superseded via `corpus_superseded_at` (35,134 rows on cip).
+4. **D4 — Deprecate:** Stop writing `shipment_evidence_line` columns that duplicate observation payload; keep job-scoped staging for candidate generation. → **BACKLOG-057**
+5. **D5 — Cleanup:** Drop redundant columns after soak. → **BACKLOG-058**
+
+## Identity addendum (2026-07-02)
+
+State-aware `line_identity_key`:
+
+- **Shipped** corpus grain: `ship:{OU|delivery_no|item_code|purchase_order_id|invoice_line}` — matches audit 5b invoice-line identity; PO required (digest fallback when missing).
+- **Open-order** grain unchanged: `order:{OU|order_no|order_line|item}`.
+- Sheet name / `report_type` casing normalized in `source_key` generation (`Shipped` ≡ `shipped`).
+
+`shipment_evidence_current` view: `DISTINCT ON (line_identity_key)` latest observation; resolution columns COALESCE from live evidence line via `evidence_line_id`.
+
+## Change events v1 (phase 4)
+
+Derived-on-read from observation chains (no fact table): `date_slip`, `qty_change`, `graduated` (order-grain open→shipped lineage), `pod_reversal` (POD cleared — steward flag, does not un-graduate). API: `GET /shipment-evidence/change-events`; CLI: `scripts/ops/run_shipment_change_events.py`. Cancelled-candidate via report-coverage → v2 (not built).
 
 ## Out of scope
 
@@ -89,4 +103,4 @@ New table (conceptual) `shipment_evidence_observation`:
 
 ## Relation to Plan C
 
-Plan C ships steward workspace + resolution plan + paginated APIs on **existing** tables. Plan D does not block Plan C merge; BACKLOG-044 closes on Plan C; BACKLOG-033 remains separate schema program.
+Plan C ships steward workspace + resolution plan + paginated APIs on **existing** tables. Plan D cutover (D1–D3 + change events v1) shipped 2026-07-02; BACKLOG-033 closed.

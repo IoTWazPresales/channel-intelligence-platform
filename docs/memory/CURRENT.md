@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-02 (lineup PO coverage: BU line match + UI parse-incomplete)
+**Last updated:** 2026-07-02 (Plan D bitemporal shipment evidence cutover complete)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,11 +9,11 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/unit-6-unified-lineup-import-centre` (Session B/C lineup + PO units + master merge) |
-| **HEAD** | `ee743de` — distributor full merge + ops script housekeeping |
+| **Branch** | `feat/unit-6-unified-lineup-import-centre` |
+| **HEAD** | `91f227e` — Plan D phases 1–4 (bitemporal cutover + change events v1) |
 | **PR** | None open |
-| **Alembic (code)** | `20260701_0065` (head) |
-| **Alembic (DB)** | **`20260701_0065`** on local `cip` |
+| **Alembic (code)** | `20260702_0066` (head) |
+| **Alembic (DB)** | **`20260702_0066`** on local `cip` |
 
 ---
 
@@ -22,8 +22,42 @@
 | Field | Value |
 |-------|--------|
 | **Active DB** | Local Postgres `cip` @ `127.0.0.1:5432` (topology B) |
-| **Bitemporal flags** | `CIP_SHIPMENT_BITEMPORAL_DUAL_WRITE` / `_READ` — **off** by default |
-| **Celery dispatch** | `broker` (apps/api/.env) — DSI apply runs in worker, not API process |
+| **Bitemporal flags** | `CIP_SHIPMENT_BITEMPORAL_DUAL_WRITE` / `_READ` — **default ON** (env = emergency off-switch) |
+| **Observation store** | 49,981 observations = 49,981 evidence lines; view `shipment_evidence_current` 14,847 rows |
+| **Legacy supersede** | 35,134 `shipment_evidence_line` rows marked `corpus_superseded_at` (soft; no deletes) |
+| **Celery dispatch** | `broker` (apps/api/.env) |
+
+---
+
+## Plan D cutover — DONE (2026-07-02)
+
+| Phase | Commit | Gate |
+|-------|--------|------|
+| 1 Identity + clone proof | `9109664` | `cip_planD_smoke` green; 0 split collapse |
+| 2 cip cutover | `1b77efc` | Migration 0066; jobs 153/154 backfilled; dual-write ON |
+| 3 Consumers + supersede | `6de21b8` | Audit **5b=0**; 35,134 superseded; parity **184** fact-mismatch worklist |
+| 4 Change events v1 | `91f227e` | API + CLI; unit tests green; real chain spot-check jobs 32/40 |
+
+**Integrity audit (cip):** `evidence_true_dupes` (5b) = **0** · `evidence_fact_parity` = **184** (genuine fact_qty / single_line_undercount steward worklist) · `duplicate_qty_inflation_groups` = **0**.
+
+**Open→shipped fact double-count (diagnostic only, BACKLOG-062):** 104 matching pairs; open qty 5,752 / shipped qty 7,224 — remediation deferred.
+
+**Sample change event (jobs 32→40):** `order:151126031011047|1.1|90NR0KS1-M00EW0` — `est_pod` slip −1 day, `erd` slip −1 day.
+
+---
+
+## Consumer read sources (after Plan D)
+
+| Consumer | Read source |
+|----------|-------------|
+| DSI corroboration (cache + per-row) | `shipment_evidence_current` |
+| DSI receipt disambiguation | `shipment_evidence_current` |
+| DSI product tiebreak | via corroboration (current view) |
+| Lineup PO reconciliation / suggested POs / BU resolution | `shipment_evidence_current` |
+| Shipment evidence API list/get | `shipment_evidence_current` |
+| Shipping ETA LAG metrics | `shipment_evidence_observation` partitioned by `line_identity_key` |
+| Channel ops, usage counters | `shipment_evidence_current` |
+| Steward writes / import apply | `shipment_evidence_line` (unchanged) |
 
 ---
 
@@ -31,350 +65,17 @@
 
 Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm dev:worker` (Redis :6379) or `CIP_DEV_CELERY_DISPATCH=in_process_thread`.
 
-| Preflight | Script | Skip env |
-|-----------|--------|----------|
-| API port / stale uvicorn | `scripts/dev-api.js` | `CIP_SKIP_API_PORT_PREFLIGHT=1` |
-| Redis TCP | `scripts/dev-worker.js` | `CIP_SKIP_REDIS_PREFLIGHT=1` |
-| Duplicate Celery consumers | `scripts/dev-worker.js` | `CIP_SKIP_WORKER_PREFLIGHT=1` |
+---
 
-**Ops note:** On Windows, the **node wrappers** for API and worker can exit after ~30 min or host sleep/resume (exit code -1). Restart `pnpm dev:api` / `pnpm dev:worker`. Worker preflight auto-kills orphan `app.worker.celery_app` processes on restart (proven: killed PIDs 23376+5032 after wrapper death). Uvicorn `--reload` does **not** reload the Celery worker — restart worker after API-side apply fixes.
+## Next
+
+- **BACKLOG-062:** Warren decision on open→shipped fact remediation (104 pairs measured).
+- **BACKLOG-057/058:** D4/D5 legacy column deprecation after soak.
+- **Unit 6 browser soak** (unified lineup import centre) — unchanged from prior CURRENT.
+- **Spec C Step C:** archive lineup backfill + link-apply.
 
 ---
 
-## What is working
+## Prior session context (abbreviated)
 
-### Session B — Unified lineup import path (Units 1-5, 7-8) — backend done, e2e-proven on `cip`
-Goal: one unified, multi-file lineup importer that supersedes the embedded Commercial-Planner
-upload and the admin `historical_lineup` workbook, with full pricing chain + negotiation tracking.
-
-- **Unit 1 — backwards pricing calc** (`lineup_pricing.py`): SRP→DAP chain (SRP/(1+VAT) → dealer →
-  net(rebate) → disti_cost → /(1+import_tax) → /ROE = DAP cost-ccy; profit = DAP − controlled_cost).
-- **Unit 2 — model + migration `20260628_0055`**: case `product_line` / `inferred_period_start` /
-  `iteration_number`; line `customer_feedback` / `internal_notes` / `pricing_chain_json` /
-  `calc_dap_cost_currency` / `calc_profit_total`.
-- **Unit 3 — pricing alias map + resolution** (`lineup_pricing_resolution.py`): file evidence over
-  trade-term defaults (customer/distributor terms + `commercial_sku_assumption`); stores calc_* +
-  `pricing_chain_json` (inputs/sources/outputs/flags); `missing_pm_bottom` flag when no PM bottom.
-- **Unit 4 — period/product-line inference** (`lineup_period_inference.py`): `26Q1`/month-column →
-  `inferred_period_start`; product line from majority column. User-supplied values win.
-- **Unit 5 — first-class `unified_lineup` importer** (`693efb9`): own template + `unified_lineup_system`
-  source (seed migration `20260628_0056`, applied to `cip`). Lineup seed generalized over
-  (template_slug, source_code); threaded through parser/dispatch/worker/Celery task so jobs are
-  audited `template_slug='unified_lineup'`. `unified_lineup_import.dispatch_unified_lineup_import`
-  fans out **one CommercialLineupCase + one always-async parse job per file** (per-file activity-feed
-  progress, per-file failure isolation). Endpoint `POST /commercial-planner/lineup/unified-import`
-  (multipart, N files + shared period/country/currency/plan). **Real e2e on cip:** job tagged
-  unified_lineup, DAP 39.6622, period 2026-01-01, `missing_pm_bottom`, chain persisted.
-- **Unit 7 — negotiation iterations + annotations** (`4d195e0`): `iteration_number` advances on
-  `pending_review→validated` (customer bounce-back = new round; first send = round 1).
-  `customer_feedback`/`internal_notes` editable through review loop (draft/validated/pending_review);
-  pricing/qty edits stay draft-only. Case payload exposes iteration/product_line/inferred_period_start.
-- **Unit 8 — per-customer XLSX export** (`4d195e0`): `GET /commercial-planner/lineup-cases/{id}/export?customer_id=`
-  streams one customer's slice with the full persisted pricing chain (recomputes nothing; DAP =
-  calculated cost-ccy, **not** PM bottom). `lineup_customer_export.py`.
-- **Tests:** 113 unit/API pass; Units 5/7/8 also proven by real `cip` e2e (scripts cleaned up).
-
-### Unit 6 (frontend) — DONE (wired + unit-tested; not yet browser-soaked)
-Import-Centre multi-file uploader for the unified lineup importer + embedded upload made read-only.
-- **New `UnifiedLineupImportDialog`** (`apps/web/src/app/(app)/admin/imports/UnifiedLineupImportDialog.tsx`):
-  multi-file dropzone + plan/period/country/currency fields → `POST /api/v1/commercial-planner/lineup/unified-import`
-  via `apiPostFormData` (repeated `files` field + form fields). On 202 it registers each returned
-  `task_id` with the nav-bell activity feed (kind `commercial_planner_lineup_parse`) so progress is
-  visible per file, and renders a per-file dispatch outcome table. Plan dropdown reads
-  `GET /commercial-planner/plans`; selecting a plan prefills country/currency.
-- **Import-Centre page** (`admin/imports/page.tsx`): added explicit primary card
-  (`unified-lineup-import-card`) opening the dialog; `ImportTemplate` type gained `hidden?`; the
-  `visibleTemplates` filter now excludes `hidden` templates so `unified_lineup` stays out of the
-  generic wizard (it has its own surface).
-- **`CurrentLineupSection`** read-only: new `allowUpload` prop (default **false**). When read-only the
-  "Upload current lineup" button is replaced by an "Import lineups in Import Centre" link (→
-  `/admin/imports`), the per-case "Upload file to this case" retry is hidden, and the
-  `UploadLineupDialog`/`RetryParseDialog` are not mounted. Legacy upload retained behind `allowUpload`.
-- **Tests:** new `UnifiedLineupImportDialog.test.tsx` (3) proves multipart `files` wiring +
-  task registration + disabled-until-valid-file; existing `CurrentLineupSection.test.tsx` (7) and
-  `commercial-planner/page.test.tsx` (83) still green. Lint clean for touched files.
-- **NOT verified:** browser soak of the dialog against a running API (per-file progress in the bell,
-  cases landing under the plan's Current lineups).
-
-### Session C Unit 2d — Confirm-with-PO + `commercial_lineup_case_po` — code done, migration pending
-- **Migration `20260628_0057`** (`commercial_lineup_case_po`): m2m join (one lineup→many POs, one
-  PO→many lineups). `case_id` FK `commercial_lineup_case` CASCADE; `purchase_order_id` FK
-  `purchase_order`; `UniqueConstraint(case_id, purchase_order_id)` for idempotency. **Applied to cip
-  (2026-06-28).** Model `CommercialLineupCasePo` + `models/__init__`.
-- **Service** `lineup_case_po_confirm.py`: `confirm_case_with_po` validates status (accepted/po_pending/
-  po_issued), normalizes+dedups PO numbers, infers distributor from case lines, lookup/upsert
-  `purchase_order` (status `raised`, source `lineup_declared`), inserts `case_po` links idempotently,
-  sets `commercial_status='po_issued'`. `list_case_pos` / `list_case_pos_bulk` (no N+1).
-- **API** `POST /commercial-planner/lineup-cases/{id}/confirm-with-po {po_numbers[], notes?}`
-  (404/409/400). `_case_payload` now returns `linked_pos` + `po_count`.
-- **UI** `CurrentLineupSection`: "Confirm lineup"/"Add PO" button → `ConfirmWithPoDialog` (multi-value
-  PO input + chips + notes); status chip → po_issued; PO-count chip + iteration "Round N".
-- **Tests:** `test_lineup_case_po_confirm.py` (mock) — 2 POs, idempotent re-confirm, append; + UI test.
-
-### Session C Unit 3 — Reconciliation + gap worklist + PO Management — code done (derived; no migration)
-- **Reconciliation** `lineup_po_reconciliation.py` `reconcile_case` (derived on read): per (case×product)
-  aggregate `shipment_evidence_line` where `purchase_order_id IN {case POs}` & `product_id` matches a
-  lineup line. PRIMARY **units** flag — matched/short/over/unshipped/unplanned/amended/po_no_match.
-  SECONDARY **value** bridged via `commercial_sku_assumption.fx_plan_currency_per_cost_currency`
-  (display only; `fx_unavailable` when no bridge — never errors). UoM eaches assertion → warning.
-  API `GET /commercial-planner/lineup/po-reconciliation?case_id`.
-- **Gap worklist** `lineup_po_gap.py`: shipment (PO,product) not covered by any confirmed case →
-  grouped by quarter (from `ship_confirm_date`/`schedule_ship_date`). Dismiss-with-reason reuses
-  `purchase_order.dismiss_reason_code`. APIs `GET .../lineup/po-gap-worklist`, `POST .../dismiss`,
-  `POST .../restore`.
-- **PO Management** `po_management.py` + endpoints `/po-management/coverage` & `/backlog`: observed POs
-  (from shipment evidence) grouped by quarter→product line; coverage meter (observed vs linked,
-  `first_run`); linked groups roll up reconciliation summary; unlinked groups get an upload prompt.
-- **UI:** new `/admin/po-management` page + `PoManagementView` (coverage meter, backlog groups with
-  recon chips / upload prompt, gap worklist table with dismiss/restore + "Show dismissed"); nav entry
-  under Data Imports. Lineup case card shows inline `CaseReconciliationInline` when POs linked.
-  `/shipping` grid: **Customer PO column** (click → filter) + `?purchase_order_id=&po_label=` deep-link
-  banner; backend `/shipping/lines` + commercial-summary accept `purchase_order_id` filter. Upload
-  prompts deep-link `/admin/imports?unified=1&period=` → `UnifiedLineupImportDialog` `initialPeriodLabel`.
-  Shipment-evidence page cross-links to PO Management.
-- **Tests:** `test_lineup_po_reconciliation.py` (all 7 flags + FX-missing + UoM), `test_lineup_po_gap.py`,
-  `PoManagementView.test.tsx` (first-run/linked/dismiss), `buildShippingLinesUrl.test.ts` (+PO filter).
-  22 backend + 3 PO-mgmt UI + 3 shipping-url + 3 dialog green; lint clean for touched files.
-- **Real-DB e2e:** migration `0057` applied to `cip`; browser soak still open.
-
-- **Lineup customer alias resolution (2026-07-02):** `lineup_case_parser` consults approved
-  `CustomerSourceTokenAlias` after dim name/code miss (same preload shape as shipment enrich refs;
-  unique-token-only). Backfill on `cip`: 5 tokens / 430 lines / 27 cases (IC → `customer_id=12`).
-  Merge-safety: `commercial_lineup_line.customer_id` covered by customer FK repoint. BACKLOG-061
-  entity verification / promote-in-place deferred.
-
-### Plan-optional lineup browse + pct evidence guard (2026-06-28)
-- **Problem:** Uploaded lineup cases (e.g. historical periods) were invisible in Commercial Planner
-  when no plan was selected — UI gated `GET /lineup-cases` on `activePlanId`.
-- **Fix:** `CurrentLineupSection` always fetches cases; optional **Show all (ignore plan)** toggle when
-  a plan is selected; cases grouped by period → product line with Linked/Unlinked chips; workbench
-  line grid + column metadata open for unlinked cases. `PATCH /lineup-cases/{id}/plan` attach/detach.
-- **Parser guard:** `sanitize_pct_evidence` in `lineup_pricing_resolution.py` — currency amounts
-  mapped to pct columns (case #6 corrupt file) dropped with `pct_evidence_out_of_range` diagnostic
-  instead of `Numeric(8,4)` overflow. Margin **amount** columns deferred → **BACKLOG-052**.
-- **Tests:** +3 API (list-all, attach, detach) · +3 UI (grouped unlinked list, plan filter, unlinked
-  workbench) · pct sanitize unit tests. 100 API + 11 CurrentLineupSection vitest green.
-
-### Direct confirm-with-PO + suggested POs (2026-06-28)
-- **Confirm with PO** on case card at **any status except cancelled** — no forward ladder required;
-  reuses `confirm_case_with_po` → `po_issued` + `commercial_lineup_case_po` links (idempotent).
-- **GET `/lineup-cases/{id}/suggested-pos`** — observed POs ranked by product overlap (distributor +
-  `shipment_evidence_line`); modal shows selectable suggestions + manual entry.
-- Workbench hides "Ready to sync" alert when case is `po_issued` / fulfillment terminal.
-- Tests: 11 PO API + 13 CurrentLineupSection vitest green.
-
-### PO↔lineup auto-alignment — Units 1–4 DONE on `cip`
-**Spec:** ONE SPEC, five units (0–5), build/commit/push **one unit at a time** on current branch.
-
-**Unit 1 (`8cd5a20`) — resolved entities + CRAD:**
-- Migration `20260629_0058`: `resolved_customer_id`, `resolved_distributor_id`, `crad_date` on
-  `shipment_evidence_line` + `fact_inbound_shipment`.
-- `shipment_resolved_entities.py` populates at validate/steward/apply; backfill script run on cip
-  (~49,981 lines).
-
-**Unit 2 (`d46dd8a`) — NULL-dist PO merge + deferred materialize:**
-- Materialize skips mint when `resolved_distributor_id` is null.
-- NULL-dist merge: 8,822 → 1,634 rows (one per norm); 7,188 losers deleted + evidence repointed.
-
-**Unit 3 (`3fbc12d`) — auto-link proposals (derived-on-read):**
-- `lineup_po_auto_link.py` — CRAD-primary period match; HIGH = customer+product+CRAD-in-quarter;
-  MEDIUM = date fallback or unresolved customer.
-- `GET /commercial-planner/lineup/po-auto-link/proposals` (`period`, `customer_id`, `confidence`, `limit`).
-- Proposes only — never writes `commercial_lineup_case_po`.
-- Tests: `test_lineup_po_auto_link.py` (9 pass incl. cip smoke ~10s).
-- **Post-backfill fix (2026-07-02):** consumers key on quarter from `inferred_period_start`
-  (`lineup_period_canonical.py`); `period_label` display-only; superseded cases excluded from
-  auto-link/coverage/gap/upload-prompt; steward collision worklist (`lineup_supersession_worklist.py`).
-  cip: 3 labels normalized `26Q2`→`2026 Q2`; proposals 722 (duplicate active cases remain for steward).
-
-**Unit 4 — review UI + dismiss/apply:**
-- Migration `20260629_0059`: `commercial_lineup_po_auto_link_dismiss` (+ GRANT to `cip` role).
-- `POST .../po-auto-link/dismiss`, `.../restore`, `.../apply` (bulk link via `link_case_to_existing_po`).
-- UI: `/admin/po-management` → **Suggested PO ↔ lineup links** (`PoAutoLinkProposalsSection`).
-  Period/confidence filters, Review dialog (customer-grain), bulk link, dismiss/restore.
-- Tests: `test_lineup_po_auto_link_actions.py` + `PoAutoLinkProposalsSection.test.tsx` (3).
-
-**Unit 5 (deferred):** period-derived importer.
-
-**Limiter:** 23 TMP-DIST / 4,960 TMP-CUST on cip — auto-link match rate capped; unmatched → exception queue.
-
-**Unit 0 findings (reference — pre-Unit 1):** shipment had no `resolved_*` columns; customer via steward,
-distributor via `_resolve_distributor_strict` + aliases; CRAD only in `raw_source_row`; PO dup from NULL
-`distributor_id` materialize (fixed in Unit 2).
-
-### Customer full merge — name-similarity duplicates (`ebfa936`, `a05f88e`) — code done, migration on cip
-- **Mirror of shipment/customer-merge pattern:** runtime FK discovery (`customer_fk_discovery.py`),
-  preview-first merge (`customer_full_merge.py`), set-based repoint (`customer_full_repoint.py`),
-  async Celery enqueue (`customer_full_merge_enqueue.py`).
-- **API** `/customers/duplicate-groups/*` — preview, confirm (async task + poll), list groups.
-- **UI** `/admin/customers/duplicates` — `NameSimilarityMergeSection` (preview counts, confirm dialog,
-  activity-feed progress).
-- **Tombstone scan fix (`a05f88e`):** merged-into customers excluded from duplicate-group discovery.
-- **Tests:** `test_customer_full_merge.py` (252 lines). Uses existing `merged_into_customer_id` on
-  `dim_customer` (no new migration this unit).
-
-### Distributor full merge — name-similarity duplicates (`361d138`) — code done, `0063` on cip
-- **Customer-merge mirror for `dim_distributor`:** FK discovery, PO row consolidation
-  (`distributor_merge_po_consolidation.py`), full repoint, preview/confirm, async enqueue.
-- **Migration `20260630_0063`:** `distributor_status`, `merged_into_distributor_id`, `merge_note` on
-  `dim_distributor` (**applied to `cip`**).
-- **API** `/distributors/duplicate-groups/*` — preview, confirm, list.
-- **UI** `/admin/distributors/duplicates` — `DistributorNameSimilarityMergeSection` + nav link.
-- **Deprecation:** legacy provisional distributor merge in `shipment_evidence_steward_ops.py` marked
-  superseded.
-- **Tests:** `test_distributor_full_merge.py` (8 pass on disposable DB). **Browser soak open** on
-  `/admin/distributors/duplicates` (API smoke: 200, 0 groups / 25 distributors scanned).
-
-### PO Management read-model refresh (`878f3d2`, `f2b987e`, `b9b8701`) — code done, browser soak open
-- **Read-model fix (`878f3d2`):** planned at (case×customer×product) grain; shipped/open from
-  `fact_inbound_shipment` (not stacked evidence).
-- **Unified totals (`f2b987e`):** coverage/backlog/gap shipped totals on `fact_inbound_shipment`;
-  globally linked POs excluded from auto-link proposals; matched products enriched with `dim_product`
-  labels; auto-link section lazy-loaded with `EnterpriseDataGrid` + dismiss dialogs.
-- **Match quality (`b9b8701`):** PO auto-link passes product-filtered lineup lines into matcher.
-- **Task-run ledger (`1763471`):** enqueue/worker race upsert made idempotent.
-
-### Shipped fact identity (`0060`–`0062`, `0061` unique) — applied on `cip`
-- **`fact_upsert_key`:** invoice-line-agnostic shipped key (`0060`), PO-inclusive key
-  `ship:OU|delivery|item|purchase_order_id` (`0062`), collapse merge + unique constraint (`0061`).
-- Amazon `PURMIDR26009978` shipped count corrected after backfill/collapse (see `CONTEXT.md` changelog).
-
-### Ops scripts housekeeping (`ee743de`)
-- Reusable maintenance scripts under `apps/api/scripts/ops/` (`resync_shipment_facts_customer_po.py`,
-  `cleanup_test_fixture_customers.py`).
-- Deleted obsolete one-shot `apply_20260626_0051_manual.py`.
-
-### Unit A — case-level distributor assignment (tokenless lines) (2026-06-28) — code done, browser soak open
-- **Gap closed:** entity resolution is token-keyed, so lineup lines with no `distributor_token_raw`
-  (e.g. an Amazon file that simply has no distributor column) could never be assigned a distributor —
-  they showed **Unassigned** forever. Unit A adds a **case-level** assign path that does not need a token.
-- **Suggest** `lineup_case_suggested_pos.py::suggest_distributors_for_case`: ranks distributors from
-  **shipment-evidence product corroboration** (which distributors actually shipped the case's resolved
-  products) → `{converged, converged_distributor_id, distinct_count, suggested_distributors[],
-  already_assigned_distributor_ids[]}`. `converged` = exactly one distinct distributor across evidence.
-- **Assign** `lineup_case_distributor_assign.py::assign_case_distributor`: sets `distributor_id` on the
-  case's lines (`only_unassigned=True` by default). Either links an **existing** `dim_distributor` OR
-  creates one — but **only** via steward-confirmed path (`new_code` + `new_name` + `confirm_create`);
-  rejects duplicate code / unknown id / non-resolvable case status. **No silent master creation** —
-  governance boundary preserved. Tags a diagnostic on touched lines.
-- **API:** `GET /commercial-planner/lineup-cases/{id}/suggested-distributors` ·
-  `POST /commercial-planner/lineup-cases/{id}/assign-distributor`
-  (`AssignDistributorBody`: `distributor_id` | `new_code`+`new_name`+`confirm_create`; `only_unassigned`).
-- **UI** `CurrentLineupSection`: "Assign distributor" button on the case card (guarded by
-  `RESOLUTION_UI_STATUSES`) → `AssignDistributorDialog`: shows evidence suggestions (converged auto-pick
-  vs ambiguous pick-list), `EntitySearchAutocomplete` to find an existing dim, or a create-new form
-  requiring confirm. Invalidates cases/lines/suggested-distributors/suggested-pos on success.
-- **Tests:** `test_lineup_case_distributor_suggest_assign.py` (10: suggest not-found/no-products/
-  converged/ambiguous; assign existing/create-new/reject dup-code/unknown-id/bad-status/not-found) +
-  3 UI tests (converged assign, ambiguous pick, create-new confirm). Read-only suggest e2e run against
-  real `cip`. **Not soaked:** live click-through assign in browser.
-
-### Unit B — lineup workbench migrated to EnterpriseDataGrid (AG Grid) (2026-06-28) — code done, browser soak open
-- **Replaces** the bespoke MUI `<Table>` workbench with the repo-standard `EnterpriseDataGrid`
-  (AG Grid wrapper used by Plans/admin grids) → native **movable / resizable / sortable / filterable**
-  columns, matching the rest of the app. (The read-only `CaseLinesDialog` and the suggested-PO table
-  stay plain MUI tables — out of scope.)
-- **Column model:** `wbColumnDefs` maps `visibleColsFiltered` → `ColDef[]`. `wbCellValue` extracts a
-  primitive (string|number|null) for sort/filter; rich display reuses existing `wbCellContent` as a
-  `cellRenderer`. Editable numeric cells (`units`→`quantity_units`, `msrp`→`msrp_local`,
-  `promo`→`promo_price_evidence_local`) only when `activeCase.commercial_status === 'draft_imported'`
-  (`type: 'numericColumn'`, `singleClickEdit`).
-- **Edit persistence:** `onCellValueChanged` ignores null/invalid/no-op commits (mirrors prior inline
-  editor) then `patchLineMutation.mutate`. **Column-order persistence:** `onDragStopped` writes the new
-  order back into `visibleCols` (localStorage v4 per case).
-- **Typing note:** `EnterpriseDataGrid` is a `forwardRef` fixing `T=unknown`, so defs are typed
-  `ColDef[]` / `GridOptions` (not `<CommercialLineupLine>`) with `as CommercialLineupLine` casts in
-  getters/renderers — same pattern as the Plans grid.
-- **Tests:** `CurrentLineupSection.test.tsx` 16/16 green (grid mocked the repo-standard way, asserting
-  columnheaders + cell content via cellRenderer/valueFormatter/valueGetter). Lint clean; tsc clean for
-  the file. **Not proven in jsdom:** real AG Grid inline-edit → `onCellValueChanged` → PATCH, and
-  drag-reorder persistence — needs a quick browser smoke.
-
-### Lineup workbench + catalogue product_line (2026-06-28)
-- **product_line inference:** catalogue-majority PRIMARY (`dim_product.product_line`, row-weighted);
-  filename fallback ONLY when &lt;25% rows resolved; sheet category/BU column removed as signal.
-  Steward-set `product_line` never overwritten. **Warren:** re-parse cases 3/4/5 to fix mislabels
-  (Gaming NR→Gaming, Consumer/NB/NV per catalogue).
-- **Workbench grid:** default columns = identity (part #, model, series, processor) + qty/SRP +
-  margin % (display ×100) + **calculated** pricing chain (`pricing_chain_json` / calc_*); no dead
-  raw upload price columns; `sku_raw` out of defaults (still in picker). localStorage v4 per case.
-  Plan-optional workbench always requests `include_product_specs` + `include_line_uploaded`.
-- **API:** lines expose `pricing_chain_json`, `calc_dap_cost_currency`, `calc_profit_total`;
-  `calc_fields` in workbench-column-metadata. Tests: 16 inference + 12 CurrentLineupSection vitest.
-
-### DSI apply — proven fresh E2E on job #199 (`b2b81ea`, 2026-06-27)
-- `import_job 199` → `completed` / `loaded` / `apply`.
-- Facts (`source_import_job_id=199`): `fact_sales_sellout`=2 · `fact_inventory_distributor`=2.
-- Full derive chain in worker: SOH reconciliation · velocity (3,369 rows) · forecasting.
-- UI: DSI Apply step shows `ImportJobLoadedSuccessCallout` when loaded (parity with shipment).
-
-### staged_metadata deadlock — FIXED (BACKLOG-050 resolved, `b2b81ea`)
-- **Root cause:** dual-writer on `import_job.staged_metadata` — caller-session `set_task_slot_on_job` (uncommitted row lock) + `enqueue_*` own committed session → self-deadlock on one worker thread.
-- **Fix:** `enqueue_*` is sole writer; derivation dispatch wrapped in try/except (loaded job never reverts to `failed`); idempotent re-apply sets `completed` when already `loaded`. Test asserts `session.flush` not called on dispatch.
-
-### dev-worker duplicate-consumer preflight (`b2b81ea`)
-- Kills stray `app.worker.celery_app` before spawn; fresh start logs `mingle: all alone`.
-
-### Job #96 — large-volume apply PROVEN LIVE (`loaded`, channel operations)
-- Full **178k-row** RAW workbook applied; facts visible in channel operations (Warren confirmed 2026-06-28).
-- **Read-only re-audit (2026-06-30):** `status=completed` · `stage=loaded` ·
-  `staged_metadata.distributor_si.applied_at` **2026-06-27T18:13:07Z** · **0** staging blockers.
-- Facts (`source_import_job_id=96`): `fact_sales_sellout` **35,582** (178,196 units) ·
-  `fact_inventory_distributor` **47,411** (1,533,553 SOH) · `fact_returns` **3,175**.
-- Apply path: async worker + poll; `staged_metadata` deadlock fix (`b2b81ea`) holds at volume.
-- Predates customer full merge (`ebfa936`, 2026-06-29) — no re-apply needed for merge remediation.
-
-### DSI apply pipeline (prior commits on branch)
-- **No re-validate on apply** (`e4c30bc`): skip Step 1 when job already `validated` with staging.
-- **Finalize → async** (`page.tsx`): Finalize button POSTs async `dsi-apply` (worker + poll), not sync in-request.
-- **Gate-key revisit** (`468c239`): mapping-draft sync at `activeStep < 5`.
-- **Customer alias resolution-key:** dealer-group token alignment; job #96 remediated → 0 blocking rows.
-
-### Shipment import wizard (DSI-aligned — wired + unit-tested)
-- 7-step wizard; `ImportJobLoadedSuccessCallout` on loaded; steward workspace parity.
-
----
-
-### Spec C — Bulk lineup backfill (panel production-ready 2026-07-01)
-- **Step A:** `20260701_0064` (`business_unit`) + `lineup_business_unit_resolution.py` on `cip`; product tier reads **`dim_product.product_line`** (folder-grain NB/NR/NV/PF/XB), not division `business_unit`.
-- **Step B:** `BulkLineupBackfillDialog` + steward overrides (period/BU per row, collision winner picker, re-preview with `manual_overrides`); `lineup_backfill_archive_config.py` for tenant archive roots; soft supersession `20260701_0065`.
-- **Step C.1 preview (read-only):** 27 archive files, `bu_label_product_mismatch` 33→9 after resolver fix; 24 clean auto-resolved files; 2 collision groups; 0 unreadable (OneDrive locks cleared).
-- **Step C operator apply:** Warren drives through UI — **no agent apply**.
-- **Browser soak:** bulk backfill dialog steward controls not yet manually exercised.
-
----
-
-## In progress / not proven live
-- **PO Management browser soak** — lazy auto-link grid + dismiss on `/admin/po-management` (`f2b987e`).
-- **Distributor duplicates browser soak** — live merge preview/confirm on `/admin/distributors/duplicates`.
-- **Customer duplicates browser soak** — live merge on `/admin/customers/duplicates` (`ebfa936`).
-- **Pre-existing lint** — 7 `rules-of-hooks` errors in `dsi-mapping-steward-panel.tsx` block clean `pnpm lint` (not introduced by DSI apply work).
-- **Billiard quirk** — solo worker spawns one child under system Python (single logical consumer; interpreter mismatch latent).
-- Warren **actively working through** ACZA shipment upload (BOM tab deferred per BACKLOG-046).
-- Shipment wizard browser soak, Rectron mapping, Import Centre URL reset — **not re-verified** this session.
-
----
-
-## Next (recommended)
-
-1. **Spec C operator backfill** — Warren stewards via `BulkLineupBackfillDialog` (preview → overrides → apply); period-by-period link-apply after cases exist.
-2. **Browser soak** — `BulkLineupBackfillDialog` + PO Management + duplicate merge UIs.
-3. Fix `dsi-mapping-steward-panel.tsx` rules-of-hooks lint (unblocks `pnpm lint`).
-
----
-
-## Blockers requiring Warren
-
-- Business sign-off: should **BOM Not Ready** enter shipment facts? (BACKLOG-046)
-- Main promotion — explicit instruction only
-
----
-
-## Key references
-
-| Topic | Doc |
-|-------|-----|
-| Memory index | `docs/memory/MEMORY_PALACE.md` |
-| Import contract | `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` |
-| Dev topology | `docs/DEV_TOPOLOGY.md` |
-| Backlog 045–050 | `docs/BACKLOG.md` |
+Unified lineup import Units 1–8 backend done; Unit 6 frontend wired. Spec C Step A/B done (`20260701_0064`/`0065`). Distributor full merge on `cip`. PO coverage compound match (`80b864a`/`daac5f6`). Data integrity audit tool (`10fd3ea`).

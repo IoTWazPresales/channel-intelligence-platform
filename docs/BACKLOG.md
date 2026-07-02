@@ -911,16 +911,60 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-14 |
-| **Effort** | Very large (schema + import pipeline + fact layer + consumer migration) |
-| **Source** | Session audit (jobs #32 Jun-1, #34 Jun-3, #40 Jun-4 — same workbook, distinct temporal snapshots); `apps/api/app/services/imports/shipment_evidence_source_keys.py` (`stable_source_key_for_row`, `report_type:state|order_no_or_delivery_no|item`); `apps/api/app/models/shipment_evidence.py` (upsert on `(import_job_id, source_key)`); `apps/api/app/services/imports/shipment_inbound_facts.py` (`fact_inbound_shipment` copies evidence per job); `apps/api/app/services/imports/dsi_soh_reconciliation.py` (aggregates `FactInboundShipment.product_id` / quantity); `apps/api/app/services/imports/dsi_shipment_corroboration.py` (reads `resolved_unique` evidence lines) |
-| **Idea** | Restructure shipment evidence/facts so each import is a dated, append-only **observation** of a shipment line's state (`eta_date`, `est_pod_date`, `promise_date`, `ship_confirm_date`, `pod_date`, `line_state`), keyed by a **stable natural identity** (`order_no` + `order_line` + `item_code`). Derive a **current-state view** = latest observation per key, which feeds volume / corroboration / reconciliation. Never overwrite prior observations. |
-| **Why it matters / deferrable** | **Logistics / ETA-arrival prediction** (roadmap) needs the history of how each shipment's ETA drifts and how predicted ETA compares to actual POD. Proven in data: job #32 (Jun-1) vs job #40 (Jun-4) snapshots of the same orders show `eta_date` drift and `pod_date` going null → actual arrival — that predicted-vs-actual delta is the training signal. Deleting or overwriting snapshots destroys it. **Without a current-state view**, inbound volume double-counts: the same shipment is counted once as `open_order` (keyed by `order_no`) and again as `shipped` (keyed by `delivery_no`), because `source_key` embeds `report_type` + a state-specific id. Inflates inbound totals every week as open orders convert to shipped. Deferrable until weekly shipment cadence or ETA-prediction work is imminent — but **before** either goes live. |
-| **What the work is** | (1) **Observation store**: append-only rows per import with `observation_date` (from `import_job.created_at` or explicit column) + mutable-state columns; stable line identity separate from `source_key`. (2) **Current-state view** (materialized view or query): `DISTINCT ON (order_no, order_line, item_code) ORDER BY observation_date DESC` (or equivalent). (3) **Fact layer**: `fact_inbound_shipment` reads current-state only (or becomes the view). (4) **Migrate consumers**: `dsi_soh_reconciliation`, inbound volume APIs, corroboration cache — all read current-state. (5) **Related guard**: import-time duplicate **detection** — same workbook re-imported with no `duplicate_review_required` flag; flag accidental re-runs (distinct from intentional weekly snapshots). (6) **Preserve** jobs #32 / #34 / #40 as observations once model exists — do not delete. **REJECTED:** idempotent upsert that overwrites in place (erases ETA history). |
-| **Regression traps** | Any consumer summing `quantity` across all fact/evidence rows (`dsi_soh_reconciliation`, inbound volume) **must** read current-state or it double-counts open+shipped and across weeks. Corroboration already dedupes on distinct `product_id` (not broken today) but should read current-state once available. Do **not** filter to shipped-only and lose open-order observations (needed for prediction). `source_key` today is **not** stable across lifecycle (`delivery_no` only exists post-ship). |
-| **Behavior to retain** | Steward / entity resolution on evidence lines; `resolved_unique` corroboration semantics; governance (no silent master creation); historical observation rows immutable after write. |
-| **Out of scope** | DSI sell-out bitemporal model; logistics/ETA ML model training (downstream of this substrate); deleting legacy jobs #32/#34/#40 before migration path exists. |
-| **TRIGGER** | Before the first real **weekly shipment cadence** goes live, **OR** before **logistics/ETA-prediction** (DSI Phase 4/5) work starts — whichever comes first. |
+| **Status** | **Closed** · 2026-07-02 — Plan D phases 1–4 shipped on `cip` (`9109664` → `91f227e`). See `docs/SHIPMENT_BITEMPORAL_PLAN_D.md`. |
+| **Follow-on** | BACKLOG-057 (D4), BACKLOG-058 (D5), BACKLOG-062 (open→shipped fact double-count), BACKLOG-063 (cancelled-candidate events v2), BACKLOG-064 (change-event UI). |
+
+---
+
+## BACKLOG-057 — Plan D D4: stop duplicating observation payload on legacy evidence lines
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-07-02 |
+| **Source** | `docs/SHIPMENT_BITEMPORAL_PLAN_D.md` D4; Plan D cutover complete |
+| **Idea** | Dual-write still populates `shipment_evidence_line` for steward job scope; stop persisting columns that mirror observation payload once all write paths read observations for history. |
+| **TRIGGER** | 30-day soak after Plan D cutover with zero steward regressions; Warren approves D4 start. |
+
+---
+
+## BACKLOG-058 — Plan D D5: drop redundant shipment_evidence_line columns
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-07-02 |
+| **Source** | `docs/SHIPMENT_BITEMPORAL_PLAN_D.md` D5 |
+| **TRIGGER** | BACKLOG-057 complete + Alembic migration reviewed; no consumer reads raw legacy columns. |
+
+---
+
+## BACKLOG-062 — Open→shipped fact double-count remediation
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-07-02 |
+| **Source** | Plan D phase 1 diagnostic (`open_order_shipped_fact_double_count_diagnostic`); measured on `cip`: **104** matching open+shipped fact pairs, open qty sum **5,752**, shipped qty sum **7,224** |
+| **Idea** | When order grain graduates to shipped, retire or supersede open-order fact rows — separate from evidence cutover. |
+| **TRIGGER** | Warren approves fact-layer remediation policy after reviewing diagnostic. |
+
+---
+
+## BACKLOG-063 — Shipment change events v2: cancelled-candidate via report-coverage
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-07-02 |
+| **Source** | Plan D phase 4 scope note; `shipment_change_events.py` v1 |
+| **TRIGGER** | Steward/report-coverage semantics for cancelled lines defined; ETA or channel-ops UI needs cancelled signal. |
+
+---
+
+## BACKLOG-064 — Shipment change-event UI surfacing
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-07-02 |
+| **Source** | Plan D phase 4 (API/CLI only) |
+| **TRIGGER** | Shipping admin or commercial planner needs in-app event timeline; API contract stable after soak. |
 
 ---
 
