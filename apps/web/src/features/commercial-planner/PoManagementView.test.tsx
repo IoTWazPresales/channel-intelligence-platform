@@ -129,6 +129,47 @@ describe('PoManagementView', () => {
     vi.clearAllMocks();
   });
 
+  it('shows lineup on file when case exists without upload prompt', async () => {
+    apiGetMock.mockImplementation((path: string) => {
+      if (path.includes('/po-management/coverage')) {
+        return Promise.resolve({
+          total_pos_observed: 5,
+          total_pos_linked: 0,
+          first_run: true,
+          data_unavailable: false,
+        });
+      }
+      if (path.includes('/po-management/backlog')) {
+        return Promise.resolve({
+          groups: [
+            {
+              year: 2026,
+              quarter: 1,
+              quarter_label: '26Q1',
+              product_line: 'NB',
+              shipped_units: 1200,
+              shipped_value_cost: 50000,
+              shipped_value_plan: 900000,
+              fx_complete: true,
+              po_count: 3,
+              linked_po_count: 0,
+              status: 'unlinked',
+              lineup_case_exists: true,
+            },
+          ],
+          data_unavailable: false,
+        });
+      }
+      if (path.includes('/po-gap-worklist')) {
+        return Promise.resolve({ groups: [], dismissed: [], total_gap_rows: 0, data_unavailable: false });
+      }
+      return Promise.resolve({});
+    });
+    renderView();
+    expect(await screen.findByText('Lineup on file')).toBeInTheDocument();
+    expect(screen.queryByTestId('po-upload-2026-1-NB')).not.toBeInTheDocument();
+  });
+
   it('shows the first-run coverage meter and an upload prompt for unlinked groups', async () => {
     wireApi({ firstRun: true });
     renderView();

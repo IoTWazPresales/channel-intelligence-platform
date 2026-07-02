@@ -660,6 +660,13 @@ async def parse_current_lineup_file(
             if inferred_line:
                 case.product_line = inferred_line
 
+        folder_bu = parse_opts.get("business_unit")
+        if folder_bu and str(folder_bu).strip():
+            case.business_unit = str(folder_bu).strip()
+            case.product_line = str(folder_bu).strip()
+        elif case.business_unit:
+            case.product_line = case.business_unit
+
         if case.business_unit is None and lines_to_add:
             import asyncio
 
@@ -696,6 +703,8 @@ async def parse_current_lineup_file(
             )
             if bu_report.business_unit:
                 case.business_unit = bu_report.business_unit
+                # Archive folder BU is the card product-line code — keep product_line aligned.
+                case.product_line = bu_report.business_unit
             for flag in bu_report.flags:
                 if flag not in warnings:
                     warnings.append(flag)

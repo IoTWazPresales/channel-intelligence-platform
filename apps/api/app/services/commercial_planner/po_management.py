@@ -17,7 +17,7 @@ from datetime import date
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo
+from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
 from app.models.commercial_planner import CommercialSkuAssumption
 from app.models.dimensions import DimProduct
 from app.models.facts import FactInboundShipment
@@ -136,20 +136,42 @@ async def _observed_groups(db: AsyncSession) -> dict[tuple[int, int, str], dict[
     return groups
 
 
-async def _active_lineup_coverage_keys(db: AsyncSession) -> set[tuple[int, int, str]]:
-    """(year, quarter, product_line) slices with at least one active lineup case."""
+async def _lineup_coverage_state(
+    db: AsyncSession,
+) -> tuple[set[tuple[int, int, str]], set[tuple[int, int, str]]]:
+    """Return (keys with parsed lines, keys with case shell but zero lines)."""
+    line_count = (
+        select(func.count(CommercialLineupLine.id))
+        .where(CommercialLineupLine.case_id == CommercialLineupCase.id)
+        .correlate(CommercialLineupCase)
+        .scalar_subquery()
+    )
     rows = (
         await db.execute(
-            select(CommercialLineupCase).where(
+            select(CommercialLineupCase, line_count).where(
                 CommercialLineupCase.inferred_period_start.isnot(None),
                 *active_lineup_case_filters(),
             )
         )
-    ).scalars().all()
-    keys: set[tuple[int, int, str]] = set()
-    for case in rows:
-        keys |= case_coverage_key(case)
-    return keys
+    ).all()
+
+    with_lines: set[tuple[int, int, str]] = set()
+    parse_incomplete: set[tuple[int, int, str]] = set()
+    for case, lc in rows:
+        keys = case_coverage_key(case)
+        if not keys:
+            continue
+        if int(lc or 0) > 0:
+            with_lines |= keys
+        else:
+            parse_incomplete |= keys
+    return with_lines, parse_incomplete
+
+
+async def _active_lineup_coverage_keys(db: AsyncSession) -> set[tuple[int, int, str]]:
+    """(year, quarter, product_line) slices with at least one active parsed lineup case."""
+    covered, _ = await _lineup_coverage_state(db)
+    return covered
 
 
 async def _linked_po_ids(db: AsyncSession) -> set[int]:
@@ -198,7 +220,7 @@ async def backlog(db: AsyncSession) -> dict[str, Any]:
     try:
         groups = await _observed_groups(db)
         linked = await _linked_po_ids(db)
-        lineup_coverage = await _active_lineup_coverage_keys(db)
+        lineup_coverage, parse_incomplete = await _lineup_coverage_state(db)
         # PO -> linked active case ids (for reconciliation rollup on linked groups).
         case_links = (
             await db.execute(
@@ -245,6 +267,8 @@ async def backlog(db: AsyncSession) -> dict[str, Any]:
             coverage_key = (int(g["year"]), int(g["quarter"]), str(g["product_line"]))
             if coverage_key in lineup_coverage:
                 entry["lineup_case_exists"] = True
+            elif coverage_key in parse_incomplete:
+                entry["parse_incomplete"] = True
             else:
                 entry["upload_prompt"] = {
                     "period_label": g["quarter_label"] if g["year"] else None,

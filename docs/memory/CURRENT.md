@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-02 (lineup PO consumers: canonical period + superseded exclusion)
+**Last updated:** 2026-07-02 (lineup PO coverage: BU line match + UI parse-incomplete)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---

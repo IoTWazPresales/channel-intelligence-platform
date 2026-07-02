@@ -47,6 +47,8 @@ type BacklogGroup = {
   status: 'linked' | 'unlinked';
   reconciliation_summary?: ReconSummary;
   linked_case_ids?: number[];
+  lineup_case_exists?: boolean;
+  parse_incomplete?: boolean;
   upload_prompt?: { period_label: string | null; product_line: string };
 };
 
@@ -367,6 +369,22 @@ export function PoManagementView() {
                         Reconciliation:
                       </Typography>
                       {g.reconciliation_summary ? <ReconSummaryChips summary={g.reconciliation_summary} /> : null}
+                    </Stack>
+                  ) : g.lineup_case_exists ? (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Chip size="small" color="info" label="Lineup on file" />
+                      <Typography variant="caption" color="text.secondary">
+                        A lineup case exists for {g.quarter_label} {g.product_line} — link POs via suggested
+                        auto-links below.
+                      </Typography>
+                    </Stack>
+                  ) : g.parse_incomplete ? (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Chip size="small" color="warning" label="Parse incomplete" />
+                      <Typography variant="caption" color="text.secondary">
+                        Lineup file uploaded for {g.quarter_label} {g.product_line} but lines were not parsed —
+                        re-run parse from Import Centre.
+                      </Typography>
                     </Stack>
                   ) : (
                     <Stack direction="row" spacing={1} alignItems="center">

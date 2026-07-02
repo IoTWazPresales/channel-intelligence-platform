@@ -24,6 +24,33 @@ def test_display_period_label_majority_format():
     assert quarter_key_from_period_start(date(2026, 4, 1)) == "26Q2"
 
 
+def test_case_coverage_key_uses_business_unit_over_inferred_product_line():
+    from app.services.commercial_planner.lineup_period_canonical import case_coverage_key
+
+    case = CommercialLineupCase(
+        id=1,
+        business_unit="NB",
+        product_line="NR",
+        inferred_period_start=date(2026, 4, 1),
+        import_intent="x",
+        source_context="y",
+    )
+    assert case_coverage_key(case) == {(2026, 2, "NB")}
+
+
+def test_canonical_case_line_code_prefers_business_unit():
+    from app.services.commercial_planner.lineup_period_canonical import canonical_case_line_code
+
+    case = CommercialLineupCase(
+        id=1,
+        business_unit="PF",
+        product_line="NR",
+        import_intent="x",
+        source_context="y",
+    )
+    assert canonical_case_line_code(case) == "PF"
+
+
 def test_is_active_lineup_case_excludes_superseded():
     active = CommercialLineupCase(
         id=1,

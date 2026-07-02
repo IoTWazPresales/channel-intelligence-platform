@@ -93,12 +93,34 @@ def test_backlog_suppresses_upload_prompt_when_active_lineup_exists(monkeypatch)
     ]
     db = _db(results)
 
-    async def _fake_coverage(_db):
-        return {(2026, 2, "Laptops")}
+    async def _fake_coverage_state(_db):
+        return {(2026, 2, "Laptops")}, set()
 
-    monkeypatch.setattr(mod, "_active_lineup_coverage_keys", _fake_coverage)
+    monkeypatch.setattr(mod, "_lineup_coverage_state", _fake_coverage_state)
     out = asyncio.run(mod.backlog(db))
     g = out["groups"][0]
     assert g["status"] == "unlinked"
     assert g.get("lineup_case_exists") is True
     assert "upload_prompt" not in g
+
+
+def test_backlog_parse_incomplete_not_upload_prompt(monkeypatch):
+    results = [
+        _R([(500, 10, 100.0, 1000.0, dt.date(2026, 4, 20))]),
+        _R([(10, "Laptops", "PC")]),
+        _R([(10, 18.5)]),
+        _R([]),
+        _R([]),
+        _R([]),
+    ]
+    db = _db(results)
+
+    async def _fake_coverage_state(_db):
+        return set(), {(2026, 2, "Laptops")}
+
+    monkeypatch.setattr(mod, "_lineup_coverage_state", _fake_coverage_state)
+    out = asyncio.run(mod.backlog(db))
+    g = out["groups"][0]
+    assert g.get("parse_incomplete") is True
+    assert "upload_prompt" not in g
+    assert g.get("lineup_case_exists") is not True

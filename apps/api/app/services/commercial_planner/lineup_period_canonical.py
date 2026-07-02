@@ -67,21 +67,29 @@ def period_filter_matches_period_start(period_filter: str | None, period_start: 
     return True
 
 
-def case_product_line_tokens(case: CommercialLineupCase) -> set[str]:
-    """Product-line / BU tokens used to match shipment observed groups."""
-    out: set[str] = set()
+def canonical_case_line_code(case: CommercialLineupCase) -> str | None:
+    """Archive folder / card product-line code — ``business_unit`` wins over inferred ``product_line``."""
     for raw in (case.business_unit, case.product_line):
         if raw is not None and str(raw).strip():
-            out.add(str(raw).strip())
-    return out
+            return str(raw).strip()
+    return None
+
+
+def case_product_line_tokens(case: CommercialLineupCase) -> set[str]:
+    """Product-line tokens used to match PO-management observed groups (BU-primary)."""
+    code = canonical_case_line_code(case)
+    return {code} if code else set()
 
 
 def case_coverage_key(case: CommercialLineupCase) -> set[tuple[int, int, str]]:
     """(year, quarter, line) keys this case satisfies for PO-management coverage."""
     if case.inferred_period_start is None:
         return set()
+    line = canonical_case_line_code(case)
+    if not line:
+        return set()
     year, q = quarter_from_period_start(case.inferred_period_start)
-    return {(year, q, line) for line in case_product_line_tokens(case)}
+    return {(year, q, line)}
 
 
 def is_active_lineup_case(case: CommercialLineupCase) -> bool:

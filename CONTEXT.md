@@ -17,7 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-07-02 — **lineup PO consumers:** canonical quarter from `inferred_period_start`; superseded cases excluded from auto-link/coverage/gap; upload-prompt suppression when active lineup exists; BACKLOG-061 deferred earlier.
+- 2026-07-02 — **lineup PO coverage compound match:** BU-primary line code, line-count gating, parse-incomplete state, UI respects `lineup_case_exists`; 8 cases BU/PL normalized on cip.
 - 2026-07-01 — **lineup bulk backfill production-ready:** BU resolver uses `product_line`; steward period/BU overrides + collision picker UI; archive config; re-preview 27 files (`bu_label_product_mismatch` 33→9); BACKLOG-056 resolved, BACKLOG-059 catalogue mapping added.
 
 - **Branch:** `feat/unit-6-unified-lineup-import-centre`

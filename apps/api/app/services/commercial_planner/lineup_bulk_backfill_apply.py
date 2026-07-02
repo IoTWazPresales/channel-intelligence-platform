@@ -187,7 +187,7 @@ def _create_case_and_maybe_parse(
         period_label=display_label,
         inferred_period_start=ps,
         business_unit=prop.get("business_unit"),
-        product_line=None,
+        product_line=prop.get("business_unit"),
         commercial_status=status,
         import_intent="historical_lineup_backfill",
         source_context="bulk_lineup_backfill",
