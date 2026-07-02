@@ -15,7 +15,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 from app.api.deps import get_db
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactInboundShipment
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
 
 router = APIRouter()
 
@@ -487,21 +487,23 @@ async def inbound_optional_columns() -> dict[str, Any]:
 async def _eta_shift_metrics(
     db: AsyncSession, *, sample_limit: int, filt: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """Compare current fact-linked evidence line vs prior job line for same ``source_key`` (LAG)."""
-    lag_est = func.lag(ShipmentEvidenceLine.est_pod_date).over(
-        partition_by=ShipmentEvidenceLine.source_key,
-        order_by=ShipmentEvidenceLine.import_job_id.asc(),
+    """Compare consecutive observations per ``line_identity_key`` (LAG on ``valid_from``)."""
+    lag_est = func.lag(ShipmentEvidenceObservation.est_pod_date).over(
+        partition_by=ShipmentEvidenceObservation.line_identity_key,
+        order_by=ShipmentEvidenceObservation.valid_from.asc(),
     )
-    lag_prom = func.lag(ShipmentEvidenceLine.promise_date).over(
-        partition_by=ShipmentEvidenceLine.source_key,
-        order_by=ShipmentEvidenceLine.import_job_id.asc(),
+    lag_prom = func.lag(ShipmentEvidenceObservation.promise_date).over(
+        partition_by=ShipmentEvidenceObservation.line_identity_key,
+        order_by=ShipmentEvidenceObservation.valid_from.asc(),
     )
     line_win = select(
-        ShipmentEvidenceLine.id,
-        ShipmentEvidenceLine.source_key,
-        ShipmentEvidenceLine.import_job_id,
-        ShipmentEvidenceLine.est_pod_date,
-        ShipmentEvidenceLine.promise_date,
+        ShipmentEvidenceObservation.id,
+        ShipmentEvidenceObservation.line_identity_key,
+        ShipmentEvidenceObservation.source_key,
+        ShipmentEvidenceObservation.import_job_id,
+        ShipmentEvidenceObservation.evidence_line_id,
+        ShipmentEvidenceObservation.est_pod_date,
+        ShipmentEvidenceObservation.promise_date,
         lag_est.label("prev_est"),
         lag_prom.label("prev_prom"),
     ).subquery()
@@ -522,7 +524,7 @@ async def _eta_shift_metrics(
             delta_days.label("delta_days"),
         )
         .select_from(line_win)
-        .join(FactInboundShipment, FactInboundShipment.shipment_evidence_line_id == line_win.c.id)
+        .join(FactInboundShipment, FactInboundShipment.shipment_evidence_line_id == line_win.c.evidence_line_id)
         .where(prev_eff.is_not(None), cur_eff.is_not(None))
     )
     if filt is not None and _shipping_filters_active(filt):

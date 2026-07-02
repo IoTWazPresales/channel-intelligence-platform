@@ -18,7 +18,12 @@ from app.ingestion.pipeline import STAGE_LOADED, STAGE_VALIDATED
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_read import (
+    apply_active_evidence_filter,
+    shipment_evidence_read_model,
+    shipment_evidence_read_relation,
+)
+from app.core.feature_flags import shipment_bitemporal_read_enabled
 from app.services.imports.import_background_slots import (
     SLOT_MAIN,
     SLOT_SHIPMENT_BULK,
@@ -97,7 +102,7 @@ def _require_admin(x_user_role: Annotated[str | None, Header(alias="X-User-Role"
 
 
 def _line_to_dict(
-    row: ShipmentEvidenceLine,
+    row: Any,
     *,
     product_sku: str | None,
     distributor_code: str | None,
@@ -155,7 +160,7 @@ def _line_to_dict(
     return out
 
 
-def _apply_filters(stmt: Any, **kwargs: Any) -> Any:
+def _apply_filters(stmt: Any, model: Any, **kwargs: Any) -> Any:
     import_job_id = kwargs.get("import_job_id")
     line_state = kwargs.get("line_state")
     report_type = kwargs.get("report_type")
@@ -163,26 +168,26 @@ def _apply_filters(stmt: Any, **kwargs: Any) -> Any:
     distributor_resolution_status = kwargs.get("distributor_resolution_status")
     search = kwargs.get("search")
     if import_job_id is not None:
-        stmt = stmt.where(ShipmentEvidenceLine.import_job_id == import_job_id)
+        stmt = stmt.where(model.import_job_id == import_job_id)
     if line_state:
-        stmt = stmt.where(ShipmentEvidenceLine.line_state == line_state)
+        stmt = stmt.where(model.line_state == line_state)
     if report_type:
-        stmt = stmt.where(ShipmentEvidenceLine.report_type == report_type)
+        stmt = stmt.where(model.report_type == report_type)
     if product_resolution_status:
-        stmt = stmt.where(ShipmentEvidenceLine.product_resolution_status == product_resolution_status)
+        stmt = stmt.where(model.product_resolution_status == product_resolution_status)
     if distributor_resolution_status:
-        stmt = stmt.where(ShipmentEvidenceLine.distributor_resolution_status == distributor_resolution_status)
+        stmt = stmt.where(model.distributor_resolution_status == distributor_resolution_status)
     if search and str(search).strip():
         term = f"%{str(search).strip()}%"
         stmt = stmt.where(
             or_(
-                ShipmentEvidenceLine.bill_to_raw.ilike(term),
-                ShipmentEvidenceLine.ship_to_raw.ilike(term),
-                ShipmentEvidenceLine.customer_dealer_token.ilike(term),
-                ShipmentEvidenceLine.item_code.ilike(term),
-                ShipmentEvidenceLine.sales_model_name.ilike(term),
-                ShipmentEvidenceLine.order_no.ilike(term),
-                ShipmentEvidenceLine.delivery_no.ilike(term),
+                model.bill_to_raw.ilike(term),
+                model.ship_to_raw.ilike(term),
+                model.customer_dealer_token.ilike(term),
+                model.item_code.ilike(term),
+                model.sales_model_name.ilike(term),
+                model.order_no.ilike(term),
+                model.delivery_no.ilike(term),
             )
         )
     return stmt
@@ -196,11 +201,15 @@ async def list_shipment_evidence_raw_column_keys(
 ) -> dict[str, Any]:
     """Distinct JSON keys present in ``raw_source_row`` for one import job (for admin column picker)."""
     _require_admin(x_user_role)
+    relation = shipment_evidence_read_relation()
+    superseded_clause = (
+        "" if shipment_bitemporal_read_enabled() else " AND corpus_superseded_at IS NULL"
+    )
     sql = text(
-        """
+        f"""
         SELECT DISTINCT jsonb_object_keys(raw_source_row) AS k
-        FROM shipment_evidence_line
-        WHERE import_job_id = :import_job_id
+        FROM {relation}
+        WHERE import_job_id = :import_job_id{superseded_clause}
         ORDER BY 1
         """
     )
@@ -931,6 +940,7 @@ async def list_shipment_evidence(
     include_raw_row: bool = Query(False),
 ) -> dict[str, Any]:
     _require_admin(x_user_role)
+    EV = shipment_evidence_read_model()
     filt: dict[str, Any] = {
         "import_job_id": import_job_id,
         "line_state": line_state,
@@ -939,12 +949,16 @@ async def list_shipment_evidence(
         "distributor_resolution_status": distributor_resolution_status,
         "search": search,
     }
-    count_stmt = select(func.count()).select_from(ShipmentEvidenceLine)
-    count_stmt = _apply_filters(count_stmt, **filt)
+    count_stmt = apply_active_evidence_filter(
+        _apply_filters(select(func.count()).select_from(EV), EV, **filt),
+        model=EV,
+    )
     total = int((await db.execute(count_stmt)).scalar_one())
 
-    q = select(ShipmentEvidenceLine).order_by(ShipmentEvidenceLine.id.desc())
-    q = _apply_filters(q, **filt)
+    q = apply_active_evidence_filter(
+        _apply_filters(select(EV).order_by(EV.id.desc()), EV, **filt),
+        model=EV,
+    )
     res = await db.execute(q.offset(skip).limit(limit))
     rows = res.scalars().all()
 
@@ -973,6 +987,47 @@ async def list_shipment_evidence(
     return {"total": total, "skip": skip, "limit": limit, "items": items}
 
 
+@router.get("/change-events")
+async def list_shipment_change_events(
+    period: str | None = Query(None, description="Quarter filter e.g. 26Q2"),
+    distributor_id: int | None = Query(None),
+    operating_unit: str | None = Query(None),
+    event_type: list[str] | None = Query(None, description="Filter: date_slip, qty_change, graduated, pod_reversal"),
+    line_identity_key: str | None = Query(None),
+    limit: int = Query(500, ge=1, le=5000),
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    """Derived-on-read shipment lifecycle events from observation chains (Plan D v1)."""
+    _require_admin(x_user_role)
+    from app.services.imports.shipment_change_events import (
+        derive_change_events,
+        group_events_by_line,
+        summarize_change_events,
+    )
+
+    et_set = {t.strip().lower() for t in event_type} if event_type else None
+
+    def _run() -> dict[str, Any]:
+        with SessionLocal() as sync_db:
+            events = derive_change_events(
+                sync_db,
+                period=period,
+                distributor_id=distributor_id,
+                operating_unit=operating_unit,
+                event_types=et_set,
+                line_identity_key=line_identity_key,
+                limit=limit,
+            )
+            return {
+                "summary": summarize_change_events(events),
+                "total": len(events),
+                "events": [e.to_dict() for e in events],
+                "chains_by_line_identity_key": group_events_by_line(events),
+            }
+
+    return await asyncio.to_thread(_run)
+
+
 @router.get("/{line_id}")
 async def get_shipment_evidence_line(
     line_id: int,
@@ -980,7 +1035,8 @@ async def get_shipment_evidence_line(
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
 ) -> dict[str, Any]:
     _require_admin(x_user_role)
-    row = await db.get(ShipmentEvidenceLine, line_id)
+    EV = shipment_evidence_read_model()
+    row = await db.get(EV, line_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
     job = await db.get(ImportJob, row.import_job_id)

@@ -20,7 +20,12 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dimensions import DimProduct
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_read import (
+    apply_active_evidence_filter,
+    shipment_evidence_read_model,
+)
+
+EV = shipment_evidence_read_model()
 from app.services.imports.distributor_sales_inventory import ProductResolutionIndex, _product_token_key
 from app.services.imports.product_resolution_standard import resolve_product_id_single_match
 
@@ -351,28 +356,29 @@ async def load_shipment_business_unit_hints(
         return []
 
     token_match = or_(
-        func.lower(func.trim(ShipmentEvidenceLine.item_code)).in_(keys),
-        func.lower(func.trim(ShipmentEvidenceLine.sales_model_name)).in_(keys),
-        func.lower(func.trim(ShipmentEvidenceLine.ean_code)).in_(keys),
-        func.lower(func.trim(ShipmentEvidenceLine.upc_code)).in_(keys),
+        func.lower(func.trim(EV.item_code)).in_(keys),
+        func.lower(func.trim(EV.sales_model_name)).in_(keys),
+        func.lower(func.trim(EV.ean_code)).in_(keys),
+        func.lower(func.trim(EV.upc_code)).in_(keys),
     )
-    stmt = (
+    stmt = apply_active_evidence_filter(
         select(DimProduct.business_unit, DimProduct.product_line)
-        .join(ShipmentEvidenceLine, ShipmentEvidenceLine.product_id == DimProduct.id)
-        .where(ShipmentEvidenceLine.product_id.isnot(None), token_match)
+        .join(EV, EV.product_id == DimProduct.id)
+        .where(EV.product_id.isnot(None), token_match),
+        model=EV,
     )
     if customer_id is not None:
         stmt = stmt.where(
             or_(
-                ShipmentEvidenceLine.resolved_customer_id == customer_id,
-                ShipmentEvidenceLine.customer_id == customer_id,
+                EV.resolved_customer_id == customer_id,
+                EV.customer_id == customer_id,
             )
         )
     if distributor_id is not None:
         stmt = stmt.where(
             or_(
-                ShipmentEvidenceLine.resolved_distributor_id == distributor_id,
-                ShipmentEvidenceLine.distributor_id == distributor_id,
+                EV.resolved_distributor_id == distributor_id,
+                EV.distributor_id == distributor_id,
             )
         )
 

@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
 from app.models.dimensions import DimDistributor
 from app.models.purchase_order import PurchaseOrder
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_read import (
+    apply_active_evidence_filter,
+    shipment_evidence_read_model,
+)
+
+EV = shipment_evidence_read_model()
 from app.services.commercial_planner.lineup_case_po_confirm import (
     CaseNotFoundError,
     _infer_case_distributor_id,
@@ -73,7 +78,7 @@ async def suggest_pos_for_case(db: AsyncSession, case_id: int) -> dict[str, Any]
             "suggestions": [],
         }
 
-    stmt = (
+    stmt = apply_active_evidence_filter(
         select(
             PurchaseOrder.id,
             PurchaseOrder.po_number_raw,
@@ -82,17 +87,17 @@ async def suggest_pos_for_case(db: AsyncSession, case_id: int) -> dict[str, Any]
             PurchaseOrder.status,
             DimDistributor.code.label("distributor_code"),
             DimDistributor.name.label("distributor_name"),
-            func.count(func.distinct(ShipmentEvidenceLine.product_id)).label("matched_product_count"),
-            func.coalesce(func.sum(ShipmentEvidenceLine.quantity), 0).label("total_shipped_units"),
+            func.count(func.distinct(EV.product_id)).label("matched_product_count"),
+            func.coalesce(func.sum(EV.quantity), 0).label("total_shipped_units"),
         )
         .join(
-            ShipmentEvidenceLine,
-            ShipmentEvidenceLine.purchase_order_id == PurchaseOrder.id,
+            EV,
+            EV.purchase_order_id == PurchaseOrder.id,
         )
         .outerjoin(DimDistributor, DimDistributor.id == PurchaseOrder.distributor_id)
         .where(
-            ShipmentEvidenceLine.purchase_order_id.isnot(None),
-            ShipmentEvidenceLine.product_id.in_(product_ids),
+            EV.purchase_order_id.isnot(None),
+            EV.product_id.in_(product_ids),
         )
         .group_by(
             PurchaseOrder.id,
@@ -102,7 +107,8 @@ async def suggest_pos_for_case(db: AsyncSession, case_id: int) -> dict[str, Any]
             PurchaseOrder.status,
             DimDistributor.code,
             DimDistributor.name,
-        )
+        ),
+        model=EV,
     )
 
     if case_distributor_id is not None:
@@ -121,7 +127,7 @@ async def suggest_pos_for_case(db: AsyncSession, case_id: int) -> dict[str, Any]
         )
 
     stmt = stmt.order_by(
-        func.count(func.distinct(ShipmentEvidenceLine.product_id)).desc(),
+        func.count(func.distinct(EV.product_id)).desc(),
         PurchaseOrder.po_number_norm.asc(),
     )
 
@@ -195,21 +201,21 @@ async def suggest_distributors_for_case(db: AsyncSession, case_id: int) -> dict[
             "already_assigned_distributor_ids": already_assigned,
         }
 
-    stmt = (
+    stmt = apply_active_evidence_filter(
         select(
             PurchaseOrder.distributor_id,
             DimDistributor.code.label("distributor_code"),
             DimDistributor.name.label("distributor_name"),
-            func.count(func.distinct(ShipmentEvidenceLine.product_id)).label("matched_product_count"),
-            func.coalesce(func.sum(ShipmentEvidenceLine.quantity), 0).label("total_shipped_units"),
+            func.count(func.distinct(EV.product_id)).label("matched_product_count"),
+            func.coalesce(func.sum(EV.quantity), 0).label("total_shipped_units"),
             func.count(func.distinct(PurchaseOrder.id)).label("po_count"),
         )
         # INNER join on DimDistributor: only real master records can be suggested/linked.
-        .join(ShipmentEvidenceLine, ShipmentEvidenceLine.purchase_order_id == PurchaseOrder.id)
+        .join(EV, EV.purchase_order_id == PurchaseOrder.id)
         .join(DimDistributor, DimDistributor.id == PurchaseOrder.distributor_id)
         .where(
-            ShipmentEvidenceLine.purchase_order_id.isnot(None),
-            ShipmentEvidenceLine.product_id.in_(product_ids),
+            EV.purchase_order_id.isnot(None),
+            EV.product_id.in_(product_ids),
             PurchaseOrder.distributor_id.isnot(None),
         )
         .group_by(
@@ -218,9 +224,10 @@ async def suggest_distributors_for_case(db: AsyncSession, case_id: int) -> dict[
             DimDistributor.name,
         )
         .order_by(
-            func.count(func.distinct(ShipmentEvidenceLine.product_id)).desc(),
-            func.coalesce(func.sum(ShipmentEvidenceLine.quantity), 0).desc(),
-        )
+            func.count(func.distinct(EV.product_id)).desc(),
+            func.coalesce(func.sum(EV.quantity), 0).desc(),
+        ),
+        model=EV,
     )
 
     rows = (await db.execute(stmt)).all()

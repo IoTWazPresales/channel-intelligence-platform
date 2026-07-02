@@ -8,7 +8,7 @@
 # - MODIFY: apps/web/src/features/shell/navConfig.ts — rename nav label
 # - EXTEND (not replace): existing sell-out uses /sellout/commercial-* ; new KPI/tabs use /channel-ops/*
 # - PATTERN: async endpoints like sellout.py + shipping.py; React Query + MUI like sell-out/shipping pages
-# - SHIPMENT TABLE: ShipmentEvidenceLine (shipment_evidence_line), NOT FactForecast
+# - SHIPMENT TABLE: shipment_evidence read model (Plan D current-state view), NOT FactForecast
 # - EXISTING SELL-OUT PAGE: PageHeader, 4 KPI papers, smart chips, Autocomplete filters,
 #   /sellout/commercial-summary, commercial-lines, filter-options, zero-sellout-products
 
@@ -29,7 +29,12 @@ from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
 from app.models.facts import FactInventoryDistributor, FactInventoryReconciliation, FactSalesSellout
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_read import (
+    apply_active_evidence_filter,
+    shipment_evidence_read_model,
+)
+
+EV = shipment_evidence_read_model()
 
 router = APIRouter()
 
@@ -414,21 +419,22 @@ async def channel_ops_movements(
     skip = (page - 1) * page_size
 
     ship_date_col = func.coalesce(
-        ShipmentEvidenceLine.ship_confirm_date,
-        ShipmentEvidenceLine.schedule_ship_date,
+        EV.ship_confirm_date,
+        EV.schedule_ship_date,
     )
 
-    q = (
+    q = apply_active_evidence_filter(
         select(
-            ShipmentEvidenceLine,
+            EV,
             DimProduct.sku,
             DimProduct.name.label("product_name"),
             DimDistributor.name.label("distributor_name"),
             ship_date_col.label("ship_date"),
         )
-        .outerjoin(DimProduct, ShipmentEvidenceLine.product_id == DimProduct.id)
-        .outerjoin(DimDistributor, ShipmentEvidenceLine.distributor_id == DimDistributor.id)
-        .where(ShipmentEvidenceLine.distributor_id == int(distributor_id))
+        .outerjoin(DimProduct, EV.product_id == DimProduct.id)
+        .outerjoin(DimDistributor, EV.distributor_id == DimDistributor.id)
+        .where(EV.distributor_id == int(distributor_id)),
+        model=EV,
     )
     if df is not None:
         q = q.where(ship_date_col >= df)

@@ -29,7 +29,12 @@ from app.models.import_distributor_si import (
     ImportDistributorSiStagingLine,
     ImportEntityMappingCandidate,
 )
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_read import (
+    apply_active_evidence_filter,
+    shipment_evidence_read_model,
+)
+
+EV = shipment_evidence_read_model()
 from app.services.commercial_planner.unassigned_distributor import UNASSIGNED_DISTRIBUTOR_CODE
 from app.services.master_usage_batch import batch_counts_multi_table, count_subquery_for_columns
 
@@ -52,7 +57,7 @@ _SPECS: list[tuple[str, object]] = [
     ("Commercial plan lines", CommercialPlanLine.distributor_id),
     ("Commercial lineup lines", CommercialLineupLine.distributor_id),
     ("Historical lineup headers", HistoricalLineupImportHeader.distributor_id),
-    ("Shipment evidence (resolved distributor)", ShipmentEvidenceLine.distributor_id),
+    ("Shipment evidence (resolved distributor)", EV.distributor_id),
     ("Customers with preferred distributor", DimCustomer.preferred_distributor_id),
     ("DSI import staging (resolved distributor)", ImportDistributorSiStagingLine.resolved_distributor_id),
     ("Distributor source token aliases", DistributorSourceTokenAlias.distributor_id),
@@ -89,7 +94,12 @@ async def distributor_hard_reference_breakdown_batch(
     out: dict[int, list[dict[str, int | str]]] = {i: [] for i in ids}
     if not ids:
         return out
-    subqueries = [count_subquery_for_columns(label, [col], ids) for label, col in _SPECS]
+    subqueries = []
+    for label, col in _SPECS:
+        sq = count_subquery_for_columns(label, [col], ids)
+        if label.startswith("Shipment evidence"):
+            sq = apply_active_evidence_filter(sq, model=EV)
+        subqueries.append(sq)
     subqueries.extend(_extra_distributor_subqueries(ids))
     return await batch_counts_multi_table(db, subqueries, ids)
 

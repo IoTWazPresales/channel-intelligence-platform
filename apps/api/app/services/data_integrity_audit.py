@@ -8,6 +8,20 @@ no dedup. Invoke:
   cd apps/api && PYTHONPATH=. python scripts/ops/run_data_integrity_audit.py --json-out audit.json
 
 Requires ``current_database()`` in ``cip`` / ``postgres`` (see ``cip_db_identity``).
+
+Shipment evidence domain contract (audit enforces):
+- **Shipped / POD path** (delivery-backed rows): one corpus row per
+  ``(delivery_no, item_code, purchase_order_id, invoice_line)``. Re-import within a job
+  upserts on ``(import_job_id, source_key)``; date/qty changes override — they must not
+  leave a second row for the same invoice line. Cross-job copies of the same invoice line
+  are **violations** (they inflate sums and break intelligence).
+- **Invoice-line splits** (same delivery+item+PO, different ``invoice_line``) are expected;
+  they sum into one shipped fact — never flagged as 5b dupes.
+- **Open-order / unship** pipeline rows use order keys — excluded from shipped duplicate
+  checks (separate report family).
+- **Fact parity (6)** compares ``fact_inbound_shipment`` to **canonical** evidence: latest
+  job wins per invoice-line key, then sum across splits. Raw multi-job duplicate inflation
+  is reported separately when ``raw_sum > canonical_sum``.
 """
 from __future__ import annotations
 
@@ -22,7 +36,11 @@ from sqlalchemy.orm import Session
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
 from app.models.dimensions import DimCustomer
 from app.models.facts import FactInboundShipment
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_read import (
+    apply_active_evidence_filter,
+    shipment_evidence_read_model,
+)
+from app.core.feature_flags import shipment_bitemporal_read_enabled
 from app.services.commercial_planner.lineup_period_canonical import (
     parse_period_filter_to_year_quarter,
     quarter_from_period_start,
@@ -47,6 +65,21 @@ CheckName = Literal[
 ]
 
 QTY_EPS = 1e-6
+
+# Shipped/POD extract report types (delivery + invoice line identity).
+SHIPPED_EVIDENCE_REPORT_TYPES = frozenset(
+    {
+        "acza_workbook_shipped",
+        "xxomrpt0025_shipment",
+    }
+)
+# Pipeline / delay intelligence — separate identity namespace; not mixed into 5b.
+OPEN_ORDER_EVIDENCE_REPORT_TYPES = frozenset(
+    {
+        "acza_workbook_unship",
+        "xxomrpt0027_order",
+    }
+)
 
 
 @dataclass
@@ -85,6 +118,49 @@ def _norm_seg(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def _is_shipped_delivery_evidence(line: Any) -> bool:
+    """Shipped POD-path rows: delivery + invoice line + item (excludes open-order pipeline)."""
+    if (line.line_state or "").strip().lower() != "shipped":
+        return False
+    rt = (line.report_type or "").strip().lower()
+    if rt in OPEN_ORDER_EVIDENCE_REPORT_TYPES:
+        return False
+    if rt in SHIPPED_EVIDENCE_REPORT_TYPES:
+        return True
+    # Legacy rows: shipped line_state with delivery invoice identity.
+    return bool(
+        _norm_seg(line.delivery_no)
+        and _norm_seg(line.invoice_line)
+        and _norm_seg(line.item_code)
+    )
+
+
+def _load_shipped_evidence_for_audit(db: Session) -> list[Any]:
+    """Active shipped corpus rows: current-state view when Plan D read is on, else non-superseded lines."""
+    EV = shipment_evidence_read_model()
+    stmt = apply_active_evidence_filter(select(EV), EV)
+    rows = list(db.execute(stmt).scalars().all())
+    return [ln for ln in rows if _is_shipped_delivery_evidence(ln)]
+
+
+def _latest_per_invoice_key(lines: list[Any]) -> list[Any]:
+    """Canonical evidence view: latest import job wins per invoice-line business key."""
+    best: dict[tuple[str, str, str, str], Any] = {}
+    for ln in lines:
+        key = _evidence_invoice_key(
+            delivery_no=ln.delivery_no,
+            item_code=ln.item_code,
+            purchase_order_id=ln.purchase_order_id,
+            invoice_line=ln.invoice_line,
+        )
+        if key is None:
+            continue
+        cur = best.get(key)
+        if cur is None or (int(ln.import_job_id), int(ln.id)) > (int(cur.import_job_id), int(cur.id)):
+            best[key] = ln
+    return list(best.values())
 
 
 def _build_customer_redirect_map(db: Session) -> dict[int, int]:
@@ -509,11 +585,12 @@ def check_fact_key_dupes(db: Session, *, sample_limit: int) -> CheckResult:
 
 
 def collect_evidence_true_dupes(db: Session) -> list[dict[str, Any]]:
-    rows = db.execute(
-        select(ShipmentEvidenceLine).where(func.lower(ShipmentEvidenceLine.line_state) == "shipped")
-    ).scalars().all()
-    buckets: dict[tuple[str, str, str, str], list[int]] = {}
+    """Corpus duplicate shipped invoice lines — must not exist (one row per business key)."""
+    rows = _load_shipped_evidence_for_audit(db)
+    buckets: dict[tuple[str, str, str, str], list[Any]] = {}
     for ln in rows:
+        if not _is_shipped_delivery_evidence(ln):
+            continue
         key = _evidence_invoice_key(
             delivery_no=ln.delivery_no,
             item_code=ln.item_code,
@@ -522,36 +599,50 @@ def collect_evidence_true_dupes(db: Session) -> list[dict[str, Any]]:
         )
         if key is None:
             continue
-        buckets.setdefault(key, []).append(int(ln.id))
+        buckets.setdefault(key, []).append(ln)
 
-    return [
-        {
-            "delivery_no": k[0],
-            "item_code": k[1],
-            "purchase_order_id": k[2],
-            "invoice_line": k[3],
-            "evidence_line_ids": ids,
-            "duplicate_count": len(ids),
-        }
-        for k, ids in buckets.items()
-        if len(ids) > 1
-    ]
+    findings: list[dict[str, Any]] = []
+    for k, lines in buckets.items():
+        if len(lines) < 2:
+            continue
+        job_ids = sorted({int(ln.import_job_id) for ln in lines})
+        findings.append(
+            {
+                "delivery_no": k[0],
+                "item_code": k[1],
+                "purchase_order_id": k[2],
+                "invoice_line": k[3],
+                "duplicate_row_count": len(lines),
+                "import_job_ids": job_ids,
+                "cross_job_duplicate": len(job_ids) > 1,
+                "evidence_line_ids": [int(ln.id) for ln in lines[:20]],
+                "source_keys": sorted({_norm_seg(ln.source_key) for ln in lines})[:10],
+                "violation": "corpus_duplicate_shipped_invoice_line",
+            }
+        )
+    return findings
 
 
 def check_evidence_true_dupes(db: Session, *, sample_limit: int) -> CheckResult:
     findings = collect_evidence_true_dupes(db)
+    cross_job = sum(1 for f in findings if f.get("cross_job_duplicate"))
     return CheckResult(
         check="evidence_true_dupes",
         count=len(findings),
         samples=findings[:sample_limit],
+        meta={
+            "domain_rule": "one shipped invoice line per corpus; within-job upsert only",
+            "cross_job_duplicate_groups": cross_job,
+            "read_source": "shipment_evidence_current"
+            if shipment_bitemporal_read_enabled()
+            else "shipment_evidence_line_active",
+        },
     )
 
 
 def collect_evidence_fact_parity(db: Session) -> list[dict[str, Any]]:
-    evidence_rows = db.execute(
-        select(ShipmentEvidenceLine).where(func.lower(ShipmentEvidenceLine.line_state) == "shipped")
-    ).scalars().all()
-    group_evidence: dict[str, list[ShipmentEvidenceLine]] = {}
+    evidence_rows = _load_shipped_evidence_for_audit(db)
+    group_evidence: dict[str, list[Any]] = {}
     for ln in evidence_rows:
         gkey = _shipped_group_key(
             operating_unit=ln.operating_unit,
@@ -575,35 +666,66 @@ def collect_evidence_fact_parity(db: Session) -> list[dict[str, Any]]:
 
     findings: list[dict[str, Any]] = []
     for gkey, lines in group_evidence.items():
-        ev_sum = sum(float(ln.quantity or 0) for ln in lines)
-        if ev_sum <= QTY_EPS:
+        if shipment_bitemporal_read_enabled():
+            canonical_lines = lines
+            raw_sum = sum(float(ln.quantity or 0) for ln in lines)
+            canonical_sum = raw_sum
+        else:
+            canonical_lines = _latest_per_invoice_key(lines)
+            raw_sum = sum(float(ln.quantity or 0) for ln in lines)
+            canonical_sum = sum(float(ln.quantity or 0) for ln in canonical_lines)
+        if canonical_sum <= QTY_EPS and raw_sum <= QTY_EPS:
             continue
+
         fact = facts.get(gkey)
+        inflation = max(0.0, raw_sum - canonical_sum)
+
         if fact is None:
             findings.append(
                 {
                     "fact_upsert_key": gkey,
                     "issue": "missing_fact_row",
-                    "evidence_qty_sum": ev_sum,
-                    "evidence_line_count": len(lines),
-                    "invoice_lines": sorted({_norm_seg(ln.invoice_line) for ln in lines}),
+                    "canonical_evidence_qty_sum": canonical_sum,
+                    "raw_evidence_qty_sum": raw_sum,
+                    "duplicate_qty_inflation": inflation,
+                    "evidence_line_count_raw": len(lines),
+                    "evidence_line_count_canonical": len(canonical_lines),
+                    "invoice_lines": sorted({_norm_seg(ln.invoice_line) for ln in canonical_lines}),
                 }
             )
             continue
+
         fact_qty = float(fact.quantity or 0)
-        if abs(fact_qty - ev_sum) > QTY_EPS:
-            invoice_lines = sorted({_norm_seg(ln.invoice_line) for ln in lines})
-            single_line_undercount = len(lines) > 1 and any(
-                abs(fact_qty - float(ln.quantity or 0)) <= QTY_EPS for ln in lines
+        if inflation > QTY_EPS:
+            findings.append(
+                {
+                    "fact_upsert_key": gkey,
+                    "fact_id": int(fact.id),
+                    "issue": "duplicate_qty_inflation",
+                    "fact_qty": fact_qty,
+                    "canonical_evidence_qty_sum": canonical_sum,
+                    "raw_evidence_qty_sum": raw_sum,
+                    "duplicate_qty_inflation": inflation,
+                    "evidence_line_count_raw": len(lines),
+                    "evidence_line_count_canonical": len(canonical_lines),
+                }
+            )
+        if abs(fact_qty - canonical_sum) > QTY_EPS:
+            invoice_lines = sorted({_norm_seg(ln.invoice_line) for ln in canonical_lines})
+            single_line_undercount = len(canonical_lines) > 1 and any(
+                abs(fact_qty - float(ln.quantity or 0)) <= QTY_EPS for ln in canonical_lines
             )
             findings.append(
                 {
                     "fact_upsert_key": gkey,
                     "fact_id": int(fact.id),
-                    "issue": "single_line_undercount" if single_line_undercount else "qty_mismatch",
+                    "issue": "single_line_undercount" if single_line_undercount else "fact_qty_mismatch",
                     "fact_qty": fact_qty,
-                    "evidence_qty_sum": ev_sum,
-                    "evidence_line_count": len(lines),
+                    "canonical_evidence_qty_sum": canonical_sum,
+                    "raw_evidence_qty_sum": raw_sum,
+                    "duplicate_qty_inflation": inflation,
+                    "evidence_line_count_raw": len(lines),
+                    "evidence_line_count_canonical": len(canonical_lines),
                     "invoice_lines": invoice_lines,
                 }
             )
@@ -612,10 +734,17 @@ def collect_evidence_fact_parity(db: Session) -> list[dict[str, Any]]:
 
 def check_evidence_fact_parity(db: Session, *, sample_limit: int) -> CheckResult:
     findings = collect_evidence_fact_parity(db)
+    inflation_groups = sum(1 for f in findings if f.get("issue") == "duplicate_qty_inflation")
     return CheckResult(
         check="evidence_fact_parity",
         count=len(findings),
         samples=findings[:sample_limit],
+        meta={
+            "parity_basis": "shipment_evidence_current_per_line_identity"
+            if shipment_bitemporal_read_enabled()
+            else "canonical_evidence_latest_job_per_invoice_line",
+            "duplicate_qty_inflation_groups": inflation_groups,
+        },
     )
 
 

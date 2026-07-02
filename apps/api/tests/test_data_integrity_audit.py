@@ -243,7 +243,7 @@ def test_audit_seeded_violations_on_db():
                 ev = ShipmentEvidenceLine(
                     import_job_id=job_id,
                     source_row_number=1,
-                    report_type="shipped",
+                    report_type="acza_workbook_shipped",
                     line_state="shipped",
                     source_key=f"audit-ev-dup-{tok}-{_}",
                     raw_source_row={},
@@ -281,7 +281,7 @@ def test_audit_seeded_violations_on_db():
                 ev = ShipmentEvidenceLine(
                     import_job_id=job_id,
                     source_row_number=2,
-                    report_type="shipped",
+                    report_type="acza_workbook_shipped",
                     line_state="shipped",
                     source_key=f"audit-parity-ev-{tok}-{inv}",
                     raw_source_row={},
@@ -319,23 +319,31 @@ def test_audit_seeded_violations_on_db():
             assert by_name["customer_mismatch"].count >= 1
             assert mismatch
 
-            true_dupes = [
-                s for s in collect_evidence_true_dupes(db) if s.get("delivery_no") == f"AUD-ED-{tok}"
-            ]
-            assert true_dupes
+            from unittest.mock import patch
 
-            parity = [
-                s
-                for s in collect_evidence_fact_parity(db)
-                if s.get("fact_upsert_key") == f"ship:AUD-PAR-{tok}|AUD-PARI-{tok}|{po_ids[1]}"
-            ]
+            _read_off = "app.services.imports.shipment_evidence_read.shipment_bitemporal_read_enabled"
+            with patch(_read_off, return_value=False):
+                true_dupes = [
+                    s for s in collect_evidence_true_dupes(db) if s.get("delivery_no") == f"AUD-ED-{tok}"
+                ]
+            assert true_dupes
+            assert true_dupes[0].get("violation") == "corpus_duplicate_shipped_invoice_line"
+            assert true_dupes[0].get("duplicate_row_count") == 2
+
+            with patch(_read_off, return_value=False):
+                parity = [
+                    s
+                    for s in collect_evidence_fact_parity(db)
+                    if s.get("fact_upsert_key") == f"ship:AUD-PAR-{tok}|AUD-PARI-{tok}|{po_ids[1]}"
+                ]
             assert parity and parity[0].get("issue") == "single_line_undercount"
 
-            split_hits = [
-                s
-                for s in collect_evidence_true_dupes(db)
-                if s.get("delivery_no") == f"AUD-PAR-{tok}"
-            ]
+            with patch(_read_off, return_value=False):
+                split_hits = [
+                    s
+                    for s in collect_evidence_true_dupes(db)
+                    if s.get("delivery_no") == f"AUD-PAR-{tok}"
+                ]
             assert not split_hits
 
             # fact_key constraint meta always present

@@ -10,10 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.core.feature_flags import (
-    shipment_bitemporal_dual_write_enabled,
-    shipment_bitemporal_read_enabled,
-)
+from app.core.feature_flags import shipment_bitemporal_dual_write_enabled
+from app.services.imports.shipment_evidence_read import shipment_evidence_read_relation
 from app.models.ingestion import ImportJob
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
@@ -74,9 +72,7 @@ _LINE_TO_OBSERVATION_COLS = (
 
 def corroboration_evidence_relation() -> str:
     """SQL relation for DSI shipment corroboration reads."""
-    if shipment_bitemporal_read_enabled():
-        return "shipment_evidence_current"
-    return "shipment_evidence_line"
+    return shipment_evidence_read_relation()
 
 
 def _job_transaction_times(job: ImportJob) -> tuple[datetime, datetime]:

@@ -31,7 +31,12 @@ from app.models.commercial_lineup import (
 from app.models.commercial_planner import CommercialSkuAssumption
 from app.models.dimensions import DimProduct
 from app.models.purchase_order import PurchaseOrder
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_read import (
+    apply_active_evidence_filter,
+    shipment_evidence_read_model,
+)
+
+EV = shipment_evidence_read_model()
 
 logger = logging.getLogger(__name__)
 
@@ -144,25 +149,28 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
     if po_ids:
         shipped_rows = (
             await db.execute(
-                select(
-                    ShipmentEvidenceLine.product_id,
-                    func.coalesce(func.sum(ShipmentEvidenceLine.quantity), 0),
-                    func.coalesce(
-                        func.sum(
-                            func.coalesce(
-                                ShipmentEvidenceLine.amount,
-                                func.coalesce(ShipmentEvidenceLine.quantity, 0)
-                                * func.coalesce(ShipmentEvidenceLine.unit_price, 0),
-                            )
+                apply_active_evidence_filter(
+                    select(
+                        EV.product_id,
+                        func.coalesce(func.sum(EV.quantity), 0),
+                        func.coalesce(
+                            func.sum(
+                                func.coalesce(
+                                    EV.amount,
+                                    func.coalesce(EV.quantity, 0)
+                                    * func.coalesce(EV.unit_price, 0),
+                                )
+                            ),
+                            0,
                         ),
-                        0,
-                    ),
+                    )
+                    .where(
+                        EV.purchase_order_id.in_(po_ids),
+                        EV.product_id.isnot(None),
+                    )
+                    .group_by(EV.product_id),
+                    model=EV,
                 )
-                .where(
-                    ShipmentEvidenceLine.purchase_order_id.in_(po_ids),
-                    ShipmentEvidenceLine.product_id.isnot(None),
-                )
-                .group_by(ShipmentEvidenceLine.product_id)
             )
         ).all()
         shipped = {
@@ -175,9 +183,12 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
     if po_ids:
         rows = (
             await db.execute(
-                select(ShipmentEvidenceLine.purchase_order_id)
-                .where(ShipmentEvidenceLine.purchase_order_id.in_(po_ids))
-                .distinct()
+                apply_active_evidence_filter(
+                    select(EV.purchase_order_id)
+                    .where(EV.purchase_order_id.in_(po_ids))
+                    .distinct(),
+                    model=EV,
+                )
             )
         ).scalars().all()
         po_with_shipments = {int(x) for x in rows if x is not None}
