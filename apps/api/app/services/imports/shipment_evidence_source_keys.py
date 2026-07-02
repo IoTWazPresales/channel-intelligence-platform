@@ -111,14 +111,22 @@ def business_source_key_fragment(report_type: str, ex: dict[str, Any]) -> str:
     return fn(ex)
 
 
+def _norm_sheet_key_segment(sheet_name: str | None) -> str:
+    """Case-fold sheet tab names so ``Shipped`` and ``shipped`` share one per-job key."""
+    s = _norm_seg(sheet_name)
+    return s.lower() if s else ""
+
+
 def stable_source_key_for_row(*, report_type: str, sheet_name: str | None, ex: dict[str, Any]) -> str:
     """Full ``source_key`` stored on ``ShipmentEvidenceLine`` (max 256 chars, unique per job)."""
-    biz = business_source_key_fragment(report_type, ex)
-    if sheet_name and str(sheet_name).strip():
-        biz = f"{_norm_seg(sheet_name)}|{biz}"
-    combined = f"{report_type}:{biz}"
+    rt = (report_type or "").strip().lower()
+    biz = business_source_key_fragment(rt, ex)
+    sheet_seg = _norm_sheet_key_segment(sheet_name)
+    if sheet_seg:
+        biz = f"{sheet_seg}|{biz}"
+    combined = f"{rt}:{biz}"
     if len(combined) <= 256:
         return combined
     digest = hashlib.sha256(combined.encode("utf-8")).hexdigest()[:48]
-    out = f"{report_type}:h{digest}"
+    out = f"{rt}:h{digest}"
     return out[:256]

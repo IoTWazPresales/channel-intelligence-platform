@@ -97,14 +97,16 @@ def test_shipped_fact_upsert_key_ignores_invoice_line() -> None:
     assert with_inv == without == "ship:15260139536|90NB1542-M007D0|10"
 
 
-def test_line_identity_key_still_includes_invoice_line() -> None:
+def test_line_identity_key_still_includes_invoice_line_and_po() -> None:
     key = stable_line_identity_key_from_fields(
+        line_state="shipped",
         operating_unit="Shipped",
         delivery_no="15260139536",
         invoice_line="1",
         item_code="90NB1542-M007D0",
+        purchase_order_id=10,
     )
-    assert key == "ship:Shipped|15260139536|1|90NB1542-M007D0"
+    assert key == "ship:Shipped|15260139536|90NB1542-M007D0|10|1"
 
 
 def test_open_order_fact_upsert_key_uses_source_key() -> None:

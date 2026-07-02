@@ -54,7 +54,14 @@ def test_stable_key_prefixes_report_type_and_sheet() -> None:
     ex = _ex(delivery_no="D", invoice_line="1", item_code="I")
     k = stable_source_key_for_row(report_type=REPORT_XXOMRPT0025, sheet_name="Sheet1", ex=ex)
     assert k.startswith(f"{REPORT_XXOMRPT0025}:")
-    assert "Sheet1|" in k
+    assert "sheet1|" in k
+
+
+def test_sheet_name_casing_normalized() -> None:
+    ex = _ex(delivery_no="D", invoice_line="1", item_code="I")
+    k1 = stable_source_key_for_row(report_type=REPORT_ACZA_SHIPPED, sheet_name="Shipped", ex=ex)
+    k2 = stable_source_key_for_row(report_type=REPORT_ACZA_SHIPPED, sheet_name="shipped", ex=ex)
+    assert k1 == k2
 
 
 def test_unknown_report_type_raises() -> None:

@@ -19,14 +19,29 @@ def test_line_identity_key_order_backed() -> None:
     assert key == "order:OU1|PO-99|2|SKU-X"
 
 
-def test_line_identity_key_shipped_fallback() -> None:
+def test_line_identity_key_shipped_corpus_grain() -> None:
     key = stable_line_identity_key_from_fields(
+        line_state="shipped",
         operating_unit="OU1",
+        order_no="ORD-IGNORED",
+        order_line="9",
         delivery_no="D100",
         invoice_line="1",
         item_code="SKU-Y",
+        purchase_order_id=42,
     )
-    assert key == "ship:OU1|D100|1|SKU-Y"
+    assert key == "ship:OU1|D100|SKU-Y|42|1"
+
+
+def test_line_identity_key_shipped_requires_po() -> None:
+    key = stable_line_identity_key_from_fields(
+        line_state="shipped",
+        delivery_no="D100",
+        invoice_line="1",
+        item_code="SKU-Y",
+        purchase_order_id=None,
+    )
+    assert key.startswith("digest:")
 
 
 def test_line_identity_key_digest_when_no_business_segments() -> None:

@@ -15,58 +15,75 @@ from app.services.imports.shipment_evidence_source_keys import _digest_ex, _norm
 
 def stable_line_identity_key_from_fields(
     *,
+    line_state: Any = None,
     operating_unit: Any = None,
     order_no: Any = None,
     order_line: Any = None,
     delivery_no: Any = None,
     invoice_line: Any = None,
     item_code: Any = None,
+    purchase_order_id: Any = None,
     raw_source_row: dict[str, Any] | None = None,
 ) -> str:
-    """Return a business-stable identity key (max 256 chars)."""
+    """Return a business-stable identity key (max 256 chars).
+
+    Shipped POD corpus grain (audit-aligned): ``ship:{OU|delivery|item|PO|invoice_line}``.
+    Open-order / pipeline rows: ``order:{OU|order_no|order_line|item}`` (unchanged).
+    """
     ex = {
+        "line_state": line_state,
         "operating_unit": operating_unit,
         "order_no": order_no,
         "order_line": order_line,
         "delivery_no": delivery_no,
         "invoice_line": invoice_line,
         "item_code": item_code,
+        "purchase_order_id": purchase_order_id,
     }
-    order_body = _pipe(
-        ex.get("operating_unit"),
-        ex.get("order_no"),
-        ex.get("order_line"),
-        ex.get("item_code"),
-    )
-    if order_body and _norm_seg(ex.get("order_no")):
-        key = f"order:{order_body}"
-    else:
-        ship_body = _pipe(
-            ex.get("operating_unit"),
-            ex.get("delivery_no"),
-            ex.get("invoice_line"),
-            ex.get("item_code"),
-        )
-        if ship_body and (
-            _norm_seg(ex.get("delivery_no")) or _norm_seg(ex.get("invoice_line"))
+    state = (line_state or "").strip().lower()
+    if state == "shipped":
+        if not (
+            _norm_seg(delivery_no)
+            and _norm_seg(invoice_line)
+            and _norm_seg(item_code)
         ):
-            key = f"ship:{ship_body}"
-        elif raw_source_row:
-            key = f"digest:{_digest_ex(raw_source_row)}"
+            pass
+        elif purchase_order_id is None or not str(purchase_order_id).strip():
+            return f"digest:{_digest_ex(ex)}"[:256]
         else:
-            key = f"digest:{_digest_ex(ex)}"
-    return key[:256]
+            po_seg = str(int(purchase_order_id))
+            ship_body = _pipe(
+                operating_unit,
+                delivery_no,
+                item_code,
+                po_seg,
+                invoice_line,
+            )
+            return f"ship:{ship_body}"[:256]
+
+    order_body = _pipe(operating_unit, order_no, order_line, item_code)
+    if order_body and _norm_seg(order_no):
+        return f"order:{order_body}"[:256]
+
+    ship_body = _pipe(operating_unit, delivery_no, invoice_line, item_code)
+    if ship_body and (_norm_seg(delivery_no) or _norm_seg(invoice_line)):
+        return f"ship:{ship_body}"[:256]
+    if raw_source_row:
+        return f"digest:{_digest_ex(raw_source_row)}"[:256]
+    return f"digest:{_digest_ex(ex)}"[:256]
 
 
 def stable_line_identity_key_from_mapping(values: dict[str, Any]) -> str:
     """Derive identity from a shipment evidence row dict."""
     return stable_line_identity_key_from_fields(
+        line_state=values.get("line_state"),
         operating_unit=values.get("operating_unit"),
         order_no=values.get("order_no"),
         order_line=values.get("order_line"),
         delivery_no=values.get("delivery_no"),
         invoice_line=values.get("invoice_line"),
         item_code=values.get("item_code"),
+        purchase_order_id=values.get("purchase_order_id"),
         raw_source_row=values.get("raw_source_row")
         if isinstance(values.get("raw_source_row"), dict)
         else None,

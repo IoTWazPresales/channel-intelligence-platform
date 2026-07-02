@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, Text, Index, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -99,3 +99,7 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
         ForeignKey("dim_distributor.id", ondelete="SET NULL"), nullable=True, index=True
     )
     crad_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    corpus_superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
