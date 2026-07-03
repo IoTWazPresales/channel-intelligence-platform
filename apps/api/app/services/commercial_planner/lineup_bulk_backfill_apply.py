@@ -131,6 +131,44 @@ def _loser_proposal_keys(preview: dict[str, Any], winners: set[str]) -> set[str]
     return losers
 
 
+def _resolve_existing_case_collisions(
+    preview: dict[str, Any],
+    confirmations: dict[str, str] | None,
+) -> tuple[set[str], dict[str, int], dict[str, int]]:
+    """Return (skip_proposal_keys, proposal_key→existing_case_id to supersede, proposal_key→existing_case_id skip target)."""
+    skip: set[str] = set()
+    supersede: dict[str, int] = {}
+    skip_existing_id: dict[str, int] = {}
+    confirmations = confirmations or {}
+    for group in preview.get("existing_case_collisions") or []:
+        if not isinstance(group, dict):
+            continue
+        gkey = str(group.get("collision_group_key") or "")
+        winner = confirmations.get(gkey) or group.get("winner_member_key")
+        proposed = None
+        existing = None
+        for member in group.get("members") or []:
+            if not isinstance(member, dict):
+                continue
+            if member.get("kind") == "proposed_case":
+                proposed = member
+            elif member.get("kind") == "existing_case":
+                existing = member
+        if not proposed or not existing:
+            continue
+        pk = str(proposed.get("proposal_key") or "")
+        existing_id = int(existing.get("case_id"))
+        if not pk:
+            continue
+        winner_str = str(winner or "")
+        if winner_str.startswith("existing:"):
+            skip.add(pk)
+            skip_existing_id[pk] = existing_id
+        elif winner_str == pk or winner_str.startswith("proposed:"):
+            supersede[pk] = existing_id
+    return skip, supersede, skip_existing_id
+
+
 def _applied_proposal_map(meta: dict[str, Any]) -> dict[str, int]:
     apply_meta = meta.get("bulk_lineup_backfill_apply")
     if not isinstance(apply_meta, dict):
@@ -212,16 +250,20 @@ def _create_case_and_maybe_parse(
             template_slug=BULK_TEMPLATE_SLUG,
             source_code=BULK_SOURCE_CODE,
         )
+        parse_opts: dict[str, Any] = {
+            "sheet_name": sheet_name,
+            "folder_path": prop.get("folder_path"),
+            "business_unit": prop.get("business_unit"),
+            "bu_report": prop.get("bu_report"),
+            "half_year_allocation_half": half_alloc,
+            "period_flags": period_flags,
+        }
+        slice_rows = prop.get("slice_source_rows")
+        if isinstance(slice_rows, list) and slice_rows:
+            parse_opts["slice_source_rows"] = [int(x) for x in slice_rows]
         parse_job.staged_metadata = to_jsonable(
             {
-                "lineup_parse_options": {
-                    "sheet_name": sheet_name,
-                    "folder_path": prop.get("folder_path"),
-                    "business_unit": prop.get("business_unit"),
-                    "bu_report": prop.get("bu_report"),
-                    "half_year_allocation_half": half_alloc,
-                    "period_flags": period_flags,
-                }
+                "lineup_parse_options": parse_opts,
             }
         )
         db.commit()
@@ -261,6 +303,9 @@ def apply_bulk_lineup_batch_sync(
         files_by_key = _file_bytes_by_key(preview)
         collision_winners = _winner_proposal_keys(preview, supersession_confirmations)
         collision_losers = _loser_proposal_keys(preview, collision_winners)
+        existing_skip, existing_supersede, existing_skip_ids = _resolve_existing_case_collisions(
+            preview, supersession_confirmations
+        )
         excluded = set(excluded_proposal_keys or [])
         approved_set = set(approved_proposal_keys or []) if approved_proposal_keys else None
 
@@ -304,6 +349,16 @@ def apply_bulk_lineup_batch_sync(
                 results.append({"proposal_key": pk, "outcome": "idempotent_skip", "case_id": applied_map[pk]})
                 continue
 
+            if pk in existing_skip:
+                existing_id = existing_skip_ids.get(pk)
+                if existing_id is None:
+                    results.append(
+                        {"proposal_key": pk, "outcome": "error", "error": "existing_case collision skip missing case_id"}
+                    )
+                    continue
+                _record_applied(pk, existing_id, "existing_case_skip", existing_case_id=existing_id)
+                continue
+
             file_key = str(prop.get("file_key") or "")
             file_bytes = files_by_key.get(file_key)
             if not file_bytes:
@@ -319,6 +374,12 @@ def apply_bulk_lineup_batch_sync(
                 superseded_by_case_id=None,
                 enqueue_parse=True,
             )
+            if pk in existing_supersede:
+                existing_case = db.get(CommercialLineupCase, existing_supersede[pk])
+                if existing_case is not None:
+                    existing_case.superseded_by_case_id = case_id
+                    existing_case.commercial_status = "superseded"
+                    db.flush()
             sgk = str(prop.get("supersession_group_key") or "")
             if sgk:
                 winner_case_by_group[sgk] = case_id

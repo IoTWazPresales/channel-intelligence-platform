@@ -71,9 +71,10 @@ class CaseProposal:
     flags: list[str] = field(default_factory=list)
     supersession_group_key: str | None = None
     allocation_summary: dict[str, Any] | None = None
+    slice_source_rows: list[int] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out = {
             "proposal_key": self.proposal_key,
             "file_key": self.file_key,
             "filename": self.filename,
@@ -96,6 +97,9 @@ class CaseProposal:
             "supersession_group_key": self.supersession_group_key,
             "allocation_summary": self.allocation_summary,
         }
+        if self.slice_source_rows is not None:
+            out["slice_source_rows"] = list(self.slice_source_rows)
+        return out
 
 
 def _sum_row_quantities(rows: list[dict[str, Any]]) -> float:
@@ -239,6 +243,11 @@ def _workbook_title_rows(file_bytes: bytes, sheet_name: str) -> list[list[Any]]:
 
 
 from app.services.commercial_planner.lineup_period_canonical import supersession_group_key_from_period_start
+from app.services.commercial_planner.lineup_bulk_slice_rows import (
+    load_lineup_parser_context_sync,
+    map_slice_rows_to_source_row_numbers,
+    parser_row_dicts_for_sheet,
+)
 
 
 def build_case_proposals_for_file(
@@ -252,6 +261,7 @@ def build_case_proposals_for_file(
     manual_business_unit: str | None = None,
     tenant_bu_codes: frozenset[str] | None = None,
     manual_overrides: dict[str, Any] | None = None,
+    parser_ctx: dict[str, Any] | None = None,
 ) -> tuple[list[CaseProposal], list[dict[str, Any]], dict[str, Any]]:
     """Parse one workbook into case proposals + per-file catalogue misses."""
     parsed_sheets, schema = parse_historical_workbook(spec.filename, spec.file_bytes)
@@ -264,6 +274,20 @@ def build_case_proposals_for_file(
     }
     proposals: list[CaseProposal] = []
     catalogue_misses: list[dict[str, Any]] = []
+    parser_rows_by_sheet: dict[str, list[dict[str, Any]]] = {}
+
+    def _parser_rows(sheet_name: str) -> list[dict[str, Any]]:
+        if sheet_name not in parser_rows_by_sheet:
+            if not parser_ctx:
+                parser_rows_by_sheet[sheet_name] = []
+            else:
+                parser_rows_by_sheet[sheet_name] = parser_row_dicts_for_sheet(
+                    spec.filename,
+                    spec.file_bytes,
+                    sheet_name=sheet_name,
+                    parser_ctx=parser_ctx,
+                )
+        return parser_rows_by_sheet[sheet_name]
 
     if not parsed_sheets:
         proposals.append(
@@ -413,6 +437,16 @@ def build_case_proposals_for_file(
                 if prop_status == "ready" and "period_unknown" in effective_period.flags:
                     prop_status = "needs_attention"
                     prop_attention.append("period_unknown")
+                slice_source_rows: list[int] | None = None
+                if len(row_groups) > 1 and parser_ctx:
+                    try:
+                        slice_source_rows = map_slice_rows_to_source_row_numbers(
+                            slice_rows,
+                            _parser_rows(sheet.sheet_name),
+                        )
+                    except ValueError:
+                        prop_status = "needs_attention"
+                        prop_attention.append("slice_row_mapping_failed")
                 sgk = supersession_group_key_from_period_start(
                     effective_period.period_start.isoformat() if effective_period.period_start else None,
                     customer_id=cust_id,
@@ -443,6 +477,7 @@ def build_case_proposals_for_file(
                         flags=flags,
                         supersession_group_key=sgk,
                         allocation_summary=alloc_summary,
+                        slice_source_rows=slice_source_rows,
                     )
                 )
 
@@ -497,6 +532,89 @@ def detect_supersession_collisions(proposals: list[CaseProposal]) -> list[dict[s
     return collisions
 
 
+def _sheet_from_case_notes(notes: str | None) -> str | None:
+    if not notes:
+        return None
+    m = re.match(r"sheet=([^;]+);", str(notes))
+    return m.group(1).strip() if m else None
+
+
+async def detect_existing_case_collisions(
+    db: AsyncSession,
+    proposals: list[CaseProposal],
+) -> list[dict[str, Any]]:
+    """Surface active DB cases that match a ready proposal's (file, sheet, BU, period)."""
+    from datetime import date as date_cls
+
+    from app.models.commercial_lineup import CommercialLineupCase
+    from app.services.commercial_planner.lineup_period_canonical import active_lineup_case_filters
+
+    collisions: list[dict[str, Any]] = []
+    seen_group_keys: set[str] = set()
+
+    for prop in proposals:
+        if prop.status != "ready" or not prop.period_start or not prop.business_unit:
+            continue
+        try:
+            ps = date_cls.fromisoformat(str(prop.period_start)[:10])
+        except ValueError:
+            continue
+
+        stmt = (
+            select(CommercialLineupCase)
+            .where(
+                *active_lineup_case_filters(),
+                CommercialLineupCase.file_name == prop.filename,
+                CommercialLineupCase.business_unit == prop.business_unit,
+                CommercialLineupCase.inferred_period_start == ps,
+            )
+            .order_by(CommercialLineupCase.id)
+        )
+        existing_cases = (await db.execute(stmt)).scalars().all()
+        for existing in existing_cases:
+            sheet = _sheet_from_case_notes(existing.notes)
+            if sheet != prop.sheet_name:
+                continue
+            gkey = f"existing_case:{existing.id}:{prop.proposal_key}"
+            if gkey in seen_group_keys:
+                continue
+            seen_group_keys.add(gkey)
+            winner_key = f"existing:{existing.id}"
+            collisions.append(
+                {
+                    "collision_group_key": gkey,
+                    "file_name": prop.filename,
+                    "sheet_name": prop.sheet_name,
+                    "business_unit": prop.business_unit,
+                    "period_start": prop.period_start,
+                    "period_label": prop.period_label,
+                    "winner_member_key": winner_key,
+                    "members": [
+                        {
+                            "kind": "existing_case",
+                            "member_key": winner_key,
+                            "case_id": int(existing.id),
+                            "file_name": existing.file_name,
+                            "sheet_name": sheet,
+                            "business_unit": existing.business_unit,
+                            "period_label": existing.period_label,
+                            "is_winner": True,
+                        },
+                        {
+                            "kind": "proposed_case",
+                            "member_key": prop.proposal_key,
+                            "proposal_key": prop.proposal_key,
+                            "file_name": prop.filename,
+                            "sheet_name": prop.sheet_name,
+                            "row_count": prop.row_count,
+                            "is_winner": False,
+                        },
+                    ],
+                }
+            )
+    return collisions
+
+
 def aggregate_catalogue_miss_worklist(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """De-dupe catalogue-miss tokens with referencing evidence (advisory)."""
     by_token: dict[str, dict[str, Any]] = {}
@@ -536,6 +654,7 @@ async def build_bulk_lineup_preview(
     """Build full file-grain preview (no lineup table writes)."""
     product_index = await asyncio.to_thread(_load_product_index_sync)
     bu_by_pid = await load_business_unit_by_product_id(db)
+    parser_ctx = await asyncio.to_thread(load_lineup_parser_context_sync)
 
     customers = (await db.execute(select(DimCustomer))).scalars().all()
     customer_map: dict[str, DimCustomer] = {}
@@ -578,12 +697,14 @@ async def build_bulk_lineup_preview(
             manual_business_unit=fo.get("business_unit"),
             tenant_bu_codes=tenant_bu_codes,
             manual_overrides=overrides,
+            parser_ctx=parser_ctx,
         )
         all_proposals.extend(proposals)
         all_misses.extend(misses)
         file_reports.append(frep)
 
     collisions = detect_supersession_collisions(all_proposals)
+    existing_collisions = await detect_existing_case_collisions(db, all_proposals)
     worklist = aggregate_catalogue_miss_worklist(all_misses)
 
     ready = [p for p in all_proposals if p.status == "ready"]
@@ -601,6 +722,7 @@ async def build_bulk_lineup_preview(
         "files": file_reports,
         "case_proposals": [p.to_dict() for p in all_proposals],
         "supersession_collisions": collisions,
+        "existing_case_collisions": existing_collisions,
         "catalogue_miss_worklist": worklist,
         "file_manifest": file_manifest,
         "totals": {
@@ -611,5 +733,6 @@ async def build_bulk_lineup_preview(
             "lines_ready": sum(p.row_count for p in ready),
             "catalogue_miss_tokens": len(worklist),
             "collision_groups": len(collisions),
+            "existing_case_collision_groups": len(existing_collisions),
         },
     }

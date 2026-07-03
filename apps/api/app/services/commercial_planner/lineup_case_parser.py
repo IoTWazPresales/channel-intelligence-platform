@@ -574,6 +574,13 @@ async def parse_current_lineup_file(
             )
         )
 
+        slice_source_rows = parse_opts.get("slice_source_rows")
+        if isinstance(slice_source_rows, list) and slice_source_rows:
+            from app.services.commercial_planner.lineup_bulk_slice_rows import filter_row_dicts_to_slice
+
+            expected_slice_len = len(slice_source_rows)
+            row_dicts = filter_row_dicts_to_slice(row_dicts, [int(x) for x in slice_source_rows])
+
         half_alloc = parse_opts.get("half_year_allocation_half")
         if half_alloc in ("q1", "q2"):
             row_dicts = [
@@ -630,6 +637,14 @@ async def parse_current_lineup_file(
             )
             db.add(line)
             lines_to_add.append(line)
+
+        if isinstance(slice_source_rows, list) and slice_source_rows:
+            expected = len(slice_source_rows)
+            actual = len(lines_to_add)
+            if actual != expected:
+                raise ValueError(
+                    f"lineup slice row count mismatch: slice_source_rows={expected} persisted_lines={actual}"
+                )
 
         await db.flush()
 

@@ -70,6 +70,8 @@ def test_multi_bu_sheet_fan_out_proposes_split_groups():
     assert len(ready) >= 2, [p.to_dict() for p in proposals]
     bus = {p.business_unit for p in ready}
     assert "NB" in bus and "NR" in bus
+    row_counts = {p.business_unit: p.row_count for p in ready}
+    assert row_counts.get("NB") == 1 and row_counts.get("NR") == 1
 
 
 def test_likely_not_lineup_needs_attention():

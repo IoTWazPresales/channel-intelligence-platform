@@ -52,6 +52,30 @@ def _multi_bu_xlsx() -> bytes:
     )
 
 
+def _multi_bu_slice_xlsx() -> bytes:
+    """5 NB rows + 2 NR rows on one sheet — fan-out slice disjointness fixture."""
+    rows = [["SKU", "Qty", "Customer"]]
+    for i in range(1, 6):
+        rows.append([f"bulk-nb-{i:02d}", str(i), "Amazon"])
+    for i in range(1, 3):
+        rows.append([f"bulk-nr-{i:02d}", str(10 + i), "Amazon"])
+    return _minimal_xlsx(sheets={"Mixed": rows})
+
+
+def _sync_enqueue_parse(**kwargs):
+    from app.services.commercial_planner.lineup_parse_worker import run_lineup_case_parse_sync
+
+    run_lineup_case_parse_sync(
+        kwargs["case_id"],
+        kwargs["filename"],
+        kwargs["file_bytes"],
+        import_job_id=kwargs["import_job_id"],
+        template_slug=kwargs.get("template_slug", "bulk_lineup_backfill"),
+        source_code=kwargs.get("source_code", "bulk_lineup_backfill_system"),
+    )
+    return {"outcome": "parsed_sync", "task_id": "test-sync"}
+
+
 def _half_year_xlsx() -> bytes:
     return _minimal_xlsx(
         sheets={
@@ -108,7 +132,7 @@ def bulk_smoke_env():
         db = conn.execute(text("SELECT current_database()")).scalar_one()
         assert db == BULK_SMOKE_DB, db
         rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
-        assert rev == "20260701_0065", f"expected 0065 on {BULK_SMOKE_DB}, got {rev}"
+        assert rev == "20260702_0066", f"expected 0066 on {BULK_SMOKE_DB}, got {rev}"
         col = conn.execute(
             text(
                 """
@@ -161,6 +185,11 @@ def _seed_catalog():
         skus = {
             "bulk-nb-01": ("NB", "bulk-nb-01"),
             "bulk-nr-01": ("NR", "bulk-nr-01"),
+            "bulk-nb-02": ("NB", "bulk-nb-02"),
+            "bulk-nb-03": ("NB", "bulk-nb-03"),
+            "bulk-nb-04": ("NB", "bulk-nb-04"),
+            "bulk-nb-05": ("NB", "bulk-nb-05"),
+            "bulk-nr-02": ("NR", "bulk-nr-02"),
             "sku-older": ("NB", "sku-older"),
             "sku-newer": ("NB", "sku-newer"),
             "only-one": ("NB", "only-one"),
@@ -175,14 +204,26 @@ def _seed_catalog():
                         part_number=code,
                         sales_model_name=code,
                         business_unit=bu,
+                        product_line=bu,
                         is_active=True,
                     )
                 )
+            else:
+                existing.business_unit = bu
+                existing.product_line = bu
+                existing.part_number = code
+                existing.sales_model_name = code
+                existing.is_active = True
         db.commit()
         return int(cust.id)
 
 
-def _run_preview_and_apply(files: list[tuple[str, bytes, str | None]]) -> tuple[dict, dict, int]:
+def _run_preview_and_apply(
+    files: list[tuple[str, bytes, str | None]],
+    *,
+    sync_parse: bool = False,
+    session_id: int | None = None,
+) -> tuple[dict, dict, int]:
     from app.db.session import AsyncSessionLocal
     from app.services.commercial_planner.lineup_bulk_backfill_apply import (
         apply_bulk_lineup_batch_sync,
@@ -197,18 +238,24 @@ def _run_preview_and_apply(files: list[tuple[str, bytes, str | None]]) -> tuple[
         inputs = [BulkFileInput(filename=n, file_bytes=b, folder_path=f) for n, b, f in files]
         async with AsyncSessionLocal() as db:
             preview = await build_bulk_lineup_preview(db, inputs)
-            job = await persist_preview_session(db, preview)
-            return preview, int(job.id)
+            if session_id is None:
+                job = await persist_preview_session(db, preview)
+                return preview, int(job.id)
+            return preview, session_id
 
-    preview, session_id = asyncio.run(_preview())
+    preview, sid = asyncio.run(_preview())
 
-    with patch(
-        "app.services.commercial_planner.lineup_bulk_backfill_apply.enqueue_lineup_parse_sync",
-        return_value={"outcome": "mock_enqueued", "task_id": "test"},
-    ):
-        apply_result = apply_bulk_lineup_batch_sync(session_id)
+    parse_patch = (
+        "app.services.commercial_planner.lineup_bulk_backfill_apply.enqueue_lineup_parse_sync"
+    )
+    if sync_parse:
+        with patch(parse_patch, side_effect=_sync_enqueue_parse):
+            apply_result = apply_bulk_lineup_batch_sync(sid)
+    else:
+        with patch(parse_patch, return_value={"outcome": "mock_enqueued", "task_id": "test"}):
+            apply_result = apply_bulk_lineup_batch_sync(sid)
 
-    return preview, apply_result, session_id
+    return preview, apply_result, sid
 
 
 @pytest.mark.usefixtures("bulk_smoke_env")
@@ -303,3 +350,87 @@ def test_bulk_lineup_apply_integration_on_disposable_clone():
             ).all()
         )
     assert case_count_second == case_count_first, "re-apply must not double-create cases"
+
+
+@pytest.mark.usefixtures("bulk_smoke_env")
+def test_multi_bu_fan_out_slice_disjointness_and_existing_collisions():
+    """Multi-BU sheet: parsed lines match preview slices; second preview surfaces collisions."""
+    from app.db.session import AsyncSessionLocal
+    from app.db.session_sync import SessionLocal
+    from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
+    from app.services.commercial_planner.lineup_bulk_backfill_preview import (
+        BulkFileInput,
+        build_bulk_lineup_preview,
+    )
+
+    _seed_catalog()
+    _clear_bulk_backfill_cases()
+
+    file_name = "multi_bu_slice.xlsx"
+    file_bytes = _multi_bu_slice_xlsx()
+    files = [(file_name, file_bytes, r"NB\2026\Q2")]
+
+    preview, apply_result, session_id = _run_preview_and_apply(files, sync_parse=True)
+
+    ready = [p for p in preview.get("case_proposals") or [] if p.get("status") == "ready"]
+    multi_props = [p for p in ready if p.get("filename") == file_name]
+    assert len(multi_props) == 2
+    by_bu = {p["business_unit"]: p for p in multi_props}
+    assert by_bu["NB"]["row_count"] == 5
+    assert by_bu["NR"]["row_count"] == 2
+    assert by_bu["NB"].get("slice_source_rows")
+    assert by_bu["NR"].get("slice_source_rows")
+    assert set(by_bu["NB"]["slice_source_rows"]).isdisjoint(set(by_bu["NR"]["slice_source_rows"]))
+
+    with SessionLocal() as db:
+        cases = db.scalars(
+            select(CommercialLineupCase).where(
+                CommercialLineupCase.source_context == "bulk_lineup_backfill",
+                CommercialLineupCase.file_name == file_name,
+            )
+        ).all()
+        assert len(cases) == 2
+        lines_by_case: dict[int, list[CommercialLineupLine]] = {}
+        for case in cases:
+            lines = db.scalars(
+                select(CommercialLineupLine).where(CommercialLineupLine.case_id == case.id)
+            ).all()
+            lines_by_case[int(case.id)] = list(lines)
+
+        nb_case = next(c for c in cases if c.business_unit == "NB")
+        nr_case = next(c for c in cases if c.business_unit == "NR")
+        assert len(lines_by_case[int(nb_case.id)]) == 5
+        assert len(lines_by_case[int(nr_case.id)]) == 2
+
+        nb_rows = {(ln.source_row_number, ln.product_id) for ln in lines_by_case[int(nb_case.id)]}
+        nr_rows = {(ln.source_row_number, ln.product_id) for ln in lines_by_case[int(nr_case.id)]}
+        assert nb_rows.isdisjoint(nr_rows)
+        assert len(nb_rows | nr_rows) == 7
+
+    from app.services.commercial_planner.lineup_bulk_backfill_apply import apply_bulk_lineup_batch_sync
+
+    with patch(
+        "app.services.commercial_planner.lineup_bulk_backfill_apply.enqueue_lineup_parse_sync",
+        return_value={"outcome": "mock_enqueued", "task_id": "test"},
+    ):
+        second_apply = apply_bulk_lineup_batch_sync(session_id)
+    assert second_apply.get("applied", 0) == 0
+    assert second_apply.get("skipped", 0) >= 2
+
+    async def _second_preview() -> dict:
+        async with AsyncSessionLocal() as db:
+            return await build_bulk_lineup_preview(
+                db,
+                [BulkFileInput(filename=file_name, file_bytes=file_bytes, folder_path=r"NB\2026\Q2")],
+            )
+
+    preview2 = asyncio.run(_second_preview())
+    existing_collisions = preview2.get("existing_case_collisions") or []
+    assert len(existing_collisions) >= 2
+    proposed_keys = {
+        m.get("proposal_key")
+        for g in existing_collisions
+        for m in g.get("members") or []
+        if m.get("kind") == "proposed_case"
+    }
+    assert len(proposed_keys) >= 2

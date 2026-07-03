@@ -42,6 +42,7 @@ from app.services.imports.shipment_evidence_read import (
 )
 from app.core.feature_flags import shipment_bitemporal_read_enabled
 from app.services.commercial_planner.lineup_period_canonical import (
+    active_lineup_case_filters,
     parse_period_filter_to_year_quarter,
     quarter_from_period_start,
 )
@@ -62,6 +63,7 @@ CheckName = Literal[
     "evidence_true_dupes",
     "evidence_fact_parity",
     "cross_job_double_book",
+    "lineup_duplicate_ingestion",
 ]
 
 QTY_EPS = 1e-6
@@ -787,6 +789,71 @@ def check_cross_job_double_book(db: Session, *, sample_limit: int) -> CheckResul
     )
 
 
+def _lineup_line_fingerprint(lines: list[CommercialLineupLine]) -> frozenset[tuple[int, int, float]]:
+    out: set[tuple[int, int, float]] = set()
+    for ln in lines:
+        qty = float(ln.quantity_units or 0)
+        out.add((int(ln.source_row_number or 0), int(ln.product_id or 0), qty))
+    return frozenset(out)
+
+
+def check_lineup_duplicate_ingestion(db: Session, *, sample_limit: int) -> CheckResult:
+    """Active cases sharing file+period with identical line fingerprints → duplicate ingestion."""
+    cases = db.execute(
+        select(CommercialLineupCase).where(*active_lineup_case_filters()).order_by(CommercialLineupCase.id)
+    ).scalars().all()
+    if not cases:
+        return CheckResult(check="lineup_duplicate_ingestion", count=0)
+
+    case_ids = [int(c.id) for c in cases]
+    lines = db.execute(
+        select(CommercialLineupLine).where(CommercialLineupLine.case_id.in_(case_ids))
+    ).scalars().all()
+    lines_by_case: dict[int, list[CommercialLineupLine]] = {}
+    for ln in lines:
+        lines_by_case.setdefault(int(ln.case_id), []).append(ln)
+
+    by_file_period: dict[tuple[str, date | None], list[CommercialLineupCase]] = {}
+    for case in cases:
+        key = (str(case.file_name or ""), case.inferred_period_start)
+        by_file_period.setdefault(key, []).append(case)
+
+    findings: list[dict[str, Any]] = []
+    reported_clusters: set[frozenset[int]] = set()
+
+    for (file_name, period_start), bucket in by_file_period.items():
+        if len(bucket) < 2:
+            continue
+        fp_clusters: dict[tuple[int, frozenset], list[CommercialLineupCase]] = {}
+        for case in bucket:
+            case_lines = lines_by_case.get(int(case.id), [])
+            fp = _lineup_line_fingerprint(case_lines)
+            cluster_key = (len(case_lines), fp)
+            fp_clusters.setdefault(cluster_key, []).append(case)
+        for (line_count, fp), members in fp_clusters.items():
+            if len(members) < 2 or line_count == 0:
+                continue
+            cluster_ids = frozenset(int(c.id) for c in members)
+            if cluster_ids in reported_clusters:
+                continue
+            reported_clusters.add(cluster_ids)
+            findings.append(
+                {
+                    "file_name": file_name,
+                    "inferred_period_start": period_start.isoformat() if period_start else None,
+                    "line_count": line_count,
+                    "case_ids": sorted(cluster_ids),
+                    "business_units": sorted({c.business_unit for c in members if c.business_unit}),
+                }
+            )
+
+    return CheckResult(
+        check="lineup_duplicate_ingestion",
+        count=len(findings),
+        samples=findings[:sample_limit],
+    )
+
+
 def run_data_integrity_audit_sync(
     db: Session,
     *,
@@ -824,6 +891,7 @@ def run_data_integrity_audit_sync(
         check_evidence_true_dupes(db, sample_limit=sample_limit),
         check_evidence_fact_parity(db, sample_limit=sample_limit),
         check_cross_job_double_book(db, sample_limit=sample_limit),
+        check_lineup_duplicate_ingestion(db, sample_limit=sample_limit),
     ]
     return AuditReport(
         database=dbname,

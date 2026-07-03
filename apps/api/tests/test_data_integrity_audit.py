@@ -387,3 +387,70 @@ def test_audit_seeded_violations_on_db():
             db.execute(text("DELETE FROM dim_customer WHERE code LIKE :pat"), {"pat": f"AUD-C%-{tok}"})
             db.execute(text("DELETE FROM import_job WHERE file_name = :fn"), {"fn": f"audit_{tok}.csv"})
             db.commit()
+
+
+def test_lineup_duplicate_ingestion_detects_identical_fingerprints():
+    from app.services.data_integrity_audit import check_lineup_duplicate_ingestion
+
+    with SessionLocal() as db:
+        db_name = db.scalar(text("SELECT current_database()"))
+        if db_name == "cip":
+            pytest.skip("seeded duplicate-ingestion test must not write to cip")
+
+        prod = DimProduct(sku="dup-ing-sku", name="dup", part_number="dup", is_active=True)
+        db.add(prod)
+        db.flush()
+        ps = date(2026, 1, 1)
+        c1 = CommercialLineupCase(
+            file_name="dup_lineup.xlsx",
+            period_label="2026 Q1",
+            inferred_period_start=ps,
+            business_unit="NB",
+            commercial_status="draft_imported",
+            import_intent="audit",
+            source_context="audit",
+            notes="sheet=NB; audit",
+        )
+        c2 = CommercialLineupCase(
+            file_name="dup_lineup.xlsx",
+            period_label="2026 Q1",
+            inferred_period_start=ps,
+            business_unit="NV",
+            commercial_status="draft_imported",
+            import_intent="audit",
+            source_context="audit",
+            notes="sheet=NR; audit",
+        )
+        db.add_all([c1, c2])
+        db.flush()
+        for case_id, bu in ((c1.id, "NB"), (c2.id, "NV")):
+            _ = bu
+            db.add(
+                CommercialLineupLine(
+                    case_id=int(case_id),
+                    source_row_number=1,
+                    product_id=int(prod.id),
+                    customer_id=1,
+                    quantity_units=10,
+                    row_status="imported",
+                )
+            )
+        db.commit()
+
+        try:
+            result = check_lineup_duplicate_ingestion(db, sample_limit=10)
+            hits = [s for s in result.samples if s.get("file_name") == "dup_lineup.xlsx"]
+            assert result.count >= 1
+            assert hits
+            assert sorted(hits[0]["case_ids"]) == sorted([int(c1.id), int(c2.id)])
+        finally:
+            db.execute(
+                text("DELETE FROM commercial_lineup_line WHERE case_id IN (:a, :b)"),
+                {"a": int(c1.id), "b": int(c2.id)},
+            )
+            db.execute(
+                text("DELETE FROM commercial_lineup_case WHERE id IN (:a, :b)"),
+                {"a": int(c1.id), "b": int(c2.id)},
+            )
+            db.execute(text("DELETE FROM dim_product WHERE sku = 'dup-ing-sku'"))
+            db.commit()
