@@ -19,6 +19,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.commercial_planner.lineup_half_year_quantity import (
+    HALF_YEAR_ALLOCATION_FLAG,
+    half_year_allocation_summary,
+)
 from app.services.commercial_planner.lineup_bulk_period_inference import (
     resolve_layered_period,
     scan_title_band_from_workbook_rows,
@@ -66,6 +70,7 @@ class CaseProposal:
     attention_reasons: list[str] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
     supersession_group_key: str | None = None
+    allocation_summary: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -89,7 +94,28 @@ class CaseProposal:
             "attention_reasons": self.attention_reasons,
             "flags": self.flags,
             "supersession_group_key": self.supersession_group_key,
+            "allocation_summary": self.allocation_summary,
         }
+
+
+def _sum_row_quantities(rows: list[dict[str, Any]]) -> float:
+    total = 0.0
+    for row in rows:
+        q = row.get("quantity_units")
+        if q is not None:
+            try:
+                total += float(q)
+            except (TypeError, ValueError):
+                pass
+    return total
+
+
+def _half_year_split_half(period_flags: list[str]) -> str | None:
+    if "period_half_split_q1" in period_flags:
+        return "q1"
+    if "period_half_split_q2" in period_flags:
+        return "q2"
+    return None
 
 
 def _norm_customer_token(value: str | None) -> str:
@@ -337,6 +363,14 @@ def build_case_proposals_for_file(
                 manual_business_unit=manual_business_unit or (bu_slice if bu_slice not in ("_unresolved", sheet.sheet_name) else None),
                 tenant_bu_codes=tenant_bu_codes,
             )
+            half_split_active = any(
+                "period_scope=1h_split" in (p.flags or []) for p in period_assignments
+            )
+            source_total_units = _sum_row_quantities(slice_rows) if half_split_active else 0.0
+            file_allocation_summary = (
+                half_year_allocation_summary(source_total_units) if half_split_active else None
+            )
+
             for period in period_assignments:
                 pk = f"{file_key}:{sheet.sheet_name}:{bu_slice}:{period.period_label or 'unknown'}"
                 pk_over = (manual_overrides or {}).get(pk) or {}
@@ -369,6 +403,11 @@ def build_case_proposals_for_file(
                 ]
                 if pk_over:
                     flags.append("steward_manual_override")
+                alloc_summary = None
+                if _half_year_split_half(list(effective_period.flags)) and file_allocation_summary:
+                    alloc_summary = dict(file_allocation_summary)
+                    if HALF_YEAR_ALLOCATION_FLAG not in flags:
+                        flags.append(HALF_YEAR_ALLOCATION_FLAG)
                 prop_status = status
                 prop_attention = list(attention)
                 if prop_status == "ready" and "period_unknown" in effective_period.flags:
@@ -403,6 +442,7 @@ def build_case_proposals_for_file(
                         attention_reasons=prop_attention,
                         flags=flags,
                         supersession_group_key=sgk,
+                        allocation_summary=alloc_summary,
                     )
                 )
 

@@ -180,6 +180,12 @@ def _create_case_and_maybe_parse(
     display_label = (
         display_period_label_from_period_start(ps) if ps is not None else prop.get("period_label")
     )
+    period_flags = list(prop.get("period_flags") or [])
+    half_alloc = None
+    if "period_half_split_q1" in period_flags:
+        half_alloc = "q1"
+    elif "period_half_split_q2" in period_flags:
+        half_alloc = "q2"
 
     case = CommercialLineupCase(
         commercial_plan_id=commercial_plan_id,
@@ -213,6 +219,8 @@ def _create_case_and_maybe_parse(
                     "folder_path": prop.get("folder_path"),
                     "business_unit": prop.get("business_unit"),
                     "bu_report": prop.get("bu_report"),
+                    "half_year_allocation_half": half_alloc,
+                    "period_flags": period_flags,
                 }
             }
         )

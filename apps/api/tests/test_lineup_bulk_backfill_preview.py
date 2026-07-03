@@ -90,6 +90,33 @@ def test_likely_not_lineup_needs_attention():
     )
 
 
+def test_folder_q1_title_1h_fan_out_two_quarters_with_allocation():
+    xlsx = _minimal_xlsx(
+        sheets={
+            "NB": [
+                ["2026 1H NEW PLAN", "", ""],
+                ["SKU", "Qty", "Customer"],
+                ["sku-nb", "11", "Amazon"],
+            ],
+        }
+    )
+    proposals, _, _ = build_case_proposals_for_file(
+        "f0",
+        BulkFileInput(filename="lineup.xlsx", file_bytes=xlsx, folder_path=r"NB\2026\26Q1"),
+        product_index=_idx(sku_to_id={"sku-nb": 1}),
+        business_unit_by_product_id={1: "NB"},
+        customer_map={},
+    )
+    ready = [p for p in proposals if p.status == "ready"]
+    periods = {p.period_label for p in ready}
+    assert "2026 Q1" in periods and "2026 Q2" in periods
+    assert any("period_scope=1h_split" in (p.period_flags or []) for p in ready)
+    with_alloc = [p for p in ready if p.allocation_summary]
+    assert with_alloc
+    assert with_alloc[0].allocation_summary["sum_invariant"] is True
+    assert with_alloc[0].allocation_summary["q1_allocated_units"] == 6.0
+
+
 def test_collision_detection_latest_wins_member():
     proposals = [
         CaseProposal(

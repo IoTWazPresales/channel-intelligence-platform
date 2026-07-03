@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
+from app.services.commercial_planner.lineup_half_year_quantity import PERIOD_SCOPE_1H_SPLIT_FLAG
 from app.services.commercial_planner.lineup_period_inference import _parse_label, _quarter_start_month
 
 _TITLE_BAND_RE = re.compile(
@@ -231,13 +232,57 @@ def resolve_layered_period(
             report,
         )
 
+    anchor = signals[0]
+    half_sig = next((s for s in signals if s.is_half), None)
+
+    # 1H from ANY tier triggers Q1+Q2 split; folder anchors year (and quarter when present).
+    if half_sig is not None:
+        year: int | None = None
+        for s in signals:
+            if s.year is not None:
+                year = _two_digit_year(int(s.year))
+                break
+        if year is None:
+            return (
+                [
+                    LayeredPeriodAssignment(
+                        period_label=half_sig.label,
+                        period_start=None,
+                        source_tier=anchor.tier,
+                        flags=[PERIOD_SCOPE_1H_SPLIT_FLAG, "period_year_unknown"],
+                    )
+                ],
+                report,
+            )
+
+        split_flags = [PERIOD_SCOPE_1H_SPLIT_FLAG]
+        if half_sig.tier != anchor.tier:
+            report["half_trigger_tier"] = half_sig.tier
+
+        assignments = [
+            LayeredPeriodAssignment(
+                period_label=_quarter_label(year, 1),
+                period_start=date(year, 1, 1),
+                source_tier=anchor.tier,
+                flags=split_flags + ["period_half_split_q1"],
+            ),
+            LayeredPeriodAssignment(
+                period_label=_quarter_label(year, 2),
+                period_start=date(year, 4, 1),
+                source_tier=anchor.tier,
+                flags=split_flags + ["period_half_split_q2"],
+            ),
+        ]
+        report["winning_tier"] = anchor.tier
+        report["half_split"] = True
+        return assignments, report
+
     flags: list[str] = []
-    winner = signals[0]
+    winner = anchor
     for other in signals[1:]:
         if _quarters_conflict(winner, other):
             flags.append("period_signal_conflict")
             report["conflict"] = {"primary": winner.tier, "other": other.tier}
-            # On conflict do not auto-pick — return empty assignments with flag only.
             return (
                 [
                     LayeredPeriodAssignment(

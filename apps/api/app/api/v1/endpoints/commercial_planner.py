@@ -3388,6 +3388,113 @@ async def bulk_lineup_backfill_get_preview(
     return {"session_import_job_id": session_import_job_id, "preview": preview}
 
 
+@router.post("/lineup/bulk-backfill/rederivation/preview")
+async def bulk_lineup_1h_rederivation_preview(
+    persist_session: bool = Form(default=True),
+    db: AsyncSession = Depends(get_db),
+):
+    """Preview steward-driven 1H re-derivation for existing imported cases (no writes)."""
+    from app.services.commercial_planner.lineup_bulk_rederivation import (
+        build_1h_rederivation_preview,
+        persist_rederivation_preview_session,
+    )
+
+    preview = await build_1h_rederivation_preview(db)
+    if not persist_session:
+        return {"session_import_job_id": None, "preview": preview, "persisted": False}
+    session_job = await persist_rederivation_preview_session(db, preview)
+    return {
+        "session_import_job_id": int(session_job.id),
+        "preview": preview,
+        "persisted": True,
+    }
+
+
+@router.post("/lineup/bulk-backfill/rederivation/apply", status_code=202)
+async def bulk_lineup_1h_rederivation_apply(
+    session_import_job_id: int = Form(...),
+    confirm: bool = Form(default=False),
+    approved_proposal_keys: str | None = Form(default=None),
+    supersession_confirmations: str | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply steward-approved 1H re-derivation (adjust Q1 in place + optional Q2 twin)."""
+    import json
+
+    from app.core.config import get_settings
+    from app.services.commercial_planner.lineup_bulk_rederivation import apply_1h_rederivation_sync
+    from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
+    from app.services.task_run_ledger import (
+        ENTITY_IMPORT_JOB,
+        TRANSPORT_IN_PROCESS_THREAD,
+        create_queued_task_run,
+        spawn_in_process_thread_with_ledger,
+    )
+
+    if not confirm:
+        raise HTTPException(status_code=400, detail="confirm=true is required to apply 1H re-derivation.")
+
+    def _parse_keys(raw: str | None) -> list[str] | None:
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed]
+        except json.JSONDecodeError:
+            return [k.strip() for k in raw.split(",") if k.strip()]
+        return None
+
+    def _parse_map(raw: str | None) -> dict[str, str] | None:
+        if not raw:
+            return None
+        parsed = json.loads(raw)
+        return {str(k): str(v) for k, v in parsed.items()} if isinstance(parsed, dict) else None
+
+    approved = _parse_keys(approved_proposal_keys)
+    confirmations = _parse_map(supersession_confirmations) if supersession_confirmations else None
+
+    settings = get_settings()
+    task_name = "commercial_planner.bulk_lineup_1h_rederivation_apply"
+
+    def _run_sync() -> dict[str, Any]:
+        return apply_1h_rederivation_sync(
+            session_import_job_id,
+            approved_proposal_keys=approved,
+            supersession_confirmations=confirmations,
+        )
+
+    celery_task_id = f"bulk-lineup-rederivation-{session_import_job_id}"
+    create_queued_task_run(
+        task_run_id=celery_task_id,
+        task_name=task_name,
+        entity_type=ENTITY_IMPORT_JOB,
+        entity_id=session_import_job_id,
+        transport=TRANSPORT_IN_PROCESS_THREAD,
+    )
+    spawn_in_process_thread_with_ledger(
+        task_run_id=celery_task_id,
+        thread_name=f"bulk-lineup-rederivation-{session_import_job_id}",
+        target=_run_sync,
+    )
+
+    job = await db.get(ImportJob, session_import_job_id)
+    if job is not None:
+        set_task_slot_on_job(
+            job,
+            SLOT_MAIN,
+            task_id=celery_task_id,
+            label="1H re-derivation apply…",
+        )
+        await db.commit()
+
+    return {
+        "async": True,
+        "session_import_job_id": session_import_job_id,
+        "task_id": celery_task_id,
+    }
+
+
 @router.post("/lineup-cases/{case_id}/parse-upload")
 async def parse_lineup_case_upload(
     case_id: int,

@@ -436,8 +436,9 @@ export function PoAutoLinkProposalsSection({
             : '',
       },
       {
-        headerName: 'Planned',
-        width: 100,
+        headerName: 'Period plan (customer-scoped)',
+        headerTooltip: 'Period plan for matched products (customer-scoped)',
+        width: 130,
         type: 'numericColumn',
         valueGetter: (p) => p.data?.total_planned_units ?? null,
         valueFormatter: (p) => fmtUnits(p.value as number),

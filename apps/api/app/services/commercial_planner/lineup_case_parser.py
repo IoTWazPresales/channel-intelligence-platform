@@ -27,6 +27,9 @@ from app.models.commercial_planner import (
 )
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
+from app.services.commercial_planner.lineup_half_year_quantity import (
+    apply_half_year_allocation_to_row_dict,
+)
 from app.services.commercial_planner.lineup_period_inference import (
     infer_case_product_line,
     infer_period_start,
@@ -570,6 +573,12 @@ async def parse_current_lineup_file(
                 sheet_name=effective_sheet,
             )
         )
+
+        half_alloc = parse_opts.get("half_year_allocation_half")
+        if half_alloc in ("q1", "q2"):
+            row_dicts = [
+                apply_half_year_allocation_to_row_dict(rd, half=str(half_alloc)) for rd in row_dicts
+            ]
 
         # Trade-term / sku-assumption fallback maps for backwards pricing (one query each).
         sku_assumptions = {
