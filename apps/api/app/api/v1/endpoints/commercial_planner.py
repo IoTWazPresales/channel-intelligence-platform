@@ -2138,6 +2138,7 @@ def _case_payload(
         "linked_pos": pos,
         "po_count": len(pos),
         "created_at": case.created_at.isoformat() if case.created_at else None,
+        "superseded_by_case_id": case.superseded_by_case_id,
     }
 
 
@@ -3137,6 +3138,38 @@ async def export_lineup_case_customer_slice(
     )
 
 
+@router.get("/lineup-cases/{case_id}/delete-preview")
+async def delete_lineup_case_preview(case_id: int, db: AsyncSession = Depends(get_db)):
+    """Preview superseded children that will be restored if this case is deleted."""
+    from app.services.commercial_planner.lineup_case_supersession import superseded_child_summaries
+
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    if case.commercial_status != "draft_imported":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Can only delete lineup cases with status 'draft_imported'. Current status: '{case.commercial_status}'",
+        )
+    children = (
+        await db.execute(
+            select(CommercialLineupCase).where(CommercialLineupCase.superseded_by_case_id == case_id)
+        )
+    ).scalars().all()
+    summaries = superseded_child_summaries(list(children))
+    return {
+        "case_id": case_id,
+        "file_name": case.file_name,
+        "superseded_child_count": len(summaries),
+        "superseded_children": summaries,
+        "message": (
+            f"This case supersedes {len(summaries)} file(s); deleting will restore them as active."
+            if summaries
+            else None
+        ),
+    }
+
+
 @router.delete("/lineup-cases/{case_id}", status_code=204)
 async def delete_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
     case = await db.get(CommercialLineupCase, case_id)
@@ -3147,6 +3180,16 @@ async def delete_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
             status_code=409,
             detail=f"Can only delete lineup cases with status 'draft_imported'. Current status: '{case.commercial_status}'",
         )
+    children = list(
+        (
+            await db.execute(
+                select(CommercialLineupCase).where(CommercialLineupCase.superseded_by_case_id == case_id)
+            )
+        ).scalars().all()
+    )
+    for child in children:
+        child.superseded_by_case_id = None
+        child.commercial_status = "draft_imported"
     await db.delete(case)
     await db.commit()
     return Response(status_code=204)

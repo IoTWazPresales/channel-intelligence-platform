@@ -26,7 +26,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import type { ColDef, GridApi, GridOptions, ICellRendererParams } from 'ag-grid-community';
+import type { ColDef, ColumnState, GridApi, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -250,12 +250,23 @@ export function PoAutoLinkProposalsSection({
   const manualCollapseRef = useRef(false);
   const [period, setPeriod] = useState(() => currentQuarterLabel());
   const [confidence, setConfidence] = useState<'all' | 'high' | 'medium'>('all');
+  const [customerFilter, setCustomerFilter] = useState('');
   const [showDismissed, setShowDismissed] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmProposal, setConfirmProposal] = useState<PoAutoLinkProposal | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [dismissTarget, setDismissTarget] = useState<PoAutoLinkProposal | null>(null);
   const gridApiRef = useRef<GridApi<PoAutoLinkProposal> | null>(null);
+  const sortStateRef = useRef<ColumnState[]>([]);
+
+  const applyPersistedSort = useCallback((api: GridApi<PoAutoLinkProposal>) => {
+    const sorted = sortStateRef.current.filter((c) => c.sort != null);
+    if (!sorted.length) return;
+    api.applyColumnState({
+      state: sorted.map((c) => ({ colId: c.colId, sort: c.sort, sortIndex: c.sortIndex })),
+      defaultState: { sort: null },
+    });
+  }, []);
 
   const queryKey = ['po-auto-link', period, confidence, showDismissed] as const;
 
@@ -320,6 +331,21 @@ export function PoAutoLinkProposalsSection({
     [proposals, showDismissed]
   );
 
+  const filteredProposals = useMemo(() => {
+    const q = customerFilter.trim().toLowerCase();
+    if (!q) return activeProposals;
+    return activeProposals.filter((p) => {
+      const label = (p.customer_label ?? '').toLowerCase();
+      const idToken = p.customer_id != null ? String(p.customer_id) : '';
+      return label.includes(q) || idToken.includes(q);
+    });
+  }, [activeProposals, customerFilter]);
+
+  useEffect(() => {
+    const api = gridApiRef.current;
+    if (api) applyPersistedSort(api);
+  }, [filteredProposals, applyPersistedSort]);
+
   const pendingCount = Math.max(
     0,
     (proposalsQ.data?.total ?? 0) - (proposalsQ.data?.dismissed_count ?? 0)
@@ -344,7 +370,7 @@ export function PoAutoLinkProposalsSection({
   }, []);
 
   const bulkApply = () => {
-    const items = activeProposals
+    const items = filteredProposals
       .filter((p) => selected.has(p.proposal_key) && !p.dismissed)
       .map((p) => ({ case_id: p.case_id, purchase_order_id: p.purchase_order_id }));
     if (!items.length) return;
@@ -353,7 +379,7 @@ export function PoAutoLinkProposalsSection({
   };
 
   const selectAllHigh = () => {
-    const keys = activeProposals.filter((p) => p.confidence === 'high' && !p.dismissed).map((p) => p.proposal_key);
+    const keys = filteredProposals.filter((p) => p.confidence === 'high' && !p.dismissed).map((p) => p.proposal_key);
     setSelected(new Set(keys));
     if (!gridApiRef.current) return;
     gridApiRef.current.forEachNode((node) => {
@@ -479,13 +505,20 @@ export function PoAutoLinkProposalsSection({
       },
       onGridReady: (e) => {
         gridApiRef.current = e.api;
+        applyPersistedSort(e.api);
+      },
+      onFirstDataRendered: (e) => {
+        applyPersistedSort(e.api);
+      },
+      onSortChanged: (e) => {
+        sortStateRef.current = e.api.getColumnState().filter((c) => c.sort != null);
       },
       onSelectionChanged: (e) => {
         const keys = e.api.getSelectedRows().map((r) => r.proposal_key);
         setSelected(new Set(keys));
       },
     }),
-    []
+    [applyPersistedSort]
   );
 
   return (
@@ -528,6 +561,15 @@ export function PoAutoLinkProposalsSection({
                   sx={{ minWidth: 140 }}
                   data-testid="po-auto-link-period"
                 />
+                <TextField
+                  size="small"
+                  label="Customer filter"
+                  placeholder="Name or customer id"
+                  value={customerFilter}
+                  onChange={(e) => setCustomerFilter(e.target.value)}
+                  sx={{ minWidth: 160 }}
+                  data-testid="po-auto-link-customer"
+                />
                 <FormControl size="small" sx={{ minWidth: 140 }}>
                   <InputLabel id="po-auto-link-confidence-label">Confidence</InputLabel>
                   <Select
@@ -548,7 +590,7 @@ export function PoAutoLinkProposalsSection({
                 <Button size="small" onClick={() => setShowDismissed((v) => !v)} data-testid="po-auto-link-toggle-dismissed">
                   {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
                 </Button>
-                <Button size="small" onClick={selectAllHigh} disabled={!activeProposals.some((p) => p.confidence === 'high')}>
+                <Button size="small" onClick={selectAllHigh} disabled={!filteredProposals.some((p) => p.confidence === 'high')}>
                   Select all high
                 </Button>
                 <Button
@@ -568,21 +610,24 @@ export function PoAutoLinkProposalsSection({
                 </Typography>
               ) : proposalsQ.data?.data_unavailable ? (
                 <Alert severity="info">Auto-link proposals are temporarily unavailable.</Alert>
-              ) : !activeProposals.length && !showDismissed ? (
+              ) : !filteredProposals.length && !showDismissed ? (
                 <Alert severity="info" data-testid="po-auto-link-empty">
-                  No link proposals for the current filters. Try clearing the period filter or lowering confidence.
+                  No link proposals for the current filters. Try clearing the period or customer filter or lowering confidence.
                 </Alert>
               ) : (
                 <>
                   <Typography variant="caption" color="text.secondary">
-                    Showing {activeProposals.length} of {proposalsQ.data?.total ?? 0} proposals
+                    Showing {filteredProposals.length} of {proposalsQ.data?.total ?? 0} proposals
+                    {customerFilter.trim() && activeProposals.length !== filteredProposals.length
+                      ? ` (${activeProposals.length} before customer filter)`
+                      : ''}
                     {(proposalsQ.data?.dismissed_count ?? 0) > 0
                       ? ` · ${proposalsQ.data?.dismissed_count} dismissed`
                       : ''}
                   </Typography>
                   <Box data-testid="po-auto-link-table">
                     <EnterpriseDataGrid
-                      rowData={activeProposals}
+                      rowData={filteredProposals}
                       columnDefs={columnDefs}
                       gridOptions={gridOptions}
                       height={420}

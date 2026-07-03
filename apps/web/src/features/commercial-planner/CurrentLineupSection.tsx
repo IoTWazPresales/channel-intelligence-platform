@@ -125,6 +125,7 @@ type CommercialLineupCase = {
   linked_pos?: LinkedPo[];
   po_count?: number;
   created_at: string | null;
+  superseded_by_case_id?: number | null;
 };
 
 /** Case statuses where PO confirm is terminal — hide forward sync prompts. */
@@ -578,6 +579,10 @@ type EntityResolutionCandidatesResponse = {
 
 const RESOLUTION_UI_STATUSES = new Set(['draft_imported', 'validated', 'pending_review']);
 
+function isSupersededCase(c: CommercialLineupCase): boolean {
+  return c.commercial_status === 'superseded';
+}
+
 function lineupProductLabel(ln: CommercialLineupLine): string {
   const a =
     ln.product_sales_model_name?.trim() ||
@@ -639,6 +644,7 @@ function lineupCaseStatusLabel(status: string): string {
     synced: 'Synced to planner',
     po_issued: 'PO issued',
     cancelled: 'Cancelled',
+    superseded: 'Superseded',
   };
   return m[status] ?? status;
 }
@@ -656,6 +662,7 @@ const STATUS_COLORS: Record<string, 'default' | 'primary' | 'secondary' | 'error
     in_fulfillment: 'info',
     received_closed: 'default',
     cancelled: 'error',
+    superseded: 'default',
   };
 
 // Staging-only transitions for current-lineup cases (not PO/customer workflow).
@@ -2767,6 +2774,7 @@ export function CurrentLineupSection({
   const [confirmCase, setConfirmCase] = useState<CommercialLineupCase | null>(null);
   const [assignDistCase, setAssignDistCase] = useState<CommercialLineupCase | null>(null);
   const [retryParseCase, setRetryParseCase] = useState<CommercialLineupCase | null>(null);
+  const [deleteCase, setDeleteCase] = useState<CommercialLineupCase | null>(null);
   const [activeCaseId, setActiveCaseId] = useState<number | null>(null);
   const [resolutionCase, setResolutionCase] = useState<CommercialLineupCase | null>(null);
   const [wbSync, setWbSync] = useState({
@@ -3278,7 +3286,21 @@ export function CurrentLineupSection({
   const deleteMutation = useMutation({
     mutationFn: (caseId: number) =>
       apiDelete(`/api/v1/commercial-planner/lineup-cases/${caseId}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] }),
+    onSuccess: () => {
+      setDeleteCase(null);
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+    },
+  });
+
+  const deletePreviewQ = useQuery({
+    queryKey: ['lineup-case-delete-preview', deleteCase?.id],
+    enabled: deleteCase != null,
+    queryFn: ({ signal }) =>
+      apiGet<{
+        superseded_child_count: number;
+        superseded_children: { id: number; file_name: string | null }[];
+        message: string | null;
+      }>(`/api/v1/commercial-planner/lineup-cases/${deleteCase!.id}/delete-preview`, { signal }),
   });
 
   const attachPlanMutation = useMutation({
@@ -3321,6 +3343,14 @@ export function CurrentLineupSection({
   });
 
   const count = cases?.length ?? 0;
+
+  const caseFileNameById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const c of cases ?? []) {
+      m.set(c.id, c.file_name ?? `(case #${c.id})`);
+    }
+    return m;
+  }, [cases]);
 
   // Group for browse: period (period_label, falling back to inferred_period_start month) then
   // product_line. Derived only — no stored active flag. Newest period first.
@@ -3532,7 +3562,8 @@ export function CurrentLineupSection({
                         Upload file to this case
                       </Button>
                     )}
-                    {(ALLOWED_TRANSITIONS[c.commercial_status]?.length ?? 0) > 0 && (
+                    {(ALLOWED_TRANSITIONS[c.commercial_status]?.length ?? 0) > 0 &&
+                      !isSupersededCase(c) && (
                       <Button size="small" onClick={() => setStatusCase(c)}>
                         Update status
                       </Button>
@@ -3548,7 +3579,7 @@ export function CurrentLineupSection({
                         Sync to plan
                       </Button>
                     )}
-                    {RESOLUTION_UI_STATUSES.has(c.commercial_status) && (
+                    {RESOLUTION_UI_STATUSES.has(c.commercial_status) && !isSupersededCase(c) && (
                       <Button
                         size="small"
                         variant="text"
@@ -3558,7 +3589,16 @@ export function CurrentLineupSection({
                         Assign distributor
                       </Button>
                     )}
-                    {c.commercial_status !== 'cancelled' && (
+                    {isSupersededCase(c) && (
+                      <Typography variant="caption" color="text.secondary" data-testid={`superseded-by-${c.id}`}>
+                        Superseded by{' '}
+                        {c.superseded_by_case_id != null
+                          ? caseFileNameById.get(c.superseded_by_case_id) ??
+                            `case #${c.superseded_by_case_id}`
+                          : 'deleted case'}
+                      </Typography>
+                    )}
+                    {c.commercial_status !== 'cancelled' && !isSupersededCase(c) && (
                       <Button
                         size="small"
                         variant={(c.po_count ?? 0) > 0 ? 'outlined' : 'contained'}
@@ -3573,8 +3613,9 @@ export function CurrentLineupSection({
                       <Button
                         size="small"
                         color="error"
-                        onClick={() => deleteMutation.mutate(c.id)}
+                        onClick={() => setDeleteCase(c)}
                         disabled={deleteMutation.isPending}
+                        data-testid={`lineup-delete-case-${c.id}`}
                       >
                         Delete
                       </Button>
@@ -3610,7 +3651,7 @@ export function CurrentLineupSection({
                 {activeCase.file_name ? ` · ${activeCase.file_name}` : ''}
               </Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap">
-                {RESOLUTION_UI_STATUSES.has(activeCase.commercial_status) && (
+                {RESOLUTION_UI_STATUSES.has(activeCase.commercial_status) && !isSupersededCase(activeCase) && (
                   <>
                     <Button
                       size="small"
@@ -3905,6 +3946,60 @@ export function CurrentLineupSection({
             `Case #${viewLinesCase.id}`
           }
         />
+      )}
+
+      {deleteCase && (
+        <Dialog
+          open={deleteCase != null}
+          onClose={() => setDeleteCase(null)}
+          maxWidth="sm"
+          fullWidth
+          data-testid="lineup-delete-case-dialog"
+        >
+          <DialogTitle>Delete lineup case?</DialogTitle>
+          <DialogContent>
+            <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+              <Typography variant="body2">
+                Permanently delete <strong>{deleteCase.file_name ?? `case #${deleteCase.id}`}</strong>?
+                This cannot be undone.
+              </Typography>
+              {deletePreviewQ.isLoading ? (
+                <CircularProgress size={20} />
+              ) : (deletePreviewQ.data?.superseded_child_count ?? 0) > 0 ? (
+                <Alert severity="warning" data-testid="lineup-delete-supersedes-warning">
+                  {deletePreviewQ.data?.message ??
+                    `This case supersedes ${deletePreviewQ.data?.superseded_child_count} file(s); deleting will restore them as active.`}
+                  {(deletePreviewQ.data?.superseded_children ?? []).length > 0 && (
+                    <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2 }}>
+                      {deletePreviewQ.data!.superseded_children.map((ch) => (
+                        <li key={ch.id}>
+                          <Typography variant="body2" component="span">
+                            {ch.file_name ?? `Case #${ch.id}`}
+                          </Typography>
+                        </li>
+                      ))}
+                    </Box>
+                  )}
+                </Alert>
+              ) : null}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button size="small" onClick={() => setDeleteCase(null)} disabled={deleteMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              size="small"
+              color="error"
+              variant="contained"
+              disabled={deleteMutation.isPending || deletePreviewQ.isLoading}
+              onClick={() => deleteMutation.mutate(deleteCase.id)}
+              data-testid="lineup-delete-case-confirm"
+            >
+              {deleteMutation.isPending ? 'Deleting…' : 'Delete case'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       )}
 
       {statusCase && (
