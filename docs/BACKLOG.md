@@ -968,6 +968,23 @@
 
 ---
 
+## BACKLOG-065 — Monthly-phased 1H allocation tier (phased → uniform_half fallback)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-03 |
+| **Effort** | Medium–large (parser parity + allocation tier stack + sanity gate + steward flags; re-derivation hook already exists for `uniform_half`) |
+| **Source** | Steward session 2026-07-03: 1H split + `uniform_half` shipped (`1893309`, `lineup_half_year_quantity.py`); read-only diagnosis on `cip` — 2026 NB 1H files lack Apr/May/Jun-style phasing in stored payloads; 2025-era corpus retains phasing in source workbooks. `historical_lineup.py` already captures `_month_split` → `month_split_json` on **historical** import lines; **`lineup_case_parser.py` (CommercialLineupCase / bulk backfill path) does not** — stores `raw_row_payload.uploaded` (all header cells) but never populates `CommercialLineupLine.month_split_json` or a `_month_split` sentinel. |
+| **Idea** | **Allocation tier stack** for 1H half-year splits: **`monthly_phased`** when source carries month phasing columns (Apr/May/Jun-style) that pass a **sum-to-total sanity gate** (monthly values sum to line `quantity_units`, no TBC/blank poisoning) → else **`uniform_half`** fallback (today’s rule). Per-line flag records the tier used (e.g. `allocation=monthly_phased` vs `allocation=uniform_half`). Q1/Q2 case split from phasing: allocate months to calendar quarters from column headers, not blind 50/50. |
+| **Why it matters / deferrable** | **Value concentrates in 2025-era corpus** — 2026 lineup format dropped monthly phasing columns, so `uniform_half` is the correct default for current imports. Phased allocation unlocks **intra-quarter phasing intelligence** (plan shape, steward review, later plan-vs-shipped at month grain) — separate follow-on, not required for 1H Q1/Q2 case split today. Safe to defer while steward re-derivation runs on `uniform_half` flags. |
+| **What the work is** | (1) **Prerequisite audit** — verify whether `lineup_case_parser` / bulk backfill preserves enough raw row evidence for phasing (gap vs preserve-raw principle); port or share month-column detection from `historical_lineup.py` into the CommercialLineupCase parse path; persist `month_split_json` on `commercial_lineup_line`. (2) **Sanity gate** — month columns sum to `quantity_units` within tolerance; reject TBC/empty/non-numeric for phased tier. (3) **Tier resolver** in `lineup_half_year_quantity` (or sibling): `monthly_phased` → Q1/Q2 from month→quarter map; fallback `uniform_half`. (4) **Preview/apply** — show tier per file/line in bulk panel + re-derivation; steward override surface for tier (extends existing allocation flag pattern). (5) **Tests** — 2025 fixture with Apr–Jun columns (phased), 2026 fixture (uniform_half only), sum-invariance for both tiers. |
+| **Regression traps** | Do not replace `uniform_half` as default when phasing absent; sum invariance must hold per tier; do not auto-pick supersession; `allocation=uniform_half` flags remain the **re-derivation hook** for already-imported 1H cases until steward re-runs with phased tier; historical vs weekly / DSI paths unchanged. |
+| **Behavior to retain** | Settled 1H rules: always split Q1+Q2; soft supersession; collisions to steward; flag ≠ block; `period_scope=1h_split` from any 1H signal tier (`1893309`). |
+| **Out of scope** | Intra-quarter phasing **reporting** UI and month-grain plan-vs-shipped chips (separate later item); inventing phasing from thin air when columns missing; changing 1H split trigger logic. |
+| **TRIGGER** | **Re-deriving any 2025 1H file** during bulk backfill stewarding (phasing columns present in source), **or** when **month-grain plan-vs-shipped** becomes a reporting target. |
+
+---
+
 ## BACKLOG-034 — Product Master launch/retire date integrity
 
 | Field | Detail |
