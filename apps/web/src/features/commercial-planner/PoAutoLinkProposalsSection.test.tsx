@@ -1,58 +1,20 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
-import { PoAutoLinkProposalsSection, buildGroupedPoAutoLinkRows } from './PoAutoLinkProposalsSection';
+import {
+  PoAutoLinkProposalsSection,
+  buildProposalGroups,
+  dedupeGroupPlanUnits,
+} from './PoAutoLinkProposalsSection';
 
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
   safeDisplayError: (e: unknown) => String(e),
-}));
-
-vi.mock('@/components/EnterpriseDataGrid', () => ({
-  EnterpriseDataGrid: ({
-    rowData,
-    columnDefs,
-    gridOptions,
-  }: {
-    rowData: Array<Record<string, unknown>>;
-    columnDefs?: Array<Record<string, unknown>>;
-    gridOptions?: { onSelectionChanged?: (e: { api: { getSelectedRows: () => unknown[] } }) => void };
-  }) => (
-    <div data-testid="po-auto-link-grid-mock">
-      {rowData.map((row) => {
-        const key = String(row.rowType === 'group' ? row.groupKey : row.proposal_key);
-        return (
-          <div key={key} data-testid={row.rowType === 'group' ? `grid-group-${key}` : `grid-row-${key}`}>
-            {columnDefs?.map((c, idx) =>
-              c?.cellRenderer ? (
-                <div key={`${key}-${idx}`}>
-                  {(c.cellRenderer as (p: { data: typeof row }) => React.ReactNode)({ data: row })}
-                </div>
-              ) : null,
-            )}
-          </div>
-        );
-      })}
-      <button
-        type="button"
-        data-testid="mock-select-row"
-        onClick={() =>
-          gridOptions?.onSelectionChanged?.({
-            api: {
-              getSelectedRows: () => rowData.filter((r) => r.rowType !== 'group'),
-            },
-          })
-        }
-      >
-        mock select
-      </button>
-    </div>
-  ),
 }));
 
 import { apiGet, apiPost } from '@/lib/api';
@@ -66,7 +28,7 @@ const sampleProposal = {
   case_period_label: '26Q1',
   inferred_period_start: '2026-01-01',
   customer_id: 5,
-  customer_label: 'CUST — Acme',
+  customer_label: 'CUST — Acme Retail Group',
   distributor_id: 21,
   distributor_code: 'DIST',
   distributor_name: 'Mustek',
@@ -100,6 +62,11 @@ function renderSection(props: { autoFetch?: boolean } = {}) {
   );
 }
 
+async function expandSection() {
+  await userEvent.click(screen.getByTestId('po-auto-link-expand'));
+  await screen.findByTestId('po-auto-link-cards');
+}
+
 describe('PoAutoLinkProposalsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -121,23 +88,22 @@ describe('PoAutoLinkProposalsSection', () => {
   it('does not fetch proposals until expanded', async () => {
     renderSection();
     expect(apiGetMock).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByTestId('po-auto-link-expand'));
-    await waitFor(() => expect(apiGetMock).toHaveBeenCalledWith(expect.stringContaining('/po-auto-link/proposals'), expect.anything()));
+    await expandSection();
+    expect(apiGetMock).toHaveBeenCalledWith(expect.stringContaining('/po-auto-link/proposals'), expect.anything());
   });
 
-  it('renders proposal grid after expand with confidence chip', async () => {
+  it('renders proposal card rows after expand with confidence chip', async () => {
     renderSection();
-    await userEvent.click(screen.getByTestId('po-auto-link-expand'));
-    expect(await screen.findByTestId('po-auto-link-table')).toBeInTheDocument();
+    await expandSection();
     expect(screen.getByText('high')).toBeInTheDocument();
-    expect(screen.getByTestId('grid-row-10:5:PO99')).toBeInTheDocument();
+    expect(screen.getByTestId('po-auto-link-row-10:5:PO99')).toBeInTheDocument();
+    expect(screen.queryByTestId('po-auto-link-grid-mock')).not.toBeInTheDocument();
   });
 
   it('opens confirm dialog with sales_model_name and sku for matched products', async () => {
     const user = userEvent.setup();
     renderSection();
-    await user.click(screen.getByTestId('po-auto-link-expand'));
-    await screen.findByTestId('po-auto-link-table');
+    await expandSection();
     await user.click(screen.getByTestId('po-auto-link-review-10:5:PO99'));
     expect(await screen.findByTestId('po-auto-link-confirm-dialog')).toBeInTheDocument();
     expect(screen.getByTestId('matched-product-label-7')).toHaveTextContent('Model Seven · SKU-7');
@@ -147,8 +113,7 @@ describe('PoAutoLinkProposalsSection', () => {
   it('applies link from confirm dialog', async () => {
     const user = userEvent.setup();
     renderSection();
-    await user.click(screen.getByTestId('po-auto-link-expand'));
-    await screen.findByTestId('po-auto-link-table');
+    await expandSection();
     await user.click(screen.getByTestId('po-auto-link-review-10:5:PO99'));
     await user.click(screen.getByTestId('po-auto-link-confirm-submit'));
     await waitFor(() => {
@@ -160,17 +125,18 @@ describe('PoAutoLinkProposalsSection', () => {
 
   it('auto-expands when autoFetch and proposals exist', async () => {
     renderSection({ autoFetch: true });
-    expect(await screen.findByTestId('po-auto-link-table')).toBeInTheDocument();
+    expect(await screen.findByTestId('po-auto-link-cards')).toBeInTheDocument();
     expect(apiGetMock).toHaveBeenCalledWith(expect.stringContaining('/po-auto-link/proposals'), expect.anything());
   });
 
-  it('bulk apply selected proposals', async () => {
+  it('bulk apply selected proposals after confirm dialog', async () => {
     const user = userEvent.setup();
     renderSection();
-    await user.click(screen.getByTestId('po-auto-link-expand'));
-    await screen.findByTestId('po-auto-link-table');
-    await user.click(screen.getByTestId('mock-select-row'));
+    await expandSection();
+    await user.click(screen.getByTestId('po-auto-link-select-10:5:PO99'));
     await user.click(screen.getByTestId('po-auto-link-bulk-apply'));
+    expect(await screen.findByTestId('po-auto-link-bulk-confirm-dialog')).toBeInTheDocument();
+    await user.click(screen.getByTestId('po-auto-link-bulk-confirm-submit'));
     await waitFor(() => {
       expect(apiPostMock).toHaveBeenCalledWith('/api/v1/commercial-planner/lineup/po-auto-link/apply', {
         items: [{ case_id: 10, purchase_order_id: 99 }],
@@ -178,7 +144,7 @@ describe('PoAutoLinkProposalsSection', () => {
     });
   });
 
-  it('groups three proposals with same period and customer into one header plan figure', () => {
+  it('groups three proposals with same period and customer into one card with deduped plan', () => {
     const proposals = [
       { ...sampleProposal, proposal_key: '10:5:PO99', purchase_order_id: 99, po_number: 'PO-99', total_planned_units: 60 },
       { ...sampleProposal, proposal_key: '10:5:PO100', purchase_order_id: 100, po_number: 'PO-100', total_planned_units: 40 },
@@ -191,11 +157,132 @@ describe('PoAutoLinkProposalsSection', () => {
         matched_products: [{ ...sampleProposal.matched_products[0], product_id: 8, planned_units: 25 }],
       },
     ];
-    const rows = buildGroupedPoAutoLinkRows(proposals);
-    const groupRows = rows.filter((r) => r.rowType === 'group');
-    const childRows = rows.filter((r) => r.rowType !== 'group');
-    expect(groupRows).toHaveLength(1);
-    expect(childRows).toHaveLength(3);
-    expect(groupRows[0].groupPlanUnits).toBe(125);
+    const groups = buildProposalGroups(proposals);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].proposals).toHaveLength(3);
+    expect(groups[0].groupPlanUnits).toBe(125);
+    expect(dedupeGroupPlanUnits(proposals)).toBe(125);
+  });
+
+  it('renders two cards with full distinct customer labels for near-identical tokens', async () => {
+    apiGetMock.mockResolvedValue({
+      proposals: [
+        { ...sampleProposal, proposal_key: 'a', customer_id: 1, customer_label: 'PROV — Makro South Africa' },
+        { ...sampleProposal, proposal_key: 'b', customer_id: 2, customer_label: 'PROV — Makro Wholesale' },
+      ],
+      total: 2,
+      returned: 2,
+      dismissed_count: 0,
+      data_unavailable: false,
+    });
+    renderSection();
+    await expandSection();
+    expect(screen.getByText('PROV — Makro South Africa')).toBeInTheDocument();
+    expect(screen.getByText('PROV — Makro Wholesale')).toBeInTheDocument();
+    expect(screen.getAllByTestId(/^po-auto-link-group-card-/)).toHaveLength(2);
+  });
+
+  it('shows per-card selection counts when global select-all-high runs on collapsed cards', async () => {
+    const user = userEvent.setup();
+    apiGetMock.mockResolvedValue({
+      proposals: [
+        { ...sampleProposal, proposal_key: 'a', customer_id: 1, customer_label: 'Makro', confidence: 'high' as const },
+        { ...sampleProposal, proposal_key: 'b', customer_id: 2, customer_label: 'Game', confidence: 'high' as const },
+        { ...sampleProposal, proposal_key: 'c', customer_id: 3, customer_label: 'Pepkor', confidence: 'medium' as const },
+        { ...sampleProposal, proposal_key: 'd', customer_id: 4, customer_label: 'Shoprite', confidence: 'high' as const },
+      ],
+      total: 4,
+      returned: 4,
+      dismissed_count: 0,
+      data_unavailable: false,
+    });
+    renderSection();
+    await expandSection();
+    // 4 cards → default collapsed
+    for (const key of ['26Q1|1', '26Q1|2', '26Q1|3', '26Q1|4']) {
+      expect(screen.getByTestId(`po-auto-link-group-selection-${key}`)).toHaveTextContent('0 of 1 selected');
+    }
+    await user.click(screen.getByRole('button', { name: /select all high/i }));
+    expect(screen.getByTestId('po-auto-link-group-selection-26Q1|1')).toHaveTextContent('1 of 1 selected');
+    expect(screen.getByTestId('po-auto-link-group-selection-26Q1|2')).toHaveTextContent('1 of 1 selected');
+    expect(screen.getByTestId('po-auto-link-group-selection-26Q1|3')).toHaveTextContent('0 of 1 selected');
+    expect(screen.getByTestId('po-auto-link-group-selection-26Q1|4')).toHaveTextContent('1 of 1 selected');
+  });
+
+  it('global link confirm lists per-customer totals', async () => {
+    const user = userEvent.setup();
+    apiGetMock.mockResolvedValue({
+      proposals: [
+        { ...sampleProposal, proposal_key: 'a', customer_id: 1, customer_label: 'Makro', purchase_order_id: 1, po_number: 'PO-1' },
+        { ...sampleProposal, proposal_key: 'b', customer_id: 1, customer_label: 'Makro', purchase_order_id: 2, po_number: 'PO-2' },
+        { ...sampleProposal, proposal_key: 'c', customer_id: 2, customer_label: 'Game', purchase_order_id: 3, po_number: 'PO-3' },
+      ],
+      total: 3,
+      returned: 3,
+      dismissed_count: 0,
+      data_unavailable: false,
+    });
+    renderSection();
+    await expandSection();
+    await user.click(screen.getByRole('button', { name: /select all high/i }));
+    await user.click(screen.getByTestId('po-auto-link-bulk-apply'));
+    const summary = await screen.findByTestId('po-auto-link-bulk-confirm-summary');
+    expect(summary).toHaveTextContent('Linking 3 proposals');
+    expect(summary).toHaveTextContent('Game 1');
+    expect(summary).toHaveTextContent('Makro 2');
+  });
+
+  it('per-card link selected posts only that card proposal keys', async () => {
+    const user = userEvent.setup();
+    apiGetMock.mockResolvedValue({
+      proposals: [
+        { ...sampleProposal, proposal_key: 'a', customer_id: 1, customer_label: 'Makro', purchase_order_id: 1, po_number: 'PO-1' },
+        { ...sampleProposal, proposal_key: 'b', customer_id: 1, customer_label: 'Makro', purchase_order_id: 2, po_number: 'PO-2' },
+        { ...sampleProposal, proposal_key: 'c', customer_id: 2, customer_label: 'Game', purchase_order_id: 3, po_number: 'PO-3' },
+      ],
+      total: 3,
+      returned: 3,
+      dismissed_count: 0,
+      data_unavailable: false,
+    });
+    renderSection();
+    await expandSection();
+    const makroCard = screen.getByTestId('po-auto-link-group-card-26Q1|1');
+    await user.click(within(makroCard).getByTestId('po-auto-link-card-select-all-26Q1|1'));
+    await user.click(within(makroCard).getByTestId('po-auto-link-card-link-26Q1|1'));
+    await user.click(screen.getByTestId('po-auto-link-bulk-confirm-submit'));
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith('/api/v1/commercial-planner/lineup/po-auto-link/apply', {
+        items: [
+          { case_id: 10, purchase_order_id: 1 },
+          { case_id: 10, purchase_order_id: 2 },
+        ],
+      });
+    });
+  });
+
+  it('shows Restore on dismissed row when Show dismissed is on', async () => {
+    const user = userEvent.setup();
+    apiGetMock.mockImplementation((path: string) => {
+      if (!path.includes('/po-auto-link/proposals')) return Promise.reject(new Error(path));
+      const includeDismissed = path.includes('include_dismissed=true');
+      return Promise.resolve({
+        proposals: includeDismissed
+          ? [
+              { ...sampleProposal, proposal_key: 'active', dismissed: false },
+              { ...sampleProposal, proposal_key: '10:5:PO99', dismissed: true },
+            ]
+          : [{ ...sampleProposal, proposal_key: 'active', dismissed: false }],
+        total: 1,
+        returned: includeDismissed ? 2 : 1,
+        dismissed_count: 1,
+        data_unavailable: false,
+      });
+    });
+    renderSection();
+    await expandSection();
+    expect(screen.queryByTestId('po-auto-link-restore-10:5:PO99')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('po-auto-link-toggle-dismissed'));
+    await waitFor(() => expect(screen.getByTestId('po-auto-link-restore-10:5:PO99')).toBeInTheDocument());
   });
 });

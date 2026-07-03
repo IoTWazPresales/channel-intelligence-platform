@@ -6,13 +6,17 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
+  FormControlLabel,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -26,11 +30,11 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import type { ColDef, ColumnState, GridApi, GridOptions, ICellRendererParams } from 'ag-grid-community';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type InputHTMLAttributes } from 'react';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
 import { PoDismissReasonDialog } from './PoDismissReasonDialog';
@@ -77,6 +81,17 @@ type ProposalsResponse = {
   data_unavailable?: boolean;
 };
 
+export type PoAutoLinkProposalGroup = {
+  groupKey: string;
+  case_period_label: string | null;
+  inferred_period_start: string | null;
+  customer_id: number | null;
+  customer_label: string | null;
+  groupPlanUnits: number;
+  proposedShipUnits: number;
+  proposals: PoAutoLinkProposal[];
+};
+
 function fmtUnits(n: number | null | undefined): string {
   if (n == null) return '—';
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
@@ -104,18 +119,15 @@ function productDisplayLabel(m: MatchedProduct): string {
   return `Product #${m.product_id}`;
 }
 
-export type PoAutoLinkGroupHeader = {
-  rowType: 'group';
-  groupKey: string;
-  case_period_label: string | null;
-  customer_id: number | null;
-  customer_label: string | null;
-  groupPlanUnits: number;
-};
+function customerDisplayLabel(p: PoAutoLinkProposal): string {
+  if (p.customer_label?.trim()) return p.customer_label.trim();
+  if (p.customer_id != null) return `Customer #${p.customer_id}`;
+  return 'Unresolved customer';
+}
 
-export type PoAutoLinkGridRow =
-  | PoAutoLinkGroupHeader
-  | (PoAutoLinkProposal & { rowType?: 'proposal' });
+function periodSortKey(g: PoAutoLinkProposalGroup): string {
+  return g.inferred_period_start ?? g.case_period_label ?? '';
+}
 
 export function dedupeGroupPlanUnits(proposals: PoAutoLinkProposal[]): number {
   const byProduct = new Map<number, number>();
@@ -127,7 +139,21 @@ export function dedupeGroupPlanUnits(proposals: PoAutoLinkProposal[]): number {
   return [...byProduct.values()].reduce((sum, n) => sum + n, 0);
 }
 
-export function buildGroupedPoAutoLinkRows(proposals: PoAutoLinkProposal[]): PoAutoLinkGridRow[] {
+function sumProposedShipUnits(proposals: PoAutoLinkProposal[]): number {
+  return proposals.reduce((sum, p) => sum + (p.total_shipped_units ?? 0), 0);
+}
+
+function sortProposalsInGroup(proposals: PoAutoLinkProposal[]): PoAutoLinkProposal[] {
+  return [...proposals].sort((a, b) => {
+    const conf = (b.confidence === 'high' ? 1 : 0) - (a.confidence === 'high' ? 1 : 0);
+    if (conf !== 0) return conf;
+    const poA = a.po_number ?? String(a.purchase_order_id);
+    const poB = b.po_number ?? String(b.purchase_order_id);
+    return poA.localeCompare(poB);
+  });
+}
+
+export function buildProposalGroups(proposals: PoAutoLinkProposal[]): PoAutoLinkProposalGroup[] {
   const groups = new Map<string, PoAutoLinkProposal[]>();
   for (const p of proposals) {
     const period = p.case_period_label ?? p.inferred_period_start ?? '';
@@ -136,26 +162,49 @@ export function buildGroupedPoAutoLinkRows(proposals: PoAutoLinkProposal[]): PoA
     bucket.push(p);
     groups.set(key, bucket);
   }
-  const rows: PoAutoLinkGridRow[] = [];
-  for (const [groupKey, bucket] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    const first = bucket[0];
-    rows.push({
-      rowType: 'group',
-      groupKey,
-      case_period_label: first.case_period_label,
-      customer_id: first.customer_id,
-      customer_label: first.customer_label,
-      groupPlanUnits: dedupeGroupPlanUnits(bucket),
+
+  return [...groups.entries()]
+    .map(([groupKey, bucket]) => {
+      const first = bucket[0];
+      return {
+        groupKey,
+        case_period_label: first.case_period_label,
+        inferred_period_start: first.inferred_period_start,
+        customer_id: first.customer_id,
+        customer_label: first.customer_label,
+        groupPlanUnits: dedupeGroupPlanUnits(bucket),
+        proposedShipUnits: sumProposedShipUnits(bucket),
+        proposals: sortProposalsInGroup(bucket),
+      };
+    })
+    .sort((a, b) => {
+      const periodCmp = periodSortKey(b).localeCompare(periodSortKey(a));
+      if (periodCmp !== 0) return periodCmp;
+      return customerDisplayLabel(a.proposals[0]).localeCompare(customerDisplayLabel(b.proposals[0]));
     });
-    for (const p of bucket) {
-      rows.push({ ...p, rowType: 'proposal' });
-    }
-  }
-  return rows;
 }
 
-function isGroupRow(row: PoAutoLinkGridRow | undefined): row is PoAutoLinkGroupHeader {
-  return row?.rowType === 'group';
+/** @deprecated Use buildProposalGroups — kept for tests migrating off synthetic grid rows. */
+export function buildGroupedPoAutoLinkRows(proposals: PoAutoLinkProposal[]) {
+  return buildProposalGroups(proposals);
+}
+
+function MatchedProductsChip({ products }: { products: MatchedProduct[] }) {
+  if (!products.length) {
+    return <Chip size="small" variant="outlined" label="0 products" />;
+  }
+  const preview = products.slice(0, 5).map(productDisplayLabel).join(' · ');
+  const suffix = products.length > 5 ? ` … +${products.length - 5} more` : '';
+  return (
+    <Tooltip title={`${preview}${suffix}`}>
+      <Chip
+        size="small"
+        variant="outlined"
+        label={`${products.length} product${products.length === 1 ? '' : 's'}`}
+        data-testid="matched-products-count-chip"
+      />
+    </Tooltip>
+  );
 }
 
 function PoAutoLinkConfirmDialog({
@@ -191,7 +240,7 @@ function PoAutoLinkConfirmDialog({
               Customer
             </Typography>
             <Typography variant="body1" data-testid="confirm-customer-label">
-              {proposal.customer_label ?? (proposal.customer_id ? `Customer #${proposal.customer_id}` : 'Unresolved')}
+              {customerDisplayLabel(proposal)}
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -287,6 +336,278 @@ function PoAutoLinkConfirmDialog({
   );
 }
 
+function BulkLinkConfirmDialog({
+  open,
+  totalCount,
+  byCustomer,
+  onClose,
+  onConfirm,
+  isPending,
+  error,
+}: {
+  open: boolean;
+  totalCount: number;
+  byCustomer: { label: string; count: number }[];
+  onClose: () => void;
+  onConfirm: () => void;
+  isPending: boolean;
+  error: string | null;
+}) {
+  const breakdown =
+    byCustomer.map((c) => `${c.label} ${c.count}`).join(', ') || '—';
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth data-testid="po-auto-link-bulk-confirm-dialog">
+      <DialogTitle>Confirm bulk link</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Typography variant="body2" data-testid="po-auto-link-bulk-confirm-summary">
+            Linking {totalCount} proposal{totalCount === 1 ? '' : 's'}: {breakdown}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Each selected PO will be linked to its lineup case and the case status set to PO issued.
+          </Typography>
+          {error && <Alert severity="error">{error}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button size="small" onClick={onClose} disabled={isPending}>
+          Cancel
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
+          disabled={isPending}
+          onClick={onConfirm}
+          data-testid="po-auto-link-bulk-confirm-submit"
+        >
+          {isPending ? 'Linking…' : `Link ${totalCount} proposal${totalCount === 1 ? '' : 's'}`}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function CoverageLine({ planUnits, shipUnits }: { planUnits: number; shipUnits: number }) {
+  const overPlan = shipUnits > planUnits && planUnits > 0;
+  return (
+    <Typography variant="body2" color="text.secondary" data-testid="po-auto-link-coverage-line">
+      Proposed POs ship {fmtUnits(shipUnits)} units vs plan {fmtUnits(planUnits)}
+      {overPlan ? (
+        <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
+          (over plan — expected when multiple POs cover the same customer period)
+        </Typography>
+      ) : null}
+    </Typography>
+  );
+}
+
+function ProposalRow({
+  proposal,
+  selected,
+  onToggleSelect,
+  onReview,
+  onDismiss,
+  onRestore,
+  restorePending,
+}: {
+  proposal: PoAutoLinkProposal;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onReview: () => void;
+  onDismiss: () => void;
+  onRestore: () => void;
+  restorePending: boolean;
+}) {
+  const dismissed = !!proposal.dismissed;
+
+  return (
+    <Stack
+      direction={{ xs: 'column', sm: 'row' }}
+      spacing={1}
+      alignItems={{ sm: 'center' }}
+      sx={{
+        py: 0.75,
+        px: 1,
+        borderRadius: 1,
+        opacity: dismissed ? 0.55 : 1,
+        bgcolor: dismissed ? 'action.hover' : 'transparent',
+      }}
+      data-testid={`po-auto-link-row-${proposal.proposal_key}`}
+    >
+      <Stack direction="row" spacing={1} alignItems="center" flex={1} flexWrap="wrap" useFlexGap>
+        <Checkbox
+          size="small"
+          checked={selected}
+          disabled={dismissed}
+          onChange={onToggleSelect}
+          inputProps={{ 'data-testid': `po-auto-link-select-${proposal.proposal_key}` } as InputHTMLAttributes<HTMLInputElement>}
+        />
+        <Tooltip title={reasonLabel(proposal.reason)}>
+          <Chip size="small" color={confidenceColor(proposal.confidence)} label={proposal.confidence} />
+        </Tooltip>
+        <Typography variant="body2" fontWeight={500}>
+          {proposal.po_number ?? `#${proposal.purchase_order_id}`}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {[proposal.distributor_code, proposal.distributor_name].filter(Boolean).join(' — ') || '—'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Shipped {fmtUnits(proposal.total_shipped_units)}
+        </Typography>
+        <MatchedProductsChip products={proposal.matched_products} />
+      </Stack>
+      <Stack direction="row" spacing={0.5} flexShrink={0}>
+        {dismissed ? (
+          <Button size="small" onClick={onRestore} disabled={restorePending} data-testid={`po-auto-link-restore-${proposal.proposal_key}`}>
+            Restore
+          </Button>
+        ) : (
+          <>
+            <Button size="small" onClick={onReview} data-testid={`po-auto-link-review-${proposal.proposal_key}`}>
+              Review
+            </Button>
+            <Button size="small" color="warning" onClick={onDismiss}>
+              Dismiss
+            </Button>
+          </>
+        )}
+      </Stack>
+    </Stack>
+  );
+}
+
+function ProposalGroupCard({
+  group,
+  expanded,
+  onToggleExpanded,
+  selected,
+  onToggleProposal,
+  onSelectAllInCard,
+  onLinkSelectedInCard,
+  onReview,
+  onDismiss,
+  onRestore,
+  restorePending,
+  applyPending,
+}: {
+  group: PoAutoLinkProposalGroup;
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  selected: Set<string>;
+  onToggleProposal: (key: string) => void;
+  onSelectAllInCard: (keys: string[]) => void;
+  onLinkSelectedInCard: (keys: string[]) => void;
+  onReview: (p: PoAutoLinkProposal) => void;
+  onDismiss: (p: PoAutoLinkProposal) => void;
+  onRestore: (key: string) => void;
+  restorePending: boolean;
+  applyPending: boolean;
+}) {
+  const selectable = group.proposals.filter((p) => !p.dismissed);
+  const selectedInCard = selectable.filter((p) => selected.has(p.proposal_key));
+  const allSelected = selectable.length > 0 && selectedInCard.length === selectable.length;
+  const someSelected = selectedInCard.length > 0 && !allSelected;
+  const periodLabel = group.case_period_label ?? group.inferred_period_start ?? '—';
+  const customerLabel = customerDisplayLabel(group.proposals[0]);
+
+  return (
+    <Card variant="outlined" data-testid={`po-auto-link-group-card-${group.groupKey}`}>
+      <CardContent sx={{ pb: expanded ? 2 : '16px !important' }}>
+        <Stack spacing={1}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={1}
+            alignItems={{ md: 'center' }}
+            justifyContent="space-between"
+          >
+            <Stack direction="row" spacing={1} alignItems="flex-start" flexWrap="wrap" useFlexGap sx={{ flex: 1 }}>
+              <IconButton size="small" onClick={onToggleExpanded} aria-label={expanded ? 'Collapse card' : 'Expand card'}>
+                {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+              </IconButton>
+              <Chip size="small" label={periodLabel} />
+              <Typography
+                variant="subtitle1"
+                fontWeight={600}
+                sx={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: '100%' }}
+                data-testid={`po-auto-link-group-customer-${group.groupKey}`}
+              >
+                {customerLabel}
+              </Typography>
+            </Stack>
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`${selectedInCard.length} of ${selectable.length} selected`}
+              data-testid={`po-auto-link-group-selection-${group.groupKey}`}
+            />
+          </Stack>
+
+          <Box sx={{ pl: { xs: 0, sm: 5 } }}>
+            <Typography variant="body2" color="text.secondary">
+              Period plan (customer-scoped): {fmtUnits(group.groupPlanUnits)}
+            </Typography>
+            <CoverageLine planUnits={group.groupPlanUnits} shipUnits={group.proposedShipUnits} />
+          </Box>
+
+          {!expanded && (
+            <Typography variant="caption" color="text.secondary" sx={{ pl: { xs: 0, sm: 5 } }}>
+              {group.proposals.length} proposal{group.proposals.length === 1 ? '' : 's'} · expand to review rows
+            </Typography>
+          )}
+
+          <Collapse in={expanded}>
+            <Divider sx={{ my: 1 }} />
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={allSelected}
+                    indeterminate={someSelected}
+                    disabled={!selectable.length}
+                    onChange={() => {
+                      if (allSelected) onSelectAllInCard([]);
+                      else onSelectAllInCard(selectable.map((p) => p.proposal_key));
+                    }}
+                    inputProps={
+                      { 'data-testid': `po-auto-link-card-select-all-${group.groupKey}` } as InputHTMLAttributes<HTMLInputElement>
+                    }
+                  />
+                }
+                label="Select all in card"
+              />
+              <Button
+                size="small"
+                variant="contained"
+                disabled={!selectedInCard.length || applyPending}
+                onClick={() => onLinkSelectedInCard(selectedInCard.map((p) => p.proposal_key))}
+                data-testid={`po-auto-link-card-link-${group.groupKey}`}
+              >
+                Link selected ({selectedInCard.length})
+              </Button>
+            </Stack>
+            <Stack spacing={0.5} divider={<Divider flexItem />}>
+              {group.proposals.map((p) => (
+                <ProposalRow
+                  key={p.proposal_key}
+                  proposal={p}
+                  selected={selected.has(p.proposal_key)}
+                  onToggleSelect={() => onToggleProposal(p.proposal_key)}
+                  onReview={() => onReview(p)}
+                  onDismiss={() => onDismiss(p)}
+                  onRestore={() => onRestore(p.proposal_key)}
+                  restorePending={restorePending}
+                />
+              ))}
+            </Stack>
+          </Collapse>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
 export const PO_AUTO_LINK_SECTION_ID = 'po-auto-link-section';
 
 type PoAutoLinkProposalsSectionProps = {
@@ -308,19 +629,10 @@ export function PoAutoLinkProposalsSection({
   const [showDismissed, setShowDismissed] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmProposal, setConfirmProposal] = useState<PoAutoLinkProposal | null>(null);
+  const [bulkConfirmKeys, setBulkConfirmKeys] = useState<string[] | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [dismissTarget, setDismissTarget] = useState<PoAutoLinkProposal | null>(null);
-  const gridApiRef = useRef<GridApi<PoAutoLinkGridRow> | null>(null);
-  const sortStateRef = useRef<ColumnState[]>([]);
-
-  const applyPersistedSort = useCallback((api: GridApi<PoAutoLinkGridRow>) => {
-    const sorted = sortStateRef.current.filter((c) => c.sort != null);
-    if (!sorted.length) return;
-    api.applyColumnState({
-      state: sorted.map((c) => ({ colId: c.colId, sort: c.sort, sortIndex: c.sortIndex })),
-      defaultState: { sort: null },
-    });
-  }, []);
+  const [cardExpanded, setCardExpanded] = useState<Record<string, boolean>>({});
 
   const queryKey = ['po-auto-link', period, confidence, showDismissed] as const;
 
@@ -345,8 +657,8 @@ export function PoAutoLinkProposalsSection({
     onSuccess: (data: { error_count?: number; errors?: { error: string }[] }) => {
       setApplyError(data.error_count ? data.errors?.map((e) => e.error).join('; ') ?? 'Some links failed' : null);
       setConfirmProposal(null);
+      setBulkConfirmKeys(null);
       setSelected(new Set());
-      gridApiRef.current?.deselectAll();
       void qc.invalidateQueries({ queryKey: ['po-auto-link'] });
       void qc.invalidateQueries({ queryKey: ['po-management'] });
       void qc.invalidateQueries({ queryKey: ['lineup-cases'] });
@@ -379,7 +691,6 @@ export function PoAutoLinkProposalsSection({
   });
 
   const proposals = proposalsQ.data?.proposals ?? [];
-  const dismissedList = proposalsQ.data?.dismissed ?? [];
   const activeProposals = useMemo(
     () => (showDismissed ? proposals : proposals.filter((p) => !p.dismissed)),
     [proposals, showDismissed]
@@ -395,17 +706,27 @@ export function PoAutoLinkProposalsSection({
     });
   }, [activeProposals, customerFilter]);
 
-  const groupedRowData = useMemo(() => buildGroupedPoAutoLinkRows(filteredProposals), [filteredProposals]);
+  const proposalGroups = useMemo(() => buildProposalGroups(filteredProposals), [filteredProposals]);
+
+  const proposalByKey = useMemo(() => {
+    const map = new Map<string, PoAutoLinkProposal>();
+    for (const p of filteredProposals) map.set(p.proposal_key, p);
+    return map;
+  }, [filteredProposals]);
 
   useEffect(() => {
-    const api = gridApiRef.current;
-    if (api) applyPersistedSort(api);
-  }, [groupedRowData, applyPersistedSort]);
+    if (!proposalGroups.length) return;
+    const defaultExpanded = proposalGroups.length <= 3;
+    setCardExpanded((prev) => {
+      const next = { ...prev };
+      for (const g of proposalGroups) {
+        if (!(g.groupKey in next)) next[g.groupKey] = defaultExpanded;
+      }
+      return next;
+    });
+  }, [proposalGroups]);
 
-  const pendingCount = Math.max(
-    0,
-    (proposalsQ.data?.total ?? 0) - (proposalsQ.data?.dismissed_count ?? 0)
-  );
+  const pendingCount = Math.max(0, (proposalsQ.data?.total ?? 0) - (proposalsQ.data?.dismissed_count ?? 0));
 
   useEffect(() => {
     if (!autoFetch) return;
@@ -425,23 +746,59 @@ export function PoAutoLinkProposalsSection({
     setExpanded(false);
   }, []);
 
-  const bulkApply = () => {
-    const items = filteredProposals
-      .filter((p) => selected.has(p.proposal_key) && !p.dismissed)
-      .map((p) => ({ case_id: p.case_id, purchase_order_id: p.purchase_order_id }));
-    if (!items.length) return;
-    setApplyError(null);
-    applyMut.mutate({ items });
-  };
+  const toggleProposalSelection = useCallback((key: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const replaceCardSelection = useCallback((groupKey: string, keys: string[]) => {
+    const group = proposalGroups.find((g) => g.groupKey === groupKey);
+    if (!group) return;
+    const groupKeys = new Set(group.proposals.map((p) => p.proposal_key));
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((k) => !groupKeys.has(k)));
+      for (const k of keys) next.add(k);
+      return next;
+    });
+  }, [proposalGroups]);
 
   const selectAllHigh = () => {
     const keys = filteredProposals.filter((p) => p.confidence === 'high' && !p.dismissed).map((p) => p.proposal_key);
     setSelected(new Set(keys));
-    if (!gridApiRef.current) return;
-    gridApiRef.current.forEachNode((node) => {
-      if (node.data && keys.includes(node.data.proposal_key)) node.setSelected(true);
-      else node.setSelected(false);
-    });
+  };
+
+  const openBulkConfirm = (keys: string[]) => {
+    if (!keys.length) return;
+    setApplyError(null);
+    setBulkConfirmKeys(keys);
+  };
+
+  const bulkConfirmBreakdown = useMemo(() => {
+    if (!bulkConfirmKeys?.length) return [];
+    const counts = new Map<string, number>();
+    for (const key of bulkConfirmKeys) {
+      const p = proposalByKey.get(key);
+      const label = p ? customerDisplayLabel(p) : key;
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [bulkConfirmKeys, proposalByKey]);
+
+  const executeBulkApply = () => {
+    if (!bulkConfirmKeys?.length) return;
+    const items = bulkConfirmKeys
+      .map((key) => proposalByKey.get(key))
+      .filter((p): p is PoAutoLinkProposal => !!p && !p.dismissed)
+      .map((p) => ({ case_id: p.case_id, purchase_order_id: p.purchase_order_id }));
+    if (!items.length) return;
+    setApplyError(null);
+    applyMut.mutate({ items });
   };
 
   const handleSingleConfirm = (notes: string) => {
@@ -457,156 +814,6 @@ export function PoAutoLinkProposalsSection({
       ],
     });
   };
-
-  const columnDefs = useMemo<ColDef<PoAutoLinkGridRow>[]>(
-    () => [
-      {
-        headerName: 'Period / Customer',
-        colId: 'periodCustomer',
-        flex: 1,
-        minWidth: 200,
-        valueGetter: (p) => {
-          if (isGroupRow(p.data)) {
-            return `${p.data.case_period_label ?? '—'} · ${p.data.customer_label ?? 'Unresolved'}`;
-          }
-          return null;
-        },
-        cellRenderer: (p: ICellRendererParams<PoAutoLinkGridRow>) => {
-          if (isGroupRow(p.data)) {
-            return (
-              <Stack spacing={0.25}>
-                <Typography variant="body2" fontWeight={600} data-testid={`po-auto-link-group-${p.data.groupKey}`}>
-                  {p.data.case_period_label ?? '—'} · {p.data.customer_label ?? 'Unresolved'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Period plan (customer-scoped): {fmtUnits(p.data.groupPlanUnits)}
-                </Typography>
-              </Stack>
-            );
-          }
-          return null;
-        },
-      },
-      {
-        headerName: 'Confidence',
-        field: 'confidence',
-        width: 110,
-        valueGetter: (p) => (!isGroupRow(p.data) ? p.data?.confidence : null),
-        cellRenderer: (p: ICellRendererParams<PoAutoLinkGridRow>) => {
-          const row = p.data;
-          if (!row || isGroupRow(row)) return null;
-          return (
-            <Tooltip title={reasonLabel(row.reason)}>
-              <Chip size="small" color={confidenceColor(row.confidence)} label={row.confidence} />
-            </Tooltip>
-          );
-        },
-      },
-      {
-        headerName: 'PO',
-        width: 130,
-        valueGetter: (p) =>
-          !isGroupRow(p.data) ? p.data?.po_number ?? (p.data ? `#${p.data.purchase_order_id}` : '') : null,
-      },
-      {
-        headerName: 'Distributor',
-        flex: 1,
-        minWidth: 120,
-        valueGetter: (p) =>
-          !isGroupRow(p.data) && p.data
-            ? [p.data.distributor_code, p.data.distributor_name].filter(Boolean).join(' — ') || '—'
-            : null,
-      },
-      {
-        headerName: 'Matched products',
-        flex: 1,
-        minWidth: 140,
-        sortable: false,
-        valueGetter: (p) =>
-          !isGroupRow(p.data) && p.data ? p.data.matched_products.map((m) => productDisplayLabel(m)).join(', ') : null,
-      },
-      {
-        headerName: 'Shipped',
-        width: 100,
-        type: 'numericColumn',
-        valueGetter: (p) => (!isGroupRow(p.data) ? p.data?.total_shipped_units ?? null : null),
-        valueFormatter: (p) => fmtUnits(p.value as number),
-      },
-      {
-        headerName: 'Actions',
-        colId: 'actions',
-        width: 160,
-        pinned: 'right',
-        sortable: false,
-        filter: false,
-        cellRenderer: (p: ICellRendererParams<PoAutoLinkGridRow>) => {
-          const row = p.data;
-          if (!row || isGroupRow(row)) return null;
-          if (row.dismissed) {
-            return (
-              <Button
-                size="small"
-                onClick={() => restoreMut.mutate(row.proposal_key)}
-                disabled={restoreMut.isPending}
-              >
-                Restore
-              </Button>
-            );
-          }
-          return (
-            <Stack direction="row" spacing={0.5}>
-              <Button
-                size="small"
-                onClick={() => {
-                  setApplyError(null);
-                  setConfirmProposal(row);
-                }}
-                data-testid={`po-auto-link-review-${row.proposal_key}`}
-              >
-                Review
-              </Button>
-              <Button size="small" color="warning" onClick={() => setDismissTarget(row)}>
-                Dismiss
-              </Button>
-            </Stack>
-          );
-        },
-      },
-    ],
-    [restoreMut]
-  );
-
-  const gridOptions = useMemo<GridOptions<PoAutoLinkGridRow>>(
-    () => ({
-      getRowId: (p) =>
-        p.data && isGroupRow(p.data) ? `group:${p.data.groupKey}` : (p.data as PoAutoLinkProposal).proposal_key,
-      rowSelection: {
-        mode: 'multiRow',
-        checkboxes: true,
-        headerCheckbox: true,
-        enableClickSelection: false,
-        isRowSelectable: (p) => !isGroupRow(p.data) && !p.data?.dismissed,
-      },
-      onGridReady: (e) => {
-        gridApiRef.current = e.api;
-        applyPersistedSort(e.api);
-      },
-      onFirstDataRendered: (e) => {
-        applyPersistedSort(e.api);
-      },
-      onSortChanged: (e) => {
-        sortStateRef.current = e.api.getColumnState().filter((c) => c.sort != null);
-      },
-      onSelectionChanged: (e) => {
-        const keys = e.api
-          .getSelectedRows()
-          .filter((r): r is PoAutoLinkProposal & { rowType?: 'proposal' } => !isGroupRow(r))
-          .map((r) => r.proposal_key);
-        setSelected(new Set(keys));
-      },
-    }),
-    [applyPersistedSort]
-  );
 
   return (
     <Card variant="outlined" id={PO_AUTO_LINK_SECTION_ID} data-testid="po-auto-link-section">
@@ -684,7 +891,7 @@ export function PoAutoLinkProposalsSection({
                   size="small"
                   variant="contained"
                   disabled={selected.size === 0 || applyMut.isPending}
-                  onClick={bulkApply}
+                  onClick={() => openBulkConfirm([...selected])}
                   data-testid="po-auto-link-bulk-apply"
                 >
                   Link selected ({selected.size})
@@ -712,38 +919,37 @@ export function PoAutoLinkProposalsSection({
                       ? ` · ${proposalsQ.data?.dismissed_count} dismissed`
                       : ''}
                   </Typography>
-                  <Box data-testid="po-auto-link-table">
-                    <EnterpriseDataGrid
-                      rowData={groupedRowData}
-                      columnDefs={columnDefs}
-                      gridOptions={gridOptions}
-                      height={420}
-                    />
-                  </Box>
+                  <Stack spacing={1.5} data-testid="po-auto-link-cards">
+                    {proposalGroups.map((group) => (
+                      <ProposalGroupCard
+                        key={group.groupKey}
+                        group={group}
+                        expanded={cardExpanded[group.groupKey] ?? proposalGroups.length <= 3}
+                        onToggleExpanded={() =>
+                          setCardExpanded((prev) => ({
+                            ...prev,
+                            [group.groupKey]: !(prev[group.groupKey] ?? proposalGroups.length <= 3),
+                          }))
+                        }
+                        selected={selected}
+                        onToggleProposal={toggleProposalSelection}
+                        onSelectAllInCard={(keys) => replaceCardSelection(group.groupKey, keys)}
+                        onLinkSelectedInCard={openBulkConfirm}
+                        onReview={(p) => {
+                          setApplyError(null);
+                          setConfirmProposal(p);
+                        }}
+                        onDismiss={setDismissTarget}
+                        onRestore={(key) => restoreMut.mutate(key)}
+                        restorePending={restoreMut.isPending}
+                        applyPending={applyMut.isPending}
+                      />
+                    ))}
+                  </Stack>
                 </>
               )}
 
-              {showDismissed && dismissedList.length > 0 && (
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Dismissed ({dismissedList.length})
-                  </Typography>
-                  <Stack spacing={0.5}>
-                    {dismissedList.map((d) => (
-                      <Stack key={d.proposal_key} direction="row" spacing={1} alignItems="center">
-                        <Typography variant="body2" color="text.secondary">
-                          {d.proposal_key} — {d.reason_code}
-                        </Typography>
-                        <Button size="small" onClick={() => restoreMut.mutate(d.proposal_key)}>
-                          Restore
-                        </Button>
-                      </Stack>
-                    ))}
-                  </Stack>
-                </Box>
-              )}
-
-              {applyError && !confirmProposal && <Alert severity="error">{applyError}</Alert>}
+              {applyError && !confirmProposal && !bulkConfirmKeys && <Alert severity="error">{applyError}</Alert>}
             </Stack>
           </Collapse>
         </Stack>
@@ -757,6 +963,19 @@ export function PoAutoLinkProposalsSection({
           setApplyError(null);
         }}
         onConfirm={handleSingleConfirm}
+        isPending={applyMut.isPending}
+        error={applyError}
+      />
+
+      <BulkLinkConfirmDialog
+        open={!!bulkConfirmKeys?.length}
+        totalCount={bulkConfirmKeys?.length ?? 0}
+        byCustomer={bulkConfirmBreakdown}
+        onClose={() => {
+          setBulkConfirmKeys(null);
+          setApplyError(null);
+        }}
+        onConfirm={executeBulkApply}
         isPending={applyMut.isPending}
         error={applyError}
       />

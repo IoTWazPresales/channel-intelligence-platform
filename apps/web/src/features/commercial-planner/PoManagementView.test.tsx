@@ -249,7 +249,7 @@ describe('PoManagementView', () => {
     });
     renderView();
     expect(await screen.findByTestId('po-coverage-pending-links')).toHaveTextContent('3 CRAD link suggestions');
-    expect(await screen.findByTestId('po-auto-link-table')).toBeInTheDocument();
+    expect(await screen.findByTestId('po-auto-link-cards')).toBeInTheDocument();
   });
 
   it('dismisses a gap PO via reason dialog', async () => {
