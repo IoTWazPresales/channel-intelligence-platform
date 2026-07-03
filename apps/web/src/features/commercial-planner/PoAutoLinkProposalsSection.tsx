@@ -70,6 +70,12 @@ export type PoAutoLinkProposal = {
   matched_products: MatchedProduct[];
   total_planned_units: number;
   total_shipped_units: number;
+  total_open_order_units?: number;
+};
+
+type GroupCoverageEntry = {
+  group_key: string;
+  linked_shipped_units: number;
 };
 
 type ProposalsResponse = {
@@ -79,6 +85,8 @@ type ProposalsResponse = {
   dismissed?: { proposal_key: string; case_id: number; purchase_order_id: number; reason_code: string | null }[];
   dismissed_count?: number;
   data_unavailable?: boolean;
+  group_coverage?: GroupCoverageEntry[];
+  group_coverage_by_key?: Record<string, GroupCoverageEntry>;
 };
 
 export type PoAutoLinkProposalGroup = {
@@ -89,6 +97,8 @@ export type PoAutoLinkProposalGroup = {
   customer_label: string | null;
   groupPlanUnits: number;
   proposedShipUnits: number;
+  proposedPipelineUnits: number;
+  linkedShipUnits: number;
   proposals: PoAutoLinkProposal[];
 };
 
@@ -143,6 +153,37 @@ function sumProposedShipUnits(proposals: PoAutoLinkProposal[]): number {
   return proposals.reduce((sum, p) => sum + (p.total_shipped_units ?? 0), 0);
 }
 
+function sumProposedPipelineUnits(proposals: PoAutoLinkProposal[]): number {
+  return proposals.reduce((sum, p) => sum + (p.total_open_order_units ?? 0), 0);
+}
+
+export function formatCoverageLineParts({
+  planUnits,
+  proposedShipUnits,
+  proposedPipelineUnits,
+  linkedShipUnits,
+}: {
+  planUnits: number;
+  proposedShipUnits: number;
+  proposedPipelineUnits: number;
+  linkedShipUnits: number;
+}): string {
+  const parts: string[] = [`Plan ${fmtUnits(planUnits)}`];
+  if (proposedShipUnits > 0 || proposedPipelineUnits > 0) {
+    let proposed = `shipped ${fmtUnits(proposedShipUnits)}`;
+    if (proposedPipelineUnits > 0) {
+      proposed += ` + pipeline ${fmtUnits(proposedPipelineUnits)} proposed`;
+    } else if (proposedShipUnits > 0) {
+      proposed += ' proposed';
+    }
+    parts.push(proposed);
+  }
+  if (linkedShipUnits > 0) {
+    parts.push(`${fmtUnits(linkedShipUnits)} already linked`);
+  }
+  return parts.join(' · ');
+}
+
 function sortProposalsInGroup(proposals: PoAutoLinkProposal[]): PoAutoLinkProposal[] {
   return [...proposals].sort((a, b) => {
     const conf = (b.confidence === 'high' ? 1 : 0) - (a.confidence === 'high' ? 1 : 0);
@@ -153,7 +194,10 @@ function sortProposalsInGroup(proposals: PoAutoLinkProposal[]): PoAutoLinkPropos
   });
 }
 
-export function buildProposalGroups(proposals: PoAutoLinkProposal[]): PoAutoLinkProposalGroup[] {
+export function buildProposalGroups(
+  proposals: PoAutoLinkProposal[],
+  coverageByKey?: Record<string, GroupCoverageEntry>,
+): PoAutoLinkProposalGroup[] {
   const groups = new Map<string, PoAutoLinkProposal[]>();
   for (const p of proposals) {
     const period = p.case_period_label ?? p.inferred_period_start ?? '';
@@ -174,6 +218,8 @@ export function buildProposalGroups(proposals: PoAutoLinkProposal[]): PoAutoLink
         customer_label: first.customer_label,
         groupPlanUnits: dedupeGroupPlanUnits(bucket),
         proposedShipUnits: sumProposedShipUnits(bucket),
+        proposedPipelineUnits: sumProposedPipelineUnits(bucket),
+        linkedShipUnits: coverageByKey?.[groupKey]?.linked_shipped_units ?? 0,
         proposals: sortProposalsInGroup(bucket),
       };
     })
@@ -255,6 +301,7 @@ function PoAutoLinkConfirmDialog({
                 <TableCell>Distributor</TableCell>
                 <TableCell align="right">Planned</TableCell>
                 <TableCell align="right">Shipped</TableCell>
+                <TableCell align="right">Pipeline</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -265,6 +312,7 @@ function PoAutoLinkConfirmDialog({
                 </TableCell>
                 <TableCell align="right">{fmtUnits(proposal.total_planned_units)}</TableCell>
                 <TableCell align="right">{fmtUnits(proposal.total_shipped_units)}</TableCell>
+                <TableCell align="right">{fmtUnits(proposal.total_open_order_units ?? 0)}</TableCell>
               </TableRow>
             </TableBody>
           </Table>
@@ -279,6 +327,7 @@ function PoAutoLinkConfirmDialog({
                     <TableCell>Product</TableCell>
                     <TableCell align="right">Planned</TableCell>
                     <TableCell align="right">Shipped</TableCell>
+                    <TableCell align="right">Pipeline</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -296,6 +345,7 @@ function PoAutoLinkConfirmDialog({
                       </TableCell>
                       <TableCell align="right">{fmtUnits(m.planned_units)}</TableCell>
                       <TableCell align="right">{fmtUnits(m.shipped_units)}</TableCell>
+                      <TableCell align="right">{fmtUnits(m.open_order_units ?? 0)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -388,17 +438,45 @@ function BulkLinkConfirmDialog({
   );
 }
 
-function CoverageLine({ planUnits, shipUnits }: { planUnits: number; shipUnits: number }) {
-  const overPlan = shipUnits > planUnits && planUnits > 0;
+function CoverageLine({
+  planUnits,
+  proposedShipUnits,
+  proposedPipelineUnits,
+  linkedShipUnits,
+}: {
+  planUnits: number;
+  proposedShipUnits: number;
+  proposedPipelineUnits: number;
+  linkedShipUnits: number;
+}) {
+  const overPlan =
+    proposedShipUnits > planUnits && planUnits > 0 && proposedPipelineUnits === 0;
   return (
-    <Typography variant="body2" color="text.secondary" data-testid="po-auto-link-coverage-line">
-      Proposed POs ship {fmtUnits(shipUnits)} units vs plan {fmtUnits(planUnits)}
+    <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Typography variant="body2" color="text.secondary" data-testid="po-auto-link-coverage-line" component="span">
+        {formatCoverageLineParts({
+          planUnits,
+          proposedShipUnits,
+          proposedPipelineUnits,
+          linkedShipUnits,
+        })}
+      </Typography>
+      {proposedPipelineUnits > 0 ? (
+        <Chip
+          size="small"
+          label="pipeline"
+          variant="outlined"
+          color="info"
+          sx={{ height: 20, fontSize: '0.7rem' }}
+          data-testid="po-auto-link-pipeline-chip"
+        />
+      ) : null}
       {overPlan ? (
-        <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
+        <Typography component="span" variant="body2" color="text.secondary">
           (over plan — expected when multiple POs cover the same customer period)
         </Typography>
       ) : null}
-    </Typography>
+    </Stack>
   );
 }
 
@@ -454,6 +532,14 @@ function ProposalRow({
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Shipped {fmtUnits(proposal.total_shipped_units)}
+          {(proposal.total_open_order_units ?? 0) > 0 ? (
+            <>
+              {' '}
+              <Typography component="span" variant="body2" color="info.main">
+                +{fmtUnits(proposal.total_open_order_units)} pipeline
+              </Typography>
+            </>
+          ) : null}
         </Typography>
         <MatchedProductsChip products={proposal.matched_products} />
       </Stack>
@@ -547,7 +633,12 @@ function ProposalGroupCard({
             <Typography variant="body2" color="text.secondary">
               Period plan (customer-scoped): {fmtUnits(group.groupPlanUnits)}
             </Typography>
-            <CoverageLine planUnits={group.groupPlanUnits} shipUnits={group.proposedShipUnits} />
+            <CoverageLine
+              planUnits={group.groupPlanUnits}
+              proposedShipUnits={group.proposedShipUnits}
+              proposedPipelineUnits={group.proposedPipelineUnits}
+              linkedShipUnits={group.linkedShipUnits}
+            />
           </Box>
 
           {!expanded && (
@@ -706,7 +797,10 @@ export function PoAutoLinkProposalsSection({
     });
   }, [activeProposals, customerFilter]);
 
-  const proposalGroups = useMemo(() => buildProposalGroups(filteredProposals), [filteredProposals]);
+  const proposalGroups = useMemo(
+    () => buildProposalGroups(filteredProposals, proposalsQ.data?.group_coverage_by_key),
+    [filteredProposals, proposalsQ.data?.group_coverage_by_key],
+  );
 
   const proposalByKey = useMemo(() => {
     const map = new Map<string, PoAutoLinkProposal>();

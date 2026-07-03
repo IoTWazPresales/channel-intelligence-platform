@@ -9,6 +9,7 @@ import {
   PoAutoLinkProposalsSection,
   buildProposalGroups,
   dedupeGroupPlanUnits,
+  formatCoverageLineParts,
 } from './PoAutoLinkProposalsSection';
 
 vi.mock('@/lib/api', () => ({
@@ -51,6 +52,7 @@ const sampleProposal = {
   ],
   total_planned_units: 100,
   total_shipped_units: 80,
+  total_open_order_units: 0,
 };
 
 function renderSection(props: { autoFetch?: boolean } = {}) {
@@ -78,6 +80,8 @@ describe('PoAutoLinkProposalsSection', () => {
           returned: 1,
           dismissed_count: 0,
           data_unavailable: false,
+          group_coverage: [],
+          group_coverage_by_key: {},
         });
       }
       return Promise.reject(new Error(`unexpected GET ${path}`));
@@ -284,5 +288,113 @@ describe('PoAutoLinkProposalsSection', () => {
     expect(screen.queryByTestId('po-auto-link-restore-10:5:PO99')).not.toBeInTheDocument();
     await user.click(screen.getByTestId('po-auto-link-toggle-dismissed'));
     await waitFor(() => expect(screen.getByTestId('po-auto-link-restore-10:5:PO99')).toBeInTheDocument());
+  });
+
+  it('formatCoverageLineParts omits zero pipeline and linked terms', () => {
+    expect(
+      formatCoverageLineParts({
+        planUnits: 500,
+        proposedShipUnits: 120,
+        proposedPipelineUnits: 0,
+        linkedShipUnits: 0,
+      }),
+    ).toBe('Plan 500 · shipped 120 proposed');
+    expect(
+      formatCoverageLineParts({
+        planUnits: 503,
+        proposedShipUnits: 200,
+        proposedPipelineUnits: 360,
+        linkedShipUnits: 863,
+      }),
+    ).toContain('pipeline 360 proposed');
+    expect(
+      formatCoverageLineParts({
+        planUnits: 503,
+        proposedShipUnits: 200,
+        proposedPipelineUnits: 360,
+        linkedShipUnits: 863,
+      }),
+    ).toContain('863 already linked');
+  });
+
+  it('renders coverage line with plan, proposed shipped+pipeline, and already linked', async () => {
+    apiGetMock.mockResolvedValue({
+      proposals: [
+        {
+          ...sampleProposal,
+          total_shipped_units: 140,
+          total_open_order_units: 60,
+        },
+      ],
+      total: 1,
+      returned: 1,
+      dismissed_count: 0,
+      data_unavailable: false,
+      group_coverage_by_key: {
+        '26Q1|5': { group_key: '26Q1|5', linked_shipped_units: 250 },
+      },
+    });
+    renderSection();
+    await expandSection();
+    const line = screen.getByTestId('po-auto-link-coverage-line');
+    expect(line).toHaveTextContent('Plan 100');
+    expect(line).toHaveTextContent('shipped 140');
+    expect(line).toHaveTextContent('pipeline 60 proposed');
+    expect(line).toHaveTextContent('250 already linked');
+    expect(screen.getByTestId('po-auto-link-pipeline-chip')).toBeInTheDocument();
+  });
+
+  it('proposal row annotates pipeline separately from shipped', async () => {
+    apiGetMock.mockResolvedValue({
+      proposals: [{ ...sampleProposal, total_shipped_units: 50, total_open_order_units: 30 }],
+      total: 1,
+      returned: 1,
+      dismissed_count: 0,
+      data_unavailable: false,
+      group_coverage_by_key: {},
+    });
+    renderSection();
+    await expandSection();
+    const row = screen.getByTestId('po-auto-link-row-10:5:PO99');
+    expect(row).toHaveTextContent('Shipped 50');
+    expect(row).toHaveTextContent('+30 pipeline');
+  });
+
+  it('buildProposalGroups merges linked coverage from API map', () => {
+    const groups = buildProposalGroups([sampleProposal], {
+      '26Q1|5': { group_key: '26Q1|5', linked_shipped_units: 400 },
+    });
+    expect(groups[0].linkedShipUnits).toBe(400);
+    expect(groups[0].proposedPipelineUnits).toBe(0);
+  });
+
+  it('after link apply refetch moves units into already-linked header', async () => {
+    const user = userEvent.setup();
+    let linked = 0;
+    apiGetMock.mockImplementation(() =>
+      Promise.resolve({
+        proposals: [{ ...sampleProposal, total_shipped_units: 80 }],
+        total: 1,
+        returned: 1,
+        dismissed_count: 0,
+        data_unavailable: false,
+        group_coverage_by_key: {
+          '26Q1|5': { group_key: '26Q1|5', linked_shipped_units: linked },
+        },
+      }),
+    );
+    apiPostMock.mockImplementation(async () => {
+      linked = 80;
+      return { applied_count: 1, applied: [], error_count: 0, errors: [] };
+    });
+    renderSection();
+    await expandSection();
+    expect(screen.getByTestId('po-auto-link-coverage-line')).not.toHaveTextContent('80 already linked');
+    await user.click(screen.getByTestId('po-auto-link-select-10:5:PO99'));
+    await user.click(screen.getByTestId('po-auto-link-bulk-apply'));
+    await user.click(screen.getByTestId('po-auto-link-bulk-confirm-submit'));
+    await waitFor(() => {
+      expect(screen.getByTestId('po-auto-link-coverage-line')).toHaveTextContent('80 already linked');
+    });
   });
 });

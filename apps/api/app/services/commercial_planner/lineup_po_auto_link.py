@@ -133,6 +133,81 @@ def _case_norm_already_linked(
     return False
 
 
+def _proposal_group_key(case: CommercialLineupCase, customer_id: int | None) -> str:
+    """Align with web card grouping: ``period_label|customer_id`` (proposal period fields)."""
+    if case.period_label and str(case.period_label).strip():
+        period = str(case.period_label).strip()
+    elif case.inferred_period_start is not None:
+        period = case.inferred_period_start.isoformat()
+    else:
+        period = ""
+    cust = str(int(customer_id)) if customer_id is not None else "null"
+    return f"{period}|{cust}"
+
+
+def compute_group_linked_coverage(
+    *,
+    case_by_id: dict[int, CommercialLineupCase],
+    linked_pairs: set[tuple[int, int]],
+    shipment_rows: list[FactInboundShipment],
+    lineup_by_case_product: dict[tuple[int, int], list[CommercialLineupLine]],
+) -> dict[str, dict[str, Any]]:
+    """Shipped units on facts for POs already linked to a case (same match grain as proposals)."""
+    linked_pos_by_case: dict[int, set[int]] = defaultdict(set)
+    for case_id, po_id in linked_pairs:
+        linked_pos_by_case[int(case_id)].add(int(po_id))
+
+    totals: dict[str, float] = defaultdict(float)
+
+    for ship in shipment_rows:
+        line_state = (ship.line_state or "").strip().lower()
+        if line_state != "shipped":
+            continue
+        if ship.purchase_order_id is None or ship.product_id is None:
+            continue
+        po_id = int(ship.purchase_order_id)
+        product_id = int(ship.product_id)
+        ship_qty = float(ship.quantity or 0)
+        ship_cust = int(ship.resolved_customer_id) if ship.resolved_customer_id is not None else None
+        ev_date, date_src = evidence_date_for_period_match(
+            crad_date=ship.crad_date,
+            schedule_ship_date=ship.schedule_ship_date,
+            ship_confirm_date=ship.ship_confirm_date,
+        )
+
+        for case_id, po_set in linked_pos_by_case.items():
+            if po_id not in po_set:
+                continue
+            case = case_by_id.get(case_id)
+            if case is None:
+                continue
+            if not date_in_case_period(ev_date, case.inferred_period_start):
+                continue
+            product_lines = lineup_by_case_product.get((case_id, product_id), [])
+            if not product_lines:
+                continue
+            match_ln, _conf, _reason, _align = _best_lineup_match_for_product(
+                product_lines,
+                product_id=product_id,
+                ship_customer_id=ship_cust,
+                date_source=date_src,
+            )
+            if match_ln is None:
+                continue
+            lineup_cust = int(match_ln.customer_id) if match_ln.customer_id is not None else None
+            prop_cust = ship_cust if ship_cust is not None else lineup_cust
+            gkey = _proposal_group_key(case, prop_cust)
+            totals[gkey] += ship_qty
+
+    return {
+        gkey: {
+            "group_key": gkey,
+            "linked_shipped_units": round(units, 4),
+        }
+        for gkey, units in totals.items()
+    }
+
+
 def _pick_canonical_po_id(
     po_ids: set[int],
     po_meta: dict[int, PurchaseOrder],
@@ -219,7 +294,7 @@ async def po_auto_link_proposals(
         )
     except Exception:
         logger.exception("po-auto-link proposals failed")
-        return {"proposals": [], "total": 0, "data_unavailable": True, "dismissed": []}
+        return {"proposals": [], "total": 0, "data_unavailable": True, "dismissed": [], "group_coverage": [], "group_coverage_by_key": {}}
 
 
 async def _po_auto_link_proposals_inner(
@@ -246,7 +321,7 @@ async def _po_auto_link_proposals_inner(
     )
     cases = [c for c in cases if _period_label_matches(c, period)]
     if not cases:
-        return {"proposals": [], "total": 0, "data_unavailable": False, "dismissed": []}
+        return {"proposals": [], "total": 0, "data_unavailable": False, "dismissed": [], "group_coverage": [], "group_coverage_by_key": {}}
 
     dismissed_rows: list[CommercialLineupPoAutoLinkDismiss] = []
     try:
@@ -517,6 +592,13 @@ async def _po_auto_link_proposals_inner(
     if limit > 0:
         out = out[: int(limit)]
 
+    group_coverage = compute_group_linked_coverage(
+        case_by_id=case_by_id,
+        linked_pairs=linked_pairs,
+        shipment_rows=shipment_rows,
+        lineup_by_case_product=lineup_by_case_product,
+    )
+
     return {
         "proposals": out,
         "total": total,
@@ -524,4 +606,6 @@ async def _po_auto_link_proposals_inner(
         "data_unavailable": False,
         "dismissed": dismissed_out if include_dismissed else [],
         "dismissed_count": len(dismissed_keys),
+        "group_coverage": list(group_coverage.values()),
+        "group_coverage_by_key": group_coverage,
     }

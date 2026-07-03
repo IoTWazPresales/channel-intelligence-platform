@@ -139,6 +139,72 @@ def test_best_lineup_match_product_filter_equivalent_to_full_case_lines():
     assert full == filtered
 
 
+def test_compute_group_linked_coverage_sums_linked_po_shipped_only():
+    from types import SimpleNamespace
+
+    from app.services.commercial_planner.lineup_po_auto_link import compute_group_linked_coverage
+
+    case = SimpleNamespace(
+        id=10,
+        period_label="26Q2",
+        inferred_period_start=date(2026, 4, 1),
+    )
+    line = SimpleNamespace(product_id=100, customer_id=5, distributor_id=1)
+    ship_shipped = SimpleNamespace(
+        purchase_order_id=99,
+        product_id=100,
+        resolved_customer_id=5,
+        quantity=80.0,
+        line_state="shipped",
+        crad_date=date(2026, 5, 1),
+        schedule_ship_date=None,
+        ship_confirm_date=None,
+    )
+    ship_open = SimpleNamespace(
+        purchase_order_id=99,
+        product_id=100,
+        resolved_customer_id=5,
+        quantity=40.0,
+        line_state="open_order",
+        crad_date=date(2026, 5, 1),
+        schedule_ship_date=None,
+        ship_confirm_date=None,
+    )
+    ship_unlinked = SimpleNamespace(
+        purchase_order_id=200,
+        product_id=100,
+        resolved_customer_id=5,
+        quantity=999.0,
+        line_state="shipped",
+        crad_date=date(2026, 5, 1),
+        schedule_ship_date=None,
+        ship_confirm_date=None,
+    )
+    coverage = compute_group_linked_coverage(
+        case_by_id={10: case},
+        linked_pairs={(10, 99)},
+        shipment_rows=[ship_shipped, ship_open, ship_unlinked],
+        lineup_by_case_product={(10, 100): [line]},
+    )
+    assert coverage["26Q2|5"]["linked_shipped_units"] == 80.0
+    assert "26Q2|5" in coverage
+
+
+def test_proposal_totals_keep_shipped_and_open_order_separate():
+    """Read-model totals must not merge pipeline into shipped."""
+    from app.services.commercial_planner.lineup_po_auto_link import _ProductMatch
+
+    products = [
+        _ProductMatch(product_id=1, shipped_units=100.0, open_order_units=35.0, planned_units=200.0),
+        _ProductMatch(product_id=2, shipped_units=20.0, open_order_units=0.0, planned_units=50.0),
+    ]
+    total_shipped = round(sum(m.shipped_units for m in products), 4)
+    total_open = round(sum(m.open_order_units for m in products), 4)
+    assert total_shipped == 120.0
+    assert total_open == 35.0
+    assert total_shipped + total_open == 155.0
+
+
 @pytest.mark.anyio
 async def test_purmidr_not_duplicated_per_po_norm_on_26q2():
     """Canonical 26Q2 filter surfaces duplicate active cases until steward supersession."""
@@ -220,3 +286,6 @@ async def test_proposals_endpoint_smoke_on_cip():
         assert row["confidence"] in ("high", "medium")
         assert "purchase_order_id" in row
         assert "matched_products" in row
+        assert "total_open_order_units" in row
+        assert "total_shipped_units" in row
+    assert "group_coverage_by_key" in result
