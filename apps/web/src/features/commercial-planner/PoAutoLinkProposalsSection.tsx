@@ -28,7 +28,7 @@ import {
 } from '@mui/material';
 import type { ColDef, GridApi, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
@@ -233,9 +233,21 @@ function PoAutoLinkConfirmDialog({
   );
 }
 
-export function PoAutoLinkProposalsSection() {
+export const PO_AUTO_LINK_SECTION_ID = 'po-auto-link-section';
+
+type PoAutoLinkProposalsSectionProps = {
+  /** Prefetch proposals on mount and auto-expand when pending count &gt; 0. */
+  autoFetch?: boolean;
+  onPendingCountChange?: (count: number) => void;
+};
+
+export function PoAutoLinkProposalsSection({
+  autoFetch = false,
+  onPendingCountChange,
+}: PoAutoLinkProposalsSectionProps) {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
+  const manualCollapseRef = useRef(false);
   const [period, setPeriod] = useState(() => currentQuarterLabel());
   const [confidence, setConfidence] = useState<'all' | 'high' | 'medium'>('all');
   const [showDismissed, setShowDismissed] = useState(false);
@@ -249,7 +261,7 @@ export function PoAutoLinkProposalsSection() {
 
   const proposalsQ = useQuery({
     queryKey,
-    enabled: expanded,
+    enabled: expanded || autoFetch,
     queryFn: ({ signal }) => {
       const params = new URLSearchParams({ limit: '200' });
       if (period.trim()) params.set('period', period.trim());
@@ -307,6 +319,29 @@ export function PoAutoLinkProposalsSection() {
     () => (showDismissed ? proposals : proposals.filter((p) => !p.dismissed)),
     [proposals, showDismissed]
   );
+
+  const pendingCount = Math.max(
+    0,
+    (proposalsQ.data?.total ?? 0) - (proposalsQ.data?.dismissed_count ?? 0)
+  );
+
+  useEffect(() => {
+    if (!autoFetch) return;
+    onPendingCountChange?.(pendingCount);
+    if (pendingCount > 0 && !manualCollapseRef.current) {
+      setExpanded(true);
+    }
+  }, [autoFetch, onPendingCountChange, pendingCount]);
+
+  const handleExpand = useCallback(() => {
+    manualCollapseRef.current = false;
+    setExpanded(true);
+  }, []);
+
+  const handleCollapse = useCallback(() => {
+    manualCollapseRef.current = true;
+    setExpanded(false);
+  }, []);
 
   const bulkApply = () => {
     const items = activeProposals
@@ -453,12 +488,8 @@ export function PoAutoLinkProposalsSection() {
     []
   );
 
-  const requestExpand = useCallback(() => {
-    setExpanded(true);
-  }, []);
-
   return (
-    <Card variant="outlined" data-testid="po-auto-link-section">
+    <Card variant="outlined" id={PO_AUTO_LINK_SECTION_ID} data-testid="po-auto-link-section">
       <CardContent>
         <Stack spacing={2}>
           <Stack direction="row" spacing={1} alignItems="flex-start" justifyContent="space-between" flexWrap="wrap" useFlexGap>
@@ -471,16 +502,15 @@ export function PoAutoLinkProposalsSection() {
               </Typography>
             </Box>
             {!expanded ? (
-              <Button
-                variant="contained"
-                size="small"
-                onClick={requestExpand}
-                data-testid="po-auto-link-expand"
-              >
-                Compute / show suggested links
+              <Button variant="contained" size="small" onClick={handleExpand} data-testid="po-auto-link-expand">
+                {autoFetch && proposalsQ.isFetching
+                  ? 'Loading suggestions…'
+                  : pendingCount > 0
+                    ? `Show ${pendingCount} suggestion${pendingCount === 1 ? '' : 's'}`
+                    : 'Compute / show suggested links'}
               </Button>
             ) : (
-              <Button size="small" variant="outlined" onClick={() => setExpanded(false)} data-testid="po-auto-link-collapse">
+              <Button size="small" variant="outlined" onClick={handleCollapse} data-testid="po-auto-link-collapse">
                 Collapse
               </Button>
             )}

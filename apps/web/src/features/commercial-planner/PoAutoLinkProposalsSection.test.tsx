@@ -86,11 +86,11 @@ const sampleProposal = {
   total_shipped_units: 80,
 };
 
-function renderSection() {
+function renderSection(props: { autoFetch?: boolean } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return renderWithProviders(
     <QueryClientProvider client={qc}>
-      <PoAutoLinkProposalsSection />
+      <PoAutoLinkProposalsSection autoFetch={props.autoFetch ?? false} />
     </QueryClientProvider>
   );
 }
@@ -151,6 +151,12 @@ describe('PoAutoLinkProposalsSection', () => {
         items: [{ case_id: 10, purchase_order_id: 99, notes: undefined }],
       });
     });
+  });
+
+  it('auto-expands when autoFetch and proposals exist', async () => {
+    renderSection({ autoFetch: true });
+    expect(await screen.findByTestId('po-auto-link-table')).toBeInTheDocument();
+    expect(apiGetMock).toHaveBeenCalledWith(expect.stringContaining('/po-auto-link/proposals'), expect.anything());
   });
 
   it('bulk apply selected proposals', async () => {

@@ -120,6 +120,15 @@ function wireApi(opts: { firstRun?: boolean; gapDismissed?: boolean } = {}) {
         data_unavailable: false,
       });
     }
+    if (path.includes('/po-auto-link/proposals')) {
+      return Promise.resolve({
+        proposals: [],
+        total: 0,
+        returned: 0,
+        dismissed_count: 0,
+        data_unavailable: false,
+      });
+    }
     return Promise.resolve({});
   });
 }
@@ -163,6 +172,15 @@ describe('PoManagementView', () => {
       if (path.includes('/po-gap-worklist')) {
         return Promise.resolve({ groups: [], dismissed: [], total_gap_rows: 0, data_unavailable: false });
       }
+      if (path.includes('/po-auto-link/proposals')) {
+        return Promise.resolve({
+          proposals: [],
+          total: 0,
+          returned: 0,
+          dismissed_count: 0,
+          data_unavailable: false,
+        });
+      }
       return Promise.resolve({});
     });
     renderView();
@@ -189,6 +207,49 @@ describe('PoManagementView', () => {
 
     expect(await screen.findByText('2 matched')).toBeInTheDocument();
     expect(screen.getByText('1 short')).toBeInTheDocument();
+  });
+
+  it('shows pending link chip in coverage when proposals exist', async () => {
+    apiGetMock.mockImplementation((path: string) => {
+      if (path.includes('/po-management/coverage')) {
+        return Promise.resolve({
+          total_pos_observed: 10,
+          total_pos_linked: 2,
+          first_run: false,
+          data_unavailable: false,
+        });
+      }
+      if (path.includes('/po-management/backlog')) {
+        return Promise.resolve({ groups: [], data_unavailable: false });
+      }
+      if (path.includes('/po-gap-worklist')) {
+        return Promise.resolve({ groups: [], dismissed: [], total_gap_rows: 0, data_unavailable: false });
+      }
+      if (path.includes('/po-auto-link/proposals')) {
+        return Promise.resolve({
+          proposals: [
+            {
+              proposal_key: '1:2:PO1',
+              case_id: 1,
+              purchase_order_id: 2,
+              confidence: 'high',
+              reason: 'customer_product_crad_in_period',
+              matched_products: [],
+              total_planned_units: 10,
+              total_shipped_units: 8,
+            },
+          ],
+          total: 3,
+          returned: 1,
+          dismissed_count: 0,
+          data_unavailable: false,
+        });
+      }
+      return Promise.resolve({});
+    });
+    renderView();
+    expect(await screen.findByTestId('po-coverage-pending-links')).toHaveTextContent('3 CRAD link suggestions');
+    expect(await screen.findByTestId('po-auto-link-table')).toBeInTheDocument();
   });
 
   it('dismisses a gap PO via reason dialog', async () => {

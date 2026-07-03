@@ -21,6 +21,7 @@ import { useRouter } from 'next/navigation';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
+import { PoAutoLinkProposalsSection, PO_AUTO_LINK_SECTION_ID } from './PoAutoLinkProposalsSection';
 import { PoDismissReasonDialog } from './PoDismissReasonDialog';
 
 type ReconSummary = {
@@ -127,6 +128,11 @@ export function PoManagementView() {
   const qc = useQueryClient();
   const [showDismissed, setShowDismissed] = useState(false);
   const [dismissTarget, setDismissTarget] = useState<GapRow | null>(null);
+  const [pendingLinkProposals, setPendingLinkProposals] = useState(0);
+
+  const scrollToAutoLink = () => {
+    document.getElementById(PO_AUTO_LINK_SECTION_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const coverageQ = useQuery({
     queryKey: ['po-management', 'coverage'],
@@ -298,6 +304,16 @@ export function PoManagementView() {
                 label={`${coverage?.total_pos_linked ?? 0} linked to a lineup`}
                 data-testid="po-coverage-linked"
               />
+              {pendingLinkProposals > 0 ? (
+                <Chip
+                  clickable
+                  color="warning"
+                  variant="filled"
+                  onClick={scrollToAutoLink}
+                  label={`${pendingLinkProposals} CRAD link suggestion${pendingLinkProposals === 1 ? '' : 's'}`}
+                  data-testid="po-coverage-pending-links"
+                />
+              ) : null}
               {coverage?.first_run ? (
                 <Alert severity="warning" sx={{ flex: 1, minWidth: 280 }}>
                   First run — no confirmed lineups link to any observed PO yet. Upload a lineup for a period below to
@@ -308,6 +324,8 @@ export function PoManagementView() {
           )}
         </CardContent>
       </Card>
+
+      <PoAutoLinkProposalsSection autoFetch onPendingCountChange={setPendingLinkProposals} />
 
       <Box>
         <Typography variant="h6" gutterBottom>
@@ -375,7 +393,7 @@ export function PoManagementView() {
                       <Chip size="small" color="info" label="Lineup on file" />
                       <Typography variant="caption" color="text.secondary">
                         A lineup case exists for {g.quarter_label} {g.product_line} — link POs via suggested
-                        auto-links below.
+                        auto-links above.
                       </Typography>
                     </Stack>
                   ) : g.parse_incomplete ? (
