@@ -44,6 +44,12 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { apiDelete, apiGet, apiPatch, apiPost, safeDisplayError } from '@/lib/api';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { EntitySearchAutocomplete } from './EntitySearchAutocomplete';
+import {
+  CustomerReconChips,
+  ReconSummaryChips,
+  type ReconCustomerSlice,
+  type ReconSummary,
+} from './lineupReconciliationDisplay';
 
 function formatHttpErrorDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail;
@@ -1723,35 +1729,17 @@ type ReconProduct = {
   product_id: number;
   product_name: string | null;
   units_flag: string;
+  customer_id?: number | null;
 };
 
 type ReconResponse = {
   case_id: number;
   linked_po_count: number;
   products: ReconProduct[];
+  customers?: ReconCustomerSlice[];
   po_flags: { purchase_order_id: number; po_number_raw: string | null; flag: string }[];
-  summary: Record<string, number>;
+  summary: ReconSummary;
   data_unavailable?: boolean;
-};
-
-const RECON_FLAG_COLORS: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
-  matched: 'success',
-  short: 'warning',
-  over: 'warning',
-  unshipped: 'error',
-  unplanned: 'info',
-  amended: 'info',
-  po_no_match: 'error',
-};
-
-const RECON_FLAG_LABELS: Record<string, string> = {
-  matched: 'matched',
-  short: 'short',
-  over: 'over',
-  unshipped: 'unshipped',
-  unplanned: 'unplanned',
-  amended: 'amended',
-  po_no_match: 'po no match',
 };
 
 function CaseReconciliationInline({ caseId }: { caseId: number }) {
@@ -1777,38 +1765,27 @@ function CaseReconciliationInline({ caseId }: { caseId: number }) {
   }
 
   const summary = data.summary ?? {};
-  const order = ['matched', 'short', 'over', 'unshipped', 'unplanned', 'amended', 'po_no_match'];
-  const active = order.filter((f) => (summary[f] ?? 0) > 0);
 
   return (
-    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap data-testid={`recon-inline-${caseId}`}>
-      <Typography variant="caption" color="text.secondary" fontWeight={600}>
-        Reconciliation:
-      </Typography>
-      {active.length === 0 ? (
-        <Typography variant="caption" color="text.secondary">
-          no shipments matched yet
+    <Stack spacing={0.5} data-testid={`recon-inline-${caseId}`}>
+      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+          Reconciliation:
         </Typography>
-      ) : (
-        active.map((f) => (
-          <Chip
-            key={f}
-            size="small"
-            color={RECON_FLAG_COLORS[f] ?? 'default'}
-            label={`${summary[f]} ${RECON_FLAG_LABELS[f] ?? f}`}
-            data-testid={`recon-inline-${caseId}-${f}`}
-          />
-        ))
-      )}
-      <Button
-        size="small"
-        variant="text"
-        component={NextLink}
-        href={`/admin/po-management`}
-        data-testid={`recon-drill-${caseId}`}
-      >
-        View PO management
-      </Button>
+        <ReconSummaryChips summary={summary} />
+        <Button
+          size="small"
+          variant="text"
+          component={NextLink}
+          href={`/admin/po-management`}
+          data-testid={`recon-drill-${caseId}`}
+        >
+          View PO management
+        </Button>
+      </Stack>
+      {data.customers?.length ? (
+        <CustomerReconChips customers={data.customers} testIdPrefix={`recon-inline-customers-${caseId}`} />
+      ) : null}
     </Stack>
   );
 }

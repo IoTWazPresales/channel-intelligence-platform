@@ -24,15 +24,12 @@ import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { PoAutoLinkProposalsSection, PO_AUTO_LINK_SECTION_ID } from './PoAutoLinkProposalsSection';
 import { PoDismissReasonDialog } from './PoDismissReasonDialog';
 
-type ReconSummary = {
-  matched?: number;
-  short?: number;
-  over?: number;
-  unshipped?: number;
-  unplanned?: number;
-  amended?: number;
-  po_no_match?: number;
-};
+import {
+  CustomerReconChips,
+  ReconSummaryChips,
+  type ReconCustomerSlice,
+  type ReconSummary,
+} from './lineupReconciliationDisplay';
 
 type BacklogGroup = {
   year: number;
@@ -47,6 +44,7 @@ type BacklogGroup = {
   linked_po_count: number;
   status: 'linked' | 'unlinked';
   reconciliation_summary?: ReconSummary;
+  reconciliation_customers?: ReconCustomerSlice[];
   linked_case_ids?: number[];
   lineup_case_exists?: boolean;
   parse_incomplete?: boolean;
@@ -100,27 +98,6 @@ function fmtUnits(n: number | null | undefined): string {
 function fmtValue(n: number | null | undefined): string {
   if (n == null) return '—';
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
-}
-
-function ReconSummaryChips({ summary }: { summary: ReconSummary }) {
-  const items: { key: keyof ReconSummary; label: string; color: 'success' | 'warning' | 'error' | 'info' | 'default' }[] = [
-    { key: 'matched', label: 'matched', color: 'success' },
-    { key: 'short', label: 'short', color: 'warning' },
-    { key: 'over', label: 'over', color: 'warning' },
-    { key: 'unshipped', label: 'unshipped', color: 'error' },
-    { key: 'amended', label: 'amended', color: 'info' },
-    { key: 'unplanned', label: 'unplanned', color: 'info' },
-    { key: 'po_no_match', label: 'po no match', color: 'error' },
-  ];
-  const active = items.filter((it) => (summary[it.key] ?? 0) > 0);
-  if (!active.length) return <Chip size="small" variant="outlined" label="No reconciled lines yet" />;
-  return (
-    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-      {active.map((it) => (
-        <Chip key={it.key} size="small" color={it.color} label={`${summary[it.key]} ${it.label}`} />
-      ))}
-    </Stack>
-  );
 }
 
 export function PoManagementView() {
@@ -382,11 +359,19 @@ export function PoManagementView() {
                   <Divider sx={{ my: 1.5 }} />
 
                   {g.status === 'linked' ? (
-                    <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
-                      <Typography variant="body2" color="text.secondary">
-                        Reconciliation:
-                      </Typography>
-                      {g.reconciliation_summary ? <ReconSummaryChips summary={g.reconciliation_summary} /> : null}
+                    <Stack spacing={1}>
+                      <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Typography variant="body2" color="text.secondary">
+                          Reconciliation:
+                        </Typography>
+                        {g.reconciliation_summary ? <ReconSummaryChips summary={g.reconciliation_summary} /> : null}
+                      </Stack>
+                      {g.reconciliation_customers?.length ? (
+                        <CustomerReconChips
+                          customers={g.reconciliation_customers}
+                          testIdPrefix={`po-mgmt-recon-customers-${g.year}-${g.quarter}-${g.product_line}`}
+                        />
+                      ) : null}
                     </Stack>
                   ) : g.lineup_case_exists ? (
                     <Stack direction="row" spacing={1} alignItems="center">

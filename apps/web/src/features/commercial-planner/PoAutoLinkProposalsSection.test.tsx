@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
-import { PoAutoLinkProposalsSection } from './PoAutoLinkProposalsSection';
+import { PoAutoLinkProposalsSection, buildGroupedPoAutoLinkRows } from './PoAutoLinkProposalsSection';
 
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(),
@@ -24,23 +24,28 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
     gridOptions?: { onSelectionChanged?: (e: { api: { getSelectedRows: () => unknown[] } }) => void };
   }) => (
     <div data-testid="po-auto-link-grid-mock">
-      {rowData.map((row) => (
-        <div key={String(row.proposal_key)} data-testid={`grid-row-${row.proposal_key}`}>
-          {columnDefs?.map((c, idx) =>
-            c?.cellRenderer ? (
-              <div key={`${String(row.proposal_key)}-${idx}`}>
-                {(c.cellRenderer as (p: { data: typeof row }) => React.ReactNode)({ data: row })}
-              </div>
-            ) : null
-          )}
-        </div>
-      ))}
+      {rowData.map((row) => {
+        const key = String(row.rowType === 'group' ? row.groupKey : row.proposal_key);
+        return (
+          <div key={key} data-testid={row.rowType === 'group' ? `grid-group-${key}` : `grid-row-${key}`}>
+            {columnDefs?.map((c, idx) =>
+              c?.cellRenderer ? (
+                <div key={`${key}-${idx}`}>
+                  {(c.cellRenderer as (p: { data: typeof row }) => React.ReactNode)({ data: row })}
+                </div>
+              ) : null,
+            )}
+          </div>
+        );
+      })}
       <button
         type="button"
         data-testid="mock-select-row"
         onClick={() =>
           gridOptions?.onSelectionChanged?.({
-            api: { getSelectedRows: () => rowData },
+            api: {
+              getSelectedRows: () => rowData.filter((r) => r.rowType !== 'group'),
+            },
           })
         }
       >
@@ -171,5 +176,26 @@ describe('PoAutoLinkProposalsSection', () => {
         items: [{ case_id: 10, purchase_order_id: 99 }],
       });
     });
+  });
+
+  it('groups three proposals with same period and customer into one header plan figure', () => {
+    const proposals = [
+      { ...sampleProposal, proposal_key: '10:5:PO99', purchase_order_id: 99, po_number: 'PO-99', total_planned_units: 60 },
+      { ...sampleProposal, proposal_key: '10:5:PO100', purchase_order_id: 100, po_number: 'PO-100', total_planned_units: 40 },
+      {
+        ...sampleProposal,
+        proposal_key: '10:5:PO101',
+        purchase_order_id: 101,
+        po_number: 'PO-101',
+        total_planned_units: 100,
+        matched_products: [{ ...sampleProposal.matched_products[0], product_id: 8, planned_units: 25 }],
+      },
+    ];
+    const rows = buildGroupedPoAutoLinkRows(proposals);
+    const groupRows = rows.filter((r) => r.rowType === 'group');
+    const childRows = rows.filter((r) => r.rowType !== 'group');
+    expect(groupRows).toHaveLength(1);
+    expect(childRows).toHaveLength(3);
+    expect(groupRows[0].groupPlanUnits).toBe(125);
   });
 });

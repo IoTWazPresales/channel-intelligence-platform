@@ -28,7 +28,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -45,6 +45,7 @@ import {
   type AutoBaseline,
   type StewardOverrides,
 } from '@/features/commercial-planner/lineupBackfillStewardOverrides';
+import { BulkLineup1hRederivationSection } from '@/features/commercial-planner/BulkLineup1hRederivationSection';
 import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 import { apiPostFormData, safeDisplayError } from '@/lib/api';
 
@@ -114,6 +115,7 @@ export type BulkLineupBackfillDialogProps = {
 };
 
 export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDialogProps) {
+  const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const [stagedFiles, setStagedFiles] = useState<StagedLineupFile[]>([]);
@@ -144,7 +146,9 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
           po_link_count: number;
           customer_planned_before?: number | null;
           customer_planned_after_q1?: number | null;
+          already_allocated?: boolean;
         };
+        half_year_signal_source?: string;
       }>;
       supersession_collisions: CollisionGroup[];
       totals?: { eligible_cases?: number; collision_groups?: number };
@@ -152,6 +156,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
   } | null>(null);
   const [confirmRederivation, setConfirmRederivation] = useState(false);
   const [rederivationCollisionWinners, setRederivationCollisionWinners] = useState<Record<string, string>>({});
+  const [rederivationApplyNotice, setRederivationApplyNotice] = useState<string | null>(null);
 
   const resetPreviewState = useCallback(() => {
     setPreview(null);
@@ -255,10 +260,12 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
       if (data.task_id) {
         registerClientBackgroundTask({
           taskId: data.task_id,
+          importJobId: data.session_import_job_id,
           kind: 'commercial_planner_lineup_parse',
           label: `Bulk lineup backfill (session ${data.session_import_job_id})`,
         });
       }
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
       onClose();
     },
   });
@@ -274,6 +281,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
     },
     onSuccess: (data) => {
       setRederivationPreview(data);
+      setRederivationApplyNotice(null);
       const winners: Record<string, string> = {};
       for (const g of data.preview.supersession_collisions ?? []) {
         const w = (g as { winner_member_key?: string }).winner_member_key ?? g.winner_proposal_key;
@@ -311,10 +319,19 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
       if (data.task_id) {
         registerClientBackgroundTask({
           taskId: data.task_id,
+          importJobId: data.session_import_job_id,
           kind: 'commercial_planner_lineup_parse',
           label: `1H re-derivation (session ${data.session_import_job_id})`,
         });
       }
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+      setConfirmRederivation(false);
+      setRederivationApplyNotice(
+        `Re-derivation apply queued for session #${data.session_import_job_id}. ` +
+          'Watch the activity bell (top right) for progress — results are written when the background task finishes. ' +
+          'You can close this dialog; lineup cases update in the background.',
+      );
     },
   });
 
@@ -380,6 +397,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
     if (!open) {
       setConfirmApply(false);
       setLoadNotice(null);
+      setRederivationApplyNotice(null);
     }
   }, [open]);
 
@@ -657,112 +675,29 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
             </>
           )}
 
-          <Box sx={{ pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="subtitle1" gutterBottom>
-              Re-derive existing 1H cases
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Halve Q1 quantities in place (preserving case id and PO links), then create or collide Q2 twins.
-              Steward confirm required — nothing auto-applies.
-            </Typography>
-            {rederivationPreviewMutation.isError && (
-              <Alert severity="error">{safeDisplayError(rederivationPreviewMutation.error)}</Alert>
-            )}
-            {rederivationApplyMutation.isError && (
-              <Alert severity="error">{safeDisplayError(rederivationApplyMutation.error)}</Alert>
-            )}
-            {rederivationPreview && (
-              <Alert severity="info" sx={{ mb: 1 }}>
-                {rederivationPreview.preview.totals?.eligible_cases ?? 0} eligible 1H case(s),{' '}
-                {rederivationPreview.preview.totals?.collision_groups ?? 0} Q2 collision group(s).
-              </Alert>
-            )}
-            {rederivationPreview?.preview.rederivation_proposals?.map((p) => (
-              <Box key={p.proposal_key} sx={{ mb: 1.5, p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                <Typography variant="body2">
-                  Case #{p.source_case_id} · {p.file_name}
-                </Typography>
-                {p.allocation_summary && (
-                  <Typography variant="caption" color="text.secondary" component="div">
-                    Source {p.allocation_summary.source_total_units} → Q1 {p.allocation_summary.q1_allocated_units} / Q2{' '}
-                    {p.allocation_summary.q2_allocated_units} ({p.allocation_summary.allocation_flag})
-                  </Typography>
-                )}
-                {p.q1_adjustment && (
-                  <Typography variant="caption" color="text.secondary" component="div">
-                    Q1 adjust: {p.q1_adjustment.planned_units_before} → {p.q1_adjustment.planned_units_after} units ·{' '}
-                    {p.q1_adjustment.po_link_count} PO link(s) preserved
-                  </Typography>
-                )}
-              </Box>
-            ))}
-            {rederivationPreview?.preview.supersession_collisions?.length ? (
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="subtitle2">Q2 collision groups</Typography>
-                {rederivationPreview.preview.supersession_collisions.map((g) => (
-                  <Box key={g.supersession_group_key} sx={{ mt: 1 }}>
-                    <Typography variant="caption">{g.supersession_group_key}</Typography>
-                    <FormControl component="fieldset" size="small">
-                      <RadioGroup
-                        value={
-                          rederivationCollisionWinners[g.supersession_group_key] ??
-                          (g as { winner_member_key?: string }).winner_member_key ??
-                          g.winner_proposal_key
-                        }
-                        onChange={(e) =>
-                          setRederivationCollisionWinners((prev) => ({
-                            ...prev,
-                            [g.supersession_group_key]: e.target.value,
-                          }))
-                        }
-                      >
-                        {(g as { members?: Array<{ member_key?: string; filename?: string; kind?: string }> }).members?.map(
-                          (m) => (
-                            <FormControlLabel
-                              key={m.member_key ?? m.filename}
-                              value={m.member_key ?? ''}
-                              control={<Radio size="small" />}
-                              label={`${m.kind ?? 'member'}: ${m.filename ?? m.member_key}`}
-                            />
-                          ),
-                        )}
-                      </RadioGroup>
-                    </FormControl>
-                  </Box>
-                ))}
-              </Box>
-            ) : null}
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Button
-                size="small"
-                variant="outlined"
-                disabled={rederivationPreviewMutation.isPending}
-                onClick={() => rederivationPreviewMutation.mutate()}
-              >
-                {rederivationPreviewMutation.isPending ? 'Loading…' : 'Preview 1H re-derivation'}
-              </Button>
-              <FormControlLabel
-                control={
-                  <Switch checked={confirmRederivation} onChange={(e) => setConfirmRederivation(e.target.checked)} />
-                }
-                label="Confirm re-derivation apply"
-              />
-              <Button
-                size="small"
-                variant="contained"
-                color="secondary"
-                disabled={
-                  !rederivationSessionId ||
-                  !confirmRederivation ||
-                  rederivationApplyMutation.isPending ||
-                  !rederivationPreview?.preview.rederivation_proposals?.length
-                }
-                onClick={() => rederivationSessionId && rederivationApplyMutation.mutate(rederivationSessionId)}
-              >
-                Apply re-derivation
-              </Button>
-            </Stack>
-          </Box>
+          <BulkLineup1hRederivationSection
+            preview={rederivationPreview?.preview ?? null}
+            collisionWinners={rederivationCollisionWinners}
+            onCollisionWinnerChange={(groupKey, memberKey) =>
+              setRederivationCollisionWinners((prev) => ({ ...prev, [groupKey]: memberKey }))
+            }
+            applyNotice={rederivationApplyNotice}
+            onDismissApplyNotice={() => setRederivationApplyNotice(null)}
+            previewError={
+              rederivationPreviewMutation.isError ? safeDisplayError(rederivationPreviewMutation.error) : null
+            }
+            applyError={rederivationApplyMutation.isError ? safeDisplayError(rederivationApplyMutation.error) : null}
+            onPreview={() => rederivationPreviewMutation.mutate()}
+            previewPending={rederivationPreviewMutation.isPending}
+            confirmRederivation={confirmRederivation}
+            onConfirmRederivationChange={setConfirmRederivation}
+            onApply={() => rederivationSessionId && rederivationApplyMutation.mutate(rederivationSessionId)}
+            applyPending={rederivationApplyMutation.isPending}
+            canApply={
+              !!rederivationSessionId &&
+              !!rederivationPreview?.preview.rederivation_proposals?.some((p) => !p.q1_adjustment?.already_allocated)
+            }
+          />
         </Stack>
       </DialogContent>
       <DialogActions>

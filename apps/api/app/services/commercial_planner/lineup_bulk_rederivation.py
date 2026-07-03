@@ -31,9 +31,14 @@ from app.services.commercial_planner.lineup_period_canonical import (
     display_period_label_from_period_start,
     supersession_group_key_from_period_start,
 )
+from app.services.commercial_planner.lineup_period_inference import detect_months_from_columns
 from app.utils.json_safe import to_jsonable
 
 REDERIVATION_PREVIEW_KEY = "lineup_1h_rederivation_preview"
+
+HALF_YEAR_SIGNAL_FILENAME = "filename_1h"
+HALF_YEAR_SIGNAL_MONTH_COLUMNS = "stored_month_columns"
+HALF_YEAR_SIGNAL_WORKBOOK_SIBLING = "workbook_sibling_1h"
 
 
 def _norm_customer_token(value: str | None) -> str:
@@ -42,12 +47,54 @@ def _norm_customer_token(value: str | None) -> str:
     return " ".join(str(value).strip().lower().split())
 
 
-def case_has_1h_signal(case: CommercialLineupCase) -> bool:
+def _workbook_file_key(file_name: str | None) -> str:
+    return (file_name or "").strip().lower()
+
+
+def _month_numbers_from_lines(lines: list[CommercialLineupLine]) -> set[int]:
+    months: set[int] = set()
+    for ln in lines:
+        raw = ln.raw_row_payload if isinstance(ln.raw_row_payload, dict) else {}
+        uploaded = raw.get("uploaded")
+        if isinstance(uploaded, dict):
+            months |= detect_months_from_columns(list(uploaded.keys()))
+    return months
+
+
+def lines_indicate_1h_month_phasing(lines: list[CommercialLineupLine]) -> bool:
+    """True when stored parse evidence has month columns spanning Q1 and Q2 (Jan–Jun style 1H)."""
+    months = _month_numbers_from_lines(lines)
+    return bool(months & {1, 2, 3}) and bool(months & {4, 5, 6})
+
+
+def case_has_1h_filename_signal(case: CommercialLineupCase) -> bool:
     sig = infer_period_from_filename(case.file_name)
     if sig is not None and sig.is_half:
         return True
     assignments, _ = resolve_layered_period(filename=case.file_name)
     return any(PERIOD_SCOPE_1H_SPLIT_FLAG in (a.flags or []) for a in assignments)
+
+
+def case_has_1h_signal(case: CommercialLineupCase) -> bool:
+    """Filename-only check — prefer ``resolve_half_year_signal`` when lines are available."""
+    return case_has_1h_filename_signal(case)
+
+
+def resolve_half_year_signal(
+    case: CommercialLineupCase,
+    lines: list[CommercialLineupLine],
+    *,
+    workbook_keys_with_direct_1h: set[str],
+) -> tuple[bool, str | None]:
+    """Detect 1H eligibility from filename, stored month columns, or sibling sheet in same workbook."""
+    if case_has_1h_filename_signal(case):
+        return True, HALF_YEAR_SIGNAL_FILENAME
+    if lines_indicate_1h_month_phasing(lines):
+        return True, HALF_YEAR_SIGNAL_MONTH_COLUMNS
+    fk = _workbook_file_key(case.file_name)
+    if fk and fk in workbook_keys_with_direct_1h:
+        return True, HALF_YEAR_SIGNAL_WORKBOOK_SIBLING
+    return False, None
 
 
 def _line_already_allocated(line: CommercialLineupLine) -> bool:
@@ -103,10 +150,13 @@ def _find_existing_q2_collisions(
     return out
 
 
-def _build_rederivation_proposal(db: Session, case: CommercialLineupCase) -> dict[str, Any] | None:
-    if not case_has_1h_signal(case):
-        return None
-    lines = list(db.scalars(select(CommercialLineupLine).where(CommercialLineupLine.case_id == case.id)).all())
+def _build_rederivation_proposal(
+    db: Session,
+    case: CommercialLineupCase,
+    *,
+    lines: list[CommercialLineupLine],
+    signal_source: str,
+) -> dict[str, Any] | None:
     if not lines:
         return None
 
@@ -160,6 +210,7 @@ def _build_rederivation_proposal(db: Session, case: CommercialLineupCase) -> dic
         "file_name": case.file_name,
         "period_label_before": case.period_label,
         "business_unit": bu,
+        "half_year_signal_source": signal_source,
         "flags": [PERIOD_SCOPE_1H_SPLIT_FLAG, HALF_YEAR_ALLOCATION_FLAG],
         "allocation_summary": alloc,
         "q1_adjustment": {
@@ -189,6 +240,7 @@ def _build_rederivation_proposal(db: Session, case: CommercialLineupCase) -> dic
                 "period_label": c.period_label,
                 "commercial_status": c.commercial_status,
                 "member_key": f"existing:{c.id}",
+                "business_unit": c.business_unit or c.product_line,
             }
             for c in q2_collisions
         ],
@@ -204,6 +256,7 @@ def build_1h_rederivation_collisions(proposals: list[dict[str, Any]]) -> list[di
         if not sgk:
             continue
         members: list[dict[str, Any]] = []
+        bu = prop.get("business_unit")
         for ex in prop.get("q2_existing_collisions") or []:
             members.append(
                 {
@@ -211,6 +264,7 @@ def build_1h_rederivation_collisions(proposals: list[dict[str, Any]]) -> list[di
                     "case_id": ex.get("case_id"),
                     "filename": ex.get("file_name"),
                     "kind": "existing_case",
+                    "business_unit": ex.get("business_unit") or bu,
                 }
             )
         members.append(
@@ -220,6 +274,7 @@ def build_1h_rederivation_collisions(proposals: list[dict[str, Any]]) -> list[di
                 "filename": prop.get("file_name"),
                 "kind": "proposed_q2_twin",
                 "source_case_id": prop.get("source_case_id"),
+                "business_unit": bu,
             }
         )
         if len(members) < 2:
@@ -249,9 +304,34 @@ async def build_1h_rederivation_preview(db: AsyncSession) -> dict[str, Any]:
                 )
             ).all()
         )
-        proposals: list[dict[str, Any]] = []
+        case_lines: list[tuple[CommercialLineupCase, list[CommercialLineupLine]]] = []
         for case in cases:
-            prop = _build_rederivation_proposal(sync_db, case)
+            lines = list(
+                sync_db.scalars(
+                    select(CommercialLineupLine).where(CommercialLineupLine.case_id == case.id)
+                ).all()
+            )
+            case_lines.append((case, lines))
+
+        workbook_keys_with_direct_1h: set[str] = set()
+        for case, lines in case_lines:
+            if case_has_1h_filename_signal(case) or lines_indicate_1h_month_phasing(lines):
+                fk = _workbook_file_key(case.file_name)
+                if fk:
+                    workbook_keys_with_direct_1h.add(fk)
+
+        proposals: list[dict[str, Any]] = []
+        for case, lines in case_lines:
+            eligible, signal_source = resolve_half_year_signal(
+                case,
+                lines,
+                workbook_keys_with_direct_1h=workbook_keys_with_direct_1h,
+            )
+            if not eligible or signal_source is None:
+                continue
+            prop = _build_rederivation_proposal(
+                sync_db, case, lines=lines, signal_source=signal_source
+            )
             if prop:
                 proposals.append(prop)
 

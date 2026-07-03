@@ -104,6 +104,60 @@ function productDisplayLabel(m: MatchedProduct): string {
   return `Product #${m.product_id}`;
 }
 
+export type PoAutoLinkGroupHeader = {
+  rowType: 'group';
+  groupKey: string;
+  case_period_label: string | null;
+  customer_id: number | null;
+  customer_label: string | null;
+  groupPlanUnits: number;
+};
+
+export type PoAutoLinkGridRow =
+  | PoAutoLinkGroupHeader
+  | (PoAutoLinkProposal & { rowType?: 'proposal' });
+
+export function dedupeGroupPlanUnits(proposals: PoAutoLinkProposal[]): number {
+  const byProduct = new Map<number, number>();
+  for (const p of proposals) {
+    for (const m of p.matched_products) {
+      byProduct.set(m.product_id, Math.max(byProduct.get(m.product_id) ?? 0, m.planned_units));
+    }
+  }
+  return [...byProduct.values()].reduce((sum, n) => sum + n, 0);
+}
+
+export function buildGroupedPoAutoLinkRows(proposals: PoAutoLinkProposal[]): PoAutoLinkGridRow[] {
+  const groups = new Map<string, PoAutoLinkProposal[]>();
+  for (const p of proposals) {
+    const period = p.case_period_label ?? p.inferred_period_start ?? '';
+    const key = `${period}|${p.customer_id ?? 'null'}`;
+    const bucket = groups.get(key) ?? [];
+    bucket.push(p);
+    groups.set(key, bucket);
+  }
+  const rows: PoAutoLinkGridRow[] = [];
+  for (const [groupKey, bucket] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const first = bucket[0];
+    rows.push({
+      rowType: 'group',
+      groupKey,
+      case_period_label: first.case_period_label,
+      customer_id: first.customer_id,
+      customer_label: first.customer_label,
+      groupPlanUnits: dedupeGroupPlanUnits(bucket),
+    });
+    for (const p of bucket) {
+      rows.push({ ...p, rowType: 'proposal' });
+    }
+  }
+  return rows;
+}
+
+function isGroupRow(row: PoAutoLinkGridRow | undefined): row is PoAutoLinkGroupHeader {
+  return row?.rowType === 'group';
+}
+
 function PoAutoLinkConfirmDialog({
   open,
   proposal,
@@ -256,10 +310,10 @@ export function PoAutoLinkProposalsSection({
   const [confirmProposal, setConfirmProposal] = useState<PoAutoLinkProposal | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [dismissTarget, setDismissTarget] = useState<PoAutoLinkProposal | null>(null);
-  const gridApiRef = useRef<GridApi<PoAutoLinkProposal> | null>(null);
+  const gridApiRef = useRef<GridApi<PoAutoLinkGridRow> | null>(null);
   const sortStateRef = useRef<ColumnState[]>([]);
 
-  const applyPersistedSort = useCallback((api: GridApi<PoAutoLinkProposal>) => {
+  const applyPersistedSort = useCallback((api: GridApi<PoAutoLinkGridRow>) => {
     const sorted = sortStateRef.current.filter((c) => c.sort != null);
     if (!sorted.length) return;
     api.applyColumnState({
@@ -341,10 +395,12 @@ export function PoAutoLinkProposalsSection({
     });
   }, [activeProposals, customerFilter]);
 
+  const groupedRowData = useMemo(() => buildGroupedPoAutoLinkRows(filteredProposals), [filteredProposals]);
+
   useEffect(() => {
     const api = gridApiRef.current;
     if (api) applyPersistedSort(api);
-  }, [filteredProposals, applyPersistedSort]);
+  }, [groupedRowData, applyPersistedSort]);
 
   const pendingCount = Math.max(
     0,
@@ -402,52 +458,78 @@ export function PoAutoLinkProposalsSection({
     });
   };
 
-  const columnDefs = useMemo<ColDef<PoAutoLinkProposal>[]>(
+  const columnDefs = useMemo<ColDef<PoAutoLinkGridRow>[]>(
     () => [
+      {
+        headerName: 'Period / Customer',
+        colId: 'periodCustomer',
+        flex: 1,
+        minWidth: 200,
+        valueGetter: (p) => {
+          if (isGroupRow(p.data)) {
+            return `${p.data.case_period_label ?? '—'} · ${p.data.customer_label ?? 'Unresolved'}`;
+          }
+          return null;
+        },
+        cellRenderer: (p: ICellRendererParams<PoAutoLinkGridRow>) => {
+          if (isGroupRow(p.data)) {
+            return (
+              <Stack spacing={0.25}>
+                <Typography variant="body2" fontWeight={600} data-testid={`po-auto-link-group-${p.data.groupKey}`}>
+                  {p.data.case_period_label ?? '—'} · {p.data.customer_label ?? 'Unresolved'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Period plan (customer-scoped): {fmtUnits(p.data.groupPlanUnits)}
+                </Typography>
+              </Stack>
+            );
+          }
+          return null;
+        },
+      },
       {
         headerName: 'Confidence',
         field: 'confidence',
         width: 110,
-        cellRenderer: (p: ICellRendererParams<PoAutoLinkProposal>) =>
-          p.data ? (
-            <Tooltip title={reasonLabel(p.data.reason)}>
-              <Chip size="small" color={confidenceColor(p.data.confidence)} label={p.data.confidence} />
+        valueGetter: (p) => (!isGroupRow(p.data) ? p.data?.confidence : null),
+        cellRenderer: (p: ICellRendererParams<PoAutoLinkGridRow>) => {
+          const row = p.data;
+          if (!row || isGroupRow(row)) return null;
+          return (
+            <Tooltip title={reasonLabel(row.reason)}>
+              <Chip size="small" color={confidenceColor(row.confidence)} label={row.confidence} />
             </Tooltip>
-          ) : null,
+          );
+        },
       },
-      {
-        headerName: 'Period',
-        width: 100,
-        valueGetter: (p) => p.data?.case_period_label ?? p.data?.inferred_period_start ?? '—',
-      },
-      { headerName: 'Customer', flex: 1, minWidth: 140, field: 'customer_label' },
       {
         headerName: 'PO',
         width: 130,
-        valueGetter: (p) => p.data?.po_number ?? (p.data ? `#${p.data.purchase_order_id}` : ''),
+        valueGetter: (p) =>
+          !isGroupRow(p.data) ? p.data?.po_number ?? (p.data ? `#${p.data.purchase_order_id}` : '') : null,
       },
       {
         headerName: 'Distributor',
         flex: 1,
         minWidth: 120,
         valueGetter: (p) =>
-          p.data
+          !isGroupRow(p.data) && p.data
             ? [p.data.distributor_code, p.data.distributor_name].filter(Boolean).join(' — ') || '—'
-            : '',
+            : null,
       },
       {
-        headerName: 'Period plan (customer-scoped)',
-        headerTooltip: 'Period plan for matched products (customer-scoped)',
-        width: 130,
-        type: 'numericColumn',
-        valueGetter: (p) => p.data?.total_planned_units ?? null,
-        valueFormatter: (p) => fmtUnits(p.value as number),
+        headerName: 'Matched products',
+        flex: 1,
+        minWidth: 140,
+        sortable: false,
+        valueGetter: (p) =>
+          !isGroupRow(p.data) && p.data ? p.data.matched_products.map((m) => productDisplayLabel(m)).join(', ') : null,
       },
       {
         headerName: 'Shipped',
         width: 100,
         type: 'numericColumn',
-        valueGetter: (p) => p.data?.total_shipped_units ?? null,
+        valueGetter: (p) => (!isGroupRow(p.data) ? p.data?.total_shipped_units ?? null : null),
         valueFormatter: (p) => fmtUnits(p.value as number),
       },
       {
@@ -457,9 +539,9 @@ export function PoAutoLinkProposalsSection({
         pinned: 'right',
         sortable: false,
         filter: false,
-        cellRenderer: (p: ICellRendererParams<PoAutoLinkProposal>) => {
+        cellRenderer: (p: ICellRendererParams<PoAutoLinkGridRow>) => {
           const row = p.data;
-          if (!row) return null;
+          if (!row || isGroupRow(row)) return null;
           if (row.dismissed) {
             return (
               <Button
@@ -494,15 +576,16 @@ export function PoAutoLinkProposalsSection({
     [restoreMut]
   );
 
-  const gridOptions = useMemo<GridOptions<PoAutoLinkProposal>>(
+  const gridOptions = useMemo<GridOptions<PoAutoLinkGridRow>>(
     () => ({
-      getRowId: (p) => p.data.proposal_key,
+      getRowId: (p) =>
+        p.data && isGroupRow(p.data) ? `group:${p.data.groupKey}` : (p.data as PoAutoLinkProposal).proposal_key,
       rowSelection: {
         mode: 'multiRow',
         checkboxes: true,
         headerCheckbox: true,
         enableClickSelection: false,
-        isRowSelectable: (p) => !p.data?.dismissed,
+        isRowSelectable: (p) => !isGroupRow(p.data) && !p.data?.dismissed,
       },
       onGridReady: (e) => {
         gridApiRef.current = e.api;
@@ -515,7 +598,10 @@ export function PoAutoLinkProposalsSection({
         sortStateRef.current = e.api.getColumnState().filter((c) => c.sort != null);
       },
       onSelectionChanged: (e) => {
-        const keys = e.api.getSelectedRows().map((r) => r.proposal_key);
+        const keys = e.api
+          .getSelectedRows()
+          .filter((r): r is PoAutoLinkProposal & { rowType?: 'proposal' } => !isGroupRow(r))
+          .map((r) => r.proposal_key);
         setSelected(new Set(keys));
       },
     }),
@@ -628,7 +714,7 @@ export function PoAutoLinkProposalsSection({
                   </Typography>
                   <Box data-testid="po-auto-link-table">
                     <EnterpriseDataGrid
-                      rowData={filteredProposals}
+                      rowData={groupedRowData}
                       columnDefs={columnDefs}
                       gridOptions={gridOptions}
                       height={420}

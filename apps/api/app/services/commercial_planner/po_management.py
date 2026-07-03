@@ -253,6 +253,7 @@ async def backlog(db: AsyncSession) -> dict[str, Any]:
             for po in linked_pos:
                 case_ids |= po_to_cases.get(po, set())
             summary = {f: 0 for f in UNITS_FLAGS}
+            cust_agg: dict[int | None, dict[str, Any]] = {}
             for cid in case_ids:
                 try:
                     recon = await reconcile_case(db, cid)
@@ -261,7 +262,24 @@ async def backlog(db: AsyncSession) -> dict[str, Any]:
                     continue
                 for f in UNITS_FLAGS:
                     summary[f] += recon.get("summary", {}).get(f, 0)
+                for cs in recon.get("customers") or []:
+                    ck = cs.get("customer_id")
+                    if ck not in cust_agg:
+                        cust_agg[ck] = {
+                            "customer_id": ck,
+                            "label": cs.get("label"),
+                            "awaiting_po": False,
+                            "summary": {f: 0 for f in UNITS_FLAGS},
+                        }
+                    if cs.get("awaiting_po"):
+                        cust_agg[ck]["awaiting_po"] = True
+                    for f in UNITS_FLAGS:
+                        cust_agg[ck]["summary"][f] += cs.get("summary", {}).get(f, 0)
             entry["reconciliation_summary"] = summary
+            entry["reconciliation_customers"] = sorted(
+                cust_agg.values(),
+                key=lambda c: (c["customer_id"] is None, c["customer_id"] or 0),
+            )
             entry["linked_case_ids"] = sorted(case_ids)
         else:
             coverage_key = (int(g["year"]), int(g["quarter"]), str(g["product_line"]))
