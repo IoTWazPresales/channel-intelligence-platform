@@ -575,10 +575,17 @@ type EntityTokenCandidate = {
   token_display: string;
   line_count: number;
   sample_line_ids: number[];
+  case_ids?: number[];
+  case_count?: number;
+  token_source?: 'distributor_column' | 'open_channel_route';
 };
 
 type EntityResolutionCandidatesResponse = {
-  case_id: number;
+  case_id?: number;
+  plan_id?: number | null;
+  eligible_case_ids?: number[];
+  eligible_case_count?: number;
+  token_count?: number;
   customer_tokens: EntityTokenCandidate[];
   distributor_tokens: EntityTokenCandidate[];
 };
@@ -719,19 +726,32 @@ type EntityResolutionApplyItem = {
   confirm_create?: boolean;
 };
 
+function tokenAffectsCase(t: EntityTokenCandidate, caseId: number | null | undefined): boolean {
+  if (!caseId) return true;
+  const ids = t.case_ids ?? [];
+  return ids.length === 0 || ids.includes(caseId);
+}
+
 function LineupEntityResolutionDialog({
   open,
   onClose,
   caseId,
   caseStatus,
+  planScope,
   onApplied,
 }: {
   open: boolean;
   onClose: () => void;
-  caseId: number;
-  caseStatus: string;
   onApplied: () => void;
+  caseId?: number;
+  caseStatus?: string;
+  planScope?: {
+    planId: number | null;
+    caseIds: number[];
+    filterCaseId?: number | null;
+  };
 }) {
+  const isPlanScope = Boolean(planScope);
   const qc = useQueryClient();
   const [custModes, setCustModes] = useState<Record<string, CustomerTokenResolutionMode>>({});
   const [distModes, setDistModes] = useState<Record<string, DistributorTokenResolutionMode>>({});
@@ -743,15 +763,43 @@ function LineupEntityResolutionDialog({
   const [distCreate, setDistCreate] = useState<Record<string, { code: string; name: string; confirm: boolean }>>({});
   const [applyError, setApplyError] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery<EntityResolutionCandidatesResponse>({
-    queryKey: ['lineup-entity-resolution-candidates', caseId],
-    queryFn: ({ signal }) =>
-      apiGet<EntityResolutionCandidatesResponse>(
-        `/api/v1/commercial-planner/lineup-cases/${caseId}/entity-resolution-candidates`,
-        { signal },
-      ),
-    enabled: open && RESOLUTION_UI_STATUSES.has(caseStatus),
+  const candidatesUrl = useMemo(() => {
+    if (isPlanScope && planScope) {
+      if (planScope.planId != null) {
+        return `/api/v1/commercial-planner/entity-resolution-candidates?plan_id=${planScope.planId}`;
+      }
+      if (planScope.caseIds.length) {
+        return `/api/v1/commercial-planner/entity-resolution-candidates?case_ids=${planScope.caseIds.join(',')}`;
+      }
+      return null;
+    }
+    if (caseId != null) {
+      return `/api/v1/commercial-planner/lineup-cases/${caseId}/entity-resolution-candidates`;
+    }
+    return null;
+  }, [isPlanScope, planScope, caseId]);
+
+  const candidatesEnabled =
+    open &&
+    candidatesUrl != null &&
+    (isPlanScope || (caseStatus != null && RESOLUTION_UI_STATUSES.has(caseStatus)));
+
+  const { data: rawData, isLoading } = useQuery<EntityResolutionCandidatesResponse>({
+    queryKey: ['lineup-entity-resolution-candidates', candidatesUrl, planScope?.filterCaseId ?? null],
+    queryFn: ({ signal }) => apiGet<EntityResolutionCandidatesResponse>(candidatesUrl!, { signal }),
+    enabled: candidatesEnabled,
   });
+
+  const data = useMemo(() => {
+    if (!rawData) return null;
+    const filterId = planScope?.filterCaseId ?? null;
+    if (!filterId) return rawData;
+    return {
+      ...rawData,
+      customer_tokens: rawData.customer_tokens.filter((t) => tokenAffectsCase(t, filterId)),
+      distributor_tokens: rawData.distributor_tokens.filter((t) => tokenAffectsCase(t, filterId)),
+    };
+  }, [rawData, planScope?.filterCaseId]);
 
   useEffect(() => {
     if (!open) {
@@ -782,18 +830,35 @@ function LineupEntityResolutionDialog({
     setCustCreate({});
     setDistCreate({});
     setApplyError(null);
-  }, [open, caseId, data]);
+  }, [open, caseId, planScope, data, isPlanScope]);
 
   const applyMutation = useMutation({
     mutationFn: async (resolutions: EntityResolutionApplyItem[]) => {
+      if (isPlanScope && planScope) {
+        await apiPost('/api/v1/commercial-planner/entity-resolutions/apply', {
+          resolutions,
+          plan_id: planScope.planId,
+          case_ids: planScope.caseIds.length ? planScope.caseIds : undefined,
+        });
+        return;
+      }
       await apiPost(`/api/v1/commercial-planner/lineup-cases/${caseId}/entity-resolutions/apply`, {
         resolutions,
       });
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['lineup-entity-resolution-candidates', caseId] });
-      await qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', caseId] });
-      await qc.invalidateQueries({ queryKey: ['lineup-workbench-column-metadata', caseId] });
+      await qc.invalidateQueries({ queryKey: ['lineup-entity-resolution-candidates'] });
+      await qc.invalidateQueries({ queryKey: ['lineup-plan-entity-resolution-candidates'] });
+      if (caseId != null) {
+        await qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', caseId] });
+        await qc.invalidateQueries({ queryKey: ['lineup-workbench-column-metadata', caseId] });
+      }
+      if (planScope?.caseIds.length) {
+        await Promise.all(
+          planScope.caseIds.map((id) => qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', id] })),
+        );
+      }
+      await qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
       await qc.invalidateQueries({ queryKey: ['sync-to-plan-preview'] });
       onApplied();
       onClose();
@@ -902,12 +967,26 @@ function LineupEntityResolutionDialog({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Resolve lineup entities (this case only)</DialogTitle>
+      <DialogTitle>
+        {isPlanScope
+          ? `Resolve lineup entities${planScope?.planId != null ? ` — plan #${planScope.planId}` : ''}`
+          : 'Resolve lineup entities (this case only)'}
+      </DialogTitle>
       <DialogContent dividers>
         <Alert severity="info" sx={{ mb: 2 }}>
-          Map file tokens with explicit actions only — abbreviations (for example IC, MITSUMI) are never auto-created or
-          guessed. Raw tokens stay in the row audit trail. Lineup updates only — DAP stays evidence-only and is not used
-          as cost.
+          {isPlanScope ? (
+            <>
+              One mapping applies to every eligible case that shares the token (
+              {rawData?.eligible_case_count ?? 0} case{(rawData?.eligible_case_count ?? 0) === 1 ? '' : 's'} in
+              draft/review). Open Channel auto-detected rows are excluded from the customer list.
+            </>
+          ) : (
+            <>
+              Map file tokens with explicit actions only — abbreviations (for example IC, MITSUMI) are never auto-created
+              or guessed. Raw tokens stay in the row audit trail. Lineup updates only — DAP stays evidence-only and is not
+              used as cost.
+            </>
+          )}
         </Alert>
         {isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
@@ -931,8 +1010,19 @@ function LineupEntityResolutionDialog({
                     return (
                       <Box key={`c-${t.token_norm}`}>
                         <Typography variant="caption" color="text.secondary" display="block">
-                          Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}): {t.token_display}
+                          Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}
+                          {t.case_count != null && t.case_count > 0
+                            ? ` · ${t.case_count} case${t.case_count === 1 ? '' : 's'}`
+                            : ''}
+                          ): {t.token_display}
                         </Typography>
+                        {t.case_ids && t.case_ids.length > 0 && (
+                          <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                            {t.case_ids.map((cid) => (
+                              <Chip key={cid} size="small" variant="outlined" label={`#${cid}`} />
+                            ))}
+                          </Stack>
+                        )}
                         <FormControl fullWidth size="small" sx={{ mt: 1 }}>
                           <InputLabel id={`${lid}-mode`}>Resolution</InputLabel>
                           <Select
@@ -1065,8 +1155,22 @@ function LineupEntityResolutionDialog({
                     return (
                       <Box key={`d-${t.token_norm}`}>
                         <Typography variant="caption" color="text.secondary" display="block">
-                          Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}): {t.token_display}
+                          Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}
+                          {t.case_count != null && t.case_count > 0
+                            ? ` · ${t.case_count} case${t.case_count === 1 ? '' : 's'}`
+                            : ''}
+                          ): {t.token_display}
                         </Typography>
+                        {t.case_ids && t.case_ids.length > 0 && (
+                          <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                            {t.case_ids.map((cid) => (
+                              <Chip key={cid} size="small" variant="outlined" label={`#${cid}`} />
+                            ))}
+                          </Stack>
+                        )}
+                        {t.token_source === 'open_channel_route' && (
+                          <Chip size="small" color="info" variant="outlined" label="Open Channel route" sx={{ mt: 0.5 }} />
+                        )}
                         <FormControl fullWidth size="small" sx={{ mt: 1 }}>
                           <InputLabel id={`${lid}-mode`}>Resolution</InputLabel>
                           <Select
@@ -2754,6 +2858,8 @@ export function CurrentLineupSection({
   const [deleteCase, setDeleteCase] = useState<CommercialLineupCase | null>(null);
   const [activeCaseId, setActiveCaseId] = useState<number | null>(null);
   const [resolutionCase, setResolutionCase] = useState<CommercialLineupCase | null>(null);
+  const [planResolutionOpen, setPlanResolutionOpen] = useState(false);
+  const [planResolutionFilterCaseId, setPlanResolutionFilterCaseId] = useState<number | null>(null);
   const [wbSync, setWbSync] = useState({
     fallbackCustomerId: '',
     fallbackDistributorId: '',
@@ -2794,6 +2900,44 @@ export function CurrentLineupSection({
   }, [cases]);
 
   const activeCase = cases?.find((c) => c.id === activeCaseId);
+
+  const eligibleResolutionCaseIds = useMemo(
+    () => (cases ?? []).filter((c) => RESOLUTION_UI_STATUSES.has(c.commercial_status)).map((c) => c.id),
+    [cases],
+  );
+
+  const planEntityCandidatesEnabled =
+    eligibleResolutionCaseIds.length > 0 &&
+    (effectivePlanId != null || !showAllCases || (cases?.length ?? 0) > 0);
+
+  const { data: planEntitySummary } = useQuery<EntityResolutionCandidatesResponse>({
+    queryKey: [
+      'lineup-plan-entity-resolution-candidates',
+      effectivePlanId,
+      eligibleResolutionCaseIds.join(','),
+    ],
+    queryFn: ({ signal }) => {
+      const url =
+        effectivePlanId != null
+          ? `/api/v1/commercial-planner/entity-resolution-candidates?plan_id=${effectivePlanId}`
+          : `/api/v1/commercial-planner/entity-resolution-candidates?case_ids=${eligibleResolutionCaseIds.join(',')}`;
+      return apiGet<EntityResolutionCandidatesResponse>(url, { signal });
+    },
+    enabled: planEntityCandidatesEnabled && eligibleResolutionCaseIds.length > 0,
+  });
+
+  const unresolvedTokenCountByCase = useMemo(() => {
+    const map = new Map<number, number>();
+    if (!planEntitySummary) return map;
+    const bumpToken = (caseIds: number[] | undefined) => {
+      for (const id of caseIds ?? []) {
+        map.set(id, (map.get(id) ?? 0) + 1);
+      }
+    };
+    for (const t of planEntitySummary.customer_tokens) bumpToken(t.case_ids);
+    for (const t of planEntitySummary.distributor_tokens) bumpToken(t.case_ids);
+    return map;
+  }, [planEntitySummary]);
 
   const hasWorkbenchPlan = Boolean(activeCase?.commercial_plan_id);
 
@@ -3370,6 +3514,20 @@ export function CurrentLineupSection({
             Current lineups
           </Button>
           {count > 0 && <Chip label={count} size="small" />}
+          {(planEntitySummary?.token_count ?? 0) > 0 && (
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => {
+                setPlanResolutionFilterCaseId(null);
+                setPlanResolutionOpen(true);
+              }}
+              data-testid="lineup-plan-entity-resolution-open"
+            >
+              Resolve entities · {planEntitySummary?.token_count} token
+              {(planEntitySummary?.token_count ?? 0) === 1 ? '' : 's'}
+            </Button>
+          )}
           {activePlanId != null && (
             <FormControlLabel
               sx={{ ml: 0.5 }}
@@ -3411,6 +3569,31 @@ export function CurrentLineupSection({
 
         <Collapse in={expanded}>
           <Box sx={{ mt: 1 }}>
+            {(planEntitySummary?.token_count ?? 0) > 0 && (
+              <Alert
+                severity="warning"
+                sx={{ mb: 1 }}
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => {
+                      setPlanResolutionFilterCaseId(null);
+                      setPlanResolutionOpen(true);
+                    }}
+                  >
+                    Resolve all
+                  </Button>
+                }
+                data-testid="lineup-plan-entity-resolution-banner"
+              >
+                {planEntitySummary?.token_count} unresolved entity token
+                {(planEntitySummary?.token_count ?? 0) === 1 ? '' : 's'} across{' '}
+                {planEntitySummary?.eligible_case_count ?? eligibleResolutionCaseIds.length} imported case
+                {(planEntitySummary?.eligible_case_count ?? eligibleResolutionCaseIds.length) === 1 ? '' : 's'} — map
+                once per token; applies to every matching case.
+              </Alert>
+            )}
             {isLoading ? (
               <CircularProgress size={20} />
             ) : count === 0 ? (
@@ -3462,6 +3645,21 @@ export function CurrentLineupSection({
                       color={STATUS_COLORS[c.commercial_status] ?? 'default'}
                       data-testid={`lineup-case-status-${c.id}`}
                     />
+                    {RESOLUTION_UI_STATUSES.has(c.commercial_status) &&
+                      (unresolvedTokenCountByCase.get(c.id) ?? 0) > 0 && (
+                        <Chip
+                          label={`${unresolvedTokenCountByCase.get(c.id)} unresolved`}
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                          clickable
+                          onClick={() => {
+                            setPlanResolutionFilterCaseId(c.id);
+                            setPlanResolutionOpen(true);
+                          }}
+                          data-testid={`lineup-case-unresolved-${c.id}`}
+                        />
+                      )}
                     {(c.iteration_number ?? 1) > 1 && (
                       <Chip
                         label={`Round ${c.iteration_number}`}
@@ -4035,6 +4233,25 @@ export function CurrentLineupSection({
           onClose={() => setRetryParseCase(null)}
           targetCase={retryParseCase}
           onParsed={() => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] })}
+        />
+      )}
+
+      {planResolutionOpen && (
+        <LineupEntityResolutionDialog
+          open
+          onClose={() => {
+            setPlanResolutionOpen(false);
+            setPlanResolutionFilterCaseId(null);
+          }}
+          planScope={{
+            planId: effectivePlanId,
+            caseIds: eligibleResolutionCaseIds,
+            filterCaseId: planResolutionFilterCaseId,
+          }}
+          onApplied={() => {
+            void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+            void qc.invalidateQueries({ queryKey: ['lineup-plan-entity-resolution-candidates'] });
+          }}
         />
       )}
 

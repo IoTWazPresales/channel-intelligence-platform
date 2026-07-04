@@ -42,7 +42,9 @@ from app.services.commercial_planner.current_lineup_seed import CurrentLineupSou
 from app.services.commercial_planner.lineup_entity_resolution import (
     RESOLUTION_ALLOWED_CASE_STATUSES,
     apply_entity_resolutions,
+    apply_plan_entity_resolutions,
     collect_entity_resolution_candidates,
+    collect_plan_entity_resolution_candidates,
 )
 from app.services.commercial_planner.intelligence.product_rankings import rank_products_for_customer
 from app.services.commercial_planner.lineup_case_po_confirm import (
@@ -2083,6 +2085,17 @@ class EntityResolutionApplyBody(BaseModel):
     resolutions: list[EntityResolutionItem] = Field(min_length=1)
 
 
+class BulkEntityResolutionApplyBody(EntityResolutionApplyBody):
+    plan_id: int | None = Field(default=None, ge=1)
+    case_ids: list[int] | None = None
+
+    @model_validator(mode="after")
+    def _require_scope(self) -> BulkEntityResolutionApplyBody:
+        if self.plan_id is None and not self.case_ids:
+            raise ValueError("plan_id or case_ids is required for bulk entity resolution apply")
+        return self
+
+
 class AssignDistributorBody(BaseModel):
     """Assign a distributor to a case's lines.
 
@@ -2211,6 +2224,59 @@ async def get_lineup_entity_resolution_candidates(case_id: int, db: AsyncSession
     if case.commercial_status == "cancelled":
         raise HTTPException(status_code=409, detail="Case is cancelled")
     return await collect_entity_resolution_candidates(db, case_id)
+
+
+@router.get("/entity-resolution-candidates")
+async def get_plan_entity_resolution_candidates(
+    db: AsyncSession = Depends(get_db),
+    plan_id: int | None = Query(default=None, ge=1),
+    case_ids: str | None = Query(
+        default=None,
+        description="Comma-separated lineup case ids (used when browsing all cases without a plan filter)",
+    ),
+):
+    """Aggregate unresolved customer/distributor tokens across eligible lineup cases on a plan."""
+    parsed_case_ids: list[int] | None = None
+    if case_ids:
+        try:
+            parsed_case_ids = [int(x.strip()) for x in case_ids.split(",") if x.strip()]
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="case_ids must be comma-separated integers") from exc
+        if not parsed_case_ids:
+            parsed_case_ids = None
+    if plan_id is None and not parsed_case_ids:
+        raise HTTPException(status_code=400, detail="plan_id or case_ids is required")
+    if plan_id is not None and not await db.get(CommercialPlan, plan_id):
+        raise HTTPException(status_code=404, detail="Commercial plan not found")
+    return await collect_plan_entity_resolution_candidates(
+        db, plan_id=plan_id, case_ids=parsed_case_ids
+    )
+
+
+async def _validate_entity_resolution_items(db: AsyncSession, resolutions: list[EntityResolutionItem]) -> None:
+    for item in resolutions:
+        if item.action == "mark_open_channel_staging":
+            continue
+        if item.action == "create_dim":
+            code = (item.new_code or "").strip()
+            if item.kind == "customer":
+                exists = await db.scalar(select(func.count()).select_from(DimCustomer).where(DimCustomer.code == code[:64]))
+                if exists:
+                    raise HTTPException(status_code=400, detail=f"Customer code already exists: {code[:64]}")
+            else:
+                exists = await db.scalar(
+                    select(func.count()).select_from(DimDistributor).where(DimDistributor.code == code[:32])
+                )
+                if exists:
+                    raise HTTPException(status_code=400, detail=f"Distributor code already exists: {code[:32]}")
+            continue
+        assert item.dim_id is not None
+        if item.kind in ("customer", "distributor_token_as_customer"):
+            if not await db.get(DimCustomer, item.dim_id):
+                raise HTTPException(status_code=400, detail=f"Unknown customer_id={item.dim_id}")
+        if item.kind in ("distributor", "customer_token_as_distributor"):
+            if not await db.get(DimDistributor, item.dim_id):
+                raise HTTPException(status_code=400, detail=f"Unknown distributor_id={item.dim_id}")
 
 
 def _workbench_calc_field_metadata() -> list[dict[str, str]]:
@@ -2350,31 +2416,34 @@ async def post_lineup_entity_resolutions_apply(
                 f"Current: '{case.commercial_status}'"
             ),
         )
-    for item in body.resolutions:
-        if item.action == "mark_open_channel_staging":
-            continue
-        if item.action == "create_dim":
-            code = (item.new_code or "").strip()
-            if item.kind == "customer":
-                exists = await db.scalar(select(func.count()).select_from(DimCustomer).where(DimCustomer.code == code[:64]))
-                if exists:
-                    raise HTTPException(status_code=400, detail=f"Customer code already exists: {code[:64]}")
-            else:
-                exists = await db.scalar(
-                    select(func.count()).select_from(DimDistributor).where(DimDistributor.code == code[:32])
-                )
-                if exists:
-                    raise HTTPException(status_code=400, detail=f"Distributor code already exists: {code[:32]}")
-            continue
-        assert item.dim_id is not None
-        if item.kind in ("customer", "distributor_token_as_customer"):
-            if not await db.get(DimCustomer, item.dim_id):
-                raise HTTPException(status_code=400, detail=f"Unknown customer_id={item.dim_id}")
-        if item.kind in ("distributor", "customer_token_as_distributor"):
-            if not await db.get(DimDistributor, item.dim_id):
-                raise HTTPException(status_code=400, detail=f"Unknown distributor_id={item.dim_id}")
+    await _validate_entity_resolution_items(db, body.resolutions)
     raw = [item.model_dump() for item in body.resolutions]
     out = await apply_entity_resolutions(db, case_id, raw)
+    await db.commit()
+    return out
+
+
+@router.post("/entity-resolutions/apply", status_code=200)
+async def post_plan_entity_resolutions_apply(
+    body: BulkEntityResolutionApplyBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply token mappings across every eligible lineup case on a plan (or explicit case list)."""
+    if body.plan_id is not None and not await db.get(CommercialPlan, body.plan_id):
+        raise HTTPException(status_code=404, detail="Commercial plan not found")
+    eligible = await collect_plan_entity_resolution_candidates(
+        db, plan_id=body.plan_id, case_ids=body.case_ids
+    )
+    if not eligible.get("eligible_case_ids"):
+        raise HTTPException(
+            status_code=409,
+            detail="No eligible lineup cases in draft/review for entity resolution on this scope.",
+        )
+    await _validate_entity_resolution_items(db, body.resolutions)
+    raw = [item.model_dump() for item in body.resolutions]
+    out = await apply_plan_entity_resolutions(
+        db, raw, plan_id=body.plan_id, case_ids=body.case_ids
+    )
     await db.commit()
     return out
 

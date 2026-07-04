@@ -10,10 +10,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.commercial_lineup import CommercialLineupLine
-from app.models.dimensions import DimCustomer, DimDistributor
-
+from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
 from app.services.commercial_planner.lineup_open_channel import (
+    CHANNEL_ROUTE_UPLOADED_CELL_KEY,
+    extract_distributor_name_from_channel_customer_cell,
     lineup_line_is_open_channel_staging,
     managed_customer_token_unresolved,
 )
@@ -39,6 +39,30 @@ def distributor_token_from_line(ln: CommercialLineupLine) -> str | None:
     return s or None
 
 
+def open_channel_distributor_hint_from_line(ln: CommercialLineupLine) -> str | None:
+    """Distributor name parsed from an Open Channel route cell when distributor_token is absent."""
+    if not lineup_line_is_open_channel_staging(ln):
+        return None
+    payload = ln.raw_row_payload if isinstance(ln.raw_row_payload, dict) else {}
+    for raw in (payload.get(CHANNEL_ROUTE_UPLOADED_CELL_KEY), payload.get("customer_token")):
+        if raw is None:
+            continue
+        hint = extract_distributor_name_from_channel_customer_cell(str(raw))
+        if hint:
+            return hint
+    return None
+
+
+def distributor_resolution_token_from_line(ln: CommercialLineupLine) -> str | None:
+    """Token used for steward distributor mapping (column token or open-channel route hint)."""
+    return distributor_token_from_line(ln) or open_channel_distributor_hint_from_line(ln)
+
+
+def _line_matches_distributor_token(ln: CommercialLineupLine, norm: str) -> bool:
+    candidate = distributor_resolution_token_from_line(ln)
+    return bool(candidate) and normalize_entity_token(candidate) == norm
+
+
 def _dedupe_preserve_order(codes: list[str]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
@@ -58,7 +82,7 @@ def refresh_diagnostics_after_entity_update(ln: CommercialLineupLine) -> None:
         codes.append("unresolved_product")
     if managed_customer_token_unresolved(ln):
         codes.append("unknown_customer")
-    dt = distributor_token_from_line(ln)
+    dt = distributor_resolution_token_from_line(ln)
     if dt and ln.distributor_id is None:
         codes.append("unknown_distributor")
     codes.extend(manual)
@@ -70,6 +94,88 @@ def append_manual_resolution_tag(ln: CommercialLineupLine, tag: str) -> None:
     if tag not in prev:
         prev.append(tag)
     ln.diagnostic_codes = _dedupe_preserve_order(prev) if prev else None
+
+
+def _accumulate_line_entity_tokens(
+    ln: CommercialLineupLine,
+    case_id: int,
+    *,
+    customer_map: dict[str, dict[str, Any]],
+    distributor_map: dict[str, dict[str, Any]],
+    sample_ids_per_token: int,
+) -> None:
+    if ln.customer_id is None:
+        if not lineup_line_is_open_channel_staging(ln):
+            tok = normalize_entity_token(ln.customer_token)
+            if tok:
+                entry = customer_map.setdefault(
+                    tok,
+                    {
+                        "token_display": (ln.customer_token or "").strip(),
+                        "line_count": 0,
+                        "case_ids": set(),
+                        "sample_line_ids": [],
+                    },
+                )
+                entry["line_count"] += 1
+                entry["case_ids"].add(case_id)
+                if len(entry["sample_line_ids"]) < sample_ids_per_token:
+                    entry["sample_line_ids"].append(ln.id)
+    if ln.distributor_id is None:
+        raw_t = distributor_resolution_token_from_line(ln)
+        tok = normalize_entity_token(raw_t)
+        if tok:
+            source = "open_channel_route" if open_channel_distributor_hint_from_line(ln) else "distributor_column"
+            entry = distributor_map.setdefault(
+                tok,
+                {
+                    "token_display": raw_t or "",
+                    "line_count": 0,
+                    "case_ids": set(),
+                    "sample_line_ids": [],
+                    "token_source": source,
+                },
+            )
+            if source == "open_channel_route":
+                entry["token_source"] = "open_channel_route"
+            entry["line_count"] += 1
+            entry["case_ids"].add(case_id)
+            if len(entry["sample_line_ids"]) < sample_ids_per_token:
+                entry["sample_line_ids"].append(ln.id)
+
+
+def _serialize_token_map(token_map: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for k, v in sorted(token_map.items(), key=lambda x: (-x[1]["line_count"], x[0])):
+        row: dict[str, Any] = {
+            "token_norm": k,
+            "token_display": v["token_display"],
+            "line_count": v["line_count"],
+            "case_ids": sorted(v.get("case_ids") or []),
+            "case_count": len(v.get("case_ids") or []),
+            "sample_line_ids": v["sample_line_ids"],
+        }
+        if v.get("token_source"):
+            row["token_source"] = v["token_source"]
+        out.append(row)
+    return out
+
+
+async def _eligible_case_ids(
+    db: AsyncSession,
+    *,
+    plan_id: int | None = None,
+    case_ids: list[int] | None = None,
+) -> list[int]:
+    stmt = select(CommercialLineupCase.id).where(
+        CommercialLineupCase.commercial_status.in_(RESOLUTION_ALLOWED_CASE_STATUSES)
+    )
+    if plan_id is not None:
+        stmt = stmt.where(CommercialLineupCase.commercial_plan_id == plan_id)
+    if case_ids:
+        stmt = stmt.where(CommercialLineupCase.id.in_(case_ids))
+    rows = (await db.execute(stmt.order_by(CommercialLineupCase.id))).scalars().all()
+    return [int(x) for x in rows]
 
 
 async def collect_entity_resolution_candidates(
@@ -86,40 +192,59 @@ async def collect_entity_resolution_candidates(
     distributor_map: dict[str, dict[str, Any]] = {}
 
     for ln in lines:
-        if ln.customer_id is None:
-            if lineup_line_is_open_channel_staging(ln):
-                continue
-            tok = normalize_entity_token(ln.customer_token)
-            if tok:
-                entry = customer_map.setdefault(
-                    tok,
-                    {"token_display": (ln.customer_token or "").strip(), "line_count": 0, "sample_line_ids": []},
-                )
-                entry["line_count"] += 1
-                if len(entry["sample_line_ids"]) < sample_ids_per_token:
-                    entry["sample_line_ids"].append(ln.id)
-        if ln.distributor_id is None:
-            raw_t = distributor_token_from_line(ln)
-            tok = normalize_entity_token(raw_t)
-            if tok:
-                entry = distributor_map.setdefault(
-                    tok,
-                    {"token_display": raw_t or "", "line_count": 0, "sample_line_ids": []},
-                )
-                entry["line_count"] += 1
-                if len(entry["sample_line_ids"]) < sample_ids_per_token:
-                    entry["sample_line_ids"].append(ln.id)
+        _accumulate_line_entity_tokens(
+            ln,
+            case_id,
+            customer_map=customer_map,
+            distributor_map=distributor_map,
+            sample_ids_per_token=sample_ids_per_token,
+        )
 
     return {
         "case_id": case_id,
-        "customer_tokens": [
-            {"token_norm": k, "token_display": v["token_display"], "line_count": v["line_count"], "sample_line_ids": v["sample_line_ids"]}
-            for k, v in sorted(customer_map.items(), key=lambda x: (-x[1]["line_count"], x[0]))
-        ],
-        "distributor_tokens": [
-            {"token_norm": k, "token_display": v["token_display"], "line_count": v["line_count"], "sample_line_ids": v["sample_line_ids"]}
-            for k, v in sorted(distributor_map.items(), key=lambda x: (-x[1]["line_count"], x[0]))
-        ],
+        "customer_tokens": _serialize_token_map(customer_map),
+        "distributor_tokens": _serialize_token_map(distributor_map),
+    }
+
+
+async def collect_plan_entity_resolution_candidates(
+    db: AsyncSession,
+    *,
+    plan_id: int | None = None,
+    case_ids: list[int] | None = None,
+    sample_ids_per_token: int = 5,
+) -> dict[str, Any]:
+    """Aggregate unresolved entity tokens across all eligible lineup cases on a plan (or case id list)."""
+    eligible_ids = await _eligible_case_ids(db, plan_id=plan_id, case_ids=case_ids)
+    customer_map: dict[str, dict[str, Any]] = {}
+    distributor_map: dict[str, dict[str, Any]] = {}
+
+    if eligible_ids:
+        lines = (
+            await db.execute(
+                select(CommercialLineupLine).where(CommercialLineupLine.case_id.in_(eligible_ids))
+            )
+        ).scalars().all()
+        for ln in lines:
+            _accumulate_line_entity_tokens(
+                ln,
+                int(ln.case_id),
+                customer_map=customer_map,
+                distributor_map=distributor_map,
+                sample_ids_per_token=sample_ids_per_token,
+            )
+
+    customer_tokens = _serialize_token_map(customer_map)
+    distributor_tokens = _serialize_token_map(distributor_map)
+    token_count = len(customer_tokens) + len(distributor_tokens)
+
+    return {
+        "plan_id": plan_id,
+        "eligible_case_ids": eligible_ids,
+        "eligible_case_count": len(eligible_ids),
+        "customer_tokens": customer_tokens,
+        "distributor_tokens": distributor_tokens,
+        "token_count": token_count,
     }
 
 
@@ -163,7 +288,7 @@ def _map_customer_token_lines(lines: list[CommercialLineupLine], norm: str, dim_
 def _map_distributor_token_lines(lines: list[CommercialLineupLine], norm: str, dim_id: int) -> int:
     updated = 0
     for ln in lines:
-        if normalize_entity_token(distributor_token_from_line(ln)) != norm:
+        if not _line_matches_distributor_token(ln, norm):
             continue
         ln.distributor_id = dim_id
         refresh_diagnostics_after_entity_update(ln)
@@ -193,7 +318,7 @@ def _redirect_distributor_token_to_customer(lines: list[CommercialLineupLine], n
     """Distributor-column token actually names a customer (explicit user action)."""
     updated = 0
     for ln in lines:
-        if normalize_entity_token(distributor_token_from_line(ln)) != norm:
+        if not _line_matches_distributor_token(ln, norm):
             continue
         ln.customer_id = dim_id
         p = dict(ln.raw_row_payload) if isinstance(ln.raw_row_payload, dict) else {}
@@ -290,3 +415,28 @@ async def apply_entity_resolutions(
         per.append(entry)
 
     return {"case_id": case_id, "updated_lines": total_updated, "per_resolution": per}
+
+
+async def apply_plan_entity_resolutions(
+    db: AsyncSession,
+    resolutions: list[dict[str, Any]],
+    *,
+    plan_id: int | None = None,
+    case_ids: list[int] | None = None,
+) -> dict[str, Any]:
+    """Apply the same resolution batch to every eligible case on a plan (or explicit case list)."""
+    eligible_ids = await _eligible_case_ids(db, plan_id=plan_id, case_ids=case_ids)
+    per_case: list[dict[str, Any]] = []
+    total_updated = 0
+    for case_id in eligible_ids:
+        out = await apply_entity_resolutions(db, case_id, resolutions)
+        if int(out.get("updated_lines") or 0) > 0:
+            per_case.append(out)
+        total_updated += int(out.get("updated_lines") or 0)
+    return {
+        "plan_id": plan_id,
+        "eligible_case_ids": eligible_ids,
+        "updated_lines": total_updated,
+        "cases_updated": len(per_case),
+        "per_case": per_case,
+    }

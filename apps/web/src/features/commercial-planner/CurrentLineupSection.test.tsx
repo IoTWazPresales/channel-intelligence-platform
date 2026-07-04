@@ -89,6 +89,23 @@ import { apiGet, apiPost } from '@/lib/api';
 const apiGetMock = vi.mocked(apiGet);
 const apiPostMock = vi.mocked(apiPost);
 
+const EMPTY_PLAN_ENTITY_RESOLUTION = {
+  eligible_case_ids: [] as number[],
+  eligible_case_count: 0,
+  token_count: 0,
+  customer_tokens: [] as unknown[],
+  distributor_tokens: [] as unknown[],
+};
+
+function mockApiGetWithPlanEntity(handler: (url: string) => Promise<unknown> | unknown) {
+  apiGetMock.mockImplementation(async (url: string) => {
+    if (url.includes('/commercial-planner/entity-resolution-candidates')) {
+      return EMPTY_PLAN_ENTITY_RESOLUTION;
+    }
+    return handler(url);
+  });
+}
+
 function lineupLineOpenChannel() {
   return {
     id: 1,
@@ -156,7 +173,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       line_count: 1,
       created_at: null,
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [draftCase];
       if (url.includes('/workbench-column-metadata')) {
         return {
@@ -207,7 +224,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       line_count: 1,
       created_at: null,
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [draftCase];
       if (url.includes('/workbench-column-metadata')) {
         return {
@@ -268,7 +285,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       ...lineupLineOpenChannel(),
       uploaded: { CPU: 'Ultra 7 155H', 'Dealer rebate': '5%' },
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [draftCase];
       if (url.includes('/workbench-column-metadata')) {
         return {
@@ -335,7 +352,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       distributor_code: 'UNASSIGNED',
       distributor_name: 'Unassigned Distributor',
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [draftCase];
       if (url.includes('/workbench-column-metadata')) {
         return {
@@ -391,7 +408,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       product_specs_flat: { cpu: 'Intel i7' },
       catalogue_product_line: 'NB',
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [draftCase];
       if (url.includes('/workbench-column-metadata')) {
         return {
@@ -455,7 +472,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       line_count: 1,
       created_at: null,
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [draftCase];
       if (url.includes('/lineup-cases/8/entity-resolution-candidates')) {
         return {
@@ -528,7 +545,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       po_count: 0,
       created_at: null,
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [draftCase];
       if (url.includes('/suggested-pos')) {
         return {
@@ -601,7 +618,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       po_count: 0,
       created_at: null,
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [acceptedCase];
       if (url.includes('/suggested-pos')) return { case_id: 12, case_distributor_id: null, suggestions: [] };
       return [];
@@ -651,7 +668,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       line_count: 1,
       created_at: null,
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [draftCase];
       if (url.includes('/lineup-cases/9/entity-resolution-candidates')) {
         return {
@@ -740,7 +757,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       line_count: 146,
     };
     let requestedUrl = '';
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/lineup-cases') && !url.includes('/lines') && !url.includes('metadata')) {
         requestedUrl = url;
         return [caseA, caseB];
@@ -772,7 +789,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     const user = userEvent.setup();
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     let requestedUrl = '';
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/lineup-cases') && !url.includes('/lines') && !url.includes('metadata')) {
         requestedUrl = url;
         return [];
@@ -813,7 +830,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       po_count: 0,
       created_at: null,
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/workbench-column-metadata')) {
         return {
           case_id: 40,
@@ -868,7 +885,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       po_count: 0,
       created_at: null,
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/suggested-distributors')) {
         return {
           case_id: 15,
@@ -941,7 +958,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       po_count: 0,
       created_at: null,
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/suggested-distributors')) {
         return {
           case_id: 16,
@@ -1023,7 +1040,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       po_count: 0,
       created_at: null,
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/suggested-distributors')) {
         return {
           case_id: 17,
@@ -1112,7 +1129,7 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
       calc_dap_cost_currency: 800,
       calc_profit_total: 4000,
     };
-    apiGetMock.mockImplementation(async (url: string) => {
+    mockApiGetWithPlanEntity(async (url: string) => {
       if (url.includes('/lineup-cases?')) return [draftCase];
       if (url.includes('/workbench-column-metadata')) {
         return {
