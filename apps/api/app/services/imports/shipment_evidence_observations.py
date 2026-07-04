@@ -146,4 +146,9 @@ def sync_job_observations_after_validate(db: Session, job: ImportJob) -> int:
     """When dual-write flag is on, append observations after legacy lines are final."""
     if not shipment_bitemporal_dual_write_enabled():
         return 0
-    return append_observations_for_job_lines(db, job)
+    appended = append_observations_for_job_lines(db, job)
+    if appended:
+        from app.services.imports.shipment_invoice_graduation import process_invoice_graduation_after_job
+
+        process_invoice_graduation_after_job(db, job)
+    return appended

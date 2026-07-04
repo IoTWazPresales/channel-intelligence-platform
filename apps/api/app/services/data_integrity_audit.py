@@ -64,6 +64,7 @@ CheckName = Literal[
     "evidence_fact_parity",
     "cross_job_double_book",
     "lineup_duplicate_ingestion",
+    "invoice_line_graduation_gap",
 ]
 
 QTY_EPS = 1e-6
@@ -854,6 +855,58 @@ def check_lineup_duplicate_ingestion(db: Session, *, sample_limit: int) -> Check
     )
 
 
+def check_invoice_line_graduation_gap(db: Session, *, sample_limit: int) -> CheckResult:
+    """Lineages with blank + numbered shipped identities both current (must be 0 after repair)."""
+    from app.services.imports.shipment_invoice_graduation import (
+        count_ungraduated_invoice_lineage_gaps,
+        discover_invoice_graduation_lineages,
+        group_current_by_lineage,
+        load_unsuperseded_current_observations,
+    )
+
+    if not shipment_bitemporal_read_enabled():
+        return CheckResult(
+            check="invoice_line_graduation_gap",
+            count=0,
+            samples=[],
+            meta={"skipped": "bitemporal read disabled"},
+        )
+
+    gap_count, partial_count = count_ungraduated_invoice_lineage_gaps(db)
+    verdicts = [v for v in discover_invoice_graduation_lineages(db) if v.outcome == "full"]
+    current = load_unsuperseded_current_observations(db)
+    grouped = group_current_by_lineage(current)
+
+    findings: list[dict[str, Any]] = []
+    for v in verdicts:
+        bucket = grouped.get(v.lineage, {"blank": [], "numbered": []})
+        ou, on, ol, ic = v.lineage
+        findings.append(
+            {
+                "operating_unit": ou or None,
+                "order_no": on,
+                "order_line": ol,
+                "item_code": ic,
+                "blank_qty": v.blank_qty,
+                "numbered_qty": v.numbered_qty,
+                "blank_keys": v.blank_keys,
+                "numbered_keys": v.numbered_keys,
+                "violation": "invoice_line_graduation_pending",
+            }
+        )
+
+    return CheckResult(
+        check="invoice_line_graduation_gap",
+        count=gap_count,
+        samples=findings[:sample_limit],
+        meta={
+            "partial_graduation_worklist": partial_count,
+            "steward_flag": "invoice_partial_graduation",
+            "note": "Partial flags are steward worklist — not audit failures",
+        },
+    )
+
+
 def run_data_integrity_audit_sync(
     db: Session,
     *,
@@ -892,6 +945,7 @@ def run_data_integrity_audit_sync(
         check_evidence_fact_parity(db, sample_limit=sample_limit),
         check_cross_job_double_book(db, sample_limit=sample_limit),
         check_lineup_duplicate_ingestion(db, sample_limit=sample_limit),
+        check_invoice_line_graduation_gap(db, sample_limit=sample_limit),
     ]
     return AuditReport(
         database=dbname,

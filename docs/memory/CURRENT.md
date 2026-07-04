@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-02 (Plan D bitemporal shipment evidence cutover complete)
+**Last updated:** 2026-07-04 (invoice-line mint graduation + cip repair)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `91f227e` — Plan D phases 1–4 (bitemporal cutover + change events v1) |
+| **HEAD** | *(pending commit — invoice-line graduation)* |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -22,10 +22,26 @@
 | Field | Value |
 |-------|--------|
 | **Active DB** | Local Postgres `cip` @ `127.0.0.1:5432` (topology B) |
-| **Bitemporal flags** | `CIP_SHIPMENT_BITEMPORAL_DUAL_WRITE` / `_READ` — **default ON** (env = emergency off-switch) |
-| **Observation store** | 49,981 observations = 49,981 evidence lines; view `shipment_evidence_current` 14,847 rows |
-| **Legacy supersede** | 35,134 `shipment_evidence_line` rows marked `corpus_superseded_at` (soft; no deletes) |
+| **Bitemporal flags** | `CIP_SHIPMENT_BITEMPORAL_DUAL_WRITE` / `_READ` — **default ON** |
+| **Observation store** | View `shipment_evidence_current` **14,673** rows (post graduation repair; was 14,847) |
+| **Invoice-line graduation** | **174** lineages quantity-graduated on cip; **432** blank observation versions superseded; audit `invoice_line_graduation_gap` = **0** |
+| **Legacy supersede** | 35,134 + graduated blank corpus lines `corpus_superseded_at` |
 | **Celery dispatch** | `broker` (apps/api/.env) |
+
+---
+
+## Invoice-line mint graduation — DONE (2026-07-04)
+
+| Step | Status |
+|------|--------|
+| Write path (dual-write hook) | Quantity-gated supersede / `invoice_partial_graduation` flag |
+| One-time repair | Preview 174 full / 0 partial; **13,685** double-count units; clone + cip green |
+| Integrity audit | `invoice_line_graduation_gap` check added |
+| Change events | `graduated` + `graduation_kind: invoice_mint` on lineage thread |
+
+**Preview impact (pre-repair):** 174 lineages · top double-count 26Q2 Open Channel 5,581 units.
+
+**Sample invoice_mint event:** order `151126051002768` line `1.1` item `90NR0NG1-M00C30` → `ship:15260187716|…|8883|1`.
 
 ---
 

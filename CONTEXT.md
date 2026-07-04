@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-04 — **invoice-line mint graduation:** quantity-gated supersede on dual-write; repair 174 lineages on cip (view 14,847→14,673; 13,685 double-count units cleared); audit `invoice_line_graduation_gap`; change events `invoice_mint`; unit tests green.
 - 2026-07-02 — **Plan D bitemporal shipment cutover complete:** state-aware identity (`9109664`), cip cutover + dual-write/read default ON (`1b77efc`), consumer migration + 35k soft-supersede + audit 5b=0 (`6de21b8`), change-event derivation v1 (`91f227e`); BACKLOG-033 closed; BACKLOG-057/058/062/063/064 added.
 - 2026-07-02 — **lineup PO coverage compound match:** BU-primary line code, line-count gating, parse-incomplete state, UI respects `lineup_case_exists`; 8 cases BU/PL normalized on cip.
 - 2026-07-01 — **lineup bulk backfill production-ready:** BU resolver uses `product_line`; steward period/BU overrides + collision picker UI; archive config; re-preview 27 files (`bu_label_product_mismatch` 33→9); BACKLOG-056 resolved, BACKLOG-059 catalogue mapping added.

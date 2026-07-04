@@ -10,6 +10,13 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
+from app.services.imports.shipment_invoice_graduation import (
+    GRADUATION_KIND_INVOICE_MINT,
+    is_blank_invoice_shipped_obs,
+    is_numbered_invoice_shipped_obs,
+    lineage_key_from_obs,
+    lineage_thread_key,
+)
 
 EventType = Literal["date_slip", "qty_change", "graduated", "pod_reversal"]
 
@@ -197,6 +204,52 @@ def _observation_filters(
     return clauses
 
 
+def _supplement_invoice_mint_lineage_observations(
+    db: Session,
+    rows: list[ShipmentEvidenceObservation],
+    *,
+    base_clauses: list[Any],
+) -> list[ShipmentEvidenceObservation]:
+    """Load single-version numbered ship observations for lineage threads already in *rows*."""
+    seen_ids = {int(o.id) for o in rows}
+    lineages: set[tuple[str, str, str, str]] = set()
+    for obs in rows:
+        lk = lineage_key_from_obs(obs)
+        if lk is not None:
+            lineages.add(lk)
+    if not lineages:
+        return rows
+
+    merged = list(rows)
+    chunk_size = 80
+    lineage_list = sorted(lineages)
+    for i in range(0, len(lineage_list), chunk_size):
+        chunk = lineage_list[i : i + chunk_size]
+        lineage_filters = [
+            and_(
+                func.coalesce(ShipmentEvidenceObservation.operating_unit, "") == ou,
+                ShipmentEvidenceObservation.order_no == on,
+                ShipmentEvidenceObservation.order_line == ol,
+                ShipmentEvidenceObservation.item_code == ic,
+            )
+            for ou, on, ol, ic in chunk
+        ]
+        sup_stmt = select(ShipmentEvidenceObservation).where(
+            func.lower(func.coalesce(ShipmentEvidenceObservation.line_state, "")) == "shipped",
+            func.coalesce(ShipmentEvidenceObservation.invoice_line, "") != "",
+            or_(*lineage_filters),
+        )
+        if base_clauses:
+            sup_stmt = sup_stmt.where(and_(*base_clauses))
+        for obs in db.scalars(sup_stmt).all():
+            oid = int(obs.id)
+            if oid in seen_ids or not is_numbered_invoice_shipped_obs(obs):
+                continue
+            merged.append(obs)
+            seen_ids.add(oid)
+    return merged
+
+
 def derive_change_events(
     db: Session,
     *,
@@ -241,6 +294,8 @@ def derive_change_events(
         stmt = stmt.limit(limit * 20)
 
     rows = list(db.scalars(stmt).all())
+    if not line_identity_key:
+        rows = _supplement_invoice_mint_lineage_observations(db, rows, base_clauses=clauses)
     by_key: dict[str, list[ShipmentEvidenceObservation]] = {}
     for obs in rows:
         by_key.setdefault(obs.line_identity_key, []).append(obs)
@@ -260,20 +315,24 @@ def derive_change_events(
                 order_no=obs.order_no,
                 order_line=obs.order_line,
                 item_code=obs.item_code,
-            )
+            ) or lineage_thread_key(obs)
             if ogk:
                 order_index.setdefault(ogk, []).append(obs)
 
     graduated_seen: set[tuple[str, int]] = set()
+    invoice_mint_seen: set[tuple[str, int]] = set()
     for ogk, chain in order_index.items():
         chain.sort(key=lambda o: (o.valid_from, o.id))
         had_open = False
         open_obs_id: int | None = None
+        blank_invoice_shipped_obs_id: int | None = None
         for obs in chain:
             st = _line_state_norm(obs)
             if st in ("open_order", "open", "unship"):
                 had_open = True
                 open_obs_id = int(obs.id)
+            elif st == "shipped" and is_blank_invoice_shipped_obs(obs):
+                blank_invoice_shipped_obs_id = int(obs.id)
             elif st == "shipped" and had_open:
                 dedupe = (ogk, int(obs.id))
                 if dedupe in graduated_seen:
@@ -296,11 +355,43 @@ def derive_change_events(
                             "order_grain_key": ogk,
                             "prior_line_state": "open_order",
                             "current_line_state": "shipped",
+                            "graduation_kind": "open_to_shipped",
                         },
                     )
                 )
                 had_open = False
                 open_obs_id = None
+            elif st == "shipped" and is_numbered_invoice_shipped_obs(obs) and blank_invoice_shipped_obs_id:
+                lk = lineage_key_from_obs(obs)
+                dedupe_key = f"{lk}|{obs.line_identity_key}"
+                dedupe = (dedupe_key, int(obs.id))
+                if dedupe in invoice_mint_seen:
+                    continue
+                invoice_mint_seen.add(dedupe)
+                events.append(
+                    ShipmentChangeEvent(
+                        event_type="graduated",
+                        line_identity_key=obs.line_identity_key,
+                        observation_id=int(obs.id),
+                        prior_observation_id=blank_invoice_shipped_obs_id,
+                        import_job_id=int(obs.import_job_id),
+                        valid_from=obs.valid_from,
+                        operating_unit=obs.operating_unit,
+                        order_no=obs.order_no,
+                        order_line=obs.order_line,
+                        item_code=obs.item_code,
+                        delivery_no=obs.delivery_no,
+                        details={
+                            "order_grain_key": ogk,
+                            "graduation_kind": GRADUATION_KIND_INVOICE_MINT,
+                            "prior_line_state": "shipped",
+                            "current_line_state": "shipped",
+                            "prior_identity_grain": "order",
+                            "current_identity_grain": "ship",
+                        },
+                    )
+                )
+                blank_invoice_shipped_obs_id = None
 
     if event_types:
         allowed = {t.strip().lower() for t in event_types}
