@@ -1,4 +1,4 @@
-"""Steward-driven re-derivation for existing 1H lineup cases (split + uniform half allocation)."""
+"""Steward-driven re-derivation for existing 1H lineup cases (month-derived or uniform_half split)."""
 
 from __future__ import annotations
 
@@ -13,25 +13,34 @@ from sqlalchemy.orm import Session
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
 from app.models.dimensions import DimCustomer
+from app.models.facts import FactInboundShipment
 from app.models.ingestion import ImportJob
 from app.services.commercial_planner.lineup_bulk_backfill_apply import persist_preview_session
 from app.services.commercial_planner.lineup_bulk_period_inference import (
     infer_period_from_filename,
     resolve_layered_period,
 )
+from app.services.commercial_planner.lineup_fiscal_calendar import (
+    get_lineup_fiscal_calendar_config,
+    half_year_period_starts,
+)
 from app.services.commercial_planner.lineup_half_year_quantity import (
     HALF_YEAR_ALLOCATION_FLAG,
     PERIOD_SCOPE_1H_SPLIT_FLAG,
-    apply_half_year_allocation_to_line_fields,
-    half_year_allocation_summary,
     sum_line_quantities,
+)
+from app.services.commercial_planner.lineup_month_derived_allocation import (
+    MONTH_DERIVED_ALLOCATION_FLAG,
+    QTY_MONTH_DISAGREEMENT_FLAG,
+    case_allocation_summary_from_lines,
+    compute_line_half_year_allocation,
+    line_preview_dict,
+    lines_indicate_1h_month_phasing_for_config,
 )
 from app.services.commercial_planner.lineup_period_canonical import (
     active_lineup_case_filters,
     display_period_label_from_period_start,
-    supersession_group_key_from_period_start,
 )
-from app.services.commercial_planner.lineup_period_inference import detect_months_from_columns
 from app.utils.json_safe import to_jsonable
 
 REDERIVATION_PREVIEW_KEY = "lineup_1h_rederivation_preview"
@@ -52,19 +61,23 @@ def _workbook_file_key(file_name: str | None) -> str:
 
 
 def _month_numbers_from_lines(lines: list[CommercialLineupLine]) -> set[int]:
+    from app.services.commercial_planner.lineup_month_column_detector import detect_month_columns
+    from app.services.commercial_planner.lineup_month_derived_allocation import _qty_from_uploaded
+
     months: set[int] = set()
     for ln in lines:
         raw = ln.raw_row_payload if isinstance(ln.raw_row_payload, dict) else {}
         uploaded = raw.get("uploaded")
         if isinstance(uploaded, dict):
-            months |= detect_months_from_columns(list(uploaded.keys()))
+            qty_cell = _qty_from_uploaded(uploaded)
+            det = detect_month_columns(uploaded, column_order=list(uploaded.keys()), qty_cell_hint=qty_cell)
+            months |= set(det.month_values.keys())
     return months
 
 
 def lines_indicate_1h_month_phasing(lines: list[CommercialLineupLine]) -> bool:
-    """True when stored parse evidence has month columns spanning Q1 and Q2 (Jan–Jun style 1H)."""
-    months = _month_numbers_from_lines(lines)
-    return bool(months & {1, 2, 3}) and bool(months & {4, 5, 6})
+    """True when stored parse evidence has month columns spanning both 1H fiscal quarters."""
+    return lines_indicate_1h_month_phasing_for_config(lines, get_lineup_fiscal_calendar_config())
 
 
 def case_has_1h_filename_signal(case: CommercialLineupCase) -> bool:
@@ -97,9 +110,70 @@ def resolve_half_year_signal(
     return False, None
 
 
-def _line_already_allocated(line: CommercialLineupLine) -> bool:
+def _line_allocation_tier(line: CommercialLineupLine) -> str | None:
     codes = list(line.diagnostic_codes or [])
-    return HALF_YEAR_ALLOCATION_FLAG in codes
+    if MONTH_DERIVED_ALLOCATION_FLAG in codes:
+        return "month_derived"
+    if HALF_YEAR_ALLOCATION_FLAG in codes:
+        return "uniform_half"
+    return None
+
+
+def _line_needs_month_rederivation(line: CommercialLineupLine) -> bool:
+    """Pending when months qualify but line still carries uniform_half only."""
+    from app.services.commercial_planner.lineup_month_column_detector import detect_month_columns
+    from app.services.commercial_planner.lineup_month_derived_allocation import _qty_from_uploaded
+
+    raw = line.raw_row_payload if isinstance(line.raw_row_payload, dict) else {}
+    uploaded = raw.get("uploaded")
+    if not isinstance(uploaded, dict):
+        return _line_allocation_tier(line) is None
+    qty_cell = _qty_from_uploaded(uploaded)
+    det = detect_month_columns(uploaded, column_order=list(uploaded.keys()), qty_cell_hint=qty_cell)
+    if not det.has_qualifying_block:
+        return _line_allocation_tier(line) is None
+    return _line_allocation_tier(line) != "month_derived"
+
+
+def _line_already_allocated(line: CommercialLineupLine) -> bool:
+    return not _line_needs_month_rederivation(line)
+
+
+def _shipment_q1_hint(db: Session, *, product_id: int | None, customer_id: int | None, q1_start: date, q2_start: date) -> float | None:
+    if product_id is None:
+        return None
+    stmt = select(func.coalesce(func.sum(FactInboundShipment.quantity), 0)).where(
+        FactInboundShipment.product_id == int(product_id),
+        FactInboundShipment.ship_confirm_date >= q1_start,
+        FactInboundShipment.ship_confirm_date < q2_start,
+    )
+    if customer_id is not None:
+        stmt = stmt.where(FactInboundShipment.customer_id == int(customer_id))
+    val = db.scalar(stmt)
+    return float(val) if val is not None else None
+
+
+def _compute_case_line_allocations(
+    db: Session,
+    lines: list[CommercialLineupLine],
+    *,
+    q1_start: date,
+    q2_start: date,
+) -> tuple[list[Any], list[Any], list[dict[str, Any]]]:
+    fiscal_config = get_lineup_fiscal_calendar_config()
+    q1_allocs: list[Any] = []
+    q2_allocs: list[Any] = []
+    previews: list[dict[str, Any]] = []
+    for ln in lines:
+        ship_hint = _shipment_q1_hint(
+            db, product_id=ln.product_id, customer_id=ln.customer_id, q1_start=q1_start, q2_start=q2_start
+        )
+        a1 = compute_line_half_year_allocation(ln, half="q1", fiscal_config=fiscal_config, shipment_q1_hint=ship_hint)
+        a2 = compute_line_half_year_allocation(ln, half="q2", fiscal_config=fiscal_config, shipment_q1_hint=ship_hint)
+        q1_allocs.append(a1)
+        q2_allocs.append(a2)
+        previews.append(line_preview_dict(a1, a2, ln))
+    return q1_allocs, q2_allocs, previews
 
 
 def _majority_customer_id(lines: list[CommercialLineupLine]) -> int | None:
@@ -170,9 +244,14 @@ def _build_rederivation_proposal(
     if year is None:
         return None
 
-    q2_start = date(year, 4, 1)
-    source_total = sum_line_quantities(lines)
-    alloc = half_year_allocation_summary(source_total)
+    fiscal_config = get_lineup_fiscal_calendar_config()
+    q1_start, q2_start = half_year_period_starts(year, fiscal_config)
+    before_total = sum_line_quantities(lines)
+    q1_allocs, q2_allocs, line_previews = _compute_case_line_allocations(
+        db, lines, q1_start=q1_start, q2_start=q2_start
+    )
+    alloc = case_allocation_summary_from_lines(q1_allocs, q2_allocs)
+    source_total = float(alloc["source_total_units"])
     cust_id = _majority_customer_id(lines)
     cust_token = next((ln.customer_token for ln in lines if ln.customer_token), None)
     bu = case.business_unit or case.product_line
@@ -196,13 +275,15 @@ def _build_rederivation_proposal(
     customer_planned_before = _planned_for_customer(lines, cust_id) if cust_id is not None else None
     customer_planned_after_q1 = None
     if customer_planned_before is not None and source_total:
-        customer_planned_after_q1 = float(alloc["q1_allocated_units"]) * (customer_planned_before / source_total)
+        customer_planned_after_q1 = float(alloc["q1_allocated_units"]) * (customer_planned_before / before_total) if before_total else None
 
     makro_id = db.scalar(select(DimCustomer.id).where(func.lower(DimCustomer.name).like("%makro%")).limit(1))
     makro_planned_before = _planned_for_customer(lines, int(makro_id)) if makro_id else None
     makro_planned_after_q1 = None
-    if makro_planned_before is not None:
-        makro_planned_after_q1 = half_year_allocation_summary(makro_planned_before)["q1_allocated_units"]
+    if makro_planned_before is not None and before_total:
+        makro_planned_after_q1 = float(alloc["q1_allocated_units"]) * (makro_planned_before / before_total)
+
+    disagreement_count = sum(1 for p in line_previews if p.get("qty_month_disagreement"))
 
     return {
         "proposal_key": f"rederivation:{case.id}",
@@ -211,11 +292,13 @@ def _build_rederivation_proposal(
         "period_label_before": case.period_label,
         "business_unit": bu,
         "half_year_signal_source": signal_source,
-        "flags": [PERIOD_SCOPE_1H_SPLIT_FLAG, HALF_YEAR_ALLOCATION_FLAG],
+        "flags": [PERIOD_SCOPE_1H_SPLIT_FLAG, str(alloc.get("allocation_flag") or HALF_YEAR_ALLOCATION_FLAG)],
         "allocation_summary": alloc,
+        "line_allocations": line_previews,
+        "qty_month_disagreement_count": disagreement_count,
         "q1_adjustment": {
             "case_id": int(case.id),
-            "planned_units_before": source_total,
+            "planned_units_before": before_total,
             "planned_units_after": alloc["q1_allocated_units"],
             "line_count": len(lines),
             "po_link_count": int(po_count or 0),
@@ -367,9 +450,11 @@ def _winner_member_keys(preview: dict[str, Any], confirmations: dict[str, str] |
     return winners
 
 
-def _snapshot_line_sources(line: CommercialLineupLine) -> None:
+def _snapshot_line_sources(line: CommercialLineupLine, *, allocation: Any | None = None) -> None:
     raw = dict(line.raw_row_payload or {})
-    if line.quantity_units is not None:
+    if allocation is not None and allocation.tier == "month_derived":
+        raw["half_year_source_quantity_units"] = float(allocation.month_total_units)
+    elif line.quantity_units is not None and "half_year_source_quantity_units" not in raw:
         raw["half_year_source_quantity_units"] = float(line.quantity_units)
     if line.msrp_local is not None:
         raw["half_year_source_msrp_local"] = float(line.msrp_local)
@@ -384,66 +469,60 @@ def _snapshot_line_sources(line: CommercialLineupLine) -> None:
     line.raw_row_payload = raw
 
 
-def _update_line_allocation(line: CommercialLineupLine, *, half: str) -> None:
+def _apply_allocation_to_line(line: CommercialLineupLine, allocation: Any) -> None:
+    line.quantity_units = allocation.quantity_units
+    for field, value in allocation.monetary.items():
+        if hasattr(line, field):
+            setattr(line, field, value)
+    line.diagnostic_codes = list(allocation.diagnostic_codes)
     raw = dict(line.raw_row_payload or {})
-    allocated = apply_half_year_allocation_to_line_fields(
-        quantity_units=float(raw.get("half_year_source_quantity_units", line.quantity_units))
-        if (raw.get("half_year_source_quantity_units", line.quantity_units) is not None)
-        else None,
-        msrp_local=float(raw.get("half_year_source_msrp_local", line.msrp_local))
-        if (raw.get("half_year_source_msrp_local", line.msrp_local) is not None)
-        else None,
-        promo_price_evidence_local=float(
-            raw.get("half_year_source_promo_price_evidence_local", line.promo_price_evidence_local)
-        )
-        if (raw.get("half_year_source_promo_price_evidence_local", line.promo_price_evidence_local) is not None)
-        else None,
-        dap_evidence_local=float(raw.get("half_year_source_dap_evidence_local", line.dap_evidence_local))
-        if (raw.get("half_year_source_dap_evidence_local", line.dap_evidence_local) is not None)
-        else None,
-        calc_dap_cost_currency=float(
-            raw.get("half_year_source_calc_dap_cost_currency", line.calc_dap_cost_currency)
-        )
-        if (raw.get("half_year_source_calc_dap_cost_currency", line.calc_dap_cost_currency) is not None)
-        else None,
-        calc_profit_total=float(raw.get("half_year_source_calc_profit_total", line.calc_profit_total))
-        if (raw.get("half_year_source_calc_profit_total", line.calc_profit_total) is not None)
-        else None,
-        half=half,
-    )
-    for field, value in allocated.items():
-        setattr(line, field, value)
-    diag = list(line.diagnostic_codes or [])
-    if HALF_YEAR_ALLOCATION_FLAG not in diag:
-        diag.append(HALF_YEAR_ALLOCATION_FLAG)
-    line.diagnostic_codes = diag
-    raw = dict(line.raw_row_payload or {})
-    if line.quantity_units is not None:
-        raw.setdefault("half_year_source_quantity_units", raw.get("quantity_units", line.quantity_units))
+    if allocation.tier == "month_derived":
+        raw["half_year_source_quantity_units"] = float(allocation.month_total_units)
+    if allocation.qty_month_disagreement:
+        raw["lineup_qty_month_disagreement"] = allocation.qty_month_disagreement
+    elif "lineup_qty_month_disagreement" in raw:
+        del raw["lineup_qty_month_disagreement"]
     line.raw_row_payload = raw
 
 
-def _clone_line_for_case(line: CommercialLineupLine, *, case_id: int, half: str) -> CommercialLineupLine:
-    raw = deepcopy(line.raw_row_payload) if isinstance(line.raw_row_payload, dict) else {}
-    source_qty = raw.get("half_year_source_quantity_units", line.quantity_units)
-    source_msrp = raw.get("half_year_source_msrp_local", line.msrp_local)
-    source_promo = raw.get("half_year_source_promo_price_evidence_local", line.promo_price_evidence_local)
-    source_dap = raw.get("half_year_source_dap_evidence_local", line.dap_evidence_local)
-    source_calc_dap = raw.get("half_year_source_calc_dap_cost_currency", line.calc_dap_cost_currency)
-    source_calc_profit = raw.get("half_year_source_calc_profit_total", line.calc_profit_total)
-
-    allocated = apply_half_year_allocation_to_line_fields(
-        quantity_units=float(source_qty) if source_qty is not None else None,
-        msrp_local=float(source_msrp) if source_msrp is not None else None,
-        promo_price_evidence_local=float(source_promo) if source_promo is not None else None,
-        dap_evidence_local=float(source_dap) if source_dap is not None else None,
-        calc_dap_cost_currency=float(source_calc_dap) if source_calc_dap is not None else None,
-        calc_profit_total=float(source_calc_profit) if source_calc_profit is not None else None,
-        half=half,
+def _update_line_allocation(
+    line: CommercialLineupLine,
+    *,
+    half: str,
+    db: Session,
+    q1_start: date,
+    q2_start: date,
+) -> None:
+    _snapshot_line_sources(line)
+    ship_hint = _shipment_q1_hint(
+        db, product_id=line.product_id, customer_id=line.customer_id, q1_start=q1_start, q2_start=q2_start
     )
-    diag = list(line.diagnostic_codes or [])
-    if HALF_YEAR_ALLOCATION_FLAG not in diag:
-        diag.append(HALF_YEAR_ALLOCATION_FLAG)
+    allocation = compute_line_half_year_allocation(
+        line, half=half, shipment_q1_hint=ship_hint  # type: ignore[arg-type]
+    )
+    _apply_allocation_to_line(line, allocation)
+
+
+def _clone_line_for_case(
+    line: CommercialLineupLine,
+    *,
+    case_id: int,
+    half: str,
+    db: Session,
+    q1_start: date,
+    q2_start: date,
+) -> CommercialLineupLine:
+    ship_hint = _shipment_q1_hint(
+        db, product_id=line.product_id, customer_id=line.customer_id, q1_start=q1_start, q2_start=q2_start
+    )
+    allocation = compute_line_half_year_allocation(
+        line, half=half, shipment_q1_hint=ship_hint  # type: ignore[arg-type]
+    )
+    raw = deepcopy(line.raw_row_payload) if isinstance(line.raw_row_payload, dict) else {}
+    if allocation.tier == "month_derived":
+        raw["half_year_source_quantity_units"] = float(allocation.month_total_units)
+    if allocation.qty_month_disagreement:
+        raw["lineup_qty_month_disagreement"] = allocation.qty_month_disagreement
 
     return CommercialLineupLine(
         case_id=case_id,
@@ -456,20 +535,20 @@ def _clone_line_for_case(line: CommercialLineupLine, *, case_id: int, half: str)
         part_number_raw=line.part_number_raw,
         model_raw=line.model_raw,
         base_unit_raw=line.base_unit_raw,
-        quantity_units=allocated["quantity_units"],
-        msrp_local=allocated["msrp_local"],
-        promo_price_evidence_local=allocated["promo_price_evidence_local"],
-        dap_evidence_local=allocated["dap_evidence_local"],
+        quantity_units=allocation.quantity_units,
+        msrp_local=allocation.monetary.get("msrp_local"),
+        promo_price_evidence_local=allocation.monetary.get("promo_price_evidence_local"),
+        dap_evidence_local=allocation.monetary.get("dap_evidence_local"),
         rebate_pct_evidence=line.rebate_pct_evidence,
         distributor_margin_pct_evidence=line.distributor_margin_pct_evidence,
         vat_pct_evidence=line.vat_pct_evidence,
-        diagnostic_codes=diag,
+        diagnostic_codes=list(allocation.diagnostic_codes),
         raw_row_payload=raw,
         row_status=line.row_status,
         mapping_confidence=line.mapping_confidence,
         pricing_chain_json=line.pricing_chain_json,
-        calc_dap_cost_currency=allocated["calc_dap_cost_currency"],
-        calc_profit_total=allocated["calc_profit_total"],
+        calc_dap_cost_currency=allocation.monetary.get("calc_dap_cost_currency"),
+        calc_profit_total=allocation.monetary.get("calc_profit_total"),
     )
 
 
@@ -514,11 +593,18 @@ def apply_1h_rederivation_sync(
             lines = list(db.scalars(select(CommercialLineupLine).where(CommercialLineupLine.case_id == case_id)).all())
             before_total = sum_line_quantities(lines)
 
+            year = case.inferred_period_start.year if case.inferred_period_start else None
+            if year is None:
+                assignments, _ = resolve_layered_period(filename=case.file_name)
+                for a in assignments:
+                    if a.period_start is not None:
+                        year = a.period_start.year
+                        break
+            fiscal_config = get_lineup_fiscal_calendar_config()
+            q1_start, q2_start = half_year_period_starts(year or date.today().year, fiscal_config)
+
             for ln in lines:
-                _snapshot_line_sources(ln)
-            for ln in lines:
-                if not _line_already_allocated(ln):
-                    _update_line_allocation(ln, half="q1")
+                _update_line_allocation(ln, half="q1", db=db, q1_start=q1_start, q2_start=q2_start)
 
             after_total = sum_line_quantities(lines)
             po_count = db.scalar(
@@ -552,7 +638,7 @@ def apply_1h_rederivation_sync(
                 db.add(q2_case)
                 db.flush()
                 for ln in lines:
-                    db.add(_clone_line_for_case(ln, case_id=int(q2_case.id), half="q2"))
+                    db.add(_clone_line_for_case(ln, case_id=int(q2_case.id), half="q2", db=db, q1_start=q1_start, q2_start=q2_start))
                 q2_case_id = int(q2_case.id)
                 q2_outcome = "created_q2_twin"
 

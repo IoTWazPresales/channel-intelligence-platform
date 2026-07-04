@@ -84,6 +84,16 @@ class Settings(BaseSettings):
         description="Postgres statement_timeout (ms) on the sync engine (env CIP_SYNC_STATEMENT_TIMEOUT_MS). 0 disables.",
     )
 
+    lineup_fiscal_year_start_month: int = Field(
+        default=1,
+        ge=1,
+        le=12,
+        description=(
+            "Calendar month (1=January) when the fiscal year starts for lineup 1H quarter mapping "
+            "(env LINEUP_FISCAL_YEAR_START_MONTH)."
+        ),
+    )
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]

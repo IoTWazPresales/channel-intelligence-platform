@@ -14,6 +14,21 @@ import {
   Typography,
 } from '@mui/material';
 
+export type LineAllocationPreview = {
+  line_id?: number;
+  part_number_raw?: string | null;
+  model_raw?: string | null;
+  customer_token?: string | null;
+  months_detected?: Record<string, number>;
+  month_total_units?: number;
+  qty_cell?: number | null;
+  q1_allocated_units?: number;
+  q2_allocated_units?: number;
+  allocation_tier?: string;
+  allocation_flag?: string;
+  qty_month_disagreement?: Record<string, unknown> | null;
+};
+
 export type RederivationProposal = {
   proposal_key: string;
   source_case_id: number;
@@ -24,7 +39,11 @@ export type RederivationProposal = {
     q1_allocated_units: number;
     q2_allocated_units: number;
     allocation_flag: string;
+    month_derived_line_count?: number;
+    uniform_half_line_count?: number;
   };
+  line_allocations?: LineAllocationPreview[];
+  qty_month_disagreement_count?: number;
   q1_adjustment?: {
     planned_units_before: number;
     planned_units_after: number;
@@ -148,9 +167,9 @@ export function BulkLineup1hRederivationSection({
         Re-derive existing 1H cases
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Halve Q1 quantities in place (preserving case id and PO links), then create or collide Q2 twins.
-        Detects 1H from filename, stored Jan–Jun month columns, or sibling sheets in the same workbook —
-        no re-upload required. Steward confirm required — nothing auto-applies.
+        Split 1H cases into fiscal Q1+Q2 using month columns when present (falls back to uniform 50/50
+        only when no qualifying month block exists). Adjusts Q1 quantities in place (preserving case id
+        and PO links), then create or collide Q2 twins. Steward confirm required — nothing auto-applies.
       </Typography>
       {previewError && <Alert severity="error">{previewError}</Alert>}
       {applyError && <Alert severity="error">{applyError}</Alert>}
@@ -204,7 +223,27 @@ export function BulkLineup1hRederivationSection({
             <Typography variant="caption" color="text.secondary" component="div">
               Q1 adjust: {p.q1_adjustment.planned_units_before} → {p.q1_adjustment.planned_units_after} units ·{' '}
               {p.q1_adjustment.po_link_count} PO link(s) preserved
+              {typeof p.qty_month_disagreement_count === 'number' && p.qty_month_disagreement_count > 0
+                ? ` · ${p.qty_month_disagreement_count} Qty≠months steward flag(s)`
+                : null}
             </Typography>
+          )}
+          {!allDone && (p.line_allocations?.length ?? 0) > 0 && (
+            <Box component="div" sx={{ mt: 0.5, maxHeight: 160, overflow: 'auto' }} data-testid={`line-alloc-${p.source_case_id}`}>
+              {p.line_allocations!.slice(0, 12).map((ln) => (
+                <Typography key={ln.line_id ?? `${ln.model_raw}-${ln.customer_token}`} variant="caption" component="div" display="block">
+                  {ln.customer_token ?? '—'} · {ln.model_raw ?? ln.part_number_raw ?? 'row'} — months{' '}
+                  {ln.months_detected ? JSON.stringify(ln.months_detected) : '{}'} → Q1 {ln.q1_allocated_units} / Q2{' '}
+                  {ln.q2_allocated_units} ({ln.allocation_tier ?? ln.allocation_flag})
+                  {ln.qty_month_disagreement ? ' · Qty≠months' : ''}
+                </Typography>
+              ))}
+              {(p.line_allocations?.length ?? 0) > 12 ? (
+                <Typography variant="caption" color="text.secondary">
+                  …and {(p.line_allocations?.length ?? 0) - 12} more lines
+                </Typography>
+              ) : null}
+            </Box>
           )}
         </Box>
       ))}
