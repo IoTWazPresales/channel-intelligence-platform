@@ -166,8 +166,8 @@ def test_assign_rejects_unknown_distributor():
         asyncio.run(assign_mod.assign_case_distributor(db, 5, distributor_id=999))
 
 
-def test_assign_rejects_non_resolvable_status():
-    case = SimpleNamespace(id=5, commercial_status="po_issued")
+def test_assign_rejects_work_closed_status():
+    case = SimpleNamespace(id=5, commercial_status="work_closed")
     db = MagicMock()
     db.get = AsyncMock(return_value=case)
     with pytest.raises(assign_mod.CaseStatusNotResolvableError):

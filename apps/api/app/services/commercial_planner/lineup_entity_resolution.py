@@ -19,9 +19,7 @@ from app.services.commercial_planner.lineup_open_channel import (
 )
 
 
-RESOLUTION_ALLOWED_CASE_STATUSES: frozenset[str] = frozenset(
-    {"draft_imported", "validated", "pending_review"}
-)
+from app.services.commercial_planner.lineup_case_status import RESOLUTION_ALLOWED_CASE_STATUSES
 
 
 def normalize_entity_token(value: str | None) -> str:

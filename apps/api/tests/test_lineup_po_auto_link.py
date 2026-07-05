@@ -96,6 +96,32 @@ def test_po_norm_already_linked_anywhere_skips_other_cases():
     assert not _po_norm_already_linked_anywhere("NEWPO", linked, norms)
 
 
+def test_best_lineup_match_open_channel_staging_exact_when_ship_is_open_channel():
+    from types import SimpleNamespace
+
+    from app.services.commercial_planner.lineup_po_auto_link import _best_lineup_match_for_product
+
+    lines = [
+        SimpleNamespace(
+            product_id=100,
+            customer_id=None,
+            distributor_id=10,
+            raw_row_payload={"staging_open_channel": True},
+        ),
+    ]
+    ln, conf, reason, align = _best_lineup_match_for_product(
+        lines,
+        product_id=100,
+        ship_customer_id=42,
+        date_source="crad",
+        open_channel_customer_id=42,
+    )
+    assert ln is not None
+    assert conf == "high"
+    assert align == "exact"
+    assert reason == "customer_product_crad_in_period"
+
+
 def test_best_lineup_match_counts_once_per_product():
     """Multiple lineup rows for the same product must not create multiple matches."""
     from types import SimpleNamespace
@@ -188,6 +214,23 @@ def test_compute_group_linked_coverage_sums_linked_po_shipped_only():
     )
     assert coverage["26Q2|5"]["linked_shipped_units"] == 80.0
     assert "26Q2|5" in coverage
+
+
+def test_compute_group_planned_units_sums_full_customer_period_plan():
+    from types import SimpleNamespace
+
+    from app.services.commercial_planner.lineup_po_auto_link import compute_group_planned_units
+
+    case = SimpleNamespace(id=9, period_label="2026 Q2", inferred_period_start=date(2026, 4, 1))
+    case_by_id = {9: case}
+    planned = {
+        (9, 1, 100): 50.0,
+        (9, 1, 200): 30.0,
+        (9, 5, 100): 999.0,  # different customer — separate group
+    }
+    out = compute_group_planned_units(case_by_id=case_by_id, planned_by_case_customer_product=planned)
+    assert out["2026 Q2|1"] == 80.0
+    assert out["2026 Q2|5"] == 999.0
 
 
 def test_proposal_totals_keep_shipped_and_open_order_separate():

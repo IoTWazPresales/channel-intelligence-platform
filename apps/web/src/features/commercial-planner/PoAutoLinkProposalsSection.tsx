@@ -18,6 +18,7 @@ import {
   FormControlLabel,
   IconButton,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Select,
   Stack,
@@ -76,6 +77,7 @@ export type PoAutoLinkProposal = {
 type GroupCoverageEntry = {
   group_key: string;
   linked_shipped_units: number;
+  group_planned_units?: number;
 };
 
 type ProposalsResponse = {
@@ -216,7 +218,8 @@ export function buildProposalGroups(
         inferred_period_start: first.inferred_period_start,
         customer_id: first.customer_id,
         customer_label: first.customer_label,
-        groupPlanUnits: dedupeGroupPlanUnits(bucket),
+        groupPlanUnits:
+          coverageByKey?.[groupKey]?.group_planned_units ?? dedupeGroupPlanUnits(bucket),
         proposedShipUnits: sumProposedShipUnits(bucket),
         proposedPipelineUnits: sumProposedPipelineUnits(bucket),
         linkedShipUnits: coverageByKey?.[groupKey]?.linked_shipped_units ?? 0,
@@ -279,7 +282,7 @@ function PoAutoLinkConfirmDialog({
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body2" color="text.secondary">
             This links the observed purchase order to the lineup case and sets the case to{' '}
-            <strong>PO issued</strong>. Review customer and product overlap before confirming.
+            <strong>PO linked</strong>. Review customer and product overlap before confirming.
           </Typography>
           <Box>
             <Typography variant="caption" color="text.secondary">
@@ -394,6 +397,7 @@ function BulkLinkConfirmDialog({
   onConfirm,
   isPending,
   error,
+  progress,
 }: {
   open: boolean;
   totalCount: number;
@@ -402,21 +406,42 @@ function BulkLinkConfirmDialog({
   onConfirm: () => void;
   isPending: boolean;
   error: string | null;
+  progress?: PoAutoLinkApplyProgress | null;
 }) {
   const breakdown =
     byCustomer.map((c) => `${c.label} ${c.count}`).join(', ') || '—';
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth data-testid="po-auto-link-bulk-confirm-dialog">
+    <Dialog
+      open={open}
+      onClose={isPending ? undefined : onClose}
+      maxWidth="sm"
+      fullWidth
+      data-testid="po-auto-link-bulk-confirm-dialog"
+    >
       <DialogTitle>Confirm bulk link</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body2" data-testid="po-auto-link-bulk-confirm-summary">
             Linking {totalCount} proposal{totalCount === 1 ? '' : 's'}: {breakdown}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Each selected PO will be linked to its lineup case and the case status set to PO issued.
-          </Typography>
+          {!isPending ? (
+            <Typography variant="body2" color="text.secondary">
+              Each selected PO will be linked to its lineup case (status advances to PO linked; steward work stays open).
+            </Typography>
+          ) : null}
+          {isPending && progress ? (
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5 }}>
+                {progress.itemsDone} / {progress.itemsTotal} processed
+                {progress.batchTotal > 1 ? ` · batch ${progress.batchIndex} of ${progress.batchTotal}` : ''}
+              </Typography>
+              <LinearProgress
+                variant="determinate"
+                value={progress.itemsTotal > 0 ? (progress.itemsDone / progress.itemsTotal) * 100 : 0}
+              />
+            </Box>
+          ) : null}
           {error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
@@ -698,8 +723,63 @@ function ProposalGroupCard({
     </Card>
   );
 }
+const PO_AUTO_LINK_APPLY_CHUNK = 100;
+
+type PoAutoLinkApplyResponse = {
+  applied_count?: number;
+  error_count?: number;
+  errors?: { error: string }[];
+  applied?: { newly_linked?: boolean }[];
+};
+
+type PoAutoLinkApplyProgress = {
+  itemsDone: number;
+  itemsTotal: number;
+  batchIndex: number;
+  batchTotal: number;
+};
+
+async function applyPoAutoLinkInChunks(
+  items: { case_id: number; purchase_order_id: number; notes?: string }[],
+  notes?: string,
+  onProgress?: (progress: PoAutoLinkApplyProgress) => void,
+): Promise<PoAutoLinkApplyResponse & { newly_linked_count: number }> {
+  let applied_count = 0;
+  let newly_linked_count = 0;
+  let error_count = 0;
+  const errors: { error: string }[] = [];
+  const batchTotal = Math.max(1, Math.ceil(items.length / PO_AUTO_LINK_APPLY_CHUNK));
+  onProgress?.({ itemsDone: 0, itemsTotal: items.length, batchIndex: 0, batchTotal });
+
+  for (let i = 0; i < items.length; i += PO_AUTO_LINK_APPLY_CHUNK) {
+    const batchIndex = Math.floor(i / PO_AUTO_LINK_APPLY_CHUNK) + 1;
+    const chunk = items.slice(i, i + PO_AUTO_LINK_APPLY_CHUNK);
+    onProgress?.({
+      itemsDone: i,
+      itemsTotal: items.length,
+      batchIndex,
+      batchTotal,
+    });
+    const data = await apiPost<PoAutoLinkApplyResponse>(
+      '/api/v1/commercial-planner/lineup/po-auto-link/apply',
+      { items: chunk, notes },
+    );
+    applied_count += data.applied_count ?? 0;
+    newly_linked_count += (data.applied ?? []).filter((row) => row.newly_linked).length;
+    error_count += data.error_count ?? 0;
+    if (data.errors?.length) errors.push(...data.errors);
+    onProgress?.({
+      itemsDone: Math.min(i + chunk.length, items.length),
+      itemsTotal: items.length,
+      batchIndex,
+      batchTotal,
+    });
+  }
+  return { applied_count, newly_linked_count, error_count, errors };
+}
 
 export const PO_AUTO_LINK_SECTION_ID = 'po-auto-link-section';
+
 
 type PoAutoLinkProposalsSectionProps = {
   /** Prefetch proposals on mount and auto-expand when pending count &gt; 0. */
@@ -722,6 +802,8 @@ export function PoAutoLinkProposalsSection({
   const [confirmProposal, setConfirmProposal] = useState<PoAutoLinkProposal | null>(null);
   const [bulkConfirmKeys, setBulkConfirmKeys] = useState<string[] | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
+  const [applySuccess, setApplySuccess] = useState<string | null>(null);
+  const [applyProgress, setApplyProgress] = useState<PoAutoLinkApplyProgress | null>(null);
   const [dismissTarget, setDismissTarget] = useState<PoAutoLinkProposal | null>(null);
   const [cardExpanded, setCardExpanded] = useState<Record<string, boolean>>({});
 
@@ -744,17 +826,45 @@ export function PoAutoLinkProposalsSection({
 
   const applyMut = useMutation({
     mutationFn: (vars: { items: { case_id: number; purchase_order_id: number; notes?: string }[]; notes?: string }) =>
-      apiPost('/api/v1/commercial-planner/lineup/po-auto-link/apply', vars),
-    onSuccess: (data: { error_count?: number; errors?: { error: string }[] }) => {
-      setApplyError(data.error_count ? data.errors?.map((e) => e.error).join('; ') ?? 'Some links failed' : null);
+      applyPoAutoLinkInChunks(vars.items, vars.notes, setApplyProgress),
+    onSuccess: (data: {
+      applied_count?: number;
+      newly_linked_count?: number;
+      error_count?: number;
+      errors?: { error: string }[];
+    }) => {
+      const applied = data.applied_count ?? 0;
+      const newly = data.newly_linked_count ?? 0;
+      const skipped = Math.max(0, applied - newly);
+      if (data.error_count) {
+        setApplyError(
+          data.errors?.map((e) => e.error).join('; ') ?? `${data.error_count} link(s) failed`,
+        );
+      } else {
+        setApplyError(null);
+      }
+      if (applied > 0) {
+        const parts = [`${newly} new PO link${newly === 1 ? '' : 's'} created`];
+        if (skipped > 0) parts.push(`${skipped} already linked`);
+        if (data.error_count) parts.push(`${data.error_count} failed`);
+        setApplySuccess(`Bulk link complete: ${parts.join(' · ')}. Refreshing suggestions…`);
+      } else if (!data.error_count) {
+        setApplySuccess('Bulk link finished — no changes (all selected proposals were already linked).');
+      }
       setConfirmProposal(null);
       setBulkConfirmKeys(null);
       setSelected(new Set());
       void qc.invalidateQueries({ queryKey: ['po-auto-link'] });
       void qc.invalidateQueries({ queryKey: ['po-management'] });
       void qc.invalidateQueries({ queryKey: ['lineup-cases'] });
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+      setApplyProgress(null);
     },
-    onError: (e) => setApplyError(safeDisplayError(e)),
+    onError: (e) => {
+      setApplyProgress(null);
+      setApplySuccess(null);
+      setApplyError(safeDisplayError(e));
+    },
   });
 
   const dismissMut = useMutation({
@@ -892,6 +1002,7 @@ export function PoAutoLinkProposalsSection({
       .map((p) => ({ case_id: p.case_id, purchase_order_id: p.purchase_order_id }));
     if (!items.length) return;
     setApplyError(null);
+    setApplySuccess(null);
     applyMut.mutate({ items });
   };
 
@@ -936,6 +1047,47 @@ export function PoAutoLinkProposalsSection({
               </Button>
             )}
           </Stack>
+
+          {(applyMut.isPending || applyProgress) && (
+            <Box data-testid="po-auto-link-apply-progress">
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+                <Typography variant="body2">
+                  Linking proposals…{' '}
+                  {applyProgress
+                    ? `${applyProgress.itemsDone} / ${applyProgress.itemsTotal}`
+                    : 'starting…'}
+                </Typography>
+                {applyProgress && applyProgress.batchTotal > 1 ? (
+                  <Typography variant="caption" color="text.secondary">
+                    Batch {applyProgress.batchIndex} of {applyProgress.batchTotal}
+                  </Typography>
+                ) : null}
+              </Stack>
+              <LinearProgress
+                variant={applyProgress ? 'determinate' : 'indeterminate'}
+                value={
+                  applyProgress && applyProgress.itemsTotal > 0
+                    ? (applyProgress.itemsDone / applyProgress.itemsTotal) * 100
+                    : 0
+                }
+              />
+            </Box>
+          )}
+
+          {applySuccess && !confirmProposal && !bulkConfirmKeys && (
+            <Alert
+              severity="success"
+              data-testid="po-auto-link-apply-success"
+              onClose={() => setApplySuccess(null)}
+            >
+              {applySuccess}
+            </Alert>
+          )}
+          {applyError && !confirmProposal && !bulkConfirmKeys && (
+            <Alert severity="error" data-testid="po-auto-link-apply-error" onClose={() => setApplyError(null)}>
+              {applyError}
+            </Alert>
+          )}
 
           <Collapse in={expanded}>
             <Stack spacing={2}>
@@ -1042,8 +1194,6 @@ export function PoAutoLinkProposalsSection({
                   </Stack>
                 </>
               )}
-
-              {applyError && !confirmProposal && !bulkConfirmKeys && <Alert severity="error">{applyError}</Alert>}
             </Stack>
           </Collapse>
         </Stack>
@@ -1071,6 +1221,7 @@ export function PoAutoLinkProposalsSection({
         }}
         onConfirm={executeBulkApply}
         isPending={applyMut.isPending}
+        progress={applyProgress}
         error={applyError}
       />
 

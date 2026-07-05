@@ -135,7 +135,19 @@ type CommercialLineupCase = {
 };
 
 /** Case statuses where PO confirm is terminal — hide forward sync prompts. */
-const PO_LINKED_STATUSES = new Set(['po_issued', 'in_fulfillment', 'received_closed']);
+const STEWARD_WORK_OPEN_STATUSES = new Set([
+  'draft_imported',
+  'validated',
+  'pending_review',
+  'accepted',
+  'po_pending',
+  'po_issued',
+  'in_fulfillment',
+]);
+
+const CLOSE_WORK_STATUSES = new Set(['po_pending', 'po_issued', 'in_fulfillment']);
+
+const PO_LINKED_STATUSES = new Set(['po_pending', 'po_issued', 'in_fulfillment', 'received_closed', 'work_closed']);
 
 type CommercialLineupLine = {
   id: number;
@@ -590,7 +602,7 @@ type EntityResolutionCandidatesResponse = {
   distributor_tokens: EntityTokenCandidate[];
 };
 
-const RESOLUTION_UI_STATUSES = new Set(['draft_imported', 'validated', 'pending_review']);
+const RESOLUTION_UI_STATUSES = STEWARD_WORK_OPEN_STATUSES;
 
 function isSupersededCase(c: CommercialLineupCase): boolean {
   return c.commercial_status === 'superseded';
@@ -655,7 +667,9 @@ function lineupCaseStatusLabel(status: string): string {
     pending_review: 'Needs review',
     accepted: 'Ready to sync',
     synced: 'Synced to planner',
+    po_pending: 'PO linked',
     po_issued: 'PO issued',
+    work_closed: 'Work closed',
     cancelled: 'Cancelled',
     superseded: 'Superseded',
   };
@@ -671,7 +685,9 @@ const STATUS_COLORS: Record<string, 'default' | 'primary' | 'secondary' | 'error
     pending_review: 'warning',
     accepted: 'success',
     synced: 'success',
+    po_pending: 'secondary',
     po_issued: 'secondary',
+    work_closed: 'default',
     in_fulfillment: 'info',
     received_closed: 'default',
     cancelled: 'error',
@@ -2874,17 +2890,27 @@ export function CurrentLineupSection({
   // it by default, but the user can toggle "Show all" to see every case (linked or unlinked). When no
   // plan exists at all, we always list everything.
   const [showAllCases, setShowAllCases] = useState(false);
+  const [showWorkClosed, setShowWorkClosed] = useState(false);
   const effectivePlanId = showAllCases ? null : activePlanId;
 
+  const lineupCasesQueryKey = [
+    'commercial-lineup-cases',
+    effectivePlanId,
+    showWorkClosed ? 'with-closed' : 'active',
+  ] as const;
+
   const { data: cases, isLoading } = useQuery<CommercialLineupCase[]>({
-    queryKey: ['commercial-lineup-cases', effectivePlanId],
-    queryFn: ({ signal }) =>
-      apiGet<CommercialLineupCase[]>(
-        effectivePlanId != null
-          ? `/api/v1/commercial-planner/lineup-cases?plan_id=${effectivePlanId}`
-          : '/api/v1/commercial-planner/lineup-cases',
+    queryKey: lineupCasesQueryKey,
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams();
+      if (effectivePlanId != null) params.set('plan_id', String(effectivePlanId));
+      if (showWorkClosed) params.set('include_work_closed', 'true');
+      const qs = params.toString();
+      return apiGet<CommercialLineupCase[]>(
+        `/api/v1/commercial-planner/lineup-cases${qs ? `?${qs}` : ''}`,
         { signal },
-      ),
+      );
+    },
   });
 
   useEffect(() => {
@@ -3432,6 +3458,14 @@ export function CurrentLineupSection({
     onSuccess: () => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] }),
   });
 
+  const closeWorkMutation = useMutation({
+    mutationFn: (caseId: number) =>
+      apiPost(`/api/v1/commercial-planner/lineup-cases/${caseId}/close-work`, {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+    },
+  });
+
   const confirmMutation = useMutation({
     mutationFn: ({ caseId, poNumbers, notes }: { caseId: number; poNumbers: string[]; notes: string }) =>
       apiPost(`/api/v1/commercial-planner/lineup-cases/${caseId}/confirm-with-po`, {
@@ -3528,6 +3562,18 @@ export function CurrentLineupSection({
               {(planEntitySummary?.token_count ?? 0) === 1 ? '' : 's'}
             </Button>
           )}
+          <FormControlLabel
+            sx={{ ml: 0.5 }}
+            control={
+              <Checkbox
+                size="small"
+                checked={showWorkClosed}
+                onChange={(e) => setShowWorkClosed(e.target.checked)}
+                data-testid="lineup-show-work-closed-toggle"
+              />
+            }
+            label={<Typography variant="caption">Show work-closed</Typography>}
+          />
           {activePlanId != null && (
             <FormControlLabel
               sx={{ ml: 0.5 }}
@@ -3782,6 +3828,18 @@ export function CurrentLineupSection({
                         data-testid={`confirm-with-po-btn-${c.id}`}
                       >
                         {(c.po_count ?? 0) > 0 ? 'Add PO' : 'Confirm with PO'}
+                      </Button>
+                    )}
+                    {CLOSE_WORK_STATUSES.has(c.commercial_status) && !isSupersededCase(c) && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="inherit"
+                        disabled={closeWorkMutation.isPending}
+                        onClick={() => closeWorkMutation.mutate(c.id)}
+                        data-testid={`close-lineup-case-work-${c.id}`}
+                      >
+                        Close case
                       </Button>
                     )}
                     {c.commercial_status === 'draft_imported' && (

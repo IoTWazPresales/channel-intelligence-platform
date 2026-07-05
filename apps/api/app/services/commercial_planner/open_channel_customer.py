@@ -18,7 +18,7 @@ use ``--commercial-system-reference-only`` when you must not wipe).
 """
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dimensions import DimCustomer
@@ -31,3 +31,44 @@ async def get_open_channel_customer_id(db: AsyncSession) -> int | None:
     """Return dim_customer.id for code OPEN_CHANNEL, or None if not provisioned."""
     r = await db.execute(select(DimCustomer.id).where(DimCustomer.code == OPEN_CHANNEL_CUSTOMER_CODE))
     return r.scalar_one_or_none()
+
+
+async def get_open_channel_canonical_and_aliases(
+    db: AsyncSession,
+) -> tuple[int | None, frozenset[int]]:
+    """Canonical OPEN_CHANNEL id plus steward-created duplicates with the same display name.
+
+    Shipment evidence often resolves to a provisional TMP-CUST row named "Open Channel" while
+    lineup staging attributes plan qty to the controlled OPEN_CHANNEL reference row.
+    """
+    canonical = await get_open_channel_customer_id(db)
+    alias_ids: set[int] = set()
+    if canonical is not None:
+        alias_ids.add(int(canonical))
+    rows = (
+        await db.execute(
+            select(DimCustomer.id).where(
+                func.lower(func.trim(DimCustomer.name)) == OPEN_CHANNEL_CUSTOMER_NAME.lower(),
+                DimCustomer.code != OPEN_CHANNEL_CUSTOMER_CODE,
+            )
+        )
+    ).scalars().all()
+    for cid in rows:
+        if cid is not None:
+            alias_ids.add(int(cid))
+    return canonical, frozenset(alias_ids)
+
+
+def canonical_open_channel_customer_id(
+    customer_id: int | None,
+    *,
+    canonical_id: int | None,
+    alias_ids: frozenset[int],
+) -> int | None:
+    """Map provisional Open Channel dim rows onto the controlled OPEN_CHANNEL account."""
+    if customer_id is None:
+        return None
+    cid = int(customer_id)
+    if canonical_id is not None and cid in alias_ids:
+        return int(canonical_id)
+    return cid

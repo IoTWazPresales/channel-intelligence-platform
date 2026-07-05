@@ -39,8 +39,12 @@ from app.services.commercial_planner.economics_trust import (
     summarize_recalculate_trust,
 )
 from app.services.commercial_planner.current_lineup_seed import CurrentLineupSourceNotConfiguredError
-from app.services.commercial_planner.lineup_entity_resolution import (
+from app.services.commercial_planner.lineup_case_status import (
+    CLOSE_WORK_ALLOWED_FROM,
+    DEFAULT_LIST_EXCLUDED_STATUSES,
     RESOLUTION_ALLOWED_CASE_STATUSES,
+)
+from app.services.commercial_planner.lineup_entity_resolution import (
     apply_entity_resolutions,
     apply_plan_entity_resolutions,
     collect_entity_resolution_candidates,
@@ -1977,10 +1981,11 @@ ALLOWED_CASE_STATUS_TRANSITIONS: dict[str, list[str]] = {
     "validated": ["pending_review", "cancelled"],
     "pending_review": ["accepted", "validated", "cancelled"],
     "accepted": ["po_pending", "cancelled"],
-    "po_pending": ["po_issued", "cancelled"],
-    "po_issued": ["in_fulfillment"],
-    "in_fulfillment": ["received_closed"],
+    "po_pending": ["po_issued", "work_closed", "cancelled"],
+    "po_issued": ["in_fulfillment", "work_closed"],
+    "in_fulfillment": ["received_closed", "work_closed"],
     "received_closed": [],
+    "work_closed": [],
     "cancelled": [],
 }
 
@@ -2030,7 +2035,7 @@ class PoAutoLinkApplyItem(BaseModel):
 
 
 class PoAutoLinkApplyBody(BaseModel):
-    items: list[PoAutoLinkApplyItem] = Field(min_length=1, max_length=100)
+    items: list[PoAutoLinkApplyItem] = Field(min_length=1, max_length=500)
     notes: str | None = Field(default=None, max_length=1024)
 
 
@@ -2158,11 +2163,23 @@ def _case_payload(
 @router.get("/lineup-cases")
 async def list_lineup_cases(
     plan_id: int | None = Query(default=None, description="Filter by commercial_plan_id"),
+    include_work_closed: bool = Query(
+        default=False,
+        description="Include work_closed cases (default list hides steward-closed work-queue items)",
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(CommercialLineupCase).order_by(CommercialLineupCase.id.desc())
     if plan_id is not None:
         stmt = stmt.where(CommercialLineupCase.commercial_plan_id == plan_id)
+    if not include_work_closed:
+        stmt = stmt.where(
+            CommercialLineupCase.commercial_status.notin_(DEFAULT_LIST_EXCLUDED_STATUSES)
+        )
+    else:
+        stmt = stmt.where(
+            CommercialLineupCase.commercial_status.notin_({"cancelled", "superseded"})
+        )
     cases = (await db.execute(stmt)).scalars().all()
     catalogue_dirty = False
     for case in cases:
@@ -2411,7 +2428,7 @@ async def post_lineup_entity_resolutions_apply(
         raise HTTPException(
             status_code=409,
             detail=(
-                "Entity resolutions are only allowed while the case is in draft/review "
+                "Entity resolutions are only allowed while steward work is open "
                 f"(statuses: {', '.join(sorted(RESOLUTION_ALLOWED_CASE_STATUSES))}). "
                 f"Current: '{case.commercial_status}'"
             ),
@@ -2437,7 +2454,7 @@ async def post_plan_entity_resolutions_apply(
     if not eligible.get("eligible_case_ids"):
         raise HTTPException(
             status_code=409,
-            detail="No eligible lineup cases in draft/review for entity resolution on this scope.",
+            detail="No eligible lineup cases with steward work open for entity resolution on this scope.",
         )
     await _validate_entity_resolution_items(db, body.resolutions)
     raw = [item.model_dump() for item in body.resolutions]
@@ -2524,11 +2541,46 @@ async def get_lineup_case_suggested_pos(case_id: int, db: AsyncSession = Depends
         raise HTTPException(status_code=404, detail="Lineup case not found")
 
 
+@router.post("/lineup-cases/{case_id}/close-work", status_code=200)
+async def close_lineup_case_work(case_id: int, db: AsyncSession = Depends(get_db)):
+    """Mark steward work complete; case leaves the default Current lineups list.
+
+    PO links, synced planner lines, and reconciliation data are unchanged — this is a work-queue
+    sign-off only, not archival from commercial intelligence.
+    """
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    if case.commercial_status not in CLOSE_WORK_ALLOWED_FROM:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    f"Cannot close work from status '{case.commercial_status}'. "
+                    f"Allowed: {', '.join(sorted(CLOSE_WORK_ALLOWED_FROM))}"
+                ),
+                "remediation": (
+                    "Link at least one PO (po_pending) before closing, or use the status ladder "
+                    "for cases not yet in the PO phase."
+                ),
+            },
+        )
+    case.commercial_status = "work_closed"
+    await db.commit()
+    line_count = (
+        await db.execute(
+            select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
+        )
+    ).scalar_one()
+    linked_pos = await list_case_pos(db, case_id)
+    return _case_payload(case, int(line_count), linked_pos)
+
+
 @router.post("/lineup-cases/{case_id}/confirm-with-po", status_code=200)
 async def confirm_lineup_case_with_po(
     case_id: int, body: ConfirmWithPoBody, db: AsyncSession = Depends(get_db)
 ):
-    """Confirm a lineup case with PO number(s); case -> po_issued. Idempotent and amendment-aware.
+    """Confirm a lineup case with PO number(s); advances to po_pending (preserves po_issued+). Idempotent.
 
     Available from any case status except ``cancelled`` — no forward approval ladder required.
     Each PO is normalized then looked up / created on ``purchase_order`` (distributor inferred from
@@ -2601,7 +2653,7 @@ async def post_lineup_case_assign_distributor(
         raise HTTPException(
             status_code=409,
             detail=(
-                "Distributor assignment is only allowed while the case is in draft/review "
+                "Distributor assignment is only allowed while steward work is open "
                 f"(statuses: {', '.join(sorted(RESOLUTION_ALLOWED_CASE_STATUSES))}). "
                 f"Current: '{exc.status}'"
             ),
@@ -2709,7 +2761,7 @@ async def post_po_auto_link_restore(
 
 @router.post("/lineup/po-auto-link/apply", status_code=200)
 async def post_po_auto_link_apply(body: PoAutoLinkApplyBody, db: AsyncSession = Depends(get_db)):
-    """Link selected proposals (writes ``commercial_lineup_case_po``; case -> po_issued)."""
+    """Link selected proposals (writes ``commercial_lineup_case_po``; case -> po_pending or unchanged)."""
     try:
         return await apply_auto_link_proposals(
             db,

@@ -26,15 +26,23 @@ class _Scalars:
 
 
 class _R:
-    def __init__(self, rows, scalar_rows=None):
+    def __init__(self, rows, scalar_rows=None, scalar_one=None):
         self._rows = rows
         self._scalar = scalar_rows if scalar_rows is not None else rows
+        self._scalar_one = scalar_one
 
     def all(self):
         return list(self._rows)
 
     def scalars(self):
         return _Scalars(self._scalar)
+
+    def scalar_one_or_none(self):
+        if self._scalar_one is not None:
+            return self._scalar_one
+        if isinstance(self._scalar, list):
+            return self._scalar[0] if self._scalar else None
+        return self._scalar
 
 
 def _db(case, results):
@@ -78,10 +86,22 @@ def _with_product_results(
     if customers is None:
         customers = [(cid, f"Customer {cid}") for cid in sorted(cust_ids)]
     resolved_scalar = sorted({int(r[0]) for r in shipped if r[0] is not None})
+    lineup_lines = [
+        SimpleNamespace(
+            product_id=int(product_id),
+            customer_id=int(cust_id) if cust_id is not None else None,
+            quantity_units=float(units),
+            dap_evidence_local=float(val) / float(units) if units else 0.0,
+            base_unit_raw=uom,
+            raw_row_payload={},
+        )
+        for cust_id, product_id, units, val in planned
+    ]
     return [
         _R([(500, "PO-1", "1")]),  # po_rows
-        _R(planned),  # planned_rows (customer_id, product_id, units, value)
-        _R([(10, uom)]),  # uom_rows
+        _R([], scalar_one=None),  # OPEN_CHANNEL canonical id
+        _R([], scalar_rows=[]),  # OPEN_CHANNEL alias ids
+        _R([], scalar_rows=lineup_lines),  # lineup lines for planned aggregation
         _R(shipped),  # shipped_rows (resolved_customer_id, product_id, units, value)
         _R([], scalar_rows=resolved_scalar),  # resolved_customers on POs
         _R([], scalar_rows=([500] if po_shipped else [])),  # po_with_shipments
@@ -179,8 +199,9 @@ def test_unplanned_different_product_line():
 def test_po_no_match_no_shipments_anywhere():
     results = [
         _R([(500, "PO-1", "1")]),
-        _R([]),
-        _R([]),
+        _R([], scalar_one=None),
+        _R([], scalar_rows=[]),
+        _R([], scalar_rows=[]),
         _R([]),
         _R([], scalar_rows=[]),
         _R([], scalar_rows=[]),

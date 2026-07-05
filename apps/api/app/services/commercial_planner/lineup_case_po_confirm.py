@@ -2,7 +2,8 @@
 
 Flow (idempotent, amendment-aware):
   normalize_po_number -> lookup/upsert ``purchase_order`` (distributor inferred from the case's
-  lineup lines) -> insert ``commercial_lineup_case_po`` link when missing -> case -> ``po_issued``.
+  lineup lines) -> insert ``commercial_lineup_case_po`` link when missing -> case -> ``po_pending``
+  (or unchanged when already ``po_issued``+).
 
 Re-confirming the same PO is a no-op (the unique (case_id, purchase_order_id) link already exists);
 confirming an additional PO appends a new link (never replaces existing links). POs are shared
@@ -22,10 +23,11 @@ from app.models.commercial_lineup import (
     CommercialLineupLine,
 )
 from app.models.purchase_order import PurchaseOrder
+from app.services.commercial_planner.lineup_case_status import commercial_status_after_po_link
 from app.services.imports.shipment_po_normalization import normalize_po_number
 
 # Direct PO confirm is allowed from any non-terminal-cancelled status (historical shortcut).
-# Forward ladder (draft -> accepted) remains for plan-anchored workflows; confirm jumps to po_issued.
+# Forward ladder (draft -> accepted) remains for plan-anchored workflows; PO link -> po_pending.
 CONFIRM_BLOCKED_STATUSES: frozenset[str] = frozenset({"cancelled"})
 
 
@@ -107,7 +109,7 @@ async def confirm_case_with_po(
     po_numbers: list[str],
     notes: str | None = None,
 ) -> dict[str, Any]:
-    """Confirm a lineup case with PO number(s); idempotent, amendment-aware. Sets status po_issued."""
+    """Confirm a lineup case with PO number(s); idempotent, amendment-aware. Advances to po_pending."""
     case = await db.get(CommercialLineupCase, case_id)
     if case is None:
         raise CaseNotFoundError(str(case_id))
@@ -157,7 +159,7 @@ async def confirm_case_with_po(
             }
         )
 
-    case.commercial_status = "po_issued"
+    case.commercial_status = commercial_status_after_po_link(case.commercial_status)
     await db.commit()
 
     total = (
@@ -215,7 +217,7 @@ async def link_case_to_existing_po(
             )
         )
 
-    case.commercial_status = "po_issued"
+    case.commercial_status = commercial_status_after_po_link(case.commercial_status)
     if commit:
         await db.commit()
     else:

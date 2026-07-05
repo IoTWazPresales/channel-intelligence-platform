@@ -32,6 +32,11 @@ from app.models.commercial_lineup import (
 from app.models.commercial_planner import CommercialSkuAssumption
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.purchase_order import PurchaseOrder
+from app.services.commercial_planner.lineup_open_channel import effective_lineup_customer_id
+from app.services.commercial_planner.open_channel_customer import (
+    canonical_open_channel_customer_id,
+    get_open_channel_canonical_and_aliases,
+)
 from app.services.imports.shipment_evidence_read import (
     apply_active_evidence_filter,
     shipment_evidence_read_model,
@@ -126,41 +131,39 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
     po_ids = [int(r[0]) for r in po_rows]
     po_label = {int(r[0]): (r[1] or r[2]) for r in po_rows}
 
-    planned_rows = (
-        await db.execute(
-            select(
-                CommercialLineupLine.customer_id,
-                CommercialLineupLine.product_id,
-                func.coalesce(func.sum(CommercialLineupLine.quantity_units), 0),
-                func.coalesce(
-                    func.sum(
-                        CommercialLineupLine.quantity_units
-                        * func.coalesce(CommercialLineupLine.dap_evidence_local, 0)
-                    ),
-                    0,
-                ),
-            )
-            .where(CommercialLineupLine.case_id == case_id, CommercialLineupLine.product_id.isnot(None))
-            .group_by(CommercialLineupLine.customer_id, CommercialLineupLine.product_id)
-        )
-    ).all()
-    planned: dict[tuple[int | None, int], dict[str, float]] = {}
-    for cust_id, pid, units, val in planned_rows:
-        planned[(int(cust_id) if cust_id is not None else None, int(pid))] = {
-            "units": float(units),
-            "value_plan": float(val),
-        }
+    open_channel_customer_id, open_channel_alias_ids = await get_open_channel_canonical_and_aliases(db)
 
-    uom_rows = (
-        await db.execute(
-            select(CommercialLineupLine.product_id, CommercialLineupLine.base_unit_raw)
-            .where(CommercialLineupLine.case_id == case_id, CommercialLineupLine.product_id.isnot(None))
-            .distinct()
+    def _canon_cust(customer_id: int | None) -> int | None:
+        return canonical_open_channel_customer_id(
+            customer_id,
+            canonical_id=open_channel_customer_id,
+            alias_ids=open_channel_alias_ids,
         )
-    ).all()
+
+    lineup_lines = (
+        await db.execute(
+            select(CommercialLineupLine).where(
+                CommercialLineupLine.case_id == case_id,
+                CommercialLineupLine.product_id.isnot(None),
+            )
+        )
+    ).scalars().all()
+
+    planned: dict[tuple[int | None, int], dict[str, float]] = {}
     uom_by_product: dict[int, set[str]] = {}
-    for pid, unit in uom_rows:
-        uom_by_product.setdefault(int(pid), set()).add((unit or "").strip())
+    for ln in lineup_lines:
+        pid = int(ln.product_id)  # type: ignore[arg-type]
+        eff_cust = _canon_cust(
+            effective_lineup_customer_id(ln, open_channel_customer_id=open_channel_customer_id)
+        )
+        key = (eff_cust, pid)
+        bucket = planned.setdefault(key, {"units": 0.0, "value_plan": 0.0})
+        qty = float(ln.quantity_units or 0)
+        bucket["units"] += qty
+        bucket["value_plan"] += qty * float(ln.dap_evidence_local or 0)
+        unit = (ln.base_unit_raw or "").strip()
+        if unit:
+            uom_by_product.setdefault(pid, set()).add(unit)
 
     shipped: dict[tuple[int | None, int], dict[str, float]] = {}
     resolved_customers_on_pos: set[int] = set()
@@ -192,7 +195,7 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
             )
         ).all()
         for cust_id, pid, units, val in shipped_rows:
-            key = (int(cust_id) if cust_id is not None else None, int(pid))
+            key = (_canon_cust(int(cust_id) if cust_id is not None else None), int(pid))
             shipped[key] = {"units": float(units), "value_cost": float(val)}
 
         resolved_rows = (
@@ -208,7 +211,10 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
                 )
             )
         ).scalars().all()
-        resolved_customers_on_pos = {int(x) for x in resolved_rows if x is not None}
+        resolved_customers_on_pos = {
+            _canon_cust(int(x)) for x in resolved_rows if x is not None
+        }
+        resolved_customers_on_pos.discard(None)
 
     po_with_shipments: set[int] = set()
     if po_ids:
@@ -256,7 +262,7 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
             customer_names[int(cid)] = str(name)
 
     cust_keys: set[int | None] = {c for c, _ in planned} | {c for c, _ in shipped}
-    if not cust_keys and planned_rows:
+    if not cust_keys and lineup_lines:
         cust_keys.add(None)
 
     customers_out: list[dict[str, Any]] = []

@@ -28,6 +28,11 @@ DateSource = Literal["crad", "schedule_ship", "ship_confirm", "none"]
 CustomerAlign = Literal["exact", "unresolved", "mismatch"]
 
 
+from app.services.commercial_planner.lineup_open_channel import effective_lineup_customer_id
+from app.services.commercial_planner.open_channel_customer import (
+    canonical_open_channel_customer_id,
+    get_open_channel_canonical_and_aliases,
+)
 from app.services.commercial_planner.lineup_period_canonical import (
     active_lineup_case_filters,
     is_active_lineup_case,
@@ -151,6 +156,8 @@ def compute_group_linked_coverage(
     linked_pairs: set[tuple[int, int]],
     shipment_rows: list[FactInboundShipment],
     lineup_by_case_product: dict[tuple[int, int], list[CommercialLineupLine]],
+    open_channel_customer_id: int | None = None,
+    open_channel_alias_ids: frozenset[int] = frozenset(),
 ) -> dict[str, dict[str, Any]]:
     """Shipped units on facts for POs already linked to a case (same match grain as proposals)."""
     linked_pos_by_case: dict[int, set[int]] = defaultdict(set)
@@ -191,11 +198,23 @@ def compute_group_linked_coverage(
                 product_id=product_id,
                 ship_customer_id=ship_cust,
                 date_source=date_src,
+                open_channel_customer_id=open_channel_customer_id,
+                open_channel_alias_ids=open_channel_alias_ids,
             )
             if match_ln is None:
                 continue
-            lineup_cust = int(match_ln.customer_id) if match_ln.customer_id is not None else None
-            prop_cust = ship_cust if ship_cust is not None else lineup_cust
+            lineup_cust = canonical_open_channel_customer_id(
+                effective_lineup_customer_id(
+                    match_ln, open_channel_customer_id=open_channel_customer_id
+                ),
+                canonical_id=open_channel_customer_id,
+                alias_ids=open_channel_alias_ids,
+            )
+            prop_cust = canonical_open_channel_customer_id(
+                ship_cust if ship_cust is not None else lineup_cust,
+                canonical_id=open_channel_customer_id,
+                alias_ids=open_channel_alias_ids,
+            )
             gkey = _proposal_group_key(case, prop_cust)
             totals[gkey] += ship_qty
 
@@ -206,6 +225,35 @@ def compute_group_linked_coverage(
         }
         for gkey, units in totals.items()
     }
+
+
+def compute_group_planned_units(
+    *,
+    case_by_id: dict[int, CommercialLineupCase],
+    planned_by_case_customer_product: dict[tuple[int, int, int], float],
+) -> dict[str, float]:
+    """Full customer-scoped lineup plan per period group (not limited to PO-matched products)."""
+    totals: dict[str, float] = defaultdict(float)
+    for (case_id, cust_id, _pid), units in planned_by_case_customer_product.items():
+        case = case_by_id.get(int(case_id))
+        if case is None:
+            continue
+        gkey = _proposal_group_key(case, int(cust_id) if cust_id is not None else None)
+        totals[gkey] += float(units)
+    return dict(totals)
+
+
+def merge_group_coverage(
+    *,
+    linked: dict[str, dict[str, Any]],
+    planned_by_group: dict[str, float],
+) -> dict[str, dict[str, Any]]:
+    out = dict(linked)
+    for gkey, units in planned_by_group.items():
+        row = dict(out.get(gkey) or {"group_key": gkey, "linked_shipped_units": 0.0})
+        row["group_planned_units"] = round(units, 4)
+        out[gkey] = row
+    return out
 
 
 def _pick_canonical_po_id(
@@ -235,6 +283,8 @@ def _best_lineup_match_for_product(
     product_id: int,
     ship_customer_id: int | None,
     date_source: DateSource,
+    open_channel_customer_id: int | None = None,
+    open_channel_alias_ids: frozenset[int] = frozenset(),
 ) -> tuple[CommercialLineupLine | None, ConfidenceTier | None, str | None, CustomerAlign | None]:
     """Return at most one lineup line match per shipment product (avoids duplicate qty)."""
     best_line: CommercialLineupLine | None = None
@@ -245,8 +295,18 @@ def _best_lineup_match_for_product(
     for ln in case_lines:
         if int(ln.product_id) != product_id:  # type: ignore[arg-type]
             continue
-        lineup_cust = int(ln.customer_id) if ln.customer_id is not None else None
-        align = classify_customer_alignment(ship_customer_id, lineup_cust)
+        lineup_cust = effective_lineup_customer_id(ln, open_channel_customer_id=open_channel_customer_id)
+        ship_cust = canonical_open_channel_customer_id(
+            ship_customer_id,
+            canonical_id=open_channel_customer_id,
+            alias_ids=open_channel_alias_ids,
+        )
+        lineup_cust = canonical_open_channel_customer_id(
+            lineup_cust,
+            canonical_id=open_channel_customer_id,
+            alias_ids=open_channel_alias_ids,
+        )
+        align = classify_customer_alignment(ship_cust, lineup_cust)
         conf, reason = classify_match_confidence(
             customer_align=align,
             date_source=date_source,
@@ -344,6 +404,14 @@ async def _po_auto_link_proposals_inner(
 
     case_ids = [int(c.id) for c in cases]
     case_by_id = {int(c.id): c for c in cases}
+    open_channel_customer_id, open_channel_alias_ids = await get_open_channel_canonical_and_aliases(db)
+
+    def _canon_cust(customer_id: int | None) -> int | None:
+        return canonical_open_channel_customer_id(
+            customer_id,
+            canonical_id=open_channel_customer_id,
+            alias_ids=open_channel_alias_ids,
+        )
 
     lineup_rows = (
         await db.execute(
@@ -395,9 +463,13 @@ async def _po_auto_link_proposals_inner(
         pid = int(ln.product_id)  # type: ignore[arg-type]
         lineup_by_case[cid].append(ln)
         lineup_by_case_product[(cid, pid)].append(ln)
-        if ln.customer_id is not None:
-            planned_by_case_customer_product[(cid, int(ln.customer_id), pid)] += float(ln.quantity_units or 0)
+        eff_cust = _canon_cust(
+            effective_lineup_customer_id(ln, open_channel_customer_id=open_channel_customer_id)
+        )
+        if eff_cust is not None:
+            planned_by_case_customer_product[(cid, int(eff_cust), pid)] += float(ln.quantity_units or 0)
 
+    filter_cust = _canon_cust(customer_id) if customer_id is not None else None
     proposals_map: dict[str, _ProposalAcc] = {}
 
     for ship in shipment_rows:
@@ -434,14 +506,20 @@ async def _po_auto_link_proposals_inner(
                 product_id=product_id,
                 ship_customer_id=ship_cust,
                 date_source=date_src,
+                open_channel_customer_id=open_channel_customer_id,
+                open_channel_alias_ids=open_channel_alias_ids,
             )
             if match_ln is None or conf is None or reason is None:
                 continue
-            lineup_cust = int(match_ln.customer_id) if match_ln.customer_id is not None else None
-            prop_cust = ship_cust if ship_cust is not None else lineup_cust
+            lineup_cust = _canon_cust(
+                effective_lineup_customer_id(
+                    match_ln, open_channel_customer_id=open_channel_customer_id
+                )
+            )
+            prop_cust = _canon_cust(ship_cust if ship_cust is not None else lineup_cust)
             lineup_dist = int(match_ln.distributor_id) if match_ln.distributor_id is not None else None
             dist_id = ship_dist if ship_dist is not None else lineup_dist
-            if customer_id is not None and prop_cust is not None and int(prop_cust) != int(customer_id):
+            if filter_cust is not None and prop_cust is not None and int(prop_cust) != int(filter_cust):
                 continue
             if confidence is not None and conf != confidence:
                 continue
@@ -592,11 +670,19 @@ async def _po_auto_link_proposals_inner(
     if limit > 0:
         out = out[: int(limit)]
 
-    group_coverage = compute_group_linked_coverage(
-        case_by_id=case_by_id,
-        linked_pairs=linked_pairs,
-        shipment_rows=shipment_rows,
-        lineup_by_case_product=lineup_by_case_product,
+    group_coverage = merge_group_coverage(
+        linked=compute_group_linked_coverage(
+            case_by_id=case_by_id,
+            linked_pairs=linked_pairs,
+            shipment_rows=shipment_rows,
+            lineup_by_case_product=lineup_by_case_product,
+            open_channel_customer_id=open_channel_customer_id,
+            open_channel_alias_ids=open_channel_alias_ids,
+        ),
+        planned_by_group=compute_group_planned_units(
+            case_by_id=case_by_id,
+            planned_by_case_customer_product=planned_by_case_customer_product,
+        ),
     )
 
     return {

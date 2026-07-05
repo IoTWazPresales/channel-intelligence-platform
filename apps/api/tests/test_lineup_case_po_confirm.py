@@ -2,7 +2,7 @@
 
 Mock-based: the commercial_lineup_case_po table is created by migration 20260628_0057, which
 Warren applies to cip. These tests assert the orchestration (normalize -> upsert PO -> link ->
-po_issued) and the idempotent / amendment-append semantics without touching the DB.
+po_pending) and the idempotent / amendment-append semantics without touching the DB.
 """
 import asyncio
 from types import SimpleNamespace
@@ -58,7 +58,7 @@ def _make_db(case, execute_results):
     return db
 
 
-def test_confirm_two_pos_creates_two_links_and_sets_po_issued():
+def test_confirm_two_pos_creates_two_links_and_sets_po_pending():
     case = SimpleNamespace(id=3, commercial_status="accepted", iteration_number=1)
     results = [
         _Res(scalar_list=[7]),   # distributor inference -> single distributor
@@ -74,7 +74,7 @@ def test_confirm_two_pos_creates_two_links_and_sets_po_issued():
         mod.confirm_case_with_po(db, 3, po_numbers=["PO-1001", "PO-1002"], notes="batch")
     )
 
-    assert case.commercial_status == "po_issued"
+    assert case.commercial_status == "po_pending"
     assert out["po_count"] == 2
     assert out["newly_linked_count"] == 2
     # 2 PurchaseOrder + 2 CommercialLineupCasePo added
@@ -105,6 +105,7 @@ def test_reconfirm_same_po_is_idempotent():
     assert sum(1 for o in db._added if isinstance(o, PurchaseOrder)) == 0
     assert sum(1 for o in db._added if isinstance(o, CommercialLineupCasePo)) == 0
     assert out["linked_pos"][0]["newly_linked"] is False
+    assert case.commercial_status == "po_issued"
 
 
 def test_add_new_po_appends_link():
@@ -122,9 +123,7 @@ def test_add_new_po_appends_link():
     assert out["po_count"] == 2
     assert out["newly_linked_count"] == 1
     assert sum(1 for o in db._added if isinstance(o, CommercialLineupCasePo)) == 1
-
-
-def test_confirm_from_draft_imported_skips_ladder():
+    assert case.commercial_status == "po_issued"
     case = SimpleNamespace(id=3, commercial_status="draft_imported", iteration_number=1)
     results = [
         _Res(scalar_list=[7]),
@@ -134,7 +133,7 @@ def test_confirm_from_draft_imported_skips_ladder():
     ]
     db = _make_db(case, results)
     out = asyncio.run(mod.confirm_case_with_po(db, 3, po_numbers=["PO-2001"]))
-    assert case.commercial_status == "po_issued"
+    assert case.commercial_status == "po_pending"
     assert out["po_count"] == 1
 
 

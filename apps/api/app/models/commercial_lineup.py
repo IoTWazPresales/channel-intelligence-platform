@@ -15,6 +15,7 @@ COMMERCIAL_LINEUP_STATUSES = {
     "po_issued",
     "in_fulfillment",
     "received_closed",
+    "work_closed",
     "cancelled",
     "superseded",
 }
