@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-05 (lineup steward-open PO lifecycle + Open Channel plan parity)
+**Last updated:** 2026-07-05 (handover → PO recon + distributor-assign discovery)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `88f8db4` — steward-open PO lifecycle, Open Channel plan parity, bulk-link UX |
+| **HEAD** | `8f70685` — docs sync for `88f8db4` (lineup PO lifecycle + Open Channel plan parity) |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -102,11 +102,24 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 ## Next
 
+- **READ-ONLY discovery (next chat):** PO Management backlog vs `reconcile_case` grain gap; per-line PO-coverage metric absent/present; assign-distributor affordance false-positive audit on historic cases. Ops script pattern: `apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py`. **No writes, no commit.**
 - **Unit 6 browser soak** — bulk PO link UX + plan-level entity resolution modal (`1b72ba8`).
 - **Spec C Step C:** archive lineup backfill + link-apply.
 - **BACKLOG-062:** Warren decision on open→shipped fact remediation (104 pairs measured).
 - **BACKLOG-057/058:** D4/D5 legacy column deprecation after soak.
 - **Perf (defer):** bulk PO apply still one DB commit per item — batched writer if volume grows.
+
+---
+
+## Discovery hints (for next agent — verify in code + cip)
+
+| Surface | Grain / trigger (code truth — re-verify) |
+|---------|------------------------------------------|
+| `po_management.backlog` | Groups: `(year, quarter, product_line)` from `fact_inbound_shipment`; linked groups roll up `reconcile_case` → `reconciliation_summary` + `reconciliation_customers` |
+| `reconcile_case` | `(case × customer × product)`; `awaiting_po` at customer slice; `products` flat list with `units_flag` |
+| Current Lineup recon UI | `CaseReconciliationInline` when `po_count > 0` on case card; drill to `/admin/po-management` |
+| Assign distributor button | `RESOLUTION_UI_STATUSES` (= steward-open statuses) && `!superseded` — **no** unassigned-line gate in UI |
+| Suggest API | `lineup_case_suggested_pos.suggest_distributors_for_case` — shipment evidence × case product_ids |
 
 ---
 
