@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-04 (invoice-line mint graduation + cip repair)
+**Last updated:** 2026-07-05 (lineup steward-open PO lifecycle + Open Channel plan parity)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `b264a2b` — invoice-line mint graduation + cip repair |
+| **HEAD** | `88f8db4` — steward-open PO lifecycle, Open Channel plan parity, bulk-link UX |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -27,6 +27,23 @@
 | **Invoice-line graduation** | **174** lineages quantity-graduated on cip; **432** blank observation versions superseded; audit `invoice_line_graduation_gap` = **0** |
 | **Legacy supersede** | 35,134 + graduated blank corpus lines `corpus_superseded_at` |
 | **Celery dispatch** | `broker` (apps/api/.env) |
+
+---
+
+## Lineup PO lifecycle + Open Channel plan — DONE (2026-07-05, `88f8db4`)
+
+| Item | Status |
+|------|--------|
+| PO link → `po_pending` (not `po_issued`); steward open through `in_fulfillment` | Wired + unit-tested |
+| Explicit `POST …/close-work` → `work_closed`; list hides work-closed by default | Wired + unit-tested |
+| Open Channel plan parity | TMP provisional dim **#19** aliased to system **OPEN_CHANNEL #1** for plan/reconcile/auto-link; `effective_lineup_customer_id` on staging |
+| PO auto-link proposals | `group_planned_units` = full customer-period plan (not PO-matched SKUs only) |
+| Bulk link UX | Chunked apply (100/request), top progress bar, success counts |
+| Bulk link on cip | **191** new `commercial_lineup_case_po` rows proven live (~2026-07-05) |
+
+**Mental model:** PO linked (`po_pending`) ≠ work closed (`work_closed`) ≠ archive. Restart API + hard-refresh web after pull.
+
+**Data hygiene (optional):** merge/remap TMP Open Channel customer **#19** → **OPEN_CHANNEL #1** — reads already alias.
 
 ---
 
@@ -85,10 +102,11 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 ## Next
 
+- **Unit 6 browser soak** — bulk PO link UX + plan-level entity resolution modal (`1b72ba8`).
+- **Spec C Step C:** archive lineup backfill + link-apply.
 - **BACKLOG-062:** Warren decision on open→shipped fact remediation (104 pairs measured).
 - **BACKLOG-057/058:** D4/D5 legacy column deprecation after soak.
-- **Unit 6 browser soak** (unified lineup import centre) — unchanged from prior CURRENT.
-- **Spec C Step C:** archive lineup backfill + link-apply.
+- **Perf (defer):** bulk PO apply still one DB commit per item — batched writer if volume grows.
 
 ---
 
