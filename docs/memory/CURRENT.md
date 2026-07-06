@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `7bd8e46` — *(pending)* PvE round-2 hardening |
+| **HEAD** | `be286ba` — plan-vs-executed: round-2 grids, drill, PO deep-links, golden tests |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
