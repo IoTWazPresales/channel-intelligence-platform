@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `a35a8ae` — plan-vs-executed: full-stack derived-on-read intelligence view |
+| **HEAD** | `7bd8e46` — plan-vs-executed: period enumeration + BU selector fix |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
