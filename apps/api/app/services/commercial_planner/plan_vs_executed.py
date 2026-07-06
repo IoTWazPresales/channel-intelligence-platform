@@ -196,75 +196,110 @@ def _period_slots_in_range(
 
 
 def _row_value_for_rank(row: dict[str, Any], *, rank_by: RankBy, field: str) -> float:
-    """Rank metric in plan currency when value mode and FX available; else units."""
+    """Rank metric in units mode only; value ranking uses ``_row_plan_value_for_field`` via buckets."""
     if rank_by == "units":
-        return float(row.get(field) or 0)
+        if field == "short":
+            return max(float(row.get("planned_units") or 0) - float(row.get("shipped_units") or 0), 0)
+        if field == "over":
+            return max(float(row.get("shipped_units") or 0) - float(row.get("planned_units") or 0), 0)
+        if field == "unplanned":
+            return float(row.get("shipped_units") or 0)
+        if field == "no_po":
+            return float(row.get("planned_units") or 0)
+    plan = _row_plan_value_for_field(row, field)
+    return plan if plan is not None else 0.0
+
+
+def _row_plan_value_for_field(row: dict[str, Any], field: str) -> float | None:
+    """Plan-currency exposure for an exception row — ``None`` when bridge absent (never units)."""
     val = row.get("value") or {}
     if field == "short":
         p = float(row.get("planned_units") or 0)
         s = float(row.get("shipped_units") or 0)
         units = max(p - s, 0)
-        if p > 0 and units > 0:
-            ratio = units / p
-            pv = float(val.get("planned_value_plan") or 0)
-            if pv > 0:
-                return pv * ratio
-        return units
+        if p <= 0 or units <= 0:
+            return None
+        pv = val.get("planned_value_plan")
+        if pv is None:
+            return None
+        fpv = float(pv)
+        if fpv <= 0:
+            return None
+        return fpv * (units / p)
     if field == "over":
         p = float(row.get("planned_units") or 0)
         s = float(row.get("shipped_units") or 0)
         units = max(s - p, 0)
-        if p > 0 and units > 0:
-            sv = val.get("shipped_value_plan")
-            if sv is not None and s > 0:
-                return float(sv) * (units / s)
-        return units
-    if field == "unplanned":
-        s = float(row.get("shipped_units") or 0)
+        if units <= 0 or s <= 0:
+            return None
         sv = val.get("shipped_value_plan")
-        if sv is not None and s > 0:
-            return float(sv)
-        return s
+        if sv is None:
+            return None
+        return float(sv) * (units / s)
+    if field == "unplanned":
+        s = float(row.get("shipped_units") or 0)
+        if s <= 0:
+            return None
+        sv = val.get("shipped_value_plan")
+        if sv is None:
+            return None
+        return float(sv)
     if field == "no_po":
         p = float(row.get("planned_units") or 0)
-        pv = float(val.get("planned_value_plan") or 0)
-        return pv if pv > 0 else p
-    return float(row.get(field) or 0)
+        if p <= 0:
+            return None
+        pv = val.get("planned_value_plan")
+        if pv is None:
+            return None
+        fpv = float(pv)
+        return fpv if fpv > 0 else None
+    return None
 
 
-def _row_value_cost_for_field(row: dict[str, Any], field: str) -> float:
-    """Cost-currency exposure for exception value columns (parallel to plan-currency rank)."""
+def _row_cost_value_for_field(row: dict[str, Any], field: str) -> float | None:
+    """Cost-currency exposure — ``None`` when bridge absent (never units, never plan fallback)."""
     val = row.get("value") or {}
     if field == "short":
         p = float(row.get("planned_units") or 0)
         s = float(row.get("shipped_units") or 0)
         units = max(p - s, 0)
-        if p > 0 and units > 0:
-            ratio = units / p
-            pv = float(val.get("planned_value_cost") or val.get("shipped_value_cost") or 0)
-            if pv > 0:
-                return pv * ratio
-        return units
+        if p <= 0 or units <= 0:
+            return None
+        pv = val.get("planned_value_cost")
+        if pv is None:
+            return None
+        fpv = float(pv)
+        if fpv <= 0:
+            return None
+        return fpv * (units / p)
     if field == "over":
         p = float(row.get("planned_units") or 0)
         s = float(row.get("shipped_units") or 0)
         units = max(s - p, 0)
-        if s > 0 and units > 0:
-            sv = val.get("shipped_value_cost")
-            if sv is not None:
-                return float(sv) * (units / s)
-        return units
+        if units <= 0 or s <= 0:
+            return None
+        sv = val.get("shipped_value_cost")
+        if sv is None:
+            return None
+        return float(sv) * (units / s)
     if field == "unplanned":
         s = float(row.get("shipped_units") or 0)
+        if s <= 0:
+            return None
         sv = val.get("shipped_value_cost")
-        if sv is not None and s > 0:
-            return float(sv)
-        return s
+        if sv is None:
+            return None
+        return float(sv)
     if field == "no_po":
         p = float(row.get("planned_units") or 0)
-        pv = float(val.get("planned_value_cost") or val.get("planned_value_plan") or 0)
-        return pv if pv > 0 else p
-    return 0.0
+        if p <= 0:
+            return None
+        pv = val.get("planned_value_cost")
+        if pv is None:
+            return None
+        fpv = float(pv)
+        return fpv if fpv > 0 else None
+    return None
 
 
 def compute_scorecard_from_execution_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -478,7 +513,9 @@ def _aggregate_exceptions(
         return {
             "units": 0.0,
             "value": 0.0,
+            "value_n": 0,
             "value_cost": 0.0,
+            "value_cost_n": 0,
             "label": "",
             "entity_primary": "",
             "entity_secondary": None,
@@ -489,6 +526,21 @@ def _aggregate_exceptions(
             "sales_model": None,
             "business_unit_label": None,
         }
+
+    def _add_values(
+        bucket: dict[Any, dict[str, Any]],
+        key: Any,
+        row: dict[str, Any],
+        cat_field: str,
+    ) -> None:
+        pv = _row_plan_value_for_field(row, cat_field)
+        if pv is not None:
+            bucket[key]["value"] += pv
+            bucket[key]["value_n"] += 1
+        vc = _row_cost_value_for_field(row, cat_field)
+        if vc is not None:
+            bucket[key]["value_cost"] += vc
+            bucket[key]["value_cost_n"] += 1
 
     def _lens_agg(
         key_fn,
@@ -520,8 +572,7 @@ def _aggregate_exceptions(
                 short_u = max(p - s, 0)
                 if short_u > 0:
                     short[key]["units"] += short_u
-                    short[key]["value"] += _row_value_for_rank(r, rank_by=rank_by, field="short")
-                    short[key]["value_cost"] += _row_value_cost_for_field(r, "short")
+                    _add_values(short, key, r, "short")
                     short[key]["label"] = entity_primary
                     short[key]["entity_primary"] = entity_primary
                     short[key]["entity_secondary"] = entity_secondary
@@ -530,8 +581,7 @@ def _aggregate_exceptions(
                 over_u = max(s - p, 0)
                 if over_u > 0:
                     over[key]["units"] += over_u
-                    over[key]["value"] += _row_value_for_rank(r, rank_by=rank_by, field="over")
-                    over[key]["value_cost"] += _row_value_cost_for_field(r, "over")
+                    _add_values(over, key, r, "over")
                     over[key]["label"] = entity_primary
                     over[key]["entity_primary"] = entity_primary
                     over[key]["entity_secondary"] = entity_secondary
@@ -539,8 +589,7 @@ def _aggregate_exceptions(
                     over[key].update({k: v for k, v in meta.items() if v is not None})
                 if r.get("awaiting_po"):
                     no_po[key]["units"] += p
-                    no_po[key]["value"] += _row_value_for_rank(r, rank_by=rank_by, field="no_po")
-                    no_po[key]["value_cost"] += _row_value_cost_for_field(r, "no_po")
+                    _add_values(no_po, key, r, "no_po")
                     no_po[key]["line_count"] += 1
                     no_po[key]["label"] = entity_primary
                     no_po[key]["entity_primary"] = entity_primary
@@ -549,8 +598,7 @@ def _aggregate_exceptions(
                     no_po[key].update({k: v for k, v in meta.items() if v is not None})
             elif s > 0:
                 unplanned[key]["units"] += s
-                unplanned[key]["value"] += _row_value_for_rank(r, rank_by=rank_by, field="unplanned")
-                unplanned[key]["value_cost"] += _row_value_cost_for_field(r, "unplanned")
+                _add_values(unplanned, key, r, "unplanned")
                 unplanned[key]["label"] = entity_primary
                 unplanned[key]["entity_primary"] = entity_primary
                 unplanned[key]["entity_secondary"] = entity_secondary
@@ -558,10 +606,19 @@ def _aggregate_exceptions(
                 unplanned[key].update({k: v for k, v in meta.items() if v is not None})
 
         def _ranked(d: dict[Any, dict[str, Any]], metric: str) -> list[dict[str, Any]]:
-            ranked = sorted(d.items(), key=lambda kv: kv[1][metric], reverse=True)
+            if metric == "value":
+                ranked = sorted(
+                    d.items(),
+                    key=lambda kv: (kv[1]["value_n"] > 0, kv[1]["value"]),
+                    reverse=True,
+                )
+            else:
+                ranked = sorted(d.items(), key=lambda kv: kv[1]["units"], reverse=True)
             out_items: list[dict[str, Any]] = []
             for k, v in ranked:
-                if v[metric] <= 0:
+                if metric == "units" and v["units"] <= 0:
+                    continue
+                if metric == "value" and v["units"] <= 0:
                     continue
                 out_items.append(
                     {
@@ -571,8 +628,8 @@ def _aggregate_exceptions(
                         "entity_secondary": v.get("entity_secondary"),
                         "label_fallback": bool(v.get("label_fallback")),
                         "units": v["units"],
-                        "value_plan": v["value"],
-                        "value_cost": v.get("value_cost") or 0.0,
+                        "value_plan": v["value"] if v["value_n"] > 0 else None,
+                        "value_cost": v["value_cost"] if v["value_cost_n"] > 0 else None,
                         "line_count": v.get("line_count") or 0,
                         "customer_id": v.get("customer_id"),
                         "product_id": v.get("product_id"),

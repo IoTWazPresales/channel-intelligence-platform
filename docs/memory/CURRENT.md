@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-06 (Plan vs Executed UX + PO Management slim)
+**Last updated:** 2026-07-06 (PvE grid pagination + value honesty + PO worklist summary)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `f3f319e` — plan-vs-executed UX repair + PO Management worklist slim |
+| **HEAD** | (pending) — PvE grid pagination, value honesty, PO worklist summary |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -59,6 +59,7 @@
 | Period enumeration fix (2026-07-06) | `available_periods` from `coverage()` groups — independent of active filter; default latest |
 | Round-2 hardening (2026-07-06) | Exception AG grids, product lens SKU/sales-model/description toggle, cross-drill, PO Mgmt deep-link params, loading-state fix, golden tie-out tests all clean periods |
 | UX repair + PO slim (2026-07-06) | One full-width exception category grid (tabs inside lens); human-readable product labels (description→sales_model→SKU) in exceptions + drill + chip; product selector drives drill column; PO Management linked cards → compact status + PvE deep-link only (recon chips removed; APIs unchanged) |
+| Grid + value honesty (2026-07-06) | Fixed-height paginated exception/drill grids; exception value columns return `null` when FX/plan bridge absent (no units-as-value); value-rank disables when category has no value coverage; PO Management "What needs action" worklist summary + visible PvE outcomes button on linked groups |
 
 ---
 
@@ -134,7 +135,7 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 ## Next
 
-- **Unit 6 browser soak** — Plan vs Executed category tabs + drill labels + PO Management worklist-only cards.
+- **Unit 6 browser soak** — paginated PvE exception grid + value-unavailable cells + PO worklist summary chips.
 - **BACKLOG-066** — #39/#40 duplicate-ingestion repair (steward soft-supersede; Plan vs Executed flags affected periods in-UI until repaired).
 - **BACKLOG-067** — backfill file-provenance gap (unified_lineup / bulk_backfill paths retain no original bytes).
 - **Spec C Step C:** archive lineup backfill + link-apply.

@@ -1,11 +1,18 @@
 'use client';
 
-import { Box, Link as MuiLink, Stack, Typography } from '@mui/material';
+import { Box, Link as MuiLink, Stack, Tooltip, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import type { ColDef, GridOptions, ICellRendererParams, RowClickedEvent } from 'ag-grid-community';
 import Link from 'next/link';
 import { useMemo } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+
+import {
+  PAGINATED_GRID_PAGE_SIZE,
+  paginatedGridHeight,
+  VALUE_UNAVAILABLE_TOOLTIP,
+} from './gridPagination';
 
 export type ExceptionRow = {
   key: string | number;
@@ -14,8 +21,8 @@ export type ExceptionRow = {
   entity_secondary?: string | null;
   label_fallback?: boolean;
   units: number;
-  value_plan: number;
-  value_cost?: number;
+  value_plan: number | null;
+  value_cost?: number | null;
   line_count?: number;
   customer_id?: number | null;
   product_id?: number | null;
@@ -67,6 +74,28 @@ function EntityCell({ data }: { data?: ExceptionRow }) {
   );
 }
 
+function ValueCell({
+  value,
+  fxPartial,
+}: {
+  value: number | null | undefined;
+  fxPartial?: boolean;
+}) {
+  if (value == null) {
+    const tip = fxPartial
+      ? `${VALUE_UNAVAILABLE_TOOLTIP} (FX partial in range)`
+      : VALUE_UNAVAILABLE_TOOLTIP;
+    return (
+      <Tooltip title={tip}>
+        <Typography component="span" variant="body2" color="text.disabled" sx={{ cursor: 'help' }}>
+          —
+        </Typography>
+      </Tooltip>
+    );
+  }
+  return <Typography component="span" variant="body2">{fmtValue(value)}</Typography>;
+}
+
 export function buildPoManagementHref(opts: {
   period: string;
   businessUnit?: string | null;
@@ -96,9 +125,13 @@ export function ExceptionCategoryGrid({
   fxPartial?: boolean;
   onRowClick?: (row: ExceptionRow) => void;
 }) {
+  const theme = useTheme();
+  const rowHeight = theme.density === 'compact' ? 34 : 42;
+  const headerHeight = theme.density === 'compact' ? 36 : 42;
+  const gridHeight = paginatedGridHeight(PAGINATED_GRID_PAGE_SIZE, { rowHeight, headerHeight });
+
   const showPoLink = category === 'short_ships' || category === 'no_po_blind_spots';
   const showLines = category === 'no_po_blind_spots';
-  const fxNote = fxPartial ? ' · FX partial' : '';
 
   const columnDefs = useMemo<ColDef<ExceptionRow>[]>(
     () => [
@@ -124,17 +157,41 @@ export function ExceptionCategoryGrid({
       },
       {
         field: 'value_plan',
-        headerName: `Value (plan)${fxNote}`,
-        width: 130,
+        headerName: 'Value (plan)',
+        headerTooltip: fxPartial
+          ? 'Plan currency — FX partial; unavailable where bridge missing'
+          : 'Plan currency — unavailable where bridge missing',
+        width: 140,
         sortable: true,
-        valueFormatter: (p) => fmtValue(Number(p.value ?? 0)),
+        comparator: (_a, _b, nodeA, nodeB) => {
+          const va = nodeA.data?.value_plan;
+          const vb = nodeB.data?.value_plan;
+          if (va == null && vb == null) return 0;
+          if (va == null) return -1;
+          if (vb == null) return 1;
+          return va - vb;
+        },
+        cellRenderer: (p: ICellRendererParams<ExceptionRow>) => (
+          <ValueCell value={p.data?.value_plan} fxPartial={fxPartial} />
+        ),
       },
       {
         field: 'value_cost',
         headerName: 'Value (cost)',
-        width: 120,
+        headerTooltip: 'Cost currency — unavailable where bridge missing',
+        width: 130,
         sortable: true,
-        valueFormatter: (p) => fmtValue(Number(p.value ?? 0)),
+        comparator: (_a, _b, nodeA, nodeB) => {
+          const va = nodeA.data?.value_cost;
+          const vb = nodeB.data?.value_cost;
+          if (va == null && vb == null) return 0;
+          if (va == null) return -1;
+          if (vb == null) return 1;
+          return va - vb;
+        },
+        cellRenderer: (p: ICellRendererParams<ExceptionRow>) => (
+          <ValueCell value={p.data?.value_cost} fxPartial={fxPartial} />
+        ),
       },
       {
         field: 'line_count',
@@ -165,14 +222,14 @@ export function ExceptionCategoryGrid({
         },
       },
     ],
-    [showPoLink, showLines, periodForLink, defaultBusinessUnit, fxNote],
+    [showPoLink, showLines, periodForLink, defaultBusinessUnit, fxPartial],
   );
 
   const gridOptions = useMemo<GridOptions<ExceptionRow>>(
     () => ({
       pagination: true,
-      paginationPageSize: 15,
-      domLayout: 'autoHeight',
+      paginationPageSize: PAGINATED_GRID_PAGE_SIZE,
+      suppressPaginationPanel: false,
       defaultColDef: { resizable: true },
       onRowClicked: (e: RowClickedEvent<ExceptionRow>) => {
         if (e.data && onRowClick) onRowClick(e.data);
@@ -193,11 +250,13 @@ export function ExceptionCategoryGrid({
   }
 
   return (
-    <EnterpriseDataGrid
-      rowData={rows}
-      columnDefs={columnDefs}
-      height={Math.min(520, 120 + rows.length * 42)}
-      gridOptions={gridOptions}
-    />
+    <Box data-testid="exception-category-grid" sx={{ width: '100%', overflow: 'visible' }}>
+      <EnterpriseDataGrid
+        rowData={rows}
+        columnDefs={columnDefs}
+        height={gridHeight}
+        gridOptions={gridOptions}
+      />
+    </Box>
   );
 }

@@ -94,6 +94,25 @@ def test_unplanned_intake_off_plan_only():
     assert sc["planned_units"] == 100
 
 
+def test_exception_value_unavailable_when_no_pricing_bridge():
+    rows = [
+        {
+            **_row(planned=100, shipped=40, flag="short", customer_id=1, product_id=10),
+            "customer_label": "Cust-1",
+            "business_unit_label": "NB",
+            "value": {
+                "shipped_value_cost": 400,
+                "value_status": "missing",
+            },
+        },
+    ]
+    exc = mod._aggregate_exceptions(rows, rank_by="units")
+    item = exc["customer"]["short_ships"][0]
+    assert item["units"] == 60
+    assert item["value_plan"] is None
+    assert item["value_cost"] is None
+
+
 def test_aggregate_exceptions_customer_lens():
     rows = [
         _row(planned=100, shipped=40, flag="short", customer_id=1, product_id=10),

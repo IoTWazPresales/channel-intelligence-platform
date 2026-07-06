@@ -19,6 +19,7 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import type { ColDef, GridOptions } from 'ag-grid-community';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -44,6 +45,7 @@ import {
   type ExceptionCategory,
   type ExceptionRow,
 } from '@/features/plan-vs-executed/ExceptionCategoryGrid';
+import { DRILL_GRID_PAGE_SIZE, paginatedGridHeight } from '@/features/plan-vs-executed/gridPagination';
 import { resolveProductDisplay } from '@/features/plan-vs-executed/productDisplay';
 import { apiGet } from '@/lib/api';
 
@@ -145,6 +147,26 @@ type Lens = 'customer' | 'product' | 'bu';
 
 const ALL_BU = '__all__';
 
+const EXCLUSIVE_TOGGLE_SX = {
+  '& .MuiToggleButton-root': {
+    color: 'text.secondary',
+    borderColor: 'divider',
+    textTransform: 'none',
+    '&.Mui-selected': {
+      color: 'primary.contrastText',
+      backgroundColor: 'primary.main',
+      fontWeight: 600,
+      '&:hover': { backgroundColor: 'primary.dark' },
+    },
+  },
+} as const;
+
+const LENS_TABS_SX = {
+  minHeight: 40,
+  '& .MuiTab-root': { color: 'text.secondary', textTransform: 'none', minHeight: 40 },
+  '& .MuiTab-root.Mui-selected': { color: 'primary.main', fontWeight: 600 },
+} as const;
+
 function fmtUnits(n: number | null | undefined): string {
   if (n == null) return '—';
   return new Intl.NumberFormat().format(Math.round(n));
@@ -193,6 +215,7 @@ function KpiTile({
 }
 
 export function PlanVsExecutedView() {
+  const theme = useTheme();
   const searchParams = useSearchParams();
   const [periodFrom, setPeriodFrom] = useState<string | null>(searchParams.get('period_from'));
   const [periodTo, setPeriodTo] = useState<string | null>(searchParams.get('period_to'));
@@ -374,8 +397,17 @@ export function PlanVsExecutedView() {
   );
 
   const drillGridOptions = useMemo<GridOptions>(
-    () => ({ pagination: true, paginationPageSize: 20, domLayout: 'autoHeight' }),
+    () => ({ pagination: true, paginationPageSize: DRILL_GRID_PAGE_SIZE, suppressPaginationPanel: false }),
     [],
+  );
+
+  const drillGridHeight = useMemo(
+    () =>
+      paginatedGridHeight(DRILL_GRID_PAGE_SIZE, {
+        rowHeight: theme.density === 'compact' ? 34 : 42,
+        headerHeight: theme.density === 'compact' ? 36 : 42,
+      }),
+    [theme.density],
   );
 
   const sc = data?.scorecard;
@@ -399,6 +431,15 @@ export function PlanVsExecutedView() {
   }, [hasDrill, data?.drill]);
 
   const activeExceptionRows = lensExceptions?.[exceptionCategory] ?? [];
+
+  const hasValueCoverage = useMemo(
+    () => activeExceptionRows.some((r) => r.value_plan != null || r.value_cost != null),
+    [activeExceptionRows],
+  );
+
+  useEffect(() => {
+    if (!hasValueCoverage && rankBy === 'value') setRankBy('units');
+  }, [hasValueCoverage, rankBy]);
 
   return (
     <Stack spacing={2}>
@@ -485,11 +526,20 @@ export function PlanVsExecutedView() {
           value={rankBy}
           onChange={(_, v) => v && setRankBy(v)}
           aria-label="Rank exceptions by"
+          sx={EXCLUSIVE_TOGGLE_SX}
         >
           <ToggleButton value="units">Rank: units</ToggleButton>
-          <ToggleButton value="value">Rank: value</ToggleButton>
+          <ToggleButton value="value" disabled={!hasValueCoverage}>
+            Rank: value
+          </ToggleButton>
         </ToggleButtonGroup>
       </Stack>
+
+      {!hasValueCoverage && lensExceptions ? (
+        <Typography variant="caption" color="text.secondary" data-testid="value-rank-unavailable-note">
+          Value ranking needs plan pricing and FX coverage for at least one row in this category — showing units only.
+        </Typography>
+      ) : null}
 
       {dataFetching ? <LinearProgress data-testid="pve-data-refresh" /> : null}
 
@@ -589,6 +639,7 @@ export function PlanVsExecutedView() {
                           setLens(v);
                           clearDrill();
                         }}
+                        sx={LENS_TABS_SX}
                       >
                         <Tab value="customer" label="By customer" />
                         <Tab value="product" label="By product" />
@@ -602,6 +653,7 @@ export function PlanVsExecutedView() {
                           onChange={(_, v) => v && setProductGroupBy(v)}
                           aria-label="Product grouping"
                           data-testid="product-group-by"
+                          sx={EXCLUSIVE_TOGGLE_SX}
                         >
                           <ToggleButton value="description">Description</ToggleButton>
                           <ToggleButton value="sku">SKU</ToggleButton>
@@ -615,6 +667,7 @@ export function PlanVsExecutedView() {
                       variant="scrollable"
                       scrollButtons="auto"
                       data-testid="exception-category-tabs"
+                      sx={LENS_TABS_SX}
                     >
                       {(Object.keys(EXCEPTION_CATEGORY_LABELS) as ExceptionCategory[]).map((cat) => (
                         <Tab
@@ -657,7 +710,7 @@ export function PlanVsExecutedView() {
                   <EnterpriseDataGrid
                     rowData={data?.drill_rows ?? []}
                     columnDefs={drillCols}
-                    height={420}
+                    height={drillGridHeight}
                     gridOptions={drillGridOptions}
                   />
                 </CardContent>

@@ -52,7 +52,12 @@ vi.mock('@tanstack/react-query', () => ({
         buckets: { executed_vs_plan: 17, off_plan: 3, pending: 4 },
       },
       exceptions: {
-        customer: { short_ships: [], over_ships: [], unplanned_intake: [], no_po_blind_spots: [] },
+        customer: {
+          short_ships: [{ key: 1, label: 'A', units: 10, value_plan: null, value_cost: null }],
+          over_ships: [],
+          unplanned_intake: [],
+          no_po_blind_spots: [],
+        },
         product: { short_ships: [], over_ships: [], unplanned_intake: [], no_po_blind_spots: [] },
         bu: { short_ships: [], over_ships: [], unplanned_intake: [], no_po_blind_spots: [] },
       },
@@ -66,12 +71,14 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 describe('PlanVsExecutedView', () => {
-  it('renders headline KPIs, category tabs, and scope notes', () => {
+  it('renders headline KPIs, category tabs, value-rank note when no value coverage, and scope notes', () => {
     render(<PlanVsExecutedView />);
     expect(screen.getByText('Fill rate (headline)')).toBeTruthy();
     expect(screen.getByText('46.0%')).toBeTruthy();
     expect(screen.getByText(/What this view answers/)).toBeTruthy();
     expect(screen.getByTestId('scope-boundary-notes')).toBeTruthy();
     expect(screen.getByTestId('exception-category-tabs')).toBeTruthy();
+    expect(screen.getByTestId('value-rank-unavailable-note')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Rank: value/i })).toHaveProperty('disabled', true);
   });
 });

@@ -97,6 +97,13 @@ function poGroupDomId(g: Pick<BacklogGroup, 'year' | 'quarter' | 'product_line'>
   return `po-mgmt-group-${g.year}-${g.quarter}-${g.product_line}`;
 }
 
+export const PO_BACKLOG_SECTION_ID = 'po-mgmt-backlog';
+export const PO_GAP_SECTION_ID = 'po-mgmt-gap';
+
+function needsLineupUpload(g: BacklogGroup): boolean {
+  return g.status === 'unlinked' && !g.lineup_case_exists && !g.parse_incomplete;
+}
+
 export function PoManagementView() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -197,6 +204,20 @@ export function PoManagementView() {
       }))
     );
   }, [gap]);
+
+  const worklistSummary = useMemo(() => {
+    const observed = coverage?.total_pos_observed ?? 0;
+    const linked = coverage?.total_pos_linked ?? 0;
+    const unlinkedPos = Math.max(observed - linked, 0);
+    const uploadNeeded =
+      backlog?.groups.filter((g) => g.po_count > 0 && needsLineupUpload(g)).length ?? 0;
+    const gapCount = gap?.total_gap_rows ?? 0;
+    return { unlinkedPos, uploadNeeded, gapCount };
+  }, [coverage, backlog, gap]);
+
+  const scrollToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const gapColumnDefs = useMemo<ColDef<GapRow>[]>(
     () => [
@@ -325,9 +346,48 @@ export function PoManagementView() {
         </CardContent>
       </Card>
 
+      {!loading && !coverage?.data_unavailable ? (
+        <Card variant="outlined" data-testid="po-worklist-summary">
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+              What needs action
+            </Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+              <Chip
+                clickable={worklistSummary.unlinkedPos > 0}
+                onClick={() => scrollToSection(PO_BACKLOG_SECTION_ID)}
+                label={`${worklistSummary.unlinkedPos} PO${worklistSummary.unlinkedPos === 1 ? '' : 's'} unlinked`}
+                color={worklistSummary.unlinkedPos > 0 ? 'warning' : 'default'}
+                variant={worklistSummary.unlinkedPos > 0 ? 'filled' : 'outlined'}
+                data-testid="po-worklist-unlinked"
+              />
+              <Chip
+                clickable={worklistSummary.uploadNeeded > 0}
+                onClick={() => scrollToSection(PO_BACKLOG_SECTION_ID)}
+                label={`${worklistSummary.uploadNeeded} period×BU need lineup upload`}
+                color={worklistSummary.uploadNeeded > 0 ? 'error' : 'default'}
+                variant={worklistSummary.uploadNeeded > 0 ? 'filled' : 'outlined'}
+                data-testid="po-worklist-upload-needed"
+              />
+              <Chip
+                clickable={worklistSummary.gapCount > 0}
+                onClick={() => scrollToSection(PO_GAP_SECTION_ID)}
+                label={`${worklistSummary.gapCount} shipment gap${worklistSummary.gapCount === 1 ? '' : 's'}`}
+                color={worklistSummary.gapCount > 0 ? 'warning' : 'default'}
+                variant={worklistSummary.gapCount > 0 ? 'filled' : 'outlined'}
+                data-testid="po-worklist-gaps"
+              />
+              <Typography variant="caption" color="text.secondary">
+                Reconciliation outcomes live on Plan vs Executed — this page is the operational worklist only.
+              </Typography>
+            </Stack>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <PoAutoLinkProposalsSection autoFetch onPendingCountChange={setPendingLinkProposals} />
 
-      <Box>
+      <Box id={PO_BACKLOG_SECTION_ID}>
         <Typography variant="h6" gutterBottom>
           Observed purchase orders by period & product line
         </Typography>
@@ -393,19 +453,24 @@ export function PoManagementView() {
                   <Divider sx={{ my: 1.5 }} />
 
                   {g.status === 'linked' ? (
-                    <Stack spacing={0.5}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap>
                       <Typography variant="body2" color="text.secondary" data-testid={`po-linked-status-${g.year}-${g.quarter}-${g.product_line}`}>
-                        Linked {g.linked_po_count}/{g.po_count} POs —{' '}
-                        <Link
-                          href={buildPlanVsExecutedHref({
-                            periodFrom: g.quarter_label,
-                            periodTo: g.quarter_label,
-                            productLine: g.product_line,
-                          })}
-                        >
-                          view outcomes in Plan vs Executed
-                        </Link>
+                        Linked {g.linked_po_count}/{g.po_count} POs — operational linking complete for this group.
                       </Typography>
+                      <Button
+                        component={Link}
+                        href={buildPlanVsExecutedHref({
+                          periodFrom: g.quarter_label,
+                          periodTo: g.quarter_label,
+                          productLine: g.product_line,
+                        })}
+                        variant="contained"
+                        size="small"
+                        color="primary"
+                        data-testid={`po-pve-link-${g.year}-${g.quarter}-${g.product_line}`}
+                      >
+                        Plan vs Executed outcomes
+                      </Button>
                       {highlightCustomerId != null && highlightGroupId === poGroupDomId(g) ? (
                         <Typography variant="caption" color="warning.main">
                           Highlighted customer #{highlightCustomerId} — link or upload work above; reconciliation
@@ -451,7 +516,7 @@ export function PoManagementView() {
         )}
       </Box>
 
-      <Box>
+      <Box id={PO_GAP_SECTION_ID}>
         <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
           <Typography variant="h6">POs with shipments but no covering lineup</Typography>
           <Button size="small" onClick={() => setShowDismissed((v) => !v)} data-testid="toggle-dismissed">
