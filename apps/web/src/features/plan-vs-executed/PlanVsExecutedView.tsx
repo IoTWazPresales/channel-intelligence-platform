@@ -42,10 +42,11 @@ import { ReconSummaryChips, type ReconSummary } from '@/features/commercial-plan
 import {
   ExceptionCategoryGrid,
   EXCEPTION_CATEGORY_LABELS,
+  formatEntityLine,
   type ExceptionCategory,
   type ExceptionRow,
 } from '@/features/plan-vs-executed/ExceptionCategoryGrid';
-import { DRILL_GRID_PAGE_SIZE, paginatedGridHeight } from '@/features/plan-vs-executed/gridPagination';
+import { DRILL_GRID_PAGE_SIZE, gridRowMetrics, paginatedGridHeight } from '@/features/plan-vs-executed/gridPagination';
 import { resolveProductDisplay } from '@/features/plan-vs-executed/productDisplay';
 import { apiGet } from '@/lib/api';
 
@@ -329,6 +330,13 @@ export function PlanVsExecutedView() {
         flex: 1,
         minWidth: 180,
         sortable: true,
+        valueGetter: (p) => {
+          const row = p.data as PlanVsExecutedResponse['drill_rows'][number] | undefined;
+          if (!row) return '';
+          const primary =
+            row.entity_primary ?? resolveProductDisplay(row, productGroupBy).primary;
+          return formatEntityLine(primary, Boolean(row.label_fallback));
+        },
         comparator: (_a, _b, nodeA, nodeB) => {
           const rowA = nodeA.data as PlanVsExecutedResponse['drill_rows'][number] | undefined;
           const rowB = nodeB.data as PlanVsExecutedResponse['drill_rows'][number] | undefined;
@@ -341,34 +349,6 @@ export function PlanVsExecutedView() {
             resolveProductDisplay(rowB ?? {}, productGroupBy).primary
           ).toLowerCase();
           return la.localeCompare(lb);
-        },
-        cellRenderer: (p: { data?: PlanVsExecutedResponse['drill_rows'][number] }) => {
-          const row = p.data;
-          if (!row) return null;
-          const display = row.entity_primary
-            ? {
-                primary: row.entity_primary,
-                secondary: row.entity_secondary ?? null,
-                labelFallback: Boolean(row.label_fallback),
-              }
-            : resolveProductDisplay(row, productGroupBy);
-          return (
-            <Stack spacing={0.25} sx={{ py: 0.5 }}>
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                {display.primary}
-                {display.labelFallback ? (
-                  <Typography component="span" variant="caption" color="text.disabled" sx={{ ml: 0.75 }}>
-                    (no description)
-                  </Typography>
-                ) : null}
-              </Typography>
-              {display.secondary ? (
-                <Typography variant="caption" color="text.secondary">
-                  {display.secondary}
-                </Typography>
-              ) : null}
-            </Stack>
-          );
         },
       },
       {
@@ -397,18 +377,23 @@ export function PlanVsExecutedView() {
   );
 
   const drillGridOptions = useMemo<GridOptions>(
-    () => ({ pagination: true, paginationPageSize: DRILL_GRID_PAGE_SIZE, suppressPaginationPanel: false }),
-    [],
-  );
-
-  const drillGridHeight = useMemo(
-    () =>
-      paginatedGridHeight(DRILL_GRID_PAGE_SIZE, {
-        rowHeight: theme.density === 'compact' ? 34 : 42,
-        headerHeight: theme.density === 'compact' ? 36 : 42,
-      }),
+    () => {
+      const { rowHeight, headerHeight } = gridRowMetrics(theme.density === 'compact' ? 'compact' : 'comfortable');
+      return {
+        pagination: true,
+        paginationPageSize: DRILL_GRID_PAGE_SIZE,
+        suppressPaginationPanel: false,
+        rowHeight,
+        headerHeight,
+      };
+    },
     [theme.density],
   );
+
+  const drillGridHeight = useMemo(() => {
+    const { rowHeight, headerHeight } = gridRowMetrics(theme.density === 'compact' ? 'compact' : 'comfortable');
+    return paginatedGridHeight(DRILL_GRID_PAGE_SIZE, { rowHeight, headerHeight });
+  }, [theme.density]);
 
   const sc = data?.scorecard;
   const fxNote = sc?.value.fx_partial ? ' (FX partial — some lines lack plan-currency bridge)' : '';
@@ -680,6 +665,7 @@ export function PlanVsExecutedView() {
                     {lensExceptions ? (
                       <ExceptionCategoryGrid
                         rows={activeExceptionRows}
+                        lens={lens}
                         rankBy={rankBy}
                         category={exceptionCategory}
                         periodForLink={periodForPoLink}

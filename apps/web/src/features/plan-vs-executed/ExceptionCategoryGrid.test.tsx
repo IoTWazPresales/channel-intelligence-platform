@@ -1,11 +1,27 @@
 import { describe, expect, it } from 'vitest';
 
-import { paginatedGridHeight, PAGINATED_GRID_PAGE_SIZE } from './gridPagination';
+import { formatEntityLine } from './ExceptionCategoryGrid';
+import {
+  paginatedGridHeight,
+  PAGINATED_GRID_PAGE_SIZE,
+  STANDARD_HEADER_HEIGHT,
+  STANDARD_ROW_HEIGHT,
+} from './gridPagination';
 
 describe('gridPagination', () => {
-  it('computes fixed height for a full page of rows plus header and pagination bar', () => {
-    const height = paginatedGridHeight(PAGINATED_GRID_PAGE_SIZE, { rowHeight: 42, headerHeight: 42 });
-    expect(height).toBe(42 + 42 * PAGINATED_GRID_PAGE_SIZE + 52);
+  it('computes fixed height for a full page of single-line rows plus header and pagination bar', () => {
+    const height = paginatedGridHeight(PAGINATED_GRID_PAGE_SIZE, {
+      rowHeight: STANDARD_ROW_HEIGHT,
+      headerHeight: STANDARD_HEADER_HEIGHT,
+    });
+    expect(height).toBe(STANDARD_HEADER_HEIGHT + STANDARD_ROW_HEIGHT * PAGINATED_GRID_PAGE_SIZE + 48);
+  });
+});
+
+describe('formatEntityLine', () => {
+  it('returns a single-line customer label without BU sub-field', () => {
+    expect(formatEntityLine('Open Channel')).toBe('Open Channel');
+    expect(formatEntityLine('Open Channel', true)).toBe('Open Channel (no description)');
   });
 });
 

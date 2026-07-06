@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-06 (PvE grid pagination + value honesty + PO worklist summary)
+**Last updated:** 2026-07-06 (PvE single-line entity columns + data-bearing default period)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `15ee448` — PvE grid pagination, value honesty, PO worklist summary |
+| **HEAD** | (pending) — PvE single-line grids + linked-quarter default |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -60,6 +60,7 @@
 | Round-2 hardening (2026-07-06) | Exception AG grids, product lens SKU/sales-model/description toggle, cross-drill, PO Mgmt deep-link params, loading-state fix, golden tie-out tests all clean periods |
 | UX repair + PO slim (2026-07-06) | One full-width exception category grid (tabs inside lens); human-readable product labels (description→sales_model→SKU) in exceptions + drill + chip; product selector drives drill column; PO Management linked cards → compact status + PvE deep-link only (recon chips removed; APIs unchanged) |
 | Grid + value honesty (2026-07-06) | Fixed-height paginated exception/drill grids; exception value columns return `null` when FX/plan bridge absent (no units-as-value); value-rank disables when category has no value coverage; PO Management "What needs action" worklist summary + visible PvE outcomes button on linked groups |
+| Single-line entity + default period (2026-07-06) | One value per exception column (customer name only — no BU stack); product/BU single Entity column; `resolve_default_period` = latest quarter with linked PO reconciliation (not empty 26Q3) |
 
 ---
 

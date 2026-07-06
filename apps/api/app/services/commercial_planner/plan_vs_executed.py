@@ -166,6 +166,10 @@ def _parse_period_bounds(
 async def enumerate_available_periods(db: AsyncSession) -> list[dict[str, Any]]:
     """Full period history — same observed-PO quarter span as PO Management coverage groups."""
     cov = await coverage(db)
+    return periods_from_coverage(cov)
+
+
+def periods_from_coverage(cov: dict[str, Any]) -> list[dict[str, Any]]:
     if cov.get("data_unavailable"):
         return []
     seen: dict[tuple[int, int], str] = {}
@@ -178,6 +182,25 @@ async def enumerate_available_periods(db: AsyncSession) -> list[dict[str, Any]]:
         {"year": y, "quarter": q, "label": lbl}
         for (y, q), lbl in sorted(seen.items(), key=lambda kv: _period_ordinal(kv[0][0], kv[0][1]), reverse=True)
     ]
+
+
+def resolve_default_period(
+    all_periods: list[dict[str, Any]],
+    *,
+    coverage_groups: list[dict[str, Any]] | None = None,
+) -> str | None:
+    """Latest observed quarter with linked PO reconciliation (skips near-empty unlinked latest)."""
+    if not all_periods:
+        return None
+    linked_quarters: set[tuple[int, int]] = set()
+    for g in coverage_groups or []:
+        if g.get("status") == "linked" and int(g.get("linked_po_count") or 0) > 0:
+            linked_quarters.add((int(g["year"]), int(g["quarter"])))
+    for p in all_periods:
+        key = (int(p["year"]), int(p["quarter"]))
+        if key in linked_quarters:
+            return str(p["label"])
+    return str(all_periods[0]["label"])
 
 
 def _period_slots_in_range(
@@ -653,7 +676,7 @@ def _aggregate_exceptions(
             "business_unit_label": r.get("business_unit_label"),
             "_display": {
                 "entity_primary": r.get("customer_label") or "Unattributed",
-                "entity_secondary": r.get("business_unit_label"),
+                "entity_secondary": None,
                 "label_fallback": False,
             },
         }
@@ -755,8 +778,9 @@ async def plan_vs_executed_read_model(
     drill_bu: str | None = None,
 ) -> dict[str, Any]:
     try:
-        all_periods = await enumerate_available_periods(db)
-        default_period = all_periods[0]["label"] if all_periods else None
+        cov = await coverage(db)
+        all_periods = periods_from_coverage(cov)
+        default_period = resolve_default_period(all_periods, coverage_groups=cov.get("groups"))
         effective_from = period_from or default_period
         effective_to = period_to or default_period
         bu_filter = product_line or drill_bu

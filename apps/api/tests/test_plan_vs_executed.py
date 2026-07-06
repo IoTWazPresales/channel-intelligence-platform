@@ -1,10 +1,28 @@
 """Unit tests for Plan vs Executed read model (derived-on-read)."""
 import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.services.commercial_planner import plan_vs_executed as mod
+
+
+def _cov_for_periods(period_labels: list[str]) -> dict[str, Any]:
+    groups = []
+    for p in period_labels:
+        y = 2000 + int(p[:2])
+        q = int(p[-1])
+        groups.append(
+            {
+                "year": y,
+                "quarter": q,
+                "quarter_label": p,
+                "status": "linked",
+                "linked_po_count": 1,
+            }
+        )
+    return {"data_unavailable": False, "groups": groups}
 
 
 def _row(
@@ -154,6 +172,20 @@ def test_enumerate_available_periods_full_span():
     assert len(labels) == 3
 
 
+def test_resolve_default_period_prefers_latest_linked_quarter():
+    all_periods = [
+        {"year": 2026, "quarter": 3, "label": "26Q3"},
+        {"year": 2026, "quarter": 2, "label": "26Q2"},
+        {"year": 2024, "quarter": 2, "label": "24Q2"},
+    ]
+    groups = [
+        {"year": 2026, "quarter": 3, "status": "unlinked", "linked_po_count": 0},
+        {"year": 2026, "quarter": 2, "status": "linked", "linked_po_count": 12},
+        {"year": 2024, "quarter": 2, "status": "linked", "linked_po_count": 3},
+    ]
+    assert mod.resolve_default_period(all_periods, coverage_groups=groups) == "26Q2"
+
+
 def test_available_periods_independent_of_period_filter():
     all_periods = [
         {"year": 2026, "quarter": 3, "label": "26Q3"},
@@ -173,7 +205,8 @@ def test_available_periods_independent_of_period_filter():
     ]
 
     async def _run():
-        with patch.object(mod, "enumerate_available_periods", AsyncMock(return_value=all_periods)):
+        cov = _cov_for_periods(["26Q3", "26Q2", "24Q2"])
+        with patch.object(mod, "coverage", AsyncMock(return_value=cov)):
             with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=fake_rows)):
                 with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
                     return await mod.plan_vs_executed_read_model(
@@ -211,11 +244,7 @@ def test_plan_vs_executed_read_model_wires_scorecard():
     ]
 
     async def _run():
-        with patch.object(
-            mod,
-            "enumerate_available_periods",
-            AsyncMock(return_value=[{"year": 2026, "quarter": 2, "label": "26Q2"}]),
-        ):
+        with patch.object(mod, "coverage", AsyncMock(return_value=_cov_for_periods(["26Q2"]))):
             with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=fake_rows)):
                 with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
                     out = await mod.plan_vs_executed_read_model(AsyncMock(), period_from="26Q2", period_to="26Q2")
@@ -260,7 +289,7 @@ def test_golden_scorecard_tie_out_all_clean_periods():
         ]
         manual = mod.scorecard_tie_out_fields(mod.compute_scorecard_from_execution_rows(rows))
         all_periods = [{"year": 2000 + int(period[:2]), "quarter": int(period[-1]), "label": period}]
-        with patch.object(mod, "enumerate_available_periods", AsyncMock(return_value=all_periods)):
+        with patch.object(mod, "coverage", AsyncMock(return_value=_cov_for_periods([period]))):
             with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=rows)):
                 with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
                     out = await mod.plan_vs_executed_read_model(
@@ -279,8 +308,7 @@ def test_backlog_066_flag_instead_of_golden_assertion(period: str):
     rows = [_period_row(period, planned=40, shipped=10, flag="short")]
 
     async def _run():
-        all_periods = [{"year": 2000 + int(period[:2]), "quarter": int(period[-1]), "label": period}]
-        with patch.object(mod, "enumerate_available_periods", AsyncMock(return_value=all_periods)):
+        with patch.object(mod, "coverage", AsyncMock(return_value=_cov_for_periods([period]))):
             with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=rows)):
                 with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
                     return await mod.plan_vs_executed_read_model(
@@ -342,8 +370,7 @@ def test_drill_filter_does_not_change_scorecard():
     portfolio_sc = mod.compute_scorecard_from_execution_rows(rows)
 
     async def _run():
-        all_periods = [{"year": 2026, "quarter": 2, "label": "26Q2"}]
-        with patch.object(mod, "enumerate_available_periods", AsyncMock(return_value=all_periods)):
+        with patch.object(mod, "coverage", AsyncMock(return_value=_cov_for_periods(["26Q2"]))):
             with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=rows)):
                 with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
                     return await mod.plan_vs_executed_read_model(

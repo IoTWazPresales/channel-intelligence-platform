@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Link as MuiLink, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Link as MuiLink, Tooltip, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import type { ColDef, GridOptions, ICellRendererParams, RowClickedEvent } from 'ag-grid-community';
 import Link from 'next/link';
@@ -9,9 +9,12 @@ import { useMemo } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 
 import {
+  ENTITY_LENS_HEADERS,
+  gridRowMetrics,
   PAGINATED_GRID_PAGE_SIZE,
   paginatedGridHeight,
   VALUE_UNAVAILABLE_TOOLTIP,
+  type ExceptionLens,
 } from './gridPagination';
 
 export type ExceptionRow = {
@@ -51,26 +54,23 @@ function fmtValue(n: number): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
 }
 
-function EntityCell({ data }: { data?: ExceptionRow }) {
-  if (!data) return null;
-  const primary = data.entity_primary ?? data.label;
-  const secondary = data.entity_secondary;
+/** Single-line entity label — one field per column, no stacked sub-labels. */
+export function formatEntityLine(primary: string, labelFallback?: boolean): string {
+  if (!labelFallback) return primary;
+  return `${primary} (no description)`;
+}
+
+function EntityCell({ primary, labelFallback }: { primary: string; labelFallback?: boolean }) {
+  const line = formatEntityLine(primary, labelFallback);
   return (
-    <Stack spacing={0.25} sx={{ py: 0.5, lineHeight: 1.3 }}>
-      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-        {primary}
-        {data.label_fallback ? (
-          <Typography component="span" variant="caption" color="text.disabled" sx={{ ml: 0.75 }}>
-            (no description)
-          </Typography>
-        ) : null}
-      </Typography>
-      {secondary ? (
-        <Typography variant="caption" color="text.secondary">
-          {secondary}
+    <Typography variant="body2" noWrap title={line} sx={{ lineHeight: 1.2 }}>
+      {primary}
+      {labelFallback ? (
+        <Typography component="span" variant="body2" color="text.disabled" sx={{ ml: 0.5 }}>
+          (no description)
         </Typography>
       ) : null}
-    </Stack>
+    </Typography>
   );
 }
 
@@ -110,6 +110,7 @@ export function buildPoManagementHref(opts: {
 
 export function ExceptionCategoryGrid({
   rows,
+  lens,
   rankBy,
   category,
   periodForLink,
@@ -118,6 +119,7 @@ export function ExceptionCategoryGrid({
   onRowClick,
 }: {
   rows: ExceptionRow[];
+  lens: ExceptionLens;
   rankBy: 'units' | 'value';
   category: ExceptionCategory;
   periodForLink: string;
@@ -126,27 +128,35 @@ export function ExceptionCategoryGrid({
   onRowClick?: (row: ExceptionRow) => void;
 }) {
   const theme = useTheme();
-  const rowHeight = theme.density === 'compact' ? 34 : 42;
-  const headerHeight = theme.density === 'compact' ? 36 : 42;
+  const density = theme.density === 'compact' ? 'compact' : 'comfortable';
+  const { rowHeight, headerHeight } = gridRowMetrics(density);
   const gridHeight = paginatedGridHeight(PAGINATED_GRID_PAGE_SIZE, { rowHeight, headerHeight });
 
   const showPoLink = category === 'short_ships' || category === 'no_po_blind_spots';
   const showLines = category === 'no_po_blind_spots';
+  const entityHeader = ENTITY_LENS_HEADERS[lens];
 
   const columnDefs = useMemo<ColDef<ExceptionRow>[]>(
     () => [
       {
         colId: 'entity',
-        headerName: 'Entity',
+        headerName: entityHeader,
         flex: 1,
-        minWidth: 220,
+        minWidth: 200,
         sortable: true,
         comparator: (_a, _b, nodeA, nodeB) => {
           const la = (nodeA.data?.entity_primary ?? nodeA.data?.label ?? '').toLowerCase();
           const lb = (nodeB.data?.entity_primary ?? nodeB.data?.label ?? '').toLowerCase();
           return la.localeCompare(lb);
         },
-        cellRenderer: (p: ICellRendererParams<ExceptionRow>) => <EntityCell data={p.data} />,
+        valueGetter: (p) =>
+          formatEntityLine(p.data?.entity_primary ?? p.data?.label ?? '', p.data?.label_fallback),
+        cellRenderer: (p: ICellRendererParams<ExceptionRow>) => (
+          <EntityCell
+            primary={p.data?.entity_primary ?? p.data?.label ?? ''}
+            labelFallback={p.data?.label_fallback}
+          />
+        ),
       },
       {
         field: 'units',
@@ -222,7 +232,7 @@ export function ExceptionCategoryGrid({
         },
       },
     ],
-    [showPoLink, showLines, periodForLink, defaultBusinessUnit, fxPartial],
+    [entityHeader, showPoLink, showLines, periodForLink, defaultBusinessUnit, fxPartial],
   );
 
   const gridOptions = useMemo<GridOptions<ExceptionRow>>(
@@ -230,13 +240,15 @@ export function ExceptionCategoryGrid({
       pagination: true,
       paginationPageSize: PAGINATED_GRID_PAGE_SIZE,
       suppressPaginationPanel: false,
+      rowHeight,
+      headerHeight,
       defaultColDef: { resizable: true },
       onRowClicked: (e: RowClickedEvent<ExceptionRow>) => {
         if (e.data && onRowClick) onRowClick(e.data);
       },
       rowStyle: onRowClick ? { cursor: 'pointer' } : undefined,
     }),
-    [onRowClick],
+    [onRowClick, rowHeight, headerHeight],
   );
 
   if (!rows.length) {
