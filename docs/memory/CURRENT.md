@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | (pending) — plan-vs-executed UX repair + PO Management worklist slim |
+| **HEAD** | `f3f319e` — plan-vs-executed UX repair + PO Management worklist slim |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
