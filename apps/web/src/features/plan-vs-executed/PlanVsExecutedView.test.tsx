@@ -9,7 +9,13 @@ vi.mock('@tanstack/react-query', () => ({
     isError: false,
     data: {
       data_unavailable: false,
-      available_periods: [{ year: 2026, quarter: 2, label: '26Q2' }],
+      period_range: { from: '26Q2', to: '26Q2' },
+      default_period: '26Q2',
+      available_periods: [
+        { year: 2026, quarter: 3, label: '26Q3' },
+        { year: 2026, quarter: 2, label: '26Q2' },
+        { year: 2024, quarter: 2, label: '24Q2' },
+      ],
       scorecard: {
         fill_rate: 0.46,
         line_hit_rate: 0.35,

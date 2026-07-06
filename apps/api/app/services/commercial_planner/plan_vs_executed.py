@@ -23,6 +23,7 @@ from app.services.commercial_planner.lineup_period_canonical import (
 from app.services.commercial_planner.lineup_po_reconciliation import UNITS_FLAGS, reconcile_case
 from app.services.commercial_planner.po_management import (
     canonical_product_line_code,
+    coverage,
     product_row_matches_group_line,
 )
 
@@ -70,6 +71,38 @@ def _parse_period_bounds(
     fy, fq = parse_period_filter_to_year_quarter(period_from)
     ty, tq = parse_period_filter_to_year_quarter(period_to)
     return fy, fq, ty, tq
+
+
+async def enumerate_available_periods(db: AsyncSession) -> list[dict[str, Any]]:
+    """Full period history — same observed-PO quarter span as PO Management coverage groups."""
+    cov = await coverage(db)
+    if cov.get("data_unavailable"):
+        return []
+    seen: dict[tuple[int, int], str] = {}
+    for g in cov.get("groups") or []:
+        y, q = int(g.get("year") or 0), int(g.get("quarter") or 0)
+        if y == 0:
+            continue
+        seen.setdefault((y, q), str(g["quarter_label"]))
+    return [
+        {"year": y, "quarter": q, "label": lbl}
+        for (y, q), lbl in sorted(seen.items(), key=lambda kv: _period_ordinal(kv[0][0], kv[0][1]), reverse=True)
+    ]
+
+
+def _period_slots_in_range(
+    all_periods: list[dict[str, Any]],
+    *,
+    period_from: str | None,
+    period_to: str | None,
+) -> list[tuple[int, int, str]]:
+    fy, fq, ty, tq = _parse_period_bounds(period_from, period_to)
+    slots: list[tuple[int, int, str]] = []
+    for p in all_periods:
+        y, q, lbl = int(p["year"]), int(p["quarter"]), str(p["label"])
+        if _period_in_range(y, q, from_year=fy, from_quarter=fq, to_year=ty, to_quarter=tq):
+            slots.append((y, q, lbl))
+    return sorted(slots, key=lambda x: _period_ordinal(x[0], x[1]))
 
 
 def _row_value_for_rank(row: dict[str, Any], *, rank_by: RankBy, field: str) -> float:
@@ -389,14 +422,12 @@ def _affected_backlog_066_labels(rows: list[dict[str, Any]]) -> list[str]:
 async def _compute_trend(
     db: AsyncSession,
     *,
-    period_from: str | None,
-    period_to: str | None,
     product_line: str | None,
-    periods_seen: list[tuple[int, int, str]],
+    period_slots: list[tuple[int, int, str]],
 ) -> list[dict[str, Any]]:
-    """Bounded per-quarter scorecard series — one reconcile pass per distinct quarter."""
+    """Per-quarter scorecard series across the selected period range."""
     trend: list[dict[str, Any]] = []
-    for year, quarter, label in sorted(periods_seen, key=lambda x: _period_ordinal(x[0], x[1])):
+    for year, quarter, label in period_slots:
         q_rows = await collect_execution_rows(
             db,
             period_from=label,
@@ -434,10 +465,15 @@ async def plan_vs_executed_read_model(
     drill_bu: str | None = None,
 ) -> dict[str, Any]:
     try:
+        all_periods = await enumerate_available_periods(db)
+        default_period = all_periods[0]["label"] if all_periods else None
+        effective_from = period_from or default_period
+        effective_to = period_to or default_period
+
         rows = await collect_execution_rows(
             db,
-            period_from=period_from,
-            period_to=period_to,
+            period_from=effective_from,
+            period_to=effective_to,
             product_line=product_line or drill_bu,
         )
     except Exception:
@@ -454,19 +490,15 @@ async def plan_vs_executed_read_model(
     scorecard = compute_scorecard_from_execution_rows(rows)
     exceptions = _aggregate_exceptions(rows, rank_by=rank_by)
 
-    periods_seen = sorted({(int(r["year"]), int(r["quarter"]), str(r["quarter_label"])) for r in rows})
+    period_slots = _period_slots_in_range(
+        all_periods,
+        period_from=effective_from,
+        period_to=effective_to,
+    )
     trend = await _compute_trend(
         db,
-        period_from=period_from,
-        period_to=period_to,
         product_line=product_line or drill_bu,
-        periods_seen=periods_seen,
-    )
-
-    available_periods = sorted(
-        {(int(r["year"]), int(r["quarter"]), str(r["quarter_label"])) for r in rows},
-        key=lambda x: _period_ordinal(x[0], x[1]),
-        reverse=True,
+        period_slots=period_slots,
     )
 
     drill_rows = [
@@ -491,12 +523,13 @@ async def plan_vs_executed_read_model(
 
     return {
         "period_range": {
-            "from": period_from,
-            "to": period_to,
+            "from": effective_from,
+            "to": effective_to,
         },
+        "default_period": default_period,
         "product_line_filter": product_line or drill_bu,
         "rank_by": rank_by,
-        "available_periods": [{"year": y, "quarter": q, "label": lbl} for y, q, lbl in available_periods],
+        "available_periods": all_periods,
         "scorecard": scorecard,
         "exceptions": exceptions,
         "trend": trend,

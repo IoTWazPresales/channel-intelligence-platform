@@ -116,6 +116,66 @@ def test_backlog_066_period_detection():
     assert mod._affected_backlog_066_labels(clean) == []
 
 
+def test_enumerate_available_periods_full_span():
+    cov_groups = [
+        {"year": 2024, "quarter": 2, "quarter_label": "24Q2"},
+        {"year": 2026, "quarter": 3, "quarter_label": "26Q3"},
+        {"year": 2025, "quarter": 1, "quarter_label": "25Q1"},
+    ]
+
+    async def _run():
+        with patch.object(mod, "coverage", AsyncMock(return_value={"groups": cov_groups, "data_unavailable": False})):
+            return await mod.enumerate_available_periods(AsyncMock())
+
+    out = asyncio.run(_run())
+    labels = [p["label"] for p in out]
+    assert labels == ["26Q3", "25Q1", "24Q2"]
+    assert len(labels) == 3
+
+
+def test_available_periods_independent_of_period_filter():
+    all_periods = [
+        {"year": 2026, "quarter": 3, "label": "26Q3"},
+        {"year": 2026, "quarter": 2, "label": "26Q2"},
+        {"year": 2024, "quarter": 2, "label": "24Q2"},
+    ]
+    fake_rows = [
+        {
+            **_row(planned=10, shipped=10),
+            "case_id": 1,
+            "year": 2026,
+            "quarter": 3,
+            "quarter_label": "26Q3",
+            "customer_label": "A",
+            "business_unit_label": "NB",
+        }
+    ]
+
+    async def _run():
+        with patch.object(mod, "enumerate_available_periods", AsyncMock(return_value=all_periods)):
+            with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=fake_rows)):
+                with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
+                    return await mod.plan_vs_executed_read_model(
+                        AsyncMock(), period_from="26Q3", period_to="26Q3"
+                    )
+
+    out = asyncio.run(_run())
+    assert len(out["available_periods"]) == 3
+    assert out["available_periods"][0]["label"] == "26Q3"
+    assert out["default_period"] == "26Q3"
+    assert out["period_range"] == {"from": "26Q3", "to": "26Q3"}
+
+
+def test_period_slots_in_range():
+    all_periods = [
+        {"year": 2026, "quarter": 3, "label": "26Q3"},
+        {"year": 2026, "quarter": 2, "label": "26Q2"},
+        {"year": 2024, "quarter": 2, "label": "24Q2"},
+    ]
+    slots = mod._period_slots_in_range(all_periods, period_from="24Q2", period_to="26Q2")
+    assert [s[2] for s in slots] == ["24Q2", "26Q2"]
+
+
 def test_plan_vs_executed_read_model_wires_scorecard():
     fake_rows = [
         {
@@ -130,9 +190,14 @@ def test_plan_vs_executed_read_model_wires_scorecard():
     ]
 
     async def _run():
-        with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=fake_rows)):
-            with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
-                out = await mod.plan_vs_executed_read_model(AsyncMock(), period_from="26Q2", period_to="26Q2")
+        with patch.object(
+            mod,
+            "enumerate_available_periods",
+            AsyncMock(return_value=[{"year": 2026, "quarter": 2, "label": "26Q2"}]),
+        ):
+            with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=fake_rows)):
+                with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
+                    out = await mod.plan_vs_executed_read_model(AsyncMock(), period_from="26Q2", period_to="26Q2")
         return out
 
     out = asyncio.run(_run())

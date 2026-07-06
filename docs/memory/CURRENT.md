@@ -56,6 +56,7 @@
 | Deep-links | Commercial Planner guide + PO Management alert |
 | 26Q2 KPI tie-out (cip read-only) | **PASS** — fill 45.96%, line-hit 35.36%; over-ship does not reduce fill rate |
 | BACKLOG-066 UI flag | Warning when range includes 25Q1 / 24Q4 |
+| Period enumeration fix (2026-07-06) | `available_periods` from `coverage()` groups — independent of active filter; default latest |
 
 ---
 
@@ -146,7 +147,7 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 | Surface | Grain / trigger (code truth — re-verify) |
 |---------|------------------------------------------|
 | `po_management.backlog` | Groups: `(year, quarter, product_line)` from `fact_inbound_shipment`; linked groups **project** `reconcile_case` product rows matching group `product_line` → `reconciliation_summary` + `reconciliation_customers` |
-| `plan_vs_executed` | Linked cases in period range → union `reconcile_case` product rows (optional `product_line` filter) → scorecard + 3-lens exceptions + trend |
+| `plan_vs_executed` | Period options from `po_management.coverage` observed groups (full history); scorecard/trend filtered by From..To range; default latest quarter |
 | `reconcile_case` | `(case × customer × product)`; product rows carry `product_line` + `business_unit` |
 | Current Lineup recon UI | `CaseReconciliationInline` = case-level (out of scope for BU projection) |
 | Assign distributor button | `RESOLUTION_UI_STATUSES` && `!superseded` — no unassigned-line gate in UI |

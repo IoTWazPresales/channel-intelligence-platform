@@ -81,6 +81,7 @@ type LensExceptions = {
 
 type PlanVsExecutedResponse = {
   period_range: { from: string | null; to: string | null };
+  default_period: string | null;
   product_line_filter: string | null;
   rank_by: 'units' | 'value';
   available_periods: { year: number; quarter: number; label: string }[];
@@ -205,10 +206,12 @@ function ExceptionList({
   );
 }
 
+const ALL_BU = '__all__';
+
 export function PlanVsExecutedView() {
-  const [periodFrom, setPeriodFrom] = useState<string>('');
-  const [periodTo, setPeriodTo] = useState<string>('');
-  const [productLine, setProductLine] = useState<string>('');
+  const [periodFrom, setPeriodFrom] = useState<string | null>(null);
+  const [periodTo, setPeriodTo] = useState<string | null>(null);
+  const [productLine, setProductLine] = useState<string>(ALL_BU);
   const [lens, setLens] = useState<Lens>('customer');
   const [rankBy, setRankBy] = useState<'units' | 'value'>('units');
 
@@ -219,7 +222,7 @@ export function PlanVsExecutedView() {
       const params = new URLSearchParams();
       if (periodFrom) params.set('period_from', periodFrom);
       if (periodTo) params.set('period_to', periodTo);
-      if (productLine) params.set('product_line', productLine);
+      if (productLine && productLine !== ALL_BU) params.set('product_line', productLine);
       params.set('rank_by', rankBy);
       const qs = params.toString();
       return apiGet<PlanVsExecutedResponse>(`/api/v1/plan-vs-executed${qs ? `?${qs}` : ''}`, { signal });
@@ -227,25 +230,21 @@ export function PlanVsExecutedView() {
   });
 
   const data = q.data;
-  const periods = data?.available_periods ?? [];
 
   useEffect(() => {
-    if (periods.length && !periodFrom && !periodTo) {
-      const latest = periods[0]?.label;
-      if (latest) {
-        setPeriodFrom(latest);
-        setPeriodTo(latest);
-      }
+    if (data?.default_period && periodFrom === null && periodTo === null) {
+      setPeriodFrom(data.default_period);
+      setPeriodTo(data.default_period);
     }
-  }, [periods, periodFrom, periodTo]);
+  }, [data?.default_period, periodFrom, periodTo]);
 
-  const periodOptions = useMemo(() => {
-    const labels = periods.map((p) => p.label);
-    return labels.length ? labels : ['26Q2'];
-  }, [periods]);
+  const periodOptions = useMemo(
+    () => (data?.available_periods ?? []).map((p) => p.label),
+    [data?.available_periods],
+  );
 
-  const effectiveFrom = periodFrom || periodOptions[periodOptions.length - 1] || '';
-  const effectiveTo = periodTo || periodOptions[0] || '';
+  const selectedFrom = periodFrom ?? data?.period_range.from ?? data?.default_period ?? '';
+  const selectedTo = periodTo ?? data?.period_range.to ?? data?.default_period ?? '';
 
   const buOptions = useMemo(() => {
     const set = new Set<string>();
@@ -312,7 +311,7 @@ export function PlanVsExecutedView() {
           <InputLabel>From</InputLabel>
           <Select
             label="From"
-            value={effectiveFrom}
+            value={selectedFrom}
             onChange={(e) => setPeriodFrom(e.target.value)}
             data-testid="period-from"
           >
@@ -325,7 +324,7 @@ export function PlanVsExecutedView() {
         </FormControl>
         <FormControl size="small" sx={{ minWidth: 120 }}>
           <InputLabel>To</InputLabel>
-          <Select label="To" value={effectiveTo} onChange={(e) => setPeriodTo(e.target.value)} data-testid="period-to">
+          <Select label="To" value={selectedTo} onChange={(e) => setPeriodTo(e.target.value)} data-testid="period-to">
             {periodOptions.map((p) => (
               <MenuItem key={p} value={p}>
                 {p}
@@ -334,14 +333,15 @@ export function PlanVsExecutedView() {
           </Select>
         </FormControl>
         <FormControl size="small" sx={{ minWidth: 140 }}>
-          <InputLabel>BU filter</InputLabel>
+          <InputLabel id="pve-bu-filter-label">BU filter</InputLabel>
           <Select
+            labelId="pve-bu-filter-label"
             label="BU filter"
             value={productLine}
             onChange={(e) => setProductLine(e.target.value)}
-            displayEmpty
+            renderValue={(v) => (v === ALL_BU ? 'All BUs' : String(v))}
           >
-            <MenuItem value="">All BUs</MenuItem>
+            <MenuItem value={ALL_BU}>All BUs</MenuItem>
             {buOptions.map((bu) => (
               <MenuItem key={bu} value={bu}>
                 {bu}
