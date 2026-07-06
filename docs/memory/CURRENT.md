@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | *(pending commit)* — Plan vs Executed full-stack derived-on-read |
+| **HEAD** | `a35a8ae` — plan-vs-executed: full-stack derived-on-read intelligence view |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
