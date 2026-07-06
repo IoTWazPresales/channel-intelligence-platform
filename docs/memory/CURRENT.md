@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-05 (handover → PO recon + distributor-assign discovery)
+**Last updated:** 2026-07-06 (rollup-attribution fix docs)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `8f70685` — docs sync for `88f8db4` (lineup PO lifecycle + Open Channel plan parity) |
+| **HEAD** | `1586f1e` — po-mgmt: project backlog reconciliation by product_line |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -27,6 +27,20 @@
 | **Invoice-line graduation** | **174** lineages quantity-graduated on cip; **432** blank observation versions superseded; audit `invoice_line_graduation_gap` = **0** |
 | **Legacy supersede** | 35,134 + graduated blank corpus lines `corpus_superseded_at` |
 | **Celery dispatch** | `broker` (apps/api/.env) |
+
+---
+
+## PO Management rollup attribution — CLOSED (2026-07-06, `1586f1e`)
+
+| Item | Status |
+|------|--------|
+| `backlog()` BU-true projection | **Done** — product rows filtered by group `product_line` (product-first, `business_unit` fallback) |
+| Customer chip re-summarization | From projected rows only |
+| `po_no_match` | Deduped per linked PO in group |
+| Formerly-identical BU pairs on cip | **Diverge** — 26Q2 NV/NR, 26Q1 NX/NV, 25Q1 NR/NB, 24Q4 PF/NR |
+| `linked_po_count` / coverage counting | Unchanged |
+
+**Projection flag-note (intelligence view):** `unplanned` / `amended` stay as computed per product row. A BU group may show `unplanned` where the case has planned lines in **other** BUs — correct per `product_line` filter; revisit when intelligence view adds BU context.
 
 ---
 
@@ -68,10 +82,10 @@
 |-------|--------|------|
 | 1 Identity + clone proof | `9109664` | `cip_planD_smoke` green; 0 split collapse |
 | 2 cip cutover | `1b77efc` | Migration 0066; jobs 153/154 backfilled; dual-write ON |
-| 3 Consumers + supersede | `6de21b8` | Audit **5b=0**; 35,134 superseded; parity **184** fact-mismatch worklist |
+| 3 Consumers + supersede | `6de21b8` | Audit **5b=0**; 35,134 superseded; parity worklist measured post-cutover |
 | 4 Change events v1 | `91f227e` | API + CLI; unit tests green; real chain spot-check jobs 32/40 |
 
-**Integrity audit (cip):** `evidence_true_dupes` (5b) = **0** · `evidence_fact_parity` = **184** (genuine fact_qty / single_line_undercount steward worklist) · `duplicate_qty_inflation_groups` = **0**.
+**Integrity audit (cip):** `evidence_true_dupes` (5b) = **0** · `evidence_fact_parity` = **10** on cip today (2026-07 audit; **184** was the pre-audit Plan-D cutover figure — steward worklist shrank after graduation/supersede) · `duplicate_qty_inflation_groups` = **0**.
 
 **Open→shipped fact double-count (diagnostic only, BACKLOG-062):** 104 matching pairs; open qty 5,752 / shipped qty 7,224 — remediation deferred.
 
@@ -102,8 +116,9 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 ## Next
 
-- **READ-ONLY discovery (next chat):** PO Management backlog vs `reconcile_case` grain gap; per-line PO-coverage metric absent/present; assign-distributor affordance false-positive audit on historic cases. Ops script pattern: `apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py`. **No writes, no commit.**
-- **Unit 6 browser soak** — bulk PO link UX + plan-level entity resolution modal (`1b72ba8`).
+- **Unit 6 browser soak** — PO Management projected recon chips + bulk PO link UX (`1586f1e` backend live).
+- **BACKLOG-066** — #39/#40 duplicate-ingestion repair (steward soft-supersede; before intelligence view trusted on affected periods).
+- **BACKLOG-067** — backfill file-provenance gap (unified_lineup / bulk_backfill paths retain no original bytes).
 - **Spec C Step C:** archive lineup backfill + link-apply.
 - **BACKLOG-062:** Warren decision on open→shipped fact remediation (104 pairs measured).
 - **BACKLOG-057/058:** D4/D5 legacy column deprecation after soak.
@@ -115,14 +130,13 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 | Surface | Grain / trigger (code truth — re-verify) |
 |---------|------------------------------------------|
-| `po_management.backlog` | Groups: `(year, quarter, product_line)` from `fact_inbound_shipment`; linked groups roll up `reconcile_case` → `reconciliation_summary` + `reconciliation_customers` |
-| `reconcile_case` | `(case × customer × product)`; `awaiting_po` at customer slice; `products` flat list with `units_flag` |
-| Current Lineup recon UI | `CaseReconciliationInline` when `po_count > 0` on case card; drill to `/admin/po-management` |
-| Assign distributor button | `RESOLUTION_UI_STATUSES` (= steward-open statuses) && `!superseded` — **no** unassigned-line gate in UI |
-| Suggest API | `lineup_case_suggested_pos.suggest_distributors_for_case` — shipment evidence × case product_ids |
+| `po_management.backlog` | Groups: `(year, quarter, product_line)` from `fact_inbound_shipment`; linked groups **project** `reconcile_case` product rows matching group `product_line` → `reconciliation_summary` + `reconciliation_customers` |
+| `reconcile_case` | `(case × customer × product)`; case-level API unchanged; product rows carry `product_line` + `business_unit` |
+| Current Lineup recon UI | `CaseReconciliationInline` = case-level (out of scope for BU projection) |
+| Assign distributor button | `RESOLUTION_UI_STATUSES` && `!superseded` — no unassigned-line gate in UI |
 
 ---
 
 ## Prior session context (abbreviated)
 
-Unified lineup import Units 1–8 backend done; Unit 6 frontend wired. Spec C Step A/B done (`20260701_0064`/`0065`). Distributor full merge on `cip`. PO coverage compound match (`80b864a`/`daac5f6`). Data integrity audit tool (`10fd3ea`).
+Unified lineup import Units 1–8 backend done; Unit 6 frontend wired. Spec C Step A/B done (`20260701_0064`/`0065`). Distributor full merge on `cip`. PO rollup attribution fixed `1586f1e`. Data integrity audit tool (`10fd3ea`).

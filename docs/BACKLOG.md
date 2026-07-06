@@ -6,6 +6,40 @@
 
 ---
 
+## BACKLOG-067 — Backfill file-provenance gap (unified_lineup / bulk_backfill paths)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-06 |
+| **Effort** | Medium (wire `RawFileMetadata` + `StorageBackend.save` on unified/bulk paths **or** document intentional omission + archive path contract) |
+| **Source** | PO Management identical-BU-pairs forensic audit (2026-07-06): implicated cases from `unified_lineup` and `bulk_lineup_backfill` have **empty** `raw_file_metadata`; original `.xlsx` bytes **not recoverable** from disk. Standard `imports.py` upload path persists bytes via `StorageBackend.save()` + `RawFileMetadata.storage_key`. Evidence: `.tmp/audit_po_recon_identical_bu_pairs_output.json` provenance samples. |
+| **Idea** | Close the auditability hole: backfill/unified lineup imports should retain original uploaded bytes (or a durable archive pointer) the same way the standard import pipeline does. |
+| **Why it matters / deferrable** | `CommercialLineupLine.raw_row_payload` + `source_row_number` suffice for **DB-only** fingerprint/duplication audits today. Deferrable until file-level re-audit or compliance requires source retention. Critical for a product whose wedge is auditability when stewards must re-open the workbook. |
+| **What the work is** | (1) Trace unified-import and bulk-backfill dispatch — where file bytes go after parse. (2) Either persist via existing `RawFileMetadata` pattern or formalize external archive path + DB pointer. (3) Verify read path for steward re-download. (4) Document which paths guarantee retention vs heuristic `file_name` only. |
+| **Regression traps** | Do not break async parse fan-out; do not store secrets in `staged_metadata`; large archive backfills may need size guards; disposable-smoke DBs should not inherit prod storage keys. |
+| **Behavior to retain** | `raw_row_payload` on parsed lines; `import_job_id` + `file_name` on cases; standard import path retention unchanged. |
+| **Out of scope** | Re-parsing all historic cases; changing rollup projection (`1586f1e`). |
+| **TRIGGER** | When **file-level re-audit or re-ingest of backfill cases** is needed; **or** before **multi-tenant onboarding** where source retention is a compliance expectation. |
+
+---
+
+## BACKLOG-066 — #39/#40 duplicate-ingestion repair (ACZA Q1 2025 Consumer Lineup)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-06 |
+| **Effort** | Small (steward supersession of duplicate case; disposable-clone proof before apply) |
+| **Source** | `check_lineup_duplicate_ingestion` on cip (2026-07-06): one workbook `Product Lineup/NB/2025/Q1/1. ACZA Q1 2025 Consumer Lineup - Sales.xlsx` parsed into **two** active cases — **#39** (NR) and **#40** (NV) — identical 72-line fingerprint (`source_row_number`, `product_id`, `quantity_units`). Pre-`6b84187` fan-out; forward fix did not repair existing rows. Evidence: identical-BU-pairs audit JSON in `.tmp/`. |
+| **Idea** | Repair via **steward panel** — soft-supersede the duplicate case (`commercial_status=superseded`, `superseded_by_case_id` on keeper), never raw SQL delete. Test on disposable clone before apply on `cip`. |
+| **Why it matters / deferrable** | After rollup projection (`1586f1e`), duplicated lines **double-count within a BU group** wherever both cases link into the same period×product_line group (e.g. 24Q4 PF/NR share cases 39+40). Deferrable until data-hygiene unit or before intelligence view is trusted on affected periods. |
+| **What the work is** | (1) Confirm keeper case (correct BU label for workbook intent). (2) Supersede loser via existing supersession workflow. (3) Re-run `check_lineup_duplicate_ingestion` → 0 clusters. (4) Verify PO Management backlog for 24Q4/25Q1 affected groups. |
+| **Regression traps** | Do not delete cases or lines; do not break `commercial_lineup_case_po` links without steward review; preserve `raw_row_payload` on keeper; no special-case filters in `backlog()` — fix data not projection. |
+| **Behavior to retain** | Latest-wins supersession semantics (`20260701_0065`); PO links on keeper case; projection logic unchanged. |
+| **Out of scope** | Bulk repair of all historical duplicate-ingestion clusters; changing parse fan-out for new imports (separate if still needed). |
+| **TRIGGER** | **Next data-hygiene unit**; **or** before **intelligence view** is trusted on periods where cases **#39** / **#40** (or successor duplicates) participate in linked PO reconciliation. |
+
+---
+
 ## BACKLOG-061 — Entity verification / promote-in-place module (customers + distributors)
 
 | Field | Detail |
