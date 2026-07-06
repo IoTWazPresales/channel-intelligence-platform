@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | (pending) — PvE grid pagination, value honesty, PO worklist summary |
+| **HEAD** | `15ee448` — PvE grid pagination, value honesty, PO worklist summary |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
