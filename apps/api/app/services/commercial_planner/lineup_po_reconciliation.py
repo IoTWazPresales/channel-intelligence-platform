@@ -334,6 +334,7 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
                 "customer_id": cust_id,
                 "product_name": pmeta.get("product_name"),
                 "product_line": pmeta.get("product_line"),
+                "business_unit": pmeta.get("business_unit"),
                 "planned_units": planned_units,
                 "shipped_units": shipped_units,
                 "units_flag": flag,

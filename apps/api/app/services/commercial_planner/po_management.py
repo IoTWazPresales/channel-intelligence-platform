@@ -30,6 +30,98 @@ from app.services.commercial_planner.lineup_po_reconciliation import UNITS_FLAGS
 
 logger = logging.getLogger(__name__)
 
+_PRODUCT_FLAG_FIELDS = tuple(f for f in UNITS_FLAGS if f != "po_no_match")
+
+
+def canonical_product_line_code(product_line: str | None, business_unit: str | None = None) -> str:
+    """Align with _observed_groups: product_line wins, else business_unit, else Unclassified."""
+    for raw in (product_line, business_unit):
+        if raw is not None and str(raw).strip():
+            return str(raw).strip()
+    return "Unclassified"
+
+
+def product_row_matches_group_line(product_row: dict[str, Any], group_product_line: str) -> bool:
+    return canonical_product_line_code(
+        product_row.get("product_line"),
+        product_row.get("business_unit"),
+    ) == canonical_product_line_code(group_product_line, None)
+
+
+def project_reconciliation_for_product_line(
+    recon: dict[str, Any],
+    *,
+    group_product_line: str,
+) -> dict[str, Any]:
+    """Project one reconcile_case payload to a single product_line BU group.
+
+    Re-summarizes customer slices from filtered product rows only; units_flag values are
+    taken as computed by reconcile_case (not recomputed).
+    """
+    products = [
+        p
+        for p in (recon.get("products") or [])
+        if product_row_matches_group_line(p, group_product_line)
+    ]
+    label_by_customer = {
+        cs.get("customer_id"): cs.get("label")
+        for cs in (recon.get("customers") or [])
+    }
+
+    customers_out: list[dict[str, Any]] = []
+    by_customer: dict[int | None, list[dict[str, Any]]] = {}
+    for row in products:
+        by_customer.setdefault(row.get("customer_id"), []).append(row)
+
+    for cust_id in sorted(by_customer.keys(), key=lambda c: (c is None, c or 0)):
+        slice_products = by_customer[cust_id]
+        slice_summary = {f: 0 for f in _PRODUCT_FLAG_FIELDS}
+        for row in slice_products:
+            flag = row.get("units_flag")
+            if flag in slice_summary:
+                slice_summary[flag] += 1
+        awaiting_po = any(row.get("awaiting_po") for row in slice_products)
+        customers_out.append(
+            {
+                "customer_id": cust_id,
+                "label": label_by_customer.get(cust_id) or ("Unattributed" if cust_id is None else f"Customer #{cust_id}"),
+                "awaiting_po": awaiting_po,
+                "summary": slice_summary,
+            }
+        )
+
+    summary = {f: 0 for f in _PRODUCT_FLAG_FIELDS}
+    for cs in customers_out:
+        for f in _PRODUCT_FLAG_FIELDS:
+            summary[f] += int(cs.get("summary", {}).get(f, 0))
+
+    return {
+        "summary": summary,
+        "customers": customers_out,
+    }
+
+
+def merge_projected_into_backlog_rollup(
+    summary: dict[str, int],
+    cust_agg: dict[int | None, dict[str, Any]],
+    projected: dict[str, Any],
+) -> None:
+    for f in _PRODUCT_FLAG_FIELDS:
+        summary[f] += int(projected.get("summary", {}).get(f, 0))
+    for cs in projected.get("customers") or []:
+        ck = cs.get("customer_id")
+        if ck not in cust_agg:
+            cust_agg[ck] = {
+                "customer_id": ck,
+                "label": cs.get("label"),
+                "awaiting_po": False,
+                "summary": {f: 0 for f in UNITS_FLAGS},
+            }
+        if cs.get("awaiting_po"):
+            cust_agg[ck]["awaiting_po"] = True
+        for f in _PRODUCT_FLAG_FIELDS:
+            cust_agg[ck]["summary"][f] += int(cs.get("summary", {}).get(f, 0))
+
 # Read-model contract: shipped quantities on PO Management come from the truth layer only.
 SHIPMENT_QUANTITY_SOURCE = "fact_inbound_shipment"
 
@@ -252,29 +344,29 @@ async def backlog(db: AsyncSession) -> dict[str, Any]:
             case_ids: set[int] = set()
             for po in linked_pos:
                 case_ids |= po_to_cases.get(po, set())
+            group_product_line = str(g["product_line"])
             summary = {f: 0 for f in UNITS_FLAGS}
             cust_agg: dict[int | None, dict[str, Any]] = {}
+            seen_po_no_match: set[int] = set()
             for cid in case_ids:
                 try:
                     recon = await reconcile_case(db, cid)
                 except Exception:
                     logger.exception("backlog reconcile_case failed cid=%s", cid)
                     continue
-                for f in UNITS_FLAGS:
-                    summary[f] += recon.get("summary", {}).get(f, 0)
-                for cs in recon.get("customers") or []:
-                    ck = cs.get("customer_id")
-                    if ck not in cust_agg:
-                        cust_agg[ck] = {
-                            "customer_id": ck,
-                            "label": cs.get("label"),
-                            "awaiting_po": False,
-                            "summary": {f: 0 for f in UNITS_FLAGS},
-                        }
-                    if cs.get("awaiting_po"):
-                        cust_agg[ck]["awaiting_po"] = True
-                    for f in UNITS_FLAGS:
-                        cust_agg[ck]["summary"][f] += cs.get("summary", {}).get(f, 0)
+                projected = project_reconciliation_for_product_line(
+                    recon,
+                    group_product_line=group_product_line,
+                )
+                merge_projected_into_backlog_rollup(summary, cust_agg, projected)
+                for pf in recon.get("po_flags") or []:
+                    po_id = pf.get("purchase_order_id")
+                    if po_id is None:
+                        continue
+                    po_int = int(po_id)
+                    if po_int in linked_pos and po_int not in seen_po_no_match:
+                        seen_po_no_match.add(po_int)
+                        summary["po_no_match"] += 1
             entry["reconciliation_summary"] = summary
             entry["reconciliation_customers"] = sorted(
                 cust_agg.values(),

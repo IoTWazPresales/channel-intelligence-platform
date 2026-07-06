@@ -124,3 +124,114 @@ def test_backlog_parse_incomplete_not_upload_prompt(monkeypatch):
     assert g.get("parse_incomplete") is True
     assert "upload_prompt" not in g
     assert g.get("lineup_case_exists") is not True
+
+
+def test_project_reconciliation_partitions_multi_bu_case():
+    recon = {
+        "products": [
+            {
+                "customer_id": 1,
+                "product_line": "NV",
+                "business_unit": "NV",
+                "units_flag": "matched",
+                "awaiting_po": False,
+            },
+            {
+                "customer_id": 1,
+                "product_line": "NR",
+                "business_unit": "NR",
+                "units_flag": "short",
+                "awaiting_po": True,
+            },
+            {
+                "customer_id": 2,
+                "product_line": "NV",
+                "business_unit": "NV",
+                "units_flag": "unshipped",
+                "awaiting_po": False,
+            },
+        ],
+        "customers": [
+            {"customer_id": 1, "label": "Customer A", "awaiting_po": True},
+            {"customer_id": 2, "label": "Customer B", "awaiting_po": False},
+        ],
+        "po_flags": [],
+    }
+    nv = mod.project_reconciliation_for_product_line(recon, group_product_line="NV")
+    nr = mod.project_reconciliation_for_product_line(recon, group_product_line="NR")
+    assert nv["summary"]["matched"] == 1
+    assert nv["summary"]["unshipped"] == 1
+    assert nv["summary"]["short"] == 0
+    assert nr["summary"]["short"] == 1
+    assert nr["summary"]["matched"] == 0
+    assert nv["summary"] != nr["summary"]
+    nv_c1 = next(c for c in nv["customers"] if c["customer_id"] == 1)
+    assert nv_c1["awaiting_po"] is False
+    nr_c1 = next(c for c in nr["customers"] if c["customer_id"] == 1)
+    assert nr_c1["awaiting_po"] is True
+
+
+def test_project_reconciliation_single_bu_unchanged():
+    recon = {
+        "products": [
+            {"customer_id": 1, "product_line": "NB", "business_unit": "NB", "units_flag": "matched", "awaiting_po": False},
+            {"customer_id": 1, "product_line": "NB", "business_unit": "NB", "units_flag": "short", "awaiting_po": False},
+        ],
+        "customers": [{"customer_id": 1, "label": "Makro", "awaiting_po": False}],
+        "po_flags": [],
+    }
+    nb = mod.project_reconciliation_for_product_line(recon, group_product_line="NB")
+    assert nb["summary"]["matched"] == 1
+    assert nb["summary"]["short"] == 1
+    assert len(nb["customers"]) == 1
+    assert nb["customers"][0]["summary"]["matched"] == 1
+
+
+def test_project_reconciliation_uses_business_unit_when_product_line_null():
+    recon = {
+        "products": [
+            {"customer_id": 1, "product_line": None, "business_unit": "NX", "units_flag": "over", "awaiting_po": False},
+        ],
+        "customers": [{"customer_id": 1, "label": "X", "awaiting_po": False}],
+        "po_flags": [],
+    }
+    nx = mod.project_reconciliation_for_product_line(recon, group_product_line="NX")
+    nv = mod.project_reconciliation_for_product_line(recon, group_product_line="NV")
+    assert nx["summary"]["over"] == 1
+    assert nv["summary"]["over"] == 0
+
+
+def test_backlog_linked_group_projects_by_product_line(monkeypatch):
+    results = [
+        _R([
+            (500, 10, 100.0, 1000.0, dt.date(2026, 4, 20)),
+            (500, 11, 50.0, 500.0, dt.date(2026, 4, 20)),
+        ]),
+        _R([(10, "NV", "NV"), (11, "NR", "NR")]),
+        _R([(10, 18.5), (11, 18.5)]),
+        _R([500]),  # linked po ids (scalars)
+        _R([]),  # lineup coverage
+        _R([(500, 42)]),  # case links
+    ]
+    db = _db(results)
+
+    async def _fake_reconcile(_db, case_id):
+        return {
+            "products": [
+                {"customer_id": 1, "product_line": "NV", "business_unit": "NV", "units_flag": "matched", "awaiting_po": False},
+                {"customer_id": 1, "product_line": "NR", "business_unit": "NR", "units_flag": "short", "awaiting_po": True},
+            ],
+            "customers": [{"customer_id": 1, "label": "A", "awaiting_po": True}],
+            "summary": {"matched": 1, "short": 1, "over": 0, "unshipped": 0, "unplanned": 0, "amended": 0, "po_no_match": 0},
+            "po_flags": [],
+        }
+
+    monkeypatch.setattr(mod, "reconcile_case", _fake_reconcile)
+    out = asyncio.run(mod.backlog(db))
+    linked = [g for g in out["groups"] if g["status"] == "linked"]
+    assert len(linked) == 2
+    by_line = {g["product_line"]: g for g in linked}
+    assert by_line["NV"]["reconciliation_summary"]["matched"] == 1
+    assert by_line["NV"]["reconciliation_summary"]["short"] == 0
+    assert by_line["NR"]["reconciliation_summary"]["short"] == 1
+    assert by_line["NR"]["reconciliation_summary"]["matched"] == 0
