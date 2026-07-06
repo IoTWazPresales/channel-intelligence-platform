@@ -54,6 +54,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: 'Commercial Planner', href: '/commercial-planner' },
       { label: 'Line-up Planning', href: '/lineup' },
+      { label: 'Plan vs Executed', href: '/plan-vs-executed' },
     ],
   },
   {

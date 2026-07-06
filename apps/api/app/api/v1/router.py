@@ -22,6 +22,7 @@ from app.api.v1.endpoints import (
     lineup,
     mappings,
     market,
+    plan_vs_executed,
     po_management,
     pricing,
     products,
@@ -53,6 +54,7 @@ api_router.include_router(buy_plans.router, prefix="/buy-plans", tags=["buy-plan
 if commercial_planner_enabled():
     api_router.include_router(commercial_planner.router, prefix="/commercial-planner", tags=["commercial-planner"])
     api_router.include_router(po_management.router, prefix="/po-management", tags=["po-management"])
+    api_router.include_router(plan_vs_executed.router, prefix="/plan-vs-executed", tags=["plan-vs-executed"])
 api_router.include_router(pricing.router, prefix="/pricing", tags=["pricing"])
 api_router.include_router(promotions.router, prefix="/promotions", tags=["promotions"])
 api_router.include_router(promo_exports.router, prefix="/promotions", tags=["promotions"])

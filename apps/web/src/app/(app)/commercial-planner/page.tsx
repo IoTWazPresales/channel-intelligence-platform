@@ -3487,8 +3487,10 @@ export default function CommercialPlannerPage() {
                   changing defaults, click <strong>Recalculate</strong> so stored line calcs match.
                 </li>
                 <li>
-                  <strong>Data map</strong> — Read-only view of which commercial fields exist, where they are edited, and how
-                  they relate to readiness and the calculator (including DAP as evidence only).
+                  <strong>Plan vs Executed</strong> — Read-only intelligence on whether the channel shipped what
+                  lineups planned: fill rate, exceptions, and trends.{' '}
+                  <Link href="/plan-vs-executed">Open Plan vs Executed</Link> (operational PO linking stays in PO
+                  Management).
                 </li>
                 <li>
                   <strong>Assisted suggestions</strong> — Optional hints from history and forecasts. <strong>Apply</strong> writes the

@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-06 (rollup-attribution fix docs)
+**Last updated:** 2026-07-06 (Plan vs Executed intelligence view)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `1586f1e` — po-mgmt: project backlog reconciliation by product_line |
+| **HEAD** | *(pending commit)* — Plan vs Executed full-stack derived-on-read |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -40,7 +40,22 @@
 | Formerly-identical BU pairs on cip | **Diverge** — 26Q2 NV/NR, 26Q1 NX/NV, 25Q1 NR/NB, 24Q4 PF/NR |
 | `linked_po_count` / coverage counting | Unchanged |
 
-**Projection flag-note (intelligence view):** `unplanned` / `amended` stay as computed per product row. A BU group may show `unplanned` where the case has planned lines in **other** BUs — correct per `product_line` filter; revisit when intelligence view adds BU context.
+**Projection flag-note (intelligence view):** `unplanned` / `amended` stay as computed per product row. A BU group may show `unplanned` where the case has planned lines in **other** BUs — correct per `product_line` filter; Plan vs Executed drill adds BU context in-UI.
+
+---
+
+## Plan vs Executed intelligence view — DONE (2026-07-06)
+
+| Item | Status |
+|------|--------|
+| Spec | `docs/PLAN_VS_EXECUTED_SPEC.md` |
+| Read model | `plan_vs_executed.py` — `reconcile_case` product rows + `product_line` projection filter |
+| API | `GET /api/v1/plan-vs-executed` (commercial-planner gated) |
+| UI | `/plan-vs-executed` — scorecard, 3-bucket + 6-flag, 3-lens exceptions, trend, drill grid |
+| Nav | Commercial Planning group — "Plan vs Executed" (top-level route, not under `/admin`) |
+| Deep-links | Commercial Planner guide + PO Management alert |
+| 26Q2 KPI tie-out (cip read-only) | **PASS** — fill 45.96%, line-hit 35.36%; over-ship does not reduce fill rate |
+| BACKLOG-066 UI flag | Warning when range includes 25Q1 / 24Q4 |
 
 ---
 
@@ -116,8 +131,8 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 ## Next
 
-- **Unit 6 browser soak** — PO Management projected recon chips + bulk PO link UX (`1586f1e` backend live).
-- **BACKLOG-066** — #39/#40 duplicate-ingestion repair (steward soft-supersede; before intelligence view trusted on affected periods).
+- **Unit 6 browser soak** — Plan vs Executed scorecard + PO Management projected recon chips + bulk PO link UX.
+- **BACKLOG-066** — #39/#40 duplicate-ingestion repair (steward soft-supersede; Plan vs Executed flags affected periods in-UI until repaired).
 - **BACKLOG-067** — backfill file-provenance gap (unified_lineup / bulk_backfill paths retain no original bytes).
 - **Spec C Step C:** archive lineup backfill + link-apply.
 - **BACKLOG-062:** Warren decision on open→shipped fact remediation (104 pairs measured).
@@ -131,7 +146,8 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 | Surface | Grain / trigger (code truth — re-verify) |
 |---------|------------------------------------------|
 | `po_management.backlog` | Groups: `(year, quarter, product_line)` from `fact_inbound_shipment`; linked groups **project** `reconcile_case` product rows matching group `product_line` → `reconciliation_summary` + `reconciliation_customers` |
-| `reconcile_case` | `(case × customer × product)`; case-level API unchanged; product rows carry `product_line` + `business_unit` |
+| `plan_vs_executed` | Linked cases in period range → union `reconcile_case` product rows (optional `product_line` filter) → scorecard + 3-lens exceptions + trend |
+| `reconcile_case` | `(case × customer × product)`; product rows carry `product_line` + `business_unit` |
 | Current Lineup recon UI | `CaseReconciliationInline` = case-level (out of scope for BU projection) |
 | Assign distributor button | `RESOLUTION_UI_STATUSES` && `!superseded` — no unassigned-line gate in UI |
 
