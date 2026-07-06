@@ -54,16 +54,53 @@ def scorecard_tie_out_fields(scorecard: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def resolve_product_display(row: dict[str, Any], group_by: ProductGroupBy = "description") -> dict[str, Any]:
+    """Human-readable product primary/secondary — description → sales_model → SKU; never bare internal id."""
+    description = (
+        (row.get("product_marketing_name") or row.get("product_description") or row.get("product_name") or "")
+        .strip()
+    )
+    sales_model = (row.get("product_sales_model") or "").strip()
+    sku = (row.get("product_sku") or "").strip()
+    label_fallback = not bool(description)
+
+    if group_by == "sku":
+        primary = sku or sales_model or description or "—"
+        secondary_parts = [p for p in (description, sales_model) if p and p != primary]
+        return {
+            "entity_primary": primary,
+            "entity_secondary": " · ".join(secondary_parts) if secondary_parts else None,
+            "label_fallback": not description and not sales_model,
+        }
+    if group_by == "sales_model":
+        primary = sales_model or description or sku or "Unspecified sales model"
+        secondary_parts = [p for p in (description, sku) if p and p != primary]
+        return {
+            "entity_primary": primary,
+            "entity_secondary": " · ".join(secondary_parts) if secondary_parts else None,
+            "label_fallback": not description,
+        }
+    primary = description or sales_model or sku or "—"
+    if not description:
+        label_fallback = True
+    secondary_parts = [p for p in (sales_model, sku) if p]
+    return {
+        "entity_primary": primary,
+        "entity_secondary": " · ".join(secondary_parts) if secondary_parts else None,
+        "label_fallback": label_fallback,
+    }
+
+
 def _product_lens_key_label(row: dict[str, Any], group_by: ProductGroupBy) -> tuple[Any, str]:
-    """Product exception lens grouping — default ``description`` matches legacy product_id + product_name."""
+    """Product exception lens grouping key + human-readable label."""
+    display = resolve_product_display(row, group_by)
     pid = row.get("product_id")
     if group_by == "sku":
-        sku = (row.get("product_sku") or "").strip()
-        return pid, sku or row.get("product_name") or f"Product #{pid}"
+        return pid, display["entity_primary"]
     if group_by == "sales_model":
         sm = (row.get("product_sales_model") or "").strip() or "Unspecified sales model"
-        return sm, sm
-    return pid, row.get("product_name") or f"Product #{pid}"
+        return sm, display["entity_primary"]
+    return pid, display["entity_primary"]
 
 
 async def _attach_product_catalog_fields(db: AsyncSession, rows: list[dict[str, Any]]) -> None:
@@ -71,17 +108,22 @@ async def _attach_product_catalog_fields(db: AsyncSession, rows: list[dict[str, 
     if not pids:
         return
     catalog: dict[int, dict[str, Any]] = {}
-    for pid, sku, smn, name in (
+    for pid, sku, smn, name, mname in (
         await db.execute(
-            select(DimProduct.id, DimProduct.sku, DimProduct.sales_model_name, DimProduct.name).where(
-                DimProduct.id.in_(pids)
-            )
+            select(
+                DimProduct.id,
+                DimProduct.sku,
+                DimProduct.sales_model_name,
+                DimProduct.name,
+                DimProduct.marketing_name,
+            ).where(DimProduct.id.in_(pids))
         )
     ).all():
         catalog[int(pid)] = {
             "product_sku": str(sku) if sku else None,
             "product_sales_model": str(smn).strip() if smn else None,
             "product_description": str(name) if name else None,
+            "product_marketing_name": str(mname).strip() if mname else None,
         }
     for row in rows:
         meta = catalog.get(int(row["product_id"])) if row.get("product_id") is not None else None
@@ -188,6 +230,41 @@ def _row_value_for_rank(row: dict[str, Any], *, rank_by: RankBy, field: str) -> 
         pv = float(val.get("planned_value_plan") or 0)
         return pv if pv > 0 else p
     return float(row.get(field) or 0)
+
+
+def _row_value_cost_for_field(row: dict[str, Any], field: str) -> float:
+    """Cost-currency exposure for exception value columns (parallel to plan-currency rank)."""
+    val = row.get("value") or {}
+    if field == "short":
+        p = float(row.get("planned_units") or 0)
+        s = float(row.get("shipped_units") or 0)
+        units = max(p - s, 0)
+        if p > 0 and units > 0:
+            ratio = units / p
+            pv = float(val.get("planned_value_cost") or val.get("shipped_value_cost") or 0)
+            if pv > 0:
+                return pv * ratio
+        return units
+    if field == "over":
+        p = float(row.get("planned_units") or 0)
+        s = float(row.get("shipped_units") or 0)
+        units = max(s - p, 0)
+        if s > 0 and units > 0:
+            sv = val.get("shipped_value_cost")
+            if sv is not None:
+                return float(sv) * (units / s)
+        return units
+    if field == "unplanned":
+        s = float(row.get("shipped_units") or 0)
+        sv = val.get("shipped_value_cost")
+        if sv is not None and s > 0:
+            return float(sv)
+        return s
+    if field == "no_po":
+        p = float(row.get("planned_units") or 0)
+        pv = float(val.get("planned_value_cost") or val.get("planned_value_plan") or 0)
+        return pv if pv > 0 else p
+    return 0.0
 
 
 def compute_scorecard_from_execution_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -401,7 +478,11 @@ def _aggregate_exceptions(
         return {
             "units": 0.0,
             "value": 0.0,
+            "value_cost": 0.0,
             "label": "",
+            "entity_primary": "",
+            "entity_secondary": None,
+            "label_fallback": False,
             "line_count": 0,
             "customer_id": None,
             "product_id": None,
@@ -425,29 +506,55 @@ def _aggregate_exceptions(
             key = key_fn(r)
             lbl = label_fn(r)
             meta = meta_fn(r, key)
+            display = meta.pop("_display", None)
+            if display:
+                entity_primary = display["entity_primary"]
+                entity_secondary = display.get("entity_secondary")
+                label_fallback = bool(display.get("label_fallback"))
+            else:
+                entity_primary = lbl
+                entity_secondary = meta.get("business_unit_label")
+                label_fallback = False
+
             if p > 0:
                 short_u = max(p - s, 0)
                 if short_u > 0:
                     short[key]["units"] += short_u
                     short[key]["value"] += _row_value_for_rank(r, rank_by=rank_by, field="short")
-                    short[key]["label"] = lbl
+                    short[key]["value_cost"] += _row_value_cost_for_field(r, "short")
+                    short[key]["label"] = entity_primary
+                    short[key]["entity_primary"] = entity_primary
+                    short[key]["entity_secondary"] = entity_secondary
+                    short[key]["label_fallback"] = label_fallback
                     short[key].update({k: v for k, v in meta.items() if v is not None})
                 over_u = max(s - p, 0)
                 if over_u > 0:
                     over[key]["units"] += over_u
                     over[key]["value"] += _row_value_for_rank(r, rank_by=rank_by, field="over")
-                    over[key]["label"] = lbl
+                    over[key]["value_cost"] += _row_value_cost_for_field(r, "over")
+                    over[key]["label"] = entity_primary
+                    over[key]["entity_primary"] = entity_primary
+                    over[key]["entity_secondary"] = entity_secondary
+                    over[key]["label_fallback"] = label_fallback
                     over[key].update({k: v for k, v in meta.items() if v is not None})
                 if r.get("awaiting_po"):
                     no_po[key]["units"] += p
                     no_po[key]["value"] += _row_value_for_rank(r, rank_by=rank_by, field="no_po")
+                    no_po[key]["value_cost"] += _row_value_cost_for_field(r, "no_po")
                     no_po[key]["line_count"] += 1
-                    no_po[key]["label"] = lbl
+                    no_po[key]["label"] = entity_primary
+                    no_po[key]["entity_primary"] = entity_primary
+                    no_po[key]["entity_secondary"] = entity_secondary
+                    no_po[key]["label_fallback"] = label_fallback
                     no_po[key].update({k: v for k, v in meta.items() if v is not None})
             elif s > 0:
                 unplanned[key]["units"] += s
                 unplanned[key]["value"] += _row_value_for_rank(r, rank_by=rank_by, field="unplanned")
-                unplanned[key]["label"] = lbl
+                unplanned[key]["value_cost"] += _row_value_cost_for_field(r, "unplanned")
+                unplanned[key]["label"] = entity_primary
+                unplanned[key]["entity_primary"] = entity_primary
+                unplanned[key]["entity_secondary"] = entity_secondary
+                unplanned[key]["label_fallback"] = label_fallback
                 unplanned[key].update({k: v for k, v in meta.items() if v is not None})
 
         def _ranked(d: dict[Any, dict[str, Any]], metric: str) -> list[dict[str, Any]]:
@@ -460,8 +567,12 @@ def _aggregate_exceptions(
                     {
                         "key": k,
                         "label": v["label"],
+                        "entity_primary": v.get("entity_primary") or v["label"],
+                        "entity_secondary": v.get("entity_secondary"),
+                        "label_fallback": bool(v.get("label_fallback")),
                         "units": v["units"],
                         "value_plan": v["value"],
+                        "value_cost": v.get("value_cost") or 0.0,
                         "line_count": v.get("line_count") or 0,
                         "customer_id": v.get("customer_id"),
                         "product_id": v.get("product_id"),
@@ -483,10 +594,18 @@ def _aggregate_exceptions(
         return {
             "customer_id": key if isinstance(key, int) else r.get("customer_id"),
             "business_unit_label": r.get("business_unit_label"),
+            "_display": {
+                "entity_primary": r.get("customer_label") or "Unattributed",
+                "entity_secondary": r.get("business_unit_label"),
+                "label_fallback": False,
+            },
         }
 
     def _product_meta(r: dict[str, Any], key: Any) -> dict[str, Any]:
-        meta: dict[str, Any] = {"business_unit_label": r.get("business_unit_label")}
+        meta: dict[str, Any] = {
+            "business_unit_label": r.get("business_unit_label"),
+            "_display": resolve_product_display(r, product_group_by),
+        }
         if product_group_by == "sales_model":
             meta["sales_model"] = key if isinstance(key, str) else r.get("product_sales_model")
         else:
@@ -494,7 +613,15 @@ def _aggregate_exceptions(
         return meta
 
     def _bu_meta(r: dict[str, Any], key: Any) -> dict[str, Any]:
-        return {"business_unit_label": key if isinstance(key, str) else r.get("business_unit_label")}
+        bu = key if isinstance(key, str) else r.get("business_unit_label")
+        return {
+            "business_unit_label": bu,
+            "_display": {
+                "entity_primary": bu or "Unspecified BU",
+                "entity_secondary": None,
+                "label_fallback": False,
+            },
+        }
 
     return {
         "customer": _lens_agg(
@@ -614,23 +741,58 @@ async def plan_vs_executed_read_model(
             if ((r.get("product_sales_model") or "").strip().lower() or "unspecified sales model") == norm
         ]
 
-    drill_rows = [
-        {
-            "case_id": r.get("case_id"),
-            "period_label": r.get("quarter_label"),
-            "business_unit_label": r.get("business_unit_label"),
-            "customer_id": r.get("customer_id"),
-            "customer_label": r.get("customer_label"),
-            "product_id": r.get("product_id"),
-            "product_name": r.get("product_name"),
-            "planned_units": r.get("planned_units"),
-            "shipped_units": r.get("shipped_units"),
-            "units_flag": r.get("units_flag"),
-            "awaiting_po": r.get("awaiting_po"),
-            "value": r.get("value"),
+    drill_rows = []
+    for r in drill_rows_source:
+        val = r.get("value") or {}
+        display = resolve_product_display(r, product_group_by)
+        drill_rows.append(
+            {
+                "case_id": r.get("case_id"),
+                "period_label": r.get("quarter_label"),
+                "business_unit_label": r.get("business_unit_label"),
+                "customer_id": r.get("customer_id"),
+                "customer_label": r.get("customer_label"),
+                "product_id": r.get("product_id"),
+                "product_name": r.get("product_name"),
+                "product_sku": r.get("product_sku"),
+                "product_description": r.get("product_description"),
+                "product_marketing_name": r.get("product_marketing_name"),
+                "product_sales_model": r.get("product_sales_model"),
+                "entity_primary": display["entity_primary"],
+                "entity_secondary": display.get("entity_secondary"),
+                "label_fallback": display.get("label_fallback"),
+                "planned_units": r.get("planned_units"),
+                "shipped_units": r.get("shipped_units"),
+                "units_flag": r.get("units_flag"),
+                "awaiting_po": r.get("awaiting_po"),
+                "planned_value_plan": val.get("planned_value_plan"),
+                "shipped_value_plan": val.get("shipped_value_plan"),
+                "shipped_value_cost": val.get("shipped_value_cost"),
+                "value": val,
+            }
+        )
+
+    drill_context: dict[str, Any] = {
+        "customer_id": drill_customer_id,
+        "product_id": drill_product_id,
+        "sales_model": drill_sales_model,
+        "customer_label": None,
+        "product_display": None,
+    }
+    if drill_customer_id is not None and drill_rows:
+        drill_context["customer_label"] = drill_rows[0].get("customer_label")
+    elif drill_product_id is not None and drill_rows:
+        drill_context["product_display"] = {
+            "entity_primary": drill_rows[0].get("entity_primary"),
+            "entity_secondary": drill_rows[0].get("entity_secondary"),
+            "label_fallback": drill_rows[0].get("label_fallback"),
         }
-        for r in drill_rows_source
-    ]
+    elif drill_sales_model and drill_rows:
+        drill_context["product_display"] = {
+            "entity_primary": drill_rows[0].get("entity_primary"),
+            "entity_secondary": drill_rows[0].get("entity_secondary"),
+            "label_fallback": drill_rows[0].get("label_fallback"),
+        }
 
     backlog_066 = _affected_backlog_066_labels(rows)
 
@@ -643,11 +805,7 @@ async def plan_vs_executed_read_model(
         "product_line_filter": bu_filter,
         "product_group_by": product_group_by,
         "rank_by": rank_by,
-        "drill": {
-            "customer_id": drill_customer_id,
-            "product_id": drill_product_id,
-            "sales_model": drill_sales_model,
-        },
+        "drill": drill_context,
         "available_periods": all_periods,
         "scorecard": scorecard,
         "exceptions": exceptions,

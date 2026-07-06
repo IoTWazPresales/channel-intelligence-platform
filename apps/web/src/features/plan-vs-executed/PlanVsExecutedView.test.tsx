@@ -3,6 +3,15 @@ import { render, screen } from '@testing-library/react';
 
 import { PlanVsExecutedView } from './PlanVsExecutedView';
 
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/plan-vs-executed',
+}));
+
+vi.mock('@/components/EnterpriseDataGrid', () => ({
+  EnterpriseDataGrid: () => <div data-testid="enterprise-grid-mock" />,
+}));
+
 vi.mock('@tanstack/react-query', () => ({
   keepPreviousData: Symbol('keepPreviousData'),
   useQuery: () => ({
@@ -57,11 +66,12 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 describe('PlanVsExecutedView', () => {
-  it('renders headline KPIs and scope notes', () => {
+  it('renders headline KPIs, category tabs, and scope notes', () => {
     render(<PlanVsExecutedView />);
     expect(screen.getByText('Fill rate (headline)')).toBeTruthy();
     expect(screen.getByText('46.0%')).toBeTruthy();
     expect(screen.getByText(/What this view answers/)).toBeTruthy();
     expect(screen.getByTestId('scope-boundary-notes')).toBeTruthy();
+    expect(screen.getByTestId('exception-category-tabs')).toBeTruthy();
   });
 });

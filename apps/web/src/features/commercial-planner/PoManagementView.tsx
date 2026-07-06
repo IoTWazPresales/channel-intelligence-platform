@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import type { ColDef, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -23,13 +24,7 @@ import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
 import { PoAutoLinkProposalsSection, PO_AUTO_LINK_SECTION_ID } from './PoAutoLinkProposalsSection';
 import { PoDismissReasonDialog } from './PoDismissReasonDialog';
-
-import {
-  CustomerReconChips,
-  ReconSummaryChips,
-  type ReconCustomerSlice,
-  type ReconSummary,
-} from './lineupReconciliationDisplay';
+import { buildPlanVsExecutedHref } from '@/features/plan-vs-executed/productDisplay';
 
 type BacklogGroup = {
   year: number;
@@ -43,8 +38,6 @@ type BacklogGroup = {
   po_count: number;
   linked_po_count: number;
   status: 'linked' | 'unlinked';
-  reconciliation_summary?: ReconSummary;
-  reconciliation_customers?: ReconCustomerSlice[];
   linked_case_ids?: number[];
   lineup_case_exists?: boolean;
   parse_incomplete?: boolean;
@@ -376,46 +369,47 @@ export function PoManagementView() {
                         color={g.status === 'linked' ? 'success' : 'default'}
                       />
                     </Stack>
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <Typography variant="body2" color="text.secondary">
-                        {fmtUnits(g.shipped_units)} units
-                      </Typography>
-                      <Tooltip
-                        title={
-                          g.fx_complete
-                            ? 'Shipped value bridged to plan currency'
-                            : 'FX unavailable for some SKUs — value is best-effort'
-                        }
-                      >
+                    {g.status !== 'linked' ? (
+                      <Stack direction="row" spacing={2} alignItems="center">
                         <Typography variant="body2" color="text.secondary">
-                          {fmtValue(g.fx_complete ? g.shipped_value_plan : g.shipped_value_cost)}
-                          {g.fx_complete ? ' (plan)' : ' (cost · FX partial)'}
+                          {fmtUnits(g.shipped_units)} units observed
                         </Typography>
-                      </Tooltip>
-                    </Stack>
+                        <Tooltip
+                          title={
+                            g.fx_complete
+                              ? 'Shipped value bridged to plan currency'
+                              : 'FX unavailable for some SKUs — value is best-effort'
+                          }
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            {fmtValue(g.fx_complete ? g.shipped_value_plan : g.shipped_value_cost)}
+                            {g.fx_complete ? ' (plan)' : ' (cost · FX partial)'}
+                          </Typography>
+                        </Tooltip>
+                      </Stack>
+                    ) : null}
                   </Stack>
 
                   <Divider sx={{ my: 1.5 }} />
 
                   {g.status === 'linked' ? (
-                    <Stack spacing={1}>
-                      <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
-                        <Typography variant="body2" color="text.secondary">
-                          Reconciliation:
-                        </Typography>
-                        {g.reconciliation_summary ? <ReconSummaryChips summary={g.reconciliation_summary} /> : null}
-                      </Stack>
-                      {g.reconciliation_customers?.length ? (
-                        <CustomerReconChips
-                          customers={g.reconciliation_customers}
-                          testIdPrefix={`po-mgmt-recon-customers-${g.year}-${g.quarter}-${g.product_line}`}
-                        />
-                      ) : null}
-                      {highlightCustomerId != null &&
-                      highlightGroupId === poGroupDomId(g) &&
-                      g.reconciliation_customers?.some((c) => c.customer_id === highlightCustomerId) ? (
+                    <Stack spacing={0.5}>
+                      <Typography variant="body2" color="text.secondary" data-testid={`po-linked-status-${g.year}-${g.quarter}-${g.product_line}`}>
+                        Linked {g.linked_po_count}/{g.po_count} POs —{' '}
+                        <Link
+                          href={buildPlanVsExecutedHref({
+                            periodFrom: g.quarter_label,
+                            periodTo: g.quarter_label,
+                            productLine: g.product_line,
+                          })}
+                        >
+                          view outcomes in Plan vs Executed
+                        </Link>
+                      </Typography>
+                      {highlightCustomerId != null && highlightGroupId === poGroupDomId(g) ? (
                         <Typography variant="caption" color="warning.main">
-                          Highlighted customer #{highlightCustomerId} — review reconciliation above.
+                          Highlighted customer #{highlightCustomerId} — link or upload work above; reconciliation
+                          outcomes are on Plan vs Executed.
                         </Typography>
                       ) : null}
                     </Stack>

@@ -22,6 +22,7 @@ import {
 import type { ColDef, GridOptions } from 'ag-grid-community';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CartesianGrid,
@@ -39,8 +40,11 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ReconSummaryChips, type ReconSummary } from '@/features/commercial-planner/lineupReconciliationDisplay';
 import {
   ExceptionCategoryGrid,
+  EXCEPTION_CATEGORY_LABELS,
+  type ExceptionCategory,
   type ExceptionRow,
 } from '@/features/plan-vs-executed/ExceptionCategoryGrid';
+import { resolveProductDisplay } from '@/features/plan-vs-executed/productDisplay';
 import { apiGet } from '@/lib/api';
 
 type Scorecard = {
@@ -85,7 +89,17 @@ type PlanVsExecutedResponse = {
   product_line_filter: string | null;
   product_group_by: ProductGroupBy;
   rank_by: 'units' | 'value';
-  drill: { customer_id: number | null; product_id: number | null; sales_model: string | null };
+  drill: {
+    customer_id: number | null;
+    product_id: number | null;
+    sales_model: string | null;
+    customer_label?: string | null;
+    product_display?: {
+      entity_primary: string;
+      entity_secondary?: string | null;
+      label_fallback?: boolean;
+    } | null;
+  };
   available_periods: { year: number; quarter: number; label: string }[];
   scorecard: Scorecard;
   exceptions: { customer: LensExceptions; product: LensExceptions; bu: LensExceptions };
@@ -104,10 +118,20 @@ type PlanVsExecutedResponse = {
     business_unit_label: string;
     customer_label: string;
     product_name: string | null;
+    product_sku?: string | null;
+    product_description?: string | null;
+    product_marketing_name?: string | null;
+    product_sales_model?: string | null;
+    entity_primary?: string;
+    entity_secondary?: string | null;
+    label_fallback?: boolean;
     planned_units: number;
     shipped_units: number;
     units_flag: string | null;
     awaiting_po: boolean;
+    planned_value_plan?: number | null;
+    shipped_value_plan?: number | null;
+    shipped_value_cost?: number | null;
   }[];
   data_quality: {
     backlog_066_affected_periods: string[];
@@ -169,10 +193,12 @@ function KpiTile({
 }
 
 export function PlanVsExecutedView() {
-  const [periodFrom, setPeriodFrom] = useState<string | null>(null);
-  const [periodTo, setPeriodTo] = useState<string | null>(null);
-  const [productLine, setProductLine] = useState<string>(ALL_BU);
+  const searchParams = useSearchParams();
+  const [periodFrom, setPeriodFrom] = useState<string | null>(searchParams.get('period_from'));
+  const [periodTo, setPeriodTo] = useState<string | null>(searchParams.get('period_to'));
+  const [productLine, setProductLine] = useState<string>(searchParams.get('product_line') ?? ALL_BU);
   const [lens, setLens] = useState<Lens>('customer');
+  const [exceptionCategory, setExceptionCategory] = useState<ExceptionCategory>('short_ships');
   const [rankBy, setRankBy] = useState<'units' | 'value'>('units');
   const [productGroupBy, setProductGroupBy] = useState<ProductGroupBy>('description');
   const [drillCustomerId, setDrillCustomerId] = useState<number | null>(null);
@@ -271,20 +297,80 @@ export function PlanVsExecutedView() {
 
   const drillCols = useMemo<ColDef[]>(
     () => [
-      { field: 'period_label', headerName: 'Period', width: 90 },
-      { field: 'business_unit_label', headerName: 'BU', width: 80 },
-      { field: 'customer_label', headerName: 'Customer', flex: 1, minWidth: 140 },
-      { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 140 },
-      { field: 'planned_units', headerName: 'Planned', width: 100 },
-      { field: 'shipped_units', headerName: 'Shipped', width: 100 },
+      { field: 'period_label', headerName: 'Period', width: 90, sortable: true },
+      { field: 'business_unit_label', headerName: 'BU', width: 90, sortable: true },
+      { field: 'customer_label', headerName: 'Customer', flex: 1, minWidth: 140, sortable: true },
+      {
+        colId: 'product_entity',
+        headerName: 'Product',
+        flex: 1,
+        minWidth: 180,
+        sortable: true,
+        comparator: (_a, _b, nodeA, nodeB) => {
+          const rowA = nodeA.data as PlanVsExecutedResponse['drill_rows'][number] | undefined;
+          const rowB = nodeB.data as PlanVsExecutedResponse['drill_rows'][number] | undefined;
+          const la = (
+            rowA?.entity_primary ??
+            resolveProductDisplay(rowA ?? {}, productGroupBy).primary
+          ).toLowerCase();
+          const lb = (
+            rowB?.entity_primary ??
+            resolveProductDisplay(rowB ?? {}, productGroupBy).primary
+          ).toLowerCase();
+          return la.localeCompare(lb);
+        },
+        cellRenderer: (p: { data?: PlanVsExecutedResponse['drill_rows'][number] }) => {
+          const row = p.data;
+          if (!row) return null;
+          const display = row.entity_primary
+            ? {
+                primary: row.entity_primary,
+                secondary: row.entity_secondary ?? null,
+                labelFallback: Boolean(row.label_fallback),
+              }
+            : resolveProductDisplay(row, productGroupBy);
+          return (
+            <Stack spacing={0.25} sx={{ py: 0.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {display.primary}
+                {display.labelFallback ? (
+                  <Typography component="span" variant="caption" color="text.disabled" sx={{ ml: 0.75 }}>
+                    (no description)
+                  </Typography>
+                ) : null}
+              </Typography>
+              {display.secondary ? (
+                <Typography variant="caption" color="text.secondary">
+                  {display.secondary}
+                </Typography>
+              ) : null}
+            </Stack>
+          );
+        },
+      },
+      {
+        field: 'planned_units',
+        headerName: 'Planned',
+        width: 100,
+        sortable: true,
+        valueFormatter: (p) => fmtUnits(p.value as number),
+      },
+      {
+        field: 'shipped_units',
+        headerName: 'Shipped',
+        width: 100,
+        sortable: true,
+        valueFormatter: (p) => fmtUnits(p.value as number),
+      },
       {
         field: 'units_flag',
         headerName: 'Flag',
         width: 110,
+        sortable: true,
         valueFormatter: (p) => (p.value as string | null) ?? (p.data?.awaiting_po ? 'awaiting PO' : '—'),
       },
     ],
-    [],
+    [productGroupBy],
   );
 
   const drillGridOptions = useMemo<GridOptions>(
@@ -297,6 +383,22 @@ export function PlanVsExecutedView() {
   const dataFetching = q.isFetching && !q.isLoading;
   const hasDrill =
     drillCustomerId != null || drillProductId != null || (drillSalesModel != null && drillSalesModel !== '');
+
+  const drillChipLabel = useMemo(() => {
+    if (!hasDrill || !data?.drill) return null;
+    if (data.drill.customer_id != null) {
+      return data.drill.customer_label ?? `Customer #${data.drill.customer_id}`;
+    }
+    const pd = data.drill.product_display;
+    if (pd?.entity_primary) {
+      return pd.entity_secondary ? `${pd.entity_primary} · ${pd.entity_secondary}` : pd.entity_primary;
+    }
+    if (data.drill.sales_model) return data.drill.sales_model;
+    if (data.drill.product_id != null) return `Product #${data.drill.product_id}`;
+    return 'Drill active';
+  }, [hasDrill, data?.drill]);
+
+  const activeExceptionRows = lensExceptions?.[exceptionCategory] ?? [];
 
   return (
     <Stack spacing={2}>
@@ -474,98 +576,92 @@ export function PlanVsExecutedView() {
                 </Card>
               ) : null}
 
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                Exception lists
-              </Typography>
-              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" sx={{ mb: 1 }}>
-                <Tabs value={lens} onChange={(_, v) => setLens(v)}>
-                  <Tab value="customer" label="By customer" />
-                  <Tab value="product" label="By product" />
-                  <Tab value="bu" label="By BU" />
-                </Tabs>
-                {lens === 'product' ? (
-                  <ToggleButtonGroup
-                    size="small"
-                    exclusive
-                    value={productGroupBy}
-                    onChange={(_, v) => v && setProductGroupBy(v)}
-                    aria-label="Product grouping"
-                  >
-                    <ToggleButton value="description">Description</ToggleButton>
-                    <ToggleButton value="sku">SKU</ToggleButton>
-                    <ToggleButton value="sales_model">Sales model</ToggleButton>
-                  </ToggleButtonGroup>
-                ) : null}
-              </Stack>
-              {lensExceptions ? (
-                <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-                  <ExceptionCategoryGrid
-                    title="Short-ships"
-                    rows={lensExceptions.short_ships}
-                    rankBy={rankBy}
-                    category="short_ships"
-                    periodForLink={periodForPoLink}
-                    defaultBusinessUnit={buForPoLink}
-                    onRowClick={lens === 'customer' || lens === 'product' ? handleExceptionRowClick : undefined}
-                  />
-                  <ExceptionCategoryGrid
-                    title="Over-ships / deal-stock"
-                    rows={lensExceptions.over_ships}
-                    rankBy={rankBy}
-                    category="over_ships"
-                    periodForLink={periodForPoLink}
-                    defaultBusinessUnit={buForPoLink}
-                    onRowClick={lens === 'customer' || lens === 'product' ? handleExceptionRowClick : undefined}
-                  />
-                  <ExceptionCategoryGrid
-                    title="Unplanned intake"
-                    rows={lensExceptions.unplanned_intake}
-                    rankBy={rankBy}
-                    category="unplanned_intake"
-                    periodForLink={periodForPoLink}
-                    defaultBusinessUnit={buForPoLink}
-                    onRowClick={lens === 'customer' || lens === 'product' ? handleExceptionRowClick : undefined}
-                  />
-                  <ExceptionCategoryGrid
-                    title="No-PO blind spots"
-                    rows={lensExceptions.no_po_blind_spots}
-                    rankBy={rankBy}
-                    category="no_po_blind_spots"
-                    periodForLink={periodForPoLink}
-                    defaultBusinessUnit={buForPoLink}
-                    onRowClick={lens === 'customer' || lens === 'product' ? handleExceptionRowClick : undefined}
-                  />
-                </Stack>
-              ) : null}
+              <Card variant="outlined" sx={{ mb: 2 }}>
+                <CardContent sx={{ pb: '16px !important' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5 }}>
+                    Exception lists
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
+                      <Tabs
+                        value={lens}
+                        onChange={(_, v) => {
+                          setLens(v);
+                          clearDrill();
+                        }}
+                      >
+                        <Tab value="customer" label="By customer" />
+                        <Tab value="product" label="By product" />
+                        <Tab value="bu" label="By BU" />
+                      </Tabs>
+                      {lens === 'product' ? (
+                        <ToggleButtonGroup
+                          size="small"
+                          exclusive
+                          value={productGroupBy}
+                          onChange={(_, v) => v && setProductGroupBy(v)}
+                          aria-label="Product grouping"
+                          data-testid="product-group-by"
+                        >
+                          <ToggleButton value="description">Description</ToggleButton>
+                          <ToggleButton value="sku">SKU</ToggleButton>
+                          <ToggleButton value="sales_model">Sales model</ToggleButton>
+                        </ToggleButtonGroup>
+                      ) : null}
+                    </Stack>
+                    <Tabs
+                      value={exceptionCategory}
+                      onChange={(_, v) => setExceptionCategory(v)}
+                      variant="scrollable"
+                      scrollButtons="auto"
+                      data-testid="exception-category-tabs"
+                    >
+                      {(Object.keys(EXCEPTION_CATEGORY_LABELS) as ExceptionCategory[]).map((cat) => (
+                        <Tab
+                          key={cat}
+                          value={cat}
+                          label={`${EXCEPTION_CATEGORY_LABELS[cat]} (${lensExceptions?.[cat]?.length ?? 0})`}
+                        />
+                      ))}
+                    </Tabs>
+                    {lensExceptions ? (
+                      <ExceptionCategoryGrid
+                        rows={activeExceptionRows}
+                        rankBy={rankBy}
+                        category={exceptionCategory}
+                        periodForLink={periodForPoLink}
+                        defaultBusinessUnit={buForPoLink}
+                        fxPartial={sc?.value.fx_partial}
+                        onRowClick={lens === 'customer' || lens === 'product' ? handleExceptionRowClick : undefined}
+                      />
+                    ) : null}
+                  </Stack>
+                </CardContent>
+              </Card>
 
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} ref={drillRef}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  Drill — six-flag grain
-                </Typography>
-                {hasDrill ? (
-                  <Button size="small" onClick={clearDrill}>
-                    Clear drill
-                  </Button>
-                ) : null}
-                {hasDrill ? (
-                  <Chip
-                    size="small"
-                    label={
-                      drillCustomerId != null
-                        ? `Customer #${drillCustomerId}`
-                        : drillProductId != null
-                          ? `Product #${drillProductId}`
-                          : drillSalesModel ?? 'Drill active'
-                    }
+              <Card variant="outlined" ref={drillRef}>
+                <CardContent>
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                      Drill — six-flag grain
+                    </Typography>
+                    {hasDrill ? (
+                      <Button size="small" onClick={clearDrill}>
+                        Clear drill
+                      </Button>
+                    ) : null}
+                    {hasDrill && drillChipLabel ? (
+                      <Chip size="small" label={drillChipLabel} data-testid="drill-active-chip" />
+                    ) : null}
+                  </Stack>
+                  <EnterpriseDataGrid
+                    rowData={data?.drill_rows ?? []}
+                    columnDefs={drillCols}
+                    height={420}
+                    gridOptions={drillGridOptions}
                   />
-                ) : null}
-              </Stack>
-              <EnterpriseDataGrid
-                rowData={data?.drill_rows ?? []}
-                columnDefs={drillCols}
-                height={420}
-                gridOptions={drillGridOptions}
-              />
+                </CardContent>
+              </Card>
             </>
           ) : null}
         </ModuleDataSection>

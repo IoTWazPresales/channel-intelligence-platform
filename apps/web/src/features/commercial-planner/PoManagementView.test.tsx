@@ -20,6 +20,8 @@ const pushMock = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/admin/po-management',
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -201,12 +203,18 @@ describe('PoManagementView', () => {
     expect(pushMock).toHaveBeenCalledWith(expect.stringContaining('period=26Q1'));
   });
 
-  it('renders a reconciliation summary for linked groups', async () => {
+  it('renders Plan vs Executed deep-link for linked groups instead of reconciliation dump', async () => {
     wireApi({ firstRun: false });
     renderView();
 
-    expect(await screen.findByText('2 matched')).toBeInTheDocument();
-    expect(screen.getByText('1 short')).toBeInTheDocument();
+    const status = await screen.findByTestId('po-linked-status-2026-1-Audio');
+    expect(status).toHaveTextContent('Linked 2/3 POs');
+    expect(screen.getByRole('link', { name: /view outcomes in Plan vs Executed/i })).toHaveAttribute(
+      'href',
+      '/plan-vs-executed?period_from=26Q1&period_to=26Q1&product_line=Audio',
+    );
+    expect(screen.queryByText('2 matched')).not.toBeInTheDocument();
+    expect(screen.queryByText('1 short')).not.toBeInTheDocument();
   });
 
   it('shows pending link chip in coverage when proposals exist', async () => {

@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-06 (Plan vs Executed intelligence view)
+**Last updated:** 2026-07-06 (Plan vs Executed UX + PO Management slim)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `be286ba` — plan-vs-executed: round-2 grids, drill, PO deep-links, golden tests |
+| **HEAD** | (pending) — plan-vs-executed UX repair + PO Management worklist slim |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -58,6 +58,7 @@
 | BACKLOG-066 UI flag | Warning when range includes 25Q1 / 24Q4 |
 | Period enumeration fix (2026-07-06) | `available_periods` from `coverage()` groups — independent of active filter; default latest |
 | Round-2 hardening (2026-07-06) | Exception AG grids, product lens SKU/sales-model/description toggle, cross-drill, PO Mgmt deep-link params, loading-state fix, golden tie-out tests all clean periods |
+| UX repair + PO slim (2026-07-06) | One full-width exception category grid (tabs inside lens); human-readable product labels (description→sales_model→SKU) in exceptions + drill + chip; product selector drives drill column; PO Management linked cards → compact status + PvE deep-link only (recon chips removed; APIs unchanged) |
 
 ---
 
@@ -133,7 +134,7 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 ## Next
 
-- **Unit 6 browser soak** — Plan vs Executed scorecard + PO Management projected recon chips + bulk PO link UX.
+- **Unit 6 browser soak** — Plan vs Executed category tabs + drill labels + PO Management worklist-only cards.
 - **BACKLOG-066** — #39/#40 duplicate-ingestion repair (steward soft-supersede; Plan vs Executed flags affected periods in-UI until repaired).
 - **BACKLOG-067** — backfill file-provenance gap (unified_lineup / bulk_backfill paths retain no original bytes).
 - **Spec C Step C:** archive lineup backfill + link-apply.
