@@ -3,11 +3,13 @@
 import {
   Alert,
   Box,
+  Button,
   Card,
   CardContent,
   Chip,
   FormControl,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Select,
   Stack,
@@ -17,10 +19,10 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
-import type { ColDef } from 'ag-grid-community';
-import { useQuery } from '@tanstack/react-query';
+import type { ColDef, GridOptions } from 'ag-grid-community';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CartesianGrid,
   Legend,
@@ -35,6 +37,10 @@ import {
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ReconSummaryChips, type ReconSummary } from '@/features/commercial-planner/lineupReconciliationDisplay';
+import {
+  ExceptionCategoryGrid,
+  type ExceptionRow,
+} from '@/features/plan-vs-executed/ExceptionCategoryGrid';
 import { apiGet } from '@/lib/api';
 
 type Scorecard = {
@@ -64,26 +70,22 @@ type Scorecard = {
   buckets: { executed_vs_plan: number; off_plan: number; pending: number };
 };
 
-type ExceptionItem = {
-  key: string | number;
-  label: string;
-  units: number;
-  value_plan: number;
-  line_count?: number;
+type LensExceptions = {
+  short_ships: ExceptionRow[];
+  over_ships: ExceptionRow[];
+  unplanned_intake: ExceptionRow[];
+  no_po_blind_spots: ExceptionRow[];
 };
 
-type LensExceptions = {
-  short_ships: ExceptionItem[];
-  over_ships: ExceptionItem[];
-  unplanned_intake: ExceptionItem[];
-  no_po_blind_spots: ExceptionItem[];
-};
+type ProductGroupBy = 'description' | 'sku' | 'sales_model';
 
 type PlanVsExecutedResponse = {
   period_range: { from: string | null; to: string | null };
   default_period: string | null;
   product_line_filter: string | null;
+  product_group_by: ProductGroupBy;
   rank_by: 'units' | 'value';
+  drill: { customer_id: number | null; product_id: number | null; sales_model: string | null };
   available_periods: { year: number; quarter: number; label: string }[];
   scorecard: Scorecard;
   exceptions: { customer: LensExceptions; product: LensExceptions; bu: LensExceptions };
@@ -116,6 +118,8 @@ type PlanVsExecutedResponse = {
 };
 
 type Lens = 'customer' | 'product' | 'bu';
+
+const ALL_BU = '__all__';
 
 function fmtUnits(n: number | null | undefined): string {
   if (n == null) return '—';
@@ -164,58 +168,29 @@ function KpiTile({
   );
 }
 
-function ExceptionList({
-  title,
-  items,
-  rankBy,
-}: {
-  title: string;
-  items: ExceptionItem[];
-  rankBy: 'units' | 'value';
-}) {
-  if (!items.length) {
-    return (
-      <Box sx={{ minWidth: 220, flex: 1 }}>
-        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-          {title}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          None in range
-        </Typography>
-      </Box>
-    );
-  }
-  return (
-    <Box sx={{ minWidth: 220, flex: 1 }}>
-      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-        {title}
-      </Typography>
-      <Stack spacing={0.5}>
-        {items.map((it) => (
-          <Stack key={String(it.key)} direction="row" justifyContent="space-between" spacing={1}>
-            <Typography variant="body2" noWrap sx={{ maxWidth: '60%' }} title={it.label}>
-              {it.label}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {rankBy === 'value' ? fmtValue(it.value_plan) : fmtUnits(it.units)}
-            </Typography>
-          </Stack>
-        ))}
-      </Stack>
-    </Box>
-  );
-}
-
-const ALL_BU = '__all__';
-
 export function PlanVsExecutedView() {
   const [periodFrom, setPeriodFrom] = useState<string | null>(null);
   const [periodTo, setPeriodTo] = useState<string | null>(null);
   const [productLine, setProductLine] = useState<string>(ALL_BU);
   const [lens, setLens] = useState<Lens>('customer');
   const [rankBy, setRankBy] = useState<'units' | 'value'>('units');
+  const [productGroupBy, setProductGroupBy] = useState<ProductGroupBy>('description');
+  const [drillCustomerId, setDrillCustomerId] = useState<number | null>(null);
+  const [drillProductId, setDrillProductId] = useState<number | null>(null);
+  const [drillSalesModel, setDrillSalesModel] = useState<string | null>(null);
+  const drillRef = useRef<HTMLDivElement | null>(null);
 
-  const queryKey = ['plan-vs-executed', periodFrom, periodTo, productLine, rankBy];
+  const queryKey = [
+    'plan-vs-executed',
+    periodFrom,
+    periodTo,
+    productLine,
+    rankBy,
+    productGroupBy,
+    drillCustomerId,
+    drillProductId,
+    drillSalesModel,
+  ];
   const q = useQuery({
     queryKey,
     queryFn: ({ signal }) => {
@@ -224,9 +199,14 @@ export function PlanVsExecutedView() {
       if (periodTo) params.set('period_to', periodTo);
       if (productLine && productLine !== ALL_BU) params.set('product_line', productLine);
       params.set('rank_by', rankBy);
+      params.set('product_group_by', productGroupBy);
+      if (drillCustomerId != null) params.set('drill_customer_id', String(drillCustomerId));
+      if (drillProductId != null) params.set('drill_product_id', String(drillProductId));
+      if (drillSalesModel) params.set('drill_sales_model', drillSalesModel);
       const qs = params.toString();
       return apiGet<PlanVsExecutedResponse>(`/api/v1/plan-vs-executed${qs ? `?${qs}` : ''}`, { signal });
     },
+    placeholderData: keepPreviousData,
   });
 
   const data = q.data;
@@ -243,18 +223,51 @@ export function PlanVsExecutedView() {
     [data?.available_periods],
   );
 
-  const selectedFrom = periodFrom ?? data?.period_range.from ?? data?.default_period ?? '';
-  const selectedTo = periodTo ?? data?.period_range.to ?? data?.default_period ?? '';
+  const selectedFrom = periodFrom ?? '';
+  const selectedTo = periodTo ?? '';
 
   const buOptions = useMemo(() => {
     const set = new Set<string>();
+    for (const p of data?.available_periods ?? []) {
+      /* BU options come from drill rows when loaded */
+      void p;
+    }
     for (const r of data?.drill_rows ?? []) {
       if (r.business_unit_label) set.add(r.business_unit_label);
     }
     return Array.from(set).sort();
-  }, [data?.drill_rows]);
+  }, [data?.drill_rows, data?.available_periods]);
 
   const lensExceptions = data?.exceptions?.[lens];
+  const periodForPoLink = selectedTo || data?.period_range.to || data?.default_period || '';
+  const buForPoLink = productLine !== ALL_BU ? productLine : data?.product_line_filter;
+
+  const clearDrill = useCallback(() => {
+    setDrillCustomerId(null);
+    setDrillProductId(null);
+    setDrillSalesModel(null);
+  }, []);
+
+  const handleExceptionRowClick = useCallback(
+    (row: ExceptionRow) => {
+      if (lens === 'customer' && row.customer_id != null) {
+        setDrillCustomerId(row.customer_id);
+        setDrillProductId(null);
+        setDrillSalesModel(null);
+      } else if (lens === 'product') {
+        setDrillCustomerId(null);
+        if (productGroupBy === 'sales_model' && row.sales_model) {
+          setDrillSalesModel(row.sales_model);
+          setDrillProductId(null);
+        } else if (typeof row.product_id === 'number') {
+          setDrillProductId(row.product_id);
+          setDrillSalesModel(null);
+        }
+      }
+      window.setTimeout(() => drillRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    },
+    [lens, productGroupBy],
+  );
 
   const drillCols = useMemo<ColDef[]>(
     () => [
@@ -274,8 +287,16 @@ export function PlanVsExecutedView() {
     [],
   );
 
+  const drillGridOptions = useMemo<GridOptions>(
+    () => ({ pagination: true, paginationPageSize: 20, domLayout: 'autoHeight' }),
+    [],
+  );
+
   const sc = data?.scorecard;
   const fxNote = sc?.value.fx_partial ? ' (FX partial — some lines lack plan-currency bridge)' : '';
+  const dataFetching = q.isFetching && !q.isLoading;
+  const hasDrill =
+    drillCustomerId != null || drillProductId != null || (drillSalesModel != null && drillSalesModel !== '');
 
   return (
     <Stack spacing={2}>
@@ -307,9 +328,10 @@ export function PlanVsExecutedView() {
       </Alert>
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap" useFlexGap>
-        <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel>From</InputLabel>
+        <FormControl size="small" sx={{ minWidth: 120 }} disabled={!periodOptions.length && q.isLoading}>
+          <InputLabel id="pve-from-label">From</InputLabel>
           <Select
+            labelId="pve-from-label"
             label="From"
             value={selectedFrom}
             onChange={(e) => setPeriodFrom(e.target.value)}
@@ -322,9 +344,15 @@ export function PlanVsExecutedView() {
             ))}
           </Select>
         </FormControl>
-        <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel>To</InputLabel>
-          <Select label="To" value={selectedTo} onChange={(e) => setPeriodTo(e.target.value)} data-testid="period-to">
+        <FormControl size="small" sx={{ minWidth: 120 }} disabled={!periodOptions.length && q.isLoading}>
+          <InputLabel id="pve-to-label">To</InputLabel>
+          <Select
+            labelId="pve-to-label"
+            label="To"
+            value={selectedTo}
+            onChange={(e) => setPeriodTo(e.target.value)}
+            data-testid="period-to"
+          >
             {periodOptions.map((p) => (
               <MenuItem key={p} value={p}>
                 {p}
@@ -361,118 +389,187 @@ export function PlanVsExecutedView() {
         </ToggleButtonGroup>
       </Stack>
 
-      <ModuleDataSection
-        isLoading={q.isLoading}
-        isError={q.isError}
-        error={q.error}
-        onRetry={() => void q.refetch()}
-        isEmpty={Boolean(
-          data && !data.data_unavailable && (data.drill_rows?.length ?? 0) === 0 && data.scorecard.planned_units === 0,
-        )}
-        empty={{
-          title: 'No linked lineup reconciliation in range',
-          description:
-            'Link purchase orders to confirmed lineups in PO Management, then return here for the plan-vs-executed readout.',
-          primary: { label: 'Open PO Management', href: '/admin/po-management' },
-        }}
-      >
-        {sc ? (
-          <>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
-              <KpiTile
-                label="Fill rate (headline)"
-                primary={fmtPct(sc.fill_rate)}
-                secondary={`Line-hit ${fmtPct(sc.line_hit_rate)}`}
-              />
-              <KpiTile
-                label="Planned vs shipped"
-                primary={`${fmtUnits(sc.planned_units)} planned`}
-                secondary={`${fmtUnits(sc.shipped_units_in_plan)} shipped (in-plan)`}
-              />
-              <KpiTile
-                label="Short exposure"
-                primary={fmtUnits(sc.short_exposure_units)}
-                secondary={`${fmtValue(sc.value.short_exposure_value_plan)} plan${fxNote}`}
-                tone="warning"
-              />
-              <KpiTile
-                label="Deal-stock landing"
-                primary={fmtUnits(sc.deal_stock_units)}
-                secondary={`${fmtValue(sc.value.deal_stock_value_plan)} plan${fxNote}`}
-                tone="positive"
-              />
-              <KpiTile
-                label="Unplanned intake"
-                primary={fmtUnits(sc.unplanned_intake_units)}
-                secondary={`${fmtValue(sc.value.unplanned_intake_value_plan)} plan${fxNote}`}
-                tone="neutral"
-              />
-              <KpiTile
-                label="No-PO blind spot"
-                primary={`${sc.no_po_blind_spot.line_count} lines`}
-                secondary={`${fmtUnits(sc.no_po_blind_spot.planned_units)} units at risk`}
-                tone="warning"
-              />
-            </Stack>
+      {dataFetching ? <LinearProgress data-testid="pve-data-refresh" /> : null}
 
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 2 }}>
-              <Chip size="small" color="success" label={`Executed vs plan: ${sc.buckets.executed_vs_plan}`} />
-              <Chip size="small" color="info" label={`Off-plan: ${sc.buckets.off_plan}`} />
-              <Chip size="small" color="warning" label={`Pending: ${sc.buckets.pending}`} />
-              <ReconSummaryChips summary={sc.flag_summary} />
-            </Stack>
-
-            {data?.trend?.length ? (
-              <Card variant="outlined" sx={{ mb: 2 }}>
-                <CardContent>
-                  <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
-                    Fill rate by quarter
-                  </Typography>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <LineChart data={data.trend}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="period_label" />
-                      <YAxis domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
-                      <Tooltip formatter={(v: number) => fmtPct(v)} />
-                      <Legend />
-                      <Line type="monotone" dataKey="fill_rate" name="Fill rate" stroke="#1976d2" dot />
-                      <Line type="monotone" dataKey="line_hit_rate" name="Line-hit rate" stroke="#9c27b0" dot />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            ) : null}
-
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-              Exception lists
-            </Typography>
-            <Tabs value={lens} onChange={(_, v) => setLens(v)} sx={{ mb: 1 }}>
-              <Tab value="customer" label="By customer" />
-              <Tab value="product" label="By product" />
-              <Tab value="bu" label="By BU" />
-            </Tabs>
-            {lensExceptions ? (
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-                <ExceptionList title="Top short-ships" items={lensExceptions.short_ships} rankBy={rankBy} />
-                <ExceptionList title="Top over-ships / deal-stock" items={lensExceptions.over_ships} rankBy={rankBy} />
-                <ExceptionList title="Biggest unplanned intake" items={lensExceptions.unplanned_intake} rankBy={rankBy} />
-                <ExceptionList title="No-PO blind spots" items={lensExceptions.no_po_blind_spots} rankBy={rankBy} />
+      <Box sx={{ position: 'relative', opacity: dataFetching ? 0.72 : 1, transition: 'opacity 0.2s' }}>
+        <ModuleDataSection
+          isLoading={q.isLoading && !data}
+          isError={q.isError}
+          error={q.error}
+          onRetry={() => void q.refetch()}
+          isEmpty={Boolean(
+            data && !data.data_unavailable && (data.drill_rows?.length ?? 0) === 0 && data.scorecard.planned_units === 0,
+          )}
+          empty={{
+            title: 'No linked lineup reconciliation in range',
+            description:
+              'Link purchase orders to confirmed lineups in PO Management, then return here for the plan-vs-executed readout.',
+            primary: { label: 'Open PO Management', href: '/admin/po-management' },
+          }}
+        >
+          {sc ? (
+            <>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+                <KpiTile
+                  label="Fill rate (headline)"
+                  primary={fmtPct(sc.fill_rate)}
+                  secondary={`Line-hit ${fmtPct(sc.line_hit_rate)}`}
+                />
+                <KpiTile
+                  label="Planned vs shipped"
+                  primary={`${fmtUnits(sc.planned_units)} planned`}
+                  secondary={`${fmtUnits(sc.shipped_units_in_plan)} shipped (in-plan)`}
+                />
+                <KpiTile
+                  label="Short exposure"
+                  primary={fmtUnits(sc.short_exposure_units)}
+                  secondary={`${fmtValue(sc.value.short_exposure_value_plan)} plan${fxNote}`}
+                  tone="warning"
+                />
+                <KpiTile
+                  label="Deal-stock landing"
+                  primary={fmtUnits(sc.deal_stock_units)}
+                  secondary={`${fmtValue(sc.value.deal_stock_value_plan)} plan${fxNote}`}
+                  tone="positive"
+                />
+                <KpiTile
+                  label="Unplanned intake"
+                  primary={fmtUnits(sc.unplanned_intake_units)}
+                  secondary={`${fmtValue(sc.value.unplanned_intake_value_plan)} plan${fxNote}`}
+                  tone="neutral"
+                />
+                <KpiTile
+                  label="No-PO blind spot"
+                  primary={`${sc.no_po_blind_spot.line_count} lines`}
+                  secondary={`${fmtUnits(sc.no_po_blind_spot.planned_units)} units at risk`}
+                  tone="warning"
+                />
               </Stack>
-            ) : null}
 
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-              Drill — six-flag grain
-            </Typography>
-            <EnterpriseDataGrid
-              rowData={data?.drill_rows ?? []}
-              columnDefs={drillCols}
-              domLayout="autoHeight"
-              pagination
-              paginationPageSize={25}
-            />
-          </>
-        ) : null}
-      </ModuleDataSection>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 2 }}>
+                <Chip size="small" color="success" label={`Executed vs plan: ${sc.buckets.executed_vs_plan}`} />
+                <Chip size="small" color="info" label={`Off-plan: ${sc.buckets.off_plan}`} />
+                <Chip size="small" color="warning" label={`Pending: ${sc.buckets.pending}`} />
+                <ReconSummaryChips summary={sc.flag_summary} />
+              </Stack>
+
+              {data?.trend?.length ? (
+                <Card variant="outlined" sx={{ mb: 2 }}>
+                  <CardContent>
+                    <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
+                      Fill rate by quarter
+                    </Typography>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <LineChart data={data.trend}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="period_label" />
+                        <YAxis domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
+                        <Tooltip formatter={(v: number) => fmtPct(v)} />
+                        <Legend />
+                        <Line type="monotone" dataKey="fill_rate" name="Fill rate" stroke="#1976d2" dot />
+                        <Line type="monotone" dataKey="line_hit_rate" name="Line-hit rate" stroke="#9c27b0" dot />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                Exception lists
+              </Typography>
+              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" sx={{ mb: 1 }}>
+                <Tabs value={lens} onChange={(_, v) => setLens(v)}>
+                  <Tab value="customer" label="By customer" />
+                  <Tab value="product" label="By product" />
+                  <Tab value="bu" label="By BU" />
+                </Tabs>
+                {lens === 'product' ? (
+                  <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    value={productGroupBy}
+                    onChange={(_, v) => v && setProductGroupBy(v)}
+                    aria-label="Product grouping"
+                  >
+                    <ToggleButton value="description">Description</ToggleButton>
+                    <ToggleButton value="sku">SKU</ToggleButton>
+                    <ToggleButton value="sales_model">Sales model</ToggleButton>
+                  </ToggleButtonGroup>
+                ) : null}
+              </Stack>
+              {lensExceptions ? (
+                <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+                  <ExceptionCategoryGrid
+                    title="Short-ships"
+                    rows={lensExceptions.short_ships}
+                    rankBy={rankBy}
+                    category="short_ships"
+                    periodForLink={periodForPoLink}
+                    defaultBusinessUnit={buForPoLink}
+                    onRowClick={lens === 'customer' || lens === 'product' ? handleExceptionRowClick : undefined}
+                  />
+                  <ExceptionCategoryGrid
+                    title="Over-ships / deal-stock"
+                    rows={lensExceptions.over_ships}
+                    rankBy={rankBy}
+                    category="over_ships"
+                    periodForLink={periodForPoLink}
+                    defaultBusinessUnit={buForPoLink}
+                    onRowClick={lens === 'customer' || lens === 'product' ? handleExceptionRowClick : undefined}
+                  />
+                  <ExceptionCategoryGrid
+                    title="Unplanned intake"
+                    rows={lensExceptions.unplanned_intake}
+                    rankBy={rankBy}
+                    category="unplanned_intake"
+                    periodForLink={periodForPoLink}
+                    defaultBusinessUnit={buForPoLink}
+                    onRowClick={lens === 'customer' || lens === 'product' ? handleExceptionRowClick : undefined}
+                  />
+                  <ExceptionCategoryGrid
+                    title="No-PO blind spots"
+                    rows={lensExceptions.no_po_blind_spots}
+                    rankBy={rankBy}
+                    category="no_po_blind_spots"
+                    periodForLink={periodForPoLink}
+                    defaultBusinessUnit={buForPoLink}
+                    onRowClick={lens === 'customer' || lens === 'product' ? handleExceptionRowClick : undefined}
+                  />
+                </Stack>
+              ) : null}
+
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} ref={drillRef}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  Drill — six-flag grain
+                </Typography>
+                {hasDrill ? (
+                  <Button size="small" onClick={clearDrill}>
+                    Clear drill
+                  </Button>
+                ) : null}
+                {hasDrill ? (
+                  <Chip
+                    size="small"
+                    label={
+                      drillCustomerId != null
+                        ? `Customer #${drillCustomerId}`
+                        : drillProductId != null
+                          ? `Product #${drillProductId}`
+                          : drillSalesModel ?? 'Drill active'
+                    }
+                  />
+                ) : null}
+              </Stack>
+              <EnterpriseDataGrid
+                rowData={data?.drill_rows ?? []}
+                columnDefs={drillCols}
+                height={420}
+                gridOptions={drillGridOptions}
+              />
+            </>
+          ) : null}
+        </ModuleDataSection>
+      </Box>
     </Stack>
   );
 }

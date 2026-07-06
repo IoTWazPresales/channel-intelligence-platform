@@ -4,12 +4,16 @@ import { render, screen } from '@testing-library/react';
 import { PlanVsExecutedView } from './PlanVsExecutedView';
 
 vi.mock('@tanstack/react-query', () => ({
+  keepPreviousData: Symbol('keepPreviousData'),
   useQuery: () => ({
     isLoading: false,
+    isFetching: false,
     isError: false,
     data: {
       data_unavailable: false,
       period_range: { from: '26Q2', to: '26Q2' },
+      drill: { customer_id: null, product_id: null, sales_model: null },
+      product_group_by: 'description',
       default_period: '26Q2',
       available_periods: [
         { year: 2026, quarter: 3, label: '26Q3' },

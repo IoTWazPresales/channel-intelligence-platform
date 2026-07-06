@@ -25,8 +25,13 @@ async def get_plan_vs_executed(
     period_to: str | None = Query(None, description="End quarter e.g. 26Q2"),
     product_line: str | None = Query(None, description="Optional BU / product_line filter"),
     rank_by: Literal["units", "value"] = Query("units"),
+    product_group_by: Literal["description", "sku", "sales_model"] = Query(
+        "description",
+        description="Product lens grouping attribute",
+    ),
     drill_customer_id: int | None = Query(None),
     drill_product_id: int | None = Query(None),
+    drill_sales_model: str | None = Query(None),
     drill_bu: str | None = Query(None),
 ):
     """Portfolio scorecard, exception lists, trend, and six-flag drill rows."""
@@ -36,7 +41,9 @@ async def get_plan_vs_executed(
         period_to=period_to,
         product_line=product_line,
         rank_by=rank_by,
+        product_group_by=product_group_by,
         drill_customer_id=drill_customer_id,
         drill_product_id=drill_product_id,
+        drill_sales_model=drill_sales_model,
         drill_bu=drill_bu,
     )

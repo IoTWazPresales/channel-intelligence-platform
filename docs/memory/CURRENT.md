@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `7bd8e46` — plan-vs-executed: period enumeration + BU selector fix |
+| **HEAD** | `7bd8e46` — *(pending)* PvE round-2 hardening |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -57,6 +57,7 @@
 | 26Q2 KPI tie-out (cip read-only) | **PASS** — fill 45.96%, line-hit 35.36%; over-ship does not reduce fill rate |
 | BACKLOG-066 UI flag | Warning when range includes 25Q1 / 24Q4 |
 | Period enumeration fix (2026-07-06) | `available_periods` from `coverage()` groups — independent of active filter; default latest |
+| Round-2 hardening (2026-07-06) | Exception AG grids, product lens SKU/sales-model/description toggle, cross-drill, PO Mgmt deep-link params, loading-state fix, golden tie-out tests all clean periods |
 
 ---
 

@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo
+from app.models.dimensions import DimProduct
 from app.services.commercial_planner.lineup_period_canonical import (
     active_lineup_case_filters,
     parse_period_filter_to_year_quarter,
@@ -30,6 +31,7 @@ from app.services.commercial_planner.po_management import (
 logger = logging.getLogger(__name__)
 
 RankBy = Literal["units", "value"]
+ProductGroupBy = Literal["description", "sku", "sales_model"]
 
 # BACKLOG-066: duplicate-ingestion periods with inflated planned units within a BU group.
 BACKLOG_066_PERIODS: frozenset[tuple[int, int]] = frozenset({(2025, 1), (2024, 4)})
@@ -38,7 +40,53 @@ _BUCKET_EXECUTED = ("matched", "short", "over")
 _BUCKET_OFF_PLAN = ("unplanned", "amended")
 _BUCKET_PENDING = ("unshipped",)
 
-_EXCEPTION_TOP_N = 10
+
+def scorecard_tie_out_fields(scorecard: dict[str, Any]) -> dict[str, Any]:
+    """Normalized KPI slice for golden tie-out assertions."""
+    return {
+        "planned_units": scorecard["planned_units"],
+        "shipped_units_in_plan": scorecard["shipped_units_in_plan"],
+        "fill_rate": scorecard["fill_rate"],
+        "short_exposure_units": scorecard["short_exposure_units"],
+        "deal_stock_units": scorecard["deal_stock_units"],
+        "unplanned_intake_units": scorecard["unplanned_intake_units"],
+        "no_po_blind_spot": scorecard["no_po_blind_spot"],
+    }
+
+
+def _product_lens_key_label(row: dict[str, Any], group_by: ProductGroupBy) -> tuple[Any, str]:
+    """Product exception lens grouping — default ``description`` matches legacy product_id + product_name."""
+    pid = row.get("product_id")
+    if group_by == "sku":
+        sku = (row.get("product_sku") or "").strip()
+        return pid, sku or row.get("product_name") or f"Product #{pid}"
+    if group_by == "sales_model":
+        sm = (row.get("product_sales_model") or "").strip() or "Unspecified sales model"
+        return sm, sm
+    return pid, row.get("product_name") or f"Product #{pid}"
+
+
+async def _attach_product_catalog_fields(db: AsyncSession, rows: list[dict[str, Any]]) -> None:
+    pids = sorted({int(r["product_id"]) for r in rows if r.get("product_id") is not None})
+    if not pids:
+        return
+    catalog: dict[int, dict[str, Any]] = {}
+    for pid, sku, smn, name in (
+        await db.execute(
+            select(DimProduct.id, DimProduct.sku, DimProduct.sales_model_name, DimProduct.name).where(
+                DimProduct.id.in_(pids)
+            )
+        )
+    ).all():
+        catalog[int(pid)] = {
+            "product_sku": str(sku) if sku else None,
+            "product_sales_model": str(smn).strip() if smn else None,
+            "product_description": str(name) if name else None,
+        }
+    for row in rows:
+        meta = catalog.get(int(row["product_id"])) if row.get("product_id") is not None else None
+        if meta:
+            row.update(meta)
 
 
 def _period_ordinal(year: int, quarter: int) -> int:
@@ -337,6 +385,7 @@ async def collect_execution_rows(
                     customer_labels=label_by_customer,
                 )
             )
+    await _attach_product_catalog_fields(db, out)
     return out
 
 
@@ -344,69 +393,124 @@ def _aggregate_exceptions(
     rows: list[dict[str, Any]],
     *,
     rank_by: RankBy,
+    product_group_by: ProductGroupBy = "description",
 ) -> dict[str, list[dict[str, Any]]]:
-    """Ranked exception lists for customer, product, and BU lenses."""
+    """Ranked exception lists for customer, product, and BU lenses (full list; UI paginates)."""
+
+    def _bucket() -> dict[str, Any]:
+        return {
+            "units": 0.0,
+            "value": 0.0,
+            "label": "",
+            "line_count": 0,
+            "customer_id": None,
+            "product_id": None,
+            "sales_model": None,
+            "business_unit_label": None,
+        }
 
     def _lens_agg(
         key_fn,
         label_fn,
+        meta_fn,
     ) -> dict[str, list[dict[str, Any]]]:
-        short: dict[Any, dict[str, Any]] = defaultdict(lambda: {"units": 0.0, "value": 0.0, "label": ""})
-        over: dict[Any, dict[str, Any]] = defaultdict(lambda: {"units": 0.0, "value": 0.0, "label": ""})
-        unplanned: dict[Any, dict[str, Any]] = defaultdict(lambda: {"units": 0.0, "value": 0.0, "label": ""})
-        no_po: dict[Any, dict[str, Any]] = defaultdict(lambda: {"units": 0.0, "value": 0.0, "label": "", "line_count": 0})
+        short: dict[Any, dict[str, Any]] = defaultdict(_bucket)
+        over: dict[Any, dict[str, Any]] = defaultdict(_bucket)
+        unplanned: dict[Any, dict[str, Any]] = defaultdict(_bucket)
+        no_po: dict[Any, dict[str, Any]] = defaultdict(_bucket)
 
         for r in rows:
             p = float(r.get("planned_units") or 0)
             s = float(r.get("shipped_units") or 0)
             key = key_fn(r)
             lbl = label_fn(r)
+            meta = meta_fn(r, key)
             if p > 0:
                 short_u = max(p - s, 0)
                 if short_u > 0:
                     short[key]["units"] += short_u
                     short[key]["value"] += _row_value_for_rank(r, rank_by=rank_by, field="short")
                     short[key]["label"] = lbl
+                    short[key].update({k: v for k, v in meta.items() if v is not None})
                 over_u = max(s - p, 0)
                 if over_u > 0:
                     over[key]["units"] += over_u
                     over[key]["value"] += _row_value_for_rank(r, rank_by=rank_by, field="over")
                     over[key]["label"] = lbl
+                    over[key].update({k: v for k, v in meta.items() if v is not None})
                 if r.get("awaiting_po"):
                     no_po[key]["units"] += p
                     no_po[key]["value"] += _row_value_for_rank(r, rank_by=rank_by, field="no_po")
                     no_po[key]["line_count"] += 1
                     no_po[key]["label"] = lbl
+                    no_po[key].update({k: v for k, v in meta.items() if v is not None})
             elif s > 0:
                 unplanned[key]["units"] += s
                 unplanned[key]["value"] += _row_value_for_rank(r, rank_by=rank_by, field="unplanned")
                 unplanned[key]["label"] = lbl
+                unplanned[key].update({k: v for k, v in meta.items() if v is not None})
 
-        def _top(d: dict[Any, dict[str, Any]], metric: str) -> list[dict[str, Any]]:
-            ranked = sorted(d.items(), key=lambda kv: kv[1][metric], reverse=True)[:_EXCEPTION_TOP_N]
-            return [
-                {"key": k, "label": v["label"], "units": v["units"], "value_plan": v["value"], "line_count": v.get("line_count")}
-                for k, v in ranked
-                if v[metric] > 0
-            ]
+        def _ranked(d: dict[Any, dict[str, Any]], metric: str) -> list[dict[str, Any]]:
+            ranked = sorted(d.items(), key=lambda kv: kv[1][metric], reverse=True)
+            out_items: list[dict[str, Any]] = []
+            for k, v in ranked:
+                if v[metric] <= 0:
+                    continue
+                out_items.append(
+                    {
+                        "key": k,
+                        "label": v["label"],
+                        "units": v["units"],
+                        "value_plan": v["value"],
+                        "line_count": v.get("line_count") or 0,
+                        "customer_id": v.get("customer_id"),
+                        "product_id": v.get("product_id"),
+                        "sales_model": v.get("sales_model"),
+                        "business_unit_label": v.get("business_unit_label"),
+                    }
+                )
+            return out_items
 
         metric = "value" if rank_by == "value" else "units"
         return {
-            "short_ships": _top(short, metric),
-            "over_ships": _top(over, metric),
-            "unplanned_intake": _top(unplanned, metric),
-            "no_po_blind_spots": _top(no_po, metric),
+            "short_ships": _ranked(short, metric),
+            "over_ships": _ranked(over, metric),
+            "unplanned_intake": _ranked(unplanned, metric),
+            "no_po_blind_spots": _ranked(no_po, metric),
         }
 
+    def _customer_meta(r: dict[str, Any], key: Any) -> dict[str, Any]:
+        return {
+            "customer_id": key if isinstance(key, int) else r.get("customer_id"),
+            "business_unit_label": r.get("business_unit_label"),
+        }
+
+    def _product_meta(r: dict[str, Any], key: Any) -> dict[str, Any]:
+        meta: dict[str, Any] = {"business_unit_label": r.get("business_unit_label")}
+        if product_group_by == "sales_model":
+            meta["sales_model"] = key if isinstance(key, str) else r.get("product_sales_model")
+        else:
+            meta["product_id"] = key if isinstance(key, int) else r.get("product_id")
+        return meta
+
+    def _bu_meta(r: dict[str, Any], key: Any) -> dict[str, Any]:
+        return {"business_unit_label": key if isinstance(key, str) else r.get("business_unit_label")}
+
     return {
-        "customer": _lens_agg(lambda r: r.get("customer_id"), lambda r: r.get("customer_label") or "Unattributed"),
+        "customer": _lens_agg(
+            lambda r: r.get("customer_id"),
+            lambda r: r.get("customer_label") or "Unattributed",
+            _customer_meta,
+        ),
         "product": _lens_agg(
-            lambda r: r.get("product_id"),
-            lambda r: r.get("product_name") or f"Product #{r.get('product_id')}",
+            lambda r: _product_lens_key_label(r, product_group_by)[0],
+            lambda r: _product_lens_key_label(r, product_group_by)[1],
+            _product_meta,
         ),
         "bu": _lens_agg(
             lambda r: r.get("business_unit_label"),
             lambda r: r.get("business_unit_label") or "Unclassified",
+            _bu_meta,
         ),
     }
 
@@ -460,8 +564,10 @@ async def plan_vs_executed_read_model(
     period_to: str | None = None,
     product_line: str | None = None,
     rank_by: RankBy = "units",
+    product_group_by: ProductGroupBy = "description",
     drill_customer_id: int | None = None,
     drill_product_id: int | None = None,
+    drill_sales_model: str | None = None,
     drill_bu: str | None = None,
 ) -> dict[str, Any]:
     try:
@@ -469,26 +575,20 @@ async def plan_vs_executed_read_model(
         default_period = all_periods[0]["label"] if all_periods else None
         effective_from = period_from or default_period
         effective_to = period_to or default_period
+        bu_filter = product_line or drill_bu
 
         rows = await collect_execution_rows(
             db,
             period_from=effective_from,
             period_to=effective_to,
-            product_line=product_line or drill_bu,
+            product_line=bu_filter,
         )
     except Exception:
         logger.exception("plan_vs_executed collect failed")
         return {"data_unavailable": True}
 
-    if drill_customer_id is not None:
-        rows = [r for r in rows if r.get("customer_id") == drill_customer_id]
-    if drill_product_id is not None:
-        rows = [r for r in rows if r.get("product_id") == drill_product_id]
-    if drill_bu and not product_line:
-        rows = [r for r in rows if r.get("business_unit_label") == drill_bu]
-
     scorecard = compute_scorecard_from_execution_rows(rows)
-    exceptions = _aggregate_exceptions(rows, rank_by=rank_by)
+    exceptions = _aggregate_exceptions(rows, rank_by=rank_by, product_group_by=product_group_by)
 
     period_slots = _period_slots_in_range(
         all_periods,
@@ -497,9 +597,22 @@ async def plan_vs_executed_read_model(
     )
     trend = await _compute_trend(
         db,
-        product_line=product_line or drill_bu,
+        product_line=bu_filter,
         period_slots=period_slots,
     )
+
+    drill_rows_source = list(rows)
+    if drill_customer_id is not None:
+        drill_rows_source = [r for r in drill_rows_source if r.get("customer_id") == drill_customer_id]
+    if drill_product_id is not None:
+        drill_rows_source = [r for r in drill_rows_source if r.get("product_id") == drill_product_id]
+    if drill_sales_model:
+        norm = drill_sales_model.strip().lower()
+        drill_rows_source = [
+            r
+            for r in drill_rows_source
+            if ((r.get("product_sales_model") or "").strip().lower() or "unspecified sales model") == norm
+        ]
 
     drill_rows = [
         {
@@ -516,7 +629,7 @@ async def plan_vs_executed_read_model(
             "awaiting_po": r.get("awaiting_po"),
             "value": r.get("value"),
         }
-        for r in rows
+        for r in drill_rows_source
     ]
 
     backlog_066 = _affected_backlog_066_labels(rows)
@@ -527,8 +640,14 @@ async def plan_vs_executed_read_model(
             "to": effective_to,
         },
         "default_period": default_period,
-        "product_line_filter": product_line or drill_bu,
+        "product_line_filter": bu_filter,
+        "product_group_by": product_group_by,
         "rank_by": rank_by,
+        "drill": {
+            "customer_id": drill_customer_id,
+            "product_id": drill_product_id,
+            "sales_model": drill_sales_model,
+        },
         "available_periods": all_periods,
         "scorecard": scorecard,
         "exceptions": exceptions,

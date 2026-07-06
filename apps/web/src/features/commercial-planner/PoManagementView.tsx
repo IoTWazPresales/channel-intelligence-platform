@@ -15,8 +15,8 @@ import {
 } from '@mui/material';
 import type { ColDef, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
@@ -100,12 +100,24 @@ function fmtValue(n: number | null | undefined): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
 }
 
+function poGroupDomId(g: Pick<BacklogGroup, 'year' | 'quarter' | 'product_line'>): string {
+  return `po-mgmt-group-${g.year}-${g.quarter}-${g.product_line}`;
+}
+
 export function PoManagementView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const qc = useQueryClient();
   const [showDismissed, setShowDismissed] = useState(false);
   const [dismissTarget, setDismissTarget] = useState<GapRow | null>(null);
   const [pendingLinkProposals, setPendingLinkProposals] = useState(0);
+  const [highlightGroupId, setHighlightGroupId] = useState<string | null>(null);
+  const [highlightCustomerId, setHighlightCustomerId] = useState<number | null>(null);
+
+  const deepLinkPeriod = searchParams.get('period');
+  const deepLinkBU = searchParams.get('business_unit');
+  const deepLinkCustomerRaw = searchParams.get('customer_id');
+  const deepLinkCustomerId = deepLinkCustomerRaw ? Number.parseInt(deepLinkCustomerRaw, 10) : null;
 
   const scrollToAutoLink = () => {
     document.getElementById(PO_AUTO_LINK_SECTION_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -119,6 +131,24 @@ export function PoManagementView() {
     queryKey: ['po-management', 'backlog'],
     queryFn: ({ signal }) => apiGet<BacklogResponse>('/api/v1/po-management/backlog', { signal }),
   });
+
+  useEffect(() => {
+    if (!deepLinkPeriod || backlogQ.data?.data_unavailable || !backlogQ.data?.groups?.length) return;
+    const match = backlogQ.data.groups.find(
+      (g) =>
+        g.quarter_label === deepLinkPeriod && (!deepLinkBU || g.product_line === deepLinkBU),
+    );
+    if (!match) return;
+    const groupId = poGroupDomId(match);
+    setHighlightGroupId(groupId);
+    if (deepLinkCustomerId != null && !Number.isNaN(deepLinkCustomerId)) {
+      setHighlightCustomerId(deepLinkCustomerId);
+    }
+    const timer = window.setTimeout(() => {
+      document.getElementById(groupId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [backlogQ.data, deepLinkPeriod, deepLinkBU, deepLinkCustomerId]);
   const gapQ = useQuery({
     queryKey: ['po-management', 'gap', showDismissed],
     queryFn: ({ signal }) =>
@@ -317,7 +347,16 @@ export function PoManagementView() {
         ) : (
           <Stack spacing={1.5}>
             {backlog.groups.map((g) => (
-              <Card key={`${g.year}-${g.quarter}-${g.product_line}`} variant="outlined">
+              <Card
+                key={`${g.year}-${g.quarter}-${g.product_line}`}
+                id={poGroupDomId(g)}
+                variant="outlined"
+                sx={
+                  highlightGroupId === poGroupDomId(g)
+                    ? { borderColor: 'warning.main', borderWidth: 2, boxShadow: 2 }
+                    : undefined
+                }
+              >
                 <CardContent>
                   <Stack
                     direction={{ xs: 'column', sm: 'row' }}
@@ -371,6 +410,13 @@ export function PoManagementView() {
                           customers={g.reconciliation_customers}
                           testIdPrefix={`po-mgmt-recon-customers-${g.year}-${g.quarter}-${g.product_line}`}
                         />
+                      ) : null}
+                      {highlightCustomerId != null &&
+                      highlightGroupId === poGroupDomId(g) &&
+                      g.reconciliation_customers?.some((c) => c.customer_id === highlightCustomerId) ? (
+                        <Typography variant="caption" color="warning.main">
+                          Highlighted customer #{highlightCustomerId} — review reconciliation above.
+                        </Typography>
                       ) : null}
                     </Stack>
                   ) : g.lineup_case_exists ? (

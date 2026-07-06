@@ -2,6 +2,8 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from app.services.commercial_planner import plan_vs_executed as mod
 
 
@@ -204,3 +206,135 @@ def test_plan_vs_executed_read_model_wires_scorecard():
     assert out["data_unavailable"] is False
     assert out["scorecard"]["fill_rate"] == 1.0
     assert out["exceptions"]["customer"]["short_ships"] == []
+
+
+def _period_row(period_label: str, *, planned: float, shipped: float, **extra) -> dict:
+    year = 2000 + int(period_label[:2])
+    quarter = int(period_label[-1])
+    base = {
+        **_row(planned=planned, shipped=shipped),
+        "case_id": 1,
+        "year": year,
+        "quarter": quarter,
+        "quarter_label": period_label,
+        "customer_label": "A",
+        "business_unit_label": "NB",
+        "product_sku": "SKU-10",
+        "product_sales_model": "Model-X",
+        "product_description": "Desc-10",
+    }
+    base.update(extra)
+    return base
+
+
+CLEAN_GOLDEN_PERIODS = ["26Q3", "26Q2", "26Q1", "24Q3", "24Q2", "23Q1"]
+FLAGGED_GOLDEN_PERIODS = ["25Q1", "24Q4"]
+
+
+def test_golden_scorecard_tie_out_all_clean_periods():
+    """Independently recompute scorecard from rows for every non-BACKLOG-066 period."""
+
+    async def _run_period(period: str):
+        rows = [
+            _period_row(period, planned=100, shipped=60, flag="short", customer_id=1, product_id=10),
+            _period_row(period, planned=50, shipped=80, flag="over", customer_id=2, product_id=11),
+        ]
+        manual = mod.scorecard_tie_out_fields(mod.compute_scorecard_from_execution_rows(rows))
+        all_periods = [{"year": 2000 + int(period[:2]), "quarter": int(period[-1]), "label": period}]
+        with patch.object(mod, "enumerate_available_periods", AsyncMock(return_value=all_periods)):
+            with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=rows)):
+                with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
+                    out = await mod.plan_vs_executed_read_model(
+                        AsyncMock(), period_from=period, period_to=period
+                    )
+        return manual, out
+
+    for period in CLEAN_GOLDEN_PERIODS:
+        manual, out = asyncio.run(_run_period(period))
+        assert out["data_quality"]["backlog_066_message"] is None, period
+        assert mod.scorecard_tie_out_fields(out["scorecard"]) == manual, period
+
+
+@pytest.mark.parametrize("period", FLAGGED_GOLDEN_PERIODS)
+def test_backlog_066_flag_instead_of_golden_assertion(period: str):
+    rows = [_period_row(period, planned=40, shipped=10, flag="short")]
+
+    async def _run():
+        all_periods = [{"year": 2000 + int(period[:2]), "quarter": int(period[-1]), "label": period}]
+        with patch.object(mod, "enumerate_available_periods", AsyncMock(return_value=all_periods)):
+            with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=rows)):
+                with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
+                    return await mod.plan_vs_executed_read_model(
+                        AsyncMock(), period_from=period, period_to=period
+                    )
+
+    out = asyncio.run(_run())
+    assert out["data_quality"]["backlog_066_message"]
+    assert period in out["data_quality"]["backlog_066_affected_periods"]
+
+
+def test_product_lens_sales_model_groups_distinct_from_sku():
+    rows = [
+        {
+            **_row(planned=10, shipped=5, flag="short", product_id=1),
+            "customer_label": "A",
+            "business_unit_label": "NB",
+            "product_sku": "SKU-A",
+            "product_sales_model": "Shared-Model",
+            "product_name": "Name A",
+        },
+        {
+            **_row(planned=20, shipped=10, flag="short", customer_id=2, product_id=2),
+            "customer_label": "B",
+            "business_unit_label": "NB",
+            "product_sku": "SKU-B",
+            "product_sales_model": "Shared-Model",
+            "product_name": "Name B",
+        },
+    ]
+    by_sku = mod._aggregate_exceptions(rows, rank_by="units", product_group_by="sku")
+    by_model = mod._aggregate_exceptions(rows, rank_by="units", product_group_by="sales_model")
+    assert len(by_sku["product"]["short_ships"]) == 2
+    assert len(by_model["product"]["short_ships"]) == 1
+    assert by_model["product"]["short_ships"][0]["units"] == 15
+
+
+def test_drill_filter_does_not_change_scorecard():
+    rows = [
+        {
+            **_row(planned=100, shipped=50, flag="short", customer_id=1, product_id=10),
+            "case_id": 1,
+            "year": 2026,
+            "quarter": 2,
+            "quarter_label": "26Q2",
+            "customer_label": "A",
+            "business_unit_label": "NB",
+        },
+        {
+            **_row(planned=80, shipped=80, flag="matched", customer_id=2, product_id=11),
+            "case_id": 1,
+            "year": 2026,
+            "quarter": 2,
+            "quarter_label": "26Q2",
+            "customer_label": "B",
+            "business_unit_label": "NB",
+        },
+    ]
+    portfolio_sc = mod.compute_scorecard_from_execution_rows(rows)
+
+    async def _run():
+        all_periods = [{"year": 2026, "quarter": 2, "label": "26Q2"}]
+        with patch.object(mod, "enumerate_available_periods", AsyncMock(return_value=all_periods)):
+            with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=rows)):
+                with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
+                    return await mod.plan_vs_executed_read_model(
+                        AsyncMock(),
+                        period_from="26Q2",
+                        period_to="26Q2",
+                        drill_customer_id=1,
+                    )
+
+    out = asyncio.run(_run())
+    assert out["scorecard"]["planned_units"] == portfolio_sc["planned_units"]
+    assert len(out["drill_rows"]) == 1
+    assert out["drill_rows"][0]["customer_label"] == "A"
