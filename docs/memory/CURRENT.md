@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | (pending) — PvE single-line grids + linked-quarter default |
+| **HEAD** | `89f9e65` — PvE single-line grids + linked-quarter default |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
