@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-06 (PvE single-line entity columns + data-bearing default period)
+**Last updated:** 2026-07-07 (PvE shipped/pipeline taxonomy — fill-rate leak corrected)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -54,13 +54,29 @@
 | UI | `/plan-vs-executed` — scorecard, 3-bucket + 6-flag, 3-lens exceptions, trend, drill grid |
 | Nav | Commercial Planning group — "Plan vs Executed" (top-level route, not under `/admin`) |
 | Deep-links | Commercial Planner guide + PO Management alert |
-| 26Q2 KPI tie-out (cip read-only) | **PASS** — fill 45.96%, line-hit 35.36%; over-ship does not reduce fill rate |
+| 26Q2 KPI tie-out (cip read-only) | **PASS (shipped-only, 2026-07-07)** — fill **41.80%**, line-hit **30.42%**, shipped_units_in_plan **12,648**; over-ship does not reduce fill rate. (Was 45.96% / 35.36% / 16,751 pre-fix when open_order leaked into shipped — 4,103 open_order units removed; see shipped/pipeline taxonomy block below.) |
 | BACKLOG-066 UI flag | Warning when range includes 25Q1 / 24Q4 |
 | Period enumeration fix (2026-07-06) | `available_periods` from `coverage()` groups — independent of active filter; default latest |
 | Round-2 hardening (2026-07-06) | Exception AG grids, product lens SKU/sales-model/description toggle, cross-drill, PO Mgmt deep-link params, loading-state fix, golden tie-out tests all clean periods |
 | UX repair + PO slim (2026-07-06) | One full-width exception category grid (tabs inside lens); human-readable product labels (description→sales_model→SKU) in exceptions + drill + chip; product selector drives drill column; PO Management linked cards → compact status + PvE deep-link only (recon chips removed; APIs unchanged) |
 | Grid + value honesty (2026-07-06) | Fixed-height paginated exception/drill grids; exception value columns return `null` when FX/plan bridge absent (no units-as-value); value-rank disables when category has no value coverage; PO Management "What needs action" worklist summary + visible PvE outcomes button on linked groups |
 | Single-line entity + default period (2026-07-06) | One value per exception column (customer name only — no BU stack); product/BU single Entity column; `resolve_default_period` = latest quarter with linked PO reconciliation (not empty 26Q3) |
+
+---
+
+## PvE shipped/pipeline/landed taxonomy — fill-rate leak corrected — DONE (2026-07-07)
+
+| Item | Status |
+|------|--------|
+| Root cause | `reconcile_case` summed **all** `shipment_evidence_current` quantity on linked POs (no `line_state` filter) → `open_order` (pipeline) credited as shipped, inflating fill rate. Only leak surface. |
+| Fix (`lineup_po_reconciliation.py`) | Shipped aggregation now gated `line_state='shipped'` (explicit — bitemporal read ON makes `apply_active_evidence_filter` a no-op); `open_order` aggregated separately as `pipeline_units`; units flags recompute off shipped-only. Domain confirmed `{shipped, open_order}` only — no third state. |
+| Consumers swept | `plan_vs_executed` scorecard/exceptions/drill/`_compute_trend` (all inherit shipped-only + new `pipeline_units_in_plan` tile + `pending_split`); `po_management` backlog projection re-summarizes flags only (inherits) and coverage meter already `line_state='shipped'`; reconcile endpoint pass-through. |
+| Pipeline surfaced (UI) | New "Pipeline (inbound)" KPI tile (open_order on in-plan rows) + Pipeline drill column; pending bucket splits inbound/pipeline vs cold. Never enters fill. |
+| Corrected 26Q2 (cip read-only) | fill **45.96%→41.80%**, shipped_units_in_plan **16,751→12,648** (4,103 open_order removed), line-hit 35.36%→30.42%. Full range 62.43%→61.10% (−5,853 units). |
+| Doc | `docs/PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md` (addendum to spec) |
+| Tests | New anti-leak tests: reconcile excludes open_order + surfaces pipeline; scorecard excludes pipeline from fill + splits pending. Golden + web tests green. |
+| Landed gap | `pod_date` exists on shipping evidence only; recon has **no landed gate** (~3% shipped-not-landed counted as executed). Deferred → BACKLOG-068. `cargo_status` does not exist. |
+| Out of scope (unchanged) | `lineup_case_suggested_pos.total_shipped_units` still sums all evidence for PO-suggestion **ranking** (not a reported PvE metric) — sibling surface, left as-is. |
 
 ---
 

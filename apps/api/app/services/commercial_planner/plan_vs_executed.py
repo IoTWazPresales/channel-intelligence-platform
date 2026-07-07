@@ -46,6 +46,7 @@ def scorecard_tie_out_fields(scorecard: dict[str, Any]) -> dict[str, Any]:
     return {
         "planned_units": scorecard["planned_units"],
         "shipped_units_in_plan": scorecard["shipped_units_in_plan"],
+        "pipeline_units_in_plan": scorecard["pipeline_units_in_plan"],
         "fill_rate": scorecard["fill_rate"],
         "short_exposure_units": scorecard["short_exposure_units"],
         "deal_stock_units": scorecard["deal_stock_units"],
@@ -354,6 +355,14 @@ def compute_scorecard_from_execution_rows(rows: list[dict[str, Any]]) -> dict[st
     no_po_line_count = len(no_po_rows)
     no_po_units = sum(float(r["planned_units"]) for r in no_po_rows)
 
+    # Pipeline (open_order) is forward/inbound, never in fill. Tile = open_order units on
+    # in-plan rows. Pending split: an in-plan line with nothing shipped is "inbound/pipeline"
+    # when it has open_order inbound, else "cold". See PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md.
+    pipeline_units_in_plan = sum(float(r.get("pipeline_units") or 0) for r in in_plan)
+    pending_rows = [r for r in in_plan if float(r.get("shipped_units") or 0) == 0]
+    inbound_pipeline_rows = [r for r in pending_rows if float(r.get("pipeline_units") or 0) > 0]
+    cold_rows = [r for r in pending_rows if float(r.get("pipeline_units") or 0) == 0]
+
     short_value_plan = 0.0
     deal_stock_value_plan = 0.0
     unplanned_value_plan = 0.0
@@ -418,6 +427,7 @@ def compute_scorecard_from_execution_rows(rows: list[dict[str, Any]]) -> dict[st
         "planned_units": sum_p,
         "shipped_units_in_plan": sum_s_in_plan,
         "shipped_units_total": sum_s_all,
+        "pipeline_units_in_plan": pipeline_units_in_plan,
         "short_exposure_units": short_units,
         "deal_stock_units": deal_stock_units,
         "unplanned_intake_units": unplanned_units,
@@ -425,6 +435,12 @@ def compute_scorecard_from_execution_rows(rows: list[dict[str, Any]]) -> dict[st
             "line_count": no_po_line_count,
             "planned_units": no_po_units,
             "planned_value_plan": no_po_value_plan,
+        },
+        "pending_split": {
+            "inbound_pipeline_lines": len(inbound_pipeline_rows),
+            "inbound_pipeline_units": sum(float(r.get("pipeline_units") or 0) for r in inbound_pipeline_rows),
+            "cold_lines": len(cold_rows),
+            "cold_planned_units": sum(float(r["planned_units"]) for r in cold_rows),
         },
         "value": {
             "planned_value_plan": planned_value_plan,
@@ -755,6 +771,7 @@ async def _compute_trend(
                 "line_hit_rate": sc["line_hit_rate"],
                 "planned_units": sc["planned_units"],
                 "shipped_units_in_plan": sc["shipped_units_in_plan"],
+                "pipeline_units_in_plan": sc["pipeline_units_in_plan"],
                 "short_exposure_units": sc["short_exposure_units"],
                 "deal_stock_units": sc["deal_stock_units"],
                 "unplanned_intake_units": sc["unplanned_intake_units"],
@@ -844,6 +861,7 @@ async def plan_vs_executed_read_model(
                 "label_fallback": display.get("label_fallback"),
                 "planned_units": r.get("planned_units"),
                 "shipped_units": r.get("shipped_units"),
+                "pipeline_units": r.get("pipeline_units") or 0,
                 "units_flag": r.get("units_flag"),
                 "awaiting_po": r.get("awaiting_po"),
                 "planned_value_plan": val.get("planned_value_plan"),

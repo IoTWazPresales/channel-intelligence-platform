@@ -56,6 +56,7 @@ type Scorecard = {
   planned_units: number;
   shipped_units_in_plan: number;
   shipped_units_total: number;
+  pipeline_units_in_plan: number;
   short_exposure_units: number;
   deal_stock_units: number;
   unplanned_intake_units: number;
@@ -63,6 +64,12 @@ type Scorecard = {
     line_count: number;
     planned_units: number;
     planned_value_plan: number;
+  };
+  pending_split: {
+    inbound_pipeline_lines: number;
+    inbound_pipeline_units: number;
+    cold_lines: number;
+    cold_planned_units: number;
   };
   value: {
     planned_value_plan: number;
@@ -130,6 +137,7 @@ type PlanVsExecutedResponse = {
     label_fallback?: boolean;
     planned_units: number;
     shipped_units: number;
+    pipeline_units?: number;
     units_flag: string | null;
     awaiting_po: boolean;
     planned_value_plan?: number | null;
@@ -366,6 +374,13 @@ export function PlanVsExecutedView() {
         valueFormatter: (p) => fmtUnits(p.value as number),
       },
       {
+        field: 'pipeline_units',
+        headerName: 'Pipeline',
+        width: 100,
+        sortable: true,
+        valueFormatter: (p) => fmtUnits((p.value as number) ?? 0),
+      },
+      {
         field: 'units_flag',
         headerName: 'Flag',
         width: 110,
@@ -556,6 +571,14 @@ export function PlanVsExecutedView() {
                   label="Planned vs shipped"
                   primary={`${fmtUnits(sc.planned_units)} planned`}
                   secondary={`${fmtUnits(sc.shipped_units_in_plan)} shipped (in-plan)`}
+                />
+                <KpiTile
+                  label="Pipeline (inbound)"
+                  primary={fmtUnits(sc.pipeline_units_in_plan)}
+                  secondary={`${sc.pending_split?.inbound_pipeline_lines ?? 0} plan lines inbound · ${
+                    sc.pending_split?.cold_lines ?? 0
+                  } cold`}
+                  tone="neutral"
                 />
                 <KpiTile
                   label="Short exposure"

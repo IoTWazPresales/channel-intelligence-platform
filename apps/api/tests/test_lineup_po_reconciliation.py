@@ -70,10 +70,12 @@ def _with_product_results(
     fx=18.5,
     uom="ea",
     customers=None,
+    pipeline=None,
 ):
     """Standard execute sequence for customer x product reconciliation under PO 500.
 
     planned/shipped tuples: (customer_id, product_id, units, value).
+    pipeline tuples: (customer_id, product_id, units) — line_state='open_order'.
     """
     meta = meta if meta is not None else [(10, "Laptop X", "Laptops", "PC")]
     cust_ids: set[int] = set()
@@ -102,7 +104,8 @@ def _with_product_results(
         _R([], scalar_one=None),  # OPEN_CHANNEL canonical id
         _R([], scalar_rows=[]),  # OPEN_CHANNEL alias ids
         _R([], scalar_rows=lineup_lines),  # lineup lines for planned aggregation
-        _R(shipped),  # shipped_rows (resolved_customer_id, product_id, units, value)
+        _R(shipped),  # shipped_rows (resolved_customer_id, product_id, units, value) — line_state='shipped'
+        _R(pipeline or []),  # pipeline_rows (resolved_customer_id, product_id, units) — line_state='open_order'
         _R([], scalar_rows=resolved_scalar),  # resolved_customers on POs
         _R([], scalar_rows=([500] if po_shipped else [])),  # po_with_shipments
         _R(meta),  # product meta
@@ -145,6 +148,30 @@ def test_over():
         mod.reconcile_case(_db(_case(), _with_product_results([(5, 10, 100.0, 5000.0)], [(5, 10, 150.0, 1500.0)])), 1)
     )
     assert _flag(out) == "over"
+
+
+def test_open_order_excluded_from_shipped_and_surfaced_as_pipeline():
+    """Pipeline (open_order) must NOT count as shipped. A leaky impl would sum 60+40=100
+    and read 'matched'; the correct impl reads shipped=60 -> 'short' and pipeline=40."""
+    out = asyncio.run(
+        mod.reconcile_case(
+            _db(
+                _case(),
+                _with_product_results(
+                    [(5, 10, 100.0, 5000.0)],
+                    [(5, 10, 60.0, 600.0)],  # line_state='shipped'
+                    pipeline=[(5, 10, 40.0)],  # line_state='open_order'
+                ),
+            ),
+            1,
+        )
+    )
+    prod = next(p for p in out["products"] if p["product_id"] == 10 and p.get("customer_id") == 5)
+    assert prod["shipped_units"] == 60.0  # open_order excluded
+    assert prod["pipeline_units"] == 40.0  # surfaced separately
+    assert prod["units_flag"] == "short"  # not "matched"
+    assert out["summary"]["short"] == 1
+    assert out["summary"]["matched"] == 0
 
 
 def test_unshipped():
@@ -202,7 +229,8 @@ def test_po_no_match_no_shipments_anywhere():
         _R([], scalar_one=None),
         _R([], scalar_rows=[]),
         _R([], scalar_rows=[]),
-        _R([]),
+        _R([]),  # shipped_rows
+        _R([]),  # pipeline_rows
         _R([], scalar_rows=[]),
         _R([], scalar_rows=[]),
     ]

@@ -34,10 +34,12 @@ def _row(
     customer_id: int = 1,
     product_id: int = 10,
     value_plan: float = 100.0,
+    pipeline: float = 0.0,
 ) -> dict:
     return {
         "planned_units": planned,
         "shipped_units": shipped,
+        "pipeline_units": pipeline,
         "units_flag": flag,
         "awaiting_po": awaiting_po,
         "customer_id": customer_id,
@@ -65,6 +67,29 @@ def test_fill_rate_over_ship_does_not_reduce_fill_rate():
     assert sc["fill_rate"] == 0.75
     assert sc["deal_stock_units"] == 50
     assert sc["short_exposure_units"] == 50
+
+
+def test_pipeline_excluded_from_fill_included_in_pipeline_tile():
+    """open_order (pipeline) inbound must never enter fill; it surfaces as its own tile and
+    splits the pending story into inbound/pipeline vs cold."""
+    rows = [
+        # planned 100, shipped 60 (short), plus 40 inbound pipeline — fill uses 60 only.
+        _row(planned=100, shipped=60, flag="short", pipeline=40),
+        # planned 50, nothing shipped, 30 inbound pipeline -> "inbound/pipeline" pending.
+        _row(planned=50, shipped=0, flag="unshipped", customer_id=2, product_id=11, pipeline=30),
+        # planned 20, nothing shipped, no pipeline -> "cold" pending.
+        _row(planned=20, shipped=0, flag="unshipped", customer_id=3, product_id=12, pipeline=0),
+    ]
+    sc = mod.compute_scorecard_from_execution_rows(rows)
+    # fill = (min(60,100)+min(0,50)+min(0,20)) / (100+50+20) = 60 / 170
+    assert sc["fill_rate"] == pytest.approx(60 / 170)
+    assert sc["shipped_units_in_plan"] == 60  # pipeline NOT summed in
+    assert sc["pipeline_units_in_plan"] == 70  # 40 + 30 (open_order on in-plan rows)
+    # pending_split counts only in-plan rows with nothing shipped (row2 inbound, row3 cold):
+    assert sc["pending_split"]["inbound_pipeline_lines"] == 1
+    assert sc["pending_split"]["inbound_pipeline_units"] == 30
+    assert sc["pending_split"]["cold_lines"] == 1
+    assert sc["pending_split"]["cold_planned_units"] == 20
 
 
 def test_line_hit_rate_secondary_metric():

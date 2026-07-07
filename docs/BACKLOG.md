@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-068 — Landing-quarter attribution for landed-basis KPI (pod_date)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-07 |
+| **Effort** | Medium (recon read model gains a landed sub-state + landing-quarter reattribution; new KPI surface; no schema — `pod_date` already on evidence + fact) |
+| **Source** | PvE shipped/pipeline taxonomy fix (2026-07-07). Fill rate now correctly counts `line_state='shipped'` only, but recon still has **no landed gate**: `reconcile_case` reads `resolved_customer_id, product_id, quantity, amount, unit_price` — never `pod_date`. Confirmed on cip: of shipped-state units on linked POs, ~3% (88 rows / 5,331 units) have `pod_date IS NULL` (shipped, in-transit, not yet delivered) yet are credited as executed in the plan quarter. `docs/PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md` §Landed. |
+| **Idea** | Add **Landed** as a sub-state of Shipped (`pod_date IS NOT NULL`) and, for a **landed-basis sales KPI**, attribute landed units to the **quarter they landed** (pod_date quarter), not the plan quarter. PvE v1 fill deliberately stays plan-quarter shipped-basis; landed is an additional lens, not a replacement. |
+| **Why it matters / deferrable** | Sales/finance care about stock that actually **arrived** in a period (revenue recognition, sell-in timing). Deferrable because v1 fill (shipped-basis) is now correct and the shipped-not-landed gap is small (~3%); becomes material when landed-basis reporting or DSI landing attribution is scoped, or when transit times lengthen. |
+| **What the work is** | (1) Decide the KPI contract: landed-basis fill vs a separate "landed this quarter" tile. (2) `reconcile_case` (or a sibling read) reads `pod_date`; split shipped into shipped-not-landed vs landed; optionally reattribute landed units to pod_date quarter. (3) Surface a Landed tile + shipped-not-landed pending sub-signal. (4) Tests: landed excluded from a plan-quarter landed KPI until pod_date present; reattribution to landing quarter. |
+| **Regression traps** | Do NOT gate v1 shipped-basis fill on landed (keep the two lenses distinct); do not double-count a unit in both plan quarter (shipped) and landing quarter (landed) within the same KPI; `pod_date` is nullable — null must mean "not landed yet", never "excluded"; no migration (fields exist). |
+| **Behavior to retain** | Shipped-basis fill = `line_state='shipped'` (BACKLOG-068 does not change it); pipeline = `open_order`; shipping module remains lifecycle authority for `pod_date`. |
+| **Out of scope** | Cancellation modeling (BACKLOG-063); sell-through/velocity (DSI); changing the shipped/pipeline gate; branch/location tagging. |
+| **TRIGGER** | When a **landed-basis KPI** or **DSI landing/arrival reporting** is scoped; **or** transit lag makes the shipped-not-landed gap material on a reported period. |
+
+---
+
 ## BACKLOG-067 — Backfill file-provenance gap (unified_lineup / bulk_backfill paths)
 
 | Field | Detail |

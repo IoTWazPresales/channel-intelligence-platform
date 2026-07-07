@@ -4,7 +4,11 @@ Per (case x customer x product) we aggregate planned lineup lines and shipment e
 confirmed case POs, then roll up to customer slices and case summary. Customer-grain
 reconciliation avoids staggered per-customer PO confirmation reading as case-wide ``short``.
 
-Units flags (primary):
+``shipped_units`` counts SHIPPED execution only (``line_state='shipped'``). ``open_order``
+evidence is aggregated separately as ``pipeline_units`` (allocated/inbound, not shipped) and
+never enters shipped or fill. See docs/PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md.
+
+Units flags (primary; all computed off shipped-only quantity):
   matched   shipped == planned
   short     0 < shipped < planned
   over      shipped > planned
@@ -40,6 +44,10 @@ from app.services.commercial_planner.open_channel_customer import (
 from app.services.imports.shipment_evidence_read import (
     apply_active_evidence_filter,
     shipment_evidence_read_model,
+)
+from app.services.imports.shipment_evidence_report_detect import (
+    LINE_OPEN_ORDER,
+    LINE_SHIPPED,
 )
 
 EV = shipment_evidence_read_model()
@@ -166,8 +174,13 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
             uom_by_product.setdefault(pid, set()).add(unit)
 
     shipped: dict[tuple[int | None, int], dict[str, float]] = {}
+    pipeline: dict[tuple[int | None, int], float] = {}
     resolved_customers_on_pos: set[int] = set()
     if po_ids:
+        # SHIPPED execution only (line_state='shipped'). Bitemporal read is ON so
+        # apply_active_evidence_filter is a no-op — the line_state gate MUST be explicit
+        # here or open_order (pipeline) inbound leaks into shipped and inflates fill rate.
+        # See docs/PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md.
         shipped_rows = (
             await db.execute(
                 apply_active_evidence_filter(
@@ -188,6 +201,7 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
                     .where(
                         EV.purchase_order_id.in_(po_ids),
                         EV.product_id.isnot(None),
+                        EV.line_state == LINE_SHIPPED,
                     )
                     .group_by(EV.resolved_customer_id, EV.product_id),
                     model=EV,
@@ -197,6 +211,30 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
         for cust_id, pid, units, val in shipped_rows:
             key = (_canon_cust(int(cust_id) if cust_id is not None else None), int(pid))
             shipped[key] = {"units": float(units), "value_cost": float(val)}
+
+        # PIPELINE (line_state='open_order'): allocated/inbound, NOT shipped. Surfaced as its
+        # own forward metric; never summed into shipped or fill.
+        pipeline_rows = (
+            await db.execute(
+                apply_active_evidence_filter(
+                    select(
+                        EV.resolved_customer_id,
+                        EV.product_id,
+                        func.coalesce(func.sum(EV.quantity), 0),
+                    )
+                    .where(
+                        EV.purchase_order_id.in_(po_ids),
+                        EV.product_id.isnot(None),
+                        EV.line_state == LINE_OPEN_ORDER,
+                    )
+                    .group_by(EV.resolved_customer_id, EV.product_id),
+                    model=EV,
+                )
+            )
+        ).all()
+        for cust_id, pid, units in pipeline_rows:
+            key = (_canon_cust(int(cust_id) if cust_id is not None else None), int(pid))
+            pipeline[key] = pipeline.get(key, 0.0) + float(units)
 
         resolved_rows = (
             await db.execute(
@@ -294,6 +332,7 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
             planned_value_plan = planned.get((cust_id, pid), {}).get("value_plan", 0.0)
             shipped_units = shipped.get((cust_id, pid), {}).get("units", 0.0)
             shipped_value_cost = shipped.get((cust_id, pid), {}).get("value_cost", 0.0)
+            pipeline_units = pipeline.get((cust_id, pid), 0.0)
             pmeta = meta.get(pid, {})
 
             if awaiting_po and planned_units > 0:
@@ -337,6 +376,7 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
                 "business_unit": pmeta.get("business_unit"),
                 "planned_units": planned_units,
                 "shipped_units": shipped_units,
+                "pipeline_units": pipeline_units,
                 "units_flag": flag,
                 "awaiting_po": awaiting_po and planned_units > 0,
                 "value": {

@@ -35,10 +35,17 @@ vi.mock('@tanstack/react-query', () => ({
         planned_units: 100,
         shipped_units_in_plan: 62,
         shipped_units_total: 70,
+        pipeline_units_in_plan: 8,
         short_exposure_units: 38,
         deal_stock_units: 10,
         unplanned_intake_units: 5,
         no_po_blind_spot: { line_count: 2, planned_units: 20, planned_value_plan: 1000 },
+        pending_split: {
+          inbound_pipeline_lines: 1,
+          inbound_pipeline_units: 8,
+          cold_lines: 3,
+          cold_planned_units: 12,
+        },
         value: {
           planned_value_plan: 5000,
           shipped_value_plan: 3000,
@@ -75,6 +82,8 @@ describe('PlanVsExecutedView', () => {
     render(<PlanVsExecutedView />);
     expect(screen.getByText('Fill rate (headline)')).toBeTruthy();
     expect(screen.getByText('46.0%')).toBeTruthy();
+    expect(screen.getByText('Pipeline (inbound)')).toBeTruthy();
+    expect(screen.getByText('1 plan lines inbound · 3 cold')).toBeTruthy();
     expect(screen.getByText(/What this view answers/)).toBeTruthy();
     expect(screen.getByTestId('scope-boundary-notes')).toBeTruthy();
     expect(screen.getByTestId('exception-category-tabs')).toBeTruthy();
