@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-08 (shipment apply hardening — unresolved write-through + failure writeback)
+**Last updated:** 2026-07-08 (PvE W1–W4 workstreams — audit gate, duplicate partition, PM gaps, presentation)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `1656606` — real pg_dump clone gate + DSI terminal status + purmidr stale assertion |
+| **HEAD** | `3ace165` — PvE W1–W4 (audit gate PASS, BACKLOG-066 partition clone-proven, PM gap worklist, presentation) |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
