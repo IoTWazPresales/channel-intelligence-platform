@@ -98,3 +98,4 @@ Skip only when intentional: `CIP_SKIP_API_PORT_PREFLIGHT=1` · `CIP_SKIP_REDIS_P
 ### Recently resolved (do not re-audit)
 
 - **BACKLOG-050** — DSI post-apply `staged_metadata` dual-writer deadlock → single-writer fix in `b2b81ea`.
+- **PvE NB 26Q2 shipped gap (2026-07-08)** — not a data bug: user compared in-plan shipped (11,465) to workbook POD Q2 (~16,493). Total in scope = 16,662; evidence POD Q2 NB = 16,493 exact. UI now surfaces **Total shipped (in scope)** tile + scope notes. Do not re-audit unless KPI definitions change.

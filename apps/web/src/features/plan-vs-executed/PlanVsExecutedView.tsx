@@ -17,6 +17,7 @@ import {
   Tabs,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip as MuiTooltip,
   Typography,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -31,7 +32,7 @@ import {
   Line,
   LineChart,
   ResponsiveContainer,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -196,20 +197,36 @@ function KpiTile({
   primary,
   secondary,
   tone = 'default',
+  title,
+  'data-testid': testId,
 }: {
   label: string;
   primary: string;
   secondary?: string;
   tone?: 'default' | 'positive' | 'warning' | 'neutral';
+  /** Tooltip explaining metric scope (shown on label). */
+  title?: string;
+  'data-testid'?: string;
 }) {
   const color =
     tone === 'positive' ? 'success.main' : tone === 'warning' ? 'warning.main' : 'text.primary';
+  const labelNode = (
+    <Typography variant="caption" color="text.secondary" component="span">
+      {label}
+    </Typography>
+  );
   return (
-    <Card variant="outlined" sx={{ flex: '1 1 160px', minWidth: 160 }}>
+    <Card variant="outlined" sx={{ flex: '1 1 160px', minWidth: 160 }} data-testid={testId}>
       <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-        <Typography variant="caption" color="text.secondary">
-          {label}
-        </Typography>
+        {title ? (
+          <MuiTooltip title={title}>
+            <Box component="span" sx={{ cursor: 'help', borderBottom: '1px dotted', borderColor: 'text.disabled' }}>
+              {labelNode}
+            </Box>
+          </MuiTooltip>
+        ) : (
+          labelNode
+        )}
         <Typography variant="h6" sx={{ fontWeight: 600, color }}>
           {primary}
         </Typography>
@@ -471,6 +488,12 @@ export function PlanVsExecutedView() {
           Operational linking and PO worklists live on{' '}
           <Link href="/admin/po-management">PO Management</Link> — this screen reports outcomes only.
         </Typography>
+        <Typography variant="body2" sx={{ mt: 1 }}>
+          <strong>Fill rate</strong> uses in-plan shipped only. <strong>Total shipped (in scope)</strong>{' '}
+          counts all executed units on linked POs in this period×BU filter (in-plan + unplanned) — use that
+          tile for intake volume KPIs. Workbook POD-quarter filters align with shipment evidence, not the
+          fill-rate numerator.
+        </Typography>
       </Alert>
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap" useFlexGap>
@@ -580,13 +603,23 @@ export function PlanVsExecutedView() {
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
                 <KpiTile
                   label="Fill rate (headline)"
+                  title="Σ min(shipped, planned) / Σ planned on in-plan lines only. Unplanned intake does not affect fill."
                   primary={fmtPct(sc.fill_rate)}
                   secondary={`Line-hit ${fmtPct(sc.line_hit_rate)}`}
                 />
                 <KpiTile
-                  label="Planned vs shipped"
+                  label="Planned vs in-plan shipped"
+                  title="Planned lineup units vs shipped on matching plan lines (linked POs). This is the fill-rate pair — not total intake."
                   primary={`${fmtUnits(sc.planned_units)} planned`}
-                  secondary={`${fmtUnits(sc.shipped_units_in_plan)} shipped (in-plan)`}
+                  secondary={`${fmtUnits(sc.shipped_units_in_plan)} shipped against plan`}
+                />
+                <KpiTile
+                  label="Total shipped (in scope)"
+                  title="All shipped execution (line_state=shipped) on POs linked to lineups in this period and BU filter — in-plan plus unplanned. Scope is plan period + linked POs, not POD-landed quarter. For workbook POD-quarter totals, compare shipment evidence directly."
+                  primary={fmtUnits(sc.shipped_units_total)}
+                  secondary={`${fmtUnits(sc.shipped_units_in_plan)} in-plan · ${fmtUnits(sc.unplanned_intake_units)} unplanned`}
+                  tone="neutral"
+                  data-testid="pve-total-shipped-in-scope"
                 />
                 <KpiTile
                   label="Pipeline (inbound)"
@@ -640,7 +673,7 @@ export function PlanVsExecutedView() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="period_label" />
                         <YAxis domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
-                        <Tooltip formatter={(v: number) => fmtPct(v)} />
+                        <RechartsTooltip formatter={(v: number) => fmtPct(v)} />
                         <Legend />
                         <Line type="monotone" dataKey="fill_rate" name="Fill rate" stroke="#1976d2" dot />
                         <Line type="monotone" dataKey="line_hit_rate" name="Line-hit rate" stroke="#9c27b0" dot />

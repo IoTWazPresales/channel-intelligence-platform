@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-08 (PvE W1–W4 workstreams — audit gate, duplicate partition, PM gaps, presentation)
+**Last updated:** 2026-07-08 (PvE W1–W4 + total-shipped KPI clarity + NB 26Q2 intake audit)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `3ace165` — PvE W1–W4 (audit gate PASS, BACKLOG-066 partition clone-proven, PM gap worklist, presentation) |
+| **HEAD** | *(see `git rev-parse --short HEAD` after pull)* — PvE W1–W4 + total-shipped tile / scope notes |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -61,6 +61,22 @@
 | UX repair + PO slim (2026-07-06) | One full-width exception category grid (tabs inside lens); human-readable product labels (description→sales_model→SKU) in exceptions + drill + chip; product selector drives drill column; PO Management linked cards → compact status + PvE deep-link only (recon chips removed; APIs unchanged) |
 | Grid + value honesty (2026-07-06) | Fixed-height paginated exception/drill grids; exception value columns return `null` when FX/plan bridge absent (no units-as-value); value-rank disables when category has no value coverage; PO Management "What needs action" worklist summary + visible PvE outcomes button on linked groups |
 | Single-line entity + default period (2026-07-06) | One value per exception column (customer name only — no BU stack); product/BU single Entity column; `resolve_default_period` = latest quarter with linked PO reconciliation (not empty 26Q3) |
+| Intake vs fill clarity (2026-07-08) | **Total shipped (in scope)** KPI tile (`shipped_units_total` = in-plan + unplanned); tooltips on headline tiles; scope alert explains fill vs intake vs workbook POD. Fix: Recharts `Tooltip` was shadowing MUI — KPI section failed to render. Web test green. |
+
+---
+
+## PvE NB 26Q2 shipped discrepancy — READ-ONLY AUDIT CLOSED (2026-07-08)
+
+| Metric | Value (cip, NB filter 26Q2) |
+|--------|----------------------------|
+| Planned | 22,375 |
+| Shipped in-plan | 11,465 |
+| Unplanned intake | 5,197 |
+| **Total shipped in scope** | **16,662** |
+| Evidence / workbook POD Q2 2026 NB | **16,493** (exact match) |
+| POD Q2 NB not on 26Q2-linked POs | 927 (outside PvE reconcile scope) |
+
+**User confusion root cause:** compared **in-plan shipped** tile to workbook POD total. Correct intake comparison: **total shipped in scope** or evidence POD-quarter filter. Fill rate correctly uses in-plan only. POD-landed quarter KPI deferred → BACKLOG-068.
 
 ---
 
@@ -166,9 +182,10 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 ## Next
 
+- **W2 on cip (Warren)** — PO Management → Duplicate ingestion panel → Preview partition → Apply (cases #39/#40); clone already proven (`cip_clone_dup066`).
 - **Job 310 re-apply on cip** — after merge; expect `completed_with_errors` (148 unresolved products on evidence).
-- **Unit 6 browser soak** — paginated PvE exception grid + value-unavailable cells + PO worklist summary chips.
-- **BACKLOG-066** — #39/#40 duplicate-ingestion repair (steward soft-supersede; Plan vs Executed flags affected periods in-UI until repaired).
+- **Unit 6 browser soak** — PvE total-shipped tile vs workbook POD; paginated exception grid; PO worklist summary chips.
+- **BACKLOG-066** — partition repair wired; **cip apply pending** Warren (UI panel above).
 - **BACKLOG-067** — backfill file-provenance gap (unified_lineup / bulk_backfill paths retain no original bytes).
 - **Spec C Step C:** archive lineup backfill + link-apply.
 - **BACKLOG-062:** Warren decision on open→shipped fact remediation (104 pairs measured).

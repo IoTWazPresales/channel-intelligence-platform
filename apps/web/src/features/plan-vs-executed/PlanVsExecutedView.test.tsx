@@ -80,7 +80,7 @@ vi.mock('@tanstack/react-query', () => ({
 describe('PlanVsExecutedView', () => {
   it('renders headline KPIs, category tabs, value-rank note when no value coverage, and scope notes', () => {
     render(<PlanVsExecutedView />);
-    expect(screen.getByText('Fill rate (headline)')).toBeTruthy();
+    expect(screen.getByText(/Fill rate \(headline\)/)).toBeTruthy();
     expect(screen.getByText('46.0%')).toBeTruthy();
     expect(screen.getByText('Pipeline (inbound)')).toBeTruthy();
     expect(screen.getByText('1 plan lines inbound · 3 cold')).toBeTruthy();
@@ -88,7 +88,9 @@ describe('PlanVsExecutedView', () => {
     expect(screen.getByTestId('scope-boundary-notes')).toBeTruthy();
     expect(screen.getByTestId('exception-category-tabs')).toBeTruthy();
     expect(screen.getByTestId('product-group-by')).toBeTruthy();
-    expect(screen.getByTestId('value-rank-unavailable-note')).toBeTruthy();
+    expect(screen.getByTestId('pve-total-shipped-in-scope')).toBeTruthy();
+    expect(screen.getByText('70')).toBeTruthy();
+    expect(screen.getByText(/62 in-plan · 5 unplanned/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /Rank: value/i })).toHaveProperty('disabled', true);
   });
 });
