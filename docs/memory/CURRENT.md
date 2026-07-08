@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `f9c6823` — PvE total-shipped tile / scope notes (`5123162`) + NB 26Q2 audit |
+| **HEAD** | `2f51a25` — PvE total-shipped tile / scope notes (feature `5123162`) |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
