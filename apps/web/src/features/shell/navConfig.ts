@@ -62,6 +62,7 @@ export const navGroups: NavGroup[] = [
     label: 'Master Data',
     items: [
       { label: 'Products', href: '/admin/products' },
+      { label: 'Product catalogue gaps', href: '/admin/product-master-gaps' },
       { label: 'Customers', href: '/admin/customers' },
       {
         label: 'Alias-scope conflicts',

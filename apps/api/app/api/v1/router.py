@@ -24,6 +24,7 @@ from app.api.v1.endpoints import (
     market,
     plan_vs_executed,
     po_management,
+    product_master_gaps,
     pricing,
     products,
     promo_exports,
@@ -70,5 +71,6 @@ api_router.include_router(
     tags=["imports-product-master"],
 )
 api_router.include_router(mappings.router, prefix="/mappings", tags=["mappings"])
+api_router.include_router(product_master_gaps.router, prefix="/product-master-gaps", tags=["product-master-gaps"])
 api_router.include_router(exceptions.router, prefix="/exceptions", tags=["exceptions"])
 api_router.include_router(dev_wipe.router, prefix="/dev", tags=["dev"])
