@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-08 (CPOR v1 Unit 1 models+migration+terms steward; not applied to cip)
+**Last updated:** 2026-07-08 (CPOR v1 Unit 1 applied on cip — alembic `20260708_0067`)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,23 +10,23 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `90680a4` — CPOR v1 Unit 1 |
+| **HEAD** | `0a1c409` — tip (Unit 1 feature `90680a4`) |
 | **PR** | None open |
 | **Alembic (code)** | `20260708_0067` (head) — CPOR v1 tables |
-| **Alembic (DB)** | **`20260702_0066`** on local `cip` — **0067 NOT applied** (awaits Warren) |
+| **Alembic (DB)** | **`20260708_0067`** on local `cip` |
 
 ---
 
-## CPOR v1 Unit 1 — DONE (code); migration pending on cip
+## CPOR v1 Unit 1 — DONE (code + cip)
 
 | Item | Status |
 |------|--------|
 | Models | `cpor_case`, `cpor_case_line`, `cpor_case_event`, `cpor_claim_evidence_line` |
-| Migration | `20260708_0067` — smoke up+down+reupgrade on `cip_alembic_smoke` only |
+| Migration | `20260708_0067` — smoke proven earlier; **applied to cip** 2026-07-08 (`0066`→`0067`; all 4 tables present) |
 | Terms | `commercial_customer_term` **reused as-is** (margin+rebate already present) |
 | Steward UI | `/admin/customer-commercial-terms` EnterpriseDataGrid create/edit (no delete); existing API + per-customer panel retained |
 | Promo scaffold | Untouched |
-| Next | Warren approve `alembic upgrade` on `cip`; then U2 waterfall + cost service |
+| Next | U2 waterfall + cost suggestion service |
 
 ---
 
