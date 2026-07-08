@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | *(pending)* — real pg_dump clone gate + terminal status DSI mirror + purmidr stale assertion |
+| **HEAD** | `1656606` — real pg_dump clone gate + DSI terminal status + purmidr stale assertion |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
