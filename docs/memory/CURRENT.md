@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `83d3b45` — CPOR funding substrate discovery + draft spec |
+| **HEAD** | `eab64c7` — CPOR funding docs (`83d3b45` discovery + draft spec) |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
