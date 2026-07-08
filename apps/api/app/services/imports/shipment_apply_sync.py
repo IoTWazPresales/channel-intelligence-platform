@@ -15,17 +15,21 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from sqlalchemy import select
+import logging
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import STAGE_LOADED
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
+from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.import_job_background_metadata import (
     persist_clear_background_task_metadata,
     persist_pipeline_worker_started_at,
 )
+from app.services.imports.shipment_apply_failure import record_shipment_apply_failure
 from app.services.imports.shipment_evidence_resolution_plan import (
     SHIPMENT_CUSTOMER_ENTITY,
     SHIPMENT_DISTRIBUTOR_ENTITY,
@@ -43,6 +47,8 @@ from app.services.imports.shipment_inbound_facts import upsert_inbound_shipment_
 # Celery PROGRESS reader (`/imports/jobs/{job_id}/dsi-progress`) and the global background-task
 # indicator already understand.
 ProgressFn = Callable[[str, str, int, int], None]
+
+logger = logging.getLogger(__name__)
 
 
 def _shipment_candidate_eligible_for_apply_auto_map(cand: ImportEntityMappingCandidate) -> bool:
@@ -167,13 +173,38 @@ def run_shipment_apply_sync(
         _emit("writing_facts", "Writing shipment facts", current, total)
 
     _emit("writing_facts", "Writing shipment facts", 0, 0)
-    fact_rows = upsert_inbound_shipment_facts_for_job(db, job_id, on_progress=_facts_progress)
-    db.commit()
+    try:
+        fact_rows = upsert_inbound_shipment_facts_for_job(db, job_id, on_progress=_facts_progress)
+        db.commit()
+    except Exception as exc:
+        logger.exception("run_shipment_apply_sync fact upsert failed job_id=%s", job_id)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return record_shipment_apply_failure(job_id, exc)
+
+    unresolved_product_rows = int(
+        db.scalar(
+            select(func.count())
+            .select_from(ShipmentEvidenceLine)
+            .where(
+                ShipmentEvidenceLine.import_job_id == int(job_id),
+                ShipmentEvidenceLine.product_id.is_(None),
+            )
+        )
+        or 0
+    )
 
     job = db.get(ImportJob, job_id)
     if job is not None:
         job.stage = STAGE_LOADED
-        job.status = "completed"
+        job.status = "completed_with_errors" if unresolved_product_rows else "completed"
+        job.error_summary = (
+            f"{unresolved_product_rows} shipment rows have unresolved product"
+            if unresolved_product_rows
+            else None
+        )
         job.completed_at = datetime.now(timezone.utc)
         persist_clear_background_task_metadata(db, job)
         db.commit()
@@ -184,4 +215,5 @@ def run_shipment_apply_sync(
         "outcome": "applied",
         "auto_applied_candidate_count": auto_applied,
         "fact_rows": fact_rows,
+        "unresolved_product_rows": unresolved_product_rows,
     }

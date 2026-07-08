@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.facts import FactInboundShipment
 from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_apply_failure import ShipmentApplyRowError
 from app.services.imports.shipment_evidence_line_identity import fact_upsert_key_for_evidence_values
 from app.utils.json_safe import to_jsonable
 
@@ -74,7 +75,6 @@ _UPSERT_REFRESH_COLUMNS: tuple[str, ...] = (
 
 _UPSERT_CHUNK_SIZE = 500
 _FACT_UPSERT_CONSTRAINT = "uq_fact_inbound_shipment_fact_upsert_key"
-_SOURCE_KEY_CONSTRAINT = "uq_fact_inbound_shipment_source_key"
 
 
 def _coalesce_shipment_dates(line: ShipmentEvidenceLine) -> date | None:
@@ -203,10 +203,53 @@ def _upsert_open_order_chunk(db: Session, tbl: Any, rows: list[dict[str, Any]]) 
         return
     ins = pg_insert(tbl).values(rows)
     stmt = ins.on_conflict_do_update(
-        constraint=_SOURCE_KEY_CONSTRAINT,
+        constraint=_FACT_UPSERT_CONSTRAINT,
         set_=_conflict_update_set(ins),
     )
     db.execute(stmt)
+
+
+def _upsert_single_evidence_row(db: Session, tbl: Any, line: ShipmentEvidenceLine) -> None:
+    row_values = _row_values_from_evidence(line)
+    line_state = (row_values.get("line_state") or "").strip().lower()
+    if line_state == "shipped":
+        _upsert_shipped_chunk(db, tbl, [row_values])
+    else:
+        _upsert_open_order_chunk(db, tbl, [row_values])
+
+
+def _upsert_evidence_chunk(
+    db: Session,
+    tbl: Any,
+    chunk: list[ShipmentEvidenceLine],
+    row_values: list[dict[str, Any]],
+) -> None:
+    shipped_rows = [r for r in row_values if (r.get("line_state") or "").strip().lower() == "shipped"]
+    open_rows = [r for r in row_values if (r.get("line_state") or "").strip().lower() != "shipped"]
+    try:
+        _upsert_shipped_chunk(db, tbl, shipped_rows)
+        _upsert_open_order_chunk(db, tbl, open_rows)
+    except Exception as chunk_exc:
+        for line in chunk:
+            try:
+                _upsert_single_evidence_row(db, tbl, line)
+            except Exception as row_exc:
+                raise ShipmentApplyRowError(
+                    f"Fact write failed for evidence line {line.id}: {row_exc}",
+                    evidence_line_id=int(line.id),
+                    source_key=str(line.source_key or ""),
+                    source_row_number=int(line.source_row_number) if line.source_row_number is not None else None,
+                    cause=row_exc,
+                ) from row_exc
+        raise ShipmentApplyRowError(
+            f"Fact write failed for chunk starting evidence line {chunk[0].id}: {chunk_exc}",
+            evidence_line_id=int(chunk[0].id),
+            source_key=str(chunk[0].source_key or ""),
+            source_row_number=int(chunk[0].source_row_number)
+            if chunk[0].source_row_number is not None
+            else None,
+            cause=chunk_exc,
+        ) from chunk_exc
 
 
 def _upsert_shipped_chunk(db: Session, tbl: Any, rows: list[dict[str, Any]]) -> None:
@@ -244,10 +287,7 @@ def upsert_inbound_shipment_facts_for_job(
     for start in range(0, total, chunk_size):
         chunk = lines[start : start + chunk_size]
         row_values = [_row_values_from_evidence(line) for line in chunk]
-        shipped_rows = [r for r in row_values if (r.get("line_state") or "").strip().lower() == "shipped"]
-        open_rows = [r for r in row_values if (r.get("line_state") or "").strip().lower() != "shipped"]
-        _upsert_shipped_chunk(db, tbl, shipped_rows)
-        _upsert_open_order_chunk(db, tbl, open_rows)
+        _upsert_evidence_chunk(db, tbl, chunk, row_values)
         n += len(chunk)
         if on_progress is not None:
             on_progress(n, total)

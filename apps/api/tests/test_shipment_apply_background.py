@@ -79,6 +79,7 @@ def test_run_shipment_apply_sync_orchestration(monkeypatch) -> None:
     job.template_slug = "inbound_shipments"
     db = MagicMock()
     db.get.return_value = job
+    db.scalar.return_value = 0
 
     monkeypatch.setattr(apply_mod, "persist_pipeline_worker_started_at", lambda s, j: None)
     monkeypatch.setattr(apply_mod, "persist_clear_background_task_metadata", lambda s, j: None)
@@ -90,7 +91,13 @@ def test_run_shipment_apply_sync_orchestration(monkeypatch) -> None:
         db, 32, on_progress=lambda phase, label, cur, tot: phases.append(phase)
     )
 
-    assert out == {"id": 32, "outcome": "applied", "auto_applied_candidate_count": 2, "fact_rows": 1200}
+    assert out == {
+        "id": 32,
+        "outcome": "applied",
+        "auto_applied_candidate_count": 2,
+        "fact_rows": 1200,
+        "unresolved_product_rows": 0,
+    }
     assert job.stage == STAGE_LOADED
     assert job.status == "completed"
     assert job.completed_at is not None

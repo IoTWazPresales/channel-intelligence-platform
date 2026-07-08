@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-07 (PvE shipped/pipeline taxonomy — fill-rate leak corrected)
+**Last updated:** 2026-07-08 (shipment apply hardening — unresolved write-through + failure writeback)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `89f9e65` — PvE single-line grids + linked-quarter default |
+| **HEAD** | *(pending commit)* — shipment apply hardening (open-order `fact_upsert_key` upsert + PM-style failure writeback) |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -144,6 +144,18 @@
 
 ---
 
+## Shipment apply hardening — DONE (2026-07-08)
+
+| Item | Status |
+|------|--------|
+| Open-order fact upsert | Uses `uq_fact_inbound_shipment_fact_upsert_key` (was stale `source_key` constraint name — job 310 apply blocker) |
+| Unresolved product write-through | All evidence lines upsert; `product_id=NULL` + existing `no_match` / `inactive_only` status carried on facts |
+| Failure writeback | `record_shipment_apply_failure` — fresh session + `ImportRowResult` + terminal `failed` (mirrors PM worker pattern) |
+| Clone gate job 310 | `cip_shipment_apply_gate_310`: 7,080 evidence → **6,649** facts (shipped key dedupe); **140** null-product facts; `dim_product` delta **0**; `completed_with_errors` |
+| **cip job 310** | **Not applied in this task** — Warren re-apply after merge |
+
+---
+
 ## Dev topology
 
 Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm dev:worker` (Redis :6379) or `CIP_DEV_CELERY_DISPATCH=in_process_thread`.
@@ -152,6 +164,7 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 ## Next
 
+- **Job 310 re-apply on cip** — after merge; expect `completed_with_errors` (148 unresolved products on evidence).
 - **Unit 6 browser soak** — paginated PvE exception grid + value-unavailable cells + PO worklist summary chips.
 - **BACKLOG-066** — #39/#40 duplicate-ingestion repair (steward soft-supersede; Plan vs Executed flags affected periods in-UI until repaired).
 - **BACKLOG-067** — backfill file-provenance gap (unified_lineup / bulk_backfill paths retain no original bytes).

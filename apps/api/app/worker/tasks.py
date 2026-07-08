@@ -136,11 +136,15 @@ def shipment_apply_task(self, job_id: int) -> dict:
 
     try:
         with SessionLocal() as db:
-            return run_shipment_apply_sync(db, job_id, on_progress=_on_progress)
-    except Exception:
-        logger.exception("shipment_apply_task failed job_id=%s — writing STAGE_FAILED", job_id)
-        _write_task_level_failure(job_id)
-        raise
+            result = run_shipment_apply_sync(db, job_id, on_progress=_on_progress)
+            if result.get("outcome") == "failed":
+                return result
+            return result
+    except Exception as exc:
+        logger.exception("shipment_apply_task failed job_id=%s — recording failure", job_id)
+        from app.services.imports.shipment_apply_failure import record_shipment_apply_failure
+
+        return record_shipment_apply_failure(job_id, exc)
 
 
 def _shipment_bulk_progress(self, phase: str, phase_label: str):
