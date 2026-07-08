@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | *(see `git rev-parse --short HEAD` after pull)* — PvE W1–W4 + total-shipped tile / scope notes |
+| **HEAD** | `5123162` — PvE W1–W4 + total-shipped tile / scope notes / NB 26Q2 audit |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
