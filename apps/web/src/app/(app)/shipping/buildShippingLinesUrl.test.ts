@@ -24,6 +24,11 @@ describe('buildShippingLinesUrl', () => {
       currencyCode: '',
       operatingUnit: '',
       podDateFilter: '',
+      planQuarter: '',
+      planBusinessUnit: '',
+      lineupAttribution: '',
+      lifecycleBucket: '',
+      slipDirection: '',
       includeRawRow: false,
     });
     expect(url).toContain('skip=100');
@@ -48,9 +53,16 @@ describe('buildShippingLinesUrl', () => {
       currencyCode: 'USD',
       operatingUnit: '',
       podDateFilter: 'true',
+      planQuarter: '2026 Q2',
+      planBusinessUnit: 'NB',
+      lineupAttribution: '',
+      lifecycleBucket: 'shipped',
+      slipDirection: 'slipped_out',
       includeRawRow: true,
     });
     expect(url).toContain('line_state=open_order');
+    expect(url).toContain('plan_quarter=2026+Q2');
+    expect(url).toContain('lifecycle_bucket=shipped');
     expect(url).toContain('status=scheduled');
     expect(url).toContain('distributor_id=3');
     expect(url).toContain('purchase_order_id=77');
@@ -75,6 +87,11 @@ describe('buildShippingLinesUrl', () => {
       currencyCode: '',
       operatingUnit: '',
       podDateFilter: 'false',
+      planQuarter: '',
+      planBusinessUnit: '',
+      lineupAttribution: '',
+      lifecycleBucket: '',
+      slipDirection: '',
     });
     expect(url).toContain('/commercial-summary');
     expect(url).toContain('status=received');

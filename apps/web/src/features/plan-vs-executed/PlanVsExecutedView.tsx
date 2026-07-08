@@ -49,6 +49,7 @@ import {
 } from '@/features/plan-vs-executed/ExceptionCategoryGrid';
 import { DRILL_GRID_PAGE_SIZE, gridRowMetrics, paginatedGridHeight } from '@/features/plan-vs-executed/gridPagination';
 import { resolveProductDisplay } from '@/features/plan-vs-executed/productDisplay';
+import { buildInboundShipmentsHref } from '@/app/(app)/shipping/buildInboundShipmentsHref';
 import { apiGet } from '@/lib/api';
 
 type Scorecard = {
@@ -406,6 +407,26 @@ export function PlanVsExecutedView() {
         width: 110,
         sortable: true,
         valueFormatter: (p) => (p.value as string | null) ?? (p.data?.awaiting_po ? 'awaiting PO' : '—'),
+      },
+      {
+        colId: 'inbound_shipments',
+        headerName: 'Shipments',
+        width: 100,
+        sortable: false,
+        cellRenderer: (p: { data?: PlanVsExecutedResponse['drill_rows'][number] }) => {
+          const row = p.data;
+          if (!row?.period_label) return null;
+          const href = buildInboundShipmentsHref({
+            planQuarter: row.period_label,
+            customerId: row.customer_id ?? null,
+            planBusinessUnit: row.business_unit_label ?? null,
+          });
+          return (
+            <Link href={href} style={{ fontSize: '0.8125rem' }}>
+              View
+            </Link>
+          );
+        },
       },
     ],
     [productGroupBy],

@@ -31,7 +31,9 @@ import { toQueryError } from '@/lib/queryError';
 import { buildShippingLinesUrl, type ShippingFilterParams } from './buildShippingLinesUrl';
 import { InboundShipmentsColumnsDialog, type OptionalColumnMeta } from './InboundShipmentsColumnsDialog';
 import { ShippingCommercialSummary } from './ShippingCommercialSummary';
+import { ShippingLineupQuarterSummary } from './ShippingLineupQuarterSummary';
 import { fmtCellForKey, fmtShortDate } from './shippingGridFormatters';
+import { gridRowMetrics } from '@/features/plan-vs-executed/gridPagination';
 import type { SmartPresetId } from './shippingSmartPresets';
 
 const LS_GRID = 'cip.commercial.inbound-shipments.grid.optional.v1';
@@ -80,6 +82,13 @@ export type ShippingLine = {
   currency_code?: string | null;
   customer_po?: string | null;
   purchase_order_id?: number | null;
+  plan_quarter?: string | null;
+  plan_quarter_label?: string | null;
+  ship_quarter?: string | null;
+  landing_quarter?: string | null;
+  lifecycle_bucket?: string | null;
+  slipped?: boolean | null;
+  awaiting_pod_days?: number | null;
   [key: string]: unknown;
 };
 
@@ -89,6 +98,12 @@ type DistHit = { id: number; distributor_code: string; distributor_name: string 
 type CustHit = { id: number; customer_code: string; customer_name: string };
 
 type DeliveryLensId = 'delivered' | 'in_transit';
+type LifecycleBucketId = 'shipped' | 'pipeline' | 'landed';
+type SlipChipId = 'slipped_in' | 'slipped_out';
+
+type PlanPeriod = { year: number; quarter: number; label: string };
+
+const NUMERIC_CELL_STYLE = { textAlign: 'right' as const, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' };
 
 function cargoStatusLabel(key: string): string {
   if (key === 'received') return 'Delivered';
@@ -135,6 +150,11 @@ export default function InboundShipmentsPage() {
   const [currencyCode, setCurrencyCode] = useState('');
   const [operatingUnit, setOperatingUnit] = useState('');
   const [podDateFilter, setPodDateFilter] = useState<'' | 'true' | 'false'>('');
+  const [planQuarter, setPlanQuarter] = useState('');
+  const [planBusinessUnit, setPlanBusinessUnit] = useState('');
+  const [lineupAttribution, setLineupAttribution] = useState<'' | 'unattributed'>('');
+  const [lifecycleBucket, setLifecycleBucket] = useState<'' | LifecycleBucketId>('');
+  const [slipDirection, setSlipDirection] = useState<'' | SlipChipId>('');
   const [purchaseOrderId, setPurchaseOrderId] = useState<number | null>(null);
   const [poFilterLabel, setPoFilterLabel] = useState<string | null>(null);
   const [smartPreset, setSmartPreset] = useState<SmartPresetId | null>(null);
@@ -318,12 +338,18 @@ export default function InboundShipmentsPage() {
       apiGet<{ distributors: DistHit[]; customers: CustHit[] }>('/api/v1/shipping/filter-options', { signal }),
   });
 
+  const { data: planPeriods } = useQuery({
+    queryKey: ['shipping-lineup-plan-periods'],
+    queryFn: ({ signal }) =>
+      apiGet<{ items: PlanPeriod[] }>('/api/v1/shipping/lineup-plan-periods', { signal }),
+  });
+
   const distOptions = filterOptions?.distributors ?? [];
   const custOptions = filterOptions?.customers ?? [];
 
   const includeRawRow = displayOptionalFields.includes('raw_source_row');
 
-  // Deep-link: ?purchase_order_id=&po_label= filters the grid to one PO (from PO Management / lineup card).
+  // Deep-link: ?purchase_order_id=&po_label= or PvE ?plan_quarter=&customer_id=&plan_business_unit=
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const sp = new URLSearchParams(window.location.search);
@@ -332,7 +358,17 @@ export default function InboundShipmentsPage() {
       setPurchaseOrderId(Number(poId));
       setPoFilterLabel(sp.get('po_label'));
     }
-  }, []);
+    const pq = sp.get('plan_quarter');
+    if (pq) setPlanQuarter(pq);
+    const pbu = sp.get('plan_business_unit');
+    if (pbu) setPlanBusinessUnit(pbu);
+    const cid = sp.get('customer_id');
+    if (cid && /^\d+$/.test(cid)) {
+      const id = Number(cid);
+      const hit = custOptions.find((c) => c.id === id);
+      if (hit) setCustomerPick(hit);
+    }
+  }, [custOptions]);
 
   const filterParams = useMemo<ShippingFilterParams>(
     () => ({
@@ -350,6 +386,11 @@ export default function InboundShipmentsPage() {
       currencyCode,
       operatingUnit,
       podDateFilter,
+      planQuarter,
+      planBusinessUnit,
+      lineupAttribution,
+      lifecycleBucket,
+      slipDirection,
     }),
     [
       lineState,
@@ -366,6 +407,11 @@ export default function InboundShipmentsPage() {
       currencyCode,
       operatingUnit,
       podDateFilter,
+      planQuarter,
+      planBusinessUnit,
+      lineupAttribution,
+      lifecycleBucket,
+      slipDirection,
     ]
   );
 
@@ -405,6 +451,35 @@ export default function InboundShipmentsPage() {
       },
       { field: 'line_state', headerName: 'Line state', minWidth: 120 },
       { field: 'status', headerName: 'Cargo status', minWidth: 120 },
+      {
+        field: 'plan_quarter_label',
+        headerName: 'Plan quarter',
+        minWidth: 108,
+        valueFormatter: (p: ValueFormatterParams<ShippingLine>) =>
+          (p.data?.plan_quarter_label ?? p.data?.plan_quarter ?? '—') as string,
+      },
+      {
+        field: 'landing_quarter',
+        headerName: 'Landing quarter',
+        minWidth: 118,
+        valueFormatter: (p: ValueFormatterParams<ShippingLine>) => (p.value ? String(p.value) : '—'),
+        cellStyle: NUMERIC_CELL_STYLE,
+      },
+      {
+        field: 'slipped',
+        headerName: 'Slip',
+        width: 72,
+        valueFormatter: (p: ValueFormatterParams<ShippingLine>) => (p.value ? 'Yes' : '—'),
+        cellStyle: NUMERIC_CELL_STYLE,
+      },
+      {
+        field: 'awaiting_pod_days',
+        headerName: 'Awaiting POD (days)',
+        minWidth: 140,
+        valueFormatter: (p: ValueFormatterParams<ShippingLine>) =>
+          p.value != null ? String(p.value) : '—',
+        cellStyle: NUMERIC_CELL_STYLE,
+      },
       { field: 'eta_date', headerName: 'ETA', minWidth: 118, valueFormatter: dateColFormatter },
       { field: 'promise_date', headerName: 'Promise', minWidth: 118, valueFormatter: dateColFormatter },
       { field: 'pod_date', headerName: 'POD', minWidth: 118, valueFormatter: dateColFormatter },
@@ -451,6 +526,7 @@ export default function InboundShipmentsPage() {
     () => ({
       getRowId: (p: { data: ShippingLine }) => String(p.data.id),
       defaultColDef: { sortable: true, filter: true, resizable: true },
+      ...gridRowMetrics('comfortable'),
     }),
     []
   );
@@ -493,6 +569,97 @@ export default function InboundShipmentsPage() {
         onApplySmartPreset={applySmartPreset}
         onFilterScheduledPipeline={filterScheduledPipeline}
       />
+
+      {planQuarter && lineupAttribution !== 'unattributed' ? (
+        <ShippingLineupQuarterSummary
+          planQuarter={planQuarter}
+          customerId={customerPick?.id ?? null}
+          planBusinessUnit={planBusinessUnit}
+        />
+      ) : null}
+
+      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
+        Lineup plan quarter
+      </Typography>
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }} alignItems="center">
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel id="flt-plan-quarter">Plan quarter</InputLabel>
+          <Select
+            labelId="flt-plan-quarter"
+            label="Plan quarter"
+            value={planQuarter}
+            onChange={(e) => {
+              setPlanQuarter(String(e.target.value));
+              setLineupAttribution('');
+              resetPagination();
+            }}
+          >
+            <MenuItem value="">(any)</MenuItem>
+            {(planPeriods?.items ?? []).map((p) => (
+              <MenuItem key={p.label} value={p.label}>
+                {p.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <TextField
+          size="small"
+          label="Plan BU"
+          placeholder="e.g. NB"
+          value={planBusinessUnit}
+          onChange={(e) => {
+            setPlanBusinessUnit(e.target.value);
+            resetPagination();
+          }}
+          sx={{ width: 100 }}
+        />
+        <Chip
+          label="Unattributed"
+          size="small"
+          variant={lineupAttribution === 'unattributed' ? 'filled' : 'outlined'}
+          color={lineupAttribution === 'unattributed' ? 'warning' : 'default'}
+          onClick={() => {
+            setLineupAttribution((prev) => (prev === 'unattributed' ? '' : 'unattributed'));
+            setPlanQuarter('');
+            resetPagination();
+          }}
+        />
+        {(['shipped', 'pipeline', 'landed'] as const).map((b) => (
+          <Chip
+            key={b}
+            label={b === 'pipeline' ? 'Pipeline' : b.charAt(0).toUpperCase() + b.slice(1)}
+            size="small"
+            variant={lifecycleBucket === b ? 'filled' : 'outlined'}
+            color={lifecycleBucket === b ? 'primary' : 'default'}
+            onClick={() => {
+              setLifecycleBucket((prev) => (prev === b ? '' : b));
+              resetPagination();
+            }}
+          />
+        ))}
+        <Chip
+          label="Slipped in"
+          size="small"
+          variant={slipDirection === 'slipped_in' ? 'filled' : 'outlined'}
+          color={slipDirection === 'slipped_in' ? 'secondary' : 'default'}
+          disabled={!planQuarter}
+          onClick={() => {
+            setSlipDirection((prev) => (prev === 'slipped_in' ? '' : 'slipped_in'));
+            resetPagination();
+          }}
+        />
+        <Chip
+          label="Slipped out"
+          size="small"
+          variant={slipDirection === 'slipped_out' ? 'filled' : 'outlined'}
+          color={slipDirection === 'slipped_out' ? 'secondary' : 'default'}
+          disabled={!planQuarter}
+          onClick={() => {
+            setSlipDirection((prev) => (prev === 'slipped_out' ? '' : 'slipped_out'));
+            resetPagination();
+          }}
+        />
+      </Stack>
 
       <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
         Smart views

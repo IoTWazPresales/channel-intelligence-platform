@@ -16,6 +16,16 @@ from app.api.deps import get_db
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactInboundShipment
 from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
+from app.services.commercial_planner.inbound_lineup_quarter import (
+    available_plan_periods,
+    enrich_fact_lineup_fields,
+    lineup_quarter_summary,
+    load_attribution_context,
+    normalize_plan_quarter_filter,
+    po_ids_for_plan_quarter,
+    row_matches_lineup_filters,
+)
+from app.services.commercial_planner.lineup_period_canonical import parse_period_filter_to_year_quarter
 
 router = APIRouter()
 
@@ -356,6 +366,23 @@ def _shipping_filters_active(filt: dict[str, Any]) -> bool:
         return True
     if filt.get("pod_date_is_null") is not None:
         return True
+    for key in ("plan_quarter", "plan_quarter_label", "plan_business_unit", "lineup_attribution", "lifecycle_bucket", "slip_direction"):
+        if (filt.get(key) or "").strip():
+            return True
+    return False
+
+
+def _lineup_filters_active(filt: dict[str, Any]) -> bool:
+    for key in (
+        "plan_quarter",
+        "plan_quarter_label",
+        "plan_business_unit",
+        "lineup_attribution",
+        "lifecycle_bucket",
+        "slip_direction",
+    ):
+        if (filt.get(key) or "").strip():
+            return True
     return False
 
 
@@ -840,6 +867,35 @@ async def shipping_eta_shifts(
     return await _eta_shift_metrics(db, sample_limit=sample_limit, filt=filt)
 
 
+@router.get("/lineup-plan-periods")
+async def shipping_lineup_plan_periods(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """Plan-quarter options — same enumeration as Plan vs Executed (coverage groups)."""
+    try:
+        periods = await available_plan_periods(db)
+        return {"items": periods, "data_unavailable": False}
+    except Exception:
+        return {"items": [], "data_unavailable": True}
+
+
+@router.get("/lineup-quarter-summary")
+async def shipping_lineup_quarter_summary(
+    db: AsyncSession = Depends(get_db),
+    plan_quarter: str = Query(..., min_length=2),
+    customer_id: int | None = None,
+    plan_business_unit: str | None = None,
+) -> dict[str, Any]:
+    """Summary strip for the active lineup plan-quarter filter (derived-on-read)."""
+    try:
+        return await lineup_quarter_summary(
+            db,
+            plan_quarter=plan_quarter,
+            customer_id=customer_id,
+            business_unit=plan_business_unit,
+        )
+    except Exception:
+        return {"data_unavailable": True, "plan_quarter": plan_quarter}
+
+
 @router.get("/summary")
 async def shipping_evidence_summary(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     """Structured counts for dashboard tiles (``fact_inbound_shipment``)."""
@@ -909,6 +965,12 @@ async def shipping_evidence_lines(
     product_family: str | None = None,
     product_model: str | None = None,
     include_raw_row: bool = Query(False),
+    plan_quarter: str | None = None,
+    plan_quarter_label: str | None = None,
+    plan_business_unit: str | None = None,
+    lineup_attribution: str | None = None,
+    lifecycle_bucket: str | None = None,
+    slip_direction: str | None = None,
 ) -> dict[str, Any]:
     df = str(date_field or "eta_date").strip()
     if df not in DATE_FIELD_MAP:
@@ -937,18 +999,88 @@ async def shipping_evidence_lines(
         product_family=product_family,
         product_model=product_model,
     )
+    filt["plan_quarter"] = (plan_quarter or "").strip() or None
+    filt["plan_quarter_label"] = (plan_quarter_label or "").strip() or None
+    filt["plan_business_unit"] = (plan_business_unit or "").strip() or None
+    filt["lineup_attribution"] = (lineup_attribution or "").strip() or None
+    filt["lifecycle_bucket"] = (lifecycle_bucket or "").strip() or None
+    filt["slip_direction"] = (slip_direction or "").strip() or None
+
+    plan_q_key, plan_q_label = normalize_plan_quarter_filter(
+        filt.get("plan_quarter"), filt.get("plan_quarter_label")
+    )
+    lineup_active = _lineup_filters_active(filt)
 
     need_dist, need_prod, need_cust = _dim_join_flags(filt)
 
-    total = await _count_shipment_facts(db, filt)
+    extra_where: list[Any] = []
+    if lineup_active and filt.get("lineup_attribution") != "unattributed" and plan_q_key:
+        year, quarter = parse_period_filter_to_year_quarter(plan_q_key)
+        if year is not None and quarter is not None:
+            po_ids = await po_ids_for_plan_quarter(
+                db,
+                year=year,
+                quarter=quarter,
+                business_unit=filt.get("plan_business_unit"),
+            )
+            if po_ids:
+                extra_where.append(FactInboundShipment.purchase_order_id.in_(po_ids))
+            else:
+                return {"total": 0, "skip": skip, "limit": limit, "items": [], "lineup_filter_active": True}
 
-    q = select(FactInboundShipment).order_by(FactInboundShipment.updated_at.desc())
-    q = _apply_outer_joins(q, need_dist, need_prod, need_cust)
-    q = _apply_fact_where_clause(
-        q, join_distributor=need_dist, join_product=need_prod, join_customer=need_cust, **filt
-    )
-    res = await db.execute(q.offset(skip).limit(limit))
-    rows = res.scalars().all()
+    if lineup_active:
+        q = select(FactInboundShipment).order_by(FactInboundShipment.updated_at.desc())
+        q = _apply_outer_joins(q, need_dist, need_prod, need_cust)
+        q = _apply_fact_where_clause(
+            q, join_distributor=need_dist, join_product=need_prod, join_customer=need_cust, **filt
+        )
+        for clause in extra_where:
+            q = q.where(clause)
+        res = await db.execute(q)
+        all_rows = res.scalars().all()
+
+        ctx = await load_attribution_context(db)
+        prod_ids = {int(r.product_id) for r in all_rows if r.product_id is not None}
+        product_meta: dict[int, tuple[str | None, str | None]] = {}
+        if prod_ids:
+            for pid, pl, bu in (
+                await db.execute(
+                    select(DimProduct.id, DimProduct.product_line, DimProduct.business_unit).where(
+                        DimProduct.id.in_(prod_ids)
+                    )
+                )
+            ).all():
+                product_meta[int(pid)] = (pl, bu)
+
+        filtered: list[tuple[FactInboundShipment, dict[str, Any]]] = []
+        for r in all_rows:
+            pl, bu = product_meta.get(int(r.product_id), (None, None)) if r.product_id else (None, None)
+            enriched = enrich_fact_lineup_fields(r, ctx=ctx, product_line=pl, business_unit=bu)
+            if row_matches_lineup_filters(
+                enriched,
+                plan_quarter=plan_q_key,
+                plan_quarter_label=plan_q_label,
+                lineup_attribution=filt.get("lineup_attribution"),
+                lifecycle_bucket_filter=filt.get("lifecycle_bucket"),
+                slip_direction=filt.get("slip_direction"),
+            ):
+                filtered.append((r, enriched))
+
+        total = len(filtered)
+        page_rows = filtered[skip : skip + limit]
+        rows = [r for r, _e in page_rows]
+        enrich_by_id = {int(r.id): e for r, e in page_rows}
+    else:
+        total = await _count_shipment_facts(db, filt)
+        q = select(FactInboundShipment).order_by(FactInboundShipment.updated_at.desc())
+        q = _apply_outer_joins(q, need_dist, need_prod, need_cust)
+        q = _apply_fact_where_clause(
+            q, join_distributor=need_dist, join_product=need_prod, join_customer=need_cust, **filt
+        )
+        res = await db.execute(q.offset(skip).limit(limit))
+        rows = res.scalars().all()
+        enrich_by_id = {}
+        ctx = await load_attribution_context(db) if rows else None
 
     prod_ids = {r.product_id for r in rows if r.product_id}
     dist_ids = {r.distributor_id for r in rows if r.distributor_id}
@@ -956,10 +1088,12 @@ async def shipping_evidence_lines(
     products: dict[int, tuple[str, str]] = {}
     distributors: dict[int, tuple[str, str]] = {}
     customers: dict[int, tuple[str, str]] = {}
+    product_lines: dict[int, tuple[str | None, str | None]] = {}
     if prod_ids:
         pr = await db.execute(select(DimProduct).where(DimProduct.id.in_(prod_ids)))
         for p in pr.scalars().all():
             products[int(p.id)] = (p.name or "", p.sku or "")
+            product_lines[int(p.id)] = (p.product_line, p.business_unit)
     if dist_ids:
         dr = await db.execute(select(DimDistributor).where(DimDistributor.id.in_(dist_ids)))
         for d in dr.scalars().all():
@@ -974,16 +1108,26 @@ async def shipping_evidence_lines(
         pn, ps = products.get(int(r.product_id), (None, None)) if r.product_id else (None, None)
         dn, dc = distributors.get(int(r.distributor_id), (None, None)) if r.distributor_id else (None, None)
         cname, ccode = customers.get(int(r.customer_id), (None, None)) if r.customer_id else (None, None)
-        items.append(
-            _fact_to_dict(
-                r,
-                product_name=pn,
-                product_sku=ps,
-                distributor_name=dn,
-                distributor_code=dc,
-                customer_name=cname,
-                customer_code=ccode,
-                include_raw_row=include_raw_row,
-            )
+        pl, bu = product_lines.get(int(r.product_id), (None, None)) if r.product_id else (None, None)
+        payload = _fact_to_dict(
+            r,
+            product_name=pn,
+            product_sku=ps,
+            distributor_name=dn,
+            distributor_code=dc,
+            customer_name=cname,
+            customer_code=ccode,
+            include_raw_row=include_raw_row,
         )
-    return {"total": total, "skip": skip, "limit": limit, "items": items}
+        if int(r.id) in enrich_by_id:
+            payload.update(enrich_by_id[int(r.id)])
+        elif ctx is not None:
+            payload.update(
+                enrich_fact_lineup_fields(r, ctx=ctx, product_line=pl, business_unit=bu)
+            )
+        items.append(payload)
+
+    out: dict[str, Any] = {"total": total, "skip": skip, "limit": limit, "items": items}
+    if lineup_active:
+        out["lineup_filter_active"] = True
+    return out

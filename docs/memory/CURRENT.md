@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-08 (PvE W1–W4 + total-shipped KPI clarity + NB 26Q2 intake audit)
+**Last updated:** 2026-07-08 (inbound shipments by lineup plan quarter)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `2f51a25` — PvE total-shipped tile / scope notes (feature `5123162`) |
+| **HEAD** | (pending commit) — inbound shipments lineup plan-quarter filter + summary |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -41,6 +41,23 @@
 | `linked_po_count` / coverage counting | Unchanged |
 
 **Projection flag-note (intelligence view):** `unplanned` / `amended` stay as computed per product row. A BU group may show `unplanned` where the case has planned lines in **other** BUs — correct per `product_line` filter; Plan vs Executed drill adds BU context in-UI.
+
+---
+
+---
+
+## Inbound shipments by lineup plan quarter — DONE (2026-07-08)
+
+| Item | Status |
+|------|--------|
+| Read model | `inbound_lineup_quarter.py` — PO-only attribution via `commercial_lineup_case_po`; plan_quarter from case `inferred_period_start`; disambiguate multi-case PO by (customer×product) lineup line → single-case → BU match |
+| API | `GET /shipping/lines` enriched fields + filters (`plan_quarter`, `plan_business_unit`, `lineup_attribution=unattributed`, `lifecycle_bucket`, `slip_direction`); `GET /shipping/lineup-plan-periods`; `GET /shipping/lineup-quarter-summary` |
+| UI | `/shipping` — plan-quarter select (PvE period enumeration), BU filter, summary strip, bucket/slip chips, columns (plan/landing quarter, slip, awaiting POD days); PvE drill → inbound deep-link |
+| Taxonomy | shipped / pipeline / landed per `PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md`; awaiting_pod_days on shipped+pod_date NULL only |
+| cip 26Q2 validation (read-only) | planned **27,218** · shipped **967** · landed **17,890** · pipeline **5,224** · slipped_in **111** · slipped_out **204**; **4** ambiguous multi-quarter POs; slipped sample id 106449 (plan 26Q2 → land 26Q3); awaiting-POD sample 57 days |
+| Tests | 11 API unit tests (`test_inbound_lineup_quarter.py`); web `buildShippingLinesUrl.test.ts` green |
+
+Closes the "filter inbound by lineup quarter" ask. No schema change.
 
 ---
 
@@ -182,6 +199,7 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 ## Next
 
+- **Browser soak** — inbound `/shipping` plan-quarter filter + PvE drill deep-link; summary strip vs grid row counts for 26Q2.
 - **W2 on cip (Warren)** — PO Management → Duplicate ingestion panel → Preview partition → Apply (cases #39/#40); clone already proven (`cip_clone_dup066`).
 - **Job 310 re-apply on cip** — after merge; expect `completed_with_errors` (148 unresolved products on evidence).
 - **Unit 6 browser soak** — PvE total-shipped tile vs workbook POD; paginated exception grid; PO worklist summary chips.
