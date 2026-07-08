@@ -96,6 +96,12 @@ from app.models.commercial_planner import (
     CommercialPlanLine,
     CommercialSkuAssumption,
 )
+from app.models.cpor import (
+    CporCase,
+    CporCaseEvent,
+    CporCaseLine,
+    CporClaimEvidenceLine,
+)
 from app.models.commercial_lineup import (
     CommercialLineupCase,
     CommercialLineupCasePo,
@@ -179,6 +185,10 @@ __all__ = [
     "CommercialCustomerTerm",
     "CommercialDistributorTerm",
     "CommercialSkuAssumption",
+    "CporCase",
+    "CporCaseLine",
+    "CporCaseEvent",
+    "CporClaimEvidenceLine",
     "HistoricalLineupImportHeader",
     "HistoricalLineupImportLine",
     "ImportDistributorSiStagingLine",

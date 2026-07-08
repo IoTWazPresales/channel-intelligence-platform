@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-08 (CPOR funding substrate discovery + draft spec; inbound lineup-quarter shipped)
+**Last updated:** 2026-07-08 (CPOR v1 Unit 1 models+migration+terms steward; not applied to cip)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,10 +10,23 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `80e12b6` — tip (CPOR docs in `83d3b45`) |
+| **HEAD** | *(update after commit)* |
 | **PR** | None open |
-| **Alembic (code)** | `20260702_0066` (head) |
-| **Alembic (DB)** | **`20260702_0066`** on local `cip` |
+| **Alembic (code)** | `20260708_0067` (head) — CPOR v1 tables |
+| **Alembic (DB)** | **`20260702_0066`** on local `cip` — **0067 NOT applied** (awaits Warren) |
+
+---
+
+## CPOR v1 Unit 1 — DONE (code); migration pending on cip
+
+| Item | Status |
+|------|--------|
+| Models | `cpor_case`, `cpor_case_line`, `cpor_case_event`, `cpor_claim_evidence_line` |
+| Migration | `20260708_0067` — smoke up+down+reupgrade on `cip_alembic_smoke` only |
+| Terms | `commercial_customer_term` **reused as-is** (margin+rebate already present) |
+| Steward UI | `/admin/customer-commercial-terms` EnterpriseDataGrid create/edit (no delete); existing API + per-customer panel retained |
+| Promo scaffold | Untouched |
+| Next | Warren approve `alembic upgrade` on `cip`; then U2 waterfall + cost service |
 
 ---
 

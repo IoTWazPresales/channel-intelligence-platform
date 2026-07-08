@@ -8,12 +8,14 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Link as MuiLink,
   Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import NextLink from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
@@ -86,8 +88,11 @@ export function CustomerCommercialTermsPanel({ customerId, customerCode }: Props
         Commercial terms
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-        These defaults feed Commercial Planner economics. Plan-line overrides may still be applied later. Configure on
-        this page or bulk edit in Commercial Planner → Planner defaults.
+        These defaults feed Commercial Planner and CPOR funding. Plan-line overrides may still apply. Bulk steward grid:{' '}
+        <MuiLink component={NextLink} href="/admin/customer-commercial-terms" underline="hover">
+          Customer commercial terms
+        </MuiLink>
+        .
       </Typography>
       {isLoading ? (
         <Typography variant="body2" color="text.secondary">
