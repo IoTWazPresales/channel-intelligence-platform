@@ -363,6 +363,7 @@ export function PlanVsExecutedView() {
         field: 'planned_units',
         headerName: 'Planned',
         width: 100,
+        type: 'numericColumn',
         sortable: true,
         valueFormatter: (p) => fmtUnits(p.value as number),
       },
@@ -370,6 +371,7 @@ export function PlanVsExecutedView() {
         field: 'shipped_units',
         headerName: 'Shipped',
         width: 100,
+        type: 'numericColumn',
         sortable: true,
         valueFormatter: (p) => fmtUnits(p.value as number),
       },
@@ -377,6 +379,7 @@ export function PlanVsExecutedView() {
         field: 'pipeline_units',
         headerName: 'Pipeline',
         width: 100,
+        type: 'numericColumn',
         sortable: true,
         valueFormatter: (p) => fmtUnits((p.value as number) ?? 0),
       },
@@ -533,6 +536,19 @@ export function PlanVsExecutedView() {
             Rank: value
           </ToggleButton>
         </ToggleButtonGroup>
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={productGroupBy}
+          onChange={(_, v) => v && setProductGroupBy(v)}
+          aria-label="Product attribute"
+          data-testid="product-group-by"
+          sx={EXCLUSIVE_TOGGLE_SX}
+        >
+          <ToggleButton value="description">Description</ToggleButton>
+          <ToggleButton value="sku">SKU</ToggleButton>
+          <ToggleButton value="sales_model">Sales model</ToggleButton>
+        </ToggleButtonGroup>
       </Stack>
 
       {!hasValueCoverage && lensExceptions ? (
@@ -640,35 +656,18 @@ export function PlanVsExecutedView() {
                     Exception lists
                   </Typography>
                   <Stack spacing={1.5}>
-                    <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
-                      <Tabs
-                        value={lens}
-                        onChange={(_, v) => {
-                          setLens(v);
-                          clearDrill();
-                        }}
-                        sx={LENS_TABS_SX}
-                      >
-                        <Tab value="customer" label="By customer" />
-                        <Tab value="product" label="By product" />
-                        <Tab value="bu" label="By BU" />
-                      </Tabs>
-                      {lens === 'product' ? (
-                        <ToggleButtonGroup
-                          size="small"
-                          exclusive
-                          value={productGroupBy}
-                          onChange={(_, v) => v && setProductGroupBy(v)}
-                          aria-label="Product grouping"
-                          data-testid="product-group-by"
-                          sx={EXCLUSIVE_TOGGLE_SX}
-                        >
-                          <ToggleButton value="description">Description</ToggleButton>
-                          <ToggleButton value="sku">SKU</ToggleButton>
-                          <ToggleButton value="sales_model">Sales model</ToggleButton>
-                        </ToggleButtonGroup>
-                      ) : null}
-                    </Stack>
+                    <Tabs
+                      value={lens}
+                      onChange={(_, v) => {
+                        setLens(v);
+                        clearDrill();
+                      }}
+                      sx={LENS_TABS_SX}
+                    >
+                      <Tab value="customer" label="By customer" />
+                      <Tab value="product" label="By product" />
+                      <Tab value="bu" label="By BU" />
+                    </Tabs>
                     <Tabs
                       value={exceptionCategory}
                       onChange={(_, v) => setExceptionCategory(v)}

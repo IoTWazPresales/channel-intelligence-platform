@@ -74,6 +74,8 @@ function EntityCell({ primary, labelFallback }: { primary: string; labelFallback
   );
 }
 
+const NUMERIC_CELL_SX = { display: 'block', textAlign: 'right', width: '100%', lineHeight: 1.2 } as const;
+
 function ValueCell({
   value,
   fxPartial,
@@ -87,13 +89,22 @@ function ValueCell({
       : VALUE_UNAVAILABLE_TOOLTIP;
     return (
       <Tooltip title={tip}>
-        <Typography component="span" variant="body2" color="text.disabled" sx={{ cursor: 'help' }}>
+        <Typography
+          component="span"
+          variant="body2"
+          color="text.disabled"
+          sx={{ ...NUMERIC_CELL_SX, cursor: 'help' }}
+        >
           —
         </Typography>
       </Tooltip>
     );
   }
-  return <Typography component="span" variant="body2">{fmtValue(value)}</Typography>;
+  return (
+    <Typography component="span" variant="body2" sx={NUMERIC_CELL_SX}>
+      {fmtValue(value)}
+    </Typography>
+  );
 }
 
 export function buildPoManagementHref(opts: {
@@ -162,6 +173,7 @@ export function ExceptionCategoryGrid({
         field: 'units',
         headerName: 'Units',
         width: 110,
+        type: 'numericColumn',
         sortable: true,
         valueFormatter: (p) => fmtUnits(Number(p.value ?? 0)),
       },
@@ -172,6 +184,7 @@ export function ExceptionCategoryGrid({
           ? 'Plan currency — FX partial; unavailable where bridge missing'
           : 'Plan currency — unavailable where bridge missing',
         width: 140,
+        type: 'numericColumn',
         sortable: true,
         comparator: (_a, _b, nodeA, nodeB) => {
           const va = nodeA.data?.value_plan;
@@ -190,6 +203,7 @@ export function ExceptionCategoryGrid({
         headerName: 'Value (cost)',
         headerTooltip: 'Cost currency — unavailable where bridge missing',
         width: 130,
+        type: 'numericColumn',
         sortable: true,
         comparator: (_a, _b, nodeA, nodeB) => {
           const va = nodeA.data?.value_cost;
@@ -207,6 +221,7 @@ export function ExceptionCategoryGrid({
         field: 'line_count',
         headerName: 'Lines',
         width: 90,
+        type: 'numericColumn',
         hide: !showLines,
         sortable: true,
       },

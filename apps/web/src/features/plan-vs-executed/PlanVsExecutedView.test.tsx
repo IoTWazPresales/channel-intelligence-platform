@@ -87,6 +87,7 @@ describe('PlanVsExecutedView', () => {
     expect(screen.getByText(/What this view answers/)).toBeTruthy();
     expect(screen.getByTestId('scope-boundary-notes')).toBeTruthy();
     expect(screen.getByTestId('exception-category-tabs')).toBeTruthy();
+    expect(screen.getByTestId('product-group-by')).toBeTruthy();
     expect(screen.getByTestId('value-rank-unavailable-note')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Rank: value/i })).toHaveProperty('disabled', true);
   });
