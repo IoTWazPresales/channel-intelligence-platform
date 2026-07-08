@@ -8,6 +8,14 @@ import pytest
 from app.services.commercial_planner import plan_vs_executed as mod
 
 
+@pytest.fixture(autouse=True)
+def _no_live_duplicate_ingestion_audit(monkeypatch):
+    async def _empty(_db):
+        return []
+
+    monkeypatch.setattr(mod, "_load_duplicate_ingestion_samples", _empty)
+
+
 def _cov_for_periods(period_labels: list[str]) -> dict[str, Any]:
     groups = []
     for p in period_labels:
@@ -175,9 +183,11 @@ def test_aggregate_exceptions_customer_lens():
 
 def test_backlog_066_period_detection():
     rows = [{"year": 2025, "quarter": 1, "quarter_label": "25Q1"}]
-    assert mod._affected_backlog_066_labels(rows) == ["25Q1"]
+    clusters = [{"inferred_period_start": "2025-01-01", "case_ids": [39, 40]}]
+    assert mod._affected_duplicate_ingestion_labels(rows, clusters) == ["25Q1"]
     clean = [{"year": 2026, "quarter": 2, "quarter_label": "26Q2"}]
-    assert mod._affected_backlog_066_labels(clean) == []
+    assert mod._affected_duplicate_ingestion_labels(clean, clusters) == []
+    assert mod._affected_duplicate_ingestion_labels(rows, []) == []
 
 
 def test_enumerate_available_periods_full_span():
@@ -331,14 +341,17 @@ def test_golden_scorecard_tie_out_all_clean_periods():
 @pytest.mark.parametrize("period", FLAGGED_GOLDEN_PERIODS)
 def test_backlog_066_flag_instead_of_golden_assertion(period: str):
     rows = [_period_row(period, planned=40, shipped=10, flag="short")]
+    period_start = "2025-01-01" if period == "25Q1" else "2024-10-01"
+    clusters = [{"inferred_period_start": period_start, "case_ids": [39, 40]}]
 
     async def _run():
-        with patch.object(mod, "coverage", AsyncMock(return_value=_cov_for_periods([period]))):
-            with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=rows)):
-                with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
-                    return await mod.plan_vs_executed_read_model(
-                        AsyncMock(), period_from=period, period_to=period
-                    )
+        with patch.object(mod, "_load_duplicate_ingestion_samples", AsyncMock(return_value=clusters)):
+            with patch.object(mod, "coverage", AsyncMock(return_value=_cov_for_periods([period]))):
+                with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=rows)):
+                    with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
+                        return await mod.plan_vs_executed_read_model(
+                            AsyncMock(), period_from=period, period_to=period
+                        )
 
     out = asyncio.run(_run())
     assert out["data_quality"]["backlog_066_message"]

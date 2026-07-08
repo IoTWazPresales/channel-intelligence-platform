@@ -36,6 +36,7 @@ from app.models.commercial_lineup import (
 from app.models.commercial_planner import CommercialSkuAssumption
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.purchase_order import PurchaseOrder
+from app.services.commercial_planner.lineup_period_canonical import active_lineup_line_filters
 from app.services.commercial_planner.lineup_open_channel import effective_lineup_customer_id
 from app.services.commercial_planner.open_channel_customer import (
     canonical_open_channel_customer_id,
@@ -153,6 +154,7 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
             select(CommercialLineupLine).where(
                 CommercialLineupLine.case_id == case_id,
                 CommercialLineupLine.product_id.isnot(None),
+                *active_lineup_line_filters(),
             )
         )
     ).scalars().all()

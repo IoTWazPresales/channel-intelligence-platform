@@ -23,6 +23,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
 import { PoAutoLinkProposalsSection, PO_AUTO_LINK_SECTION_ID } from './PoAutoLinkProposalsSection';
+import { LineupDuplicatePartitionPanel } from './LineupDuplicatePartitionPanel';
 import { PoDismissReasonDialog } from './PoDismissReasonDialog';
 import { buildPlanVsExecutedHref } from '@/features/plan-vs-executed/productDisplay';
 
@@ -301,6 +302,7 @@ export function PoManagementView() {
 
   return (
     <Stack spacing={3}>
+      <LineupDuplicatePartitionPanel />
       <Card variant="outlined">
         <CardContent>
           <Typography variant="h6" gutterBottom>
@@ -372,7 +374,7 @@ export function PoManagementView() {
               <Chip
                 clickable={worklistSummary.gapCount > 0}
                 onClick={() => scrollToSection(PO_GAP_SECTION_ID)}
-                label={`${worklistSummary.gapCount} shipment gap${worklistSummary.gapCount === 1 ? '' : 's'}`}
+                label={`${worklistSummary.gapCount.toLocaleString()} gap line${worklistSummary.gapCount === 1 ? '' : 's'}`}
                 color={worklistSummary.gapCount > 0 ? 'warning' : 'default'}
                 variant={worklistSummary.gapCount > 0 ? 'filled' : 'outlined'}
                 data-testid="po-worklist-gaps"

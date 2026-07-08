@@ -109,6 +109,13 @@ def active_lineup_case_filters():
     )
 
 
+def active_lineup_line_filters():
+    """SQLAlchemy filters for lineup lines counted in reconciliation / planned units."""
+    from app.models.commercial_lineup import CommercialLineupLine
+
+    return (CommercialLineupLine.row_status != "superseded",)
+
+
 def supersession_group_key_from_period_start(
     period_start: date | str | None,
     *,

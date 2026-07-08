@@ -33,8 +33,7 @@ logger = logging.getLogger(__name__)
 RankBy = Literal["units", "value"]
 ProductGroupBy = Literal["description", "sku", "sales_model"]
 
-# BACKLOG-066: duplicate-ingestion periods with inflated planned units within a BU group.
-BACKLOG_066_PERIODS: frozenset[tuple[int, int]] = frozenset({(2025, 1), (2024, 4)})
+# BACKLOG-066: duplicate-ingestion periods — detected at read time via check_lineup_duplicate_ingestion.
 
 _BUCKET_EXECUTED = ("matched", "short", "over")
 _BUCKET_OFF_PLAN = ("unplanned", "amended")
@@ -738,12 +737,41 @@ def _aggregate_exceptions(
     }
 
 
-def _affected_backlog_066_labels(rows: list[dict[str, Any]]) -> list[str]:
-    labels: set[str] = set()
-    for r in rows:
-        if (int(r["year"]), int(r["quarter"])) in BACKLOG_066_PERIODS:
-            labels.add(str(r["quarter_label"]))
-    return sorted(labels)
+def _affected_duplicate_ingestion_labels(rows: list[dict[str, Any]], cluster_samples: list[dict[str, Any]]) -> list[str]:
+    """Period labels in scope that still have active duplicate-ingestion clusters."""
+    if not cluster_samples:
+        return []
+    from datetime import date
+
+    affected_keys: set[tuple[int, int]] = set()
+    for cluster in cluster_samples:
+        ps = cluster.get("inferred_period_start")
+        if not ps:
+            continue
+        try:
+            d = date.fromisoformat(str(ps)[:10])
+        except ValueError:
+            continue
+        affected_keys.add(quarter_from_period_start(d))
+    return sorted(
+        str(r["quarter_label"])
+        for r in rows
+        if (int(r["year"]), int(r["quarter"])) in affected_keys
+    )
+
+
+async def _load_duplicate_ingestion_samples(db: AsyncSession) -> list[dict[str, Any]]:
+    from app.db.session_sync import SessionLocal
+    from app.services.data_integrity_audit import check_lineup_duplicate_ingestion
+
+    def _run() -> list[dict[str, Any]]:
+        with SessionLocal() as sync_db:
+            result = check_lineup_duplicate_ingestion(sync_db, sample_limit=500)
+            return list(result.samples or [])
+
+    import asyncio
+
+    return await asyncio.to_thread(_run)
 
 
 async def _compute_trend(
@@ -893,7 +921,8 @@ async def plan_vs_executed_read_model(
             "label_fallback": drill_rows[0].get("label_fallback"),
         }
 
-    backlog_066 = _affected_backlog_066_labels(rows)
+    dup_clusters = await _load_duplicate_ingestion_samples(db)
+    backlog_066 = _affected_duplicate_ingestion_labels(rows, dup_clusters)
 
     return {
         "period_range": {

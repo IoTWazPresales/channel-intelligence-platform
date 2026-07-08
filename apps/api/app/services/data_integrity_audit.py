@@ -793,6 +793,8 @@ def check_cross_job_double_book(db: Session, *, sample_limit: int) -> CheckResul
 def _lineup_line_fingerprint(lines: list[CommercialLineupLine]) -> frozenset[tuple[int, int, float]]:
     out: set[tuple[int, int, float]] = set()
     for ln in lines:
+        if (ln.row_status or "") == "superseded":
+            continue
         qty = float(ln.quantity_units or 0)
         out.add((int(ln.source_row_number or 0), int(ln.product_id or 0), qty))
     return frozenset(out)

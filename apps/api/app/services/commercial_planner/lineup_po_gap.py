@@ -52,6 +52,7 @@ async def _po_gap_worklist_inner(db: AsyncSession, *, include_dismissed: bool) -
             .join(CommercialLineupCase, CommercialLineupCase.id == CommercialLineupCasePo.case_id)
             .where(
                 CommercialLineupLine.product_id.isnot(None),
+                CommercialLineupLine.row_status != "superseded",
                 *active_lineup_case_filters(),
             )
             .distinct()
