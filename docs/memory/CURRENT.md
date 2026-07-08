@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | *(update after commit)* |
+| **HEAD** | `90680a4` — CPOR v1 Unit 1 |
 | **PR** | None open |
 | **Alembic (code)** | `20260708_0067` (head) — CPOR v1 tables |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` — **0067 NOT applied** (awaits Warren) |
