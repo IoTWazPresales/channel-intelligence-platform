@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | (pending commit) — inbound shipments lineup plan-quarter filter + summary |
+| **HEAD** | `4d7231f` — inbound shipments lineup plan-quarter filter + summary |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
