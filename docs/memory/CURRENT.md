@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | *(pending commit)* — shipment apply hardening (open-order `fact_upsert_key` upsert + PM-style failure writeback) |
+| **HEAD** | `13a0115` — shipment apply hardening (open-order `fact_upsert_key` upsert + PM-style failure writeback) |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
