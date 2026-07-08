@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-08 (inbound shipments by lineup plan quarter)
+**Last updated:** 2026-07-08 (CPOR funding substrate discovery + draft spec; inbound lineup-quarter shipped)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `4d7231f` — inbound shipments lineup plan-quarter filter + summary |
+| **HEAD** | `53996e7` — inbound shipments lineup plan-quarter (`4d7231f` feature) |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -186,7 +186,7 @@ Closes the "filter inbound by lineup quarter" ask. No schema change.
 | Failure writeback | `record_shipment_apply_failure` — fresh session + `ImportRowResult` + terminal `failed` (mirrors PM worker pattern) |
 | Terminal status | **`completed` + `loaded`** on successful apply (mirrors DSI `complete_dsi_import_job_to_loaded`; unresolved count in return payload only) |
 | **REAL clone gate** (pg_dump 227.9 MB → `cip_clone_310`) | 7,080 evidence → **6,649** facts (shipped `fact_upsert_key` dedupe); **140** null-product facts; `dim_product` **18,158→18,158**; session hardening proven |
-| **cip job 310** | **Not applied** — Warren re-apply after merge |
+| **cip job 310** | **Proven applied** on `cip` 2026-07-08 ~15:04 — `stage=loaded`, `status=completed`; **6,649** fact rows (matches clone gate); `imports.shipment_apply` succeeded after earlier failed attempts |
 | purmidr test | **(a) STALE ASSERTION** fixed — PO now linked to case 9; test guards fact shipped sum ≤ 7000 |
 
 ---
@@ -197,11 +197,21 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm
 
 ---
 
+## CPOR promotion funding — discovery + draft spec (2026-07-08)
+
+| Item | Status |
+|------|--------|
+| Substrate discovery | `docs/PROMOTION_FUNDING_SUBSTRATE_DISCOVERY_2026-07-08.md` — read-only; cip SELECTs after `current_database()=cip` |
+| Draft spec | `docs/SPEC_CPOR_V1_AND_LISTING_CAPTURE_V0.md` — Warren review; not implementation |
+| Jun-14 baseline | `docs/PROMOTION_PLANNING_DATA_SUBSTRATE_AUDIT.md` left unmodified |
+
+---
+
 ## Next
 
+- **Warren review** — `SPEC_CPOR_V1_AND_LISTING_CAPTURE_V0.md` before any CPOR schema/implementation.
 - **Browser soak** — inbound `/shipping` plan-quarter filter + PvE drill deep-link; summary strip vs grid row counts for 26Q2.
 - **W2 on cip (Warren)** — PO Management → Duplicate ingestion panel → Preview partition → Apply (cases #39/#40); clone already proven (`cip_clone_dup066`).
-- **Job 310 re-apply on cip** — after merge; expect `completed_with_errors` (148 unresolved products on evidence).
 - **Unit 6 browser soak** — PvE total-shipped tile vs workbook POD; paginated exception grid; PO worklist summary chips.
 - **BACKLOG-066** — partition repair wired; **cip apply pending** Warren (UI panel above).
 - **BACKLOG-067** — backfill file-provenance gap (unified_lineup / bulk_backfill paths retain no original bytes).
