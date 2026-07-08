@@ -199,12 +199,11 @@ def run_shipment_apply_sync(
     job = db.get(ImportJob, job_id)
     if job is not None:
         job.stage = STAGE_LOADED
-        job.status = "completed_with_errors" if unresolved_product_rows else "completed"
-        job.error_summary = (
-            f"{unresolved_product_rows} shipment rows have unresolved product"
-            if unresolved_product_rows
-            else None
-        )
+        # Mirror DSI apply completion: successful fact upsert → completed + loaded.
+        # Unresolved products are non-blocking write-through (validate blocking==0 path);
+        # see complete_dsi_import_job_to_loaded (status=completed when facts upsert OK).
+        job.status = "completed"
+        job.error_summary = None
         job.completed_at = datetime.now(timezone.utc)
         persist_clear_background_task_metadata(db, job)
         db.commit()

@@ -250,7 +250,7 @@ def test_proposal_totals_keep_shipped_and_open_order_separate():
 
 @pytest.mark.anyio
 async def test_purmidr_not_duplicated_per_po_norm_on_26q2():
-    """Canonical 26Q2 filter surfaces duplicate active cases until steward supersession."""
+    """PURMIDR26010748 must not inflate shipped units; linked POs must not re-propose."""
     pytest.importorskip("asyncpg")
     from sqlalchemy import text
 
@@ -266,13 +266,44 @@ async def test_purmidr_not_duplicated_per_po_norm_on_26q2():
         )
         if not has_col:
             pytest.skip("migration 20260630_0060 not applied")
+        already_linked = await db.scalar(
+            text(
+                """
+                SELECT 1 FROM commercial_lineup_case_po clcp
+                JOIN purchase_order po ON po.id = clcp.purchase_order_id
+                WHERE po.po_number_norm = 'PURMIDR26010748'
+                LIMIT 1
+                """
+            )
+        )
+        shipped_sum = float(
+            await db.scalar(
+                text(
+                    """
+                    SELECT COALESCE(SUM(f.quantity), 0)
+                    FROM fact_inbound_shipment f
+                    JOIN purchase_order po ON po.id = f.purchase_order_id
+                    WHERE po.po_number_norm = 'PURMIDR26010748'
+                      AND f.line_state = 'shipped'
+                    """
+                )
+            )
+            or 0
+        )
         r = await po_auto_link_proposals(db, period="26Q2", limit=500)
-    hits = [p for p in r["proposals"] if p.get("po_number") == "PURMIDR26010748" and "Game" in (p.get("customer_label") or "")]
-    assert len(hits) >= 1
-    case_ids = {h["case_id"] for h in hits}
-    assert case_ids.issubset({9, 26, 32, 33})
-    row = hits[0]
-    assert row["total_shipped_units"] <= 7000  # was inflated to 21276 before fix
+    hits = [
+        p
+        for p in r["proposals"]
+        if p.get("po_number") == "PURMIDR26010748" and "Game" in (p.get("customer_label") or "")
+    ]
+    assert shipped_sum <= 7000, f"fact shipped sum inflated: {shipped_sum}"
+    if already_linked:
+        assert len(hits) == 0
+    else:
+        assert len(hits) >= 1
+        case_ids = {h["case_id"] for h in hits}
+        assert case_ids.issubset({9, 26, 32, 33})
+        assert hits[0]["total_shipped_units"] <= 7000
 
 
 @pytest.mark.anyio

@@ -156,8 +156,8 @@ def test_run_shipment_apply_sync_completed_with_errors_when_unresolved_products(
     assert out["outcome"] == "applied"
     assert out["unresolved_product_rows"] == 148
     assert job.stage == STAGE_LOADED
-    assert job.status == "completed_with_errors"
-    assert "148" in (job.error_summary or "")
+    assert job.status == "completed"
+    assert job.error_summary is None
 
 
 def test_chunk_failure_falls_back_to_row_and_raises_shipment_apply_row_error(monkeypatch) -> None:

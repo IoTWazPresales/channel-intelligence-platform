@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `13a0115` — shipment apply hardening (open-order `fact_upsert_key` upsert + PM-style failure writeback) |
+| **HEAD** | *(pending)* — real pg_dump clone gate + terminal status DSI mirror + purmidr stale assertion |
 | **PR** | None open |
 | **Alembic (code)** | `20260702_0066` (head) |
 | **Alembic (DB)** | **`20260702_0066`** on local `cip` |
@@ -151,8 +151,10 @@
 | Open-order fact upsert | Uses `uq_fact_inbound_shipment_fact_upsert_key` (was stale `source_key` constraint name — job 310 apply blocker) |
 | Unresolved product write-through | All evidence lines upsert; `product_id=NULL` + existing `no_match` / `inactive_only` status carried on facts |
 | Failure writeback | `record_shipment_apply_failure` — fresh session + `ImportRowResult` + terminal `failed` (mirrors PM worker pattern) |
-| Clone gate job 310 | `cip_shipment_apply_gate_310`: 7,080 evidence → **6,649** facts (shipped key dedupe); **140** null-product facts; `dim_product` delta **0**; `completed_with_errors` |
-| **cip job 310** | **Not applied in this task** — Warren re-apply after merge |
+| Terminal status | **`completed` + `loaded`** on successful apply (mirrors DSI `complete_dsi_import_job_to_loaded`; unresolved count in return payload only) |
+| **REAL clone gate** (pg_dump 227.9 MB → `cip_clone_310`) | 7,080 evidence → **6,649** facts (shipped `fact_upsert_key` dedupe); **140** null-product facts; `dim_product` **18,158→18,158**; session hardening proven |
+| **cip job 310** | **Not applied** — Warren re-apply after merge |
+| purmidr test | **(a) STALE ASSERTION** fixed — PO now linked to case 9; test guards fact shipped sum ≤ 7000 |
 
 ---
 

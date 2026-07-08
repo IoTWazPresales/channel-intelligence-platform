@@ -6,6 +6,57 @@
 
 ---
 
+## BACKLOG-070 — Frontend ESLint v9 flat-config gap (repo-wide lint broken)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-08 |
+| **Effort** | Small–medium (web + root lint wiring) |
+| **Source** | Agent session (2026-07-08): shipment apply hardening gate; `eslint` v9 installed; no `eslint.config.js` / flat config; `eslint .` fails repo-wide; `ESLINT_USE_FLAT_CONFIG=false` required for Next.js only; zero enforced frontend lint in default dev path. |
+| **Idea** | Restore a single working lint entrypoint for `apps/web` and shared packages — either adopt ESLint 9 flat config (Next.js-compatible) or pin/document the legacy config path in CI and `pnpm lint`. |
+| **Why it matters / deferrable** | Drift accumulates without lint gate; deferrable while Vitest + typecheck cover critical paths. |
+| **What the work is** | (1) Audit `pnpm lint` / `apps/web` ESLint integration. (2) Add flat config or explicit legacy shim. (3) Wire CI to fail on lint. |
+| **Regression traps** | Breaking Next.js 15 ESLint plugin; duplicate configs; CI false greens. |
+| **Behavior to retain** | `pnpm test:web` unchanged; no rule thrash without cause. |
+| **Out of scope** | Full design-system lint overhaul. |
+| **TRIGGER** | Next frontend-heavy unit or CI hardening pass. |
+
+---
+
+## BACKLOG-071 — Clone-gate tooling: pg_dump/pg_restore not on shell PATH
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-08 |
+| **Effort** | Small (docs + helper script) |
+| **Source** | Agent session (2026-07-08): shipment apply clone gate; `pg_dump` not on PATH in PowerShell; binaries at `C:\Program Files\PostgreSQL\18\bin\`; gate used explicit full paths; prior session used `CREATE DATABASE … TEMPLATE cip` (not pg_dump proof). |
+| **Idea** | Standardize disposable clone creation for destructive-class gates: `scripts/ops/clone_cip_db.py` wrapping explicit `pg_dump`/`pg_restore` paths (Windows + Linux), env override for bin dir, refuse `current_database()='cip'` writes. |
+| **Why it matters / deferrable** | Agents substitute synthetic/template clones when PATH fails — invalid proof. Deferrable until next clone gate. |
+| **What the work is** | (1) Document `PG_BIN` / `SMOKE_ADMIN_PASSWORD` in ops README. (2) Shared clone helper used by Plan D + shipment gates. (3) Optional: add PostgreSQL bin to dev PATH in onboarding doc. |
+| **Regression traps** | Cloning while cip has active connections; wrong admin creds; partial restore. |
+| **Behavior to retain** | Never write to `cip` from gate scripts; drop clone after proof. |
+| **Out of scope** | Cloud/Supabase clone automation. |
+| **TRIGGER** | Any future clone-gate or destructive-class apply proof task. |
+
+---
+
+## BACKLOG-069 — Shipment steward drawer: off-screen on Review when scrolled (layout vs DSI)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-07 |
+| **Effort** | Small–medium (web layout only; no API) |
+| **Source** | Warren steward session (2026-07-07): shipment import **Review…** opens **Channel partner steward** drawer at top of page while operator is scrolled lower in candidate list; `apps/web/src/app/(app)/admin/shipment-evidence/ShipmentImportJobResolutionSection.tsx` vs `DsiImportJobResolutionSection.tsx`; `ShipmentCandidateStewardDrawer.tsx` (`position: sticky`, `top: 80`); embedded in `apps/web/src/app/(app)/admin/imports/page.tsx` validate step. Related: **BACKLOG-045** (steward UI parity). |
+| **Idea** | Clicking **Review…** on a shipment mapping candidate should open the side steward panel **in view** beside the row being worked — same operator expectation as DSI steward. Today the drawer mounts at the **top** of the flex workspace; on a long imports wizard page the panel stays off-screen until the operator scrolls back up. |
+| **Why it matters / deferrable** | Blocks efficient steward sessions on large candidate queues (backfill / ACZA). Deferrable only while stewards work around it by scrolling up — but it is a daily friction bug, not polish. |
+| **What the work is** | (1) **Root cause:** DSI left column caps height (`maxHeight: calc(100vh - 120px)`, `overflow: hidden`) so the candidate table scrolls **inside** the workspace and the drawer stays viewport-visible; shipment section omits this cap — flex row grows with full table height, drawer `alignSelf: flex-start` + `sticky top: 80` anchors to container top. (2) **Fix direction:** port DSI viewport-bound workspace shell to `ShipmentImportJobResolutionSection` (preferred) **or** `scrollIntoView` on drawer open with a ref on `ShipmentCandidateStewardDrawer` (fallback; less ideal on mobile). (3) **Parity check:** confirm `ShipmentMappingStewardPanel` behaviours still differ from DSI (verify-name chip vs interactive flow, duplicate cluster, peer lookup) under **BACKLOG-045** — separate from scroll bug. |
+| **Regression traps** | Breaking embedded `ImportStewardCandidateWorkspace` internal scroll; pagination toolbar clipped; mobile column stack order; sticky nav offset (`top: 80`) vs app shell height changes. |
+| **Behavior to retain** | Side drawer pattern (not modal); shipment-evidence API family; row click + Review both open same drawer; governance flows unchanged. |
+| **Out of scope** | Full `DsiMappingStewardPanel` feature parity (BACKLOG-045); backend steward logic. |
+| **TRIGGER** | **Fired** — Warren reported during live steward session (2026-07-07); resume on next import-parity / steward UX pass. |
+
+---
+
 ## BACKLOG-068 — Landing-quarter attribution for landed-basis KPI (pod_date)
 
 | Field | Detail |
