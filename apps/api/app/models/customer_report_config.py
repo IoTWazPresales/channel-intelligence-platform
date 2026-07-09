@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from sqlalchemy import Boolean, Date, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -23,3 +24,4 @@ class CustomerReportConfig(Base, TimestampMixin):
     last_report_received: Mapped[date | None] = mapped_column(Date, nullable=True)
     overdue_threshold_days: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
     notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    feed_profile_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

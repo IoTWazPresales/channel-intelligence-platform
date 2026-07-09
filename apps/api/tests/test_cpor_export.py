@@ -20,11 +20,40 @@ client = TestClient(app)
 
 
 def test_reseller_headers_frozen():
-    assert RESELLER_HEADERS[0] == "Case Code"
-    assert "Dealer Price" in RESELLER_HEADERS
-    assert "Support/Unit" in RESELLER_HEADERS
-    assert "Ttl Result" in RESELLER_HEADERS
-    assert RESELLER_HEADERS[-1] == "Flags"
+    assert RESELLER_HEADERS == (
+        "Case Code",
+        "Case Name",
+        "Customer",
+        "Promotion Type",
+        "Window Start",
+        "Window End",
+        "Status",
+        "Version",
+        "ROE",
+        "SKU",
+        "Product Name",
+        "Product Line",
+        "Distributor",
+        "POD Quarter",
+        "SOH",
+        "SRP",
+        "VAT Rate",
+        "Dealer Margin %",
+        "Dealer Price",
+        "Cost Basis",
+        "Cost Source",
+        "Support/Unit",
+        "Estimate Qty",
+        "Cap Qty",
+        "Ttl Support",
+        "Support USD",
+        "Ttl Support USD",
+        "Result Qty",
+        "Ttl Result",
+        "Ttl Result USD",
+        "Remark",
+        "Flags",
+    )
 
 
 def test_is_voided_line():
@@ -36,6 +65,7 @@ def test_builder_renders_stored_workbook_numbers():
     case = SimpleNamespace(
         id=1,
         case_code="C26C99999",
+        case_name="Evetech Jan Sell Out Support",
         customer_id=7,
         promotion_type="Sell out PP",
         window_start=date(2026, 1, 1),
@@ -63,8 +93,10 @@ def test_builder_renders_stored_workbook_numbers():
         cap_qty=None,
         ttl_support=5019.2,
         support_usd=13.5654,
+        ttl_support_usd=271.308,
         result_qty=49,
         ttl_result=12297.18,
+        ttl_result_usd=664.7124,
         remark=None,
     )
     voided = SimpleNamespace(
@@ -86,8 +118,10 @@ def test_builder_renders_stored_workbook_numbers():
         cap_qty=None,
         ttl_support=0,
         support_usd=0,
+        ttl_support_usd=0,
         result_qty=None,
         ttl_result=None,
+        ttl_result_usd=None,
         remark="x [voided]",
     )
     cust = SimpleNamespace(id=7, code="EV", name="Evetech")
@@ -113,9 +147,13 @@ def test_builder_renders_stored_workbook_numbers():
     assert tuple(headers) == RESELLER_HEADERS
     row = [c.value for c in wb["Reseller"][2]]
     # Dealer Price / Support/Unit / Ttl Result columns
+    assert row[headers.index("Case Name")] == "Evetech Jan Sell Out Support"
+    assert row[headers.index("Product Line")] == "NB"
     assert row[headers.index("Dealer Price")] == 10347.09
     assert row[headers.index("Support/Unit")] == 250.96
     assert row[headers.index("Ttl Result")] == 12297.18
+    assert row[headers.index("Ttl Support USD")] == 271.308
+    assert row[headers.index("Ttl Result USD")] == 664.7124
     assert wb["Reseller"].max_row == 2  # header + 1 line (voided excluded)
 
 
@@ -125,6 +163,7 @@ def test_pivot_helper_totals():
         product_id=1,
         pod_quarter="26Q1",
         support_usd=10.0,
+        ttl_support_usd=50.0,
         estimate_qty=5,
         remark=None,
     )

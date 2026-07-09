@@ -15,7 +15,7 @@ import app.services.imports.customer_sell_through as cst
 import app.services.imports.customer_sell_through_apply as apply_mod
 
 
-def _line(i, *, cust, prod, period, units, loc=None):
+def _line(i, *, cust, prod, period, units, loc=None, site_label=None):
     return SimpleNamespace(
         id=i,
         resolved_customer_id=cust,
@@ -28,7 +28,11 @@ def _line(i, *, cust, prod, period, units, loc=None):
         is_mtd_estimate=False,
         unit_sell_price=None,
         unit_cost=None,
+        unit_mac=None,
         reported_soh=None,
+        site_label=site_label,
+        vat_basis=None,
+        raw_location_token=site_label,
         raw_row_payload={},
         apply_status=None,
         fact_sellthrough_row_id=None,

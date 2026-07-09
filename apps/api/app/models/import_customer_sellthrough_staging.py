@@ -38,7 +38,13 @@ class ImportCustomerSellthroughStagingLine(Base, TimestampMixin):
     is_mtd_estimate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     unit_sell_price: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     unit_cost: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    unit_mac: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     reported_soh: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    site_label: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    vat_basis: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    raw_article_token: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    listing_external_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    listing_marketplace: Mapped[str | None] = mapped_column(String(32), nullable=True)
     resolution_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     apply_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     fact_sellthrough_row_id: Mapped[int | None] = mapped_column(

@@ -104,6 +104,8 @@ def test_no_cost_basis_still_computes_dealer_price():
     assert out["support_unit"] is None
     assert out["ttl_support"] is None
     assert out["ttl_result"] is None
+    assert out["ttl_result_usd"] is None
+    assert out["ttl_support_usd"] is None
     assert "no_cost_basis" in out["flags"]
 
 
@@ -118,4 +120,21 @@ def test_ttl_result_none_when_no_result_qty():
         case_roe="18.5",
     )
     assert out["ttl_result"] is None
+    assert out["ttl_result_usd"] is None
     assert out["support_unit"] is not None
+    assert out["ttl_support_usd"] is not None
+
+
+def test_ttl_usd_from_full_precision_totals():
+    """ttl_*_usd = local_total / roe — stored by recompute, not builder-derived."""
+    out = compute_line_waterfall(
+        srp="13999",
+        vat_rate="0.15",
+        dealer_margin_pct="0.15",
+        cost_basis="9585.07",
+        estimate_qty=20,
+        result_qty=49,
+        case_roe="18.5",
+    )
+    assert out["ttl_support_usd"] == out["ttl_support"] / Decimal("18.5")
+    assert out["ttl_result_usd"] == out["ttl_result"] / Decimal("18.5")

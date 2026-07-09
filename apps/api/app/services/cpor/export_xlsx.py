@@ -18,9 +18,10 @@ from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.services.cpor.pivot import build_case_pivot, is_voided_line
 
-# Presentation contract (Warren to confirm) — Reseller sheet header row
+# Presentation contract (Warren-confirmed 2026-07-09) — Reseller sheet header row
 RESELLER_HEADERS: tuple[str, ...] = (
     "Case Code",
+    "Case Name",
     "Customer",
     "Promotion Type",
     "Window Start",
@@ -30,6 +31,7 @@ RESELLER_HEADERS: tuple[str, ...] = (
     "ROE",
     "SKU",
     "Product Name",
+    "Product Line",
     "Distributor",
     "POD Quarter",
     "SOH",
@@ -44,8 +46,10 @@ RESELLER_HEADERS: tuple[str, ...] = (
     "Cap Qty",
     "Ttl Support",
     "Support USD",
+    "Ttl Support USD",
     "Result Qty",
     "Ttl Result",
+    "Ttl Result USD",
     "Remark",
     "Flags",
 )
@@ -123,6 +127,7 @@ def build_cpor_case_workbook_bytes(session: Session, case_id: int) -> tuple[byte
         ws.append(
             [
                 case.case_code,
+                case.case_name,
                 customer_label,
                 case.promotion_type,
                 case.window_start.isoformat() if case.window_start else None,
@@ -132,6 +137,7 @@ def build_cpor_case_workbook_bytes(session: Session, case_id: int) -> tuple[byte
                 _f(case.roe_snapshot),
                 prod.sku if prod else None,
                 prod.name if prod else None,
+                prod.product_line if prod else None,
                 dist_label,
                 line.pod_quarter,
                 _f(line.soh_snapshot),
@@ -146,8 +152,10 @@ def build_cpor_case_workbook_bytes(session: Session, case_id: int) -> tuple[byte
                 _f(line.cap_qty),
                 _f(line.ttl_support),
                 _f(line.support_usd),
+                _f(line.ttl_support_usd),
                 _f(line.result_qty),
                 _f(line.ttl_result),
+                _f(line.ttl_result_usd),
                 line.remark,
                 ", ".join(flags),
             ]

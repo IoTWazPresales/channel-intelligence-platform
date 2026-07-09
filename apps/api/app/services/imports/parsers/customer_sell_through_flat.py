@@ -29,7 +29,11 @@ CANONICAL_FIELDS = (
     "units_sold",
     "unit_sell_price",
     "unit_cost",
+    "unit_mac",
     "reported_soh",
+    "raw_article_token",
+    "listing_external_id",
+    "listing_marketplace",
 )
 
 _PERIOD_RANGE_RE = re.compile(r"(\d{8})[_\-\s]+(\d{8})")
@@ -359,6 +363,7 @@ def parse_flat_report(
                 "raw_row_payload": _row_dict(series),
                 "raw_customer_token": None,
                 "raw_location_token": loc_tok,
+                "site_label": loc_tok,
                 "raw_product_token": product_tok,
                 "raw_period_ref": period_ref,
                 "period_start_date": eff_period,
@@ -370,8 +375,18 @@ def parse_flat_report(
                 if col_map["unit_sell_price"]
                 else None,
                 "unit_cost": _parse_decimal(series.get(col_map["unit_cost"])) if col_map["unit_cost"] else None,
+                "unit_mac": _parse_decimal(series.get(col_map["unit_mac"])) if col_map.get("unit_mac") else None,
                 "reported_soh": _parse_decimal(series.get(col_map["reported_soh"]))
                 if col_map["reported_soh"]
+                else None,
+                "raw_article_token": _normalize_text(series.get(col_map["raw_article_token"]))
+                if col_map.get("raw_article_token")
+                else None,
+                "listing_external_id": _normalize_text(series.get(col_map["listing_external_id"]))
+                if col_map.get("listing_external_id")
+                else None,
+                "listing_marketplace": _normalize_text(series.get(col_map["listing_marketplace"]))
+                if col_map.get("listing_marketplace")
                 else None,
                 "resolution_status": "pending",
             }

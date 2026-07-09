@@ -97,7 +97,8 @@ def test_manual_deviation_flag():
     session = MagicMock()
     # Tier1 hit
     t1 = MagicMock()
-    t1.first = MagicMock(return_value=(Decimal("100"), date(2026, 5, 1), 9))
+    # unit_mac, unit_cost, period, id (U4.5 tier-1 shape)
+    t1.first = MagicMock(return_value=(None, Decimal("100"), date(2026, 5, 1), 9))
     t2 = MagicMock()
     t2.all = MagicMock(return_value=[])
     session.execute = MagicMock(side_effect=[t1, t2])

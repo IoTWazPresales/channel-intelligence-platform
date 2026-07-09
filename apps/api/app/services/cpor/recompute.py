@@ -1,7 +1,7 @@
 """CPOR server-side recompute path (spec §3 — never trust client math).
 
-Writes dealer_price / support_unit / ttl_support / support_usd (and ttl_result
-when result_qty present) onto cpor_case_line. No API endpoints in U2.
+Writes dealer_price / support_unit / ttl_support / support_usd / ttl_support_usd
+(and ttl_result / ttl_result_usd when result_qty present) onto cpor_case_line.
 """
 
 from __future__ import annotations
@@ -55,17 +55,27 @@ def recompute_case_line(
         line.ttl_support = None
         line.support_usd = None
         line.ttl_result = None
+        line.ttl_support_usd = None
+        line.ttl_result_usd = None
     else:
         line.support_unit = _q(result["support_unit"])
         line.ttl_support = _q(result["ttl_support"])
         line.support_usd = _q(result["support_usd"])
         line.ttl_result = _q(result["ttl_result"]) if result["ttl_result"] is not None else None
+        line.ttl_support_usd = (
+            _q(result["ttl_support_usd"]) if result.get("ttl_support_usd") is not None else None
+        )
+        line.ttl_result_usd = (
+            _q(result["ttl_result_usd"]) if result.get("ttl_result_usd") is not None else None
+        )
         changed.update(
             {
                 "support_unit": line.support_unit,
                 "ttl_support": line.ttl_support,
                 "support_usd": line.support_usd,
                 "ttl_result": line.ttl_result,
+                "ttl_support_usd": line.ttl_support_usd,
+                "ttl_result_usd": line.ttl_result_usd,
             }
         )
 
@@ -90,6 +100,8 @@ def recompute_case_line(
             "ttl_support": line.ttl_support,
             "support_usd": line.support_usd,
             "ttl_result": line.ttl_result,
+            "ttl_support_usd": line.ttl_support_usd,
+            "ttl_result_usd": line.ttl_result_usd,
         },
         "full_precision": {
             "dealer_price": str(result["dealer_price"]),
@@ -97,6 +109,12 @@ def recompute_case_line(
             "ttl_support": str(result["ttl_support"]) if result["ttl_support"] is not None else None,
             "ttl_result": str(result["ttl_result"]) if result["ttl_result"] is not None else None,
             "support_usd": str(result["support_usd"]) if result["support_usd"] is not None else None,
+            "ttl_support_usd": (
+                str(result["ttl_support_usd"]) if result.get("ttl_support_usd") is not None else None
+            ),
+            "ttl_result_usd": (
+                str(result["ttl_result_usd"]) if result.get("ttl_result_usd") is not None else None
+            ),
         },
         "flags": list(result["flags"]),
     }

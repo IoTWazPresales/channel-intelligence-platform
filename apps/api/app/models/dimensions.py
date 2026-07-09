@@ -81,6 +81,7 @@ class DimCustomer(Base, TimestampMixin):
     code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     customer_status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
+    is_key_account: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     partner_tier: Mapped[str | None] = mapped_column(String(32), nullable=True)
     account_owner_internal: Mapped[str | None] = mapped_column(String(128), nullable=True)
     notes_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)

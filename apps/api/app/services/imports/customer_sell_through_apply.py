@@ -20,7 +20,10 @@ _CONFLICT_SET = {
     "units_sold": text("EXCLUDED.units_sold"),
     "unit_sell_price": text("EXCLUDED.unit_sell_price"),
     "unit_cost": text("EXCLUDED.unit_cost"),
+    "unit_mac": text("EXCLUDED.unit_mac"),
     "reported_soh": text("EXCLUDED.reported_soh"),
+    "site_label": text("EXCLUDED.site_label"),
+    "vat_basis": text("EXCLUDED.vat_basis"),
     "import_job_id": text("EXCLUDED.import_job_id"),
     "raw_source_row": text("EXCLUDED.raw_source_row"),
     "updated_at": text("EXCLUDED.updated_at"),
@@ -100,6 +103,10 @@ def apply_customer_sellthrough_staging(
             product_id=prod_id,
             period_start_date=period,
         )
+        # site_label: prefer explicit staging column; fall back to raw location token (verbatim).
+        site_label = getattr(line, "site_label", None)
+        if site_label is None and line.raw_location_token:
+            site_label = str(line.raw_location_token).strip() or None
         values = {
             "source_key": sk,
             "customer_id": cust_id,
@@ -112,7 +119,10 @@ def apply_customer_sellthrough_staging(
             "is_mtd_estimate": bool(line.is_mtd_estimate),
             "unit_sell_price": line.unit_sell_price,
             "unit_cost": line.unit_cost,
+            "unit_mac": getattr(line, "unit_mac", None),
             "reported_soh": line.reported_soh,
+            "site_label": site_label,
+            "vat_basis": getattr(line, "vat_basis", None) or "ex_vat",
             "import_job_id": job_id,
             "raw_source_row": line.raw_row_payload,
             "updated_at": now,

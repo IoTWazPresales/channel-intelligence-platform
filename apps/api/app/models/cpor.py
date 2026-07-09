@@ -21,6 +21,7 @@ class CporCase(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     case_code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    case_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False, index=True)
     promotion_type: Mapped[str] = mapped_column(String(128), nullable=False)
     window_start: Mapped[date] = mapped_column(Date, nullable=False)
@@ -91,6 +92,8 @@ class CporCaseLine(Base, TimestampMixin):
 
     result_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     ttl_result: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    ttl_support_usd: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    ttl_result_usd: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     case: Mapped["CporCase"] = relationship("CporCase", back_populates="lines")

@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-09 (CPOR v1 Unit 4 XLSX export)
+**Last updated:** 2026-07-09 (CPOR U4.5 Phase B core wired; commit pending)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,13 +9,36 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/cpor-unit-4-export` |
-| **HEAD** | `1cbd95a` — off U3 `433ac1b` |
+| **Branch** | `feat/cpor-unit-4-5-cst` |
+| **HEAD** | uncommitted (schema 0068 + Phase B core) off U4 `19b0c7e` |
 | **PR** | None open |
-| **Alembic (code)** | `20260708_0067` (unchanged — U4 no migration) |
-| **Alembic (DB)** | **`20260708_0067`** on local `cip` |
+| **Alembic (code)** | `20260709_0068` |
+| **Alembic (DB)** | **`20260709_0068`** on local `cip` |
 
 ---
+
+## CPOR v1 Unit 4.5 — Phase B CORE DONE (pipeline wiring)
+
+| Item | Status |
+|------|--------|
+| Schema | `20260709_0068` on cip |
+| Apply | site_label / unit_mac / vat_basis → fact; FLAG≠BLOCK unmapped site |
+| Resolve | product-only resolve; article alias after PM tiers; listing seed propose |
+| Flat parser | unit_mac + article + listing + site_label columns |
+| Cost | tier-1 prefers unit_mac then unit_cost |
+| Period/slots | corroborate_period + mark received + advance helper |
+| Tests | 96 green (Phase B + CST/CPOR subset); ALLOW unset |
+| Deferred in B | full profile-driven parser selection UI; all 5 parsers unit_mac parity; slot notification job |
+| Next | Commit; remaining parser parity; Fable U5/U4.6 |
+
+## CPOR v1 Unit 4.5 — IN PROGRESS (schema on cip; Phase B next)
+
+| Item | Status |
+|------|--------|
+| Migration | `20260709_0068` — smoke OK; **applied to cip** (postgres + grants) |
+| Amendments | `case_name`; `ttl_*_usd`; Reseller headers; `is_key_account` |
+| CST D1 | site_label/unit_mac/vat_basis; article alias; slots; listing seed; feed_profile_json |
+| Next | Phase B pipeline (parsers/profiles/period/alias/tracker/cost) |
 
 ## CPOR v1 Unit 4 — DONE (XLSX export; no schema)
 

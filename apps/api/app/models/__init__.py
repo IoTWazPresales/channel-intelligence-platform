@@ -46,6 +46,9 @@ from app.models.shipment_evidence_current import ShipmentEvidenceCurrent
 from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
 from app.models.promo_export import PromoPlanExport, PromoPlanExportEvent
 from app.models.customer_report_config import CustomerReportConfig
+from app.models.customer_article_alias import CustomerArticleAlias
+from app.models.customer_cst_report_slot import CustomerCstReportSlot
+from app.models.cst_listing_seed import CstListingSeed
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
@@ -134,6 +137,9 @@ __all__ = [
     "FactCustomerSellthrough",
     "ImportCustomerSellthroughStagingLine",
     "CustomerReportConfig",
+    "CustomerArticleAlias",
+    "CustomerCstReportSlot",
+    "CstListingSeed",
     "FactCustomerVelocity",
     "FactDsiForecast",
     "FactInboundShipment",

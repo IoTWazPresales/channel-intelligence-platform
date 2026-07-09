@@ -79,8 +79,12 @@ def _tier1_cst(
     product_id: int,
     as_of: date,
 ) -> CostSuggestion | None:
+    """Prefer unit_mac when present (Takealot MAC), else unit_cost. Tier order unchanged."""
+    from sqlalchemy import or_
+
     row = session.execute(
         select(
+            FactCustomerSellthrough.unit_mac,
             FactCustomerSellthrough.unit_cost,
             FactCustomerSellthrough.period_start_date,
             FactCustomerSellthrough.id,
@@ -88,7 +92,10 @@ def _tier1_cst(
         .where(
             FactCustomerSellthrough.customer_id == customer_id,
             FactCustomerSellthrough.product_id == product_id,
-            FactCustomerSellthrough.unit_cost.is_not(None),
+            or_(
+                FactCustomerSellthrough.unit_mac.is_not(None),
+                FactCustomerSellthrough.unit_cost.is_not(None),
+            ),
             FactCustomerSellthrough.period_start_date <= as_of,
         )
         .order_by(FactCustomerSellthrough.period_start_date.desc(), FactCustomerSellthrough.id.desc())
@@ -96,16 +103,27 @@ def _tier1_cst(
     ).first()
     if row is None:
         return None
-    unit_cost, period_start, row_id = row
+    unit_mac, unit_cost, period_start, row_id = row
+    if unit_mac is not None:
+        chosen = unit_mac
+        field_used = "unit_mac"
+    else:
+        chosen = unit_cost
+        field_used = "unit_cost"
+    evidence: dict[str, Any] = {
+        "tier": "cst_reported",
+        "as_of": period_start.isoformat(),
+        "fact_id": int(row_id),
+        "field_used": field_used,
+        field_used: float(_as_decimal(chosen)),
+    }
+    if unit_mac is not None and unit_cost is not None:
+        evidence["unit_mac"] = float(_as_decimal(unit_mac))
+        evidence["unit_cost"] = float(_as_decimal(unit_cost))
     return CostSuggestion(
-        cost_basis=_as_decimal(unit_cost),
+        cost_basis=_as_decimal(chosen),
         cost_source="cst_reported",
-        evidence={
-            "tier": "cst_reported",
-            "as_of": period_start.isoformat(),
-            "fact_id": int(row_id),
-            "unit_cost": float(_as_decimal(unit_cost)),
-        },
+        evidence=evidence,
         flags=[],
     )
 

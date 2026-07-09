@@ -17,8 +17,17 @@ from app.models.ingestion import ImportJob, ImportTemplate, RawFileMetadata
 from app.services.imports.distributor_sales_inventory import (
     ProductResolutionIndex,
     _load_product_resolution_index,
+    _product_token_key,
 )
 from app.services.imports.product_resolution_standard import resolve_product_id_single_match
+from app.services.imports.cst_d1 import (
+    feed_profile_vat_basis,
+    mark_cst_report_slot_received,
+    propose_customer_article_alias,
+    resolve_customer_article_alias,
+    upsert_cst_listing_seed,
+    corroborate_period,
+)
 from app.core.config import get_settings
 from app.services.imports.ai_import_resolver import detect_format_drift
 from app.services.imports.ai_resolver_wiring import (
@@ -135,9 +144,27 @@ def resolve_customer_id_for_job(db: Session, job: ImportJob) -> int | None:
     return None
 
 
-def resolve_product_id_for_sellthrough(idx: ProductResolutionIndex, token: str) -> int | None:
-    """Item/material → EAN/UPC → sales model (single match only; shared standard tiers)."""
-    return resolve_product_id_single_match(idx, token)
+def resolve_product_id_for_sellthrough(
+    idx: ProductResolutionIndex,
+    token: str,
+    *,
+    session: Session | None = None,
+    customer_id: int | None = None,
+    article_token: str | None = None,
+) -> int | None:
+    """PM single-match tiers, then customer_article_alias (exact-key, confirmed only)."""
+    pid = resolve_product_id_single_match(idx, token)
+    if pid is not None:
+        return pid
+    if session is not None and customer_id is not None:
+        # Prefer explicit article token; else try the product token as article key.
+        for candidate in (article_token, token):
+            alias_pid = resolve_customer_article_alias(
+                session, customer_id=customer_id, article_token=candidate
+            )
+            if alias_pid is not None:
+                return alias_pid
+    return None
 
 
 def _upsert_customer_report_config(
@@ -355,6 +382,8 @@ def _ingest_parse_result(
 
     resolved_products, resolved_locations = load_resolved_cst_candidates(db, job.id)
     prod_idx = _load_product_resolution_index(db)
+    cfg = db.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id))
+    vat_basis = feed_profile_vat_basis(cfg)
     resolved_n = 0
     unresolved_n = 0
     ai_assist_used = [False]
@@ -362,9 +391,21 @@ def _ingest_parse_result(
     for row in result.rows:
         line = ImportCustomerSellthroughStagingLine(**row)
         line.resolved_customer_id = customer_id
+        # D1: site_label first-class (verbatim); siteless reports stay NULL.
+        if not getattr(line, "site_label", None) and line.raw_location_token:
+            line.site_label = str(line.raw_location_token).strip() or None
+        if not getattr(line, "vat_basis", None):
+            line.vat_basis = vat_basis
 
+        article_tok = getattr(line, "raw_article_token", None)
         if line.raw_product_token:
-            pid = resolve_product_id_for_sellthrough(prod_idx, line.raw_product_token)
+            pid = resolve_product_id_for_sellthrough(
+                prod_idx,
+                line.raw_product_token,
+                session=db,
+                customer_id=customer_id,
+                article_token=article_tok,
+            )
             if pid is not None:
                 line.resolved_product_id = pid
 
@@ -377,7 +418,13 @@ def _ingest_parse_result(
         )
 
         if not product_ok and line.raw_product_token:
-            pid = resolve_product_id_for_sellthrough(prod_idx, line.raw_product_token)
+            pid = resolve_product_id_for_sellthrough(
+                prod_idx,
+                line.raw_product_token,
+                session=db,
+                customer_id=customer_id,
+                article_token=article_tok,
+            )
             if pid is not None:
                 line.resolved_product_id = pid
                 product_ok = True
@@ -394,16 +441,38 @@ def _ingest_parse_result(
                 line.resolved_location_id = resolved_locations[loc_key]
                 location_ok = True
 
-        if product_ok and location_ok and line.resolution_status in ("pending", "unresolved"):
+        # FLAG ≠ BLOCK for unmapped sites: product alone is enough to resolve for apply.
+        # Unmapped location stays on worklist via cst_location_token; site_label still carried.
+        if product_ok and line.resolution_status in ("pending", "unresolved", "ai_auto_resolved"):
             line.resolution_status = "resolved"
 
-        if product_ok and location_ok:
-            if line.resolution_status in ("ai_auto_resolved", "pending"):
-                line.resolution_status = "resolved"
+        if product_ok:
             if line.resolution_status == "resolved":
                 resolved_n += 1
             else:
                 unresolved_n += 1
+            # Learn article alias on co-occurrence (proposed only — steward confirms later).
+            if article_tok and line.resolved_product_id is not None:
+                propose_customer_article_alias(
+                    db,
+                    customer_id=customer_id,
+                    article_token=article_tok,
+                    product_id=int(line.resolved_product_id),
+                    evidence={
+                        "co_occurred_with": line.raw_product_token,
+                        "import_job_id": job.id,
+                    },
+                )
+            # Listing seed side-channel (LC-U1 handoff).
+            upsert_cst_listing_seed(
+                db,
+                customer_id=customer_id,
+                marketplace=getattr(line, "listing_marketplace", None),
+                external_id=getattr(line, "listing_external_id", None),
+                product_id=int(line.resolved_product_id) if line.resolved_product_id else None,
+                import_job_id=job.id,
+                raw=line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None,
+            )
         else:
             if line.resolution_status == "pending":
                 line.resolution_status = "unresolved"
@@ -418,13 +487,36 @@ def _ingest_parse_result(
     if drift_warnings:
         warnings = drift_warnings + warnings
 
+    # Period: steward-declared (staged_metadata) + file-corroborated.
     meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    steward_period = None
+    raw_declared = meta.get("declared_period_start") or meta.get("steward_period_start")
+    if isinstance(raw_declared, str) and raw_declared.strip():
+        try:
+            steward_period = date.fromisoformat(raw_declared.strip()[:10])
+        except ValueError:
+            warnings.append(f"invalid declared_period_start={raw_declared!r}")
+    period_report = corroborate_period(
+        steward_declared=steward_period,
+        file_inferred=result.period_start_date,
+        filename=getattr(job, "original_filename", None),
+    )
+    if period_report["flags"]:
+        warnings.extend(period_report["flags"])
+    if period_report["period_start_date"] is not None:
+        # Prefer corroborated/steward choice for config last_report_received.
+        effective_period = period_report["period_start_date"]
+    else:
+        effective_period = result.period_start_date
+
     summary: dict[str, Any] = {
-        "period_start_date": str(result.period_start_date) if result.period_start_date else None,
+        "period_start_date": str(effective_period) if effective_period else None,
+        "period_corroboration": to_jsonable(period_report),
         "total_rows": len(result.rows),
         "resolved": resolved_n,
         "unresolved": unresolved_n,
         "warnings": warnings,
+        "vat_basis": vat_basis,
     }
     if ai_assist_used[0]:
         summary["ai_assist_used"] = True
@@ -434,8 +526,14 @@ def _ingest_parse_result(
     _upsert_customer_report_config(
         db,
         customer_id=customer_id,
-        period_start_date=result.period_start_date,
+        period_start_date=effective_period,
         report_structure_type=structure_type,
+    )
+    mark_cst_report_slot_received(
+        db,
+        customer_id=customer_id,
+        period_start_date=effective_period,
+        import_job_id=job.id,
     )
 
     if (job.import_mode or "").strip().lower() == "apply":
@@ -548,16 +646,29 @@ def _handle_flat(
 
     resolved_products, resolved_locations = load_resolved_cst_candidates(db, job.id)
     prod_idx = _load_product_resolution_index(db)
+    cfg = db.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id))
+    vat_basis = feed_profile_vat_basis(cfg)
     resolved_n = 0
     unresolved_n = 0
 
     for row in result.rows:
         line = ImportCustomerSellthroughStagingLine(**row)
         line.resolved_customer_id = customer_id
+        if not getattr(line, "site_label", None) and line.raw_location_token:
+            line.site_label = str(line.raw_location_token).strip() or None
+        if not getattr(line, "vat_basis", None):
+            line.vat_basis = vat_basis
 
         product_ok = False
+        article_tok = getattr(line, "raw_article_token", None)
         if line.raw_product_token:
-            pid = resolve_product_id_for_sellthrough(prod_idx, line.raw_product_token)
+            pid = resolve_product_id_for_sellthrough(
+                prod_idx,
+                line.raw_product_token,
+                session=db,
+                customer_id=customer_id,
+                article_token=article_tok,
+            )
             if pid is None:
                 key = _product_token_key(line.raw_product_token)
                 pid = resolved_products.get(key)
@@ -565,7 +676,6 @@ def _handle_flat(
                 line.resolved_product_id = pid
                 product_ok = True
 
-        location_ok = True
         if line.raw_location_token:
             loc_id = db.scalar(
                 select(CustomerLocation.id).where(
@@ -578,12 +688,28 @@ def _handle_flat(
                 loc_id = resolved_locations.get(loc_key)
             if loc_id is not None:
                 line.resolved_location_id = int(loc_id)
-            else:
-                location_ok = False
 
-        if product_ok and location_ok:
+        # FLAG != BLOCK: product alone resolves the line for apply.
+        if product_ok:
             line.resolution_status = "resolved"
             resolved_n += 1
+            if article_tok and line.resolved_product_id is not None:
+                propose_customer_article_alias(
+                    db,
+                    customer_id=customer_id,
+                    article_token=article_tok,
+                    product_id=int(line.resolved_product_id),
+                    evidence={"co_occurred_with": line.raw_product_token, "import_job_id": job.id},
+                )
+            upsert_cst_listing_seed(
+                db,
+                customer_id=customer_id,
+                marketplace=getattr(line, "listing_marketplace", None),
+                external_id=getattr(line, "listing_external_id", None),
+                product_id=int(line.resolved_product_id) if line.resolved_product_id else None,
+                import_job_id=job.id,
+                raw=line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None,
+            )
         else:
             line.resolution_status = "unresolved"
             unresolved_n += 1
@@ -601,6 +727,7 @@ def _handle_flat(
             "resolved": resolved_n,
             "unresolved": unresolved_n,
             "warnings": list(result.warnings),
+            "vat_basis": vat_basis,
         }
     )
     job.staged_metadata = to_jsonable(meta)
@@ -610,6 +737,12 @@ def _handle_flat(
         customer_id=customer_id,
         period_start_date=result.period_start_date,
         report_structure_type=STRUCTURE_FLAT,
+    )
+    mark_cst_report_slot_received(
+        db,
+        customer_id=customer_id,
+        period_start_date=result.period_start_date,
+        import_job_id=job.id,
     )
 
     if (job.import_mode or "").strip().lower() == "apply":

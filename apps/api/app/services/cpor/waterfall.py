@@ -119,6 +119,22 @@ def compute_support_usd(
     return _as_decimal(support_unit) / roe, []
 
 
+def compute_ttl_usd(
+    local_total: Decimal | float | int | str | None,
+    case_roe: Decimal | float | int | str | None,
+) -> Decimal | None:
+    """Convert a local-currency total (ttl_support / ttl_result) to USD via case ROE.
+
+    Uses full-precision intermediates (same discipline as support_usd / 12,297.18 lesson).
+    """
+    if local_total is None or case_roe is None:
+        return None
+    roe = _as_decimal(case_roe)
+    if roe == 0:
+        return None
+    return _as_decimal(local_total) / roe
+
+
 def compute_line_waterfall(
     *,
     srp: Decimal | float | int | str,
@@ -144,6 +160,8 @@ def compute_line_waterfall(
             "ttl_support": None,
             "ttl_result": None,
             "support_usd": None if "missing_roe" in flags or cost_basis is None else support_usd,
+            "ttl_support_usd": None,
+            "ttl_result_usd": None,
             "flags": flags,
         }
 
@@ -152,6 +170,8 @@ def compute_line_waterfall(
     ttl_result = compute_ttl_result(support_unit, result_qty)
     support_usd, roe_flags = compute_support_usd(support_unit, case_roe)
     flags.extend(roe_flags)
+    ttl_support_usd = compute_ttl_usd(ttl_support, case_roe)
+    ttl_result_usd = compute_ttl_usd(ttl_result, case_roe)
 
     return {
         "dealer_price": dealer_price,
@@ -159,5 +179,7 @@ def compute_line_waterfall(
         "ttl_support": ttl_support,
         "ttl_result": ttl_result,
         "support_usd": support_usd,
+        "ttl_support_usd": ttl_support_usd,
+        "ttl_result_usd": ttl_result_usd,
         "flags": flags,
     }

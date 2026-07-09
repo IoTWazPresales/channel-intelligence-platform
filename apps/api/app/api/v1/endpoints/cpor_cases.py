@@ -119,8 +119,10 @@ def _line_json(line: CporCaseLine, product: DimProduct | None = None) -> dict[st
         "support_unit": float(line.support_unit) if line.support_unit is not None else None,
         "ttl_support": float(line.ttl_support) if line.ttl_support is not None else None,
         "support_usd": float(line.support_usd) if line.support_usd is not None else None,
+        "ttl_support_usd": float(line.ttl_support_usd) if line.ttl_support_usd is not None else None,
         "result_qty": float(line.result_qty) if line.result_qty is not None else None,
         "ttl_result": float(line.ttl_result) if line.ttl_result is not None else None,
+        "ttl_result_usd": float(line.ttl_result_usd) if line.ttl_result_usd is not None else None,
         "remark": line.remark,
         "flags": flags,
     }
@@ -137,19 +139,19 @@ def _case_json(
     ttl_usd = None
     if lines:
         zar_vals = [l["ttl_support"] for l in lines if l.get("ttl_support") is not None]
-        usd_vals = [l["support_usd"] for l in lines if l.get("support_usd") is not None]
-        # support_usd is per-unit; workbook pivot uses support_usd * estimate for line USD ask
-        # Spec §5: Ttl Support USD — use stored support_usd * estimate when present, else sum support_usd alone is wrong.
-        # U2 stores support_usd = support_unit / roe (per unit). Pivot should sum (support_usd * estimate_qty).
+        # Prefer stored ttl_support_usd (recompute); fall back to support_usd * estimate_qty.
         line_usd = []
         for l in lines:
-            if l.get("support_usd") is not None and l.get("estimate_qty") is not None:
+            if l.get("ttl_support_usd") is not None:
+                line_usd.append(float(l["ttl_support_usd"]))
+            elif l.get("support_usd") is not None and l.get("estimate_qty") is not None:
                 line_usd.append(float(l["support_usd"]) * float(l["estimate_qty"]))
         ttl_zar = sum(zar_vals) if zar_vals else None
         ttl_usd = sum(line_usd) if line_usd else None
     out: dict[str, Any] = {
         "id": case.id,
         "case_code": case.case_code,
+        "case_name": case.case_name,
         "customer_id": case.customer_id,
         "customer_code": customer.code if customer else None,
         "customer_name": customer.name if customer else None,
@@ -241,6 +243,7 @@ class CaseCreate(BaseModel):
     window_start: date
     window_end: date
     case_code: str | None = None
+    case_name: str | None = None
     roe_snapshot: float | None = None
     currency_code: str = "ZAR"
     channel: str = "reseller"
@@ -248,6 +251,7 @@ class CaseCreate(BaseModel):
 
 
 class CasePatch(BaseModel):
+    case_name: str | None = None
     promotion_type: str | None = None
     window_start: date | None = None
     window_end: date | None = None
@@ -329,6 +333,7 @@ def list_cases(
             needle = f"%{q.strip()}%"
             stmt = stmt.where(
                 (CporCase.case_code.ilike(needle))
+                | (CporCase.case_name.ilike(needle))
                 | (DimCustomer.code.ilike(needle))
                 | (DimCustomer.name.ilike(needle))
             )
@@ -359,6 +364,7 @@ def create_case(body: CaseCreate, x_user_id: str | None = Header(default=None, a
         code = (body.case_code or "").strip() or _generate_case_code(session)
         case = CporCase(
             case_code=code,
+            case_name=(body.case_name or "").strip() or None,
             customer_id=body.customer_id,
             promotion_type=body.promotion_type,
             window_start=body.window_start,
