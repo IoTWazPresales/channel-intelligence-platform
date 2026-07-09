@@ -1,7 +1,7 @@
 # Current state
 
 **Last updated:** 2026-07-09 (CPOR v1 Unit 2 waterfall + cost service)
-**Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
+**Verify git:** `git branch --show-current` Â· `git rev-parse --short HEAD`
 
 ---
 
@@ -10,31 +10,31 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/cpor-unit-2-waterfall-cost-service` |
-| **HEAD** | `e26c4bd` ? tip (Unit 2 feature `44fedba`) |
+| **HEAD** | `9b615d9` â€” tip (Unit 2 feature `44fedba`) |
 | **PR** | None open |
-| **Alembic (code)** | `20260708_0067` (unchanged ? U2 no migration) |
+| **Alembic (code)** | `20260708_0067` (unchanged â€” U2 no migration) |
 | **Alembic (DB)** | **`20260708_0067`** on local `cip` |
 
 ---
 
-## CPOR v1 Unit 2 ? DONE (waterfall + cost; no schema)
+## CPOR v1 Unit 2 â€” DONE (waterfall + cost; no schema)
 
 | Item | Status |
 |------|--------|
-| Waterfall | `services/cpor/waterfall.py` ? reseller `vat_divide`?`margin_deduct`; Decimal; clamp; full-precision fixtures |
-| Cost suggestion | `cost_suggestion.py` ? CST ? sell-out WAVG ? manual; drift detect-only; FLAG?BLOCK |
-| Recompute | `recompute.py` ? writes computed columns; optional `recomputed` event; no API (U3) |
+| Waterfall | `services/cpor/waterfall.py` â€” reseller `vat_divide`â†’`margin_deduct`; Decimal; clamp; full-precision fixtures |
+| Cost suggestion | `cost_suggestion.py` â€” CST â†’ sell-out WAVG â†’ manual; drift detect-only; FLAGâ‰ BLOCK |
+| Recompute | `recompute.py` â€” writes computed columns; optional `recomputed` event; no API (U3) |
 | Tests | 19 green; `ALLOW_TESTS_ON_DEV_DB` unset |
-| Next | Feed Fable U2 report ? U3 case UI prompt |
+| Next | Feed Fable U2 report â†’ U3 case UI prompt |
 
 ---
 
-## CPOR v1 Unit 1 ? DONE (code + cip)
+## CPOR v1 Unit 1 â€” DONE (code + cip)
 
 | Item | Status |
 |------|--------|
 | Models | `cpor_case`, `cpor_case_line`, `cpor_case_event`, `cpor_claim_evidence_line` |
-| Migration | `20260708_0067` ? applied to cip |
+| Migration | `20260708_0067` â€” applied to cip |
 | Terms | `commercial_customer_term` reused as-is |
 | Steward UI | `/admin/customer-commercial-terms` |
 
@@ -73,11 +73,11 @@
 
 | Item | Status |
 |------|--------|
-| Read model | `inbound_lineup_quarter.py` ? PO-only attribution via `commercial_lineup_case_po`; plan_quarter from case `inferred_period_start`; disambiguate multi-case PO by (customer×product) lineup line ? single-case ? BU match |
+| Read model | `inbound_lineup_quarter.py` ? PO-only attribution via `commercial_lineup_case_po`; plan_quarter from case `inferred_period_start`; disambiguate multi-case PO by (customer?product) lineup line ? single-case ? BU match |
 | API | `GET /shipping/lines` enriched fields + filters (`plan_quarter`, `plan_business_unit`, `lineup_attribution=unattributed`, `lifecycle_bucket`, `slip_direction`); `GET /shipping/lineup-plan-periods`; `GET /shipping/lineup-quarter-summary` |
 | UI | `/shipping` ? plan-quarter select (PvE period enumeration), BU filter, summary strip, bucket/slip chips, columns (plan/landing quarter, slip, awaiting POD days); PvE drill ? inbound deep-link |
 | Taxonomy | shipped / pipeline / landed per `PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md`; awaiting_pod_days on shipped+pod_date NULL only |
-| cip 26Q2 validation (read-only) | planned **27,218** · shipped **967** · landed **17,890** · pipeline **5,224** · slipped_in **111** · slipped_out **204**; **4** ambiguous multi-quarter POs; slipped sample id 106449 (plan 26Q2 ? land 26Q3); awaiting-POD sample 57 days |
+| cip 26Q2 validation (read-only) | planned **27,218** ? shipped **967** ? landed **17,890** ? pipeline **5,224** ? slipped_in **111** ? slipped_out **204**; **4** ambiguous multi-quarter POs; slipped sample id 106449 (plan 26Q2 ? land 26Q3); awaiting-POD sample 57 days |
 | Tests | 11 API unit tests (`test_inbound_lineup_quarter.py`); web `buildShippingLinesUrl.test.ts` green |
 
 Closes the "filter inbound by lineup quarter" ask. No schema change.
@@ -162,7 +162,7 @@ Closes the "filter inbound by lineup quarter" ask. No schema change.
 | Integrity audit | `invoice_line_graduation_gap` check added |
 | Change events | `graduated` + `graduation_kind: invoice_mint` on lineage thread |
 
-**Preview impact (pre-repair):** 174 lineages · top double-count 26Q2 Open Channel 5,581 units.
+**Preview impact (pre-repair):** 174 lineages ? top double-count 26Q2 Open Channel 5,581 units.
 
 **Sample invoice_mint event:** order `151126051002768` line `1.1` item `90NR0NG1-M00C30` ? `ship:15260187716|?|8883|1`.
 
@@ -177,7 +177,7 @@ Closes the "filter inbound by lineup quarter" ask. No schema change.
 | 3 Consumers + supersede | `6de21b8` | Audit **5b=0**; 35,134 superseded; parity worklist measured post-cutover |
 | 4 Change events v1 | `91f227e` | API + CLI; unit tests green; real chain spot-check jobs 32/40 |
 
-**Integrity audit (cip):** `evidence_true_dupes` (5b) = **0** · `evidence_fact_parity` = **10** on cip today (2026-07 audit; **184** was the pre-audit Plan-D cutover figure ? steward worklist shrank after graduation/supersede) · `duplicate_qty_inflation_groups` = **0**.
+**Integrity audit (cip):** `evidence_true_dupes` (5b) = **0** ? `evidence_fact_parity` = **10** on cip today (2026-07 audit; **184** was the pre-audit Plan-D cutover figure ? steward worklist shrank after graduation/supersede) ? `duplicate_qty_inflation_groups` = **0**.
 
 **Open?shipped fact double-count (diagnostic only, BACKLOG-062):** 104 matching pairs; open qty 5,752 / shipped qty 7,224 ? remediation deferred.
 
@@ -216,7 +216,7 @@ Closes the "filter inbound by lineup quarter" ask. No schema change.
 
 ## Dev topology
 
-Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm dev:worker` (Redis :6379) or `CIP_DEV_CELERY_DISPATCH=in_process_thread`.
+Local desktop (no Docker): `pnpm dev:api` :8001 ? `pnpm dev:web` :3000 ? `pnpm dev:worker` (Redis :6379) or `CIP_DEV_CELERY_DISPATCH=in_process_thread`.
 
 ---
 
@@ -251,7 +251,7 @@ Local desktop (no Docker): `pnpm dev:api` :8001 · `pnpm dev:web` :3000 · `pnpm d
 |---------|------------------------------------------|
 | `po_management.backlog` | Groups: `(year, quarter, product_line)` from `fact_inbound_shipment`; linked groups **project** `reconcile_case` product rows matching group `product_line` ? `reconciliation_summary` + `reconciliation_customers` |
 | `plan_vs_executed` | Period options from `po_management.coverage` observed groups (full history); scorecard/trend filtered by From..To range; default latest quarter |
-| `reconcile_case` | `(case × customer × product)`; product rows carry `product_line` + `business_unit` |
+| `reconcile_case` | `(case ? customer ? product)`; product rows carry `product_line` + `business_unit` |
 | Current Lineup recon UI | `CaseReconciliationInline` = case-level (out of scope for BU projection) |
 | Assign distributor button | `RESOLUTION_UI_STATUSES` && `!superseded` ? no unassigned-line gate in UI |
 
