@@ -168,12 +168,17 @@ def test_check_dsi_import_state_writes_shape(
     assert intel["prior_applied_job_count"] == 2
 
 
-def test_has_cpor_always_false_until_cpor_import_module_exists() -> None:
+def test_has_cpor_wires_to_cpor_case_count() -> None:
+    """Spec §7: no longer always-False; True when non-cancelled cpor_case rows exist."""
     from app.services.imports.dsi_import_state_awareness import _has_cpor_data
 
     session = MagicMock()
+    session.scalar.return_value = 0
     assert _has_cpor_data(session, None) is False
-    assert _has_cpor_data(session, 1) is False
+    session.scalar.return_value = 2
+    assert _has_cpor_data(session, 1) is True
+    # DB error → False (degraded, not crash)
+    session.scalar.side_effect = RuntimeError("boom")
     assert _has_cpor_data(session, 99) is False
 
 

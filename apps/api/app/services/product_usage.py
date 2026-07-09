@@ -21,6 +21,7 @@ from app.models.derived import (
     StockRisk,
     WeeksOfStock,
 )
+from app.models.cpor import CporCaseLine
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
@@ -64,8 +65,9 @@ _SPECS: list[tuple[str, object]] = [
     ("Inbound shipments", FactInboundShipment.product_id),
     ("Pricing", FactPricing.product_id),
     ("Support / MDF", FactSupport.product_id),
-    ("Promotion plans", FactPromotionPlan.product_id),
+    ("Promotion plans", FactPromotionPlan.product_id),  # scaffold kept until table drop (spec §7)
     ("Promotion performance", FactPromotionPerformance.product_id),
+    ("CPOR case lines", CporCaseLine.product_id),
     ("Forecasts", FactForecast.product_id),
     ("Buy plans", FactBuyPlan.product_id),
     ("Competitor mappings", FactCompetitorMapping.product_id),

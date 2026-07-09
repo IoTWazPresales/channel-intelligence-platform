@@ -188,10 +188,15 @@ export default function PromotionsPage() {
   return (
     <>
       <PageHeader crumbs={[{ label: 'Promotions' }]} title="Promo calendar & readiness" />
+      <Alert severity="info" sx={{ mb: 2 }}>
+        Scaffold plans/readiness are parked (CPOR U6 / spec §7). Use{' '}
+        <strong>Commercial Planning → CPOR Cases</strong> (
+        <a href="/commercial-planner/cpor-cases">/commercial-planner/cpor-cases</a>) for live promotion cases and
+        U4 XLSX export. Legacy export tab below remains for empty scaffold only.
+      </Alert>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
-        <strong>Plans</strong> list SKUs on a promotion; <strong>Readiness</strong> shows explainable risk flags.{' '}
-        <strong>CPOR export</strong> builds a versioned Excel file from those plan rows—ensure fact_promotion_plan has
-        lines (via imports or internal writes) before exporting.
+        <strong>Plans</strong> and <strong>Readiness</strong> APIs return empty (parked). Prefer CPOR Cases for
+        case builder, lifecycle, and settlement.
       </Typography>
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab label="Plans" />

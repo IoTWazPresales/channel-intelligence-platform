@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-09 (LC-U1 ? Listing Capture v0; migration authored NOT applied)
+**Last updated:** 2026-07-09 (CPOR U6 ? scaffold reader migration)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,42 +9,41 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/lc-unit-1-listing-capture` |
-| **HEAD** | *(update after commit)* ? off U4.6 tip `c593677` |
+| **Branch** | `feat/cpor-unit-6-scaffold-readers` |
+| **HEAD** | *(update after commit)* ? off LC-U1 tip `a5cca19` |
 | **PR** | None open |
-| **Alembic (code)** | `20260709_0069` (head) ? listing tables |
-| **Alembic (DB)** | **`20260709_0068`** on local `cip` ? **0069 NOT applied** (awaits Warren) |
+| **Alembic (code)** | `20260709_0069` (LC-U1; U6 no new migration) |
+| **Alembic (DB)** | **`20260709_0068`** on cip ? **0069 NOT applied** (Warren gate) |
 
 ---
 
-## LC-U1 ? DONE (code); migration pending on cip
+## CPOR U6 ? DONE (promo scaffold readers ? CPOR; no schema)
 
 | Item | Status |
 |------|--------|
-| a) Migration | `20260709_0069` authored ? customer_listing + listing_observation |
-| b) Registry API | `/api/v1/listing-capture` CRUD + CSV + status |
-| c) Proposals | confirm/reject from `cst_listing_seed` (steward only) |
-| d) Observation | compress/parse/reparse; mocked HTTP; dead-link backoff |
-| e) Beat | `listing_capture.poll_listings` gated no-op (default disabled) |
-| f) Web | `/listing-capture` + nav |
-| g) Tests | 10 passed; ALLOW unset; no live HTTP |
-| cip | SELECT-only: tables absent; alembic still 0068 |
-| **STOP** | Warren must approve `alembic upgrade` to apply 0069 on cip |
+| A1 cpor_xlsx | Documented legacy; U4 CPOR export is canonical |
+| A2 promotions UI/API | plans/readiness parked empty; meta parked hint; page banner ? CPOR Cases |
+| A3 product_rankings | Re-pointed to `cpor_case_line` |
+| A4 product_usage | Added CPOR case lines; kept old promo checks |
+| A5 seed | Stopped FactPromotionPlan seeding |
+| A6 template | promotion_plan disabled (U5 already added cpor_claim_evidence) |
+| A7 DSI `_has_cpor_data` | Wired to non-cancelled `cpor_case` count |
+| A8 nav | No /promotions nav entry (already absent); page parked in place |
+| Tests | 6 U6 + DSI awareness green |
+| Next | Fable verify ? BACKLOG-072 ? BACKLOG-061 |
 
 ---
 
-## CPOR U4.6 ? DONE (`c593677`)
+## HARD GATE
 
-CST channel intelligence read-model; Fable PASS ? LC-U1.
-
----
-
-## CPOR U5 ? DONE (`a1b6e84`)
-
-Settlement claim import + consolidation.
+**Apply `20260709_0069` on cip only after Warren explicit approval** (LC-U1 listing tables).
 
 ---
 
-## Next after LC-U1 Fable verify
+## Prior units (tips)
 
-U6 ? BACKLOG-072 ? BACKLOG-061
+| Unit | Tip |
+|------|-----|
+| LC-U1 | `a5cca19` |
+| U4.6 | `c593677` |
+| U5 | `a1b6e84` |

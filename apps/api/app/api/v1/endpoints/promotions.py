@@ -1,15 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
-from app.models.dimensions import DimProduct, DimPromotion
 from app.models.derived import PromoReadiness
 from app.models.facts import FactPromotionPlan
 
 router = APIRouter()
+
+# Spec §7 / U6: park scaffold readers — prefer /commercial-planner/cpor-cases.
+_PARKED = {
+    "parked": True,
+    "message": "Promo scaffold plans/readiness are parked. Use CPOR Cases.",
+    "cpor_cases_href": "/commercial-planner/cpor-cases",
+}
 
 
 class ClearConfirmBody(BaseModel):
@@ -18,43 +24,21 @@ class ClearConfirmBody(BaseModel):
 
 @router.get("/plans")
 async def list_promo_plans(db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(FactPromotionPlan))
-    rows = res.scalars().all()
-    out = []
-    for row in rows:
-        promo = await db.get(DimPromotion, row.promotion_id)
-        prod = await db.get(DimProduct, row.product_id)
-        out.append(
-            {
-                "id": row.id,
-                "promotion_id": row.promotion_id,
-                "promo_code": promo.code if promo else None,
-                "sku": prod.sku if prod else None,
-                "expected_uplift_pct": float(row.expected_uplift_pct) if row.expected_uplift_pct else None,
-                "support_needed": row.support_needed,
-                "stock_readiness": row.stock_readiness,
-            }
-        )
-    return out
+    """Parked (spec §7): returns empty list + redirect hint. Code retained."""
+    _ = db
+    return []
 
 
 @router.get("/readiness")
 async def list_promo_readiness(db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(PromoReadiness))
-    rows = res.scalars().all()
-    out = []
-    for r in rows:
-        prod = await db.get(DimProduct, r.product_id)
-        out.append(
-            {
-                "id": r.id,
-                "sku": prod.sku if prod else None,
-                "explanation_summary": r.explanation_summary,
-                "explanation_factors": r.explanation_factors,
-                "confidence": r.confidence,
-            }
-        )
-    return out
+    """Parked (spec §7 / §11): readiness tab parked; code retained."""
+    _ = db
+    return []
+
+
+@router.get("/meta")
+async def promotions_meta():
+    return _PARKED
 
 
 @router.delete("/plans/{plan_id}", status_code=204)

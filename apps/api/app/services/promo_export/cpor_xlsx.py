@@ -1,7 +1,9 @@
-"""Template-driven CPOR-style promo plan workbook (openpyxl).
+"""Template-driven legacy promo plan workbook (openpyxl).
 
-Loads a fixed-layout workbook (generated once per process if missing), fills the data grid,
-and preserves sheet structure for downstream formatting tweaks in the template file.
+SPEC §7 / U6: This path still reads empty ``dim_promotion`` / ``fact_promotion_plan``
+scaffold tables for the old ``/promotions`` export API. The authoritative CPOR XLSX
+export is U4's ``/api/v1/cpor/cases/{id}/export`` (cpor_case / cpor_case_line).
+Do not extend this module — re-point callers to the CPOR export instead.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.dimensions import DimCustomer, DimProduct, DimPromotion
-from app.models.facts import FactPromotionPlan
+from app.models.facts import FactPromotionPlan  # noqa: F401 — scaffold retained until table drop (spec §7)
 
 TEMPLATE_CODE = "cpor_v1"
 DATA_SHEET = "CPOR_PromoPlan"
