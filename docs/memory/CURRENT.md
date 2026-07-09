@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | eat/cpor-batch3-tmp-display-names |
-| **HEAD** | (pending commit) - Batch 3 off Batch 2 tip 9924d96 |
+| **HEAD** | ea62e66 - Batch 3 off Batch 2 tip 9924d96 |
 | **PR** | None open |
 | **Alembic (code)** | 20260709_0068 (unchanged - Batch 3 no migration) |
 | **Alembic (DB)** | **20260709_0068** on local cip |
