@@ -28,6 +28,8 @@ import {
   Step,
   StepLabel,
   Stepper,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -62,6 +64,7 @@ import { toQueryError } from '@/lib/queryError';
 
 import { ImportFileUploadZone } from './ImportFileUploadZone';
 import { BulkLineupBackfillDialog } from './BulkLineupBackfillDialog';
+import { DsiBulkUploadDialog } from './DsiBulkUploadDialog';
 import { UnifiedLineupImportDialog } from './UnifiedLineupImportDialog';
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
 import {
@@ -93,11 +96,13 @@ import {
   computeDsiContinueGateKey,
   dsiContinueToApplyAllowed,
   dsiGateFromMapping,
+  dsiGateFromNestedMapping,
   dsiHumanFixableBlockingRows,
   dsiSelectValue,
   dsiTargetDescription,
   dsiTargetLabel,
   formatDsiBlockerSummaryLine,
+  isNestedDsiFieldMapping,
   formatDsiSamples,
   parseDistributorSiSummaryFromRows,
   stableFieldMappingJson,
@@ -535,6 +540,9 @@ function AdminImportsPageContent() {
   const [pmRowFilter, setPmRowFilter] = useState<'all' | 'unmapped' | 'mapped' | 'core'>('all');
   const [pmBulkSelected, setPmBulkSelected] = useState<Record<string, boolean>>({});
   const [dsiMapDraft, setDsiMapDraft] = useState<Record<string, string>>({});
+  const [dsiNestedMapDraft, setDsiNestedMapDraft] = useState<Record<string, Record<string, string>>>({});
+  const [dsiActiveSheetKey, setDsiActiveSheetKey] = useState<string | null>(null);
+  const [dsiBulkUploadOpen, setDsiBulkUploadOpen] = useState(false);
   const [jobsBulkSelectionMode, setJobsBulkSelectionMode] = useState<'normal' | 'selecting'>('normal');
   const [jobsSelectedCount, setJobsSelectedCount] = useState(0);
   const [jobsVisibleRowCount, setJobsVisibleRowCount] = useState(0);
@@ -887,7 +895,29 @@ function AdminImportsPageContent() {
     template_slug?: string | null;
     error_summary?: string | null;
     file_headers: string[];
-    field_mapping: Record<string, string>;
+    field_mapping: Record<string, string> | Record<string, Record<string, string>>;
+    multi_sheet?: boolean;
+    dsi_workbook?: {
+      multi_sheet?: boolean;
+      sheet_count?: number;
+      sheets?: Array<{
+        sheet_name?: string | null;
+        sheet_key?: string;
+        row_count?: number;
+        columns?: string[];
+        dsi_mappable?: boolean;
+      }>;
+      skipped_sheets?: Array<{ sheet_name?: string; reason?: string }>;
+    } | null;
+    sheet_field_mappings?: Record<
+      string,
+      {
+        field_mapping: Record<string, string>;
+        blocking_mapping_errors: Array<{ code: string; message: string }>;
+        mapping_valid: boolean;
+        mapping_adjustment_notices?: Array<{ code: string; message: string }>;
+      }
+    >;
     canonical_targets: string[];
     blocking_mapping_errors: Array<{ code: string; message: string }>;
     mapping_valid: boolean;
@@ -914,10 +944,27 @@ function AdminImportsPageContent() {
     enabled: Boolean(isDsi && lastJobId != null && activeStep >= 5),
   });
 
-  const dsiServerMappingGateOk = useMemo(
-    () => dsiGateFromMapping(dsiMappingState?.field_mapping ?? {}),
-    [dsiMappingState?.field_mapping]
+  const dsiIsMultiSheet = Boolean(
+    dsiMappingState?.multi_sheet || isNestedDsiFieldMapping(dsiMappingState?.field_mapping)
   );
+
+  const dsiSheetKeys = useMemo(() => {
+    if (!dsiIsMultiSheet || !dsiMappingState) return [] as string[];
+    const fromWb = (dsiMappingState.dsi_workbook?.sheets ?? [])
+      .map((s) => s.sheet_key)
+      .filter((k): k is string => Boolean(k));
+    if (fromWb.length) return fromWb;
+    if (isNestedDsiFieldMapping(dsiMappingState.field_mapping)) {
+      return Object.keys(dsiMappingState.field_mapping);
+    }
+    return Object.keys(dsiMappingState.sheet_field_mappings ?? {});
+  }, [dsiIsMultiSheet, dsiMappingState]);
+
+  const dsiServerMappingGateOk = useMemo(() => {
+    const fm = dsiMappingState?.field_mapping;
+    if (isNestedDsiFieldMapping(fm)) return dsiGateFromNestedMapping(fm);
+    return dsiGateFromMapping((fm as Record<string, string>) ?? {});
+  }, [dsiMappingState?.field_mapping]);
 
   const dsiCanonSet = useMemo(
     () => new Set(dsiMappingState?.canonical_targets ?? []),
@@ -948,12 +995,33 @@ function AdminImportsPageContent() {
   useEffect(() => {
     if (!isDsi) return;
     setDsiMapDraft({});
+    setDsiNestedMapDraft({});
+    setDsiActiveSheetKey(null);
     setDsiContinueGateKey(null);
   }, [isDsi, lastJobId]);
 
+  useEffect(() => {
+    if (!dsiIsMultiSheet || !dsiSheetKeys.length) return;
+    if (dsiActiveSheetKey && dsiSheetKeys.includes(dsiActiveSheetKey)) return;
+    setDsiActiveSheetKey(dsiSheetKeys[0] ?? null);
+  }, [dsiIsMultiSheet, dsiSheetKeys, dsiActiveSheetKey]);
+
   const dsiMappingDraftDirty = useMemo(() => {
-    if (!isDsi || !dsiMappingState?.file_headers?.length) return false;
-    const server = dsiMappingState.field_mapping ?? {};
+    if (!isDsi || !dsiMappingState) return false;
+    if (dsiIsMultiSheet && isNestedDsiFieldMapping(dsiMappingState.field_mapping)) {
+      const server = dsiMappingState.field_mapping;
+      for (const key of dsiSheetKeys) {
+        const sMap = server[key] ?? {};
+        const dMap = dsiNestedMapDraft[key] ?? {};
+        const headers = new Set([...Object.keys(sMap), ...Object.keys(dMap)]);
+        for (const h of headers) {
+          if ((dMap[h] ?? '') !== (sMap[h] ?? '')) return true;
+        }
+      }
+      return false;
+    }
+    if (!dsiMappingState.file_headers?.length) return false;
+    const server = (dsiMappingState.field_mapping as Record<string, string>) ?? {};
     for (const h of dsiMappingState.file_headers) {
       if ((dsiMapDraft[h] ?? '') !== (server[h] ?? '')) return true;
     }
@@ -961,26 +1029,61 @@ function AdminImportsPageContent() {
       if (!dsiMappingState.file_headers.includes(k) && dsiMapDraft[k]) return true;
     }
     return false;
-  }, [isDsi, dsiMapDraft, dsiMappingState?.field_mapping, dsiMappingState?.file_headers]);
+  }, [
+    isDsi,
+    dsiIsMultiSheet,
+    dsiMapDraft,
+    dsiNestedMapDraft,
+    dsiSheetKeys,
+    dsiMappingState,
+  ]);
 
   useEffect(() => {
-    if (!isDsi || activeStep < 5 || !dsiMappingState?.file_headers?.length) return;
-    const server = dsiMappingState.field_mapping ?? {};
+    if (!isDsi || activeStep < 5 || !dsiMappingState) return;
+    if (dsiIsMultiSheet && isNestedDsiFieldMapping(dsiMappingState.field_mapping)) {
+      const next: Record<string, Record<string, string>> = {};
+      for (const key of dsiSheetKeys) {
+        const serverSheet =
+          dsiMappingState.sheet_field_mappings?.[key]?.field_mapping ??
+          dsiMappingState.field_mapping[key] ??
+          {};
+        const sheetNext: Record<string, string> = {};
+        for (const [h, v] of Object.entries(serverSheet)) {
+          if (v && dsiCanonSet.has(v)) sheetNext[h] = v;
+        }
+        next[key] = sheetNext;
+      }
+      setDsiNestedMapDraft(next);
+      return;
+    }
+    if (!dsiMappingState.file_headers?.length) return;
+    const server = (dsiMappingState.field_mapping as Record<string, string>) ?? {};
     const next: Record<string, string> = {};
     for (const h of dsiMappingState.file_headers) {
       const v = server[h];
       if (v && dsiCanonSet.has(v)) next[h] = v;
     }
     setDsiMapDraft(next);
-  }, [isDsi, activeStep, dsiMappingState?.id, dsiServerMappingKey, dsiMappingState?.file_headers, dsiCanonSet]);
+  }, [
+    isDsi,
+    activeStep,
+    dsiIsMultiSheet,
+    dsiMappingState?.id,
+    dsiServerMappingKey,
+    dsiMappingState?.file_headers,
+    dsiSheetKeys,
+    dsiCanonSet,
+    dsiMappingState,
+  ]);
 
   const saveDsiMapping = useMutation({
     mutationFn: async () => {
       if (lastJobId == null) throw new Error('No job');
+      const payload = dsiIsMultiSheet ? dsiNestedMapDraft : dsiMapDraft;
       const res = await fetch(apiUrl(`/api/v1/imports/jobs/${lastJobId}/dsi-field-mapping`), {
         method: 'PUT',
         headers: { ...defaultHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ field_mapping: dsiMapDraft }),
+        body: JSON.stringify({ field_mapping: payload }),
       });
       if (!res.ok) throw new Error(await readFetchError(res));
       return res.json() as Promise<DsiMappingState>;
@@ -1400,7 +1503,10 @@ function AdminImportsPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when draft diverges from saved server mapping
   }, [isDsi, dsiMappingDraftDirty]);
 
-  const dsiGateOk = useMemo(() => dsiGateFromMapping(dsiMapDraft), [dsiMapDraft]);
+  const dsiGateOk = useMemo(() => {
+    if (dsiIsMultiSheet) return dsiGateFromNestedMapping(dsiNestedMapDraft);
+    return dsiGateFromMapping(dsiMapDraft);
+  }, [dsiIsMultiSheet, dsiMapDraft, dsiNestedMapDraft]);
 
   const dsiJobDisplay = useMemo(
     () =>
@@ -2388,6 +2494,20 @@ function AdminImportsPageContent() {
         open={unifiedLineupOpen}
         onClose={() => setUnifiedLineupOpen(false)}
         initialPeriodLabel={unifiedPeriodPrefill}
+      />
+      <DsiBulkUploadDialog
+        open={dsiBulkUploadOpen}
+        onClose={() => setDsiBulkUploadOpen(false)}
+        sourceId={typeof sourceId === 'number' ? sourceId : null}
+        dsiWorkflowMode={dsiWorkflowMode}
+        onWorkflowModeChange={setDsiWorkflowMode}
+        onJobsCreated={(ids) => {
+          if (ids[0] != null) {
+            setLastJobId(ids[0]);
+            setActiveStep(5);
+          }
+          void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+        }}
       />
       <BulkLineupBackfillDialog
         open={bulkLineupBackfillOpen}
@@ -3700,6 +3820,14 @@ function AdminImportsPageContent() {
               subtitle="Or choose a file. Validation and apply run only after you confirm mappings."
               testIdPrefix="dsi-upload"
             />
+            <Button
+              variant="outlined"
+              disabled={!canGoUpload || upload.isPending}
+              onClick={() => setDsiBulkUploadOpen(true)}
+              data-testid="dsi-bulk-upload-open"
+            >
+              Bulk upload (multiple files)
+            </Button>
             {upload.isSuccess && lastJobId != null ? (
               <Alert severity="success" data-testid="dsi-upload-success">
                 Job <strong>#{lastJobId}</strong> created. Continue to column mapping.
@@ -3733,8 +3861,11 @@ function AdminImportsPageContent() {
               <strong>Unresolved value</strong> means a column is mapped but a token (for example a distributor name) is not
               found in master data — fix master data or aliases; you do not need to rename source headers like DISTI.
             </Alert>
-            {!dsiMappingState?.file_headers?.length ? (
+            {!dsiIsMultiSheet && !dsiMappingState?.file_headers?.length ? (
               <Alert severity="warning">Loading column headers…</Alert>
+            ) : null}
+            {dsiIsMultiSheet && !dsiSheetKeys.length ? (
+              <Alert severity="warning">Loading workbook sheets…</Alert>
             ) : null}
             {dsiMappingState?.blocking_mapping_errors?.length ? (
               <Alert severity="warning">
@@ -3757,7 +3888,60 @@ function AdminImportsPageContent() {
                 ))}
               </Alert>
             ) : null}
-            {!dsiMappingState?.file_headers?.length ? null : (
+            {dsiIsMultiSheet && dsiSheetKeys.length ? (
+              <Stack spacing={2} data-testid="dsi-multi-sheet-mapping">
+                <Alert severity="info">
+                  Multi-sheet workbook detected ({dsiSheetKeys.length} mappable sheet
+                  {dsiSheetKeys.length === 1 ? '' : 's'}). Map each sheet, then save.
+                </Alert>
+                <Tabs
+                  value={dsiActiveSheetKey ?? dsiSheetKeys[0]}
+                  onChange={(_e, v) => setDsiActiveSheetKey(String(v))}
+                  variant="scrollable"
+                  scrollButtons="auto"
+                >
+                  {dsiSheetKeys.map((key) => {
+                    const sheetOk = dsiGateFromMapping(dsiNestedMapDraft[key] ?? {});
+                    return (
+                      <Tab
+                        key={key}
+                        value={key}
+                        label={`${key}${sheetOk ? '' : ' *'}`}
+                        data-testid={`dsi-sheet-tab-${key}`}
+                      />
+                    );
+                  })}
+                </Tabs>
+                {(() => {
+                  const activeKey = dsiActiveSheetKey ?? dsiSheetKeys[0];
+                  const sheetMeta = (dsiMappingState?.dsi_workbook?.sheets ?? []).find(
+                    (s) => s.sheet_key === activeKey
+                  );
+                  const headers =
+                    sheetMeta?.columns?.length
+                      ? sheetMeta.columns
+                      : Object.keys(dsiNestedMapDraft[activeKey] ?? {});
+                  const sheetState = dsiMappingState?.sheet_field_mappings?.[activeKey];
+                  return (
+                    <CanonicalColumnMappingPanel
+                      testIdPrefix={`dsi-sheet-${activeKey}`}
+                      fileHeaders={headers}
+                      draft={dsiNestedMapDraft[activeKey] ?? {}}
+                      onChange={(next) =>
+                        setDsiNestedMapDraft((prev) => ({ ...prev, [activeKey]: next }))
+                      }
+                      targetOptions={dsiMappingTargetOptions}
+                      columnSamples={dsiMappingState?.column_samples}
+                      blockingErrors={sheetState?.blocking_mapping_errors}
+                      adjustmentNotices={sheetState?.mapping_adjustment_notices}
+                      requiredGroups={DSI_MAPPING_REQUIRED_GROUPS}
+                      formatSamples={formatDsiSamples}
+                      dirty={dsiMappingDraftDirty}
+                    />
+                  );
+                })()}
+              </Stack>
+            ) : !dsiMappingState?.file_headers?.length ? null : (
               <CanonicalColumnMappingPanel
                 testIdPrefix="dsi"
                 fileHeaders={dsiMappingState.file_headers}

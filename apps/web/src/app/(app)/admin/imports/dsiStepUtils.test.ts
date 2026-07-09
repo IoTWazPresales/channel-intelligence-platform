@@ -4,11 +4,13 @@ import {
   computeDsiContinueGateKey,
   dsiContinueToApplyAllowed,
   dsiGateFromMapping,
+  dsiGateFromNestedMapping,
   dsiHumanFixableBlockingRows,
   dsiSelectValue,
   dsiTargetDescription,
   dsiTargetLabel,
   formatDsiBlockerSummaryLine,
+  isNestedDsiFieldMapping,
   parseDistributorSiSummaryFromRows,
   stableFieldMappingJson,
 } from './dsiStepUtils';
@@ -51,6 +53,20 @@ describe('dsiStepUtils', () => {
         d: 'quantity_sold',
       })
     ).toBe(true);
+  });
+
+  it('dsiGateFromNestedMapping requires every sheet to pass', () => {
+    const good = {
+      a: 'distributor_token',
+      b: 'product_identifier',
+      c: 'snapshot_date',
+      d: 'stock_on_hand',
+    };
+    expect(dsiGateFromNestedMapping({ Sales: good, SOH: good })).toBe(true);
+    expect(dsiGateFromNestedMapping({ Sales: good, SOH: { a: 'distributor_token' } })).toBe(false);
+    expect(dsiGateFromNestedMapping({})).toBe(false);
+    expect(isNestedDsiFieldMapping({ Sales: good })).toBe(true);
+    expect(isNestedDsiFieldMapping({ a: 'distributor_token' })).toBe(false);
   });
 
   it('stableFieldMappingJson is order-independent', () => {

@@ -43,6 +43,20 @@ export function dsiGateFromMapping(m: Record<string, string>): boolean {
   );
 }
 
+/** True when every sheet in a nested (multi-sheet) mapping passes the flat gate. */
+export function dsiGateFromNestedMapping(m: Record<string, Record<string, string>>): boolean {
+  const sheets = Object.values(m).filter((s) => s && Object.keys(s).length > 0);
+  if (!sheets.length) return false;
+  return sheets.every((sheet) => dsiGateFromMapping(sheet));
+}
+
+export function isNestedDsiFieldMapping(
+  m: Record<string, string> | Record<string, Record<string, string>> | null | undefined
+): m is Record<string, Record<string, string>> {
+  if (!m || typeof m !== 'object') return false;
+  return Object.values(m).some((v) => v != null && typeof v === 'object' && !Array.isArray(v));
+}
+
 export function formatDsiSamples(samples: string[] | undefined): string {
   if (!samples?.length) return '—';
   const parts = samples.map((s) => (s.length > 48 ? `${s.slice(0, 45)}…` : s)).filter(Boolean);

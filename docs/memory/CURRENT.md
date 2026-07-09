@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-07-09 (CPOR Batch 1 — U4.5 Phase B completion)
-**Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
+**Last updated:** 2026-07-09 (CPOR Batch 2 ? DSI channel stock)
+**Verify git:** `git branch --show-current` � `git rev-parse --short HEAD`
 
 ---
 
@@ -9,15 +9,30 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/cpor-batch1-phaseb-completion` |
-| **HEAD** | `29a3126` — Batch 1 off Batch 0 `67b8ab0` |
+| **Branch** | `feat/cpor-batch2-dsi-channel-stock` |
+| **HEAD** | (see git) ? Batch 2 off Batch 1 tip `d22e978` |
 | **PR** | None open |
-| **Alembic (code)** | `20260709_0068` (unchanged — Batch 1 no migration) |
+| **Alembic (code)** | `20260709_0068` (unchanged ? Batch 2 no migration) |
 | **Alembic (DB)** | **`20260709_0068`** on local `cip` |
 
 ---
 
-## CPOR Batch 1 — DONE (U4.5 Phase B completion; no schema)
+## CPOR Batch 2 ? DONE (derived channel stock + DSI multi-file/sheet; no schema)
+
+| Item | Status |
+|------|--------|
+| a) DSI weekly + bulk + multi-sheet | Weekly mode already wired; bulk multi-file dialog; multi-sheet mapping tabs; nested apply gate |
+| b) Derived channel stock | `channel_ops_derived_stock.py` ? latest SOH ? sell-out + shipped POD-landed; variance FLAG |
+| c) Channel Ops tiles | Summary uses derived sum (not raw snapshot sum); WoC n/a near-zero; YoY denom guard |
+| d) cip read-only validation | dist 21 � 5 products printed; SELECT-only |
+| Side task job 43 | Job `failed`/`fields_mapped` ? no candidate rows; cannot assert ?19087/?1307 (report as blocked) |
+| Tests | 19 API (derived+channel_ops) + 13 web (dsiStepUtils+page); ALLOW unset |
+| Schema | None |
+| Next | STOP for Fable verify ? Batch 3 (TMP display-name-first) |
+
+---
+
+## CPOR Batch 1 ? DONE (U4.5 Phase B completion; no schema)
 
 | Item | Status |
 |------|--------|
@@ -25,10 +40,10 @@
 | b) Report slots | beat `imports.cst_advance_report_slots` + worklist + manual advance; frozen-clock tests |
 | c) Parser D1 parity | pivoted / multi_sheet / mtd_delta / wide_extract emit unit_mac/article/listing/site_label |
 | d) Feed profile + aliases | JSON editor on steward page; confirm/reject article-alias worklist |
-| e) CPOR picker | `is_key_account` query param; empty→all + hint; typed search = all |
+| e) CPOR picker | `is_key_account` query param; empty?all + hint; typed search = all |
 | Tests | 102 green (slots+parsers+cpor subset); ALLOW unset; no cip writes |
 | Schema | None |
-| Next | STOP for Fable verify → Batch 2 |
+| Next | Batch 2 (done) |
 
 ---
 

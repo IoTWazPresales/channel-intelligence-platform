@@ -23,12 +23,34 @@ async def test_summary_returns_zeros_on_empty_tables() -> None:
 
     with patch.object(co, "_table_exists", AsyncMock(return_value=False)):
         with patch.object(co, "_has_rows", AsyncMock(return_value=False)):
-            out = await co.channel_ops_summary(db)
+            with patch.object(co, "sum_derived_channel_stock", AsyncMock(return_value=(0, 0))):
+                out = await co.channel_ops_summary(db)
 
     assert out["sell_out_this_quarter"]["units"] == 0
     assert out["total_inventory_units"] == 0
+    assert out["sell_out_yoy_pct"] is None
+    assert out["weeks_of_cover"] is None
     assert out["has_velocity_data"] is False
     assert out["has_forecast_data"] is False
+
+
+@pytest.mark.anyio
+async def test_summary_yoy_none_when_prior_zero() -> None:
+    db = AsyncMock()
+    db.scalar = AsyncMock(return_value=0)
+    # current quarter has units; prior year quarter is zero → YoY n/a
+    db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(one=MagicMock(return_value=(100.0, 50.0))),
+            MagicMock(one=MagicMock(return_value=(0.0, 0.0))),
+        ]
+    )
+    with patch.object(co, "_table_exists", AsyncMock(return_value=False)):
+        with patch.object(co, "_has_rows", AsyncMock(return_value=False)):
+            with patch.object(co, "sum_derived_channel_stock", AsyncMock(return_value=(42, 3))):
+                out = await co.channel_ops_summary(db)
+    assert out["total_inventory_units"] == 42
+    assert out["sell_out_yoy_pct"] is None
 
 
 @pytest.mark.anyio

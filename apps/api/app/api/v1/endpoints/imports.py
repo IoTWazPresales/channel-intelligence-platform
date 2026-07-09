@@ -1148,12 +1148,20 @@ async def post_dsi_apply(
                 status_code=400,
                 detail="This import can change canonical facts; pass confirm_destructive=true.",
             )
-    headers = list(job.file_headers or [])
-    clean, _ = sanitize_dsi_field_mapping(headers, dict(job.field_mapping or {}))
-    job.field_mapping = clean
-    await db.commit()
-    await db.refresh(job)
-    gate = dsi_mapping_gate_errors(job.field_mapping or {})
+    from app.services.imports.dsi_workbook import is_nested_dsi_field_mapping
+
+    if is_nested_dsi_field_mapping(job.field_mapping):
+        gate = []
+        for sheet_map in (job.field_mapping or {}).values():
+            if isinstance(sheet_map, dict):
+                gate.extend(dsi_mapping_gate_errors(sheet_map))
+    else:
+        headers = list(job.file_headers or [])
+        clean, _ = sanitize_dsi_field_mapping(headers, dict(job.field_mapping or {}))
+        job.field_mapping = clean
+        await db.commit()
+        await db.refresh(job)
+        gate = dsi_mapping_gate_errors(job.field_mapping or {})
     if gate:
         raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
     # Mark running + record dispatch time + import_mode=apply in a sync session before handing off,
