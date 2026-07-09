@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-09 (BACKLOG-072 implement complete — awaiting commit + Fable verify)
+**Last updated:** 2026-07-09 (BACKLOG-072 Fable PASS · next BACKLOG-061)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,11 +9,23 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/backlog-072-catalogue-gap-bulk-resolve` (cut from U6) |
-| **HEAD** | `0e44557` + uncommitted 072 work |
+| **Branch** | `feat/backlog-072-catalogue-gap-bulk-resolve` |
+| **HEAD** | `0202098` (pushed) |
 | **PR** | None open |
 | **Alembic (code)** | `20260709_0069` (LC-U1; unapplied) |
 | **Alembic (DB)** | **`20260709_0068`** on cip — **0069 NOT applied** (Warren gate) |
+
+---
+
+## Units
+
+| Unit | Tip | Fable verify |
+|------|-----|--------------|
+| BACKLOG-072 | `0202098` | **PASS 2026-07-09** · next: BACKLOG-061 |
+| U6 | `0e44557` | PASS |
+| LC-U1 | `a5cca19` | PASS |
+| U4.6 | `c593677` | PASS |
+| U5 | `a1b6e84` | PASS |
 
 ---
 
@@ -23,24 +35,15 @@
 
 ---
 
-## In progress / ready for handoff
+## Next
 
-**BACKLOG-072** — catalogue-gap governed bulk resolve implemented (no schema):
-
-- Service: `product_master_gap_resolve.py` (scan / preview / confirm-apply)
-- API: `POST /product-master-gaps/{scan,preview,apply}`
-- UI: select ? Preview ? Confirm resolve on `/admin/product-master-gaps`
-- Post-PM commit: scan-only `ImportRowResult` (no auto-apply)
-- DSI facts: FLAG only (`dsi_facts_repoint_deferred`)
-- Tests: 9 unit passed; SELECT-only cip: ship 4818 / DSI cand 534 / claims 0 / alembic 0068
-
-**Next:** commit + push ? CLI Fable verify ? BACKLOG-061
+**BACKLOG-061** — entity promote-in-place. Prompt: `.tmp/b072_fable_response.md` (authored on PASS). New branch off `0202098`.
 
 ---
 
 ## Workflow
 
-`docs/WORKFLOW_DUAL_AGENT.md` active (Cursor ? Fable). Skill deferred.
+`docs/WORKFLOW_DUAL_AGENT.md` active. Skill deferred.
 
 ---
 
@@ -48,6 +51,7 @@
 
 | Unit | Tip |
 |------|-----|
+| 072 | `0202098` |
 | U6 | `0e44557` |
 | LC-U1 | `a5cca19` |
 | U4.6 | `c593677` |
