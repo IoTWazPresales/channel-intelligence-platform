@@ -86,6 +86,12 @@ class CustomerBulkBody(BaseModel):
     rows: list[CustomerBulkRow]
 
 
+class CustomerPromoteBody(BaseModel):
+    new_code: str = Field(min_length=1, max_length=64)
+    confirm: bool = False
+    note: str | None = Field(default=None, max_length=512)
+
+
 class CustomerLocationCreate(BaseModel):
     location_code: str = Field(min_length=1, max_length=64)
     location_name: str = Field(min_length=1, max_length=256)
@@ -868,6 +874,41 @@ async def patch_customer(customer_id: int, body: CustomerPatch, db: AsyncSession
     if status_warning:
         payload["warnings"] = [status_warning]
     return payload
+
+
+@router.post("/{customer_id}/promote")
+async def promote_customer(
+    customer_id: int,
+    body: CustomerPromoteBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """BACKLOG-061 B1 — promote-in-place: same id, reassign TMP code → real code.
+
+    Preview when ``confirm=false`` (no writes). Confirm requires ``confirm=true``.
+    Never auto-creates dim_customer; never touches merged_into_* / aliases / FKs.
+    """
+    from app.services.customer_promote import (
+        CustomerPromoteError,
+        confirm_customer_promote,
+        preview_customer_promote,
+    )
+
+    try:
+        if not body.confirm:
+            return await preview_customer_promote(
+                db, customer_id=customer_id, new_code=body.new_code
+            )
+        return await confirm_customer_promote(
+            db,
+            customer_id=customer_id,
+            new_code=body.new_code,
+            note=body.note,
+        )
+    except CustomerPromoteError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": exc.message, "code": exc.code},
+        ) from exc
 
 
 @router.post("/bulk", status_code=200)

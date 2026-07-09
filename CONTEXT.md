@@ -64,6 +64,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-07-09 | **BACKLOG-061 B1 (uncommitted):** `POST /customers/{id}/promote` preview/confirm — same-id TMP→real code, status→active; UNIQUE collision blocks merged losers too (design §3.2.4 amended). 11 unit tests green. No UI/distributor/migration. Branch `feat/backlog-061-entity-promote-in-place`. |
 | 2026-07-09 | **BACKLOG-061 Phase A (design):** promote-in-place discovery + `docs/design/BACKLOG-061_promote_in_place.md` — target status `active` (not orphaned `verified`); TMP-DIST all active on cip (backlog wording mismatch reported). No API/UI/migration. Branch `feat/backlog-061-entity-promote-in-place`. |
 | 2026-07-09 | **BACKLOG-072 Fable PASS (`0202098`):** catalogue-gap scan/preview/confirm-apply (shipment + DSI staging + CPOR claims; DSI facts FLAG-only). CLI Fable verified; next prompt BACKLOG-061 Phase A. Branch `feat/backlog-072-catalogue-gap-bulk-resolve`. |
 | 2026-07-08 | **Inbound shipments by lineup plan quarter:** PO-only attribution read model; shipping API/UI quarter filter + summary strip + lifecycle/slip chips; PvE drill deep-link. cip 26Q2 validation (planned 27,218 / shipped 967 / landed 17,890 / pipeline 5,224). 11 API tests green. Branch `feat/unit-6-unified-lineup-import-centre`. |

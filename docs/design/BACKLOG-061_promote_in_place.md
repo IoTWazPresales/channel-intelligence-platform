@@ -97,7 +97,8 @@ distributor_merged_into_set= 0
 1. **Same primary key** (no merge, no new dim row).
 2. **Code reassignment:** `TMP-*` (or steward-supplied old code) → unique real business `code`.
 3. **Status:** customer `unverified` (or TMP+active edge cases) → **`active`**; distributor TMP+`active` stays **`active`** (or set explicitly `active`).
-4. **Uniqueness:** reject if target `code` already owned by another non-merged row (`merged_into_* IS NULL`).
+4. **Uniqueness:** reject if target `code` already owned by **any** other row (case-insensitive).  
+   **Amendment (B1 evidence):** `dim_customer.code` is UNIQUE and merge losers **retain** their codes (`customer_full_merge` does not rename). Therefore “collision with merged-away row allowed” from an earlier draft is **not implementable** without a separate loser-code-retire step. B1 blocks all collisions; document loser-code retire as a future ops/merge enhancement if needed.
 5. **Confirm required:** `confirm=true`; preview returns collisions + reuse impact.
 6. **Audit:** `ImportRowResult`-style or dedicated audit note on row / activity — at minimum structured API response + optional `merge_note`-like field only if Warren approves column (distributor already has `merge_note`; customer does not).
 7. **Aliases:** **no auto-repoint** — same id; existing `CustomerSourceTokenAlias` / distributor aliases remain valid.
