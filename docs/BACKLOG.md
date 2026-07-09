@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-072 — Product catalogue gaps: governed bulk resolve after PM (not job re-apply)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-09 |
+| **Effort** | Large (cross-importer set-based repoint + steward confirm UI + activity feed) |
+| **Source** | Warren session (2026-07-09): Channel Ops / PM discussion — “re-resolving a job after Product Master upload is silly”; Product catalogue gaps (`/admin/product-master-gaps`, W3 worklist) is flag-only today (`ProductMasterGapWorklistView` + `product_master_gap_worklist.py`); does not create PM rows or bulk-repoint facts. Enterprise expectation: PM lands → propose matches → steward confirm → resolve across affected tables/jobs. |
+| **Idea** | Close the loop on catalogue gaps: after PM commit (or steward product confirm), surface tokens that now exact-match Product Master tiers; steward confirm screen shows affected shipment lines / DSI staging-or-facts / job ids; on confirm, set-based repoint + optional alias write. Intelligence = one steward surface, not “remember which import job to re-apply.” |
+| **Why it matters / deferrable** | Operators cannot clear cross-import unresolved debt without reopening jobs; looks unintelligent vs worklist intent. Deferrable while CPOR Batch 1–3 / Channel Ops derived-stock (Batch 2) run — gap worklist still useful as read-only triage. |
+| **What the work is** | (1) Post-PM (and on-demand) scan: open gap tokens → eligible `dim_product` via existing tier order (item_code → EAN/UPC → sales_model → alias); no fuzzy. (2) Preview API: token → product_id, counts by source (shipment / DSI / …), job ids. (3) Confirm apply: chunked set-based updates to evidence/staging/facts per importer contracts; write `ProductAlias` / source-token alias where steward opts in. (4) UI on `/admin/product-master-gaps`: select rows → Confirm resolve (not Create product). (5) Activity-feed progress; idempotent re-run. (6) Extend worklist sources beyond shipment+DSI only if discovery shows other product-resolving importers in scope. |
+| **Regression traps** | No auto-create `dim_product`; no silent confirm; no weak/substring joins; do not bypass DSI eligibility / historical vs weekly rules; shipment latest-job-wins vs sell-out transaction-immutability (update resolution FKs only where that contract applies); do not force full job re-validate as the only path; FLAG≠BLOCK for leftovers. |
+| **Behavior to retain** | Current read-only worklist + deep-links into job steward; ignore status; PM commit unchanged; steward-initiated provisional create stays elsewhere. |
+| **Out of scope** | Auto-resolve without steward confirm; fuzzy description matching; customer/distributor promote (BACKLOG-061); Channel Ops derived stock (CPOR Batch 2); rebuilding import wizards. |
+| **TRIGGER** | Warren prioritizes catalogue-gap close-the-loop after a PM upload leaves large unresolved debt; **or** operators refuse job re-apply as the remediation path; **or** post–CPOR Batch 2/3 when import-intelligence UX is next. |
+
+---
+
 ## BACKLOG-070 — Frontend ESLint v9 flat-config gap (repo-wide lint broken)
 
 | Field | Detail |

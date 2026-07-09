@@ -345,6 +345,38 @@ def run_pm_commit_worker(db: Session, job_id: int, *, confirm_destructive: bool,
 
     try:
         commit_product_master_sync(db, job_id, confirm_destructive=confirm_destructive, from_worker=True)
+        # BACKLOG-072: post-commit scan only (no auto-apply). Steward confirms on gap worklist.
+        try:
+            from app.services.imports.product_master_gap_resolve import scan_open_gaps_for_matches
+
+            scan = scan_open_gaps_for_matches(db, limit=500)
+            matched_n = int(scan.get("matched_count") or 0)
+            if matched_n > 0:
+                db.add(
+                    ImportRowResult(
+                        job_id=job_id,
+                        row_number=0,
+                        severity="info",
+                        code="catalogue_gap_scan_after_pm",
+                        message=(
+                            f"Post-PM gap scan: {matched_n} open token(s) now match Product Master. "
+                            "Confirm resolve on /admin/product-master-gaps (no auto-apply)."
+                        ),
+                        raw_payload=to_jsonable(
+                            {
+                                "matched_count": matched_n,
+                                "scanned_tokens": scan.get("scanned_tokens"),
+                                "truncated": scan.get("truncated"),
+                            }
+                        ),
+                    )
+                )
+                db.commit()
+        except Exception:
+            logger.exception(
+                "run_pm_commit_worker: post-PM catalogue gap scan failed (non-fatal) job_id=%s",
+                job_id,
+            )
     except Exception as exc:
         logger.exception("run_pm_commit_worker: commit failed job_id=%s", job_id)
         db.rollback()
