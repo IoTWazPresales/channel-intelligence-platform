@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.cpor.claim_evidence_apply import apply_claim_evidence_to_case
 from app.services.cpor.cost_suggestion import (
     detect_cost_basis_drift,
     resolve_default_margin,
@@ -30,6 +31,10 @@ from app.services.cpor.lifecycle import (
 from app.services.cpor.pivot import build_case_pivot
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PROMOTION_TYPE_SET
 from app.services.cpor.recompute import recompute_case, recompute_case_line
+from app.services.cpor.settlement import (
+    build_settlement_consolidation,
+    rollup_result_qty_from_claims,
+)
 
 router = APIRouter()
 
@@ -865,6 +870,63 @@ def transition_case(
 @router.get("/meta/promotion-types")
 def promotion_types():
     return {"promotion_types": sorted(CPOR_PROMOTION_TYPE_SET)}
+
+
+# --- settlement (U5) ---------------------------------------------------------
+
+
+@router.get("/cases/{case_id}/settlement")
+def get_settlement(case_id: int):
+    with SessionLocal() as session:
+        _load_case(session, case_id)
+        return build_settlement_consolidation(session, case_id)
+
+
+@router.post("/cases/{case_id}/claim-evidence/import")
+async def import_claim_evidence(
+    case_id: int,
+    file: UploadFile = File(...),
+    include_out_of_window: bool = Form(default=False),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    """Case-scoped claim evidence upload → upsert cpor_claim_evidence_line + rollup."""
+    actor = _actor(x_user_id)
+    raw = await file.read()
+    with SessionLocal() as session:
+        _load_case(session, case_id)
+        result = apply_claim_evidence_to_case(
+            session,
+            case_id=case_id,
+            filename=file.filename or "claim.csv",
+            raw_bytes=raw,
+            include_out_of_window=bool(include_out_of_window),
+        )
+        if not result.get("ok"):
+            raise HTTPException(status_code=422, detail=result)
+        rollup = rollup_result_qty_from_claims(session, case_id, actor=actor)
+        _record_event(
+            session,
+            case_id=case_id,
+            event_type="claim_evidence_imported",
+            actor=actor,
+            payload={"import": result, "rollup": rollup},
+        )
+        session.commit()
+        consolidation = build_settlement_consolidation(session, case_id)
+        return {"import": result, "rollup": rollup, "settlement": consolidation}
+
+
+@router.post("/cases/{case_id}/settlement/rollup")
+def post_settlement_rollup(
+    case_id: int,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    actor = _actor(x_user_id)
+    with SessionLocal() as session:
+        _load_case(session, case_id)
+        rollup = rollup_result_qty_from_claims(session, case_id, actor=actor)
+        session.commit()
+        return {"rollup": rollup, "settlement": build_settlement_consolidation(session, case_id)}
 
 
 @router.get("/meta/lifecycle")

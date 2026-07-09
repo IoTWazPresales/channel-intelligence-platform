@@ -587,9 +587,9 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     },
     {
         "slug": "promotion_plan",
-        "display_name": "Promotion plan",
-        "description": "Promo plan rows by SKU (pipeline scaffold).",
-        "enabled": True,
+        "display_name": "Promotion plan (legacy stub)",
+        "description": "Deprecated scaffold — use cpor_claim_evidence for settlement claims (U5).",
+        "enabled": False,
         "hidden": True,
         "admin_only": False,
         "requires_provider": True,
@@ -597,6 +597,28 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "destructive_apply_requires_confirm": False,
         "accepted_file_types": [".csv", ".xlsx"],
         "expected_columns": {"sku": {"aliases": ["item"], "required": True}},
+    },
+    {
+        "slug": "cpor_claim_evidence",
+        "display_name": "CPOR claim evidence",
+        "description": "Case-scoped settlement claim rows (product × date × units). Prefer case detail upload.",
+        "enabled": True,
+        "hidden": False,
+        "admin_only": True,
+        "requires_provider": False,
+        "pipeline_handler": "stub_noop",
+        "destructive_apply_requires_confirm": False,
+        "accepted_file_types": [".csv", ".xlsx"],
+        "expected_columns": {
+            "product_token": {
+                "aliases": ["sku", "item", "item_code", "model", "sales_model", "sales_model_name"],
+                "required": True,
+            },
+            "sale_date": {"aliases": ["date", "transaction_date", "invoice_date"], "required": True},
+            "units": {"aliases": ["qty", "quantity", "result_qty", "units_sold"], "required": True},
+            "unit_price": {"aliases": ["price", "unit_sell_price"], "required": False},
+            "ean": {"aliases": ["ean_code", "barcode"], "required": False},
+        },
     },
 ]
 
@@ -621,6 +643,12 @@ DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
         "planning_extract",
     ),
     ("promotion_plan_default", "Default promotion plan feed", "promotion_plan", "promo_extract"),
+    (
+        "cpor_claim_evidence_default",
+        "Default CPOR claim evidence feed",
+        "cpor_claim_evidence",
+        "settlement_extract",
+    ),
     ("current_lineup_system", "Current working lineup (Commercial Planner upload)", "current_lineup", "planning_extract"),
     ("unified_lineup_system", "Unified lineup import (Import Centre, multi-file)", "unified_lineup", "planning_extract"),
     (

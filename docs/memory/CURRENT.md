@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-07-09 (CPOR Batch 3 - TMP display-name-first)
-**Verify git:** git branch --show-current Â· git rev-parse --short HEAD
+**Last updated:** 2026-07-09 (CPOR U5 ? settlement / claim evidence)
+**Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
 
@@ -9,11 +9,28 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | eat/cpor-batch3-tmp-display-names |
-| **HEAD** | ea62e66 - Batch 3 off Batch 2 tip 9924d96 |
+| **Branch** | `feat/cpor-unit-5-settlement` |
+| **HEAD** | *(update after commit)* ? off Batch 3 tip `4baf200` |
 | **PR** | None open |
-| **Alembic (code)** | 20260709_0068 (unchanged - Batch 3 no migration) |
-| **Alembic (DB)** | **20260709_0068** on local cip |
+| **Alembic (code)** | `20260709_0068` (unchanged ? U5 no migration) |
+| **Alembic (DB)** | **`20260709_0068`** on local `cip` |
+
+---
+
+## CPOR U5 ? DONE (settlement: claim import + consolidation + settle; no schema)
+
+| Item | Status |
+|------|--------|
+| a) Claim import | Case-scoped `POST .../claim-evidence/import`; `cpor_claim_evidence` template; `source_key` upsert |
+| b) Product resolve | item?EAN?sales model; unresolved FLAG; PM gap worklist `cpor_claim` |
+| c) Settlement math | `ttl_result = support_unit * result_qty` uncapped; over_estimate FLAG |
+| d) CST reconcile | Divergence FLAG?BLOCK vs `fact_customer_sellthrough` |
+| e) Consolidation | `GET .../settlement` + Settlement tab on case detail |
+| f) Settle | Existing `ended ? settle ? settled` + panel Settle button |
+| g) cip validation | SELECT-only: table+cols present; 0 claim rows; 2 cancelled cases |
+| Tests | 6 API (`test_cpor_settlement_u5`); ALLOW unset; no cip writes |
+| Schema | None (uses U1 `cpor_claim_evidence_line`) |
+| Next | STOP for Fable verify ? U4.6 ? LC-U1 ? U6 ? BACKLOG-072 ? BACKLOG-061 |
 
 ---
 
@@ -27,7 +44,7 @@
 | d) cip validation | TMP sample + normal contrast printed SELECT-only |
 | Tests | 8 API + 4 web; ALLOW unset; no TMP mutation |
 | Schema | None |
-| Next | STOP for Fable verify -> U5 / U4.6 / LC-U1 / U6 + BACKLOG-072/061 |
+| Next | U5 (done) |
 
 ---
 

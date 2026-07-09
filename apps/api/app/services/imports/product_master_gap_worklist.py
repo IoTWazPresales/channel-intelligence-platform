@@ -13,6 +13,7 @@ from typing import Any, Literal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.cpor import CporClaimEvidenceLine
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.shipment_evidence_current import ShipmentEvidenceCurrent
 from app.services.imports.dsi_product_running_change import (
@@ -20,7 +21,7 @@ from app.services.imports.dsi_product_running_change import (
     infer_dsi_ignore_reason_code,
 )
 
-SourceKind = Literal["shipment", "dsi"]
+SourceKind = Literal["shipment", "dsi", "cpor_claim"]
 WorklistStatus = Literal["unresolved", "ignored"]
 
 _SHIPMENT_UNRESOLVED_STATUSES = frozenset({"no_match", "inactive_only", "ambiguous", "no_identifier"})
@@ -63,6 +64,8 @@ async def product_master_gap_worklist(
         await _merge_shipment_tokens(db, rows_by_token)
     if source in (None, "dsi"):
         await _merge_dsi_tokens(db, rows_by_token)
+    if source in (None, "cpor_claim"):
+        await _merge_cpor_claim_tokens(db, rows_by_token)
 
     out = sorted(rows_by_token.values(), key=lambda r: (-int(r["occurrence_count"]), r["token"]))
     if status:
@@ -81,6 +84,7 @@ async def product_master_gap_worklist(
         "status_vocabulary": {
             "shipment": sorted(_SHIPMENT_UNRESOLVED_STATUSES),
             "dsi": ["needs_review", "ignored", "resolved"],
+            "cpor_claim": ["unresolved", "ambiguous"],
             "worklist": ["unresolved", "ignored"],
         },
         "data_unavailable": False,
@@ -190,6 +194,43 @@ async def _merge_dsi_tokens(db: AsyncSession, rows_by_token: dict[str, dict[str,
         )
 
 
+async def _merge_cpor_claim_tokens(db: AsyncSession, rows_by_token: dict[str, dict[str, Any]]) -> None:
+    """Unresolved/ambiguous claim tokens (product_id IS NULL). FLAG≠BLOCK; no auto-create."""
+    agg = (
+        await db.execute(
+            select(
+                CporClaimEvidenceLine.source_model_token,
+                CporClaimEvidenceLine.case_id,
+                func.count().label("n"),
+                func.coalesce(func.sum(CporClaimEvidenceLine.units), 0).label("qty"),
+                func.min(CporClaimEvidenceLine.import_job_id).label("first_job"),
+                func.max(CporClaimEvidenceLine.import_job_id).label("last_job"),
+                func.min(CporClaimEvidenceLine.created_at).label("first_seen"),
+                func.max(CporClaimEvidenceLine.updated_at).label("last_seen"),
+            )
+            .where(CporClaimEvidenceLine.product_id.is_(None))
+            .group_by(CporClaimEvidenceLine.source_model_token, CporClaimEvidenceLine.case_id)
+        )
+    ).all()
+
+    for row in agg:
+        token = _norm_token(row.source_model_token) or "UNKNOWN"
+        job_ids = {int(j) for j in (row.first_job, row.last_job) if j is not None}
+        _upsert_token_row(
+            rows_by_token,
+            token=token,
+            source="cpor_claim",
+            status="unresolved",
+            resolution_status="unresolved",
+            occurrence_count=int(row.n),
+            quantity_impact=float(row.qty or 0),
+            sample_identifiers=f"case:{row.case_id}",
+            job_ids=job_ids,
+            first_seen=row.first_seen,
+            last_seen=row.last_seen or row.first_seen,
+        )
+
+
 def _sample_ids(item: str | None, ean: str | None, model: str | None) -> str:
     parts = [p for p in (item, ean, model) if p and str(p).strip()]
     return " · ".join(parts[:3])
@@ -256,5 +297,10 @@ def _deep_link(source: str, job_ids: set[int]) -> dict[str, str]:
         return {
             "href": f"/admin/shipment-evidence?job_id={jid}&entity=product",
             "label": "Shipment steward",
+        }
+    if source == "cpor_claim":
+        return {
+            "href": "/commercial-planner/cpor-cases",
+            "label": "CPOR cases",
         }
     return {"href": "/admin/imports", "label": "Import center"}

@@ -4,12 +4,13 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  MenuItem,
+  FormControlLabel,
   Stack,
   Tab,
   Tabs,
@@ -18,13 +19,13 @@ import {
 } from '@mui/material';
 import type { ColDef } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { PageHeader } from '@/components/PageHeader';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
-import { apiGet, apiPatch, apiPost } from '@/lib/api';
+import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 
 type LineRow = {
   id: number;
@@ -79,6 +80,37 @@ type Pivot = {
 
 type ProductPick = { id: number; sku: string; name: string };
 
+type SettlementLine = {
+  line_id: number;
+  product_id: number | null;
+  estimate_qty: number;
+  result_qty: number | null;
+  support_unit: number | null;
+  ttl_support: number | null;
+  ttl_result: number | null;
+  ttl_support_usd: number | null;
+  ttl_result_usd: number | null;
+  flags: string[];
+};
+
+type SettlementPayload = {
+  case_id: number;
+  status: string;
+  window_start: string | null;
+  window_end: string | null;
+  claim_row_count: number;
+  out_of_window_claim_rows: number;
+  unresolved_products: { token: string; units: number }[];
+  cst_reconciliation: {
+    available: boolean;
+    reason?: string;
+    divergence_count?: number;
+    products_compared?: number;
+  };
+  lines: SettlementLine[];
+  can_settle: boolean;
+};
+
 const ACTION_LABELS: Record<string, string> = {
   propose: 'Propose',
   approve: 'Approve',
@@ -104,6 +136,8 @@ export default function CporCaseDetailPage() {
   const [estimate, setEstimate] = useState('20');
   const [podQuarter, setPodQuarter] = useState('');
   const [costOverride, setCostOverride] = useState('');
+  const [includeOow, setIncludeOow] = useState(false);
+  const claimFileRef = useRef<HTMLInputElement | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['cpor', 'case', caseId],
@@ -144,6 +178,16 @@ export default function CporCaseDetailPage() {
     enabled: caseId > 0 && tab === 3,
   });
 
+  const {
+    data: settlement,
+    refetch: refetchSettlement,
+    isFetching: settlementLoading,
+  } = useQuery({
+    queryKey: ['cpor', 'settlement', caseId],
+    queryFn: ({ signal }) => apiGet<SettlementPayload>(`/api/v1/cpor/cases/${caseId}/settlement`, { signal }),
+    enabled: caseId > 0 && tab === 4,
+  });
+
   const generateExport = useMutation({
     mutationFn: () => apiPost(`/api/v1/cpor/cases/${caseId}/export`, {}),
     onSuccess: async () => {
@@ -181,6 +225,35 @@ export default function CporCaseDetailPage() {
     },
   });
 
+  const importClaims = useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('include_out_of_window', includeOow ? 'true' : 'false');
+      return apiPostFormData<{
+        import: { rows_upserted: number; unresolved_product_rows: number; out_of_window_rows: number };
+        rollup: { lines_updated: number };
+        settlement: SettlementPayload;
+      }>(`/api/v1/cpor/cases/${caseId}/claim-evidence/import`, fd);
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', caseId] });
+      await refetch();
+      await refetchSettlement();
+    },
+  });
+
+  const rollupSettlement = useMutation({
+    mutationFn: () => apiPost(`/api/v1/cpor/cases/${caseId}/settlement/rollup`, {}),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', caseId] });
+      await refetch();
+      await refetchSettlement();
+    },
+  });
+
   const lineCols = useMemo<ColDef<LineRow>[]>(
     () => [
       { field: 'product_sku', headerName: 'SKU', width: 120 },
@@ -211,6 +284,39 @@ export default function CporCaseDetailPage() {
       {
         headerName: 'Flags',
         width: 160,
+        valueGetter: (p) => (p.data?.flags ?? []).join(', '),
+      },
+    ],
+    [],
+  );
+
+  const settlementCols = useMemo<ColDef<SettlementLine>[]>(
+    () => [
+      { field: 'product_id', headerName: 'Product', width: 100 },
+      { field: 'estimate_qty', headerName: 'Estimate', width: 100 },
+      { field: 'result_qty', headerName: 'Result', width: 100 },
+      {
+        field: 'support_unit',
+        headerName: 'Support/u',
+        width: 110,
+        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+      },
+      {
+        field: 'ttl_result',
+        headerName: 'Ttl result ZAR',
+        width: 130,
+        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+      },
+      {
+        field: 'ttl_result_usd',
+        headerName: 'Ttl result USD',
+        width: 130,
+        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+      },
+      {
+        headerName: 'Flags',
+        flex: 1,
+        minWidth: 160,
         valueGetter: (p) => (p.data?.flags ?? []).join(', '),
       },
     ],
@@ -297,6 +403,7 @@ export default function CporCaseDetailPage() {
         <Tab label="USD pivot" />
         <Tab label="Events" />
         <Tab label="Exports" />
+        <Tab label="Settlement" data-testid="cpor-tab-settlement" />
       </Tabs>
 
       {tab === 0 ? (
@@ -367,6 +474,117 @@ export default function CporCaseDetailPage() {
               </Stack>
             ))
           )}
+        </Stack>
+      ) : null}
+
+      {tab === 4 ? (
+        <Stack spacing={1.5} data-testid="cpor-settlement-panel">
+          <Alert severity="info">
+            Claim evidence is the settlement source of record. Over-estimate and CST divergence are flags only —
+            they never block settle. Unresolved products stay on the worklist and do not block other claim rows.
+          </Alert>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Button
+              size="small"
+              variant="contained"
+              disabled={importClaims.isPending}
+              onClick={() => claimFileRef.current?.click()}
+              data-testid="cpor-claim-upload"
+            >
+              {importClaims.isPending ? 'Importing…' : 'Upload claim evidence'}
+            </Button>
+            <input
+              ref={claimFileRef}
+              type="file"
+              accept=".csv,.xlsx"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (f) importClaims.mutate(f);
+              }}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={includeOow}
+                  onChange={(e) => setIncludeOow(e.target.checked)}
+                />
+              }
+              label="Include out-of-window rows in rollup"
+            />
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={rollupSettlement.isPending || settlementLoading}
+              onClick={() => rollupSettlement.mutate()}
+              data-testid="cpor-settlement-rollup"
+            >
+              Re-rollup from claims
+            </Button>
+            {settlement?.can_settle ? (
+              <Button
+                size="small"
+                variant="contained"
+                color="success"
+                disabled={transition.isPending}
+                onClick={() => transition.mutate({ action: 'settle' })}
+                data-testid="cpor-settle-from-panel"
+              >
+                Settle case
+              </Button>
+            ) : null}
+          </Stack>
+          {importClaims.isError ? (
+            <Alert severity="error">{String((importClaims.error as Error)?.message)}</Alert>
+          ) : null}
+          {rollupSettlement.isError ? (
+            <Alert severity="error">{String((rollupSettlement.error as Error)?.message)}</Alert>
+          ) : null}
+          {importClaims.isSuccess ? (
+            <Alert severity="success">
+              Upserted {importClaims.data.import.rows_upserted} claim row(s); updated{' '}
+              {importClaims.data.rollup.lines_updated} line(s). Unresolved:{' '}
+              {importClaims.data.import.unresolved_product_rows}; out-of-window:{' '}
+              {importClaims.data.import.out_of_window_rows}.
+            </Alert>
+          ) : null}
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            <Chip size="small" label={`claims: ${settlement?.claim_row_count ?? '…'}`} />
+            <Chip size="small" label={`out-of-window: ${settlement?.out_of_window_claim_rows ?? '…'}`} />
+            <Chip
+              size="small"
+              color={(settlement?.unresolved_products?.length ?? 0) > 0 ? 'warning' : 'default'}
+              label={`unresolved products: ${settlement?.unresolved_products?.length ?? '…'}`}
+            />
+            <Chip
+              size="small"
+              color={
+                settlement?.cst_reconciliation?.available &&
+                (settlement.cst_reconciliation.divergence_count ?? 0) > 0
+                  ? 'warning'
+                  : 'default'
+              }
+              label={
+                settlement?.cst_reconciliation?.available
+                  ? `CST divergence: ${settlement.cst_reconciliation.divergence_count ?? 0}`
+                  : `CST: ${settlement?.cst_reconciliation?.reason ?? 'n/a'}`
+              }
+            />
+          </Stack>
+          {(settlement?.unresolved_products ?? []).length > 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              Unresolved tokens:{' '}
+              {settlement!.unresolved_products.map((u) => `${u.token} (${u.units})`).join(', ')}
+            </Typography>
+          ) : null}
+          <EnterpriseDataGrid
+            rowData={settlement?.lines ?? []}
+            columnDefs={settlementCols}
+            height={360}
+            gridOptions={{ getRowId: (p) => String(p.data.line_id) }}
+          />
         </Stack>
       ) : null}
 
