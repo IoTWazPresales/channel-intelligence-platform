@@ -231,6 +231,10 @@ async def list_customers(
         default=None,
         description="Filter by alias linkage: linked (≥1 alias) or unlinked (0 aliases)",
     ),
+    is_key_account: bool | None = Query(
+        default=None,
+        description="When true, only key-account customers; when false, only non-key; omit for all",
+    ),
     sort_by: str = Query(default="code"),
     sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
 ):
@@ -354,6 +358,9 @@ async def list_customers(
     elif al == "unlinked":
         base = base.where(alias_count_sq == 0)
 
+    if is_key_account is not None:
+        filters.append(DimCustomer.is_key_account.is_(bool(is_key_account)))
+
     if filters:
         base = base.where(and_(*filters))
 
@@ -392,6 +399,7 @@ async def list_customers(
                 "customer_code": c.code,
                 "customer_name": c.name,
                 "customer_status": c.customer_status,
+                "is_key_account": bool(c.is_key_account),
                 "created_at": c.created_at.isoformat() if c.created_at is not None else None,
                 "updated_at": c.updated_at.isoformat() if c.updated_at is not None else None,
                 "partner_tier": c.partner_tier,

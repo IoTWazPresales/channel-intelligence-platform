@@ -1,6 +1,10 @@
 # Plan (Phase 1e wide extract parser):
 # - Header-first column selection; stream data in 500-row chunks.
 # - Period columns trigger shared pivoted unpivot; else single-period flat rows.
+# - D1 parity (Batch 1c): flat path emits unit_mac, raw_article_token, listing_external_id,
+#   listing_marketplace, and site_label when mapped; pivoted path inherits identity-column
+#   behaviour from customer_sell_through_pivoted (per-period values not supported).
+#   Identity headers misclassified as period columns must be remapped via field_mapping.
 
 from __future__ import annotations
 
@@ -44,7 +48,16 @@ def _apply_ai_mapping_if_needed(
         headers=headers[:50],
         sample_rows=sample_rows,
         canonical_fields=list(_REQUIRED_CANONICAL)
-        + ["raw_location_token", "unit_cost", "reported_soh", "unit_sell_price"],
+        + [
+            "raw_location_token",
+            "unit_cost",
+            "unit_mac",
+            "reported_soh",
+            "unit_sell_price",
+            "raw_article_token",
+            "listing_external_id",
+            "listing_marketplace",
+        ],
         existing_mapping=field_mapping,
     )
     if not suggestion:
@@ -165,6 +178,7 @@ def parse_wide_extract_report(
                 "raw_row_payload": _row_dict(series),
                 "raw_customer_token": None,
                 "raw_location_token": loc_tok,
+                "site_label": loc_tok,
                 "raw_product_token": product_tok,
                 "raw_period_ref": None,
                 "period_start_date": period_start,
@@ -176,8 +190,18 @@ def parse_wide_extract_report(
                 if resolved["unit_sell_price"]
                 else None,
                 "unit_cost": _parse_decimal(series.get(resolved["unit_cost"])) if resolved["unit_cost"] else None,
+                "unit_mac": _parse_decimal(series.get(resolved["unit_mac"])) if resolved.get("unit_mac") else None,
                 "reported_soh": _parse_decimal(series.get(resolved["reported_soh"]))
                 if resolved["reported_soh"]
+                else None,
+                "raw_article_token": _normalize_text(series.get(resolved["raw_article_token"]))
+                if resolved.get("raw_article_token")
+                else None,
+                "listing_external_id": _normalize_text(series.get(resolved["listing_external_id"]))
+                if resolved.get("listing_external_id")
+                else None,
+                "listing_marketplace": _normalize_text(series.get(resolved["listing_marketplace"]))
+                if resolved.get("listing_marketplace")
                 else None,
                 "resolution_status": "pending",
             }

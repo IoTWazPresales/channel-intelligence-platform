@@ -281,11 +281,80 @@ def mark_cst_report_slot_received(
     return slot
 
 
-def list_missing_cst_report_slots(session: Session) -> list[CustomerCstReportSlot]:
+def list_cst_report_worklist_slots(
+    session: Session,
+    *,
+    statuses: tuple[str, ...] = ("due", "late", "missing"),
+) -> list[CustomerCstReportSlot]:
+    """Worklist slots — received is excluded by default (drops off worklist)."""
     return list(
         session.scalars(
             select(CustomerCstReportSlot)
-            .where(CustomerCstReportSlot.status.in_(("late", "missing")))
-            .order_by(CustomerCstReportSlot.week_start_date.desc())
+            .where(CustomerCstReportSlot.status.in_(statuses))
+            .order_by(CustomerCstReportSlot.week_start_date.desc(), CustomerCstReportSlot.id.desc())
         ).all()
     )
+
+
+def list_missing_cst_report_slots(session: Session) -> list[CustomerCstReportSlot]:
+    return list_cst_report_worklist_slots(session, statuses=("late", "missing"))
+
+
+def confirm_customer_article_alias(
+    session: Session,
+    *,
+    alias_id: int,
+    actor: str | None = None,
+) -> CustomerArticleAlias | None:
+    """Steward confirm: proposed → confirmed. Never silent."""
+    row = session.get(CustomerArticleAlias, alias_id)
+    if row is None:
+        return None
+    if row.status in CONFIRMED_ALIAS_STATUSES:
+        return row
+    if row.status not in ("proposed", "rejected"):
+        return row
+    evidence = dict(row.evidence_json or {}) if isinstance(row.evidence_json, dict) else {}
+    trail = list(evidence.get("steward_events") or [])
+    trail.append(
+        {
+            "action": "confirm",
+            "actor": actor,
+            "at": datetime.now(timezone.utc).isoformat(),
+            "from_status": row.status,
+        }
+    )
+    evidence["steward_events"] = trail
+    row.status = "confirmed"
+    row.evidence_json = to_jsonable(evidence)
+    session.add(row)
+    return row
+
+
+def reject_customer_article_alias(
+    session: Session,
+    *,
+    alias_id: int,
+    actor: str | None = None,
+    reason: str | None = None,
+) -> CustomerArticleAlias | None:
+    """Steward reject. FLAG only — does not delete."""
+    row = session.get(CustomerArticleAlias, alias_id)
+    if row is None:
+        return None
+    evidence = dict(row.evidence_json or {}) if isinstance(row.evidence_json, dict) else {}
+    trail = list(evidence.get("steward_events") or [])
+    trail.append(
+        {
+            "action": "reject",
+            "actor": actor,
+            "at": datetime.now(timezone.utc).isoformat(),
+            "from_status": row.status,
+            "reason": reason,
+        }
+    )
+    evidence["steward_events"] = trail
+    row.status = "rejected"
+    row.evidence_json = to_jsonable(evidence)
+    session.add(row)
+    return row

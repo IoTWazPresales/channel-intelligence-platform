@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-09 — **CPOR Batch 1 (U4.5 Phase B completion):** CST steward UI/API (key-account + cadence + feed_profile_json); report-slot beat + worklist; parser D1 parity on 4 non-flat parsers; article-alias confirm/reject; CPOR picker key-account default with zero→all fallback. No schema. Branch `feat/cpor-batch1-phaseb-completion` off `67b8ab0`. Spec untouched. 102 tests green; no cip writes.
 - 2026-07-09 — **CPOR Batch 0 (sequence grants):** role `cip` USAGE/SELECT on all `cpor_*` sequences + table DML re-asserted; post-apply verify step added to `docs/LOCAL_DEV_WINDOWS.md`; smoke create+cancel draft case via API. No schema. Branch `fix/cpor-batch0-sequence-grants` off `a2fe33c`. Spec untouched.
 - 2026-07-09 — **CPOR U4.5 Phase B core:** apply carries `site_label`/`unit_mac`/`vat_basis`; unmapped site FLAG≠BLOCK (product-only resolve); `customer_article_alias` after PM tiers; `cst_listing_seed` propose; flat parser D1 columns; cost tier-1 prefers `unit_mac`; period corroboration + report-slot received. Branch `feat/cpor-unit-4-5-cst` (commit pending). 96 tests green. Spec untouched.
 - 2026-07-09 — **CPOR U4.5 schema `20260709_0068` on cip:** Phase A CST D1 + `cpor_case.case_name` + line `ttl_support_usd`/`ttl_result_usd` + frozen Reseller header additions + `dim_customer.is_key_account`. Smoke on `cip_alembic_smoke`; cip apply as postgres + grants to `cip`. Branch `feat/cpor-unit-4-5-cst` (code commit pending). Phase B next. Spec untouched.

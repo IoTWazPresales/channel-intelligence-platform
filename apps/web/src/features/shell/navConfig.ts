@@ -79,6 +79,7 @@ export const navGroups: NavGroup[] = [
         href: '/admin/distributors/duplicates',
       },
       { label: 'Channels & Regions', href: '/admin/channels-regions' },
+      { label: 'CST steward', href: '/admin/cst-steward' },
     ],
   },
   {

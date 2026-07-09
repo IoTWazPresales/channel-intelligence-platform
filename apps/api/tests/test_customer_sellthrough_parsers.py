@@ -362,3 +362,195 @@ def test_ai_suggested_below_threshold_status_in_handler() -> None:
             )
     assert line.resolution_status == "ai_suggested"
     assert product_ok is False
+
+
+# --- D1 column parity (Batch 1c) ---
+
+D1_ROW_KEYS = {
+    "import_job_id",
+    "source_row_number",
+    "raw_row_payload",
+    "raw_customer_token",
+    "raw_location_token",
+    "site_label",
+    "raw_product_token",
+    "raw_period_ref",
+    "period_start_date",
+    "period_type",
+    "units_sold",
+    "raw_mtd_units",
+    "is_mtd_estimate",
+    "unit_sell_price",
+    "unit_cost",
+    "unit_mac",
+    "reported_soh",
+    "raw_article_token",
+    "listing_external_id",
+    "listing_marketplace",
+    "resolution_status",
+}
+
+D1_EXPECTED_COLUMNS = {
+    **DEFAULT_EXPECTED,
+    "unit_mac": {"aliases": ["mac_cost", "unit_mac"], "required": False},
+    "raw_article_token": {"aliases": ["article", "article_no"], "required": False},
+    "listing_external_id": {"aliases": ["listing_id", "asin"], "required": False},
+    "listing_marketplace": {"aliases": ["marketplace", "platform"], "required": False},
+}
+
+
+def _d1_mapping(**extra: str) -> dict:
+    m = _base_mapping(**extra)
+    m.update(
+        {
+            "Unit MAC": "unit_mac",
+            "Article": "raw_article_token",
+            "Listing ID": "listing_external_id",
+            "Platform": "listing_marketplace",
+        }
+    )
+    m[EXPECTED_COLUMNS_META_KEY] = D1_EXPECTED_COLUMNS
+    return m
+
+
+def _assert_d1_row_keys(rows: list) -> None:
+    assert rows, "expected at least one parsed row"
+    for row in rows:
+        assert set(row.keys()) == D1_ROW_KEYS
+
+
+def _assert_d1_values(row: dict) -> None:
+    assert row["unit_mac"] == 90.5
+    assert row["raw_article_token"] == "ART-1"
+    assert row["listing_external_id"] == "L-99"
+    assert row["listing_marketplace"] == "Amazon"
+    assert row["site_label"] == "S1"
+    assert row["raw_location_token"] == "S1"
+
+
+def test_pivoted_emits_d1_row_keys() -> None:
+    data = (FIXTURES / "pivoted_weekly.xlsx").read_bytes()
+    result = parse_pivoted_report(data, "pivoted_weekly.xlsx", _base_mapping(), 1)
+    assert result.error is None
+    _assert_d1_row_keys(result.rows)
+    for row in result.rows:
+        assert row["unit_mac"] is None
+        assert row["raw_article_token"] is None
+        assert row["listing_external_id"] is None
+        assert row["listing_marketplace"] is None
+        assert row["site_label"] == row["raw_location_token"]
+
+
+def test_pivoted_d1_fields_from_identity_columns() -> None:
+    import io
+
+    import pandas as pd
+
+    bio = io.BytesIO()
+    pd.DataFrame(
+        [
+            ["SKU", "Store", "Unit MAC", "Article", "Listing ID", "Platform", "2025-W10", "2025-W11"],
+            ["P001", "S1", 90.5, "ART-1", "L-99", "Amazon", 10, 5],
+        ]
+    ).to_excel(bio, index=False, header=False)
+    result = parse_pivoted_report(bio.getvalue(), "pivoted_d1.xlsx", _d1_mapping(), 1)
+    assert result.error is None
+    _assert_d1_row_keys(result.rows)
+    sample = next(r for r in result.rows if r["raw_product_token"] == "P001")
+    _assert_d1_values(sample)
+
+
+def test_multi_sheet_emits_d1_row_keys() -> None:
+    data = (FIXTURES / "multi_sheet_weekly.xlsx").read_bytes()
+    result = parse_multi_sheet_report(data, "multi.xlsx", _base_mapping(), 1)
+    assert result.error is None
+    _assert_d1_row_keys(result.rows)
+
+
+def test_multi_sheet_d1_fields_from_identity_columns() -> None:
+    import io
+
+    import pandas as pd
+
+    bio = io.BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+        pd.DataFrame(
+            [
+                ["SKU", "Store", "Unit MAC", "Article", "Listing ID", "Platform", "TW Sales"],
+                ["P001", "S1", 90.5, "ART-1", "L-99", "Amazon", 12],
+            ]
+        ).to_excel(writer, sheet_name="Week 10", index=False, header=False)
+    result = parse_multi_sheet_report(bio.getvalue(), "multi_d1.xlsx", _d1_mapping(), 1)
+    assert result.error is None
+    _assert_d1_row_keys(result.rows)
+    sample = next(r for r in result.rows if r["raw_product_token"] == "P001")
+    _assert_d1_values(sample)
+
+
+def test_mtd_delta_emits_d1_row_keys() -> None:
+    data = (FIXTURES / "mtd_delta_current.xlsx").read_bytes()
+    db = MagicMock()
+    db.execute.return_value.first.return_value = None
+    mapping = _base_mapping()
+    mapping["MTD Units"] = "raw_mtd_units"
+    result = parse_mtd_delta_report(data, "mtd.xlsx", mapping, 1, db)
+    assert result.error is None
+    _assert_d1_row_keys(result.rows)
+
+
+def test_mtd_delta_d1_fields_from_identity_columns() -> None:
+    import io
+
+    import pandas as pd
+
+    bio = io.BytesIO()
+    pd.DataFrame(
+        [
+            [
+                "SKU",
+                "Store",
+                "MTD Units",
+                "Unit MAC",
+                "Article",
+                "Listing ID",
+                "Platform",
+            ],
+            ["P001", "S1", 120, 90.5, "ART-1", "L-99", "Amazon"],
+        ]
+    ).to_excel(bio, index=False, header=False)
+    db = MagicMock()
+    db.execute.return_value.first.return_value = None
+    mapping = _d1_mapping()
+    mapping["MTD Units"] = "raw_mtd_units"
+    result = parse_mtd_delta_report(bio.getvalue(), "mtd_d1.xlsx", mapping, 1, db)
+    assert result.error is None
+    _assert_d1_row_keys(result.rows)
+    sample = next(r for r in result.rows if r["raw_product_token"] == "P001")
+    _assert_d1_values(sample)
+
+
+def test_wide_extract_emits_d1_row_keys() -> None:
+    data = (FIXTURES / "wide_extract_minimal.xlsx").read_bytes()
+    result = parse_wide_extract_report(data, "wide.xlsx", _base_mapping(), 1)
+    assert result.error is None
+    _assert_d1_row_keys(result.rows)
+
+
+def test_wide_extract_d1_fields_from_identity_columns() -> None:
+    import io
+
+    import pandas as pd
+
+    bio = io.BytesIO()
+    pd.DataFrame(
+        [
+            ["SKU", "Store", "TW Sales", "Unit MAC", "Article", "Listing ID", "Platform", "Noise"],
+            ["P001", "S1", 8, 90.5, "ART-1", "L-99", "Amazon", "ignore"],
+            ["P002", "S2", 3, 88.0, "ART-2", "L-88", "Takealot", "ignore"],
+        ]
+    ).to_excel(bio, index=False, header=False)
+    result = parse_wide_extract_report(bio.getvalue(), "wide_d1.xlsx", _d1_mapping(), 1)
+    assert result.error is None
+    _assert_d1_row_keys(result.rows)
+    sample = next(r for r in result.rows if r["raw_product_token"] == "P001")
+    _assert_d1_values(sample)

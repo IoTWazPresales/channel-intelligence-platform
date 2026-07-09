@@ -1,5 +1,5 @@
 from celery import Celery
-from celery.schedules import schedule
+from celery.schedules import crontab, schedule
 import os
 
 from app.core.config import get_settings
@@ -30,6 +30,12 @@ else:
             "schedule": schedule(
                 run_every=float(os.environ.get("CIP_RUNNING_JOB_REAPER_INTERVAL_SECONDS", "120"))
             ),
+        },
+        # CST expected-report tracker (spec §10.4.4.5): due Mon / late Tue / missing thereafter.
+        # Daily morning pass is enough; advance_cst_report_slots is idempotent.
+        "cst-advance-report-slots": {
+            "task": "imports.cst_advance_report_slots",
+            "schedule": crontab(hour=6, minute=15),
         },
     }
 

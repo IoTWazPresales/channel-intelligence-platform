@@ -55,6 +55,7 @@ export default function CporCasesListPage() {
   const [windowEnd, setWindowEnd] = useState('');
   const [roe, setRoe] = useState('');
   const [caseCode, setCaseCode] = useState('');
+  const [customerPickerHint, setCustomerPickerHint] = useState<string | null>(null);
 
   const { data: types } = useQuery({
     queryKey: ['cpor', 'promotion-types'],
@@ -184,13 +185,38 @@ export default function CporCasesListPage() {
               onChange={setCust}
               getOptionLabel={(o) => `${o.customer_code} — ${o.customer_name}`}
               fetchOptions={async (q, signal) => {
-                const res = await apiGet<{ items: CustomerPick[] }>(
-                  `/api/v1/customers?page=1&page_size=25&q=${encodeURIComponent(q)}`,
+                const needle = q.trim();
+                // Typing searches all customers. Empty query defaults to key accounts
+                // with graceful fallback when none are flagged.
+                if (needle) {
+                  setCustomerPickerHint(null);
+                  const res = await apiGet<{ items: CustomerPick[]; total: number }>(
+                    `/api/v1/customers?page=1&page_size=25&q=${encodeURIComponent(needle)}`,
+                    { signal },
+                  );
+                  return res.items ?? [];
+                }
+                const keyRes = await apiGet<{ items: CustomerPick[]; total: number }>(
+                  `/api/v1/customers?page=1&page_size=25&is_key_account=true`,
                   { signal },
                 );
-                return res.items ?? [];
+                if ((keyRes.total ?? 0) > 0 && (keyRes.items?.length ?? 0) > 0) {
+                  setCustomerPickerHint(null);
+                  return keyRes.items ?? [];
+                }
+                setCustomerPickerHint('No key accounts flagged — showing all customers');
+                const allRes = await apiGet<{ items: CustomerPick[]; total: number }>(
+                  `/api/v1/customers?page=1&page_size=25`,
+                  { signal },
+                );
+                return allRes.items ?? [];
               }}
             />
+            {customerPickerHint ? (
+              <Alert severity="info" data-testid="cpor-customer-picker-hint">
+                {customerPickerHint}
+              </Alert>
+            ) : null}
             <TextField
               select
               size="small"

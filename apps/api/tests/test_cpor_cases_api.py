@@ -51,6 +51,7 @@ def test_create_case_mocked():
     case = SimpleNamespace(
         id=10,
         case_code="C26C00001",
+        case_name=None,
         customer_id=1,
         promotion_type="Sell out PP",
         window_start=date(2026, 1, 1),
@@ -110,6 +111,7 @@ def test_transition_illegal_returns_409():
         status="draft",
         customer_id=1,
         case_code="X",
+        case_name=None,
         promotion_type="Sell out PP",
         window_start=date(2026, 1, 1),
         window_end=date(2026, 1, 7),

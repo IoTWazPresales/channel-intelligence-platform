@@ -599,6 +599,22 @@ def reap_stale_running_jobs_task() -> dict:
     return reap_stale_running_import_jobs_sync()
 
 
+@celery_app.task(name="imports.cst_advance_report_slots")
+def cst_advance_report_slots_task() -> dict:
+    """Beat task: create/advance CST expected-report slots (due→late→missing). Idempotent."""
+    from app.db.session_sync import SessionLocal
+    from app.services.imports.cst_d1 import advance_cst_report_slots
+    from app.worker.celery_queues import dev_beat_disabled
+
+    if dev_beat_disabled():
+        return {"skipped": True, "reason": "dev_beat_disabled"}
+
+    with SessionLocal() as session:
+        result = advance_cst_report_slots(session)
+        session.commit()
+        return result
+
+
 @celery_app.task(name="imports.flush_deferred_dsi_post_validate_auto_apply")
 def flush_deferred_dsi_post_validate_auto_apply_task(job_id: int) -> dict:
     """Batch-queue task: enqueue deferred historical auto-apply when steward is idle."""
