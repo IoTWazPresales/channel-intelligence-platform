@@ -44,6 +44,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: 'Channel Operations', href: '/sell-out' },
       { label: 'Sell-Through', href: '/sell-out' },
+      { label: 'CST channel intelligence', href: '/channel-intelligence' },
       { label: 'Inbound shipments', href: '/shipping' },
       { label: 'Forecasting', href: '/forecasts' },
     ],
