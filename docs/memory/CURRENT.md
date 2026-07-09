@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/cpor-unit-4-5-cst` |
-| **HEAD** | uncommitted (schema 0068 + Phase B core) off U4 `19b0c7e` |
+| **HEAD** | `8b859d1` — schema 0068 + Phase B core off U4 `19b0c7e` |
 | **PR** | None open |
 | **Alembic (code)** | `20260709_0068` |
 | **Alembic (DB)** | **`20260709_0068`** on local `cip` |
