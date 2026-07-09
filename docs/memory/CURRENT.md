@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `fix/cpor-batch0-sequence-grants` |
-| **HEAD** | (pin after commit) — off U4.5 `a2fe33c` |
+| **HEAD** | `b1f3916` — Batch 0 off U4.5 `a2fe33c` |
 | **PR** | None open |
 | **Alembic (code)** | `20260709_0068` (unchanged — Batch 0 no migration) |
 | **Alembic (DB)** | **`20260709_0068`** on local `cip` |
