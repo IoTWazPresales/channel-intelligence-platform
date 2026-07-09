@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-09 — **LC-U1 (Listing Capture v0):** migration `20260709_0069` (customer_listing + listing_observation) **authored, NOT applied to cip**; registry API + CSV + feed-proposal confirm; observation compress/parse/reparse (mocked HTTP); beat gated no-op; `/listing-capture` page. Branch `feat/lc-unit-1-listing-capture` off `c593677`. Spec untouched. 10 tests green; no cip writes.
 - 2026-07-09 — **CPOR U4.6 (CST channel intel):** compute-on-read velocity/WoC/aged/trend over `fact_customer_sellthrough`; `GET /api/v1/channel-intelligence` + `/channel-intelligence` page; monthly→weekly normalize; sparse → insufficient_data. No schema. Branch `feat/cpor-unit-4-6-channel-intel` off `a1b6e84`. Spec untouched. 7 tests green; no cip writes.
 - 2026-07-09 — **CPOR U5 (settlement):** case-scoped claim-evidence import (`source_key` upsert + raw_source_row); product tier resolve FLAG≠BLOCK; rollup→result_qty; consolidation + CST divergence flags; Settlement tab; settle via existing lifecycle. No schema. Branch `feat/cpor-unit-5-settlement` off `4baf200`. Spec untouched. 6 tests green; no cip writes.
 - 2026-07-09 — **CPOR Batch 3 (TMP display-name-first):** shipping grid prefers human distributor name over TMP code (read-layer only); secondary code line + tooltip; search includes resolution token. No schema/TMP mutation. Branch `feat/cpor-batch3-tmp-display-names` off 9924d96. Spec untouched.

@@ -615,6 +615,24 @@ def cst_advance_report_slots_task() -> dict:
         return result
 
 
+@celery_app.task(name="listing_capture.poll_listings")
+def listing_capture_poll_listings_task() -> dict:
+    """Beat task: gated no-op unless schedule enabled and listings exist. No live HTTP in LC-U1."""
+    from app.db.session_sync import SessionLocal
+    from app.services.listing_capture.registry import scheduler_should_run
+    from app.worker.celery_queues import dev_beat_disabled
+
+    if dev_beat_disabled():
+        return {"skipped": True, "reason": "dev_beat_disabled"}
+
+    with SessionLocal() as session:
+        gate = scheduler_should_run(session)
+        if not gate["should_run"]:
+            return {"skipped": True, "reason": "schedule_disabled_or_empty", **gate}
+        # Live fetch intentionally not wired — Warren enables schedule + injects fetcher later.
+        return {"skipped": True, "reason": "live_fetch_not_enabled_in_lc_u1", **gate}
+
+
 @celery_app.task(name="imports.flush_deferred_dsi_post_validate_auto_apply")
 def flush_deferred_dsi_post_validate_auto_apply_task(job_id: int) -> dict:
     """Batch-queue task: enqueue deferred historical auto-apply when steward is idle."""

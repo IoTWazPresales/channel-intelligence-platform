@@ -24,6 +24,7 @@ from app.api.v1.endpoints import (
     inbound_shipments,
     inventory,
     lineup,
+    listing_capture,
     mappings,
     market,
     plan_vs_executed,
@@ -53,6 +54,7 @@ api_router.include_router(channel_ops.router, prefix="/channel-ops", tags=["chan
 api_router.include_router(
     channel_intelligence.router, prefix="/channel-intelligence", tags=["channel-intelligence"]
 )
+api_router.include_router(listing_capture.router, prefix="/listing-capture", tags=["listing-capture"])
 api_router.include_router(inbound_shipments.router, prefix="/inbound-shipments", tags=["inbound-shipments"])
 api_router.include_router(shipment_evidence.router, prefix="/shipment-evidence", tags=["shipment-evidence"])
 api_router.include_router(shipping.router, prefix="/shipping", tags=["shipping"])

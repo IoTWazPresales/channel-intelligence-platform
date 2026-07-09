@@ -37,6 +37,11 @@ else:
             "task": "imports.cst_advance_report_slots",
             "schedule": crontab(hour=6, minute=15),
         },
+        # Listing Capture poller (LC-U1): gated no-op unless schedule enabled + listings exist.
+        "listing-capture-poll": {
+            "task": "listing_capture.poll_listings",
+            "schedule": crontab(minute="*/30"),
+        },
     }
 
 # Interactive steward tasks vs batch validate/apply (BACKLOG-039). Workers must subscribe with

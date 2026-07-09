@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-09 (CPOR U4.6 ? CST channel intelligence read-model)
+**Last updated:** 2026-07-09 (LC-U1 ? Listing Capture v0; migration authored NOT applied)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,43 +9,42 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/cpor-unit-4-6-channel-intel` |
-| **HEAD** | *(update after commit)* ? off U5 tip `a1b6e84` |
+| **Branch** | `feat/lc-unit-1-listing-capture` |
+| **HEAD** | *(update after commit)* ? off U4.6 tip `c593677` |
 | **PR** | None open |
-| **Alembic (code)** | `20260709_0068` (unchanged ? U4.6 no migration) |
-| **Alembic (DB)** | **`20260709_0068`** on local `cip` |
+| **Alembic (code)** | `20260709_0069` (head) ? listing tables |
+| **Alembic (DB)** | **`20260709_0068`** on local `cip` ? **0069 NOT applied** (awaits Warren) |
 
 ---
 
-## CPOR U4.6 ? DONE (CST channel intelligence read-model; no schema)
+## LC-U1 ? DONE (code); migration pending on cip
 
 | Item | Status |
 |------|--------|
-| a) Read-model | `channel_intelligence/cst_read_model.py` ? vel 4/13wk, WoC, aged, trend |
-| b) Explainability | factors + aged_factors; no composite score |
-| c) API | `GET /api/v1/channel-intelligence` |
-| d) Web | `/channel-intelligence` + nav under Channel Intelligence |
-| e) Grain/sparse | monthly?weekly÷4.345; min 4 observed weeks ? insufficient_data |
-| f) cip validation | SELECT-only: cst_rows=0 ? data_unavailable (by design) |
-| g) Tests | 7 API unit; ALLOW unset |
-| Schema | None |
-| Next | STOP for Fable verify ? LC-U1 ? U6 ? BACKLOG-072 ? BACKLOG-061 |
+| a) Migration | `20260709_0069` authored ? customer_listing + listing_observation |
+| b) Registry API | `/api/v1/listing-capture` CRUD + CSV + status |
+| c) Proposals | confirm/reject from `cst_listing_seed` (steward only) |
+| d) Observation | compress/parse/reparse; mocked HTTP; dead-link backoff |
+| e) Beat | `listing_capture.poll_listings` gated no-op (default disabled) |
+| f) Web | `/listing-capture` + nav |
+| g) Tests | 10 passed; ALLOW unset; no live HTTP |
+| cip | SELECT-only: tables absent; alembic still 0068 |
+| **STOP** | Warren must approve `alembic upgrade` to apply 0069 on cip |
 
 ---
 
-## CPOR U5 ? DONE (settlement: claim import + consolidation + settle; no schema)
+## CPOR U4.6 ? DONE (`c593677`)
 
-| Item | Status |
-|------|--------|
-| Feature | `a1b6e84` on `feat/cpor-unit-5-settlement` |
-| Fable | PASS ? authored U4.6 |
-| Next | U4.6 (this unit) |
+CST channel intelligence read-model; Fable PASS ? LC-U1.
 
 ---
 
-## CPOR Batch 3 - DONE (TMP display-name-first shipping grid; no schema)
+## CPOR U5 ? DONE (`a1b6e84`)
 
-| Item | Status |
-|------|--------|
-| Feature | `ea62e66` / docs `4baf200` |
-| Next | U5 (done) |
+Settlement claim import + consolidation.
+
+---
+
+## Next after LC-U1 Fable verify
+
+U6 ? BACKLOG-072 ? BACKLOG-061
