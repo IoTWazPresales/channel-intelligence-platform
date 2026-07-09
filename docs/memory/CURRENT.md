@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/cpor-unit-4-export` |
-| **HEAD** | (pin after commit) — off U3 `433ac1b` |
+| **HEAD** | `1cbd95a` — off U3 `433ac1b` |
 | **PR** | None open |
 | **Alembic (code)** | `20260708_0067` (unchanged — U4 no migration) |
 | **Alembic (DB)** | **`20260708_0067`** on local `cip` |
