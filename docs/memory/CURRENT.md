@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-08 (CPOR v1 Unit 1 applied on cip — alembic `20260708_0067`)
+**Last updated:** 2026-07-09 (CPOR v1 Unit 2 waterfall + cost service)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,11 +9,23 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/unit-6-unified-lineup-import-centre` |
-| **HEAD** | `0a1c409` — tip (Unit 1 feature `90680a4`) |
+| **Branch** | `feat/cpor-unit-2-waterfall-cost-service` |
+| **HEAD** | *(update after commit)* |
 | **PR** | None open |
-| **Alembic (code)** | `20260708_0067` (head) — CPOR v1 tables |
+| **Alembic (code)** | `20260708_0067` (unchanged — U2 no migration) |
 | **Alembic (DB)** | **`20260708_0067`** on local `cip` |
+
+---
+
+## CPOR v1 Unit 2 — DONE (waterfall + cost; no schema)
+
+| Item | Status |
+|------|--------|
+| Waterfall | `services/cpor/waterfall.py` — reseller `vat_divide`→`margin_deduct`; Decimal; clamp; full-precision fixtures |
+| Cost suggestion | `cost_suggestion.py` — CST → sell-out WAVG → manual; drift detect-only; FLAG≠BLOCK |
+| Recompute | `recompute.py` — writes computed columns; optional `recomputed` event; no API (U3) |
+| Tests | 19 green; `ALLOW_TESTS_ON_DEV_DB` unset |
+| Next | Feed Fable U2 report → U3 case UI prompt |
 
 ---
 
@@ -22,11 +34,9 @@
 | Item | Status |
 |------|--------|
 | Models | `cpor_case`, `cpor_case_line`, `cpor_case_event`, `cpor_claim_evidence_line` |
-| Migration | `20260708_0067` — smoke proven earlier; **applied to cip** 2026-07-08 (`0066`→`0067`; all 4 tables present) |
-| Terms | `commercial_customer_term` **reused as-is** (margin+rebate already present) |
-| Steward UI | `/admin/customer-commercial-terms` EnterpriseDataGrid create/edit (no delete); existing API + per-customer panel retained |
-| Promo scaffold | Untouched |
-| Next | U2 waterfall + cost suggestion service |
+| Migration | `20260708_0067` — applied to cip |
+| Terms | `commercial_customer_term` reused as-is |
+| Steward UI | `/admin/customer-commercial-terms` |
 
 ---
 
