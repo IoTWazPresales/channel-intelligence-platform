@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-09 (CPOR v1 Unit 3 case UI + API)
+**Last updated:** 2026-07-09 (CPOR v1 Unit 4 XLSX export)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,11 +9,24 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/cpor-unit-3-case-ui` |
-| **HEAD** | `9b615d9` — tip (Unit 2 feature `44fedba`) |
+| **Branch** | `feat/cpor-unit-4-export` |
+| **HEAD** | (pin after commit) — off U3 `433ac1b` |
 | **PR** | None open |
-| **Alembic (code)** | `20260708_0067` (unchanged — U2 no migration) |
+| **Alembic (code)** | `20260708_0067` (unchanged — U4 no migration) |
 | **Alembic (DB)** | **`20260708_0067`** on local `cip` |
+
+---
+
+## CPOR v1 Unit 4 — DONE (XLSX export; no schema)
+
+| Item | Status |
+|------|--------|
+| Builder | `services/cpor/export_xlsx.py` — Reseller + USD Pivot sheets; stored columns only |
+| Pivot | Shared `services/cpor/pivot.py` (endpoint + sheet) |
+| API | `POST/GET .../export(s)` under `/api/v1/cpor`; registry = `export_generated` events + LocalStorage |
+| UI | Case detail **Exports** tab — generate / history / download |
+| Tests | 32 green (export+cases+waterfall+cost+recompute); ALLOW_TESTS_ON_DEV_DB unset |
+| Next | Feed Fable U4 report → U4.5 CST |
 
 ---
 
@@ -22,12 +35,10 @@
 | Item | Status |
 |------|--------|
 | API | `/api/v1/cpor` — cases/lines CRUD, transition, recompute, cost-suggest, pivot, events |
-| UI | `/commercial-planner/cpor-cases` list + detail (lines / USD pivot / events) |
+| UI | `/commercial-planner/cpor-cases` list + detail (lines / USD pivot / events / exports) |
 | Nav | Commercial Planning → CPOR Cases |
 | Lifecycle | draft→proposed→approved|rejected→active→ended→settled|cancelled; resend bumps version |
-| Next | Feed Fable U3 report → U4 export prompt |
-
----
+| Next | U4 export shipped on `feat/cpor-unit-4-export` |
 
 ## CPOR v1 Unit 2 — DONE (waterfall + cost; no schema)
 

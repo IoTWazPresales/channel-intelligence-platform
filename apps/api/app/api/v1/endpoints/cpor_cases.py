@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
@@ -28,6 +27,7 @@ from app.services.cpor.lifecycle import (
     can_transition,
     target_status,
 )
+from app.services.cpor.pivot import build_case_pivot
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PROMOTION_TYPE_SET
 from app.services.cpor.recompute import recompute_case, recompute_case_line
 
@@ -753,33 +753,9 @@ def case_pivot(case_id: int):
     """POD quarter × product_line → Ttl Support USD (sum of support_usd * estimate_qty)."""
     with SessionLocal() as session:
         case = _load_case(session, case_id)
-        lines = session.scalars(select(CporCaseLine).where(CporCaseLine.case_id == case.id)).all()
+        lines = list(session.scalars(select(CporCaseLine).where(CporCaseLine.case_id == case.id)).all())
         pmap = _products_map(session, [int(l.product_id) for l in lines])
-        cells: dict[str, dict[str, float]] = {}
-        row_totals: dict[str, float] = {}
-        col_totals: dict[str, float] = {}
-        grand = 0.0
-        for line in lines:
-            if line.support_usd is None or line.estimate_qty is None:
-                continue
-            pq = line.pod_quarter or "(none)"
-            pl = (pmap.get(int(line.product_id)).product_line if pmap.get(int(line.product_id)) else None) or "(unknown)"
-            usd = float(line.support_usd) * float(line.estimate_qty)
-            cells.setdefault(pq, {})
-            cells[pq][pl] = cells[pq].get(pl, 0.0) + usd
-            row_totals[pq] = row_totals.get(pq, 0.0) + usd
-            col_totals[pl] = col_totals.get(pl, 0.0) + usd
-            grand += usd
-        return {
-            "case_id": case.id,
-            "case_code": case.case_code,
-            "roe_snapshot": float(case.roe_snapshot) if case.roe_snapshot is not None else None,
-            "missing_roe": case.roe_snapshot is None,
-            "cells": cells,
-            "row_totals": row_totals,
-            "col_totals": col_totals,
-            "grand_total_usd": grand,
-        }
+        return build_case_pivot(session, case, lines, pmap)
 
 
 # --- lifecycle ---------------------------------------------------------------

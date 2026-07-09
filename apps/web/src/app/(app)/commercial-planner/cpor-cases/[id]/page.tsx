@@ -127,6 +127,30 @@ export default function CporCaseDetailPage() {
     enabled: caseId > 0 && tab === 2,
   });
 
+  const { data: exports, refetch: refetchExports } = useQuery({
+    queryKey: ['cpor', 'exports', caseId],
+    queryFn: ({ signal }) =>
+      apiGet<{
+        exports: {
+          export_version: number;
+          file_name: string | null;
+          checksum_sha256: string | null;
+          actor: string | null;
+          created_at: string | null;
+          is_latest_for_version: boolean;
+          flags_present: string[];
+        }[];
+      }>(`/api/v1/cpor/cases/${caseId}/exports`, { signal }),
+    enabled: caseId > 0 && tab === 3,
+  });
+
+  const generateExport = useMutation({
+    mutationFn: () => apiPost(`/api/v1/cpor/cases/${caseId}/export`, {}),
+    onSuccess: async () => {
+      await refetchExports();
+    },
+  });
+
   const transition = useMutation({
     mutationFn: (payload: { action: string; comment?: string }) =>
       apiPost(`/api/v1/cpor/cases/${caseId}/transition`, payload),
@@ -272,6 +296,7 @@ export default function CporCaseDetailPage() {
         <Tab label="Lines" />
         <Tab label="USD pivot" />
         <Tab label="Events" />
+        <Tab label="Exports" />
       </Tabs>
 
       {tab === 0 ? (
@@ -300,6 +325,48 @@ export default function CporCaseDetailPage() {
               {e.created_at} · <strong>{e.event_type}</strong> · {e.actor ?? '—'}
             </Typography>
           ))}
+        </Stack>
+      ) : null}
+
+      {tab === 3 ? (
+        <Stack spacing={1.5}>
+          <Button
+            variant="contained"
+            size="small"
+            disabled={generateExport.isPending}
+            onClick={() => generateExport.mutate()}
+            data-testid="cpor-generate-export"
+            sx={{ alignSelf: 'flex-start' }}
+          >
+            {generateExport.isPending ? 'Generating…' : 'Generate export'}
+          </Button>
+          {generateExport.isError ? (
+            <Alert severity="error">{String((generateExport.error as Error)?.message)}</Alert>
+          ) : null}
+          {(exports?.exports ?? []).length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              No exports yet.
+            </Typography>
+          ) : (
+            (exports?.exports ?? []).map((ex, i) => (
+              <Stack key={`${ex.export_version}-${i}`} direction="row" spacing={1} alignItems="center">
+                <Typography variant="body2">
+                  v{ex.export_version} · {ex.created_at} · {ex.actor ?? '—'} · {ex.file_name}
+                  {ex.is_latest_for_version ? ' (latest)' : ''}
+                </Typography>
+                {(ex.flags_present ?? []).map((f) => (
+                  <Chip key={f} size="small" label={f} variant="outlined" />
+                ))}
+                <Button
+                  size="small"
+                  href={`/api/v1/cpor/cases/${caseId}/exports/${ex.export_version}/file`}
+                  target="_blank"
+                >
+                  Download
+                </Button>
+              </Stack>
+            ))
+          )}
         </Stack>
       ) : null}
 
