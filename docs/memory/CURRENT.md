@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/cpor-batch1-phaseb-completion` |
-| **HEAD** | `67b8ab0` — Batch 1 off Batch 0 `67b8ab0` |
+| **HEAD** | `29a3126` — Batch 1 off Batch 0 `67b8ab0` |
 | **PR** | None open |
 | **Alembic (code)** | `20260709_0068` (unchanged — Batch 1 no migration) |
 | **Alembic (DB)** | **`20260709_0068`** on local `cip` |
