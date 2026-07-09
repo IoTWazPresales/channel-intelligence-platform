@@ -81,6 +81,53 @@ WHERE schemaname = 'public' AND tablename = 'dim_customer';
 
 **Do not** stamp Alembic to head without applying revisions, or otherwise bypass migration history.
 
+### Post-apply verification (role `cip` — table DML + sequence USAGE)
+
+When a migration is applied as **`postgres`** (or any non-`cip` owner) and objects are then granted to the app role, **table DML grants alone are not enough**. `INSERT … RETURNING id` needs **`USAGE` (and typically `SELECT`) on the backing sequences**. Missing sequence grants surface as HTTP 500 on create paths (CPOR Batch 0: `permission denied for sequence cpor_case_id_seq` while `cpor_case` already had INSERT).
+
+**After any `cip` apply that creates or re-owns tables/sequences, assert as role `cip` on database `cip`:**
+
+```sql
+SELECT current_database();  -- must be cip
+
+-- Tables: expect SELECT/INSERT/UPDATE/DELETE = true for every new public table
+SELECT t.tablename,
+       has_table_privilege('cip', format('%I.%I', t.schemaname, t.tablename), 'SELECT') AS sel,
+       has_table_privilege('cip', format('%I.%I', t.schemaname, t.tablename), 'INSERT') AS ins,
+       has_table_privilege('cip', format('%I.%I', t.schemaname, t.tablename), 'UPDATE') AS upd,
+       has_table_privilege('cip', format('%I.%I', t.schemaname, t.tablename), 'DELETE') AS del
+FROM pg_tables t
+WHERE t.schemaname = 'public'
+  AND t.tablename LIKE 'cpor_%'   -- or the prefix for the objects just applied
+ORDER BY 1;
+
+-- Sequences: expect USAGE = true (and SELECT = true) for every new sequence
+SELECT c.relname AS sequence_name,
+       has_sequence_privilege('cip', c.oid, 'USAGE') AS usage,
+       has_sequence_privilege('cip', c.oid, 'SELECT') AS sel
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind = 'S'
+  AND n.nspname = 'public'
+  AND c.relname LIKE 'cpor_%'     -- or the prefix for the objects just applied
+ORDER BY 1;
+```
+
+**Repair (superuser / migrate role on database `cip` only):**
+
+```sql
+SELECT current_database();  -- must be cip
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO cip;
+-- Prefer scoped grants for new objects, e.g.:
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.cpor_case TO cip;
+
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO cip;
+-- Prefer scoped: GRANT USAGE, SELECT ON SEQUENCE public.cpor_case_id_seq TO cip;
+```
+
+Re-run the verification queries until every new object shows the expected privileges. Do **not** skip sequence checks after a table-only grant pass.
+
 ---
 
 ## Recommended startup order

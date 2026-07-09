@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-09 (CPOR U4.5 Phase B core wired; commit pending)
+**Last updated:** 2026-07-09 (CPOR Batch 0 — sequence grants + post-apply verify docs)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,11 +9,24 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/cpor-unit-4-5-cst` |
-| **HEAD** | `8b859d1` — schema 0068 + Phase B core off U4 `19b0c7e` |
+| **Branch** | `fix/cpor-batch0-sequence-grants` |
+| **HEAD** | (pin after commit) — off U4.5 `a2fe33c` |
 | **PR** | None open |
-| **Alembic (code)** | `20260709_0068` |
+| **Alembic (code)** | `20260709_0068` (unchanged — Batch 0 no migration) |
 | **Alembic (DB)** | **`20260709_0068`** on local `cip` |
+
+---
+
+## CPOR Batch 0 — DONE (ops; no schema)
+
+| Item | Status |
+|------|--------|
+| Root cause | `permission denied for sequence cpor_case_id_seq` (table DML existed; sequence USAGE missing) |
+| Fix | Idempotent `GRANT USAGE, SELECT` on all `cpor_*` sequences + table DML to role `cip` (as postgres migrate role; `current_database()=cip`) |
+| Docs | `docs/LOCAL_DEV_WINDOWS.md` — post-apply verify: table DML **and** sequence USAGE for role `cip` |
+| Smoke | API create draft `BATCH0-SMOKE-001` → transition `cancel` (soft); events `created` + `transition_cancel`; row retained `status=cancelled` |
+| Schema | None |
+| Next | STOP for Fable verify → Batch 1 (U4.5 Phase B completion) |
 
 ---
 
