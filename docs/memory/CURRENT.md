@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/cpor-unit-2-waterfall-cost-service` |
-| **HEAD** | *(update after commit)* |
+| **HEAD** | $hash — CPOR v1 Unit 2 |
 | **PR** | None open |
 | **Alembic (code)** | `20260708_0067` (unchanged â€” U2 no migration) |
 | **Alembic (DB)** | **`20260708_0067`** on local `cip` |
