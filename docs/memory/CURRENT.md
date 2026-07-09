@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-09 (CPOR v1 Unit 2 waterfall + cost service)
+**Last updated:** 2026-07-09 (CPOR v1 Unit 3 case UI + API)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,11 +9,23 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/cpor-unit-2-waterfall-cost-service` |
+| **Branch** | `feat/cpor-unit-3-case-ui` |
 | **HEAD** | `9b615d9` — tip (Unit 2 feature `44fedba`) |
 | **PR** | None open |
 | **Alembic (code)** | `20260708_0067` (unchanged — U2 no migration) |
 | **Alembic (DB)** | **`20260708_0067`** on local `cip` |
+
+---
+
+## CPOR v1 Unit 3 — DONE (case API + UI; no schema)
+
+| Item | Status |
+|------|--------|
+| API | `/api/v1/cpor` — cases/lines CRUD, transition, recompute, cost-suggest, pivot, events |
+| UI | `/commercial-planner/cpor-cases` list + detail (lines / USD pivot / events) |
+| Nav | Commercial Planning → CPOR Cases |
+| Lifecycle | draft→proposed→approved|rejected→active→ended→settled|cancelled; resend bumps version |
+| Next | Feed Fable U3 report → U4 export prompt |
 
 ---
 
