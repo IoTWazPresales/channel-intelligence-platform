@@ -33,6 +33,7 @@ import { InboundShipmentsColumnsDialog, type OptionalColumnMeta } from './Inboun
 import { ShippingCommercialSummary } from './ShippingCommercialSummary';
 import { ShippingLineupQuarterSummary } from './ShippingLineupQuarterSummary';
 import { fmtCellForKey, fmtShortDate } from './shippingGridFormatters';
+import { shippingDistributorCellValue } from './shippingDistributorDisplay';
 import { gridRowMetrics } from '@/features/plan-vs-executed/gridPagination';
 import type { SmartPresetId } from './shippingSmartPresets';
 
@@ -66,6 +67,7 @@ export type ShippingLine = {
   distributor_display?: string | null;
   distributor_name?: string | null;
   distributor_code?: string | null;
+  distributor_is_provisional?: boolean | null;
   channel_partner_label?: string | null;
   channel_partner_caption?: string | null;
   sales_model_name?: string | null;
@@ -431,12 +433,16 @@ export default function InboundShipmentsPage() {
       {
         headerName: 'Distributor',
         minWidth: 160,
-        valueGetter: (p) => {
-          const label = (p.data?.distributor_display ?? p.data?.distributor_name ?? '—') as string;
+        tooltipValueGetter: (p) => {
           const code = p.data?.distributor_code;
-          if (code && p.data?.distributor_name) return `${label}\n${code}`;
-          return label;
+          const label = p.data?.distributor_display ?? p.data?.distributor_name;
+          if (code && label && code !== label) return `${label} (${code})`;
+          return (label ?? code ?? undefined) as string | undefined;
         },
+        valueGetter: (p) => shippingDistributorCellValue(p.data),
+        // Client filter matches display + code (valueGetter includes secondary TMP line).
+        filter: true,
+        sortable: true,
       },
       {
         headerName: 'Channel partner',

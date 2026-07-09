@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-09 — **CPOR Batch 3 (TMP display-name-first):** shipping grid prefers human distributor name over TMP code (read-layer only); secondary code line + tooltip; search includes resolution token. No schema/TMP mutation. Branch eat/cpor-batch3-tmp-display-names off 9924d96. Spec untouched.
 - 2026-07-09 — **CPOR Batch 2 (DSI channel stock):** derived stock read model (latest SOH − sell-out + shipped POD-landed; variance FLAG); Channel Ops tiles use derived sum + WoC/YoY guards; DSI bulk multi-file upload + multi-sheet mapping UI; nested apply gate. No schema. Branch `feat/cpor-batch2-dsi-channel-stock` off `d22e978`. Job 43 side task blocked (job failed mid-validate). Spec untouched. Tests green; no cip writes.
 - 2026-07-09 — **CPOR Batch 1 (U4.5 Phase B completion):** CST steward UI/API (key-account + cadence + feed_profile_json); report-slot beat + worklist; parser D1 parity on 4 non-flat parsers; article-alias confirm/reject; CPOR picker key-account default with zero→all fallback. No schema. Branch `feat/cpor-batch1-phaseb-completion` off `67b8ab0`. Spec untouched. 102 tests green; no cip writes.
 - 2026-07-09 — **CPOR Batch 0 (sequence grants):** role `cip` USAGE/SELECT on all `cpor_*` sequences + table DML re-asserted; post-apply verify step added to `docs/LOCAL_DEV_WINDOWS.md`; smoke create+cancel draft case via API. No schema. Branch `fix/cpor-batch0-sequence-grants` off `a2fe33c`. Spec untouched.

@@ -94,22 +94,18 @@ def _distributor_display(
     distributor_name: str | None,
     distributor_code: str | None,
 ) -> str:
-    dn = (distributor_name or "").strip()
-    dc = (distributor_code or "").strip()
-    if dn:
-        return dn
-    if dc and not dc.upper().startswith("TMP-DIST"):
-        return dc
-    br = (row.bill_to_raw or "").strip()
-    if br:
-        return br[:240]
-    sr = (row.ship_to_raw or "").strip()
-    if sr:
-        return sr[:240]
-    tok = (row.distributor_resolution_token or "").strip()
-    if tok:
-        return tok[:240]
-    return dc or "—"
+    from app.services.shipping_distributor_display import resolve_distributor_display_from_row
+
+    label, _provisional = resolve_distributor_display_from_row(
+        row, distributor_name, distributor_code
+    )
+    return label
+
+
+def _distributor_is_provisional(distributor_code: str | None, distributor_name: str | None = None) -> bool:
+    from app.services.shipping_distributor_display import is_tmp_distributor_code
+
+    return is_tmp_distributor_code(distributor_code) or is_tmp_distributor_code(distributor_name)
 
 
 def _dim_join_flags(kwargs: dict[str, Any]) -> tuple[bool, bool, bool]:
@@ -249,6 +245,7 @@ def _apply_fact_where_clause(
             FactInboundShipment.bill_to_raw.ilike(term),
             FactInboundShipment.ship_to_raw.ilike(term),
             FactInboundShipment.customer_dealer_token.ilike(term),
+            FactInboundShipment.distributor_resolution_token.ilike(term),
             FactInboundShipment.item_code.ilike(term),
             FactInboundShipment.sales_model_name.ilike(term),
             FactInboundShipment.order_no.ilike(term),
@@ -420,6 +417,7 @@ def _fact_to_dict(
     include_raw_row: bool,
 ) -> dict[str, Any]:
     dist_disp = _distributor_display(row, distributor_name, distributor_code)
+    dist_provisional = _distributor_is_provisional(distributor_code, distributor_name)
     cn = (customer_name or "").strip()
     cc = (customer_code or "").strip()
     tok = (row.customer_dealer_token or "").strip()
@@ -480,6 +478,7 @@ def _fact_to_dict(
         "distributor_code": distributor_code,
         "distributor_name": distributor_name,
         "distributor_display": dist_disp,
+        "distributor_is_provisional": dist_provisional,
         "distributor_resolution_status": row.distributor_resolution_status,
         "distributor_resolution_token": row.distributor_resolution_token,
         "customer_id": row.customer_id,

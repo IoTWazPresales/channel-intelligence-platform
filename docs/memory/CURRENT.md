@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-09 (CPOR Batch 2 - DSI channel stock)
+**Last updated:** 2026-07-09 (CPOR Batch 3 - TMP display-name-first)
 **Verify git:** git branch --show-current · git rev-parse --short HEAD
 
 ---
@@ -9,11 +9,25 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | eat/cpor-batch2-dsi-channel-stock |
-| **HEAD** | 73919fd - Batch 2 off Batch 1 tip d22e978 |
+| **Branch** | eat/cpor-batch3-tmp-display-names |
+| **HEAD** | (pending commit) - Batch 3 off Batch 2 tip 9924d96 |
 | **PR** | None open |
-| **Alembic (code)** | 20260709_0068 (unchanged - Batch 2 no migration) |
+| **Alembic (code)** | 20260709_0068 (unchanged - Batch 3 no migration) |
 | **Alembic (DB)** | **20260709_0068** on local cip |
+
+---
+
+## CPOR Batch 3 - DONE (TMP display-name-first shipping grid; no schema)
+
+| Item | Status |
+|------|--------|
+| a) Display-name-first | shipping_distributor_display.py + /shipping/lines distributor_display / distributor_is_provisional |
+| b) Code accessible | Secondary TMP line + tooltip with code |
+| c) Search | Server search includes distributor_resolution_token; grid filter on display+code |
+| d) cip validation | TMP sample + normal contrast printed SELECT-only |
+| Tests | 8 API + 4 web; ALLOW unset; no TMP mutation |
+| Schema | None |
+| Next | STOP for Fable verify -> U5 / U4.6 / LC-U1 / U6 + BACKLOG-072/061 |
 
 ---
 
@@ -25,10 +39,10 @@
 | b) Derived channel stock | channel_ops_derived_stock.py - latest SOH - sell-out + shipped POD-landed; variance FLAG |
 | c) Channel Ops tiles | Summary uses derived sum (not raw snapshot sum); WoC n/a near-zero; YoY denom guard |
 | d) cip read-only validation | dist 21 x 5 products printed; SELECT-only |
-| Side task job 43 | Job failed/fields_mapped - no candidate rows; cannot assert <=19087/<=1307 (report as blocked) |
-| Tests | 19 API (derived+channel_ops) + 13 web (dsiStepUtils+page); ALLOW unset |
+| Side task job 43 | Job failed/fields_mapped - blocked/N/A (superseded job) |
+| Tests | 19 API + 13 web; ALLOW unset |
 | Schema | None |
-| Next | STOP for Fable verify -> Batch 3 (TMP display-name-first) |
+| Next | Batch 3 (done) |
 
 ---
 
