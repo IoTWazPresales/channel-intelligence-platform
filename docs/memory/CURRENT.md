@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-07-10 (BACKLOG-061 complete ó Fable PASS B2ñB4; 0069 + grants)
-**Verify git:** `git branch --show-current` ∑ `git rev-parse --short HEAD`
+**Last updated:** 2026-07-10 (BACKLOG-061 complete ù Fable PASS B2ùB4; 0069 + grants)
+**Verify git:** `git branch --show-current` ù `git rev-parse --short HEAD`
 
 ---
 
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/backlog-061-entity-promote-in-place` |
-| **HEAD** | `9cfb67f` (+ grants script commit pending) |
+| **HEAD** | `6c2532f` (pushed) |
 | **PR** | Recommend open/merge |
 | **Alembic (DB)** | **`20260709_0069`** on cip; `cip` role GRANTed on listing tables |
 
@@ -20,7 +20,7 @@
 
 | Unit | Tip | Fable verify |
 |------|-----|--------------|
-| BACKLOG-061 B2ñB4 | `9cfb67f` | **PASS 2026-07-10** ∑ queue empty |
+| BACKLOG-061 B2ùB4 | `9cfb67f` | **PASS 2026-07-10** ù queue empty |
 | BACKLOG-061 B1 | `a824c9a` | **PASS** |
 | BACKLOG-072 | `0202098` | **PASS** |
 
@@ -30,7 +30,7 @@
 
 - B4: 7 `verified` ? `active` (remaining 0)
 - Alembic **0069** applied
-- GRANTs to `cip` on `customer_listing` / `listing_observation` (+ sequences) ó verified SELECT as `cip`
+- GRANTs to `cip` on `customer_listing` / `listing_observation` (+ sequences) ù verified SELECT as `cip`
 
 ---
 
