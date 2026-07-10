@@ -1528,7 +1528,6 @@ function AdminCustomersPageContent() {
           </Button>
         </DialogActions>
       </Dialog>
-      </Drawer>
       <CustomerPromoteDialog
         open={Boolean(promoteTarget)}
         customer={
