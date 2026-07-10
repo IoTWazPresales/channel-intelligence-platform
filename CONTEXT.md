@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-10 — **BACKLOG-061-U2a Fable PASS (`198507e`):** research note PASS; next = Warren picks A/B/C (rec A `CUST-######`) then U2b. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U2a:** ERP mint research note (`docs/design/BACKLOG-061-U2a_customer_code_mint_research.md`) — NetSuite/Dynamics/SAP survey; candidates A `CUST-######` (recommended) / B region / C year; settings+API sketch on paper; no-code disposition deferred. SELECT-only cip sample tmp_pending=4892. Docs-only; awaiting Fable VERIFY + Warren pick before U2b. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **Dual-agent skill + handover:** personal `dual-agent-fable` (CONSULT/IMPLEMENT/VERIFY; interviews in Cursor via CLI Fable, not browser); CIP skill `cip-dual-agent-fable`; WORKFLOW overlay updated. Next chat: BACKLOG-061-U2 mint. Branch `feat/backlog-061-entity-promote-in-place` @ `7ef261c`.
 - 2026-07-10 — **BACKLOG-061 BP1:** `POST /customers/promote/batch` (CSV/paste tmp→code, cap 500, partial success); `CustomerBulkPromoteDialog` on Master Data customers; Products default-visible `part_number` + `sales_model_name`. No mint (→ BACKLOG-061-U2). No alembic. Branch `feat/backlog-061-entity-promote-in-place`.
