@@ -146,7 +146,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **In progress on branch** `feat/backlog-061-entity-promote-in-place` · B1–B4 + BP1 (CSV bulk promote) shipped; Unit 2 mint deferred below |
+| **Status / parked** | **Theme B complete on branch** `feat/backlog-061-entity-promote-in-place` · B1–B4 + BP1 + U2 mint + U3 disposition + U-G2/U-B2 shell + U-B3 distributor bulk/mint/disposition shipped (Fable PASS); PR pending merge |
 | **Effort** | Medium (API promote endpoint, admin UI, status taxonomy cleanup, distributor parity) |
 | **Source** | Read-only audits (2026-07-02): IC/lineup alias gap; provisional customer promote investigation (`dim_customer` 4,886 unverified `TMP-CUST-%`; distributors ~23 `TMP-DIST-%`). No promote-in-place exists — only merge (soft redirect) or ad-hoc PATCH without code reassignment. |
 | **Idea** | Governed **promote-in-place**: same `dim_customer` / `dim_distributor` id, flip `unverified` → verified master (`active` or canonical `verified`), assign real business code on the row, audit trail — distinct from merge-into-existing-master. |
@@ -163,7 +163,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-10 |
+| **Status / parked** | **Shipped on branch** (customers U2a/U2b + distributors U-B3a mint) · 0070 + 0072 on cip |
 | **Effort** | Medium (settings schema + mint service + bulk “mint for me” + ERP research) |
 | **Source** | Warren answers 2026-07-10 (consult bulk promote): codes may come from import **or** system mint; format is per-business (region/segment); do not hardcode one global format; CIP is multi-tenant. Fable Unit 1 deliberately ships CSV mapping only (no mint). |
 | **Idea** | Configurable per-tenant customer-code convention (research NetSuite/Dynamics/SAP-style auto-numbering), stored in app settings; bulk “mint for me” promote that assigns codes under that convention for code-less businesses (including Warren’s ~4,886 TMP backlog when no external codes exist). |

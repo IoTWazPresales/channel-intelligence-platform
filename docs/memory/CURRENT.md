@@ -10,8 +10,8 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/backlog-061-entity-promote-in-place` |
-| **HEAD** | `fc7b6c4` |
-| **PR** | Not opened yet — ready when Warren says |
+| **HEAD** | `6d2f342` |
+| **PR** | Opening — Theme B complete; merge when Warren says |
 | **Alembic (DB)** | **`20260710_0072`** on cip |
 
 ---
@@ -30,7 +30,7 @@
 ## Next
 
 1. Human soak UI on `/admin/distributors` (optional).
-2. Open PR ? merge when Warren says.
-3. Deferred: BACKLOG-073 import-job fact purge.
+2. Merge PR when Warren says "promote to main" / "merge the PR".
+3. Deferred: BACKLOG-073 import-job fact purge (Theme B done; start only when Warren prioritizes junk cleanup).
 
 **Do not re-audit:** U2a/U2b/U-D1/U-G2/U-B2/U-B3a/U-B3b PASSes.
