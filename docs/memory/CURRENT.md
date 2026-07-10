@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-07-10 (handover ó dual-agent skill + BP1 done; Unit 2 next chat)
-**Verify git:** `git branch --show-current` ∑ `git rev-parse --short HEAD`
+**Last updated:** 2026-07-10 (handover ù dual-agent skill + BP1 done; Unit 2 next chat)
+**Verify git:** `git branch --show-current` ù `git rev-parse --short HEAD`
 
 ---
 
@@ -10,8 +10,8 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/backlog-061-entity-promote-in-place` |
-| **HEAD** | `7ef261c` (in sync with origin; feature tip `82ef990`) |
-| **PR** | Not opened yet ó recommend open/merge when ready |
+| **HEAD** | `02f68f1` (in sync; feature tip `82ef990`) |
+| **PR** | Not opened yet ù recommend open/merge when ready |
 | **Alembic (DB)** | **`20260709_0069`** on cip; listing table GRANTs to `cip` |
 
 ---
@@ -30,10 +30,10 @@
 ## Locked decisions (Warren 2026-07-10)
 
 - Codes: **import when available OR system mint** (multi-tenant).
-- BP1 = CSV/paste mapping only ó **no mint**.
+- BP1 = CSV/paste mapping only ù **no mint**.
 - Batch: **partial success** + per-row report.
 - Theme A (bulk promote) before Theme B (grid shell).
-- Interviews: **CLI Fable in Cursor chat** ó not browser Claude.
+- Interviews: **CLI Fable in Cursor chat** ù not browser Claude.
 
 ---
 
@@ -46,11 +46,11 @@
 
 ## Next (new chat)
 
-1. **BACKLOG-061-U2** ó per-tenant customer code mint convention (see `docs/BACKLOG.md`).
+1. **BACKLOG-061-U2** ù per-tenant customer code mint convention (see `docs/BACKLOG.md`).
 2. Optional: open/merge PR for this branch before or after U2.
 3. Theme B grid shell later (capability matrix first).
 
-**Do not re-audit:** BP1/B1ñB4/072 PASSes; 0069 applied + grants; single-row promote contract; TMP-DIST already active on cip.
+**Do not re-audit:** BP1/B1ùB4/072 PASSes; 0069 applied + grants; single-row promote contract; TMP-DIST already active on cip.
 
 ---
 
