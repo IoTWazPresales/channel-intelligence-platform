@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-10 (U-D1 Fable PASS; U-G1 matrix written; Warren applies 0071)
+**Last updated:** 2026-07-10 (0071 applied on cip — ready for U-G2 handover)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,9 +10,9 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/backlog-061-entity-promote-in-place` |
-| **HEAD** | `063c19b` (+ matrix commit pending) |
+| **HEAD** | `beb537e` |
 | **PR** | Not opened yet |
-| **Alembic (DB)** | **`20260710_0070`** on cip · **`0071` authored, NOT applied** (awaiting Warren) |
+| **Alembic (DB)** | **`20260710_0071`** on cip (disposition columns live) |
 
 ---
 
@@ -20,17 +20,17 @@
 
 | Unit | Tip | Fable verify |
 |------|-----|--------------|
-| BACKLOG-061-U3 / U-D1 disposition | `063c19b` | **PASS 2026-07-10** |
-| BACKLOG-061-U-G1 capability matrix | docs pending | review gate before U-G2 |
+| BACKLOG-061-U3 / U-D1 disposition | `063c19b` | **PASS** · **0071 applied** |
+| BACKLOG-061-U-G1 capability matrix | `beb537e` | docs — review before U-G2 |
 | BACKLOG-061-U2b mint | `66003db` | **PASS** · **0070 applied** |
 | Prior 061/072 | — | **PASS** |
 
 ---
 
-## Next
+## Next (new chat)
 
-1. **Warren applies `20260710_0071` on cip** (confirm `.env` points at `cip` first).
-2. Review U-G1 matrix ? then U-G2 shell + U-B2 (distributor batch) in a **fresh chat** (large).
+1. **U-G2** — `MasterDataGridShell` + customers parity (matrix reviewed).
+2. **U-B2** — products/distributors shell + distributor batch + disposition wiring.
 3. Soak: **Warren owns**.
 
-**Do not re-audit:** U2a/U2b/U-D1 PASSes; Candidate A; 0070 applied.
+**Do not re-audit:** U2a/U2b/U-D1 PASSes; 0070+0071 applied; Candidate A; matrix at `docs/design/BACKLOG-061-U4_master_grid_capability_matrix.md`.
