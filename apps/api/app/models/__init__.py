@@ -51,6 +51,7 @@ from app.models.customer_cst_report_slot import CustomerCstReportSlot
 from app.models.cst_listing_seed import CstListingSeed
 from app.models.listing_capture import CustomerListing, ListingObservation
 from app.models.customer_code_mint_setting import CustomerCodeMintSetting
+from app.models.distributor_code_mint_setting import DistributorCodeMintSetting
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
@@ -145,6 +146,7 @@ __all__ = [
     "CustomerListing",
     "ListingObservation",
     "CustomerCodeMintSetting",
+    "DistributorCodeMintSetting",
     "FactCustomerVelocity",
     "FactDsiForecast",
     "FactInboundShipment",

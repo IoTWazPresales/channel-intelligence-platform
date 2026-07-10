@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -32,6 +32,25 @@ class MasterBulkIdsBody(BaseModel):
 
 ALLOWED_DISTRIBUTOR_LOCATION_TYPES = {"hq", "branch", "warehouse", "office", "store", "other"}
 ALLOWED_DISTRIBUTOR_CONTACT_ROLES = {"general", "executive", "sales", "operations", "finance", "support", "other"}
+
+
+class DistributorBulkPromoteRow(BaseModel):
+    tmp_code: str = Field(min_length=0, max_length=64)
+    new_code: str = Field(default="", max_length=64)
+    note: str | None = Field(default=None, max_length=512)
+
+
+class DistributorBulkPromoteBody(BaseModel):
+    rows: list[DistributorBulkPromoteRow]
+    dry_run: bool = True
+    mode: Literal["map", "mint"] = "map"
+
+
+class DistributorDispositionBatchBody(BaseModel):
+    distributor_ids: list[int]
+    disposition: Literal["parked", "excluded", "clear"]
+    note: str | None = Field(default=None, max_length=512)
+    dry_run: bool = True
 
 
 class DistributorCreate(BaseModel):
@@ -280,6 +299,10 @@ async def list_distributors(
     page_size: int = Query(default=25, ge=1, le=200),
     q: str = Query(default=""),
     linkage_status: str = Query(default=""),
+    disposition: str | None = Query(
+        default=None,
+        description="Filter no_code_disposition: parked|excluded|set|unset",
+    ),
     min_alias_count: int | None = Query(default=None, ge=0),
     alias_link: str | None = Query(default=None, description="Filter: linked (≥1 alias) or unlinked (0 aliases)"),
     sort_by: str = Query(default="distributor_code"),
@@ -360,6 +383,7 @@ async def list_distributors(
             DimDistributor.id.label("id"),
             DimDistributor.code.label("distributor_code"),
             DimDistributor.name.label("distributor_name"),
+            DimDistributor.no_code_disposition.label("no_code_disposition"),
             DimDistributor.created_at.label("dim_created_at"),
             DimDistributor.updated_at.label("dim_updated_at"),
             linked_sellout_col.label("linked_sellout_rows"),
@@ -406,6 +430,21 @@ async def list_distributors(
     elif al == "unlinked":
         base = base.where(dist_alias_count_sq == 0)
 
+    disp = (disposition or "").strip().lower()
+    if disp == "parked":
+        base = base.where(DimDistributor.no_code_disposition == "parked")
+    elif disp == "excluded":
+        base = base.where(DimDistributor.no_code_disposition == "excluded")
+    elif disp == "set":
+        base = base.where(DimDistributor.no_code_disposition.is_not(None))
+    elif disp == "unset":
+        base = base.where(DimDistributor.no_code_disposition.is_(None))
+    elif disp:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "Invalid disposition filter", "code": "invalid_disposition_filter"},
+        )
+
     count_stmt = select(func.count()).select_from(base.subquery())
     total = (await db.execute(count_stmt)).scalar_one()
 
@@ -449,6 +488,7 @@ async def list_distributors(
                 "id": r.id,
                 "distributor_code": r.distributor_code,
                 "distributor_name": r.distributor_name,
+                "no_code_disposition": r.no_code_disposition,
                 "created_at": dim_created.isoformat() if dim_created is not None else None,
                 "updated_at": dim_updated.isoformat() if dim_updated is not None else None,
                 "linked_sellout_rows": int(r.linked_sellout_rows or 0),
@@ -589,6 +629,70 @@ class DistributorPromoteBody(BaseModel):
     new_code: str = Field(min_length=1, max_length=64)
     confirm: bool = False
     note: str | None = Field(default=None, max_length=512)
+
+
+@router.post("/disposition/batch")
+async def disposition_distributors_batch(
+    body: DistributorDispositionBatchBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """BACKLOG-061-U-B3a — park/exclude/clear no_code_disposition on TMP-DIST rows.
+
+    Never mutates distributor_status. Cap 500. Never auto-creates dim_distributor.
+    """
+    from app.services.distributor_disposition import run_distributor_disposition_batch
+    from app.services.distributor_promote import DistributorPromoteError
+
+    try:
+        return await run_distributor_disposition_batch(
+            db,
+            distributor_ids=list(body.distributor_ids),
+            disposition=body.disposition,
+            note=body.note,
+            dry_run=body.dry_run,
+        )
+    except DistributorPromoteError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": exc.message, "code": exc.code},
+        ) from exc
+
+
+@router.post("/promote/batch")
+async def promote_distributors_batch(
+    body: DistributorBulkPromoteBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """BACKLOG-061-U-B3a — bulk promote via CSV map or system mint.
+
+    ``mode=map`` (default): tmp_code→new_code mapping (CSV/paste). Blank new_code skipped.
+    ``mode=mint``: tmp_code only; service mints DIST-###### codes.
+    ``dry_run=true``: preview only. ``dry_run=false``: apply ready rows with partial
+    success (per-row commit). Cap 500. Never auto-creates dim_distributor.
+    """
+    from app.services.distributor_bulk_promote import BATCH_MAX_ROWS, run_distributor_bulk_promote
+    from app.services.distributor_promote import DistributorPromoteError
+
+    if len(body.rows) > BATCH_MAX_ROWS:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": f"Too many rows (max {BATCH_MAX_ROWS})",
+                "code": "batch_too_large",
+            },
+        )
+    try:
+        return await run_distributor_bulk_promote(
+            db,
+            rows=[r.model_dump() for r in body.rows],
+            dry_run=body.dry_run,
+            mode=body.mode,
+        )
+    except DistributorPromoteError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": exc.message, "code": exc.code},
+        ) from exc
 
 
 @router.post("/{distributor_id}/promote")
