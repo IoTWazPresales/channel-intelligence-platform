@@ -10,7 +10,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Drawer,
   FormControl,
   FormControlLabel,
   InputLabel,
@@ -24,25 +23,24 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  CellValueChangedEvent,
-  ColDef,
-  ColumnMovedEvent,
-  ColumnPinnedEvent,
-  ColumnResizedEvent,
-  ColumnVisibleEvent,
-  GridOptions,
-  GridReadyEvent,
-} from 'ag-grid-community';
+import type { CellValueChangedEvent, ColDef, GridApi, GridOptions } from 'ag-grid-community';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Suspense, type ReactNode, useCallback, useMemo, useState } from 'react';
 
-import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
+import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
+import { DistributorBulkPromoteDialog } from '@/features/admin/DistributorBulkPromoteDialog';
+import { DistributorDispositionDialog } from '@/features/admin/DistributorDispositionDialog';
+import {
+  DistributorPromoteDialog,
+  distributorPromoteActionVisible,
+} from '@/features/admin/DistributorPromoteDialog';
 import {
   MasterBulkDeleteImpactDialog,
   type MasterBulkDeletePreview,
 } from '@/components/bulkTable/MasterBulkDeleteImpactDialog';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
@@ -55,6 +53,7 @@ type DistributorRow = {
   id: number;
   distributor_code: string;
   distributor_name: string;
+  no_code_disposition?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   linked_sellout_rows: number;
@@ -142,11 +141,15 @@ function distGridShortDateTime(p: { value: unknown }): string {
 }
 
 const DISTRIBUTOR_MASTER_GRID_STATE_KEY = 'cip.admin.distributors.master.gridState.v1';
+const DEFAULT_PAGE_SIZE = 25;
+const DEFAULT_SORT_BY = 'distributor_code';
+const DEFAULT_SORT_DIR: 'asc' | 'desc' = 'asc';
 
 const ALL_DISTRIBUTOR_MASTER_COLUMN_FIELDS = [
   'id',
   'distributor_code',
   'distributor_name',
+  'no_code_disposition',
   'created_at',
   'updated_at',
   'location_count',
@@ -176,7 +179,10 @@ const DEFAULT_INITIALLY_HIDDEN_DISTRIBUTOR_FIELDS: readonly DistributorMasterCol
 ];
 
 const STATIC_DISTRIBUTOR_MASTER_COLUMN_GROUPS: { label: string; fields: DistributorMasterColumnField[] }[] = [
-  { label: 'dim_distributor', fields: ['id', 'distributor_code', 'distributor_name', 'created_at', 'updated_at'] },
+  {
+    label: 'dim_distributor',
+    fields: ['id', 'distributor_code', 'distributor_name', 'no_code_disposition', 'created_at', 'updated_at'],
+  },
   { label: 'Related counts', fields: ['location_count', 'contact_count'] },
   { label: 'Import & alias linkage', fields: ['alias_count', 'last_import_at', 'alias_link_status'] },
   { label: 'Fact linkage', fields: ['linkage_status', 'linked_sellout_rows', 'linked_inbound_rows'] },
@@ -198,6 +204,7 @@ function AdminDistributorsPageContent() {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [drawerRow, setDrawerRow] = useState<DistributorRow | null>(null);
+  const [promoteTarget, setPromoteTarget] = useState<DistributorRow | null>(null);
   const [locationDraft, setLocationDraft] = useState({
     location_code: '',
     location_name: '',
@@ -218,26 +225,25 @@ function AdminDistributorsPageContent() {
   });
   const [editingLocationId, setEditingLocationId] = useState<number | null>(null);
   const [editingContactId, setEditingContactId] = useState<number | null>(null);
-  const [distGridApi, setDistGridApi] = useState<any | null>(null);
-  const [distColumnsOpen, setDistColumnsOpen] = useState(false);
-  const [distColumnSearch, setDistColumnSearch] = useState('');
-  const [distColumnVisibility, setDistColumnVisibility] = useState<Record<string, boolean>>({});
+  const [distGridApi, setDistGridApi] = useState<GridApi<DistributorRow> | null>(null);
   const [bulkSelectionMode, setBulkSelectionMode] = useState<BulkTableSelectionMode>('normal');
-  const [bulkSelectedCount, setBulkSelectedCount] = useState(0);
-  const [visibleRowCount, setVisibleRowCount] = useState(0);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeletePreview, setBulkDeletePreview] = useState<MasterBulkDeletePreview | null>(null);
   const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
   const [bulkDeleteAck, setBulkDeleteAck] = useState(false);
+  const [bulkSelectedCount, setBulkSelectedCount] = useState(0);
+  const [bulkPromoteOpen, setBulkPromoteOpen] = useState(false);
+  const [dispositionOpen, setDispositionOpen] = useState(false);
 
   const page = Number(searchParams.get('page') || '1') || 1;
-  const pageSize = Number(searchParams.get('page_size') || '25') || 25;
+  const pageSize = Number(searchParams.get('page_size') || `${DEFAULT_PAGE_SIZE}`) || DEFAULT_PAGE_SIZE;
   const q = searchParams.get('q') ?? '';
-  const sortBy = searchParams.get('sort_by') ?? 'distributor_code';
-  const sortDir = (searchParams.get('sort_dir') as 'asc' | 'desc' | null) ?? 'asc';
+  const sortBy = searchParams.get('sort_by') ?? DEFAULT_SORT_BY;
+  const sortDir = (searchParams.get('sort_dir') as 'asc' | 'desc' | null) ?? DEFAULT_SORT_DIR;
   const linkageFilter = searchParams.get('linkage_status') ?? '';
   const minAliasCountFilter = searchParams.get('min_alias_count') ?? '';
   const aliasLinkFilter = searchParams.get('alias_link') ?? '';
+  const dispositionFilter = searchParams.get('disposition') ?? '';
 
   const setParamState = useCallback(
     (changes: Record<string, string | null>, resetPage = false) => {
@@ -259,7 +265,18 @@ function AdminDistributorsPageContent() {
     error: distErr,
     refetch: refetchDist,
   } = useQuery({
-    queryKey: ['admin-distributors', page, pageSize, q, sortBy, sortDir, linkageFilter, minAliasCountFilter, aliasLinkFilter],
+    queryKey: [
+      'admin-distributors',
+      page,
+      pageSize,
+      q,
+      sortBy,
+      sortDir,
+      linkageFilter,
+      minAliasCountFilter,
+      aliasLinkFilter,
+      dispositionFilter,
+    ],
     queryFn: ({ signal }) => {
       const sp = new URLSearchParams();
       sp.set('page', String(page));
@@ -272,6 +289,7 @@ function AdminDistributorsPageContent() {
       if (mac !== '' && Number.isFinite(Number(mac))) sp.set('min_alias_count', String(Number(mac)));
       const al = aliasLinkFilter.trim().toLowerCase();
       if (al === 'linked' || al === 'unlinked') sp.set('alias_link', al);
+      if (dispositionFilter) sp.set('disposition', dispositionFilter);
       return apiGet<DistributorListResponse>(`/api/v1/distributors?${sp.toString()}`, { signal });
     },
   });
@@ -535,6 +553,18 @@ function AdminDistributorsPageContent() {
       },
       { field: 'distributor_name', headerName: 'Canonical name', flex: 1, minWidth: 220, editable: true },
       {
+        field: 'no_code_disposition',
+        headerName: 'Disposition',
+        minWidth: 120,
+        editable: false,
+        cellRenderer: (p: { value?: string | null }) => {
+          const v = (p.value || '').toLowerCase();
+          if (v === 'parked') return <Chip size="small" label="Parked" />;
+          if (v === 'excluded') return <Chip size="small" color="warning" label="Excluded" />;
+          return '';
+        },
+      },
+      {
         field: 'created_at',
         headerName: 'Created',
         minWidth: 160,
@@ -606,13 +636,20 @@ function AdminDistributorsPageContent() {
       {
         headerName: 'Details',
         colId: '__detail',
-        minWidth: 110,
+        minWidth: 160,
         editable: false,
         cellRenderer: ({ data }: { data: DistributorRow }) =>
           data ? (
-            <Button size="small" onClick={() => setDrawerRow(data)}>
-              Open
-            </Button>
+            <Stack direction="row" spacing={0.5}>
+              <Button size="small" onClick={() => setDrawerRow(data)}>
+                Open
+              </Button>
+              {distributorPromoteActionVisible(data) ? (
+                <Button size="small" color="primary" onClick={() => setPromoteTarget(data)}>
+                  Promote
+                </Button>
+              ) : null}
+            </Stack>
           ) : null,
       },
       gridDeleteColumn<DistributorRow>((id) => void delDist.mutate(id), { busy: delDist.isPending }),
@@ -628,44 +665,6 @@ function AdminDistributorsPageContent() {
     }
     return out;
   }, [distCols]);
-
-  const persistDistMasterGridState = useCallback((api: any) => {
-    try {
-      const state = api.getColumnState();
-      localStorage.setItem(DISTRIBUTOR_MASTER_GRID_STATE_KEY, JSON.stringify(state));
-    } catch {
-      // no-op
-    }
-  }, []);
-
-  const syncDistMasterColumnVisibility = useCallback((api: any) => {
-    if (!api?.getColumns) return;
-    try {
-      const visibility: Record<string, boolean> = {};
-      for (const col of api.getColumns() ?? []) {
-        const def = col?.getColDef?.();
-        const field = def?.field as string | undefined;
-        if (!field) continue;
-        if (ALL_DISTRIBUTOR_MASTER_COLUMN_FIELDS.includes(field as DistributorMasterColumnField)) {
-          visibility[field] = Boolean(col.isVisible?.());
-        }
-      }
-      if (Object.keys(visibility).length) setDistColumnVisibility(visibility);
-    } catch {
-      // no-op
-    }
-  }, []);
-
-  useEffect(() => {
-    if (bulkSelectionMode !== 'selecting') {
-      distGridApi?.deselectAll();
-      setBulkSelectedCount(0);
-    }
-  }, [bulkSelectionMode, distGridApi]);
-
-  useEffect(() => {
-    setVisibleRowCount((distributors?.items ?? []).length);
-  }, [distributors?.items]);
 
   const openDistributorBulkDeletePreview = useCallback(async () => {
     if (!distGridApi) return;
@@ -692,6 +691,18 @@ function AdminDistributorsPageContent() {
     setBulkDeletePreview(null);
   }, [bulkDeleteBusy]);
 
+  const bulkMintCandidates = useMemo(() => {
+    if (!distGridApi || bulkSelectionMode !== 'selecting') return [] as { tmp_code: string; name?: string }[];
+    return (distGridApi.getSelectedRows() as DistributorRow[])
+      .filter((r) => String(r.distributor_code || '').toUpperCase().startsWith('TMP-DIST-'))
+      .map((r) => ({ tmp_code: String(r.distributor_code), name: r.distributor_name }));
+  }, [distGridApi, bulkSelectionMode, bulkSelectedCount]);
+
+  const dispositionDistributorIds = useMemo(() => {
+    if (!distGridApi || bulkSelectionMode !== 'selecting') return [] as number[];
+    return (distGridApi.getSelectedRows() as DistributorRow[]).map((r) => r.id);
+  }, [distGridApi, bulkSelectionMode, bulkSelectedCount]);
+
   const confirmDistributorBulkDelete = useCallback(async () => {
     if (!bulkDeletePreview) return;
     setBulkDeleteBusy(true);
@@ -709,62 +720,6 @@ function AdminDistributorsPageContent() {
       setBulkDeleteBusy(false);
     }
   }, [bulkDeletePreview, delDist, qc]);
-
-  const onDistMasterGridReady = useCallback(
-    (e: GridReadyEvent<DistributorRow>) => {
-      setDistGridApi(e.api);
-      setVisibleRowCount(e.api.getDisplayedRowCount());
-      try {
-        const raw = localStorage.getItem(DISTRIBUTOR_MASTER_GRID_STATE_KEY);
-        if (raw) {
-          e.api.applyColumnState({ state: JSON.parse(raw), applyOrder: true });
-        } else {
-          e.api.applyColumnState({
-            state: DEFAULT_INITIALLY_HIDDEN_DISTRIBUTOR_FIELDS.map((colId) => ({ colId, hide: true })),
-            applyOrder: true,
-          });
-        }
-      } catch {
-        // no-op
-      }
-      syncDistMasterColumnVisibility(e.api);
-    },
-    [syncDistMasterColumnVisibility]
-  );
-
-  const onDistMasterColumnStateEvent = useCallback(
-    (
-      e:
-        | ColumnMovedEvent<DistributorRow>
-        | ColumnVisibleEvent<DistributorRow>
-        | ColumnPinnedEvent<DistributorRow>
-        | ColumnResizedEvent<DistributorRow>
-    ) => {
-      persistDistMasterGridState(e.api);
-      syncDistMasterColumnVisibility(e.api);
-    },
-    [persistDistMasterGridState, syncDistMasterColumnVisibility]
-  );
-
-  const groupedDistMasterColumnPickerBlocks = useMemo((): { label: string; options: { id: string; label: string }[] }[] => {
-    const query = distColumnSearch.trim().toLowerCase();
-    return STATIC_DISTRIBUTOR_MASTER_COLUMN_GROUPS.map((group) => ({
-      label: group.label,
-      options: group.fields
-        .map((field) => ({ id: field, label: distColumnLabelByField[field] ?? field }))
-        .filter((opt) => !query || opt.label.toLowerCase().includes(query) || opt.id.toLowerCase().includes(query)),
-    })).filter((group) => group.options.length > 0);
-  }, [distColumnLabelByField, distColumnSearch]);
-
-  const toggleDistMasterColumnVisibility = useCallback(
-    (columnId: string, visible: boolean) => {
-      if (!distGridApi?.setColumnsVisible) return;
-      distGridApi.setColumnsVisible([columnId], visible);
-      persistDistMasterGridState(distGridApi);
-      setDistColumnVisibility((prev) => ({ ...prev, [columnId]: visible }));
-    },
-    [distGridApi, persistDistMasterGridState]
-  );
 
   const sellCols: ColDef<SelloutRow>[] = useMemo(
     () => {
@@ -810,36 +765,6 @@ function AdminDistributorsPageContent() {
     [distCodes, delInbound, delInbound.isPending, clearInbound.isPending]
   );
 
-  const distGrid: GridOptions<DistributorRow> = useMemo(() => {
-    const base: GridOptions<DistributorRow> = {
-      singleClickEdit: true,
-      onCellValueChanged: onDistCell,
-      onGridReady: onDistMasterGridReady,
-      onColumnMoved: onDistMasterColumnStateEvent,
-      onColumnVisible: onDistMasterColumnStateEvent,
-      onColumnPinned: onDistMasterColumnStateEvent,
-      onColumnResized: onDistMasterColumnStateEvent,
-      onFilterChanged: (e) => {
-        if (bulkSelectionMode === 'selecting') setVisibleRowCount(e.api.getDisplayedRowCount());
-      },
-      onSortChanged: (e) => {
-        if (bulkSelectionMode === 'selecting') setVisibleRowCount(e.api.getDisplayedRowCount());
-      },
-    };
-    if (bulkSelectionMode !== 'selecting') return base;
-    return {
-      ...base,
-      rowSelection: {
-        mode: 'multiRow',
-        checkboxes: true,
-        headerCheckbox: true,
-        enableClickSelection: false,
-      },
-      onSelectionChanged: (e) => {
-        setBulkSelectedCount(e.api.getSelectedRows().length);
-      },
-    };
-  }, [bulkSelectionMode, onDistCell, onDistMasterGridReady, onDistMasterColumnStateEvent]);
   const sellGrid: GridOptions<SelloutRow> = useMemo(
     () => ({ singleClickEdit: true, onCellValueChanged: onSellCell }),
     [onSellCell]
@@ -863,7 +788,10 @@ function AdminDistributorsPageContent() {
       />
       <Alert severity="info" sx={{ mb: 2 }}>
         Maintain distributor master records first, then monitor linkage health across sell-out and inbound feeds.
-        Transitional fact-mapping tabs remain available below while import and routing maturity catches up.
+        Transitional fact-mapping tabs remain available below while import and routing maturity catches up.{' '}
+        <Button component={Link} href="/admin/distributors/duplicates" size="small" sx={{ ml: 1 }}>
+          Name-similarity duplicates
+        </Button>
       </Alert>
       {delDist.isError ? (
         <Alert severity="warning" sx={{ mb: 2 }} onClose={() => delDist.reset()}>
@@ -894,375 +822,216 @@ function AdminDistributorsPageContent() {
       </Paper>
 
       <TabPanel value={tab} index={0}>
-        <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
-          <Button variant="contained" onClick={() => setAddOpen(true)}>
-            Add distributor
-          </Button>
-          {hasDistributorMasterImport ? (
-            <Button variant="outlined" onClick={() => router.push('/admin/imports?template=distributor_master')}>
-              Import distributor master
-            </Button>
-          ) : null}
-          {hasDistributorInventoryImport ? (
-            <Button variant="outlined" onClick={() => router.push('/admin/imports?template=distributor_inventory')}>
-              Import distributor inventory
-            </Button>
-          ) : null}
-        </Stack>
-        <Paper sx={{ p: 2 }}>
-          <ModuleDataSection
-            intro={
-              <>
-                Distributor master and linkage health. Only operationally ready import paths are shown here; deferred
-                templates stay hidden.
-              </>
-            }
-            isLoading={distLoading}
-            isError={distIsError}
-            error={toQueryError(distErr)}
-            onRetry={() => void refetchDist()}
-            isEmpty={drows.length === 0}
-            empty={{
-              title: 'No distributors',
-              description: hasDistributorMasterImport
-                ? 'Use Add distributor above, or import distributor master data from your source feed.'
-                : 'Use Add distributor above. Distributor master import is not currently ready.',
-              primary: hasDistributorMasterImport
-                ? { label: 'Import distributor master', href: '/admin/imports?template=distributor_master' }
-                : { label: 'Getting started', href: '/getting-started' },
-              secondary: hasDistributorInventoryImport
-                ? { label: 'Import distributor inventory', href: '/admin/imports?template=distributor_inventory' }
-                : undefined,
-            }}
-            toolbar={
-              <Stack direction="row" spacing={1} alignItems="center">
-                <TextField
-                  size="small"
-                  label="Search distributors"
-                  value={q}
-                  onChange={(e) => setParamState({ q: e.target.value || null }, true)}
-                />
-                <FormControl size="small" sx={{ minWidth: 170 }}>
-                  <InputLabel id="dist-linkage-filter-label">Linkage status</InputLabel>
-                  <Select
-                    labelId="dist-linkage-filter-label"
-                    label="Linkage status"
-                    value={linkageFilter}
-                    onChange={(e) => setParamState({ linkage_status: String(e.target.value) || null }, true)}
-                  >
-                    <MenuItem value="">All</MenuItem>
-                    <MenuItem value="healthy">healthy</MenuItem>
-                    <MenuItem value="partial">partial</MenuItem>
-                    <MenuItem value="unmapped">unmapped</MenuItem>
-                    <MenuItem value="no_fact_links">no fact links</MenuItem>
-                  </Select>
-                </FormControl>
-                <TextField
-                  size="small"
-                  label="Min alias #"
-                  type="number"
-                  inputProps={{ min: 0 }}
-                  value={minAliasCountFilter}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setParamState({ min_alias_count: v.trim() === '' ? null : v }, true);
-                  }}
-                  sx={{ minWidth: 120 }}
-                />
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel id="dist-alias-link-label">Alias link</InputLabel>
-                  <Select
-                    labelId="dist-alias-link-label"
-                    label="Alias link"
-                    value={aliasLinkFilter}
-                    onChange={(e) => setParamState({ alias_link: String(e.target.value || '') }, true)}
-                  >
-                    <MenuItem value="">All</MenuItem>
-                    <MenuItem value="linked">Linked</MenuItem>
-                    <MenuItem value="unlinked">Unlinked</MenuItem>
-                  </Select>
-                </FormControl>
-                <FormControl size="small" sx={{ minWidth: 170 }}>
-                  <InputLabel id="dist-sort-by-label">Sort by</InputLabel>
-                  <Select
-                    labelId="dist-sort-by-label"
-                    label="Sort by"
-                    value={sortBy}
-                    onChange={(e) => setParamState({ sort_by: String(e.target.value) }, false)}
-                  >
-                    <MenuItem value="distributor_code">Code</MenuItem>
-                    <MenuItem value="distributor_name">Name</MenuItem>
-                    <MenuItem value="id">ID</MenuItem>
-                    <MenuItem value="created_at">Created</MenuItem>
-                    <MenuItem value="updated_at">Updated</MenuItem>
-                    <MenuItem value="location_count">Locations #</MenuItem>
-                    <MenuItem value="contact_count">Contacts #</MenuItem>
-                    <MenuItem value="latest_sellout_period_start">Latest sell-out</MenuItem>
-                    <MenuItem value="latest_inbound_eta_date">Latest inbound</MenuItem>
-                    <MenuItem value="linked_sellout_rows">Sell-out linked</MenuItem>
-                    <MenuItem value="linked_inbound_rows">Inbound linked</MenuItem>
-                    <MenuItem value="alias_count">Alias count</MenuItem>
-                    <MenuItem value="last_import_at">Last import (alias)</MenuItem>
-                  </Select>
-                </FormControl>
-                <FormControl size="small" sx={{ minWidth: 130 }}>
-                  <InputLabel id="dist-sort-dir-label">Direction</InputLabel>
-                  <Select
-                    labelId="dist-sort-dir-label"
-                    label="Direction"
-                    value={sortDir}
-                    onChange={(e) => setParamState({ sort_dir: String(e.target.value) }, false)}
-                  >
-                    <MenuItem value="asc">Asc</MenuItem>
-                    <MenuItem value="desc">Desc</MenuItem>
-                  </Select>
-                </FormControl>
-                <FormControl size="small" sx={{ minWidth: 120 }}>
-                  <InputLabel id="dist-page-size-label">Page size</InputLabel>
-                  <Select
-                    labelId="dist-page-size-label"
-                    label="Page size"
-                    value={String(pageSize)}
-                    onChange={(e) => setParamState({ page_size: String(e.target.value) }, true)}
-                  >
-                    <MenuItem value="25">25</MenuItem>
-                    <MenuItem value="50">50</MenuItem>
-                    <MenuItem value="100">100</MenuItem>
-                  </Select>
-                </FormControl>
-                <Button
-                  variant="outlined"
-                  disabled={!distGridApi}
-                  onClick={() => {
-                    setDistColumnSearch('');
-                    setDistColumnsOpen(true);
-                    if (distGridApi) syncDistMasterColumnVisibility(distGridApi);
-                  }}
-                >
-                  Columns
+        <MasterDataGridShell
+          entityKey="distributors"
+          rows={drows}
+          columnDefs={distCols}
+          total={distributors?.total ?? 0}
+          isLoading={distLoading}
+          isError={distIsError}
+          error={toQueryError(distErr)}
+          onRetry={() => void refetchDist()}
+          intro={
+            <>
+              Distributor master and linkage health. Only operationally ready import paths are shown here; deferred
+              templates stay hidden.
+            </>
+          }
+          empty={{
+            title: 'No distributors',
+            description: hasDistributorMasterImport
+              ? 'Use Add distributor above, or import distributor master data from your source feed.'
+              : 'Use Add distributor above. Distributor master import is not currently ready.',
+            primary: hasDistributorMasterImport
+              ? { label: 'Import distributor master', href: '/admin/imports?template=distributor_master' }
+              : { label: 'Getting started', href: '/getting-started' },
+            secondary: hasDistributorInventoryImport
+              ? { label: 'Import distributor inventory', href: '/admin/imports?template=distributor_inventory' }
+              : undefined,
+          }}
+          url={{
+            page,
+            pageSize,
+            q,
+            sortBy,
+            sortDir,
+          }}
+          onUrlChange={setParamState}
+          defaultPageSize={DEFAULT_PAGE_SIZE}
+          defaultSortBy={DEFAULT_SORT_BY}
+          defaultSortDir={DEFAULT_SORT_DIR}
+          enableEmptyUrlSeed
+          gridStateStorageKey={DISTRIBUTOR_MASTER_GRID_STATE_KEY}
+          defaultInitiallyHiddenFields={DEFAULT_INITIALLY_HIDDEN_DISTRIBUTOR_FIELDS}
+          columnPickerTitle="Manage distributor columns"
+          columnPickerGroups={STATIC_DISTRIBUTOR_MASTER_COLUMN_GROUPS}
+          columnLabelByField={distColumnLabelByField}
+          gridHeight={440}
+          onCellValueChanged={onDistCell}
+          onGridApiChange={setDistGridApi}
+          bulkSelectionMode={bulkSelectionMode}
+          onBulkSelectionModeChange={setBulkSelectionMode}
+          onBulkSelectedCountChange={setBulkSelectedCount}
+          onPreviewBulkDelete={() => void openDistributorBulkDeletePreview()}
+          previewBulkDeleteDisabled={bulkDeleteBusy}
+          bulkBusy={bulkDeleteBusy}
+          onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-distributors'] })}
+          refreshBusy={delDist.isPending || createDist.isPending || bulkDeleteBusy}
+          toolbarStart={
+            <>
+              <Button variant="contained" onClick={() => setAddOpen(true)}>
+                Add distributor
+              </Button>
+              {hasDistributorMasterImport ? (
+                <Button variant="outlined" onClick={() => router.push('/admin/imports?template=distributor_master')}>
+                  Import distributor master
                 </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    try {
-                      localStorage.removeItem(DISTRIBUTOR_MASTER_GRID_STATE_KEY);
-                      window.location.reload();
-                    } catch {
-                      // no-op
-                    }
-                  }}
-                >
-                  Reset column layout
+              ) : null}
+              {hasDistributorInventoryImport ? (
+                <Button variant="outlined" onClick={() => router.push('/admin/imports?template=distributor_inventory')}>
+                  Import distributor inventory
                 </Button>
-                <ModuleGridToolbar
-                  onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-distributors'] })}
-                  importsHref={
-                    hasDistributorMasterImport
-                      ? '/admin/imports?template=distributor_master'
-                      : hasDistributorInventoryImport
-                        ? '/admin/imports?template=distributor_inventory'
-                        : undefined
-                  }
-                  busy={delDist.isPending || createDist.isPending || bulkDeleteBusy}
-                />
-                <BulkSelectionToolbar
-                  mode={bulkSelectionMode}
-                  selectedCount={bulkSelectedCount}
-                  visibleRowCount={visibleRowCount}
-                  onEnterSelectionMode={() => setBulkSelectionMode('selecting')}
-                  onExitSelectionMode={() => setBulkSelectionMode('normal')}
-                  onSelectAllVisible={() => {
-                    if (!distGridApi) return;
-                    distGridApi.forEachNodeAfterFilterAndSort(
-                      (node: { data?: DistributorRow; setSelected: (v: boolean) => void }) => {
-                        if (node.data) node.setSelected(true);
-                      }
-                    );
-                  }}
-                  onDeselectAll={() => distGridApi?.deselectAll()}
-                  onPreviewDangerAction={() => void openDistributorBulkDeletePreview()}
-                  previewDangerDisabled={bulkDeleteBusy}
-                  busy={bulkDeleteBusy}
-                />
-              </Stack>
-            }
-          >
-            <EnterpriseDataGrid rowData={drows} columnDefs={distCols} gridOptions={distGrid} height={440} />
-            <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center" sx={{ mt: 1.5 }}>
-              <Typography variant="body2" color="text.secondary">
-                Page {distributors?.page ?? page} of {Math.max(1, Math.ceil((distributors?.total ?? 0) / pageSize))}
-              </Typography>
-              <Button
-                size="small"
-                onClick={() => setParamState({ page: String(Math.max(1, page - 1)) })}
-                disabled={page <= 1}
-              >
-                Prev
+              ) : null}
+              <Button variant="outlined" onClick={() => setBulkPromoteOpen(true)} data-testid="bulk-promote-open">
+                Bulk promote…
               </Button>
               <Button
-                size="small"
-                onClick={() => setParamState({ page: String(page + 1) })}
-                disabled={(distributors?.page ?? 1) * pageSize >= (distributors?.total ?? 0)}
+                variant="outlined"
+                disabled={bulkSelectionMode !== 'selecting' || bulkSelectedCount === 0}
+                onClick={() => setDispositionOpen(true)}
+                data-testid="disposition-open"
               >
-                Next
+                Park / Exclude…
+              </Button>
+            </>
+          }
+          filterSlot={
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} useFlexGap alignItems={{ md: 'center' }}>
+              <TextField
+                size="small"
+                label="Search distributors"
+                value={q}
+                onChange={(e) => setParamState({ q: e.target.value || null }, true)}
+              />
+              <FormControl size="small" sx={{ minWidth: 170 }}>
+                <InputLabel id="dist-linkage-filter-label">Linkage status</InputLabel>
+                <Select
+                  labelId="dist-linkage-filter-label"
+                  label="Linkage status"
+                  value={linkageFilter}
+                  onChange={(e) => setParamState({ linkage_status: String(e.target.value) || null }, true)}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="healthy">healthy</MenuItem>
+                  <MenuItem value="partial">partial</MenuItem>
+                  <MenuItem value="unmapped">unmapped</MenuItem>
+                  <MenuItem value="no_fact_links">no fact links</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                size="small"
+                label="Min alias #"
+                type="number"
+                inputProps={{ min: 0 }}
+                value={minAliasCountFilter}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setParamState({ min_alias_count: v.trim() === '' ? null : v }, true);
+                }}
+                sx={{ minWidth: 120 }}
+              />
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel id="dist-alias-link-label">Alias link</InputLabel>
+                <Select
+                  labelId="dist-alias-link-label"
+                  label="Alias link"
+                  value={aliasLinkFilter}
+                  onChange={(e) => setParamState({ alias_link: String(e.target.value || '') }, true)}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="linked">Linked</MenuItem>
+                  <MenuItem value="unlinked">Unlinked</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel id="dist-disposition-filter-label">Disposition</InputLabel>
+                <Select
+                  labelId="dist-disposition-filter-label"
+                  label="Disposition"
+                  value={dispositionFilter}
+                  onChange={(e) => setParamState({ disposition: String(e.target.value || '') }, true)}
+                  data-testid="disposition-filter"
+                >
+                  <MenuItem value="">Any</MenuItem>
+                  <MenuItem value="parked">Parked</MenuItem>
+                  <MenuItem value="excluded">Excluded</MenuItem>
+                  <MenuItem value="unset">None</MenuItem>
+                  <MenuItem value="set">Any set</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 170 }}>
+                <InputLabel id="dist-sort-by-label">Sort by</InputLabel>
+                <Select
+                  labelId="dist-sort-by-label"
+                  label="Sort by"
+                  value={sortBy}
+                  onChange={(e) => setParamState({ sort_by: String(e.target.value || DEFAULT_SORT_BY) }, false)}
+                >
+                  <MenuItem value="distributor_code">Code</MenuItem>
+                  <MenuItem value="distributor_name">Name</MenuItem>
+                  <MenuItem value="id">ID</MenuItem>
+                  <MenuItem value="created_at">Created</MenuItem>
+                  <MenuItem value="updated_at">Updated</MenuItem>
+                  <MenuItem value="location_count">Locations #</MenuItem>
+                  <MenuItem value="contact_count">Contacts #</MenuItem>
+                  <MenuItem value="latest_sellout_period_start">Latest sell-out</MenuItem>
+                  <MenuItem value="latest_inbound_eta_date">Latest inbound</MenuItem>
+                  <MenuItem value="linked_sellout_rows">Sell-out linked</MenuItem>
+                  <MenuItem value="linked_inbound_rows">Inbound linked</MenuItem>
+                  <MenuItem value="alias_count">Alias count</MenuItem>
+                  <MenuItem value="last_import_at">Last import (alias)</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 130 }}>
+                <InputLabel id="dist-sort-dir-label">Direction</InputLabel>
+                <Select
+                  labelId="dist-sort-dir-label"
+                  label="Direction"
+                  value={sortDir}
+                  onChange={(e) => setParamState({ sort_dir: String(e.target.value || DEFAULT_SORT_DIR) }, false)}
+                >
+                  <MenuItem value="asc">Asc</MenuItem>
+                  <MenuItem value="desc">Desc</MenuItem>
+                </Select>
+              </FormControl>
+              <Button
+                variant="text"
+                onClick={() =>
+                  setParamState(
+                    {
+                      q: '',
+                      linkage_status: '',
+                      min_alias_count: '',
+                      alias_link: '',
+                      disposition: '',
+                      sort_by: DEFAULT_SORT_BY,
+                      sort_dir: DEFAULT_SORT_DIR,
+                    },
+                    true
+                  )
+                }
+              >
+                Clear filters
               </Button>
             </Stack>
-          </ModuleDataSection>
-        </Paper>
-      </TabPanel>
-
-      <Dialog open={distColumnsOpen} onClose={() => setDistColumnsOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>Manage distributor columns</DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-            <TextField
-              size="small"
-              label="Search columns"
-              placeholder="Find by label or field key"
-              value={distColumnSearch}
-              onChange={(e) => setDistColumnSearch(e.target.value)}
-            />
-            {!distGridApi ? (
-              <Alert severity="info">Grid is still initializing. Column toggles become available in a moment.</Alert>
-            ) : null}
-            {groupedDistMasterColumnPickerBlocks.map((group) => (
-              <Paper key={group.label} variant="outlined" sx={{ p: 1.25 }}>
-                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                  {group.label}
-                </Typography>
-                <Stack>
-                  {group.options.map((opt) => (
-                    <FormControlLabel
-                      key={opt.id}
-                      control={
-                        <Checkbox
-                          checked={distColumnVisibility[opt.id] ?? false}
-                          onChange={(e) => toggleDistMasterColumnVisibility(opt.id, e.target.checked)}
-                          disabled={!distGridApi}
-                        />
-                      }
-                      label={opt.label}
-                    />
-                  ))}
-                </Stack>
-              </Paper>
-            ))}
-            {!groupedDistMasterColumnPickerBlocks.length ? (
-              <Typography variant="body2" color="text.secondary">
-                No columns match the current search.
-              </Typography>
-            ) : null}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDistColumnsOpen(false)}>Done</Button>
-        </DialogActions>
-      </Dialog>
-
-      <TabPanel value={tab} index={1}>
-        <Paper sx={{ p: 2 }}>
-          <ModuleDataSection
-            intro={
-              <>
-                Transitional mapper over <strong>fact_sales_sellout</strong>. Keep this for continuity while
-                distributor linkage workflows are hardened.
-              </>
-            }
-            isLoading={sellLoading}
-            isError={sellIsError}
-            error={toQueryError(sellErr)}
-            onRetry={() => void refetchSell()}
-            isEmpty={(sellout ?? []).length === 0}
-            empty={{
-              title: 'No sell-out rows',
-              description: 'Load sales facts via Data imports or upstream connectors when available.',
-              primary: { label: 'Data & imports', href: '/admin/imports' },
-            }}
-            toolbar={
-              <ModuleGridToolbar
-                onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-sellout'] })}
-                onClearAll={() => {
-                  if (!window.confirm('Delete every sell-out fact row? This cannot be undone.')) return;
-                  void clearSell.mutate();
-                }}
-                importsHref="/admin/imports"
-                busy={delSell.isPending || clearSell.isPending}
-              />
-            }
-          >
-            <EnterpriseDataGrid rowData={sellout ?? []} columnDefs={sellCols} gridOptions={sellGrid} height={480} />
-          </ModuleDataSection>
-        </Paper>
-      </TabPanel>
-
-      <TabPanel value={tab} index={2}>
-        <Paper sx={{ p: 2 }}>
-          <ModuleDataSection
-            intro={
-              <>
-                Transitional mapper over <strong>fact_inbound_shipment</strong> to keep current operations running.
-              </>
-            }
-            isLoading={inboundLoading}
-            isError={inboundIsError}
-            error={toQueryError(inboundErr)}
-            onRetry={() => void refetchInbound()}
-            isEmpty={(inbound ?? []).length === 0}
-            empty={{
-              title: 'No inbound rows',
-              description: 'Inbound shipment facts appear when purchase-order or ASN data is loaded.',
-              primary: { label: 'Data & imports', href: '/admin/imports' },
-            }}
-            toolbar={
-              <ModuleGridToolbar
-                onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-inbound'] })}
-                onClearAll={() => {
-                  if (!window.confirm('Delete every inbound shipment row? This cannot be undone.')) return;
-                  void clearInbound.mutate();
-                }}
-                importsHref="/admin/imports"
-                busy={delInbound.isPending || clearInbound.isPending}
-              />
-            }
-          >
-            <EnterpriseDataGrid rowData={inbound ?? []} columnDefs={inboundCols} gridOptions={inboundGrid} height={480} />
-          </ModuleDataSection>
-        </Paper>
-      </TabPanel>
-
-      <Dialog open={addOpen} onClose={() => !createDist.isPending && setAddOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>New distributor</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField label="Code" value={code} onChange={(e) => setCode(e.target.value)} required />
-            <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
-          </Stack>
-          {createDist.isError ? (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {(createDist.error as Error).message}
-            </Alert>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddOpen(false)} disabled={createDist.isPending}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            disabled={createDist.isPending || !code.trim() || !name.trim()}
-            onClick={() => createDist.mutate()}
-          >
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
-      <Drawer anchor="right" open={Boolean(drawerRow)} onClose={() => setDrawerRow(null)}>
-        <Box sx={{ width: 460, p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 1.5 }}>
-            Distributor details
-          </Typography>
-          {drawerRow ? (
-            <Stack spacing={1.25}>
+          }
+          drawer={{
+            open: Boolean(drawerRow),
+            onClose: () => setDrawerRow(null),
+            width: 460,
+            title: 'Distributor details',
+            children: !drawerRow ? null : (
+<Stack spacing={1.25}>
               <Paper variant="outlined" sx={{ p: 1.25 }}>
                 <Typography variant="subtitle2">Summary</Typography>
                 <Typography variant="body2">
@@ -1277,6 +1046,11 @@ function AdminDistributorsPageContent() {
                 <Typography variant="body2">
                   <strong>Contacts:</strong> {drawerRow.contact_count ?? distributorContacts?.length ?? 0}
                 </Typography>
+                {distributorPromoteActionVisible(drawerRow) ? (
+                  <Button size="small" variant="outlined" onClick={() => setPromoteTarget(drawerRow)}>
+                    Promote provisional code…
+                  </Button>
+                ) : null}
               </Paper>
               <Paper variant="outlined" sx={{ p: 1.25 }}>
                 <Typography variant="subtitle2">Linkage health</Typography>
@@ -1622,9 +1396,140 @@ function AdminDistributorsPageContent() {
                 </Typography>
               </Paper>
             </Stack>
+            ),
+          }}
+        />
+      </TabPanel>
+
+      <TabPanel value={tab} index={1}>
+        <Paper sx={{ p: 2 }}>
+          <ModuleDataSection
+            intro={
+              <>
+                Transitional mapper over <strong>fact_sales_sellout</strong>. Keep this for continuity while
+                distributor linkage workflows are hardened.
+              </>
+            }
+            isLoading={sellLoading}
+            isError={sellIsError}
+            error={toQueryError(sellErr)}
+            onRetry={() => void refetchSell()}
+            isEmpty={(sellout ?? []).length === 0}
+            empty={{
+              title: 'No sell-out rows',
+              description: 'Load sales facts via Data imports or upstream connectors when available.',
+              primary: { label: 'Data & imports', href: '/admin/imports' },
+            }}
+            toolbar={
+              <ModuleGridToolbar
+                onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-sellout'] })}
+                onClearAll={() => {
+                  if (!window.confirm('Delete every sell-out fact row? This cannot be undone.')) return;
+                  void clearSell.mutate();
+                }}
+                importsHref="/admin/imports"
+                busy={delSell.isPending || clearSell.isPending}
+              />
+            }
+          >
+            <EnterpriseDataGrid rowData={sellout ?? []} columnDefs={sellCols} gridOptions={sellGrid} height={480} />
+          </ModuleDataSection>
+        </Paper>
+      </TabPanel>
+
+      <TabPanel value={tab} index={2}>
+        <Paper sx={{ p: 2 }}>
+          <ModuleDataSection
+            intro={
+              <>
+                Transitional mapper over <strong>fact_inbound_shipment</strong> to keep current operations running.
+              </>
+            }
+            isLoading={inboundLoading}
+            isError={inboundIsError}
+            error={toQueryError(inboundErr)}
+            onRetry={() => void refetchInbound()}
+            isEmpty={(inbound ?? []).length === 0}
+            empty={{
+              title: 'No inbound rows',
+              description: 'Inbound shipment facts appear when purchase-order or ASN data is loaded.',
+              primary: { label: 'Data & imports', href: '/admin/imports' },
+            }}
+            toolbar={
+              <ModuleGridToolbar
+                onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-inbound'] })}
+                onClearAll={() => {
+                  if (!window.confirm('Delete every inbound shipment row? This cannot be undone.')) return;
+                  void clearInbound.mutate();
+                }}
+                importsHref="/admin/imports"
+                busy={delInbound.isPending || clearInbound.isPending}
+              />
+            }
+          >
+            <EnterpriseDataGrid rowData={inbound ?? []} columnDefs={inboundCols} gridOptions={inboundGrid} height={480} />
+          </ModuleDataSection>
+        </Paper>
+      </TabPanel>
+
+      <Dialog open={addOpen} onClose={() => !createDist.isPending && setAddOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>New distributor</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField label="Code" value={code} onChange={(e) => setCode(e.target.value)} required />
+            <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+          </Stack>
+          {createDist.isError ? (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {(createDist.error as Error).message}
+            </Alert>
           ) : null}
-        </Box>
-      </Drawer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddOpen(false)} disabled={createDist.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={createDist.isPending || !code.trim() || !name.trim()}
+            onClick={() => createDist.mutate()}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <DistributorPromoteDialog
+        open={Boolean(promoteTarget)}
+        distributor={
+          promoteTarget
+            ? {
+                id: promoteTarget.id,
+                distributor_code: promoteTarget.distributor_code,
+                distributor_name: promoteTarget.distributor_name,
+              }
+            : null
+        }
+        onClose={() => {
+          setPromoteTarget(null);
+          void qc.invalidateQueries({ queryKey: ['admin-distributors'] });
+        }}
+      />
+      <DistributorBulkPromoteDialog
+        open={bulkPromoteOpen}
+        mintCandidates={bulkMintCandidates}
+        onClose={() => {
+          setBulkPromoteOpen(false);
+          void qc.invalidateQueries({ queryKey: ['admin-distributors'] });
+        }}
+      />
+      <DistributorDispositionDialog
+        open={dispositionOpen}
+        distributorIds={dispositionDistributorIds}
+        onClose={() => {
+          setDispositionOpen(false);
+          void qc.invalidateQueries({ queryKey: ['admin-distributors'] });
+        }}
+      />
       <MasterBulkDeleteImpactDialog
         open={bulkDeleteOpen}
         busy={bulkDeleteBusy}

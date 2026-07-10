@@ -42,7 +42,10 @@ class FactCustomerSellthrough(Base, TimestampMixin):
     is_mtd_estimate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     unit_sell_price: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     unit_cost: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    unit_mac: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     reported_soh: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    site_label: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    vat_basis: Mapped[str | None] = mapped_column(String(16), nullable=True)
     import_job_id: Mapped[int | None] = mapped_column(
         ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True
     )

@@ -39,16 +39,60 @@ from app.services.commercial_planner.economics_trust import (
     summarize_recalculate_trust,
 )
 from app.services.commercial_planner.current_lineup_seed import CurrentLineupSourceNotConfiguredError
-from app.services.commercial_planner.lineup_entity_resolution import (
+from app.services.commercial_planner.lineup_case_status import (
+    CLOSE_WORK_ALLOWED_FROM,
+    DEFAULT_LIST_EXCLUDED_STATUSES,
     RESOLUTION_ALLOWED_CASE_STATUSES,
+)
+from app.services.commercial_planner.lineup_entity_resolution import (
     apply_entity_resolutions,
+    apply_plan_entity_resolutions,
     collect_entity_resolution_candidates,
+    collect_plan_entity_resolution_candidates,
 )
 from app.services.commercial_planner.intelligence.product_rankings import rank_products_for_customer
+from app.services.commercial_planner.lineup_case_po_confirm import (
+    CaseNotFoundError,
+    CaseStatusNotConfirmableError,
+    UnresolvedCaseDistributorError,
+    confirm_case_with_po,
+    list_case_pos,
+    list_case_pos_bulk,
+)
+from app.services.commercial_planner.lineup_case_suggested_pos import (
+    suggest_distributors_for_case,
+    suggest_pos_for_case,
+)
+from app.services.commercial_planner.lineup_case_distributor_assign import (
+    CaseNotFoundError as AssignCaseNotFoundError,
+    CaseStatusNotResolvableError as AssignCaseStatusNotResolvableError,
+    DistributorCodeExistsError,
+    DistributorNotFoundError,
+    assign_case_distributor,
+)
+from app.services.commercial_planner.lineup_po_reconciliation import (
+    CaseNotFoundError as ReconCaseNotFoundError,
+    reconcile_case,
+)
+from app.services.commercial_planner.lineup_po_gap import (
+    PurchaseOrderNotFoundError,
+    dismiss_gap_po,
+    po_gap_worklist,
+    restore_gap_po,
+)
+from app.services.commercial_planner.lineup_po_auto_link import po_auto_link_proposals
+from app.services.commercial_planner.lineup_po_auto_link_actions import (
+    ProposalNotFoundError,
+    apply_auto_link_proposals,
+    dismiss_auto_link_proposal,
+    restore_auto_link_proposal,
+)
 from app.services.commercial_planner.lineup_case_parser import (
     parse_current_lineup_file,
     preview_current_lineup_file,
 )
+from app.services.commercial_planner.lineup_case_product_line import ensure_case_product_line_from_catalogue
+from app.services.commercial_planner.lineup_header_mapping import lineup_evidence_from_uploaded
 from app.services.commercial_planner.lineup_open_channel import (
     CHANNEL_ROUTE_UPLOADED_CELL_KEY,
     STAGING_OPEN_CHANNEL_KEY,
@@ -1000,7 +1044,7 @@ async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db))
     # ── 5. Batch lineup evidence per product_id (latest apply job) ───────────
     latest_job_id = await db.scalar(
         select(func.max(HistoricalLineupImportHeader.import_job_id))
-        .join(HistoricalLineupImportLine, HistoricalLineupImportLine.header_id == HistoricalLineupImportLine.id)
+        .join(HistoricalLineupImportLine, HistoricalLineupImportLine.header_id == HistoricalLineupImportHeader.id)
         .join(ImportJob, ImportJob.id == HistoricalLineupImportHeader.import_job_id)
         .where(
             HistoricalLineupImportLine.product_id.in_(product_ids),
@@ -1937,10 +1981,11 @@ ALLOWED_CASE_STATUS_TRANSITIONS: dict[str, list[str]] = {
     "validated": ["pending_review", "cancelled"],
     "pending_review": ["accepted", "validated", "cancelled"],
     "accepted": ["po_pending", "cancelled"],
-    "po_pending": ["po_issued", "cancelled"],
-    "po_issued": ["in_fulfillment"],
-    "in_fulfillment": ["received_closed"],
+    "po_pending": ["po_issued", "work_closed", "cancelled"],
+    "po_issued": ["in_fulfillment", "work_closed"],
+    "in_fulfillment": ["received_closed", "work_closed"],
     "received_closed": [],
+    "work_closed": [],
     "cancelled": [],
 }
 
@@ -1965,10 +2010,47 @@ class LineupCaseStatusPatch(BaseModel):
     accepted_by: str | None = None
 
 
+class LineupCaseAttachPlanPatch(BaseModel):
+    # None detaches the case from any plan. Plan linkage is optional enrichment for forward
+    # buy-planning, never a precondition for viewing or working a lineup case.
+    commercial_plan_id: int | None = None
+
+
+class ConfirmWithPoBody(BaseModel):
+    po_numbers: list[str] = Field(min_length=1, description="One or more PO numbers to link")
+    notes: str | None = Field(default=None, max_length=1024)
+
+
+class PoAutoLinkDismissBody(BaseModel):
+    proposal_key: str = Field(min_length=1, max_length=128)
+    case_id: int = Field(ge=1)
+    purchase_order_id: int = Field(ge=1)
+    reason_code: str = Field(min_length=1, max_length=256)
+
+
+class PoAutoLinkApplyItem(BaseModel):
+    case_id: int = Field(ge=1)
+    purchase_order_id: int = Field(ge=1)
+    notes: str | None = Field(default=None, max_length=1024)
+
+
+class PoAutoLinkApplyBody(BaseModel):
+    items: list[PoAutoLinkApplyItem] = Field(min_length=1, max_length=500)
+    notes: str | None = Field(default=None, max_length=1024)
+
+
 class CommercialLineupLinePatch(BaseModel):
     quantity_units: float | None = None
     msrp_local: float | None = None
     promo_price_evidence_local: float | None = None
+    customer_feedback: str | None = Field(default=None, max_length=1024)
+    internal_notes: str | None = Field(default=None, max_length=1024)
+
+
+# Pricing/quantity edits are draft-only (pre-sync staging). Negotiation annotations
+# (customer feedback / internal notes) stay editable through the review loop.
+LINEUP_LINE_PRICING_EDIT_STATUSES = {"draft_imported"}
+LINEUP_LINE_ANNOTATION_EDIT_STATUSES = {"draft_imported", "validated", "pending_review"}
 
 
 class EntityResolutionItem(BaseModel):
@@ -2008,7 +2090,49 @@ class EntityResolutionApplyBody(BaseModel):
     resolutions: list[EntityResolutionItem] = Field(min_length=1)
 
 
-def _case_payload(case: CommercialLineupCase, line_count: int) -> dict:
+class BulkEntityResolutionApplyBody(EntityResolutionApplyBody):
+    plan_id: int | None = Field(default=None, ge=1)
+    case_ids: list[int] | None = None
+
+    @model_validator(mode="after")
+    def _require_scope(self) -> BulkEntityResolutionApplyBody:
+        if self.plan_id is None and not self.case_ids:
+            raise ValueError("plan_id or case_ids is required for bulk entity resolution apply")
+        return self
+
+
+class AssignDistributorBody(BaseModel):
+    """Assign a distributor to a case's lines.
+
+    Provide exactly one of: ``distributor_id`` (an existing dim, e.g. a shipment-evidence
+    suggestion) OR ``new_code`` + ``new_name`` + ``confirm_create=true`` to create a new
+    ``dim_distributor`` (steward-confirmed). ``only_unassigned`` (default true) writes only lines
+    without a distributor.
+    """
+
+    distributor_id: int | None = Field(default=None, ge=1)
+    new_code: str | None = Field(default=None, max_length=32)
+    new_name: str | None = Field(default=None, max_length=256)
+    confirm_create: bool = False
+    only_unassigned: bool = True
+
+    @model_validator(mode="after")
+    def _validate(self) -> AssignDistributorBody:
+        if self.distributor_id is not None:
+            if self.new_code or self.new_name:
+                raise ValueError("Provide either distributor_id or new_code+new_name, not both.")
+            return self
+        if not (self.new_code and self.new_name):
+            raise ValueError("distributor_id, or new_code + new_name (to create), is required.")
+        if not self.confirm_create:
+            raise ValueError("confirm_create must be true to create a new distributor.")
+        return self
+
+
+def _case_payload(
+    case: CommercialLineupCase, line_count: int, linked_pos: list[dict] | None = None
+) -> dict:
+    pos = linked_pos or []
     return {
         "id": case.id,
         "import_job_id": case.import_job_id,
@@ -2020,23 +2144,50 @@ def _case_payload(case: CommercialLineupCase, line_count: int) -> dict:
         "import_intent": case.import_intent,
         "source_context": case.source_context,
         "commercial_status": case.commercial_status,
+        "iteration_number": case.iteration_number,
+        "product_line": case.product_line,
+        "inferred_period_start": case.inferred_period_start.isoformat()
+        if case.inferred_period_start
+        else None,
         "notes": case.notes,
         "accepted_at": case.accepted_at.isoformat() if case.accepted_at else None,
         "accepted_by": case.accepted_by,
         "line_count": line_count,
+        "linked_pos": pos,
+        "po_count": len(pos),
         "created_at": case.created_at.isoformat() if case.created_at else None,
+        "superseded_by_case_id": case.superseded_by_case_id,
     }
 
 
 @router.get("/lineup-cases")
 async def list_lineup_cases(
     plan_id: int | None = Query(default=None, description="Filter by commercial_plan_id"),
+    include_work_closed: bool = Query(
+        default=False,
+        description="Include work_closed cases (default list hides steward-closed work-queue items)",
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(CommercialLineupCase).order_by(CommercialLineupCase.id.desc())
     if plan_id is not None:
         stmt = stmt.where(CommercialLineupCase.commercial_plan_id == plan_id)
+    if not include_work_closed:
+        stmt = stmt.where(
+            CommercialLineupCase.commercial_status.notin_(DEFAULT_LIST_EXCLUDED_STATUSES)
+        )
+    else:
+        stmt = stmt.where(
+            CommercialLineupCase.commercial_status.notin_({"cancelled", "superseded"})
+        )
     cases = (await db.execute(stmt)).scalars().all()
+    catalogue_dirty = False
+    for case in cases:
+        if await ensure_case_product_line_from_catalogue(db, case):
+            catalogue_dirty = True
+    if catalogue_dirty:
+        await db.commit()
+    pos_by_case = await list_case_pos_bulk(db, [int(c.id) for c in cases])
     out = []
     for case in cases:
         line_count = (
@@ -2044,7 +2195,7 @@ async def list_lineup_cases(
                 select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case.id)
             )
         ).scalar_one()
-        out.append(_case_payload(case, int(line_count)))
+        out.append(_case_payload(case, int(line_count), pos_by_case.get(int(case.id), [])))
     return out
 
 
@@ -2078,7 +2229,8 @@ async def get_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
             select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
         )
     ).scalar_one()
-    return _case_payload(case, int(line_count))
+    linked_pos = await list_case_pos(db, case_id)
+    return _case_payload(case, int(line_count), linked_pos)
 
 
 @router.get("/lineup-cases/{case_id}/entity-resolution-candidates")
@@ -2089,6 +2241,73 @@ async def get_lineup_entity_resolution_candidates(case_id: int, db: AsyncSession
     if case.commercial_status == "cancelled":
         raise HTTPException(status_code=409, detail="Case is cancelled")
     return await collect_entity_resolution_candidates(db, case_id)
+
+
+@router.get("/entity-resolution-candidates")
+async def get_plan_entity_resolution_candidates(
+    db: AsyncSession = Depends(get_db),
+    plan_id: int | None = Query(default=None, ge=1),
+    case_ids: str | None = Query(
+        default=None,
+        description="Comma-separated lineup case ids (used when browsing all cases without a plan filter)",
+    ),
+):
+    """Aggregate unresolved customer/distributor tokens across eligible lineup cases on a plan."""
+    parsed_case_ids: list[int] | None = None
+    if case_ids:
+        try:
+            parsed_case_ids = [int(x.strip()) for x in case_ids.split(",") if x.strip()]
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="case_ids must be comma-separated integers") from exc
+        if not parsed_case_ids:
+            parsed_case_ids = None
+    if plan_id is None and not parsed_case_ids:
+        raise HTTPException(status_code=400, detail="plan_id or case_ids is required")
+    if plan_id is not None and not await db.get(CommercialPlan, plan_id):
+        raise HTTPException(status_code=404, detail="Commercial plan not found")
+    return await collect_plan_entity_resolution_candidates(
+        db, plan_id=plan_id, case_ids=parsed_case_ids
+    )
+
+
+async def _validate_entity_resolution_items(db: AsyncSession, resolutions: list[EntityResolutionItem]) -> None:
+    for item in resolutions:
+        if item.action == "mark_open_channel_staging":
+            continue
+        if item.action == "create_dim":
+            code = (item.new_code or "").strip()
+            if item.kind == "customer":
+                exists = await db.scalar(select(func.count()).select_from(DimCustomer).where(DimCustomer.code == code[:64]))
+                if exists:
+                    raise HTTPException(status_code=400, detail=f"Customer code already exists: {code[:64]}")
+            else:
+                exists = await db.scalar(
+                    select(func.count()).select_from(DimDistributor).where(DimDistributor.code == code[:32])
+                )
+                if exists:
+                    raise HTTPException(status_code=400, detail=f"Distributor code already exists: {code[:32]}")
+            continue
+        assert item.dim_id is not None
+        if item.kind in ("customer", "distributor_token_as_customer"):
+            if not await db.get(DimCustomer, item.dim_id):
+                raise HTTPException(status_code=400, detail=f"Unknown customer_id={item.dim_id}")
+        if item.kind in ("distributor", "customer_token_as_distributor"):
+            if not await db.get(DimDistributor, item.dim_id):
+                raise HTTPException(status_code=400, detail=f"Unknown distributor_id={item.dim_id}")
+
+
+def _workbench_calc_field_metadata() -> list[dict[str, str]]:
+    """Derived pricing chain outputs stored on lineup lines (pricing_chain_json.outputs)."""
+    specs = [
+        ("dealer_price", "Dealer price (calc)", "calc_dealer_price_local"),
+        ("net_price", "Net price (calc)", "calc_net_price_local"),
+        ("disti_cost", "Disti cost (calc)", "calc_disti_cost_local"),
+        ("dap", "DAP (calc)", "calc_dap_cost_currency"),
+        ("profit", "Profit total (calc)", "calc_profit_total"),
+    ]
+    return [
+        {"id": f"calc:{k}", "group": "calculated", "label": lab, "field": field} for k, lab, field in specs
+    ]
 
 
 def _workbench_parsed_field_metadata() -> list[dict[str, str]]:
@@ -2104,7 +2323,10 @@ def _workbench_parsed_field_metadata() -> list[dict[str, str]]:
         ("promo_price_evidence_local", "Promo price (evidence)"),
         ("dap_evidence_local", "DAP (evidence only)"),
         ("rebate_pct_evidence", "Rebate % (evidence)"),
-        ("distributor_margin_pct_evidence", "Dealer margin % (evidence)"),
+        ("dealer_margin_pct_evidence", "Dealer margin % (evidence)"),
+        ("distributor_margin_pct_evidence", "Disti margin % (evidence)"),
+        ("import_tax_pct_evidence", "Import tax % (evidence)"),
+        ("roe_evidence", "ROE / FX rate (evidence)"),
         ("vat_pct_evidence", "VAT % (evidence)"),
         ("customer_token", "Customer token (parsed column)"),
         ("distributor_token_raw", "Distributor token (from upload)"),
@@ -2188,6 +2410,7 @@ async def get_lineup_workbench_column_metadata(case_id: int, db: AsyncSession = 
         "catalogue_spec_keys": sorted(spec_keys),
         "processor_spec_key_hints": proc_hints,
         "sync_fields": _workbench_sync_field_metadata(),
+        "calc_fields": _workbench_calc_field_metadata(),
     }
 
 
@@ -2205,36 +2428,39 @@ async def post_lineup_entity_resolutions_apply(
         raise HTTPException(
             status_code=409,
             detail=(
-                "Entity resolutions are only allowed while the case is in draft/review "
+                "Entity resolutions are only allowed while steward work is open "
                 f"(statuses: {', '.join(sorted(RESOLUTION_ALLOWED_CASE_STATUSES))}). "
                 f"Current: '{case.commercial_status}'"
             ),
         )
-    for item in body.resolutions:
-        if item.action == "mark_open_channel_staging":
-            continue
-        if item.action == "create_dim":
-            code = (item.new_code or "").strip()
-            if item.kind == "customer":
-                exists = await db.scalar(select(func.count()).select_from(DimCustomer).where(DimCustomer.code == code[:64]))
-                if exists:
-                    raise HTTPException(status_code=400, detail=f"Customer code already exists: {code[:64]}")
-            else:
-                exists = await db.scalar(
-                    select(func.count()).select_from(DimDistributor).where(DimDistributor.code == code[:32])
-                )
-                if exists:
-                    raise HTTPException(status_code=400, detail=f"Distributor code already exists: {code[:32]}")
-            continue
-        assert item.dim_id is not None
-        if item.kind in ("customer", "distributor_token_as_customer"):
-            if not await db.get(DimCustomer, item.dim_id):
-                raise HTTPException(status_code=400, detail=f"Unknown customer_id={item.dim_id}")
-        if item.kind in ("distributor", "customer_token_as_distributor"):
-            if not await db.get(DimDistributor, item.dim_id):
-                raise HTTPException(status_code=400, detail=f"Unknown distributor_id={item.dim_id}")
+    await _validate_entity_resolution_items(db, body.resolutions)
     raw = [item.model_dump() for item in body.resolutions]
     out = await apply_entity_resolutions(db, case_id, raw)
+    await db.commit()
+    return out
+
+
+@router.post("/entity-resolutions/apply", status_code=200)
+async def post_plan_entity_resolutions_apply(
+    body: BulkEntityResolutionApplyBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply token mappings across every eligible lineup case on a plan (or explicit case list)."""
+    if body.plan_id is not None and not await db.get(CommercialPlan, body.plan_id):
+        raise HTTPException(status_code=404, detail="Commercial plan not found")
+    eligible = await collect_plan_entity_resolution_candidates(
+        db, plan_id=body.plan_id, case_ids=body.case_ids
+    )
+    if not eligible.get("eligible_case_ids"):
+        raise HTTPException(
+            status_code=409,
+            detail="No eligible lineup cases with steward work open for entity resolution on this scope.",
+        )
+    await _validate_entity_resolution_items(db, body.resolutions)
+    raw = [item.model_dump() for item in body.resolutions]
+    out = await apply_plan_entity_resolutions(
+        db, raw, plan_id=body.plan_id, case_ids=body.case_ids
+    )
     await db.commit()
     return out
 
@@ -2258,6 +2484,11 @@ async def patch_lineup_case_status(case_id: int, body: LineupCaseStatusPatch, db
                 f"Allowed: {allowed or 'none (terminal state)'}"
             ),
         )
+    # Negotiation round counter: the first send (validated -> pending_review) is round 1.
+    # When the customer bounces it back for revision (pending_review -> validated), a new
+    # round begins, so increment then.
+    if case.commercial_status == "pending_review" and body.status == "validated":
+        case.iteration_number = (case.iteration_number or 1) + 1
     case.commercial_status = body.status
     if body.notes is not None:
         case.notes = body.notes
@@ -2272,6 +2503,273 @@ async def patch_lineup_case_status(case_id: int, body: LineupCaseStatusPatch, db
         )
     ).scalar_one()
     return _case_payload(case, int(line_count))
+
+
+@router.patch("/lineup-cases/{case_id}/plan")
+async def patch_lineup_case_plan(
+    case_id: int, body: LineupCaseAttachPlanPatch, db: AsyncSession = Depends(get_db)
+):
+    """Attach (or detach) a lineup case to a commercial plan.
+
+    Plan linkage is optional enrichment — a case is browsable and workable on its own. Pass
+    ``commercial_plan_id`` to attach, or ``null`` to detach.
+    """
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    if body.commercial_plan_id is not None and not await db.get(CommercialPlan, body.commercial_plan_id):
+        raise HTTPException(
+            status_code=400, detail=f"Unknown commercial_plan_id={body.commercial_plan_id}"
+        )
+    case.commercial_plan_id = body.commercial_plan_id
+    await db.commit()
+    await db.refresh(case)
+    line_count = (
+        await db.execute(
+            select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
+        )
+    ).scalar_one()
+    return _case_payload(case, int(line_count))
+
+
+@router.get("/lineup-cases/{case_id}/suggested-pos")
+async def get_lineup_case_suggested_pos(case_id: int, db: AsyncSession = Depends(get_db)):
+    """Observed purchase orders ranked by product overlap with this case (read-only)."""
+    try:
+        return await suggest_pos_for_case(db, case_id)
+    except CaseNotFoundError:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+
+
+@router.post("/lineup-cases/{case_id}/close-work", status_code=200)
+async def close_lineup_case_work(case_id: int, db: AsyncSession = Depends(get_db)):
+    """Mark steward work complete; case leaves the default Current lineups list.
+
+    PO links, synced planner lines, and reconciliation data are unchanged — this is a work-queue
+    sign-off only, not archival from commercial intelligence.
+    """
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    if case.commercial_status not in CLOSE_WORK_ALLOWED_FROM:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    f"Cannot close work from status '{case.commercial_status}'. "
+                    f"Allowed: {', '.join(sorted(CLOSE_WORK_ALLOWED_FROM))}"
+                ),
+                "remediation": (
+                    "Link at least one PO (po_pending) before closing, or use the status ladder "
+                    "for cases not yet in the PO phase."
+                ),
+            },
+        )
+    case.commercial_status = "work_closed"
+    await db.commit()
+    line_count = (
+        await db.execute(
+            select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
+        )
+    ).scalar_one()
+    linked_pos = await list_case_pos(db, case_id)
+    return _case_payload(case, int(line_count), linked_pos)
+
+
+@router.post("/lineup-cases/{case_id}/confirm-with-po", status_code=200)
+async def confirm_lineup_case_with_po(
+    case_id: int, body: ConfirmWithPoBody, db: AsyncSession = Depends(get_db)
+):
+    """Confirm a lineup case with PO number(s); advances to po_pending (preserves po_issued+). Idempotent.
+
+    Available from any case status except ``cancelled`` — no forward approval ladder required.
+    Each PO is normalized then looked up / created on ``purchase_order`` (distributor inferred from
+    the case lines) and linked via ``commercial_lineup_case_po``. Re-confirming the same PO is a
+    no-op; confirming a new PO appends a link.
+    """
+    try:
+        return await confirm_case_with_po(
+            db, case_id, po_numbers=body.po_numbers, notes=body.notes
+        )
+    except CaseNotFoundError:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    except CaseStatusNotConfirmableError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"Cannot confirm a case in status '{exc.status}'.",
+                "remediation": "Cancelled cases cannot be confirmed with a PO.",
+            },
+        )
+    except UnresolvedCaseDistributorError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": str(exc),
+                "remediation": (
+                    "Assign a single distributor on lineup lines (or use distributor assign) "
+                    "before confirming with a PO."
+                ),
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/lineup-cases/{case_id}/suggested-distributors")
+async def get_lineup_case_suggested_distributors(case_id: int, db: AsyncSession = Depends(get_db)):
+    """Distributors suggested from shipment-evidence product corroboration (read-only).
+
+    Every suggestion is an existing ``dim_distributor``. ``converged`` is true only when exactly one
+    distinct distributor is found across the corroborating evidence.
+    """
+    try:
+        return await suggest_distributors_for_case(db, case_id)
+    except CaseNotFoundError:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+
+
+@router.post("/lineup-cases/{case_id}/assign-distributor", status_code=200)
+async def post_lineup_case_assign_distributor(
+    case_id: int, body: AssignDistributorBody, db: AsyncSession = Depends(get_db)
+):
+    """Assign a distributor to a case's lines (existing dim or steward-confirmed create).
+
+    Fills the gap left by token-keyed entity resolution for lines that carry no distributor token.
+    Writes only ``distributor_id``; cost / DAP / SKU assumptions are untouched.
+    """
+    try:
+        return await assign_case_distributor(
+            db,
+            case_id,
+            distributor_id=body.distributor_id,
+            new_code=body.new_code,
+            new_name=body.new_name,
+            only_unassigned=body.only_unassigned,
+        )
+    except AssignCaseNotFoundError:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    except AssignCaseStatusNotResolvableError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Distributor assignment is only allowed while steward work is open "
+                f"(statuses: {', '.join(sorted(RESOLUTION_ALLOWED_CASE_STATUSES))}). "
+                f"Current: '{exc.status}'"
+            ),
+        )
+    except DistributorNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=f"Unknown distributor_id={exc}")
+    except DistributorCodeExistsError as exc:
+        raise HTTPException(status_code=400, detail=f"Distributor code already exists: {exc.code}")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/lineup/po-reconciliation")
+async def get_po_reconciliation(
+    case_id: int = Query(..., description="Lineup case to reconcile against its confirmed POs"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Units-primary reconciliation per (case x product); FX-bridged value is secondary/display."""
+    try:
+        return await reconcile_case(db, case_id)
+    except ReconCaseNotFoundError:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+
+
+class GapDismissBody(BaseModel):
+    purchase_order_id: int = Field(ge=1)
+    reason_code: str = Field(min_length=1, max_length=64)
+
+
+@router.get("/lineup/po-gap-worklist")
+async def get_po_gap_worklist(
+    include_dismissed: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    """POs with shipments but no covering confirmed lineup, grouped by quarter/year."""
+    return await po_gap_worklist(db, include_dismissed=include_dismissed)
+
+
+@router.post("/lineup/po-gap-worklist/dismiss", status_code=200)
+async def dismiss_po_gap(body: GapDismissBody, db: AsyncSession = Depends(get_db)):
+    try:
+        return await dismiss_gap_po(db, body.purchase_order_id, body.reason_code)
+    except PurchaseOrderNotFoundError:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+
+@router.post("/lineup/po-gap-worklist/restore", status_code=200)
+async def restore_po_gap(
+    purchase_order_id: int = Query(..., ge=1), db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await restore_gap_po(db, purchase_order_id)
+    except PurchaseOrderNotFoundError:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+
+@router.get("/lineup/po-auto-link/proposals")
+async def get_po_auto_link_proposals(
+    period: str | None = Query(default=None, description="Filter by case period_label or quarter token (e.g. 26Q1)"),
+    customer_id: int | None = Query(default=None, ge=1),
+    confidence: Literal["high", "medium"] | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=5000),
+    include_dismissed: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    """Derived PO↔lineup link proposals (CRAD-primary period match). Proposes only — never confirms."""
+    return await po_auto_link_proposals(
+        db,
+        period=period,
+        customer_id=customer_id,
+        confidence=confidence,
+        limit=limit,
+        include_dismissed=include_dismissed,
+    )
+
+
+@router.post("/lineup/po-auto-link/dismiss", status_code=200)
+async def post_po_auto_link_dismiss(body: PoAutoLinkDismissBody, db: AsyncSession = Depends(get_db)):
+    """Dismiss a proposal so it no longer appears in the default review list."""
+    try:
+        return await dismiss_auto_link_proposal(
+            db,
+            proposal_key=body.proposal_key,
+            case_id=body.case_id,
+            purchase_order_id=body.purchase_order_id,
+            reason_code=body.reason_code,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/lineup/po-auto-link/restore", status_code=200)
+async def post_po_auto_link_restore(
+    proposal_key: str = Query(..., min_length=1, max_length=128),
+    db: AsyncSession = Depends(get_db),
+):
+    """Restore a previously dismissed auto-link proposal."""
+    try:
+        return await restore_auto_link_proposal(db, proposal_key=proposal_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except ProposalNotFoundError:
+        raise HTTPException(status_code=404, detail="Dismissed proposal not found")
+
+
+@router.post("/lineup/po-auto-link/apply", status_code=200)
+async def post_po_auto_link_apply(body: PoAutoLinkApplyBody, db: AsyncSession = Depends(get_db)):
+    """Link selected proposals (writes ``commercial_lineup_case_po``; case -> po_pending or unchanged)."""
+    try:
+        return await apply_auto_link_proposals(
+            db,
+            items=[item.model_dump() for item in body.items],
+            notes=body.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 def _lineup_row_needs_resolution(ln: CommercialLineupLine, raw_payload: dict) -> bool:
@@ -2469,6 +2967,11 @@ async def list_lineup_case_lines(
             "row_status": ln.row_status,
             "mapping_confidence": float(ln.mapping_confidence) if ln.mapping_confidence is not None else None,
             "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE,
+            "pricing_chain_json": ln.pricing_chain_json if isinstance(ln.pricing_chain_json, dict) else None,
+            "calc_dap_cost_currency": float(ln.calc_dap_cost_currency)
+            if ln.calc_dap_cost_currency is not None
+            else None,
+            "calc_profit_total": float(ln.calc_profit_total) if ln.calc_profit_total is not None else None,
             "staging_open_channel": raw_payload.get(STAGING_OPEN_CHANNEL_KEY) is True,
             "channel_route_uploaded_cell": raw_payload.get(CHANNEL_ROUTE_UPLOADED_CELL_KEY)
             if isinstance(raw_payload.get(CHANNEL_ROUTE_UPLOADED_CELL_KEY), str)
@@ -2497,6 +3000,18 @@ async def list_lineup_case_lines(
         if include_line_uploaded:
             up = raw_payload.get("uploaded")
             d["uploaded"] = up if isinstance(up, dict) else {}
+        uploaded_for_evidence = (
+            d.get("uploaded")
+            if isinstance(d.get("uploaded"), dict)
+            else (
+                raw_payload.get("uploaded")
+                if isinstance(raw_payload.get("uploaded"), dict)
+                else {}
+            )
+        )
+        for field, val in lineup_evidence_from_uploaded(uploaded_for_evidence).items():
+            if d.get(field) is None:
+                d[field] = val
         if include_raw_row_payload:
             d["raw_row_payload"] = ln.raw_row_payload if isinstance(ln.raw_row_payload, dict) else {}
         rows_payload.append((ln, d))
@@ -2590,18 +3105,35 @@ async def patch_lineup_case_line(
     body: CommercialLineupLinePatch,
     db: AsyncSession = Depends(get_db),
 ):
-    """Edit draft current-lineup row fields (units, MSRP, promo evidence). Safe for pre-sync staging only."""
+    """Edit lineup row fields. Pricing/qty edits are draft-only (pre-sync staging);
+    customer feedback / internal notes stay editable through the review loop."""
     case = await db.get(CommercialLineupCase, case_id)
     if not case:
         raise HTTPException(status_code=404, detail="Lineup case not found")
-    if case.commercial_status != "draft_imported":
+
+    wants_pricing_edit = any(
+        v is not None
+        for v in (body.quantity_units, body.msrp_local, body.promo_price_evidence_local)
+    )
+    wants_annotation_edit = body.customer_feedback is not None or body.internal_notes is not None
+
+    if wants_pricing_edit and case.commercial_status not in LINEUP_LINE_PRICING_EDIT_STATUSES:
         raise HTTPException(
             status_code=409,
             detail=(
-                f"Can only edit lineup lines on cases with status 'draft_imported'. "
+                "Can only edit pricing/quantity on cases with status 'draft_imported'. "
                 f"Current: '{case.commercial_status}'"
             ),
         )
+    if wants_annotation_edit and case.commercial_status not in LINEUP_LINE_ANNOTATION_EDIT_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Can only edit customer feedback / internal notes while the case is in "
+                f"{sorted(LINEUP_LINE_ANNOTATION_EDIT_STATUSES)}. Current: '{case.commercial_status}'"
+            ),
+        )
+
     ln = await db.get(CommercialLineupLine, line_id)
     if ln is None or ln.case_id != case_id:
         raise HTTPException(status_code=404, detail="Lineup line not found")
@@ -2612,6 +3144,10 @@ async def patch_lineup_case_line(
         ln.msrp_local = body.msrp_local
     if body.promo_price_evidence_local is not None:
         ln.promo_price_evidence_local = body.promo_price_evidence_local
+    if body.customer_feedback is not None:
+        ln.customer_feedback = body.customer_feedback.strip() or None
+    if body.internal_notes is not None:
+        ln.internal_notes = body.internal_notes.strip() or None
 
     await db.commit()
     await db.refresh(ln)
@@ -2686,10 +3222,72 @@ async def patch_lineup_case_line(
         if ln2.distributor_margin_pct_evidence is not None
         else None,
         "vat_pct_evidence": float(ln2.vat_pct_evidence) if ln2.vat_pct_evidence is not None else None,
+        "customer_feedback": ln2.customer_feedback,
+        "internal_notes": ln2.internal_notes,
         "diagnostic_codes": ln2.diagnostic_codes or [],
         "row_status": ln2.row_status,
         "mapping_confidence": float(ln2.mapping_confidence) if ln2.mapping_confidence is not None else None,
         "dap_semantics_note": _LINEUP_DAP_SEMANTICS_NOTE,
+    }
+
+
+@router.get("/lineup-cases/{case_id}/export")
+async def export_lineup_case_customer_slice(
+    case_id: int,
+    customer_id: int = Query(..., description="Resolved DimCustomer id to slice the lineup for"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download a single customer's slice of a lineup case as XLSX (full pricing chain).
+
+    Presents persisted calc_* / pricing_chain_json values — never recomputes. DAP shown is the
+    calculated cost-currency DAP, not PM bottom.
+    """
+    from app.services.commercial_planner.lineup_customer_export import (
+        LineupExportNotFoundError,
+        build_customer_lineup_slice_xlsx,
+    )
+
+    try:
+        data, filename, _row_count = await build_customer_lineup_slice_xlsx(db, case_id, customer_id)
+    except LineupExportNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/lineup-cases/{case_id}/delete-preview")
+async def delete_lineup_case_preview(case_id: int, db: AsyncSession = Depends(get_db)):
+    """Preview superseded children that will be restored if this case is deleted."""
+    from app.services.commercial_planner.lineup_case_supersession import superseded_child_summaries
+
+    case = await db.get(CommercialLineupCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Lineup case not found")
+    if case.commercial_status != "draft_imported":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Can only delete lineup cases with status 'draft_imported'. Current status: '{case.commercial_status}'",
+        )
+    children = (
+        await db.execute(
+            select(CommercialLineupCase).where(CommercialLineupCase.superseded_by_case_id == case_id)
+        )
+    ).scalars().all()
+    summaries = superseded_child_summaries(list(children))
+    return {
+        "case_id": case_id,
+        "file_name": case.file_name,
+        "superseded_child_count": len(summaries),
+        "superseded_children": summaries,
+        "message": (
+            f"This case supersedes {len(summaries)} file(s); deleting will restore them as active."
+            if summaries
+            else None
+        ),
     }
 
 
@@ -2703,6 +3301,16 @@ async def delete_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
             status_code=409,
             detail=f"Can only delete lineup cases with status 'draft_imported'. Current status: '{case.commercial_status}'",
         )
+    children = list(
+        (
+            await db.execute(
+                select(CommercialLineupCase).where(CommercialLineupCase.superseded_by_case_id == case_id)
+            )
+        ).scalars().all()
+    )
+    for child in children:
+        child.superseded_by_case_id = None
+        child.commercial_status = "draft_imported"
     await db.delete(case)
     await db.commit()
     return Response(status_code=204)
@@ -2755,6 +3363,257 @@ async def parse_lineup_case_apply(
     from app.services.commercial_planner.lineup_parse_api import execute_lineup_parse_upload
 
     return await execute_lineup_parse_upload(db, case_id, filename, file_bytes)
+
+
+@router.post("/lineup/unified-import", status_code=202)
+async def unified_lineup_import(
+    files: list[UploadFile] = File(..., description="One or more .csv/.xlsx/.xlsm lineup files"),
+    commercial_plan_id: int | None = Form(default=None),
+    period_label: str | None = Form(default=None),
+    country_code: str | None = Form(default=None),
+    currency_code: str | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unified multi-file lineup import: one CommercialLineupCase + one async parse job per file.
+
+    Each file runs the full pricing chain (backwards SRP->DAP) + period/product-line inference via
+    the shared lineup parser, tagged template_slug='unified_lineup'. Per-file progress is visible in
+    the activity feed; a single bad file does not abort the batch. DAP stays evidence-only.
+    """
+    from app.services.commercial_planner.unified_lineup_import import dispatch_unified_lineup_import
+
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one file is required.")
+
+    payloads: list[tuple[str, bytes]] = []
+    for f in files:
+        payloads.append((f.filename or "upload", await f.read()))
+
+    try:
+        return await dispatch_unified_lineup_import(
+            db,
+            payloads,
+            commercial_plan_id=commercial_plan_id,
+            period_label=period_label,
+            country_code=country_code,
+            currency_code=currency_code,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/lineup/bulk-backfill/preview")
+async def bulk_lineup_backfill_preview(
+    files: list[UploadFile] = File(..., description="Historical lineup workbooks"),
+    folder_paths: list[str] | None = Form(default=None),
+    manual_overrides: str | None = Form(default=None, description="JSON map of proposal_key or file_key overrides"),
+    persist_session: bool = Form(default=True, description="When false, in-memory preview only (no ImportJob row)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """File-grain preview for bulk historical lineup backfill (no lineup table writes)."""
+    import json
+
+    from app.services.commercial_planner.lineup_bulk_backfill_api import execute_bulk_lineup_preview
+
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one file is required.")
+    paths = list(folder_paths or [])
+    payloads: list[tuple[str, bytes, str | None]] = []
+    for i, f in enumerate(files):
+        raw_folder = paths[i] if i < len(paths) else None
+        folder = raw_folder.strip() if raw_folder and str(raw_folder).strip() else None
+        payloads.append((f.filename or "upload", await f.read(), folder))
+    overrides: dict | None = None
+    if manual_overrides and manual_overrides.strip():
+        try:
+            parsed = json.loads(manual_overrides)
+            overrides = parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail=f"manual_overrides must be JSON: {exc}") from exc
+    try:
+        return await execute_bulk_lineup_preview(
+            db,
+            payloads,
+            manual_overrides=overrides,
+            persist_session=persist_session,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/lineup/bulk-backfill/apply", status_code=202)
+async def bulk_lineup_backfill_apply(
+    session_import_job_id: int = Form(...),
+    confirm: bool = Form(default=False),
+    approved_proposal_keys: str | None = Form(default=None),
+    excluded_proposal_keys: str | None = Form(default=None),
+    supersession_confirmations: str | None = Form(default=None),
+    commercial_plan_id: int | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Batch-apply steward-approved bulk lineup preview (async; good files only)."""
+    import json
+
+    from app.services.commercial_planner.lineup_bulk_backfill_api import execute_bulk_lineup_apply
+
+    if not confirm:
+        raise HTTPException(status_code=400, detail="confirm=true is required to apply bulk backfill.")
+
+    def _parse_keys(raw: str | None) -> list[str] | None:
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed]
+        except json.JSONDecodeError:
+            return [k.strip() for k in raw.split(",") if k.strip()]
+        return None
+
+    def _parse_confirmations(raw: str | None) -> dict[str, str] | None:
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return {str(k): str(v) for k, v in parsed.items()}
+        except json.JSONDecodeError:
+            return None
+        return None
+
+    try:
+        return await execute_bulk_lineup_apply(
+            db,
+            session_import_job_id,
+            approved_proposal_keys=_parse_keys(approved_proposal_keys),
+            excluded_proposal_keys=_parse_keys(excluded_proposal_keys),
+            supersession_confirmations=_parse_confirmations(supersession_confirmations),
+            commercial_plan_id=commercial_plan_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/lineup/bulk-backfill/preview/{session_import_job_id}")
+async def bulk_lineup_backfill_get_preview(
+    session_import_job_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reload a persisted bulk lineup preview session."""
+    from app.services.commercial_planner.lineup_bulk_backfill_apply import load_preview_session
+
+    try:
+        preview = await load_preview_session(db, session_import_job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"session_import_job_id": session_import_job_id, "preview": preview}
+
+
+@router.post("/lineup/bulk-backfill/rederivation/preview")
+async def bulk_lineup_1h_rederivation_preview(
+    persist_session: bool = Form(default=True),
+    db: AsyncSession = Depends(get_db),
+):
+    """Preview steward-driven 1H re-derivation for existing imported cases (no writes)."""
+    from app.services.commercial_planner.lineup_bulk_rederivation import (
+        build_1h_rederivation_preview,
+        persist_rederivation_preview_session,
+    )
+
+    preview = await build_1h_rederivation_preview(db)
+    if not persist_session:
+        return {"session_import_job_id": None, "preview": preview, "persisted": False}
+    session_job = await persist_rederivation_preview_session(db, preview)
+    return {
+        "session_import_job_id": int(session_job.id),
+        "preview": preview,
+        "persisted": True,
+    }
+
+
+@router.post("/lineup/bulk-backfill/rederivation/apply", status_code=202)
+async def bulk_lineup_1h_rederivation_apply(
+    session_import_job_id: int = Form(...),
+    confirm: bool = Form(default=False),
+    approved_proposal_keys: str | None = Form(default=None),
+    supersession_confirmations: str | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply steward-approved 1H re-derivation (adjust Q1 in place + optional Q2 twin)."""
+    import json
+
+    from app.core.config import get_settings
+    from app.services.commercial_planner.lineup_bulk_rederivation import apply_1h_rederivation_sync
+    from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
+    from app.services.task_run_ledger import (
+        ENTITY_IMPORT_JOB,
+        TRANSPORT_IN_PROCESS_THREAD,
+        create_queued_task_run,
+        spawn_in_process_thread_with_ledger,
+    )
+
+    if not confirm:
+        raise HTTPException(status_code=400, detail="confirm=true is required to apply 1H re-derivation.")
+
+    def _parse_keys(raw: str | None) -> list[str] | None:
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed]
+        except json.JSONDecodeError:
+            return [k.strip() for k in raw.split(",") if k.strip()]
+        return None
+
+    def _parse_map(raw: str | None) -> dict[str, str] | None:
+        if not raw:
+            return None
+        parsed = json.loads(raw)
+        return {str(k): str(v) for k, v in parsed.items()} if isinstance(parsed, dict) else None
+
+    approved = _parse_keys(approved_proposal_keys)
+    confirmations = _parse_map(supersession_confirmations) if supersession_confirmations else None
+
+    settings = get_settings()
+    task_name = "commercial_planner.bulk_lineup_1h_rederivation_apply"
+
+    def _run_sync() -> dict[str, Any]:
+        return apply_1h_rederivation_sync(
+            session_import_job_id,
+            approved_proposal_keys=approved,
+            supersession_confirmations=confirmations,
+        )
+
+    celery_task_id = f"bulk-lineup-rederivation-{session_import_job_id}"
+    create_queued_task_run(
+        task_run_id=celery_task_id,
+        task_name=task_name,
+        entity_type=ENTITY_IMPORT_JOB,
+        entity_id=session_import_job_id,
+        transport=TRANSPORT_IN_PROCESS_THREAD,
+    )
+    spawn_in_process_thread_with_ledger(
+        task_run_id=celery_task_id,
+        thread_name=f"bulk-lineup-rederivation-{session_import_job_id}",
+        target=_run_sync,
+    )
+
+    job = await db.get(ImportJob, session_import_job_id)
+    if job is not None:
+        set_task_slot_on_job(
+            job,
+            SLOT_MAIN,
+            task_id=celery_task_id,
+            label="1H re-derivation apply…",
+        )
+        await db.commit()
+
+    return {
+        "async": True,
+        "session_import_job_id": session_import_job_id,
+        "task_id": celery_task_id,
+    }
 
 
 @router.post("/lineup-cases/{case_id}/parse-upload")

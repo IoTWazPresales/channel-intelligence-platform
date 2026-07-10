@@ -2,6 +2,8 @@
  * Entity type strings aligned with shipment steward filters — kept in features to avoid
  * `features` → `app` cross-imports (same values as shipmentEntityStewardFilters).
  */
+import { shipmentEntityChipLabel } from './shipmentMappingCandidateDisplay';
+
 export const INBOUND_STEWARD_ENTITY_DIST = 'shipment_distributor' as const;
 export const INBOUND_STEWARD_ENTITY_CUST = 'shipment_customer_token' as const;
 
@@ -53,9 +55,7 @@ export function inboundEvidenceContextPossibleDuplicateOf(ctx: Record<string, un
 }
 
 export function inboundEvidenceEntityChipLabel(entityType: string): string {
-  if (entityType === INBOUND_STEWARD_ENTITY_DIST) return 'Distributor';
-  if (entityType === INBOUND_STEWARD_ENTITY_CUST) return 'Channel partner';
-  return entityType;
+  return shipmentEntityChipLabel(entityType);
 }
 
 export function inboundEvidenceHumanizeSnakeTitle(s: string | null): string {

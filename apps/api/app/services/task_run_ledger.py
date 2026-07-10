@@ -9,6 +9,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterator, TypeVar
 
+from sqlalchemy.exc import IntegrityError
+
 from app.models.task_run import TaskRun
 
 logger = logging.getLogger(__name__)
@@ -16,6 +18,9 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 ENTITY_IMPORT_JOB = "import_job"
+ENTITY_CUSTOMER_ALIAS_SCOPE_MERGE = "customer_alias_scope_merge"
+ENTITY_CUSTOMER_FULL_MERGE = "customer_full_merge"
+ENTITY_DISTRIBUTOR_FULL_MERGE = "distributor_full_merge"
 
 TRANSPORT_BROKER = "broker"
 TRANSPORT_IN_PROCESS_THREAD = "in_process_thread"
@@ -26,6 +31,12 @@ STATE_RUNNING = "running"
 STATE_SUCCEEDED = "succeeded"
 STATE_FAILED = "failed"
 
+# Celery-compatible states for HTTP poll consumers.
+POLL_STATE_PENDING = "PENDING"
+POLL_STATE_STARTED = "STARTED"
+POLL_STATE_SUCCESS = "SUCCESS"
+POLL_STATE_FAILURE = "FAILURE"
+
 TASK_CLASS_BY_NAME: dict[str, str] = {
     "imports.process_job": "pipeline",
     "imports.infer_dsi": "pipeline",
@@ -34,14 +45,20 @@ TASK_CLASS_BY_NAME: dict[str, str] = {
     "imports.product_master_validate": "master",
     "imports.product_master_commit": "master",
     "imports.dsi_bulk_provisional_customers": "steward",
+    "imports.dsi_bulk_ignore": "steward",
     "imports.dsi_resolution_plan_apply": "steward",
     "imports.dsi_resolution_plan_compute": "steward",
     "imports.shipment_bulk_map_customer": "steward",
     "imports.shipment_bulk_apply_plans": "steward",
     "imports.shipment_bulk_provisional_customers": "steward",
+    "imports.shipment_resolution_plan_compute": "steward",
+    "imports.shipment_resolution_plan_apply": "steward",
     "imports.dsi_soh_reconciliation": "derive",
     "imports.dsi_velocity_compute": "derive",
     "imports.dsi_forecasting": "derive",
+    "customers.alias_scope_merge_confirm": "master",
+    "customers.full_merge_confirm": "master",
+    "distributors.full_merge_confirm": "master",
     "commercial_planner.parse_lineup_case": "lineup",
 }
 
@@ -59,6 +76,33 @@ def mint_synthetic_task_id(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex}"
 
 
+def task_run_poll_state(ledger_state: str | None) -> str:
+    """Map ``task_run.state`` to Celery-style poll states for API consumers."""
+    key = (ledger_state or "").strip().lower()
+    if key == STATE_SUCCEEDED:
+        return POLL_STATE_SUCCESS
+    if key == STATE_FAILED:
+        return POLL_STATE_FAILURE
+    if key == STATE_RUNNING:
+        return POLL_STATE_STARTED
+    return POLL_STATE_PENDING
+
+
+def read_task_run_poll_progress_sync(task_run_id: str) -> dict[str, Any] | None:
+    """Read poll payload from ``task_run`` (canonical when Celery uses ``ignore_result=True``)."""
+    from app.db.session_sync import SessionLocal
+
+    with SessionLocal() as db:
+        row = db.get(TaskRun, task_run_id)
+        if row is None:
+            return None
+        poll_state = task_run_poll_state(row.state)
+        progress: dict[str, Any] = {"task_id": task_run_id, "state": poll_state}
+        if poll_state == POLL_STATE_FAILURE:
+            progress["error"] = (row.error_summary or "Task failed")[:800]
+        return progress
+
+
 def entity_from_task_args(task_name: str, args: tuple[Any, ...]) -> tuple[str, int]:
     if task_name == "commercial_planner.parse_lineup_case":
         if len(args) > 3:
@@ -66,6 +110,33 @@ def entity_from_task_args(task_name: str, args: tuple[Any, ...]) -> tuple[str, i
         if args:
             return ENTITY_IMPORT_JOB, int(args[0])
         return ENTITY_IMPORT_JOB, 0
+    if task_name == "customers.alias_scope_merge_confirm":
+        if args and isinstance(args[0], dict):
+            payload = args[0]
+            try:
+                survivor_id = int(payload.get("survivor_id") or 0)
+            except (TypeError, ValueError):
+                survivor_id = 0
+            return ENTITY_CUSTOMER_ALIAS_SCOPE_MERGE, survivor_id
+        return ENTITY_CUSTOMER_ALIAS_SCOPE_MERGE, 0
+    if task_name == "customers.full_merge_confirm":
+        if args and isinstance(args[0], dict):
+            payload = args[0]
+            try:
+                survivor_id = int(payload.get("survivor_id") or 0)
+            except (TypeError, ValueError):
+                survivor_id = 0
+            return ENTITY_CUSTOMER_FULL_MERGE, survivor_id
+        return ENTITY_CUSTOMER_FULL_MERGE, 0
+    if task_name == "distributors.full_merge_confirm":
+        if args and isinstance(args[0], dict):
+            payload = args[0]
+            try:
+                survivor_id = int(payload.get("survivor_id") or 0)
+            except (TypeError, ValueError):
+                survivor_id = 0
+            return ENTITY_DISTRIBUTOR_FULL_MERGE, survivor_id
+        return ENTITY_DISTRIBUTOR_FULL_MERGE, 0
     if args:
         return ENTITY_IMPORT_JOB, int(args[0])
     return ENTITY_IMPORT_JOB, 0
@@ -85,6 +156,14 @@ def current_task_run_id() -> str | None:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _promote_task_run_to_running(row: TaskRun, now: datetime) -> None:
+    if row.state in (STATE_SUCCEEDED, STATE_FAILED):
+        return
+    row.state = STATE_RUNNING
+    if row.started_at is None:
+        row.started_at = now
 
 
 def _fresh_session_commit(fn: Callable[[Any], None]) -> None:
@@ -111,17 +190,22 @@ def create_queued_task_run(
     def _write(db) -> None:
         if db.get(TaskRun, task_run_id) is not None:
             return
-        db.add(
-            TaskRun(
-                id=task_run_id,
-                task_name=task_name,
-                task_class=task_class_for(task_name),
-                transport=transport,
-                entity_type=entity_type,
-                entity_id=int(entity_id),
-                state=STATE_QUEUED,
-            )
+        row = TaskRun(
+            id=task_run_id,
+            task_name=task_name,
+            task_class=task_class_for(task_name),
+            transport=transport,
+            entity_type=entity_type,
+            entity_id=int(entity_id),
+            state=STATE_QUEUED,
         )
+        db.add(row)
+        try:
+            with db.begin_nested():
+                db.flush()
+        except IntegrityError:
+            # Race with worker LedgerTask or duplicate enqueue — row already exists.
+            return
 
     _fresh_session_commit(_write)
 
@@ -140,25 +224,31 @@ def ensure_task_run_running(
 
     def _write(db) -> None:
         row = db.get(TaskRun, task_run_id)
-        if row is None:
-            row = TaskRun(
-                id=task_run_id,
-                task_name=task_name,
-                task_class=task_class_for(task_name),
-                transport=transport,
-                entity_type=entity_type,
-                entity_id=int(entity_id),
-                state=STATE_RUNNING,
-                started_at=now,
-            )
+        if row is not None:
+            _promote_task_run_to_running(row, now)
             db.add(row)
             return
-        if row.state in (STATE_SUCCEEDED, STATE_FAILED):
-            return
-        row.state = STATE_RUNNING
-        if row.started_at is None:
-            row.started_at = now
+        row = TaskRun(
+            id=task_run_id,
+            task_name=task_name,
+            task_class=task_class_for(task_name),
+            transport=transport,
+            entity_type=entity_type,
+            entity_id=int(entity_id),
+            state=STATE_RUNNING,
+            started_at=now,
+        )
         db.add(row)
+        try:
+            with db.begin_nested():
+                db.flush()
+        except IntegrityError:
+            # Race with create_queued_task_run on fast broker pickup — promote existing row.
+            existing = db.get(TaskRun, task_run_id)
+            if existing is None:
+                raise
+            _promote_task_run_to_running(existing, now)
+            db.add(existing)
 
     _fresh_session_commit(_write)
 

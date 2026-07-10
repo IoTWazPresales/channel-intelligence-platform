@@ -9,16 +9,23 @@ The same ``canonical_provisional_entity_name_key`` is used by governed merge/cle
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
+
+from app.services.imports.dsi_customer_name_normalization import (
+    normalize_customer_name_for_similarity,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
 
     from app.models.dimensions import DimCustomer, DimDistributor
+
+logger = logging.getLogger(__name__)
 
 _PUNCT_COLLAPSE = re.compile(r"[^\w\s]+", re.UNICODE)
 _WS_COLLAPSE = re.compile(r"\s+")
@@ -67,6 +74,14 @@ def canonical_provisional_entity_name_key(name: str | None) -> str:
     return _WS_COLLAPSE.sub(" ", t).strip()
 
 
+def customer_source_token_alias_key(raw: str | None) -> str:
+    """SSOT lookup key for approved ``customer_source_token_alias`` rows (DSI validate + steward write).
+
+    Reconciles punctuation variants such as ``(pty)`` vs bare ``pty`` that ``_norm_key`` does not unify.
+    """
+    return canonical_provisional_entity_name_key(raw)[:512]
+
+
 def is_non_entity_customer_provisional_token(
     *,
     raw_token: str | None = None,
@@ -97,6 +112,42 @@ def _pick_earliest_provisional_customer(rows: list[DimCustomer]) -> DimCustomer 
         return None
     rows.sort(key=lambda c: int(c.id))
     return rows[0]
+
+
+def pick_provisional_customer_for_reuse(
+    rows: list[DimCustomer],
+    display_name: str | None,
+) -> DimCustomer | None:
+    """Return earliest unverified provisional to reuse for ``display_name``, else None.
+
+    Canonical key match first; then unique ``normalize_customer_name_for_similarity`` match.
+    Two or more similarity matches → None (caller creates; consolidation is out of scope).
+    """
+    key = canonical_provisional_entity_name_key(display_name)
+    sim_key = normalize_customer_name_for_similarity(display_name)
+    if not key and not sim_key:
+        return None
+
+    if key:
+        canonical_matches = [c for c in rows if canonical_provisional_entity_name_key(c.name) == key]
+        pick = _pick_earliest_provisional_customer(canonical_matches)
+        if pick is not None:
+            return pick
+
+    if not sim_key:
+        return None
+
+    sim_matches = [c for c in rows if normalize_customer_name_for_similarity(c.name) == sim_key]
+    if len(sim_matches) == 1:
+        return _pick_earliest_provisional_customer(sim_matches)
+    if len(sim_matches) >= 2:
+        logger.warning(
+            "provisional_customer_similarity_ambiguous sim_key=%r count=%d customer_ids=%s",
+            sim_key,
+            len(sim_matches),
+            sorted(int(c.id) for c in sim_matches),
+        )
+    return None
 
 
 def find_existing_provisional_distributor_by_canonical_name(
@@ -133,11 +184,12 @@ def find_existing_provisional_customer_by_canonical_name(
     session: Session,
     display_name: str | None,
 ) -> DimCustomer | None:
-    """Return earliest unverified ``TMP-CUST-%`` row matching canonical display name, else None."""
+    """Return earliest unverified ``TMP-CUST-%`` row to reuse for ``display_name``, else None."""
     from app.models.dimensions import DimCustomer
 
-    key = canonical_provisional_entity_name_key(display_name)
-    if not key:
+    if not canonical_provisional_entity_name_key(display_name) and not normalize_customer_name_for_similarity(
+        display_name
+    ):
         return None
     rows = list(
         session.scalars(
@@ -147,8 +199,7 @@ def find_existing_provisional_customer_by_canonical_name(
             )
         ).all()
     )
-    matches = [c for c in rows if canonical_provisional_entity_name_key(c.name) == key]
-    return _pick_earliest_provisional_customer(matches)
+    return pick_provisional_customer_for_reuse(rows, display_name)
 
 
 async def find_existing_provisional_customer_by_canonical_name_async(
@@ -157,8 +208,9 @@ async def find_existing_provisional_customer_by_canonical_name_async(
 ) -> DimCustomer | None:
     from app.models.dimensions import DimCustomer
 
-    key = canonical_provisional_entity_name_key(display_name)
-    if not key:
+    if not canonical_provisional_entity_name_key(display_name) and not normalize_customer_name_for_similarity(
+        display_name
+    ):
         return None
     result = await session.scalars(
         select(DimCustomer).where(
@@ -167,5 +219,4 @@ async def find_existing_provisional_customer_by_canonical_name_async(
         )
     )
     rows = list(result.all())
-    matches = [c for c in rows if canonical_provisional_entity_name_key(c.name) == key]
-    return _pick_earliest_provisional_customer(matches)
+    return pick_provisional_customer_for_reuse(rows, display_name)

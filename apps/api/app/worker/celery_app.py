@@ -1,8 +1,9 @@
 from celery import Celery
-from celery.schedules import schedule
+from celery.schedules import crontab, schedule
 import os
 
 from app.core.config import get_settings
+from app.worker.celery_queues import build_task_routes, dev_beat_disabled
 from app.worker.ledger_task import LedgerTask
 
 settings = get_settings()
@@ -19,35 +20,32 @@ celery_app.conf.task_track_started = True
 
 # Periodic maintenance — local dev: `pnpm dev:worker` (Unix: worker --beat; Windows: sibling beat process).
 # Docker/prod: separate `beat` service in docker-compose.
-celery_app.conf.beat_schedule = {
-    "imports-reap-stale-running-jobs": {
-        "task": "imports.reap_stale_running_jobs",
-        "schedule": schedule(
-            run_every=float(os.environ.get("CIP_RUNNING_JOB_REAPER_INTERVAL_SECONDS", "120"))
-        ),
-    },
-}
+# Windows solo dev disables beat by default (BACKLOG-038); set CIP_ENABLE_DEV_BEAT=1 to re-enable.
+if dev_beat_disabled():
+    celery_app.conf.beat_schedule = {}
+else:
+    celery_app.conf.beat_schedule = {
+        "imports-reap-stale-running-jobs": {
+            "task": "imports.reap_stale_running_jobs",
+            "schedule": schedule(
+                run_every=float(os.environ.get("CIP_RUNNING_JOB_REAPER_INTERVAL_SECONDS", "120"))
+            ),
+        },
+        # CST expected-report tracker (spec §10.4.4.5): due Mon / late Tue / missing thereafter.
+        # Daily morning pass is enough; advance_cst_report_slots is idempotent.
+        "cst-advance-report-slots": {
+            "task": "imports.cst_advance_report_slots",
+            "schedule": crontab(hour=6, minute=15),
+        },
+        # Listing Capture poller (LC-U1): gated no-op unless schedule enabled + listings exist.
+        "listing-capture-poll": {
+            "task": "listing_capture.poll_listings",
+            "schedule": crontab(minute="*/30"),
+        },
+    }
 
-# Tasks use explicit ``name=`` (e.g. ``imports.process_job``), not ``app.worker.tasks.*``.
-# Route them to the default worker queue (``celery worker`` without ``-Q`` consumes ``celery``).
-celery_app.conf.task_routes = {
-    "imports.process_job": {"queue": "celery"},
-    "imports.infer_dsi": {"queue": "celery"},
-    "imports.product_master_commit": {"queue": "celery"},
-    "imports.product_master_validate": {"queue": "celery"},
-    "imports.dsi_bulk_provisional_customers": {"queue": "celery"},
-    "imports.dsi_resolution_plan_apply": {"queue": "celery"},
-    "imports.dsi_resolution_plan_compute": {"queue": "celery"},
-    "imports.dsi_apply": {"queue": "celery"},
-    "imports.shipment_apply": {"queue": "celery"},
-    "imports.shipment_bulk_map_customer": {"queue": "celery"},
-    "imports.shipment_bulk_apply_plans": {"queue": "celery"},
-    "imports.shipment_bulk_provisional_customers": {"queue": "celery"},
-    "imports.dsi_soh_reconciliation": {"queue": "celery"},
-    "imports.dsi_velocity_compute": {"queue": "celery"},
-    "imports.dsi_forecasting": {"queue": "celery"},
-    "commercial_planner.parse_lineup_case": {"queue": "celery"},
-    "imports.reap_stale_running_jobs": {"queue": "celery"},
-}
+# Interactive steward tasks vs batch validate/apply (BACKLOG-039). Workers must subscribe with
+# ``-Q interactive,batch,celery`` (interactive first) — see scripts/dev-worker.js and docker-compose.
+celery_app.conf.task_routes = build_task_routes()
 
 import app.worker.tasks  # noqa: E402, F401 — register tasks

@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,7 +15,9 @@ COMMERCIAL_LINEUP_STATUSES = {
     "po_issued",
     "in_fulfillment",
     "received_closed",
+    "work_closed",
     "cancelled",
+    "superseded",
 }
 
 
@@ -35,6 +37,15 @@ class CommercialLineupCase(Base, TimestampMixin):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     accepted_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    product_line: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    business_unit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    inferred_period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    iteration_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    superseded_by_case_id: Mapped[int | None] = mapped_column(
+        ForeignKey("commercial_lineup_case.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
 
 class CommercialLineupLine(Base, TimestampMixin):
@@ -65,3 +76,52 @@ class CommercialLineupLine(Base, TimestampMixin):
     raw_row_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     row_status: Mapped[str] = mapped_column(String(32), nullable=False, default="imported")
     mapping_confidence: Mapped[float | None] = mapped_column(Numeric(6, 4), nullable=True)
+    customer_feedback: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    internal_notes: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    pricing_chain_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    calc_dap_cost_currency: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    calc_profit_total: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+
+
+class CommercialLineupCasePo(Base, TimestampMixin):
+    """Join: confirmed lineup case <-> purchase order (many-to-many).
+
+    One lineup can issue many POs; one PO can cover many lineups (split delivery / amendments).
+    Unique (case_id, purchase_order_id) keeps Confirm-with-PO idempotent. PO is shared shipment
+    evidence, so only case_id cascades on delete.
+    """
+
+    __tablename__ = "commercial_lineup_case_po"
+    __table_args__ = (
+        UniqueConstraint("case_id", "purchase_order_id", name="uq_case_po_case_purchase_order"),
+        Index("ix_clcp_case_id", "case_id"),
+        Index("ix_clcp_purchase_order_id", "purchase_order_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    case_id: Mapped[int] = mapped_column(
+        ForeignKey("commercial_lineup_case.id", ondelete="CASCADE"), nullable=False
+    )
+    purchase_order_id: Mapped[int] = mapped_column(ForeignKey("purchase_order.id"), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class CommercialLineupPoAutoLinkDismiss(Base, TimestampMixin):
+    """Steward-dismissed PO↔lineup auto-link proposal (Unit 4)."""
+
+    __tablename__ = "commercial_lineup_po_auto_link_dismiss"
+    __table_args__ = (
+        UniqueConstraint("proposal_key", name="uq_po_auto_link_dismiss_proposal_key"),
+        Index("ix_po_auto_link_dismiss_case_id", "case_id"),
+        Index("ix_po_auto_link_dismiss_purchase_order_id", "purchase_order_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    proposal_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    case_id: Mapped[int] = mapped_column(
+        ForeignKey("commercial_lineup_case.id", ondelete="CASCADE"), nullable=False
+    )
+    purchase_order_id: Mapped[int] = mapped_column(
+        ForeignKey("purchase_order.id", ondelete="CASCADE"), nullable=False
+    )
+    reason_code: Mapped[str | None] = mapped_column(String(256), nullable=True)

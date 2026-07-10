@@ -117,6 +117,30 @@ def _source_customer_alias_raw_for_dsi_candidate(candidate: ImportEntityMappingC
     return _first_sample_raw(candidate)
 
 
+def dsi_customer_alias_normalized_token(candidate: ImportEntityMappingCandidate) -> str:
+    """Approved-alias lookup key for a DSI customer candidate.
+
+    This MUST equal the candidate's resolution identity. DSI staging resolves a customer
+    on the Dealer Name Group when present, falling back to the customer/dealer name column
+    only when the group is blank (``effective_dsi_customer_primary_for_resolution``). The
+    candidate ``normalized_key`` is built with the exact same dealer-group-primary rule
+    (``_customer_candidate_identity_norm``), so it is the single source of truth for the
+    alias key.
+
+    Historically the alias was keyed on the customer-name evidence
+    (``_source_customer_alias_raw_for_dsi_candidate``). When a row carried a dealer group
+    that differed from the customer-name column, the resolver looked up the dealer-group
+    token while the approved alias was stored under the customer-name token — so the alias
+    was never found and the row stayed ``customer_unresolved`` forever, even though the
+    candidate was marked ``resolved``. Keying on ``normalized_key`` fixes that at source.
+    """
+    nk = (candidate.normalized_key or "").strip()
+    if nk and nk != "__blank__":
+        return nk[:512]
+    # No usable dealer-group/customer identity key — fall back to the customer-name evidence.
+    return _norm_key(_source_customer_alias_raw_for_dsi_candidate(candidate))[:512]
+
+
 async def preview_resolve_dsi_product(
     db: AsyncSession,
     cand: ImportEntityMappingCandidate,
@@ -291,7 +315,7 @@ async def preview_map_dsi_customer(
     raw = (raw_token or _source_customer_alias_raw_for_dsi_candidate(cand)).strip()
     if not raw:
         return {"ok": False, "skip_reason": "missing_token", "detail": "raw_token required"}
-    nt = _norm_key(raw)
+    nt = dsi_customer_alias_normalized_token(cand)
     if not nt:
         return {"ok": False, "skip_reason": "empty_norm", "detail": "raw_token empty after normalization"}
     return {
@@ -301,6 +325,7 @@ async def preview_map_dsi_customer(
         "customer_code": cust.code,
         "customer_name": cust.name,
         "alias_raw_preview": raw[:160],
+        "alias_normalized_token": nt[:160],
     }
 
 
@@ -312,29 +337,17 @@ async def _apply_map_dsi_customer_without_commit(
     raw_token: str | None,
 ) -> dict[str, Any]:
     """Map candidate to customer in the current session; caller must commit."""
+    from app.services.imports.dsi_customer_alias_scope import apply_map_dsi_customer_scoped_async
+
     pv = await preview_map_dsi_customer(db, cand, customer_id=customer_id, raw_token=raw_token)
     if not pv.get("ok"):
         raise StewardOpError(pv.get("detail") or "preview failed", status_code=400)
-    raw = (raw_token or _source_customer_alias_raw_for_dsi_candidate(cand)).strip()
-    nt = _norm_key(raw)
-    alias = CustomerSourceTokenAlias(
-        customer_id=customer_id,
-        raw_token=raw[:512],
-        normalized_token=nt[:512],
-        source_definition_id=cand.source_definition_id,
-        distributor_id=None,
-        dealer_group_token=cand.dealer_group_token,
-        status="approved",
-        notes=f"Mapped from import candidate {cand.id} (job {cand.import_job_id})",
-        created_from_import_job_id=cand.import_job_id,
-        import_entity_mapping_candidate_id=cand.id,
+    return await apply_map_dsi_customer_scoped_async(
+        db,
+        cand,
+        customer_id=int(customer_id),
+        raw_token=raw_token,
     )
-    db.add(alias)
-    await db.flush()
-    cand.status = "resolved"
-    cand.suggested_entity_id = customer_id
-    cand.match_reason = "steward_map_existing_customer"
-    return {"ok": True, "alias_id": alias.id, "customer_id": customer_id, "candidate_id": cand.id}
 
 
 async def execute_map_dsi_customer(
@@ -421,12 +434,32 @@ async def preview_ignore_dsi_candidate(
     cand: ImportEntityMappingCandidate,
     *,
     notes: str | None,
+    reason_code: str | None = None,
 ) -> dict[str, Any]:
     if cand.entity_type not in {"customer_dealer_token", "distributor_token", "product_identifier"}:
         return {"ok": False, "skip_reason": "wrong_entity_type", "detail": "Unsupported entity_type for ignore"}
     if _is_dsi_steward_terminal_status(cand.status):
         return {"ok": False, "skip_reason": "terminal_status", "detail": "Candidate already terminal"}
-    return {"ok": True, "detail": "Would set status ignored", "notes": notes}
+    from app.services.imports.dsi_product_running_change import (
+        DSI_IGNORE_REASON_CODES,
+        build_steward_ignore_remap_context,
+        infer_dsi_ignore_reason_code,
+    )
+
+    ctx = cand.context if isinstance(cand.context, dict) else {}
+    inferred = infer_dsi_ignore_reason_code(ctx) if cand.entity_type == "product_identifier" else None
+    rc = (reason_code or inferred or "").strip() or None
+    if rc is not None and rc not in DSI_IGNORE_REASON_CODES:
+        return {
+            "ok": False,
+            "skip_reason": "invalid_reason_code",
+            "detail": f"Unsupported ignore reason_code {rc!r}",
+        }
+    out: dict[str, Any] = {"ok": True, "detail": "Would set status ignored", "notes": notes}
+    if rc:
+        out["reason_code"] = rc
+        out["remap_context_keys"] = list(build_steward_ignore_remap_context(ctx).keys())
+    return out
 
 
 async def execute_ignore_dsi_candidate(
@@ -434,17 +467,62 @@ async def execute_ignore_dsi_candidate(
     cand: ImportEntityMappingCandidate,
     *,
     notes: str | None,
+    reason_code: str | None = None,
 ) -> dict[str, Any]:
-    pv = await preview_ignore_dsi_candidate(cand, notes=notes)
+    pv = await preview_ignore_dsi_candidate(cand, notes=notes, reason_code=reason_code)
     if not pv.get("ok"):
         raise StewardOpError(pv.get("detail") or "preview failed", status_code=400)
+    from app.services.imports.dsi_product_running_change import (
+        build_product_resolution_quality,
+        build_steward_ignore_remap_context,
+        infer_dsi_ignore_reason_code,
+    )
+
     cand.status = "ignored"
+    ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
     if notes:
-        ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
         ctx["steward_ignore_notes"] = notes[:2000]
-        cand.context = ctx
+    rc = (reason_code or pv.get("reason_code") or infer_dsi_ignore_reason_code(ctx) or "").strip() or None
+    if rc:
+        ctx["steward_ignore_reason_code"] = rc
+    remap = build_steward_ignore_remap_context(ctx)
+    if remap:
+        ctx["steward_ignore_remap_context"] = remap
+    quality = ctx.get("product_resolution_quality")
+    if isinstance(quality, dict) and cand.entity_type == "product_identifier":
+        ignored_rows = int(cand.row_count or 0)
+        updated = build_product_resolution_quality(
+            {
+                "total_rows": int(quality.get("total_rows") or 0),
+                "resolved_receipt_temporal": int(quality.get("resolved_receipt_temporal") or 0),
+                "resolved_other": int(quality.get("resolved_other") or 0),
+                "unresolved_rows": int(quality.get("unresolved_rows") or 0),
+            },
+            ignored_rows=ignored_rows,
+        )
+        ctx["product_resolution_quality"] = updated
+    cand.context = ctx
     await db.commit()
-    return {"ok": True, "candidate_id": cand.id, "status": cand.status}
+    if cand.entity_type == "product_identifier" and rc:
+        from app.db.session_sync import SessionLocal
+        from app.services.imports.dsi_product_running_change import (
+            demote_product_staging_lines_for_ignored_candidate,
+        )
+
+        with SessionLocal() as sync_db:
+            demote_product_staging_lines_for_ignored_candidate(
+                sync_db,
+                int(cand.import_job_id),
+                cand.normalized_key or "",
+                rc,
+            )
+            sync_db.commit()
+    return {
+        "ok": True,
+        "candidate_id": cand.id,
+        "status": cand.status,
+        "reason_code": rc,
+    }
 
 
 def _resolved_provisional_display_name(display_name_override: str | None, cand: ImportEntityMappingCandidate) -> str:
@@ -655,7 +733,7 @@ async def execute_create_provisional_dsi_customer(
         await db.flush()
         reused_provisional = False
     raw = _source_customer_alias_raw_for_dsi_candidate(cand)
-    nt = _norm_key(raw)
+    nt = dsi_customer_alias_normalized_token(cand)
     alias = CustomerSourceTokenAlias(
         customer_id=row.id,
         raw_token=raw[:512],

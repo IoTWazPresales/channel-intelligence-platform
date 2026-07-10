@@ -111,14 +111,24 @@ def _has_shipment_evidence(session: Session, distributor_id: int | None) -> bool
 
 
 def _has_cpor_data(session: Session, distributor_id: int | None) -> bool:
-    """CPOR pricing intelligence is inactive until a dedicated CPOR import module lands.
+    """True when any CPOR case exists (spec §7 — wire off always-False stub).
 
-    There is no distributor-scoped CPOR fact table in the schema today (``FactPromotionPlan`` and
-    ``FactPricing`` are not CPOR import evidence). Returning ``False`` keeps
-    ``pricing_intelligence`` in ``degraded`` state and surfaces the CPOR banner honestly.
+    Distributor scope is not on ``cpor_case`` today (customer-scoped); presence of any
+    non-cancelled case activates pricing_intelligence. ``distributor_id`` reserved for
+    a future distributor-scoped CPOR surface.
     """
-    _ = session, distributor_id
-    return False
+    _ = distributor_id
+    try:
+        from app.models.cpor import CporCase
+
+        n = session.scalar(
+            select(func.count())
+            .select_from(CporCase)
+            .where(CporCase.status.notin_(("cancelled",)))
+        )
+        return int(n or 0) > 0
+    except Exception:
+        return False
 
 
 def _velocity_weeks_available(session: Session, distributor_id: int | None) -> int:

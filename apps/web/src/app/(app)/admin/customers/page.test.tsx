@@ -105,6 +105,10 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
           applyColumnState: () => undefined,
           getColumns: () => [],
           setColumnsVisible: setColumnsVisibleSpy,
+          getDisplayedRowCount: () => mockState.customerItems.length,
+          deselectAll: () => undefined,
+          forEachNodeAfterFilterAndSort: () => undefined,
+          getSelectedRows: () => [],
         },
       });
     }, [gridOptions]);

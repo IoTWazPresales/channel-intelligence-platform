@@ -79,7 +79,7 @@ export function ChannelOpsKpiCards({ distributorId }: { distributorId?: number |
             ? '—'
             : data?.weeks_of_cover != null
               ? `${data.weeks_of_cover.toFixed(1)} weeks of cover`
-              : 'No velocity data yet'}
+              : 'n/a weeks of cover'}
         </Typography>
       </Paper>
       <Paper variant="outlined" sx={{ p: 2, flex: '1 1 200px' }}>

@@ -25,7 +25,13 @@ def _db_with_lines(n: int) -> MagicMock:
 
 def test_upsert_batches_into_chunked_statements(monkeypatch) -> None:
     # Replace per-line value extraction with a constant row so no real ORM line is needed.
-    monkeypatch.setattr(facts_mod, "_row_values_from_evidence", lambda line: {"source_key": "k", "import_job_id": 1})
+    monkeypatch.setattr(
+        facts_mod,
+        "_row_values_from_evidence",
+        lambda line: {"source_key": "k", "fact_upsert_key": "k", "import_job_id": 1, "line_state": "open_order"},
+    )
+    monkeypatch.setattr(facts_mod, "_upsert_shipped_chunk", lambda db, tbl, rows: None)
+    monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: db.execute(MagicMock()) or None)
     db = _db_with_lines(1200)
     progress: list[tuple[int, int]] = []
 
@@ -41,7 +47,13 @@ def test_upsert_batches_into_chunked_statements(monkeypatch) -> None:
 
 
 def test_upsert_single_chunk_and_empty(monkeypatch) -> None:
-    monkeypatch.setattr(facts_mod, "_row_values_from_evidence", lambda line: {"source_key": "k", "import_job_id": 1})
+    monkeypatch.setattr(
+        facts_mod,
+        "_row_values_from_evidence",
+        lambda line: {"source_key": "k", "fact_upsert_key": "k", "import_job_id": 1, "line_state": "open_order"},
+    )
+    monkeypatch.setattr(facts_mod, "_upsert_shipped_chunk", lambda db, tbl, rows: None)
+    monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: db.execute(MagicMock()) or None)
 
     db = _db_with_lines(3)
     progress: list[tuple[int, int]] = []
@@ -67,6 +79,7 @@ def test_run_shipment_apply_sync_orchestration(monkeypatch) -> None:
     job.template_slug = "inbound_shipments"
     db = MagicMock()
     db.get.return_value = job
+    db.scalar.return_value = 0
 
     monkeypatch.setattr(apply_mod, "persist_pipeline_worker_started_at", lambda s, j: None)
     monkeypatch.setattr(apply_mod, "persist_clear_background_task_metadata", lambda s, j: None)
@@ -78,7 +91,13 @@ def test_run_shipment_apply_sync_orchestration(monkeypatch) -> None:
         db, 32, on_progress=lambda phase, label, cur, tot: phases.append(phase)
     )
 
-    assert out == {"id": 32, "outcome": "applied", "auto_applied_candidate_count": 2, "fact_rows": 1200}
+    assert out == {
+        "id": 32,
+        "outcome": "applied",
+        "auto_applied_candidate_count": 2,
+        "fact_rows": 1200,
+        "unresolved_product_rows": 0,
+    }
     assert job.stage == STAGE_LOADED
     assert job.status == "completed"
     assert job.completed_at is not None

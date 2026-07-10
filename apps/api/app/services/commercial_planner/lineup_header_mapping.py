@@ -24,6 +24,10 @@ _COMMERCIAL_LINEUP_ALIASES: dict[str, list[str]] = {
         "msrp",
         "srp",
         "rrp",
+        "new_srp",
+        "new srp",
+        "new_rrp",
+        "new rrp",
         "list_price",
         "retail_price",
         "new_msrp",
@@ -43,6 +47,10 @@ _COMMERCIAL_LINEUP_ALIASES: dict[str, list[str]] = {
         "sell_price",
         "street_price",
     ],
+    # Old SRP claimed explicitly (before the MSRP "*srp" pattern fallback) so it is never
+    # mistaken for the current/new SRP that drives pricing.
+    "old_srp_local": ["old_srp", "old srp", "previous_srp", "previous srp", "old_rrp", "old rrp"],
+    "actual_dap_evidence_local": ["actual_dap", "actual dap", "actual_dap_local"],
     "dap_evidence_local": [
         "dap",
         "dap_local",
@@ -51,8 +59,14 @@ _COMMERCIAL_LINEUP_ALIASES: dict[str, list[str]] = {
         "landed zar",
         "local dap",
     ],
+    "dealer_price_evidence_local": ["dealer_price", "dealer price", "dealerprice"],
+    "net_price_evidence_local": ["net_price", "net price", "net_local", "net"],
+    "disti_cost_evidence_local": ["disti_cost", "disti cost", "distributor_cost", "distributor cost"],
     "rebate_pct_evidence": ["rebate", "rebate_pct"],
-    "distributor_margin_pct_evidence": ["disti_margin", "distributor_margin", "disti_margin_pct"],
+    "dealer_margin_pct_evidence": ["dealer_margin", "dealer margin", "retail_margin", "retail margin"],
+    "distributor_margin_pct_evidence": ["disti_margin", "distributor_margin", "disti_margin_pct", "disti margin"],
+    "import_tax_pct_evidence": ["import_tax", "import tax", "import_duty", "import duty", "duty"],
+    "roe_evidence": ["roe", "rate_of_exchange", "rate of exchange", "exchange_rate", "exchange rate", "fx_rate", "fx rate"],
     "vat_pct_evidence": ["vat", "vat_pct", "tax_pct"],
     "base_unit_raw": ["base_unit", "baseunit", "base unit"],
 }
@@ -89,3 +103,19 @@ def build_commercial_lineup_column_map(columns: list[str]) -> dict[str, str]:
                         break
 
     return mapping
+
+
+def lineup_evidence_from_uploaded(uploaded: dict[str, Any] | None) -> dict[str, Any]:
+    """Map raw upload header cells to canonical lineup evidence field names (for workbench display)."""
+    if not uploaded or not isinstance(uploaded, dict):
+        return {}
+    col_map = build_commercial_lineup_column_map(list(uploaded.keys()))
+    out: dict[str, Any] = {}
+    for target, header in col_map.items():
+        val = uploaded.get(header)
+        if val is None:
+            continue
+        if isinstance(val, str) and not val.strip():
+            continue
+        out[target] = val
+    return out

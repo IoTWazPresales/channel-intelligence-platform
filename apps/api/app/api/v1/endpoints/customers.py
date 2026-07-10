@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import secrets
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
@@ -20,6 +21,7 @@ from app.models.dimensions import (
 )
 from app.models.import_distributor_si import CustomerSourceTokenAlias
 from app.models.ingestion import ImportJob
+from app.services.customer_duplicate_groups import list_customer_duplicate_groups
 from app.services.customer_usage import (
     cleanup_soft_customer_references,
     customer_hard_reference_breakdown,
@@ -43,6 +45,9 @@ class MasterBulkIdsBody(BaseModel):
 ALLOWED_CUSTOMER_STATUS = {"active", "inactive", "onboarding", "blocked", "unverified", "needs_review"}
 ALLOWED_PARTNER_TIER = {"strategic", "tier_1", "tier_2", "tier_3", "core", "long_tail", "unmanaged"}
 TMP_CUSTOMER_CODE_PREFIX = "TMP-CUST"
+PROVISIONAL_REUSE_STATUS_WARNING = (
+    "Leaving unverified stops provisional reuse for this row; future imports may mint a duplicate."
+)
 ALLOWED_LOCATION_TYPE = {"hq", "store", "warehouse", "branch", "online", "other"}
 ALLOWED_CONTACT_ROLE = {"procurement", "sales", "operations", "finance", "support", "executive", "general"}
 
@@ -79,6 +84,31 @@ class CustomerBulkRow(BaseModel):
 
 class CustomerBulkBody(BaseModel):
     rows: list[CustomerBulkRow]
+
+
+class CustomerPromoteBody(BaseModel):
+    new_code: str = Field(min_length=1, max_length=64)
+    confirm: bool = False
+    note: str | None = Field(default=None, max_length=512)
+
+
+class CustomerBulkPromoteRow(BaseModel):
+    tmp_code: str = Field(min_length=0, max_length=64)
+    new_code: str = Field(default="", max_length=64)
+    note: str | None = Field(default=None, max_length=512)
+
+
+class CustomerBulkPromoteBody(BaseModel):
+    rows: list[CustomerBulkPromoteRow]
+    dry_run: bool = True
+    mode: Literal["map", "mint"] = "map"
+
+
+class CustomerDispositionBatchBody(BaseModel):
+    customer_ids: list[int]
+    disposition: Literal["parked", "excluded", "clear"]
+    note: str | None = Field(default=None, max_length=512)
+    dry_run: bool = True
 
 
 class CustomerLocationCreate(BaseModel):
@@ -124,6 +154,21 @@ def _normalize_customer_status(raw_value: str | None) -> str:
     if raw not in ALLOWED_CUSTOMER_STATUS:
         raise HTTPException(status_code=400, detail="Invalid customer_status")
     return raw
+
+
+def _provisional_reuse_status_warning(row: DimCustomer, new_status: str | None) -> str | None:
+    """Warn when a TMP-CUST provisional leaves ``unverified`` (stops reuse; may duplicate)."""
+    if new_status is None:
+        return None
+    prior = (row.customer_status or "").strip().lower()
+    if prior != "unverified":
+        return None
+    if new_status.strip().lower() == "unverified":
+        return None
+    code = (row.code or "").strip()
+    if not code.startswith(f"{TMP_CUSTOMER_CODE_PREFIX}-"):
+        return None
+    return PROVISIONAL_REUSE_STATUS_WARNING
 
 
 def _normalize_partner_tier(raw_value: str | None) -> str | None:
@@ -210,6 +255,14 @@ async def list_customers(
     alias_link: str | None = Query(
         default=None,
         description="Filter by alias linkage: linked (≥1 alias) or unlinked (0 aliases)",
+    ),
+    is_key_account: bool | None = Query(
+        default=None,
+        description="When true, only key-account customers; when false, only non-key; omit for all",
+    ),
+    disposition: str | None = Query(
+        default=None,
+        description="Filter no_code_disposition: parked|excluded|set|unset",
     ),
     sort_by: str = Query(default="code"),
     sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
@@ -334,6 +387,24 @@ async def list_customers(
     elif al == "unlinked":
         base = base.where(alias_count_sq == 0)
 
+    if is_key_account is not None:
+        filters.append(DimCustomer.is_key_account.is_(bool(is_key_account)))
+
+    disp = (disposition or "").strip().lower()
+    if disp == "parked":
+        filters.append(DimCustomer.no_code_disposition == "parked")
+    elif disp == "excluded":
+        filters.append(DimCustomer.no_code_disposition == "excluded")
+    elif disp == "set":
+        filters.append(DimCustomer.no_code_disposition.is_not(None))
+    elif disp == "unset":
+        filters.append(DimCustomer.no_code_disposition.is_(None))
+    elif disp:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "Invalid disposition filter", "code": "invalid_disposition_filter"},
+        )
+
     if filters:
         base = base.where(and_(*filters))
 
@@ -372,6 +443,8 @@ async def list_customers(
                 "customer_code": c.code,
                 "customer_name": c.name,
                 "customer_status": c.customer_status,
+                "no_code_disposition": c.no_code_disposition,
+                "is_key_account": bool(c.is_key_account),
                 "created_at": c.created_at.isoformat() if c.created_at is not None else None,
                 "updated_at": c.updated_at.isoformat() if c.updated_at is not None else None,
                 "partner_tier": c.partner_tier,
@@ -399,6 +472,283 @@ async def list_customers(
         "sort_by": sort_by if sort_by in allowed_sort else "code",
         "sort_dir": sort_dir,
     }
+
+
+@router.get("/duplicate-groups")
+async def list_customer_duplicate_groups_endpoint(
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+):
+    """Read-only: groups of customers sharing a similarity-normalised name key (2+ members)."""
+    return await list_customer_duplicate_groups(db, page=page, page_size=page_size)
+
+
+class CustomerAliasScopeMergeBody(BaseModel):
+    normalized_token: str = Field(min_length=1, max_length=512)
+    source_definition_id: int | None = None
+    distributor_id: int | None = None
+    survivor_id: int | None = None
+    audit_note: str = Field(min_length=1, max_length=2000)
+    return_import_job_id: int | None = None
+
+
+@router.get("/alias-scope-conflicts")
+async def list_customer_alias_scope_conflicts_endpoint(
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    normalized_token: str | None = Query(default=None),
+):
+    from app.services.customer_alias_scope_conflicts import list_customer_alias_scope_conflicts
+
+    return await list_customer_alias_scope_conflicts(
+        db,
+        page=page,
+        page_size=page_size,
+        normalized_token=normalized_token,
+    )
+
+
+@router.post("/alias-scope-conflicts/merge-preview")
+async def customer_alias_scope_merge_preview_endpoint(body: CustomerAliasScopeMergeBody):
+    import asyncio
+
+    from app.db.session_sync import SessionLocal
+    from app.services.customer_alias_scope_merge import (
+        CustomerAliasScopeMergeError,
+        preview_customer_alias_scope_merge,
+    )
+
+    def _run() -> dict:
+        with SessionLocal() as db:
+            return preview_customer_alias_scope_merge(
+                db,
+                normalized_token=body.normalized_token,
+                source_definition_id=body.source_definition_id,
+                distributor_id=body.distributor_id,
+                survivor_id=body.survivor_id,
+                audit_note=body.audit_note,
+            )
+
+    try:
+        return await asyncio.to_thread(_run)
+    except CustomerAliasScopeMergeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/alias-scope-conflicts/merge-confirm", status_code=202)
+async def customer_alias_scope_merge_confirm_endpoint(body: CustomerAliasScopeMergeBody):
+    from app.services.customer_alias_scope_merge import CustomerAliasScopeMergeError
+    from app.services.customer_alias_scope_merge_enqueue import enqueue_customer_alias_scope_merge_confirm
+
+    if body.survivor_id is None:
+        raise HTTPException(status_code=400, detail="survivor_id is required for merge-confirm")
+
+    payload = {
+        "normalized_token": body.normalized_token,
+        "source_definition_id": body.source_definition_id,
+        "distributor_id": body.distributor_id,
+        "survivor_id": int(body.survivor_id),
+        "audit_note": body.audit_note,
+        "return_import_job_id": body.return_import_job_id,
+    }
+    try:
+        task_id, async_poll = enqueue_customer_alias_scope_merge_confirm(payload)
+    except CustomerAliasScopeMergeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    out: dict = {
+        "task_id": task_id,
+        "async_poll": async_poll,
+        "scope": {
+            "normalized_token": body.normalized_token,
+            "source_definition_id": body.source_definition_id,
+            "distributor_id": body.distributor_id,
+        },
+        "survivor_id": body.survivor_id,
+    }
+    if body.return_import_job_id is not None:
+        out["revalidate_import_job_id"] = body.return_import_job_id
+        out["revalidate_href"] = f"/admin/imports?job={body.return_import_job_id}"
+    return out
+
+
+@router.get("/alias-scope-conflicts/merge-task/{task_id}")
+async def customer_alias_scope_merge_task_status(task_id: str):
+    import asyncio
+
+    from app.services.customer_alias_scope_merge_enqueue import dev_customer_alias_scope_merge_results
+    from app.services.task_run_ledger import (
+        POLL_STATE_FAILURE,
+        POLL_STATE_SUCCESS,
+        read_task_run_poll_progress_sync,
+    )
+
+    dev_hit = dev_customer_alias_scope_merge_results().get(task_id)
+    if dev_hit is not None:
+        state = dev_hit.get("state", POLL_STATE_SUCCESS)
+        if state in (POLL_STATE_SUCCESS, POLL_STATE_FAILURE):
+            dev_customer_alias_scope_merge_results().pop(task_id, None)
+        progress: dict = {"task_id": task_id, "state": state}
+        if state == POLL_STATE_SUCCESS:
+            progress["result"] = dev_hit.get("result")
+        else:
+            progress["error"] = dev_hit.get("error")
+        return progress
+
+    ledger_progress = await asyncio.to_thread(read_task_run_poll_progress_sync, task_id)
+    if ledger_progress is not None:
+        return ledger_progress
+
+    from celery.result import AsyncResult
+
+    from app.worker.celery_app import celery_app
+
+    def _read() -> tuple[str, Any]:
+        r = AsyncResult(task_id, app=celery_app)
+        return r.state, r.info
+
+    task_state, info = await asyncio.to_thread(_read)
+    progress = {"task_id": task_id, "state": task_state}
+    if task_state == POLL_STATE_SUCCESS:
+        from celery.result import AsyncResult as _AR
+
+        raw_result = await asyncio.to_thread(lambda: _AR(task_id, app=celery_app).result)
+        progress["result"] = raw_result if isinstance(raw_result, dict) else None
+    elif task_state == POLL_STATE_FAILURE:
+        progress["error"] = str(info)[:800] if info is not None else "Task failed"
+    return progress
+
+
+class CustomerFullMergeBody(BaseModel):
+    similarity_key: str = Field(min_length=1, max_length=512)
+    survivor_id: int | None = None
+    customer_ids: list[int] | None = None
+    audit_note: str = Field(min_length=1, max_length=2000)
+
+
+class CustomerFullMergeBulkPreviewBody(BaseModel):
+    groups: list[dict[str, Any]]
+    audit_note: str = Field(min_length=1, max_length=2000)
+
+
+@router.post("/duplicate-groups/merge-preview")
+async def customer_full_merge_preview_endpoint(body: CustomerFullMergeBody):
+    import asyncio
+
+    from app.db.session_sync import SessionLocal
+    from app.services.customer_full_merge import CustomerFullMergeError, preview_customer_full_merge
+
+    def _run() -> dict:
+        with SessionLocal() as db:
+            return preview_customer_full_merge(
+                db,
+                similarity_key=body.similarity_key,
+                survivor_id=body.survivor_id,
+                audit_note=body.audit_note,
+                customer_ids=body.customer_ids,
+            )
+
+    try:
+        return await asyncio.to_thread(_run)
+    except CustomerFullMergeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/duplicate-groups/merge-preview-bulk")
+async def customer_full_merge_bulk_preview_endpoint(body: CustomerFullMergeBulkPreviewBody):
+    import asyncio
+
+    from app.db.session_sync import SessionLocal
+    from app.services.customer_full_merge import CustomerFullMergeError, preview_customer_full_merge_bulk
+
+    def _run() -> dict:
+        with SessionLocal() as db:
+            return preview_customer_full_merge_bulk(
+                db,
+                groups=body.groups,
+                audit_note=body.audit_note,
+            )
+
+    try:
+        return await asyncio.to_thread(_run)
+    except CustomerFullMergeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/duplicate-groups/merge-confirm", status_code=202)
+async def customer_full_merge_confirm_endpoint(body: CustomerFullMergeBody):
+    from app.services.customer_full_merge import CustomerFullMergeError
+    from app.services.customer_full_merge_enqueue import enqueue_customer_full_merge_confirm
+
+    if body.survivor_id is None:
+        raise HTTPException(status_code=400, detail="survivor_id is required for merge-confirm")
+
+    payload = {
+        "similarity_key": body.similarity_key,
+        "survivor_id": int(body.survivor_id),
+        "audit_note": body.audit_note,
+        "customer_ids": body.customer_ids,
+    }
+    try:
+        task_id, async_poll = enqueue_customer_full_merge_confirm(payload)
+    except CustomerFullMergeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "task_id": task_id,
+        "async_poll": async_poll,
+        "similarity_key": body.similarity_key,
+        "survivor_id": body.survivor_id,
+    }
+
+
+@router.get("/duplicate-groups/merge-task/{task_id}")
+async def customer_full_merge_task_status(task_id: str):
+    import asyncio
+
+    from app.services.customer_full_merge_enqueue import dev_customer_full_merge_results
+    from app.services.task_run_ledger import (
+        POLL_STATE_FAILURE,
+        POLL_STATE_SUCCESS,
+        read_task_run_poll_progress_sync,
+    )
+
+    dev_hit = dev_customer_full_merge_results().get(task_id)
+    if dev_hit is not None:
+        state = dev_hit.get("state", POLL_STATE_SUCCESS)
+        if state in (POLL_STATE_SUCCESS, POLL_STATE_FAILURE):
+            dev_customer_full_merge_results().pop(task_id, None)
+        progress: dict = {"task_id": task_id, "state": state}
+        if state == POLL_STATE_SUCCESS:
+            progress["result"] = dev_hit.get("result")
+        else:
+            progress["error"] = dev_hit.get("error")
+        return progress
+
+    ledger_progress = await asyncio.to_thread(read_task_run_poll_progress_sync, task_id)
+    if ledger_progress is not None:
+        return ledger_progress
+
+    from celery.result import AsyncResult
+
+    from app.worker.celery_app import celery_app
+
+    def _read() -> tuple[str, Any]:
+        r = AsyncResult(task_id, app=celery_app)
+        return r.state, r.info
+
+    task_state, info = await asyncio.to_thread(_read)
+    progress = {"task_id": task_id, "state": task_state}
+    if task_state == POLL_STATE_SUCCESS:
+        from celery.result import AsyncResult as _AR
+
+        raw_result = await asyncio.to_thread(lambda: _AR(task_id, app=celery_app).result)
+        progress["result"] = raw_result if isinstance(raw_result, dict) else None
+    elif task_state == POLL_STATE_FAILURE:
+        progress["error"] = str(info)[:800] if info is not None else "Task failed"
+    return progress
 
 
 @router.post("", status_code=201)
@@ -512,6 +862,9 @@ async def patch_customer(customer_id: int, body: CustomerPatch, db: AsyncSession
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
     data = body.model_dump(exclude_unset=True)
+    status_warning = _provisional_reuse_status_warning(
+        row, data.get("customer_status") if "customer_status" in data else None
+    )
     if "name" in data and data["name"] is not None:
         row.name = data["name"].strip()
     if "customer_status" in data:
@@ -545,7 +898,7 @@ async def patch_customer(customer_id: int, body: CustomerPatch, db: AsyncSession
         row.preferred_distributor_id = did
     await db.commit()
     await db.refresh(row)
-    return {
+    payload = {
         "id": row.id,
         "customer_code": row.code,
         "customer_name": row.name,
@@ -557,6 +910,108 @@ async def patch_customer(customer_id: int, body: CustomerPatch, db: AsyncSession
         "channel_id": row.channel_id,
         "preferred_distributor_id": row.preferred_distributor_id,
     }
+    if status_warning:
+        payload["warnings"] = [status_warning]
+    return payload
+
+
+@router.post("/disposition/batch")
+async def disposition_customers_batch(
+    body: CustomerDispositionBatchBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """BACKLOG-061-U3 — park/exclude/clear no_code_disposition on TMP-CUST rows.
+
+    Never mutates customer_status. Cap 500. Never auto-creates dim_customer.
+    """
+    from app.services.customer_disposition import run_customer_disposition_batch
+    from app.services.customer_promote import CustomerPromoteError
+
+    try:
+        return await run_customer_disposition_batch(
+            db,
+            customer_ids=list(body.customer_ids),
+            disposition=body.disposition,
+            note=body.note,
+            dry_run=body.dry_run,
+        )
+    except CustomerPromoteError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": exc.message, "code": exc.code},
+        ) from exc
+
+
+@router.post("/promote/batch")
+async def promote_customers_batch(
+    body: CustomerBulkPromoteBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """BACKLOG-061 BP1/U2b — bulk promote via CSV map or system mint.
+
+    ``mode=map`` (default): tmp_code→new_code mapping (CSV/paste). Blank new_code skipped.
+    ``mode=mint``: tmp_code only; service mints Candidate A codes (CUST-######).
+    ``dry_run=true``: preview only. ``dry_run=false``: apply ready rows with partial
+    success (per-row commit). Cap 500. Never auto-creates dim_customer.
+    """
+    from app.services.customer_bulk_promote import BATCH_MAX_ROWS, run_customer_bulk_promote
+    from app.services.customer_promote import CustomerPromoteError
+
+    if len(body.rows) > BATCH_MAX_ROWS:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": f"Too many rows (max {BATCH_MAX_ROWS})",
+                "code": "batch_too_large",
+            },
+        )
+    try:
+        return await run_customer_bulk_promote(
+            db,
+            rows=[r.model_dump() for r in body.rows],
+            dry_run=body.dry_run,
+            mode=body.mode,
+        )
+    except CustomerPromoteError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": exc.message, "code": exc.code},
+        ) from exc
+
+
+@router.post("/{customer_id}/promote")
+async def promote_customer(
+    customer_id: int,
+    body: CustomerPromoteBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """BACKLOG-061 B1 — promote-in-place: same id, reassign TMP code → real code.
+
+    Preview when ``confirm=false`` (no writes). Confirm requires ``confirm=true``.
+    Never auto-creates dim_customer; never touches merged_into_* / aliases / FKs.
+    """
+    from app.services.customer_promote import (
+        CustomerPromoteError,
+        confirm_customer_promote,
+        preview_customer_promote,
+    )
+
+    try:
+        if not body.confirm:
+            return await preview_customer_promote(
+                db, customer_id=customer_id, new_code=body.new_code
+            )
+        return await confirm_customer_promote(
+            db,
+            customer_id=customer_id,
+            new_code=body.new_code,
+            note=body.note,
+        )
+    except CustomerPromoteError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": exc.message, "code": exc.code},
+        ) from exc
 
 
 @router.post("/bulk", status_code=200)

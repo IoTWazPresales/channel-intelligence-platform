@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +29,19 @@ class DimDistributor(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
+    distributor_status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
+    merged_into_distributor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_distributor.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    merge_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # BACKLOG-061-U3 — column authored with customers; distributor wiring is a later unit
+    no_code_disposition: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    merged_into: Mapped["DimDistributor | None"] = relationship(
+        remote_side="DimDistributor.id",
+        foreign_keys=[merged_into_distributor_id],
+    )
 
 
 class DistributorLocation(Base, TimestampMixin):
@@ -70,6 +83,7 @@ class DimCustomer(Base, TimestampMixin):
     code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     customer_status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
+    is_key_account: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     partner_tier: Mapped[str | None] = mapped_column(String(32), nullable=True)
     account_owner_internal: Mapped[str | None] = mapped_column(String(128), nullable=True)
     notes_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -78,8 +92,17 @@ class DimCustomer(Base, TimestampMixin):
     preferred_distributor_id: Mapped[int | None] = mapped_column(
         ForeignKey("dim_distributor.id"), nullable=True
     )
+    merged_into_customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True, index=False
+    )
+    # BACKLOG-061-U3 — park/exclude without changing customer_status (reuse depends on unverified)
+    no_code_disposition: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     region: Mapped["DimRegion | None"] = relationship()
+    merged_into_customer: Mapped["DimCustomer | None"] = relationship(
+        foreign_keys=[merged_into_customer_id],
+        remote_side="DimCustomer.id",
+    )
     channel: Mapped["DimChannel | None"] = relationship()
     preferred_distributor: Mapped["DimDistributor | None"] = relationship()
 

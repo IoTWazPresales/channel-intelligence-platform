@@ -69,7 +69,9 @@ export async function pollDsiResolutionPlanComputeTask(
     if (isQueuePendingState(state)) {
       pendingOnlyAttempts += 1;
       if (pendingOnlyAttempts > queueGraceAttempts) {
-        throw new Error('Resolution plan compute timed out while waiting in queue (worker busy)');
+        throw new Error(
+          'Resolution plan compute timed out while waiting in queue (worker busy with validate or apply — try again shortly)'
+        );
       }
     } else {
       executionAttempts += 1;

@@ -11,9 +11,9 @@ before blaming application code.
 
 | Mode | API | Worker | DB | Redis | Use for |
 |------|-----|--------|-----|-------|---------|
-| **A — Windows native (Warren default)** | venv :8001 | solo + sibling beat | Remote Supabase | localhost | Daily UI work — **degraded** for long Celery |
-| **B — Windows + local `cip`** | venv :8001 | solo or `in_process_thread` | localhost `cip` | optional | Fast feature loop, migrations, unit tests |
-| **C — Docker Compose (cloud / optional local)** | :8010 | prefork Linux | container Postgres | container | **Closest to prod**; use for soak |
+| **A — Windows native + remote Supabase** | venv :8001 | solo, no beat default, `-Q interactive,batch,celery` | Remote Supabase | localhost | Long Celery soaks / remote parity — **degraded** for queue timeouts |
+| **B — Windows + local `cip` (Warren default)** | venv :8001 | solo or `in_process_thread` | localhost `cip` | localhost | **Daily dev** — fast loop, migrations, DSI work (2026-06-22) |
+| **C — Docker Compose (cloud / optional local)** | :8010 | prefork Linux, `-Q interactive,batch,celery` | container Postgres | container | **Closest to prod**; use for soak |
 | **D — Customer on-prem (target prod)** | customer VPC | prefork, multi-queue | customer Postgres | customer Redis | Production; web may be SaaS → VPN to API |
 
 ---
@@ -37,7 +37,7 @@ before blaming application code.
 | **Next.js web** | Separate Node process | Never run Celery in web |
 | **FastAPI** | Separate process | Must not run 19-minute validates synchronously in request path |
 | **Celery worker** | Separate process(es) | Batch + interactive should be **queues**, not one solo thread in prod |
-| **Celery beat** | Separate process in Docker; merged on Unix `worker --beat` | **Disable on Windows solo dev** when reaper adds no value |
+| **Celery beat** | Separate process in Docker; **disabled by default** on Windows solo dev | Set `CIP_ENABLE_DEV_BEAT=1` for local reaper; prod uses Docker `beat` service |
 | **Postgres** | One primary per tenant | Pooler ≠ same as direct primary for long sync writes |
 | **Redis** | One broker per env | Required for broker dispatch |
 
@@ -60,7 +60,7 @@ If mode **A** and symptom is queue timeout → **scheduling/topology**, not brok
 
 | Activity | Recommended topology |
 |----------|---------------------|
-| UI / steward UX | A or B |
+| UI / steward UX | **B** (Warren) or A |
 | Migrations / alembic | B (`cip`) |
 | 100k+ row DSI validate soak | C or D |
 | Production | D |

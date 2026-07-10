@@ -1301,10 +1301,10 @@ export function DsiMappingStewardPanel({
             Product identifiers are governed through Product Master / ProductAlias. Map via Product Master workflows; this
             screen does not create products or provisional SKUs.
           </Alert>
+          {ctx ? <DsiProductResolutionEvidenceCard context={ctx} /> : null}
           {typeof ctx?.product_match_summary === 'string' && ctx.product_match_summary.trim() ? (
             <Alert severity="info" data-testid="dsi-product-match-summary">
               <Typography variant="body2">{String(ctx.product_match_summary)}</Typography>
-              <DsiProductResolutionEvidenceCard context={ctx} />
               {planProductReady ? (
                 <Box sx={{ mt: 1 }} data-testid="dsi-product-plan-ready-banner">
                   <Alert severity="success" variant="outlined" sx={{ mb: 1 }}>

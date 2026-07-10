@@ -3,6 +3,7 @@ export type ShippingFilterParams = {
   cargoStatus: string;
   distributorId: number | null;
   customerId: number | null;
+  purchaseOrderId: number | null;
   search: string;
   dateField: string;
   dateFrom: string;
@@ -12,6 +13,11 @@ export type ShippingFilterParams = {
   currencyCode: string;
   operatingUnit: string;
   podDateFilter: '' | 'true' | 'false';
+  planQuarter: string;
+  planBusinessUnit: string;
+  lineupAttribution: '' | 'unattributed';
+  lifecycleBucket: '' | 'shipped' | 'pipeline' | 'landed';
+  slipDirection: '' | 'slipped_in' | 'slipped_out';
 };
 
 export type ShippingLinesQueryParams = ShippingFilterParams & {
@@ -26,6 +32,7 @@ export function appendShippingFilterParams(params: URLSearchParams, p: ShippingF
   if (p.cargoStatus) params.set('status', p.cargoStatus);
   if (p.distributorId != null) params.set('distributor_id', String(p.distributorId));
   if (p.customerId != null) params.set('customer_id', String(p.customerId));
+  if (p.purchaseOrderId != null) params.set('purchase_order_id', String(p.purchaseOrderId));
   if (p.search.trim()) params.set('search', p.search.trim());
   if (p.dateField) params.set('date_field', p.dateField);
   if (p.dateFrom.trim()) params.set('date_from', p.dateFrom.trim());
@@ -36,6 +43,23 @@ export function appendShippingFilterParams(params: URLSearchParams, p: ShippingF
   if (p.operatingUnit.trim()) params.set('operating_unit', p.operatingUnit.trim());
   if (p.podDateFilter === 'true') params.set('pod_date_is_null', 'true');
   if (p.podDateFilter === 'false') params.set('pod_date_is_null', 'false');
+  if (p.planQuarter.trim()) params.set('plan_quarter', p.planQuarter.trim());
+  if (p.planBusinessUnit.trim()) params.set('plan_business_unit', p.planBusinessUnit.trim());
+  if (p.lineupAttribution === 'unattributed') params.set('lineup_attribution', 'unattributed');
+  if (p.lifecycleBucket) params.set('lifecycle_bucket', p.lifecycleBucket);
+  if (p.slipDirection) params.set('slip_direction', p.slipDirection);
+}
+
+export function buildShippingLineupQuarterSummaryUrl(
+  planQuarter: string,
+  customerId: number | null,
+  planBusinessUnit: string,
+): string {
+  const params = new URLSearchParams();
+  params.set('plan_quarter', planQuarter);
+  if (customerId != null) params.set('customer_id', String(customerId));
+  if (planBusinessUnit.trim()) params.set('plan_business_unit', planBusinessUnit.trim());
+  return `/api/v1/shipping/lineup-quarter-summary?${params.toString()}`;
 }
 
 export function buildShippingCommercialSummaryUrl(p: ShippingFilterParams): string {

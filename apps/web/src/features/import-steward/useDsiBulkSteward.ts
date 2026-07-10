@@ -11,6 +11,12 @@ import { pollDsiBulkProvisionalTask } from './dsiBulkProvisionalPoll';
 
 import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
 import {
+  chunkDsiBulkCandidateIds,
+  dsiBulkStewardChunkSize,
+  mergeDsiBulkApplyResponses,
+  mergeDsiBulkPreviewResponses,
+} from './dsiBulkStewardChunking';
+import {
   bulkActionToStewardAction,
   optimisticallyApplyStewardBulk,
   type DsiStewardRowAction,
@@ -180,10 +186,17 @@ export function useDsiBulkSteward({
         } satisfies DsiBulkPreviewResponse;
       }
       const body = buildBulkBody();
-      return apiPost<DsiBulkPreviewResponse>(
-        `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-preview`,
-        body
-      );
+      const chunkSize = dsiBulkStewardChunkSize(bulkAction);
+      const chunks = chunkDsiBulkCandidateIds(selectedIds, chunkSize);
+      const parts: DsiBulkPreviewResponse[] = [];
+      for (const candidate_ids of chunks) {
+        const part = await apiPost<DsiBulkPreviewResponse>(
+          `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-preview`,
+          { ...body, candidate_ids }
+        );
+        parts.push(part);
+      }
+      return mergeDsiBulkPreviewResponses(importJobId, bulkAction, parts);
     },
     onSuccess: (data) => {
       setBulkApplySummary(null);
@@ -223,6 +236,29 @@ export function useDsiBulkSteward({
         } satisfies DsiBulkApplyResponse;
       }
       const body = buildBulkBody();
+      if (bulkAction === 'ignore') {
+        let taskId: string | undefined;
+        try {
+          const enqueued = await apiPost<DsiBulkProvisionalAsyncEnqueueResponse>(
+            `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-ignore/apply-async`,
+            body
+          );
+          taskId = enqueued.task_id;
+          registerClientBackgroundTask({
+            taskId: enqueued.task_id,
+            importJobId,
+            kind: 'dsi_bulk_ignore',
+            label: `Ignoring steward candidates (DSI job ${importJobId})`,
+          });
+          void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+          return pollDsiBulkProvisionalTask(importJobId, enqueued.task_id, {
+            rowCount: selectedIds.length,
+          });
+        } finally {
+          if (taskId) finishClientBackgroundTask(taskId);
+          void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+        }
+      }
       if (bulkAction === 'create_provisional_customer') {
         let taskId: string | undefined;
         try {
@@ -246,10 +282,17 @@ export function useDsiBulkSteward({
           void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
         }
       }
-      return apiPost<DsiBulkApplyResponse>(
-        `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-apply`,
-        body
-      );
+      const chunkSize = dsiBulkStewardChunkSize(bulkAction);
+      const chunks = chunkDsiBulkCandidateIds(selectedIds, chunkSize);
+      const parts: DsiBulkApplyResponse[] = [];
+      for (const candidate_ids of chunks) {
+        const part = await apiPost<DsiBulkApplyResponse>(
+          `/api/v1/mappings/import-jobs/${importJobId}/dsi-steward-bulk-apply`,
+          { ...body, candidate_ids }
+        );
+        parts.push(part);
+      }
+      return mergeDsiBulkApplyResponses(importJobId, bulkAction, parts);
     },
     onMutate: async () => {
       if (

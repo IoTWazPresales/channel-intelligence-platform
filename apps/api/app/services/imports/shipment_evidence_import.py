@@ -198,6 +198,18 @@ def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None =
             by_canon("order_no")
             or col("Order No.", "Order No", "order no.", "order no", "ORDER NO", "Order number")
         ),
+        "customer_po": normalize_shipment_cell_value(
+            by_canon("customer_po")
+            or col(
+                "Customer PO",
+                "Cust PO",
+                "Customer P/O",
+                "Purchase Order",
+                "PO No",
+                "PO No.",
+                "PO Number",
+            )
+        ),
         "order_line": normalize_shipment_cell_value(by_canon("order_line") or col("Order Line", "order line")),
         "delivery_no": normalize_shipment_cell_value(
             by_canon("delivery_no")
@@ -247,6 +259,7 @@ def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None =
                 "Delivery Confirmed Date",
             )
         ),
+        "crad_date": _parse_date(by_canon("crad_date") or col("CRAD", "crad")),
         "customer_dealer_token": normalize_shipment_cell_value(
             by_canon("customer_dealer_token")
             or col(
@@ -713,6 +726,7 @@ _SHIPMENT_LINE_DATE_COLS = (
     "erd_date",
     "est_pod_date",
     "pod_date",
+    "crad_date",
 )
 
 
@@ -739,6 +753,7 @@ def _shipment_line_conflict_set(ex: Any) -> dict[str, Any]:
         "bill_to_raw": ex.bill_to_raw,
         "ship_to_raw": ex.ship_to_raw,
         "order_no": ex.order_no,
+        "customer_po": ex.customer_po,
         "order_line": ex.order_line,
         "delivery_no": ex.delivery_no,
         "invoice_line": ex.invoice_line,
@@ -759,6 +774,7 @@ def _shipment_line_conflict_set(ex: Any) -> dict[str, Any]:
         "erd_date": ex.erd_date,
         "est_pod_date": ex.est_pod_date,
         "pod_date": ex.pod_date,
+        "crad_date": ex.crad_date,
         "customer_dealer_token": ex.customer_dealer_token,
         "updated_at": func.now(),
     }
@@ -804,6 +820,23 @@ def _execute_shipment_line_upsert(db: Session, values: dict[str, Any]) -> None:
             cleared[k] = None
         with db.begin_nested():
             db.execute(_shipment_evidence_line_upsert_statement(cleared))
+
+
+def _purge_orphan_shipment_evidence_lines(db: Session, job_id: int, seen_source_keys: set[str]) -> int:
+    """Remove evidence lines from a prior validate pass whose ``source_key`` no longer appears.
+
+    Runs after a successful re-validate when column mapping changes shift business keys.
+    Steward resolution on surviving keys is preserved via upsert-on-conflict semantics.
+    """
+    if not seen_source_keys:
+        return 0
+    result = db.execute(
+        delete(ShipmentEvidenceLine).where(
+            ShipmentEvidenceLine.import_job_id == job_id,
+            ShipmentEvidenceLine.source_key.notin_(sorted(seen_source_keys)),
+        )
+    )
+    return int(result.rowcount or 0)
 
 
 def _flush_shipment_line_batch(db: Session, rows: list[dict[str, Any]]) -> None:
@@ -925,8 +958,13 @@ def _resolve_unresolved_shipment_lines_for_job(
             line.distributor_id = did
             line.distributor_resolution_status = dstatus
             line.distributor_resolution_token = dtoken
+            if did is not None:
+                line.resolved_distributor_id = int(did)
             db.add(line)
     db.flush()
+    from app.services.imports.shipment_resolved_entities import populate_resolved_entities_for_job
+
+    populate_resolved_entities_for_job(db, job, res_cache=res_cache)
 
 
 def _openpyxl_sheet_to_dataframe(ws: Any) -> pd.DataFrame:
@@ -1042,9 +1080,14 @@ def process_shipment_evidence_import(
             total_rows += len(_frame)
 
     line_buffer: list[dict[str, Any]] = []
+    seen_source_keys: set[str] = set()
 
     def _flush_buffer() -> None:
         if line_buffer:
+            for row in line_buffer:
+                sk = row.get("source_key")
+                if isinstance(sk, str) and sk:
+                    seen_source_keys.add(sk)
             _flush_shipment_line_batch(db, line_buffer)
             line_buffer.clear()
 
@@ -1173,6 +1216,7 @@ def process_shipment_evidence_import(
                     "bill_to_raw": ex["bill_to_raw"],
                     "ship_to_raw": ex["ship_to_raw"],
                     "order_no": ex["order_no"],
+                    "customer_po": ex["customer_po"],
                     "order_line": ex["order_line"],
                     "delivery_no": ex["delivery_no"],
                     "invoice_line": ex["invoice_line"],
@@ -1193,9 +1237,12 @@ def process_shipment_evidence_import(
                     "erd_date": ex["erd_date"],
                     "est_pod_date": ex["est_pod_date"],
                     "pod_date": ex["pod_date"],
+                    "crad_date": ex["crad_date"],
                     "customer_dealer_token": ex["customer_dealer_token"],
                     "customer_resolution_status": None,
                     "customer_id": None,
+                    "resolved_customer_id": None,
+                    "resolved_distributor_id": int(did) if did is not None else None,
                     "product_id": pid,
                     "product_resolution_status": pstatus,
                     "product_resolution_token": ptoken,
@@ -1254,11 +1301,22 @@ def process_shipment_evidence_import(
             )
         )
 
+    if blocking == 0 and seen_source_keys:
+        _purge_orphan_shipment_evidence_lines(db, int(job.id), seen_source_keys)
+
     db.flush()
+    from app.services.imports.shipment_purchase_order_materialize import materialize_purchase_orders_for_shipment_job
+
+    materialize_purchase_orders_for_shipment_job(db, int(job.id))
+    from app.services.imports.shipment_evidence_observations import sync_job_observations_after_validate
+
+    sync_job_observations_after_validate(db, job)
     _rebuild_shipment_distributor_candidates(db, job)
     _rebuild_shipment_customer_candidates(db, job)
 
     meta = dict(job.staged_metadata or {})
+    if not str(meta.get("import_purpose") or "").strip():
+        meta["import_purpose"] = "current"
     meta["shipment_evidence"] = to_jsonable(
         {
             "processed_at": datetime.now(timezone.utc).isoformat(),

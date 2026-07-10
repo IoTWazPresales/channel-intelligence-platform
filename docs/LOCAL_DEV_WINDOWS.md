@@ -81,6 +81,53 @@ WHERE schemaname = 'public' AND tablename = 'dim_customer';
 
 **Do not** stamp Alembic to head without applying revisions, or otherwise bypass migration history.
 
+### Post-apply verification (role `cip` — table DML + sequence USAGE)
+
+When a migration is applied as **`postgres`** (or any non-`cip` owner) and objects are then granted to the app role, **table DML grants alone are not enough**. `INSERT … RETURNING id` needs **`USAGE` (and typically `SELECT`) on the backing sequences**. Missing sequence grants surface as HTTP 500 on create paths (CPOR Batch 0: `permission denied for sequence cpor_case_id_seq` while `cpor_case` already had INSERT).
+
+**After any `cip` apply that creates or re-owns tables/sequences, assert as role `cip` on database `cip`:**
+
+```sql
+SELECT current_database();  -- must be cip
+
+-- Tables: expect SELECT/INSERT/UPDATE/DELETE = true for every new public table
+SELECT t.tablename,
+       has_table_privilege('cip', format('%I.%I', t.schemaname, t.tablename), 'SELECT') AS sel,
+       has_table_privilege('cip', format('%I.%I', t.schemaname, t.tablename), 'INSERT') AS ins,
+       has_table_privilege('cip', format('%I.%I', t.schemaname, t.tablename), 'UPDATE') AS upd,
+       has_table_privilege('cip', format('%I.%I', t.schemaname, t.tablename), 'DELETE') AS del
+FROM pg_tables t
+WHERE t.schemaname = 'public'
+  AND t.tablename LIKE 'cpor_%'   -- or the prefix for the objects just applied
+ORDER BY 1;
+
+-- Sequences: expect USAGE = true (and SELECT = true) for every new sequence
+SELECT c.relname AS sequence_name,
+       has_sequence_privilege('cip', c.oid, 'USAGE') AS usage,
+       has_sequence_privilege('cip', c.oid, 'SELECT') AS sel
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind = 'S'
+  AND n.nspname = 'public'
+  AND c.relname LIKE 'cpor_%'     -- or the prefix for the objects just applied
+ORDER BY 1;
+```
+
+**Repair (superuser / migrate role on database `cip` only):**
+
+```sql
+SELECT current_database();  -- must be cip
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO cip;
+-- Prefer scoped grants for new objects, e.g.:
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.cpor_case TO cip;
+
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO cip;
+-- Prefer scoped: GRANT USAGE, SELECT ON SEQUENCE public.cpor_case_id_seq TO cip;
+```
+
+Re-run the verification queries until every new object shows the expected privileges. Do **not** skip sequence checks after a table-only grant pass.
+
 ---
 
 ## Recommended startup order
@@ -164,6 +211,22 @@ Effects:
 - **Not for production** — no process isolation, reload/kill stops the thread, and load is not offloaded.
 
 Other code paths that assume Redis (caching, future tasks) may still require a broker; this setting only changes **how Product Master commit is dispatched** after `try_enqueue_pm_commit_sync`.
+
+---
+
+## Clone Supabase into local `cip` (read-only remote)
+
+Use when daily dev should run on **topology B** (local Postgres) while Supabase stays an untouched backup.
+
+1. **Preflight:** Windows `pg_dump`/`pg_restore` **18+** ≥ Supabase server major; WSL worker must reach `127.0.0.1:5432`.
+2. **Backup local `cip`:** `pg_dump -Fc -d postgresql://cip:cip@127.0.0.1:5432/cip -f local_cip_backup.dump`
+3. **Dump Supabase (read-only):** `pg_dump -Fc --schema=public -d "$DATABASE_URL_SYNC" -f supabase_public.dump` (from `apps/api/.env` session pooler URL).
+4. **Recreate DB** as local `postgres` superuser: terminate backends → `DROP DATABASE cip` → `CREATE DATABASE cip OWNER cip`.
+5. **Restore:** `pg_restore --no-owner --no-privileges -d postgresql://cip:cip@127.0.0.1:5432/cip supabase_public.dump` (benign `CREATE SCHEMA public` already exists is OK on fresh DB).
+6. **Verify anchors:** `dim_product` count, `alembic_version`, and 5 other key tables match Supabase before repointing `.env`.
+7. **Repoint `apps/api/.env`:** set `DATABASE_URL` / `DATABASE_URL_SYNC` to `127.0.0.1`; comment Supabase URLs for rollback. Restart API + worker.
+
+**Do not commit** `.env`, `*.dump`, or restore logs. See `docs/memory/CURRENT.md` for Warren's verified anchors and rollback file names.
 
 ---
 

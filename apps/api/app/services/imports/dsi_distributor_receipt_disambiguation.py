@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.services.imports.distributor_sales_inventory import _norm_key, _product_token_key
 from app.services.imports.provisional_entity_identity import canonical_provisional_entity_name_key
+from app.services.imports.shipment_evidence_read import shipment_evidence_read_relation
 
 REASON_SINGLE = "distributor_receipt_single"
 REASON_OVERLAP_REFINED = "distributor_receipt_overlap_refined"
@@ -77,9 +78,10 @@ class DistributorReceiptProductIndex:
     def load(cls, db: Session, dist_id_to_canonical: dict[int, str]) -> "DistributorReceiptProductIndex":
         """Load receipt evidence for disambiguation (shipped lines with qty>1; no demo sales models)."""
         idx = cls()
+        rel = shipment_evidence_read_relation()
         rows = db.execute(
             text(
-                """
+                f"""
                 SELECT
                     distributor_id,
                     product_id,
@@ -87,7 +89,7 @@ class DistributorReceiptProductIndex:
                     COALESCE(ship_confirm_date, schedule_ship_date, promise_date)::date AS ship_dt,
                     COALESCE(pod_date, est_pod_date)::date AS pod_dt,
                     COALESCE(quantity, 0)::numeric AS qty
-                FROM shipment_evidence_line
+                FROM {rel}
                 WHERE product_resolution_status IN ('resolved', 'resolved_unique')
                   AND product_id IS NOT NULL
                   AND distributor_id IS NOT NULL
@@ -423,7 +425,9 @@ def preview_receipt_disambiguation_for_staging_rows(
     return dict(tier_counts)
 
 
-_MISASSIGN_CANDIDATE_SQL = """
+def _misassign_candidate_sql() -> str:
+    rel = shipment_evidence_read_relation()
+    return f"""
             SELECT s.id,
                    s.raw_product_token,
                    s.resolved_product_id,
@@ -438,7 +442,7 @@ _MISASSIGN_CANDIDATE_SQL = """
               AND btrim(coalesce(s.raw_product_token, '')) <> ''
               AND NOT EXISTS (
                     SELECT 1
-                    FROM shipment_evidence_line se
+                    FROM {rel} se
                     WHERE se.product_id = s.resolved_product_id
                       AND se.distributor_id = s.resolved_distributor_id
                       AND lower(btrim(coalesce(se.sales_model_name, '')))
@@ -446,7 +450,7 @@ _MISASSIGN_CANDIDATE_SQL = """
                   )
               AND EXISTS (
                     SELECT 1
-                    FROM shipment_evidence_line se2
+                    FROM {rel} se2
                     WHERE se2.product_id = s.resolved_product_id
                       AND se2.distributor_id IS NOT NULL
                       AND se2.distributor_id <> s.resolved_distributor_id
@@ -529,7 +533,7 @@ def preview_cross_distributor_misassignments(
     job = db.get(ImportJob, int(import_job_id))
     historical_relaxed = dsi_historical_product_eligibility_relaxed_from_import_job(job) if job else True
 
-    rows = db.execute(text(_MISASSIGN_CANDIDATE_SQL), {"jid": int(import_job_id)}).fetchall()
+    rows = db.execute(text(_misassign_candidate_sql()), {"jid": int(import_job_id)}).fetchall()
 
     prod_idx = _load_product_resolution_index(db)
     counts: dict[str, int] = defaultdict(int)
@@ -614,7 +618,7 @@ def apply_cross_distributor_misassignment_corrections(
         raise ValueError(f"import job {import_job_id} not found")
     historical_relaxed = dsi_historical_product_eligibility_relaxed_from_import_job(job)
 
-    rows = db.execute(text(_MISASSIGN_CANDIDATE_SQL), {"jid": int(import_job_id)}).fetchall()
+    rows = db.execute(text(_misassign_candidate_sql()), {"jid": int(import_job_id)}).fetchall()
     prod_idx = _load_product_resolution_index(db)
     counts: dict[str, int] = defaultdict(int)
     counts["misassign_candidate_rows"] = len(rows)

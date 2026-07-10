@@ -5,8 +5,12 @@ from app.api.v1.endpoints import (
     auth,
     budgets,
     buy_plans,
+    channel_intelligence,
     channel_ops,
     commercial_planner,
+    cpor_cases,
+    cpor_exports,
+    cst_steward,
     dev_wipe,
     catalog,
     competition,
@@ -20,8 +24,12 @@ from app.api.v1.endpoints import (
     inbound_shipments,
     inventory,
     lineup,
+    listing_capture,
     mappings,
     market,
+    plan_vs_executed,
+    po_management,
+    product_master_gaps,
     pricing,
     products,
     promo_exports,
@@ -43,6 +51,10 @@ api_router.include_router(customers.router, prefix="/customers", tags=["customer
 api_router.include_router(distributors.router, prefix="/distributors", tags=["distributors"])
 api_router.include_router(sellout.router, prefix="/sellout", tags=["sellout"])
 api_router.include_router(channel_ops.router, prefix="/channel-ops", tags=["channel-ops"])
+api_router.include_router(
+    channel_intelligence.router, prefix="/channel-intelligence", tags=["channel-intelligence"]
+)
+api_router.include_router(listing_capture.router, prefix="/listing-capture", tags=["listing-capture"])
 api_router.include_router(inbound_shipments.router, prefix="/inbound-shipments", tags=["inbound-shipments"])
 api_router.include_router(shipment_evidence.router, prefix="/shipment-evidence", tags=["shipment-evidence"])
 api_router.include_router(shipping.router, prefix="/shipping", tags=["shipping"])
@@ -51,6 +63,11 @@ api_router.include_router(forecasts.router, prefix="/forecasts", tags=["forecast
 api_router.include_router(buy_plans.router, prefix="/buy-plans", tags=["buy-plans"])
 if commercial_planner_enabled():
     api_router.include_router(commercial_planner.router, prefix="/commercial-planner", tags=["commercial-planner"])
+    api_router.include_router(po_management.router, prefix="/po-management", tags=["po-management"])
+    api_router.include_router(plan_vs_executed.router, prefix="/plan-vs-executed", tags=["plan-vs-executed"])
+    api_router.include_router(cpor_cases.router, prefix="/cpor", tags=["cpor"])
+    api_router.include_router(cpor_exports.router, prefix="/cpor", tags=["cpor"])
+    api_router.include_router(cst_steward.router, prefix="/cst-steward", tags=["cst-steward"])
 api_router.include_router(pricing.router, prefix="/pricing", tags=["pricing"])
 api_router.include_router(promotions.router, prefix="/promotions", tags=["promotions"])
 api_router.include_router(promo_exports.router, prefix="/promotions", tags=["promotions"])
@@ -66,5 +83,6 @@ api_router.include_router(
     tags=["imports-product-master"],
 )
 api_router.include_router(mappings.router, prefix="/mappings", tags=["mappings"])
+api_router.include_router(product_master_gaps.router, prefix="/product-master-gaps", tags=["product-master-gaps"])
 api_router.include_router(exceptions.router, prefix="/exceptions", tags=["exceptions"])
 api_router.include_router(dev_wipe.router, prefix="/dev", tags=["dev"])

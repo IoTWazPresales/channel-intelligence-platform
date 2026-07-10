@@ -136,11 +136,15 @@ def shipment_apply_task(self, job_id: int) -> dict:
 
     try:
         with SessionLocal() as db:
-            return run_shipment_apply_sync(db, job_id, on_progress=_on_progress)
-    except Exception:
-        logger.exception("shipment_apply_task failed job_id=%s — writing STAGE_FAILED", job_id)
-        _write_task_level_failure(job_id)
-        raise
+            result = run_shipment_apply_sync(db, job_id, on_progress=_on_progress)
+            if result.get("outcome") == "failed":
+                return result
+            return result
+    except Exception as exc:
+        logger.exception("shipment_apply_task failed job_id=%s — recording failure", job_id)
+        from app.services.imports.shipment_apply_failure import record_shipment_apply_failure
+
+        return record_shipment_apply_failure(job_id, exc)
 
 
 def _shipment_bulk_progress(self, phase: str, phase_label: str):
@@ -208,6 +212,36 @@ def shipment_bulk_provisional_customers_task(self, job_id: int, payload: dict) -
         raise
 
 
+@celery_app.task(name="imports.shipment_resolution_plan_compute", bind=True, ack_late=True)
+def shipment_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
+    from app.services.imports.shipment_resolution_plan_compute_sync import run_shipment_resolution_plan_compute_sync
+
+    try:
+        return run_shipment_resolution_plan_compute_sync(
+            job_id,
+            payload,
+            on_progress=_shipment_bulk_progress(self, "computing_plan", "Computing resolution plan"),
+        )
+    except Exception:
+        logger.exception("shipment_resolution_plan_compute failed job_id=%s", job_id)
+        raise
+
+
+@celery_app.task(name="imports.shipment_resolution_plan_apply", bind=True, ack_late=True)
+def shipment_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
+    from app.services.imports.shipment_resolution_plan_apply_sync import run_shipment_resolution_plan_apply_sync
+
+    try:
+        return run_shipment_resolution_plan_apply_sync(
+            job_id,
+            payload,
+            on_progress=_shipment_bulk_progress(self, "applying_plan", "Applying resolution plan"),
+        )
+    except Exception:
+        logger.exception("shipment_resolution_plan_apply failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.dsi_apply", bind=True, ack_late=True)
 def dsi_apply_task(self, job_id: int) -> dict:
     """Background apply for a ``distributor_inventory`` job (pipeline apply → complete-to-loaded)."""
@@ -247,6 +281,44 @@ def infer_dsi_import_job_task(job_id: int) -> int:
     return job_id
 
 
+@celery_app.task(name="imports.dsi_bulk_ignore", bind=True, ack_late=True)
+def dsi_bulk_ignore_task(self, job_id: int, payload: dict) -> dict:
+    """Batch ignore DSI mapping candidates (single commit; one staging demotion pass)."""
+    from app.db.session_sync import SessionLocal
+    from app.services.imports.dsi_bulk_ignore_sync import run_dsi_bulk_ignore_sync
+
+    candidate_ids = payload.get("candidate_ids") or []
+    notes = payload.get("notes")
+
+    def _on_progress(current: int, total: int) -> None:
+        try:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "phase": "ignoring_candidates",
+                    "phase_label": "Ignoring steward candidates",
+                    "current_row": current,
+                    "total_rows": total,
+                    "pct": round(current / total * 100) if total else 0,
+                },
+            )
+        except Exception:
+            pass
+
+    try:
+        with SessionLocal() as db:
+            return run_dsi_bulk_ignore_sync(
+                db,
+                job_id,
+                list(candidate_ids),
+                notes=notes,
+                on_progress=_on_progress,
+            )
+    except Exception:
+        logger.exception("dsi_bulk_ignore failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.dsi_bulk_provisional_customers", bind=True, ack_late=True)
 def dsi_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dict:
     """Batch provisional customer creates for DSI bulk steward (single commit, one replan on client)."""
@@ -270,9 +342,15 @@ def dsi_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dic
 
     try:
         with SessionLocal() as db:
-            return run_dsi_bulk_provisional_customers_sync(
+            result = run_dsi_bulk_provisional_customers_sync(
                 db, job_id, payload, on_progress=_on_progress
             )
+        from app.services.imports.dsi_post_validate_auto_apply import try_flush_deferred_dsi_post_validate_auto_apply
+
+        with SessionLocal() as flush_db:
+            if try_flush_deferred_dsi_post_validate_auto_apply(flush_db, job_id):
+                flush_db.commit()
+        return result
     except Exception:
         logger.exception("dsi_bulk_provisional_customers failed job_id=%s", job_id)
         raise
@@ -281,7 +359,9 @@ def dsi_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dic
 @celery_app.task(name="imports.dsi_resolution_plan_apply", bind=True, ack_late=True)
 def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
     """Apply DSI resolution-plan rows (steward map/provisional/product) with progress updates."""
+    from app.services.imports.dsi_post_validate_auto_apply import try_flush_deferred_dsi_post_validate_auto_apply
     from app.services.imports.dsi_resolution_plan_apply_sync import run_dsi_resolution_plan_apply_sync
+    from app.db.session_sync import SessionLocal
 
     candidate_ids = payload.get("candidate_ids") or []
     total_rows = len(candidate_ids) if isinstance(candidate_ids, list) else 0
@@ -303,7 +383,11 @@ def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
 
     try:
         _on_progress(0, total_rows or 1)
-        return run_dsi_resolution_plan_apply_sync(job_id, payload, on_progress=_on_progress)
+        result = run_dsi_resolution_plan_apply_sync(job_id, payload, on_progress=_on_progress)
+        with SessionLocal() as db:
+            if try_flush_deferred_dsi_post_validate_auto_apply(db, job_id):
+                db.commit()
+        return result
     except Exception:
         logger.exception("dsi_resolution_plan_apply failed job_id=%s", job_id)
         raise
@@ -312,7 +396,9 @@ def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
 @celery_app.task(name="imports.dsi_resolution_plan_compute", bind=True, ack_late=True)
 def dsi_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
     """Build DSI steward resolution plan off the HTTP request path."""
+    from app.services.imports.dsi_post_validate_auto_apply import try_flush_deferred_dsi_post_validate_auto_apply
     from app.services.imports.dsi_resolution_plan_compute_sync import run_dsi_resolution_plan_compute_sync
+    from app.db.session_sync import SessionLocal
 
     def _on_progress(current: int, total: int) -> None:
         try:
@@ -330,7 +416,11 @@ def dsi_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
             pass
 
     try:
-        return run_dsi_resolution_plan_compute_sync(job_id, payload, on_progress=_on_progress)
+        result = run_dsi_resolution_plan_compute_sync(job_id, payload, on_progress=_on_progress)
+        with SessionLocal() as db:
+            if try_flush_deferred_dsi_post_validate_auto_apply(db, job_id):
+                db.commit()
+        return result
     except Exception:
         logger.exception("dsi_resolution_plan_compute failed job_id=%s", job_id)
         raise
@@ -372,6 +462,58 @@ def dsi_forecasting_task(self, job_id: int, payload: dict) -> dict:
         raise
 
 
+@celery_app.task(name="customers.full_merge_confirm", bind=True, ack_late=True)
+def customer_full_merge_confirm_task(self, payload: dict) -> dict:
+    """Steward-confirmed full customer merge (name-similarity group)."""
+    from app.db.session_sync import SessionLocal
+    from app.services.customer_full_merge import confirm_customer_full_merge_sync
+
+    with SessionLocal() as db:
+        return confirm_customer_full_merge_sync(
+            db,
+            similarity_key=str(payload["similarity_key"]),
+            survivor_id=int(payload["survivor_id"]),
+            audit_note=str(payload["audit_note"]),
+            performed_by=payload.get("performed_by"),
+            customer_ids=payload.get("customer_ids"),
+        )
+
+
+@celery_app.task(name="distributors.full_merge_confirm", bind=True, ack_late=True)
+def distributor_full_merge_confirm_task(self, payload: dict) -> dict:
+    """Steward-confirmed full distributor merge (name-similarity group)."""
+    from app.db.session_sync import SessionLocal
+    from app.services.distributor_full_merge import confirm_distributor_full_merge_sync
+
+    with SessionLocal() as db:
+        return confirm_distributor_full_merge_sync(
+            db,
+            similarity_key=str(payload["similarity_key"]),
+            survivor_id=int(payload["survivor_id"]),
+            audit_note=str(payload["audit_note"]),
+            performed_by=payload.get("performed_by"),
+            distributor_ids=payload.get("distributor_ids"),
+        )
+
+
+@celery_app.task(name="customers.alias_scope_merge_confirm", bind=True, ack_late=True)
+def customer_alias_scope_merge_confirm_task(self, payload: dict) -> dict:
+    """Steward-confirmed customer alias-scope merge."""
+    from app.db.session_sync import SessionLocal
+    from app.services.customer_alias_scope_merge import confirm_customer_alias_scope_merge_sync
+
+    with SessionLocal() as db:
+        return confirm_customer_alias_scope_merge_sync(
+            db,
+            normalized_token=str(payload["normalized_token"]),
+            source_definition_id=payload.get("source_definition_id"),
+            distributor_id=payload.get("distributor_id"),
+            survivor_id=int(payload["survivor_id"]),
+            audit_note=str(payload["audit_note"]),
+            performed_by=payload.get("performed_by"),
+        )
+
+
 def run_product_master_validate_job(job_id: int, *, celery_task_id: str | None) -> int:
     """Shared implementation for Celery worker and explicit dev-only dispatch paths."""
     from app.services.imports.pm_validate_sync import run_product_master_validate_sync
@@ -407,8 +549,10 @@ def commercial_planner_lineup_parse_task(
     filename: str,
     file_b64: str,
     import_job_id: int,
+    template_slug: str = "current_lineup",
+    source_code: str = "current_lineup_system",
 ) -> dict:
-    """Background current lineup parse for large uploads."""
+    """Background lineup parse for large uploads (current_lineup or unified_lineup)."""
     from app.services.commercial_planner.lineup_parse_worker import run_lineup_case_parse_job
 
     celery_id = getattr(getattr(self, "request", None), "id", None)
@@ -424,6 +568,8 @@ def commercial_planner_lineup_parse_task(
             file_b64,
             import_job_id,
             celery_task_id=str(celery_id) if celery_id else None,
+            template_slug=template_slug,
+            source_code=source_code,
         )
     except Exception:
         logger.exception("lineup parse failed case_id=%s", case_id)
@@ -445,5 +591,53 @@ def product_master_commit_task(self, job_id: int, confirm_destructive: bool) -> 
 def reap_stale_running_jobs_task() -> dict:
     """Beat task: fail import jobs stuck ``running`` when Celery confirms work is dead."""
     from app.services.imports.running_import_job_reaper import reap_stale_running_import_jobs_sync
+    from app.worker.celery_queues import dev_beat_disabled
+
+    if dev_beat_disabled():
+        return {"skipped": True, "reason": "dev_beat_disabled"}
 
     return reap_stale_running_import_jobs_sync()
+
+
+@celery_app.task(name="imports.cst_advance_report_slots")
+def cst_advance_report_slots_task() -> dict:
+    """Beat task: create/advance CST expected-report slots (due→late→missing). Idempotent."""
+    from app.db.session_sync import SessionLocal
+    from app.services.imports.cst_d1 import advance_cst_report_slots
+    from app.worker.celery_queues import dev_beat_disabled
+
+    if dev_beat_disabled():
+        return {"skipped": True, "reason": "dev_beat_disabled"}
+
+    with SessionLocal() as session:
+        result = advance_cst_report_slots(session)
+        session.commit()
+        return result
+
+
+@celery_app.task(name="listing_capture.poll_listings")
+def listing_capture_poll_listings_task() -> dict:
+    """Beat task: gated no-op unless schedule enabled and listings exist. No live HTTP in LC-U1."""
+    from app.db.session_sync import SessionLocal
+    from app.services.listing_capture.registry import scheduler_should_run
+    from app.worker.celery_queues import dev_beat_disabled
+
+    if dev_beat_disabled():
+        return {"skipped": True, "reason": "dev_beat_disabled"}
+
+    with SessionLocal() as session:
+        gate = scheduler_should_run(session)
+        if not gate["should_run"]:
+            return {"skipped": True, "reason": "schedule_disabled_or_empty", **gate}
+        # Live fetch intentionally not wired — Warren enables schedule + injects fetcher later.
+        return {"skipped": True, "reason": "live_fetch_not_enabled_in_lc_u1", **gate}
+
+
+@celery_app.task(name="imports.flush_deferred_dsi_post_validate_auto_apply")
+def flush_deferred_dsi_post_validate_auto_apply_task(job_id: int) -> dict:
+    """Batch-queue task: enqueue deferred historical auto-apply when steward is idle."""
+    from app.services.imports.dsi_post_validate_auto_apply import (
+        run_flush_deferred_dsi_post_validate_auto_apply_sync,
+    )
+
+    return run_flush_deferred_dsi_post_validate_auto_apply_sync(job_id)

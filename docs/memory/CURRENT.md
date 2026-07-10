@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-06-21 (project rules memory palace aligned)
-**Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
+**Last updated:** 2026-07-10 (Theme B complete � PR #7 open)
+**Verify git:** `git branch --show-current` � `git rev-parse --short HEAD`
 
 ---
 
@@ -9,84 +9,28 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `fix/shipment-steward-performance` |
-| **HEAD (snapshot)** | `6cb632d` — dev worker embeds Celery beat (Windows sibling beat) |
-| **PR** | **#5** merging to `main` this session (steward perf + close-out + memory palace) |
-| **Alembic (code)** | `20260609_0049` (`task_run` ledger) — **confirm** with `alembic current` before any migration work |
-| **Alembic (Supabase)** | `20260608_0048` applied (alias partial-uniques) per Jun 16 soak |
+| **Branch** | `feat/backlog-061-entity-promote-in-place` |
+| **HEAD** | `09af204` |
+| **PR** | [#7](https://github.com/IoTWazPresales/channel-intelligence-platform/pull/7) � open; merge when Warren says |
+| **Alembic (DB)** | **`20260710_0072`** on cip |
 
 ---
 
-## Database and environment (Warren local)
+## Units
 
-| Field | Value |
-|-------|--------|
-| **Active DB** | Remote **Supabase EU** via pooler (`DATABASE_URL` / `DATABASE_URL_SYNC` in `apps/api/.env`) — not local `cip` unless URLs swapped |
-| **Risk** | ~~Disk quota / read-only~~ **Verified 2026-06-21 via Supabase MCP:** project `ACTIVE_HEALTHY`, DB **740 MB**, `default_transaction_read_only=off` |
-| **Sync engine** | BACKLOG-028: pooler → direct primary rewrite when host resolvable; Windows may keep pooler if `db.*.supabase.co` fails DNS |
-
----
-
-## Dev topology (this machine)
-
-| Process | Mode |
-|---------|------|
-| API | `pnpm dev:api` → **:8001** |
-| Web | `pnpm dev:web` → **:3000** |
-| Worker | `pnpm dev:worker` → Celery **`--pool=solo`** on Windows + **sibling beat** |
-| Redis | `localhost:6379` required for broker dispatch |
-| Docker | **Not used** on Windows desktop (see `docs/DEV_TOPOLOGY.md`) |
-
-**Known degraded dev constraints:**
-
-- Solo worker = **one task at a time** (validate, apply, compute, reaper queue behind each other).
-- Celery `inspect()` often returns **no workers** on Windows solo → reaper is **no-op** but still **consumes queue time**.
-- DSI plan compute UI queue grace ≈ **120s**; historical post-validate auto-apply can hold worker **4+ min** → false **"timed out while waiting in queue"** even when task later succeeds.
+| Unit | Tip | Fable verify |
+|------|-----|--------------|
+| BACKLOG-061-U-B3b dist bulk+disposition UI | `fc7b6c4` | **PASS** |
+| BACKLOG-061-U-B3a dist bulk+mint+disposition API | `66ae66d` | **PASS** � 0072 |
+| BACKLOG-061-U-B2 products+dist shell | `c54c32f` | **PASS** |
+| BACKLOG-061-U-G2 shell + customers | `d58e38c` | **PASS** |
 
 ---
 
-## What is working
+## Next
 
-- DSI validate via Celery `imports.process_job` (large files — tens of minutes on remote DB).
-- DSI steward: async plan **compute** + **apply**, bulk orchestrators, tab counts, shared `ImportStewardCandidateWorkspace` (DSI).
-- Shipment / PM import paths (see capability contract per `template_slug`).
-- Celery beat reaper `imports.reap_stale_running_jobs` (fail-safe when inspect unavailable).
-- `task_run` ledger dual-write at dispatch (read path not fully unified with activity feed).
+1. Human soak UI on `/admin/distributors` (optional).
+2. Merge PR #7 when Warren says "promote to main" / "merge the PR".
+3. Deferred: BACKLOG-073 import-job fact purge (start only when Warren prioritizes junk cleanup).
 
----
-
-## In progress / not proven live
-
-- **Job #96 class:** queue timeout on Customers tab during resolution refresh — scheduling/topology, not broken compute logic.
-- **PR #5** merge and soak on supported topology (Linux worker or co-located stack).
-- **Import wizard modularization** — `admin/imports/page.tsx` still ~4k lines; BACKLOG-004 Phase 3 not implemented.
-- **`db_transient_retry`** — verify which production paths import it (do not assume all commits use it).
-
----
-
-## Next (recommended)
-
-1. **Ops:** Expand Supabase disk or use local `cip` for daily feature work; reserve Supabase for scheduled soaks.
-2. **Topology:** Prefer Docker/WSL Linux worker for long validates, or disable beat/reaper on Windows solo dev.
-3. **Product:** Celery queue split (interactive vs batch) + defer historical auto-apply until steward idle (when implementing).
-4. **Delivery:** Merge or split `fix/shipment-steward-performance` — reduce branch drift.
-
----
-
-## Blockers requiring Warren
-
-- `alembic upgrade` on `cip` or Supabase without explicit approval.
-- Promotion to `main` — only on explicit "promote to main" / "merge to main".
-- `.cursor/rules/` changes — explicit approval.
-
----
-
-## Key references
-
-| Topic | Doc |
-|-------|-----|
-| Memory index | `docs/memory/MEMORY_PALACE.md` |
-| Topology matrix | `docs/DEV_TOPOLOGY.md` |
-| Async / Celery | `docs/memory/derived/platform_async_and_background_truth.md` |
-| Deferred work | `docs/BACKLOG.md` |
-| Import parity | `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` |
+**Do not re-audit:** U2a/U2b/U-D1/U-G2/U-B2/U-B3a/U-B3b PASSes.

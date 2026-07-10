@@ -27,6 +27,8 @@ def run_dsi_bulk_ignore_sync(
     results: list[dict[str, Any]] = []
     pending_commit = 0
     total = len(candidate_ids)
+    product_tokens_to_demote: dict[str, str] = {}
+    customer_tokens_to_demote: dict[str, str] = {}
 
     for idx, cid in enumerate(candidate_ids):
         if on_progress is not None:
@@ -44,7 +46,7 @@ def run_dsi_bulk_ignore_sync(
                 }
             )
             continue
-        rc = cand.row_count
+        row_count = cand.row_count
         tu = float(cand.total_units) if cand.total_units is not None else None
         trv = float(cand.total_reported_value) if cand.total_reported_value is not None else None
         if cand.entity_type not in {"customer_dealer_token", "distributor_token", "product_identifier"}:
@@ -53,7 +55,7 @@ def run_dsi_bulk_ignore_sync(
                     "candidate_id": int(cid),
                     "ok": False,
                     "detail": "Unsupported entity_type for ignore",
-                    "row_count": rc,
+                    "row_count": row_count,
                     "total_units": tu,
                     "total_reported_value": trv,
                 }
@@ -65,17 +67,58 @@ def run_dsi_bulk_ignore_sync(
                     "candidate_id": int(cid),
                     "ok": False,
                     "detail": "Candidate already terminal",
-                    "row_count": rc,
+                    "row_count": row_count,
                     "total_units": tu,
                     "total_reported_value": trv,
                 }
             )
             continue
         cand.status = "ignored"
+        ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
         if notes:
-            ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
             ctx["steward_ignore_notes"] = notes[:2000]
-            cand.context = ctx
+        from app.services.imports.dsi_product_running_change import (
+            _norm_key_for_steward_ignore_token,
+            batch_demote_steward_ignored_customer_staging_lines,
+            batch_demote_steward_ignored_product_staging_lines,
+            build_product_resolution_quality,
+            build_steward_ignore_remap_context,
+            infer_dsi_customer_ignore_reason_code,
+            infer_dsi_ignore_reason_code,
+        )
+
+        if cand.entity_type == "product_identifier":
+            ignore_reason = infer_dsi_ignore_reason_code(ctx)
+        elif cand.entity_type == "customer_dealer_token":
+            ignore_reason = infer_dsi_customer_ignore_reason_code(cand.normalized_key, ctx)
+        else:
+            ignore_reason = None
+        if ignore_reason:
+            ctx["steward_ignore_reason_code"] = ignore_reason
+        remap = build_steward_ignore_remap_context(ctx)
+        if remap:
+            ctx["steward_ignore_remap_context"] = remap
+        quality = ctx.get("product_resolution_quality")
+        if isinstance(quality, dict) and cand.entity_type == "product_identifier":
+            updated = build_product_resolution_quality(
+                {
+                    "total_rows": int(quality.get("total_rows") or 0),
+                    "resolved_receipt_temporal": int(quality.get("resolved_receipt_temporal") or 0),
+                    "resolved_other": int(quality.get("resolved_other") or 0),
+                    "unresolved_rows": int(quality.get("unresolved_rows") or 0),
+                },
+                ignored_rows=int(cand.row_count or 0),
+            )
+            ctx["product_resolution_quality"] = updated
+        cand.context = ctx
+        if cand.entity_type == "product_identifier" and ignore_reason:
+            nk = _norm_key_for_steward_ignore_token(cand.normalized_key or "")
+            if nk:
+                product_tokens_to_demote[nk] = ignore_reason
+        if cand.entity_type == "customer_dealer_token" and ignore_reason:
+            nk = str(cand.normalized_key or "").strip().lower()
+            if nk:
+                customer_tokens_to_demote[nk] = ignore_reason
         pending_commit += 1
         results.append(
             {
@@ -83,10 +126,19 @@ def run_dsi_bulk_ignore_sync(
                 "ok": True,
                 "entity_type": cand.entity_type,
                 "result": {"ok": True, "candidate_id": cand.id, "status": cand.status},
-                "row_count": rc,
+                "row_count": row_count,
                 "total_units": tu,
                 "total_reported_value": trv,
             }
+        )
+
+    if pending_commit > 0 and product_tokens_to_demote:
+        batch_demote_steward_ignored_product_staging_lines(
+            session, int(job_id), product_tokens_to_demote
+        )
+    if pending_commit > 0 and customer_tokens_to_demote:
+        batch_demote_steward_ignored_customer_staging_lines(
+            session, int(job_id), customer_tokens_to_demote
         )
 
     if pending_commit > 0:

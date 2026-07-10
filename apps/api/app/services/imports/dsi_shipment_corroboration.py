@@ -26,7 +26,7 @@ from typing import Any
 from sqlalchemy import Date, and_, func, literal, or_, select, text
 from sqlalchemy.orm import Session
 
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_observations import corroboration_evidence_relation
 
 logger = logging.getLogger(__name__)
 
@@ -38,16 +38,22 @@ _CUSTOMER_CORROBORATION_STATUSES = ("resolved", "resolved_unique")
 # Helpers shared by both DB-query path and in-memory cache path
 # ---------------------------------------------------------------------------
 
-def _same_calendar_month_as_evidence(evidence_date: date) -> Any:
+def _same_calendar_month_as_evidence(evidence_date: date, model: Any) -> Any:
     co = func.coalesce(
-        ShipmentEvidenceLine.ship_confirm_date,
-        ShipmentEvidenceLine.schedule_ship_date,
-        ShipmentEvidenceLine.promise_date,
+        model.ship_confirm_date,
+        model.schedule_ship_date,
+        model.promise_date,
     )
     return and_(
         co.isnot(None),
         func.date_trunc("month", co) == func.date_trunc("month", literal(evidence_date, type_=Date())),
     )
+
+
+def _corroboration_evidence_model():
+    from app.services.imports.shipment_evidence_read import shipment_evidence_read_model
+
+    return shipment_evidence_read_model()
 
 
 # ---------------------------------------------------------------------------
@@ -101,8 +107,9 @@ class ShipmentCorroborationCache:
         # Filter by product_resolution_status='resolved_unique' (has an index).
         # Restrict evidence months in SQL so remote validate does not pull the full table.
         month_set = set(month_list)
+        rel = corroboration_evidence_relation()
         prod_rows = db.execute(
-            text("""
+            text(f"""
                 SELECT
                     distributor_id,
                     product_id,
@@ -115,7 +122,7 @@ class ShipmentCorroborationCache:
                     lower(btrim(coalesce(ean_code,         ''))) AS ean_key,
                     lower(btrim(coalesce(upc_code,         ''))) AS upc_key,
                     lower(btrim(coalesce(sales_model_name, ''))) AS sm_key
-                FROM shipment_evidence_line
+                FROM {rel}
                 WHERE product_resolution_status = 'resolved_unique'
                   AND product_id IS NOT NULL
                   AND COALESCE(ship_confirm_date, schedule_ship_date, promise_date) IS NOT NULL
@@ -146,7 +153,7 @@ class ShipmentCorroborationCache:
         # --- customer corroboration rows ---
         # Restrict to distributor-resolved rows that also have customer_id.
         cust_rows = db.execute(
-            text("""
+            text(f"""
                 SELECT
                     distributor_id,
                     customer_id,
@@ -158,7 +165,7 @@ class ShipmentCorroborationCache:
                     lower(btrim(coalesce(customer_dealer_token, ''))) AS cust_token_key,
                     lower(coalesce(bill_to_raw,  '')) AS bill_to_lower,
                     lower(coalesce(ship_to_raw,  '')) AS ship_to_lower
-                FROM shipment_evidence_line
+                FROM {rel}
                 WHERE customer_id IS NOT NULL
                   AND customer_resolution_status IN ('resolved', 'resolved_unique')
                   AND distributor_id IS NOT NULL
@@ -331,13 +338,14 @@ class GlobalProductIdentityIndex:
     def load(cls, db: Session) -> "GlobalProductIdentityIndex":
         from app.services.imports.distributor_sales_inventory import _product_token_key
 
+        rel = corroboration_evidence_relation()
         rows = db.execute(
             text(
-                """
+                f"""
                 SELECT DISTINCT
                     lower(btrim(coalesce(sales_model_name, ''))) AS sm_key,
                     product_id
-                FROM shipment_evidence_line
+                FROM {rel}
                 WHERE product_resolution_status = 'resolved_unique'
                   AND product_id IS NOT NULL
                   AND btrim(coalesce(sales_model_name, '')) <> ''
@@ -389,8 +397,8 @@ def shipment_corroboration_for_product(
 ) -> dict[str, Any] | None:
     """Return JSON-serializable corroboration dict, or None when lookup is not applicable.
 
-    Includes ``distinct_resolved_product_ids``: distinct ``ShipmentEvidenceLine.product_id`` values
-    among matching **resolved_unique** lines in the evidence month (used to break DSI ambiguity).
+    Includes ``distinct_resolved_product_ids``: distinct resolved product ids among matching
+    **resolved_unique** lines in the evidence month (used to break DSI ambiguity).
 
     For raw-token matching, rows are first limited to the DSI **distributor_id**. If that scope yields
     no distinct product ids, the same token + month match is retried **across all distributors**; when
@@ -398,22 +406,24 @@ def shipment_corroboration_for_product(
     ``distinct_ids_scope`` is ``cross_distributor``. Otherwise ``distinct_ids_scope`` is
     ``distributor_specific`` when the distributor-scoped set is non-empty.
     """
+    from app.services.imports.shipment_evidence_read import apply_active_evidence_filter
+
+    EV = _corroboration_evidence_model()
     if not distributor_id or evidence_date is None:
         return None
     base_where = (
-        ShipmentEvidenceLine.distributor_id == int(distributor_id),
-        ShipmentEvidenceLine.product_resolution_status == "resolved_unique",
-        ShipmentEvidenceLine.product_id.isnot(None),
-        _same_calendar_month_as_evidence(evidence_date),
+        EV.distributor_id == int(distributor_id),
+        EV.product_resolution_status == "resolved_unique",
+        EV.product_id.isnot(None),
+        _same_calendar_month_as_evidence(evidence_date, EV),
     )
-    base_count = select(func.count()).select_from(ShipmentEvidenceLine).where(*base_where)
+    base_count = apply_active_evidence_filter(select(func.count()).select_from(EV).where(*base_where), EV)
     if resolved_product_id is not None:
-        n = db.scalar(base_count.where(ShipmentEvidenceLine.product_id == int(resolved_product_id)))
+        n = db.scalar(base_count.where(EV.product_id == int(resolved_product_id)))
         mode = "resolved_product_id"
-        ids_stmt = (
-            select(ShipmentEvidenceLine.product_id)
-            .where(*base_where, ShipmentEvidenceLine.product_id == int(resolved_product_id))
-            .distinct()
+        ids_stmt = apply_active_evidence_filter(
+            select(EV.product_id).where(*base_where, EV.product_id == int(resolved_product_id)).distinct(),
+            EV,
         )
         cnt = int(n or 0)
         if cnt <= 0:
@@ -438,10 +448,10 @@ def shipment_corroboration_for_product(
     token_match = or_(
         *[
             or_(
-                func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.item_code, ""))) == literal(k),
-                func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.ean_code, ""))) == literal(k),
-                func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.upc_code, ""))) == literal(k),
-                func.lower(func.btrim(func.coalesce(ShipmentEvidenceLine.sales_model_name, ""))) == literal(k),
+                func.lower(func.btrim(func.coalesce(EV.item_code, ""))) == literal(k),
+                func.lower(func.btrim(func.coalesce(EV.ean_code, ""))) == literal(k),
+                func.lower(func.btrim(func.coalesce(EV.upc_code, ""))) == literal(k),
+                func.lower(func.btrim(func.coalesce(EV.sales_model_name, ""))) == literal(k),
             )
             for k in lookup_keys
         ]
@@ -449,7 +459,9 @@ def shipment_corroboration_for_product(
     mode = "raw_product_token_tiers"
 
     n_dist = db.scalar(base_count.where(token_match))
-    ids_dist_stmt = select(ShipmentEvidenceLine.product_id).where(*base_where, token_match).distinct()
+    ids_dist_stmt = apply_active_evidence_filter(
+        select(EV.product_id).where(*base_where, token_match).distinct(), EV
+    )
     distinct_dist: list[int] = []
     if n_dist and int(n_dist) > 0:
         raw_d = list(db.scalars(ids_dist_stmt).all())
@@ -467,16 +479,16 @@ def shipment_corroboration_for_product(
         }
 
     cross_where = (
-        ShipmentEvidenceLine.product_resolution_status == "resolved_unique",
-        ShipmentEvidenceLine.product_id.isnot(None),
-        _same_calendar_month_as_evidence(evidence_date),
+        EV.product_resolution_status == "resolved_unique",
+        EV.product_id.isnot(None),
+        _same_calendar_month_as_evidence(evidence_date, EV),
         token_match,
     )
-    cross_count = select(func.count()).select_from(ShipmentEvidenceLine).where(*cross_where)
+    cross_count = apply_active_evidence_filter(select(func.count()).select_from(EV).where(*cross_where), EV)
     n_cross = db.scalar(cross_count)
     if not n_cross or int(n_cross) <= 0:
         return None
-    ids_cross_stmt = select(ShipmentEvidenceLine.product_id).where(*cross_where).distinct()
+    ids_cross_stmt = apply_active_evidence_filter(select(EV.product_id).where(*cross_where).distinct(), EV)
     raw_c = list(db.scalars(ids_cross_stmt).all())
     distinct_cross = sorted({int(x) for x in raw_c if x is not None})[:32]
     if len(distinct_cross) != 1:
@@ -501,20 +513,24 @@ def shipment_corroboration_for_customer(
     dealer_group_raw: str | None,
     resolved_customer_id: int | None,
 ) -> dict[str, Any] | None:
+    from app.services.imports.shipment_evidence_read import apply_active_evidence_filter
+
+    EV = _corroboration_evidence_model()
     if not distributor_id or evidence_date is None:
         return None
-    base = (
+    base = apply_active_evidence_filter(
         select(func.count())
-        .select_from(ShipmentEvidenceLine)
+        .select_from(EV)
         .where(
-            ShipmentEvidenceLine.distributor_id == int(distributor_id),
-            ShipmentEvidenceLine.customer_id.isnot(None),
-            ShipmentEvidenceLine.customer_resolution_status.in_(_CUSTOMER_CORROBORATION_STATUSES),
-            _same_calendar_month_as_evidence(evidence_date),
-        )
+            EV.distributor_id == int(distributor_id),
+            EV.customer_id.isnot(None),
+            EV.customer_resolution_status.in_(_CUSTOMER_CORROBORATION_STATUSES),
+            _same_calendar_month_as_evidence(evidence_date, EV),
+        ),
+        EV,
     )
     if resolved_customer_id is not None:
-        n = db.scalar(base.where(ShipmentEvidenceLine.customer_id == int(resolved_customer_id)))
+        n = db.scalar(base.where(EV.customer_id == int(resolved_customer_id)))
         mode = "resolved_customer_id"
     else:
         from app.services.imports.distributor_sales_inventory import _norm_key
@@ -525,15 +541,15 @@ def shipment_corroboration_for_customer(
             return None
         conds = []
         if nk:
-            tok = func.nullif(func.btrim(ShipmentEvidenceLine.customer_dealer_token), "")
+            tok = func.nullif(func.btrim(EV.customer_dealer_token), "")
             conds.append(func.lower(tok) == literal(nk))
         if dg:
             esc = dg.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             pat = f"%{esc}%"
             conds.append(
                 or_(
-                    ShipmentEvidenceLine.bill_to_raw.ilike(literal(pat), escape="\\"),
-                    ShipmentEvidenceLine.ship_to_raw.ilike(literal(pat), escape="\\"),
+                    EV.bill_to_raw.ilike(literal(pat), escape="\\"),
+                    EV.ship_to_raw.ilike(literal(pat), escape="\\"),
                 )
             )
         if not conds:

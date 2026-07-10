@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.db.session_sync import SessionLocal
+from app.services.imports.provisional_entity_identity import customer_source_token_alias_key
 from app.services.imports.distributor_sales_inventory import (
     DSIResolutionCache,
     DSIResolutionCustAliasRow,
@@ -39,9 +40,14 @@ def test_resolution_cache_survives_session_commit_without_db_access(monkeypatch)
         all_customers=[DSIResolutionCustomerRow(id=10, code="cust-01", name="Cust One")],
         customer_code_to_id={"cust-01": 10},
         customer_name_to_ids={"cust one": [10]},
+        customer_sim_name_to_ids={"cust one": [10]},
         cust_aliases=[
             DSIResolutionCustAliasRow(
-                normalized_token="cust01", source_definition_id=None, distributor_id=1, customer_id=10
+                normalized_token="cust01",
+                match_key=customer_source_token_alias_key("cust01"),
+                source_definition_id=None,
+                distributor_id=1,
+                customer_id=10,
             ),
         ],
         open_channel_cid=None,

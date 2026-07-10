@@ -44,6 +44,7 @@ from app.services.imports.provisional_entity_identity import (
     find_existing_provisional_distributor_by_canonical_name,
     is_non_entity_customer_provisional_token,
 )
+from app.services.imports.shipment_customer_alias_scope import append_shipment_customer_aliases_scoped
 from app.services.imports.shipment_evidence_resolution_plan import (
     SHIPMENT_CANDIDATE_TERMINAL_STATUSES,
     SHIPMENT_CUSTOMER_ENTITY,
@@ -128,85 +129,19 @@ def _append_customer_aliases_for_shipment_candidate(
     raw_tokens: list[str],
     notes: str,
 ) -> list[int]:
-    """Create approved ``CustomerSourceTokenAlias`` rows for each raw token (skips exact duplicates)."""
-    alias_ids: list[int] = []
-    sid = cand.source_definition_id
-    jid = cand.import_job_id
-    cid = cand.id
-    seen_raw: set[str] = set()
-    for raw in raw_tokens:
-        raw_s = (raw or "").strip()[:512]
-        if not raw_s or raw_s in seen_raw:
-            continue
-        seen_raw.add(raw_s)
-        nt = _norm_key(raw_s)
-        if not nt:
-            continue
-        conds = [
-            CustomerSourceTokenAlias.customer_id == int(customer_id),
-            CustomerSourceTokenAlias.raw_token == raw_s,
-            CustomerSourceTokenAlias.normalized_token == nt[:512],
-            CustomerSourceTokenAlias.status == "approved",
-        ]
-        if sid is not None:
-            conds.append(
-                or_(
-                    CustomerSourceTokenAlias.source_definition_id.is_(None),
-                    CustomerSourceTokenAlias.source_definition_id == int(sid),
-                )
-            )
-        else:
-            conds.append(CustomerSourceTokenAlias.source_definition_id.is_(None))
-        existing_id = db.scalar(select(CustomerSourceTokenAlias.id).where(*conds))
-        if existing_id is not None:
-            alias_ids.append(int(existing_id))
-            continue
-        conflict = _conflicting_customer_alias(
+    """Create approved ``CustomerSourceTokenAlias`` rows (0048 scoped, ON CONFLICT DO NOTHING)."""
+    from app.services.imports.shipment_customer_alias_scope import ShipmentCustomerAliasScopeError
+
+    try:
+        return append_shipment_customer_aliases_scoped(
             db,
-            target_customer_id=customer_id,
-            normalized_token=nt,
-            source_definition_id=sid,
+            customer_id=customer_id,
+            cand=cand,
+            raw_tokens=raw_tokens,
+            notes=notes,
         )
-        if conflict is not None:
-            raise ShipmentStewardOpError(
-                "A source token normalises to an approved alias for a different customer",
-                status_code=409,
-            )
-        alias = CustomerSourceTokenAlias(
-            customer_id=int(customer_id),
-            raw_token=raw_s,
-            normalized_token=nt[:512],
-            source_definition_id=sid,
-            distributor_id=None,
-            dealer_group_token=None,
-            status="approved",
-            notes=notes[:1024] if notes else None,
-            created_from_import_job_id=jid,
-            import_entity_mapping_candidate_id=cid,
-        )
-        try:
-            with db.begin_nested():
-                db.add(alias)
-                db.flush()
-        except IntegrityError:
-            dup = db.scalars(
-                select(CustomerSourceTokenAlias)
-                .where(
-                    CustomerSourceTokenAlias.customer_id == int(customer_id),
-                    CustomerSourceTokenAlias.raw_token == raw_s,
-                    CustomerSourceTokenAlias.normalized_token == nt[:512],
-                )
-                .limit(1)
-            ).first()
-            if dup is not None:
-                alias_ids.append(int(dup.id))
-                continue
-            raise ShipmentStewardOpError(
-                "Could not create customer alias (duplicate or conflict)",
-                status_code=409,
-            ) from None
-        alias_ids.append(int(alias.id))
-    return alias_ids
+    except ShipmentCustomerAliasScopeError as exc:
+        raise ShipmentStewardOpError(str(exc.detail), status_code=exc.status_code) from exc
 
 
 def _allocate_tmp_distributor_code(db: Session) -> str:
@@ -287,6 +222,7 @@ def _update_lines_resolved(
         .where(ShipmentEvidenceLine.id.in_(unique_ids))
         .values(
             distributor_id=int(distributor_id),
+            resolved_distributor_id=int(distributor_id),
             distributor_resolution_status="resolved",
             distributor_resolution_token=tok,
         )
@@ -508,7 +444,7 @@ def _mark_customer_lines_resolved(db: Session, line_ids: list[int], customer_id:
     result = db.execute(
         update(ShipmentEvidenceLine)
         .where(ShipmentEvidenceLine.id.in_(unique_ids))
-        .values(customer_resolution_status="resolved", customer_id=cid)
+        .values(customer_resolution_status="resolved", customer_id=cid, resolved_customer_id=cid)
     )
     return int(result.rowcount or 0)
 
@@ -1333,7 +1269,12 @@ def merge_duplicate_shipment_provisional_distributors_by_display_name(
     *,
     dry_run: bool = True,
 ) -> dict[str, Any]:
-    """Merge ``TMP-DIST-%`` distributors that share the same normalised display ``name``.
+    """DEPRECATED — use ``distributor_full_merge`` (preview + all-or-nothing repoint + PO consolidation).
+
+    Do not run this legacy path and the full merge engine on the same duplicate group.
+    This function performs a partial hard-delete merge and does not consolidate PO rows.
+
+    Merge ``TMP-DIST-%`` distributors that share the same normalised display ``name``.
 
     For each duplicate group the lowest ``id`` is kept. Aliases and ``ShipmentEvidenceLine.distributor_id``
     are moved to the survivor; common FK references are repointed; duplicate rows are deleted when they

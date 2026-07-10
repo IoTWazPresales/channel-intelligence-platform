@@ -17,8 +17,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from sqlalchemy import func, select
+
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import STAGE_FAILED, STAGE_LOADED, STAGE_VALIDATED, process_import_job_sync
+from app.models.import_distributor_si import ImportDistributorSiStagingLine
 from app.models.ingestion import ImportJob
 from app.services.imports.dsi_apply_completion import (
     DsiApplyCompletionError,
@@ -49,10 +52,23 @@ def run_dsi_apply_sync(job_id: int, *, on_progress: ProgressFn | None = None) ->
         job = db.get(ImportJob, job_id)
         if job is None or (job.template_slug or "") != "distributor_inventory":
             return {"id": job_id, "outcome": "not_found"}
+        # Normal flow: validate already built ``import_distributor_si_staging_line``. Step 2
+        # (``complete_dsi_import_job_to_loaded``) re-resolves those rows against current master
+        # data and upserts facts — re-parsing the file here is redundant and destructive (wiping
+        # staging mid-apply if interrupted). Skip Step 1 whenever staging already exists, including
+        # recovery from a prior failed/interrupted apply that left rows behind.
+        staging_count = db.scalar(
+            select(func.count())
+            .select_from(ImportDistributorSiStagingLine)
+            .where(ImportDistributorSiStagingLine.import_job_id == job_id)
+        ) or 0
+        skip_full_pipeline = staging_count > 0
 
-    # Step 1 — DSI pipeline in apply mode (refresh staging → validated), with row progress.
-    with SessionLocal() as db:
-        process_import_job_sync(db, job_id, on_progress=on_progress)
+    # Step 1 — DSI pipeline in apply mode (parse file → staging → validated). Fallback only when
+    # there is no staging yet (apply without a prior validate).
+    if not skip_full_pipeline:
+        with SessionLocal() as db:
+            process_import_job_sync(db, job_id, on_progress=on_progress)
 
     # Step 2 — finalize: fact upsert + promote to loaded + dispatch derivation tasks.
     _emit("finalizing_apply", "Finalizing DSI apply", 0, 0)
@@ -84,6 +100,14 @@ def run_dsi_apply_sync(job_id: int, *, on_progress: ProgressFn | None = None) ->
         outcome = "applied"
         if job is not None:
             if (job.stage or "") == STAGE_LOADED:
+                # Idempotent re-apply: a job already at ``loaded`` skips
+                # ``complete_dsi_import_job_to_loaded`` (it requires ``validated``), so the
+                # endpoint's ``status=running`` would otherwise stick forever on a
+                # double-click / re-apply. A job at ``loaded`` is, by definition, completed.
+                if (job.status or "") != "completed":
+                    job.status = "completed"
+                    if getattr(job, "completed_at", None) is None:
+                        job.completed_at = datetime.now(timezone.utc)
                 persist_clear_background_task_metadata(db, job)
                 db.commit()
             else:

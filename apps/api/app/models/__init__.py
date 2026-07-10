@@ -40,9 +40,18 @@ from app.models.import_distributor_si import (
     ImportEntityMappingCandidate,
     RegionSourceTokenAlias,
 )
+from app.models.purchase_order import PurchaseOrder
 from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.models.shipment_evidence_current import ShipmentEvidenceCurrent
+from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
 from app.models.promo_export import PromoPlanExport, PromoPlanExportEvent
 from app.models.customer_report_config import CustomerReportConfig
+from app.models.customer_article_alias import CustomerArticleAlias
+from app.models.customer_cst_report_slot import CustomerCstReportSlot
+from app.models.cst_listing_seed import CstListingSeed
+from app.models.listing_capture import CustomerListing, ListingObservation
+from app.models.customer_code_mint_setting import CustomerCodeMintSetting
+from app.models.distributor_code_mint_setting import DistributorCodeMintSetting
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
@@ -93,7 +102,17 @@ from app.models.commercial_planner import (
     CommercialPlanLine,
     CommercialSkuAssumption,
 )
-from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
+from app.models.cpor import (
+    CporCase,
+    CporCaseEvent,
+    CporCaseLine,
+    CporClaimEvidenceLine,
+)
+from app.models.commercial_lineup import (
+    CommercialLineupCase,
+    CommercialLineupCasePo,
+    CommercialLineupLine,
+)
 from app.models.task_run import TaskRun
 
 __all__ = [
@@ -121,6 +140,13 @@ __all__ = [
     "FactCustomerSellthrough",
     "ImportCustomerSellthroughStagingLine",
     "CustomerReportConfig",
+    "CustomerArticleAlias",
+    "CustomerCstReportSlot",
+    "CstListingSeed",
+    "CustomerListing",
+    "ListingObservation",
+    "CustomerCodeMintSetting",
+    "DistributorCodeMintSetting",
     "FactCustomerVelocity",
     "FactDsiForecast",
     "FactInboundShipment",
@@ -172,6 +198,10 @@ __all__ = [
     "CommercialCustomerTerm",
     "CommercialDistributorTerm",
     "CommercialSkuAssumption",
+    "CporCase",
+    "CporCaseLine",
+    "CporCaseEvent",
+    "CporClaimEvidenceLine",
     "HistoricalLineupImportHeader",
     "HistoricalLineupImportLine",
     "ImportDistributorSiStagingLine",
@@ -181,7 +211,11 @@ __all__ = [
     "CustomerSourceTokenAlias",
     "DistributorSourceTokenAlias",
     "CommercialLineupCase",
+    "CommercialLineupCasePo",
     "CommercialLineupLine",
+    "PurchaseOrder",
     "ShipmentEvidenceLine",
+    "ShipmentEvidenceCurrent",
+    "ShipmentEvidenceObservation",
     "TaskRun",
 ]

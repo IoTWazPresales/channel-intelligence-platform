@@ -30,7 +30,11 @@ type InvRow = {
   product_id: number;
   sku: string | null;
   product_name: string | null;
+  snapshot_date?: string | null;
   reported_soh: number;
+  sell_out_since?: number;
+  landed_since?: number;
+  derived_stock?: number;
   calculated_soh: number | null;
   variance_units: number | null;
   variance_pct: number | null;
@@ -100,6 +104,7 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
                   <TableCell>Product</TableCell>
                   <TableCell>SKU</TableCell>
                   <TableCell align="right">Reported SOH</TableCell>
+                  <TableCell align="right">Derived stock</TableCell>
                   {depthAtLeast(depth, 'operational') && (
                     <>
                       <TableCell align="right">Calculated SOH</TableCell>
@@ -122,6 +127,9 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
                     <TableCell>{r.product_name}</TableCell>
                     <TableCell>{r.sku}</TableCell>
                     <TableCell align="right">{r.reported_soh.toLocaleString()}</TableCell>
+                    <TableCell align="right">
+                      {(r.derived_stock ?? r.reported_soh).toLocaleString()}
+                    </TableCell>
                     {depthAtLeast(depth, 'operational') && (
                       <>
                         <TableCell align="right">
@@ -139,7 +147,7 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
                           {r.velocity_52wk != null ? r.velocity_52wk.toFixed(2) : '—'}
                         </TableCell>
                         <TableCell align="right">
-                          {r.weeks_of_cover != null ? r.weeks_of_cover.toFixed(1) : '—'}
+                          {r.weeks_of_cover != null ? r.weeks_of_cover.toFixed(1) : 'n/a'}
                         </TableCell>
                       </>
                     )}

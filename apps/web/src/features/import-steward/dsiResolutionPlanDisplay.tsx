@@ -21,6 +21,12 @@ import {
 import type { DsiCatalogOpt, DsiPlanRowOverride, DsiRegionEvidenceDto } from "./dsiSteward.types";
 import type { DsiCandidateRow } from "./dsi-mapping-steward-panel";
 import {
+  formatDsiProductRunningChangeSummary,
+  isDsiTokenLevelResolveProductBlocked,
+  dsiIgnoreReasonCodeLabel,
+} from "./dsiProductRunningChangeDisplay";
+import { DsiProductResolutionEvidenceCard } from "./DsiProductResolutionEvidenceCard";
+import {
   DsiPlanWhyPanel,
   formatPlanRulePathLabel,
   type DsiPlanWhy,
@@ -95,11 +101,18 @@ function dsiSourceRegionChannelLines(ctx: Record<string, unknown> | null | undef
   return { region, channel };
 }
 
-export function allowedOverrideActions(entityType: string): string[] {
+export function allowedOverrideActions(
+  entityType: string,
+  ctx?: Record<string, unknown> | null,
+  planRow?: Record<string, unknown> | null
+): string[] {
   if (entityType === 'distributor_token') {
     return ['ignore', 'map_distributor', 'create_provisional_distributor'];
   }
   if (entityType === 'product_identifier') {
+    if (isDsiTokenLevelResolveProductBlocked(ctx, planRow)) {
+      return ['ignore'];
+    }
     return ['ignore', 'resolve_product'];
   }
   if (entityType === 'customer_dealer_token') {
@@ -306,7 +319,7 @@ export function PlanDialogRowDetail({
 }: PlanDialogRowDetailProps) {
   const id = Number(r.candidate_id);
   const et = String(r.entity_type ?? '');
-  const actions = allowedOverrideActions(et);
+  const actions = allowedOverrideActions(et, cand?.context ?? null, r);
   const strategicHint = String(r.reason ?? '').toLowerCase().includes('strategic');
   const blockers = Array.isArray(r.resolution_blockers)
     ? (r.resolution_blockers as string[]).join(', ')
@@ -420,7 +433,23 @@ export function PlanDialogRowDetail({
               <Typography variant="caption" color="text.secondary">
                 Product match summary
               </Typography>
-              <Typography variant="body2">{dsiProductMatchSummaryCell(cand?.context ?? null) || '—'}</Typography>
+              <Typography variant="body2">
+                {formatDsiProductRunningChangeSummary(cand?.context ?? null) ||
+                  dsiProductMatchSummaryCell(cand?.context ?? null) ||
+                  '—'}
+              </Typography>
+              <DsiProductResolutionEvidenceCard context={cand?.context ?? null} />
+              {isDsiTokenLevelResolveProductBlocked(cand?.context ?? null, r) ? (
+                <Typography variant="caption" color="warning.main" data-testid="dsi-plan-running-change-blocked">
+                  Token-level ProductAlias bind blocked — receipt/temporal splits rows by distributor and date.
+                  Use ignore for indeterminate remainder or choose product per date cluster in Review.
+                </Typography>
+              ) : null}
+              {typeof r.suggested_ignore_reason_code === 'string' ? (
+                <Typography variant="caption" color="text.secondary">
+                  Suggested ignore: {dsiIgnoreReasonCodeLabel(String(r.suggested_ignore_reason_code))}
+                </Typography>
+              ) : null}
             </>
           ) : null}
         </Stack>

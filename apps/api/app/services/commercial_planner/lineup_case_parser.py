@@ -20,12 +20,41 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
+from app.models.commercial_planner import (
+    CommercialCustomerTerm,
+    CommercialDistributorTerm,
+    CommercialSkuAssumption,
+)
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
+from app.services.commercial_planner.lineup_half_year_quantity import (
+    apply_half_year_allocation_to_row_dict,
+)
+from app.services.commercial_planner.lineup_period_inference import (
+    infer_case_product_line,
+    infer_period_start,
+)
+from app.services.commercial_planner.lineup_pricing_resolution import (
+    LineupTradeTermDefaults,
+    resolve_lineup_pricing,
+    sanitize_pct_evidence,
+)
+
+_PCT_EVIDENCE_FIELDS = (
+    "rebate_pct_evidence",
+    "dealer_margin_pct_evidence",
+    "distributor_margin_pct_evidence",
+    "import_tax_pct_evidence",
+    "vat_pct_evidence",
+)
 
 from app.services.commercial_planner.current_lineup_seed import (
     CurrentLineupSourceNotConfiguredError,
-    ensure_current_lineup_import_seed,
+    ensure_lineup_import_seed,
+)
+from app.services.commercial_planner.lineup_customer_alias_resolution import (
+    load_approved_customer_alias_id_by_token_async,
+    resolve_lineup_customer_id_from_token,
 )
 from app.services.commercial_planner.lineup_header_mapping import build_commercial_lineup_column_map
 from app.services.commercial_planner.lineup_open_channel import (
@@ -91,18 +120,21 @@ def _find_header_row(df: pd.DataFrame) -> int | None:
     return None
 
 
-def _load_df(filename: str, file_bytes: bytes) -> pd.DataFrame:
+def _load_df(filename: str, file_bytes: bytes, *, sheet_name: str | None = None) -> pd.DataFrame:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext in ("xlsx", "xlsm"):
         xl = pd.ExcelFile(io.BytesIO(file_bytes))
         sheets = xl.sheet_names
-        chosen = sheets[0]
-        for name in sheets:
-            sample = xl.parse(name, header=None, nrows=15)
-            vals = " ".join(str(v).lower() for v in sample.values.flatten() if pd.notna(v))
-            if "sku" in vals or "model" in vals:
-                chosen = name
-                break
+        if sheet_name and sheet_name in sheets:
+            chosen = sheet_name
+        else:
+            chosen = sheets[0]
+            for name in sheets:
+                sample = xl.parse(name, header=None, nrows=15)
+                vals = " ".join(str(v).lower() for v in sample.values.flatten() if pd.notna(v))
+                if "sku" in vals or "model" in vals:
+                    chosen = name
+                    break
         return xl.parse(chosen, header=None)
     return pd.read_csv(io.BytesIO(file_bytes), header=None, dtype=str)
 
@@ -138,6 +170,69 @@ def _build_distributor_map(distributors: list[DimDistributor]) -> dict[str, DimD
     return m
 
 
+def _resolve_pricing_for_row_dict(
+    rd: dict[str, Any],
+    *,
+    sku_assumptions: dict[int, CommercialSkuAssumption],
+    customer_terms: dict[int, CommercialCustomerTerm],
+    distributor_terms: dict[int, CommercialDistributorTerm],
+) -> tuple[float | None, float | None, dict[str, Any] | None, list[str]]:
+    """Run the backwards SRP -> DAP calculator for one parsed row.
+
+    Uses file evidence first, then trade-term / sku-assumption fallbacks. Returns
+    (calc_dap_cost_currency, calc_profit_total, pricing_chain_json, pricing_flags).
+    No-op (all None) when there is no SRP to price from.
+    """
+    srp = rd.get("msrp_local")
+    if srp is None:
+        return None, None, None, []
+
+    product_id = rd.get("product_id")
+    customer_id = rd.get("customer_id")
+    distributor_id = rd.get("distributor_id")
+
+    assumption = sku_assumptions.get(product_id) if product_id is not None else None
+    cust_term = customer_terms.get(customer_id) if customer_id is not None else None
+    dist_term = distributor_terms.get(distributor_id) if distributor_id is not None else None
+
+    defaults = LineupTradeTermDefaults(
+        dealer_margin_pct=float(cust_term.customer_margin_pct) if cust_term else None,
+        rebate_pct=float(cust_term.customer_rebate_pct) if cust_term else None,
+        distributor_margin_pct=float(dist_term.distributor_margin_pct) if dist_term else None,
+        vat_rate_pct=float(assumption.vat_rate_pct) if assumption else None,
+        roe_local_per_cost_currency=(
+            float(assumption.fx_plan_currency_per_cost_currency) if assumption else None
+        ),
+        controlled_cost_amount=float(assumption.controlled_cost_amount) if assumption else None,
+    )
+
+    resolution = resolve_lineup_pricing(
+        srp_inc_vat_local=srp,
+        quantity_units=rd.get("quantity_units"),
+        file_vat_pct=rd.get("vat_pct_evidence"),
+        file_dealer_margin_pct=rd.get("dealer_margin_pct_evidence"),
+        file_rebate_pct=rd.get("rebate_pct_evidence"),
+        file_distributor_margin_pct=rd.get("distributor_margin_pct_evidence"),
+        file_import_tax_pct=rd.get("import_tax_pct_evidence"),
+        file_roe=rd.get("roe_evidence"),
+        defaults=defaults,
+        evidence={
+            "actual_dap_evidence_local": rd.get("actual_dap_evidence_local"),
+            "dap_evidence_local": rd.get("dap_evidence_local"),
+            "dealer_price_evidence_local": rd.get("dealer_price_evidence_local"),
+            "net_price_evidence_local": rd.get("net_price_evidence_local"),
+            "disti_cost_evidence_local": rd.get("disti_cost_evidence_local"),
+            "old_srp_local": rd.get("old_srp_local"),
+        },
+    )
+    return (
+        resolution.result.calc_dap_cost_currency,
+        resolution.result.calc_profit_total,
+        resolution.pricing_chain,
+        resolution.flags,
+    )
+
+
 def _parse_file_to_row_dicts(
     filename: str,
     file_bytes: bytes,
@@ -145,11 +240,14 @@ def _parse_file_to_row_dicts(
     product_map: dict[str, DimProduct],
     customer_map: dict[str, DimCustomer],
     distributor_map: dict[str, DimDistributor],
+    customer_alias_map: dict[str, int] | None = None,
+    customers_by_id: dict[int, DimCustomer] | None = None,
     row_limit: int | None = None,
-) -> tuple[list[dict[str, Any]], list[str], int, int, int, int]:
-    """Parse tabular file into serialisable row dicts. Returns rows, warnings, counts."""
+    sheet_name: str | None = None,
+) -> tuple[list[dict[str, Any]], list[str], int, int, int, int, int, list[str]]:
+    """Parse tabular file into serialisable row dicts. Returns rows, warnings, counts, header."""
     warnings: list[str] = []
-    raw_df = _load_df(filename, file_bytes)
+    raw_df = _load_df(filename, file_bytes, sheet_name=sheet_name)
     header_row = _find_header_row(raw_df)
     if header_row is None:
         header_row = 0
@@ -169,6 +267,8 @@ def _parse_file_to_row_dicts(
     unresolved_products = 0
     unknown_customer_rows = 0
     unknown_distributor_rows = 0
+    alias_map = customer_alias_map or {}
+    cust_by_id = customers_by_id or {}
 
     for row_idx, row in data_df.iterrows():
         if row_limit is not None and len(out) >= row_limit:
@@ -211,7 +311,14 @@ def _parse_file_to_row_dicts(
 
         resolved_customer: DimCustomer | None = None
         if customer_token_val:
-            resolved_customer = customer_map.get(customer_token_val.lower())
+            resolved_cid = resolve_lineup_customer_id_from_token(
+                customer_token_val,
+                customer_map=customer_map,
+                customer_alias_map=alias_map,
+                customers_by_id=cust_by_id,
+            )
+            if resolved_cid is not None:
+                resolved_customer = cust_by_id.get(resolved_cid)
             if resolved_customer is None:
                 diag.append("unknown_customer")
                 unknown_customer_rows += 1
@@ -242,10 +349,18 @@ def _parse_file_to_row_dicts(
             "distributor_token",
             "quantity_units",
             "msrp_local",
+            "old_srp_local",
             "promo_price_evidence_local",
             "dap_evidence_local",
+            "actual_dap_evidence_local",
+            "dealer_price_evidence_local",
+            "net_price_evidence_local",
+            "disti_cost_evidence_local",
             "rebate_pct_evidence",
+            "dealer_margin_pct_evidence",
             "distributor_margin_pct_evidence",
+            "import_tax_pct_evidence",
+            "roe_evidence",
             "vat_pct_evidence",
             "base_unit_raw",
         }
@@ -258,6 +373,15 @@ def _parse_file_to_row_dicts(
             if channel_uploaded_cell:
                 raw_row_payload[CHANNEL_ROUTE_UPLOADED_CELL_KEY] = channel_uploaded_cell
                 raw_row_payload["customer_token"] = channel_uploaded_cell
+
+        msrp_local = _safe_float(raw.get("msrp_local"))
+        pct_evidence: dict[str, float | None] = {}
+        for field in _PCT_EVIDENCE_FIELDS:
+            raw_pct = _safe_float(raw.get(field))
+            clean_pct = sanitize_pct_evidence(raw_pct, reference_price=msrp_local)
+            if raw_pct is not None and clean_pct is None and "pct_evidence_out_of_range" not in diag:
+                diag.append("pct_evidence_out_of_range")
+            pct_evidence[field] = clean_pct
 
         out.append(
             {
@@ -272,9 +396,20 @@ def _parse_file_to_row_dicts(
                 "model_raw": model_raw,
                 "base_unit_raw": base_unit_raw,
                 "quantity_units": _safe_float(raw.get("quantity_units")),
-                "msrp_local": _safe_float(raw.get("msrp_local")),
+                "msrp_local": msrp_local,
+                "old_srp_local": _safe_float(raw.get("old_srp_local")),
                 "promo_price_evidence_local": _safe_float(raw.get("promo_price_evidence_local")),
                 "dap_evidence_local": _safe_float(raw.get("dap_evidence_local")),
+                "actual_dap_evidence_local": _safe_float(raw.get("actual_dap_evidence_local")),
+                "dealer_price_evidence_local": _safe_float(raw.get("dealer_price_evidence_local")),
+                "net_price_evidence_local": _safe_float(raw.get("net_price_evidence_local")),
+                "disti_cost_evidence_local": _safe_float(raw.get("disti_cost_evidence_local")),
+                "rebate_pct_evidence": pct_evidence["rebate_pct_evidence"],
+                "dealer_margin_pct_evidence": pct_evidence["dealer_margin_pct_evidence"],
+                "distributor_margin_pct_evidence": pct_evidence["distributor_margin_pct_evidence"],
+                "import_tax_pct_evidence": pct_evidence["import_tax_pct_evidence"],
+                "roe_evidence": _safe_float(raw.get("roe_evidence")),
+                "vat_pct_evidence": pct_evidence["vat_pct_evidence"],
                 "diagnostic_codes": diag,
                 "row_status": "resolved" if resolved_product else "unresolved",
                 "raw_row_payload": raw_row_payload,
@@ -289,6 +424,7 @@ def _parse_file_to_row_dicts(
         unresolved_products,
         unknown_customer_rows,
         unknown_distributor_rows,
+        list(data_df.columns),
     )
 
 
@@ -305,15 +441,21 @@ async def preview_current_lineup_file(
     distributors = (await db.execute(select(DimDistributor))).scalars().all()
     product_map = _build_product_map(list(products))
     customer_map = _build_customer_map(list(customers))
+    customers_by_id = {int(c.id): c for c in customers}
+    customer_alias_map = await load_approved_customer_alias_id_by_token_async(db)
     distributor_map = _build_distributor_map(list(distributors))
 
-    rows, warnings, total_rows, resolved_products, unresolved_products, unk_cust, unk_dist = _parse_file_to_row_dicts(
-        filename,
-        file_bytes,
-        product_map=product_map,
-        customer_map=customer_map,
-        distributor_map=distributor_map,
-        row_limit=sample_limit,
+    rows, warnings, total_rows, resolved_products, unresolved_products, unk_cust, unk_dist, _header = (
+        _parse_file_to_row_dicts(
+            filename,
+            file_bytes,
+            product_map=product_map,
+            customer_map=customer_map,
+            distributor_map=distributor_map,
+            customer_alias_map=customer_alias_map,
+            customers_by_id=customers_by_id,
+            row_limit=sample_limit,
+        )
     )
     return LineupParsePreview(
         total_rows=total_rows,
@@ -334,10 +476,15 @@ async def parse_current_lineup_file(
     file_bytes: bytes,
     *,
     existing_import_job_id: int | None = None,
+    template_slug: str = "current_lineup",
+    source_code: str = "current_lineup_system",
+    sheet_name: str | None = None,
+    folder_path: str | None = None,
 ) -> ParseResult:
     """Parse an uploaded lineup file and write CommercialLineupLine rows.
 
-    Creates an ImportJob audit record.
+    Creates an ImportJob audit record tagged ``template_slug`` (default ``current_lineup``; the
+    unified Import-Centre path passes ``unified_lineup``).
     dap_evidence_local is stored as evidence only — never written to controlled_cost_amount.
     """
     now = datetime.now(tz=timezone.utc)
@@ -346,34 +493,31 @@ async def parse_current_lineup_file(
     if case is None:
         raise ValueError(f"CommercialLineupCase id={case_id} not found")
 
-    # Idempotent seed: upsert template + insert current_lineup_system source if missing.
-    await ensure_current_lineup_import_seed(db)
+    # Idempotent seed: upsert template + insert the system source if missing.
+    await ensure_lineup_import_seed(db, template_slug=template_slug, source_code=source_code)
 
-    # Resolve source_definition for the current_lineup template (required FK).
+    # Resolve source_definition for the lineup template (required FK).
     source = await db.scalar(
         select(SourceDefinition)
         .join(ImportTemplate, ImportTemplate.id == SourceDefinition.import_template_id)
-        .where(ImportTemplate.slug == "current_lineup", SourceDefinition.code == "current_lineup_system")
+        .where(ImportTemplate.slug == template_slug, SourceDefinition.code == source_code)
         .limit(1)
     )
     if source is None:
-        tpl = await db.scalar(select(ImportTemplate).where(ImportTemplate.slug == "current_lineup"))
+        tpl = await db.scalar(select(ImportTemplate).where(ImportTemplate.slug == template_slug))
+        remediation = (
+            "From the apps/api directory run: alembic upgrade head "
+            "(current_lineup seed 20260428_0021 / unified_lineup seed 20260628_0056 or later). "
+            "If developing locally, ensure PYTHONPATH includes the app package."
+        )
         if tpl is None:
             raise CurrentLineupSourceNotConfiguredError(
-                "Import template 'current_lineup' is missing after seed attempt.",
-                remediation=(
-                    "From the apps/api directory run: alembic upgrade head "
-                    "(revision 20260428_0021_current_lineup_template_source_seed or later). "
-                    "If developing locally, ensure PYTHONPATH includes the app package."
-                ),
+                f"Import template {template_slug!r} is missing after seed attempt.",
+                remediation=remediation,
             )
         raise CurrentLineupSourceNotConfiguredError(
-            "SourceDefinition 'current_lineup_system' is missing after seed attempt.",
-            remediation=(
-                "From the apps/api directory run: alembic upgrade head "
-                "(revision 20260428_0021_current_lineup_template_source_seed or later). "
-                "Verify import_template.slug='current_lineup' exists and re-run upgrade."
-            ),
+            f"SourceDefinition {source_code!r} is missing after seed attempt.",
+            remediation=remediation,
         )
     source_id = source.id
 
@@ -389,7 +533,7 @@ async def parse_current_lineup_file(
     else:
         job = ImportJob(
             source_id=source_id,
-            template_slug="current_lineup",
+            template_slug=template_slug,
             import_mode="apply",
             status="running",
             file_name=filename,
@@ -398,26 +542,74 @@ async def parse_current_lineup_file(
         db.add(job)
     await db.flush()
 
+    parse_opts: dict[str, Any] = {}
+    if isinstance(job.staged_metadata, dict):
+        raw_opts = job.staged_metadata.get("lineup_parse_options")
+        if isinstance(raw_opts, dict):
+            parse_opts = raw_opts
+    effective_sheet = sheet_name or parse_opts.get("sheet_name")
+    effective_folder = folder_path or parse_opts.get("folder_path")
+
     try:
         products = (await db.execute(select(DimProduct))).scalars().all()
         customers = (await db.execute(select(DimCustomer))).scalars().all()
         distributors = (await db.execute(select(DimDistributor))).scalars().all()
         product_map = _build_product_map(list(products))
         customer_map = _build_customer_map(list(customers))
+        customers_by_id = {int(c.id): c for c in customers}
+        customer_alias_map = await load_approved_customer_alias_id_by_token_async(db)
         distributor_map = _build_distributor_map(list(distributors))
 
-        row_dicts, warnings, total_rows, resolved_products, unresolved_products, _, _ = _parse_file_to_row_dicts(
-            filename,
-            file_bytes,
-            product_map=product_map,
-            customer_map=customer_map,
-            distributor_map=distributor_map,
-            row_limit=None,
+        row_dicts, warnings, total_rows, resolved_products, unresolved_products, _, _, header_cols = (
+            _parse_file_to_row_dicts(
+                filename,
+                file_bytes,
+                product_map=product_map,
+                customer_map=customer_map,
+                distributor_map=distributor_map,
+                customer_alias_map=customer_alias_map,
+                customers_by_id=customers_by_id,
+                row_limit=None,
+                sheet_name=effective_sheet,
+            )
         )
+
+        slice_source_rows = parse_opts.get("slice_source_rows")
+        if isinstance(slice_source_rows, list) and slice_source_rows:
+            from app.services.commercial_planner.lineup_bulk_slice_rows import filter_row_dicts_to_slice
+
+            expected_slice_len = len(slice_source_rows)
+            row_dicts = filter_row_dicts_to_slice(row_dicts, [int(x) for x in slice_source_rows])
+
+        half_alloc = parse_opts.get("half_year_allocation_half")
+        if half_alloc in ("q1", "q2"):
+            row_dicts = [
+                apply_half_year_allocation_to_row_dict(rd, half=str(half_alloc)) for rd in row_dicts
+            ]
+
+        # Trade-term / sku-assumption fallback maps for backwards pricing (one query each).
+        sku_assumptions = {
+            a.product_id: a for a in (await db.execute(select(CommercialSkuAssumption))).scalars().all()
+        }
+        customer_terms = {
+            t.customer_id: t for t in (await db.execute(select(CommercialCustomerTerm))).scalars().all()
+        }
+        distributor_terms = {
+            t.distributor_id: t for t in (await db.execute(select(CommercialDistributorTerm))).scalars().all()
+        }
 
         lines_to_add: list[CommercialLineupLine] = []
         for rd in row_dicts:
-            diag = rd.get("diagnostic_codes") or []
+            diag = list(rd.get("diagnostic_codes") or [])
+            calc_dap, calc_profit, pricing_chain, pricing_flags = _resolve_pricing_for_row_dict(
+                rd,
+                sku_assumptions=sku_assumptions,
+                customer_terms=customer_terms,
+                distributor_terms=distributor_terms,
+            )
+            for flag in pricing_flags:
+                if flag not in diag:
+                    diag.append(flag)
             line = CommercialLineupLine(
                 case_id=case_id,
                 source_row_number=rd["source_row_number"],
@@ -433,14 +625,116 @@ async def parse_current_lineup_file(
                 msrp_local=rd.get("msrp_local"),
                 promo_price_evidence_local=rd.get("promo_price_evidence_local"),
                 dap_evidence_local=rd.get("dap_evidence_local"),
+                rebate_pct_evidence=rd.get("rebate_pct_evidence"),
+                distributor_margin_pct_evidence=rd.get("distributor_margin_pct_evidence"),
+                vat_pct_evidence=rd.get("vat_pct_evidence"),
                 raw_row_payload=rd.get("raw_row_payload"),
                 row_status=rd.get("row_status") or "imported",
                 diagnostic_codes=diag if diag else None,
+                pricing_chain_json=pricing_chain,
+                calc_dap_cost_currency=calc_dap,
+                calc_profit_total=calc_profit,
             )
             db.add(line)
             lines_to_add.append(line)
 
+        if isinstance(slice_source_rows, list) and slice_source_rows:
+            expected = len(slice_source_rows)
+            actual = len(lines_to_add)
+            if actual != expected:
+                raise ValueError(
+                    f"lineup slice row count mismatch: slice_source_rows={expected} persisted_lines={actual}"
+                )
+
         await db.flush()
+
+        # Infer reporting period (label x month columns) and product line (catalogue majority,
+        # filename fallback); never overwrite a value a steward already set on the case.
+        inferred_start, period_flags = infer_period_start(case.period_label, header_cols)
+        if inferred_start is not None and case.inferred_period_start is None:
+            case.inferred_period_start = inferred_start
+        if period_flags:
+            for f in period_flags:
+                if f not in warnings:
+                    warnings.append(f)
+        if case.product_line is None and lines_to_add:
+            resolved_pids = sorted({int(l.product_id) for l in lines_to_add if l.product_id})
+            pline_by_id: dict[int, str | None] = {}
+            if resolved_pids:
+                cat_rows = (
+                    await db.execute(
+                        select(DimProduct.id, DimProduct.product_line).where(
+                            DimProduct.id.in_(resolved_pids)
+                        )
+                    )
+                ).all()
+                pline_by_id = {int(r[0]): r[1] for r in cat_rows}
+            resolved_plines: list[str] = []
+            for line in lines_to_add:
+                if not line.product_id:
+                    continue
+                pl = pline_by_id.get(int(line.product_id))
+                if pl and str(pl).strip():
+                    resolved_plines.append(str(pl).strip())
+            inferred_line = infer_case_product_line(
+                filename=filename,
+                total_rows=len(lines_to_add),
+                resolved_product_lines=resolved_plines,
+            )
+            if inferred_line:
+                case.product_line = inferred_line
+
+        folder_bu = parse_opts.get("business_unit")
+        if folder_bu and str(folder_bu).strip():
+            case.business_unit = str(folder_bu).strip()
+            case.product_line = str(folder_bu).strip()
+        elif case.business_unit:
+            case.product_line = case.business_unit
+
+        if case.business_unit is None and lines_to_add:
+            import asyncio
+
+            from app.db.session_sync import SessionLocal as SyncSessionLocal
+            from app.services.commercial_planner.lineup_business_unit_resolution import (
+                LineupRowProductTokens,
+                load_business_unit_by_product_id,
+                resolve_lineup_business_unit,
+            )
+            from app.services.imports.product_resolution_index_cache import get_product_resolution_index
+
+            bu_by_pid = await load_business_unit_by_product_id(db)
+
+            def _load_index() -> Any:
+                with SyncSessionLocal() as sync_db:
+                    return get_product_resolution_index(sync_db)
+
+            product_index = await asyncio.to_thread(_load_index)
+            token_rows = [
+                LineupRowProductTokens(
+                    sku_raw=ln.sku_raw,
+                    part_number_raw=ln.part_number_raw,
+                    model_raw=ln.model_raw,
+                )
+                for ln in lines_to_add
+            ]
+            bu_report = resolve_lineup_business_unit(
+                rows=token_rows,
+                product_index=product_index,
+                business_unit_by_product_id=bu_by_pid,
+                sheet_name=effective_sheet,
+                folder_path=effective_folder,
+                manual_business_unit=parse_opts.get("business_unit"),
+            )
+            if bu_report.business_unit:
+                case.business_unit = bu_report.business_unit
+                # Archive folder BU is the card product-line code — keep product_line aligned.
+                case.product_line = bu_report.business_unit
+            for flag in bu_report.flags:
+                if flag not in warnings:
+                    warnings.append(flag)
+            meta = dict(job.staged_metadata) if isinstance(job.staged_metadata, dict) else {}
+            meta["lineup_bu_resolution"] = bu_report.to_dict()
+            job.staged_metadata = meta
 
         job.status = "completed"
         job.completed_at = datetime.now(tz=timezone.utc)

@@ -21,6 +21,7 @@ from app.services.imports.import_background_slots import SLOT_MAIN, clear_task_s
 from app.services.imports.import_job_background_metadata import (
     ACTIVE_CELERY_STATES,
     TERMINAL_CELERY_STATES,
+    job_db_indicates_pipeline_finished,
     persist_pipeline_queued_at,
     pipeline_dispatch_conflict_message,
     read_main_celery_state,
@@ -77,6 +78,12 @@ def pipeline_queued_at_age_seconds(job: ImportJob) -> float | None:
 
 def import_pipeline_dispatch_is_busy(job: ImportJob) -> bool:
     """True when a ``process_job`` run is queued or in flight for this job (any job status)."""
+    # DB is the authoritative source of truth.  If the job is already in a terminal DB state
+    # (completed/validated/loaded/failed), it is not busy — no checkpoint or Celery artifact
+    # should override that.
+    if job_db_indicates_pipeline_finished(job):
+        return False
+
     state = read_main_celery_state(job)
     if state is not None and state in ACTIVE_CELERY_STATES:
         return True

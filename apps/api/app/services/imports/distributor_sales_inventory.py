@@ -41,7 +41,11 @@ from app.services.imports.dsi_customer_intelligence import (
     annotate_dsi_customer_candidate_duplicates,
     annotate_dsi_customer_distributor_name_collisions,
 )
-from app.services.imports.dsi_customer_name_normalization import normalize_customer_name_token
+from app.services.imports.dsi_customer_name_normalization import (
+    normalize_customer_name_for_similarity,
+    normalize_customer_name_token,
+)
+from app.services.imports.provisional_entity_identity import customer_source_token_alias_key
 from app.services.imports.dsi_shipment_corroboration import (
     shipment_corroboration_for_customer,
     shipment_corroboration_for_product,
@@ -584,6 +588,7 @@ class DSIResolutionCustAliasRow:
     """Detached approved customer alias row."""
 
     normalized_token: str
+    match_key: str
     source_definition_id: int | None
     distributor_id: int | None
     customer_id: int
@@ -614,8 +619,10 @@ def _dist_alias_row_from_orm(row: DistributorSourceTokenAlias) -> DSIResolutionD
 
 
 def _cust_alias_row_from_orm(row: CustomerSourceTokenAlias) -> DSIResolutionCustAliasRow:
+    stored = str(row.normalized_token or "")
     return DSIResolutionCustAliasRow(
-        normalized_token=str(row.normalized_token or ""),
+        normalized_token=stored,
+        match_key=customer_source_token_alias_key(stored),
         source_definition_id=int(row.source_definition_id) if row.source_definition_id is not None else None,
         distributor_id=int(row.distributor_id) if row.distributor_id is not None else None,
         customer_id=int(row.customer_id),
@@ -644,6 +651,7 @@ class DSIResolutionCache:
     all_customers: list[DSIResolutionCustomerRow]
     customer_code_to_id: dict[str, int]
     customer_name_to_ids: dict[str, list[int]]
+    customer_sim_name_to_ids: dict[str, list[int]]
     cust_aliases: list[DSIResolutionCustAliasRow]
     open_channel_cid: int | None
 
@@ -712,6 +720,7 @@ def _build_resolution_cache(
     customer_rows = [_customer_row_from_orm(c) for c in all_customers_orm]
     customer_code_to_id: dict[str, int] = {}
     customer_name_to_ids: dict[str, list[int]] = {}
+    customer_sim_name_to_ids: dict[str, list[int]] = {}
     for c in customer_rows:
         ck = (c.code or "").strip().lower()
         if ck:
@@ -719,6 +728,9 @@ def _build_resolution_cache(
         nk = (c.name or "").strip().lower()
         if nk:
             customer_name_to_ids.setdefault(nk, []).append(int(c.id))
+        sk = normalize_customer_name_for_similarity(c.name)
+        if sk:
+            customer_sim_name_to_ids.setdefault(sk, []).append(int(c.id))
 
     if on_sub_phase is not None:
         on_sub_phase("customer_aliases")
@@ -750,6 +762,7 @@ def _build_resolution_cache(
         all_customers=customer_rows,
         customer_code_to_id=customer_code_to_id,
         customer_name_to_ids=customer_name_to_ids,
+        customer_sim_name_to_ids=customer_sim_name_to_ids,
         cust_aliases=cust_alias_rows,
         open_channel_cid=int(open_channel_cid) if open_channel_cid is not None else None,
     )
@@ -775,6 +788,7 @@ def _build_distributor_resolution_cache(db: Session, source_def_id: int | None =
         all_customers=[],
         customer_code_to_id={},
         customer_name_to_ids={},
+        customer_sim_name_to_ids={},
         cust_aliases=[],
         open_channel_cid=None,
     )
@@ -1304,16 +1318,17 @@ def _resolve_customer_from_cache(
     _ = channel_raw
     diagnostics: list[str] = []
     nt = _norm_key(customer_raw)
+    alias_lookup_key = customer_source_token_alias_key(customer_raw)
     dg = _clean_str(dealer_group_raw)
 
     if dg and any(x in dg.lower() for x in DEALER_GROUP_PLACEHOLDER_SUBSTRINGS):
         diagnostics.append("dealer_group_placeholder")
 
     if not _customer_token_is_placeholder(nt, customer_raw):
-        if nt:
+        if alias_lookup_key:
             matches: list[int] = []
             for a in res_cache.cust_aliases:
-                if a.normalized_token != nt:
+                if a.match_key != alias_lookup_key:
                     continue
                 if (
                     source_id is not None
@@ -1733,6 +1748,43 @@ def process_distributor_sales_inventory(
         )
         return 1
 
+    from app.services.imports.dsi_workbook import (
+        DSI_SHEET_META_KEY,
+        build_combined_dsi_dataframe,
+        is_nested_dsi_field_mapping,
+        iter_dsi_dataframes_for_job,
+        persist_dsi_workbook_on_job,
+    )
+
+    sheet_frames = iter_dsi_dataframes_for_job(db, job, df)
+    skipped_sheets: list[dict[str, str]] = []
+    if len(sheet_frames) > 1 or is_nested_dsi_field_mapping(job.field_mapping):
+        df, mapping, skipped_sheets = build_combined_dsi_dataframe(sheet_frames)
+        wb_meta = dict((job.staged_metadata or {}).get(DSI_SHEET_META_KEY) or {})
+        wb_meta["skipped_sheets"] = skipped_sheets
+        persist_dsi_workbook_on_job(job, wb_meta)
+        if df.empty:
+            db.add(
+                ImportRowResult(
+                    job_id=job.id,
+                    row_number=0,
+                    severity="error",
+                    code="dsi_no_mapped_sheets",
+                    message="No mapped DSI sheets to process. Map at least one sheet with distributor and product columns.",
+                )
+            )
+            return 1
+        for skip in skipped_sheets:
+            db.add(
+                ImportRowResult(
+                    job_id=job.id,
+                    row_number=0,
+                    severity="warning",
+                    code="dsi_sheet_skipped",
+                    message=f"Sheet {skip['sheet_name']!r} skipped: {skip['reason']}",
+                )
+            )
+
     if job.source and isinstance(job.source.column_mapping_memory, dict):
         from app.services.imports.ai_resolver_wiring import record_format_drift_on_job
 
@@ -1973,8 +2025,23 @@ def process_distributor_sales_inventory(
         }
     )
 
+    from app.services.imports.dsi_product_running_change import (
+        accumulate_product_running_change_stat,
+        compute_dsi_hard_row_with_product_auto_exclude,
+        compute_dsi_sellout_block_with_customer_auto_exclude,
+        IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT,
+        IGNORE_REASON_NO_CUSTOMER,
+        new_product_running_change_stats_bucket,
+        product_auto_exclude_terminal_status,
+        strip_ambiguous_product_match_from_diags,
+    )
+
+    product_running_change_stats: dict[str, dict[str, int]] = {}
+
     blocking = 0
     warnings = 0
+    master_merge_excluded_rows = 0
+    auto_excluded_rows = 0
     first_unresolved_dist_raw: str | None = None
     dsi_sellout_issue_rows = 0
     dsi_inv_ready_with_sellout_issue_rows = 0
@@ -2185,6 +2252,7 @@ def process_distributor_sales_inventory(
                     prod_diag.append(presolve_tag)
                     diag.append(presolve_tag)
                     perr = None
+                    strip_ambiguous_product_match_from_diags(diag, prod_diag)
             if (
                 rpid is None
                 and prod_raw
@@ -2212,6 +2280,7 @@ def process_distributor_sales_inventory(
                     prod_diag.append(presolve_tag)
                     diag.append(presolve_tag)
                     perr = None
+                    strip_ambiguous_product_match_from_diags(diag, prod_diag)
             if rpid is None and prod_raw:
                 from app.services.imports.dsi_weekly_auto_resolution import (
                     check_product_auto_resolution_at_validate,
@@ -2257,6 +2326,18 @@ def process_distributor_sales_inventory(
             if prod_memo_key[0]:
                 _memo_prod[prod_memo_key] = (rpid, perr, list(prod_diag), presolve_tag, pev)
 
+        if prod_raw:
+            pk_stat = _norm_key(prod_raw)
+            if pk_stat:
+                st_bucket = product_running_change_stats.setdefault(
+                    pk_stat, new_product_running_change_stats_bucket()
+                )
+                accumulate_product_running_change_stat(
+                    st_bucket,
+                    resolved_product_id=rpid,
+                    presolve_tag=presolve_tag,
+                )
+
         rdistributor_id = rdid
         rcustomer_id: int | None = None
 
@@ -2268,6 +2349,7 @@ def process_distributor_sales_inventory(
 
         cust_res_raw: str | None = None
         cust_res_notes: list[str] = []
+        cust_diag: list[str] = []
         if sellout_or_return_attempt:
             cust_res_raw, cust_res_notes = effective_dsi_customer_primary_for_resolution(cust_raw, dg_raw)
 
@@ -2304,7 +2386,7 @@ def process_distributor_sales_inventory(
                         res_cache,
                         source_definition_id=source_def_id,
                         distributor_id=rdistributor_id,
-                        normalized_token=_norm_key(cust_res_raw) or "",
+                        normalized_token=customer_source_token_alias_key(cust_res_raw) or "",
                     )
                     if cust_alias_conflict:
                         cust_diag.append(cust_alias_conflict)
@@ -2362,8 +2444,26 @@ def process_distributor_sales_inventory(
                     list(cust_res_notes),
                 )
 
-        hard_row = bool((derr and rdid is None) or (perr and rpid is None))
-        sellout_blocked_no_customer = bool(sellout_or_return_attempt and rcustomer_id is None)
+        hard_row, product_auto_exclude_reason = compute_dsi_hard_row_with_product_auto_exclude(
+            derr=derr,
+            rdid=rdid,
+            perr=perr,
+            rpid=rpid,
+            pev=pev,
+            diag=diag,
+        )
+        ckey_for_customer_exclude = (
+            _customer_candidate_identity_norm(cust_raw, dg_raw) if sellout_or_return_attempt else ""
+        )
+        sellout_blocked_no_customer, customer_auto_exclude_reason = compute_dsi_sellout_block_with_customer_auto_exclude(
+            sellout_or_return_attempt=sellout_or_return_attempt,
+            rcustomer_id=rcustomer_id,
+            cust_diag=cust_diag,
+            normalized_candidate_key=ckey_for_customer_exclude,
+            customer_dealer_raw=cust_raw,
+            dealer_group_raw=dg_raw,
+            diag=diag,
+        )
         sellout_blocked_no_tx = bool(
             qty_f is not None and qty_f != 0 and tx_date is None
         )
@@ -2464,6 +2564,16 @@ def process_distributor_sales_inventory(
             res_status = "ready_inventory"
         else:
             res_status = "staged_only"
+
+        if customer_auto_exclude_reason:
+            sev, res_status = product_auto_exclude_terminal_status()
+            if customer_auto_exclude_reason == IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT:
+                master_merge_excluded_rows += 1
+            elif customer_auto_exclude_reason == IGNORE_REASON_NO_CUSTOMER:
+                auto_excluded_rows += 1
+        elif product_auto_exclude_reason:
+            sev, res_status = product_auto_exclude_terminal_status()
+            auto_excluded_rows += 1
 
         _append_shipment_corroboration_signals_dsi(
             db,
@@ -2827,14 +2937,22 @@ def process_distributor_sales_inventory(
                     if temporal_ev.get("fifo_candidate") or acc.get("fifo_any"):
                         ctx["fifo_candidate"] = True
                 if amb:
+                    from app.services.imports.dsi_product_running_change import (
+                        enrich_product_candidate_running_change_context,
+                    )
+
                     ctx["product_match_status"] = "ambiguous_eligible"
                     ctx["product_ambiguous_eligible"] = amb
                     ids = amb.get("product_ids") or []
                     tier = amb.get("tier") or ""
-                    ctx["product_match_summary"] = (
-                        f"Ambiguous: {len(ids)} eligible Product Master rows in tier "
-                        f"{tier}; auto-resolve blocked."
-                    )
+                    stats_entry = product_running_change_stats.get(nkey_clean)
+                    if isinstance(stats_entry, dict) and int(stats_entry.get("total_rows") or 0) > 0:
+                        enrich_product_candidate_running_change_context(ctx, stats_entry)
+                    else:
+                        ctx["product_match_summary"] = (
+                            f"Ambiguous: {len(ids)} eligible Product Master rows in tier "
+                            f"{tier}; auto-resolve blocked."
+                        )
                 elif inh:
                     ctx["product_match_status"] = "inactive_only"
                     ctx["product_inactive_matches"] = inh[:16]
@@ -2905,18 +3023,46 @@ def process_distributor_sales_inventory(
                 "summary": "Resolved shipment evidence lines in the same calendar month may corroborate this bucket (no auto-resolve).",
             }
             ctx.setdefault("corroboration_markers", []).append("shipment_evidence_customer")
+        from app.services.imports.source_token_alias_conflicts import MULTIPLE_CUSTOMER_ALIASES
+
+        alias_scope_conflict = (
+            etype == "customer_dealer_token"
+            and data.get("alias_conflict_reason") == MULTIPLE_CUSTOMER_ALIASES
+        )
+        if alias_scope_conflict:
+            ctx["resolution_blocker"] = "master_data_alias_scope_conflict"
+            ctx["hold_for_manual_review"] = True
+            ctx["plan_status"] = "needs_review"
         cand_status = "needs_review"
         suggested_entity_id: int | None = None
         match_reason: str | None = None
         pres = preserved_candidate_steward.get((etype, nkey_clean[:512]))
+        if alias_scope_conflict:
+            pres = None
         if pres:
             if isinstance(pres.get("duplicate_review"), dict):
                 ctx["duplicate_review"] = pres["duplicate_review"]
-            pres_st = pres.get("status")
+            pres_st = (pres.get("status") or "").strip()
+            # A candidate only regenerates when at least one of its rows is still
+            # unresolved this run (the aggregator adds it only when the FK is None).
+            # Carrying a stale ``resolved`` status forward onto a regenerated
+            # customer candidate marks it terminal — hiding it from the steward
+            # queue while staging stays blocked (phantom-resolved). Re-open such a
+            # candidate so the work is visible; keep the prior target as a hint.
+            stale_resolved_customer = (
+                etype == "customer_dealer_token" and pres_st == "resolved"
+            )
             if pres_st == "acknowledged_unique":
                 cand_status = "acknowledged_unique"
-            elif is_dsi_mapping_candidate_terminal_status(str(pres_st or "")):
-                cand_status = str(pres_st).strip()
+            elif stale_resolved_customer:
+                cand_status = "needs_review"
+                if pres.get("suggested_entity_id") is not None:
+                    try:
+                        ctx["prior_resolved_customer_id"] = int(pres["suggested_entity_id"])
+                    except (TypeError, ValueError):
+                        pass
+            elif is_dsi_mapping_candidate_terminal_status(pres_st):
+                cand_status = pres_st
                 if pres.get("suggested_entity_id") is not None:
                     try:
                         suggested_entity_id = int(pres["suggested_entity_id"])
@@ -2985,6 +3131,10 @@ def process_distributor_sales_inventory(
     summary = {
         "staging_rows": int(len(df)),
         "blocking_rows": blocking,
+        "human_fixable_blocking_rows": blocking,
+        "master_merge_excluded_rows": master_merge_excluded_rows,
+        "steward_map_blocking_rows": blocking,
+        "auto_excluded_rows": auto_excluded_rows,
         "warning_rows": warnings,
         "aggregated_candidates": len(agg),
         "import_mode": job.import_mode,
@@ -3137,6 +3287,7 @@ def refresh_dsi_staging_line_resolution(
 
     cust_res_raw: str | None = None
     cust_res_notes: list[str] = []
+    cust_diag: list[str] = []
     if sellout_attempt:
         cust_res_raw, cust_res_notes = effective_dsi_customer_primary_for_resolution(cust_raw, dg_raw)
 
@@ -3150,11 +3301,48 @@ def refresh_dsi_staging_line_resolution(
             channel_raw=ch_raw,
             open_flag_raw=open_raw,
         )
-        diag.extend(cd)
+        cust_diag = list(cd)
+        diag.extend(cust_diag)
+        if rcustomer_id is None and cust_res_raw:
+            from app.services.imports.source_token_alias_conflicts import (
+                customer_alias_conflict_reason_from_db,
+            )
+
+            cust_alias_conflict = customer_alias_conflict_reason_from_db(
+                db,
+                source_definition_id=source_def_id,
+                distributor_id=rdistributor_id,
+                raw_or_normalized_token=cust_res_raw,
+            )
+            if cust_alias_conflict:
+                cust_diag.append(cust_alias_conflict)
+                diag.append(cust_alias_conflict)
         diag.extend(cust_res_notes)
 
-    hard_row = bool(derr or perr)
-    sellout_blocked_no_customer = bool(sellout_attempt and rcustomer_id is None)
+    from app.services.imports.dsi_product_running_change import (
+        compute_dsi_hard_row_with_product_auto_exclude,
+        compute_dsi_sellout_block_with_customer_auto_exclude,
+        product_auto_exclude_terminal_status,
+    )
+
+    hard_row, product_auto_exclude_reason = compute_dsi_hard_row_with_product_auto_exclude(
+        derr=derr,
+        rdid=rdistributor_id,
+        perr=perr,
+        rpid=rpid,
+        pev=pev,
+        diag=diag,
+    )
+    ckey_for_customer_exclude = _customer_candidate_identity_norm(cust_raw, dg_raw) if sellout_attempt else ""
+    sellout_blocked_no_customer, customer_auto_exclude_reason = compute_dsi_sellout_block_with_customer_auto_exclude(
+        sellout_or_return_attempt=sellout_attempt,
+        rcustomer_id=rcustomer_id,
+        cust_diag=cust_diag,
+        normalized_candidate_key=ckey_for_customer_exclude,
+        customer_dealer_raw=cust_raw,
+        dealer_group_raw=dg_raw,
+        diag=diag,
+    )
     sellout_blocked_no_tx = bool(qty_sold is not None and qty_sold != 0 and tx_date is None)
     inv_ready = bool(inv_attempt and snap_date is not None and soh is not None)
     inv_soft_fail = bool(inv_attempt and not inv_ready)
@@ -3230,6 +3418,11 @@ def refresh_dsi_staging_line_resolution(
         res_status = "ready_inventory"
     else:
         res_status = "staged_only"
+
+    if customer_auto_exclude_reason:
+        sev, res_status = product_auto_exclude_terminal_status()
+    elif product_auto_exclude_reason:
+        sev, res_status = product_auto_exclude_terminal_status()
 
     _append_shipment_corroboration_signals_dsi(
         db,

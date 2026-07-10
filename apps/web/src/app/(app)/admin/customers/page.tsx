@@ -4,16 +4,13 @@ import {
   Alert,
   Box,
   Button,
-  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
-  Drawer,
   FormControl,
-  FormControlLabel,
   InputLabel,
   MenuItem,
   Paper,
@@ -23,29 +20,25 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  CellValueChangedEvent,
-  ColDef,
-  ColumnMovedEvent,
-  ColumnPinnedEvent,
-  ColumnResizedEvent,
-  ColumnVisibleEvent,
-  GridOptions,
-  GridReadyEvent,
-} from 'ag-grid-community';
+import type { CellValueChangedEvent, ColDef, GridApi } from 'ag-grid-community';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 
-import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 import {
   MasterBulkDeleteImpactDialog,
   type MasterBulkDeletePreview,
 } from '@/components/bulkTable/MasterBulkDeleteImpactDialog';
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { ModuleDataSection } from '@/components/ModuleDataSection';
-import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import { PageHeader } from '@/components/PageHeader';
 import { CustomerCommercialTermsPanel } from '@/features/admin/CustomerCommercialTermsPanel';
+import { CustomerBulkPromoteDialog } from '@/features/admin/CustomerBulkPromoteDialog';
+import { CustomerDispositionDialog } from '@/features/admin/CustomerDispositionDialog';
+import {
+  CustomerPromoteDialog,
+  customerPromoteActionVisible,
+} from '@/features/admin/CustomerPromoteDialog';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -55,6 +48,7 @@ type CustomerRow = {
   customer_code: string;
   customer_name: string;
   customer_status: string;
+  no_code_disposition?: string | null;
   partner_tier: string | null;
   account_owner_internal: string | null;
   notes_summary: string | null;
@@ -172,7 +166,7 @@ const STATIC_CUSTOMER_COLUMN_GROUPS: { label: string; fields: CustomerColumnFiel
   { label: 'Import & alias linkage', fields: ['alias_count', 'last_import_at', 'alias_link_status'] },
   { label: 'dim_customer — timestamps', fields: ['created_at', 'updated_at'] },
 ];
-const STATUS_OPTIONS = ['', 'active', 'inactive', 'onboarding', 'blocked'];
+const STATUS_OPTIONS = ['', 'active', 'inactive', 'onboarding', 'blocked', 'unverified', 'needs_review'];
 const PARTNER_TIER_OPTIONS = ['', 'strategic', 'tier_1', 'tier_2', 'tier_3', 'core', 'long_tail'];
 const LOCATION_TYPE_OPTIONS = ['hq', 'store', 'warehouse', 'branch', 'online', 'other'];
 const CONTACT_ROLE_OPTIONS = ['general', 'procurement', 'sales', 'operations', 'finance', 'support', 'executive'];
@@ -231,6 +225,9 @@ function AdminCustomersPageContent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [paste, setPaste] = useState('');
   const [selectedRow, setSelectedRow] = useState<CustomerRow | null>(null);
+  const [promoteTarget, setPromoteTarget] = useState<CustomerRow | null>(null);
+  const [bulkPromoteOpen, setBulkPromoteOpen] = useState(false);
+  const [dispositionOpen, setDispositionOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateCustomerBody>({
     customer_code: '',
     customer_name: '',
@@ -262,22 +259,20 @@ function AdminCustomersPageContent() {
   });
   const [editingLocationId, setEditingLocationId] = useState<number | null>(null);
   const [editingContactId, setEditingContactId] = useState<number | null>(null);
-  const [gridApi, setGridApi] = useState<any | null>(null);
+  const [gridApi, setGridApi] = useState<GridApi<CustomerRow> | null>(null);
   const [bulkSelectionMode, setBulkSelectionMode] = useState<BulkTableSelectionMode>('normal');
   const [bulkSelectedCount, setBulkSelectedCount] = useState(0);
-  const [visibleRowCount, setVisibleRowCount] = useState(0);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeletePreview, setBulkDeletePreview] = useState<MasterBulkDeletePreview | null>(null);
   const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
   const [bulkDeleteAck, setBulkDeleteAck] = useState(false);
-  const [columnsOpen, setColumnsOpen] = useState(false);
-  const [columnSearch, setColumnSearch] = useState('');
-  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
+  const [statusPatchWarning, setStatusPatchWarning] = useState<string | null>(null);
 
   const page = Number(searchParams.get('page') || '1') || 1;
   const pageSize = Number(searchParams.get('page_size') || `${DEFAULT_PAGE_SIZE}`) || DEFAULT_PAGE_SIZE;
   const q = searchParams.get('q') ?? '';
   const customerStatusFilter = searchParams.get('customer_status') ?? '';
+  const dispositionFilter = searchParams.get('disposition') ?? '';
   const partnerTierFilter = searchParams.get('partner_tier') ?? '';
   const regionCodeFilter = searchParams.get('region_code') ?? '';
   const channelCodeFilter = searchParams.get('channel_code') ?? '';
@@ -301,17 +296,6 @@ function AdminCustomersPageContent() {
   );
 
   useEffect(() => {
-    if (!searchParams.toString()) {
-      const sp = new URLSearchParams();
-      sp.set('page', '1');
-      sp.set('page_size', String(DEFAULT_PAGE_SIZE));
-      sp.set('sort_by', DEFAULT_SORT_BY);
-      sp.set('sort_dir', DEFAULT_SORT_DIR);
-      router.replace(`${pathname}?${sp.toString()}`);
-    }
-  }, [pathname, router, searchParams]);
-
-  useEffect(() => {
     if (searchParams.get('create') === '1') {
       setCreateOpen(true);
       setCreateError(null);
@@ -331,6 +315,7 @@ function AdminCustomersPageContent() {
       pageSize,
       q,
       customerStatusFilter,
+      dispositionFilter,
       partnerTierFilter,
       regionCodeFilter,
       channelCodeFilter,
@@ -348,6 +333,7 @@ function AdminCustomersPageContent() {
       sp.set('sort_dir', sortDir);
       if (q.trim()) sp.set('q', q.trim());
       if (customerStatusFilter) sp.set('customer_status', customerStatusFilter);
+      if (dispositionFilter) sp.set('disposition', dispositionFilter);
       if (partnerTierFilter) sp.set('partner_tier', partnerTierFilter);
       if (regionCodeFilter) sp.set('region_code', regionCodeFilter);
       if (channelCodeFilter) sp.set('channel_code', channelCodeFilter);
@@ -555,7 +541,11 @@ function AdminCustomersPageContent() {
         if (field === 'customer_name') {
           await apiPatch(`/api/v1/customers/${id}`, { name: String(e.newValue ?? '') });
         } else if (field === 'customer_status') {
-          await apiPatch(`/api/v1/customers/${id}`, { customer_status: String(e.newValue ?? '') });
+          const body = await apiPatch<{ warnings?: string[] }>(`/api/v1/customers/${id}`, {
+            customer_status: String(e.newValue ?? ''),
+          });
+          const warn = body.warnings?.[0];
+          setStatusPatchWarning(warn ?? null);
         } else if (field === 'partner_tier') {
           await apiPatch(`/api/v1/customers/${id}`, { partner_tier: String(e.newValue ?? '') || null });
         } else if (field === 'account_owner_internal') {
@@ -607,6 +597,18 @@ function AdminCustomersPageContent() {
         editable: true,
         cellEditor: 'agSelectCellEditor',
         cellEditorParams: { values: STATUS_OPTIONS.filter(Boolean) },
+      },
+      {
+        field: 'no_code_disposition',
+        headerName: 'Disposition',
+        minWidth: 120,
+        editable: false,
+        cellRenderer: (p: { value?: string | null }) => {
+          const v = (p.value || '').toLowerCase();
+          if (v === 'parked') return <Chip size="small" label="Parked" />;
+          if (v === 'excluded') return <Chip size="small" color="warning" label="Excluded" />;
+          return '';
+        },
       },
       {
         field: 'partner_tier',
@@ -725,16 +727,29 @@ function AdminCustomersPageContent() {
       {
         headerName: 'Details',
         colId: '__detail',
-        width: 90,
-        maxWidth: 100,
+        width: 160,
+        maxWidth: 180,
         pinned: 'right',
         sortable: false,
         filter: false,
         resizable: false,
         cellRenderer: (p: { data: CustomerRow }) => (
-          <Button size="small" variant="text" onClick={() => setSelectedRow(p.data)}>
-            Open
-          </Button>
+          <Stack direction="row" spacing={0.5}>
+            <Button size="small" variant="text" onClick={() => setSelectedRow(p.data)}>
+              Open
+            </Button>
+            {customerPromoteActionVisible(p.data) ? (
+              <Button
+                size="small"
+                variant="text"
+                color="primary"
+                data-testid="pmg-promote-row"
+                onClick={() => setPromoteTarget(p.data)}
+              >
+                Promote
+              </Button>
+            ) : null}
+          </Stack>
         ),
       },
       gridDeleteColumn<CustomerRow>((id) => void delCustomer.mutate(id), { busy: delCustomer.isPending }),
@@ -751,102 +766,9 @@ function AdminCustomersPageContent() {
     return out;
   }, [colDefs]);
 
-  const persistGridState = useCallback((api: any) => {
-    try {
-      const state = api.getColumnState();
-      localStorage.setItem(CUSTOMER_GRID_STATE_KEY, JSON.stringify(state));
-    } catch {
-      // no-op
-    }
-  }, []);
-
-  const syncColumnVisibility = useCallback((api: any) => {
-    if (!api?.getColumns) return;
-    try {
-      const visibility: Record<string, boolean> = {};
-      for (const col of api.getColumns() ?? []) {
-        const def = col?.getColDef?.();
-        const field = def?.field as string | undefined;
-        if (!field) continue;
-        if (ALL_CUSTOMER_COLUMN_FIELDS.includes(field as CustomerColumnField)) {
-          visibility[field] = Boolean(col.isVisible?.());
-        }
-      }
-      if (Object.keys(visibility).length) setColumnVisibility(visibility);
-    } catch {
-      // no-op
-    }
-  }, []);
-
-  const onGridReady = useCallback(
-    (e: GridReadyEvent<CustomerRow>) => {
-      setGridApi(e.api);
-      try {
-        const raw = localStorage.getItem(CUSTOMER_GRID_STATE_KEY);
-        if (raw) {
-          e.api.applyColumnState({ state: JSON.parse(raw), applyOrder: true });
-        } else {
-          e.api.applyColumnState({
-            state: DEFAULT_INITIALLY_HIDDEN_CUSTOMER_FIELDS.map((colId) => ({ colId, hide: true })),
-            applyOrder: true,
-          });
-        }
-      } catch {
-        // no-op
-      }
-      syncColumnVisibility(e.api);
-    },
-    [syncColumnVisibility]
-  );
-
-  const onColumnStateEvent = useCallback(
-    (
-      e:
-        | ColumnMovedEvent<CustomerRow>
-        | ColumnVisibleEvent<CustomerRow>
-        | ColumnPinnedEvent<CustomerRow>
-        | ColumnResizedEvent<CustomerRow>
-    ) => {
-      persistGridState(e.api);
-      syncColumnVisibility(e.api);
-    },
-    [persistGridState, syncColumnVisibility]
-  );
-
-  const groupedColumnPickerBlocks = useMemo((): { label: string; options: { id: string; label: string }[] }[] => {
-    const query = columnSearch.trim().toLowerCase();
-    return STATIC_CUSTOMER_COLUMN_GROUPS.map((group) => ({
-      label: group.label,
-      options: group.fields
-        .map((field) => ({ id: field, label: columnLabelByField[field] ?? field }))
-        .filter((opt) => !query || opt.label.toLowerCase().includes(query) || opt.id.toLowerCase().includes(query)),
-    })).filter((group) => group.options.length > 0);
-  }, [columnLabelByField, columnSearch]);
-
-  const toggleColumnVisibility = useCallback(
-    (columnId: string, visible: boolean) => {
-      if (!gridApi?.setColumnsVisible) return;
-      gridApi.setColumnsVisible([columnId], visible);
-      persistGridState(gridApi);
-      setColumnVisibility((prev) => ({ ...prev, [columnId]: visible }));
-    },
-    [gridApi, persistGridState]
-  );
-
-  useEffect(() => {
-    if (bulkSelectionMode !== 'selecting') {
-      gridApi?.deselectAll();
-      setBulkSelectedCount(0);
-    }
-  }, [bulkSelectionMode, gridApi]);
-
-  useEffect(() => {
-    setVisibleRowCount((customers?.items ?? []).length);
-  }, [customers?.items]);
-
   const openCustomerBulkDeletePreview = useCallback(async () => {
     if (!gridApi) return;
-    const ids = gridApi.getSelectedRows().map((r: CustomerRow) => r.id);
+    const ids = gridApi.getSelectedRows().map((r) => r.id);
     if (!ids.length) return;
     setBulkDeleteBusy(true);
     setBulkDeleteAck(false);
@@ -862,6 +784,18 @@ function AdminCustomersPageContent() {
       setBulkDeleteBusy(false);
     }
   }, [gridApi]);
+
+  const bulkMintCandidates = useMemo(() => {
+    if (!gridApi || bulkSelectionMode !== 'selecting') return [];
+    return (gridApi.getSelectedRows() as CustomerRow[])
+      .filter((r) => String(r.customer_code || '').toUpperCase().startsWith('TMP-CUST-'))
+      .map((r) => ({ tmp_code: String(r.customer_code), name: r.customer_name }));
+  }, [gridApi, bulkSelectionMode, bulkSelectedCount]);
+
+  const dispositionCustomerIds = useMemo(() => {
+    if (!gridApi || bulkSelectionMode !== 'selecting') return [] as number[];
+    return (gridApi.getSelectedRows() as CustomerRow[]).map((r) => r.id);
+  }, [gridApi, bulkSelectionMode, bulkSelectedCount]);
 
   const closeCustomerBulkDeleteDialog = useCallback(() => {
     if (bulkDeleteBusy) return;
@@ -887,43 +821,8 @@ function AdminCustomersPageContent() {
     }
   }, [bulkDeletePreview, delCustomer, qc]);
 
-  const gridOptions: GridOptions<CustomerRow> = useMemo(() => {
-    const base: GridOptions<CustomerRow> = {
-      singleClickEdit: true,
-      onCellValueChanged,
-      onGridReady: (e) => {
-        onGridReady(e);
-        setVisibleRowCount(e.api.getDisplayedRowCount());
-      },
-      onColumnMoved: onColumnStateEvent,
-      onColumnVisible: onColumnStateEvent,
-      onColumnPinned: onColumnStateEvent,
-      onColumnResized: onColumnStateEvent,
-      onFilterChanged: (e) => {
-        if (bulkSelectionMode === 'selecting') setVisibleRowCount(e.api.getDisplayedRowCount());
-      },
-      onSortChanged: (e) => {
-        if (bulkSelectionMode === 'selecting') setVisibleRowCount(e.api.getDisplayedRowCount());
-      },
-    };
-    if (bulkSelectionMode !== 'selecting') return base;
-    return {
-      ...base,
-      rowSelection: {
-        mode: 'multiRow',
-        checkboxes: true,
-        headerCheckbox: true,
-        enableClickSelection: false,
-      },
-      onSelectionChanged: (e) => {
-        setBulkSelectedCount(e.api.getSelectedRows().length);
-      },
-    };
-  }, [bulkSelectionMode, onCellValueChanged, onGridReady, onColumnStateEvent]);
-
   const rows = customers?.items ?? [];
   const total = customers?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <>
@@ -932,6 +831,11 @@ function AdminCustomersPageContent() {
         Customer account master is governed here. For bulk updates use Data & imports; use this table for operational
         maintenance, filters, and classification edits.
       </Alert>
+      {statusPatchWarning ? (
+        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setStatusPatchWarning(null)}>
+          {statusPatchWarning}
+        </Alert>
+      ) : null}
       {delCustomer.isError ? (
         <Alert severity="warning" sx={{ mb: 2 }} onClose={() => delCustomer.reset()}>
           {HttpConflictError.is(delCustomer.error) ? (
@@ -952,341 +856,599 @@ function AdminCustomersPageContent() {
           )}
         </Alert>
       ) : null}
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-        <Button
-          variant="contained"
-          onClick={() => {
-            setCreateError(null);
-            setCreateOpen(true);
-          }}
-        >
-          Add customer
-        </Button>
-        <Button
-          variant="outlined"
-          onClick={() => router.push('/admin/imports?template=customer_master')}
-        >
-          Import customer master
-        </Button>
-        <Button variant="contained" onClick={() => setUploadOpen(true)}>
-          Quick paste CSV (legacy)
-        </Button>
-        <Button
-          variant="outlined"
-          disabled={!gridApi}
-          onClick={() => {
-            setColumnSearch('');
-            setColumnsOpen(true);
-            if (gridApi) syncColumnVisibility(gridApi);
-          }}
-        >
-          Columns
-        </Button>
-        <Button
-          variant="outlined"
-          onClick={() => {
-            try {
-              localStorage.removeItem(CUSTOMER_GRID_STATE_KEY);
-              window.location.reload();
-            } catch {
-              // no-op
-            }
-          }}
-        >
-          Reset column layout
-        </Button>
-        <ModuleGridToolbar
-          onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-customers'] })}
-          sx={{ mb: 0 }}
-          busy={delCustomer.isPending || bulkDeleteBusy}
-        />
-        <BulkSelectionToolbar
-          mode={bulkSelectionMode}
-          selectedCount={bulkSelectedCount}
-          visibleRowCount={visibleRowCount}
-          onEnterSelectionMode={() => setBulkSelectionMode('selecting')}
-          onExitSelectionMode={() => setBulkSelectionMode('normal')}
-          onSelectAllVisible={() => {
-            if (!gridApi) return;
-            gridApi.forEachNodeAfterFilterAndSort((node: { data?: CustomerRow; setSelected: (v: boolean) => void }) => {
-              if (node.data) node.setSelected(true);
-            });
-          }}
-          onDeselectAll={() => gridApi?.deselectAll()}
-          onPreviewDangerAction={() => void openCustomerBulkDeletePreview()}
-          previewDangerDisabled={bulkDeleteBusy}
-          busy={bulkDeleteBusy}
-        />
-      </Stack>
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} useFlexGap alignItems={{ md: 'center' }}>
-          <TextField
-            size="small"
-            label="Search"
-            value={q}
-            onChange={(e) => setParamState({ q: e.target.value }, true)}
-            placeholder="Code, name, owner, notes"
-          />
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel>Status</InputLabel>
-            <Select
-              label="Status"
-              value={customerStatusFilter}
-              onChange={(e) => setParamState({ customer_status: String(e.target.value || '') }, true)}
+      <MasterDataGridShell
+        entityKey="customers"
+        rows={rows}
+        columnDefs={colDefs}
+        total={total}
+        isLoading={customersLoading}
+        isError={customersIsError}
+        error={toQueryError(customersErr)}
+        onRetry={() => void refetchCustomers()}
+        intro={
+          <>
+            Master list is stored in <strong>dim_customer</strong>. Channel codes must match catalog
+            channels.
+          </>
+        }
+        empty={{
+          title: 'No customers yet',
+          description:
+            'Create your first customer manually for immediate operations, or import customer master when source governance is ready.',
+          primary: { label: 'Add customer', href: '/admin/customers?create=1' },
+          secondary: { label: 'Import customer master', href: '/admin/imports?template=customer_master' },
+        }}
+        url={{
+          page,
+          pageSize,
+          q,
+          sortBy,
+          sortDir,
+        }}
+        onUrlChange={setParamState}
+        defaultPageSize={DEFAULT_PAGE_SIZE}
+        defaultSortBy={DEFAULT_SORT_BY}
+        defaultSortDir={DEFAULT_SORT_DIR}
+        gridStateStorageKey={CUSTOMER_GRID_STATE_KEY}
+        defaultInitiallyHiddenFields={DEFAULT_INITIALLY_HIDDEN_CUSTOMER_FIELDS}
+        columnPickerTitle="Manage customer columns"
+        columnPickerGroups={STATIC_CUSTOMER_COLUMN_GROUPS}
+        columnLabelByField={columnLabelByField}
+        onCellValueChanged={onCellValueChanged}
+        onGridApiChange={setGridApi}
+        bulkSelectionMode={bulkSelectionMode}
+        onBulkSelectionModeChange={setBulkSelectionMode}
+        onPreviewBulkDelete={() => void openCustomerBulkDeletePreview()}
+        previewBulkDeleteDisabled={bulkDeleteBusy}
+        bulkBusy={bulkDeleteBusy}
+        onBulkSelectedCountChange={setBulkSelectedCount}
+        onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-customers'] })}
+        refreshBusy={delCustomer.isPending || bulkDeleteBusy}
+        toolbarStart={
+          <>
+            <Button
+              variant="contained"
+              onClick={() => {
+                setCreateError(null);
+                setCreateOpen(true);
+              }}
             >
-              <MenuItem value="">All</MenuItem>
-              {STATUS_OPTIONS.filter(Boolean).map((s) => (
-                <MenuItem key={s} value={s}>
-                  {s}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel>Partner tier</InputLabel>
-            <Select
-              label="Partner tier"
-              value={partnerTierFilter}
-              onChange={(e) => setParamState({ partner_tier: String(e.target.value || '') }, true)}
-            >
-              <MenuItem value="">All</MenuItem>
-              {PARTNER_TIER_OPTIONS.filter(Boolean).map((s) => (
-                <MenuItem key={s} value={s}>
-                  {s}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Primary region</InputLabel>
-            <Select
-              label="Primary region"
-              value={regionCodeFilter}
-              onChange={(e) => setParamState({ region_code: String(e.target.value || '') }, true)}
-            >
-              <MenuItem value="">All</MenuItem>
-              {(regions ?? []).map((r) => (
-                <MenuItem key={r.code} value={r.code}>
-                  {r.code}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel>Primary channel</InputLabel>
-            <Select
-              label="Primary channel"
-              value={channelCodeFilter}
-              onChange={(e) => setParamState({ channel_code: String(e.target.value || '') }, true)}
-            >
-              <MenuItem value="">All</MenuItem>
-              {(channels ?? []).map((c) => (
-                <MenuItem key={c.code} value={c.code}>
-                  {c.code}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 190 }}>
-            <InputLabel>Preferred distributor</InputLabel>
-            <Select
-              label="Preferred distributor"
-              value={preferredDistributorFilter}
-              onChange={(e) =>
-                setParamState({ preferred_distributor_code: String(e.target.value || '') }, true)
-              }
-            >
-              <MenuItem value="">All</MenuItem>
-              {(distributors ?? []).map((d) => (
-                <MenuItem key={d.code} value={d.code}>
-                  {d.code}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <TextField
-            size="small"
-            label="Min alias #"
-            type="number"
-            inputProps={{ min: 0 }}
-            value={minAliasCountFilter}
-            onChange={(e) => {
-              const v = e.target.value;
-              setParamState({ min_alias_count: v.trim() === '' ? null : v }, true);
-            }}
-            sx={{ minWidth: 120 }}
-          />
-          <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Alias link</InputLabel>
-            <Select
-              label="Alias link"
-              value={aliasLinkFilter}
-              onChange={(e) => setParamState({ alias_link: String(e.target.value || '') }, true)}
-            >
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="linked">Linked</MenuItem>
-              <MenuItem value="unlinked">Unlinked</MenuItem>
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Sort by</InputLabel>
-            <Select
-              label="Sort by"
-              value={sortBy}
-              onChange={(e) => setParamState({ sort_by: String(e.target.value || DEFAULT_SORT_BY) })}
-            >
-              <MenuItem value="customer_code">Customer code</MenuItem>
-              <MenuItem value="customer_name">Customer name</MenuItem>
-              <MenuItem value="id">ID</MenuItem>
-              <MenuItem value="customer_status">Status</MenuItem>
-              <MenuItem value="partner_tier">Partner tier</MenuItem>
-              <MenuItem value="region_id">Region ID</MenuItem>
-              <MenuItem value="channel_id">Channel ID</MenuItem>
-              <MenuItem value="preferred_distributor_id">Preferred distributor ID</MenuItem>
-              <MenuItem value="region_code">Region</MenuItem>
-              <MenuItem value="channel_code">Channel</MenuItem>
-              <MenuItem value="account_owner_internal">Owner</MenuItem>
-              <MenuItem value="preferred_distributor_code">Preferred distributor</MenuItem>
-              <MenuItem value="location_count">Locations #</MenuItem>
-              <MenuItem value="contact_count">Contacts #</MenuItem>
-              <MenuItem value="alias_count">Alias count</MenuItem>
-              <MenuItem value="last_import_at">Last import (alias)</MenuItem>
-              <MenuItem value="created_at">Created</MenuItem>
-              <MenuItem value="updated_at">Updated</MenuItem>
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 100 }}>
-            <InputLabel>Dir</InputLabel>
-            <Select
-              label="Dir"
-              value={sortDir}
-              onChange={(e) => setParamState({ sort_dir: String(e.target.value || DEFAULT_SORT_DIR) })}
-            >
-              <MenuItem value="asc">Asc</MenuItem>
-              <MenuItem value="desc">Desc</MenuItem>
-            </Select>
-          </FormControl>
-          <Button
-            variant="text"
-            onClick={() =>
-              setParamState(
-                {
-                  q: '',
-                  customer_status: '',
-                  partner_tier: '',
-                  region_code: '',
-                  channel_code: '',
-                  preferred_distributor_code: '',
-                  min_alias_count: '',
-                  alias_link: '',
-                  sort_by: DEFAULT_SORT_BY,
-                  sort_dir: DEFAULT_SORT_DIR,
-                },
-                true
-              )
-            }
-          >
-            Clear filters
-          </Button>
-        </Stack>
-      </Paper>
-      <Paper sx={{ p: 2 }}>
-        <ModuleDataSection
-          intro={<>Master list is stored in <strong>dim_customer</strong>. Channel codes must match catalog channels.</>}
-          isLoading={customersLoading}
-          isError={customersIsError}
-          error={toQueryError(customersErr)}
-          onRetry={() => void refetchCustomers()}
-          isEmpty={rows.length === 0}
-          empty={{
-            title: 'No customers yet',
-            description:
-              'Create your first customer manually for immediate operations, or import customer master when source governance is ready.',
-            primary: { label: 'Add customer', href: '/admin/customers?create=1' },
-            secondary: { label: 'Import customer master', href: '/admin/imports?template=customer_master' },
-          }}
-        >
-          <EnterpriseDataGrid
-            key={bulkSelectionMode === 'selecting' ? 'customers-bulk' : 'customers-normal'}
-            rowData={rows}
-            columnDefs={colDefs}
-            gridOptions={gridOptions}
-            height={520}
-          />
-          <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center">
-            <Button disabled={page <= 1} onClick={() => setParamState({ page: String(page - 1) })}>
-              Prev
+              Add customer
             </Button>
-            <Typography variant="body2">
-              Page {page} / {totalPages} ({total} rows)
-            </Typography>
-            <Button disabled={page >= totalPages} onClick={() => setParamState({ page: String(page + 1) })}>
-              Next
+            <Button
+              variant="outlined"
+              component={Link}
+              href="/admin/customers/duplicates?tab=alias_scope"
+            >
+              Alias-scope conflicts
             </Button>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>Page size</InputLabel>
-              <Select
-                label="Page size"
-                value={String(pageSize)}
-                onChange={(e) => setParamState({ page_size: String(e.target.value || DEFAULT_PAGE_SIZE) }, true)}
-              >
-                <MenuItem value="25">25</MenuItem>
-                <MenuItem value="50">50</MenuItem>
-                <MenuItem value="100">100</MenuItem>
-                <MenuItem value="200">200</MenuItem>
-              </Select>
-            </FormControl>
-          </Stack>
-        </ModuleDataSection>
-      </Paper>
-
-      <Dialog open={columnsOpen} onClose={() => setColumnsOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>Manage customer columns</DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <Button
+              variant="outlined"
+              component={Link}
+              href="/admin/customers/duplicates?tab=name_similarity"
+            >
+              Name-similarity duplicates
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => router.push('/admin/imports?template=customer_master')}
+            >
+              Import customer master
+            </Button>
+            <Button variant="outlined" onClick={() => setBulkPromoteOpen(true)} data-testid="bulk-promote-open">
+              Bulk promote…
+            </Button>
+            <Button
+              variant="outlined"
+              disabled={bulkSelectionMode !== 'selecting' || bulkSelectedCount === 0}
+              onClick={() => setDispositionOpen(true)}
+              data-testid="disposition-open"
+            >
+              Park / Exclude…
+            </Button>
+            <Button variant="contained" onClick={() => setUploadOpen(true)}>
+              Quick paste CSV (legacy)
+            </Button>
+          </>
+        }
+        filterSlot={
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} useFlexGap alignItems={{ md: 'center' }}>
             <TextField
               size="small"
-              label="Search columns"
-              placeholder="Find by label or field key"
-              value={columnSearch}
-              onChange={(e) => setColumnSearch(e.target.value)}
+              label="Search"
+              value={q}
+              onChange={(e) => setParamState({ q: e.target.value }, true)}
+              placeholder="Code, name, owner, notes"
             />
-            {!gridApi ? (
-              <Alert severity="info">Grid is still initializing. Column toggles become available in a moment.</Alert>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel>Status</InputLabel>
+              <Select
+                label="Status"
+                value={customerStatusFilter}
+                onChange={(e) => setParamState({ customer_status: String(e.target.value || '') }, true)}
+              >
+                <MenuItem value="">All</MenuItem>
+                {STATUS_OPTIONS.filter(Boolean).map((s) => (
+                  <MenuItem key={s} value={s}>
+                    {s}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Disposition</InputLabel>
+              <Select
+                label="Disposition"
+                value={dispositionFilter}
+                onChange={(e) => setParamState({ disposition: String(e.target.value || '') }, true)}
+                data-testid="disposition-filter"
+              >
+                <MenuItem value="">Any</MenuItem>
+                <MenuItem value="parked">Parked</MenuItem>
+                <MenuItem value="excluded">Excluded</MenuItem>
+                <MenuItem value="unset">None</MenuItem>
+                <MenuItem value="set">Any set</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel>Partner tier</InputLabel>
+              <Select
+                label="Partner tier"
+                value={partnerTierFilter}
+                onChange={(e) => setParamState({ partner_tier: String(e.target.value || '') }, true)}
+              >
+                <MenuItem value="">All</MenuItem>
+                {PARTNER_TIER_OPTIONS.filter(Boolean).map((s) => (
+                  <MenuItem key={s} value={s}>
+                    {s}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Primary region</InputLabel>
+              <Select
+                label="Primary region"
+                value={regionCodeFilter}
+                onChange={(e) => setParamState({ region_code: String(e.target.value || '') }, true)}
+              >
+                <MenuItem value="">All</MenuItem>
+                {(regions ?? []).map((r) => (
+                  <MenuItem key={r.code} value={r.code}>
+                    {r.code}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel>Primary channel</InputLabel>
+              <Select
+                label="Primary channel"
+                value={channelCodeFilter}
+                onChange={(e) => setParamState({ channel_code: String(e.target.value || '') }, true)}
+              >
+                <MenuItem value="">All</MenuItem>
+                {(channels ?? []).map((c) => (
+                  <MenuItem key={c.code} value={c.code}>
+                    {c.code}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 190 }}>
+              <InputLabel>Preferred distributor</InputLabel>
+              <Select
+                label="Preferred distributor"
+                value={preferredDistributorFilter}
+                onChange={(e) =>
+                  setParamState({ preferred_distributor_code: String(e.target.value || '') }, true)
+                }
+              >
+                <MenuItem value="">All</MenuItem>
+                {(distributors ?? []).map((d) => (
+                  <MenuItem key={d.code} value={d.code}>
+                    {d.code}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              size="small"
+              label="Min alias #"
+              type="number"
+              inputProps={{ min: 0 }}
+              value={minAliasCountFilter}
+              onChange={(e) => {
+                const v = e.target.value;
+                setParamState({ min_alias_count: v.trim() === '' ? null : v }, true);
+              }}
+              sx={{ minWidth: 120 }}
+            />
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Alias link</InputLabel>
+              <Select
+                label="Alias link"
+                value={aliasLinkFilter}
+                onChange={(e) => setParamState({ alias_link: String(e.target.value || '') }, true)}
+              >
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="linked">Linked</MenuItem>
+                <MenuItem value="unlinked">Unlinked</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Sort by</InputLabel>
+              <Select
+                label="Sort by"
+                value={sortBy}
+                onChange={(e) => setParamState({ sort_by: String(e.target.value || DEFAULT_SORT_BY) })}
+              >
+                <MenuItem value="customer_code">Customer code</MenuItem>
+                <MenuItem value="customer_name">Customer name</MenuItem>
+                <MenuItem value="id">ID</MenuItem>
+                <MenuItem value="customer_status">Status</MenuItem>
+                <MenuItem value="partner_tier">Partner tier</MenuItem>
+                <MenuItem value="region_id">Region ID</MenuItem>
+                <MenuItem value="channel_id">Channel ID</MenuItem>
+                <MenuItem value="preferred_distributor_id">Preferred distributor ID</MenuItem>
+                <MenuItem value="region_code">Region</MenuItem>
+                <MenuItem value="channel_code">Channel</MenuItem>
+                <MenuItem value="account_owner_internal">Owner</MenuItem>
+                <MenuItem value="preferred_distributor_code">Preferred distributor</MenuItem>
+                <MenuItem value="location_count">Locations #</MenuItem>
+                <MenuItem value="contact_count">Contacts #</MenuItem>
+                <MenuItem value="alias_count">Alias count</MenuItem>
+                <MenuItem value="last_import_at">Last import (alias)</MenuItem>
+                <MenuItem value="created_at">Created</MenuItem>
+                <MenuItem value="updated_at">Updated</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 100 }}>
+              <InputLabel>Dir</InputLabel>
+              <Select
+                label="Dir"
+                value={sortDir}
+                onChange={(e) => setParamState({ sort_dir: String(e.target.value || DEFAULT_SORT_DIR) })}
+              >
+                <MenuItem value="asc">Asc</MenuItem>
+                <MenuItem value="desc">Desc</MenuItem>
+              </Select>
+            </FormControl>
+            <Button
+              variant="text"
+              onClick={() =>
+                setParamState(
+                  {
+                    q: '',
+                    customer_status: '',
+                    partner_tier: '',
+                    region_code: '',
+                    channel_code: '',
+                    preferred_distributor_code: '',
+                    min_alias_count: '',
+                    alias_link: '',
+                    sort_by: DEFAULT_SORT_BY,
+                    sort_dir: DEFAULT_SORT_DIR,
+                  },
+                  true
+                )
+              }
+            >
+              Clear filters
+            </Button>
+          </Stack>
+        }
+        drawer={{
+          open: Boolean(selectedRow),
+          onClose: () => setSelectedRow(null),
+          width: 430,
+          title: 'Customer details',
+          children: !selectedRow ? null : (
+            <Stack spacing={1.5}>
+            <Typography variant="subtitle2">Account summary</Typography>
+            <Typography variant="body2">
+              <strong>Customer code:</strong> {selectedRow.customer_code}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Customer name:</strong> {selectedRow.customer_name}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Status:</strong> {selectedRow.customer_status}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Partner tier:</strong> {selectedRow.partner_tier ?? '—'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Primary region:</strong> {selectedRow.region_code ?? '—'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Primary channel:</strong> {selectedRow.channel_code ?? '—'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Account owner:</strong> {selectedRow.account_owner_internal ?? '—'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Preferred distributor:</strong> {selectedRow.preferred_distributor_name ?? selectedRow.preferred_distributor_code ?? '—'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Locations:</strong> {selectedRow.location_count ?? 0} | <strong>Contacts:</strong>{' '}
+              {selectedRow.contact_count ?? 0}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Notes:</strong> {selectedRow.notes_summary ?? '—'}
+            </Typography>
+            {customerPromoteActionVisible(selectedRow) ? (
+              <Button
+                size="small"
+                variant="outlined"
+                data-testid="pmg-promote-drawer"
+                onClick={() => setPromoteTarget(selectedRow)}
+              >
+                Promote provisional code…
+              </Button>
             ) : null}
-            {groupedColumnPickerBlocks.map((group) => (
-              <Paper key={group.label} variant="outlined" sx={{ p: 1.25 }}>
-                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                  {group.label}
-                </Typography>
-                <Stack>
-                  {group.options.map((opt) => (
-                    <FormControlLabel
-                      key={opt.id}
-                      control={
-                        <Checkbox
-                          checked={columnVisibility[opt.id] ?? false}
-                          onChange={(e) => toggleColumnVisibility(opt.id, e.target.checked)}
-                          disabled={!gridApi}
-                        />
-                      }
-                      label={opt.label}
-                    />
-                  ))}
+            <Divider sx={{ my: 1 }} />
+            <CustomerCommercialTermsPanel customerId={selectedRow.id} customerCode={selectedRow.customer_code} />
+            <Typography variant="subtitle2" sx={{ pt: 1 }}>
+              Locations
+            </Typography>
+            {deleteLocation.isError ? (
+              <Alert severity="warning" sx={{ mb: 1 }} onClose={() => deleteLocation.reset()}>
+                {HttpConflictError.is(deleteLocation.error) ? (
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2">{deleteLocation.error.message}</Typography>
+                    {deleteLocation.error.references.map((r) => (
+                      <Typography key={`${r.label}-${r.count}`} variant="caption" component="div">
+                        {r.label} ({r.count})
+                      </Typography>
+                    ))}
+                  </Stack>
+                ) : (
+                  <Typography variant="body2">{(deleteLocation.error as Error).message}</Typography>
+                )}
+              </Alert>
+            ) : null}
+            {locationsLoading ? <Typography variant="body2">Loading locations…</Typography> : null}
+            {(locations ?? []).map((loc) => (
+              <Paper key={loc.id} variant="outlined" sx={{ p: 1 }}>
+                <Stack spacing={1}>
+                  <TextField
+                    size="small"
+                    label="Location code"
+                    value={loc.location_code}
+                    onChange={(e) => {
+                      if (editingLocationId !== loc.id) setEditingLocationId(loc.id);
+                      qc.setQueryData<CustomerLocationRow[]>(['customer-locations', selectedRow.id], (prev = []) =>
+                        prev.map((x) => (x.id === loc.id ? { ...x, location_code: e.target.value } : x))
+                      );
+                    }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Location name"
+                    value={loc.location_name}
+                    onChange={(e) => {
+                      if (editingLocationId !== loc.id) setEditingLocationId(loc.id);
+                      qc.setQueryData<CustomerLocationRow[]>(['customer-locations', selectedRow.id], (prev = []) =>
+                        prev.map((x) => (x.id === loc.id ? { ...x, location_name: e.target.value } : x))
+                      );
+                    }}
+                  />
+                  <FormControl size="small">
+                    <InputLabel id={`loc-type-${loc.id}`}>Type</InputLabel>
+                    <Select
+                      labelId={`loc-type-${loc.id}`}
+                      label="Type"
+                      value={loc.location_type}
+                      onChange={(e) => {
+                        if (editingLocationId !== loc.id) setEditingLocationId(loc.id);
+                        qc.setQueryData<CustomerLocationRow[]>(['customer-locations', selectedRow.id], (prev = []) =>
+                          prev.map((x) => (x.id === loc.id ? { ...x, location_type: String(e.target.value) } : x))
+                        );
+                      }}
+                    >
+                      {LOCATION_TYPE_OPTIONS.map((opt) => (
+                        <MenuItem key={opt} value={opt}>
+                          {opt}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => patchLocation.mutate(loc)}
+                      disabled={patchLocation.isPending}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() => deleteLocation.mutate(loc.id)}
+                      disabled={deleteLocation.isPending}
+                    >
+                      Delete
+                    </Button>
+                  </Stack>
                 </Stack>
               </Paper>
             ))}
-            {!groupedColumnPickerBlocks.length ? (
-              <Typography variant="body2" color="text.secondary">
-                No columns match the current search.
-              </Typography>
-            ) : null}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setColumnsOpen(false)}>Done</Button>
-        </DialogActions>
-      </Dialog>
+            <Paper variant="outlined" sx={{ p: 1 }}>
+              <Stack spacing={1}>
+                <Typography variant="body2" fontWeight={600}>
+                  Add location
+                </Typography>
+                <TextField
+                  size="small"
+                  label="Location code"
+                  value={locationDraft.location_code}
+                  onChange={(e) => setLocationDraft((s) => ({ ...s, location_code: e.target.value }))}
+                />
+                <TextField
+                  size="small"
+                  label="Location name"
+                  value={locationDraft.location_name}
+                  onChange={(e) => setLocationDraft((s) => ({ ...s, location_name: e.target.value }))}
+                />
+                <FormControl size="small">
+                  <InputLabel id="new-loc-type">Type</InputLabel>
+                  <Select
+                    labelId="new-loc-type"
+                    label="Type"
+                    value={locationDraft.location_type}
+                    onChange={(e) => setLocationDraft((s) => ({ ...s, location_type: String(e.target.value) }))}
+                  >
+                    {LOCATION_TYPE_OPTIONS.map((opt) => (
+                      <MenuItem key={opt} value={opt}>
+                        {opt}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => createLocation.mutate()}
+                  disabled={createLocation.isPending || !locationDraft.location_code.trim() || !locationDraft.location_name.trim()}
+                >
+                  Add location
+                </Button>
+              </Stack>
+            </Paper>
+            <Typography variant="subtitle2" sx={{ pt: 1 }}>
+              Contacts
+            </Typography>
+            {contactsLoading ? <Typography variant="body2">Loading contacts…</Typography> : null}
+            {(contacts ?? []).map((contact) => (
+              <Paper key={contact.id} variant="outlined" sx={{ p: 1 }}>
+                <Stack spacing={1}>
+                  <TextField
+                    size="small"
+                    label="Contact name"
+                    value={contact.contact_name}
+                    onChange={(e) => {
+                      if (editingContactId !== contact.id) setEditingContactId(contact.id);
+                      qc.setQueryData<CustomerContactRow[]>(['customer-contacts', selectedRow.id], (prev = []) =>
+                        prev.map((x) => (x.id === contact.id ? { ...x, contact_name: e.target.value } : x))
+                      );
+                    }}
+                  />
+                  <FormControl size="small">
+                    <InputLabel id={`contact-role-${contact.id}`}>Role</InputLabel>
+                    <Select
+                      labelId={`contact-role-${contact.id}`}
+                      label="Role"
+                      value={contact.contact_role}
+                      onChange={(e) => {
+                        if (editingContactId !== contact.id) setEditingContactId(contact.id);
+                        qc.setQueryData<CustomerContactRow[]>(['customer-contacts', selectedRow.id], (prev = []) =>
+                          prev.map((x) => (x.id === contact.id ? { ...x, contact_role: String(e.target.value) } : x))
+                        );
+                      }}
+                    >
+                      {CONTACT_ROLE_OPTIONS.map((opt) => (
+                        <MenuItem key={opt} value={opt}>
+                          {opt}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <TextField
+                    size="small"
+                    label="Email"
+                    value={contact.email ?? ''}
+                    onChange={(e) => {
+                      if (editingContactId !== contact.id) setEditingContactId(contact.id);
+                      qc.setQueryData<CustomerContactRow[]>(['customer-contacts', selectedRow.id], (prev = []) =>
+                        prev.map((x) => (x.id === contact.id ? { ...x, email: e.target.value } : x))
+                      );
+                    }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Phone"
+                    value={contact.phone ?? ''}
+                    onChange={(e) => {
+                      if (editingContactId !== contact.id) setEditingContactId(contact.id);
+                      qc.setQueryData<CustomerContactRow[]>(['customer-contacts', selectedRow.id], (prev = []) =>
+                        prev.map((x) => (x.id === contact.id ? { ...x, phone: e.target.value } : x))
+                      );
+                    }}
+                  />
+                  <Stack direction="row" spacing={1}>
+                    <Button size="small" variant="outlined" onClick={() => patchContact.mutate(contact)}>
+                      Save
+                    </Button>
+                    <Button size="small" color="error" onClick={() => deleteContact.mutate(contact.id)}>
+                      Delete
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Paper>
+            ))}
+            <Paper variant="outlined" sx={{ p: 1 }}>
+              <Stack spacing={1}>
+                <Typography variant="body2" fontWeight={600}>
+                  Add contact
+                </Typography>
+                <TextField
+                  size="small"
+                  label="Contact name"
+                  value={contactDraft.contact_name}
+                  onChange={(e) => setContactDraft((s) => ({ ...s, contact_name: e.target.value }))}
+                />
+                <FormControl size="small">
+                  <InputLabel id="new-contact-role">Role</InputLabel>
+                  <Select
+                    labelId="new-contact-role"
+                    label="Role"
+                    value={contactDraft.contact_role}
+                    onChange={(e) => setContactDraft((s) => ({ ...s, contact_role: String(e.target.value) }))}
+                  >
+                    {CONTACT_ROLE_OPTIONS.map((opt) => (
+                      <MenuItem key={opt} value={opt}>
+                        {opt}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField
+                  size="small"
+                  label="Email"
+                  value={contactDraft.email}
+                  onChange={(e) => setContactDraft((s) => ({ ...s, email: e.target.value }))}
+                />
+                <TextField
+                  size="small"
+                  label="Phone"
+                  value={contactDraft.phone}
+                  onChange={(e) => setContactDraft((s) => ({ ...s, phone: e.target.value }))}
+                />
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => createContact.mutate()}
+                  disabled={createContact.isPending || !contactDraft.contact_name.trim()}
+                >
+                  Add contact
+                </Button>
+              </Stack>
+            </Paper>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => router.push('/admin/imports?template=customer_master')}
+              >
+                Import customer master
+              </Button>
+            </Stack>
+            </Stack>
+          ),
+        }}
+      />
 
       <Dialog open={uploadOpen} onClose={() => !bulk.isPending && setUploadOpen(false)} fullWidth maxWidth="md">
         <DialogTitle>Paste customer rows</DialogTitle>
@@ -1481,321 +1643,43 @@ function AdminCustomersPageContent() {
             }
             onClick={() => createCustomer.mutate(createForm)}
           >
-            {createCustomer.isPending ? 'Creating…' : 'Create customer'}
+            {createCustomer.isPending ? 'Creatingâ€¦' : 'Create customer'}
           </Button>
         </DialogActions>
       </Dialog>
-      <Drawer
-        anchor="right"
-        open={Boolean(selectedRow)}
-        onClose={() => setSelectedRow(null)}
-        sx={{
-          '& .MuiDrawer-paper': {
-            top: { xs: 56, sm: 64 },
-            height: { xs: 'calc(100% - 56px)', sm: 'calc(100% - 64px)' },
-          },
+      <CustomerPromoteDialog
+        open={Boolean(promoteTarget)}
+        customer={
+          promoteTarget
+            ? {
+                id: promoteTarget.id,
+                customer_code: promoteTarget.customer_code,
+                customer_name: promoteTarget.customer_name,
+                customer_status: promoteTarget.customer_status,
+              }
+            : null
+        }
+        onClose={() => {
+          setPromoteTarget(null);
+          void qc.invalidateQueries({ queryKey: ['admin-customers'] });
         }}
-      >
-        <Box sx={{ width: 430, p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>
-            Customer details
-          </Typography>
-          {!selectedRow ? null : (
-            <Stack spacing={1.5}>
-              <Typography variant="subtitle2">Account summary</Typography>
-              <Typography variant="body2">
-                <strong>Customer code:</strong> {selectedRow.customer_code}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Customer name:</strong> {selectedRow.customer_name}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Status:</strong> {selectedRow.customer_status}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Partner tier:</strong> {selectedRow.partner_tier ?? '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Primary region:</strong> {selectedRow.region_code ?? '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Primary channel:</strong> {selectedRow.channel_code ?? '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Account owner:</strong> {selectedRow.account_owner_internal ?? '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Preferred distributor:</strong> {selectedRow.preferred_distributor_name ?? selectedRow.preferred_distributor_code ?? '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Locations:</strong> {selectedRow.location_count ?? 0} | <strong>Contacts:</strong>{' '}
-                {selectedRow.contact_count ?? 0}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Notes:</strong> {selectedRow.notes_summary ?? '—'}
-              </Typography>
-              <Divider sx={{ my: 1 }} />
-              <CustomerCommercialTermsPanel customerId={selectedRow.id} customerCode={selectedRow.customer_code} />
-              <Typography variant="subtitle2" sx={{ pt: 1 }}>
-                Locations
-              </Typography>
-              {deleteLocation.isError ? (
-                <Alert severity="warning" sx={{ mb: 1 }} onClose={() => deleteLocation.reset()}>
-                  {HttpConflictError.is(deleteLocation.error) ? (
-                    <Stack spacing={0.5}>
-                      <Typography variant="body2">{deleteLocation.error.message}</Typography>
-                      {deleteLocation.error.references.map((r) => (
-                        <Typography key={`${r.label}-${r.count}`} variant="caption" component="div">
-                          {r.label} ({r.count})
-                        </Typography>
-                      ))}
-                    </Stack>
-                  ) : (
-                    <Typography variant="body2">{(deleteLocation.error as Error).message}</Typography>
-                  )}
-                </Alert>
-              ) : null}
-              {locationsLoading ? <Typography variant="body2">Loading locations…</Typography> : null}
-              {(locations ?? []).map((loc) => (
-                <Paper key={loc.id} variant="outlined" sx={{ p: 1 }}>
-                  <Stack spacing={1}>
-                    <TextField
-                      size="small"
-                      label="Location code"
-                      value={loc.location_code}
-                      onChange={(e) => {
-                        if (editingLocationId !== loc.id) setEditingLocationId(loc.id);
-                        qc.setQueryData<CustomerLocationRow[]>(['customer-locations', selectedRow.id], (prev = []) =>
-                          prev.map((x) => (x.id === loc.id ? { ...x, location_code: e.target.value } : x))
-                        );
-                      }}
-                    />
-                    <TextField
-                      size="small"
-                      label="Location name"
-                      value={loc.location_name}
-                      onChange={(e) => {
-                        if (editingLocationId !== loc.id) setEditingLocationId(loc.id);
-                        qc.setQueryData<CustomerLocationRow[]>(['customer-locations', selectedRow.id], (prev = []) =>
-                          prev.map((x) => (x.id === loc.id ? { ...x, location_name: e.target.value } : x))
-                        );
-                      }}
-                    />
-                    <FormControl size="small">
-                      <InputLabel id={`loc-type-${loc.id}`}>Type</InputLabel>
-                      <Select
-                        labelId={`loc-type-${loc.id}`}
-                        label="Type"
-                        value={loc.location_type}
-                        onChange={(e) => {
-                          if (editingLocationId !== loc.id) setEditingLocationId(loc.id);
-                          qc.setQueryData<CustomerLocationRow[]>(['customer-locations', selectedRow.id], (prev = []) =>
-                            prev.map((x) => (x.id === loc.id ? { ...x, location_type: String(e.target.value) } : x))
-                          );
-                        }}
-                      >
-                        {LOCATION_TYPE_OPTIONS.map((opt) => (
-                          <MenuItem key={opt} value={opt}>
-                            {opt}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <Stack direction="row" spacing={1}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => patchLocation.mutate(loc)}
-                        disabled={patchLocation.isPending}
-                      >
-                        Save
-                      </Button>
-                      <Button
-                        size="small"
-                        color="error"
-                        onClick={() => deleteLocation.mutate(loc.id)}
-                        disabled={deleteLocation.isPending}
-                      >
-                        Delete
-                      </Button>
-                    </Stack>
-                  </Stack>
-                </Paper>
-              ))}
-              <Paper variant="outlined" sx={{ p: 1 }}>
-                <Stack spacing={1}>
-                  <Typography variant="body2" fontWeight={600}>
-                    Add location
-                  </Typography>
-                  <TextField
-                    size="small"
-                    label="Location code"
-                    value={locationDraft.location_code}
-                    onChange={(e) => setLocationDraft((s) => ({ ...s, location_code: e.target.value }))}
-                  />
-                  <TextField
-                    size="small"
-                    label="Location name"
-                    value={locationDraft.location_name}
-                    onChange={(e) => setLocationDraft((s) => ({ ...s, location_name: e.target.value }))}
-                  />
-                  <FormControl size="small">
-                    <InputLabel id="new-loc-type">Type</InputLabel>
-                    <Select
-                      labelId="new-loc-type"
-                      label="Type"
-                      value={locationDraft.location_type}
-                      onChange={(e) => setLocationDraft((s) => ({ ...s, location_type: String(e.target.value) }))}
-                    >
-                      {LOCATION_TYPE_OPTIONS.map((opt) => (
-                        <MenuItem key={opt} value={opt}>
-                          {opt}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={() => createLocation.mutate()}
-                    disabled={createLocation.isPending || !locationDraft.location_code.trim() || !locationDraft.location_name.trim()}
-                  >
-                    Add location
-                  </Button>
-                </Stack>
-              </Paper>
-              <Typography variant="subtitle2" sx={{ pt: 1 }}>
-                Contacts
-              </Typography>
-              {contactsLoading ? <Typography variant="body2">Loading contacts…</Typography> : null}
-              {(contacts ?? []).map((contact) => (
-                <Paper key={contact.id} variant="outlined" sx={{ p: 1 }}>
-                  <Stack spacing={1}>
-                    <TextField
-                      size="small"
-                      label="Contact name"
-                      value={contact.contact_name}
-                      onChange={(e) => {
-                        if (editingContactId !== contact.id) setEditingContactId(contact.id);
-                        qc.setQueryData<CustomerContactRow[]>(['customer-contacts', selectedRow.id], (prev = []) =>
-                          prev.map((x) => (x.id === contact.id ? { ...x, contact_name: e.target.value } : x))
-                        );
-                      }}
-                    />
-                    <FormControl size="small">
-                      <InputLabel id={`contact-role-${contact.id}`}>Role</InputLabel>
-                      <Select
-                        labelId={`contact-role-${contact.id}`}
-                        label="Role"
-                        value={contact.contact_role}
-                        onChange={(e) => {
-                          if (editingContactId !== contact.id) setEditingContactId(contact.id);
-                          qc.setQueryData<CustomerContactRow[]>(['customer-contacts', selectedRow.id], (prev = []) =>
-                            prev.map((x) => (x.id === contact.id ? { ...x, contact_role: String(e.target.value) } : x))
-                          );
-                        }}
-                      >
-                        {CONTACT_ROLE_OPTIONS.map((opt) => (
-                          <MenuItem key={opt} value={opt}>
-                            {opt}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <TextField
-                      size="small"
-                      label="Email"
-                      value={contact.email ?? ''}
-                      onChange={(e) => {
-                        if (editingContactId !== contact.id) setEditingContactId(contact.id);
-                        qc.setQueryData<CustomerContactRow[]>(['customer-contacts', selectedRow.id], (prev = []) =>
-                          prev.map((x) => (x.id === contact.id ? { ...x, email: e.target.value } : x))
-                        );
-                      }}
-                    />
-                    <TextField
-                      size="small"
-                      label="Phone"
-                      value={contact.phone ?? ''}
-                      onChange={(e) => {
-                        if (editingContactId !== contact.id) setEditingContactId(contact.id);
-                        qc.setQueryData<CustomerContactRow[]>(['customer-contacts', selectedRow.id], (prev = []) =>
-                          prev.map((x) => (x.id === contact.id ? { ...x, phone: e.target.value } : x))
-                        );
-                      }}
-                    />
-                    <Stack direction="row" spacing={1}>
-                      <Button size="small" variant="outlined" onClick={() => patchContact.mutate(contact)}>
-                        Save
-                      </Button>
-                      <Button size="small" color="error" onClick={() => deleteContact.mutate(contact.id)}>
-                        Delete
-                      </Button>
-                    </Stack>
-                  </Stack>
-                </Paper>
-              ))}
-              <Paper variant="outlined" sx={{ p: 1 }}>
-                <Stack spacing={1}>
-                  <Typography variant="body2" fontWeight={600}>
-                    Add contact
-                  </Typography>
-                  <TextField
-                    size="small"
-                    label="Contact name"
-                    value={contactDraft.contact_name}
-                    onChange={(e) => setContactDraft((s) => ({ ...s, contact_name: e.target.value }))}
-                  />
-                  <FormControl size="small">
-                    <InputLabel id="new-contact-role">Role</InputLabel>
-                    <Select
-                      labelId="new-contact-role"
-                      label="Role"
-                      value={contactDraft.contact_role}
-                      onChange={(e) => setContactDraft((s) => ({ ...s, contact_role: String(e.target.value) }))}
-                    >
-                      {CONTACT_ROLE_OPTIONS.map((opt) => (
-                        <MenuItem key={opt} value={opt}>
-                          {opt}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <TextField
-                    size="small"
-                    label="Email"
-                    value={contactDraft.email}
-                    onChange={(e) => setContactDraft((s) => ({ ...s, email: e.target.value }))}
-                  />
-                  <TextField
-                    size="small"
-                    label="Phone"
-                    value={contactDraft.phone}
-                    onChange={(e) => setContactDraft((s) => ({ ...s, phone: e.target.value }))}
-                  />
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={() => createContact.mutate()}
-                    disabled={createContact.isPending || !contactDraft.contact_name.trim()}
-                  >
-                    Add contact
-                  </Button>
-                </Stack>
-              </Paper>
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => router.push('/admin/imports?template=customer_master')}
-                >
-                  Import customer master
-                </Button>
-              </Stack>
-            </Stack>
-          )}
-        </Box>
-      </Drawer>
+      />
+      <CustomerBulkPromoteDialog
+        open={bulkPromoteOpen}
+        mintCandidates={bulkMintCandidates}
+        onClose={() => {
+          setBulkPromoteOpen(false);
+          void qc.invalidateQueries({ queryKey: ['admin-customers'] });
+        }}
+      />
+      <CustomerDispositionDialog
+        open={dispositionOpen}
+        customerIds={dispositionCustomerIds}
+        onClose={() => {
+          setDispositionOpen(false);
+          void qc.invalidateQueries({ queryKey: ['admin-customers'] });
+        }}
+      />
       <MasterBulkDeleteImpactDialog
         open={bulkDeleteOpen}
         busy={bulkDeleteBusy}

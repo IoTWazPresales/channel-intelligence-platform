@@ -55,8 +55,6 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
     const columnDefsKey = columnDefs.map((c) => String(c.field ?? c.colId ?? '')).join('\0');
     useEffect(() => {
       const DEFAULT_HIDDEN = new Set([
-        'part_number',
-        'sales_model_name',
         'model_name',
         'series_name',
         'product_line',
@@ -330,21 +328,21 @@ describe('AdminProductsPage pass1 behaviors', () => {
     const search = await screen.findByLabelText('Search columns');
     fireEvent.change(search, { target: { value: 'Part number' } });
     const toggle = await screen.findByRole('checkbox', { name: 'Part number' });
-    expect(toggle).not.toBeChecked();
+    expect(toggle).toBeChecked();
     fireEvent.click(toggle);
-    expect(setColumnsVisibleSpy).toHaveBeenCalledWith(['part_number'], true);
+    expect(setColumnsVisibleSpy).toHaveBeenCalledWith(['part_number'], false);
     await waitFor(() => {
-      expect(screen.getByRole('checkbox', { name: 'Part number' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Part number' })).not.toBeChecked();
     });
   });
 
   it('persists chosen column layout across search/filter query changes', async () => {
     const view = renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Columns' }));
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Part number' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Model family' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Done' }));
     const rawAfterToggle = localStorage.getItem('cip.admin.products.gridState.v1');
-    expect(rawAfterToggle).toContain('"colId":"part_number"');
+    expect(rawAfterToggle).toContain('"colId":"model_name"');
     expect(rawAfterToggle).toContain('"hide":false');
 
     const search = await screen.findByLabelText('Search');
@@ -356,7 +354,7 @@ describe('AdminProductsPage pass1 behaviors', () => {
       </QueryClientProvider>
     );
     const rawAfterSearch = localStorage.getItem('cip.admin.products.gridState.v1');
-    expect(rawAfterSearch).toContain('"colId":"part_number"');
+    expect(rawAfterSearch).toContain('"colId":"model_name"');
     expect(rawAfterSearch).toContain('"hide":false');
 
     searchString = 'page=1&page_size=50&sort_by=sku&sort_dir=asc&q=sku-1&is_active=true';
@@ -366,14 +364,14 @@ describe('AdminProductsPage pass1 behaviors', () => {
       </QueryClientProvider>
     );
     const rawAfterFilter = localStorage.getItem('cip.admin.products.gridState.v1');
-    expect(rawAfterFilter).toContain('"colId":"part_number"');
+    expect(rawAfterFilter).toContain('"colId":"model_name"');
     expect(rawAfterFilter).toContain('"hide":false');
   });
 
   it('only reset column layout action clears persisted layout', async () => {
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Columns' }));
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Part number' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Model family' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Done' }));
     expect(localStorageRemoveSpy).not.toHaveBeenCalledWith('cip.admin.products.gridState.v1');
 
@@ -387,9 +385,8 @@ describe('AdminProductsPage pass1 behaviors', () => {
   it('adds hidden optional pass1.1 columns while keeping default columns visible', async () => {
     renderPage();
     await screen.findByText('SKU-1');
+    const defaultVisibleCommercial = ['part_number', 'sales_model_name'];
     const hiddenFields = [
-      'part_number',
-      'sales_model_name',
       'model_name',
       'series_name',
       'product_line',
@@ -398,12 +395,16 @@ describe('AdminProductsPage pass1 behaviors', () => {
       'ean',
       'upc',
     ];
-    for (const field of hiddenFields) {
+    for (const field of [...defaultVisibleCommercial, ...hiddenFields]) {
       const col = capturedColumnDefs.find((c) => c.field === field);
       expect(col).toBeTruthy();
       expect(col.hide).toBeUndefined();
     }
     await waitFor(() => {
+      for (const field of defaultVisibleCommercial) {
+        const st = mockColumnState.find((c) => c.colId === field);
+        expect(st?.hide).toBe(false);
+      }
       for (const field of hiddenFields) {
         const st = mockColumnState.find((c) => c.colId === field);
         expect(st?.hide).toBe(true);

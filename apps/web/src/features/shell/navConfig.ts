@@ -44,6 +44,8 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: 'Channel Operations', href: '/sell-out' },
       { label: 'Sell-Through', href: '/sell-out' },
+      { label: 'CST channel intelligence', href: '/channel-intelligence' },
+      { label: 'Listing Capture', href: '/listing-capture' },
       { label: 'Inbound shipments', href: '/shipping' },
       { label: 'Forecasting', href: '/forecasts' },
     ],
@@ -53,7 +55,9 @@ export const navGroups: NavGroup[] = [
     label: 'Commercial Planning',
     items: [
       { label: 'Commercial Planner', href: '/commercial-planner' },
+      { label: 'CPOR Cases', href: '/commercial-planner/cpor-cases' },
       { label: 'Line-up Planning', href: '/lineup' },
+      { label: 'Plan vs Executed', href: '/plan-vs-executed' },
     ],
   },
   {
@@ -61,9 +65,23 @@ export const navGroups: NavGroup[] = [
     label: 'Master Data',
     items: [
       { label: 'Products', href: '/admin/products' },
+      { label: 'Product catalogue gaps', href: '/admin/product-master-gaps' },
       { label: 'Customers', href: '/admin/customers' },
+      {
+        label: 'Alias-scope conflicts',
+        href: '/admin/customers/duplicates?tab=alias_scope',
+      },
+      {
+        label: 'Name-similarity duplicates',
+        href: '/admin/customers/duplicates?tab=name_similarity',
+      },
       { label: 'Distributors', href: '/admin/distributors' },
+      {
+        label: 'Distributor name-similarity duplicates',
+        href: '/admin/distributors/duplicates',
+      },
       { label: 'Channels & Regions', href: '/admin/channels-regions' },
+      { label: 'CST steward', href: '/admin/cst-steward' },
     ],
   },
   {
@@ -72,6 +90,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: 'Import Center', href: '/admin/imports' },
       { label: 'Shipment Evidence', href: '/admin/shipment-evidence' },
+      { label: 'PO Management', href: '/admin/po-management' },
       { label: 'Customer Reports', href: '/admin/imports?template=customer_sell_through' },
     ],
   },
@@ -93,10 +112,27 @@ export function defaultGroupExpandedState(): Record<string, boolean> {
   return out;
 }
 
+function duplicatesTabFromSearch(search: string): string {
+  const raw = search.startsWith('?') ? search.slice(1) : search;
+  const tab = new URLSearchParams(raw).get('tab');
+  if (tab === 'alias_scope' || tab === 'name_similarity') return tab;
+  return 'name_similarity';
+}
+
 export function navHrefMatches(pathname: string, search: string, href: string): boolean {
   const qIdx = href.indexOf('?');
+  const path = qIdx >= 0 ? href.slice(0, qIdx) : href;
+  const hrefQuery = qIdx >= 0 ? href.slice(qIdx + 1) : '';
+
+  if (path === '/admin/customers/duplicates') {
+    if (pathname !== path) return false;
+    const expectedTab = hrefQuery
+      ? new URLSearchParams(hrefQuery).get('tab') || 'name_similarity'
+      : 'name_similarity';
+    return duplicatesTabFromSearch(search) === expectedTab;
+  }
+
   if (qIdx >= 0) {
-    const path = href.slice(0, qIdx);
     const query = href.slice(qIdx);
     return pathname === path && search === query;
   }

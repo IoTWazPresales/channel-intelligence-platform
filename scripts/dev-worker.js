@@ -4,11 +4,17 @@
  * - Preflight: TCP connect to the host:port from CELERY_BROKER_URL (default 127.0.0.1:6379) so the worker
  *   fails fast with a clear message when Redis is not listening (common no-Docker Windows gap).
  * - Windows: defaults to --pool=solo (prefork is unreliable on Windows). Override with CIP_CELERY_WORKER_POOL.
- * - Local dev beat: Unix/macOS embed via worker --beat; Windows spawns a sibling `celery beat` process
- *   (Celery rejects --beat on Windows). Docker/prod uses a separate beat service only.
+ * - Local dev beat: disabled by default on Windows solo (BACKLOG-038). Set CIP_ENABLE_DEV_BEAT=1 to spawn beat.
+ *   Unix/macOS embed via worker --beat unless CIP_DISABLE_DEV_BEAT=1.
+ * - Worker subscribes to -Q interactive,batch,celery (interactive first).
+ * - Duplicate-consumer preflight: before spawning, scan for any existing Celery process bound to
+ *   app.worker.celery_app and stop it (orphaned worker/beat from a crashed wrapper, or a second
+ *   `pnpm dev:worker`). Two workers on the same Redis queues double-consume tasks and cause the
+ *   intermittent task contention / "idle in transaction" symptoms. Mirrors dev-api.js killing a
+ *   stale process on its port. Skip with CIP_SKIP_WORKER_PREFLIGHT=1 (e.g. intentional multi-worker).
  * - Skip preflight only when explicitly needed: CIP_SKIP_REDIS_PREFLIGHT=1 (not for normal local dev).
  */
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const fs = require('fs');
 const net = require('net');
 const path = require('path');
@@ -75,6 +81,74 @@ function checkBrokerTcp({ host, port }, timeoutMs) {
   });
 }
 
+// Command-line signature shared by `celery -A app.worker.celery_app worker|beat`.
+const CELERY_SIGNATURE = 'app.worker.celery_app';
+
+/**
+ * Find PIDs of existing Celery processes (worker or beat) for this app.
+ * The preflight runs BEFORE this wrapper spawns any child, so every match is stale by definition.
+ * @returns {number[]}
+ */
+function findStaleCeleryPids() {
+  try {
+    if (isWin) {
+      const psCmd =
+        "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | " +
+        "Where-Object { $_.CommandLine -match 'app\\.worker\\.celery_app' } | " +
+        'ForEach-Object { $_.ProcessId }';
+      const out = execFileSync(
+        'powershell',
+        ['-NoProfile', '-NonInteractive', '-Command', psCmd],
+        { encoding: 'utf8' }
+      );
+      return out
+        .split(/\r?\n/)
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => Number.isFinite(n) && n > 0 && n !== process.pid);
+    }
+    const out = execFileSync('pgrep', ['-f', CELERY_SIGNATURE], { encoding: 'utf8' });
+    return out
+      .split(/\s+/)
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isFinite(n) && n > 0 && n !== process.pid);
+  } catch {
+    // pgrep exits 1 with no output when nothing matches; treat as "no stale workers".
+    return [];
+  }
+}
+
+/**
+ * Stop any pre-existing Celery worker/beat so this run is the sole consumer.
+ * Skipped with CIP_SKIP_WORKER_PREFLIGHT=1.
+ */
+function killStaleCeleryWorkers() {
+  if (process.env.CIP_SKIP_WORKER_PREFLIGHT === '1') {
+    console.error(
+      '[cip-dev-worker] CIP_SKIP_WORKER_PREFLIGHT=1 — skipping duplicate-worker preflight (intentional multi-worker only).'
+    );
+    return;
+  }
+  const pids = findStaleCeleryPids();
+  if (!pids.length) return;
+  console.error(
+    `[cip-dev-worker] Found ${pids.length} existing Celery process(es) (${pids.join(', ')}). ` +
+      'Duplicate consumers double-process tasks and cause contention — stopping them before starting fresh. ' +
+      '(To run multiple workers intentionally: CIP_SKIP_WORKER_PREFLIGHT=1)'
+  );
+  for (const pid of pids) {
+    try {
+      if (isWin) {
+        execFileSync('taskkill', ['/PID', String(pid), '/F', '/T'], { stdio: 'ignore' });
+      } else {
+        process.kill(pid, 'SIGTERM');
+      }
+      console.error(`[cip-dev-worker] stopped stale Celery PID ${pid}`);
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
 function spawnCelery(subcommand, extraArgs = []) {
   const args = ['-m', 'celery', '-A', 'app.worker.celery_app', subcommand, '-l', 'info', ...extraArgs];
   const child = spawn(py, args, { cwd: apiRoot, stdio: 'inherit', env: process.env });
@@ -113,6 +187,8 @@ async function main() {
     process.exit(1);
   }
 
+  killStaleCeleryWorkers();
+
   if (process.env.CIP_SKIP_REDIS_PREFLIGHT === '1') {
     console.error(
       '[cip-dev-worker] CIP_SKIP_REDIS_PREFLIGHT=1 — skipping Redis TCP preflight (for automation/unusual setups only).'
@@ -137,6 +213,11 @@ async function main() {
 
   const workerExtra = [];
   const poolOverride = process.env.CIP_CELERY_WORKER_POOL;
+  const soloPool = !poolOverride || poolOverride === 'solo';
+  const disableBeat =
+    process.env.CIP_DISABLE_DEV_BEAT === '1' ||
+    (isWin && soloPool && process.env.CIP_ENABLE_DEV_BEAT !== '1');
+
   if (poolOverride) {
     workerExtra.push('--pool', poolOverride);
     console.error(`[cip-dev-worker] Using Celery --pool=${poolOverride} (from CIP_CELERY_WORKER_POOL).`);
@@ -147,7 +228,16 @@ async function main() {
     );
   }
 
-  if (isWin) {
+  workerExtra.push('-Q', 'interactive,batch,celery');
+  console.error(
+    '[cip-dev-worker] Subscribing to queues interactive,batch,celery (interactive first for steward work).'
+  );
+
+  if (disableBeat) {
+    console.error(
+      '[cip-dev-worker] Celery beat disabled (Windows solo default). Set CIP_ENABLE_DEV_BEAT=1 to run periodic reaper locally.'
+    );
+  } else if (isWin) {
     console.error(
       '[cip-dev-worker] Windows: spawning sibling celery beat (worker --beat is unsupported on Windows).'
     );

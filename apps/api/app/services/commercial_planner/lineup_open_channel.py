@@ -37,6 +37,19 @@ def lineup_line_is_open_channel_staging(ln: CommercialLineupLine) -> bool:
     return p.get(STAGING_OPEN_CHANNEL_KEY) is True
 
 
+def effective_lineup_customer_id(
+    ln: CommercialLineupLine,
+    *,
+    open_channel_customer_id: int | None,
+) -> int | None:
+    """Customer grain for planned qty / PO match — OPEN_CHANNEL dim when row is open-channel staging."""
+    if ln.customer_id is not None:
+        return int(ln.customer_id)
+    if lineup_line_is_open_channel_staging(ln) and open_channel_customer_id is not None:
+        return int(open_channel_customer_id)
+    return None
+
+
 def managed_customer_token_unresolved(ln: CommercialLineupLine) -> bool:
     """True when a non–open-channel customer token is present but not mapped to DimCustomer."""
     if lineup_line_is_open_channel_staging(ln):

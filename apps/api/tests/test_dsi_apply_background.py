@@ -14,10 +14,13 @@ from app.ingestion.pipeline import STAGE_FAILED, STAGE_LOADED, STAGE_VALIDATED
 from app.services.imports.dsi_apply_completion import DsiApplyCompletionError
 
 
-def _install_fake_session(monkeypatch, job):
+def _install_fake_session(monkeypatch, job, *, staging_count: int = 100):
     class _FakeSession:
         def get(self, _model, _id):
             return job
+
+        def scalar(self, _stmt):
+            return staging_count
 
         def commit(self):
             pass
@@ -37,7 +40,12 @@ def test_run_dsi_apply_sync_happy_path(monkeypatch) -> None:
         status="running",
     )
     _install_fake_session(monkeypatch, job)
-    monkeypatch.setattr(apply_mod, "process_import_job_sync", lambda db, jid, on_progress=None: job)
+    called = {"process": False}
+    monkeypatch.setattr(
+        apply_mod,
+        "process_import_job_sync",
+        lambda db, jid, on_progress=None: called.__setitem__("process", True),
+    )
 
     def _complete(db, jid):
         job.stage = STAGE_LOADED
@@ -54,8 +62,32 @@ def test_run_dsi_apply_sync_happy_path(monkeypatch) -> None:
 
     assert out == {"id": 51, "outcome": "applied"}
     assert job.stage == STAGE_LOADED
+    assert called["process"] is False
     assert "finalizing_apply" in phases
     assert phases[-1] == "complete"
+
+
+def test_run_dsi_apply_sync_runs_pipeline_when_no_staging(monkeypatch) -> None:
+    job = SimpleNamespace(
+        template_slug="distributor_inventory",
+        stage="dsi_mapping_ready",
+        import_mode="apply",
+        status="running",
+    )
+    _install_fake_session(monkeypatch, job, staging_count=0)
+    called = {"process": False}
+
+    def _process(db, jid, on_progress=None):
+        called["process"] = True
+        job.stage = STAGE_VALIDATED
+
+    monkeypatch.setattr(apply_mod, "process_import_job_sync", _process)
+    monkeypatch.setattr(apply_mod, "complete_dsi_import_job_to_loaded", lambda db, jid: {"ok": True})
+    monkeypatch.setattr(apply_mod, "persist_clear_background_task_metadata", lambda s, j: None)
+
+    apply_mod.run_dsi_apply_sync(53)
+
+    assert called["process"] is True
 
 
 def test_run_dsi_apply_sync_rejects_non_dsi(monkeypatch) -> None:
@@ -83,7 +115,7 @@ def test_run_dsi_apply_sync_completion_error_marks_failed(monkeypatch) -> None:
         error_summary=None,
         completed_at=None,
     )
-    _install_fake_session(monkeypatch, job)
+    _install_fake_session(monkeypatch, job, staging_count=0)
     monkeypatch.setattr(apply_mod, "process_import_job_sync", lambda db, jid, on_progress=None: job)
 
     def _boom(db, jid):

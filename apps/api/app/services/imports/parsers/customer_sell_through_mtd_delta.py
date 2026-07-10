@@ -2,6 +2,8 @@
 # - Detect MTD measure column by header keywords or explicit field_mapping.
 # - Prior-week MTD from staging via raw_product_token + customer_id (handler passes __customer_id__).
 # - derived_units = current_mtd - prior; first upload in month uses is_mtd_estimate=True.
+# - D1 parity (Batch 1c): unit_mac, raw_article_token, listing_external_id,
+#   listing_marketplace, and site_label emitted when mapped; otherwise None.
 
 from __future__ import annotations
 
@@ -213,6 +215,7 @@ def parse_mtd_delta_report(
                 "raw_row_payload": _row_dict(series),
                 "raw_customer_token": None,
                 "raw_location_token": loc_tok,
+                "site_label": loc_tok,
                 "raw_product_token": product_tok,
                 "raw_period_ref": _normalize_text(series.get(col_map["raw_period_ref"]))
                 if col_map["raw_period_ref"]
@@ -226,8 +229,18 @@ def parse_mtd_delta_report(
                 if col_map["unit_sell_price"]
                 else None,
                 "unit_cost": _parse_decimal(series.get(col_map["unit_cost"])) if col_map["unit_cost"] else None,
+                "unit_mac": _parse_decimal(series.get(col_map["unit_mac"])) if col_map.get("unit_mac") else None,
                 "reported_soh": _parse_decimal(series.get(col_map["reported_soh"]))
                 if col_map["reported_soh"]
+                else None,
+                "raw_article_token": _normalize_text(series.get(col_map["raw_article_token"]))
+                if col_map.get("raw_article_token")
+                else None,
+                "listing_external_id": _normalize_text(series.get(col_map["listing_external_id"]))
+                if col_map.get("listing_external_id")
+                else None,
+                "listing_marketplace": _normalize_text(series.get(col_map["listing_marketplace"]))
+                if col_map.get("listing_marketplace")
                 else None,
                 "resolution_status": "pending",
             }

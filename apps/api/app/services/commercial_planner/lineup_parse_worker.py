@@ -18,6 +18,8 @@ def run_lineup_case_parse_sync(
     file_bytes: bytes,
     *,
     import_job_id: int | None = None,
+    template_slug: str = "current_lineup",
+    source_code: str = "current_lineup_system",
 ) -> dict:
     """Run parse_current_lineup_file in a fresh event loop (Celery worker safe)."""
     from app.db.session import AsyncSessionLocal
@@ -31,6 +33,8 @@ def run_lineup_case_parse_sync(
                 filename,
                 file_bytes,
                 existing_import_job_id=import_job_id,
+                template_slug=template_slug,
+                source_code=source_code,
             )
             return {
                 "case_id": result.case_id,
@@ -52,6 +56,8 @@ def run_lineup_case_parse_job(
     import_job_id: int,
     *,
     celery_task_id: str | None = None,
+    template_slug: str = "current_lineup",
+    source_code: str = "current_lineup_system",
 ) -> dict:
     """Celery worker entry: decode payload and parse lineup file."""
     _ = celery_task_id
@@ -62,6 +68,8 @@ def run_lineup_case_parse_job(
             filename,
             file_bytes,
             import_job_id=import_job_id,
+            template_slug=template_slug,
+            source_code=source_code,
         )
     except Exception:
         logger.exception("lineup parse failed case_id=%s import_job_id=%s", case_id, import_job_id)

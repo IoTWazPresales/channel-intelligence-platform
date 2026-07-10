@@ -6,6 +6,7 @@ steward apply paths remain strict (approved alias + explicit dimension choice).
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 
 from sqlalchemy import or_, select
@@ -18,6 +19,7 @@ from app.models.import_distributor_si import (
     ImportEntityMappingCandidate,
 )
 from app.services.imports.distributor_sales_inventory import _norm_key
+from app.services.imports.shipment_evidence_candidate_names import suggested_name_for_distributor_token
 from app.utils.json_safe import to_jsonable
 
 
@@ -71,6 +73,22 @@ def build_shipment_enrich_refs(db: Session) -> "ShipmentEnrichRefs":
         dist_aliases=dist_aliases,
         cust_aliases=cust_aliases,
     )
+
+
+def build_unique_approved_customer_alias_id_by_token(
+    cust_aliases: list[tuple[str, int, int | None]] | list[tuple[str, int]],
+) -> dict[str, int]:
+    """Map ``normalized_token`` → ``customer_id`` when exactly one distinct id is approved.
+
+    Used by lineup parse/backfill and any path that must not guess on ambiguous alias scope.
+    """
+    by_token: dict[str, set[int]] = defaultdict(set)
+    for row in cust_aliases:
+        nt = str(row[0] or "").strip()
+        if not nt:
+            continue
+        by_token[nt].add(int(row[1]))
+    return {nt: next(iter(ids)) for nt, ids in by_token.items() if len(ids) == 1}
 
 
 def _alias_source_match(alias_source_id: int | None, source_definition_id: int | None) -> bool:
@@ -179,6 +197,20 @@ def _exact_dim_customer_matches(
     return sorted(set(out))
 
 
+def _distributor_display_name_hint(cand: ImportEntityMappingCandidate) -> str:
+    """Human label derived at candidate build time (e.g. RECTRON-ZA-EDU → Rectron)."""
+    ctx = cand.context if isinstance(cand.context, dict) else {}
+    hint = (ctx.get("suggested_name") or "").strip()
+    if hint:
+        return hint
+    samples = cand.sample_raw_values
+    if isinstance(samples, list):
+        for raw in samples:
+            if isinstance(raw, str) and raw.strip():
+                return suggested_name_for_distributor_token(raw)
+    return ""
+
+
 def score_shipment_distributor_candidate(
     db: Session,
     cand: ImportEntityMappingCandidate,
@@ -220,6 +252,26 @@ def score_shipment_distributor_candidate(
             "match_reason": "multiple_dim_distributors_exact_match_token",
             "confidence_score": 0.35,
         }
+
+    display_hint = _distributor_display_name_hint(cand)
+    if display_hint:
+        hint_nk = _norm_key(display_hint)
+        if hint_nk and hint_nk != nt:
+            hint_ids = _exact_dim_matches(db, normalized_token=hint_nk, refs=refs)
+            if len(hint_ids) == 1:
+                return {
+                    "suggested_action": "map_distributor",
+                    "suggested_entity_id": int(hint_ids[0]),
+                    "match_reason": "exact_dim_distributor_name_matches_display_hint",
+                    "confidence_score": 0.88,
+                }
+            if len(hint_ids) > 1:
+                return {
+                    "suggested_action": "needs_review",
+                    "suggested_entity_id": None,
+                    "match_reason": "multiple_dim_distributors_match_display_hint",
+                    "confidence_score": 0.35,
+                }
 
     return {
         "suggested_action": "create_provisional_distributor",

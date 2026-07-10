@@ -33,7 +33,8 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
     - Template ``distributor_inventory``
     - Stage ``validated``
     - ``import_mode == apply``
-    - No staging line with ``resolution_status == blocked`` after refresh
+    - No human-fixable staging line with ``resolution_status == blocked`` after refresh
+      (structural / master-data exclusions and auto-excludes do not gate apply)
     - Fact upsert completes without recorded errors
     """
     job = db.get(ImportJob, int(job_id))
@@ -60,11 +61,25 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
     for line in lines:
         refresh_dsi_staging_line_resolution(db, job, line, prod_idx)
 
-    blocked = [ln for ln in lines if (ln.resolution_status or "") == "blocked"]
+    from app.services.imports.dsi_product_running_change import (
+        build_dsi_apply_exclusion_summary,
+        is_human_fixable_dsi_blocked_staging_line,
+        reapply_dsi_steward_ignored_customer_staging_lines,
+        reapply_dsi_steward_ignored_product_staging_lines,
+    )
+
+    reapply_dsi_steward_ignored_product_staging_lines(db, int(job.id))
+    reapply_dsi_steward_ignored_customer_staging_lines(db, int(job.id))
+    db.flush()
+
+    blocked = [ln for ln in lines if is_human_fixable_dsi_blocked_staging_line(ln)]
     if blocked:
         raise DsiApplyCompletionError(
-            f"{len(blocked)} staging line(s) still blocked after refresh (e.g. row {blocked[0].source_row_number})"
+            f"{len(blocked)} staging line(s) still human-fixable blocked after refresh "
+            f"(e.g. row {blocked[0].source_row_number})"
         )
+
+    apply_exclusion = build_dsi_apply_exclusion_summary(db, int(job.id), lines)
 
     db.flush()
     _sell, _inv, _ret, apply_errors = upsert_dsi_facts_for_staging_job(db, job)
@@ -99,21 +114,37 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
             )
         )
     if dist_id is not None and period_end is not None:
-        from app.services.imports.dsi_soh_reconciliation_enqueue import (
-            dispatch_dsi_soh_reconciliation_after_apply,
-        )
+        # Facts are already committed and the job is LOADED (above). Downstream
+        # derivation dispatch (SOH reconciliation, velocity) is best-effort: any
+        # failure here must NOT revert a successfully loaded job, so it is isolated
+        # in its own try/except. A derivation hiccup leaves the job ``loaded`` with
+        # facts applied — never ``failed``.
+        try:
+            from app.services.imports.dsi_soh_reconciliation_enqueue import (
+                dispatch_dsi_soh_reconciliation_after_apply,
+            )
 
-        dispatch_dsi_soh_reconciliation_after_apply(
-            db,
-            job,
-            distributor_id=int(dist_id),
-            period_end_date=period_end if isinstance(period_end, date) else period_end,
-        )
-        from app.services.imports.dsi_velocity_enqueue import dispatch_dsi_velocity_after_apply
+            dispatch_dsi_soh_reconciliation_after_apply(
+                db,
+                job,
+                distributor_id=int(dist_id),
+                period_end_date=period_end if isinstance(period_end, date) else period_end,
+            )
+            from app.services.imports.dsi_velocity_enqueue import dispatch_dsi_velocity_after_apply
 
-        dispatch_dsi_velocity_after_apply(db, job, int(dist_id))
-        db.commit()
-        db.refresh(job)
+            dispatch_dsi_velocity_after_apply(db, job, int(dist_id))
+            db.commit()
+            db.refresh(job)
+        except Exception:
+            logger.exception(
+                "DSI post-load derivation dispatch failed job_id=%s; facts applied and "
+                "job remains loaded",
+                job.id,
+            )
+            try:
+                db.rollback()
+            except Exception:
+                logger.exception("DSI post-load rollback failed job_id=%s", job.id)
 
     return {
         "ok": True,
@@ -121,4 +152,5 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
         "stage": job.stage,
         "status": job.status,
         "staging_rows": len(lines),
+        "apply_exclusion": apply_exclusion,
     }

@@ -51,7 +51,6 @@ from app.models.facts import (
     FactInventoryCustomer,
     FactPricing,
     FactProductRoadmap,
-    FactPromotionPlan,
     FactSalesSellout,
 )
 from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
@@ -228,6 +227,8 @@ def run(session: Session, *, full_demo: bool = False) -> None:
     session.add_all(owners)
     session.flush()
 
+    # Spec §7: stop seeding FactPromotionPlan (empty scaffold). DimPromotion retained
+    # only while PromoReadiness / PromoPlanExport / lineup.link_promotion_id still FK it.
     promos = [
         DimPromotion(code="PROMO-Q2", name="Spring Audio Event", start_date=date.today(), end_date=date.today() + timedelta(days=45)),
     ]
@@ -311,13 +312,7 @@ def run(session: Session, *, full_demo: bool = False) -> None:
                 net_price=169.99,
                 currency="USD",
             ),
-            FactPromotionPlan(
-                promotion_id=promos[0].id,
-                product_id=products[0].id,
-                expected_uplift_pct=18.0,
-                support_needed="Incremental display allowance",
-                stock_readiness="at_risk",
-            ),
+            # FactPromotionPlan seeding removed (spec §7 — deprecated scaffold).
         ]
     )
 

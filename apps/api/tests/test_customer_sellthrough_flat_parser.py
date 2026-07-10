@@ -221,6 +221,7 @@ def test_all_output_rows_contain_required_keys() -> None:
         "raw_row_payload",
         "raw_customer_token",
         "raw_location_token",
+        "site_label",
         "raw_product_token",
         "raw_period_ref",
         "period_start_date",
@@ -230,7 +231,11 @@ def test_all_output_rows_contain_required_keys() -> None:
         "is_mtd_estimate",
         "unit_sell_price",
         "unit_cost",
+        "unit_mac",
         "reported_soh",
+        "raw_article_token",
+        "listing_external_id",
+        "listing_marketplace",
         "resolution_status",
     }
     for row in result.rows:

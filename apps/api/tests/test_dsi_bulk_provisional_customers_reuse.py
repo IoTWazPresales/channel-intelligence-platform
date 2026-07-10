@@ -194,9 +194,16 @@ def test_bulk_provisional_reuses_existing_approved_alias(dsi_bulk_reuse_ctx: dic
     assert out["results"][0]["result"]["reused"] is True
 
 
-def test_bulk_provisional_batch_dedupes_same_scope(dsi_bulk_reuse_ctx: dict) -> None:
-    token = f"Batch Dealer {secrets.token_hex(4)}"
-    nt = _norm_key(token)
+def test_bulk_provisional_distinct_dealer_groups_create_distinct(dsi_bulk_reuse_ctx: dict) -> None:
+    """Two candidates with distinct Dealer Name Groups are distinct accounts: each creates its
+    own provisional customer and an approved alias keyed on its dealer-group resolution identity
+    (normalized_key). The customer-name column is evidence only and must not be the alias key."""
+    suffix = secrets.token_hex(4)
+    dg_a = f"BATCH DEALER GROUP ALPHA {suffix}"
+    dg_b = f"BATCH DEALER GROUP BETA {suffix}"
+    nk_a = _norm_key(dg_a)[:512]
+    nk_b = _norm_key(dg_b)[:512]
+    shared_customer_name = f"Shared Store Name {suffix}"
     source_id = dsi_bulk_reuse_ctx["source_id"]
     job_id = dsi_bulk_reuse_ctx["job_id"]
 
@@ -205,20 +212,21 @@ def test_bulk_provisional_batch_dedupes_same_scope(dsi_bulk_reuse_ctx: dict) -> 
             session,
             job_id=job_id,
             source_id=source_id,
-            token=token,
+            token=shared_customer_name,
             region_id=dsi_bulk_reuse_ctx["region_id"],
             channel_id=dsi_bulk_reuse_ctx["channel_id"],
         )
-        c1.normalized_key = f"{_norm_key(token)}-agg-a"[:512]
+        c1.normalized_key = nk_a
+        c1.dealer_group_token = dg_a
         c2 = ImportEntityMappingCandidate(
             import_job_id=job_id,
             source_definition_id=source_id,
             entity_type="customer_dealer_token",
-            normalized_key=f"{_norm_key(token)}-agg-b"[:512],
-            dealer_group_token=None,
+            normalized_key=nk_b,
+            dealer_group_token=dg_b,
             row_count=2,
-            sample_raw_values=[token],
-            context={"source_customer_name_raw_samples": [token]},
+            sample_raw_values=[shared_customer_name],
+            context={"source_customer_name_raw_samples": [shared_customer_name]},
             status="needs_review",
         )
         session.add(c2)
@@ -236,16 +244,23 @@ def test_bulk_provisional_batch_dedupes_same_scope(dsi_bulk_reuse_ctx: dict) -> 
                 "channel_id": dsi_bulk_reuse_ctx["channel_id"],
             },
         )
-        alias_n = _alias_count_for_scope(session, normalized_token=nt, source_id=source_id)
+        alias_a = _alias_count_for_scope(session, normalized_token=nk_a, source_id=source_id)
+        alias_b = _alias_count_for_scope(session, normalized_token=nk_b, source_id=source_id)
+        alias_name = _alias_count_for_scope(
+            session, normalized_token=_norm_key(shared_customer_name)[:512], source_id=source_id
+        )
         cust_ids = {
             session.get(ImportEntityMappingCandidate, id1).suggested_entity_id,
             session.get(ImportEntityMappingCandidate, id2).suggested_entity_id,
         }
 
-    assert out["counts"] == {"created": 1, "reused": 1, "skipped": 0}
+    assert out["counts"] == {"created": 2, "reused": 0, "skipped": 0}
     assert out["applied"] == 2
-    assert alias_n == 1
-    assert len(cust_ids) == 1
+    assert alias_a == 1
+    assert alias_b == 1
+    # The customer-name column must NOT be used as the alias lookup key.
+    assert alias_name == 0
+    assert len(cust_ids) == 2
     assert None not in cust_ids
 
 

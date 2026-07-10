@@ -3,7 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ShipmentEntityStewardPanel } from './ShipmentEntityStewardPanel';
+import { ShipmentEntityStewardPanelLegacy } from './ShipmentEntityStewardPanelLegacy';
 
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(async (path: string) => {
@@ -61,9 +61,9 @@ function wrap(ui: ReactElement) {
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
 }
 
-describe('ShipmentEntityStewardPanel', () => {
+describe('ShipmentEntityStewardPanelLegacy', () => {
   it('renders distributor and channel partner rows', async () => {
-    wrap(<ShipmentEntityStewardPanel importJobId={9} />);
+    wrap(<ShipmentEntityStewardPanelLegacy importJobId={9} />);
     expect(await screen.findByText('ACME Pty')).toBeTruthy();
     expect(screen.getByTestId('shipment-entity-steward-panel')).toBeTruthy();
     expect(screen.getByText('Q2 Takealot')).toBeTruthy();
@@ -76,7 +76,7 @@ describe('ShipmentEntityStewardPanel', () => {
   });
 
   it('bands confidence scores (0.2 -> Low) on candidate rows', async () => {
-    wrap(<ShipmentEntityStewardPanel importJobId={9} />);
+    wrap(<ShipmentEntityStewardPanelLegacy importJobId={9} />);
     await screen.findByText('ACME Pty');
     // Both seeded rows have confidence_score 0.2 -> Low band chip + raw score.
     expect(screen.getByTestId('shipment-confidence-band-101')).toHaveTextContent('Low');
@@ -85,7 +85,7 @@ describe('ShipmentEntityStewardPanel', () => {
   });
 
   it('filters candidate rows via chip strip without crashing', async () => {
-    wrap(<ShipmentEntityStewardPanel importJobId={9} />);
+    wrap(<ShipmentEntityStewardPanelLegacy importJobId={9} />);
     await screen.findByText('ACME Pty');
     const filters = screen.getByTestId('shipment-steward-candidate-filters');
     expect(within(filters).getByText('Showing 2 of 2')).toBeInTheDocument();

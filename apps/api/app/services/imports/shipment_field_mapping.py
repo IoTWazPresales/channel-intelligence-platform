@@ -34,6 +34,7 @@ SHIPMENT_CANONICAL_TARGETS: tuple[str, ...] = (
     "ship_to_raw",
     "distributor_token",
     "order_no",
+    "customer_po",
     "order_line",
     "delivery_no",
     "invoice_line",
@@ -54,6 +55,7 @@ SHIPMENT_CANONICAL_TARGETS: tuple[str, ...] = (
     "erd_date",
     "est_pod_date",
     "pod_date",
+    "crad_date",
     "customer_dealer_token",
 )
 
@@ -64,6 +66,10 @@ SHIPMENT_FIELD_TARGET_DESCRIPTIONS: dict[str, str] = {
         "Values are stored on the Bill To column for resolution when Bill To is not mapped separately."
     ),
     "bill_to_raw": "Bill-to party text used for distributor resolution when no separate distributor column is mapped.",
+    "customer_po": (
+        "Distributor or customer purchase order number (links to commercial plan / lineup PO). "
+        "Distinct from order_no (ASUS internal order number)."
+    ),
     "ship_to_raw": "Ship-to party text used for distributor resolution when Bill To does not resolve.",
     "customer_dealer_token": (
         "Secondary label from the file: the raw customer / channel-partner name as printed "
@@ -78,11 +84,46 @@ SHIPMENT_FIELD_TARGET_DESCRIPTIONS: dict[str, str] = {
     "pod_date": (
         "Actual Proof of Delivery: the confirmed delivery date once the shipment is delivered (null until known)."
     ),
+    "crad_date": (
+        "Customer Required Arrival Date from the workbook CRAD column (commercial planning anchor; "
+        "distinct from logistics POD/ship-confirm dates)."
+    ),
 }
 
 
 def _norm_header(h: str) -> str:
     return (h or "").strip().lower()
+
+
+CUSTOMER_PO_HEADER_ALIASES_NORMALIZED: frozenset[str] = frozenset(
+    {
+        "customer po",
+        "cust po",
+        "customer p/o",
+        "purchase order",
+        "po no",
+        "po no.",
+        "po number",
+        "customer_po",
+    }
+)
+
+
+def extract_customer_po_from_raw_row(raw: dict | None) -> str | None:
+    """Read customer PO from a stored ``raw_source_row`` using Unit 1 alias spellings."""
+    if not isinstance(raw, dict):
+        return None
+    for key, value in raw.items():
+        if not isinstance(key, str):
+            continue
+        if _norm_header(key) not in CUSTOMER_PO_HEADER_ALIASES_NORMALIZED:
+            continue
+        from app.services.imports.shipment_evidence_text_normalize import normalize_shipment_cell_value
+
+        cell = normalize_shipment_cell_value(value)
+        if cell:
+            return cell
+    return None
 
 
 def merge_shipment_mapping_memory(db: Session, *, source_id: int, field_mapping: dict[str, str]) -> None:
@@ -170,6 +211,17 @@ def build_initial_shipment_field_mapping(headers: list[str], source: SourceDefin
             mapping[col] = "operating_unit"
         elif key in ("order no.", "order no", "order number", "order_no"):
             mapping[col] = "order_no"
+        elif key in (
+            "customer po",
+            "cust po",
+            "customer p/o",
+            "purchase order",
+            "po no",
+            "po no.",
+            "po number",
+            "customer_po",
+        ):
+            mapping[col] = "customer_po"
         elif key in ("order line", "order_line"):
             mapping[col] = "order_line"
         elif key in ("delivery no", "delivery no.", "delivery number", "delivery_no", "delivery no "):

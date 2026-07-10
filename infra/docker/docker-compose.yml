@@ -69,7 +69,7 @@ services:
     build:
       context: ../../apps/api
       dockerfile: Dockerfile
-    command: ["celery", "-A", "app.worker.celery_app", "worker", "-l", "info"]
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "-l", "info", "-Q", "interactive,batch,celery"]
     environment:
       DATABASE_URL: postgresql+asyncpg://cip:cip@postgres:5432/cip
       DATABASE_URL_SYNC: postgresql://cip:cip@postgres:5432/cip

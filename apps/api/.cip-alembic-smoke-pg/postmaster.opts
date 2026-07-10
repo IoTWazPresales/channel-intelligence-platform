@@ -1,0 +1,1 @@
+C:/Program Files/PostgreSQL/18/bin/postgres.exe "-D" "C:/Users/warren_eliason/channel-intelligence-platform/apps/api/.cip-alembic-smoke-pg" "-p" "5433"

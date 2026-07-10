@@ -21,6 +21,7 @@ from app.models.derived import (
     StockRisk,
     WeeksOfStock,
 )
+from app.models.cpor import CporCaseLine
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
@@ -46,7 +47,12 @@ from app.models.import_distributor_si import ImportDistributorSiStagingLine, Imp
 from app.models.lineup import FactLineupPlanItem
 from app.models.mapping import ProductAlias
 from app.models.product_catalog import CatalogProduct
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_read import (
+    apply_active_evidence_filter,
+    shipment_evidence_read_model,
+)
+
+EV = shipment_evidence_read_model()
 from app.services.master_usage_batch import batch_counts_multi_table, count_subquery_for_columns
 
 _PRODUCT_MAPPING_ENTITY_TYPES = ("product_identifier",)
@@ -59,8 +65,9 @@ _SPECS: list[tuple[str, object]] = [
     ("Inbound shipments", FactInboundShipment.product_id),
     ("Pricing", FactPricing.product_id),
     ("Support / MDF", FactSupport.product_id),
-    ("Promotion plans", FactPromotionPlan.product_id),
+    ("Promotion plans", FactPromotionPlan.product_id),  # scaffold kept until table drop (spec §7)
     ("Promotion performance", FactPromotionPerformance.product_id),
+    ("CPOR case lines", CporCaseLine.product_id),
     ("Forecasts", FactForecast.product_id),
     ("Buy plans", FactBuyPlan.product_id),
     ("Competitor mappings", FactCompetitorMapping.product_id),
@@ -69,7 +76,7 @@ _SPECS: list[tuple[str, object]] = [
     ("Customer sell-through", FactCustomerSellthrough.product_id),
     ("Customer velocity", FactCustomerVelocity.product_id),
     ("DSI forecasts", FactDsiForecast.product_id),
-    ("Shipment evidence (resolved product)", ShipmentEvidenceLine.product_id),
+    ("Shipment evidence (resolved product)", EV.product_id),
     ("DSI import staging (resolved product)", ImportDistributorSiStagingLine.resolved_product_id),
     ("Customer sell-through import staging", ImportCustomerSellthroughStagingLine.resolved_product_id),
     ("Catalog products (canonical link)", CatalogProduct.canonical_product_id),
@@ -118,7 +125,12 @@ async def product_hard_reference_breakdown_batch(
     out: dict[int, list[dict[str, int | str]]] = {i: [] for i in ids}
     if not ids:
         return out
-    subqueries = [count_subquery_for_columns(label, [col], ids) for label, col in _SPECS]
+    subqueries = []
+    for label, col in _SPECS:
+        sq = count_subquery_for_columns(label, [col], ids)
+        if label.startswith("Shipment evidence"):
+            sq = apply_active_evidence_filter(sq, model=EV)
+        subqueries.append(sq)
     subqueries.extend(_extra_product_subqueries(ids))
     return await batch_counts_multi_table(db, subqueries, ids)
 

@@ -3,6 +3,11 @@
 # - Unpivot: one output row per product/location per period with units_sold > 0.
 # - SOH snapshot applied on the latest period column row only per identity group.
 # - AI column mapping only when AI_ASSIST_ENABLED and zero period columns detected.
+# - D1 parity (Batch 1c): unit_mac, raw_article_token, listing_external_id,
+#   listing_marketplace, and site_label are read from identity (non-period) columns when
+#   mapped; otherwise None. Pivoted layout cannot carry per-period values for these fields.
+#   Identity headers misclassified as period columns (e.g. "Marketplace") are unpivoted
+#   as measure columns — use explicit field_mapping to a non-period source header.
 
 from __future__ import annotations
 
@@ -35,8 +40,12 @@ _IDENTITY_CANONICAL = (
     "raw_product_token",
     "raw_location_token",
     "unit_cost",
+    "unit_mac",
     "reported_soh",
     "unit_sell_price",
+    "raw_article_token",
+    "listing_external_id",
+    "listing_marketplace",
 )
 
 
@@ -113,8 +122,24 @@ def _parse_pivoted_dataframe(
             loc_tok = _normalize_text(series.get(col_map["raw_location_token"]))
 
         unit_cost = _parse_decimal(series.get(col_map["unit_cost"])) if col_map["unit_cost"] else None
+        unit_mac = _parse_decimal(series.get(col_map["unit_mac"])) if col_map.get("unit_mac") else None
         unit_sell = _parse_decimal(series.get(col_map["unit_sell_price"])) if col_map["unit_sell_price"] else None
         soh_val = _parse_decimal(series.get(col_map["reported_soh"])) if col_map["reported_soh"] else None
+        article_tok = (
+            _normalize_text(series.get(col_map["raw_article_token"]))
+            if col_map.get("raw_article_token")
+            else None
+        )
+        listing_ext_id = (
+            _normalize_text(series.get(col_map["listing_external_id"]))
+            if col_map.get("listing_external_id")
+            else None
+        )
+        listing_mkt = (
+            _normalize_text(series.get(col_map["listing_marketplace"]))
+            if col_map.get("listing_marketplace")
+            else None
+        )
 
         for col_name, period_date, period_type in period_cols:
             if period_date is None:
@@ -133,6 +158,7 @@ def _parse_pivoted_dataframe(
                     "raw_row_payload": _row_dict(series),
                     "raw_customer_token": None,
                     "raw_location_token": loc_tok,
+                    "site_label": loc_tok,
                     "raw_product_token": product_tok,
                     "raw_period_ref": str(col_name),
                     "period_start_date": period_date,
@@ -142,7 +168,11 @@ def _parse_pivoted_dataframe(
                     "is_mtd_estimate": False,
                     "unit_sell_price": unit_sell,
                     "unit_cost": unit_cost,
+                    "unit_mac": unit_mac,
                     "reported_soh": reported_soh,
+                    "raw_article_token": article_tok,
+                    "listing_external_id": listing_ext_id,
+                    "listing_marketplace": listing_mkt,
                     "resolution_status": "pending",
                 }
             )

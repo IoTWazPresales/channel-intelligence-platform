@@ -1,6 +1,7 @@
 export type DsiWizardJobSnapshot = {
   stage: string;
   status: string;
+  import_mode?: string | null;
 };
 
 /** True when validate has finished and steward/summary can mount. */
@@ -18,8 +19,12 @@ export function dsiJobHasValidationComplete(snapshot: DsiWizardJobSnapshot): boo
 export function dsiWizardActiveStepFromServer(snapshot: DsiWizardJobSnapshot): number | null {
   const stage = (snapshot.stage || '').trim();
   const status = (snapshot.status || '').trim().toLowerCase();
+  const importMode = (snapshot.import_mode || '').trim().toLowerCase();
 
   if (stage === 'loaded') return 7;
+
+  // Apply dispatched (import_mode=apply) but facts not yet loaded — stay on apply step, not steward.
+  if (importMode === 'apply' && stage === 'validated') return 7;
 
   if (dsiJobHasValidationComplete(snapshot)) return 6;
 

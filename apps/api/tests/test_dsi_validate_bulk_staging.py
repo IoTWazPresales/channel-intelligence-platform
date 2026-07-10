@@ -447,6 +447,7 @@ def test_distributor_candidates_from_cache_no_db_query(monkeypatch) -> None:
         all_customers=[],
         customer_code_to_id={},
         customer_name_to_ids={},
+        customer_sim_name_to_ids={},
         cust_aliases=[],
         open_channel_cid=None,
     )
@@ -574,6 +575,7 @@ def _minimal_dsi_resolution_cache(*, distributor_id: int = 42, distributor_code:
         all_customers=[],
         customer_code_to_id={},
         customer_name_to_ids={},
+        customer_sim_name_to_ids={},
         cust_aliases=[],
         open_channel_cid=None,
     )

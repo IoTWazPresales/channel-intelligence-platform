@@ -31,15 +31,25 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { CellValueChangedEvent, ColDef, GridOptions, ICellRendererParams } from 'ag-grid-community';
+import NextLink from 'next/link';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost, safeDisplayError } from '@/lib/api';
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { EntitySearchAutocomplete } from './EntitySearchAutocomplete';
+import {
+  CustomerReconChips,
+  ReconSummaryChips,
+  type ReconCustomerSlice,
+  type ReconSummary,
+} from './lineupReconciliationDisplay';
 
 function formatHttpErrorDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail;
@@ -62,6 +72,46 @@ function formatHttpErrorDetail(detail: unknown): string {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+type SuggestedPo = {
+  purchase_order_id: number;
+  po_number: string;
+  po_number_norm: string;
+  distributor_id: number | null;
+  distributor_code: string | null;
+  distributor_name: string | null;
+  matched_product_count: number;
+  total_shipped_units: number;
+  already_linked: boolean;
+  status: string;
+};
+
+type LinkedPo = {
+  purchase_order_id: number;
+  po_number_raw: string;
+  po_number_norm: string;
+  distributor_id: number | null;
+  status: string;
+};
+
+type SuggestedDistributor = {
+  distributor_id: number;
+  distributor_code: string | null;
+  distributor_name: string | null;
+  matched_product_count: number;
+  total_shipped_units: number;
+  po_count: number;
+  already_assigned: boolean;
+};
+
+type SuggestedDistributorsResponse = {
+  case_id: number;
+  converged: boolean;
+  converged_distributor_id: number | null;
+  distinct_count: number;
+  suggested_distributors: SuggestedDistributor[];
+  already_assigned_distributor_ids: number[];
+};
+
 type CommercialLineupCase = {
   id: number;
   import_job_id: number | null;
@@ -75,8 +125,29 @@ type CommercialLineupCase = {
   accepted_at: string | null;
   accepted_by: string | null;
   line_count: number;
+  iteration_number?: number;
+  product_line?: string | null;
+  inferred_period_start?: string | null;
+  linked_pos?: LinkedPo[];
+  po_count?: number;
   created_at: string | null;
+  superseded_by_case_id?: number | null;
 };
+
+/** Case statuses where PO confirm is terminal — hide forward sync prompts. */
+const STEWARD_WORK_OPEN_STATUSES = new Set([
+  'draft_imported',
+  'validated',
+  'pending_review',
+  'accepted',
+  'po_pending',
+  'po_issued',
+  'in_fulfillment',
+]);
+
+const CLOSE_WORK_STATUSES = new Set(['po_pending', 'po_issued', 'in_fulfillment']);
+
+const PO_LINKED_STATUSES = new Set(['po_pending', 'po_issued', 'in_fulfillment', 'received_closed', 'work_closed']);
 
 type CommercialLineupLine = {
   id: number;
@@ -130,6 +201,17 @@ type CommercialLineupLine = {
   product_spec_processor?: string | null;
   /** Flattened, non-empty specs_json map — same keys as workbench-column-metadata catalogue_spec_keys. */
   product_specs_flat?: Record<string, string>;
+  pricing_chain_json?: {
+    outputs?: Record<string, number | null>;
+  } | null;
+  calc_dap_cost_currency?: number | null;
+  calc_profit_total?: number | null;
+  rebate_pct_evidence?: number | null;
+  dealer_margin_pct_evidence?: number | null;
+  distributor_margin_pct_evidence?: number | null;
+  import_tax_pct_evidence?: number | null;
+  vat_pct_evidence?: number | null;
+  roe_evidence?: number | null;
 };
 
 type WorkbenchLineCounts = {
@@ -156,10 +238,67 @@ type WorkbenchColumnMetadata = {
   /** Server-derived spec_json keys matching processor/CPU aliases (metadata-driven). */
   processor_spec_key_hints?: string[];
   sync_fields: { id: string; group: string; label: string; field: string }[];
+  calc_fields?: { id: string; group: string; label: string; field: string }[];
 };
 
 const WB_STORAGE_V1 = 'cip.commercial-planner.currentLineupWorkbench.columns.v1';
 const WB_STORAGE_V2 = 'cip.commercial-planner.currentLineupWorkbench.columns.v2';
+const WB_STORAGE_V3 = 'cip.commercial-planner.currentLineupWorkbench.columns.v3';
+const WB_STORAGE_V4 = 'cip.commercial-planner.currentLineupWorkbench.columns.v4';
+
+/** Parsed evidence fields aligned with unified_lineup template (commercial chain, not CPU specs). */
+const UNIFIED_LINEUP_PARSED_DEFAULTS = [
+  'parsed:rebate_pct_evidence',
+  'parsed:dealer_margin_pct_evidence',
+  'parsed:distributor_margin_pct_evidence',
+  'parsed:import_tax_pct_evidence',
+  'parsed:vat_pct_evidence',
+  'parsed:roe_evidence',
+] as const;
+
+/** Derived pricing chain columns (pricing_chain_json.outputs + persisted calc_* fields). */
+const UNIFIED_LINEUP_CALC_DEFAULTS = [
+  'calc:dealer_price',
+  'calc:net_price',
+  'calc:disti_cost',
+  'calc:dap',
+  'calc:profit',
+] as const;
+
+const UNIFIED_LINEUP_CATALOGUE_DEFAULTS = [
+  'cat:product_model_name',
+  'cat:product_spec_processor',
+  'cat:catalogue_series_name',
+  'cat:catalogue_product_line',
+] as const;
+
+/** Default visible columns for unified lineup workbench — commercial template first. */
+function defaultUnifiedLineupWorkbenchIds(
+  meta: WorkbenchColumnMetadata | undefined,
+  hasPlan: boolean,
+): string[] {
+  const allow = mergeWorkbenchAllowedIds(meta, hasPlan);
+  const core = defaultWorkbenchVisible(hasPlan).filter((id) => allow.has(id));
+  const extras: string[] = [];
+  for (const id of UNIFIED_LINEUP_PARSED_DEFAULTS) {
+    if (allow.has(id)) extras.push(id);
+  }
+  for (const id of UNIFIED_LINEUP_CALC_DEFAULTS) {
+    if (allow.has(id)) extras.push(id);
+  }
+  for (const id of UNIFIED_LINEUP_CATALOGUE_DEFAULTS) {
+    if (allow.has(id)) extras.push(id);
+  }
+  const withoutSync = core.filter((id) => id !== 'sync');
+  const msrpIdx = withoutSync.indexOf('msrp');
+  const insertAt = msrpIdx >= 0 ? msrpIdx + 1 : withoutSync.length;
+  const merged = [
+    ...withoutSync.slice(0, insertAt),
+    ...extras.filter((id) => !withoutSync.includes(id)),
+    ...withoutSync.slice(insertAt),
+  ];
+  return hasPlan && allow.has('sync') ? [...merged, 'sync'] : merged;
+}
 
 const CORE_WORKBENCH_IDS = [
   'num',
@@ -188,7 +327,7 @@ const CORE_WORKBENCH_LABELS: Record<CoreWorkbenchId, string> = {
   units: 'Units',
   msrp: 'MSRP / list',
   promo: 'Promo evidence',
-  dap: 'DAP evidence',
+  dap: 'DAP (evidence)',
   issues: 'Status / issues',
   sync: 'Sync preview (plan)',
 };
@@ -200,8 +339,8 @@ function rawHeaderMatchesProcessorAliases(header: string): boolean {
   return needles.some((t) => n === t || n.includes(t));
 }
 
-/** Raw upload columns + resolved spec keys (from metadata hints) to show by default when present. */
-function pickDefaultProcessorWorkbenchIds(meta: WorkbenchColumnMetadata): string[] {
+/** Optional column preset — processor/upload CPU specs (never auto-injected). */
+function pickProcessorPresetWorkbenchIds(meta: WorkbenchColumnMetadata): string[] {
   const out: string[] = [];
   const rawColumns = meta.raw_columns ?? [];
   const byLower = new Map(rawColumns.map((c) => [c.toLowerCase(), c]));
@@ -223,7 +362,6 @@ function defaultWorkbenchVisible(hasPlan: boolean): string[] {
   const base = [
     'num',
     'product',
-    'sku',
     'part',
     'cust',
     'dist',
@@ -249,6 +387,11 @@ function mergeWorkbenchAllowedIds(meta: WorkbenchColumnMetadata | undefined, has
     'promo',
     'dap',
     'issues',
+    'calc:dealer_price',
+    'calc:net_price',
+    'calc:disti_cost',
+    'calc:dap',
+    'calc:profit',
   ]);
   if (hasPlan) s.add('sync');
   if (!meta) return s;
@@ -262,27 +405,54 @@ function mergeWorkbenchAllowedIds(meta: WorkbenchColumnMetadata | undefined, has
   for (const c of catFs) s.add(c.id);
   const syncFs = Array.isArray(meta.sync_fields) ? meta.sync_fields : [];
   for (const f of syncFs) s.add(f.id);
+  const calcFs = Array.isArray(meta.calc_fields) ? meta.calc_fields : [];
+  for (const c of calcFs) s.add(c.id);
   return s;
 }
 
-function readInitialWorkbenchVisible(hasPlan: boolean): string[] {
-  const fallback = defaultWorkbenchVisible(hasPlan);
-  if (typeof window === 'undefined') return fallback;
+function readCaseWorkbenchStorage(caseId: number): string[] | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const v2 = localStorage.getItem(WB_STORAGE_V2);
-    if (v2) {
-      const arr = JSON.parse(v2) as unknown;
-      if (Array.isArray(arr) && arr.every((x) => typeof x === 'string') && arr.length) return arr;
-    }
-    const raw = localStorage.getItem(WB_STORAGE_V1);
-    if (!raw) return fallback;
-    const arr = JSON.parse(raw) as unknown;
-    if (!Array.isArray(arr)) return fallback;
-    const next = arr.filter((x): x is string => typeof x === 'string');
-    return next.length ? next : fallback;
+    const raw = localStorage.getItem(WB_STORAGE_V4);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const cases = (parsed as { cases?: Record<string, unknown> }).cases;
+    if (!cases || typeof cases !== 'object') return null;
+    const entry = cases[String(caseId)];
+    if (!Array.isArray(entry) || !entry.every((x) => typeof x === 'string') || !entry.length) return null;
+    return entry as string[];
   } catch {
-    return fallback;
+    return null;
   }
+}
+
+function saveCaseWorkbenchStorage(caseId: number, cols: string[]): void {
+  if (typeof window === 'undefined' || !cols.length) return;
+  try {
+    const raw = localStorage.getItem(WB_STORAGE_V4);
+    let cases: Record<string, string[]> = {};
+    if (raw) {
+      const parsed = JSON.parse(raw) as { cases?: Record<string, string[]> };
+      if (parsed?.cases && typeof parsed.cases === 'object') cases = { ...parsed.cases };
+    }
+    cases[String(caseId)] = cols;
+    localStorage.setItem(WB_STORAGE_V4, JSON.stringify({ version: 1, cases }));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function readInitialWorkbenchVisible(
+  caseId: number | null,
+  meta: WorkbenchColumnMetadata | undefined,
+  hasPlan: boolean,
+): string[] {
+  const fallback = defaultUnifiedLineupWorkbenchIds(meta, hasPlan);
+  if (caseId == null) return fallback;
+  const stored = readCaseWorkbenchStorage(caseId);
+  if (stored) return stored;
+  return fallback;
 }
 
 const SPEC_KEY_HUMAN_LABELS: Record<string, string> = {
@@ -313,9 +483,59 @@ function humanizeSpecKey(k: string): string {
   return SPEC_KEY_HUMAN_LABELS[k.toLowerCase()] ?? k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const CALC_COLUMN_LABELS: Record<string, string> = {
+  'calc:dealer_price': 'Dealer price (calc)',
+  'calc:net_price': 'Net price (calc)',
+  'calc:disti_cost': 'Disti cost (calc)',
+  'calc:dap': 'DAP (calc)',
+  'calc:profit': 'Profit total (calc)',
+};
+
+const PCT_EVIDENCE_FIELDS = new Set([
+  'rebate_pct_evidence',
+  'dealer_margin_pct_evidence',
+  'distributor_margin_pct_evidence',
+  'import_tax_pct_evidence',
+  'vat_pct_evidence',
+]);
+
+function formatPctEvidenceValue(value: unknown): string {
+  if (value == null) return '—';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  const pct = Math.abs(n) <= 1 ? n * 100 : n;
+  const dp = pct >= 10 ? 1 : 2;
+  const text = pct.toFixed(dp).replace(/\.?0+$/, '');
+  return `${text}%`;
+}
+
+function formatMoneyWorkbenchValue(value: unknown): string {
+  if (value == null) return '—';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function calcChainOutput(ln: CommercialLineupLine, outputKey: string): number | null {
+  const chain = ln.pricing_chain_json;
+  if (!chain || typeof chain !== 'object') return null;
+  const outputs = (chain as { outputs?: Record<string, unknown> }).outputs;
+  if (!outputs || typeof outputs !== 'object') return null;
+  const raw = outputs[outputKey];
+  if (raw == null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 function workbenchColumnLabel(colId: string, meta: WorkbenchColumnMetadata | undefined): string {
   if ((CORE_WORKBENCH_IDS as readonly string[]).includes(colId)) {
     return CORE_WORKBENCH_LABELS[colId as CoreWorkbenchId];
+  }
+  if (colId in CALC_COLUMN_LABELS) return CALC_COLUMN_LABELS[colId]!;
+  if (colId.startsWith('calc:') && meta) {
+    const calcFs = Array.isArray(meta.calc_fields) ? meta.calc_fields : [];
+    const hit = calcFs.find((p) => p.id === colId);
+    if (hit) return hit.label;
   }
   if (colId.startsWith('raw:')) return `Upload: ${colId.slice(4)}`;
   if (colId.startsWith('spec:')) {
@@ -346,6 +566,7 @@ function workbenchColumnLabel(colId: string, meta: WorkbenchColumnMetadata | und
 function formatParsedFieldForWorkbench(ln: CommercialLineupLine, field: string): string {
   const v = (ln as Record<string, unknown>)[field];
   if (v == null) return '—';
+  if (PCT_EVIDENCE_FIELDS.has(field)) return formatPctEvidenceValue(v);
   if (Array.isArray(v)) return v.length ? JSON.stringify(v) : '—';
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
@@ -366,15 +587,26 @@ type EntityTokenCandidate = {
   token_display: string;
   line_count: number;
   sample_line_ids: number[];
+  case_ids?: number[];
+  case_count?: number;
+  token_source?: 'distributor_column' | 'open_channel_route';
 };
 
 type EntityResolutionCandidatesResponse = {
-  case_id: number;
+  case_id?: number;
+  plan_id?: number | null;
+  eligible_case_ids?: number[];
+  eligible_case_count?: number;
+  token_count?: number;
   customer_tokens: EntityTokenCandidate[];
   distributor_tokens: EntityTokenCandidate[];
 };
 
-const RESOLUTION_UI_STATUSES = new Set(['draft_imported', 'validated', 'pending_review']);
+const RESOLUTION_UI_STATUSES = STEWARD_WORK_OPEN_STATUSES;
+
+function isSupersededCase(c: CommercialLineupCase): boolean {
+  return c.commercial_status === 'superseded';
+}
 
 function lineupProductLabel(ln: CommercialLineupLine): string {
   const a =
@@ -435,7 +667,11 @@ function lineupCaseStatusLabel(status: string): string {
     pending_review: 'Needs review',
     accepted: 'Ready to sync',
     synced: 'Synced to planner',
+    po_pending: 'PO linked',
+    po_issued: 'PO issued',
+    work_closed: 'Work closed',
     cancelled: 'Cancelled',
+    superseded: 'Superseded',
   };
   return m[status] ?? status;
 }
@@ -449,10 +685,13 @@ const STATUS_COLORS: Record<string, 'default' | 'primary' | 'secondary' | 'error
     pending_review: 'warning',
     accepted: 'success',
     synced: 'success',
+    po_pending: 'secondary',
     po_issued: 'secondary',
+    work_closed: 'default',
     in_fulfillment: 'info',
     received_closed: 'default',
     cancelled: 'error',
+    superseded: 'default',
   };
 
 // Staging-only transitions for current-lineup cases (not PO/customer workflow).
@@ -475,10 +714,10 @@ function buildCaseLinesSearchParams(opts: {
   workbenchScope: 'active' | 'synced' | 'ready' | 'blocked' | 'all';
 }): string {
   const p = new URLSearchParams();
-  if (!opts.commercialPlanId) return '';
-  p.set('include_sync_eligibility', 'true');
   p.set('include_product_specs', 'true');
   p.set('include_line_uploaded', 'true');
+  if (!opts.commercialPlanId) return p.toString();
+  p.set('include_sync_eligibility', 'true');
   p.set('workbench_scope', opts.workbenchScope);
   const fc = Number(opts.fallbackCustomerId.trim());
   if (Number.isFinite(fc) && fc > 0) p.set('fallback_customer_id', String(Math.trunc(fc)));
@@ -503,19 +742,32 @@ type EntityResolutionApplyItem = {
   confirm_create?: boolean;
 };
 
+function tokenAffectsCase(t: EntityTokenCandidate, caseId: number | null | undefined): boolean {
+  if (!caseId) return true;
+  const ids = t.case_ids ?? [];
+  return ids.length === 0 || ids.includes(caseId);
+}
+
 function LineupEntityResolutionDialog({
   open,
   onClose,
   caseId,
   caseStatus,
+  planScope,
   onApplied,
 }: {
   open: boolean;
   onClose: () => void;
-  caseId: number;
-  caseStatus: string;
   onApplied: () => void;
+  caseId?: number;
+  caseStatus?: string;
+  planScope?: {
+    planId: number | null;
+    caseIds: number[];
+    filterCaseId?: number | null;
+  };
 }) {
+  const isPlanScope = Boolean(planScope);
   const qc = useQueryClient();
   const [custModes, setCustModes] = useState<Record<string, CustomerTokenResolutionMode>>({});
   const [distModes, setDistModes] = useState<Record<string, DistributorTokenResolutionMode>>({});
@@ -527,15 +779,43 @@ function LineupEntityResolutionDialog({
   const [distCreate, setDistCreate] = useState<Record<string, { code: string; name: string; confirm: boolean }>>({});
   const [applyError, setApplyError] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery<EntityResolutionCandidatesResponse>({
-    queryKey: ['lineup-entity-resolution-candidates', caseId],
-    queryFn: ({ signal }) =>
-      apiGet<EntityResolutionCandidatesResponse>(
-        `/api/v1/commercial-planner/lineup-cases/${caseId}/entity-resolution-candidates`,
-        { signal },
-      ),
-    enabled: open && RESOLUTION_UI_STATUSES.has(caseStatus),
+  const candidatesUrl = useMemo(() => {
+    if (isPlanScope && planScope) {
+      if (planScope.planId != null) {
+        return `/api/v1/commercial-planner/entity-resolution-candidates?plan_id=${planScope.planId}`;
+      }
+      if (planScope.caseIds.length) {
+        return `/api/v1/commercial-planner/entity-resolution-candidates?case_ids=${planScope.caseIds.join(',')}`;
+      }
+      return null;
+    }
+    if (caseId != null) {
+      return `/api/v1/commercial-planner/lineup-cases/${caseId}/entity-resolution-candidates`;
+    }
+    return null;
+  }, [isPlanScope, planScope, caseId]);
+
+  const candidatesEnabled =
+    open &&
+    candidatesUrl != null &&
+    (isPlanScope || (caseStatus != null && RESOLUTION_UI_STATUSES.has(caseStatus)));
+
+  const { data: rawData, isLoading } = useQuery<EntityResolutionCandidatesResponse>({
+    queryKey: ['lineup-entity-resolution-candidates', candidatesUrl, planScope?.filterCaseId ?? null],
+    queryFn: ({ signal }) => apiGet<EntityResolutionCandidatesResponse>(candidatesUrl!, { signal }),
+    enabled: candidatesEnabled,
   });
+
+  const data = useMemo(() => {
+    if (!rawData) return null;
+    const filterId = planScope?.filterCaseId ?? null;
+    if (!filterId) return rawData;
+    return {
+      ...rawData,
+      customer_tokens: rawData.customer_tokens.filter((t) => tokenAffectsCase(t, filterId)),
+      distributor_tokens: rawData.distributor_tokens.filter((t) => tokenAffectsCase(t, filterId)),
+    };
+  }, [rawData, planScope?.filterCaseId]);
 
   useEffect(() => {
     if (!open) {
@@ -566,18 +846,35 @@ function LineupEntityResolutionDialog({
     setCustCreate({});
     setDistCreate({});
     setApplyError(null);
-  }, [open, caseId, data]);
+  }, [open, caseId, planScope, data, isPlanScope]);
 
   const applyMutation = useMutation({
     mutationFn: async (resolutions: EntityResolutionApplyItem[]) => {
+      if (isPlanScope && planScope) {
+        await apiPost('/api/v1/commercial-planner/entity-resolutions/apply', {
+          resolutions,
+          plan_id: planScope.planId,
+          case_ids: planScope.caseIds.length ? planScope.caseIds : undefined,
+        });
+        return;
+      }
       await apiPost(`/api/v1/commercial-planner/lineup-cases/${caseId}/entity-resolutions/apply`, {
         resolutions,
       });
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['lineup-entity-resolution-candidates', caseId] });
-      await qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', caseId] });
-      await qc.invalidateQueries({ queryKey: ['lineup-workbench-column-metadata', caseId] });
+      await qc.invalidateQueries({ queryKey: ['lineup-entity-resolution-candidates'] });
+      await qc.invalidateQueries({ queryKey: ['lineup-plan-entity-resolution-candidates'] });
+      if (caseId != null) {
+        await qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', caseId] });
+        await qc.invalidateQueries({ queryKey: ['lineup-workbench-column-metadata', caseId] });
+      }
+      if (planScope?.caseIds.length) {
+        await Promise.all(
+          planScope.caseIds.map((id) => qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', id] })),
+        );
+      }
+      await qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
       await qc.invalidateQueries({ queryKey: ['sync-to-plan-preview'] });
       onApplied();
       onClose();
@@ -686,12 +983,26 @@ function LineupEntityResolutionDialog({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Resolve lineup entities (this case only)</DialogTitle>
+      <DialogTitle>
+        {isPlanScope
+          ? `Resolve lineup entities${planScope?.planId != null ? ` — plan #${planScope.planId}` : ''}`
+          : 'Resolve lineup entities (this case only)'}
+      </DialogTitle>
       <DialogContent dividers>
         <Alert severity="info" sx={{ mb: 2 }}>
-          Map file tokens with explicit actions only — abbreviations (for example IC, MITSUMI) are never auto-created or
-          guessed. Raw tokens stay in the row audit trail. Lineup updates only — DAP stays evidence-only and is not used
-          as cost.
+          {isPlanScope ? (
+            <>
+              One mapping applies to every eligible case that shares the token (
+              {rawData?.eligible_case_count ?? 0} case{(rawData?.eligible_case_count ?? 0) === 1 ? '' : 's'} in
+              draft/review). Open Channel auto-detected rows are excluded from the customer list.
+            </>
+          ) : (
+            <>
+              Map file tokens with explicit actions only — abbreviations (for example IC, MITSUMI) are never auto-created
+              or guessed. Raw tokens stay in the row audit trail. Lineup updates only — DAP stays evidence-only and is not
+              used as cost.
+            </>
+          )}
         </Alert>
         {isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
@@ -715,8 +1026,19 @@ function LineupEntityResolutionDialog({
                     return (
                       <Box key={`c-${t.token_norm}`}>
                         <Typography variant="caption" color="text.secondary" display="block">
-                          Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}): {t.token_display}
+                          Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}
+                          {t.case_count != null && t.case_count > 0
+                            ? ` · ${t.case_count} case${t.case_count === 1 ? '' : 's'}`
+                            : ''}
+                          ): {t.token_display}
                         </Typography>
+                        {t.case_ids && t.case_ids.length > 0 && (
+                          <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                            {t.case_ids.map((cid) => (
+                              <Chip key={cid} size="small" variant="outlined" label={`#${cid}`} />
+                            ))}
+                          </Stack>
+                        )}
                         <FormControl fullWidth size="small" sx={{ mt: 1 }}>
                           <InputLabel id={`${lid}-mode`}>Resolution</InputLabel>
                           <Select
@@ -849,8 +1171,22 @@ function LineupEntityResolutionDialog({
                     return (
                       <Box key={`d-${t.token_norm}`}>
                         <Typography variant="caption" color="text.secondary" display="block">
-                          Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}): {t.token_display}
+                          Token ({t.line_count} row{t.line_count === 1 ? '' : 's'}
+                          {t.case_count != null && t.case_count > 0
+                            ? ` · ${t.case_count} case${t.case_count === 1 ? '' : 's'}`
+                            : ''}
+                          ): {t.token_display}
                         </Typography>
+                        {t.case_ids && t.case_ids.length > 0 && (
+                          <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                            {t.case_ids.map((cid) => (
+                              <Chip key={cid} size="small" variant="outlined" label={`#${cid}`} />
+                            ))}
+                          </Stack>
+                        )}
+                        {t.token_source === 'open_channel_route' && (
+                          <Chip size="small" color="info" variant="outlined" label="Open Channel route" sx={{ mt: 0.5 }} />
+                        )}
                         <FormControl fullWidth size="small" sx={{ mt: 1 }}>
                           <InputLabel id={`${lid}-mode`}>Resolution</InputLabel>
                           <Select
@@ -1507,6 +1843,552 @@ function StatusTransitionDialog({
   );
 }
 
+// ── Reconciliation inline summary (Session C Unit 3) ──────────────────────────
+
+type ReconProduct = {
+  product_id: number;
+  product_name: string | null;
+  units_flag: string;
+  customer_id?: number | null;
+};
+
+type ReconResponse = {
+  case_id: number;
+  linked_po_count: number;
+  products: ReconProduct[];
+  customers?: ReconCustomerSlice[];
+  po_flags: { purchase_order_id: number; po_number_raw: string | null; flag: string }[];
+  summary: ReconSummary;
+  data_unavailable?: boolean;
+};
+
+function CaseReconciliationInline({ caseId }: { caseId: number }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['lineup-po-reconciliation', caseId],
+    queryFn: ({ signal }) =>
+      apiGet<ReconResponse>(`/api/v1/commercial-planner/lineup/po-reconciliation?case_id=${caseId}`, { signal }),
+  });
+
+  if (isLoading) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        Loading reconciliation…
+      </Typography>
+    );
+  }
+  if (!data || data.data_unavailable) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        Reconciliation unavailable.
+      </Typography>
+    );
+  }
+
+  const summary = data.summary ?? {};
+
+  return (
+    <Stack spacing={0.5} data-testid={`recon-inline-${caseId}`}>
+      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+          Reconciliation:
+        </Typography>
+        <ReconSummaryChips summary={summary} />
+        <Button
+          size="small"
+          variant="text"
+          component={NextLink}
+          href={`/admin/po-management`}
+          data-testid={`recon-drill-${caseId}`}
+        >
+          View PO management
+        </Button>
+      </Stack>
+      {data.customers?.length ? (
+        <CustomerReconChips customers={data.customers} testIdPrefix={`recon-inline-customers-${caseId}`} />
+      ) : null}
+    </Stack>
+  );
+}
+
+// ── Confirm lineup with PO(s) (Session C Unit 2d) ─────────────────────────────
+
+function AssignDistributorDialog({
+  open,
+  onClose,
+  currentCase,
+  isPending,
+  error,
+  onAssign,
+}: {
+  open: boolean;
+  onClose: () => void;
+  currentCase: CommercialLineupCase;
+  isPending: boolean;
+  error: string | null;
+  onAssign: (payload: {
+    distributor_id?: number;
+    new_code?: string;
+    new_name?: string;
+    confirm_create?: boolean;
+  }) => void;
+}) {
+  const [chosen, setChosen] = useState<DistributorPick | null>(null);
+  const [createMode, setCreateMode] = useState(false);
+  const [newCode, setNewCode] = useState('');
+  const [newName, setNewName] = useState('');
+  const [confirmCreate, setConfirmCreate] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['lineup-suggested-distributors', currentCase.id],
+    queryFn: ({ signal }) =>
+      apiGet<SuggestedDistributorsResponse>(
+        `/api/v1/commercial-planner/lineup-cases/${currentCase.id}/suggested-distributors`,
+        { signal },
+      ),
+    enabled: open,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    setChosen(null);
+    setCreateMode(false);
+    setNewCode('');
+    setNewName('');
+    setConfirmCreate(false);
+  }, [open, currentCase.id]);
+
+  const suggestions = data?.suggested_distributors ?? [];
+  const converged = data?.converged ?? false;
+
+  const canCreate =
+    createMode && newCode.trim().length > 0 && newName.trim().length > 0 && confirmCreate;
+  const canAssign = !isPending && (canCreate || (!createMode && chosen != null));
+
+  const handleAssign = () => {
+    if (canCreate) {
+      onAssign({ new_code: newCode.trim(), new_name: newName.trim(), confirm_create: true });
+    } else if (chosen) {
+      onAssign({ distributor_id: chosen.id });
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>Assign distributor</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Assigns a distributor to this case&apos;s lines that do not yet have one. Suggestions come
+            from shipment evidence (products in this lineup that were shipped under a distributor&apos;s
+            POs) and are always existing distributor records. If the right distributor is not listed,
+            search for it or create a new one.
+          </Typography>
+
+          {isLoading && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CircularProgress size={18} />
+              <Typography variant="body2" color="text.secondary">
+                Loading shipment-evidence suggestions…
+              </Typography>
+            </Box>
+          )}
+
+          {!isLoading && converged && suggestions[0] && (
+            <Alert severity="success" data-testid="assign-dist-converged">
+              Shipment evidence points to a single distributor:{' '}
+              <strong>{suggestions[0].distributor_name ?? suggestions[0].distributor_code}</strong> (
+              {suggestions[0].matched_product_count} matched product
+              {suggestions[0].matched_product_count === 1 ? '' : 's'}).
+            </Alert>
+          )}
+          {!isLoading && !converged && suggestions.length > 1 && (
+            <Alert severity="info" data-testid="assign-dist-ambiguous">
+              Shipment evidence is ambiguous — these products were shipped under{' '}
+              {data?.distinct_count} different distributors. Pick the correct one, or search / create.
+            </Alert>
+          )}
+          {!isLoading && suggestions.length === 0 && (
+            <Alert severity="info" data-testid="assign-dist-none">
+              No distributor could be suggested from shipment evidence for this case. Search for a
+              distributor or create a new one.
+            </Alert>
+          )}
+
+          {suggestions.length > 0 && !createMode && (
+            <Box data-testid="assign-dist-suggestions">
+              <Typography variant="subtitle2" gutterBottom>
+                Suggested from shipment evidence
+              </Typography>
+              <Stack spacing={1}>
+                {suggestions.map((s) => (
+                  <Button
+                    key={s.distributor_id}
+                    fullWidth
+                    variant={chosen?.id === s.distributor_id ? 'contained' : 'outlined'}
+                    onClick={() =>
+                      setChosen({
+                        id: s.distributor_id,
+                        distributor_code: s.distributor_code ?? '',
+                        distributor_name: s.distributor_name ?? '',
+                      })
+                    }
+                    sx={{ justifyContent: 'space-between', textTransform: 'none' }}
+                    data-testid={`assign-dist-suggestion-${s.distributor_id}`}
+                  >
+                    <span>
+                      {s.distributor_name ?? s.distributor_code}
+                      {s.already_assigned ? ' (already on some lines)' : ''}
+                    </span>
+                    <span>
+                      {s.matched_product_count} product{s.matched_product_count === 1 ? '' : 's'} ·{' '}
+                      {s.po_count} PO{s.po_count === 1 ? '' : 's'}
+                    </span>
+                  </Button>
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          {!createMode && (
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>
+                Or search all distributors
+              </Typography>
+              <EntitySearchAutocomplete<DistributorPick>
+                label="Search distributors"
+                value={chosen}
+                onChange={(next) => setChosen(next)}
+                fetchOptions={async (q) => {
+                  const res = await apiGet<{ items: DistributorPick[] }>(
+                    `/api/v1/distributors?page=1&page_size=25&q=${encodeURIComponent(q)}`,
+                  );
+                  return res.items;
+                }}
+                getOptionLabel={(o) => `${o.distributor_code} — ${o.distributor_name}`}
+              />
+            </Box>
+          )}
+
+          <Divider />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={createMode}
+                onChange={(e) => {
+                  setCreateMode(e.target.checked);
+                  setChosen(null);
+                }}
+                data-testid="assign-dist-create-toggle"
+              />
+            }
+            label="Create a new distributor instead"
+          />
+          {createMode && (
+            <Stack spacing={2}>
+              <TextField
+                label="New distributor code"
+                value={newCode}
+                onChange={(e) => setNewCode(e.target.value)}
+                size="small"
+                inputProps={{ maxLength: 32 }}
+                data-testid="assign-dist-new-code"
+              />
+              <TextField
+                label="New distributor name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                size="small"
+                inputProps={{ maxLength: 256 }}
+                data-testid="assign-dist-new-name"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={confirmCreate}
+                    onChange={(e) => setConfirmCreate(e.target.checked)}
+                    data-testid="assign-dist-confirm-create"
+                  />
+                }
+                label="I confirm creating this distributor in master data"
+              />
+            </Stack>
+          )}
+
+          {error && (
+            <Alert severity="error" data-testid="assign-dist-error">
+              {error}
+            </Alert>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={isPending}>
+          Cancel
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleAssign}
+          disabled={!canAssign}
+          data-testid="assign-dist-submit"
+        >
+          {isPending ? 'Assigning…' : 'Assign distributor'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+
+function ConfirmWithPoDialog({
+  open,
+  onClose,
+  currentCase,
+  isPending,
+  error,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: () => void;
+  currentCase: CommercialLineupCase;
+  isPending: boolean;
+  error: string | null;
+  onConfirm: (poNumbers: string[], notes: string) => void;
+}) {
+  const [pos, setPos] = useState<string[]>([]);
+  const [input, setInput] = useState('');
+  const [notes, setNotes] = useState('');
+  const [selectedNorms, setSelectedNorms] = useState<Set<string>>(new Set());
+
+  const { data: suggestedData, isLoading: suggestionsLoading } = useQuery({
+    queryKey: ['lineup-suggested-pos', currentCase.id],
+    queryFn: ({ signal }) =>
+      apiGet<{ case_id: number; suggestions: SuggestedPo[] }>(
+        `/api/v1/commercial-planner/lineup-cases/${currentCase.id}/suggested-pos`,
+        { signal },
+      ),
+    enabled: open,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    setPos([]);
+    setInput('');
+    setNotes('');
+    setSelectedNorms(new Set());
+  }, [open, currentCase.id]);
+
+  const suggestions = suggestedData?.suggestions ?? [];
+
+  const addTokens = (raw: string) => {
+    const tokens = raw
+      .split(/[\n,;\t]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (!tokens.length) return;
+    setPos((prev) => {
+      const seen = new Set(prev.map((p) => p.toUpperCase()));
+      const merged = [...prev];
+      for (const t of tokens) {
+        if (!seen.has(t.toUpperCase())) {
+          seen.add(t.toUpperCase());
+          merged.push(t);
+        }
+      }
+      return merged;
+    });
+    setInput('');
+  };
+
+  const removePo = (idx: number) => setPos((prev) => prev.filter((_, i) => i !== idx));
+
+  const toggleSuggestion = (s: SuggestedPo) => {
+    if (s.already_linked) return;
+    setSelectedNorms((prev) => {
+      const next = new Set(prev);
+      if (next.has(s.po_number_norm)) next.delete(s.po_number_norm);
+      else next.add(s.po_number_norm);
+      return next;
+    });
+  };
+
+  const collectPoNumbers = (): string[] => {
+    const fromSuggestions = suggestions
+      .filter((s) => selectedNorms.has(s.po_number_norm))
+      .map((s) => s.po_number);
+    const all = [...fromSuggestions, ...pos];
+    const trailing = input.trim();
+    if (trailing) all.push(trailing);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const p of all) {
+      const key = p.toUpperCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(p);
+      }
+    }
+    return out;
+  };
+
+  const alreadyLinked = currentCase.linked_pos ?? [];
+  const hasLinked = (currentCase.po_count ?? 0) > 0 || alreadyLinked.length > 0;
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>{hasLinked ? 'Add purchase order(s)' : 'Confirm with PO'}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Links one or more PO numbers to this case and sets status to <strong>PO issued</strong>.
+            No review-step ladder required — use this for historical lineups already fulfilled.
+            Re-adding an existing PO is a no-op; new POs append.
+          </Typography>
+
+          {alreadyLinked.length > 0 && (
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                Already linked:
+              </Typography>
+              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+                {alreadyLinked.map((p) => (
+                  <Chip key={p.purchase_order_id} size="small" variant="outlined" label={p.po_number_raw} />
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          {suggestionsLoading && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CircularProgress size={18} />
+              <Typography variant="body2" color="text.secondary">
+                Loading observed PO suggestions…
+              </Typography>
+            </Box>
+          )}
+
+          {!suggestionsLoading && suggestions.length > 0 && (
+            <Box data-testid="confirm-po-suggestions">
+              <Typography variant="subtitle2" gutterBottom>
+                Suggested from shipment evidence
+              </Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox" />
+                    <TableCell>PO number</TableCell>
+                    <TableCell>Distributor</TableCell>
+                    <TableCell align="right">Products matched</TableCell>
+                    <TableCell align="right">Shipped units</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {suggestions.map((s) => (
+                    <TableRow
+                      key={s.purchase_order_id}
+                      hover={!s.already_linked}
+                      sx={{ opacity: s.already_linked ? 0.6 : 1 }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          size="small"
+                          checked={s.already_linked || selectedNorms.has(s.po_number_norm)}
+                          disabled={s.already_linked || isPending}
+                          onChange={() => toggleSuggestion(s)}
+                          inputProps={{
+                            'aria-label': `Include PO ${s.po_number}`,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {s.po_number}
+                        {s.already_linked && (
+                          <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                            (linked)
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {[s.distributor_code, s.distributor_name].filter(Boolean).join(' — ') || '—'}
+                      </TableCell>
+                      <TableCell align="right">{s.matched_product_count}</TableCell>
+                      <TableCell align="right">{s.total_shipped_units.toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
+          )}
+
+          {!suggestionsLoading && suggestions.length === 0 && (
+            <Typography variant="body2" color="text.secondary">
+              No observed POs match this case&apos;s distributor and products. Enter a PO number manually below.
+            </Typography>
+          )}
+
+          <TextField
+            size="small"
+            label="PO number(s) — manual entry"
+            placeholder="e.g. PO-12345"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                addTokens(input);
+              }
+            }}
+            onBlur={() => addTokens(input)}
+            fullWidth
+            data-testid="confirm-po-input"
+          />
+
+          {pos.length > 0 && (
+            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap data-testid="confirm-po-chips">
+              {pos.map((p, idx) => (
+                <Chip key={`${p}:${idx}`} size="small" color="primary" label={p} onDelete={() => removePo(idx)} />
+              ))}
+            </Stack>
+          )}
+
+          <TextField
+            size="small"
+            label="Notes (optional)"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            multiline
+            rows={2}
+            fullWidth
+          />
+
+          {error && (
+            <Alert severity="error" data-testid="confirm-po-error">
+              {error}
+            </Alert>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button size="small" onClick={onClose} disabled={isPending}>
+          Cancel
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
+          disabled={isPending || collectPoNumbers().length === 0}
+          onClick={() => {
+            const all = collectPoNumbers();
+            if (!all.length) return;
+            onConfirm(all, notes);
+          }}
+          data-testid="confirm-po-submit"
+        >
+          {isPending ? 'Confirming…' : 'Confirm'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 // ── Retry parse on empty draft case ───────────────────────────────────────────
 
 function RetryParseDialog({
@@ -1965,6 +2847,7 @@ export function CurrentLineupSection({
   planCurrencyCode,
   onSyncComplete,
   onStagedLineupSummary,
+  allowUpload = false,
 }: {
   activePlanId: number | null;
   planLineCount?: number;
@@ -1972,6 +2855,12 @@ export function CurrentLineupSection({
   planCurrencyCode?: string | null;
   onSyncComplete?: (info: { planId: number; caseId: number }) => void;
   onStagedLineupSummary?: (summary: { caseId: number | null; lineCount: number }) => void;
+  /**
+   * When false (default), the embedded lineup upload is read-only: the section points users to the
+   * unified importer in the Import Centre instead. The legacy in-section upload dialogs are retained
+   * behind this flag so existing flows/tests can still opt in.
+   */
+  allowUpload?: boolean;
 }) {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(true);
@@ -1979,9 +2868,14 @@ export function CurrentLineupSection({
   const [viewLinesCase, setViewLinesCase] = useState<CommercialLineupCase | null>(null);
   const [statusCase, setStatusCase] = useState<CommercialLineupCase | null>(null);
   const [syncCase, setSyncCase] = useState<CommercialLineupCase | null>(null);
+  const [confirmCase, setConfirmCase] = useState<CommercialLineupCase | null>(null);
+  const [assignDistCase, setAssignDistCase] = useState<CommercialLineupCase | null>(null);
   const [retryParseCase, setRetryParseCase] = useState<CommercialLineupCase | null>(null);
+  const [deleteCase, setDeleteCase] = useState<CommercialLineupCase | null>(null);
   const [activeCaseId, setActiveCaseId] = useState<number | null>(null);
   const [resolutionCase, setResolutionCase] = useState<CommercialLineupCase | null>(null);
+  const [planResolutionOpen, setPlanResolutionOpen] = useState(false);
+  const [planResolutionFilterCaseId, setPlanResolutionFilterCaseId] = useState<number | null>(null);
   const [wbSync, setWbSync] = useState({
     fallbackCustomerId: '',
     fallbackDistributorId: '',
@@ -1992,14 +2886,31 @@ export function CurrentLineupSection({
   const [colSelectorOpen, setColSelectorOpen] = useState(false);
   const [colSelectorSearch, setColSelectorSearch] = useState('');
 
+  // Plan-optional browse: a lineup case is viewable on its own. When a plan is selected we filter to
+  // it by default, but the user can toggle "Show all" to see every case (linked or unlinked). When no
+  // plan exists at all, we always list everything.
+  const [showAllCases, setShowAllCases] = useState(false);
+  const [showWorkClosed, setShowWorkClosed] = useState(false);
+  const effectivePlanId = showAllCases ? null : activePlanId;
+
+  const lineupCasesQueryKey = [
+    'commercial-lineup-cases',
+    effectivePlanId,
+    showWorkClosed ? 'with-closed' : 'active',
+  ] as const;
+
   const { data: cases, isLoading } = useQuery<CommercialLineupCase[]>({
-    queryKey: ['commercial-lineup-cases', activePlanId],
-    queryFn: ({ signal }) =>
-      apiGet<CommercialLineupCase[]>(
-        `/api/v1/commercial-planner/lineup-cases?plan_id=${activePlanId}`,
-        { signal }
-      ),
-    enabled: activePlanId != null,
+    queryKey: lineupCasesQueryKey,
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams();
+      if (effectivePlanId != null) params.set('plan_id', String(effectivePlanId));
+      if (showWorkClosed) params.set('include_work_closed', 'true');
+      const qs = params.toString();
+      return apiGet<CommercialLineupCase[]>(
+        `/api/v1/commercial-planner/lineup-cases${qs ? `?${qs}` : ''}`,
+        { signal },
+      );
+    },
   });
 
   useEffect(() => {
@@ -2016,6 +2927,44 @@ export function CurrentLineupSection({
 
   const activeCase = cases?.find((c) => c.id === activeCaseId);
 
+  const eligibleResolutionCaseIds = useMemo(
+    () => (cases ?? []).filter((c) => RESOLUTION_UI_STATUSES.has(c.commercial_status)).map((c) => c.id),
+    [cases],
+  );
+
+  const planEntityCandidatesEnabled =
+    eligibleResolutionCaseIds.length > 0 &&
+    (effectivePlanId != null || !showAllCases || (cases?.length ?? 0) > 0);
+
+  const { data: planEntitySummary } = useQuery<EntityResolutionCandidatesResponse>({
+    queryKey: [
+      'lineup-plan-entity-resolution-candidates',
+      effectivePlanId,
+      eligibleResolutionCaseIds.join(','),
+    ],
+    queryFn: ({ signal }) => {
+      const url =
+        effectivePlanId != null
+          ? `/api/v1/commercial-planner/entity-resolution-candidates?plan_id=${effectivePlanId}`
+          : `/api/v1/commercial-planner/entity-resolution-candidates?case_ids=${eligibleResolutionCaseIds.join(',')}`;
+      return apiGet<EntityResolutionCandidatesResponse>(url, { signal });
+    },
+    enabled: planEntityCandidatesEnabled && eligibleResolutionCaseIds.length > 0,
+  });
+
+  const unresolvedTokenCountByCase = useMemo(() => {
+    const map = new Map<number, number>();
+    if (!planEntitySummary) return map;
+    const bumpToken = (caseIds: number[] | undefined) => {
+      for (const id of caseIds ?? []) {
+        map.set(id, (map.get(id) ?? 0) + 1);
+      }
+    };
+    for (const t of planEntitySummary.customer_tokens) bumpToken(t.case_ids);
+    for (const t of planEntitySummary.distributor_tokens) bumpToken(t.case_ids);
+    return map;
+  }, [planEntitySummary]);
+
   const hasWorkbenchPlan = Boolean(activeCase?.commercial_plan_id);
 
   const { data: wbMeta, isSuccess: wbMetaReady } = useQuery<WorkbenchColumnMetadata>({
@@ -2025,7 +2974,8 @@ export function CurrentLineupSection({
         `/api/v1/commercial-planner/lineup-cases/${activeCaseId}/workbench-column-metadata`,
         { signal },
       ),
-    enabled: activeCaseId != null && activePlanId != null,
+    // Case-scoped metadata; load it whenever a case is active, with or without a plan.
+    enabled: activeCaseId != null,
   });
 
   const allowedWorkbenchIds = useMemo(
@@ -2034,55 +2984,24 @@ export function CurrentLineupSection({
   );
 
   const [visibleCols, setVisibleCols] = useState<string[]>([]);
-  const processorRawInjectedKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (activeCaseId == null) {
       setVisibleCols([]);
       return;
     }
-    const stored = readInitialWorkbenchVisible(hasWorkbenchPlan);
-    const baseAllow = mergeWorkbenchAllowedIds(undefined, hasWorkbenchPlan);
-    const prelim = stored.filter((id) => baseAllow.has(id));
-    setVisibleCols(prelim.length ? prelim : defaultWorkbenchVisible(hasWorkbenchPlan));
-  }, [activeCaseId, hasWorkbenchPlan]);
-
-  useEffect(() => {
-    if (activeCaseId == null || !wbMetaReady) return;
-    setVisibleCols((prev) => {
-      const allow = mergeWorkbenchAllowedIds(wbMeta, hasWorkbenchPlan);
-      const next = prev.filter((id) => allow.has(id));
-      return next.length ? next : defaultWorkbenchVisible(hasWorkbenchPlan);
-    });
-  }, [wbMetaReady, wbMeta, activeCaseId, hasWorkbenchPlan]);
-
-  useEffect(() => {
-    if (activeCaseId == null || !wbMetaReady || !wbMeta) return;
-    const rawCols = wbMeta.raw_columns ?? [];
-    const hintPart = (wbMeta.processor_spec_key_hints ?? []).join('\u0002');
-    const digest = `${activeCaseId}:${rawCols.join('\u0001')}:${hintPart}`;
-    if (processorRawInjectedKey.current === digest) return;
-    const hints = pickDefaultProcessorWorkbenchIds(wbMeta);
-    processorRawInjectedKey.current = digest;
-    if (!hints.length) return;
-    setVisibleCols((prev) => {
-      const allow = mergeWorkbenchAllowedIds(wbMeta, hasWorkbenchPlan);
-      const toAdd = hints.filter((id) => allow.has(id) && !prev.includes(id));
-      if (!toAdd.length) return prev;
-      const dapIdx = prev.indexOf('dap');
-      if (dapIdx >= 0) {
-        const copy = [...prev];
-        copy.splice(dapIdx, 0, ...toAdd);
-        return copy;
-      }
-      return [...toAdd, ...prev];
-    });
+    if (!wbMetaReady) return;
+    const allow = mergeWorkbenchAllowedIds(wbMeta, hasWorkbenchPlan);
+    const defaults = defaultUnifiedLineupWorkbenchIds(wbMeta, hasWorkbenchPlan);
+    const stored = readInitialWorkbenchVisible(activeCaseId, wbMeta, hasWorkbenchPlan);
+    const chosen = stored.filter((id) => allow.has(id));
+    setVisibleCols(chosen.length ? chosen : defaults.filter((id) => allow.has(id)));
   }, [activeCaseId, wbMetaReady, wbMeta, hasWorkbenchPlan]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !visibleCols.length) return;
-    localStorage.setItem(WB_STORAGE_V2, JSON.stringify(visibleCols));
-  }, [visibleCols]);
+    if (activeCaseId == null || !visibleCols.length) return;
+    saveCaseWorkbenchStorage(activeCaseId, visibleCols);
+  }, [activeCaseId, visibleCols]);
 
   const columnMenuEntries = useMemo(() => {
     const rows: Array<{ kind: 'header'; label: string } | { kind: 'col'; id: string }> = [];
@@ -2101,6 +3020,8 @@ export function CurrentLineupSection({
         wbMeta.raw_columns.map((c) => `raw:${c}`),
       );
     if (wbMeta?.parsed_fields?.length) push('Parsed staging fields', wbMeta.parsed_fields.map((p) => p.id));
+    if (wbMeta?.calc_fields?.length)
+      push('Calculated pricing chain', wbMeta.calc_fields.map((f) => f.id));
     if (wbMeta?.catalogue_product_fields?.length)
       push(
         'Matched catalogue / product fields',
@@ -2142,7 +3063,10 @@ export function CurrentLineupSection({
   const { data: workingLinesData } = useQuery<CaseLinesResponse>({
     queryKey: ['commercial-lineup-case-lines', activeCaseId, caseLinesSuffix],
     queryFn: ({ signal }) => apiGet<CaseLinesResponse>(workingLinesUrl!, { signal }),
-    enabled: activeCaseId != null && activePlanId != null && workingLinesUrl != null,
+    // Plan-optional: the lines endpoint is case-scoped, so the workbench grid opens even for a
+    // case not yet attached to a plan. Plan-specific extras (sync, sync diagnostics) stay gated on
+    // activeCase.commercial_plan_id below.
+    enabled: activeCaseId != null && workingLinesUrl != null,
   });
 
   const workingLines = useMemo(() => workingLinesData?.lines ?? [], [workingLinesData?.lines]);
@@ -2175,7 +3099,7 @@ export function CurrentLineupSection({
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', activeCaseId] });
       await qc.invalidateQueries({ queryKey: ['lineup-workbench-column-metadata', activeCaseId] });
-      await qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] });
+      await qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
     },
   });
 
@@ -2250,7 +3174,30 @@ export function CurrentLineupSection({
           />
         );
       if (colId === 'dap')
-        return ln.dap_evidence_local != null ? ln.dap_evidence_local.toLocaleString() : '—';
+        return ln.dap_evidence_local != null
+          ? formatMoneyWorkbenchValue(ln.dap_evidence_local)
+          : '—';
+      if (colId.startsWith('calc:')) {
+        const key = colId.slice(5);
+        if (key === 'dap') {
+          const v = ln.calc_dap_cost_currency ?? calcChainOutput(ln, 'calc_dap_cost_currency');
+          return formatMoneyWorkbenchValue(v);
+        }
+        if (key === 'profit') {
+          const v = ln.calc_profit_total ?? calcChainOutput(ln, 'calc_profit_total');
+          return formatMoneyWorkbenchValue(v);
+        }
+        const outputKey =
+          key === 'dealer_price'
+            ? 'calc_dealer_price_local'
+            : key === 'net_price'
+              ? 'calc_net_price_local'
+              : key === 'disti_cost'
+                ? 'calc_disti_cost_local'
+                : null;
+        if (outputKey) return formatMoneyWorkbenchValue(calcChainOutput(ln, outputKey));
+        return '—';
+      }
       if (colId === 'issues')
         return <Typography variant="caption">{lineupIssuesCell(ln)}</Typography>;
       if (colId === 'sync') {
@@ -2322,6 +3269,147 @@ export function CurrentLineupSection({
     [activeCaseId, patchLineMutation, showSyncWorkbenchCol],
   );
 
+  // Primitive value for AG Grid sort/filter (cellRenderer below handles rich display). Mirrors the
+  // value branches of wbCellContent so sorting matches what the user sees.
+  const wbCellValue = useCallback(
+    (ln: CommercialLineupLine, colId: string): string | number | null => {
+      if (colId === 'num') return ln.source_row_number ?? ln.id;
+      if (colId === 'product') return lineupProductLabel(ln);
+      if (colId === 'sku') return ln.product_sku ?? ln.sku_raw ?? '—';
+      if (colId === 'part') return ln.product_part_number ?? ln.part_number_raw ?? '—';
+      if (colId === 'cust') return lineupCustomerCell(ln);
+      if (colId === 'dist') return lineupDistributorCell(ln);
+      if (colId === 'units') return ln.quantity_units ?? null;
+      if (colId === 'msrp') return ln.msrp_local ?? null;
+      if (colId === 'promo') return ln.promo_price_evidence_local ?? null;
+      if (colId === 'dap') return ln.dap_evidence_local ?? null;
+      if (colId.startsWith('calc:')) {
+        const key = colId.slice(5);
+        if (key === 'dap') return ln.calc_dap_cost_currency ?? calcChainOutput(ln, 'calc_dap_cost_currency');
+        if (key === 'profit') return ln.calc_profit_total ?? calcChainOutput(ln, 'calc_profit_total');
+        const outputKey =
+          key === 'dealer_price'
+            ? 'calc_dealer_price_local'
+            : key === 'net_price'
+              ? 'calc_net_price_local'
+              : key === 'disti_cost'
+                ? 'calc_disti_cost_local'
+                : null;
+        return outputKey ? calcChainOutput(ln, outputKey) : null;
+      }
+      if (colId === 'issues') return lineupIssuesCell(ln);
+      if (colId === 'sync') return showSyncWorkbenchCol ? (ln.sync_eligible ? 'eligible' : 'skipped') : '—';
+      if (colId.startsWith('raw:')) {
+        const key = colId.slice(4);
+        const up =
+          ln.uploaded && typeof ln.uploaded === 'object' && !Array.isArray(ln.uploaded)
+            ? (ln.uploaded as Record<string, unknown>)[key]
+            : undefined;
+        if (up == null || (typeof up === 'string' && !up.trim())) return '—';
+        return String(up);
+      }
+      if (colId.startsWith('parsed:')) return formatParsedFieldForWorkbench(ln, colId.slice(7));
+      if (colId.startsWith('cat:')) return formatParsedFieldForWorkbench(ln, colId.slice(4));
+      if (colId.startsWith('spec:')) {
+        const k = colId.slice(5);
+        const flat = ln.product_specs_flat;
+        if (!flat) return '—';
+        const direct = flat[k];
+        if (direct?.trim()) return direct;
+        const lower = k.toLowerCase();
+        const matchKey = Object.keys(flat).find((fk) => fk.toLowerCase() === lower);
+        const fallback = matchKey ? flat[matchKey] : undefined;
+        return fallback?.trim() ? fallback : '—';
+      }
+      if (colId.startsWith('sync:')) return formatSyncFieldForWorkbench(ln, colId.slice(5));
+      return '—';
+    },
+    [showSyncWorkbenchCol],
+  );
+
+  const wbCanEdit = activeCase?.commercial_status === 'draft_imported';
+
+  const wbColumnDefs = useMemo<ColDef[]>(() => {
+    return visibleColsFiltered.map((colId) => {
+      const headerName = workbenchColumnLabel(colId, wbMeta);
+      const editableField =
+        colId === 'units'
+          ? 'quantity_units'
+          : colId === 'msrp'
+            ? 'msrp_local'
+            : colId === 'promo'
+              ? 'promo_price_evidence_local'
+              : null;
+      if (wbCanEdit && editableField) {
+        return {
+          colId,
+          headerName,
+          editable: true,
+          type: 'numericColumn',
+          minWidth: 100,
+          valueGetter: (p) =>
+            p.data ? ((p.data as Record<string, unknown>)[editableField] as number | null) ?? null : null,
+          valueFormatter: (p) => (p.value == null || p.value === '' ? '' : String(p.value)),
+        } satisfies ColDef;
+      }
+      return {
+        colId,
+        headerName,
+        minWidth: colId === 'num' ? 72 : 120,
+        valueGetter: (p) => (p.data ? wbCellValue(p.data as CommercialLineupLine, colId) : null),
+        cellRenderer: (p: ICellRendererParams<CommercialLineupLine>) =>
+          p.data ? wbCellContent(p.data, colId, false) : null,
+      } satisfies ColDef;
+    });
+  }, [visibleColsFiltered, wbMeta, wbCanEdit, wbCellValue, wbCellContent]);
+
+  const onWbCellValueChanged = useCallback(
+    (e: CellValueChangedEvent) => {
+      if (!activeCaseId || !e.data) return;
+      const colId = e.column.getColId();
+      const field =
+        colId === 'units'
+          ? 'quantity_units'
+          : colId === 'msrp'
+            ? 'msrp_local'
+            : colId === 'promo'
+              ? 'promo_price_evidence_local'
+              : null;
+      if (!field) return;
+      const raw = e.newValue;
+      const next = raw == null || raw === '' ? null : Number(raw);
+      // Mirror the prior inline editor: ignore null/invalid commits and no-ops.
+      if (next == null || !Number.isFinite(next)) return;
+      const current = (e.data as Record<string, unknown>)[field] as number | null;
+      if (next === current) return;
+      patchLineMutation.mutate({ caseId: activeCaseId, lineId: (e.data as CommercialLineupLine).id, body: { [field]: next } });
+    },
+    [activeCaseId, patchLineMutation],
+  );
+
+  const wbGridOptions = useMemo<GridOptions>(
+    () => ({
+      singleClickEdit: true,
+      enableBrowserTooltips: true,
+      onCellValueChanged: (e) => onWbCellValueChanged(e),
+      // Persist user column reordering back into visibleCols (which is saved to localStorage).
+      onDragStopped: (e) => {
+        const order = e.api.getAllDisplayedColumns().map((c) => c.getColId());
+        if (!order.length) return;
+        setVisibleCols((prev) => {
+          const displayed = new Set(order);
+          const rest = prev.filter((id) => !displayed.has(id));
+          const nextOrder = [...order, ...rest];
+          if (nextOrder.length === prev.length && nextOrder.every((id, i) => id === prev[i])) {
+            return prev;
+          }
+          return nextOrder;
+        });
+      },
+    }),
+    [onWbCellValueChanged],
+  );
+
   const statusMutation = useMutation({
     mutationFn: ({
       caseId,
@@ -2339,16 +3427,112 @@ export function CurrentLineupSection({
         notes: notes || null,
         accepted_by: acceptedBy ?? null,
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (caseId: number) =>
       apiDelete(`/api/v1/commercial-planner/lineup-cases/${caseId}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] }),
+    onSuccess: () => {
+      setDeleteCase(null);
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+    },
+  });
+
+  const deletePreviewQ = useQuery({
+    queryKey: ['lineup-case-delete-preview', deleteCase?.id],
+    enabled: deleteCase != null,
+    queryFn: ({ signal }) =>
+      apiGet<{
+        superseded_child_count: number;
+        superseded_children: { id: number; file_name: string | null }[];
+        message: string | null;
+      }>(`/api/v1/commercial-planner/lineup-cases/${deleteCase!.id}/delete-preview`, { signal }),
+  });
+
+  const attachPlanMutation = useMutation({
+    mutationFn: ({ caseId, planId }: { caseId: number; planId: number | null }) =>
+      apiPatch(`/api/v1/commercial-planner/lineup-cases/${caseId}/plan`, {
+        commercial_plan_id: planId,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] }),
+  });
+
+  const closeWorkMutation = useMutation({
+    mutationFn: (caseId: number) =>
+      apiPost(`/api/v1/commercial-planner/lineup-cases/${caseId}/close-work`, {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+    },
+  });
+
+  const confirmMutation = useMutation({
+    mutationFn: ({ caseId, poNumbers, notes }: { caseId: number; poNumbers: string[]; notes: string }) =>
+      apiPost(`/api/v1/commercial-planner/lineup-cases/${caseId}/confirm-with-po`, {
+        po_numbers: poNumbers,
+        notes: notes || null,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+      void qc.invalidateQueries({ queryKey: ['po-reconciliation'] });
+      setConfirmCase(null);
+    },
+  });
+
+  const assignDistributorMutation = useMutation({
+    mutationFn: ({
+      caseId,
+      payload,
+    }: {
+      caseId: number;
+      payload: { distributor_id?: number; new_code?: string; new_name?: string; confirm_create?: boolean };
+    }) =>
+      apiPost(`/api/v1/commercial-planner/lineup-cases/${caseId}/assign-distributor`, payload),
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-case-lines', vars.caseId] });
+      void qc.invalidateQueries({ queryKey: ['lineup-suggested-distributors', vars.caseId] });
+      void qc.invalidateQueries({ queryKey: ['lineup-suggested-pos', vars.caseId] });
+      setAssignDistCase(null);
+    },
   });
 
   const count = cases?.length ?? 0;
+
+  const caseFileNameById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const c of cases ?? []) {
+      m.set(c.id, c.file_name ?? `(case #${c.id})`);
+    }
+    return m;
+  }, [cases]);
+
+  // Group for browse: period (period_label, falling back to inferred_period_start month) then
+  // product_line. Derived only — no stored active flag. Newest period first.
+  const groupedCases = useMemo(() => {
+    const list = cases ?? [];
+    const groups = new Map<
+      string,
+      { periodLabel: string; productLine: string; cases: CommercialLineupCase[] }
+    >();
+    for (const c of list) {
+      const periodLabel =
+        c.period_label ?? (c.inferred_period_start ? c.inferred_period_start.slice(0, 7) : 'No period');
+      const productLine = c.product_line ?? 'Unclassified';
+      const key = `${periodLabel}\u0000${productLine}`;
+      let g = groups.get(key);
+      if (!g) {
+        g = { periodLabel, productLine, cases: [] };
+        groups.set(key, g);
+      }
+      g.cases.push(c);
+    }
+    return Array.from(groups.values()).sort((a, b) =>
+      a.periodLabel !== b.periodLabel
+        ? b.periodLabel.localeCompare(a.periodLabel)
+        : a.productLine.localeCompare(b.productLine),
+    );
+  }, [cases]);
 
   return (
     <>
@@ -2364,29 +3548,126 @@ export function CurrentLineupSection({
             Current lineups
           </Button>
           {count > 0 && <Chip label={count} size="small" />}
-          {activePlanId != null && (
+          {(planEntitySummary?.token_count ?? 0) > 0 && (
             <Button
               size="small"
-              variant="outlined"
-              onClick={() => setUploadOpen(true)}
-              data-testid="upload-current-lineup-btn"
+              variant="contained"
+              onClick={() => {
+                setPlanResolutionFilterCaseId(null);
+                setPlanResolutionOpen(true);
+              }}
+              data-testid="lineup-plan-entity-resolution-open"
             >
-              Upload current lineup
+              Resolve entities · {planEntitySummary?.token_count} token
+              {(planEntitySummary?.token_count ?? 0) === 1 ? '' : 's'}
             </Button>
           )}
+          <FormControlLabel
+            sx={{ ml: 0.5 }}
+            control={
+              <Checkbox
+                size="small"
+                checked={showWorkClosed}
+                onChange={(e) => setShowWorkClosed(e.target.checked)}
+                data-testid="lineup-show-work-closed-toggle"
+              />
+            }
+            label={<Typography variant="caption">Show work-closed</Typography>}
+          />
+          {activePlanId != null && (
+            <FormControlLabel
+              sx={{ ml: 0.5 }}
+              control={
+                <Checkbox
+                  size="small"
+                  checked={showAllCases}
+                  onChange={(e) => setShowAllCases(e.target.checked)}
+                  data-testid="lineup-show-all-toggle"
+                />
+              }
+              label={<Typography variant="caption">Show all (ignore plan)</Typography>}
+            />
+          )}
+          {activePlanId != null &&
+            (allowUpload ? (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => setUploadOpen(true)}
+                data-testid="upload-current-lineup-btn"
+              >
+                Upload current lineup
+              </Button>
+            ) : (
+              <Tooltip title="Lineup uploads now run through the unified multi-file importer in the Import Centre.">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  component={NextLink}
+                  href="/admin/imports"
+                  data-testid="upload-current-lineup-link"
+                >
+                  Import lineups in Import Centre
+                </Button>
+              </Tooltip>
+            ))}
         </Stack>
 
         <Collapse in={expanded}>
           <Box sx={{ mt: 1 }}>
+            {(planEntitySummary?.token_count ?? 0) > 0 && (
+              <Alert
+                severity="warning"
+                sx={{ mb: 1 }}
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => {
+                      setPlanResolutionFilterCaseId(null);
+                      setPlanResolutionOpen(true);
+                    }}
+                  >
+                    Resolve all
+                  </Button>
+                }
+                data-testid="lineup-plan-entity-resolution-banner"
+              >
+                {planEntitySummary?.token_count} unresolved entity token
+                {(planEntitySummary?.token_count ?? 0) === 1 ? '' : 's'} across{' '}
+                {planEntitySummary?.eligible_case_count ?? eligibleResolutionCaseIds.length} imported case
+                {(planEntitySummary?.eligible_case_count ?? eligibleResolutionCaseIds.length) === 1 ? '' : 's'} — map
+                once per token; applies to every matching case.
+              </Alert>
+            )}
             {isLoading ? (
               <CircularProgress size={20} />
             ) : count === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No current lineup cases for this plan.
+              <Typography variant="body2" color="text.secondary" data-testid="lineup-empty-state">
+                {effectivePlanId != null
+                  ? 'No lineup cases for this plan. Toggle “Show all (ignore plan)” to browse every uploaded lineup.'
+                  : 'No lineup cases uploaded yet. Upload lineups in the Import Centre.'}
               </Typography>
             ) : (
-              <Stack spacing={1}>
-                {cases!.map((c) => (
+              <Stack spacing={2} data-testid="lineup-case-groups">
+                {groupedCases.map((g) => (
+                  <Box key={`${g.periodLabel}\u0000${g.productLine}`} data-testid="lineup-case-group">
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ mb: 0.5, mt: 0.5 }}
+                    >
+                      <Typography variant="subtitle2" data-testid="lineup-group-period">
+                        {g.periodLabel}
+                      </Typography>
+                      <Chip label={g.productLine} size="small" variant="outlined" />
+                      <Typography variant="caption" color="text.secondary">
+                        {g.cases.length} case{g.cases.length === 1 ? '' : 's'}
+                      </Typography>
+                    </Stack>
+                    <Stack spacing={1}>
+                      {g.cases.map((c) => (
                   <Box
                     key={c.id}
                     sx={{
@@ -2408,10 +3689,56 @@ export function CurrentLineupSection({
                       label={lineupCaseStatusLabel(c.commercial_status)}
                       size="small"
                       color={STATUS_COLORS[c.commercial_status] ?? 'default'}
+                      data-testid={`lineup-case-status-${c.id}`}
                     />
+                    {RESOLUTION_UI_STATUSES.has(c.commercial_status) &&
+                      (unresolvedTokenCountByCase.get(c.id) ?? 0) > 0 && (
+                        <Chip
+                          label={`${unresolvedTokenCountByCase.get(c.id)} unresolved`}
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                          clickable
+                          onClick={() => {
+                            setPlanResolutionFilterCaseId(c.id);
+                            setPlanResolutionOpen(true);
+                          }}
+                          data-testid={`lineup-case-unresolved-${c.id}`}
+                        />
+                      )}
+                    {(c.iteration_number ?? 1) > 1 && (
+                      <Chip
+                        label={`Round ${c.iteration_number}`}
+                        size="small"
+                        variant="outlined"
+                        data-testid={`lineup-case-iteration-${c.id}`}
+                      />
+                    )}
                     <Typography variant="caption" color="text.secondary">
                       {c.line_count} line{c.line_count === 1 ? '' : 's'}
                     </Typography>
+                    <Chip
+                      label={c.commercial_plan_id != null ? `Plan #${c.commercial_plan_id}` : 'Unlinked'}
+                      size="small"
+                      variant="outlined"
+                      color={c.commercial_plan_id != null ? 'success' : 'default'}
+                      data-testid={`lineup-case-link-${c.id}`}
+                    />
+                    {(c.po_count ?? 0) > 0 && (
+                      <Tooltip
+                        title={(c.linked_pos ?? [])
+                          .map((p) => p.po_number_raw)
+                          .join(', ')}
+                      >
+                        <Chip
+                          label={`${c.po_count} PO${(c.po_count ?? 0) === 1 ? '' : 's'}`}
+                          size="small"
+                          color="secondary"
+                          variant="outlined"
+                          data-testid={`lineup-case-po-count-${c.id}`}
+                        />
+                      </Tooltip>
+                    )}
                     <Button
                       size="small"
                       variant={activeCaseId === c.id ? 'contained' : 'outlined'}
@@ -2423,7 +3750,30 @@ export function CurrentLineupSection({
                     <Button size="small" onClick={() => setViewLinesCase(c)}>
                       Details
                     </Button>
-                    {c.commercial_status === 'draft_imported' && c.line_count === 0 && (
+                    {activePlanId != null && c.commercial_plan_id !== activePlanId && (
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => attachPlanMutation.mutate({ caseId: c.id, planId: activePlanId })}
+                        disabled={attachPlanMutation.isPending}
+                        data-testid={`lineup-attach-plan-${c.id}`}
+                      >
+                        Attach to plan
+                      </Button>
+                    )}
+                    {c.commercial_plan_id != null && (
+                      <Button
+                        size="small"
+                        variant="text"
+                        color="inherit"
+                        onClick={() => attachPlanMutation.mutate({ caseId: c.id, planId: null })}
+                        disabled={attachPlanMutation.isPending}
+                        data-testid={`lineup-detach-plan-${c.id}`}
+                      >
+                        Detach
+                      </Button>
+                    )}
+                    {allowUpload && c.commercial_status === 'draft_imported' && c.line_count === 0 && (
                       <Button
                         size="small"
                         variant="outlined"
@@ -2433,7 +3783,8 @@ export function CurrentLineupSection({
                         Upload file to this case
                       </Button>
                     )}
-                    {(ALLOWED_TRANSITIONS[c.commercial_status]?.length ?? 0) > 0 && (
+                    {(ALLOWED_TRANSITIONS[c.commercial_status]?.length ?? 0) > 0 &&
+                      !isSupersededCase(c) && (
                       <Button size="small" onClick={() => setStatusCase(c)}>
                         Update status
                       </Button>
@@ -2449,16 +3800,67 @@ export function CurrentLineupSection({
                         Sync to plan
                       </Button>
                     )}
+                    {RESOLUTION_UI_STATUSES.has(c.commercial_status) && !isSupersededCase(c) && (
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => setAssignDistCase(c)}
+                        data-testid={`assign-distributor-btn-${c.id}`}
+                      >
+                        Assign distributor
+                      </Button>
+                    )}
+                    {isSupersededCase(c) && (
+                      <Typography variant="caption" color="text.secondary" data-testid={`superseded-by-${c.id}`}>
+                        Superseded by{' '}
+                        {c.superseded_by_case_id != null
+                          ? caseFileNameById.get(c.superseded_by_case_id) ??
+                            `case #${c.superseded_by_case_id}`
+                          : 'deleted case'}
+                      </Typography>
+                    )}
+                    {c.commercial_status !== 'cancelled' && !isSupersededCase(c) && (
+                      <Button
+                        size="small"
+                        variant={(c.po_count ?? 0) > 0 ? 'outlined' : 'contained'}
+                        color="primary"
+                        onClick={() => setConfirmCase(c)}
+                        data-testid={`confirm-with-po-btn-${c.id}`}
+                      >
+                        {(c.po_count ?? 0) > 0 ? 'Add PO' : 'Confirm with PO'}
+                      </Button>
+                    )}
+                    {CLOSE_WORK_STATUSES.has(c.commercial_status) && !isSupersededCase(c) && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="inherit"
+                        disabled={closeWorkMutation.isPending}
+                        onClick={() => closeWorkMutation.mutate(c.id)}
+                        data-testid={`close-lineup-case-work-${c.id}`}
+                      >
+                        Close case
+                      </Button>
+                    )}
                     {c.commercial_status === 'draft_imported' && (
                       <Button
                         size="small"
                         color="error"
-                        onClick={() => deleteMutation.mutate(c.id)}
+                        onClick={() => setDeleteCase(c)}
                         disabled={deleteMutation.isPending}
+                        data-testid={`lineup-delete-case-${c.id}`}
                       >
                         Delete
                       </Button>
                     )}
+                    {(c.po_count ?? 0) > 0 && (
+                      <Box sx={{ flexBasis: '100%' }}>
+                        <CaseReconciliationInline caseId={c.id} />
+                      </Box>
+                    )}
+                  </Box>
+                      ))}
+                    </Stack>
                   </Box>
                 ))}
               </Stack>
@@ -2468,7 +3870,9 @@ export function CurrentLineupSection({
 
         {activeCaseId != null && activeCase && (
           <Box sx={{ mt: 2 }} data-testid="current-lineup-working-grid">
-            {planLineCount === 0 && workingLines.length > 0 && (
+            {planLineCount === 0 &&
+              workingLines.length > 0 &&
+              !PO_LINKED_STATUSES.has(activeCase.commercial_status) && (
               <Alert severity="info" sx={{ mb: 1 }}>
                 This plan has no commercial planner lines yet. Lineup rows below are staged on this case. Mark the
                 case as Ready to sync, then use Sync to plan to create planner lines from eligible rows.
@@ -2480,7 +3884,7 @@ export function CurrentLineupSection({
                 {activeCase.file_name ? ` · ${activeCase.file_name}` : ''}
               </Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap">
-                {RESOLUTION_UI_STATUSES.has(activeCase.commercial_status) && (
+                {RESOLUTION_UI_STATUSES.has(activeCase.commercial_status) && !isSupersededCase(activeCase) && (
                   <>
                     <Button
                       size="small"
@@ -2607,15 +4011,30 @@ export function CurrentLineupSection({
                   })}
                 </Stack>
               </DialogContent>
-              <DialogActions>
+              <DialogActions sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                 <Button
                   size="small"
                   onClick={() => {
-                    setVisibleCols(defaultWorkbenchVisible(hasWorkbenchPlan));
+                    setVisibleCols(defaultUnifiedLineupWorkbenchIds(wbMeta, hasWorkbenchPlan));
                   }}
+                  data-testid="lineup-columns-preset-commercial"
                 >
-                  Reset to defaults
+                  Lineup template
                 </Button>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    if (!wbMeta) return;
+                    const allow = mergeWorkbenchAllowedIds(wbMeta, hasWorkbenchPlan);
+                    const core = defaultWorkbenchVisible(hasWorkbenchPlan).filter((id) => allow.has(id));
+                    const proc = pickProcessorPresetWorkbenchIds(wbMeta).filter((id) => allow.has(id));
+                    setVisibleCols([...core, ...proc.filter((id) => !core.includes(id))]);
+                  }}
+                  data-testid="lineup-columns-preset-processor"
+                >
+                  Processor details
+                </Button>
+                <Box sx={{ flex: 1 }} />
                 <Button size="small" variant="contained" onClick={() => setColSelectorOpen(false)}>
                   Done
                 </Button>
@@ -2726,42 +4145,29 @@ export function CurrentLineupSection({
                 </Typography>
               )
             ) : (
-              <Box sx={{ overflowX: 'auto' }}>
-                <Table size="small" stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      {visibleColsFiltered.map((colId) => (
-                        <TableCell key={colId}>{workbenchColumnLabel(colId, wbMeta)}</TableCell>
-                      ))}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {workingLines.map((ln) => {
-                      const canEdit = activeCase.commercial_status === 'draft_imported';
-                      return (
-                        <TableRow key={ln.id}>
-                          {visibleColsFiltered.map((colId) => (
-                            <TableCell key={`${ln.id}-${colId}`}>{wbCellContent(ln, colId, canEdit)}</TableCell>
-                          ))}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+              <Box data-testid="lineup-workbench-grid">
+                <EnterpriseDataGrid
+                  rowData={workingLines}
+                  columnDefs={wbColumnDefs}
+                  gridOptions={wbGridOptions}
+                  height={560}
+                />
               </Box>
             )}
           </Box>
         )}
       </Box>
 
-      <UploadLineupDialog
-        open={uploadOpen}
-        onClose={() => setUploadOpen(false)}
-        activePlanId={activePlanId}
-        planCountryCode={planCountryCode}
-        planCurrencyCode={planCurrencyCode}
-        onCreated={() => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] })}
-      />
+      {allowUpload && (
+        <UploadLineupDialog
+          open={uploadOpen}
+          onClose={() => setUploadOpen(false)}
+          activePlanId={activePlanId}
+          planCountryCode={planCountryCode}
+          planCurrencyCode={planCurrencyCode}
+          onCreated={() => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] })}
+        />
+      )}
 
       {viewLinesCase && (
         <CaseLinesDialog
@@ -2773,6 +4179,60 @@ export function CurrentLineupSection({
             `Case #${viewLinesCase.id}`
           }
         />
+      )}
+
+      {deleteCase && (
+        <Dialog
+          open={deleteCase != null}
+          onClose={() => setDeleteCase(null)}
+          maxWidth="sm"
+          fullWidth
+          data-testid="lineup-delete-case-dialog"
+        >
+          <DialogTitle>Delete lineup case?</DialogTitle>
+          <DialogContent>
+            <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+              <Typography variant="body2">
+                Permanently delete <strong>{deleteCase.file_name ?? `case #${deleteCase.id}`}</strong>?
+                This cannot be undone.
+              </Typography>
+              {deletePreviewQ.isLoading ? (
+                <CircularProgress size={20} />
+              ) : (deletePreviewQ.data?.superseded_child_count ?? 0) > 0 ? (
+                <Alert severity="warning" data-testid="lineup-delete-supersedes-warning">
+                  {deletePreviewQ.data?.message ??
+                    `This case supersedes ${deletePreviewQ.data?.superseded_child_count} file(s); deleting will restore them as active.`}
+                  {(deletePreviewQ.data?.superseded_children ?? []).length > 0 && (
+                    <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2 }}>
+                      {deletePreviewQ.data!.superseded_children.map((ch) => (
+                        <li key={ch.id}>
+                          <Typography variant="body2" component="span">
+                            {ch.file_name ?? `Case #${ch.id}`}
+                          </Typography>
+                        </li>
+                      ))}
+                    </Box>
+                  )}
+                </Alert>
+              ) : null}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button size="small" onClick={() => setDeleteCase(null)} disabled={deleteMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              size="small"
+              color="error"
+              variant="contained"
+              disabled={deleteMutation.isPending || deletePreviewQ.isLoading}
+              onClick={() => deleteMutation.mutate(deleteCase.id)}
+              data-testid="lineup-delete-case-confirm"
+            >
+              {deleteMutation.isPending ? 'Deleting…' : 'Delete case'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       )}
 
       {statusCase && (
@@ -2795,12 +4255,61 @@ export function CurrentLineupSection({
         />
       )}
 
-      {retryParseCase && (
+      {confirmCase && (
+        <ConfirmWithPoDialog
+          open={confirmCase != null}
+          onClose={() => setConfirmCase(null)}
+          currentCase={confirmCase}
+          isPending={confirmMutation.isPending}
+          error={confirmMutation.isError ? safeDisplayError(confirmMutation.error) : null}
+          onConfirm={(poNumbers, notes) =>
+            confirmMutation.mutate({ caseId: confirmCase.id, poNumbers, notes })
+          }
+        />
+      )}
+
+      {assignDistCase && (
+        <AssignDistributorDialog
+          open={assignDistCase != null}
+          onClose={() => setAssignDistCase(null)}
+          currentCase={assignDistCase}
+          isPending={assignDistributorMutation.isPending}
+          error={
+            assignDistributorMutation.isError
+              ? safeDisplayError(assignDistributorMutation.error)
+              : null
+          }
+          onAssign={(payload) =>
+            assignDistributorMutation.mutate({ caseId: assignDistCase.id, payload })
+          }
+        />
+      )}
+
+      {allowUpload && retryParseCase && (
         <RetryParseDialog
           open={retryParseCase != null}
           onClose={() => setRetryParseCase(null)}
           targetCase={retryParseCase}
           onParsed={() => qc.invalidateQueries({ queryKey: ['commercial-lineup-cases', activePlanId] })}
+        />
+      )}
+
+      {planResolutionOpen && (
+        <LineupEntityResolutionDialog
+          open
+          onClose={() => {
+            setPlanResolutionOpen(false);
+            setPlanResolutionFilterCaseId(null);
+          }}
+          planScope={{
+            planId: effectivePlanId,
+            caseIds: eligibleResolutionCaseIds,
+            filterCaseId: planResolutionFilterCaseId,
+          }}
+          onApplied={() => {
+            void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+            void qc.invalidateQueries({ queryKey: ['lineup-plan-entity-resolution-candidates'] });
+          }}
         />
       )}
 

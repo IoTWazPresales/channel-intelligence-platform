@@ -73,6 +73,13 @@ export const EnterpriseDataGrid = forwardRef(function EnterpriseDataGrid<T>(
         '& .ag-row': {
           backgroundColor: `${theme.palette.background.paper} !important`,
         },
+        '& .ag-cell': {
+          display: 'flex',
+          alignItems: 'center',
+        },
+        '& .ag-cell-value': {
+          width: '100%',
+        },
         '& .ag-row-odd': {
           backgroundColor: `${isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.025)'} !important`,
         },

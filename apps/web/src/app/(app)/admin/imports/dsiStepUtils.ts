@@ -43,6 +43,20 @@ export function dsiGateFromMapping(m: Record<string, string>): boolean {
   );
 }
 
+/** True when every sheet in a nested (multi-sheet) mapping passes the flat gate. */
+export function dsiGateFromNestedMapping(m: Record<string, Record<string, string>>): boolean {
+  const sheets = Object.values(m).filter((s) => s && Object.keys(s).length > 0);
+  if (!sheets.length) return false;
+  return sheets.every((sheet) => dsiGateFromMapping(sheet));
+}
+
+export function isNestedDsiFieldMapping(
+  m: Record<string, string> | Record<string, Record<string, string>> | null | undefined
+): m is Record<string, Record<string, string>> {
+  if (!m || typeof m !== 'object') return false;
+  return Object.values(m).some((v) => v != null && typeof v === 'object' && !Array.isArray(v));
+}
+
 export function formatDsiSamples(samples: string[] | undefined): string {
   if (!samples?.length) return '—';
   const parts = samples.map((s) => (s.length > 48 ? `${s.slice(0, 45)}…` : s)).filter(Boolean);
@@ -69,6 +83,10 @@ export function stableFieldMappingJson(fieldMapping: Record<string, string> | un
 export type DistributorSiSummary = {
   staging_rows?: number;
   blocking_rows?: number;
+  human_fixable_blocking_rows?: number;
+  master_merge_excluded_rows?: number;
+  steward_map_blocking_rows?: number;
+  auto_excluded_rows?: number;
   warning_rows?: number;
   aggregated_candidates?: number;
   import_mode?: string;
@@ -78,14 +96,37 @@ export type DistributorSiSummary = {
   rows_inventory_ready_with_sellout_warnings?: number;
 };
 
+/** Human-fixable blockers that still require steward action before apply. */
+export function dsiHumanFixableBlockingRows(summary: DistributorSiSummary | null | undefined): number {
+  if (!summary) return 0;
+  return summary.human_fixable_blocking_rows ?? summary.blocking_rows ?? 0;
+}
+
+export function formatDsiBlockerSummaryLine(summary: DistributorSiSummary | null | undefined): string | null {
+  if (!summary) return null;
+  const master = summary.master_merge_excluded_rows ?? 0;
+  const steward = summary.steward_map_blocking_rows ?? summary.human_fixable_blocking_rows ?? summary.blocking_rows ?? 0;
+  const auto = summary.auto_excluded_rows ?? 0;
+  if (master === 0 && steward === 0 && auto === 0) return null;
+  return `${master} master-merge · ${steward} steward-map · ${auto} auto-excluded`;
+}
+
 /** Parse distributor_si_summary row from import job preview rows (DSI validate). */
 export function parseDistributorSiSummaryFromRows(
-  previewRows: Array<{ row_number: number; code?: string; message?: string | null }> | undefined
+  previewRows: Array<{ row_number: number; code?: string; message?: string | null; id?: number }> | undefined
 ): DistributorSiSummary | null {
   if (!previewRows?.length) return null;
-  const row = previewRows.find((r) => r.row_number === 0 && r.code === 'distributor_si_summary');
-  if (!row?.message) return null;
+  const summaries = previewRows.filter(
+    (r) => r.row_number === 0 && r.code === 'distributor_si_summary' && r.message
+  );
+  if (!summaries.length) return null;
+  const withId = summaries.filter((r) => r.id != null);
+  const row =
+    withId.length > 0
+      ? withId.reduce((best, r) => ((r.id ?? 0) > (best.id ?? 0) ? r : best))
+      : summaries[summaries.length - 1];
   const raw = row.message;
+  if (!raw) return null;
   const cut = raw.indexOf(' Applied sell-out');
   const jsonPart = cut === -1 ? raw : raw.slice(0, cut);
   try {
@@ -107,5 +148,18 @@ export function dsiContinueToApplyAllowed(
   if (jobId == null || gateKey === null || summary == null) return false;
   const key = `${jobId}::${stableFieldMappingJson(fieldMapping)}`;
   if (gateKey !== key) return false;
-  return (summary.blocking_rows ?? 0) === 0;
+  if (dsiHumanFixableBlockingRows(summary) > 0) return false;
+  return (summary.master_merge_excluded_rows ?? 0) === 0;
+}
+
+/** Gate key after a successful validate when blockers are cleared (null when apply must stay blocked). */
+export function computeDsiContinueGateKey(
+  jobId: number | null,
+  fieldMapping: Record<string, string> | undefined,
+  summary: DistributorSiSummary | null
+): string | null {
+  if (jobId == null || summary == null) return null;
+  if (dsiHumanFixableBlockingRows(summary) > 0) return null;
+  if ((summary.master_merge_excluded_rows ?? 0) > 0) return null;
+  return `${jobId}::${stableFieldMappingJson(fieldMapping)}`;
 }

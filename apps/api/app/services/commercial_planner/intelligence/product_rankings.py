@@ -21,9 +21,9 @@ from app.models.facts import (
     FactBuyPlan,
     FactForecast,
     FactPricing,
-    FactPromotionPlan,
     FactSalesSellout,
 )
+from app.models.cpor import CporCaseLine
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob
 from app.services.commercial_planner.calculator import CommercialCalcInputs, compute_line_economics
@@ -155,16 +155,17 @@ async def _lineup_msrp_by_product(
 
 
 async def _promo_product_ids(db: AsyncSession, product_ids: list[int]) -> set[int]:
+    """CPOR case-line products (spec §7 — re-pointed off empty FactPromotionPlan)."""
     if not product_ids:
         return set()
     rows = (
         await db.execute(
-            select(FactPromotionPlan.product_id)
-            .where(FactPromotionPlan.product_id.in_(product_ids))
+            select(CporCaseLine.product_id)
+            .where(CporCaseLine.product_id.in_(product_ids))
             .distinct()
         )
     ).scalars().all()
-    return {int(x) for x in rows}
+    return {int(x) for x in rows if x is not None}
 
 
 def _suggested_srp_local(
@@ -288,7 +289,7 @@ async def _candidate_product_ids(
     ).scalars().all()
     ids.update(int(x) for x in pricing_ids if x is not None)
 
-    promo_ids = (await db.execute(select(FactPromotionPlan.product_id).distinct())).scalars().all()
+    promo_ids = (await db.execute(select(CporCaseLine.product_id).distinct())).scalars().all()
     ids.update(int(x) for x in promo_ids if x is not None)
 
     budget_ids = (

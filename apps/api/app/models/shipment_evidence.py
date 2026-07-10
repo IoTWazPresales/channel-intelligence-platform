@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, Text, Index, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -51,6 +51,10 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
     ship_to_raw: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     order_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    customer_po: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    purchase_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_order.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     order_line: Mapped[str | None] = mapped_column(String(64), nullable=True)
     delivery_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
     invoice_line: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -87,3 +91,15 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
     customer_dealer_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True)
     customer_resolution_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    resolved_customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    resolved_distributor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_distributor.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    crad_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    corpus_superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

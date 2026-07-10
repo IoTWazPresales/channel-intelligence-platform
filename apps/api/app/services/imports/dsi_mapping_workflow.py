@@ -457,22 +457,63 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
     storage = get_storage_backend()
     data = storage.read(raw.storage_key)
 
-    df = read_tabular(job.file_name, data)
-    schema = infer_schema(df)
-    cols = [c["name"] for c in schema["columns"]]
+    from app.services.imports.dsi_workbook import (
+        DSI_SINGLE_SHEET_KEY,
+        build_dsi_workbook_structure,
+        load_dsi_workbook_sheet_frames,
+        persist_dsi_workbook_on_job,
+    )
 
-    source = job.source
-    template = effective_mapping_template(source)
-    samples = column_samples_from_schema_dict(schema)
-    mapping = build_initial_dsi_field_mapping(db, cols, source, template, column_samples=samples)
+    sheet_frames = load_dsi_workbook_sheet_frames(job.file_name or "", data)
+    structure = build_dsi_workbook_structure(job.file_name or "", data)
 
-    from app.services.imports.dsi_column_mapping_intel import apply_high_confidence_dsi_automap
+    if len(sheet_frames) > 1:
+        nested_mapping: dict[str, dict[str, str]] = {}
+        all_headers: list[str] = []
+        mappable_keys = {
+            str(s.get("sheet_key"))
+            for s in structure.get("sheets", [])
+            if isinstance(s, dict) and s.get("sheet_key")
+        }
+        for sheet_name, sheet_df in sheet_frames:
+            key = sheet_name or DSI_SINGLE_SHEET_KEY
+            if mappable_keys and key not in mappable_keys:
+                continue
+            schema = infer_schema(sheet_df)
+            cols = [c["name"] for c in schema["columns"]]
+            all_headers.extend(cols)
+            source = job.source
+            template = effective_mapping_template(source)
+            samples = column_samples_from_schema_dict(schema)
+            sheet_map = build_initial_dsi_field_mapping(db, cols, source, template, column_samples=samples)
+            from app.services.imports.dsi_column_mapping_intel import apply_high_confidence_dsi_automap
 
-    mapping, auto_applied = apply_high_confidence_dsi_automap(cols, source, mapping, column_samples=samples)
+            sheet_map, _ = apply_high_confidence_dsi_automap(cols, source, sheet_map, column_samples=samples)
+            key = sheet_name or DSI_SINGLE_SHEET_KEY
+            nested_mapping[key] = sheet_map
+        job.inferred_schema = {"multi_sheet": True, "sheet_count": len(sheet_frames)}
+        job.file_headers = sorted(set(all_headers))
+        job.field_mapping = nested_mapping
+        persist_dsi_workbook_on_job(job, structure)
+    else:
+        df = sheet_frames[0][1] if sheet_frames else read_tabular(job.file_name, data)
+        schema = infer_schema(df)
+        cols = [c["name"] for c in schema["columns"]]
 
-    job.inferred_schema = {**schema, "dsi_column_automap_applied": auto_applied}
-    job.file_headers = cols
-    job.field_mapping = mapping
+        source = job.source
+        template = effective_mapping_template(source)
+        samples = column_samples_from_schema_dict(schema)
+        mapping = build_initial_dsi_field_mapping(db, cols, source, template, column_samples=samples)
+
+        from app.services.imports.dsi_column_mapping_intel import apply_high_confidence_dsi_automap
+
+        mapping, auto_applied = apply_high_confidence_dsi_automap(cols, source, mapping, column_samples=samples)
+
+        job.inferred_schema = {**schema, "dsi_column_automap_applied": auto_applied}
+        job.file_headers = cols
+        job.field_mapping = mapping
+        persist_dsi_workbook_on_job(job, structure)
+
     job.stage = "dsi_mapping_ready"
     job.status = "pending"
     db.add(job)
@@ -487,6 +528,51 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
         DSI_FIELD_TARGET_DESCRIPTIONS,
         suggest_dsi_column_mapping,
     )
+    from app.services.imports.dsi_workbook import (
+        DSI_SHEET_META_KEY,
+        is_nested_dsi_field_mapping,
+    )
+
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    workbook = meta.get(DSI_SHEET_META_KEY) if isinstance(meta.get(DSI_SHEET_META_KEY), dict) else None
+
+    if is_nested_dsi_field_mapping(job.field_mapping):
+        nested = dict(job.field_mapping or {})
+        sheet_states: dict[str, Any] = {}
+        blocking_all: list[dict[str, str]] = []
+        for sheet_key, sheet_map in nested.items():
+            if not isinstance(sheet_map, dict):
+                continue
+            headers = sorted({str(k) for k in sheet_map.keys()})
+            smap, notices = sanitize_dsi_field_mapping(headers, sheet_map)
+            gate = dsi_mapping_gate_errors(smap)
+            blocking_all.extend(gate)
+            sheet_states[str(sheet_key)] = {
+                "field_mapping": smap,
+                "blocking_mapping_errors": gate,
+                "mapping_valid": len(gate) == 0,
+                "mapping_adjustment_notices": notices,
+            }
+        return {
+            "id": job.id,
+            "stage": job.stage,
+            "status": job.status,
+            "import_mode": job.import_mode,
+            "template_slug": job.template_slug,
+            "error_summary": job.error_summary,
+            "multi_sheet": True,
+            "dsi_workbook": workbook,
+            "sheet_field_mappings": sheet_states,
+            "field_mapping": nested,
+            "file_headers": list(job.file_headers or []),
+            "blocking_mapping_errors": blocking_all,
+            "mapping_valid": len(blocking_all) == 0,
+            "canonical_targets": sorted(DSI_MEMORY_TARGETS),
+            "field_target_descriptions": dict(DSI_FIELD_TARGET_DESCRIPTIONS),
+            "dsi_workflow_mode": meta.get("dsi_workflow_mode"),
+            "dsi_workflow_mode_explicit": meta.get("dsi_workflow_mode_explicit"),
+            "dsi_predominantly_old_sellout_dates": meta.get("dsi_predominantly_old_sellout_dates"),
+        }
 
     headers = list(job.file_headers or [])
     raw_mapping = dict(job.field_mapping or {})

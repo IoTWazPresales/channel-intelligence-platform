@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  computeDsiContinueGateKey,
   dsiContinueToApplyAllowed,
   dsiGateFromMapping,
+  dsiGateFromNestedMapping,
+  dsiHumanFixableBlockingRows,
   dsiSelectValue,
   dsiTargetDescription,
   dsiTargetLabel,
+  formatDsiBlockerSummaryLine,
+  isNestedDsiFieldMapping,
   parseDistributorSiSummaryFromRows,
   stableFieldMappingJson,
 } from './dsiStepUtils';
@@ -50,6 +55,20 @@ describe('dsiStepUtils', () => {
     ).toBe(true);
   });
 
+  it('dsiGateFromNestedMapping requires every sheet to pass', () => {
+    const good = {
+      a: 'distributor_token',
+      b: 'product_identifier',
+      c: 'snapshot_date',
+      d: 'stock_on_hand',
+    };
+    expect(dsiGateFromNestedMapping({ Sales: good, SOH: good })).toBe(true);
+    expect(dsiGateFromNestedMapping({ Sales: good, SOH: { a: 'distributor_token' } })).toBe(false);
+    expect(dsiGateFromNestedMapping({})).toBe(false);
+    expect(isNestedDsiFieldMapping({ Sales: good })).toBe(true);
+    expect(isNestedDsiFieldMapping({ a: 'distributor_token' })).toBe(false);
+  });
+
   it('stableFieldMappingJson is order-independent', () => {
     const a = stableFieldMappingJson({ b: 'x', a: 'y' });
     const b = stableFieldMappingJson({ a: 'y', b: 'x' });
@@ -65,6 +84,26 @@ describe('dsiStepUtils', () => {
       },
     ];
     expect(parseDistributorSiSummaryFromRows(rows)?.blocking_rows).toBe(0);
+  });
+
+  it('parseDistributorSiSummaryFromRows uses the latest summary when multiple exist', () => {
+    const rows = [
+      {
+        id: 10,
+        row_number: 0,
+        code: 'distributor_si_summary',
+        message: JSON.stringify({ staging_rows: 178067, blocking_rows: 22522, warning_rows: 1, aggregated_candidates: 799 }),
+      },
+      {
+        id: 99,
+        row_number: 0,
+        code: 'distributor_si_summary',
+        message: JSON.stringify({ staging_rows: 178067, blocking_rows: 194, warning_rows: 10722, aggregated_candidates: 542 }),
+      },
+    ];
+    const s = parseDistributorSiSummaryFromRows(rows);
+    expect(s?.blocking_rows).toBe(194);
+    expect(s?.aggregated_candidates).toBe(542);
   });
 
   it('parseDistributorSiSummaryFromRows reads extended DSI counters', () => {
@@ -87,19 +126,66 @@ describe('dsiStepUtils', () => {
     expect(s?.rows_inventory_ready_with_sellout_warnings).toBe(2);
   });
 
-  it('dsiContinueToApplyAllowed gates on job, mapping key, and blocking rows', () => {
+  it('computeDsiContinueGateKey returns null when blockers remain', () => {
+    const fm = { a: 'distributor_token' };
+    expect(computeDsiContinueGateKey(7, fm, { blocking_rows: 3, human_fixable_blocking_rows: 3 })).toBeNull();
+    expect(
+      computeDsiContinueGateKey(7, fm, {
+        blocking_rows: 0,
+        human_fixable_blocking_rows: 0,
+        master_merge_excluded_rows: 2,
+      })
+    ).toBeNull();
+    const key = computeDsiContinueGateKey(7, fm, {
+      blocking_rows: 0,
+      human_fixable_blocking_rows: 0,
+      master_merge_excluded_rows: 0,
+    });
+    expect(key).toBe(`7::${stableFieldMappingJson(fm)}`);
+    expect(dsiContinueToApplyAllowed(key, 7, fm, { blocking_rows: 0, human_fixable_blocking_rows: 0 }, { isValidating: false, hasServerGate: true })).toBe(
+      true
+    );
+  });
+
+  it('dsiContinueToApplyAllowed gates on human-fixable blocking rows', () => {
     const fm = { a: 'distributor_token' };
     const key = `7::${stableFieldMappingJson(fm)}`;
-    const summary = { staging_rows: 1, blocking_rows: 0 };
+    const summary = { staging_rows: 1, blocking_rows: 0, human_fixable_blocking_rows: 0, master_merge_excluded_rows: 21 };
     expect(
       dsiContinueToApplyAllowed(key, 7, fm, summary, { isValidating: false, hasServerGate: true })
+    ).toBe(false);
+    expect(
+      dsiContinueToApplyAllowed(
+        key,
+        7,
+        fm,
+        { ...summary, master_merge_excluded_rows: 0 },
+        { isValidating: false, hasServerGate: true }
+      )
     ).toBe(true);
     expect(
-      dsiContinueToApplyAllowed(key, 7, fm, { ...summary, blocking_rows: 2 }, { isValidating: false, hasServerGate: true })
+      dsiContinueToApplyAllowed(
+        key,
+        7,
+        fm,
+        { ...summary, human_fixable_blocking_rows: 2, blocking_rows: 2 },
+        { isValidating: false, hasServerGate: true }
+      )
     ).toBe(false);
     expect(dsiContinueToApplyAllowed(key, 7, { ...fm, b: 'x' }, summary, { isValidating: false, hasServerGate: true })).toBe(
       false
     );
     expect(dsiContinueToApplyAllowed(key, 7, fm, summary, { isValidating: true, hasServerGate: true })).toBe(false);
+  });
+
+  it('formatDsiBlockerSummaryLine splits master-merge vs steward-map vs auto-excluded', () => {
+    expect(
+      formatDsiBlockerSummaryLine({
+        master_merge_excluded_rows: 21,
+        steward_map_blocking_rows: 40,
+        auto_excluded_rows: 121,
+      })
+    ).toBe('21 master-merge · 40 steward-map · 121 auto-excluded');
+    expect(dsiHumanFixableBlockingRows({ human_fixable_blocking_rows: 40, blocking_rows: 61 })).toBe(40);
   });
 });

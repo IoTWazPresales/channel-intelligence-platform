@@ -8,7 +8,7 @@
 # - MODIFY: apps/web/src/features/shell/navConfig.ts — rename nav label
 # - EXTEND (not replace): existing sell-out uses /sellout/commercial-* ; new KPI/tabs use /channel-ops/*
 # - PATTERN: async endpoints like sellout.py + shipping.py; React Query + MUI like sell-out/shipping pages
-# - SHIPMENT TABLE: ShipmentEvidenceLine (shipment_evidence_line), NOT FactForecast
+# - SHIPMENT TABLE: shipment_evidence read model (Plan D current-state view), NOT FactForecast
 # - EXISTING SELL-OUT PAGE: PageHeader, 4 KPI papers, smart chips, Autocomplete filters,
 #   /sellout/commercial-summary, commercial-lines, filter-options, zero-sellout-products
 
@@ -28,8 +28,19 @@ from app.api.deps import get_db
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
-from app.models.facts import FactInventoryDistributor, FactInventoryReconciliation, FactSalesSellout
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.models.facts import FactInventoryReconciliation, FactSalesSellout
+from app.services.channel_ops_derived_stock import (
+    derived_stock_rows_for_distributor,
+    sum_derived_channel_stock,
+    weeks_of_cover_or_none,
+    yoy_pct_or_none,
+)
+from app.services.imports.shipment_evidence_read import (
+    apply_active_evidence_filter,
+    shipment_evidence_read_model,
+)
+
+EV = shipment_evidence_read_model()
 
 router = APIRouter()
 
@@ -148,14 +159,15 @@ async def channel_ops_summary(
     prior = (await db.execute(sell_py)).one()
     cur_units, cur_rev = float(cur[0]), float(cur[1])
     py_units, py_rev = float(prior[0]), float(prior[1])
-    yoy_pct: float | None = None
-    if py_units > 0:
-        yoy_pct = (cur_units - py_units) / py_units
+    # Denominator sanity: zero/missing prior quarter → n/a (never divide-by-zero).
+    yoy_pct = yoy_pct_or_none(cur_units, py_units)
 
-    inv_q = select(func.coalesce(func.sum(FactInventoryDistributor.on_hand_units), 0))
-    if distributor_id is not None:
-        inv_q = inv_q.where(FactInventoryDistributor.distributor_id == int(distributor_id))
-    total_inv = float(await db.scalar(inv_q) or 0)
+    # Channel stock = sum of derived latest per (distributor, product).
+    # NEVER sum raw snapshots across periods.
+    total_inv_i, _pair_count = await sum_derived_channel_stock(
+        db, distributor_id=int(distributor_id) if distributor_id is not None else None
+    )
+    total_inv = float(total_inv_i)
 
     weeks_of_cover: float | None = None
     if await _table_exists(db, "fact_customer_velocity"):
@@ -166,8 +178,7 @@ async def channel_ops_summary(
         if distributor_id is not None:
             vel_q = vel_q.where(FactCustomerVelocity.distributor_id == int(distributor_id))
         avg_vel = await db.scalar(vel_q)
-        if avg_vel is not None and float(avg_vel) > 0:
-            weeks_of_cover = total_inv / float(avg_vel)
+        weeks_of_cover = weeks_of_cover_or_none(total_inv, avg_vel)
 
     since_35 = today - timedelta(days=35)
     dist_reporting_q = select(func.count(func.distinct(FactSalesSellout.distributor_id))).where(
@@ -326,27 +337,25 @@ async def channel_ops_inventory(
 ) -> dict[str, Any]:
     if distributor_id is None:
         raise HTTPException(status_code=400, detail="distributor_id is required")
-    inv_q = (
-        select(
-            FactInventoryDistributor,
-            DimProduct.sku,
-            DimProduct.name.label("product_name"),
-            DimDistributor.name.label("distributor_name"),
-        )
-        .join(DimProduct, FactInventoryDistributor.product_id == DimProduct.id)
-        .join(DimDistributor, FactInventoryDistributor.distributor_id == DimDistributor.id)
-        .where(FactInventoryDistributor.distributor_id == int(distributor_id))
-    )
-    if product_id is not None:
-        inv_q = inv_q.where(FactInventoryDistributor.product_id == int(product_id))
 
-    inv_rows_raw = (await db.execute(inv_q.order_by(desc(FactInventoryDistributor.as_of_date)))).all()
-    inv_by_product: dict[int, Any] = {}
-    for row in inv_rows_raw:
-        inv = row[0]
-        pid = int(inv.product_id)
-        if pid not in inv_by_product:
-            inv_by_product[pid] = row
+    derived_rows = await derived_stock_rows_for_distributor(
+        db, distributor_id=int(distributor_id), product_id=product_id
+    )
+    product_ids = [int(r["product_id"]) for r in derived_rows]
+    product_meta: dict[int, tuple[str | None, str | None]] = {}
+    dist_name: str | None = None
+    if product_ids:
+        prod_rows = (
+            await db.execute(
+                select(DimProduct.id, DimProduct.sku, DimProduct.name).where(
+                    DimProduct.id.in_(product_ids)
+                )
+            )
+        ).all()
+        product_meta = {int(r[0]): (r[1], r[2]) for r in prod_rows}
+        dist_name = await db.scalar(
+            select(DimDistributor.name).where(DimDistributor.id == int(distributor_id))
+        )
 
     velocity_map: dict[int, FactCustomerVelocity] = {}
     if await _table_exists(db, "fact_customer_velocity"):
@@ -365,27 +374,29 @@ async def channel_ops_inventory(
                 velocity_map[pid] = v
 
     items: list[dict[str, Any]] = []
-    for row in inv_by_product.values():
-        inv = row[0]
-        pid = int(inv.product_id)
+    for row in derived_rows:
+        pid = int(row["product_id"])
+        sku, pname = product_meta.get(pid, (None, None))
         v = velocity_map.get(pid)
         v52 = float(v.velocity_52wk) if v and v.velocity_52wk is not None else None
-        reported = float(inv.on_hand_units)
-        weeks: float | None = None
-        if v52 and v52 > 0:
-            weeks = reported / v52
+        derived = float(row["derived_stock"])
+        weeks = weeks_of_cover_or_none(derived, v52)
         items.append(
             {
-                "distributor_id": int(inv.distributor_id),
-                "distributor_name": row.distributor_name,
+                "distributor_id": int(row["distributor_id"]),
+                "distributor_name": dist_name,
                 "product_id": pid,
-                "sku": row.sku,
-                "product_name": row.product_name,
-                "reported_soh": reported,
-                "calculated_soh": float(inv.calculated_soh) if inv.calculated_soh is not None else None,
-                "variance_units": float(inv.soh_variance) if inv.soh_variance is not None else None,
+                "sku": sku,
+                "product_name": pname,
+                "snapshot_date": row.get("snapshot_date"),
+                "reported_soh": float(row["reported_soh"]),
+                "sell_out_since": float(row["sell_out_since"]),
+                "landed_since": float(row["landed_since"]),
+                "derived_stock": derived,
+                "calculated_soh": row.get("calculated_soh"),
+                "variance_units": row.get("variance_units"),
                 "variance_pct": None,
-                "reconciliation_status": inv.reconciliation_status,
+                "reconciliation_status": row.get("reconciliation_status"),
                 "velocity_52wk": v52,
                 "weeks_of_cover": weeks,
                 "computed_through_date": v.computed_through_date.isoformat()
@@ -414,21 +425,22 @@ async def channel_ops_movements(
     skip = (page - 1) * page_size
 
     ship_date_col = func.coalesce(
-        ShipmentEvidenceLine.ship_confirm_date,
-        ShipmentEvidenceLine.schedule_ship_date,
+        EV.ship_confirm_date,
+        EV.schedule_ship_date,
     )
 
-    q = (
+    q = apply_active_evidence_filter(
         select(
-            ShipmentEvidenceLine,
+            EV,
             DimProduct.sku,
             DimProduct.name.label("product_name"),
             DimDistributor.name.label("distributor_name"),
             ship_date_col.label("ship_date"),
         )
-        .outerjoin(DimProduct, ShipmentEvidenceLine.product_id == DimProduct.id)
-        .outerjoin(DimDistributor, ShipmentEvidenceLine.distributor_id == DimDistributor.id)
-        .where(ShipmentEvidenceLine.distributor_id == int(distributor_id))
+        .outerjoin(DimProduct, EV.product_id == DimProduct.id)
+        .outerjoin(DimDistributor, EV.distributor_id == DimDistributor.id)
+        .where(EV.distributor_id == int(distributor_id)),
+        model=EV,
     )
     if df is not None:
         q = q.where(ship_date_col >= df)

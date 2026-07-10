@@ -1032,20 +1032,42 @@ async def put_dsi_field_mapping(job_id: int, body: dict[str, Any] = Body(...), d
     fm = body.get("field_mapping")
     if not isinstance(fm, dict):
         raise HTTPException(status_code=400, detail="field_mapping must be an object")
-    headers = list(job.file_headers or [])
-    cleaned_input: dict[str, str] = {}
-    for k, v in fm.items():
-        if not isinstance(k, str) or not isinstance(v, str):
-            continue
-        if not v.strip():
-            continue
-        cleaned_input[k] = v.strip()
-    cleaned, _ = sanitize_dsi_field_mapping(headers, cleaned_input)
-    job.field_mapping = cleaned
-    if job.source_id is not None:
-        with SessionLocal() as sync_db:
-            merge_dsi_mapping_memory(sync_db, source_id=job.source_id, field_mapping=cleaned)
-            sync_db.commit()
+    from app.services.imports.dsi_workbook import is_nested_dsi_field_mapping
+
+    if is_nested_dsi_field_mapping(fm):
+        nested_clean: dict[str, dict[str, str]] = {}
+        for sheet_key, sheet_map in fm.items():
+            if not isinstance(sheet_key, str) or not isinstance(sheet_map, dict):
+                continue
+            headers = list(job.file_headers or [])
+            cleaned_input: dict[str, str] = {}
+            for k, v in sheet_map.items():
+                if isinstance(k, str) and isinstance(v, str) and v.strip():
+                    cleaned_input[k] = v.strip()
+            cleaned, _ = sanitize_dsi_field_mapping(headers, cleaned_input)
+            if cleaned:
+                nested_clean[sheet_key] = cleaned
+        job.field_mapping = nested_clean
+        if job.source_id is not None and nested_clean:
+            with SessionLocal() as sync_db:
+                first = next(iter(nested_clean.values()))
+                merge_dsi_mapping_memory(sync_db, source_id=job.source_id, field_mapping=first)
+                sync_db.commit()
+    else:
+        headers = list(job.file_headers or [])
+        cleaned_input: dict[str, str] = {}
+        for k, v in fm.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                continue
+            if not v.strip():
+                continue
+            cleaned_input[k] = v.strip()
+        cleaned, _ = sanitize_dsi_field_mapping(headers, cleaned_input)
+        job.field_mapping = cleaned
+        if job.source_id is not None:
+            with SessionLocal() as sync_db:
+                merge_dsi_mapping_memory(sync_db, source_id=job.source_id, field_mapping=cleaned)
+                sync_db.commit()
     await db.commit()
     job = await _async_import_job_with_source(db, job_id)
     if not job or job.template_slug != "distributor_inventory":
@@ -1058,12 +1080,20 @@ async def post_dsi_validate(job_id: int, db: AsyncSession = Depends(get_db)):
     job = await db.get(ImportJob, job_id)
     if not job or job.template_slug != "distributor_inventory":
         raise HTTPException(status_code=404, detail="Job not found")
-    headers = list(job.file_headers or [])
-    clean, _ = sanitize_dsi_field_mapping(headers, dict(job.field_mapping or {}))
-    job.field_mapping = clean
-    await db.commit()
-    await db.refresh(job)
-    gate = dsi_mapping_gate_errors(job.field_mapping or {})
+    from app.services.imports.dsi_workbook import is_nested_dsi_field_mapping
+
+    if is_nested_dsi_field_mapping(job.field_mapping):
+        gate: list[dict[str, str]] = []
+        for sheet_map in (job.field_mapping or {}).values():
+            if isinstance(sheet_map, dict):
+                gate.extend(dsi_mapping_gate_errors(sheet_map))
+    else:
+        headers = list(job.file_headers or [])
+        clean, _ = sanitize_dsi_field_mapping(headers, dict(job.field_mapping or {}))
+        job.field_mapping = clean
+        await db.commit()
+        await db.refresh(job)
+        gate = dsi_mapping_gate_errors(job.field_mapping or {})
     if gate:
         raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
 
@@ -1118,12 +1148,20 @@ async def post_dsi_apply(
                 status_code=400,
                 detail="This import can change canonical facts; pass confirm_destructive=true.",
             )
-    headers = list(job.file_headers or [])
-    clean, _ = sanitize_dsi_field_mapping(headers, dict(job.field_mapping or {}))
-    job.field_mapping = clean
-    await db.commit()
-    await db.refresh(job)
-    gate = dsi_mapping_gate_errors(job.field_mapping or {})
+    from app.services.imports.dsi_workbook import is_nested_dsi_field_mapping
+
+    if is_nested_dsi_field_mapping(job.field_mapping):
+        gate = []
+        for sheet_map in (job.field_mapping or {}).values():
+            if isinstance(sheet_map, dict):
+                gate.extend(dsi_mapping_gate_errors(sheet_map))
+    else:
+        headers = list(job.file_headers or [])
+        clean, _ = sanitize_dsi_field_mapping(headers, dict(job.field_mapping or {}))
+        job.field_mapping = clean
+        await db.commit()
+        await db.refresh(job)
+        gate = dsi_mapping_gate_errors(job.field_mapping or {})
     if gate:
         raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
     # Mark running + record dispatch time + import_mode=apply in a sync session before handing off,

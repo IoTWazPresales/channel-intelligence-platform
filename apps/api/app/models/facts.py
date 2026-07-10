@@ -121,7 +121,7 @@ class FactInventoryReconciliation(Base, TimestampMixin):
 
 
 class FactInboundShipment(Base, TimestampMixin):
-    """Inbound shipment / order truth layer, fed from ``ShipmentEvidenceLine`` on apply (global ``source_key``)."""
+    """Inbound shipment / order truth layer, fed from ``ShipmentEvidenceLine`` on apply."""
 
     __tablename__ = "fact_inbound_shipment"
     __table_args__ = (Index("ix_fact_inbound_shipment_import_job_id", "import_job_id"),)
@@ -129,7 +129,8 @@ class FactInboundShipment(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     import_job_id: Mapped[int | None] = mapped_column(ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True)
-    source_key: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
+    source_key: Mapped[str] = mapped_column(String(256), nullable=False)
+    fact_upsert_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
     shipment_evidence_line_id: Mapped[int | None] = mapped_column(
         ForeignKey("shipment_evidence_line.id", ondelete="SET NULL"), nullable=True
     )
@@ -145,6 +146,10 @@ class FactInboundShipment(Base, TimestampMixin):
     ship_to_raw: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     order_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    customer_po: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    purchase_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_order.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     order_line: Mapped[str | None] = mapped_column(String(64), nullable=True)
     delivery_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
     invoice_line: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -181,6 +186,14 @@ class FactInboundShipment(Base, TimestampMixin):
     customer_dealer_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True)
     customer_resolution_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    resolved_customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    resolved_distributor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_distributor.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    crad_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     eta_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     reference: Mapped[str | None] = mapped_column(String(128), nullable=True)

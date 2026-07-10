@@ -293,6 +293,66 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         },
     },
     {
+        # Unified lineup importer — first-class, own multi-file Import-Centre surface (not the generic
+        # single-file wizard). Supersedes the embedded Commercial-Planner upload (made read-only) and the
+        # admin historical_lineup workbook for go-forward lineups. Each uploaded file becomes one
+        # CommercialLineupCase + one async parse job (template_slug=unified_lineup), running the full
+        # pricing chain (backwards SRP->DAP) + period/product-line inference.
+        "slug": "unified_lineup",
+        "display_name": "Lineup (unified import)",
+        "description": (
+            "Unified multi-file lineup import. Accepts several .csv/.xlsx/.xlsm files in one session and "
+            "dispatches one parse job per file. Maps the full pricing chain (SRP, dealer/disti margin, "
+            "rebate, VAT, ROE, import tax, net/disti/dealer price, DAP), applies trade-term defaults, runs "
+            "the backwards SRP->DAP calculator, and infers reporting period + product line."
+        ),
+        "enabled": True,
+        "hidden": True,  # dedicated multi-file surface in the Import Centre, not the generic wizard
+        "admin_only": False,
+        "requires_provider": False,
+        "pipeline_handler": "stub_noop",
+        "destructive_apply_requires_confirm": False,
+        "accepted_file_types": [".csv", ".xlsx", ".xlsm"],
+        "expected_columns": {
+            "sku_raw": {"aliases": ["sku", "item", "product_sku"], "required": False},
+            "part_number_raw": {"aliases": ["part_number", "mpn", "part no"], "required": False},
+            "model_raw": {"aliases": ["model", "model_name", "series"], "required": False},
+            "customer_token": {"aliases": ["customer", "account", "end customer", "sold to"], "required": False},
+            "distributor_token": {"aliases": ["distributor", "disti", "channel_partner"], "required": False},
+            "quantity_units": {"aliases": ["qty", "quantity", "units"], "required": False},
+            "msrp_local": {"aliases": ["msrp", "srp", "rrp", "new srp", "list_price"], "required": False},
+            "old_srp_local": {"aliases": ["old srp", "previous srp", "old rrp"], "required": False},
+            "dealer_price_evidence_local": {"aliases": ["dealer price"], "required": False},
+            "net_price_evidence_local": {"aliases": ["net price", "net"], "required": False},
+            "disti_cost_evidence_local": {"aliases": ["disti cost", "distributor cost"], "required": False},
+            "actual_dap_evidence_local": {"aliases": ["actual dap"], "required": False},
+            "dap_evidence_local": {"aliases": ["dap", "local dap"], "required": False},
+            "dealer_margin_pct_evidence": {"aliases": ["dealer margin", "retail margin"], "required": False},
+            "rebate_pct_evidence": {"aliases": ["rebate"], "required": False},
+            "distributor_margin_pct_evidence": {"aliases": ["disti margin", "distributor margin"], "required": False},
+            "import_tax_pct_evidence": {"aliases": ["import tax", "import duty", "duty"], "required": False},
+            "roe_evidence": {"aliases": ["roe", "rate of exchange", "exchange rate", "fx rate"], "required": False},
+            "vat_pct_evidence": {"aliases": ["vat", "tax_pct"], "required": False},
+            "promo_price_evidence_local": {"aliases": ["promo_price", "promo", "deal_price"], "required": False},
+        },
+    },
+    {
+        "slug": "bulk_lineup_backfill",
+        "display_name": "Bulk historical lineup backfill",
+        "description": (
+            "File-grain steward panel for historical lineup archive backfill. Multi-file upload, "
+            "layered period inference, per-sheet BU fan-out, supersession preview, and batch apply."
+        ),
+        "enabled": True,
+        "hidden": True,
+        "admin_only": False,
+        "requires_provider": False,
+        "pipeline_handler": "stub_noop",
+        "destructive_apply_requires_confirm": True,
+        "accepted_file_types": [".csv", ".xlsx", ".xlsm"],
+        "expected_columns": {},
+    },
+    {
         "slug": "customer_channel_mapping",
         "display_name": "Customer/channel mapping",
         "description": "Customer classification mapping import (intentionally deferred; not wired for apply yet).",
@@ -434,6 +494,18 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                 "aliases": ["Order No.", "Order No", "ORDER NO", "Order number", "order no.", "order no"],
                 "required": False,
             },
+            "customer_po": {
+                "aliases": [
+                    "Customer PO",
+                    "Cust PO",
+                    "Customer P/O",
+                    "Purchase Order",
+                    "PO No",
+                    "PO No.",
+                    "PO Number",
+                ],
+                "required": False,
+            },
             "order_line": {"aliases": ["Order Line", "order line"], "required": False},
             "delivery_no": {
                 "aliases": [
@@ -480,6 +552,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                 ],
                 "required": False,
             },
+            "crad_date": {"aliases": ["CRAD", "crad"], "required": False},
             "customer_dealer_token": {
                 "aliases": ["Customer Remarks", "Customer Remark", "CUSTOMER REMARKS", "customer remarks"],
                 "required": False,
@@ -514,9 +587,9 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     },
     {
         "slug": "promotion_plan",
-        "display_name": "Promotion plan",
-        "description": "Promo plan rows by SKU (pipeline scaffold).",
-        "enabled": True,
+        "display_name": "Promotion plan (legacy stub)",
+        "description": "Deprecated scaffold — use cpor_claim_evidence for settlement claims (U5).",
+        "enabled": False,
         "hidden": True,
         "admin_only": False,
         "requires_provider": True,
@@ -524,6 +597,28 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "destructive_apply_requires_confirm": False,
         "accepted_file_types": [".csv", ".xlsx"],
         "expected_columns": {"sku": {"aliases": ["item"], "required": True}},
+    },
+    {
+        "slug": "cpor_claim_evidence",
+        "display_name": "CPOR claim evidence",
+        "description": "Case-scoped settlement claim rows (product × date × units). Prefer case detail upload.",
+        "enabled": True,
+        "hidden": False,
+        "admin_only": True,
+        "requires_provider": False,
+        "pipeline_handler": "stub_noop",
+        "destructive_apply_requires_confirm": False,
+        "accepted_file_types": [".csv", ".xlsx"],
+        "expected_columns": {
+            "product_token": {
+                "aliases": ["sku", "item", "item_code", "model", "sales_model", "sales_model_name"],
+                "required": True,
+            },
+            "sale_date": {"aliases": ["date", "transaction_date", "invoice_date"], "required": True},
+            "units": {"aliases": ["qty", "quantity", "result_qty", "units_sold"], "required": True},
+            "unit_price": {"aliases": ["price", "unit_sell_price"], "required": False},
+            "ean": {"aliases": ["ean_code", "barcode"], "required": False},
+        },
     },
 ]
 
@@ -548,7 +643,20 @@ DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
         "planning_extract",
     ),
     ("promotion_plan_default", "Default promotion plan feed", "promotion_plan", "promo_extract"),
+    (
+        "cpor_claim_evidence_default",
+        "Default CPOR claim evidence feed",
+        "cpor_claim_evidence",
+        "settlement_extract",
+    ),
     ("current_lineup_system", "Current working lineup (Commercial Planner upload)", "current_lineup", "planning_extract"),
+    ("unified_lineup_system", "Unified lineup import (Import Centre, multi-file)", "unified_lineup", "planning_extract"),
+    (
+        "bulk_lineup_backfill_system",
+        "Bulk historical lineup backfill (Import Centre steward panel)",
+        "bulk_lineup_backfill",
+        "planning_extract",
+    ),
 ]
 
 

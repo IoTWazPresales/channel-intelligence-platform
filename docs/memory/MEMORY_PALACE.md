@@ -10,13 +10,15 @@
 | Order | File | Use for |
 |-------|------|---------|
 | 1 | **`docs/memory/CURRENT.md`** | Authoritative **now**: branch, DB target, topology, what works, blockers, next step |
-| 2 | **`AGENTS.md`** | Agent protocol, fix protocol, git/DB safety, ports |
-| 3 | **`.cursor/rules/branch-and-pr-lifecycle.mdc`** | When to merge PR / open new branch |
-| 4 | **`.cursor/rules/context-handover-discipline.mdc`** | When to recommend new chat |
-| 5 | **`.cursor/rules/Supply-Chain-Intelligence-Project-Rules.mdc`** | Domain architecture, DSI rules, gotchas, stop conditions |
-| 4 | **`.cursor/rules/engineering-rules.mdc`** | General engineering behaviour |
-| 5 | **`docs/BACKLOG.md`** | **Deferred only** — resume when TRIGGER fires or user waives |
-| 6 | **`docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md`** | Importer matrix before import/steward changes |
+| 2 | **`docs/memory/ROADMAP.md`** | Phased **what to do next** — all themes with **done vs open** (links BACKLOG IDs) |
+| 3 | **`AGENTS.md`** | Agent protocol, fix protocol, git/DB safety, ports |
+| 4 | **`.cursor/rules/branch-and-pr-lifecycle.mdc`** | When to merge PR / open new branch |
+| 5 | **`.cursor/rules/context-handover-discipline.mdc`** | When to recommend new chat |
+| 6 | **`.cursor/rules/Supply-Chain-Intelligence-Project-Rules.mdc`** | Domain architecture, DSI rules, gotchas, stop conditions |
+| 7 | **`.cursor/rules/engineering-rules.mdc`** | General engineering behaviour |
+| 8 | **`docs/BACKLOG.md`** | **Deferred detail** — full entries + TRIGGER (resume when ROADMAP row is Open) |
+| 9 | **`docs/WORKFLOW_DUAL_AGENT.md`** + skills `dual-agent-fable` / `cip-dual-agent-fable` | Cursor ↔ CLI Fable loop (CONSULT in-chat, VERIFY gate). Browser Claude retired for this loop. |
+| 10 | **`docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md`** | Importer matrix before import/steward changes |
 
 **Do not** read `docs/memory/CONTEXT-archive-*.md` unless you need historical detail.
 **Do not** scan old session handover docs for current state — check `CURRENT.md` first.
@@ -29,6 +31,7 @@
 |------|------|-------------|
 | **`docs/memory/CURRENT.md`** | Single source of truth for **current** state (~100 lines max) | End of every significant task |
 | **`CONTEXT.md`** | **Router + changelog** — points here; one-line entries per session | Append changelog line; do not grow unbounded blocks |
+| **`docs/memory/ROADMAP.md`** | Phased schedule — open work + done verification | When phases complete or priorities shift |
 | **`docs/BACKLOG.md`** | Intentionally **not done** + TRIGGER | Deferring work (see `deferral-discipline.mdc`) |
 | **`docs/memory/CONTEXT-archive-*.md`** | Frozen history | Never edit after creation |
 | **`docs/memory/derived/*.md`** | Stable architecture truth (async, runtime, data model) | When architecture changes — then bump `last_verified` in file |
@@ -79,5 +82,21 @@ Never silently pick the older block in an archive or a session handover.
 ## Topology reminder
 
 Before debugging **worker busy**, **queue timeout**, or **Celery inspect** issues, read
-**`docs/DEV_TOPOLOGY.md`**. Windows solo worker + remote Supabase is a **supported but
-degraded** dev mode — not production topology.
+**`docs/DEV_TOPOLOGY.md`**. Warren daily dev is **Mode B** (local `cip` since 2026-06-22).
+Windows solo worker + **remote** Supabase (Mode A) remains supported but **degraded** — not production topology.
+
+### Local dev preflights (2026-06-27)
+
+| Service | Script | What it does |
+|---------|--------|--------------|
+| API | `scripts/dev-api.js` | Kills stale process on :8001 if CIP API already listening |
+| Worker | `scripts/dev-worker.js` | Redis TCP check; **kills orphan Celery** (`app.worker.celery_app`) before spawn |
+
+Skip only when intentional: `CIP_SKIP_API_PORT_PREFLIGHT=1` · `CIP_SKIP_REDIS_PREFLIGHT=1` · `CIP_SKIP_WORKER_PREFLIGHT=1`.
+
+**Windows ops:** node wrappers for API/worker can exit after long runs or sleep/resume — restart `pnpm dev:api` / `pnpm dev:worker`. Worker changes require worker restart (uvicorn reload does not cover Celery).
+
+### Recently resolved (do not re-audit)
+
+- **BACKLOG-050** — DSI post-apply `staged_metadata` dual-writer deadlock → single-writer fix in `b2b81ea`.
+- **PvE NB 26Q2 shipped gap (2026-07-08)** — not a data bug: user compared in-plan shipped (11,465) to workbook POD Q2 (~16,493). Total in scope = 16,662; evidence POD Q2 NB = 16,493 exact. UI now surfaces **Total shipped (in scope)** tile + scope notes. Do not re-audit unless KPI definitions change.
