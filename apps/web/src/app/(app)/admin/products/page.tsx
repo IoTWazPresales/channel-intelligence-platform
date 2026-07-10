@@ -146,8 +146,6 @@ type ProductColumnField = (typeof ALL_PRODUCT_COLUMN_FIELDS)[number];
 
 /** ColDef `hide` on optional columns was resetting visibility when columnDefs refreshed. Defaults are applied once via column state in onGridReady instead. */
 const DEFAULT_INITIALLY_HIDDEN_FIELDS: readonly ProductColumnField[] = [
-  'part_number',
-  'sales_model_name',
   'model_name',
   'series_name',
   'product_line',

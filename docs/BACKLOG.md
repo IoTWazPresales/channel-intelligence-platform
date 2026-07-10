@@ -129,16 +129,33 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-02 |
+| **Status / parked** | **In progress on branch** `feat/backlog-061-entity-promote-in-place` · B1–B4 + BP1 (CSV bulk promote) shipped; Unit 2 mint deferred below |
 | **Effort** | Medium (API promote endpoint, admin UI, status taxonomy cleanup, distributor parity) |
 | **Source** | Read-only audits (2026-07-02): IC/lineup alias gap; provisional customer promote investigation (`dim_customer` 4,886 unverified `TMP-CUST-%`; distributors ~23 `TMP-DIST-%`). No promote-in-place exists — only merge (soft redirect) or ad-hoc PATCH without code reassignment. |
 | **Idea** | Governed **promote-in-place**: same `dim_customer` / `dim_distributor` id, flip `unverified` → verified master (`active` or canonical `verified`), assign real business code on the row, audit trail — distinct from merge-into-existing-master. |
 | **Why it matters / deferrable** | Stable ids + merge soft-redirect already protect fact integrity; deferral is safe for **data corruption** risk. Costs without promotion: duplicate provisional minting on code-keyed imports (`bulk` upsert mints new rows while old rows keep `TMP-*` codes), merge-survivor UX noise, operator confusion. `verified` status is **orphaned** (7 rows in DB, not in API `ALLOWED_CUSTOMER_STATUS`, gates nothing at runtime). |
-| **What the work is** | (1) **Design first** — decide what `verified` gates: stop provisional reuse, merge-survivor preference, reporting eligibility, import filters. (2) Customer promote API + admin action (code reassignment on same id, uniqueness checks). (3) Distributor parity (`TMP-DIST-%`, 23 rows). (4) Align API allow-list vs DB statuses; remove or formalize orphaned `verified`. (5) Document interaction with alias tables (no auto-repoint on promote — same id). |
+| **What the work is** | (1) **Design first** — decide what `verified` gates: stop provisional reuse, merge-survivor preference, reporting eligibility, import filters. (2) Customer promote API + admin action (code reassignment on same id, uniqueness checks). (3) Distributor parity (`TMP-DIST-%`, 23 rows). (4) Align API allow-list vs DB statuses; remove or formalize orphaned `verified`. (5) Document interaction with alias tables (no auto-repoint on promote — same id). (6) **BP1 done:** CSV/paste bulk promote. (7) **Unit 2:** per-tenant mint — see BACKLOG-061-U2. |
 | **Regression traps** | Do not break `merged_into_*` soft redirect; do not auto-create on promote; code uniqueness; bulk upsert-by-code must not silently duplicate when steward intended promote; lineup/shipment resolution must keep using aliases + dim codes regardless of status until gates are defined. |
 | **Behavior to retain** | Merge repoint (`customer_full_merge`, `customer_alias_scope_merge`); provisional reuse only for `unverified` + `TMP-*`; PATCH provisional-reuse warning (2026-07-02). |
 | **Out of scope** | Building promote in the IC/lineup alias pass; changing DSI resolution tier order. |
 | **TRIGGER** | Before **tagged-customer sell-through reporting** starts; **or** before **second-tenant onboarding** — whichever comes first. |
+
+---
+
+## BACKLOG-061-U2 — Per-tenant customer code mint convention
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-10 |
+| **Effort** | Medium (settings schema + mint service + bulk “mint for me” + ERP research) |
+| **Source** | Warren answers 2026-07-10 (consult bulk promote): codes may come from import **or** system mint; format is per-business (region/segment); do not hardcode one global format; CIP is multi-tenant. Fable Unit 1 deliberately ships CSV mapping only (no mint). |
+| **Idea** | Configurable per-tenant customer-code convention (research NetSuite/Dynamics/SAP-style auto-numbering), stored in app settings; bulk “mint for me” promote that assigns codes under that convention for code-less businesses (including Warren’s ~4,886 TMP backlog when no external codes exist). |
+| **Why it matters / deferrable** | Unit 1 CSV path clears tenants that already have ERP codes; Warren’s own tenant may clear few rows until mint exists. Deferrable until second-tenant onboarding or until steward needs to clear TMP backlog without an external code list. |
+| **What the work is** | (1) ERP numbering research note. (2) Settings table / alembic (first schema step). (3) Mint service + collision-safe sequence. (4) Bulk promote “mint” mode wired to BP1 batch endpoint. (5) Optional no-code disposition policy. |
+| **Regression traps** | Never invent a global hard-coded format; never auto-create dim_customer; FLAG≠BLOCK on collisions; partial success semantics from BP1. |
+| **Behavior to retain** | CSV/paste mapping path from BP1; single-row promote. |
+| **Out of scope** | Grid-shell extraction (Theme B); distributor batch (optional follow-on). |
+| **TRIGGER** | Steward needs to clear TMP-CUST backlog without an external code CSV; **or** second-tenant onboarding that requires mint; **or** Warren asks for Unit 2. |
 
 ---
 

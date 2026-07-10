@@ -92,6 +92,17 @@ class CustomerPromoteBody(BaseModel):
     note: str | None = Field(default=None, max_length=512)
 
 
+class CustomerBulkPromoteRow(BaseModel):
+    tmp_code: str = Field(min_length=0, max_length=64)
+    new_code: str = Field(default="", max_length=64)
+    note: str | None = Field(default=None, max_length=512)
+
+
+class CustomerBulkPromoteBody(BaseModel):
+    rows: list[CustomerBulkPromoteRow]
+    dry_run: bool = True
+
+
 class CustomerLocationCreate(BaseModel):
     location_code: str = Field(min_length=1, max_length=64)
     location_name: str = Field(min_length=1, max_length=256)
@@ -874,6 +885,40 @@ async def patch_customer(customer_id: int, body: CustomerPatch, db: AsyncSession
     if status_warning:
         payload["warnings"] = [status_warning]
     return payload
+
+
+@router.post("/promote/batch")
+async def promote_customers_batch(
+    body: CustomerBulkPromoteBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """BACKLOG-061 BP1 — bulk promote via tmp_code→new_code mapping (CSV/paste).
+
+    ``dry_run=true``: preview only. ``dry_run=false``: apply ready rows with partial
+    success (per-row commit). Cap 500. No mint path. Never auto-creates dim_customer.
+    """
+    from app.services.customer_bulk_promote import BATCH_MAX_ROWS, run_customer_bulk_promote
+    from app.services.customer_promote import CustomerPromoteError
+
+    if len(body.rows) > BATCH_MAX_ROWS:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": f"Too many rows (max {BATCH_MAX_ROWS})",
+                "code": "batch_too_large",
+            },
+        )
+    try:
+        return await run_customer_bulk_promote(
+            db,
+            rows=[r.model_dump() for r in body.rows],
+            dry_run=body.dry_run,
+        )
+    except CustomerPromoteError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": exc.message, "code": exc.code},
+        ) from exc
 
 
 @router.post("/{customer_id}/promote")

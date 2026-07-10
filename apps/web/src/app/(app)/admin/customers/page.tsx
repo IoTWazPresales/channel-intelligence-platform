@@ -47,6 +47,7 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { CustomerCommercialTermsPanel } from '@/features/admin/CustomerCommercialTermsPanel';
+import { CustomerBulkPromoteDialog } from '@/features/admin/CustomerBulkPromoteDialog';
 import {
   CustomerPromoteDialog,
   customerPromoteActionVisible,
@@ -237,6 +238,7 @@ function AdminCustomersPageContent() {
   const [paste, setPaste] = useState('');
   const [selectedRow, setSelectedRow] = useState<CustomerRow | null>(null);
   const [promoteTarget, setPromoteTarget] = useState<CustomerRow | null>(null);
+  const [bulkPromoteOpen, setBulkPromoteOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateCustomerBody>({
     customer_code: '',
     customer_name: '',
@@ -1011,6 +1013,9 @@ function AdminCustomersPageContent() {
         >
           Import customer master
         </Button>
+        <Button variant="outlined" onClick={() => setBulkPromoteOpen(true)} data-testid="bulk-promote-open">
+          Bulk promote…
+        </Button>
         <Button variant="contained" onClick={() => setUploadOpen(true)}>
           Quick paste CSV (legacy)
         </Button>
@@ -1542,6 +1547,13 @@ function AdminCustomersPageContent() {
         }
         onClose={() => {
           setPromoteTarget(null);
+          void qc.invalidateQueries({ queryKey: ['admin-customers'] });
+        }}
+      />
+      <CustomerBulkPromoteDialog
+        open={bulkPromoteOpen}
+        onClose={() => {
+          setBulkPromoteOpen(false);
           void qc.invalidateQueries({ queryKey: ['admin-customers'] });
         }}
       />
