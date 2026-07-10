@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-10 — **Dual-agent skill + handover:** personal `dual-agent-fable` (CONSULT/IMPLEMENT/VERIFY; interviews in Cursor via CLI Fable, not browser); CIP skill `cip-dual-agent-fable`; WORKFLOW overlay updated. Next chat: BACKLOG-061-U2 mint. Branch `feat/backlog-061-entity-promote-in-place` @ `7ef261c`.
 - 2026-07-10 — **BACKLOG-061 BP1:** `POST /customers/promote/batch` (CSV/paste tmp→code, cap 500, partial success); `CustomerBulkPromoteDialog` on Master Data customers; Products default-visible `part_number` + `sales_model_name`. No mint (→ BACKLOG-061-U2). No alembic. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-09 — **CPOR U6 (scaffold readers):** park promotions plans/readiness; rankings→cpor_case_line; product_usage + CPOR check; stop FactPromotionPlan seed; DSI `_has_cpor_data` wired to cpor_case; legacy cpor_xlsx documented. No schema. Branch `feat/cpor-unit-6-scaffold-readers` off `a5cca19`. Spec untouched. Tests green; no cip writes. **0069 still unapplied.**
 - 2026-07-09 — **LC-U1 (Listing Capture v0):** migration `20260709_0069` (customer_listing + listing_observation) **authored, NOT applied to cip**; registry API + CSV + feed-proposal confirm; observation compress/parse/reparse (mocked HTTP); beat gated no-op; `/listing-capture` page. Branch `feat/lc-unit-1-listing-capture` off `c593677`. Spec untouched. 10 tests green; no cip writes.

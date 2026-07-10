@@ -17,7 +17,7 @@
 | 6 | **`.cursor/rules/Supply-Chain-Intelligence-Project-Rules.mdc`** | Domain architecture, DSI rules, gotchas, stop conditions |
 | 7 | **`.cursor/rules/engineering-rules.mdc`** | General engineering behaviour |
 | 8 | **`docs/BACKLOG.md`** | **Deferred detail** — full entries + TRIGGER (resume when ROADMAP row is Open) |
-| 9 | **`docs/WORKFLOW_DUAL_AGENT.md`** | Cursor ↔ Fable dual-agent loop (sync pin, optional interview, verify gate) |
+| 9 | **`docs/WORKFLOW_DUAL_AGENT.md`** + skills `dual-agent-fable` / `cip-dual-agent-fable` | Cursor ↔ CLI Fable loop (CONSULT in-chat, VERIFY gate). Browser Claude retired for this loop. |
 | 10 | **`docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md`** | Importer matrix before import/steward changes |
 
 **Do not** read `docs/memory/CONTEXT-archive-*.md` unless you need historical detail.
