@@ -104,6 +104,13 @@ class CustomerBulkPromoteBody(BaseModel):
     mode: Literal["map", "mint"] = "map"
 
 
+class CustomerDispositionBatchBody(BaseModel):
+    customer_ids: list[int]
+    disposition: Literal["parked", "excluded", "clear"]
+    note: str | None = Field(default=None, max_length=512)
+    dry_run: bool = True
+
+
 class CustomerLocationCreate(BaseModel):
     location_code: str = Field(min_length=1, max_length=64)
     location_name: str = Field(min_length=1, max_length=256)
@@ -253,6 +260,10 @@ async def list_customers(
         default=None,
         description="When true, only key-account customers; when false, only non-key; omit for all",
     ),
+    disposition: str | None = Query(
+        default=None,
+        description="Filter no_code_disposition: parked|excluded|set|unset",
+    ),
     sort_by: str = Query(default="code"),
     sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
 ):
@@ -379,6 +390,21 @@ async def list_customers(
     if is_key_account is not None:
         filters.append(DimCustomer.is_key_account.is_(bool(is_key_account)))
 
+    disp = (disposition or "").strip().lower()
+    if disp == "parked":
+        filters.append(DimCustomer.no_code_disposition == "parked")
+    elif disp == "excluded":
+        filters.append(DimCustomer.no_code_disposition == "excluded")
+    elif disp == "set":
+        filters.append(DimCustomer.no_code_disposition.is_not(None))
+    elif disp == "unset":
+        filters.append(DimCustomer.no_code_disposition.is_(None))
+    elif disp:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "Invalid disposition filter", "code": "invalid_disposition_filter"},
+        )
+
     if filters:
         base = base.where(and_(*filters))
 
@@ -417,6 +443,7 @@ async def list_customers(
                 "customer_code": c.code,
                 "customer_name": c.name,
                 "customer_status": c.customer_status,
+                "no_code_disposition": c.no_code_disposition,
                 "is_key_account": bool(c.is_key_account),
                 "created_at": c.created_at.isoformat() if c.created_at is not None else None,
                 "updated_at": c.updated_at.isoformat() if c.updated_at is not None else None,
@@ -886,6 +913,33 @@ async def patch_customer(customer_id: int, body: CustomerPatch, db: AsyncSession
     if status_warning:
         payload["warnings"] = [status_warning]
     return payload
+
+
+@router.post("/disposition/batch")
+async def disposition_customers_batch(
+    body: CustomerDispositionBatchBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """BACKLOG-061-U3 — park/exclude/clear no_code_disposition on TMP-CUST rows.
+
+    Never mutates customer_status. Cap 500. Never auto-creates dim_customer.
+    """
+    from app.services.customer_disposition import run_customer_disposition_batch
+    from app.services.customer_promote import CustomerPromoteError
+
+    try:
+        return await run_customer_disposition_batch(
+            db,
+            customer_ids=list(body.customer_ids),
+            disposition=body.disposition,
+            note=body.note,
+            dry_run=body.dry_run,
+        )
+    except CustomerPromoteError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": exc.message, "code": exc.code},
+        ) from exc
 
 
 @router.post("/promote/batch")

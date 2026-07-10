@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-10 — **Alembic 0070 on cip (Warren approved):** `customer_code_mint_setting` seeded (default/CUST/pad6/next_seq=1). U2b mint live-ready; soak is Human-owned. Next: deferred disposition + Theme B + distributor batch. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U2b Fable PASS (`66003db`):** Candidate A mint verified; next = Warren applies `20260710_0070` on cip, then optional dry-run mint smoke. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U2b (Candidate A mint):** migration `20260710_0070` authored (NOT applied); mint allocator + `promote/batch` mode=mint; UI mint+chunking. Tests 18 API + 4 vitest green. Fable VERIFY blocked on CLI session limit (~12:40 SAST). Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U2a Fable PASS (`198507e`):** research note PASS; next = Warren picks A/B/C (rec A `CUST-######`) then U2b. Branch `feat/backlog-061-entity-promote-in-place`.

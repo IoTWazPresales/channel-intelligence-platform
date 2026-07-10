@@ -36,6 +36,8 @@ class DimDistributor(Base, TimestampMixin):
         index=True,
     )
     merge_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # BACKLOG-061-U3 — column authored with customers; distributor wiring is a later unit
+    no_code_disposition: Mapped[str | None] = mapped_column(String(16), nullable=True)
     merged_into: Mapped["DimDistributor | None"] = relationship(
         remote_side="DimDistributor.id",
         foreign_keys=[merged_into_distributor_id],
@@ -93,6 +95,8 @@ class DimCustomer(Base, TimestampMixin):
     merged_into_customer_id: Mapped[int | None] = mapped_column(
         ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True, index=False
     )
+    # BACKLOG-061-U3 — park/exclude without changing customer_status (reuse depends on unverified)
+    no_code_disposition: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     region: Mapped["DimRegion | None"] = relationship()
     merged_into_customer: Mapped["DimCustomer | None"] = relationship(

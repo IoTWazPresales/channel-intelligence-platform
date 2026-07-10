@@ -93,6 +93,10 @@ def _eligibility(row: DimCustomer) -> dict[str, Any]:
     if _is_tmp_customer_code(code) and not merged and status not in ("unverified", "active"):
         reasons.append(f"status_not_eligible:{status or 'blank'}")
 
+    disp = (getattr(row, "no_code_disposition", None) or "").strip().lower()
+    if disp:
+        reasons.append(f"disposition_{disp}")
+
     eligible = not reasons and _is_tmp_customer_code(code) and not merged and status in (
         "unverified",
         "active",

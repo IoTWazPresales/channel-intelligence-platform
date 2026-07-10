@@ -48,6 +48,7 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { CustomerCommercialTermsPanel } from '@/features/admin/CustomerCommercialTermsPanel';
 import { CustomerBulkPromoteDialog } from '@/features/admin/CustomerBulkPromoteDialog';
+import { CustomerDispositionDialog } from '@/features/admin/CustomerDispositionDialog';
 import {
   CustomerPromoteDialog,
   customerPromoteActionVisible,
@@ -61,6 +62,7 @@ type CustomerRow = {
   customer_code: string;
   customer_name: string;
   customer_status: string;
+  no_code_disposition?: string | null;
   partner_tier: string | null;
   account_owner_internal: string | null;
   notes_summary: string | null;
@@ -239,6 +241,7 @@ function AdminCustomersPageContent() {
   const [selectedRow, setSelectedRow] = useState<CustomerRow | null>(null);
   const [promoteTarget, setPromoteTarget] = useState<CustomerRow | null>(null);
   const [bulkPromoteOpen, setBulkPromoteOpen] = useState(false);
+  const [dispositionOpen, setDispositionOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateCustomerBody>({
     customer_code: '',
     customer_name: '',
@@ -287,6 +290,7 @@ function AdminCustomersPageContent() {
   const pageSize = Number(searchParams.get('page_size') || `${DEFAULT_PAGE_SIZE}`) || DEFAULT_PAGE_SIZE;
   const q = searchParams.get('q') ?? '';
   const customerStatusFilter = searchParams.get('customer_status') ?? '';
+  const dispositionFilter = searchParams.get('disposition') ?? '';
   const partnerTierFilter = searchParams.get('partner_tier') ?? '';
   const regionCodeFilter = searchParams.get('region_code') ?? '';
   const channelCodeFilter = searchParams.get('channel_code') ?? '';
@@ -340,6 +344,7 @@ function AdminCustomersPageContent() {
       pageSize,
       q,
       customerStatusFilter,
+      dispositionFilter,
       partnerTierFilter,
       regionCodeFilter,
       channelCodeFilter,
@@ -357,6 +362,7 @@ function AdminCustomersPageContent() {
       sp.set('sort_dir', sortDir);
       if (q.trim()) sp.set('q', q.trim());
       if (customerStatusFilter) sp.set('customer_status', customerStatusFilter);
+      if (dispositionFilter) sp.set('disposition', dispositionFilter);
       if (partnerTierFilter) sp.set('partner_tier', partnerTierFilter);
       if (regionCodeFilter) sp.set('region_code', regionCodeFilter);
       if (channelCodeFilter) sp.set('channel_code', channelCodeFilter);
@@ -620,6 +626,18 @@ function AdminCustomersPageContent() {
         editable: true,
         cellEditor: 'agSelectCellEditor',
         cellEditorParams: { values: STATUS_OPTIONS.filter(Boolean) },
+      },
+      {
+        field: 'no_code_disposition',
+        headerName: 'Disposition',
+        minWidth: 120,
+        editable: false,
+        cellRenderer: (p: { value?: string | null }) => {
+          const v = (p.value || '').toLowerCase();
+          if (v === 'parked') return <Chip size="small" label="Parked" />;
+          if (v === 'excluded') return <Chip size="small" color="warning" label="Excluded" />;
+          return '';
+        },
       },
       {
         field: 'partner_tier',
@@ -896,6 +914,11 @@ function AdminCustomersPageContent() {
       .map((r) => ({ tmp_code: String(r.customer_code), name: r.customer_name }));
   }, [gridApi, bulkSelectionMode, bulkSelectedCount]);
 
+  const dispositionCustomerIds = useMemo(() => {
+    if (!gridApi || bulkSelectionMode !== 'selecting') return [] as number[];
+    return (gridApi.getSelectedRows() as CustomerRow[]).map((r) => r.id);
+  }, [gridApi, bulkSelectionMode, bulkSelectedCount]);
+
   const closeCustomerBulkDeleteDialog = useCallback(() => {
     if (bulkDeleteBusy) return;
     setBulkDeleteOpen(false);
@@ -1023,6 +1046,14 @@ function AdminCustomersPageContent() {
         <Button variant="outlined" onClick={() => setBulkPromoteOpen(true)} data-testid="bulk-promote-open">
           Bulk promote…
         </Button>
+        <Button
+          variant="outlined"
+          disabled={bulkSelectionMode !== 'selecting' || bulkSelectedCount === 0}
+          onClick={() => setDispositionOpen(true)}
+          data-testid="disposition-open"
+        >
+          Park / Exclude…
+        </Button>
         <Button variant="contained" onClick={() => setUploadOpen(true)}>
           Quick paste CSV (legacy)
         </Button>
@@ -1095,6 +1126,21 @@ function AdminCustomersPageContent() {
                   {s}
                 </MenuItem>
               ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Disposition</InputLabel>
+            <Select
+              label="Disposition"
+              value={dispositionFilter}
+              onChange={(e) => setParamState({ disposition: String(e.target.value || '') }, true)}
+              data-testid="disposition-filter"
+            >
+              <MenuItem value="">Any</MenuItem>
+              <MenuItem value="parked">Parked</MenuItem>
+              <MenuItem value="excluded">Excluded</MenuItem>
+              <MenuItem value="unset">None</MenuItem>
+              <MenuItem value="set">Any set</MenuItem>
             </Select>
           </FormControl>
           <FormControl size="small" sx={{ minWidth: 140 }}>
@@ -1562,6 +1608,14 @@ function AdminCustomersPageContent() {
         mintCandidates={bulkMintCandidates}
         onClose={() => {
           setBulkPromoteOpen(false);
+          void qc.invalidateQueries({ queryKey: ['admin-customers'] });
+        }}
+      />
+      <CustomerDispositionDialog
+        open={dispositionOpen}
+        customerIds={dispositionCustomerIds}
+        onClose={() => {
+          setDispositionOpen(false);
           void qc.invalidateQueries({ queryKey: ['admin-customers'] });
         }}
       />

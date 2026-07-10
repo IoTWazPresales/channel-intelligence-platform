@@ -168,6 +168,12 @@ async def run_customer_bulk_promote(
         r["customer_id"] = int(row.id)
 
         if mode == "mint":
+            disp = (getattr(row, "no_code_disposition", None) or "").strip().lower()
+            if disp:
+                r["status"] = "blocked"
+                r["reasons"].append(f"disposition_{disp}")
+                r["outcome"] = "blocked"
+                continue
             try:
                 minted, used_seq = await mint_next_customer_code(
                     db,
