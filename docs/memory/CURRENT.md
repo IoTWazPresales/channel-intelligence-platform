@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/backlog-061-entity-promote-in-place` |
-| **HEAD** | (see git after U2b commit) |
+| **HEAD** | `66003db` (U2b pushed; Fable VERIFY pending) |
 | **PR** | Not opened yet |
 | **Alembic (DB)** | **`20260709_0069`** on cip — **0070 authored, NOT applied** |
 
