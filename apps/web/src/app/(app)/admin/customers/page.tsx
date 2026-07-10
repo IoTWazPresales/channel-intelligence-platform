@@ -47,6 +47,10 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { CustomerCommercialTermsPanel } from '@/features/admin/CustomerCommercialTermsPanel';
+import {
+  CustomerPromoteDialog,
+  customerPromoteActionVisible,
+} from '@/features/admin/CustomerPromoteDialog';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -232,6 +236,7 @@ function AdminCustomersPageContent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [paste, setPaste] = useState('');
   const [selectedRow, setSelectedRow] = useState<CustomerRow | null>(null);
+  const [promoteTarget, setPromoteTarget] = useState<CustomerRow | null>(null);
   const [createForm, setCreateForm] = useState<CreateCustomerBody>({
     customer_code: '',
     customer_name: '',
@@ -731,16 +736,29 @@ function AdminCustomersPageContent() {
       {
         headerName: 'Details',
         colId: '__detail',
-        width: 90,
-        maxWidth: 100,
+        width: 160,
+        maxWidth: 180,
         pinned: 'right',
         sortable: false,
         filter: false,
         resizable: false,
         cellRenderer: (p: { data: CustomerRow }) => (
-          <Button size="small" variant="text" onClick={() => setSelectedRow(p.data)}>
-            Open
-          </Button>
+          <Stack direction="row" spacing={0.5}>
+            <Button size="small" variant="text" onClick={() => setSelectedRow(p.data)}>
+              Open
+            </Button>
+            {customerPromoteActionVisible(p.data) ? (
+              <Button
+                size="small"
+                variant="text"
+                color="primary"
+                data-testid="pmg-promote-row"
+                onClick={() => setPromoteTarget(p.data)}
+              >
+                Promote
+              </Button>
+            ) : null}
+          </Stack>
         ),
       },
       gridDeleteColumn<CustomerRow>((id) => void delCustomer.mutate(id), { busy: delCustomer.isPending }),
@@ -1510,6 +1528,24 @@ function AdminCustomersPageContent() {
           </Button>
         </DialogActions>
       </Dialog>
+      </Drawer>
+      <CustomerPromoteDialog
+        open={Boolean(promoteTarget)}
+        customer={
+          promoteTarget
+            ? {
+                id: promoteTarget.id,
+                customer_code: promoteTarget.customer_code,
+                customer_name: promoteTarget.customer_name,
+                customer_status: promoteTarget.customer_status,
+              }
+            : null
+        }
+        onClose={() => {
+          setPromoteTarget(null);
+          void qc.invalidateQueries({ queryKey: ['admin-customers'] });
+        }}
+      />
       <Drawer
         anchor="right"
         open={Boolean(selectedRow)}
@@ -1559,6 +1595,16 @@ function AdminCustomersPageContent() {
               <Typography variant="body2">
                 <strong>Notes:</strong> {selectedRow.notes_summary ?? '—'}
               </Typography>
+              {customerPromoteActionVisible(selectedRow) ? (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  data-testid="pmg-promote-drawer"
+                  onClick={() => setPromoteTarget(selectedRow)}
+                >
+                  Promote provisional code…
+                </Button>
+              ) : null}
               <Divider sx={{ my: 1 }} />
               <CustomerCommercialTermsPanel customerId={selectedRow.id} customerCode={selectedRow.customer_code} />
               <Typography variant="subtitle2" sx={{ pt: 1 }}>

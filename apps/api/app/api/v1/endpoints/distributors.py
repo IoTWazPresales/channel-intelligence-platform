@@ -585,6 +585,43 @@ async def patch_distributor(
     }
 
 
+class DistributorPromoteBody(BaseModel):
+    new_code: str = Field(min_length=1, max_length=64)
+    confirm: bool = False
+    note: str | None = Field(default=None, max_length=512)
+
+
+@router.post("/{distributor_id}/promote")
+async def promote_distributor(
+    distributor_id: int,
+    body: DistributorPromoteBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """BACKLOG-061 B3 — promote-in-place for TMP-DIST rows."""
+    from app.services.distributor_promote import (
+        DistributorPromoteError,
+        confirm_distributor_promote,
+        preview_distributor_promote,
+    )
+
+    try:
+        if not body.confirm:
+            return await preview_distributor_promote(
+                db, distributor_id=distributor_id, new_code=body.new_code
+            )
+        return await confirm_distributor_promote(
+            db,
+            distributor_id=distributor_id,
+            new_code=body.new_code,
+            note=body.note,
+        )
+    except DistributorPromoteError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": exc.message, "code": exc.code},
+        ) from exc
+
+
 async def _distributor_references_bundle(db: AsyncSession, distributor_id: int) -> dict:
     row = await db.get(DimDistributor, distributor_id)
     if not row:

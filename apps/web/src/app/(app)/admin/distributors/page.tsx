@@ -40,6 +40,10 @@ import { Suspense, type ReactNode, useCallback, useEffect, useMemo, useState } f
 
 import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 import {
+  DistributorPromoteDialog,
+  distributorPromoteActionVisible,
+} from '@/features/admin/DistributorPromoteDialog';
+import {
   MasterBulkDeleteImpactDialog,
   type MasterBulkDeletePreview,
 } from '@/components/bulkTable/MasterBulkDeleteImpactDialog';
@@ -199,6 +203,7 @@ function AdminDistributorsPageContent() {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [drawerRow, setDrawerRow] = useState<DistributorRow | null>(null);
+  const [promoteTarget, setPromoteTarget] = useState<DistributorRow | null>(null);
   const [locationDraft, setLocationDraft] = useState({
     location_code: '',
     location_name: '',
@@ -607,13 +612,20 @@ function AdminDistributorsPageContent() {
       {
         headerName: 'Details',
         colId: '__detail',
-        minWidth: 110,
+        minWidth: 160,
         editable: false,
         cellRenderer: ({ data }: { data: DistributorRow }) =>
           data ? (
-            <Button size="small" onClick={() => setDrawerRow(data)}>
-              Open
-            </Button>
+            <Stack direction="row" spacing={0.5}>
+              <Button size="small" onClick={() => setDrawerRow(data)}>
+                Open
+              </Button>
+              {distributorPromoteActionVisible(data) ? (
+                <Button size="small" color="primary" onClick={() => setPromoteTarget(data)}>
+                  Promote
+                </Button>
+              ) : null}
+            </Stack>
           ) : null,
       },
       gridDeleteColumn<DistributorRow>((id) => void delDist.mutate(id), { busy: delDist.isPending }),
@@ -1281,6 +1293,11 @@ function AdminDistributorsPageContent() {
                 <Typography variant="body2">
                   <strong>Contacts:</strong> {drawerRow.contact_count ?? distributorContacts?.length ?? 0}
                 </Typography>
+                {distributorPromoteActionVisible(drawerRow) ? (
+                  <Button size="small" variant="outlined" onClick={() => setPromoteTarget(drawerRow)}>
+                    Promote provisional code…
+                  </Button>
+                ) : null}
               </Paper>
               <Paper variant="outlined" sx={{ p: 1.25 }}>
                 <Typography variant="subtitle2">Linkage health</Typography>
@@ -1629,6 +1646,22 @@ function AdminDistributorsPageContent() {
           ) : null}
         </Box>
       </Drawer>
+      <DistributorPromoteDialog
+        open={Boolean(promoteTarget)}
+        distributor={
+          promoteTarget
+            ? {
+                id: promoteTarget.id,
+                distributor_code: promoteTarget.distributor_code,
+                distributor_name: promoteTarget.distributor_name,
+              }
+            : null
+        }
+        onClose={() => {
+          setPromoteTarget(null);
+          void qc.invalidateQueries({ queryKey: ['admin-distributors'] });
+        }}
+      />
       <MasterBulkDeleteImpactDialog
         open={bulkDeleteOpen}
         busy={bulkDeleteBusy}
