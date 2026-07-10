@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-10 — **BACKLOG-061 Theme B complete — PR #7 open (`dd98683`):** U-B3b PASS; distributor bulk promote + disposition UI live; ready to merge when Warren says. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U-B3b Fable PASS (`fc7b6c4`):** distributor bulk promote + disposition UI; Theme B queue empty; ready for PR. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U-B3b (uncommitted):** DistributorBulkPromoteDialog + DispositionDialog on admin/distributors; disposition column/filter; vitest 11/11. Next: commit + Fable VERIFY. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U-B3a Fable PASS (`66ae66d`) + 0072 on cip:** distributor promote/batch (map+mint), disposition/batch, list disposition filter. Next: U-B3b UI. Branch `feat/backlog-061-entity-promote-in-place`.
