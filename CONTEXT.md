@@ -17,7 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-07-10 — **BACKLOG-061-U-B3a + 0072 on cip:** distributor promote/batch (map+mint), disposition/batch, list disposition filter; `distributor_code_mint_setting` seeded DIST/pad6/next_seq=1. 25 API tests green. Next: Fable VERIFY then U-B3b UI. Branch `feat/backlog-061-entity-promote-in-place`.
+- 2026-07-10 — **BACKLOG-061-U-B3b (uncommitted):** DistributorBulkPromoteDialog + DispositionDialog on admin/distributors; disposition column/filter; vitest 11/11. Next: commit + Fable VERIFY. Branch `feat/backlog-061-entity-promote-in-place`.
+- 2026-07-10 — **BACKLOG-061-U-B3a Fable PASS (`66ae66d`) + 0072 on cip:** distributor promote/batch (map+mint), disposition/batch, list disposition filter. Next: U-B3b UI. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U-B2 distributors half (uncommitted):** `admin/distributors` master tab → `MasterDataGridShell` (transitional sell-out/inbound tabs unchanged); vitest 6/6 green. Next: Fable VERIFY U-B2. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U-B2 products half (uncommitted):** `admin/products` → `MasterDataGridShell` (specs via `columnPickerExtraGroups`); vitest 15/15 green. Next: distributors shell. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U-B2 Fable PASS (`c54c32f`):** products + distributor master on MasterDataGridShell; next U-B3 dist bulk promote + disposition. Branch `feat/backlog-061-entity-promote-in-place`.

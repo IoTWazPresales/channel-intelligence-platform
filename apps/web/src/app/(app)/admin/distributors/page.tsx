@@ -29,6 +29,8 @@ import Link from 'next/link';
 import { Suspense, type ReactNode, useCallback, useMemo, useState } from 'react';
 
 import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
+import { DistributorBulkPromoteDialog } from '@/features/admin/DistributorBulkPromoteDialog';
+import { DistributorDispositionDialog } from '@/features/admin/DistributorDispositionDialog';
 import {
   DistributorPromoteDialog,
   distributorPromoteActionVisible,
@@ -51,6 +53,7 @@ type DistributorRow = {
   id: number;
   distributor_code: string;
   distributor_name: string;
+  no_code_disposition?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   linked_sellout_rows: number;
@@ -146,6 +149,7 @@ const ALL_DISTRIBUTOR_MASTER_COLUMN_FIELDS = [
   'id',
   'distributor_code',
   'distributor_name',
+  'no_code_disposition',
   'created_at',
   'updated_at',
   'location_count',
@@ -175,7 +179,10 @@ const DEFAULT_INITIALLY_HIDDEN_DISTRIBUTOR_FIELDS: readonly DistributorMasterCol
 ];
 
 const STATIC_DISTRIBUTOR_MASTER_COLUMN_GROUPS: { label: string; fields: DistributorMasterColumnField[] }[] = [
-  { label: 'dim_distributor', fields: ['id', 'distributor_code', 'distributor_name', 'created_at', 'updated_at'] },
+  {
+    label: 'dim_distributor',
+    fields: ['id', 'distributor_code', 'distributor_name', 'no_code_disposition', 'created_at', 'updated_at'],
+  },
   { label: 'Related counts', fields: ['location_count', 'contact_count'] },
   { label: 'Import & alias linkage', fields: ['alias_count', 'last_import_at', 'alias_link_status'] },
   { label: 'Fact linkage', fields: ['linkage_status', 'linked_sellout_rows', 'linked_inbound_rows'] },
@@ -224,6 +231,9 @@ function AdminDistributorsPageContent() {
   const [bulkDeletePreview, setBulkDeletePreview] = useState<MasterBulkDeletePreview | null>(null);
   const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
   const [bulkDeleteAck, setBulkDeleteAck] = useState(false);
+  const [bulkSelectedCount, setBulkSelectedCount] = useState(0);
+  const [bulkPromoteOpen, setBulkPromoteOpen] = useState(false);
+  const [dispositionOpen, setDispositionOpen] = useState(false);
 
   const page = Number(searchParams.get('page') || '1') || 1;
   const pageSize = Number(searchParams.get('page_size') || `${DEFAULT_PAGE_SIZE}`) || DEFAULT_PAGE_SIZE;
@@ -233,6 +243,7 @@ function AdminDistributorsPageContent() {
   const linkageFilter = searchParams.get('linkage_status') ?? '';
   const minAliasCountFilter = searchParams.get('min_alias_count') ?? '';
   const aliasLinkFilter = searchParams.get('alias_link') ?? '';
+  const dispositionFilter = searchParams.get('disposition') ?? '';
 
   const setParamState = useCallback(
     (changes: Record<string, string | null>, resetPage = false) => {
@@ -254,7 +265,18 @@ function AdminDistributorsPageContent() {
     error: distErr,
     refetch: refetchDist,
   } = useQuery({
-    queryKey: ['admin-distributors', page, pageSize, q, sortBy, sortDir, linkageFilter, minAliasCountFilter, aliasLinkFilter],
+    queryKey: [
+      'admin-distributors',
+      page,
+      pageSize,
+      q,
+      sortBy,
+      sortDir,
+      linkageFilter,
+      minAliasCountFilter,
+      aliasLinkFilter,
+      dispositionFilter,
+    ],
     queryFn: ({ signal }) => {
       const sp = new URLSearchParams();
       sp.set('page', String(page));
@@ -267,6 +289,7 @@ function AdminDistributorsPageContent() {
       if (mac !== '' && Number.isFinite(Number(mac))) sp.set('min_alias_count', String(Number(mac)));
       const al = aliasLinkFilter.trim().toLowerCase();
       if (al === 'linked' || al === 'unlinked') sp.set('alias_link', al);
+      if (dispositionFilter) sp.set('disposition', dispositionFilter);
       return apiGet<DistributorListResponse>(`/api/v1/distributors?${sp.toString()}`, { signal });
     },
   });
@@ -530,6 +553,18 @@ function AdminDistributorsPageContent() {
       },
       { field: 'distributor_name', headerName: 'Canonical name', flex: 1, minWidth: 220, editable: true },
       {
+        field: 'no_code_disposition',
+        headerName: 'Disposition',
+        minWidth: 120,
+        editable: false,
+        cellRenderer: (p: { value?: string | null }) => {
+          const v = (p.value || '').toLowerCase();
+          if (v === 'parked') return <Chip size="small" label="Parked" />;
+          if (v === 'excluded') return <Chip size="small" color="warning" label="Excluded" />;
+          return '';
+        },
+      },
+      {
         field: 'created_at',
         headerName: 'Created',
         minWidth: 160,
@@ -655,6 +690,18 @@ function AdminDistributorsPageContent() {
     setBulkDeleteOpen(false);
     setBulkDeletePreview(null);
   }, [bulkDeleteBusy]);
+
+  const bulkMintCandidates = useMemo(() => {
+    if (!distGridApi || bulkSelectionMode !== 'selecting') return [] as { tmp_code: string; name?: string }[];
+    return (distGridApi.getSelectedRows() as DistributorRow[])
+      .filter((r) => String(r.distributor_code || '').toUpperCase().startsWith('TMP-DIST-'))
+      .map((r) => ({ tmp_code: String(r.distributor_code), name: r.distributor_name }));
+  }, [distGridApi, bulkSelectionMode, bulkSelectedCount]);
+
+  const dispositionDistributorIds = useMemo(() => {
+    if (!distGridApi || bulkSelectionMode !== 'selecting') return [] as number[];
+    return (distGridApi.getSelectedRows() as DistributorRow[]).map((r) => r.id);
+  }, [distGridApi, bulkSelectionMode, bulkSelectedCount]);
 
   const confirmDistributorBulkDelete = useCallback(async () => {
     if (!bulkDeletePreview) return;
@@ -824,6 +871,7 @@ function AdminDistributorsPageContent() {
           onGridApiChange={setDistGridApi}
           bulkSelectionMode={bulkSelectionMode}
           onBulkSelectionModeChange={setBulkSelectionMode}
+          onBulkSelectedCountChange={setBulkSelectedCount}
           onPreviewBulkDelete={() => void openDistributorBulkDeletePreview()}
           previewBulkDeleteDisabled={bulkDeleteBusy}
           bulkBusy={bulkDeleteBusy}
@@ -844,6 +892,17 @@ function AdminDistributorsPageContent() {
                   Import distributor inventory
                 </Button>
               ) : null}
+              <Button variant="outlined" onClick={() => setBulkPromoteOpen(true)} data-testid="bulk-promote-open">
+                Bulk promote…
+              </Button>
+              <Button
+                variant="outlined"
+                disabled={bulkSelectionMode !== 'selecting' || bulkSelectedCount === 0}
+                onClick={() => setDispositionOpen(true)}
+                data-testid="disposition-open"
+              >
+                Park / Exclude…
+              </Button>
             </>
           }
           filterSlot={
@@ -894,6 +953,22 @@ function AdminDistributorsPageContent() {
                   <MenuItem value="unlinked">Unlinked</MenuItem>
                 </Select>
               </FormControl>
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel id="dist-disposition-filter-label">Disposition</InputLabel>
+                <Select
+                  labelId="dist-disposition-filter-label"
+                  label="Disposition"
+                  value={dispositionFilter}
+                  onChange={(e) => setParamState({ disposition: String(e.target.value || '') }, true)}
+                  data-testid="disposition-filter"
+                >
+                  <MenuItem value="">Any</MenuItem>
+                  <MenuItem value="parked">Parked</MenuItem>
+                  <MenuItem value="excluded">Excluded</MenuItem>
+                  <MenuItem value="unset">None</MenuItem>
+                  <MenuItem value="set">Any set</MenuItem>
+                </Select>
+              </FormControl>
               <FormControl size="small" sx={{ minWidth: 170 }}>
                 <InputLabel id="dist-sort-by-label">Sort by</InputLabel>
                 <Select
@@ -938,6 +1013,7 @@ function AdminDistributorsPageContent() {
                       linkage_status: '',
                       min_alias_count: '',
                       alias_link: '',
+                      disposition: '',
                       sort_by: DEFAULT_SORT_BY,
                       sort_dir: DEFAULT_SORT_DIR,
                     },
@@ -1435,6 +1511,22 @@ function AdminDistributorsPageContent() {
         }
         onClose={() => {
           setPromoteTarget(null);
+          void qc.invalidateQueries({ queryKey: ['admin-distributors'] });
+        }}
+      />
+      <DistributorBulkPromoteDialog
+        open={bulkPromoteOpen}
+        mintCandidates={bulkMintCandidates}
+        onClose={() => {
+          setBulkPromoteOpen(false);
+          void qc.invalidateQueries({ queryKey: ['admin-distributors'] });
+        }}
+      />
+      <DistributorDispositionDialog
+        open={dispositionOpen}
+        distributorIds={dispositionDistributorIds}
+        onClose={() => {
+          setDispositionOpen(false);
           void qc.invalidateQueries({ queryKey: ['admin-distributors'] });
         }}
       />
