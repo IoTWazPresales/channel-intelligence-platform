@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-07-10 (Theme B complete ó PR #7 open)
-**Verify git:** `git branch --show-current` ∑ `git rev-parse --short HEAD`
+**Last updated:** 2026-07-10 (Theme B complete ù PR #7 open)
+**Verify git:** `git branch --show-current` ù `git rev-parse --short HEAD`
 
 ---
 
@@ -10,8 +10,8 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/backlog-061-entity-promote-in-place` |
-| **HEAD** | `dd98683` |
-| **PR** | [#7](https://github.com/IoTWazPresales/channel-intelligence-platform/pull/7) ó open; merge when Warren says |
+| **HEAD** | `09af204` |
+| **PR** | [#7](https://github.com/IoTWazPresales/channel-intelligence-platform/pull/7) ù open; merge when Warren says |
 | **Alembic (DB)** | **`20260710_0072`** on cip |
 
 ---
@@ -21,7 +21,7 @@
 | Unit | Tip | Fable verify |
 |------|-----|--------------|
 | BACKLOG-061-U-B3b dist bulk+disposition UI | `fc7b6c4` | **PASS** |
-| BACKLOG-061-U-B3a dist bulk+mint+disposition API | `66ae66d` | **PASS** ∑ 0072 |
+| BACKLOG-061-U-B3a dist bulk+mint+disposition API | `66ae66d` | **PASS** ù 0072 |
 | BACKLOG-061-U-B2 products+dist shell | `c54c32f` | **PASS** |
 | BACKLOG-061-U-G2 shell + customers | `d58e38c` | **PASS** |
 
