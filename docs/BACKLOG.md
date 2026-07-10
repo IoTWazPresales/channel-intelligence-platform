@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-073 — Import-job fact rollback / purge (test-junk cleanup; not park/exclude)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-10 |
+| **Effort** | Large (per-importer fact contracts + audited purge + UI gate) |
+| **Source** | Warren U-G2 smoke (2026-07-10) + Fable CONSULT: customers blocked from hard-delete by sell-out refs are **test import junk**, not bad production data. Park/exclude makes the master look messy and is the wrong tool (TMP provisional workflow only). Cheap default-hide of dispositioned rows **refused**. |
+| **Idea** | Governed **import-job rollback/purge**: remove the junk **facts** (and related staging) that a test import wrote, so orphaned `dim_customer` / `dim_product` / `dim_distributor` hard-delete unblocks via existing usage guards — without weakening fact immutability for real sell-out. |
+| **Why it matters / deferrable** | Test junk masters clutter admin grids and cannot be deleted while facts remain; operators need a clean path. Deferrable while real commercial data is healthy and junk is confined to known test jobs on cip/dev. |
+| **What the work is** | (1) Discovery: which importers/jobs mint facts that block master delete (DSI sell-out first). (2) Preview: job → fact counts by table + affected dim ids. (3) Confirm purge: audited, chunked deletes of **that job’s** facts/staging only (respect latest-job-wins vs transaction-immutable contracts). (4) Then steward may hard-delete unreferenced dims. (5) Hard gate: never available as casual “delete customer with history” — job-scoped only. |
+| **Regression traps** | Do **not** delete sell-out from the customer master delete UI; do not reassign FKs to OPEN_CHANNEL/sink to fake-clean; do not loosen `customer_usage` blockers for prod convenience; do not use park/exclude as archive; FLAG≠BLOCK leftovers must stay reviewable. |
+| **Behavior to retain** | Hard-delete blocked while refs exist; park/exclude stays TMP no-code disposition only; merge soft-redirect for real duplicate identity. |
+| **Out of scope** | Default-hiding parked/excluded rows as a substitute; prod cascade-purge tool; inventing `archived` status until a real-facts/no-merge case appears. |
+| **TRIGGER** | Warren prioritizes cleaning test-import junk from cip/admin masters; **or** operators cannot promote/steward because TMP/test dims dominate lists; **or** after BACKLOG-061 Theme B (U-G2/U-B2) when master UX cleanup is next. |
+
+---
+
 ## BACKLOG-072 — Product catalogue gaps: governed bulk resolve after PM (not job re-apply)
 
 | Field | Detail |

@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-10 — **BACKLOG-073 parked:** test-import junk cleanup = import-job fact rollback/purge (not park/exclude; no cheap default-hide). U-G2 shell smoke OK; commit+VERIFY pending. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **Alembic 0071 on cip (Warren asked agent apply):** `no_code_disposition` on dim_customer + dim_distributor; disposition dry_run ready on TMP id=3. Next chat: U-G2 shell. Branch `feat/backlog-061-entity-promote-in-place` @ `beb537e`.
 - 2026-07-10 — **BACKLOG-061-U3 Fable PASS (`063c19b`):** disposition PASS; U-G1 matrix doc written; next Warren applies 0071 then Theme B shell (U-G2) + dist batch (U-B2) in fresh chat. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U3 disposition (`063c19b`):** `no_code_disposition` (0071 authored, smoke up/down on cip_alembic_smoke; NOT on cip); batch API + Park/Exclude UI; promote/mint blocked. 0070 already on cip. Next: Fable VERIFY then Theme B matrix. Branch `feat/backlog-061-entity-promote-in-place`.
