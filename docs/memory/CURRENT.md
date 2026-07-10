@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-07-10 (handover ù dual-agent skill + BP1 done; Unit 2 next chat)
-**Verify git:** `git branch --show-current` ù `git rev-parse --short HEAD`
+**Last updated:** 2026-07-10 (U2a research note ó awaiting Fable VERIFY + Warren format pick)
+**Verify git:** `git branch --show-current` ∑ `git rev-parse --short HEAD`
 
 ---
 
@@ -10,8 +10,8 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/backlog-061-entity-promote-in-place` |
-| **HEAD** | `02f68f1` (in sync; feature tip `82ef990`) |
-| **PR** | Not opened yet ù recommend open/merge when ready |
+| **HEAD** | (see git) ó U2a docs pending commit |
+| **PR** | Not opened yet |
 | **Alembic (DB)** | **`20260709_0069`** on cip; listing table GRANTs to `cip` |
 
 ---
@@ -20,6 +20,7 @@
 
 | Unit | Tip | Fable verify |
 |------|-----|--------------|
+| BACKLOG-061-U2a (mint research note) | docs pending | **awaiting VERIFY** |
 | BACKLOG-061 BP1 (bulk CSV promote + Products cols) | `82ef990` | **PASS 2026-07-10** |
 | BACKLOG-061 B2-B4 | `9cfb67f` | **PASS 2026-07-10** |
 | BACKLOG-061 B1 | `a824c9a` | **PASS** |
@@ -30,32 +31,27 @@
 ## Locked decisions (Warren 2026-07-10)
 
 - Codes: **import when available OR system mint** (multi-tenant).
-- BP1 = CSV/paste mapping only ù **no mint**.
+- BP1 = CSV/paste mapping only ó **no mint**.
 - Batch: **partial success** + per-row report.
+- U2: research-first; settings by `tenant_id` (one seeded row); Select-N ? dry-run ? confirm; mint silent bump; no-code disposition **deferred**.
 - Theme A (bulk promote) before Theme B (grid shell).
-- Interviews: **CLI Fable in Cursor chat** ù not browser Claude.
+- Interviews: **CLI Fable in Cursor chat** ó not browser Claude.
 
 ---
 
-## Workflow
+## Next
 
-- Personal skill: `~/.cursor/skills/dual-agent-fable` (any app)
-- CIP entry: `.cursor/skills/cip-dual-agent-fable` + `docs/WORKFLOW_DUAL_AGENT.md`
+1. Fable VERIFY U2a research note.
+2. Warren picks Candidate A/B/C (recommendation: **A** `CUST-######`).
+3. U2b: settings alembic + mint service + batch mint mode (STOP before cip apply).
 
----
-
-## Next (new chat)
-
-1. **BACKLOG-061-U2** ù per-tenant customer code mint convention (see `docs/BACKLOG.md`).
-2. Optional: open/merge PR for this branch before or after U2.
-3. Theme B grid shell later (capability matrix first).
-
-**Do not re-audit:** BP1/B1ùB4/072 PASSes; 0069 applied + grants; single-row promote contract; TMP-DIST already active on cip.
+**Do not re-audit:** BP1/B1ñB4/072 PASSes; 0069 applied + grants; single-row promote contract; TMP-DIST already active on cip.
 
 ---
 
 ## Proven vs unproven
 
 - **Proven (wired + Fable PASS):** single-row promote; bulk CSV promote API/UI; Products default columns; verified?active remap.
-- **Unproven on soak:** bulk promote against full ~4,886 TMP list with real ERP codes (needs Human CSV).
-- **Planned:** U2 mint; Theme B grid shell.
+- **Wired docs (unverified):** U2a research note + 3 candidates.
+- **Unproven on soak:** bulk promote against full ~4,892 TMP list with real ERP codes (needs Human CSV).
+- **Planned:** U2b mint after format pick; Theme B grid shell.
