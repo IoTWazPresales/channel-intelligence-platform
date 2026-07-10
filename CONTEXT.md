@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-10 — **BACKLOG-061-U2b Fable PASS (`66003db`):** Candidate A mint verified; next = Warren applies `20260710_0070` on cip, then optional dry-run mint smoke. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U2b (Candidate A mint):** migration `20260710_0070` authored (NOT applied); mint allocator + `promote/batch` mode=mint; UI mint+chunking. Tests 18 API + 4 vitest green. Fable VERIFY blocked on CLI session limit (~12:40 SAST). Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U2a Fable PASS (`198507e`):** research note PASS; next = Warren picks A/B/C (rec A `CUST-######`) then U2b. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U2a:** ERP mint research note (`docs/design/BACKLOG-061-U2a_customer_code_mint_research.md`) — NetSuite/Dynamics/SAP survey; candidates A `CUST-######` (recommended) / B region / C year; settings+API sketch on paper; no-code disposition deferred. SELECT-only cip sample tmp_pending=4892. Docs-only; awaiting Fable VERIFY + Warren pick before U2b. Branch `feat/backlog-061-entity-promote-in-place`.
@@ -69,6 +70,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-07-10 | **BACKLOG-061-U2b Fable PASS (`66003db`):** mint verified; Warren applies 0070 next. |
 | 2026-07-10 | **BACKLOG-061-U2a:** mint research note — 3 candidates (rec A `CUST-######`); settings/API sketch; disposition deferred. Awaiting VERIFY + Warren pick. |
 | 2026-07-10 | **BACKLOG-061 Fable PASS B2–B4 (`9cfb67f`):** promote UI+distributor API; verified remap; 0069 on cip + GRANTs to `cip`. Queue empty — recommend merge PR. |
 | 2026-07-10 | **BACKLOG-061 B2–B4 + 0069 (Warren full approve):** customer/distributor promote UI; distributor promote API; orphan `verified`→`active` (7 rows); alembic **0069** applied on cip (`customer_listing`/`listing_observation`). Branch `feat/backlog-061-entity-promote-in-place`. |
