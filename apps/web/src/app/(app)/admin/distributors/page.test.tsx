@@ -91,18 +91,48 @@ vi.mock('@/components/ModuleGridToolbar', () => ({
 }));
 
 vi.mock('@/components/EnterpriseDataGrid', () => ({
-  EnterpriseDataGrid: ({ rowData, columnDefs }: { rowData: any[]; columnDefs: any[] }) => (
-    <div>
-      {rowData.map((row) => (
-        <div key={row.id}>
-          <span>{row.distributor_code ?? row.product_sku}</span>
-          {columnDefs.map((c, idx) =>
-            c?.cellRenderer ? <div key={`${row.id}-${idx}`}>{c.cellRenderer({ data: row, value: row[c.field] })}</div> : null
-          )}
-        </div>
-      ))}
-    </div>
-  ),
+  EnterpriseDataGrid: ({
+    rowData,
+    columnDefs,
+    gridOptions,
+  }: {
+    rowData: any[];
+    columnDefs: any[];
+    gridOptions?: any;
+  }) => {
+    React.useEffect(() => {
+      gridOptions?.onGridReady?.({
+        api: {
+          getColumnState: () => [],
+          applyColumnState: () => undefined,
+          getColumns: () => [],
+          setColumnsVisible: () => undefined,
+          getDisplayedRowCount: () => rowData.length,
+          deselectAll: () => undefined,
+          forEachNodeAfterFilterAndSort: (
+            cb: (node: { data?: (typeof rowData)[number]; setSelected: (v: boolean) => void }) => void
+          ) => {
+            rowData.forEach((row) => cb({ data: row, setSelected: () => undefined }));
+          },
+          getSelectedRows: () => [] as typeof rowData,
+        },
+      });
+    }, [gridOptions, rowData]);
+    return (
+      <div>
+        {rowData.map((row) => (
+          <div key={row.id}>
+            <span>{row.distributor_code ?? row.product_sku}</span>
+            {columnDefs.map((c, idx) =>
+              c?.cellRenderer ? (
+                <div key={`${row.id}-${idx}`}>{c.cellRenderer({ data: row, value: row[c.field] })}</div>
+              ) : null
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/lib/api', () => ({

@@ -5,14 +5,11 @@ import {
   Box,
   Button,
   Chip,
-  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
-  Drawer,
-  FormControlLabel,
   FormControl,
   InputLabel,
   MenuItem,
@@ -23,28 +20,17 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  CellValueChangedEvent,
-  ColDef,
-  ColumnMovedEvent,
-  ColumnPinnedEvent,
-  ColumnResizedEvent,
-  ColumnVisibleEvent,
-  GridOptions,
-  GridReadyEvent,
-} from 'ag-grid-community';
+import type { CellValueChangedEvent, ColDef, GridApi } from 'ag-grid-community';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Suspense } from 'react';
 
-import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
+import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 import {
   MasterBulkDeleteImpactDialog,
   type MasterBulkDeletePreview,
 } from '@/components/bulkTable/MasterBulkDeleteImpactDialog';
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { ModuleDataSection } from '@/components/ModuleDataSection';
-import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import { PageHeader } from '@/components/PageHeader';
 import { ProductSkuEconomicsPanel } from '@/features/admin/ProductSkuEconomicsPanel';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
@@ -215,10 +201,7 @@ function AdminProductsPageContent() {
   const [selectedRow, setSelectedRow] = useState<ProductRow | null>(null);
   const [savedViews, setSavedViews] = useState<SavedView[]>([]);
   const [viewName, setViewName] = useState('');
-  const [gridApi, setGridApi] = useState<any | null>(null);
-  const [columnsOpen, setColumnsOpen] = useState(false);
-  const [columnSearch, setColumnSearch] = useState('');
-  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
+  const [gridApi, setGridApi] = useState<GridApi<ProductRow> | null>(null);
   /** Union of flattened specs_json keys from any loaded list page (grows as you browse). */
   const [accumulatedSpecKeys, setAccumulatedSpecKeys] = useState<string[]>([]);
   const prevAccumulatedSpecKeysRef = useRef<string[]>([]);
@@ -226,8 +209,7 @@ function AdminProductsPageContent() {
   const [dsiConfirmOpen, setDsiConfirmOpen] = useState(false);
   const [dsiConfirmText, setDsiConfirmText] = useState('');
   const [bulkSelectionMode, setBulkSelectionMode] = useState<BulkTableSelectionMode>('normal');
-  const [bulkSelectedCount, setBulkSelectedCount] = useState(0);
-  const [visibleRowCount, setVisibleRowCount] = useState(0);
+  const [, setBulkSelectedCount] = useState(0);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeletePreview, setBulkDeletePreview] = useState<MasterBulkDeletePreview | null>(null);
   const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
@@ -258,17 +240,6 @@ function AdminProductsPageContent() {
     },
     [pathname, router, searchParams]
   );
-
-  useEffect(() => {
-    if (!searchParams.toString()) {
-      const sp = new URLSearchParams();
-      sp.set('page', '1');
-      sp.set('page_size', String(DEFAULT_PAGE_SIZE));
-      sp.set('sort_by', DEFAULT_SORT_BY);
-      sp.set('sort_dir', DEFAULT_SORT_DIR);
-      router.replace(`${pathname}?${sp.toString()}`);
-    }
-  }, [pathname, router, searchParams]);
 
   useEffect(() => {
     try {
@@ -537,10 +508,24 @@ function AdminProductsPageContent() {
       if (!col.field) continue;
       out[col.field] = col.headerName ?? col.field;
     }
+    for (const rawKey of accumulatedSpecKeys) {
+      out[specColIdFromRawKey(rawKey)] = `Spec: ${rawKey}`;
+    }
     return out;
-  }, [colDefs]);
+  }, [colDefs, accumulatedSpecKeys]);
 
-  const persistGridState = useCallback((api: any) => {
+  const columnPickerExtraGroups = useMemo(() => {
+    if (!accumulatedSpecKeys.length) return undefined;
+    return [
+      {
+        label: 'Discovered specs & metadata (flattened; union across browsed pages)',
+        fields: accumulatedSpecKeys.map(specColIdFromRawKey),
+      },
+    ];
+  }, [accumulatedSpecKeys]);
+
+  /** Persist for product-only newly-discovered-spec hide (shell owns general column state). */
+  const persistProductGridState = useCallback((api: GridApi<ProductRow>) => {
     try {
       const state = api.getColumnState();
       localStorage.setItem(PRODUCT_GRID_STATE_KEY, JSON.stringify(state));
@@ -548,77 +533,10 @@ function AdminProductsPageContent() {
       // no-op
     }
   }, []);
-  const syncColumnVisibility = useCallback(
-    (api: any) => {
-      if (!api?.getColumns) return;
-      try {
-        const visibility: Record<string, boolean> = {};
-        for (const col of api.getColumns() ?? []) {
-          const def = col?.getColDef?.();
-          const field = def?.field as string | undefined;
-          if (!field) continue;
-          if (
-            ALL_PRODUCT_COLUMN_FIELDS.includes(field as ProductColumnField) ||
-            field.startsWith('spec:')
-          ) {
-            visibility[field] = Boolean(col.isVisible?.());
-          }
-        }
-        if (Object.keys(visibility).length) setColumnVisibility(visibility);
-      } catch {
-        // no-op
-      }
-    },
-    [setColumnVisibility]
-  );
-  const onGridReady = useCallback(
-    (e: GridReadyEvent<ProductRow>) => {
-      setGridApi(e.api);
-      try {
-        const raw = localStorage.getItem(PRODUCT_GRID_STATE_KEY);
-        if (raw) {
-          e.api.applyColumnState({ state: JSON.parse(raw), applyOrder: true });
-        } else {
-          e.api.applyColumnState({
-            state: DEFAULT_INITIALLY_HIDDEN_FIELDS.map((colId) => ({ colId, hide: true })),
-            applyOrder: true,
-          });
-        }
-      } catch {
-        // no-op
-      }
-      syncColumnVisibility(e.api);
-    },
-    [syncColumnVisibility]
-  );
-  const onColumnStateEvent = useCallback(
-    (
-      e:
-        | ColumnMovedEvent<ProductRow>
-        | ColumnVisibleEvent<ProductRow>
-        | ColumnPinnedEvent<ProductRow>
-        | ColumnResizedEvent<ProductRow>
-    ) => {
-      persistGridState(e.api);
-      syncColumnVisibility(e.api);
-    },
-    [persistGridState, syncColumnVisibility]
-  );
-
-  useEffect(() => {
-    if (bulkSelectionMode !== 'selecting') {
-      gridApi?.deselectAll();
-      setBulkSelectedCount(0);
-    }
-  }, [bulkSelectionMode, gridApi]);
-
-  useEffect(() => {
-    setVisibleRowCount((products?.items ?? []).length);
-  }, [products?.items]);
 
   const openProductBulkDeletePreview = useCallback(async () => {
     if (!gridApi) return;
-    const ids = gridApi.getSelectedRows().map((r: ProductRow) => r.id);
+    const ids = gridApi.getSelectedRows().map((r) => r.id);
     if (!ids.length) return;
     setBulkDeleteBusy(true);
     setBulkDeleteAck(false);
@@ -660,74 +578,6 @@ function AdminProductsPageContent() {
     }
   }, [bulkDeletePreview, delProduct, qc]);
 
-  const gridOptions: GridOptions<ProductRow> = useMemo(() => {
-    const base: GridOptions<ProductRow> = {
-      singleClickEdit: true,
-      onCellValueChanged,
-      onGridReady: (e) => {
-        onGridReady(e);
-        setVisibleRowCount(e.api.getDisplayedRowCount());
-      },
-      onColumnMoved: onColumnStateEvent,
-      onColumnVisible: onColumnStateEvent,
-      onColumnPinned: onColumnStateEvent,
-      onColumnResized: onColumnStateEvent,
-      onFilterChanged: (e) => {
-        if (bulkSelectionMode === 'selecting') setVisibleRowCount(e.api.getDisplayedRowCount());
-      },
-      onSortChanged: (e) => {
-        if (bulkSelectionMode === 'selecting') setVisibleRowCount(e.api.getDisplayedRowCount());
-      },
-    };
-    if (bulkSelectionMode !== 'selecting') return base;
-    return {
-      ...base,
-      rowSelection: {
-        mode: 'multiRow',
-        checkboxes: true,
-        headerCheckbox: true,
-        enableClickSelection: false,
-      },
-      onSelectionChanged: (e) => {
-        setBulkSelectedCount(e.api.getSelectedRows().length);
-      },
-    };
-  }, [bulkSelectionMode, onCellValueChanged, onGridReady, onColumnStateEvent]);
-  const groupedColumnPickerBlocks = useMemo((): { label: string; options: { id: string; label: string }[] }[] => {
-    const query = columnSearch.trim().toLowerCase();
-    const blocks: { label: string; options: { id: string; label: string }[] }[] = STATIC_PRODUCT_COLUMN_GROUPS.map(
-      (group) => ({
-        label: group.label,
-        options: group.fields
-          .map((field) => ({ id: field, label: columnLabelByField[field] ?? field }))
-          .filter(
-            (opt) => !query || opt.label.toLowerCase().includes(query) || opt.id.toLowerCase().includes(query)
-          ),
-      })
-    ).filter((group) => group.options.length > 0);
-    const specOptions = accumulatedSpecKeys
-      .map((rawKey) => ({ id: specColIdFromRawKey(rawKey), label: `Spec: ${rawKey}` }))
-      .filter(
-        (opt) => !query || opt.label.toLowerCase().includes(query) || opt.id.toLowerCase().includes(query)
-      );
-    if (specOptions.length) {
-      blocks.push({
-        label: 'Discovered specs & metadata (flattened; union across browsed pages)',
-        options: specOptions,
-      });
-    }
-    return blocks;
-  }, [columnLabelByField, columnSearch, accumulatedSpecKeys]);
-  const toggleColumnVisibility = useCallback(
-    (columnId: string, visible: boolean) => {
-      if (!gridApi?.setColumnsVisible) return;
-      gridApi.setColumnsVisible([columnId], visible);
-      persistGridState(gridApi);
-      setColumnVisibility((prev) => ({ ...prev, [columnId]: visible }));
-    },
-    [gridApi, persistGridState]
-  );
-
   useEffect(() => {
     if (!gridApi || !accumulatedSpecKeys.length) return;
     const prev = new Set(prevAccumulatedSpecKeysRef.current);
@@ -736,12 +586,11 @@ function AdminProductsPageContent() {
     if (!added.length) return;
     const ids = added.map((k) => specColIdFromRawKey(k));
     gridApi.setColumnsVisible(ids, false);
-    persistGridState(gridApi);
-  }, [accumulatedSpecKeys, gridApi, persistGridState]);
+    persistProductGridState(gridApi);
+  }, [accumulatedSpecKeys, gridApi, persistProductGridState]);
 
   const rows = useMemo(() => products?.items ?? [], [products?.items]);
   const total = products?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const categories = useMemo(() => {
     const s = new Set<string>();
     for (const r of rows) if (r.category) s.add(r.category);
@@ -881,255 +730,290 @@ function AdminProductsPageContent() {
           )}
         </Alert>
       ) : null}
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-        <Button variant="contained" onClick={() => setUploadOpen(true)}>
-          Upload CSV (paste)
-        </Button>
-        <Button
-          variant="outlined"
-          disabled={!gridApi}
-          onClick={() => gridApi?.exportDataAsCsv({ fileName: `products_control_view_page${page}.csv` })}
-        >
-          Export current filtered/sorted view
-        </Button>
-        <Button
-          variant="outlined"
-          onClick={() => {
-            try {
-              localStorage.removeItem(PRODUCT_GRID_STATE_KEY);
-              window.location.reload();
-            } catch {
-              // no-op
-            }
-          }}
-        >
-          Reset column layout
-        </Button>
-        <Button
-          variant="outlined"
-          onClick={() => {
-            setColumnSearch('');
-            setColumnsOpen(true);
-            if (gridApi) syncColumnVisibility(gridApi);
-          }}
-        >
-          Columns
-        </Button>
-        <ModuleGridToolbar
-          onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-products'] })}
-          sx={{ mb: 0 }}
-          busy={delProduct.isPending || bulkDeleteBusy}
-        />
-        <BulkSelectionToolbar
-          mode={bulkSelectionMode}
-          selectedCount={bulkSelectedCount}
-          visibleRowCount={visibleRowCount}
-          onEnterSelectionMode={() => setBulkSelectionMode('selecting')}
-          onExitSelectionMode={() => setBulkSelectionMode('normal')}
-          onSelectAllVisible={() => {
-            if (!gridApi) return;
-            gridApi.forEachNodeAfterFilterAndSort((node: { data?: ProductRow; setSelected: (v: boolean) => void }) => {
-              if (node.data) node.setSelected(true);
-            });
-          }}
-          onDeselectAll={() => gridApi?.deselectAll()}
-          onPreviewDangerAction={() => void openProductBulkDeletePreview()}
-          previewDangerDisabled={bulkDeleteBusy}
-          busy={bulkDeleteBusy}
-        />
-      </Stack>
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} useFlexGap alignItems={{ md: 'center' }}>
-          <TextField
-            size="small"
-            label="Search"
-            value={q}
-            onChange={(e) => setParamState({ q: e.target.value }, true)}
-            placeholder="SKU, name, category, model"
-          />
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel>Active</InputLabel>
-            <Select
-              label="Active"
-              value={isActiveFilter == null ? '' : String(isActiveFilter)}
-              onChange={(e) => setParamState({ is_active: String(e.target.value || '') }, true)}
-            >
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="true">Active only</MenuItem>
-              <MenuItem value="false">Inactive only</MenuItem>
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel>Category</InputLabel>
-            <Select
-              label="Category"
-              value={categoryFilter}
-              onChange={(e) => setParamState({ category: String(e.target.value || '') }, true)}
-            >
-              <MenuItem value="">All</MenuItem>
-              {categories.map((c) => (
-                <MenuItem key={c} value={c}>
-                  {c}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 170 }}>
-            <InputLabel>Lifecycle</InputLabel>
-            <Select
-              label="Lifecycle"
-              value={lifecycleFilter}
-              onChange={(e) => setParamState({ lifecycle_status: String(e.target.value || '') }, true)}
-            >
-              <MenuItem value="">All</MenuItem>
-              {lifecycleStatuses.map((c) => (
-                <MenuItem key={c} value={c}>
-                  {c}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <TextField
-            size="small"
-            label="Launch from"
-            type="date"
-            value={launchDateFrom}
-            onChange={(e) => setParamState({ launch_date_from: e.target.value }, true)}
-            InputLabelProps={{ shrink: true }}
-          />
-          <TextField
-            size="small"
-            label="Launch to"
-            type="date"
-            value={launchDateTo}
-            onChange={(e) => setParamState({ launch_date_to: e.target.value }, true)}
-            InputLabelProps={{ shrink: true }}
-          />
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel>Sort by</InputLabel>
-            <Select
-              label="Sort by"
-              value={sortBy}
-              onChange={(e) => setParamState({ sort_by: String(e.target.value || DEFAULT_SORT_BY) })}
-            >
-              <MenuItem value="sku">SKU</MenuItem>
-              <MenuItem value="name">Name</MenuItem>
-              <MenuItem value="category">Category</MenuItem>
-              <MenuItem value="lifecycle_status">Lifecycle</MenuItem>
-              <MenuItem value="launch_date">Launch date</MenuItem>
-              <MenuItem value="retired_date">Retired date</MenuItem>
-              <MenuItem value="is_active">Active</MenuItem>
-              <MenuItem value="updated_at">Updated</MenuItem>
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 110 }}>
-            <InputLabel>Dir</InputLabel>
-            <Select
-              label="Dir"
-              value={sortDir}
-              onChange={(e) => setParamState({ sort_dir: String(e.target.value || DEFAULT_SORT_DIR) })}
-            >
-              <MenuItem value="asc">Asc</MenuItem>
-              <MenuItem value="desc">Desc</MenuItem>
-            </Select>
-          </FormControl>
-          <Button variant="text" onClick={() => setParamState({ q: '', is_active: '', category: '', lifecycle_status: '', launch_date_from: '', launch_date_to: '', retired_date_from: '', retired_date_to: '', sort_by: DEFAULT_SORT_BY, sort_dir: DEFAULT_SORT_DIR }, true)}>
-            Clear filters
-          </Button>
-        </Stack>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 2 }} alignItems={{ md: 'center' }}>
-          <TextField
-            size="small"
-            label="Save current view"
-            value={viewName}
-            onChange={(e) => setViewName(e.target.value)}
-            sx={{ minWidth: 220 }}
-          />
-          <Button
-            variant="outlined"
-            onClick={() => {
-              const n = viewName.trim();
-              if (!n) return;
-              const view: SavedView = { name: n, query: searchParams.toString() };
-              const next = [view, ...savedViews.filter((x) => x.name !== n)];
-              setSavedViews(next);
-              localStorage.setItem(PRODUCT_SAVED_VIEWS_KEY, JSON.stringify(next));
-              setViewName('');
-            }}
-          >
-            Save private view
-          </Button>
-          <FormControl size="small" sx={{ minWidth: 220 }}>
-            <InputLabel>Apply saved view</InputLabel>
-            <Select
-              label="Apply saved view"
-              value=""
-              onChange={(e) => {
-                const picked = savedViews.find((v) => v.name === e.target.value);
-                if (!picked) return;
-                router.replace(`${pathname}?${picked.query}`);
-              }}
-            >
-              {savedViews.map((v) => (
-                <MenuItem key={v.name} value={v.name}>
-                  {v.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Typography variant="caption" color="text.secondary">
-            Private views are local to this browser.
-          </Typography>
-        </Stack>
-      </Paper>
-      <Paper sx={{ p: 2 }}>
-        <ModuleDataSection
-          intro={<>Rows are stored in <strong>dim_product</strong>.</>}
-          isLoading={productsLoading}
-          isError={productsIsError}
-          error={toQueryError(productsErr)}
-          onRetry={() => void refetchProducts()}
-          isEmpty={rows.length === 0}
-          empty={{
-            title: 'No products yet',
-            description: 'Upload a CSV paste or use Data imports when a product source is registered.',
-            primary: { label: 'Getting started', href: '/getting-started' },
-            secondary: { label: 'Data & imports', href: '/admin/imports' },
-          }}
-        >
-          <EnterpriseDataGrid
-            key={bulkSelectionMode === 'selecting' ? 'products-bulk' : 'products-normal'}
-            rowData={rows}
-            columnDefs={colDefs}
-            gridOptions={gridOptions}
-            height={520}
-          />
-          <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center">
-            <Button disabled={page <= 1} onClick={() => setParamState({ page: String(page - 1) })}>
-              Prev
+      <MasterDataGridShell
+        entityKey="products"
+        rows={rows}
+        columnDefs={colDefs}
+        total={total}
+        isLoading={productsLoading}
+        isError={productsIsError}
+        error={toQueryError(productsErr)}
+        onRetry={() => void refetchProducts()}
+        intro={
+          <>
+            Rows are stored in <strong>dim_product</strong>.
+          </>
+        }
+        empty={{
+          title: 'No products yet',
+          description: 'Upload a CSV paste or use Data imports when a product source is registered.',
+          primary: { label: 'Getting started', href: '/getting-started' },
+          secondary: { label: 'Data & imports', href: '/admin/imports' },
+        }}
+        url={{
+          page,
+          pageSize,
+          q,
+          sortBy,
+          sortDir,
+        }}
+        onUrlChange={setParamState}
+        defaultPageSize={DEFAULT_PAGE_SIZE}
+        defaultSortBy={DEFAULT_SORT_BY}
+        defaultSortDir={DEFAULT_SORT_DIR}
+        gridStateStorageKey={PRODUCT_GRID_STATE_KEY}
+        defaultInitiallyHiddenFields={DEFAULT_INITIALLY_HIDDEN_FIELDS}
+        columnPickerTitle="Manage product columns"
+        columnPickerGroups={STATIC_PRODUCT_COLUMN_GROUPS}
+        columnPickerExtraGroups={columnPickerExtraGroups}
+        columnLabelByField={columnLabelByField}
+        onCellValueChanged={onCellValueChanged}
+        onGridApiChange={setGridApi}
+        bulkSelectionMode={bulkSelectionMode}
+        onBulkSelectionModeChange={setBulkSelectionMode}
+        onPreviewBulkDelete={() => void openProductBulkDeletePreview()}
+        previewBulkDeleteDisabled={bulkDeleteBusy}
+        bulkBusy={bulkDeleteBusy}
+        onBulkSelectedCountChange={setBulkSelectedCount}
+        onRefresh={() => qc.invalidateQueries({ queryKey: ['admin-products'] })}
+        refreshBusy={delProduct.isPending || bulkDeleteBusy}
+        toolbarStart={
+          <>
+            <Button variant="contained" onClick={() => setUploadOpen(true)}>
+              Upload CSV (paste)
             </Button>
-            <Typography variant="body2">
-              Page {page} / {totalPages} ({total} rows)
-            </Typography>
-            <Button disabled={page >= totalPages} onClick={() => setParamState({ page: String(page + 1) })}>
-              Next
+            <Button
+              variant="outlined"
+              disabled={!gridApi}
+              onClick={() => gridApi?.exportDataAsCsv({ fileName: `products_control_view_page${page}.csv` })}
+            >
+              Export current filtered/sorted view
             </Button>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>Page size</InputLabel>
-              <Select
-                label="Page size"
-                value={String(pageSize)}
-                onChange={(e) => setParamState({ page_size: String(e.target.value || DEFAULT_PAGE_SIZE) }, true)}
+          </>
+        }
+        filterSlot={
+          <>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} useFlexGap alignItems={{ md: 'center' }}>
+              <TextField
+                size="small"
+                label="Search"
+                value={q}
+                onChange={(e) => setParamState({ q: e.target.value }, true)}
+                placeholder="SKU, name, category, model"
+              />
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <InputLabel>Active</InputLabel>
+                <Select
+                  label="Active"
+                  value={isActiveFilter == null ? '' : String(isActiveFilter)}
+                  onChange={(e) => setParamState({ is_active: String(e.target.value || '') }, true)}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="true">Active only</MenuItem>
+                  <MenuItem value="false">Inactive only</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel>Category</InputLabel>
+                <Select
+                  label="Category"
+                  value={categoryFilter}
+                  onChange={(e) => setParamState({ category: String(e.target.value || '') }, true)}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  {categories.map((c) => (
+                    <MenuItem key={c} value={c}>
+                      {c}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 170 }}>
+                <InputLabel>Lifecycle</InputLabel>
+                <Select
+                  label="Lifecycle"
+                  value={lifecycleFilter}
+                  onChange={(e) => setParamState({ lifecycle_status: String(e.target.value || '') }, true)}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  {lifecycleStatuses.map((c) => (
+                    <MenuItem key={c} value={c}>
+                      {c}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                size="small"
+                label="Launch from"
+                type="date"
+                value={launchDateFrom}
+                onChange={(e) => setParamState({ launch_date_from: e.target.value }, true)}
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                size="small"
+                label="Launch to"
+                type="date"
+                value={launchDateTo}
+                onChange={(e) => setParamState({ launch_date_to: e.target.value }, true)}
+                InputLabelProps={{ shrink: true }}
+              />
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <InputLabel>Sort by</InputLabel>
+                <Select
+                  label="Sort by"
+                  value={sortBy}
+                  onChange={(e) => setParamState({ sort_by: String(e.target.value || DEFAULT_SORT_BY) })}
+                >
+                  <MenuItem value="sku">SKU</MenuItem>
+                  <MenuItem value="name">Name</MenuItem>
+                  <MenuItem value="category">Category</MenuItem>
+                  <MenuItem value="lifecycle_status">Lifecycle</MenuItem>
+                  <MenuItem value="launch_date">Launch date</MenuItem>
+                  <MenuItem value="retired_date">Retired date</MenuItem>
+                  <MenuItem value="is_active">Active</MenuItem>
+                  <MenuItem value="updated_at">Updated</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 110 }}>
+                <InputLabel>Dir</InputLabel>
+                <Select
+                  label="Dir"
+                  value={sortDir}
+                  onChange={(e) => setParamState({ sort_dir: String(e.target.value || DEFAULT_SORT_DIR) })}
+                >
+                  <MenuItem value="asc">Asc</MenuItem>
+                  <MenuItem value="desc">Desc</MenuItem>
+                </Select>
+              </FormControl>
+              <Button
+                variant="text"
+                onClick={() =>
+                  setParamState(
+                    {
+                      q: '',
+                      is_active: '',
+                      category: '',
+                      lifecycle_status: '',
+                      launch_date_from: '',
+                      launch_date_to: '',
+                      retired_date_from: '',
+                      retired_date_to: '',
+                      sort_by: DEFAULT_SORT_BY,
+                      sort_dir: DEFAULT_SORT_DIR,
+                    },
+                    true
+                  )
+                }
               >
-                <MenuItem value="25">25</MenuItem>
-                <MenuItem value="50">50</MenuItem>
-                <MenuItem value="100">100</MenuItem>
-                <MenuItem value="200">200</MenuItem>
-              </Select>
-            </FormControl>
-          </Stack>
-        </ModuleDataSection>
-      </Paper>
+                Clear filters
+              </Button>
+            </Stack>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 2 }} alignItems={{ md: 'center' }}>
+              <TextField
+                size="small"
+                label="Save current view"
+                value={viewName}
+                onChange={(e) => setViewName(e.target.value)}
+                sx={{ minWidth: 220 }}
+              />
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  const n = viewName.trim();
+                  if (!n) return;
+                  const view: SavedView = { name: n, query: searchParams.toString() };
+                  const next = [view, ...savedViews.filter((x) => x.name !== n)];
+                  setSavedViews(next);
+                  localStorage.setItem(PRODUCT_SAVED_VIEWS_KEY, JSON.stringify(next));
+                  setViewName('');
+                }}
+              >
+                Save private view
+              </Button>
+              <FormControl size="small" sx={{ minWidth: 220 }}>
+                <InputLabel>Apply saved view</InputLabel>
+                <Select
+                  label="Apply saved view"
+                  value=""
+                  onChange={(e) => {
+                    const picked = savedViews.find((v) => v.name === e.target.value);
+                    if (!picked) return;
+                    router.replace(`${pathname}?${picked.query}`);
+                  }}
+                >
+                  {savedViews.map((v) => (
+                    <MenuItem key={v.name} value={v.name}>
+                      {v.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Typography variant="caption" color="text.secondary">
+                Private views are local to this browser.
+              </Typography>
+            </Stack>
+          </>
+        }
+        drawer={{
+          open: Boolean(selectedRow),
+          onClose: () => setSelectedRow(null),
+          width: 460,
+          title: 'Product details',
+          children: !selectedRow ? null : (
+            <Stack spacing={1.5}>
+              <Typography variant="body2">
+                <strong>SKU:</strong> {selectedRow.sku}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Name:</strong> {selectedRow.name}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Category:</strong> {selectedRow.category ?? '—'}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Form factor:</strong> {selectedRow.form_factor ?? '—'}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Lifecycle:</strong> {selectedRow.lifecycle_status ?? '—'}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Launch:</strong> {selectedRow.launch_date ?? '—'}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Retired:</strong> {selectedRow.retired_date ?? '—'}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Last import:</strong> {selectedRow.last_import_date ?? '—'}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Missing required:</strong>{' '}
+                {selectedRow.missing_required_fields.length
+                  ? selectedRow.missing_required_fields.join(', ')
+                  : 'None'}
+              </Typography>
+              <Divider sx={{ my: 1 }} />
+              <ProductSkuEconomicsPanel productId={selectedRow.id} productSku={selectedRow.sku} />
+              <Stack direction="row" spacing={1}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={async () => {
+                    await apiPatch(`/api/v1/products/${selectedRow.id}`, {
+                      is_active: !selectedRow.is_active,
+                    });
+                    await qc.invalidateQueries({ queryKey: ['admin-products'] });
+                    setSelectedRow({ ...selectedRow, is_active: !selectedRow.is_active });
+                  }}
+                >
+                  Set {selectedRow.is_active ? 'Inactive' : 'Active'}
+                </Button>
+              </Stack>
+            </Stack>
+          ),
+        }}
+      />
 
       <Dialog
         open={dsiConfirmOpen}
@@ -1223,117 +1107,6 @@ function AdminProductsPageContent() {
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={columnsOpen} onClose={() => setColumnsOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>Manage product columns</DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-            <TextField
-              size="small"
-              label="Search columns"
-              placeholder="Find by label or field key"
-              value={columnSearch}
-              onChange={(e) => setColumnSearch(e.target.value)}
-            />
-            {!gridApi ? (
-              <Alert severity="info">Grid is still initializing. Column toggles become available in a moment.</Alert>
-            ) : null}
-            {groupedColumnPickerBlocks.map((group) => (
-              <Paper key={group.label} variant="outlined" sx={{ p: 1.25 }}>
-                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                  {group.label}
-                </Typography>
-                <Stack>
-                  {group.options.map((opt) => (
-                    <FormControlLabel
-                      key={opt.id}
-                      control={
-                        <Checkbox
-                          checked={columnVisibility[opt.id] ?? false}
-                          onChange={(e) => toggleColumnVisibility(opt.id, e.target.checked)}
-                          disabled={!gridApi}
-                        />
-                      }
-                      label={opt.label}
-                    />
-                  ))}
-                </Stack>
-              </Paper>
-            ))}
-            {!groupedColumnPickerBlocks.length ? (
-              <Typography variant="body2" color="text.secondary">
-                No columns match the current search.
-              </Typography>
-            ) : null}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setColumnsOpen(false)}>Done</Button>
-        </DialogActions>
-      </Dialog>
-      <Drawer
-        anchor="right"
-        open={Boolean(selectedRow)}
-        onClose={() => setSelectedRow(null)}
-        sx={{
-          '& .MuiDrawer-paper': {
-            top: { xs: 56, sm: 64 },
-            height: { xs: 'calc(100% - 56px)', sm: 'calc(100% - 64px)' },
-          },
-        }}
-      >
-        <Box sx={{ width: 460, p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>
-            Product details
-          </Typography>
-          {!selectedRow ? null : (
-            <Stack spacing={1.5}>
-              <Typography variant="body2">
-                <strong>SKU:</strong> {selectedRow.sku}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Name:</strong> {selectedRow.name}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Category:</strong> {selectedRow.category ?? '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Form factor:</strong> {selectedRow.form_factor ?? '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Lifecycle:</strong> {selectedRow.lifecycle_status ?? '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Launch:</strong> {selectedRow.launch_date ?? '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Retired:</strong> {selectedRow.retired_date ?? '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Last import:</strong> {selectedRow.last_import_date ?? '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Missing required:</strong>{' '}
-                {selectedRow.missing_required_fields.length ? selectedRow.missing_required_fields.join(', ') : 'None'}
-              </Typography>
-              <Divider sx={{ my: 1 }} />
-              <ProductSkuEconomicsPanel productId={selectedRow.id} productSku={selectedRow.sku} />
-              <Stack direction="row" spacing={1}>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={async () => {
-                    await apiPatch(`/api/v1/products/${selectedRow.id}`, { is_active: !selectedRow.is_active });
-                    await qc.invalidateQueries({ queryKey: ['admin-products'] });
-                    setSelectedRow({ ...selectedRow, is_active: !selectedRow.is_active });
-                  }}
-                >
-                  Set {selectedRow.is_active ? 'Inactive' : 'Active'}
-                </Button>
-              </Stack>
-            </Stack>
-          )}
-        </Box>
-      </Drawer>
       <MasterBulkDeleteImpactDialog
         open={bulkDeleteOpen}
         busy={bulkDeleteBusy}

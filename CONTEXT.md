@@ -17,6 +17,9 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-10 — **BACKLOG-061-U-B2 distributors half (uncommitted):** `admin/distributors` master tab → `MasterDataGridShell` (transitional sell-out/inbound tabs unchanged); vitest 6/6 green. Next: Fable VERIFY U-B2. Branch `feat/backlog-061-entity-promote-in-place`.
+- 2026-07-10 — **BACKLOG-061-U-B2 products half (uncommitted):** `admin/products` → `MasterDataGridShell` (specs via `columnPickerExtraGroups`); vitest 15/15 green. Next: distributors shell. Branch `feat/backlog-061-entity-promote-in-place`.
+- 2026-07-10 — **BACKLOG-061-U-G2 Fable PASS (`d58e38c`):** MasterDataGridShell + customers parity; BACKLOG-073 parked (test-junk = import-job purge). Next: U-B2 products+distributors shell. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-073 parked:** test-import junk cleanup = import-job fact rollback/purge (not park/exclude; no cheap default-hide). U-G2 shell smoke OK; commit+VERIFY pending. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **Alembic 0071 on cip (Warren asked agent apply):** `no_code_disposition` on dim_customer + dim_distributor; disposition dry_run ready on TMP id=3. Next chat: U-G2 shell. Branch `feat/backlog-061-entity-promote-in-place` @ `beb537e`.
 - 2026-07-10 — **BACKLOG-061-U3 Fable PASS (`063c19b`):** disposition PASS; U-G1 matrix doc written; next Warren applies 0071 then Theme B shell (U-G2) + dist batch (U-B2) in fresh chat. Branch `feat/backlog-061-entity-promote-in-place`.

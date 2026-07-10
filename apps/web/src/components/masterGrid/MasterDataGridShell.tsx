@@ -75,6 +75,8 @@ export type MasterDataGridShellProps<TRow extends { id: number }> = {
   defaultInitiallyHiddenFields?: readonly string[];
   columnPickerTitle: string;
   columnPickerGroups: MasterColumnPickerGroup[];
+  /** Optional extra groups (e.g. products discovered specs) — U-B2 */
+  columnPickerExtraGroups?: MasterColumnPickerGroup[];
   columnLabelByField?: Record<string, string>;
 
   gridHeight?: number | string;
@@ -128,6 +130,7 @@ export function MasterDataGridShell<TRow extends { id: number }>({
   defaultInitiallyHiddenFields = [],
   columnPickerTitle,
   columnPickerGroups,
+  columnPickerExtraGroups,
   columnLabelByField,
   gridHeight = 520,
   gridOptions: pageGridOptions,
@@ -179,6 +182,11 @@ export function MasterDataGridShell<TRow extends { id: number }>({
     defaultSortDir,
   ]);
 
+  const allColumnPickerGroups = useMemo(
+    () => [...columnPickerGroups, ...(columnPickerExtraGroups ?? [])],
+    [columnPickerGroups, columnPickerExtraGroups]
+  );
+
   const persistGridState = useCallback(
     (api: GridApi<TRow>) => {
       try {
@@ -195,7 +203,7 @@ export function MasterDataGridShell<TRow extends { id: number }>({
     (api: GridApi<TRow>) => {
       if (!api?.getColumns) return;
       try {
-        const known = new Set(columnPickerGroups.flatMap((g) => g.fields));
+        const known = new Set(allColumnPickerGroups.flatMap((g) => g.fields));
         const visibility: Record<string, boolean> = {};
         for (const col of api.getColumns() ?? []) {
           const def = col?.getColDef?.();
@@ -208,7 +216,7 @@ export function MasterDataGridShell<TRow extends { id: number }>({
         // no-op
       }
     },
-    [columnPickerGroups]
+    [allColumnPickerGroups]
   );
 
   const setGridApiAndNotify = useCallback(
@@ -478,7 +486,7 @@ export function MasterDataGridShell<TRow extends { id: number }>({
         open={columnsOpen}
         onClose={() => setColumnsOpen(false)}
         title={columnPickerTitle}
-        groups={columnPickerGroups}
+        groups={allColumnPickerGroups}
         columnLabelByField={columnLabelByField}
         visibility={columnVisibility}
         onToggle={toggleColumnVisibility}
