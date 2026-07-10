@@ -146,7 +146,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Theme B complete on branch** `feat/backlog-061-entity-promote-in-place` · B1–B4 + BP1 + U2 mint + U3 disposition + U-G2/U-B2 shell + U-B3 distributor bulk/mint/disposition shipped (Fable PASS); PR pending merge |
+| **Status / parked** | **Shipped on main** (PR #7 merged 2026-07-10) · Theme B complete: B1–B4 + BP1 + U2 mint + U3 disposition + U-G2/U-B2 shell + U-B3 distributor bulk/mint/disposition |
 | **Effort** | Medium (API promote endpoint, admin UI, status taxonomy cleanup, distributor parity) |
 | **Source** | Read-only audits (2026-07-02): IC/lineup alias gap; provisional customer promote investigation (`dim_customer` 4,886 unverified `TMP-CUST-%`; distributors ~23 `TMP-DIST-%`). No promote-in-place exists — only merge (soft redirect) or ad-hoc PATCH without code reassignment. |
 | **Idea** | Governed **promote-in-place**: same `dim_customer` / `dim_distributor` id, flip `unverified` → verified master (`active` or canonical `verified`), assign real business code on the row, audit trail — distinct from merge-into-existing-master. |

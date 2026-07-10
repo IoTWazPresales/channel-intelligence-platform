@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-07-10 (Theme B complete ù PR #7 open)
-**Verify git:** `git branch --show-current` ù `git rev-parse --short HEAD`
+**Last updated:** 2026-07-10 (PR #7 merged to main ó BACKLOG-061 Theme B)
+**Verify git:** `git branch --show-current` ∑ `git rev-parse --short HEAD`
 
 ---
 
@@ -9,28 +9,25 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/backlog-061-entity-promote-in-place` |
-| **HEAD** | `09af204` |
-| **PR** | [#7](https://github.com/IoTWazPresales/channel-intelligence-platform/pull/7) ù open; merge when Warren says |
+| **Branch** | `main` |
+| **HEAD** | `4d1700b` |
+| **PR** | [#7](https://github.com/IoTWazPresales/channel-intelligence-platform/pull/7) ó **merged** |
 | **Alembic (DB)** | **`20260710_0072`** on cip |
 
 ---
 
-## Units
+## What shipped (PR #7)
 
-| Unit | Tip | Fable verify |
-|------|-----|--------------|
-| BACKLOG-061-U-B3b dist bulk+disposition UI | `fc7b6c4` | **PASS** |
-| BACKLOG-061-U-B3a dist bulk+mint+disposition API | `66ae66d` | **PASS** ù 0072 |
-| BACKLOG-061-U-B2 products+dist shell | `c54c32f` | **PASS** |
-| BACKLOG-061-U-G2 shell + customers | `d58e38c` | **PASS** |
+- BACKLOG-061 Theme B: MasterDataGridShell + customer/distributor promote-in-place (map, mint, park/exclude)
+- U-G2 / U-B2 / U-B3a / U-B3b Fable PASS
+- Migrations through `20260710_0072` (distributor code mint setting)
 
 ---
 
 ## Next
 
-1. Human soak UI on `/admin/distributors` (optional).
-2. Merge PR #7 when Warren says "promote to main" / "merge the PR".
-3. Deferred: BACKLOG-073 import-job fact purge (start only when Warren prioritizes junk cleanup).
+1. Optional human soak: `/admin/customers` + `/admin/distributors` promote/disposition.
+2. New feature branch when next TRIGGER fires ó likely BACKLOG-073 (import-job fact purge) if Warren prioritizes junk cleanup.
+3. CI note: GitHub Actions `pnpm/action-setup` fails on version clash (`version: 9` vs `packageManager: pnpm@9.15.9`) ó infra fix, not Theme B.
 
 **Do not re-audit:** U2a/U2b/U-D1/U-G2/U-B2/U-B3a/U-B3b PASSes.
