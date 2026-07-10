@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-10 (BACKLOG-061 B2–B4 + 0069 applied — awaiting Fable batch verify)
+**Last updated:** 2026-07-10 (BACKLOG-061 complete — Fable PASS B2–B4; 0069 + grants)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,8 +10,9 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/backlog-061-entity-promote-in-place` |
-| **HEAD** | *(update after commit)* |
-| **Alembic (DB)** | **`20260709_0069`** on cip (Warren approved 2026-07-10) |
+| **HEAD** | `9cfb67f` (+ grants script commit pending) |
+| **PR** | Recommend open/merge |
+| **Alembic (DB)** | **`20260709_0069`** on cip; `cip` role GRANTed on listing tables |
 
 ---
 
@@ -19,23 +20,23 @@
 
 | Unit | Tip | Fable verify |
 |------|-----|--------------|
-| BACKLOG-061 B1 | `a824c9a` | **PASS 2026-07-10** |
-| BACKLOG-061 B2–B4 + 0069 | pending commit | pending |
+| BACKLOG-061 B2–B4 | `9cfb67f` | **PASS 2026-07-10** · queue empty |
+| BACKLOG-061 B1 | `a824c9a` | **PASS** |
 | BACKLOG-072 | `0202098` | **PASS** |
 
 ---
 
-## Warren approvals recorded 2026-07-10
+## Done on cip (Warren approved)
 
-- §6 defaults: target=`active`; API-only audit; TMP+active eligible with confirm
-- B4: 7 orphan `verified` ? `active` (**done**, remaining=0)
-- Apply migration **0069** (**done** on cip)
+- B4: 7 `verified` ? `active` (remaining 0)
+- Alembic **0069** applied
+- GRANTs to `cip` on `customer_listing` / `listing_observation` (+ sequences) — verified SELECT as `cip`
 
 ---
 
 ## Next
 
-CLI Fable verify B2–B4 batch ? merge/PR when PASS.
+Open PR and merge `feat/backlog-061-entity-promote-in-place` ? `main` when ready.
 
 ---
 

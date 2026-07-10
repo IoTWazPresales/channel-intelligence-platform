@@ -64,6 +64,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-07-10 | **BACKLOG-061 Fable PASS B2–B4 (`9cfb67f`):** promote UI+distributor API; verified remap; 0069 on cip + GRANTs to `cip`. Queue empty — recommend merge PR. |
 | 2026-07-10 | **BACKLOG-061 B2–B4 + 0069 (Warren full approve):** customer/distributor promote UI; distributor promote API; orphan `verified`→`active` (7 rows); alembic **0069** applied on cip (`customer_listing`/`listing_observation`). Branch `feat/backlog-061-entity-promote-in-place`. |
 | 2026-07-09 | **BACKLOG-061 B1 (`a824c9a`) Fable PASS:** `POST /customers/{id}/promote` preview/confirm. Branch `feat/backlog-061-entity-promote-in-place`. |
 | 2026-07-09 | **BACKLOG-061 Phase A (design):** promote-in-place discovery + `docs/design/BACKLOG-061_promote_in_place.md` — target status `active` (not orphaned `verified`); TMP-DIST all active on cip (backlog wording mismatch reported). No API/UI/migration. Branch `feat/backlog-061-entity-promote-in-place`. |
