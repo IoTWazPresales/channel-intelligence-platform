@@ -107,7 +107,59 @@ describe('CustomerBulkPromoteDialog', () => {
         { tmp_code: 'TMP-CUST-B', new_code: 'TAKEN', note: undefined },
       ],
       dry_run: false,
+      mode: 'map',
     });
     expect(screen.getByText(/applied 1/i)).toBeInTheDocument();
+  });
+
+  it('mint mode previews and chunks 1200 into 3 requests', async () => {
+    const codes = Array.from({ length: 1200 }, (_, i) => `TMP-CUST-${i}`);
+    apiPost.mockImplementation(async (_url: string, body: { rows: { tmp_code: string }[] }) => ({
+      dry_run: true,
+      mode: 'mint',
+      summary: {
+        ready: body.rows.length,
+        blocked: 0,
+        skipped: 0,
+        applied: 0,
+        total: body.rows.length,
+      },
+      rows: body.rows.map((r, i) => ({
+        tmp_code: r.tmp_code,
+        new_code: `CUST-${String(i + 1).padStart(6, '0')}`,
+        customer_id: i + 1,
+        status: 'ready' as const,
+        reasons: [],
+      })),
+    }));
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CustomerBulkPromoteDialog
+          open
+          onClose={vi.fn()}
+          mintCandidates={codes.map((tmp_code) => ({ tmp_code, name: 'X' }))}
+        />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByTestId('bulk-promote-mint-selection')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('bulk-promote-preview-btn'));
+    await waitFor(() => expect(screen.getByTestId('bulk-promote-preview')).toBeInTheDocument());
+    expect(apiPost).toHaveBeenCalledTimes(3);
+    expect(apiPost.mock.calls[0][1].mode).toBe('mint');
+    expect(apiPost.mock.calls[0][1].rows).toHaveLength(500);
+    expect(apiPost.mock.calls[1][1].rows).toHaveLength(500);
+    expect(apiPost.mock.calls[2][1].rows).toHaveLength(200);
+  });
+});
+
+describe('chunkRows', () => {
+  it('splits 1200 into 3 chunks of 500/500/200', async () => {
+    const { chunkRows } = await import('./CustomerBulkPromoteDialog');
+    const rows = Array.from({ length: 1200 }, (_, i) => i);
+    const chunks = chunkRows(rows, 500);
+    expect(chunks.map((c) => c.length)).toEqual([500, 500, 200]);
   });
 });

@@ -1,17 +1,18 @@
-"""BACKLOG-061 Unit BP1 — bulk customer promote via CSV/paste mapping.
+"""BACKLOG-061 Unit BP1/U2b — bulk customer promote via CSV map or system mint.
 
-Loops the single-row promote service. No mint path. No schema changes.
+Loops the single-row promote service. Never auto-creates dim_customer.
 Partial success: per-row commit; one failure does not abort the rest.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dimensions import DimCustomer
+from app.services.customer_code_mint import mint_next_customer_code
 from app.services.customer_promote import (
     CustomerPromoteError,
     _norm_code,
@@ -20,6 +21,7 @@ from app.services.customer_promote import (
 )
 
 BATCH_MAX_ROWS = 500
+BulkPromoteMode = Literal["map", "mint"]
 
 
 def _row_base(
@@ -51,7 +53,11 @@ async def _resolve_tmp_customer(db: AsyncSession, tmp_code: str) -> DimCustomer 
     ).scalars().first()
 
 
-def _mark_intra_batch_duplicates(results: list[dict[str, Any]]) -> None:
+def _mark_intra_batch_duplicates(
+    results: list[dict[str, Any]],
+    *,
+    mode: BulkPromoteMode,
+) -> None:
     """Duplicate tmp_code or new_code (case-insensitive) blocks ALL involved rows."""
     tmp_counts: dict[str, list[int]] = {}
     new_counts: dict[str, list[int]] = {}
@@ -59,6 +65,8 @@ def _mark_intra_batch_duplicates(results: list[dict[str, Any]]) -> None:
         t = _norm_code(r["tmp_code"]).lower()
         if t:
             tmp_counts.setdefault(t, []).append(i)
+        # Mint mode assigns new_code later — only check provided new_codes in map mode
+        # (or any already-filled new_code).
         n = _norm_code(r["new_code"]).lower()
         if n:
             new_counts.setdefault(n, []).append(i)
@@ -71,13 +79,14 @@ def _mark_intra_batch_duplicates(results: list[dict[str, Any]]) -> None:
             if "intra_batch_duplicate_tmp" not in results[i]["reasons"]:
                 results[i]["reasons"].append("intra_batch_duplicate_tmp")
 
-    for idxs in new_counts.values():
-        if len(idxs) < 2:
-            continue
-        for i in idxs:
-            results[i]["status"] = "blocked"
-            if "intra_batch_duplicate_new" not in results[i]["reasons"]:
-                results[i]["reasons"].append("intra_batch_duplicate_new")
+    if mode == "map":
+        for idxs in new_counts.values():
+            if len(idxs) < 2:
+                continue
+            for i in idxs:
+                results[i]["status"] = "blocked"
+                if "intra_batch_duplicate_new" not in results[i]["reasons"]:
+                    results[i]["reasons"].append("intra_batch_duplicate_new")
 
 
 async def run_customer_bulk_promote(
@@ -85,12 +94,20 @@ async def run_customer_bulk_promote(
     *,
     rows: list[dict[str, Any]],
     dry_run: bool,
+    mode: BulkPromoteMode = "map",
 ) -> dict[str, Any]:
-    """Preview or confirm a batch of tmp_code → new_code mappings.
+    """Preview or confirm a batch of promotes.
 
-    ``rows`` items: ``{tmp_code, new_code, note?}``.
-    Blank ``new_code`` → ``skipped_blank`` (not an error).
+    mode=map: ``{tmp_code, new_code, note?}`` — blank new_code → skipped_blank.
+    mode=mint: ``{tmp_code, note?}`` — new_code must be blank; service mints Candidate A codes.
     """
+    if mode not in ("map", "mint"):
+        raise CustomerPromoteError(
+            f"Unsupported mode {mode!r}",
+            status_code=422,
+            code="invalid_mode",
+        )
+
     if len(rows) > BATCH_MAX_ROWS:
         raise CustomerPromoteError(
             f"Too many rows (max {BATCH_MAX_ROWS})",
@@ -103,9 +120,15 @@ async def run_customer_bulk_promote(
         tmp = _norm_code(raw.get("tmp_code"))
         new = _norm_code(raw.get("new_code"))
         note = raw.get("note")
-        results.append(_row_base(tmp_code=tmp, new_code=new, note=note if isinstance(note, str) else None))
+        results.append(
+            _row_base(tmp_code=tmp, new_code=new, note=note if isinstance(note, str) else None)
+        )
 
-    _mark_intra_batch_duplicates(results)
+    _mark_intra_batch_duplicates(results, mode=mode)
+
+    # Mint dry-run: provisional codes tracked in reserved so preview is unique within batch.
+    mint_reserved: set[str] = set()
+    mint_start_seq: int | None = None
 
     for r in results:
         if r["status"] == "blocked" and r["reasons"]:
@@ -116,10 +139,17 @@ async def run_customer_bulk_promote(
             r["reasons"].append("tmp_code_blank")
             continue
 
-        if not r["new_code"]:
-            r["status"] = "skipped_blank"
-            r["reasons"] = []
-            continue
+        if mode == "mint":
+            if r["new_code"]:
+                r["status"] = "blocked"
+                r["reasons"].append("new_code_not_allowed_in_mint")
+                r["outcome"] = "blocked"
+                continue
+        else:
+            if not r["new_code"]:
+                r["status"] = "skipped_blank"
+                r["reasons"] = []
+                continue
 
         code_u = r["tmp_code"].upper()
         if not code_u.startswith("TMP-CUST-"):
@@ -136,6 +166,24 @@ async def run_customer_bulk_promote(
             continue
 
         r["customer_id"] = int(row.id)
+
+        if mode == "mint":
+            try:
+                minted, used_seq = await mint_next_customer_code(
+                    db,
+                    dry_run=dry_run,
+                    reserved=mint_reserved,
+                    start_seq=mint_start_seq if dry_run else None,
+                )
+            except CustomerPromoteError as exc:
+                r["status"] = "blocked"
+                r["reasons"].append(exc.code)
+                r["outcome"] = "blocked"
+                continue
+            r["new_code"] = minted
+            mint_reserved.add(minted.lower())
+            if dry_run:
+                mint_start_seq = used_seq + 1
 
         if dry_run:
             try:
@@ -159,7 +207,7 @@ async def run_customer_bulk_promote(
                 r["reasons"] = reasons or ["not_eligible"]
             continue
 
-        # Confirm path: re-preview inside confirm_customer_promote guards drift.
+        # Confirm path
         try:
             applied = await confirm_customer_promote(
                 db,
@@ -197,6 +245,7 @@ async def run_customer_bulk_promote(
     }
     return {
         "dry_run": dry_run,
+        "mode": mode,
         "rows": results,
         "summary": summary,
     }

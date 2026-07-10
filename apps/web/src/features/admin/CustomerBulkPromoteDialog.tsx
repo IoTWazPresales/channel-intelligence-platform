@@ -15,6 +15,8 @@ import {
   TableHead,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -26,6 +28,11 @@ export type BulkPromoteMappingRow = {
   tmp_code: string;
   new_code: string;
   note?: string | null;
+};
+
+export type MintCandidate = {
+  tmp_code: string;
+  name?: string;
 };
 
 type BatchRowResult = {
@@ -44,6 +51,7 @@ type BatchRowResult = {
 
 type BatchResponse = {
   dry_run: boolean;
+  mode?: 'map' | 'mint';
   rows: BatchRowResult[];
   summary: {
     ready: number;
@@ -57,7 +65,11 @@ type BatchResponse = {
 type Props = {
   open: boolean;
   onClose: () => void;
+  /** Optional grid selection for mint mode (TMP-CUST rows). */
+  mintCandidates?: MintCandidate[];
 };
+
+export const BULK_PROMOTE_CHUNK_SIZE = 500;
 
 /** Parse paste/CSV: tmp_code,new_code[,note]. Header optional. */
 export function parseBulkPromoteCsv(text: string): BulkPromoteMappingRow[] {
@@ -82,6 +94,51 @@ export function parseBulkPromoteCsv(text: string): BulkPromoteMappingRow[] {
     });
   }
   return rows;
+}
+
+/** One tmp_code per line (or comma-first field). */
+export function parseMintTmpCodes(text: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const line of text.split(/\r?\n/)) {
+    const raw = line.trim();
+    if (!raw) continue;
+    const lower = raw.toLowerCase();
+    if (lower === 'tmp_code' || lower.startsWith('tmp_code,')) continue;
+    const code = raw.split(',')[0].trim().replace(/^"|"$/g, '');
+    if (!code) continue;
+    const key = code.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(code);
+  }
+  return out;
+}
+
+/** Split into ≤chunkSize batches (client-side chunking for ~4.9k backlog). */
+export function chunkRows<T>(rows: T[], chunkSize = BULK_PROMOTE_CHUNK_SIZE): T[][] {
+  if (chunkSize < 1) throw new Error('chunkSize must be >= 1');
+  const chunks: T[][] = [];
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    chunks.push(rows.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+function mergeBatchResponses(parts: BatchResponse[], dryRun: boolean): BatchResponse {
+  const rows = parts.flatMap((p) => p.rows);
+  return {
+    dry_run: dryRun,
+    mode: parts[0]?.mode,
+    rows,
+    summary: {
+      ready: rows.filter((r) => r.status === 'ready').length,
+      blocked: rows.filter((r) => r.status === 'blocked').length,
+      skipped: rows.filter((r) => r.status === 'skipped_blank').length,
+      applied: rows.filter((r) => r.status === 'applied').length,
+      total: rows.length,
+    },
+  };
 }
 
 function statusChip(status: BatchRowResult['status']) {
@@ -113,8 +170,9 @@ function downloadReportCsv(rows: BatchRowResult[]) {
   URL.revokeObjectURL(url);
 }
 
-export function CustomerBulkPromoteDialog({ open, onClose }: Props) {
+export function CustomerBulkPromoteDialog({ open, onClose, mintCandidates = [] }: Props) {
   const qc = useQueryClient();
+  const [mode, setMode] = useState<'map' | 'mint'>('map');
   const [paste, setPaste] = useState('');
   const [step, setStep] = useState<'input' | 'preview' | 'result'>('input');
   const [preview, setPreview] = useState<BatchResponse | null>(null);
@@ -130,20 +188,69 @@ export function CustomerBulkPromoteDialog({ open, onClose }: Props) {
     setResult(null);
     setError(null);
     setMapping([]);
-  }, [open]);
+    setMode(mintCandidates.length > 0 ? 'mint' : 'map');
+  }, [open, mintCandidates.length]);
 
-  const parsedCount = useMemo(() => parseBulkPromoteCsv(paste).length, [paste]);
+  const parsedMapCount = useMemo(() => parseBulkPromoteCsv(paste).length, [paste]);
+  const mintCodesFromPaste = useMemo(() => parseMintTmpCodes(paste), [paste]);
+  const effectiveMintCodes = useMemo(() => {
+    if (mintCandidates.length > 0) {
+      const seen = new Set<string>();
+      const codes: string[] = [];
+      for (const c of mintCandidates) {
+        const code = (c.tmp_code || '').trim();
+        if (!code) continue;
+        const key = code.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        codes.push(code);
+      }
+      return codes;
+    }
+    return mintCodesFromPaste;
+  }, [mintCandidates, mintCodesFromPaste]);
+
+  const nameByTmp = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of mintCandidates) {
+      if (c.tmp_code && c.name) m.set(c.tmp_code.toLowerCase(), c.name);
+    }
+    return m;
+  }, [mintCandidates]);
 
   const previewMut = useMutation({
     mutationFn: async () => {
-      const rows = parseBulkPromoteCsv(paste);
-      if (rows.length === 0) throw new Error('Paste at least one tmp_code,new_code row');
-      if (rows.length > 500) throw new Error('Max 500 rows per batch');
+      if (mode === 'map') {
+        const rows = parseBulkPromoteCsv(paste);
+        if (rows.length === 0) throw new Error('Paste at least one tmp_code,new_code row');
+        if (rows.length > BULK_PROMOTE_CHUNK_SIZE) {
+          throw new Error(`Max ${BULK_PROMOTE_CHUNK_SIZE} rows per batch`);
+        }
+        setMapping(rows);
+        return apiPost<BatchResponse>('/api/v1/customers/promote/batch', {
+          rows,
+          dry_run: true,
+          mode: 'map',
+        });
+      }
+      const codes = effectiveMintCodes;
+      if (codes.length === 0) {
+        throw new Error('Select TMP customers on the grid, or paste tmp_code lines');
+      }
+      const rows = codes.map((tmp_code) => ({ tmp_code, new_code: '' }));
       setMapping(rows);
-      return apiPost<BatchResponse>('/api/v1/customers/promote/batch', {
-        rows,
-        dry_run: true,
-      });
+      const chunks = chunkRows(rows, BULK_PROMOTE_CHUNK_SIZE);
+      const parts: BatchResponse[] = [];
+      for (const chunk of chunks) {
+        parts.push(
+          await apiPost<BatchResponse>('/api/v1/customers/promote/batch', {
+            rows: chunk,
+            dry_run: true,
+            mode: 'mint',
+          })
+        );
+      }
+      return mergeBatchResponses(parts, true);
     },
     onSuccess: (data) => {
       setPreview(data);
@@ -160,10 +267,25 @@ export function CustomerBulkPromoteDialog({ open, onClose }: Props) {
   const confirmMut = useMutation({
     mutationFn: async () => {
       if (!mapping.length) throw new Error('No mapping');
-      return apiPost<BatchResponse>('/api/v1/customers/promote/batch', {
-        rows: mapping,
-        dry_run: false,
-      });
+      if (mode === 'map') {
+        return apiPost<BatchResponse>('/api/v1/customers/promote/batch', {
+          rows: mapping,
+          dry_run: false,
+          mode: 'map',
+        });
+      }
+      const chunks = chunkRows(mapping, BULK_PROMOTE_CHUNK_SIZE);
+      const parts: BatchResponse[] = [];
+      for (const chunk of chunks) {
+        parts.push(
+          await apiPost<BatchResponse>('/api/v1/customers/promote/batch', {
+            rows: chunk,
+            dry_run: false,
+            mode: 'mint',
+          })
+        );
+      }
+      return mergeBatchResponses(parts, false);
     },
     onSuccess: (data) => {
       setResult(data);
@@ -177,6 +299,8 @@ export function CustomerBulkPromoteDialog({ open, onClose }: Props) {
 
   const readyN = preview?.summary.ready ?? 0;
   const displayRows = result?.rows ?? preview?.rows ?? [];
+  const inputReady =
+    mode === 'map' ? Boolean(paste.trim()) : effectiveMintCodes.length > 0;
 
   return (
     <Dialog
@@ -189,14 +313,38 @@ export function CustomerBulkPromoteDialog({ open, onClose }: Props) {
       <DialogTitle>Bulk promote provisional customers</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
-          <Typography variant="body2" color="text.secondary">
-            Map existing TMP codes to real business codes. Format:{' '}
-            <code>tmp_code,new_code[,note]</code>. Blank new_code rows are skipped. No codes are
-            minted here — paste codes from your ERP/import or leave blank until a tenant convention
-            exists.
-          </Typography>
-
           {step === 'input' ? (
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={mode}
+              onChange={(_, v) => {
+                if (v) {
+                  setMode(v);
+                  setError(null);
+                }
+              }}
+              data-testid="bulk-promote-mode"
+            >
+              <ToggleButton value="map">CSV / paste map</ToggleButton>
+              <ToggleButton value="mint">Mint codes</ToggleButton>
+            </ToggleButtonGroup>
+          ) : null}
+
+          {mode === 'map' ? (
+            <Typography variant="body2" color="text.secondary">
+              Map existing TMP codes to real business codes. Format:{' '}
+              <code>tmp_code,new_code[,note]</code>. Blank new_code rows are skipped.
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              System-mint Candidate A codes (<code>CUST-000001</code>…). Select TMP rows on the
+              customers grid (selection mode), or paste one <code>tmp_code</code> per line. Preview
+              then confirm; batches of {BULK_PROMOTE_CHUNK_SIZE} are sent automatically.
+            </Typography>
+          )}
+
+          {step === 'input' && mode === 'map' ? (
             <>
               <TextField
                 multiline
@@ -208,7 +356,8 @@ export function CustomerBulkPromoteDialog({ open, onClose }: Props) {
                 inputProps={{ 'data-testid': 'bulk-promote-paste' }}
               />
               <Typography variant="caption" color="text.secondary">
-                {parsedCount} row{parsedCount === 1 ? '' : 's'} parsed (max 500)
+                {parsedMapCount} row{parsedMapCount === 1 ? '' : 's'} parsed (max{' '}
+                {BULK_PROMOTE_CHUNK_SIZE})
               </Typography>
               <Button variant="outlined" component="label" data-testid="bulk-promote-file">
                 Load CSV file
@@ -227,6 +376,32 @@ export function CustomerBulkPromoteDialog({ open, onClose }: Props) {
             </>
           ) : null}
 
+          {step === 'input' && mode === 'mint' ? (
+            <>
+              {mintCandidates.length > 0 ? (
+                <Alert severity="info" data-testid="bulk-promote-mint-selection">
+                  {effectiveMintCodes.length} selected TMP customer
+                  {effectiveMintCodes.length === 1 ? '' : 's'} from the grid.
+                </Alert>
+              ) : (
+                <TextField
+                  multiline
+                  minRows={8}
+                  fullWidth
+                  value={paste}
+                  onChange={(e) => setPaste(e.target.value)}
+                  placeholder={'TMP-CUST-ABC\nTMP-CUST-DEF'}
+                  inputProps={{ 'data-testid': 'bulk-promote-mint-paste' }}
+                />
+              )}
+              <Typography variant="caption" color="text.secondary">
+                {effectiveMintCodes.length} code{effectiveMintCodes.length === 1 ? '' : 's'} ·{' '}
+                {chunkRows(effectiveMintCodes, BULK_PROMOTE_CHUNK_SIZE).length} request chunk
+                {chunkRows(effectiveMintCodes, BULK_PROMOTE_CHUNK_SIZE).length === 1 ? '' : 's'}
+              </Typography>
+            </>
+          ) : null}
+
           {error ? (
             <Alert severity="error" data-testid="bulk-promote-error">
               {error}
@@ -234,7 +409,10 @@ export function CustomerBulkPromoteDialog({ open, onClose }: Props) {
           ) : null}
 
           {(step === 'preview' || step === 'result') && displayRows.length ? (
-            <Stack spacing={1} data-testid={step === 'result' ? 'bulk-promote-result' : 'bulk-promote-preview'}>
+            <Stack
+              spacing={1}
+              data-testid={step === 'result' ? 'bulk-promote-result' : 'bulk-promote-preview'}
+            >
               <Typography variant="subtitle2">
                 {step === 'result' ? 'Result' : 'Preview'} · ready {preview?.summary.ready ?? 0} ·
                 blocked {result?.summary.blocked ?? preview?.summary.blocked ?? 0} · skipped{' '}
@@ -245,6 +423,7 @@ export function CustomerBulkPromoteDialog({ open, onClose }: Props) {
                 <TableHead>
                   <TableRow>
                     <TableCell>TMP code</TableCell>
+                    {mode === 'mint' ? <TableCell>Name</TableCell> : null}
                     <TableCell>New code</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell>Reasons</TableCell>
@@ -254,6 +433,9 @@ export function CustomerBulkPromoteDialog({ open, onClose }: Props) {
                   {displayRows.map((r, i) => (
                     <TableRow key={`${r.tmp_code}-${i}`}>
                       <TableCell>{r.tmp_code}</TableCell>
+                      {mode === 'mint' ? (
+                        <TableCell>{nameByTmp.get(r.tmp_code.toLowerCase()) || '—'}</TableCell>
+                      ) : null}
                       <TableCell>{r.new_code || '—'}</TableCell>
                       <TableCell>{statusChip(r.status)}</TableCell>
                       <TableCell>
@@ -281,7 +463,7 @@ export function CustomerBulkPromoteDialog({ open, onClose }: Props) {
         {step === 'input' ? (
           <Button
             variant="contained"
-            disabled={!paste.trim() || previewMut.isPending}
+            disabled={!inputReady || previewMut.isPending}
             onClick={() => previewMut.mutate()}
             data-testid="bulk-promote-preview-btn"
           >
@@ -304,7 +486,9 @@ export function CustomerBulkPromoteDialog({ open, onClose }: Props) {
               onClick={() => confirmMut.mutate()}
               data-testid="bulk-promote-confirm-btn"
             >
-              {confirmMut.isPending ? 'Promoting…' : `Promote ${readyN} ready row${readyN === 1 ? '' : 's'}`}
+              {confirmMut.isPending
+                ? 'Promoting…'
+                : `Promote ${readyN} ready row${readyN === 1 ? '' : 's'}`}
             </Button>
           </>
         ) : null}

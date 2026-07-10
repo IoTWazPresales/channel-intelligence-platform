@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import secrets
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
@@ -101,6 +101,7 @@ class CustomerBulkPromoteRow(BaseModel):
 class CustomerBulkPromoteBody(BaseModel):
     rows: list[CustomerBulkPromoteRow]
     dry_run: bool = True
+    mode: Literal["map", "mint"] = "map"
 
 
 class CustomerLocationCreate(BaseModel):
@@ -892,10 +893,12 @@ async def promote_customers_batch(
     body: CustomerBulkPromoteBody,
     db: AsyncSession = Depends(get_db),
 ):
-    """BACKLOG-061 BP1 — bulk promote via tmp_code→new_code mapping (CSV/paste).
+    """BACKLOG-061 BP1/U2b — bulk promote via CSV map or system mint.
 
+    ``mode=map`` (default): tmp_code→new_code mapping (CSV/paste). Blank new_code skipped.
+    ``mode=mint``: tmp_code only; service mints Candidate A codes (CUST-######).
     ``dry_run=true``: preview only. ``dry_run=false``: apply ready rows with partial
-    success (per-row commit). Cap 500. No mint path. Never auto-creates dim_customer.
+    success (per-row commit). Cap 500. Never auto-creates dim_customer.
     """
     from app.services.customer_bulk_promote import BATCH_MAX_ROWS, run_customer_bulk_promote
     from app.services.customer_promote import CustomerPromoteError
@@ -913,6 +916,7 @@ async def promote_customers_batch(
             db,
             rows=[r.model_dump() for r in body.rows],
             dry_run=body.dry_run,
+            mode=body.mode,
         )
     except CustomerPromoteError as exc:
         raise HTTPException(

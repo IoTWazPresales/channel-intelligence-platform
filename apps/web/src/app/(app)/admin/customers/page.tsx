@@ -889,6 +889,13 @@ function AdminCustomersPageContent() {
     }
   }, [gridApi]);
 
+  const bulkMintCandidates = useMemo(() => {
+    if (!gridApi || bulkSelectionMode !== 'selecting') return [];
+    return (gridApi.getSelectedRows() as CustomerRow[])
+      .filter((r) => String(r.customer_code || '').toUpperCase().startsWith('TMP-CUST-'))
+      .map((r) => ({ tmp_code: String(r.customer_code), name: r.customer_name }));
+  }, [gridApi, bulkSelectionMode, bulkSelectedCount]);
+
   const closeCustomerBulkDeleteDialog = useCallback(() => {
     if (bulkDeleteBusy) return;
     setBulkDeleteOpen(false);
@@ -1552,6 +1559,7 @@ function AdminCustomersPageContent() {
       />
       <CustomerBulkPromoteDialog
         open={bulkPromoteOpen}
+        mintCandidates={bulkMintCandidates}
         onClose={() => {
           setBulkPromoteOpen(false);
           void qc.invalidateQueries({ queryKey: ['admin-customers'] });
