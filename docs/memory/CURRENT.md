@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-07-10 (PR #7 merged to main ù BACKLOG-061 Theme B)
-**Verify git:** `git branch --show-current` ù `git rev-parse --short HEAD`
+**Last updated:** 2026-07-11 (Channel Ops KPI + PM gap scan perf ó in progress)
+**Verify git:** `git branch --show-current` ∑ `git rev-parse --short HEAD`
 
 ---
 
@@ -9,25 +9,28 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `main` |
-| **HEAD** | `8866bbe` |
-| **PR** | [#7](https://github.com/IoTWazPresales/channel-intelligence-platform/pull/7) ù **merged** |
+| **Branch** | `feat/channel-ops-kpi-and-gap-scan-perf` |
+| **HEAD** | pending commit |
+| **PR** | Not opened |
 | **Alembic (DB)** | **`20260710_0072`** on cip |
+| **main tip** | `618448c` (PR #7 Theme B merged) |
 
 ---
 
-## What shipped (PR #7)
+## This branch
 
-- BACKLOG-061 Theme B: MasterDataGridShell + customer/distributor promote-in-place (map, mint, park/exclude)
-- U-G2 / U-B2 / U-B3a / U-B3b Fable PASS
-- Migrations through `20260710_0072` (distributor code mint setting)
+- Set-based `sum_derived_channel_stock` / inventory rows (KPI cards were blank while summary N+1 took ~13s)
+- PM gap `scan` match-only + proxy undici headersTimeout for `/product-master-gaps/scan`
+- Opus CONSULT READY: bug-first queue; parity = CST beachhead then audit matrix (not mega-PR)
 
 ---
 
 ## Next
 
-1. Optional human soak: `/admin/customers` + `/admin/distributors` promote/disposition.
-2. New feature branch when next TRIGGER fires ù likely BACKLOG-073 (import-job fact purge) if Warren prioritizes junk cleanup.
-3. CI note: GitHub Actions `pnpm/action-setup` fails on version clash (`version: 9` vs `packageManager: pnpm@9.15.9`) ù infra fix, not Theme B.
+1. Restart API so live `:8001` picks up set-based stock.
+2. Commit/push this branch; optional PR.
+3. Unit 3: CST steward toolbar/filter parity (not shell swap).
+4. Unit 4: parity inventory audit (PVE/CPOR/PM gaps/channels/PO/inbound).
+5. Deferred: BACKLOG-073; CI pnpm clash.
 
 **Do not re-audit:** U2a/U2b/U-D1/U-G2/U-B2/U-B3a/U-B3b PASSes.

@@ -284,57 +284,102 @@ async def sum_derived_channel_stock(
 
     Returns (total_derived_units_rounded, pair_count).
     Never sums raw snapshots across periods.
+
+    Set-based: one join for latest snapshots + aggregated sell-out/landed
+    since each pair's snapshot (no per-pair round-trips).
     """
     latest = _latest_snapshot_subquery(distributor_id)
-    inv_rows = (
+    inv = (
+        select(
+            FactInventoryDistributor.distributor_id.label("distributor_id"),
+            FactInventoryDistributor.product_id.label("product_id"),
+            FactInventoryDistributor.as_of_date.label("snapshot_date"),
+            FactInventoryDistributor.on_hand_units.label("on_hand"),
+        )
+        .join(
+            latest,
+            and_(
+                FactInventoryDistributor.distributor_id == latest.c.distributor_id,
+                FactInventoryDistributor.product_id == latest.c.product_id,
+                FactInventoryDistributor.as_of_date == latest.c.snapshot_date,
+            ),
+        )
+        .subquery("inv_latest")
+    )
+
+    sell_agg = (
+        select(
+            inv.c.distributor_id.label("distributor_id"),
+            inv.c.product_id.label("product_id"),
+            func.coalesce(func.sum(FactSalesSellout.units), 0).label("sell_out"),
+        )
+        .select_from(inv)
+        .outerjoin(
+            FactSalesSellout,
+            and_(
+                FactSalesSellout.distributor_id == inv.c.distributor_id,
+                FactSalesSellout.product_id == inv.c.product_id,
+                FactSalesSellout.transaction_date > inv.c.snapshot_date,
+            ),
+        )
+        .group_by(inv.c.distributor_id, inv.c.product_id)
+        .subquery("sell_since")
+    )
+
+    land_agg = (
+        select(
+            inv.c.distributor_id.label("distributor_id"),
+            inv.c.product_id.label("product_id"),
+            func.coalesce(func.sum(FactInboundShipment.quantity), 0).label("landed"),
+        )
+        .select_from(inv)
+        .outerjoin(
+            FactInboundShipment,
+            and_(
+                FactInboundShipment.distributor_id == inv.c.distributor_id,
+                FactInboundShipment.product_id == inv.c.product_id,
+                FactInboundShipment.pod_date.isnot(None),
+                FactInboundShipment.pod_date > inv.c.snapshot_date,
+                func.lower(FactInboundShipment.line_state) == "shipped",
+            ),
+        )
+        .group_by(inv.c.distributor_id, inv.c.product_id)
+        .subquery("land_since")
+    )
+
+    row = (
         await db.execute(
             select(
-                FactInventoryDistributor.distributor_id,
-                FactInventoryDistributor.product_id,
-                FactInventoryDistributor.as_of_date,
-                FactInventoryDistributor.on_hand_units,
-            ).join(
-                latest,
+                func.coalesce(
+                    func.sum(
+                        func.coalesce(inv.c.on_hand, 0)
+                        - func.coalesce(sell_agg.c.sell_out, 0)
+                        + func.coalesce(land_agg.c.landed, 0)
+                    ),
+                    0,
+                ),
+                func.count(),
+            )
+            .select_from(inv)
+            .outerjoin(
+                sell_agg,
                 and_(
-                    FactInventoryDistributor.distributor_id == latest.c.distributor_id,
-                    FactInventoryDistributor.product_id == latest.c.product_id,
-                    FactInventoryDistributor.as_of_date == latest.c.snapshot_date,
+                    sell_agg.c.distributor_id == inv.c.distributor_id,
+                    sell_agg.c.product_id == inv.c.product_id,
+                ),
+            )
+            .outerjoin(
+                land_agg,
+                and_(
+                    land_agg.c.distributor_id == inv.c.distributor_id,
+                    land_agg.c.product_id == inv.c.product_id,
                 ),
             )
         )
-    ).all()
-    if not inv_rows:
-        return 0, 0
-
-    total = Decimal("0")
-    for dist_id, prod_id, snap_date, on_hand in inv_rows:
-        reported = Decimal(str(on_hand or 0))
-        sell_out = Decimal(
-            str(
-                await db.scalar(
-                    select(func.coalesce(func.sum(FactSalesSellout.units), 0)).where(
-                        FactSalesSellout.distributor_id == int(dist_id),
-                        FactSalesSellout.product_id == int(prod_id),
-                        FactSalesSellout.transaction_date > snap_date,
-                    )
-                )
-                or 0
-            )
-        )
-        landed = Decimal(
-            str(
-                await db.scalar(
-                    select(func.coalesce(func.sum(FactInboundShipment.quantity), 0)).where(
-                        _shipped_landed_filter(int(dist_id), int(prod_id), snap_date)
-                    )
-                )
-                or 0
-            )
-        )
-        total += compute_derived_stock(
-            reported_soh=reported, sell_out_since=sell_out, landed_since=landed
-        )
-    return int(total), len(inv_rows)
+    ).one()
+    total = Decimal(str(row[0] or 0))
+    pair_count = int(row[1] or 0)
+    return int(total), pair_count
 
 
 async def derived_stock_rows_for_distributor(
@@ -345,15 +390,15 @@ async def derived_stock_rows_for_distributor(
 ) -> list[dict[str, Any]]:
     """Per-product derived stock rows for Channel Ops inventory tab."""
     latest = _latest_snapshot_subquery(int(distributor_id))
-    q = (
+    inv = (
         select(
-            FactInventoryDistributor.distributor_id,
-            FactInventoryDistributor.product_id,
-            FactInventoryDistributor.as_of_date,
-            FactInventoryDistributor.on_hand_units,
-            FactInventoryDistributor.calculated_soh,
-            FactInventoryDistributor.soh_variance,
-            FactInventoryDistributor.reconciliation_status,
+            FactInventoryDistributor.distributor_id.label("distributor_id"),
+            FactInventoryDistributor.product_id.label("product_id"),
+            FactInventoryDistributor.as_of_date.label("snapshot_date"),
+            FactInventoryDistributor.on_hand_units.label("on_hand"),
+            FactInventoryDistributor.calculated_soh.label("calculated_soh"),
+            FactInventoryDistributor.soh_variance.label("soh_variance"),
+            FactInventoryDistributor.reconciliation_status.label("reconciliation_status"),
         )
         .join(
             latest,
@@ -366,34 +411,86 @@ async def derived_stock_rows_for_distributor(
         .where(FactInventoryDistributor.distributor_id == int(distributor_id))
     )
     if product_id is not None:
-        q = q.where(FactInventoryDistributor.product_id == int(product_id))
-    rows = (await db.execute(q)).all()
+        inv = inv.where(FactInventoryDistributor.product_id == int(product_id))
+    inv = inv.subquery("inv_latest")
+
+    sell_agg = (
+        select(
+            inv.c.distributor_id.label("distributor_id"),
+            inv.c.product_id.label("product_id"),
+            func.coalesce(func.sum(FactSalesSellout.units), 0).label("sell_out"),
+        )
+        .select_from(inv)
+        .outerjoin(
+            FactSalesSellout,
+            and_(
+                FactSalesSellout.distributor_id == inv.c.distributor_id,
+                FactSalesSellout.product_id == inv.c.product_id,
+                FactSalesSellout.transaction_date > inv.c.snapshot_date,
+            ),
+        )
+        .group_by(inv.c.distributor_id, inv.c.product_id)
+        .subquery("sell_since")
+    )
+
+    land_agg = (
+        select(
+            inv.c.distributor_id.label("distributor_id"),
+            inv.c.product_id.label("product_id"),
+            func.coalesce(func.sum(FactInboundShipment.quantity), 0).label("landed"),
+        )
+        .select_from(inv)
+        .outerjoin(
+            FactInboundShipment,
+            and_(
+                FactInboundShipment.distributor_id == inv.c.distributor_id,
+                FactInboundShipment.product_id == inv.c.product_id,
+                FactInboundShipment.pod_date.isnot(None),
+                FactInboundShipment.pod_date > inv.c.snapshot_date,
+                func.lower(FactInboundShipment.line_state) == "shipped",
+            ),
+        )
+        .group_by(inv.c.distributor_id, inv.c.product_id)
+        .subquery("land_since")
+    )
+
+    rows = (
+        await db.execute(
+            select(
+                inv.c.distributor_id,
+                inv.c.product_id,
+                inv.c.snapshot_date,
+                inv.c.on_hand,
+                inv.c.calculated_soh,
+                inv.c.soh_variance,
+                inv.c.reconciliation_status,
+                func.coalesce(sell_agg.c.sell_out, 0),
+                func.coalesce(land_agg.c.landed, 0),
+            )
+            .select_from(inv)
+            .outerjoin(
+                sell_agg,
+                and_(
+                    sell_agg.c.distributor_id == inv.c.distributor_id,
+                    sell_agg.c.product_id == inv.c.product_id,
+                ),
+            )
+            .outerjoin(
+                land_agg,
+                and_(
+                    land_agg.c.distributor_id == inv.c.distributor_id,
+                    land_agg.c.product_id == inv.c.product_id,
+                ),
+            )
+        )
+    ).all()
+
     out: list[dict[str, Any]] = []
     for r in rows:
-        dist_id, prod_id, snap_date, on_hand = int(r[0]), int(r[1]), r[2], r[3]
-        reported = Decimal(str(on_hand or 0))
-        sell_out = Decimal(
-            str(
-                await db.scalar(
-                    select(func.coalesce(func.sum(FactSalesSellout.units), 0)).where(
-                        FactSalesSellout.distributor_id == dist_id,
-                        FactSalesSellout.product_id == prod_id,
-                        FactSalesSellout.transaction_date > snap_date,
-                    )
-                )
-                or 0
-            )
-        )
-        landed = Decimal(
-            str(
-                await db.scalar(
-                    select(func.coalesce(func.sum(FactInboundShipment.quantity), 0)).where(
-                        _shipped_landed_filter(dist_id, prod_id, snap_date)
-                    )
-                )
-                or 0
-            )
-        )
+        dist_id, prod_id, snap_date = int(r[0]), int(r[1]), r[2]
+        reported = Decimal(str(r[3] or 0))
+        sell_out = Decimal(str(r[7] or 0))
+        landed = Decimal(str(r[8] or 0))
         derived = compute_derived_stock(
             reported_soh=reported, sell_out_since=sell_out, landed_since=landed
         )

@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { Agent, fetch as undiciFetch } from 'undici';
 
 /**
  * Same-origin reverse proxy: browser calls `/api/v1/...` on the Next host, this route forwards to FastAPI.
@@ -63,6 +64,13 @@ function upstreamOrigin(): string {
 /** Long-running import apply/validate/commit can exceed the default undici/fetch timeout. */
 const LONG_PROXY_TIMEOUT_MS = 600_000;
 
+/** Undici defaults headersTimeout to 300s — AbortSignal alone does not raise it (UND_ERR_HEADERS_TIMEOUT). */
+const longProxyAgent = new Agent({
+  headersTimeout: LONG_PROXY_TIMEOUT_MS,
+  bodyTimeout: LONG_PROXY_TIMEOUT_MS,
+  connectTimeout: 60_000,
+});
+
 function proxyFetchInitNeedsLongTimeout(method: string, pathSuffix: string): boolean {
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false;
   const p = pathSuffix.toLowerCase();
@@ -70,7 +78,9 @@ function proxyFetchInitNeedsLongTimeout(method: string, pathSuffix: string): boo
     p.includes('/validate') ||
     p.includes('/commit') ||
     p.endsWith('/apply') ||
-    p.includes('/apply/')
+    p.includes('/apply/') ||
+    // Catalogue-gap scan can still be heavy on large unresolved sets (bounded server-side).
+    p.includes('/product-master-gaps/scan')
   );
 }
 
@@ -89,14 +99,16 @@ async function proxy(request: NextRequest, pathSegments: string[] | undefined) {
     }
   });
 
-  const init: RequestInit & { duplex?: 'half' } = {
+  const long = proxyFetchInitNeedsLongTimeout(request.method, suffix);
+  const init: RequestInit & { duplex?: 'half'; dispatcher?: Agent } = {
     method: request.method,
     headers,
     redirect: 'manual',
   };
 
-  if (proxyFetchInitNeedsLongTimeout(request.method, suffix)) {
+  if (long) {
     init.signal = AbortSignal.timeout(LONG_PROXY_TIMEOUT_MS);
+    init.dispatcher = longProxyAgent;
   }
 
   if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS') {
@@ -104,11 +116,12 @@ async function proxy(request: NextRequest, pathSegments: string[] | undefined) {
     init.duplex = 'half';
   }
 
-  const res = await fetch(url, init);
-  const out = new Headers(res.headers);
+  // Use undici fetch when a custom dispatcher is required; otherwise global fetch is fine.
+  const res = long ? await undiciFetch(url, init as Parameters<typeof undiciFetch>[1]) : await fetch(url, init);
+  const out = new Headers(res.headers as HeadersInit);
   HOP_BY_HOP.forEach((h) => out.delete(h));
 
-  return new NextResponse(res.body, { status: res.status, statusText: res.statusText, headers: out });
+  return new NextResponse(res.body as BodyInit, { status: res.status, statusText: res.statusText, headers: out });
 }
 
 type RouteCtx = { params: Promise<{ path?: string[] }> };

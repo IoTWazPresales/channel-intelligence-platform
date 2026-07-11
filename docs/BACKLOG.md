@@ -6,6 +6,21 @@
 
 ---
 
+## BACKLOG-074 — Admin/ops grid chrome parity program (post–Theme B)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-07-11 · Opus CONSULT READY (bug-first queue) |
+| **Effort** | Large (multi-PR; beachhead then audit then per-surface) |
+| **Source** | Warren 2026-07-11: CST steward + PVE + CPOR + PM gaps + channels/regions + PO + inbound lack MasterDataGridShell / filter / toolbar parity after Theme B. Opus refused mega-PR. |
+| **Idea** | Bring grid/filter/toolbar *capability* parity without conflating admin `MasterDataGridShell` and import `ImportStewardCandidateWorkspace`. |
+| **What the work is** | (1) CST steward beachhead — affordances on existing bar, not shell swap. (2) Docs-only inventory matrix for PVE/CPOR/PM gaps/channels/PO/inbound. (3) Warren picks next 1–2 surfaces from matrix. |
+| **Regression traps** | Do not swap steward workspace onto MasterDataGridShell; do not touch commercial-planner `ColumnSelectorModal`; do not default-hide dispositioned rows (BACKLOG-073). |
+| **Out of scope** | BACKLOG-073 junk purge; CI pnpm clash; new CST “data provider” entity (config+import already exist). |
+| **TRIGGER** | After Channel Ops KPI + PM gap scan perf ships; **or** Warren prioritizes CST steward chrome. |
+
+---
+
 ## BACKLOG-073 — Import-job fact rollback / purge (test-junk cleanup; not park/exclude)
 
 | Field | Detail |

@@ -63,7 +63,7 @@ export function ChannelOpsKpiCards({ distributorId }: { distributorId?: number |
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5 }}>
           <TrendIcon fontSize="small" color={yoy != null && yoy > 0 ? 'success' : 'inherit'} />
           <Typography variant="caption" color="text.secondary">
-            {yoy == null ? 'YoY n/a' : `YoY ${(yoy * 100).toFixed(1)}%`}
+            {isLoading ? '…' : yoy == null ? 'YoY n/a' : `YoY ${(yoy * 100).toFixed(1)}%`}
           </Typography>
         </Stack>
       </Paper>

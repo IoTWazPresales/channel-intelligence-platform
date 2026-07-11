@@ -368,49 +368,85 @@ def _ensure_product_alias(session: Session, tok: str, product_id: int) -> tuple[
 
 
 def scan_open_gaps_for_matches(session: Session, *, limit: int = 500) -> dict[str, Any]:
-    """On-demand / post-PM: worklist unresolved tokens that now match PM."""
+    """On-demand / post-PM: worklist unresolved tokens that now match PM.
+
+    Match-only (no per-token full-table count scans). Counts belong on preview/apply.
+    """
     tokens: set[str] = set()
-    for line in session.scalars(
-        select(ShipmentEvidenceLine).where(
-            ShipmentEvidenceLine.product_id.is_(None),
-            ShipmentEvidenceLine.product_resolution_status.in_(tuple(_SHIPMENT_UNRESOLVED)),
-        )
-    ).all():
-        for field in (
-            line.product_resolution_token,
-            line.item_code,
-            line.ean_code,
-            line.upc_code,
-            line.sales_model_name,
-            line.customer_item,
-            line.mpor_item_no,
-        ):
-            t = _norm_token(field)
+
+    # Distinct unresolved shipment tokens — SQL DISTINCT, not full ORM hydrate + Python loop
+    # over every line for every token (that path caused ~318s HeadersTimeout).
+    ship_cols = (
+        ShipmentEvidenceLine.product_resolution_token,
+        ShipmentEvidenceLine.item_code,
+        ShipmentEvidenceLine.ean_code,
+        ShipmentEvidenceLine.upc_code,
+        ShipmentEvidenceLine.sales_model_name,
+        ShipmentEvidenceLine.customer_item,
+        ShipmentEvidenceLine.mpor_item_no,
+    )
+    for col in ship_cols:
+        if len(tokens) >= limit:
+            break
+        for raw in session.scalars(
+            select(col)
+            .where(
+                ShipmentEvidenceLine.product_id.is_(None),
+                ShipmentEvidenceLine.product_resolution_status.in_(tuple(_SHIPMENT_UNRESOLVED)),
+                col.isnot(None),
+                col != "",
+            )
+            .distinct()
+            .limit(limit)
+        ).all():
+            t = _norm_token(raw)
             if t:
                 tokens.add(t)
+            if len(tokens) >= limit:
                 break
-    for c in session.scalars(
-        select(ImportEntityMappingCandidate).where(
-            ImportEntityMappingCandidate.entity_type == "product_identifier",
-            ImportEntityMappingCandidate.status == "needs_review",
-        )
-    ).all():
-        t = _norm_token(c.normalized_key)
-        if t:
-            tokens.add(t)
-    for r in session.scalars(
-        select(CporClaimEvidenceLine).where(CporClaimEvidenceLine.product_id.is_(None))
-    ).all():
-        t = _norm_token(r.source_model_token)
-        if t:
-            tokens.add(t)
+
+    if len(tokens) < limit:
+        for c in session.scalars(
+            select(ImportEntityMappingCandidate.normalized_key)
+            .where(
+                ImportEntityMappingCandidate.entity_type == "product_identifier",
+                ImportEntityMappingCandidate.status == "needs_review",
+            )
+            .distinct()
+            .limit(limit)
+        ).all():
+            t = _norm_token(c)
+            if t:
+                tokens.add(t)
+            if len(tokens) >= limit:
+                break
+
+    if len(tokens) < limit:
+        for raw in session.scalars(
+            select(CporClaimEvidenceLine.source_model_token)
+            .where(
+                CporClaimEvidenceLine.product_id.is_(None),
+                CporClaimEvidenceLine.source_model_token.isnot(None),
+            )
+            .distinct()
+            .limit(limit)
+        ).all():
+            t = _norm_token(raw)
+            if t:
+                tokens.add(t)
+            if len(tokens) >= limit:
+                break
 
     token_list = sorted(tokens)[:limit]
-    preview = preview_gap_resolve(session, token_list)
-    matched = [i for i in preview["items"] if i.get("matched")]
+    # Load PM index once; match only — do not call preview_gap_resolve (O(tokens × all lines)).
+    matched: list[dict[str, Any]] = []
+    for tok in token_list:
+        m = match_token_to_product(session, tok)
+        if m.get("matched"):
+            matched.append(m)
     return {
         "scanned_tokens": len(token_list),
         "matched": matched,
         "matched_count": len(matched),
-        "truncated": len(tokens) > limit,
+        "truncated": len(tokens) >= limit,
     }
