@@ -117,6 +117,18 @@ def _assert_survivor_valid(db: Session, *, survivor_id: int, member_ids: list[in
     return survivor
 
 
+def _assert_losers_not_open_channel(db: Session, loser_ids: list[int]) -> None:
+    """System OPEN_CHANNEL must never be soft-redirected away from id=1."""
+    if not loser_ids:
+        return
+    rows = db.execute(
+        select(DimCustomer.id, DimCustomer.code).where(DimCustomer.id.in_([int(x) for x in loser_ids]))
+    ).all()
+    for r in rows:
+        if str(r.code) == OPEN_CHANNEL_CUSTOMER_CODE:
+            raise CustomerFullMergeError("OPEN_CHANNEL cannot be a merge loser")
+
+
 def _reject_non_customer_entities(member_ids: list[int]) -> None:
     """Products and distributors are out of scope — only dim_customer ids allowed."""
     # Callers pass dim_customer ids from duplicate groups; explicit guard for API misuse.
@@ -176,6 +188,7 @@ def preview_customer_full_merge(
     kid = int(survivor_id) if survivor_id is not None else _default_survivor_id(members)
     _assert_survivor_valid(db, survivor_id=kid, member_ids=member_ids)
     losers = [int(x) for x in member_ids if int(x) != kid]
+    _assert_losers_not_open_channel(db, losers)
 
     loser_plans: list[dict[str, Any]] = []
     for lid in losers:

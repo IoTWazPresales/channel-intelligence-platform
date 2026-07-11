@@ -75,6 +75,10 @@ export const navGroups: NavGroup[] = [
         label: 'Name-similarity duplicates',
         href: '/admin/customers/duplicates?tab=name_similarity',
       },
+      {
+        label: 'Related names (review)',
+        href: '/admin/customers/duplicates?tab=related',
+      },
       { label: 'Distributors', href: '/admin/distributors' },
       {
         label: 'Distributor name-similarity duplicates',
@@ -115,7 +119,7 @@ export function defaultGroupExpandedState(): Record<string, boolean> {
 function duplicatesTabFromSearch(search: string): string {
   const raw = search.startsWith('?') ? search.slice(1) : search;
   const tab = new URLSearchParams(raw).get('tab');
-  if (tab === 'alias_scope' || tab === 'name_similarity') return tab;
+  if (tab === 'alias_scope' || tab === 'name_similarity' || tab === 'related') return tab;
   return 'name_similarity';
 }
 

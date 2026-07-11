@@ -11,6 +11,7 @@ Taxonomy (``docs/PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md``):
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any, Literal
@@ -43,6 +44,10 @@ from app.services.commercial_planner.open_channel_customer import (
 from app.services.commercial_planner.plan_vs_executed import enumerate_available_periods
 
 logger = logging.getLogger(__name__)
+
+# Short TTL — shipping grid re-hits attribution on every page/filter change.
+_ATTRIBUTION_CTX_TTL_SEC = 45.0
+_ATTRIBUTION_CTX_CACHE: tuple[float, "AttributionContext"] | None = None
 
 LifecycleBucket = Literal["shipped", "pipeline", "landed"]
 SlipDirection = Literal["slipped_in", "slipped_out"]
@@ -173,6 +178,22 @@ class AttributionContext:
 
 
 async def load_attribution_context(db: AsyncSession) -> AttributionContext:
+    """Load PO↔lineup attribution maps.
+
+    Process-local TTL cache (45s): ``/shipping/lines`` invokes this on every page
+    and the full case/PO/line scan dominates latency on large cip datasets.
+    """
+    global _ATTRIBUTION_CTX_CACHE
+    now = time.monotonic()
+    cached = _ATTRIBUTION_CTX_CACHE
+    if cached is not None and (now - cached[0]) < _ATTRIBUTION_CTX_TTL_SEC:
+        return cached[1]
+    ctx = await _load_attribution_context_uncached(db)
+    _ATTRIBUTION_CTX_CACHE = (now, ctx)
+    return ctx
+
+
+async def _load_attribution_context_uncached(db: AsyncSession) -> AttributionContext:
     open_channel_customer_id, open_channel_alias_ids = await get_open_channel_canonical_and_aliases(db)
     ctx = AttributionContext(
         open_channel_customer_id=open_channel_customer_id,

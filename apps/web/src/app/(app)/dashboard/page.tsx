@@ -89,9 +89,30 @@ export default function DashboardPage() {
               <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                 Stock health snapshot
               </Typography>
-              <Typography variant="body2" color="text.secondary" component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
-                {JSON.stringify(data?.stock_health ?? {}, null, 2)}
-              </Typography>
+              {data?.stock_health && Object.keys(data.stock_health).length > 0 ? (
+                <Stack spacing={0.75}>
+                  {Object.entries(data.stock_health)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([state, count]) => (
+                      <Stack key={state} direction="row" justifyContent="space-between" spacing={2}>
+                        <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
+                          {state.replace(/_/g, ' ')}
+                        </Typography>
+                        <Typography variant="body2" fontWeight={600}>
+                          {count.toLocaleString()}
+                        </Typography>
+                      </Stack>
+                    ))}
+                </Stack>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No stock-health rows derived yet. Live inventory and weeks-of-cover live on{' '}
+                  <Link component={NextLink} href="/sell-out" fontWeight={600}>
+                    Channel Operations
+                  </Link>
+                  .
+                </Typography>
+              )}
             </Paper>
             <Paper sx={{ p: 2, flex: 1 }}>
               <Typography variant="subtitle1" fontWeight={600} gutterBottom>

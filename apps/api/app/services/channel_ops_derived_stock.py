@@ -28,6 +28,8 @@ from app.models.facts import FactInboundShipment, FactInventoryDistributor, Fact
 VARIANCE_FLAG_PCT = Decimal("0.10")
 # Weeks-of-cover: treat near-zero velocity as n/a (avoid absurd cover numbers).
 VELOCITY_NEAR_ZERO = Decimal("0.01")
+# Portfolio / SKU cover above two years is not actionable — treat as n/a.
+MAX_WEEKS_OF_COVER = Decimal("104")
 
 
 @dataclass(frozen=True)
@@ -96,14 +98,18 @@ def weeks_of_cover_or_none(
     velocity: Decimal | float | int | None,
     *,
     near_zero: Decimal = VELOCITY_NEAR_ZERO,
+    max_weeks: Decimal = MAX_WEEKS_OF_COVER,
 ) -> float | None:
-    """Return weeks of cover, or None when velocity is missing/near-zero."""
+    """Return weeks of cover, or None when velocity is missing/near-zero or cover is absurd."""
     if stock is None or velocity is None:
         return None
     vel = Decimal(str(velocity))
     if vel <= near_zero:
         return None
-    return float(Decimal(str(stock)) / vel)
+    weeks = Decimal(str(stock)) / vel
+    if weeks > max_weeks:
+        return None
+    return float(weeks)
 
 
 def yoy_pct_or_none(

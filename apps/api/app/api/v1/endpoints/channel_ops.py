@@ -174,14 +174,16 @@ async def channel_ops_summary(
 
     weeks_of_cover: float | None = None
     if await _table_exists(db, "fact_customer_velocity"):
-        vel_q = select(func.avg(FactCustomerVelocity.velocity_52wk)).where(
+        # Portfolio cover = total stock / sum of positive velocities (not avg — avg understates
+        # velocity and produces absurd multi-thousand-week cover figures).
+        vel_q = select(func.coalesce(func.sum(FactCustomerVelocity.velocity_52wk), 0)).where(
             FactCustomerVelocity.velocity_52wk.isnot(None),
             FactCustomerVelocity.velocity_52wk > 0,
         )
         if distributor_id is not None:
             vel_q = vel_q.where(FactCustomerVelocity.distributor_id == int(distributor_id))
-        avg_vel = await db.scalar(vel_q)
-        weeks_of_cover = weeks_of_cover_or_none(total_inv, avg_vel)
+        total_vel = await db.scalar(vel_q)
+        weeks_of_cover = weeks_of_cover_or_none(total_inv, total_vel)
 
     since_35 = today - timedelta(days=35)
     dist_reporting_q = select(func.count(func.distinct(FactSalesSellout.distributor_id))).where(

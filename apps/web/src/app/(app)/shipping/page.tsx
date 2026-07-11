@@ -116,26 +116,10 @@ function cargoStatusLabel(key: string): string {
   return key;
 }
 
-function localDateYMD(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function startOfISOWeek(d: Date): Date {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const dow = x.getDay();
-  const diff = dow === 0 ? -6 : 1 - dow;
-  x.setDate(x.getDate() + diff);
-  return x;
-}
-
-function addDaysCal(d: Date, n: number): Date {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  x.setDate(x.getDate() + n);
-  return x;
-}
+import {
+  arrivingOrLandedWeekPresetDates,
+  overdueSmartPresetDates,
+} from './shippingUtcDates';
 
 function dateColFormatter(p: ValueFormatterParams<ShippingLine>): string {
   return fmtShortDate(p.value as string | undefined);
@@ -304,18 +288,17 @@ export default function InboundShipmentsPage() {
 
   const applySmartPreset = useCallback(
     (id: SmartPresetId) => {
-      const today = new Date();
-      const w0 = startOfISOWeek(today);
-      const w6 = addDaysCal(w0, 6);
-      const yest = addDaysCal(today, -1);
+      // Match API commercial-summary: UTC today + UTC ISO week (not browser-local calendar).
+      const { weekStart, weekEnd } = arrivingOrLandedWeekPresetDates();
+      const { dateTo: overdueTo } = overdueSmartPresetDates();
       setSmartPreset(id);
       setDeliveryLens(null);
       resetPagination();
       switch (id) {
         case 'arriving_week':
           setDateField('eta_date');
-          setDateFrom(localDateYMD(w0));
-          setDateTo(localDateYMD(w6));
+          setDateFrom(weekStart);
+          setDateTo(weekEnd);
           setCargoStatus('scheduled');
           setLineState('');
           setPodDateFilter('');
@@ -323,15 +306,15 @@ export default function InboundShipmentsPage() {
         case 'overdue':
           setDateField('promise_date');
           setDateFrom('');
-          setDateTo(localDateYMD(yest));
+          setDateTo(overdueTo);
           setCargoStatus('scheduled');
           setLineState('');
           setPodDateFilter('true');
           break;
         case 'landed_week':
           setDateField('pod_date');
-          setDateFrom(localDateYMD(w0));
-          setDateTo(localDateYMD(w6));
+          setDateFrom(weekStart);
+          setDateTo(weekEnd);
           setCargoStatus('received');
           setLineState('');
           setPodDateFilter('false');

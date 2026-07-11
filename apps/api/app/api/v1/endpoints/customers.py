@@ -265,6 +265,10 @@ async def list_customers(
         default=None,
         description="Filter no_code_disposition: parked|excluded|set|unset",
     ),
+    include_merged: bool = Query(
+        default=False,
+        description="When false (default), exclude soft-redirected losers (merged_into_customer_id set)",
+    ),
     sort_by: str = Query(default="code"),
     sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
 ):
@@ -405,6 +409,9 @@ async def list_customers(
             status_code=422,
             detail={"message": "Invalid disposition filter", "code": "invalid_disposition_filter"},
         )
+
+    if not include_merged:
+        filters.append(DimCustomer.merged_into_customer_id.is_(None))
 
     if filters:
         base = base.where(and_(*filters))

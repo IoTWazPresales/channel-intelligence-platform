@@ -937,6 +937,13 @@ function AdminCustomersPageContent() {
             </Button>
             <Button
               variant="outlined"
+              component={Link}
+              href="/admin/customers/duplicates?tab=related"
+            >
+              Related names
+            </Button>
+            <Button
+              variant="outlined"
               onClick={() => router.push('/admin/imports?template=customer_master')}
             >
               Import customer master

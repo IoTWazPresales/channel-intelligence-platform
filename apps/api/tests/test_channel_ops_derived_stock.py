@@ -82,6 +82,13 @@ def test_weeks_of_cover_near_zero_velocity_is_none() -> None:
     assert weeks_of_cover_or_none(None, 10) is None
 
 
+def test_weeks_of_cover_absurdly_high_is_none() -> None:
+    # 61k stock / ~0.4 vel ≈ 150k weeks — treat as n/a, not a real KPI.
+    assert weeks_of_cover_or_none(61073, 0.425) is None
+    assert weeks_of_cover_or_none(1040, 10) == 104.0
+    assert weeks_of_cover_or_none(1040.01, 10) is None
+
+
 def test_yoy_pct_denominator_guard() -> None:
     assert yoy_pct_or_none(110, 100) == 0.1
     assert yoy_pct_or_none(50, 0) is None

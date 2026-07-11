@@ -365,3 +365,25 @@ def test_exact_key_strict_equality_unchanged() -> None:
                 audit_note="strict equality",
                 customer_ids=[c1],
             )
+
+
+def test_open_channel_cannot_be_merge_loser() -> None:
+    from unittest.mock import MagicMock
+
+    from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
+    from app.services.customer_full_merge import _assert_losers_not_open_channel
+
+    db = MagicMock()
+    row = MagicMock()
+    row.id = 1
+    row.code = OPEN_CHANNEL_CUSTOMER_CODE
+    db.execute.return_value.all.return_value = [row]
+    with pytest.raises(CustomerFullMergeError, match="OPEN_CHANNEL cannot be a merge loser"):
+        _assert_losers_not_open_channel(db, [1])
+
+    db2 = MagicMock()
+    other = MagicMock()
+    other.id = 99
+    other.code = "TMP-OTHER"
+    db2.execute.return_value.all.return_value = [other]
+    _assert_losers_not_open_channel(db2, [99])  # no raise
