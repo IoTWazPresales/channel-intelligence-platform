@@ -24,7 +24,7 @@ import { useTheme } from '@mui/material/styles';
 import type { ColDef, GridOptions } from 'ag-grid-community';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CartesianGrid,
@@ -47,7 +47,7 @@ import {
   type ExceptionCategory,
   type ExceptionRow,
 } from '@/features/plan-vs-executed/ExceptionCategoryGrid';
-import { DRILL_GRID_PAGE_SIZE, gridRowMetrics, paginatedGridHeight } from '@/features/plan-vs-executed/gridPagination';
+import { DRILL_GRID_PAGE_SIZE, gridRowMetrics, paginatedGridHeight, PAGINATED_GRID_PAGE_SIZE } from '@/features/plan-vs-executed/gridPagination';
 import { resolveProductDisplay } from '@/features/plan-vs-executed/productDisplay';
 import { buildInboundShipmentsHref } from '@/app/(app)/shipping/buildInboundShipmentsHref';
 import { apiGet } from '@/lib/api';
@@ -86,11 +86,16 @@ type Scorecard = {
   buckets: { executed_vs_plan: number; off_plan: number; pending: number };
 };
 
+type ExceptionCategoryPage = {
+  items: ExceptionRow[];
+  total: number;
+};
+
 type LensExceptions = {
-  short_ships: ExceptionRow[];
-  over_ships: ExceptionRow[];
-  unplanned_intake: ExceptionRow[];
-  no_po_blind_spots: ExceptionRow[];
+  short_ships: ExceptionCategoryPage;
+  over_ships: ExceptionCategoryPage;
+  unplanned_intake: ExceptionCategoryPage;
+  no_po_blind_spots: ExceptionCategoryPage;
 };
 
 type ProductGroupBy = 'description' | 'sku' | 'sales_model';
@@ -114,7 +119,13 @@ type PlanVsExecutedResponse = {
   };
   available_periods: { year: number; quarter: number; label: string }[];
   scorecard: Scorecard;
-  exceptions: { customer: LensExceptions; product: LensExceptions; bu: LensExceptions };
+  exceptions: Partial<Record<Lens, LensExceptions>>;
+  exceptions_paging?: {
+    lens: Lens;
+    category: ExceptionCategory;
+    limit: number;
+    offset: number;
+  };
   trend: {
     period_label: string;
     fill_rate: number | null;
@@ -157,6 +168,17 @@ type PlanVsExecutedResponse = {
 type Lens = 'customer' | 'product' | 'bu';
 
 const ALL_BU = '__all__';
+
+const EXCEPTION_PAGE_SIZE_OPTIONS = [15, 30, 50] as const;
+
+function parseExceptionPagination(sp: URLSearchParams): { offset: number; limit: number } {
+  const offset = Math.max(0, Number(sp.get('exc_offset') || '0') || 0);
+  const limitRaw = Number(sp.get('exc_limit') || String(PAGINATED_GRID_PAGE_SIZE)) || PAGINATED_GRID_PAGE_SIZE;
+  const limit = (EXCEPTION_PAGE_SIZE_OPTIONS as readonly number[]).includes(limitRaw)
+    ? limitRaw
+    : PAGINATED_GRID_PAGE_SIZE;
+  return { offset, limit };
+}
 
 const EXCLUSIVE_TOGGLE_SX = {
   '& .MuiToggleButton-root': {
@@ -243,6 +265,8 @@ function KpiTile({
 
 export function PlanVsExecutedView() {
   const theme = useTheme();
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [periodFrom, setPeriodFrom] = useState<string | null>(searchParams.get('period_from'));
   const [periodTo, setPeriodTo] = useState<string | null>(searchParams.get('period_to'));
@@ -256,6 +280,24 @@ export function PlanVsExecutedView() {
   const [drillSalesModel, setDrillSalesModel] = useState<string | null>(null);
   const drillRef = useRef<HTMLDivElement | null>(null);
 
+  const { offset: excOffset, limit: excLimit } = useMemo(
+    () => parseExceptionPagination(searchParams),
+    [searchParams],
+  );
+
+  const setExceptionParamState = useCallback(
+    (patch: { exc_offset?: string | null; exc_limit?: string | null }) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (patch.exc_offset === null) next.delete('exc_offset');
+      else if (patch.exc_offset != null) next.set('exc_offset', patch.exc_offset);
+      if (patch.exc_limit === null) next.delete('exc_limit');
+      else if (patch.exc_limit != null) next.set('exc_limit', patch.exc_limit);
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
   const queryKey = [
     'plan-vs-executed',
     periodFrom,
@@ -266,6 +308,10 @@ export function PlanVsExecutedView() {
     drillCustomerId,
     drillProductId,
     drillSalesModel,
+    lens,
+    exceptionCategory,
+    excOffset,
+    excLimit,
   ];
   const q = useQuery({
     queryKey,
@@ -279,6 +325,10 @@ export function PlanVsExecutedView() {
       if (drillCustomerId != null) params.set('drill_customer_id', String(drillCustomerId));
       if (drillProductId != null) params.set('drill_product_id', String(drillProductId));
       if (drillSalesModel) params.set('drill_sales_model', drillSalesModel);
+      params.set('exceptions_lens', lens);
+      params.set('exceptions_category', exceptionCategory);
+      params.set('exceptions_limit', String(excLimit));
+      params.set('exceptions_offset', String(excOffset));
       const qs = params.toString();
       return apiGet<PlanVsExecutedResponse>(`/api/v1/plan-vs-executed${qs ? `?${qs}` : ''}`, { signal });
     },
@@ -471,7 +521,9 @@ export function PlanVsExecutedView() {
     return 'Drill active';
   }, [hasDrill, data?.drill]);
 
-  const activeExceptionRows = lensExceptions?.[exceptionCategory] ?? [];
+  const activeExceptionRows = lensExceptions?.[exceptionCategory]?.items ?? [];
+  const activeExceptionTotal = lensExceptions?.[exceptionCategory]?.total ?? 0;
+  const exceptionPage = excLimit > 0 ? Math.floor(excOffset / excLimit) : 0;
 
   const hasValueCoverage = useMemo(
     () => activeExceptionRows.some((r) => r.value_plan != null || r.value_cost != null),
@@ -571,7 +623,12 @@ export function PlanVsExecutedView() {
           size="small"
           exclusive
           value={rankBy}
-          onChange={(_, v) => v && setRankBy(v)}
+          onChange={(_, v) => {
+            if (v) {
+              setRankBy(v);
+              setExceptionParamState({ exc_offset: null });
+            }
+          }}
           aria-label="Rank exceptions by"
           sx={EXCLUSIVE_TOGGLE_SX}
         >
@@ -584,7 +641,12 @@ export function PlanVsExecutedView() {
           size="small"
           exclusive
           value={productGroupBy}
-          onChange={(_, v) => v && setProductGroupBy(v)}
+          onChange={(_, v) => {
+            if (v) {
+              setProductGroupBy(v);
+              setExceptionParamState({ exc_offset: null });
+            }
+          }}
           aria-label="Product attribute"
           data-testid="product-group-by"
           sx={EXCLUSIVE_TOGGLE_SX}
@@ -715,6 +777,7 @@ export function PlanVsExecutedView() {
                       onChange={(_, v) => {
                         setLens(v);
                         clearDrill();
+                        setExceptionParamState({ exc_offset: null });
                       }}
                       sx={LENS_TABS_SX}
                     >
@@ -724,7 +787,10 @@ export function PlanVsExecutedView() {
                     </Tabs>
                     <Tabs
                       value={exceptionCategory}
-                      onChange={(_, v) => setExceptionCategory(v)}
+                      onChange={(_, v) => {
+                        setExceptionCategory(v);
+                        setExceptionParamState({ exc_offset: null });
+                      }}
                       variant="scrollable"
                       scrollButtons="auto"
                       data-testid="exception-category-tabs"
@@ -734,13 +800,23 @@ export function PlanVsExecutedView() {
                         <Tab
                           key={cat}
                           value={cat}
-                          label={`${EXCEPTION_CATEGORY_LABELS[cat]} (${lensExceptions?.[cat]?.length ?? 0})`}
+                          label={`${EXCEPTION_CATEGORY_LABELS[cat]} (${lensExceptions?.[cat]?.total ?? 0})`}
                         />
                       ))}
                     </Tabs>
                     {lensExceptions ? (
                       <ExceptionCategoryGrid
                         rows={activeExceptionRows}
+                        total={activeExceptionTotal}
+                        page={exceptionPage}
+                        pageSize={excLimit}
+                        pageSizeOptions={EXCEPTION_PAGE_SIZE_OPTIONS}
+                        onPageChange={(nextPage) => {
+                          setExceptionParamState({ exc_offset: String(nextPage * excLimit) });
+                        }}
+                        onPageSizeChange={(nextLimit) => {
+                          setExceptionParamState({ exc_offset: null, exc_limit: String(nextLimit) });
+                        }}
                         lens={lens}
                         rankBy={rankBy}
                         category={exceptionCategory}

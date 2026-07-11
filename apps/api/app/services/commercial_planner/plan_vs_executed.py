@@ -32,6 +32,22 @@ logger = logging.getLogger(__name__)
 
 RankBy = Literal["units", "value"]
 ProductGroupBy = Literal["description", "sku", "sales_model"]
+ExceptionLens = Literal["customer", "product", "bu"]
+ExceptionCategory = Literal[
+    "short_ships",
+    "over_ships",
+    "unplanned_intake",
+    "no_po_blind_spots",
+]
+
+_EXCEPTION_CATEGORIES: tuple[ExceptionCategory, ...] = (
+    "short_ships",
+    "over_ships",
+    "unplanned_intake",
+    "no_po_blind_spots",
+)
+DEFAULT_EXCEPTIONS_LIMIT = 15
+MAX_EXCEPTIONS_LIMIT = 500
 
 # BACKLOG-066: duplicate-ingestion periods — detected at read time via check_lineup_duplicate_ingestion.
 
@@ -545,7 +561,7 @@ def _aggregate_exceptions(
     rank_by: RankBy,
     product_group_by: ProductGroupBy = "description",
 ) -> dict[str, list[dict[str, Any]]]:
-    """Ranked exception lists for customer, product, and BU lenses (full list; UI paginates)."""
+    """Ranked exception lists for customer, product, and BU lenses (full ranked lists)."""
 
     def _bucket() -> dict[str, Any]:
         return {
@@ -737,6 +753,45 @@ def _aggregate_exceptions(
     }
 
 
+def paginate_exception_category_page(
+    items: list[dict[str, Any]],
+    *,
+    limit: int,
+    offset: int,
+) -> dict[str, Any]:
+    """Slice a ranked exception list — scorecard already computed from full execution rows."""
+    total = len(items)
+    start = max(0, offset)
+    end = start + limit
+    return {"items": items[start:end], "total": total}
+
+
+def apply_exceptions_paging(
+    exceptions: dict[str, dict[str, list[dict[str, Any]]]],
+    *,
+    lens: ExceptionLens,
+    category: ExceptionCategory,
+    limit: int,
+    offset: int,
+) -> tuple[dict[str, dict[str, dict[str, Any]]], dict[str, Any]]:
+    """Return one lens with paginated active category; other categories expose totals only."""
+    lens_data = exceptions.get(lens) or {}
+    paged_lens: dict[str, dict[str, Any]] = {}
+    for cat in _EXCEPTION_CATEGORIES:
+        full_list = lens_data.get(cat) or []
+        if cat == category:
+            paged_lens[cat] = paginate_exception_category_page(full_list, limit=limit, offset=offset)
+        else:
+            paged_lens[cat] = {"items": [], "total": len(full_list)}
+    paging = {
+        "lens": lens,
+        "category": category,
+        "limit": limit,
+        "offset": offset,
+    }
+    return {lens: paged_lens}, paging
+
+
 def _affected_duplicate_ingestion_labels(rows: list[dict[str, Any]], cluster_samples: list[dict[str, Any]]) -> list[str]:
     """Period labels in scope that still have active duplicate-ingestion clusters."""
     if not cluster_samples:
@@ -821,6 +876,10 @@ async def plan_vs_executed_read_model(
     drill_product_id: int | None = None,
     drill_sales_model: str | None = None,
     drill_bu: str | None = None,
+    exceptions_lens: ExceptionLens = "customer",
+    exceptions_category: ExceptionCategory = "short_ships",
+    exceptions_limit: int = DEFAULT_EXCEPTIONS_LIMIT,
+    exceptions_offset: int = 0,
 ) -> dict[str, Any]:
     try:
         cov = await coverage(db)
@@ -841,7 +900,14 @@ async def plan_vs_executed_read_model(
         return {"data_unavailable": True}
 
     scorecard = compute_scorecard_from_execution_rows(rows)
-    exceptions = _aggregate_exceptions(rows, rank_by=rank_by, product_group_by=product_group_by)
+    exceptions_full = _aggregate_exceptions(rows, rank_by=rank_by, product_group_by=product_group_by)
+    exceptions, exceptions_paging = apply_exceptions_paging(
+        exceptions_full,
+        lens=exceptions_lens,
+        category=exceptions_category,
+        limit=exceptions_limit,
+        offset=exceptions_offset,
+    )
 
     period_slots = _period_slots_in_range(
         all_periods,
@@ -937,6 +1003,7 @@ async def plan_vs_executed_read_model(
         "available_periods": all_periods,
         "scorecard": scorecard,
         "exceptions": exceptions,
+        "exceptions_paging": exceptions_paging,
         "trend": trend,
         "drill_rows": drill_rows,
         "data_quality": {

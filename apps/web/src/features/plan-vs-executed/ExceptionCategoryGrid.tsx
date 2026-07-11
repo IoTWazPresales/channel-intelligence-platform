@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Link as MuiLink, Tooltip, Typography } from '@mui/material';
+import { Box, Link as MuiLink, TablePagination, Tooltip, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import type { ColDef, GridOptions, ICellRendererParams, RowClickedEvent } from 'ag-grid-community';
 import Link from 'next/link';
@@ -121,6 +121,12 @@ export function buildPoManagementHref(opts: {
 
 export function ExceptionCategoryGrid({
   rows,
+  total,
+  page,
+  pageSize,
+  pageSizeOptions,
+  onPageChange,
+  onPageSizeChange,
   lens,
   rankBy,
   category,
@@ -130,6 +136,12 @@ export function ExceptionCategoryGrid({
   onRowClick,
 }: {
   rows: ExceptionRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageSizeOptions?: readonly number[];
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
   lens: ExceptionLens;
   rankBy: 'units' | 'value';
   category: ExceptionCategory;
@@ -141,7 +153,8 @@ export function ExceptionCategoryGrid({
   const theme = useTheme();
   const density = theme.density === 'compact' ? 'compact' : 'comfortable';
   const { rowHeight, headerHeight } = gridRowMetrics(density);
-  const gridHeight = paginatedGridHeight(PAGINATED_GRID_PAGE_SIZE, { rowHeight, headerHeight });
+  const visibleRows = Math.max(1, Math.min(rows.length || 1, pageSize));
+  const gridHeight = paginatedGridHeight(visibleRows, { rowHeight, headerHeight });
 
   const showPoLink = category === 'short_ships' || category === 'no_po_blind_spots';
   const showLines = category === 'no_po_blind_spots';
@@ -252,9 +265,8 @@ export function ExceptionCategoryGrid({
 
   const gridOptions = useMemo<GridOptions<ExceptionRow>>(
     () => ({
-      pagination: true,
-      paginationPageSize: PAGINATED_GRID_PAGE_SIZE,
-      suppressPaginationPanel: false,
+      pagination: false,
+      suppressPaginationPanel: true,
       rowHeight,
       headerHeight,
       defaultColDef: { resizable: true },
@@ -266,7 +278,7 @@ export function ExceptionCategoryGrid({
     [onRowClick, rowHeight, headerHeight],
   );
 
-  if (!rows.length) {
+  if (!total) {
     return (
       <Box sx={{ py: 2 }}>
         <Typography variant="body2" color="text.secondary">
@@ -283,6 +295,18 @@ export function ExceptionCategoryGrid({
         columnDefs={columnDefs}
         height={gridHeight}
         gridOptions={gridOptions}
+      />
+      <TablePagination
+        component="div"
+        count={total}
+        page={page}
+        onPageChange={(_, nextPage) => onPageChange(nextPage)}
+        rowsPerPage={pageSize}
+        onRowsPerPageChange={(e) => onPageSizeChange(Number(e.target.value))}
+        rowsPerPageOptions={[...(pageSizeOptions ?? [PAGINATED_GRID_PAGE_SIZE, 30, 50])]}
+        labelDisplayedRows={({ from, to, count }) =>
+          count === 0 ? '0 of 0' : `${from}–${to} of ${count}`
+        }
       />
     </Box>
   );

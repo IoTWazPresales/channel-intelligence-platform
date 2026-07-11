@@ -288,7 +288,8 @@ def test_plan_vs_executed_read_model_wires_scorecard():
     out = asyncio.run(_run())
     assert out["data_unavailable"] is False
     assert out["scorecard"]["fill_rate"] == 1.0
-    assert out["exceptions"]["customer"]["short_ships"] == []
+    assert out["exceptions"]["customer"]["short_ships"]["items"] == []
+    assert out["exceptions"]["customer"]["short_ships"]["total"] == 0
 
 
 def _period_row(period_label: str, *, planned: float, shipped: float, **extra) -> dict:
@@ -422,3 +423,63 @@ def test_drill_filter_does_not_change_scorecard():
     assert out["scorecard"]["planned_units"] == portfolio_sc["planned_units"]
     assert len(out["drill_rows"]) == 1
     assert out["drill_rows"][0]["customer_label"] == "A"
+
+
+def _short_ship_rows_for_customers(count: int) -> list[dict]:
+    rows = []
+    for cid in range(1, count + 1):
+        rows.append(
+            {
+                **_row(planned=100, shipped=40, flag="short", customer_id=cid, product_id=10 + cid),
+                "case_id": 1,
+                "year": 2026,
+                "quarter": 2,
+                "quarter_label": "26Q2",
+                "customer_label": f"Cust-{cid}",
+                "business_unit_label": "NB",
+            }
+        )
+    return rows
+
+
+def test_exceptions_paging_page_two_disjoint_from_page_one():
+    full = mod._aggregate_exceptions(_short_ship_rows_for_customers(30), rank_by="units")
+    page1, paging1 = mod.apply_exceptions_paging(
+        full, lens="customer", category="short_ships", limit=15, offset=0
+    )
+    page2, paging2 = mod.apply_exceptions_paging(
+        full, lens="customer", category="short_ships", limit=15, offset=15
+    )
+    keys1 = {item["key"] for item in page1["customer"]["short_ships"]["items"]}
+    keys2 = {item["key"] for item in page2["customer"]["short_ships"]["items"]}
+    assert len(keys1) == 15
+    assert len(keys2) == 15
+    assert keys1.isdisjoint(keys2)
+    assert paging1["offset"] == 0
+    assert paging2["offset"] == 15
+    assert page1["customer"]["short_ships"]["total"] == 30
+    assert page2["customer"]["short_ships"]["total"] == 30
+
+
+def test_scorecard_present_when_exceptions_paged():
+    rows = _short_ship_rows_for_customers(25)
+
+    async def _run():
+        with patch.object(mod, "coverage", AsyncMock(return_value=_cov_for_periods(["26Q2"]))):
+            with patch.object(mod, "collect_execution_rows", AsyncMock(return_value=rows)):
+                with patch.object(mod, "_compute_trend", AsyncMock(return_value=[])):
+                    return await mod.plan_vs_executed_read_model(
+                        AsyncMock(),
+                        period_from="26Q2",
+                        period_to="26Q2",
+                        exceptions_limit=10,
+                        exceptions_offset=10,
+                    )
+
+    out = asyncio.run(_run())
+    portfolio_sc = mod.compute_scorecard_from_execution_rows(rows)
+    assert out["scorecard"]["planned_units"] == portfolio_sc["planned_units"]
+    assert out["scorecard"]["short_exposure_units"] == portfolio_sc["short_exposure_units"]
+    assert len(out["exceptions"]["customer"]["short_ships"]["items"]) == 10
+    assert out["exceptions"]["customer"]["short_ships"]["total"] == 25
+    assert out["exceptions_paging"]["offset"] == 10

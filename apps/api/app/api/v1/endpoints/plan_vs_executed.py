@@ -33,6 +33,23 @@ async def get_plan_vs_executed(
     drill_product_id: int | None = Query(None),
     drill_sales_model: str | None = Query(None),
     drill_bu: str | None = Query(None),
+    exceptions_lens: Literal["customer", "product", "bu"] = Query(
+        "customer",
+        description="Exception grid lens (only this lens is returned; refetch on tab change)",
+    ),
+    exceptions_category: Literal[
+        "short_ships",
+        "over_ships",
+        "unplanned_intake",
+        "no_po_blind_spots",
+    ] = Query("short_ships", description="Active exception category for the paged items slice"),
+    exceptions_limit: int = Query(
+        15,
+        ge=1,
+        le=500,
+        description="Max exception rows returned for the active category",
+    ),
+    exceptions_offset: int = Query(0, ge=0, description="Offset into the active category ranked list"),
 ):
     """Portfolio scorecard, exception lists, trend, and six-flag drill rows."""
     return await plan_vs_executed_read_model(
@@ -46,4 +63,8 @@ async def get_plan_vs_executed(
         drill_product_id=drill_product_id,
         drill_sales_model=drill_sales_model,
         drill_bu=drill_bu,
+        exceptions_lens=exceptions_lens,
+        exceptions_category=exceptions_category,
+        exceptions_limit=exceptions_limit,
+        exceptions_offset=exceptions_offset,
     )
