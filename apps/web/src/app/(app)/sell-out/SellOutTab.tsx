@@ -11,12 +11,13 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { apiGet } from '@/lib/api';
 
@@ -63,11 +64,16 @@ type DistHit = { id: number; distributor_code: string; distributor_name: string 
 type CustHit = { id: number; customer_code: string; customer_name: string };
 type ZeroProduct = { product_id: number; sku: string; name: string };
 
+const CHANNEL_PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+const CHANNEL_DEFAULT_PAGE_SIZE = 50;
+
 export function SellOutTab({ depth }: { depth: IntelDepth }) {
   const [smartPreset, setSmartPreset] = useState<SmartPresetId>('');
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const [customerPick, setCustomerPick] = useState<CustHit | null>(null);
   const [search, setSearch] = useState('');
+  const [channelPage, setChannelPage] = useState(0);
+  const [channelPageSize, setChannelPageSize] = useState(CHANNEL_DEFAULT_PAGE_SIZE);
   const useChannelApi = depthAtLeast(depth, 'operational');
 
   const { data: summary } = useQuery({
@@ -91,6 +97,10 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
     return d.toISOString().slice(0, 10);
   }, [smartPreset]);
 
+  useEffect(() => {
+    setChannelPage(0);
+  }, [smartPreset, distributorPick?.id, customerPick?.id, periodFrom, useChannelApi]);
+
   const linesQueryKey = useMemo(
     () =>
       [
@@ -100,15 +110,20 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
         customerPick?.id ?? null,
         search,
         periodFrom,
+        useChannelApi ? channelPage : null,
+        useChannelApi ? channelPageSize : null,
       ] as const,
-    [useChannelApi, smartPreset, distributorPick?.id, customerPick?.id, search, periodFrom]
+    [useChannelApi, smartPreset, distributorPick?.id, customerPick?.id, search, periodFrom, channelPage, channelPageSize]
   );
 
   const { data: lines, isLoading: linesLoading, isError: linesError, error: linesErr } = useQuery({
     queryKey: linesQueryKey,
     queryFn: async ({ signal }) => {
       if (useChannelApi) {
-        const params = new URLSearchParams({ page: '1', page_size: '50' });
+        const params = new URLSearchParams({
+          page: String(channelPage + 1),
+          page_size: String(channelPageSize),
+        });
         if (distributorPick != null) params.set('distributor_id', String(distributorPick.id));
         if (customerPick != null) params.set('customer_id', String(customerPick.id));
         if (periodFrom) params.set('date_from', periodFrom);
@@ -289,6 +304,24 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
                 ? `${lines.total.toLocaleString()} matching rows · showing ${lines.items.length}`
                 : null}
             </Typography>
+            {lines?.channel && lines.total > 0 ? (
+              <TablePagination
+                component="div"
+                count={lines.total}
+                page={channelPage}
+                onPageChange={(_e, nextPage) => setChannelPage(nextPage)}
+                rowsPerPage={channelPageSize}
+                onRowsPerPageChange={(e) => {
+                  setChannelPageSize(Number(e.target.value));
+                  setChannelPage(0);
+                }}
+                rowsPerPageOptions={[...CHANNEL_PAGE_SIZE_OPTIONS]}
+                labelDisplayedRows={({ from, to, count }) =>
+                  `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
+                }
+                sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}
+              />
+            ) : null}
             {linesLoading ? (
               <Typography variant="body2">Loading…</Typography>
             ) : (lines?.items ?? []).length === 0 ? (

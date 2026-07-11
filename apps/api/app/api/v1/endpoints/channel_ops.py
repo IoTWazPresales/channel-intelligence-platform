@@ -44,6 +44,9 @@ EV = shipment_evidence_read_model()
 
 router = APIRouter()
 
+# Per-distributor inventory rows are derived in memory; cap list payload size (FLAG: no offset paging yet).
+INVENTORY_LIST_CAP = 500
+
 
 def _parse_opt_date(s: str | None) -> date | None:
     if not s or not str(s).strip():
@@ -406,7 +409,12 @@ async def channel_ops_inventory(
             }
         )
 
-    return {"items": items, "total": len(items)}
+    total = len(items)
+    truncated = total > INVENTORY_LIST_CAP
+    if truncated:
+        items = items[:INVENTORY_LIST_CAP]
+
+    return {"items": items, "total": total, "truncated": truncated}
 
 
 @router.get("/movements")

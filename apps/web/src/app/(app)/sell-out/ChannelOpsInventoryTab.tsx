@@ -58,15 +58,32 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['channel-ops-inventory', distId],
     queryFn: ({ signal }) =>
-      apiGet<{ items: InvRow[] }>(`/api/v1/channel-ops/inventory?distributor_id=${distId}`, { signal }),
+      apiGet<{ items: InvRow[]; total: number; truncated?: boolean }>(
+        `/api/v1/channel-ops/inventory?distributor_id=${distId}`,
+        { signal }
+      ),
     enabled: distId != null,
   });
 
   if (distId == null) {
     return (
-      <Alert severity="info">
-        Select a distributor to view inventory intelligence for that channel.
-      </Alert>
+      <Box>
+        <Stack direction="row" spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+          <Autocomplete
+            sx={{ minWidth: 320 }}
+            size="small"
+            options={filterOptions?.distributors ?? []}
+            value={distributorPick}
+            onChange={(_e, v) => setDistributorPick(v)}
+            getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            renderInput={(params) => <TextField {...params} label="Distributor" required />}
+          />
+        </Stack>
+        <Alert severity="info">
+          Select a distributor to view inventory intelligence for that channel.
+        </Alert>
+      </Box>
     );
   }
 
@@ -89,6 +106,12 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
           {(error as Error)?.message ?? 'Failed to load inventory.'}
         </Alert>
       )}
+      {data?.truncated ? (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Showing first {data.items.length.toLocaleString()} of {data.total.toLocaleString()} products for this
+          distributor. Server cap applies until inventory paging is added.
+        </Alert>
+      ) : null}
       <Paper variant="outlined">
         <Box sx={{ p: 2 }}>
           {isLoading ? (

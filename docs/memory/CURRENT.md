@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-11 (BACKLOG-074 U3+3b implemented; U4 docs inventory written — uncommitted)
+**Last updated:** 2026-07-11 (BACKLOG-074 U3?U4g shipped; U4h skipped; next = lineup multi-folder + browser audit)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,26 +10,36 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/channel-ops-kpi-and-gap-scan-perf` |
-| **HEAD** | `92df7c6` (+ uncommitted U3 chrome, U3b pagination, U4 docs) |
+| **HEAD** | see `git rev-parse --short HEAD` (U4g tip after push) |
 | **PR** | Not opened |
-| **Alembic (DB)** | **`20260710_0072`** on cip |
+| **Alembic (DB)** | **`20260710_0072`** on cip — no new migrations this program |
 
 ---
 
-## In progress (uncommitted)
+## BACKLOG-074 status (pushed)
 
-- **Unit 3:** CST steward composed chrome (URL tab/q/key_only, toolbar, ModuleDataSection, tab-0 column picker)
-- **Unit 3b:** Replaced hard `limit(500)` with `{items,total}` + limit/offset on key-accounts + article-aliases; Prev/Next UI (fixes A–B truncation). Vitest 6/6 + API 4/4.
-- **Unit 4:** `docs/design/BACKLOG-074-U4_ops_grid_parity_inventory.md` — ranked U4a–U4h. Warren picks next.
+| Unit | Status |
+|------|--------|
+| U3 + 3b CST chrome + pagination | PASS @ f9362f3 |
+| U4 inventory doc | shipped with U3 |
+| U4a CST slots + aliases | PASS @ b865070 |
+| U4b inbound/evidence URL skip/limit | PASS @ 2eccb1c |
+| U4c PMG skip/limit paging | shipped @ 9481479 |
+| U4d CPOR case list paging | shipped @ 0c1775c |
+| U4e PO gap + auto-link paging | shipped @ 8162d60 |
+| U4f PVE exception paging | shipped (commit after this pin) |
+| U4g Channel Ops sell-out/movements pager | shipped (commit after this pin) |
+| U4h Channels & Regions | **skipped** — small catalog; already has toolbar+bulk |
 
-**Shell swap:** Fable re-CONSULT **REAFFIRMED no** — truncation was API cap, not a shell argument.
+**Shell swap:** still no (re-CONSULT reaffirmed).
 
 ---
 
-## Next
+## Next (different themes — prefer fresh chat)
 
-1. Commit U3+3b+U4 docs ? Fable VERIFY Unit 3/3b.
-2. Warren picks from U4 ranked list (rec: U4a CST slots, or U4c PMG truncation).
-3. Human: restart API + soak Channel Ops cards + CST Key Accounts paging past B.
+1. **Lineup multi-folder historical upload** — plan viability + implement choose-folder multi-path parity with unified lineup importer.
+2. **Read-only browser + DB audit** — visit each surface; compare numbers to source/DB; review only, no code changes.
+3. Optional: Fable VERIFY batch for U4c–U4g; open PR for this branch.
+4. Human soak: restart API; CST Key Accounts page past B; Channel Ops cards.
 
-**Do not re-audit:** Theme B · BACKLOG-073 · shell-swap decision · mega-PR.
+**Do not re-audit:** Theme B · BACKLOG-073 · shell-swap · U4 inventory ranking.

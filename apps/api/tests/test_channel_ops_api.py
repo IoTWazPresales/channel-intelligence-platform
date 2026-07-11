@@ -72,6 +72,35 @@ async def test_inventory_returns_400_when_distributor_id_missing() -> None:
 
 
 @pytest.mark.anyio
+async def test_inventory_truncates_when_over_cap() -> None:
+    db = AsyncMock()
+    cap = co.INVENTORY_LIST_CAP
+    derived = [
+        {
+            "product_id": i,
+            "distributor_id": 1,
+            "snapshot_date": None,
+            "reported_soh": 1.0,
+            "sell_out_since": 0.0,
+            "landed_since": 0.0,
+            "derived_stock": 1.0,
+            "calculated_soh": None,
+            "variance_units": None,
+            "reconciliation_status": None,
+        }
+        for i in range(cap + 50)
+    ]
+    with patch.object(co, "derived_stock_rows_for_distributor", AsyncMock(return_value=derived)):
+        with patch.object(co, "_table_exists", AsyncMock(return_value=False)):
+            db.execute = AsyncMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+            db.scalar = AsyncMock(return_value="Dist One")
+            out = await co.channel_ops_inventory(db, distributor_id=1)
+    assert out["total"] == cap + 50
+    assert out["truncated"] is True
+    assert len(out["items"]) == cap
+
+
+@pytest.mark.anyio
 async def test_forecasts_reads_fact_dsi_forecast_not_fact_forecast() -> None:
     db = AsyncMock()
     with patch.object(co, "_table_exists", AsyncMock(return_value=False)):
