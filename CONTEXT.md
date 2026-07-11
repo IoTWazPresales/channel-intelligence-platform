@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-11 — **BACKLOG-074 U3+3b+U4 (uncommitted):** CST chrome + server pagination (fixes A–B `limit(500)` truncate); U4 ops grid inventory `docs/design/BACKLOG-074-U4_ops_grid_parity_inventory.md`. Shell swap re-CONSULT: still no. Next: commit → VERIFY → Warren picks U4a–U4h. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
+- 2026-07-11 — **BACKLOG-074 Unit 3 (uncommitted):** CST steward chrome capability parity (URL tab/q/key_only, ModuleGridToolbar, ModuleDataSection, tab-0 column picker). Not MasterDataGridShell swap. Vitest 4/4. Next: commit → Fable VERIFY → Unit 4 audit matrix. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-11 — **Channel Ops KPI + PM gap scan perf (uncommitted):** set-based derived stock (~13s→~2s summary); gap scan match-only (~318s→~1.3s); proxy undici long timeout for `/product-master-gaps/scan`. Opus queue: CST parity beachhead → audit matrix. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-10 — **PR #7 merged to main (`4d1700b`):** BACKLOG-061 Theme B (promote-in-place + master grid shell + distributor parity). Next: soak or BACKLOG-073 when prioritized. CI pnpm-setup version clash noted (infra).
 - 2026-07-10 — **BACKLOG-061 Theme B complete — PR #7 open (`dd98683`):** U-B3b PASS; distributor bulk promote + disposition UI live; ready to merge when Warren says. Branch `feat/backlog-061-entity-promote-in-place`.

@@ -8,7 +8,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   FormControlLabel,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   Switch,
   Tab,
@@ -16,12 +20,28 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import type { ColDef, ICellRendererParams } from 'ag-grid-community';
+import type {
+  ColDef,
+  ColumnMovedEvent,
+  ColumnPinnedEvent,
+  ColumnResizedEvent,
+  ColumnVisibleEvent,
+  GridApi,
+  GridReadyEvent,
+  ICellRendererParams,
+} from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import {
+  MasterColumnPickerDialog,
+  type MasterColumnPickerGroup,
+} from '@/components/masterGrid/MasterColumnPickerDialog';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 
 type KeyAccountRow = {
@@ -56,10 +76,55 @@ type AliasRow = {
   status: string;
 };
 
+const TAB_KEYS = ['key-accounts', 'slots', 'aliases'] as const;
+type TabKey = (typeof TAB_KEYS)[number];
+
+const GRID_STATE_KEY = 'cip.admin.cst-steward.key-accounts.grid.v2';
+const DEFAULT_PAGE_SIZE = 100;
+const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
+
+type ListEnvelope<T> = { items: T[]; total: number };
+
+const KEY_ACCOUNT_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  {
+    label: 'Identity',
+    fields: ['customer_code', 'customer_name'],
+  },
+  {
+    label: 'Feed config',
+    fields: ['is_key_account', 'reports_expected', 'expected_cadence'],
+  },
+];
+
+const KEY_ACCOUNT_COLUMN_LABELS: Record<string, string> = {
+  customer_code: 'Code',
+  customer_name: 'Name',
+  is_key_account: 'Key account',
+  reports_expected: 'Reports expected',
+  expected_cadence: 'Cadence',
+};
+
+function tabIndexFromParam(raw: string | null): number {
+  if (!raw) return 0;
+  const idx = TAB_KEYS.indexOf(raw as TabKey);
+  return idx >= 0 ? idx : 0;
+}
+
 export default function CstStewardPage() {
   const qc = useQueryClient();
-  const [tab, setTab] = useState(0);
-  const [filter, setFilter] = useState('');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const tab = tabIndexFromParam(searchParams.get('tab'));
+  const urlQ = searchParams.get('q') ?? '';
+  const keyOnly = searchParams.get('key_only') === '1';
+  const page = Math.max(1, Number(searchParams.get('page') || '1') || 1);
+  const pageSizeRaw = Number(searchParams.get('page_size') || String(DEFAULT_PAGE_SIZE)) || DEFAULT_PAGE_SIZE;
+  const pageSize = PAGE_SIZE_OPTIONS.includes(pageSizeRaw) ? pageSizeRaw : DEFAULT_PAGE_SIZE;
+
+  const [filterInput, setFilterInput] = useState(urlQ);
+  const [debouncedQ, setDebouncedQ] = useState(urlQ);
   const [dlg, setDlg] = useState<KeyAccountRow | null>(null);
   const [keyFlag, setKeyFlag] = useState(false);
   const [reportsExpected, setReportsExpected] = useState(false);
@@ -68,17 +133,75 @@ export default function CstStewardPage() {
   const [notes, setNotes] = useState('');
   const [feedRaw, setFeedRaw] = useState('');
 
-  const { data: accounts, isLoading: loadingAccounts, isError: errAccounts, error: accountsError, refetch: refetchAccounts } =
-    useQuery({
-      queryKey: ['cst-steward', 'key-accounts', filter],
-      queryFn: ({ signal }) => {
-        const q = filter.trim() ? `?q=${encodeURIComponent(filter.trim())}` : '';
-        return apiGet<KeyAccountRow[]>(`/api/v1/cst-steward/key-accounts${q}`, { signal });
-      },
-      enabled: tab === 0,
-    });
+  const [gridApi, setGridApi] = useState<GridApi<KeyAccountRow> | null>(null);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [columnSearch, setColumnSearch] = useState('');
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
 
-  const { data: worklist, isLoading: loadingSlots, refetch: refetchSlots } = useQuery({
+  const searchKey = searchParams.toString();
+
+  const setParamState = useCallback(
+    (changes: Record<string, string | null>) => {
+      const sp = new URLSearchParams(searchKey);
+      for (const [k, v] of Object.entries(changes)) {
+        if (v == null || v === '') sp.delete(k);
+        else sp.set(k, v);
+      }
+      const next = sp.toString();
+      router.replace(next ? `${pathname}?${next}` : pathname);
+    },
+    [pathname, router, searchKey],
+  );
+
+  useEffect(() => {
+    setFilterInput(urlQ);
+    setDebouncedQ(urlQ);
+  }, [urlQ]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(filterInput), 300);
+    return () => clearTimeout(t);
+  }, [filterInput]);
+
+  useEffect(() => {
+    const next = debouncedQ.trim();
+    if (next === urlQ) return;
+    setParamState({ q: next || null, page: '1' });
+  }, [debouncedQ, urlQ, setParamState]);
+
+  const {
+    data: accountsPage,
+    isLoading: loadingAccounts,
+    isFetching: fetchingAccounts,
+    isError: errAccounts,
+    error: accountsError,
+    refetch: refetchAccounts,
+  } = useQuery({
+    queryKey: ['cst-steward', 'key-accounts', debouncedQ, keyOnly, page, pageSize],
+    queryFn: ({ signal }) => {
+      const sp = new URLSearchParams();
+      if (debouncedQ.trim()) sp.set('q', debouncedQ.trim());
+      if (keyOnly) sp.set('key_only', 'true');
+      sp.set('limit', String(pageSize));
+      sp.set('offset', String((page - 1) * pageSize));
+      return apiGet<ListEnvelope<KeyAccountRow>>(`/api/v1/cst-steward/key-accounts?${sp.toString()}`, {
+        signal,
+      });
+    },
+    enabled: tab === 0,
+  });
+  const accounts = accountsPage?.items;
+  const accountsTotal = accountsPage?.total ?? 0;
+  const accountsTotalPages = Math.max(1, Math.ceil(accountsTotal / pageSize));
+
+  const {
+    data: worklist,
+    isLoading: loadingSlots,
+    isFetching: fetchingSlots,
+    isError: errSlots,
+    error: slotsError,
+    refetch: refetchSlots,
+  } = useQuery({
     queryKey: ['cst-steward', 'slots'],
     queryFn: ({ signal }) =>
       apiGet<{
@@ -88,12 +211,29 @@ export default function CstStewardPage() {
     enabled: tab === 1,
   });
 
-  const { data: aliases, isLoading: loadingAliases, refetch: refetchAliases } = useQuery({
-    queryKey: ['cst-steward', 'aliases'],
-    queryFn: ({ signal }) =>
-      apiGet<AliasRow[]>('/api/v1/cst-steward/article-aliases?status=proposed', { signal }),
+  const {
+    data: aliasesPage,
+    isLoading: loadingAliases,
+    isFetching: fetchingAliases,
+    isError: errAliases,
+    error: aliasesError,
+    refetch: refetchAliases,
+  } = useQuery({
+    queryKey: ['cst-steward', 'aliases', page, pageSize],
+    queryFn: ({ signal }) => {
+      const sp = new URLSearchParams();
+      sp.set('status', 'proposed');
+      sp.set('limit', String(pageSize));
+      sp.set('offset', String((page - 1) * pageSize));
+      return apiGet<ListEnvelope<AliasRow>>(`/api/v1/cst-steward/article-aliases?${sp.toString()}`, {
+        signal,
+      });
+    },
     enabled: tab === 2,
   });
+  const aliases = aliasesPage?.items;
+  const aliasesTotal = aliasesPage?.total ?? 0;
+  const aliasesTotalPages = Math.max(1, Math.ceil(aliasesTotal / pageSize));
 
   const save = useMutation({
     mutationFn: async () => {
@@ -145,6 +285,70 @@ export default function CstStewardPage() {
     setFeedRaw(row.feed_profile_json ? JSON.stringify(row.feed_profile_json, null, 2) : '');
   };
 
+  const persistGridState = useCallback((api: GridApi<KeyAccountRow>) => {
+    try {
+      localStorage.setItem(GRID_STATE_KEY, JSON.stringify(api.getColumnState()));
+    } catch {
+      // no-op
+    }
+  }, []);
+
+  const syncColumnVisibility = useCallback((api: GridApi<KeyAccountRow>) => {
+    if (!api?.getColumns) return;
+    try {
+      const known = new Set(KEY_ACCOUNT_COLUMN_GROUPS.flatMap((g) => g.fields));
+      const visibility: Record<string, boolean> = {};
+      for (const col of api.getColumns() ?? []) {
+        const field = col?.getColDef?.()?.field as string | undefined;
+        if (!field || !known.has(field)) continue;
+        visibility[field] = Boolean(col.isVisible?.());
+      }
+      if (Object.keys(visibility).length) setColumnVisibility(visibility);
+    } catch {
+      // no-op
+    }
+  }, []);
+
+  const onAccountsGridReady = useCallback(
+    (e: GridReadyEvent<KeyAccountRow>) => {
+      setGridApi(e.api);
+      try {
+        const raw = localStorage.getItem(GRID_STATE_KEY);
+        if (raw) {
+          e.api.applyColumnState({ state: JSON.parse(raw), applyOrder: true });
+        }
+      } catch {
+        // no-op
+      }
+      syncColumnVisibility(e.api);
+    },
+    [syncColumnVisibility],
+  );
+
+  const onColumnStateEvent = useCallback(
+    (
+      e:
+        | ColumnMovedEvent<KeyAccountRow>
+        | ColumnVisibleEvent<KeyAccountRow>
+        | ColumnPinnedEvent<KeyAccountRow>
+        | ColumnResizedEvent<KeyAccountRow>,
+    ) => {
+      persistGridState(e.api);
+      syncColumnVisibility(e.api);
+    },
+    [persistGridState, syncColumnVisibility],
+  );
+
+  const toggleColumnVisibility = useCallback(
+    (columnId: string, visible: boolean) => {
+      if (!gridApi?.setColumnsVisible) return;
+      gridApi.setColumnsVisible([columnId], visible);
+      persistGridState(gridApi);
+      setColumnVisibility((prev) => ({ ...prev, [columnId]: visible }));
+    },
+    [gridApi, persistGridState],
+  );
+
   const accountCols = useMemo<ColDef<KeyAccountRow>[]>(
     () => [
       { field: 'customer_code', headerName: 'Code', width: 140 },
@@ -164,6 +368,7 @@ export default function CstStewardPage() {
       { field: 'expected_cadence', headerName: 'Cadence', width: 110 },
       {
         headerName: '',
+        colId: 'actions',
         width: 100,
         sortable: false,
         filter: false,
@@ -197,6 +402,7 @@ export default function CstStewardPage() {
       { field: 'status', headerName: 'Status', width: 100 },
       {
         headerName: '',
+        colId: 'actions',
         width: 180,
         sortable: false,
         filter: false,
@@ -221,6 +427,11 @@ export default function CstStewardPage() {
     [confirmAlias, rejectAlias],
   );
 
+  const filterActive = Boolean(debouncedQ.trim()) || keyOnly;
+  const accountsEmptyDescription = filterActive
+    ? 'No key-account rows match the current filter. Clear the search or turn off “Key accounts only”.'
+    : 'No CST key-account / feed-profile rows yet. Flag customers from Master Data or import CST feeds.';
+
   return (
     <>
       <PageHeader crumbs={[{ label: 'Master Data' }, { label: 'CST steward' }]} title="CST steward" />
@@ -229,37 +440,141 @@ export default function CstStewardPage() {
         BLOCK — unconfirmed aliases never auto-resolve. Slot advance is steward/dev triggered here; beat job is
         registered but not run against cip from this page without intent.
       </Alert>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 1.5 }} data-testid="cst-steward-tabs">
+      <Tabs
+        value={tab}
+        onChange={(_, v: number) =>
+          setParamState({ tab: TAB_KEYS[v] ?? 'key-accounts', page: '1' })
+        }
+        sx={{ mb: 1.5 }}
+        data-testid="cst-steward-tabs"
+      >
         <Tab label="Key accounts & feed profile" />
-        <Tab label={`Report slots${worklist ? ` (${worklist.counts?.due ?? 0}/${worklist.counts?.late ?? 0}/${worklist.counts?.missing ?? 0})` : ''}`} />
+        <Tab
+          label={`Report slots${worklist ? ` (${worklist.counts?.due ?? 0}/${worklist.counts?.late ?? 0}/${worklist.counts?.missing ?? 0})` : ''}`}
+        />
         <Tab label="Article aliases" />
       </Tabs>
 
       {tab === 0 ? (
         <>
-          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
             <TextField
               size="small"
               label="Filter"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
+              value={filterInput}
+              onChange={(e) => setFilterInput(e.target.value)}
               sx={{ minWidth: 260 }}
               data-testid="cst-key-filter"
             />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={keyOnly}
+                  onChange={(e) =>
+                    setParamState({ key_only: e.target.checked ? '1' : null, page: '1' })
+                  }
+                  data-testid="cst-key-only"
+                />
+              }
+              label="Key accounts only"
+            />
+            <Button
+              variant="outlined"
+              disabled={!gridApi}
+              onClick={() => {
+                setColumnSearch('');
+                setColumnsOpen(true);
+                if (gridApi) syncColumnVisibility(gridApi);
+              }}
+              data-testid="cst-steward-columns-open"
+            >
+              Columns
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                try {
+                  localStorage.removeItem(GRID_STATE_KEY);
+                  window.location.reload();
+                } catch {
+                  // no-op
+                }
+              }}
+              data-testid="cst-steward-columns-reset"
+            >
+              Reset column layout
+            </Button>
+            <ModuleGridToolbar
+              onRefresh={() => void refetchAccounts()}
+              busy={fetchingAccounts}
+              sx={{ mb: 0 }}
+            />
           </Stack>
-          {errAccounts ? <Alert severity="error">{String((accountsError as Error)?.message)}</Alert> : null}
-          <EnterpriseDataGrid
-            rowData={accounts ?? []}
-            columnDefs={accountCols}
-            height={520}
-            gridOptions={{ getRowId: (p) => String(p.data.customer_id), loading: loadingAccounts }}
-          />
+          <ModuleDataSection
+            isLoading={loadingAccounts}
+            isError={errAccounts}
+            error={(accountsError as Error) ?? null}
+            onRetry={() => void refetchAccounts()}
+            isEmpty={accountsTotal === 0}
+            empty={{
+              title: 'No key accounts',
+              description: accountsEmptyDescription,
+            }}
+          >
+            <EnterpriseDataGrid
+              rowData={accounts ?? []}
+              columnDefs={accountCols}
+              height={520}
+              gridOptions={{
+                getRowId: (p) => String(p.data.customer_id),
+                onGridReady: onAccountsGridReady,
+                onColumnMoved: onColumnStateEvent,
+                onColumnVisible: onColumnStateEvent,
+                onColumnPinned: onColumnStateEvent,
+                onColumnResized: onColumnStateEvent,
+              }}
+            />
+            <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center" data-testid="cst-accounts-pager">
+              <Button
+                disabled={page <= 1 || fetchingAccounts}
+                onClick={() => setParamState({ page: String(page - 1) })}
+              >
+                Prev
+              </Button>
+              <Typography variant="body2">
+                Page {page} / {accountsTotalPages} ({accountsTotal} rows)
+              </Typography>
+              <Button
+                disabled={page >= accountsTotalPages || fetchingAccounts}
+                onClick={() => setParamState({ page: String(page + 1) })}
+              >
+                Next
+              </Button>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>Page size</InputLabel>
+                <Select
+                  label="Page size"
+                  value={String(pageSize)}
+                  onChange={(e) =>
+                    setParamState({ page_size: String(e.target.value || DEFAULT_PAGE_SIZE), page: '1' })
+                  }
+                  data-testid="cst-accounts-page-size"
+                >
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <MenuItem key={n} value={String(n)}>
+                      {n}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
+          </ModuleDataSection>
         </>
       ) : null}
 
       {tab === 1 ? (
         <>
-          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
             <Typography variant="body2" color="text.secondary">
               Due / late / missing only — received slots drop off.
             </Typography>
@@ -272,25 +587,111 @@ export default function CstStewardPage() {
             >
               {advance.isPending ? 'Advancing…' : 'Advance slots now'}
             </Button>
+            <ModuleGridToolbar
+              onRefresh={() => void refetchSlots()}
+              busy={fetchingSlots}
+              sx={{ mb: 0 }}
+            />
           </Stack>
           {advance.isError ? <Alert severity="error">{String((advance.error as Error)?.message)}</Alert> : null}
-          <EnterpriseDataGrid
-            rowData={worklist?.items ?? []}
-            columnDefs={slotCols}
-            height={520}
-            gridOptions={{ getRowId: (p) => String(p.data.id), loading: loadingSlots }}
-          />
+          <ModuleDataSection
+            isLoading={loadingSlots}
+            isError={errSlots}
+            error={(slotsError as Error) ?? null}
+            onRetry={() => void refetchSlots()}
+            isEmpty={(worklist?.items?.length ?? 0) === 0}
+            empty={{
+              title: 'No open report slots',
+              description: 'Due / late / missing slots appear here. Advance slots to mint the current week’s expectations.',
+            }}
+          >
+            <EnterpriseDataGrid
+              rowData={worklist?.items ?? []}
+              columnDefs={slotCols}
+              height={520}
+              gridOptions={{ getRowId: (p) => String(p.data.id) }}
+            />
+          </ModuleDataSection>
         </>
       ) : null}
 
       {tab === 2 ? (
-        <EnterpriseDataGrid
-          rowData={aliases ?? []}
-          columnDefs={aliasCols}
-          height={560}
-          gridOptions={{ getRowId: (p) => String(p.data.id), loading: loadingAliases }}
-        />
+        <>
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center">
+            <Box sx={{ flex: 1 }} />
+            <ModuleGridToolbar
+              onRefresh={() => void refetchAliases()}
+              busy={fetchingAliases}
+              sx={{ mb: 0 }}
+            />
+          </Stack>
+          <ModuleDataSection
+            isLoading={loadingAliases}
+            isError={errAliases}
+            error={(aliasesError as Error) ?? null}
+            onRetry={() => void refetchAliases()}
+            isEmpty={aliasesTotal === 0}
+            empty={{
+              title: 'No proposed aliases',
+              description: 'Proposed customer article aliases awaiting confirm/reject will show here.',
+            }}
+          >
+            <EnterpriseDataGrid
+              rowData={aliases ?? []}
+              columnDefs={aliasCols}
+              height={560}
+              gridOptions={{ getRowId: (p) => String(p.data.id) }}
+            />
+            <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center" data-testid="cst-aliases-pager">
+              <Button
+                disabled={page <= 1 || fetchingAliases}
+                onClick={() => setParamState({ page: String(page - 1) })}
+              >
+                Prev
+              </Button>
+              <Typography variant="body2">
+                Page {page} / {aliasesTotalPages} ({aliasesTotal} rows)
+              </Typography>
+              <Button
+                disabled={page >= aliasesTotalPages || fetchingAliases}
+                onClick={() => setParamState({ page: String(page + 1) })}
+              >
+                Next
+              </Button>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>Page size</InputLabel>
+                <Select
+                  label="Page size"
+                  value={String(pageSize)}
+                  onChange={(e) =>
+                    setParamState({ page_size: String(e.target.value || DEFAULT_PAGE_SIZE), page: '1' })
+                  }
+                  data-testid="cst-aliases-page-size"
+                >
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <MenuItem key={n} value={String(n)}>
+                      {n}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
+          </ModuleDataSection>
+        </>
       ) : null}
+
+      <MasterColumnPickerDialog
+        open={columnsOpen}
+        onClose={() => setColumnsOpen(false)}
+        title="CST key-account columns"
+        groups={KEY_ACCOUNT_COLUMN_GROUPS}
+        columnLabelByField={KEY_ACCOUNT_COLUMN_LABELS}
+        visibility={columnVisibility}
+        onToggle={toggleColumnVisibility}
+        gridReady={Boolean(gridApi)}
+        search={columnSearch}
+        onSearchChange={setColumnSearch}
+      />
 
       <Dialog open={dlg != null} onClose={() => !save.isPending && setDlg(null)} fullWidth maxWidth="sm">
         <DialogTitle>

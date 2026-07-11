@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-11 (handover — KPI/gap-scan perf shipped; next BACKLOG-074)
+**Last updated:** 2026-07-11 (BACKLOG-074 U3+3b implemented; U4 docs inventory written — uncommitted)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,27 +10,26 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/channel-ops-kpi-and-gap-scan-perf` |
-| **HEAD** | `4a4f1ed` |
-| **PR** | Not opened — open when Warren says |
+| **HEAD** | `92df7c6` (+ uncommitted U3 chrome, U3b pagination, U4 docs) |
+| **PR** | Not opened |
 | **Alembic (DB)** | **`20260710_0072`** on cip |
-| **main tip** | `618448c` (PR #7 Theme B merged) |
 
 ---
 
-## Shipped on this branch (unproven live until API restart)
+## In progress (uncommitted)
 
-- Set-based `sum_derived_channel_stock` — summary ~13s ? ~2.1s in-process; KPI cards were blank while loading
-- PM gap `scan` match-only — ~318s ? ~1.3s; Next proxy undici long Agent for `/product-master-gaps/scan`
-- BACKLOG-074 parked (grid chrome parity program); Opus queue: CST beachhead ? audit matrix
+- **Unit 3:** CST steward composed chrome (URL tab/q/key_only, toolbar, ModuleDataSection, tab-0 column picker)
+- **Unit 3b:** Replaced hard `limit(500)` with `{items,total}` + limit/offset on key-accounts + article-aliases; Prev/Next UI (fixes A–B truncation). Vitest 6/6 + API 4/4.
+- **Unit 4:** `docs/design/BACKLOG-074-U4_ops_grid_parity_inventory.md` — ranked U4a–U4h. Warren picks next.
+
+**Shell swap:** Fable re-CONSULT **REAFFIRMED no** — truncation was API cap, not a shell argument.
 
 ---
 
 ## Next
 
-1. **Restart API** (`pnpm dev:api`) so `:8001` picks up set-based stock; confirm Channel Ops cards paint.
-2. Open PR for this branch ? merge when ready.
-3. **BACKLOG-074 Unit 3:** CST steward toolbar/filter parity (capability parity — do **not** swap onto MasterDataGridShell).
-4. Unit 4: parity inventory audit (PVE / CPOR / PM gaps / channels / PO / inbound) — docs matrix, then Warren picks.
-5. Deferred: BACKLOG-073; CI pnpm Action version clash.
+1. Commit U3+3b+U4 docs ? Fable VERIFY Unit 3/3b.
+2. Warren picks from U4 ranked list (rec: U4a CST slots, or U4c PMG truncation).
+3. Human: restart API + soak Channel Ops cards + CST Key Accounts paging past B.
 
-**Do not re-audit:** U2a/U2b/U-D1/U-G2/U-B2/U-B3a/U-B3b PASSes · Theme B PR #7.
+**Do not re-audit:** Theme B · BACKLOG-073 · shell-swap decision · mega-PR.

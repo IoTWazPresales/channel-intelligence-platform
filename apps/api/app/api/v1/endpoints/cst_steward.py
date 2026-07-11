@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session_sync import SessionLocal
@@ -121,23 +121,39 @@ class SlotAdvanceBody(BaseModel):
 def list_key_account_steward(
     q: str | None = Query(default=None),
     key_only: bool = Query(default=False),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
 ):
     """Steward grid: customers with key-account flag + report config (upserted on edit)."""
     with SessionLocal() as session:
+        filters = []
+        if key_only:
+            filters.append(DimCustomer.is_key_account.is_(True))
+        if q and q.strip():
+            needle = f"%{q.strip()}%"
+            filters.append(or_(DimCustomer.code.ilike(needle), DimCustomer.name.ilike(needle)))
+
+        count_stmt = (
+            select(func.count())
+            .select_from(DimCustomer)
+            .outerjoin(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
+        )
+        if filters:
+            count_stmt = count_stmt.where(*filters)
+        total = int(session.scalar(count_stmt) or 0)
+
         stmt = (
             select(DimCustomer, CustomerReportConfig)
             .outerjoin(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
             .order_by(DimCustomer.name.asc(), DimCustomer.id.asc())
         )
-        if key_only:
-            stmt = stmt.where(DimCustomer.is_key_account.is_(True))
-        if q and q.strip():
-            needle = f"%{q.strip()}%"
-            stmt = stmt.where(
-                or_(DimCustomer.code.ilike(needle), DimCustomer.name.ilike(needle))
-            )
-        rows = session.execute(stmt.limit(500)).all()
-        return [_config_json(cfg, customer=cust) for cust, cfg in rows]
+        if filters:
+            stmt = stmt.where(*filters)
+        rows = session.execute(stmt.limit(limit).offset(offset)).all()
+        return {
+            "items": [_config_json(cfg, customer=cust) for cust, cfg in rows],
+            "total": total,
+        }
 
 
 @router.get("/key-accounts/{customer_id}")
@@ -273,18 +289,29 @@ def list_article_aliases(
     status: str | None = Query(default="proposed"),
     customer_id: int | None = Query(default=None),
     q: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
 ):
     with SessionLocal() as session:
-        stmt = select(CustomerArticleAlias).order_by(CustomerArticleAlias.id.desc())
+        filters = []
         if status and status.strip() and status.strip().lower() != "all":
             statuses = tuple(s.strip() for s in status.split(",") if s.strip())
-            stmt = stmt.where(CustomerArticleAlias.status.in_(statuses))
+            filters.append(CustomerArticleAlias.status.in_(statuses))
         if customer_id is not None:
-            stmt = stmt.where(CustomerArticleAlias.customer_id == customer_id)
+            filters.append(CustomerArticleAlias.customer_id == customer_id)
         if q and q.strip():
             needle = f"%{q.strip().lower()}%"
-            stmt = stmt.where(CustomerArticleAlias.article_no_normalized.ilike(needle))
-        rows = list(session.scalars(stmt.limit(500)).all())
+            filters.append(CustomerArticleAlias.article_no_normalized.ilike(needle))
+
+        count_stmt = select(func.count()).select_from(CustomerArticleAlias)
+        if filters:
+            count_stmt = count_stmt.where(*filters)
+        total = int(session.scalar(count_stmt) or 0)
+
+        stmt = select(CustomerArticleAlias).order_by(CustomerArticleAlias.id.desc())
+        if filters:
+            stmt = stmt.where(*filters)
+        rows = list(session.scalars(stmt.limit(limit).offset(offset)).all())
         cust_ids = {int(r.customer_id) for r in rows}
         prod_ids = {int(r.product_id) for r in rows}
         cmap = {
@@ -295,9 +322,12 @@ def list_article_aliases(
             int(p.id): p
             for p in session.scalars(select(DimProduct).where(DimProduct.id.in_(prod_ids or {0}))).all()
         }
-        return [
-            _alias_json(r, cmap.get(int(r.customer_id)), pmap.get(int(r.product_id))) for r in rows
-        ]
+        return {
+            "items": [
+                _alias_json(r, cmap.get(int(r.customer_id)), pmap.get(int(r.product_id))) for r in rows
+            ],
+            "total": total,
+        }
 
 
 @router.post("/article-aliases/{alias_id}/confirm")
