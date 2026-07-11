@@ -19,8 +19,9 @@ import {
 } from '@mui/material';
 import type { ColDef, RowClickedEvent, ValueGetterParams } from 'ag-grid-community';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
@@ -28,6 +29,7 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
+import { parseSkipLimitParams } from '@/lib/skipLimitSearchParams';
 import { fetchDsiImportPipelineProgress } from '@/features/background-tasks/fetchImportJobProgress';
 
 import {
@@ -37,6 +39,7 @@ import {
 import { ShipmentEntityStewardPanel } from './ShipmentEntityStewardPanel';
 
 const LS_GRID = 'cip.admin.shipment-evidence.grid.v1';
+const DEFAULT_LIMIT = 100;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500, 1000] as const;
 
 export type ShipmentEvidenceGridRow = {
@@ -157,8 +160,31 @@ function buildListUrl(params: {
 
 export default function ShipmentEvidenceAdminPage() {
   const qc = useQueryClient();
-  const [skip, setSkip] = useState(0);
-  const [limit, setLimit] = useState(100);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchKey = searchParams.toString();
+
+  const { skip, limit } = useMemo(
+    () => parseSkipLimitParams(searchParams, { defaultLimit: DEFAULT_LIMIT, pageSizeOptions: PAGE_SIZE_OPTIONS }),
+    [searchParams],
+  );
+
+  const setParamState = useCallback(
+    (changes: Record<string, string | null>) => {
+      const sp = new URLSearchParams(searchKey);
+      for (const [k, v] of Object.entries(changes)) {
+        if (v == null || v === '') sp.delete(k);
+        else sp.set(k, v);
+      }
+      const next = sp.toString();
+      router.replace(next ? `${pathname}?${next}` : pathname);
+    },
+    [pathname, router, searchKey],
+  );
+
+  const resetPagination = useCallback(() => setParamState({ skip: null }), [setParamState]);
+
   const [importJobId, setImportJobId] = useState('');
   const [lineState, setLineState] = useState('');
   const [reportType, setReportType] = useState('');
@@ -176,6 +202,7 @@ export default function ShipmentEvidenceAdminPage() {
   const [applyStewardWarning, setApplyStewardWarning] = useState<string | null>(null);
   /** True once a background apply has been dispatched for the current job; gates progress polling. */
   const [applyDispatched, setApplyDispatched] = useState(false);
+  const lsLimitHydratedRef = useRef(false);
 
   const parsedJobId = useMemo(() => {
     const t = importJobId.trim();
@@ -185,16 +212,11 @@ export default function ShipmentEvidenceAdminPage() {
   }, [importJobId]);
 
   useEffect(() => {
-    try {
-      const q = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-      const raw = q.get('importJobId') ?? q.get('job');
-      if (raw && /^\d+$/.test(raw.trim())) {
-        setImportJobId((prev) => (prev.trim() === '' ? raw.trim() : prev));
-      }
-    } catch {
-      /* ignore */
+    const raw = searchParams.get('importJobId') ?? searchParams.get('job');
+    if (raw && /^\d+$/.test(raw.trim())) {
+      setImportJobId((prev) => (prev.trim() === '' ? raw.trim() : prev));
     }
-  }, []);
+  }, [searchParams]);
 
   const includeRawRow = rawKeys.length > 0;
 
@@ -213,15 +235,31 @@ export default function ShipmentEvidenceAdminPage() {
           setOptionalFields(p.optionalFields.filter((f) => allowed.has(f)));
         }
         if (Array.isArray(p.rawKeys)) setRawKeys(p.rawKeys);
-        if (typeof p.pageSize === 'number' && PAGE_SIZE_OPTIONS.includes(p.pageSize as (typeof PAGE_SIZE_OPTIONS)[number])) {
-          setLimit(p.pageSize);
-        }
       }
     } catch {
       /* ignore */
     }
     setPersistReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!persistReady || lsLimitHydratedRef.current) return;
+    lsLimitHydratedRef.current = true;
+    if (searchParams.get('limit')) return;
+    try {
+      const raw = localStorage.getItem(LS_GRID);
+      if (!raw) return;
+      const p = JSON.parse(raw) as { pageSize?: number };
+      if (
+        typeof p.pageSize === 'number' &&
+        PAGE_SIZE_OPTIONS.includes(p.pageSize as (typeof PAGE_SIZE_OPTIONS)[number])
+      ) {
+        setParamState({ limit: String(p.pageSize) });
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [persistReady, searchParams, setParamState]);
 
   useEffect(() => {
     if (!persistReady) return;
@@ -492,7 +530,7 @@ export default function ShipmentEvidenceAdminPage() {
               label="Search"
               value={search}
               onChange={(e) => {
-                setSkip(0);
+                resetPagination();
                 setSearch(e.target.value);
               }}
               sx={{ minWidth: 220 }}
@@ -502,7 +540,7 @@ export default function ShipmentEvidenceAdminPage() {
               label="Import job ID"
               value={importJobId}
               onChange={(e) => {
-                setSkip(0);
+                resetPagination();
                 setImportJobId(e.target.value);
               }}
               sx={{ width: 140 }}
@@ -513,7 +551,7 @@ export default function ShipmentEvidenceAdminPage() {
               label="Line state"
               value={lineState}
               onChange={(e) => {
-                setSkip(0);
+                resetPagination();
                 setLineState(e.target.value);
               }}
               sx={{ width: 160 }}
@@ -528,7 +566,7 @@ export default function ShipmentEvidenceAdminPage() {
               label="Report type"
               value={reportType}
               onChange={(e) => {
-                setSkip(0);
+                resetPagination();
                 setReportType(e.target.value);
               }}
               sx={{ width: 220 }}
@@ -545,7 +583,7 @@ export default function ShipmentEvidenceAdminPage() {
               label="Product resolution"
               value={productStatus}
               onChange={(e) => {
-                setSkip(0);
+                resetPagination();
                 setProductStatus(e.target.value);
               }}
               sx={{ width: 200 }}
@@ -563,7 +601,7 @@ export default function ShipmentEvidenceAdminPage() {
               label="Distributor resolution"
               value={distStatus}
               onChange={(e) => {
-                setSkip(0);
+                resetPagination();
                 setDistStatus(e.target.value);
               }}
               sx={{ width: 200 }}
@@ -579,13 +617,12 @@ export default function ShipmentEvidenceAdminPage() {
             count={total}
             page={total === 0 ? 0 : Math.min(page, pageCount)}
             onPageChange={(_, nextPage) => {
-              setSkip(nextPage * limit);
+              setParamState({ skip: String(nextPage * limit) });
             }}
             rowsPerPage={limit}
             onRowsPerPageChange={(e) => {
               const next = Number(e.target.value);
-              setLimit(next);
-              setSkip(0);
+              setParamState({ skip: null, limit: String(next) });
             }}
             rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
             labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`}

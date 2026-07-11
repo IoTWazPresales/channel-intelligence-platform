@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import type { ColDef, GridOptions, ValueFormatterParams } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
@@ -27,6 +28,7 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { apiGet } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
+import { parseSkipLimitParams } from '@/lib/skipLimitSearchParams';
 
 import { buildShippingLinesUrl, type ShippingFilterParams } from './buildShippingLinesUrl';
 import { InboundShipmentsColumnsDialog, type OptionalColumnMeta } from './InboundShipmentsColumnsDialog';
@@ -38,6 +40,7 @@ import { gridRowMetrics } from '@/features/plan-vs-executed/gridPagination';
 import type { SmartPresetId } from './shippingSmartPresets';
 
 const LS_GRID = 'cip.commercial.inbound-shipments.grid.optional.v1';
+const DEFAULT_LIMIT = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500] as const;
 
 const DATE_FIELD_OPTIONS: { value: string; label: string }[] = [
@@ -139,6 +142,29 @@ function dateColFormatter(p: ValueFormatterParams<ShippingLine>): string {
 }
 
 export default function InboundShipmentsPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchKey = searchParams.toString();
+
+  const { skip, limit } = useMemo(
+    () => parseSkipLimitParams(searchParams, { defaultLimit: DEFAULT_LIMIT, pageSizeOptions: PAGE_SIZE_OPTIONS }),
+    [searchParams],
+  );
+
+  const setParamState = useCallback(
+    (changes: Record<string, string | null>) => {
+      const sp = new URLSearchParams(searchKey);
+      for (const [k, v] of Object.entries(changes)) {
+        if (v == null || v === '') sp.delete(k);
+        else sp.set(k, v);
+      }
+      const next = sp.toString();
+      router.replace(next ? `${pathname}?${next}` : pathname);
+    },
+    [pathname, router, searchKey],
+  );
+
   const [lineState, setLineState] = useState<string>('');
   const [cargoStatus, setCargoStatus] = useState<string>('');
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
@@ -161,16 +187,15 @@ export default function InboundShipmentsPage() {
   const [poFilterLabel, setPoFilterLabel] = useState<string | null>(null);
   const [smartPreset, setSmartPreset] = useState<SmartPresetId | null>(null);
   const [deliveryLens, setDeliveryLens] = useState<DeliveryLensId | null>(null);
-  const [skip, setSkip] = useState(0);
-  const [limit, setLimit] = useState<number>(50);
 
   const [colDialogOpen, setColDialogOpen] = useState(false);
   const [optionalFields, setOptionalFields] = useState<string[]>([]);
   const [persistReady, setPersistReady] = useState(false);
 
   const gridSectionRef = useRef<HTMLDivElement | null>(null);
+  const lsLimitHydratedRef = useRef(false);
 
-  const resetPagination = useCallback(() => setSkip(0), []);
+  const resetPagination = useCallback(() => setParamState({ skip: null }), [setParamState]);
 
   const { data: colMeta, isLoading: colMetaLoading } = useQuery({
     queryKey: ['shipping-inbound-optional-columns'],
@@ -186,15 +211,31 @@ export default function InboundShipmentsPage() {
         if (Array.isArray(p.optionalFields)) {
           setOptionalFields(p.optionalFields);
         }
-        if (typeof p.pageSize === 'number' && PAGE_SIZE_OPTIONS.includes(p.pageSize as (typeof PAGE_SIZE_OPTIONS)[number])) {
-          setLimit(p.pageSize);
-        }
       }
     } catch {
       /* ignore */
     }
     setPersistReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!persistReady || lsLimitHydratedRef.current) return;
+    lsLimitHydratedRef.current = true;
+    if (searchParams.get('limit')) return;
+    try {
+      const raw = localStorage.getItem(LS_GRID);
+      if (!raw) return;
+      const p = JSON.parse(raw) as { pageSize?: number };
+      if (
+        typeof p.pageSize === 'number' &&
+        PAGE_SIZE_OPTIONS.includes(p.pageSize as (typeof PAGE_SIZE_OPTIONS)[number])
+      ) {
+        setParamState({ limit: String(p.pageSize) });
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [persistReady, searchParams, setParamState]);
 
   useEffect(() => {
     if (!colMeta?.items?.length) return;
@@ -919,13 +960,12 @@ export default function InboundShipmentsPage() {
           count={total}
           page={total === 0 ? 0 : Math.min(page, pageCount)}
           onPageChange={(_, nextPage) => {
-            setSkip(nextPage * limit);
+            setParamState({ skip: String(nextPage * limit) });
           }}
           rowsPerPage={limit}
           onRowsPerPageChange={(e) => {
             const next = Number(e.target.value);
-            setLimit(next);
-            setSkip(0);
+            setParamState({ skip: null, limit: String(next) });
           }}
           rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
           labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`}
