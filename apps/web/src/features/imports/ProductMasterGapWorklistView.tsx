@@ -16,16 +16,23 @@ import {
   MenuItem,
   Select,
   Stack,
+  TablePagination,
   Typography,
 } from '@mui/material';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
+import { parseSkipLimitParams } from '@/lib/skipLimitSearchParams';
+
+const DEFAULT_LIMIT = 100;
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200, 500] as const;
 
 type GapRow = {
   token: string;
@@ -44,7 +51,8 @@ type GapRow = {
 type WorklistResponse = {
   rows: GapRow[];
   total: number;
-  truncated: boolean;
+  skip: number;
+  limit: number;
   data_unavailable: boolean;
 };
 
@@ -78,8 +86,32 @@ type ApplyResponse = {
 };
 
 export function ProductMasterGapWorklistView() {
-  const [source, setSource] = useState<'all' | 'shipment' | 'dsi' | 'cpor_claim'>('all');
-  const [status, setStatus] = useState<'all' | 'unresolved' | 'ignored'>('all');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchKey = searchParams.toString();
+
+  const { skip, limit } = useMemo(
+    () => parseSkipLimitParams(searchParams, { defaultLimit: DEFAULT_LIMIT, pageSizeOptions: PAGE_SIZE_OPTIONS }),
+    [searchParams],
+  );
+
+  const setParamState = useCallback(
+    (changes: Record<string, string | null>) => {
+      const sp = new URLSearchParams(searchKey);
+      for (const [k, v] of Object.entries(changes)) {
+        if (v == null || v === '') sp.delete(k);
+        else sp.set(k, v);
+      }
+      const next = sp.toString();
+      router.replace(next ? `${pathname}?${next}` : pathname);
+    },
+    [pathname, router, searchKey],
+  );
+
+  const source = (searchParams.get('source') || 'all') as 'all' | 'shipment' | 'dsi' | 'cpor_claim';
+  const status = (searchParams.get('status') || 'all') as 'all' | 'unresolved' | 'ignored';
+
   const [selectedCount, setSelectedCount] = useState(0);
   const [gridApi, setGridApi] = useState<GridApi<GapRow> | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -91,13 +123,14 @@ export function ProductMasterGapWorklistView() {
   const queryClient = useQueryClient();
 
   const q = useQuery({
-    queryKey: ['product-master-gaps', source, status],
+    queryKey: ['product-master-gaps', source, status, skip, limit],
     queryFn: () => {
       const params = new URLSearchParams();
       if (source !== 'all') params.set('source', source);
       if (status !== 'all') params.set('status', status);
-      const qs = params.toString();
-      return apiGet<WorklistResponse>(`/api/v1/product-master-gaps/worklist${qs ? `?${qs}` : ''}`);
+      params.set('skip', String(skip));
+      params.set('limit', String(limit));
+      return apiGet<WorklistResponse>(`/api/v1/product-master-gaps/worklist?${params.toString()}`);
     },
   });
 
@@ -146,6 +179,11 @@ export function ProductMasterGapWorklistView() {
     },
     onError: (err) => setBanner({ severity: 'error', text: safeDisplayError(err) }),
   });
+
+  useEffect(() => {
+    gridApi?.deselectAll();
+    setSelectedCount(0);
+  }, [skip, limit, source, status, gridApi]);
 
   const columnDefs = useMemo<ColDef<GapRow>[]>(
     () => [
@@ -234,6 +272,10 @@ export function ProductMasterGapWorklistView() {
     [],
   );
 
+  const total = q.data?.total ?? 0;
+  const page = limit > 0 ? Math.floor(skip / limit) : 0;
+  const pageCount = limit > 0 ? Math.max(1, Math.ceil(total / limit)) : 1;
+
   const job310Count = useMemo(
     () => (q.data?.rows ?? []).filter((r) => r.affected_job_ids.includes(310)).length,
     [q.data?.rows],
@@ -253,9 +295,9 @@ export function ProductMasterGapWorklistView() {
   return (
     <Stack spacing={2}>
       <Alert severity="info">
-        Catalogue gaps across shipment evidence, DSI staging, and CPOR claims. Select tokens → Preview →
-        Confirm resolve. This surface never creates Product Master rows; DSI facts are not rewritten
-        (FLAG only).
+        Catalogue gaps across shipment evidence, DSI staging, and CPOR claims. Select tokens on the
+        current page → Preview → Confirm resolve. Selection does not carry across pages. This
+        surface never creates Product Master rows; DSI facts are not rewritten (FLAG only).
       </Alert>
       {banner ? (
         <Alert severity={banner.severity} onClose={() => setBanner(null)} data-testid="pmg-banner">
@@ -270,7 +312,9 @@ export function ProductMasterGapWorklistView() {
             labelId="pmg-source"
             label="Source"
             value={source}
-            onChange={(e) => setSource(e.target.value as typeof source)}
+            onChange={(e) =>
+              setParamState({ source: e.target.value === 'all' ? null : e.target.value, skip: null })
+            }
           >
             <MenuItem value="all">All</MenuItem>
             <MenuItem value="shipment">Shipment</MenuItem>
@@ -284,7 +328,9 @@ export function ProductMasterGapWorklistView() {
             labelId="pmg-status"
             label="Status"
             value={status}
-            onChange={(e) => setStatus(e.target.value as typeof status)}
+            onChange={(e) =>
+              setParamState({ status: e.target.value === 'all' ? null : e.target.value, skip: null })
+            }
           >
             <MenuItem value="all">All</MenuItem>
             <MenuItem value="unresolved">Unresolved</MenuItem>
@@ -316,15 +362,37 @@ export function ProductMasterGapWorklistView() {
         >
           Preview resolve ({selectedCount})
         </Button>
+        <Box sx={{ flex: 1 }} />
+        <ModuleGridToolbar
+          onRefresh={() => void q.refetch()}
+          busy={q.isFetching}
+          sx={{ mb: 0 }}
+        />
       </Stack>
 
       {q.data ? (
         <Typography variant="body2" color="text.secondary" data-testid="pmg-summary">
-          {q.data.total} token{q.data.total === 1 ? '' : 's'}
-          {job310Count > 0 ? ` · ${job310Count} touching job 310` : ''}
-          {q.data.truncated ? ' (truncated)' : ''}
+          {total} token{total === 1 ? '' : 's'}
+          {job310Count > 0 ? ` · ${job310Count} on this page touching job 310` : ''}
         </Typography>
       ) : null}
+
+      <TablePagination
+        component="div"
+        count={total}
+        page={total === 0 ? 0 : Math.min(page, pageCount - 1)}
+        onPageChange={(_, nextPage) => {
+          setParamState({ skip: String(nextPage * limit) });
+        }}
+        rowsPerPage={limit}
+        onRowsPerPageChange={(e) => {
+          const next = Number(e.target.value);
+          setParamState({ skip: null, limit: String(next) });
+        }}
+        rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
+        labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${count}`}
+        data-testid="pmg-pagination"
+      />
 
       <ModuleDataSection
         isLoading={q.isLoading}
@@ -337,7 +405,7 @@ export function ProductMasterGapWorklistView() {
           description: 'All imported product identifiers resolved to Product Master for the current filters.',
         }}
       >
-        <Box data-testid="pmg-grid">
+        <Box>
           <EnterpriseDataGrid
             rowData={q.data?.rows ?? []}
             columnDefs={columnDefs}

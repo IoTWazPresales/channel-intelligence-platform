@@ -40,7 +40,8 @@ async def get_product_master_gap_worklist(
     source: Literal["shipment", "dsi", "cpor_claim"] | None = Query(default=None),
     status: Literal["unresolved", "ignored"] | None = Query(default=None),
     search: str | None = Query(default=None, max_length=128),
-    limit: int = Query(default=2000, ge=1, le=5000),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
 ):
     """Derived-on-read aggregation of product tokens that failed PM resolution."""
     return await product_master_gap_worklist(
@@ -48,6 +49,7 @@ async def get_product_master_gap_worklist(
         source=source,
         status=status,
         search=search,
+        skip=skip,
         limit=limit,
     )
 

@@ -55,7 +55,8 @@ async def product_master_gap_worklist(
     source: SourceKind | None = None,
     status: WorklistStatus | None = None,
     search: str | None = None,
-    limit: int = 2000,
+    skip: int = 0,
+    limit: int = 100,
 ) -> dict[str, Any]:
     """Return unresolved/ignored product tokens grouped by normalized token."""
     rows_by_token: dict[str, dict[str, Any]] = {}
@@ -74,13 +75,14 @@ async def product_master_gap_worklist(
         q = search.strip().upper()
         out = [r for r in out if q in r["token"] or q in (r.get("sample_identifiers") or "").upper()]
 
-    truncated = len(out) > limit
-    out = out[:limit]
+    total = len(out)
+    page = out[skip : skip + limit]
 
     return {
-        "rows": out,
-        "total": len(out),
-        "truncated": truncated,
+        "rows": page,
+        "total": total,
+        "skip": skip,
+        "limit": limit,
         "status_vocabulary": {
             "shipment": sorted(_SHIPMENT_UNRESOLVED_STATUSES),
             "dsi": ["needs_review", "ignored", "resolved"],
