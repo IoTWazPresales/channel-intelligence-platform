@@ -67,6 +67,34 @@ def test_covered_po_product_is_not_a_gap():
     assert out["groups"] == []
 
 
+def test_gap_pagination_skip_limit():
+    results = [
+        _R([]),
+        _R([]),
+        _R(
+            [
+                (500, 10, 40.0, dt.date(2026, 2, 15)),
+                (501, 11, 10.0, dt.date(2026, 2, 15)),
+                (502, 12, 5.0, dt.date(2026, 3, 15)),
+            ]
+        ),
+        _R([(500, "PO-1"), (501, "PO-2"), (502, "PO-3")]),
+        _R(
+            [
+                (10, "W1", "Laptops", "PC"),
+                (11, "W2", "Laptops", "PC"),
+                (12, "W3", "Laptops", "PC"),
+            ]
+        ),
+    ]
+    out = asyncio.run(mod.po_gap_worklist(_db(results), skip=1, limit=1))
+    assert out["total_gap_rows"] == 3
+    assert out["skip"] == 1
+    assert out["limit"] == 1
+    assert len(out["groups"][0]["rows"]) == 1
+    assert out["groups"][0]["rows"][0]["purchase_order_id"] == 501
+
+
 def test_dismissed_po_excluded_unless_included():
     # PO 500 is dismissed; gap pair exists but should be filtered out by default.
     base = [

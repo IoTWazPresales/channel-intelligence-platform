@@ -2686,10 +2686,12 @@ class GapDismissBody(BaseModel):
 @router.get("/lineup/po-gap-worklist")
 async def get_po_gap_worklist(
     include_dismissed: bool = Query(default=False),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
 ):
     """POs with shipments but no covering confirmed lineup, grouped by quarter/year."""
-    return await po_gap_worklist(db, include_dismissed=include_dismissed)
+    return await po_gap_worklist(db, include_dismissed=include_dismissed, skip=skip, limit=limit)
 
 
 @router.post("/lineup/po-gap-worklist/dismiss", status_code=200)
@@ -2715,7 +2717,8 @@ async def get_po_auto_link_proposals(
     period: str | None = Query(default=None, description="Filter by case period_label or quarter token (e.g. 26Q1)"),
     customer_id: int | None = Query(default=None, ge=1),
     confidence: Literal["high", "medium"] | None = Query(default=None),
-    limit: int = Query(default=500, ge=1, le=5000),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=200, ge=1, le=5000),
     include_dismissed: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
 ):
@@ -2725,6 +2728,7 @@ async def get_po_auto_link_proposals(
         period=period,
         customer_id=customer_id,
         confidence=confidence,
+        skip=skip,
         limit=limit,
         include_dismissed=include_dismissed,
     )

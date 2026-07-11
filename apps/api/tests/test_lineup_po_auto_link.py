@@ -354,6 +354,8 @@ async def test_proposals_endpoint_smoke_on_cip():
 
     assert "proposals" in result
     assert result.get("data_unavailable") is False
+    assert result.get("skip") == 0
+    assert result.get("limit") == 5
     if result["proposals"]:
         row = result["proposals"][0]
         assert "confidence" in row

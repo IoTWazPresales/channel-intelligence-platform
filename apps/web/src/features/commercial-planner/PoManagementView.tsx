@@ -10,16 +10,18 @@ import {
   Divider,
   LinearProgress,
   Stack,
+  TablePagination,
   Tooltip,
   Typography,
 } from '@mui/material';
 import type { ColDef, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
 import { PoAutoLinkProposalsSection, PO_AUTO_LINK_SECTION_ID } from './PoAutoLinkProposalsSection';
@@ -81,6 +83,8 @@ type GapResponse = {
   groups: GapGroup[];
   dismissed: { purchase_order_id: number; po_number_raw: string | null; dismiss_reason_code: string | null }[];
   total_gap_rows: number;
+  skip?: number;
+  limit?: number;
   data_unavailable?: boolean;
 };
 
@@ -101,12 +105,23 @@ function poGroupDomId(g: Pick<BacklogGroup, 'year' | 'quarter' | 'product_line'>
 export const PO_BACKLOG_SECTION_ID = 'po-mgmt-backlog';
 export const PO_GAP_SECTION_ID = 'po-mgmt-gap';
 
+const GAP_DEFAULT_LIMIT = 100;
+const GAP_PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
+
+function parseGapPagination(sp: URLSearchParams): { skip: number; limit: number } {
+  const skip = Math.max(0, Number(sp.get('gap_skip') || '0') || 0);
+  const limitRaw = Number(sp.get('gap_limit') || String(GAP_DEFAULT_LIMIT)) || GAP_DEFAULT_LIMIT;
+  const limit = (GAP_PAGE_SIZE_OPTIONS as readonly number[]).includes(limitRaw) ? limitRaw : GAP_DEFAULT_LIMIT;
+  return { skip, limit };
+}
+
 function needsLineupUpload(g: BacklogGroup): boolean {
   return g.status === 'unlinked' && !g.lineup_case_exists && !g.parse_incomplete;
 }
 
 export function PoManagementView() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const qc = useQueryClient();
   const [showDismissed, setShowDismissed] = useState(false);
@@ -114,6 +129,21 @@ export function PoManagementView() {
   const [pendingLinkProposals, setPendingLinkProposals] = useState(0);
   const [highlightGroupId, setHighlightGroupId] = useState<string | null>(null);
   const [highlightCustomerId, setHighlightCustomerId] = useState<number | null>(null);
+
+  const { skip: gapSkip, limit: gapLimit } = useMemo(() => parseGapPagination(searchParams), [searchParams]);
+
+  const setGapParamState = useCallback(
+    (changes: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(changes)) {
+        if (value == null || value === '') params.delete(key);
+        else params.set(key, value);
+      }
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
 
   const deepLinkPeriod = searchParams.get('period');
   const deepLinkBU = searchParams.get('business_unit');
@@ -151,12 +181,18 @@ export function PoManagementView() {
     return () => window.clearTimeout(timer);
   }, [backlogQ.data, deepLinkPeriod, deepLinkBU, deepLinkCustomerId]);
   const gapQ = useQuery({
-    queryKey: ['po-management', 'gap', showDismissed],
-    queryFn: ({ signal }) =>
-      apiGet<GapResponse>(
-        `/api/v1/commercial-planner/lineup/po-gap-worklist?include_dismissed=${showDismissed ? 'true' : 'false'}`,
+    queryKey: ['po-management', 'gap', showDismissed, gapSkip, gapLimit],
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams({
+        include_dismissed: showDismissed ? 'true' : 'false',
+        skip: String(gapSkip),
+        limit: String(gapLimit),
+      });
+      return apiGet<GapResponse>(
+        `/api/v1/commercial-planner/lineup/po-gap-worklist?${params.toString()}`,
         { signal }
-      ),
+      );
+    },
   });
 
   const dismissMut = useMutation({
@@ -218,6 +254,15 @@ export function PoManagementView() {
 
   const scrollToSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const gapTotal = gap?.total_gap_rows ?? 0;
+  const gapPage = gapLimit > 0 ? Math.floor(gapSkip / gapLimit) : 0;
+  const gapHasRows = gapRows.length > 0;
+
+  const handleToggleDismissed = () => {
+    setShowDismissed((v) => !v);
+    setGapParamState({ gap_skip: null });
   };
 
   const gapColumnDefs = useMemo<ColDef<GapRow>[]>(
@@ -521,43 +566,85 @@ export function PoManagementView() {
       <Box id={PO_GAP_SECTION_ID}>
         <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
           <Typography variant="h6">POs with shipments but no covering lineup</Typography>
-          <Button size="small" onClick={() => setShowDismissed((v) => !v)} data-testid="toggle-dismissed">
-            {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
-          </Button>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Button size="small" onClick={() => void gapQ.refetch()} disabled={gapQ.isFetching} data-testid="gap-refresh">
+              Refresh
+            </Button>
+            <Button size="small" onClick={handleToggleDismissed} data-testid="toggle-dismissed">
+              {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
+            </Button>
+          </Stack>
         </Stack>
         {dismissMut.isError ? <Alert severity="error">{safeDisplayError(dismissMut.error)}</Alert> : null}
-        {gapQ.isLoading ? (
-          <LinearProgress />
-        ) : gap?.data_unavailable ? (
-          <Alert severity="info">Gap worklist is unavailable.</Alert>
-        ) : !gap?.groups.length ? (
-          <Alert severity="success">No gaps — every shipment PO is covered by a confirmed lineup.</Alert>
-        ) : (
-          <Stack spacing={1.5}>
-            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-              <Typography variant="body2" color="text.secondary">
-                {gap.total_gap_rows} gap row{gap.total_gap_rows === 1 ? '' : 's'} across {gap.groups.length} period
-                {gap.groups.length === 1 ? '' : 's'}
-              </Typography>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={() => startUpload(gap.groups[0]?.quarter_label ?? null)}
-                data-testid="gap-upload-top"
-              >
-                Upload lineup
-              </Button>
+        <ModuleDataSection
+          isLoading={gapQ.isLoading}
+          isError={gapQ.isError}
+          error={gapQ.error instanceof Error ? gapQ.error : gapQ.error ? new Error(String(gapQ.error)) : null}
+          onRetry={() => void gapQ.refetch()}
+          isEmpty={!gap?.data_unavailable && gapTotal === 0}
+          empty={{
+            title: showDismissed ? 'No gap rows' : 'No gaps',
+            description: showDismissed
+              ? 'No dismissed gap POs match the current view.'
+              : 'Every shipment PO is covered by a confirmed lineup.',
+          }}
+          loadingLabel="Loading gap worklist…"
+        >
+          {gap?.data_unavailable ? (
+            <Alert severity="info">Gap worklist is unavailable.</Alert>
+          ) : (
+            <Stack spacing={1.5}>
+              <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
+                <Typography variant="body2" color="text.secondary" data-testid="po-gap-summary">
+                  {gapTotal.toLocaleString()} gap row{gapTotal === 1 ? '' : 's'}
+                  {gapTotal > 0
+                    ? ` · showing ${gapSkip + 1}–${Math.min(gapSkip + gapRows.length, gapTotal)}`
+                    : ''}
+                </Typography>
+                {gap?.groups[0]?.quarter_label ? (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => startUpload(gap.groups[0]?.quarter_label ?? null)}
+                    data-testid="gap-upload-top"
+                  >
+                    Upload lineup
+                  </Button>
+                ) : null}
+              </Stack>
+              {gapHasRows ? (
+                <Box data-testid="po-gap-grid">
+                  <EnterpriseDataGrid
+                    rowData={gapRows}
+                    columnDefs={gapColumnDefs}
+                    gridOptions={gapGridOptions}
+                    height={Math.min(480, 120 + gapRows.length * 42)}
+                  />
+                </Box>
+              ) : null}
+              {gapTotal > 0 ? (
+                <TablePagination
+                  component="div"
+                  count={gapTotal}
+                  page={gapPage}
+                  onPageChange={(_e, nextPage) => {
+                    setGapParamState({ gap_skip: String(nextPage * gapLimit) });
+                  }}
+                  rowsPerPage={gapLimit}
+                  onRowsPerPageChange={(e) => {
+                    const next = Number.parseInt(e.target.value, 10);
+                    setGapParamState({ gap_skip: null, gap_limit: String(next) });
+                  }}
+                  rowsPerPageOptions={[...GAP_PAGE_SIZE_OPTIONS]}
+                  labelDisplayedRows={({ from, to, count }) =>
+                    `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
+                  }
+                  data-testid="po-gap-pagination"
+                />
+              ) : null}
             </Stack>
-            <Box data-testid="po-gap-grid">
-              <EnterpriseDataGrid
-                rowData={gapRows}
-                columnDefs={gapColumnDefs}
-                gridOptions={gapGridOptions}
-                height={Math.min(480, 120 + gapRows.length * 42)}
-              />
-            </Box>
-          </Stack>
-        )}
+          )}
+        </ModuleDataSection>
       </Box>
 
       <PoDismissReasonDialog

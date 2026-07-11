@@ -339,7 +339,8 @@ async def po_auto_link_proposals(
     period: str | None = None,
     customer_id: int | None = None,
     confidence: ConfidenceTier | None = None,
-    limit: int = 500,
+    skip: int = 0,
+    limit: int = 200,
     include_dismissed: bool = False,
 ) -> dict[str, Any]:
     """Build auto-link proposals (read-only; does not write ``commercial_lineup_case_po``)."""
@@ -349,12 +350,13 @@ async def po_auto_link_proposals(
             period=period,
             customer_id=customer_id,
             confidence=confidence,
+            skip=skip,
             limit=limit,
             include_dismissed=include_dismissed,
         )
     except Exception:
         logger.exception("po-auto-link proposals failed")
-        return {"proposals": [], "total": 0, "data_unavailable": True, "dismissed": [], "group_coverage": [], "group_coverage_by_key": {}}
+        return {"proposals": [], "total": 0, "data_unavailable": True, "dismissed": [], "group_coverage": [], "group_coverage_by_key": {}, "skip": skip, "limit": limit, "returned": 0, "dismissed_count": 0}
 
 
 async def _po_auto_link_proposals_inner(
@@ -363,6 +365,7 @@ async def _po_auto_link_proposals_inner(
     period: str | None,
     customer_id: int | None,
     confidence: ConfidenceTier | None,
+    skip: int,
     limit: int,
     include_dismissed: bool,
 ) -> dict[str, Any]:
@@ -381,7 +384,18 @@ async def _po_auto_link_proposals_inner(
     )
     cases = [c for c in cases if _period_label_matches(c, period)]
     if not cases:
-        return {"proposals": [], "total": 0, "data_unavailable": False, "dismissed": [], "group_coverage": [], "group_coverage_by_key": {}}
+        return {
+            "proposals": [],
+            "total": 0,
+            "returned": 0,
+            "skip": skip,
+            "limit": limit,
+            "data_unavailable": False,
+            "dismissed": [],
+            "dismissed_count": 0,
+            "group_coverage": [],
+            "group_coverage_by_key": {},
+        }
 
     dismissed_rows: list[CommercialLineupPoAutoLinkDismiss] = []
     try:
@@ -668,7 +682,7 @@ async def _po_auto_link_proposals_inner(
 
     total = len(out)
     if limit > 0:
-        out = out[: int(limit)]
+        out = out[int(skip) : int(skip) + int(limit)]
 
     group_coverage = merge_group_coverage(
         linked=compute_group_linked_coverage(
@@ -689,6 +703,8 @@ async def _po_auto_link_proposals_inner(
         "proposals": out,
         "total": total,
         "returned": len(out),
+        "skip": skip,
+        "limit": limit,
         "data_unavailable": False,
         "dismissed": dismissed_out if include_dismissed else [],
         "dismissed_count": len(dismissed_keys),

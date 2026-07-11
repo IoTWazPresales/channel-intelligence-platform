@@ -19,10 +19,12 @@ function renderView() {
 const pushMock = vi.fn();
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: pushMock }),
-  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: pushMock, replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(searchString),
   usePathname: () => '/admin/po-management',
 }));
+
+let searchString = '';
 
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(),
@@ -138,6 +140,7 @@ function wireApi(opts: { firstRun?: boolean; gapDismissed?: boolean } = {}) {
 describe('PoManagementView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    searchString = '';
   });
 
   it('shows lineup on file when case exists without upload prompt', async () => {
@@ -226,7 +229,7 @@ describe('PoManagementView', () => {
     expect(await screen.findByTestId('po-worklist-summary')).toBeInTheDocument();
     expect(screen.getByTestId('po-worklist-unlinked')).toHaveTextContent('3 POs unlinked');
     expect(screen.getByTestId('po-worklist-upload-needed')).toHaveTextContent('0 period×BU need lineup upload');
-    expect(screen.getByTestId('po-worklist-gaps')).toHaveTextContent('1 shipment gap');
+    expect(screen.getByTestId('po-worklist-gaps')).toHaveTextContent('1 gap line');
   });
 
   it('shows pending link chip in coverage when proposals exist', async () => {
@@ -270,6 +273,18 @@ describe('PoManagementView', () => {
     renderView();
     expect(await screen.findByTestId('po-coverage-pending-links')).toHaveTextContent('3 CRAD link suggestions');
     expect(await screen.findByTestId('po-auto-link-cards')).toBeInTheDocument();
+  });
+
+  it('fetches gap worklist with skip/limit from URL', async () => {
+    searchString = 'gap_skip=100&gap_limit=50';
+    wireApi({ firstRun: false });
+    renderView();
+    await waitFor(() =>
+      expect(apiGetMock).toHaveBeenCalledWith(
+        expect.stringMatching(/po-gap-worklist.*skip=100.*limit=50/),
+        expect.anything()
+      )
+    );
   });
 
   it('dismisses a gap PO via reason dialog', async () => {

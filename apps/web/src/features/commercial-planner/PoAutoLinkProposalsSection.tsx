@@ -26,6 +26,7 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Tooltip,
@@ -84,12 +85,18 @@ type ProposalsResponse = {
   proposals: PoAutoLinkProposal[];
   total: number;
   returned: number;
+  skip?: number;
+  limit?: number;
   dismissed?: { proposal_key: string; case_id: number; purchase_order_id: number; reason_code: string | null }[];
   dismissed_count?: number;
   data_unavailable?: boolean;
   group_coverage?: GroupCoverageEntry[];
   group_coverage_by_key?: Record<string, GroupCoverageEntry>;
 };
+
+export const AUTO_LINK_DEFAULT_LIMIT = 200;
+export const AUTO_LINK_MAX_LIMIT = 5000;
+const AUTO_LINK_PAGE_SIZE_OPTIONS = [50, 100, 200, 500, 1000] as const;
 
 export type PoAutoLinkProposalGroup = {
   groupKey: string;
@@ -806,14 +813,23 @@ export function PoAutoLinkProposalsSection({
   const [applyProgress, setApplyProgress] = useState<PoAutoLinkApplyProgress | null>(null);
   const [dismissTarget, setDismissTarget] = useState<PoAutoLinkProposal | null>(null);
   const [cardExpanded, setCardExpanded] = useState<Record<string, boolean>>({});
+  const [proposalSkip, setProposalSkip] = useState(0);
+  const [proposalLimit, setProposalLimit] = useState(AUTO_LINK_DEFAULT_LIMIT);
 
-  const queryKey = ['po-auto-link', period, confidence, showDismissed] as const;
+  const queryKey = ['po-auto-link', period, confidence, showDismissed, proposalSkip, proposalLimit] as const;
+
+  useEffect(() => {
+    setProposalSkip(0);
+  }, [period, confidence, showDismissed]);
 
   const proposalsQ = useQuery({
     queryKey,
     enabled: expanded || autoFetch,
     queryFn: ({ signal }) => {
-      const params = new URLSearchParams({ limit: '200' });
+      const params = new URLSearchParams({
+        skip: String(proposalSkip),
+        limit: String(proposalLimit),
+      });
       if (period.trim()) params.set('period', period.trim());
       if (confidence !== 'all') params.set('confidence', confidence);
       if (showDismissed) params.set('include_dismissed', 'true');
@@ -930,7 +946,12 @@ export function PoAutoLinkProposalsSection({
     });
   }, [proposalGroups]);
 
-  const pendingCount = Math.max(0, (proposalsQ.data?.total ?? 0) - (proposalsQ.data?.dismissed_count ?? 0));
+  const proposalTotal = proposalsQ.data?.total ?? 0;
+  const proposalReturned = proposalsQ.data?.returned ?? filteredProposals.length;
+  const proposalPage = proposalLimit > 0 ? Math.floor(proposalSkip / proposalLimit) : 0;
+  const hasMoreProposals = proposalTotal > proposalSkip + proposalReturned;
+
+  const pendingCount = Math.max(0, proposalTotal - (proposalsQ.data?.dismissed_count ?? 0));
 
   useEffect(() => {
     if (!autoFetch) return;
@@ -1156,13 +1177,17 @@ export function PoAutoLinkProposalsSection({
                 </Alert>
               ) : (
                 <>
-                  <Typography variant="caption" color="text.secondary">
-                    Showing {filteredProposals.length} of {proposalsQ.data?.total ?? 0} proposals
+                  <Typography variant="caption" color="text.secondary" data-testid="po-auto-link-page-summary">
+                    Showing {proposalSkip + 1}–{proposalSkip + proposalReturned} of {proposalTotal.toLocaleString()}{' '}
+                    proposal{proposalTotal === 1 ? '' : 's'}
                     {customerFilter.trim() && activeProposals.length !== filteredProposals.length
-                      ? ` (${activeProposals.length} before customer filter)`
+                      ? ` (${activeProposals.length} on this page before customer filter)`
                       : ''}
                     {(proposalsQ.data?.dismissed_count ?? 0) > 0
                       ? ` · ${proposalsQ.data?.dismissed_count} dismissed`
+                      : ''}
+                    {hasMoreProposals
+                      ? ` · raise page size (max ${AUTO_LINK_MAX_LIMIT.toLocaleString()}) or use pages below`
                       : ''}
                   </Typography>
                   <Stack spacing={1.5} data-testid="po-auto-link-cards">
@@ -1192,6 +1217,31 @@ export function PoAutoLinkProposalsSection({
                       />
                     ))}
                   </Stack>
+                  {proposalTotal > 0 ? (
+                    <TablePagination
+                      component="div"
+                      count={proposalTotal}
+                      page={proposalPage}
+                      onPageChange={(_e, nextPage) => {
+                        setProposalSkip(nextPage * proposalLimit);
+                      }}
+                      rowsPerPage={proposalLimit}
+                      onRowsPerPageChange={(e) => {
+                        const next = Number.parseInt(e.target.value, 10);
+                        setProposalLimit(
+                          (AUTO_LINK_PAGE_SIZE_OPTIONS as readonly number[]).includes(next)
+                            ? next
+                            : AUTO_LINK_DEFAULT_LIMIT
+                        );
+                        setProposalSkip(0);
+                      }}
+                      rowsPerPageOptions={[...AUTO_LINK_PAGE_SIZE_OPTIONS]}
+                      labelDisplayedRows={({ from, to, count }) =>
+                        `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
+                      }
+                      data-testid="po-auto-link-pagination"
+                    />
+                  ) : null}
                 </>
               )}
             </Stack>

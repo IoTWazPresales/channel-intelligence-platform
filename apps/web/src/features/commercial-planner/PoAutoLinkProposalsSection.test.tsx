@@ -96,6 +96,38 @@ describe('PoAutoLinkProposalsSection', () => {
     expect(apiGetMock).toHaveBeenCalledWith(expect.stringContaining('/po-auto-link/proposals'), expect.anything());
   });
 
+  it('fetches proposals with default skip/limit when expanded', async () => {
+    renderSection();
+    await expandSection();
+    expect(apiGetMock).toHaveBeenCalledWith(
+      expect.stringMatching(/skip=0.*limit=200/),
+      expect.anything()
+    );
+  });
+
+  it('shows pagination when more proposals exist than returned', async () => {
+    apiGetMock.mockImplementation((path: string) => {
+      if (path.includes('/po-auto-link/proposals')) {
+        return Promise.resolve({
+          proposals: [sampleProposal],
+          total: 250,
+          returned: 1,
+          skip: 0,
+          limit: 200,
+          dismissed_count: 0,
+          data_unavailable: false,
+          group_coverage: [],
+          group_coverage_by_key: {},
+        });
+      }
+      return Promise.reject(new Error(`unexpected GET ${path}`));
+    });
+    renderSection();
+    await expandSection();
+    expect(await screen.findByTestId('po-auto-link-pagination')).toBeInTheDocument();
+    expect(screen.getByTestId('po-auto-link-page-summary')).toHaveTextContent(/max 5.?000/);
+  });
+
   it('renders proposal card rows after expand with confidence chip', async () => {
     renderSection();
     await expandSection();

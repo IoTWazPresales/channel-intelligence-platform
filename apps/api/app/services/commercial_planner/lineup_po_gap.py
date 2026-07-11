@@ -35,15 +35,39 @@ class PurchaseOrderNotFoundError(Exception):
     pass
 
 
-async def po_gap_worklist(db: AsyncSession, *, include_dismissed: bool = False) -> dict[str, Any]:
+async def po_gap_worklist(
+    db: AsyncSession,
+    *,
+    include_dismissed: bool = False,
+    skip: int = 0,
+    limit: int = 100,
+) -> dict[str, Any]:
     try:
-        return await _po_gap_worklist_inner(db, include_dismissed=include_dismissed)
+        return await _po_gap_worklist_inner(
+            db,
+            include_dismissed=include_dismissed,
+            skip=skip,
+            limit=limit,
+        )
     except Exception:
         logger.exception("po-gap-worklist failed")
-        return {"groups": [], "dismissed": [], "total_gap_rows": 0, "data_unavailable": True}
+        return {
+            "groups": [],
+            "dismissed": [],
+            "total_gap_rows": 0,
+            "skip": skip,
+            "limit": limit,
+            "data_unavailable": True,
+        }
 
 
-async def _po_gap_worklist_inner(db: AsyncSession, *, include_dismissed: bool) -> dict[str, Any]:
+async def _po_gap_worklist_inner(
+    db: AsyncSession,
+    *,
+    include_dismissed: bool,
+    skip: int,
+    limit: int,
+) -> dict[str, Any]:
     # Covered (po, product) pairs: PO linked to a case whose lineup contains that product.
     covered_rows = (
         await db.execute(
@@ -123,8 +147,7 @@ async def _po_gap_worklist_inner(db: AsyncSession, *, include_dismissed: bool) -
                 "product_line": pline or bu,
             }
 
-    groups: dict[tuple[int, int], dict[str, Any]] = {}
-    total = 0
+    flat_rows: list[dict[str, Any]] = []
     for po, pid, units, rep in gap_pairs:
         if po in dismissed_ids and not include_dismissed:
             continue
@@ -132,20 +155,12 @@ async def _po_gap_worklist_inner(db: AsyncSession, *, include_dismissed: bool) -
             year, q, label = _quarter(rep.year, rep.month)
         else:
             year, q, label = 0, 0, "Undated"
-        key = (year, q)
-        g = groups.setdefault(
-            key,
+        pm = prod_meta.get(pid, {})
+        flat_rows.append(
             {
                 "year": year,
                 "quarter": q,
                 "quarter_label": label,
-                "rows": [],
-                "shipped_units": 0.0,
-            },
-        )
-        pm = prod_meta.get(pid, {})
-        g["rows"].append(
-            {
                 "purchase_order_id": po,
                 "po_number_raw": po_meta.get(po),
                 "product_id": pid,
@@ -156,8 +171,44 @@ async def _po_gap_worklist_inner(db: AsyncSession, *, include_dismissed: bool) -
                 "dismissed": po in dismissed_ids,
             }
         )
-        g["shipped_units"] += units
-        total += 1
+
+    flat_rows.sort(
+        key=lambda r: (
+            -int(r["year"]),
+            -int(r["quarter"]),
+            int(r["purchase_order_id"]),
+            int(r["product_id"]),
+        )
+    )
+    total = len(flat_rows)
+    page_rows = flat_rows[skip : skip + limit] if limit > 0 else []
+
+    groups: dict[tuple[int, int], dict[str, Any]] = {}
+    for row in page_rows:
+        key = (int(row["year"]), int(row["quarter"]))
+        g = groups.setdefault(
+            key,
+            {
+                "year": row["year"],
+                "quarter": row["quarter"],
+                "quarter_label": row["quarter_label"],
+                "rows": [],
+                "shipped_units": 0.0,
+            },
+        )
+        g["rows"].append(
+            {
+                "purchase_order_id": row["purchase_order_id"],
+                "po_number_raw": row["po_number_raw"],
+                "product_id": row["product_id"],
+                "product_name": row["product_name"],
+                "product_line": row["product_line"],
+                "shipped_units": row["shipped_units"],
+                "period_label": row["period_label"],
+                "dismissed": row["dismissed"],
+            }
+        )
+        g["shipped_units"] += float(row["shipped_units"])
 
     group_list = sorted(groups.values(), key=lambda g: (g["year"], g["quarter"]), reverse=True)
     for g in group_list:
@@ -173,6 +224,8 @@ async def _po_gap_worklist_inner(db: AsyncSession, *, include_dismissed: bool) -
         "groups": group_list,
         "dismissed": dismissed,
         "total_gap_rows": total,
+        "skip": skip,
+        "limit": limit,
         "data_unavailable": False,
     }
 
