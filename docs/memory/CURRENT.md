@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/channel-ops-kpi-and-gap-scan-perf` |
-| **HEAD** | pending commit |
+| **HEAD** | `d87eff3` |
 | **PR** | Not opened |
 | **Alembic (DB)** | **`20260710_0072`** on cip |
 | **main tip** | `618448c` (PR #7 Theme B merged) |
