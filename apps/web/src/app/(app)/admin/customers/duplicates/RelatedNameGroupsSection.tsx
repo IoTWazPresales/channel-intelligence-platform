@@ -250,9 +250,10 @@ export function RelatedNameGroupsSection({
           Related names — review before merge
         </Typography>
         <Typography variant="body2">
-          Candidates may be different entities. Check only the members that are the same customer, choose a survivor,
-          then preview → confirm. Losers are soft-redirected (<code>merged_into_customer_id</code>). This tab is not
-          tied to an import job — no revalidate/recommit bounce.
+          Only <strong>contained-prefix</strong> matches are listed (e.g. Rectron → Rectron Staff COD) —
+          not loose &quot;similar root&quot; clusters. Check only members that are the same customer, choose a
+          survivor, then preview → confirm. Losers are soft-redirected and sealed as aliases. Not tied to
+          an import job.
         </Typography>
       </Alert>
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>

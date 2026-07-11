@@ -127,3 +127,16 @@ def test_survivor_hint_order_on_related_members():
     assert amazon["members"][0].id == 1  # anchor pinned first
     related_ids = [m.id for m in amazon["members"][1:]]
     assert related_ids[0] == 2  # verified/oldest among related
+
+
+def test_shared_short_root_false_positives_not_grouped():
+    """Root peel must not cluster unrelated 'Computer *' / 'Destiny *' brands."""
+    rows = [
+        _row(1, "COMPUTER SUPPORT SPECIALISTS"),
+        _row(2, "Computer Connection cc"),
+        _row(3, "COMPUTER WORLD"),
+        _row(4, "Destiny Computer Solutions (Pty) Ltd"),
+        _row(5, "DESTINY GROUP (PTY) LTD"),
+        _row(6, "Destiny Global Technology (Pty) Ltd"),
+    ]
+    assert build_related_master_groups(rows) == []

@@ -1,4 +1,4 @@
-"""Related-master customer groups (anchored token-prefix containment + root similarity)."""
+"""Related-master customer groups (anchored token-prefix containment only)."""
 
 from __future__ import annotations
 
@@ -18,11 +18,9 @@ from app.services.customer_duplicate_groups import (
 )
 from app.services.imports.dsi_customer_name_normalization import (
     anchor_is_eligible,
-    compare_root_identities_from_raw,
     containment_score,
     is_token_prefix_containment,
     normalize_customer_name_for_similarity,
-    split_distinctive_and_generic_tokens,
 )
 
 RELATED_SIMILARITY_KEY_PREFIX = "related:"
@@ -34,7 +32,13 @@ def _first_token(normalized: str) -> str:
 
 
 def build_related_master_groups(rows: list[_CustomerRow]) -> list[dict[str, Any]]:
-    """Build anchored related groups; each group needs an eligible anchor + ≥1 related member."""
+    """Build anchored related groups via token-prefix containment only.
+
+    Root-similarity was removed from this worklist: shared short roots like
+    ``computer`` / ``destiny`` produced high-confidence false groups
+    (Computer Connection vs Computer World, Destiny Group vs Destiny Global, …).
+    Exact-key duplicates stay on the name-similarity tab.
+    """
     normalized: dict[int, str] = {}
     for row in rows:
         key = normalize_customer_name_for_similarity(row.name)
@@ -68,29 +72,13 @@ def build_related_master_groups(rows: list[_CustomerRow]) -> list[dict[str, Any]
                 if other_norm == anchor_norm:
                     # Exact-key duplicates belong on the name-similarity tab.
                     continue
-                basis: str | None = None
-                score: float | None = None
-                if is_token_prefix_containment(anchor_norm, other_norm):
-                    basis = "contained_prefix"
-                    score = containment_score(anchor_norm, other_norm)
-                else:
-                    other_tokens = [t for t in other_norm.split() if t]
-                    other_distinctive, _ = split_distinctive_and_generic_tokens(other_norm)
-                    # Skip weak root matches (tiny single-token or generic-only candidates).
-                    if (
-                        other_distinctive
-                        and not (len(other_tokens) == 1 and len(other_tokens[0]) <= 3)
-                    ):
-                        root_score = compare_root_identities_from_raw(
-                            by_id[anchor_id].name, by_id[other_id].name
-                        )
-                        if root_score is not None:
-                            basis = "root_similarity"
-                            score = float(root_score)
-                if basis is None or score is None:
+                if not is_token_prefix_containment(anchor_norm, other_norm):
                     continue
                 members.append(by_id[other_id])
-                meta[other_id] = {"match_basis": basis, "score": score}
+                meta[other_id] = {
+                    "match_basis": "contained_prefix",
+                    "score": containment_score(anchor_norm, other_norm),
+                }
 
             if len(members) < 2:
                 continue
