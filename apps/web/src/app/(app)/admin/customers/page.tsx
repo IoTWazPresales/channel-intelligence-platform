@@ -41,6 +41,7 @@ import {
 } from '@/features/admin/CustomerPromoteDialog';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
+import { useDebouncedUrlQuery } from '@/lib/useDebouncedUrlQuery';
 import { toQueryError } from '@/lib/queryError';
 
 type CustomerRow = {
@@ -293,6 +294,11 @@ function AdminCustomersPageContent() {
       router.replace(`${pathname}?${sp.toString()}`);
     },
     [pathname, router, searchParams]
+  );
+
+  const [searchInput, setSearchInput] = useDebouncedUrlQuery(
+    q,
+    useCallback((next) => setParamState({ q: next }, true), [setParamState]),
   );
 
   useEffect(() => {
@@ -956,9 +962,10 @@ function AdminCustomersPageContent() {
             <TextField
               size="small"
               label="Search"
-              value={q}
-              onChange={(e) => setParamState({ q: e.target.value }, true)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Code, name, owner, notes"
+              data-testid="customers-search"
             />
             <FormControl size="small" sx={{ minWidth: 140 }}>
               <InputLabel>Status</InputLabel>

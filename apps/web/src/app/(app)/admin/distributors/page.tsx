@@ -48,6 +48,7 @@ import { DistributorCommercialTermsPanel } from '@/features/admin/DistributorCom
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
+import { useDebouncedUrlQuery } from '@/lib/useDebouncedUrlQuery';
 
 type DistributorRow = {
   id: number;
@@ -256,6 +257,11 @@ function AdminDistributorsPageContent() {
       router.replace(`${pathname}?${sp.toString()}`);
     },
     [pathname, router, searchParams]
+  );
+
+  const [searchInput, setSearchInput] = useDebouncedUrlQuery(
+    q,
+    useCallback((next) => setParamState({ q: next || null }, true), [setParamState]),
   );
 
   const {
@@ -910,8 +916,9 @@ function AdminDistributorsPageContent() {
               <TextField
                 size="small"
                 label="Search distributors"
-                value={q}
-                onChange={(e) => setParamState({ q: e.target.value || null }, true)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                data-testid="distributors-search"
               />
               <FormControl size="small" sx={{ minWidth: 170 }}>
                 <InputLabel id="dist-linkage-filter-label">Linkage status</InputLabel>

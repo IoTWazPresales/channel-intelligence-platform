@@ -36,6 +36,7 @@ import { ProductSkuEconomicsPanel } from '@/features/admin/ProductSkuEconomicsPa
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiDeleteJson, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
+import { useDebouncedUrlQuery } from '@/lib/useDebouncedUrlQuery';
 
 const DSI_REFERENCE_LABELS = new Set(['Distributor inventory', 'Sell-out']);
 
@@ -239,6 +240,11 @@ function AdminProductsPageContent() {
       router.replace(`${pathname}?${sp.toString()}`);
     },
     [pathname, router, searchParams]
+  );
+
+  const [searchInput, setSearchInput] = useDebouncedUrlQuery(
+    q,
+    useCallback((next) => setParamState({ q: next }, true), [setParamState]),
   );
 
   useEffect(() => {
@@ -797,9 +803,10 @@ function AdminProductsPageContent() {
               <TextField
                 size="small"
                 label="Search"
-                value={q}
-                onChange={(e) => setParamState({ q: e.target.value }, true)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="SKU, name, category, model"
+                data-testid="products-search"
               />
               <FormControl size="small" sx={{ minWidth: 140 }}>
                 <InputLabel>Active</InputLabel>
