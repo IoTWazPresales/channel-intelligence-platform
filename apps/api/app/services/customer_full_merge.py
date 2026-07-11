@@ -26,6 +26,7 @@ from app.services.customer_full_repoint import (
     count_customer_fk_refs,
     repoint_customer_footprint_full,
 )
+from app.services.customer_merge_alias_seal import seal_loser_display_name_aliases
 
 _LEGAL_FORM_PATTERN = re.compile(
     r"\b(?:pty|ltd|cc|inc|llc|corp|corporation|limited|proprietary)\b",
@@ -304,6 +305,13 @@ def confirm_customer_full_merge_sync(
                 db.add(loser_row)
                 soft_redirected.append(lid)
             db.flush()
+
+        alias_seal = seal_loser_display_name_aliases(
+            db,
+            keeper_id=kid,
+            loser_ids=losers,
+            audit_note=audit_note,
+        )
     except CustomerFullRepointAbortError as exc:
         db.rollback()
         raise CustomerFullMergeError(str(exc)) from exc
@@ -318,4 +326,5 @@ def confirm_customer_full_merge_sync(
         "repoint_stats": repoint_stats,
         "soft_redirected_customer_ids": soft_redirected,
         "audit_note": audit_note.strip(),
+        **alias_seal,
     }

@@ -133,8 +133,8 @@ def _alias_insert_params(
     distributor_id: int | None,
     dealer_group_token: str | None,
     notes: str,
-    created_from_import_job_id: int,
-    import_entity_mapping_candidate_id: int,
+    created_from_import_job_id: int | None,
+    import_entity_mapping_candidate_id: int | None,
 ) -> dict[str, Any]:
     return {
         "customer_id": int(customer_id),
@@ -144,8 +144,14 @@ def _alias_insert_params(
         "normalized_token": normalized_token[:512],
         "dealer_group_token": dealer_group_token[:512] if dealer_group_token else None,
         "notes": notes,
-        "created_from_import_job_id": int(created_from_import_job_id),
-        "import_entity_mapping_candidate_id": int(import_entity_mapping_candidate_id),
+        "created_from_import_job_id": (
+            int(created_from_import_job_id) if created_from_import_job_id is not None else None
+        ),
+        "import_entity_mapping_candidate_id": (
+            int(import_entity_mapping_candidate_id)
+            if import_entity_mapping_candidate_id is not None
+            else None
+        ),
     }
 
 
@@ -159,8 +165,8 @@ def insert_approved_customer_alias_on_conflict_do_nothing(
     distributor_id: int | None,
     dealer_group_token: str | None,
     notes: str,
-    created_from_import_job_id: int,
-    import_entity_mapping_candidate_id: int,
+    created_from_import_job_id: int | None = None,
+    import_entity_mapping_candidate_id: int | None = None,
 ) -> int | None:
     """Insert alias; return new id or None when uq_cust_src_token_alias_approved_scope blocks insert."""
     row = session.execute(
@@ -192,8 +198,8 @@ async def insert_approved_customer_alias_on_conflict_do_nothing_async(
     distributor_id: int | None,
     dealer_group_token: str | None,
     notes: str,
-    created_from_import_job_id: int,
-    import_entity_mapping_candidate_id: int,
+    created_from_import_job_id: int | None = None,
+    import_entity_mapping_candidate_id: int | None = None,
 ) -> int | None:
     row = (
         await db.execute(

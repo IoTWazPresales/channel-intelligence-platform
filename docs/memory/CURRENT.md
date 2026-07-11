@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-11 (related-master U1+U2 + search debounce pushed @ `55a519f`)
+**Last updated:** 2026-07-11 (U5a+U5b alias seal + redirect-follow; OPEN_CHANNEL repair applied on cip)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,26 +10,27 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/channel-ops-kpi-and-gap-scan-perf` |
-| **HEAD** | `55a519f` (pushed) |
+| **HEAD** | see git |
 | **PR** | Not opened |
 | **Alembic (DB)** | **`20260710_0072`** on cip — no new migrations |
 
 ---
 
-## Shipped this session (pushed)
+## Shipped this session
 
-| Commit | What |
-|--------|------|
-| `792a9db` | Related-name groups: detector + `GET /duplicate-groups/related` + `related:` subset merge + **Related names (review)** tab (no job bounce) |
-| `55a519f` | Debounced master search URL `q` on customers/products/distributors |
+| Item | Status |
+|------|--------|
+| Related-name groups U1+U2 | pushed earlier |
+| Search debounce | pushed earlier |
+| U5a merge mints global loser-name aliases | committing |
+| U5b DSI resolve follows `merged_into_customer_id` | committing |
+| Backfill script for prior merges | applied on cip (89 minted); script in repo |
+| OPEN_CHANNEL wrong-merge repair | applied on cip (TMP-19 ? system id=1); script in repo |
 
 ---
 
 ## Next
 
-1. Fable VERIFY related-master U1+U2
-2. Soak: Amazon / Computer Mania on Related names tab ? subset merge
-3. Distributors related-names (U3) when prioritized
-4. Lineup multi-folder + browser/DB audit (fresh chat)
-
-**Do not:** expand alias-scope return_job to related tab; auto-merge; non-anchored shared-root clusters in v1.
+1. Fable VERIFY / soak Related merge + re-upload
+2. Optional: block UI from merging OPEN_CHANNEL as a loser
+3. Distributors related-names; lineup multi-folder (fresh chat)

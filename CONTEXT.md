@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-11 — **U5a+U5b + OPEN_CHANNEL repair:** merge seals loser-name aliases; DSI follows `merged_into`; backfill + wrong-merge repair ops scripts (applied on cip). Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
+- 2026-07-11 — **U5a+U5b merge alias seal (uncommitted):** full-merge mints global loser-name aliases; DSI resolve follows `merged_into_customer_id` (DB+cache). Tests green. Next: commit → VERIFY → soak. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-11 — **Related-master U1+U2 + search debounce pushed** (`792a9db`, `55a519f`): anchored containment + Related names tab (no job bounce); debounced master search `q`. Next: Fable VERIFY / soak. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-11 — **Related-master U1+U2 (uncommitted):** anchored containment detector + `GET /duplicate-groups/related` + `related:` merge subset resolver; tab “Related names (review)” (no job bounce). Tests green. Next: commit → Fable VERIFY. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-11 — **BACKLOG-074 U3→U4g complete** on `feat/channel-ops-kpi-and-gap-scan-perf`: CST chrome+paging; U4a–U4g grid/API pagination; U4h skipped. Next: lineup multi-folder historical upload + read-only browser/DB audit (fresh chat). No new alembic.

@@ -45,6 +45,10 @@ from app.services.imports.dsi_customer_name_normalization import (
     normalize_customer_name_for_similarity,
     normalize_customer_name_token,
 )
+from app.services.customer_merge_redirect import (
+    follow_customer_merge_redirect,
+    terminal_customer_id_from_map,
+)
 from app.services.imports.provisional_entity_identity import customer_source_token_alias_key
 from app.services.imports.dsi_shipment_corroboration import (
     shipment_corroboration_for_customer,
@@ -572,6 +576,7 @@ class DSIResolutionCustomerRow:
     id: int
     code: str
     name: str
+    merged_into_customer_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -607,6 +612,9 @@ def _customer_row_from_orm(row: DimCustomer) -> DSIResolutionCustomerRow:
         id=int(row.id),
         code=str(row.code or ""),
         name=str(row.name or ""),
+        merged_into_customer_id=(
+            int(row.merged_into_customer_id) if row.merged_into_customer_id is not None else None
+        ),
     )
 
 
@@ -718,19 +726,25 @@ def _build_resolution_cache(
         db, lambda: list(db.scalars(select(DimCustomer)).all())
     )
     customer_rows = [_customer_row_from_orm(c) for c in all_customers_orm]
+    merged_into_by_id = {c.id: c.merged_into_customer_id for c in customer_rows}
     customer_code_to_id: dict[str, int] = {}
     customer_name_to_ids: dict[str, list[int]] = {}
     customer_sim_name_to_ids: dict[str, list[int]] = {}
     for c in customer_rows:
+        terminal_id = terminal_customer_id_from_map(merged_into_by_id, c.id)
         ck = (c.code or "").strip().lower()
         if ck:
-            customer_code_to_id[ck] = int(c.id)
+            customer_code_to_id[ck] = terminal_id
         nk = (c.name or "").strip().lower()
         if nk:
-            customer_name_to_ids.setdefault(nk, []).append(int(c.id))
+            bucket = customer_name_to_ids.setdefault(nk, [])
+            if terminal_id not in bucket:
+                bucket.append(terminal_id)
         sk = normalize_customer_name_for_similarity(c.name)
         if sk:
-            customer_sim_name_to_ids.setdefault(sk, []).append(int(c.id))
+            sim_bucket = customer_sim_name_to_ids.setdefault(sk, [])
+            if terminal_id not in sim_bucket:
+                sim_bucket.append(terminal_id)
 
     if on_sub_phase is not None:
         on_sub_phase("customer_aliases")
@@ -742,7 +756,19 @@ def _build_resolution_cache(
             ).all()
         ),
     )
-    cust_alias_rows = [_cust_alias_row_from_orm(a) for a in cust_aliases_orm]
+    cust_alias_rows: list[DSIResolutionCustAliasRow] = []
+    for a in cust_aliases_orm:
+        row = _cust_alias_row_from_orm(a)
+        terminal_cid = terminal_customer_id_from_map(merged_into_by_id, row.customer_id)
+        if terminal_cid != row.customer_id:
+            row = DSIResolutionCustAliasRow(
+                normalized_token=row.normalized_token,
+                match_key=row.match_key,
+                source_definition_id=row.source_definition_id,
+                distributor_id=row.distributor_id,
+                customer_id=terminal_cid,
+            )
+        cust_alias_rows.append(row)
 
     open_channel_cid = _dsi_session_read_with_transient_retry(
         db,
@@ -1220,6 +1246,33 @@ def _alias_customer_id(
     return None
 
 
+def _apply_customer_merge_redirect(
+    db: Session,
+    customer_id: int | None,
+    diagnostics: list[str],
+) -> int | None:
+    if customer_id is None:
+        return None
+    terminal, followed = follow_customer_merge_redirect(db, int(customer_id))
+    if followed:
+        diagnostics.append("customer_redirect_followed")
+    return int(terminal)
+
+
+def _apply_cached_customer_merge_redirect(
+    res_cache: "DSIResolutionCache",
+    customer_id: int | None,
+    diagnostics: list[str],
+) -> int | None:
+    if customer_id is None:
+        return None
+    merged_into = {c.id: c.merged_into_customer_id for c in res_cache.all_customers}
+    terminal = terminal_customer_id_from_map(merged_into, int(customer_id))
+    if terminal != int(customer_id):
+        diagnostics.append("customer_redirect_followed")
+    return int(terminal)
+
+
 def _resolve_customer(
     db: Session,
     *,
@@ -1234,17 +1287,21 @@ def _resolve_customer(
     _ = channel_raw  # reserved; open-channel auto-assign uses explicit evidence column only
     diagnostics: list[str] = []
     nt = _norm_key(customer_raw)
+    alias_lookup_key = customer_source_token_alias_key(customer_raw)
     dg = _clean_str(dealer_group_raw)
 
     if dg and any(x in dg.lower() for x in DEALER_GROUP_PLACEHOLDER_SUBSTRINGS):
         diagnostics.append("dealer_group_placeholder")
 
-    alias_id: int | None = None
     if not _customer_token_is_placeholder(nt, customer_raw):
-        alias_id = _alias_customer_id(db, source_id, distributor_id, nt, dg)
-        if alias_id is not None:
-            diagnostics.append("customer_resolved_alias")
-            return alias_id, diagnostics
+        # Prefer SSOT alias key; also try _norm_key for older rows stored pre-SSOT.
+        for alias_key in dict.fromkeys([alias_lookup_key, nt]):
+            if not alias_key:
+                continue
+            alias_id = _alias_customer_id(db, source_id, distributor_id, alias_key, dg)
+            if alias_id is not None:
+                diagnostics.append("customer_resolved_alias")
+                return _apply_customer_merge_redirect(db, alias_id, diagnostics), diagnostics
     elif nt or (customer_raw and str(customer_raw).strip()):
         diagnostics.append("customer_token_placeholder")
         nt = ""
@@ -1260,7 +1317,7 @@ def _resolve_customer(
         oc = _open_channel_customer_id(db)
         if oc:
             diagnostics.append("customer_open_channel")
-            return oc, diagnostics
+            return _apply_customer_merge_redirect(db, int(oc), diagnostics), diagnostics
         diagnostics.append("open_channel_missing_dim")
         return None, diagnostics
 
@@ -1276,14 +1333,23 @@ def _resolve_customer(
     cid = db.scalar(stmt)
     if cid:
         diagnostics.append("customer_resolved_code")
-        return int(cid), diagnostics
+        return _apply_customer_merge_redirect(db, int(cid), diagnostics), diagnostics
 
     stmt2 = select(DimCustomer.id).where(func.lower(DimCustomer.name) == nt)
     ids = list(db.scalars(stmt2).all())
     if len(ids) == 1:
         diagnostics.append("customer_resolved_exact_name")
-        return int(ids[0]), diagnostics
+        return _apply_customer_merge_redirect(db, int(ids[0]), diagnostics), diagnostics
     if len(ids) > 1:
+        terminals = list(
+            dict.fromkeys(
+                _apply_customer_merge_redirect(db, int(i), []) or int(i) for i in ids
+            )
+        )
+        if len(terminals) == 1:
+            diagnostics.append("customer_resolved_exact_name")
+            diagnostics.append("customer_redirect_followed")
+            return int(terminals[0]), diagnostics
         diagnostics.append("ambiguous_customer_name")
         return None, diagnostics
 
@@ -1294,7 +1360,7 @@ def _resolve_customer(
         oc_force = _open_channel_customer_id(db)
         if oc_force:
             diagnostics.append("customer_open_channel_evidence_override")
-            return int(oc_force), diagnostics
+            return _apply_customer_merge_redirect(db, int(oc_force), diagnostics), diagnostics
 
     diagnostics.append("customer_unresolved")
     return None, diagnostics
@@ -1346,7 +1412,10 @@ def _resolve_customer_from_cache(
             unique = list(dict.fromkeys(matches))
             if len(unique) == 1:
                 diagnostics.append("customer_resolved_alias")
-                return unique[0], diagnostics
+                return (
+                    _apply_cached_customer_merge_redirect(res_cache, unique[0], diagnostics),
+                    diagnostics,
+                )
     elif nt or (customer_raw and str(customer_raw).strip()):
         diagnostics.append("customer_token_placeholder")
         nt = ""
@@ -1359,7 +1428,12 @@ def _resolve_customer_from_cache(
     if (not nt) and open_from_col:
         if res_cache.open_channel_cid:
             diagnostics.append("customer_open_channel")
-            return res_cache.open_channel_cid, diagnostics
+            return (
+                _apply_cached_customer_merge_redirect(
+                    res_cache, res_cache.open_channel_cid, diagnostics
+                ),
+                diagnostics,
+            )
         diagnostics.append("open_channel_missing_dim")
         return None, diagnostics
 
@@ -1374,12 +1448,12 @@ def _resolve_customer_from_cache(
     cid = res_cache.customer_code_to_id.get(nt)
     if cid is not None:
         diagnostics.append("customer_resolved_code")
-        return cid, diagnostics
+        return _apply_cached_customer_merge_redirect(res_cache, cid, diagnostics), diagnostics
 
     ids = res_cache.customer_name_to_ids.get(nt, [])
     if len(ids) == 1:
         diagnostics.append("customer_resolved_exact_name")
-        return ids[0], diagnostics
+        return _apply_cached_customer_merge_redirect(res_cache, ids[0], diagnostics), diagnostics
     if len(ids) > 1:
         diagnostics.append("ambiguous_customer_name")
         return None, diagnostics
@@ -1387,7 +1461,12 @@ def _resolve_customer_from_cache(
     if open_from_col:
         if res_cache.open_channel_cid:
             diagnostics.append("customer_open_channel_evidence_override")
-            return res_cache.open_channel_cid, diagnostics
+            return (
+                _apply_cached_customer_merge_redirect(
+                    res_cache, res_cache.open_channel_cid, diagnostics
+                ),
+                diagnostics,
+            )
 
     diagnostics.append("customer_unresolved")
     return None, diagnostics
