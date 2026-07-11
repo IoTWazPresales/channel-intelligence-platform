@@ -80,6 +80,7 @@ const TAB_KEYS = ['key-accounts', 'slots', 'aliases'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 const GRID_STATE_KEY = 'cip.admin.cst-steward.key-accounts.grid.v2';
+const ALIAS_GRID_STATE_KEY = 'cip.admin.cst-steward.aliases.grid.v1';
 const DEFAULT_PAGE_SIZE = 100;
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
 
@@ -102,6 +103,25 @@ const KEY_ACCOUNT_COLUMN_LABELS: Record<string, string> = {
   is_key_account: 'Key account',
   reports_expected: 'Reports expected',
   expected_cadence: 'Cadence',
+};
+
+const ALIAS_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  {
+    label: 'Alias',
+    fields: ['article_no_normalized', 'customer_name', 'status'],
+  },
+  {
+    label: 'Product',
+    fields: ['product_sku', 'product_name'],
+  },
+];
+
+const ALIAS_COLUMN_LABELS: Record<string, string> = {
+  article_no_normalized: 'Article',
+  customer_name: 'Customer',
+  product_sku: 'SKU',
+  product_name: 'Product',
+  status: 'Status',
 };
 
 function tabIndexFromParam(raw: string | null): number {
@@ -134,9 +154,13 @@ export default function CstStewardPage() {
   const [feedRaw, setFeedRaw] = useState('');
 
   const [gridApi, setGridApi] = useState<GridApi<KeyAccountRow> | null>(null);
+  const [aliasGridApi, setAliasGridApi] = useState<GridApi<AliasRow> | null>(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
+  const [aliasColumnsOpen, setAliasColumnsOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState('');
+  const [aliasColumnSearch, setAliasColumnSearch] = useState('');
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
+  const [aliasColumnVisibility, setAliasColumnVisibility] = useState<Record<string, boolean>>({});
 
   const searchKey = searchParams.toString();
 
@@ -202,14 +226,21 @@ export default function CstStewardPage() {
     error: slotsError,
     refetch: refetchSlots,
   } = useQuery({
-    queryKey: ['cst-steward', 'slots'],
-    queryFn: ({ signal }) =>
-      apiGet<{
+    queryKey: ['cst-steward', 'slots', page, pageSize],
+    queryFn: ({ signal }) => {
+      const sp = new URLSearchParams();
+      sp.set('limit', String(pageSize));
+      sp.set('offset', String((page - 1) * pageSize));
+      return apiGet<{
         counts: Record<string, number>;
         items: SlotItem[];
-      }>('/api/v1/cst-steward/report-slots/worklist', { signal }),
+        total: number;
+      }>(`/api/v1/cst-steward/report-slots/worklist?${sp.toString()}`, { signal });
+    },
     enabled: tab === 1,
   });
+  const slotsTotal = worklist?.total ?? 0;
+  const slotsTotalPages = Math.max(1, Math.ceil(slotsTotal / pageSize));
 
   const {
     data: aliasesPage,
@@ -323,6 +354,70 @@ export default function CstStewardPage() {
       syncColumnVisibility(e.api);
     },
     [syncColumnVisibility],
+  );
+
+  const persistAliasGridState = useCallback((api: GridApi<AliasRow>) => {
+    try {
+      localStorage.setItem(ALIAS_GRID_STATE_KEY, JSON.stringify(api.getColumnState()));
+    } catch {
+      // no-op
+    }
+  }, []);
+
+  const syncAliasColumnVisibility = useCallback((api: GridApi<AliasRow>) => {
+    if (!api?.getColumns) return;
+    try {
+      const known = new Set(ALIAS_COLUMN_GROUPS.flatMap((g) => g.fields));
+      const visibility: Record<string, boolean> = {};
+      for (const col of api.getColumns() ?? []) {
+        const field = col?.getColDef?.()?.field as string | undefined;
+        if (!field || !known.has(field)) continue;
+        visibility[field] = Boolean(col.isVisible?.());
+      }
+      if (Object.keys(visibility).length) setAliasColumnVisibility(visibility);
+    } catch {
+      // no-op
+    }
+  }, []);
+
+  const onAliasesGridReady = useCallback(
+    (e: GridReadyEvent<AliasRow>) => {
+      setAliasGridApi(e.api);
+      try {
+        const raw = localStorage.getItem(ALIAS_GRID_STATE_KEY);
+        if (raw) {
+          e.api.applyColumnState({ state: JSON.parse(raw), applyOrder: true });
+        }
+      } catch {
+        // no-op
+      }
+      syncAliasColumnVisibility(e.api);
+    },
+    [syncAliasColumnVisibility],
+  );
+
+  const onAliasColumnStateEvent = useCallback(
+    (
+      e:
+        | ColumnMovedEvent<AliasRow>
+        | ColumnVisibleEvent<AliasRow>
+        | ColumnPinnedEvent<AliasRow>
+        | ColumnResizedEvent<AliasRow>,
+    ) => {
+      persistAliasGridState(e.api);
+      syncAliasColumnVisibility(e.api);
+    },
+    [persistAliasGridState, syncAliasColumnVisibility],
+  );
+
+  const toggleAliasColumnVisibility = useCallback(
+    (columnId: string, visible: boolean) => {
+      if (!aliasGridApi?.setColumnsVisible) return;
+      aliasGridApi.setColumnsVisible([columnId], visible);
+      persistAliasGridState(aliasGridApi);
+      setAliasColumnVisibility((prev) => ({ ...prev, [columnId]: visible }));
+    },
+    [aliasGridApi, persistAliasGridState],
   );
 
   const onColumnStateEvent = useCallback(
@@ -599,7 +694,7 @@ export default function CstStewardPage() {
             isError={errSlots}
             error={(slotsError as Error) ?? null}
             onRetry={() => void refetchSlots()}
-            isEmpty={(worklist?.items?.length ?? 0) === 0}
+            isEmpty={slotsTotal === 0}
             empty={{
               title: 'No open report slots',
               description: 'Due / late / missing slots appear here. Advance slots to mint the current week’s expectations.',
@@ -611,14 +706,74 @@ export default function CstStewardPage() {
               height={520}
               gridOptions={{ getRowId: (p) => String(p.data.id) }}
             />
+            <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center" data-testid="cst-slots-pager">
+              <Button
+                disabled={page <= 1 || fetchingSlots}
+                onClick={() => setParamState({ page: String(page - 1) })}
+              >
+                Prev
+              </Button>
+              <Typography variant="body2">
+                Page {page} / {slotsTotalPages} ({slotsTotal} rows)
+              </Typography>
+              <Button
+                disabled={page >= slotsTotalPages || fetchingSlots}
+                onClick={() => setParamState({ page: String(page + 1) })}
+              >
+                Next
+              </Button>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>Page size</InputLabel>
+                <Select
+                  label="Page size"
+                  value={String(pageSize)}
+                  onChange={(e) =>
+                    setParamState({ page_size: String(e.target.value || DEFAULT_PAGE_SIZE), page: '1' })
+                  }
+                  data-testid="cst-slots-page-size"
+                >
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <MenuItem key={n} value={String(n)}>
+                      {n}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
           </ModuleDataSection>
         </>
       ) : null}
 
       {tab === 2 ? (
         <>
-          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
             <Box sx={{ flex: 1 }} />
+            <Button
+              variant="outlined"
+              disabled={!aliasGridApi}
+              onClick={() => {
+                setAliasColumnSearch('');
+                setAliasColumnsOpen(true);
+                if (aliasGridApi) syncAliasColumnVisibility(aliasGridApi);
+              }}
+              data-testid="cst-aliases-columns-open"
+            >
+              Columns
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                try {
+                  localStorage.removeItem(ALIAS_GRID_STATE_KEY);
+                  window.location.reload();
+                } catch {
+                  // no-op
+                }
+              }}
+              data-testid="cst-aliases-columns-reset"
+            >
+              Reset column layout
+            </Button>
             <ModuleGridToolbar
               onRefresh={() => void refetchAliases()}
               busy={fetchingAliases}
@@ -640,7 +795,14 @@ export default function CstStewardPage() {
               rowData={aliases ?? []}
               columnDefs={aliasCols}
               height={560}
-              gridOptions={{ getRowId: (p) => String(p.data.id) }}
+              gridOptions={{
+                getRowId: (p) => String(p.data.id),
+                onGridReady: onAliasesGridReady,
+                onColumnMoved: onAliasColumnStateEvent,
+                onColumnVisible: onAliasColumnStateEvent,
+                onColumnPinned: onAliasColumnStateEvent,
+                onColumnResized: onAliasColumnStateEvent,
+              }}
             />
             <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center" data-testid="cst-aliases-pager">
               <Button
@@ -691,6 +853,19 @@ export default function CstStewardPage() {
         gridReady={Boolean(gridApi)}
         search={columnSearch}
         onSearchChange={setColumnSearch}
+      />
+
+      <MasterColumnPickerDialog
+        open={aliasColumnsOpen}
+        onClose={() => setAliasColumnsOpen(false)}
+        title="CST article-alias columns"
+        groups={ALIAS_COLUMN_GROUPS}
+        columnLabelByField={ALIAS_COLUMN_LABELS}
+        visibility={aliasColumnVisibility}
+        onToggle={toggleAliasColumnVisibility}
+        gridReady={Boolean(aliasGridApi)}
+        search={aliasColumnSearch}
+        onSearchChange={setAliasColumnSearch}
       />
 
       <Dialog open={dlg != null} onClose={() => !save.isPending && setDlg(null)} fullWidth maxWidth="sm">

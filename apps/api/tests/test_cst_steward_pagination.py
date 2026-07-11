@@ -109,3 +109,59 @@ def test_article_aliases_envelope_and_offset(client: TestClient):
     assert body["total"] == 2
     assert len(body["items"]) == 2
     assert body["items"][0]["id"] == 10
+
+
+def test_report_slots_worklist_envelope_and_offset(client: TestClient):
+    slots = [
+        SimpleNamespace(
+            id=i,
+            customer_id=1,
+            week_start_date=None,
+            status="due",
+            due_at=None,
+            late_at=None,
+            received_at=None,
+            import_job_id=None,
+            cadence_snapshot=None,
+        )
+        for i in (3, 4)
+    ]
+    session = MagicMock()
+    # counts: due, late, missing, received, then total
+    session.scalar.side_effect = [5, 1, 2, 0, 8]
+    session.scalars.side_effect = [
+        _ScalarList(slots),
+        _ScalarList([SimpleNamespace(id=1, code="C1", name="Cust")]),
+    ]
+    session.__enter__ = MagicMock(return_value=session)
+    session.__exit__ = MagicMock(return_value=False)
+
+    with patch("app.api.v1.endpoints.cst_steward.SessionLocal", return_value=session):
+        res = client.get("/api/v1/cst-steward/report-slots/worklist?limit=2&offset=2")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total"] == 8
+    assert body["counts"]["due"] == 5
+    assert body["counts"]["late"] == 1
+    assert body["counts"]["missing"] == 2
+    assert len(body["items"]) == 2
+    assert "groups" not in body
+
+
+def test_report_slots_counts_independent_of_page(client: TestClient):
+    session = MagicMock()
+    session.scalar.side_effect = [10, 3, 1, 0, 14]
+    session.scalars.side_effect = [
+        _ScalarList([]),
+        _ScalarList([]),
+    ]
+    session.__enter__ = MagicMock(return_value=session)
+    session.__exit__ = MagicMock(return_value=False)
+
+    with patch("app.api.v1.endpoints.cst_steward.SessionLocal", return_value=session):
+        res = client.get("/api/v1/cst-steward/report-slots/worklist?limit=10&offset=50")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total"] == 14
+    assert body["counts"]["due"] == 10
+    assert body["items"] == []

@@ -224,4 +224,59 @@ describe('CST steward page chrome (BACKLOG-074 Unit 3)', () => {
       expect.anything(),
     );
   });
+
+  it('shows slots pager total and pages via URL', async () => {
+    searchString = 'tab=slots';
+    mockState.apiGetMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('report-slots')) {
+        return {
+          counts: { due: 250, late: 0, missing: 0, received: 0 },
+          total: 250,
+          items: [
+            {
+              id: 1,
+              customer_id: 10,
+              customer_code: 'KA-1',
+              customer_name: 'Key One',
+              week_start_date: '2026-07-06',
+              status: 'due',
+            },
+          ],
+        };
+      }
+      return { total: 0, items: [] };
+    });
+    renderPage();
+    expect(await screen.findByText(/250 rows/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(replaceSpy).toHaveBeenCalled();
+    const last = String(replaceSpy.mock.calls.at(-1)?.[0] ?? '');
+    expect(last).toContain('page=2');
+  });
+
+  it('exposes Columns control on aliases tab', async () => {
+    searchString = 'tab=aliases';
+    mockState.apiGetMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('article-aliases')) {
+        return {
+          total: 1,
+          items: [
+            {
+              id: 9,
+              customer_code: 'KA-1',
+              customer_name: 'Key One',
+              article_no_normalized: 'ART-1',
+              product_sku: 'SKU-1',
+              product_name: 'Widget',
+              status: 'proposed',
+            },
+          ],
+        };
+      }
+      return { total: 0, items: [] };
+    });
+    renderPage();
+    await screen.findByText('KA-1');
+    expect(screen.getByTestId('cst-aliases-columns-open')).toBeInTheDocument();
+  });
 });

@@ -22,7 +22,6 @@ from app.models.dimensions import DimCustomer, DimProduct
 from app.services.imports.cst_d1 import (
     advance_cst_report_slots,
     confirm_customer_article_alias,
-    list_cst_report_worklist_slots,
     reject_customer_article_alias,
 )
 from app.utils.json_safe import to_jsonable
@@ -243,6 +242,8 @@ def patch_key_account_steward(
 @router.get("/report-slots/worklist")
 def report_slot_worklist(
     status: str | None = Query(default=None, description="due|late|missing or comma-list"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
 ):
     with SessionLocal() as session:
         if status and status.strip():
@@ -252,21 +253,71 @@ def report_slot_worklist(
         for s in statuses:
             if s not in ("due", "late", "missing", "received"):
                 raise HTTPException(status_code=400, detail=f"Unknown slot status={s}")
-        slots = list_cst_report_worklist_slots(session, statuses=statuses)
+
+        base_where = CustomerCstReportSlot.status.in_(statuses)
+        counts = {
+            "due": int(
+                session.scalar(
+                    select(func.count()).select_from(CustomerCstReportSlot).where(
+                        CustomerCstReportSlot.status == "due"
+                    )
+                )
+                or 0
+            ),
+            "late": int(
+                session.scalar(
+                    select(func.count()).select_from(CustomerCstReportSlot).where(
+                        CustomerCstReportSlot.status == "late"
+                    )
+                )
+                or 0
+            ),
+            "missing": int(
+                session.scalar(
+                    select(func.count()).select_from(CustomerCstReportSlot).where(
+                        CustomerCstReportSlot.status == "missing"
+                    )
+                )
+                or 0
+            ),
+            "received": int(
+                session.scalar(
+                    select(func.count()).select_from(CustomerCstReportSlot).where(
+                        CustomerCstReportSlot.status == "received"
+                    )
+                )
+                or 0
+            ),
+        }
+        total = int(
+            session.scalar(
+                select(func.count()).select_from(CustomerCstReportSlot).where(base_where)
+            )
+            or 0
+        )
+        slots = list(
+            session.scalars(
+                select(CustomerCstReportSlot)
+                .where(base_where)
+                .order_by(
+                    CustomerCstReportSlot.week_start_date.desc(),
+                    CustomerCstReportSlot.id.desc(),
+                )
+                .limit(limit)
+                .offset(offset)
+            ).all()
+        )
         cust_ids = {int(s.customer_id) for s in slots}
         cmap: dict[int, DimCustomer] = {}
         if cust_ids:
             for c in session.scalars(select(DimCustomer).where(DimCustomer.id.in_(cust_ids))).all():
                 cmap[int(c.id)] = c
-        grouped: dict[str, list[dict]] = {"due": [], "late": [], "missing": [], "received": []}
-        for slot in slots:
-            item = _slot_json(slot, cmap.get(int(slot.customer_id)))
-            grouped.setdefault(slot.status, []).append(item)
+        items = [_slot_json(slot, cmap.get(int(slot.customer_id))) for slot in slots]
         return {
             "as_of": date.today().isoformat(),
-            "counts": {k: len(v) for k, v in grouped.items()},
-            "groups": grouped,
-            "items": [item for items in grouped.values() for item in items],
+            "counts": counts,
+            "total": total,
+            "items": items,
         }
 
 
