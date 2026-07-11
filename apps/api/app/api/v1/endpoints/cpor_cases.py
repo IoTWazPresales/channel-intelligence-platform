@@ -139,10 +139,13 @@ def _case_json(
     customer: DimCustomer | None = None,
     lines: list[dict] | None = None,
     include_lines: bool = False,
+    line_count: int | None = None,
+    ttl_support_zar: float | None = None,
+    ttl_support_usd: float | None = None,
 ) -> dict[str, Any]:
-    ttl_zar = None
-    ttl_usd = None
-    if lines:
+    ttl_zar = ttl_support_zar
+    ttl_usd = ttl_support_usd
+    if lines and ttl_zar is None and ttl_usd is None:
         zar_vals = [l["ttl_support"] for l in lines if l.get("ttl_support") is not None]
         # Prefer stored ttl_support_usd (recompute); fall back to support_usd * estimate_qty.
         line_usd = []
@@ -181,6 +184,8 @@ def _case_json(
         "ttl_support_usd": ttl_usd,
         "missing_roe": case.roe_snapshot is None,
     }
+    if line_count is not None:
+        out["line_count"] = line_count
     if include_lines and lines is not None:
         out["lines"] = lines
         all_flags: list[str] = []
@@ -316,40 +321,100 @@ class LayerSplitBody(BaseModel):
 # --- case CRUD ---------------------------------------------------------------
 
 
+def _case_list_filters(
+    *,
+    status: str | None,
+    customer_id: int | None,
+    q: str | None,
+) -> list:
+    filters: list = []
+    if status:
+        if status not in CPOR_CASE_STATUS_SET:
+            raise HTTPException(status_code=400, detail=f"Unknown status={status}")
+        filters.append(CporCase.status == status)
+    if customer_id is not None:
+        filters.append(CporCase.customer_id == customer_id)
+    if q and q.strip():
+        needle = f"%{q.strip()}%"
+        filters.append(
+            (CporCase.case_code.ilike(needle))
+            | (CporCase.case_name.ilike(needle))
+            | (DimCustomer.code.ilike(needle))
+            | (DimCustomer.name.ilike(needle))
+        )
+    return filters
+
+
+def _line_totals_for_cases(session: Session, case_ids: list[int]) -> dict[int, dict[str, Any]]:
+    """Aggregate line counts and support totals for list view (no per-line N+1)."""
+    if not case_ids:
+        return {}
+    usd_expr = func.coalesce(
+        CporCaseLine.ttl_support_usd,
+        CporCaseLine.support_usd * CporCaseLine.estimate_qty,
+    )
+    rows = session.execute(
+        select(
+            CporCaseLine.case_id,
+            func.count(CporCaseLine.id).label("line_count"),
+            func.sum(CporCaseLine.ttl_support).label("ttl_zar"),
+            func.sum(usd_expr).label("ttl_usd"),
+        )
+        .where(CporCaseLine.case_id.in_(case_ids))
+        .group_by(CporCaseLine.case_id)
+    ).all()
+    out: dict[int, dict[str, Any]] = {}
+    for case_id, line_count, ttl_zar, ttl_usd in rows:
+        out[int(case_id)] = {
+            "line_count": int(line_count or 0),
+            "ttl_support_zar": float(ttl_zar) if ttl_zar is not None else None,
+            "ttl_support_usd": float(ttl_usd) if ttl_usd is not None else None,
+        }
+    return out
+
+
 @router.get("/cases")
 def list_cases(
     status: str | None = Query(default=None),
     customer_id: int | None = Query(default=None),
     q: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
 ):
     with SessionLocal() as session:
+        filters = _case_list_filters(status=status, customer_id=customer_id, q=q)
+        count_stmt = (
+            select(func.count())
+            .select_from(CporCase)
+            .join(DimCustomer, DimCustomer.id == CporCase.customer_id)
+        )
+        if filters:
+            count_stmt = count_stmt.where(*filters)
+        total = int(session.scalar(count_stmt) or 0)
+
         stmt = (
             select(CporCase, DimCustomer)
             .join(DimCustomer, DimCustomer.id == CporCase.customer_id)
             .order_by(CporCase.id.desc())
         )
-        if status:
-            if status not in CPOR_CASE_STATUS_SET:
-                raise HTTPException(status_code=400, detail=f"Unknown status={status}")
-            stmt = stmt.where(CporCase.status == status)
-        if customer_id is not None:
-            stmt = stmt.where(CporCase.customer_id == customer_id)
-        if q and q.strip():
-            needle = f"%{q.strip()}%"
-            stmt = stmt.where(
-                (CporCase.case_code.ilike(needle))
-                | (CporCase.case_name.ilike(needle))
-                | (DimCustomer.code.ilike(needle))
-                | (DimCustomer.name.ilike(needle))
-            )
-        rows = session.execute(stmt).all()
-        out = []
+        if filters:
+            stmt = stmt.where(*filters)
+        rows = session.execute(stmt.limit(limit).offset(offset)).all()
+        case_ids = [int(case.id) for case, _ in rows]
+        totals_by_case = _line_totals_for_cases(session, case_ids)
+        items = []
         for case, cust in rows:
-            lines = session.scalars(select(CporCaseLine).where(CporCaseLine.case_id == case.id)).all()
-            pmap = _products_map(session, [int(l.product_id) for l in lines])
-            line_jsons = [_line_json(l, pmap.get(int(l.product_id))) for l in lines]
-            out.append(_case_json(case, customer=cust, lines=line_jsons, include_lines=False))
-        return out
+            agg = totals_by_case.get(int(case.id), {})
+            items.append(
+                _case_json(
+                    case,
+                    customer=cust,
+                    line_count=agg.get("line_count", 0),
+                    ttl_support_zar=agg.get("ttl_support_zar"),
+                    ttl_support_usd=agg.get("ttl_support_usd"),
+                )
+            )
+        return {"items": items, "total": total}
 
 
 @router.post("/cases", status_code=201)
