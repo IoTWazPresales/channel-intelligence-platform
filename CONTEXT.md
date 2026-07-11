@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-11 — **BACKLOG-074 U3→U4g complete** on `feat/channel-ops-kpi-and-gap-scan-perf`: CST chrome+paging; U4a–U4g grid/API pagination; U4h skipped. Next: lineup multi-folder historical upload + read-only browser/DB audit (fresh chat). No new alembic.
 - 2026-07-11 — **BACKLOG-074 U3+3b+U4 (uncommitted):** CST chrome + server pagination (fixes A–B `limit(500)` truncate); U4 ops grid inventory `docs/design/BACKLOG-074-U4_ops_grid_parity_inventory.md`. Shell swap re-CONSULT: still no. Next: commit → VERIFY → Warren picks U4a–U4h. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-11 — **BACKLOG-074 Unit 3 (uncommitted):** CST steward chrome capability parity (URL tab/q/key_only, ModuleGridToolbar, ModuleDataSection, tab-0 column picker). Not MasterDataGridShell swap. Vitest 4/4. Next: commit → Fable VERIFY → Unit 4 audit matrix. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-11 — **Channel Ops KPI + PM gap scan perf (uncommitted):** set-based derived stock (~13s→~2s summary); gap scan match-only (~318s→~1.3s); proxy undici long timeout for `/product-master-gaps/scan`. Opus queue: CST parity beachhead → audit matrix. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
