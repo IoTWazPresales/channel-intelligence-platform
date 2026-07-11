@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-11 (BACKLOG-074 U3?U4g shipped; U4h skipped; next = lineup multi-folder + browser audit)
+**Last updated:** 2026-07-11 (related-master U1+U2 implemented, uncommitted; search-debounce WIP still dirty)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,36 +10,30 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/channel-ops-kpi-and-gap-scan-perf` |
-| **HEAD** | see `git rev-parse --short HEAD` (U4g tip after push) |
+| **HEAD** | see `git rev-parse --short HEAD` (last pushed: BACKLOG-074 U4g docs pin) |
 | **PR** | Not opened |
-| **Alembic (DB)** | **`20260710_0072`** on cip — no new migrations this program |
+| **Alembic (DB)** | **`20260710_0072`** on cip — no new migrations |
 
 ---
 
-## BACKLOG-074 status (pushed)
+## In progress (uncommitted)
 
-| Unit | Status |
-|------|--------|
-| U3 + 3b CST chrome + pagination | PASS @ f9362f3 |
-| U4 inventory doc | shipped with U3 |
-| U4a CST slots + aliases | PASS @ b865070 |
-| U4b inbound/evidence URL skip/limit | PASS @ 2eccb1c |
-| U4c PMG skip/limit paging | shipped @ 9481479 |
-| U4d CPOR case list paging | shipped @ 0c1775c |
-| U4e PO gap + auto-link paging | shipped @ 8162d60 |
-| U4f PVE exception paging | shipped (commit after this pin) |
-| U4g Channel Ops sell-out/movements pager | shipped (commit after this pin) |
-| U4h Channels & Regions | **skipped** — small catalog; already has toolbar+bulk |
+**Related-master customer groups (Fable CONSULT READY ? U1+U2):**
+- Detector: anchored token-prefix containment + guarded root similarity
+- `GET /api/v1/customers/duplicate-groups/related`
+- Merge via existing preview/confirm with `similarity_key=related:<anchor>` + subset select
+- UI tab **Related names (review)** on `/admin/customers/duplicates` — no `return_job` / revalidate bounce
+- Tests: `test_customer_related_master_groups.py` 7/7; related merge cases in `test_customer_full_merge.py` green
 
-**Shell swap:** still no (re-CONSULT reaffirmed).
+**Also dirty (separate):** master search debounce (`useDebouncedUrlQuery*`) — do not mix into related-master commit.
 
 ---
 
-## Next (different themes — prefer fresh chat)
+## Next
 
-1. **Lineup multi-folder historical upload** — plan viability + implement choose-folder multi-path parity with unified lineup importer.
-2. **Read-only browser + DB audit** — visit each surface; compare numbers to source/DB; review only, no code changes.
-3. Optional: Fable VERIFY batch for U4c–U4g; open PR for this branch.
-4. Human soak: restart API; CST Key Accounts page past B; Channel Ops cards.
+1. Commit related-master U1+U2 (explicit paths) ? Fable VERIFY ? push
+2. Optional: commit search debounce separately
+3. Distributors related-names (U3) when prioritized
+4. Lineup multi-folder + browser/DB audit (fresh chat)
 
-**Do not re-audit:** Theme B · BACKLOG-073 · shell-swap · U4 inventory ranking.
+**Do not:** expand alias-scope return_job pattern to related tab; auto-merge; non-anchored shared-root clusters in v1.

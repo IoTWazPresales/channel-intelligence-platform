@@ -250,3 +250,118 @@ def test_products_and_distributors_not_in_merge_path() -> None:
                 survivor_id=int(dist.id),
                 audit_note="nope",
             )
+
+
+def _seed_related_pair(session, *, anchor_name: str, related_name: str) -> tuple[int, int, str]:
+    suffix = secrets.token_hex(4)
+    c1 = DimCustomer(code=f"C-REL-A-{suffix}", name=anchor_name, customer_status="active")
+    c2 = DimCustomer(code=f"C-REL-B-{suffix}", name=related_name, customer_status="unverified")
+    session.add_all([c1, c2])
+    session.commit()
+    anchor_key = normalize_customer_name_for_similarity(anchor_name)
+    return int(c1.id), int(c2.id), f"related:{anchor_key}"
+
+
+def test_related_key_subset_preview_and_confirm() -> None:
+    _require_disposable_or_opt_in_db()
+    with SessionLocal() as session:
+        _seed_dims(session)
+        token = secrets.token_hex(4)
+        c1, c2, related_key = _seed_related_pair(
+            session,
+            anchor_name=f"RelAmazon {token}",
+            related_name=f"RelAmazon {token} Commercial SE",
+        )
+        preview = preview_customer_full_merge(
+            session,
+            similarity_key=related_key,
+            survivor_id=c1,
+            audit_note="related subset preview",
+            customer_ids=[c1, c2],
+        )
+        assert preview["survivor_id"] == c1
+        assert c2 in preview["loser_ids"]
+        assert sorted(preview["member_ids"]) == sorted([c1, c2])
+
+        out = confirm_customer_full_merge_sync(
+            session,
+            similarity_key=related_key,
+            survivor_id=c1,
+            audit_note="related subset confirm",
+            customer_ids=[c1, c2],
+        )
+        assert out["dry_run"] is False
+        loser = session.get(DimCustomer, c2)
+        assert loser is not None
+        assert loser.merged_into_customer_id == c1
+
+
+def test_related_key_validation_errors() -> None:
+    _require_disposable_or_opt_in_db()
+    with SessionLocal() as session:
+        _seed_dims(session)
+        token = secrets.token_hex(4)
+        c1, c2, related_key = _seed_related_pair(
+            session,
+            anchor_name=f"RelMania {token}",
+            related_name=f"RelMania {token} Centl",
+        )
+        outsider = DimCustomer(
+            code=f"C-REL-OUT-{secrets.token_hex(4)}",
+            name=f"Unrelated Outsider {token}",
+            customer_status="active",
+        )
+        session.add(outsider)
+        session.commit()
+        oid = int(outsider.id)
+
+        with pytest.raises(CustomerFullMergeError, match="subset"):
+            preview_customer_full_merge(
+                session,
+                similarity_key=related_key,
+                survivor_id=c1,
+                audit_note="bad subset",
+                customer_ids=[c1, oid],
+            )
+        with pytest.raises(CustomerFullMergeError, match="at least 2"):
+            preview_customer_full_merge(
+                session,
+                similarity_key=related_key,
+                survivor_id=c1,
+                audit_note="too few",
+                customer_ids=[c1],
+            )
+        with pytest.raises(CustomerFullMergeError, match="not a member"):
+            preview_customer_full_merge(
+                session,
+                similarity_key=related_key,
+                survivor_id=oid,
+                audit_note="survivor outside subset",
+                customer_ids=[c1, c2],
+            )
+        with pytest.raises(CustomerFullMergeError, match="No related group"):
+            preview_customer_full_merge(
+                session,
+                similarity_key="related:nonexistent-anchor-xyz",
+                survivor_id=c1,
+                audit_note="unknown",
+                customer_ids=[c1, c2],
+            )
+
+
+def test_exact_key_strict_equality_unchanged() -> None:
+    _require_disposable_or_opt_in_db()
+    with SessionLocal() as session:
+        _seed_dims(session)
+        token = secrets.token_hex(4)
+        c1, c2, key = _seed_similar_pair(
+            session, name_a=f"Exact Key {token}", name_b=f"Exact Key {token} Ltd"
+        )
+        with pytest.raises(CustomerFullMergeError, match="must match the duplicate group"):
+            preview_customer_full_merge(
+                session,
+                similarity_key=key,
+                survivor_id=c1,
+                audit_note="strict equality",
+                customer_ids=[c1],
+            )

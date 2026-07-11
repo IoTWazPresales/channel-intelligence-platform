@@ -16,6 +16,10 @@ from app.services.customer_duplicate_groups import (
     build_duplicate_groups,
     survivor_hint_sort_key,
 )
+from app.services.customer_related_master_groups import (
+    RELATED_SIMILARITY_KEY_PREFIX,
+    related_group_members_for_key,
+)
 from app.services.customer_fk_discovery import discover_customer_fk_columns, extra_customer_ref_specs
 from app.services.customer_full_repoint import (
     CustomerFullRepointAbortError,
@@ -65,6 +69,34 @@ def _members_for_similarity_key(db: Session, similarity_key: str) -> list[_Custo
         if group["similarity_key"] == key:
             return list(group["members"])
     raise CustomerFullMergeError(f"No duplicate group found for similarity_key={key!r}")
+
+
+def _members_for_related_merge(
+    db: Session,
+    *,
+    similarity_key: str,
+    customer_ids: list[int] | None,
+) -> list[_CustomerRow]:
+    """Resolve related: keys; customer_ids must be a subset (≥2) of the server-computed group."""
+    key = (similarity_key or "").strip()
+    if not key.startswith(RELATED_SIMILARITY_KEY_PREFIX):
+        raise CustomerFullMergeError("related similarity_key prefix required")
+    anchor_key = key[len(RELATED_SIMILARITY_KEY_PREFIX) :].strip()
+    if not anchor_key:
+        raise CustomerFullMergeError("related similarity_key requires an anchor key")
+    group_members = related_group_members_for_key(db, anchor_key)
+    if not group_members:
+        raise CustomerFullMergeError(f"No related group found for similarity_key={key!r}")
+    if customer_ids is None:
+        raise CustomerFullMergeError("customer_ids is required for related merges")
+    provided = sorted({int(x) for x in customer_ids})
+    if len(provided) < 2:
+        raise CustomerFullMergeError("customer_ids must include at least 2 members for related merge")
+    group_ids = {m.id for m in group_members}
+    if any(pid not in group_ids for pid in provided):
+        raise CustomerFullMergeError("customer_ids must be a subset of the related group")
+    by_id = {m.id: m for m in group_members}
+    return sorted((by_id[i] for i in provided), key=survivor_hint_sort_key)
 
 
 def _default_survivor_id(members: list[_CustomerRow]) -> int:
@@ -127,12 +159,17 @@ def preview_customer_full_merge(
     if not note:
         raise CustomerFullMergeError("audit_note is required")
 
-    members = _members_for_similarity_key(db, similarity_key)
-    member_ids = [m.id for m in members]
-    if customer_ids is not None:
-        provided = sorted({int(x) for x in customer_ids})
-        if provided != sorted(member_ids):
-            raise CustomerFullMergeError("customer_ids must match the duplicate group members")
+    key = (similarity_key or "").strip()
+    if key.startswith(RELATED_SIMILARITY_KEY_PREFIX):
+        members = _members_for_related_merge(db, similarity_key=key, customer_ids=customer_ids)
+        member_ids = [m.id for m in members]
+    else:
+        members = _members_for_similarity_key(db, key)
+        member_ids = [m.id for m in members]
+        if customer_ids is not None:
+            provided = sorted({int(x) for x in customer_ids})
+            if provided != sorted(member_ids):
+                raise CustomerFullMergeError("customer_ids must match the duplicate group members")
     _reject_non_customer_entities(member_ids)
 
     kid = int(survivor_id) if survivor_id is not None else _default_survivor_id(members)

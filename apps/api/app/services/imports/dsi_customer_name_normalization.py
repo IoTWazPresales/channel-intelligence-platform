@@ -511,3 +511,35 @@ def dsi_duplicate_similarity_score(
     """Root-identity duplicate score for dealer-group and source-customer name pairs."""
     del full_string_threshold, distinctive_threshold
     return compare_root_identities_from_raw(name_a, name_b)
+
+
+def is_token_prefix_containment(base_norm: str, candidate_norm: str) -> bool:
+    """True when candidate token list starts with base tokens and is strictly longer."""
+    base_tokens = [t for t in (base_norm or "").split() if t]
+    cand_tokens = [t for t in (candidate_norm or "").split() if t]
+    if not base_tokens or len(cand_tokens) <= len(base_tokens):
+        return False
+    return cand_tokens[: len(base_tokens)] == base_tokens
+
+
+def anchor_is_eligible(base_norm: str) -> bool:
+    """Guards for related-master anchors (min length, distinctive token, not tiny single token)."""
+    norm = (base_norm or "").strip()
+    if len(norm) < DSI_DUPLICATE_MIN_NORMALIZED_LEN:
+        return False
+    distinctive, _generic = split_distinctive_and_generic_tokens(norm)
+    if not distinctive:
+        return False
+    tokens = [t for t in norm.split() if t]
+    if len(tokens) == 1 and len(tokens[0]) <= 3:
+        return False
+    return True
+
+
+def containment_score(base_norm: str, candidate_norm: str) -> float:
+    """Ranking-only score: shorter anchor length / longer candidate length."""
+    base = (base_norm or "").strip()
+    cand = (candidate_norm or "").strip()
+    if not base or not cand:
+        return 0.0
+    return round(len(base) / len(cand), 4)
