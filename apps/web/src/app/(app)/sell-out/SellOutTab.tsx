@@ -150,6 +150,24 @@ function specColIdFromRawKey(rawKey: string): string {
   return `spec:${safe || 'key'}`;
 }
 
+/** colId → user wants visible (true) from persisted AG Grid column state. */
+function readPersistedColumnVisibility(storageKey: string): Map<string, boolean> {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return new Map();
+    const state = JSON.parse(raw) as Array<{ colId?: string; hide?: boolean }>;
+    const m = new Map<string, boolean>();
+    if (!Array.isArray(state)) return m;
+    for (const c of state) {
+      if (!c?.colId) continue;
+      m.set(c.colId, c.hide !== true);
+    }
+    return m;
+  } catch {
+    return new Map();
+  }
+}
+
 const LEGACY_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
   {
     id: 'core',
@@ -360,9 +378,14 @@ export function SellOutTab({
     const added = accumulatedSpecKeys.filter((k) => !prev.has(k));
     prevAccumulatedSpecKeysRef.current = accumulatedSpecKeys;
     if (!added.length) return;
-    const ids = added.map((k) => specColIdFromRawKey(k));
+    // Set-difference vs restored LS: only force-hide keys the user has not explicitly un-hidden.
+    const persistedVisible = readPersistedColumnVisibility(SELLOUT_GRID_STATE_KEY);
+    const toHide = added
+      .map((k) => specColIdFromRawKey(k))
+      .filter((colId) => persistedVisible.get(colId) !== true);
+    if (!toHide.length) return;
     try {
-      gridApi.setColumnsVisible(ids, false);
+      gridApi.setColumnsVisible(toHide, false);
     } catch {
       // no-op
     }

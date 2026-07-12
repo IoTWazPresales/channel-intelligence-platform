@@ -40,6 +40,7 @@ import {
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import { offsetFromZeroBasedPage, zeroBasedPageFromOffset } from '@/lib/skipLimitSearchParams';
 import { ReconSummaryChips, type ReconSummary } from '@/features/commercial-planner/lineupReconciliationDisplay';
 import {
   ExceptionCategoryGrid,
@@ -574,7 +575,7 @@ export function PlanVsExecutedView() {
 
   const activeExceptionRows = lensExceptions?.[exceptionCategory]?.items ?? [];
   const activeExceptionTotal = lensExceptions?.[exceptionCategory]?.total ?? 0;
-  const exceptionPage = excLimit > 0 ? Math.floor(excOffset / excLimit) : 0;
+  const exceptionPage = zeroBasedPageFromOffset(excOffset, excLimit);
 
   const hasValueCoverage = useMemo(
     () => activeExceptionRows.some((r) => r.value_plan != null || r.value_cost != null),
@@ -893,7 +894,9 @@ export function PlanVsExecutedView() {
                         pageSize={excLimit}
                         pageSizeOptions={EXCEPTION_PAGE_SIZE_OPTIONS}
                         onPageChange={(nextPage) => {
-                          setExceptionParamState({ exc_offset: String(nextPage * excLimit) });
+                          setExceptionParamState({
+                            exc_offset: String(offsetFromZeroBasedPage(nextPage, excLimit)),
+                          });
                         }}
                         onPageSizeChange={(nextLimit) => {
                           setExceptionParamState({ exc_offset: null, exc_limit: String(nextLimit) });

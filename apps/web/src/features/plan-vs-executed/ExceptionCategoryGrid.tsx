@@ -16,6 +16,7 @@ import {
   VALUE_UNAVAILABLE_TOOLTIP,
   type ExceptionLens,
 } from './gridPagination';
+import { pageFromSkipLimit, skipFromPage, zeroBasedPageFromOffset } from '@/lib/skipLimitSearchParams';
 
 export type ExceptionRow = {
   id?: string;
@@ -49,7 +50,11 @@ export const EXCEPTION_CATEGORY_LABELS: Record<ExceptionCategory, string> = {
   no_po_blind_spots: 'No-PO blind spots',
 };
 
-const GRID_STATE_KEY = 'cip.pve.exceptions.grid.v1';
+const GRID_STATE_KEY_BASE = 'cip.pve.exceptions.grid.v1';
+
+function exceptionGridStateKey(category: ExceptionCategory): string {
+  return `${GRID_STATE_KEY_BASE}.${category}`;
+}
 
 const EXCEPTION_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
   { label: 'Entity', fields: ['label'] },
@@ -169,8 +174,11 @@ export function ExceptionCategoryGrid({
   const theme = useTheme();
   const density = theme.density === 'compact' ? 'compact' : 'comfortable';
   const { rowHeight, headerHeight } = gridRowMetrics(density);
-  const gridHeight = headerHeight + rowHeight * pageSize;
-  const shellPage = page + 1;
+  // Clamp height to occupied rows (not full pageSize capacity).
+  const visibleRows = Math.max(1, Math.min(rows.length || 1, pageSize));
+  const gridHeight = headerHeight + rowHeight * visibleRows;
+  // 0-based parent page ↔ 1-based shell via shared skip/limit bijection (skip = page * pageSize).
+  const shellPage = pageFromSkipLimit(page * pageSize, pageSize);
   const gridRows = useMemo(() => toGridRows(rows), [rows]);
 
   const showPoLink = category === 'short_ships' || category === 'no_po_blind_spots';
@@ -320,7 +328,9 @@ export function ExceptionCategoryGrid({
         return;
       }
       if (patch.page != null) {
-        onPageChange(Math.max(0, Number(patch.page) - 1));
+        const oneBased = Math.max(1, Number(patch.page) || 1);
+        const skip = skipFromPage(oneBased, pageSize);
+        onPageChange(zeroBasedPageFromOffset(skip, pageSize));
       }
     },
     [onPageChange, onPageSizeChange, pageSize],
@@ -339,7 +349,7 @@ export function ExceptionCategoryGrid({
   return (
     <Box data-testid="exception-category-grid" sx={{ width: '100%', overflow: 'visible' }}>
       <MasterDataGridShell
-        entityKey="pve-exceptions"
+        entityKey={`pve-exceptions-${category}`}
         rows={gridRows}
         columnDefs={columnDefs}
         total={total}
@@ -360,7 +370,7 @@ export function ExceptionCategoryGrid({
         defaultSortDir="desc"
         pageSizeOptions={[...(pageSizeOptions ?? [PAGINATED_GRID_PAGE_SIZE, 30, 50])]}
         enableEmptyUrlSeed={false}
-        gridStateStorageKey={GRID_STATE_KEY}
+        gridStateStorageKey={exceptionGridStateKey(category)}
         columnPickerTitle="Exception list columns"
         columnPickerGroups={EXCEPTION_COLUMN_GROUPS}
         columnLabelByField={columnLabelByField}

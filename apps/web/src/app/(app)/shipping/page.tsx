@@ -26,7 +26,7 @@ import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColu
 import { PageHeader } from '@/components/PageHeader';
 import { apiGet } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
-import { parseSkipLimitParams } from '@/lib/skipLimitSearchParams';
+import { pageFromSkipLimit, parseSkipLimitParams, skipFromPage } from '@/lib/skipLimitSearchParams';
 
 import { buildShippingLinesUrl, type ShippingFilterParams } from './buildShippingLinesUrl';
 import type { OptionalColumnMeta } from './InboundShipmentsColumnsDialog';
@@ -625,7 +625,7 @@ export default function InboundShipmentsPage() {
   );
 
   const total = lines?.total ?? 0;
-  const shellPage = limit > 0 ? Math.floor(skip / limit) + 1 : 1;
+  const shellPage = pageFromSkipLimit(skip, limit);
 
   const onShellUrlChange = useCallback(
     (patch: Record<string, string | null>, resetPage?: boolean) => {
@@ -635,7 +635,8 @@ export default function InboundShipmentsPage() {
         next.skip = null;
       } else if (patch.page != null) {
         const p = Math.max(1, Number(patch.page) || 1);
-        next.skip = p <= 1 ? null : String((p - 1) * limit);
+        const nextSkip = skipFromPage(p, limit);
+        next.skip = nextSkip <= 0 ? null : String(nextSkip);
       }
       if (resetPage) next.skip = null;
       setParamState(next);
