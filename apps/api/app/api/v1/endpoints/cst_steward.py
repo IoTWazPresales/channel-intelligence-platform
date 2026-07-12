@@ -112,6 +112,13 @@ class AliasRejectBody(BaseModel):
     reason: str | None = None
 
 
+class AliasBatchBody(BaseModel):
+    """Explicit steward selection — never auto-resolve. Cap 500. FLAG ≠ BLOCK."""
+
+    alias_ids: list[int] = Field(..., min_length=1, max_length=500)
+    reason: str | None = None
+
+
 class SlotAdvanceBody(BaseModel):
     as_of: date | None = None
 
@@ -379,6 +386,67 @@ def list_article_aliases(
             ],
             "total": total,
         }
+
+
+def _alias_batch_results(
+    session: Session,
+    *,
+    alias_ids: list[int],
+    action: str,
+    actor: str | None,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Per-id envelope with partial success. Does not auto-create masters."""
+    results: list[dict[str, Any]] = []
+    for alias_id in alias_ids:
+        if action == "confirm":
+            row = confirm_customer_article_alias(session, alias_id=alias_id, actor=actor)
+        else:
+            row = reject_customer_article_alias(
+                session, alias_id=alias_id, actor=actor, reason=reason
+            )
+        if row is None:
+            results.append({"alias_id": alias_id, "ok": False, "error": "not_found"})
+        else:
+            results.append({"alias_id": alias_id, "ok": True, "status": row.status})
+    ok_count = sum(1 for r in results if r["ok"])
+    return {
+        "results": results,
+        "ok_count": ok_count,
+        "error_count": len(results) - ok_count,
+    }
+
+
+@router.post("/article-aliases/batch-confirm")
+def batch_confirm_article_aliases(
+    body: AliasBatchBody,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    actor = _actor(x_user_id)
+    with SessionLocal() as session:
+        payload = _alias_batch_results(
+            session, alias_ids=list(body.alias_ids), action="confirm", actor=actor
+        )
+        session.commit()
+        return payload
+
+
+@router.post("/article-aliases/batch-reject")
+def batch_reject_article_aliases(
+    body: AliasBatchBody,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    actor = _actor(x_user_id)
+    with SessionLocal() as session:
+        payload = _alias_batch_results(
+            session,
+            alias_ids=list(body.alias_ids),
+            action="reject",
+            actor=actor,
+            reason=body.reason or "steward_reject",
+        )
+        session.commit()
+        return payload
 
 
 @router.post("/article-aliases/{alias_id}/confirm")

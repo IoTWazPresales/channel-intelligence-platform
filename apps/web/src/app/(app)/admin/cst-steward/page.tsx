@@ -29,6 +29,7 @@ import type {
   GridApi,
   GridReadyEvent,
   ICellRendererParams,
+  SelectionChangedEvent,
 } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -161,6 +162,8 @@ export default function CstStewardPage() {
   const [aliasColumnSearch, setAliasColumnSearch] = useState('');
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
   const [aliasColumnVisibility, setAliasColumnVisibility] = useState<Record<string, boolean>>({});
+  const [selectedAliasIds, setSelectedAliasIds] = useState<number[]>([]);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
   const searchKey = searchParams.toString();
 
@@ -300,8 +303,42 @@ export default function CstStewardPage() {
   });
 
   const rejectAlias = useMutation({
-    mutationFn: (id: number) => apiPost(`/api/v1/cst-steward/article-aliases/${id}/reject`, { reason: 'steward_reject' }),
+    mutationFn: (id: number) =>
+      apiPost(`/api/v1/cst-steward/article-aliases/${id}/reject`, { reason: 'steward_reject' }),
     onSuccess: async () => {
+      await refetchAliases();
+    },
+  });
+
+  type AliasBatchResponse = {
+    results: { alias_id: number; ok: boolean; status?: string; error?: string }[];
+    ok_count: number;
+    error_count: number;
+  };
+
+  const batchConfirmAliases = useMutation({
+    mutationFn: (aliasIds: number[]) =>
+      apiPost<AliasBatchResponse>('/api/v1/cst-steward/article-aliases/batch-confirm', {
+        alias_ids: aliasIds,
+      }),
+    onSuccess: async (data) => {
+      setBulkMessage(`Confirmed ${data.ok_count} · failed ${data.error_count}`);
+      setSelectedAliasIds([]);
+      aliasGridApi?.deselectAll();
+      await refetchAliases();
+    },
+  });
+
+  const batchRejectAliases = useMutation({
+    mutationFn: (aliasIds: number[]) =>
+      apiPost<AliasBatchResponse>('/api/v1/cst-steward/article-aliases/batch-reject', {
+        alias_ids: aliasIds,
+        reason: 'steward_reject',
+      }),
+    onSuccess: async (data) => {
+      setBulkMessage(`Rejected ${data.ok_count} · failed ${data.error_count}`);
+      setSelectedAliasIds([]);
+      aliasGridApi?.deselectAll();
       await refetchAliases();
     },
   });
@@ -490,6 +527,17 @@ export default function CstStewardPage() {
 
   const aliasCols = useMemo<ColDef<AliasRow>[]>(
     () => [
+      {
+        colId: 'select',
+        headerName: '',
+        width: 48,
+        checkboxSelection: true,
+        headerCheckboxSelection: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        pinned: 'left',
+      },
       { field: 'article_no_normalized', headerName: 'Article', width: 140 },
       { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 140 },
       { field: 'product_sku', headerName: 'SKU', width: 120 },
@@ -522,6 +570,10 @@ export default function CstStewardPage() {
     [confirmAlias, rejectAlias],
   );
 
+  const onAliasSelectionChanged = useCallback((e: SelectionChangedEvent<AliasRow>) => {
+    setSelectedAliasIds(e.api.getSelectedRows().map((r) => r.id));
+  }, []);
+
   const filterActive = Boolean(debouncedQ.trim()) || keyOnly;
   const accountsEmptyDescription = filterActive
     ? 'No rows match the current search/key-account filter. Clear the search or turn off “Key accounts only”.'
@@ -539,8 +591,9 @@ export default function CstStewardPage() {
       <Alert severity="info" sx={{ mb: 2 }} data-testid="cst-steward-guide">
         What you can do here: <strong>Edit</strong> key-account / cadence / feed profile on the first tab;{' '}
         <strong>Advance slots now</strong> on Report slots (worklist shows due/late/missing only);{' '}
-        <strong>Confirm / Reject</strong> proposed article aliases on the third tab. This is not a full customer
-        editor or CST analytics dashboard — use Master Data → Customers for create/edit identity.
+        <strong>Confirm / Reject</strong> proposed article aliases on the third tab (row actions or bulk selection).
+        This is not a full customer editor or CST analytics dashboard — use Master Data → Customers for create/edit
+        identity. Aliases never auto-resolve (FLAG ≠ BLOCK).
       </Alert>
       <Tabs
         value={tab}
@@ -754,6 +807,22 @@ export default function CstStewardPage() {
       {tab === 2 ? (
         <>
           <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Button
+              variant="contained"
+              disabled={selectedAliasIds.length === 0 || batchConfirmAliases.isPending || batchRejectAliases.isPending}
+              onClick={() => batchConfirmAliases.mutate(selectedAliasIds)}
+              data-testid="cst-aliases-bulk-confirm"
+            >
+              Confirm selected ({selectedAliasIds.length})
+            </Button>
+            <Button
+              variant="outlined"
+              disabled={selectedAliasIds.length === 0 || batchConfirmAliases.isPending || batchRejectAliases.isPending}
+              onClick={() => batchRejectAliases.mutate(selectedAliasIds)}
+              data-testid="cst-aliases-bulk-reject"
+            >
+              Reject selected ({selectedAliasIds.length})
+            </Button>
             <Box sx={{ flex: 1 }} />
             <Button
               variant="outlined"
@@ -787,6 +856,11 @@ export default function CstStewardPage() {
               sx={{ mb: 0 }}
             />
           </Stack>
+          {bulkMessage ? (
+            <Alert severity="info" sx={{ mb: 1.5 }} onClose={() => setBulkMessage(null)} data-testid="cst-aliases-bulk-result">
+              {bulkMessage}
+            </Alert>
+          ) : null}
           <ModuleDataSection
             isLoading={loadingAliases}
             isError={errAliases}
@@ -803,8 +877,11 @@ export default function CstStewardPage() {
               columnDefs={aliasCols}
               height={560}
               gridOptions={{
+                rowSelection: 'multiple',
+                suppressRowClickSelection: true,
                 getRowId: (p) => String(p.data.id),
                 onGridReady: onAliasesGridReady,
+                onSelectionChanged: onAliasSelectionChanged,
                 onColumnMoved: onAliasColumnStateEvent,
                 onColumnVisible: onAliasColumnStateEvent,
                 onColumnPinned: onAliasColumnStateEvent,

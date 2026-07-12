@@ -285,6 +285,8 @@ describe('CST steward page chrome (BACKLOG-074 Unit 3)', () => {
     renderPage();
     await screen.findByText('KA-1');
     expect(screen.getByTestId('cst-aliases-columns-open')).toBeInTheDocument();
+    expect(screen.getByTestId('cst-aliases-bulk-confirm')).toBeDisabled();
+    expect(screen.getByTestId('cst-aliases-bulk-reject')).toBeDisabled();
   });
 
   it('shows actionable empty-state copy on aliases and slots tabs (Wave 3)', async () => {

@@ -179,3 +179,21 @@ def test_reject_alias_writes_trail():
     assert out is row
     assert row.status == "rejected"
     assert row.evidence_json["steward_events"][-1]["reason"] == "wrong sku"
+
+
+def test_alias_batch_partial_success(monkeypatch):
+    from app.api.v1.endpoints import cst_steward as ep
+
+    session = MagicMock()
+
+    def fake_confirm(session, *, alias_id, actor=None):
+        if alias_id == 1:
+            return SimpleNamespace(id=1, status="confirmed")
+        return None
+
+    monkeypatch.setattr(ep, "confirm_customer_article_alias", fake_confirm)
+    out = ep._alias_batch_results(session, alias_ids=[1, 99], action="confirm", actor="steward")
+    assert out["ok_count"] == 1
+    assert out["error_count"] == 1
+    assert out["results"][0] == {"alias_id": 1, "ok": True, "status": "confirmed"}
+    assert out["results"][1] == {"alias_id": 99, "ok": False, "error": "not_found"}
