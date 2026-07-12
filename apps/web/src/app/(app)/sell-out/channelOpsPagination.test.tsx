@@ -14,12 +14,25 @@ vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(),
 }));
 
-vi.mock('@/components/EnterpriseDataGrid', () => ({
-  EnterpriseDataGrid: ({ rowData }: { rowData: Array<Record<string, unknown>> }) => (
-    <div data-testid="enterprise-grid-mock">
-      {rowData.map((r, i) => (
-        <div key={i}>{String(r.sku ?? r.product_sku ?? '')}</div>
-      ))}
+vi.mock('@/components/masterGrid/MasterDataGridShell', () => ({
+  MasterDataGridShell: ({
+    rows,
+    onUrlChange,
+    url,
+  }: {
+    rows: Array<Record<string, unknown>>;
+    onUrlChange: (patch: Record<string, string | null>) => void;
+    url: { page: number };
+  }) => (
+    <div>
+      <div data-testid="shell-grid">
+        {rows.map((r, i) => (
+          <div key={i}>{String(r.sku ?? r.product_sku ?? '')}</div>
+        ))}
+      </div>
+      <button type="button" onClick={() => onUrlChange({ page: String(url.page + 1) })}>
+        Next
+      </button>
     </div>
   ),
 }));
@@ -51,14 +64,36 @@ describe('Channel Operations pagination (BACKLOG-074 U4g)', () => {
             total: 120,
             page: 2,
             page_size: 50,
-            items: [{ date: '2026-01-02', sku: 'SKU-2', customer_name: 'C2', distributor_name: 'D', units: 2, revenue: 20, unit_price: 10, prior_period_units: null }],
+            items: [
+              {
+                date: '2026-01-02',
+                sku: 'SKU-2',
+                customer_name: 'C2',
+                distributor_name: 'D',
+                units: 2,
+                revenue: 20,
+                unit_price: 10,
+                prior_period_units: null,
+              },
+            ],
           };
         }
         return {
           total: 120,
           page: 1,
           page_size: 50,
-          items: [{ date: '2026-01-01', sku: 'SKU-1', customer_name: 'C1', distributor_name: 'D', units: 1, revenue: 10, unit_price: 10, prior_period_units: null }],
+          items: [
+            {
+              date: '2026-01-01',
+              sku: 'SKU-1',
+              customer_name: 'C1',
+              distributor_name: 'D',
+              units: 1,
+              revenue: 10,
+              unit_price: 10,
+              prior_period_units: null,
+            },
+          ],
         };
       }
       return {};
@@ -67,12 +102,12 @@ describe('Channel Operations pagination (BACKLOG-074 U4g)', () => {
     renderWithQuery(<SellOutTab depth="operational" />);
 
     expect(await screen.findByText('SKU-1')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Go to next page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
     await waitFor(() => {
       expect(apiGetMock).toHaveBeenCalledWith(
         expect.stringMatching(/channel-ops\/sell-out.*page=2/),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
     expect(await screen.findByText('SKU-2')).toBeInTheDocument();
@@ -80,11 +115,6 @@ describe('Channel Operations pagination (BACKLOG-074 U4g)', () => {
 
   it('ChannelOpsMovementsTab fetches page 2 when Next is clicked', async () => {
     apiGetMock.mockImplementation(async (url: string) => {
-      if (url.includes('/sellout/filter-options')) {
-        return {
-          distributors: [{ id: 7, distributor_code: 'DIST7', distributor_name: 'Dist Seven' }],
-        };
-      }
       if (url.includes('/channel-ops/movements')) {
         const page = new URL(url, 'http://test').searchParams.get('page');
         if (page === '2') {
@@ -132,12 +162,12 @@ describe('Channel Operations pagination (BACKLOG-074 U4g)', () => {
     renderWithQuery(<ChannelOpsMovementsTab depth="operational" distributorId={7} />);
 
     expect(await screen.findByText('M-SKU-1')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Go to next page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
     await waitFor(() => {
       expect(apiGetMock).toHaveBeenCalledWith(
         expect.stringMatching(/channel-ops\/movements.*page=2/),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
     expect(await screen.findByText('M-SKU-2')).toBeInTheDocument();

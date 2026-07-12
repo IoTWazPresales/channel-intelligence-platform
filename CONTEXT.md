@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-12 — **Ops MasterDataGridShell adoption (impl):** shipping + Channel Ops Sell-out/Inventory/Movements + CST tabs + PVE exception grid. Overview + ImportStewardCandidateWorkspace excluded. Audit `.tmp/OPS_MASTER_GRID_SHELL_AUDIT.md`. Branch `feat/ops-master-grid-shell-parity` (uncommitted pending Warren).
+- 2026-07-12 — **BACKLOG-074 lock SUPERSEDED:** Warren — ops list surfaces use `MasterDataGridShell` (same as masters). Chart Overview + import steward candidate UI excluded. Branch `feat/ops-master-grid-shell-parity`. Prior composed-only “parity” revoked.
 - 2026-07-12 — **SHIP-ALIGN (Unit 5):** Inbound pagination below AG Grid (toolbar→grid→pager rhythm). Branch `feat/shipping-layout-rhythm`. Queue 1–5 done; Fable re-VERIFY pending.
 - 2026-07-12 — **CST-BULK (Unit 4):** Alias batch-confirm/reject API + selection UI. Branch `feat/cst-alias-bulk-actions` @ `bf2afd4`.
 - 2026-07-12 — **U4g (Unit 3):** Channel Ops Sell-out/Inventory/Movements → EnterpriseDataGrid + ModuleDataSection. Branch `feat/channel-ops-ag-grid-chrome` @ `2a0eae6`.

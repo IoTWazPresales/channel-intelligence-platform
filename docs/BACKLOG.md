@@ -10,14 +10,15 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-07-11 · Opus CONSULT READY (bug-first queue) |
-| **Effort** | Large (multi-PR; beachhead then audit then per-surface) |
-| **Source** | Warren 2026-07-11: CST steward + PVE + CPOR + PM gaps + channels/regions + PO + inbound lack MasterDataGridShell / filter / toolbar parity after Theme B. Opus refused mega-PR. |
-| **Idea** | Bring grid/filter/toolbar *capability* parity without conflating admin `MasterDataGridShell` and import `ImportStewardCandidateWorkspace`. |
-| **What the work is** | (1) CST steward beachhead — affordances on existing bar, not shell swap. (2) Docs-only inventory matrix for PVE/CPOR/PM gaps/channels/PO/inbound. (3) Warren picks next 1–2 surfaces from matrix. |
-| **Regression traps** | Do not swap steward workspace onto MasterDataGridShell; do not touch commercial-planner `ColumnSelectorModal`; do not default-hide dispositioned rows (BACKLOG-073). |
-| **Out of scope** | BACKLOG-073 junk purge; CI pnpm clash; new CST “data provider” entity (config+import already exist). |
-| **TRIGGER** | After Channel Ops KPI + PM gap scan perf ships; **or** Warren prioritizes CST steward chrome. |
+| **Status / parked** | **Open · SUPERSEDED lock 2026-07-12** — Warren override: ops list surfaces use **`MasterDataGridShell`** (same as Customers / Products / Distributors). Prior “composed chrome without shell” / “no shell on CST/ops” traps are **revoked**. |
+| **Effort** | Large (multi-surface shell adoption) |
+| **Source** | Warren 2026-07-11: CST / PVE / CPOR / PM gaps / channels / PO / inbound lack Theme B parity. Warren 2026-07-12: composed-only waves did **not** deliver visual/behaviour parity; **shell is the bar**. |
+| **Idea** | One list/workbench shell for masters **and** ops worklists. Domain actions stay optional props (promote/disposition stay master-only). Do **not** invent a forever-weaker “ops chrome” stack. |
+| **What the work is** | Adopt `MasterDataGridShell` on: inbound shipping; Channel Ops Sell-out / Inventory / Movements; CST steward list tabs; PVE exception lists; then CPOR / PM gaps / PO as follow-ons. Extend shell only where needed (e.g. row `id` typing, bulk optional). |
+| **Regression traps** | Do **not** put shell on chart-only Overview or import `ImportStewardCandidateWorkspace`. Do not touch commercial-planner `ColumnSelectorModal`. Do not default-hide dispositioned rows (BACKLOG-073). Do not auto-create masters. |
+| **Out of scope** | Chart-only Overview; DSI/import steward candidate UI; BACKLOG-073 junk purge. |
+| **TRIGGER** | **Fired 2026-07-12** — Warren: update docs and proceed with shell on ops. |
+| **Supersedes** | U4 inventory “no MasterDataGridShell on CST”; feedback-plan “do not force shell onto sell-out/shipping/PVE”; Waves 1–5 / Units 1–5 “composed chrome = parity” framing. |
 
 ---
 

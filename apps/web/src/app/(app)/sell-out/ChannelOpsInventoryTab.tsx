@@ -1,20 +1,19 @@
 'use client';
 
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import { Alert, Box, TablePagination } from '@mui/material';
+import { Alert, Box } from '@mui/material';
 import type { ColDef, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { ModuleDataSection } from '@/components/ModuleDataSection';
-import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
-import { gridRowMetrics, paginatedGridHeight } from '@/features/plan-vs-executed/gridPagination';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
+import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
 
 type InvRow = {
+  id: number;
   distributor_id: number;
   distributor_name: string | null;
   product_id: number;
@@ -35,8 +34,17 @@ type InvRow = {
   reorder_signal: boolean;
 };
 
-const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
 const DEFAULT_PAGE_SIZE = 50;
+const GRID_STATE_KEY = 'cip.channel-ops.inventory.shell.grid.v1';
+
+const COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  {
+    id: 'core',
+    label: 'Core',
+    fields: ['product_name', 'sku', 'reported_soh', 'derived_stock', 'calculated_soh', 'variance_units', 'reconciliation_status', 'velocity_52wk', 'weeks_of_cover', 'reorder_signal'],
+  },
+];
 
 function fmtNum(n: number | null | undefined): string {
   if (n == null) return '—';
@@ -50,31 +58,35 @@ export function ChannelOpsInventoryTab({
   depth: IntelDepth;
   distributorId?: number | null;
 }) {
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const distId = distributorId ?? null;
-  const { rowHeight, headerHeight } = gridRowMetrics('comfortable');
 
   useEffect(() => {
-    setPage(0);
+    setPage(1);
   }, [distId]);
 
   const q = useQuery({
     queryKey: ['channel-ops-inventory', distId, page, pageSize],
     queryFn: ({ signal }) =>
       apiGet<{
-        items: InvRow[];
+        items: Omit<InvRow, 'id'>[];
         total: number;
         page: number;
         page_size: number;
         truncated?: boolean;
         true_total?: number;
       }>(
-        `/api/v1/channel-ops/inventory?distributor_id=${distId}&page=${page + 1}&page_size=${pageSize}`,
+        `/api/v1/channel-ops/inventory?distributor_id=${distId}&page=${page}&page_size=${pageSize}`,
         { signal },
       ),
     enabled: distId != null,
   });
+
+  const rows: InvRow[] = useMemo(
+    () => (q.data?.items ?? []).map((r) => ({ ...r, id: r.product_id })),
+    [q.data?.items],
+  );
 
   const columnDefs = useMemo<ColDef<InvRow>[]>(() => {
     const cols: ColDef<InvRow>[] = [
@@ -89,6 +101,7 @@ export function ChannelOpsInventoryTab({
       },
       {
         colId: 'derived_stock',
+        field: 'derived_stock',
         headerName: 'Derived stock',
         width: 120,
         type: 'numericColumn',
@@ -122,16 +135,14 @@ export function ChannelOpsInventoryTab({
           headerName: 'Velocity 52wk',
           width: 120,
           type: 'numericColumn',
-          valueFormatter: (p) =>
-            p.value == null ? '—' : Number(p.value).toFixed(2),
+          valueFormatter: (p) => (p.value == null ? '—' : Number(p.value).toFixed(2)),
         },
         {
           field: 'weeks_of_cover',
           headerName: 'Weeks of cover',
           width: 130,
           type: 'numericColumn',
-          valueFormatter: (p) =>
-            p.value == null ? 'n/a' : Number(p.value).toFixed(1),
+          valueFormatter: (p) => (p.value == null ? 'n/a' : Number(p.value).toFixed(1)),
         },
       );
     }
@@ -155,12 +166,10 @@ export function ChannelOpsInventoryTab({
     () => ({
       pagination: false,
       suppressPaginationPanel: true,
-      getRowId: (p) => String(p.data.product_id),
-      rowHeight,
-      headerHeight,
+      getRowId: (p) => String(p.data.id),
       defaultColDef: { resizable: true, sortable: true },
     }),
-    [rowHeight, headerHeight],
+    [],
   );
 
   if (distId == null) {
@@ -172,55 +181,51 @@ export function ChannelOpsInventoryTab({
     );
   }
 
-  const items = q.data?.items ?? [];
-  const total = q.data?.total ?? 0;
-
   return (
     <Box>
       {q.data?.truncated ? (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Soft cap: paging the first {total.toLocaleString()} of{' '}
-          {(q.data.true_total ?? total).toLocaleString()} products for this distributor.
+          Soft cap: paging the first {(q.data.total ?? 0).toLocaleString()} of{' '}
+          {(q.data.true_total ?? q.data.total).toLocaleString()} products for this distributor.
         </Alert>
       ) : null}
-      <ModuleGridToolbar onRefresh={() => void q.refetch()} busy={q.isFetching} />
-      <ModuleDataSection
+      <MasterDataGridShell
+        entityKey="channel-ops-inventory"
+        rows={rows}
+        columnDefs={columnDefs}
+        total={q.data?.total ?? 0}
         isLoading={q.isLoading}
         isError={q.isError}
         error={(q.error as Error) ?? null}
         onRetry={() => void q.refetch()}
-        isEmpty={items.length === 0}
         empty={{
           title: 'No inventory rows',
           description:
             'No distributor inventory rows for this selection. Confirm DSI inventory snapshots exist for this distributor (Admin → Imports), or try another distributor.',
         }}
-      >
-        <EnterpriseDataGrid
-          rowData={items}
-          columnDefs={columnDefs}
-          height={paginatedGridHeight(Math.min(pageSize, Math.max(items.length, 1)), {
-            rowHeight,
-            headerHeight,
-          })}
-          gridOptions={gridOptions}
-        />
-        <TablePagination
-          component="div"
-          count={total}
-          page={page}
-          onPageChange={(_e, nextPage) => setPage(nextPage)}
-          rowsPerPage={pageSize}
-          onRowsPerPageChange={(e) => {
-            setPageSize(Number(e.target.value));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
-          labelDisplayedRows={({ from, to, count }) =>
-            `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
+        url={{ page, pageSize, q: '', sortBy: 'sku', sortDir: 'asc' }}
+        onUrlChange={(patch, resetPage) => {
+          if (patch.page_size != null) {
+            setPageSize(Number(patch.page_size) || DEFAULT_PAGE_SIZE);
+            setPage(1);
+            return;
           }
-        />
-      </ModuleDataSection>
+          if (resetPage) setPage(1);
+          if (patch.page != null) setPage(Math.max(1, Number(patch.page) || 1));
+        }}
+        defaultPageSize={DEFAULT_PAGE_SIZE}
+        defaultSortBy="sku"
+        defaultSortDir="asc"
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+        enableEmptyUrlSeed={false}
+        gridStateStorageKey={GRID_STATE_KEY}
+        columnPickerTitle="Inventory columns"
+        columnPickerGroups={COLUMN_GROUPS}
+        gridOptions={gridOptions}
+        bulkSelectionEnabled={false}
+        onRefresh={() => void q.refetch()}
+        refreshBusy={q.isFetching}
+      />
     </Box>
   );
 }

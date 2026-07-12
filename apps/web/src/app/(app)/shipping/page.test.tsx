@@ -23,22 +23,27 @@ vi.mock('@/components/PageHeader', () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
 }));
 
-vi.mock('@/components/ModuleDataSection', () => ({
-  ModuleDataSection: ({ children, isEmpty, empty, isLoading }: any) => {
-    if (isLoading) return <div>Loading lines…</div>;
-    if (isEmpty) return <div>{empty?.title}</div>;
-    return <>{children}</>;
-  },
-}));
-
-vi.mock('@/components/ModuleGridToolbar', () => ({
-  ModuleGridToolbar: () => <div data-testid="shipping-toolbar" />,
-}));
-
-vi.mock('@/components/EnterpriseDataGrid', () => ({
-  EnterpriseDataGrid: ({ rowData }: { rowData: any[] }) => (
-    <div data-testid="shipping-grid">{rowData.length} rows</div>
+vi.mock('@/components/masterGrid/MasterDataGridShell', () => ({
+  MasterDataGridShell: ({
+    rows,
+    onUrlChange,
+    url,
+  }: {
+    rows: unknown[];
+    onUrlChange: (patch: Record<string, string | null>) => void;
+    url: { page: number };
+  }) => (
+    <div>
+      <div data-testid="shipping-grid">{rows.length} rows</div>
+      <button type="button" onClick={() => onUrlChange({ page: String(url.page + 1) })}>
+        Next
+      </button>
+    </div>
   ),
+}));
+
+vi.mock('@/components/masterGrid/MasterColumnPickerDialog', () => ({
+  MasterColumnPickerDialog: () => null,
 }));
 
 vi.mock('./ShippingCommercialSummary', () => ({
@@ -115,7 +120,7 @@ describe('Inbound shipments page pagination (BACKLOG-074 U4b)', () => {
   it('syncs next page to URL skip param', async () => {
     renderPage();
     await screen.findByTestId('shipping-grid');
-    fireEvent.click(screen.getByRole('button', { name: 'Go to next page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(replaceSpy).toHaveBeenCalled();
     const last = String(replaceSpy.mock.calls.at(-1)?.[0] ?? '');
     expect(last).toContain('skip=50');

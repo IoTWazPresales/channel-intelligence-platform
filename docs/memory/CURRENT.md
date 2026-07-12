@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-12 (ops parity Units 1–5 shipped; Fable re-VERIFY pending)
+**Last updated:** 2026-07-12 (ops MasterDataGridShell parity — implementation ready for review)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,27 +9,45 @@
 
 | Field | Value |
 |-------|--------|
-| **Tip branch** | `feat/shipping-layout-rhythm` (stack tip) |
-| **Alembic (DB)** | **`20260710_0072`** |
-| **Fable** | Unit 1 PASS. Units 2–5 **Cursor self-checked**; CLI Fable session-limited — **re-VERIFY when available** (Warren 2026-07-12). |
+| **Branch** | `feat/ops-master-grid-shell-parity` |
+| **Base** | `4dfc541` (shipping-layout-rhythm tip) |
+| **Alembic (DB)** | **`20260710_0072`** (unchanged) |
+| **Lock** | Ops **list** grids use **`MasterDataGridShell`**. Composed-only ? parity. |
 
 ---
 
-## Queue status (all implemented + pushed)
+## Exclusions (still)
 
-| # | Unit | Branch | Tip |
-|---|------|--------|-----|
-| 1 | CO-LAYOUT | `feat/channel-ops-kpi-first-layout` | `0a727ee` PASS |
-| 2 | U4f PVE chrome | `feat/pve-exception-list-parity` | `44eb8bd` |
-| 3 | U4g AG Grid | `feat/channel-ops-ag-grid-chrome` | `2a0eae6` |
-| 4 | CST-BULK | `feat/cst-alias-bulk-actions` | `bf2afd4` |
-| 5 | SHIP-ALIGN | `feat/shipping-layout-rhythm` | (this) |
+- Channel Ops **Overview** (charts only — no shell)
+- Import **`ImportStewardCandidateWorkspace`** (steward candidate UI)
 
-Stack: each unit branched from prior tip (serial). Waves 1–3 still on `feat/channel-ops-kpi-and-gap-scan-perf` @ `dc614fe`.
+---
+
+## What works (this branch — uncommitted until Warren asks)
+
+| Surface | Shell |
+|---------|--------|
+| `/shipping` | Yes (`skip`/`limit` adapted) |
+| Channel Ops Sell-out / Inventory / Movements | Yes (not Overview) |
+| CST steward key-accounts / slots / aliases | Yes |
+| PVE `ExceptionCategoryGrid` | Yes (drill grid still EnterpriseDataGrid) |
+
+Shell tweaks: `id: number \| string`; bulk props optional when `bulkSelectionEnabled={false}`.
+
+**Tests (focused):** shipping + channelOps pagination + CST steward + ExceptionCategoryGrid — green.
+
+**Audit for Fable/Opus:** `.tmp/OPS_MASTER_GRID_SHELL_AUDIT.md`
 
 ---
 
 ## Next
 
-1. When Fable available: re-VERIFY Units 2–5 (or open PRs / merge stack)
-2. Do not start new themes without proceed
+1. Commit + push when Warren asks
+2. Fable/Opus review from audit (no re-CONSULT required for proceed — already greenlit)
+3. Follow-on (not this slice): CPOR cases, PM gaps, PO gap grids, shipment evidence
+
+---
+
+## Prior queue note
+
+Units 1–5 composed-chrome work remains useful UX but is **not** the master-grid parity bar.

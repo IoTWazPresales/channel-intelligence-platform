@@ -2,17 +2,12 @@
 
 import {
   Alert,
-  Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
   FormControlLabel,
-  InputLabel,
-  MenuItem,
-  Select,
   Stack,
   Switch,
   Tab,
@@ -20,29 +15,15 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import type {
-  ColDef,
-  ColumnMovedEvent,
-  ColumnPinnedEvent,
-  ColumnResizedEvent,
-  ColumnVisibleEvent,
-  GridApi,
-  GridReadyEvent,
-  ICellRendererParams,
-  SelectionChangedEvent,
-} from 'ag-grid-community';
+import type { ColDef, GridApi, ICellRendererParams, SelectionChangedEvent } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { ModuleDataSection } from '@/components/ModuleDataSection';
-import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 import { PageHeader } from '@/components/PageHeader';
-import {
-  MasterColumnPickerDialog,
-  type MasterColumnPickerGroup,
-} from '@/components/masterGrid/MasterColumnPickerDialog';
+import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 
 type KeyAccountRow = {
@@ -57,6 +38,8 @@ type KeyAccountRow = {
   notes: string | null;
   feed_profile_json: Record<string, unknown> | null;
 };
+
+type KeyAccountGridRow = Omit<KeyAccountRow, 'id'> & { id: number };
 
 type SlotItem = {
   id: number;
@@ -81,6 +64,7 @@ const TAB_KEYS = ['key-accounts', 'slots', 'aliases'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 const GRID_STATE_KEY = 'cip.admin.cst-steward.key-accounts.grid.v2';
+const SLOTS_GRID_STATE_KEY = 'cip.admin.cst-steward.slots.grid.v1';
 const ALIAS_GRID_STATE_KEY = 'cip.admin.cst-steward.aliases.grid.v1';
 const DEFAULT_PAGE_SIZE = 100;
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
@@ -104,6 +88,20 @@ const KEY_ACCOUNT_COLUMN_LABELS: Record<string, string> = {
   is_key_account: 'Key account',
   reports_expected: 'Reports expected',
   expected_cadence: 'Cadence',
+};
+
+const SLOT_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  {
+    label: 'Slot',
+    fields: ['status', 'week_start_date', 'customer_code', 'customer_name'],
+  },
+];
+
+const SLOT_COLUMN_LABELS: Record<string, string> = {
+  status: 'Status',
+  week_start_date: 'Week start',
+  customer_code: 'Code',
+  customer_name: 'Customer',
 };
 
 const ALIAS_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
@@ -154,14 +152,8 @@ export default function CstStewardPage() {
   const [notes, setNotes] = useState('');
   const [feedRaw, setFeedRaw] = useState('');
 
-  const [gridApi, setGridApi] = useState<GridApi<KeyAccountRow> | null>(null);
   const [aliasGridApi, setAliasGridApi] = useState<GridApi<AliasRow> | null>(null);
-  const [columnsOpen, setColumnsOpen] = useState(false);
-  const [aliasColumnsOpen, setAliasColumnsOpen] = useState(false);
-  const [columnSearch, setColumnSearch] = useState('');
-  const [aliasColumnSearch, setAliasColumnSearch] = useState('');
-  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
-  const [aliasColumnVisibility, setAliasColumnVisibility] = useState<Record<string, boolean>>({});
+  const [aliasBulkSelectionMode, setAliasBulkSelectionMode] = useState<BulkTableSelectionMode>('normal');
   const [selectedAliasIds, setSelectedAliasIds] = useState<number[]>([]);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
@@ -178,6 +170,26 @@ export default function CstStewardPage() {
       router.replace(next ? `${pathname}?${next}` : pathname);
     },
     [pathname, router, searchKey],
+  );
+
+  const handleGridUrlChange = useCallback(
+    (patch: Record<string, string | null>, resetPage?: boolean) => {
+      const changes = { ...patch };
+      if (resetPage) changes.page = '1';
+      setParamState(changes);
+    },
+    [setParamState],
+  );
+
+  const gridUrl = useMemo(
+    () => ({
+      page,
+      pageSize,
+      q: debouncedQ,
+      sortBy: 'id',
+      sortDir: 'asc' as const,
+    }),
+    [page, pageSize, debouncedQ],
   );
 
   useEffect(() => {
@@ -219,7 +231,15 @@ export default function CstStewardPage() {
   });
   const accounts = accountsPage?.items;
   const accountsTotal = accountsPage?.total ?? 0;
-  const accountsTotalPages = Math.max(1, Math.ceil(accountsTotal / pageSize));
+
+  const accountRows = useMemo<KeyAccountGridRow[]>(
+    () =>
+      (accounts ?? []).map((row) => ({
+        ...row,
+        id: row.id ?? row.customer_id,
+      })),
+    [accounts],
+  );
 
   const {
     data: worklist,
@@ -243,7 +263,6 @@ export default function CstStewardPage() {
     enabled: tab === 1,
   });
   const slotsTotal = worklist?.total ?? 0;
-  const slotsTotalPages = Math.max(1, Math.ceil(slotsTotal / pageSize));
 
   const {
     data: aliasesPage,
@@ -267,7 +286,6 @@ export default function CstStewardPage() {
   });
   const aliases = aliasesPage?.items;
   const aliasesTotal = aliasesPage?.total ?? 0;
-  const aliasesTotalPages = Math.max(1, Math.ceil(aliasesTotal / pageSize));
 
   const save = useMutation({
     mutationFn: async () => {
@@ -353,135 +371,7 @@ export default function CstStewardPage() {
     setFeedRaw(row.feed_profile_json ? JSON.stringify(row.feed_profile_json, null, 2) : '');
   };
 
-  const persistGridState = useCallback((api: GridApi<KeyAccountRow>) => {
-    try {
-      localStorage.setItem(GRID_STATE_KEY, JSON.stringify(api.getColumnState()));
-    } catch {
-      // no-op
-    }
-  }, []);
-
-  const syncColumnVisibility = useCallback((api: GridApi<KeyAccountRow>) => {
-    if (!api?.getColumns) return;
-    try {
-      const known = new Set(KEY_ACCOUNT_COLUMN_GROUPS.flatMap((g) => g.fields));
-      const visibility: Record<string, boolean> = {};
-      for (const col of api.getColumns() ?? []) {
-        const field = col?.getColDef?.()?.field as string | undefined;
-        if (!field || !known.has(field)) continue;
-        visibility[field] = Boolean(col.isVisible?.());
-      }
-      if (Object.keys(visibility).length) setColumnVisibility(visibility);
-    } catch {
-      // no-op
-    }
-  }, []);
-
-  const onAccountsGridReady = useCallback(
-    (e: GridReadyEvent<KeyAccountRow>) => {
-      setGridApi(e.api);
-      try {
-        const raw = localStorage.getItem(GRID_STATE_KEY);
-        if (raw) {
-          e.api.applyColumnState({ state: JSON.parse(raw), applyOrder: true });
-        }
-      } catch {
-        // no-op
-      }
-      syncColumnVisibility(e.api);
-    },
-    [syncColumnVisibility],
-  );
-
-  const persistAliasGridState = useCallback((api: GridApi<AliasRow>) => {
-    try {
-      localStorage.setItem(ALIAS_GRID_STATE_KEY, JSON.stringify(api.getColumnState()));
-    } catch {
-      // no-op
-    }
-  }, []);
-
-  const syncAliasColumnVisibility = useCallback((api: GridApi<AliasRow>) => {
-    if (!api?.getColumns) return;
-    try {
-      const known = new Set(ALIAS_COLUMN_GROUPS.flatMap((g) => g.fields));
-      const visibility: Record<string, boolean> = {};
-      for (const col of api.getColumns() ?? []) {
-        const field = col?.getColDef?.()?.field as string | undefined;
-        if (!field || !known.has(field)) continue;
-        visibility[field] = Boolean(col.isVisible?.());
-      }
-      if (Object.keys(visibility).length) setAliasColumnVisibility(visibility);
-    } catch {
-      // no-op
-    }
-  }, []);
-
-  const onAliasesGridReady = useCallback(
-    (e: GridReadyEvent<AliasRow>) => {
-      setAliasGridApi(e.api);
-      try {
-        const raw = localStorage.getItem(ALIAS_GRID_STATE_KEY);
-        if (raw) {
-          e.api.applyColumnState({ state: JSON.parse(raw), applyOrder: true });
-        }
-      } catch {
-        // no-op
-      }
-      syncAliasColumnVisibility(e.api);
-    },
-    [syncAliasColumnVisibility],
-  );
-
-  const onAliasColumnStateEvent = useCallback(
-    (
-      e:
-        | ColumnMovedEvent<AliasRow>
-        | ColumnVisibleEvent<AliasRow>
-        | ColumnPinnedEvent<AliasRow>
-        | ColumnResizedEvent<AliasRow>,
-    ) => {
-      persistAliasGridState(e.api);
-      syncAliasColumnVisibility(e.api);
-    },
-    [persistAliasGridState, syncAliasColumnVisibility],
-  );
-
-  const toggleAliasColumnVisibility = useCallback(
-    (columnId: string, visible: boolean) => {
-      if (!aliasGridApi?.setColumnsVisible) return;
-      aliasGridApi.setColumnsVisible([columnId], visible);
-      persistAliasGridState(aliasGridApi);
-      setAliasColumnVisibility((prev) => ({ ...prev, [columnId]: visible }));
-    },
-    [aliasGridApi, persistAliasGridState],
-  );
-
-  const onColumnStateEvent = useCallback(
-    (
-      e:
-        | ColumnMovedEvent<KeyAccountRow>
-        | ColumnVisibleEvent<KeyAccountRow>
-        | ColumnPinnedEvent<KeyAccountRow>
-        | ColumnResizedEvent<KeyAccountRow>,
-    ) => {
-      persistGridState(e.api);
-      syncColumnVisibility(e.api);
-    },
-    [persistGridState, syncColumnVisibility],
-  );
-
-  const toggleColumnVisibility = useCallback(
-    (columnId: string, visible: boolean) => {
-      if (!gridApi?.setColumnsVisible) return;
-      gridApi.setColumnsVisible([columnId], visible);
-      persistGridState(gridApi);
-      setColumnVisibility((prev) => ({ ...prev, [columnId]: visible }));
-    },
-    [gridApi, persistGridState],
-  );
-
-  const accountCols = useMemo<ColDef<KeyAccountRow>[]>(
+  const accountCols = useMemo<ColDef<KeyAccountGridRow>[]>(
     () => [
       { field: 'customer_code', headerName: 'Code', width: 140 },
       { field: 'customer_name', headerName: 'Name', flex: 1, minWidth: 180 },
@@ -504,7 +394,7 @@ export default function CstStewardPage() {
         width: 100,
         sortable: false,
         filter: false,
-        cellRenderer: (p: ICellRendererParams<KeyAccountRow>) =>
+        cellRenderer: (p: ICellRendererParams<KeyAccountGridRow>) =>
           p.data ? (
             <Button size="small" onClick={() => openEdit(p.data!)} data-testid={`cst-key-edit-${p.data.customer_id}`}>
               Edit
@@ -527,17 +417,6 @@ export default function CstStewardPage() {
 
   const aliasCols = useMemo<ColDef<AliasRow>[]>(
     () => [
-      {
-        colId: 'select',
-        headerName: '',
-        width: 48,
-        checkboxSelection: true,
-        headerCheckboxSelection: true,
-        sortable: false,
-        filter: false,
-        resizable: false,
-        pinned: 'left',
-      },
       { field: 'article_no_normalized', headerName: 'Article', width: 140 },
       { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 140 },
       { field: 'product_sku', headerName: 'SKU', width: 120 },
@@ -611,346 +490,185 @@ export default function CstStewardPage() {
       </Tabs>
 
       {tab === 0 ? (
-        <>
-          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
-            <TextField
-              size="small"
-              label="Filter"
-              value={filterInput}
-              onChange={(e) => setFilterInput(e.target.value)}
-              sx={{ minWidth: 260 }}
-              data-testid="cst-key-filter"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={keyOnly}
-                  onChange={(e) =>
-                    setParamState({ key_only: e.target.checked ? '1' : null, page: '1' })
-                  }
-                  data-testid="cst-key-only"
-                />
-              }
-              label="Key accounts only"
-            />
-            <Button
-              variant="outlined"
-              disabled={!gridApi}
-              onClick={() => {
-                setColumnSearch('');
-                setColumnsOpen(true);
-                if (gridApi) syncColumnVisibility(gridApi);
-              }}
-              data-testid="cst-steward-columns-open"
-            >
-              Columns
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={() => {
-                try {
-                  localStorage.removeItem(GRID_STATE_KEY);
-                  window.location.reload();
-                } catch {
-                  // no-op
+        <MasterDataGridShell<KeyAccountGridRow>
+          entityKey="cst-steward"
+          rows={accountRows}
+          columnDefs={accountCols}
+          total={accountsTotal}
+          isLoading={loadingAccounts}
+          isError={errAccounts}
+          error={(accountsError as Error) ?? null}
+          onRetry={() => void refetchAccounts()}
+          empty={{
+            title: 'No key-account / feed-profile rows',
+            description: accountsEmptyDescription,
+          }}
+          url={gridUrl}
+          onUrlChange={handleGridUrlChange}
+          defaultPageSize={DEFAULT_PAGE_SIZE}
+          defaultSortBy="customer_code"
+          defaultSortDir="asc"
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          enableEmptyUrlSeed={false}
+          gridStateStorageKey={GRID_STATE_KEY}
+          columnPickerTitle="CST key-account columns"
+          columnPickerGroups={KEY_ACCOUNT_COLUMN_GROUPS}
+          columnLabelByField={KEY_ACCOUNT_COLUMN_LABELS}
+          gridOptions={{ getRowId: (p) => String(p.data.customer_id) }}
+          bulkSelectionEnabled={false}
+          onRefresh={() => void refetchAccounts()}
+          refreshBusy={fetchingAccounts}
+          filterSlot={
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <TextField
+                size="small"
+                label="Filter"
+                value={filterInput}
+                onChange={(e) => setFilterInput(e.target.value)}
+                sx={{ minWidth: 260 }}
+                data-testid="cst-key-filter"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={keyOnly}
+                    onChange={(e) =>
+                      setParamState({ key_only: e.target.checked ? '1' : null, page: '1' })
+                    }
+                    data-testid="cst-key-only"
+                  />
                 }
-              }}
-              data-testid="cst-steward-columns-reset"
-            >
-              Reset column layout
-            </Button>
-            <ModuleGridToolbar
-              onRefresh={() => void refetchAccounts()}
-              busy={fetchingAccounts}
-              sx={{ mb: 0 }}
-            />
-          </Stack>
-          <ModuleDataSection
-            isLoading={loadingAccounts}
-            isError={errAccounts}
-            error={(accountsError as Error) ?? null}
-            onRetry={() => void refetchAccounts()}
-            isEmpty={accountsTotal === 0}
-            empty={{
-              title: 'No key-account / feed-profile rows',
-              description: accountsEmptyDescription,
-            }}
-          >
-            <EnterpriseDataGrid
-              rowData={accounts ?? []}
-              columnDefs={accountCols}
-              height={520}
-              gridOptions={{
-                getRowId: (p) => String(p.data.customer_id),
-                onGridReady: onAccountsGridReady,
-                onColumnMoved: onColumnStateEvent,
-                onColumnVisible: onColumnStateEvent,
-                onColumnPinned: onColumnStateEvent,
-                onColumnResized: onColumnStateEvent,
-              }}
-            />
-            <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center" data-testid="cst-accounts-pager">
-              <Button
-                disabled={page <= 1 || fetchingAccounts}
-                onClick={() => setParamState({ page: String(page - 1) })}
-              >
-                Prev
-              </Button>
-              <Typography variant="body2">
-                Page {page} / {accountsTotalPages} ({accountsTotal} rows)
-              </Typography>
-              <Button
-                disabled={page >= accountsTotalPages || fetchingAccounts}
-                onClick={() => setParamState({ page: String(page + 1) })}
-              >
-                Next
-              </Button>
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>Page size</InputLabel>
-                <Select
-                  label="Page size"
-                  value={String(pageSize)}
-                  onChange={(e) =>
-                    setParamState({ page_size: String(e.target.value || DEFAULT_PAGE_SIZE), page: '1' })
-                  }
-                  data-testid="cst-accounts-page-size"
-                >
-                  {PAGE_SIZE_OPTIONS.map((n) => (
-                    <MenuItem key={n} value={String(n)}>
-                      {n}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                label="Key accounts only"
+              />
             </Stack>
-          </ModuleDataSection>
-        </>
+          }
+        />
       ) : null}
 
       {tab === 1 ? (
         <>
-          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
-            <Typography variant="body2" color="text.secondary">
-              Due / late / missing only — received slots drop off.
-            </Typography>
-            <Box sx={{ flex: 1 }} />
-            <Button
-              variant="outlined"
-              onClick={() => advance.mutate()}
-              disabled={advance.isPending}
-              data-testid="cst-slots-advance"
-            >
-              {advance.isPending ? 'Advancing…' : 'Advance slots now'}
-            </Button>
-            <ModuleGridToolbar
-              onRefresh={() => void refetchSlots()}
-              busy={fetchingSlots}
-              sx={{ mb: 0 }}
-            />
-          </Stack>
-          {advance.isError ? <Alert severity="error">{String((advance.error as Error)?.message)}</Alert> : null}
-          <ModuleDataSection
+          {advance.isError ? (
+            <Alert severity="error" sx={{ mb: 1.5 }}>
+              {String((advance.error as Error)?.message)}
+            </Alert>
+          ) : null}
+          <MasterDataGridShell<SlotItem>
+            entityKey="cst-slots"
+            rows={worklist?.items ?? []}
+            columnDefs={slotCols}
+            total={slotsTotal}
             isLoading={loadingSlots}
             isError={errSlots}
             error={(slotsError as Error) ?? null}
             onRetry={() => void refetchSlots()}
-            isEmpty={slotsTotal === 0}
+            intro="Due / late / missing only — received slots drop off."
             empty={{
               title: 'No open report slots',
               description: slotsEmptyDescription,
             }}
-          >
-            <EnterpriseDataGrid
-              rowData={worklist?.items ?? []}
-              columnDefs={slotCols}
-              height={520}
-              gridOptions={{ getRowId: (p) => String(p.data.id) }}
-            />
-            <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center" data-testid="cst-slots-pager">
+            url={gridUrl}
+            onUrlChange={handleGridUrlChange}
+            defaultPageSize={DEFAULT_PAGE_SIZE}
+            defaultSortBy="week_start_date"
+            defaultSortDir="desc"
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            enableEmptyUrlSeed={false}
+            gridStateStorageKey={SLOTS_GRID_STATE_KEY}
+            columnPickerTitle="CST report-slot columns"
+            columnPickerGroups={SLOT_COLUMN_GROUPS}
+            columnLabelByField={SLOT_COLUMN_LABELS}
+            gridOptions={{ getRowId: (p) => String(p.data.id) }}
+            bulkSelectionEnabled={false}
+            onRefresh={() => void refetchSlots()}
+            refreshBusy={fetchingSlots}
+            toolbarStart={
               <Button
-                disabled={page <= 1 || fetchingSlots}
-                onClick={() => setParamState({ page: String(page - 1) })}
+                variant="outlined"
+                onClick={() => advance.mutate()}
+                disabled={advance.isPending}
+                data-testid="cst-slots-advance"
               >
-                Prev
+                {advance.isPending ? 'Advancing…' : 'Advance slots now'}
               </Button>
-              <Typography variant="body2">
-                Page {page} / {slotsTotalPages} ({slotsTotal} rows)
-              </Typography>
-              <Button
-                disabled={page >= slotsTotalPages || fetchingSlots}
-                onClick={() => setParamState({ page: String(page + 1) })}
-              >
-                Next
-              </Button>
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>Page size</InputLabel>
-                <Select
-                  label="Page size"
-                  value={String(pageSize)}
-                  onChange={(e) =>
-                    setParamState({ page_size: String(e.target.value || DEFAULT_PAGE_SIZE), page: '1' })
-                  }
-                  data-testid="cst-slots-page-size"
-                >
-                  {PAGE_SIZE_OPTIONS.map((n) => (
-                    <MenuItem key={n} value={String(n)}>
-                      {n}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Stack>
-          </ModuleDataSection>
+            }
+          />
         </>
       ) : null}
 
       {tab === 2 ? (
         <>
-          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
-            <Button
-              variant="contained"
-              disabled={selectedAliasIds.length === 0 || batchConfirmAliases.isPending || batchRejectAliases.isPending}
-              onClick={() => batchConfirmAliases.mutate(selectedAliasIds)}
-              data-testid="cst-aliases-bulk-confirm"
-            >
-              Confirm selected ({selectedAliasIds.length})
-            </Button>
-            <Button
-              variant="outlined"
-              disabled={selectedAliasIds.length === 0 || batchConfirmAliases.isPending || batchRejectAliases.isPending}
-              onClick={() => batchRejectAliases.mutate(selectedAliasIds)}
-              data-testid="cst-aliases-bulk-reject"
-            >
-              Reject selected ({selectedAliasIds.length})
-            </Button>
-            <Box sx={{ flex: 1 }} />
-            <Button
-              variant="outlined"
-              disabled={!aliasGridApi}
-              onClick={() => {
-                setAliasColumnSearch('');
-                setAliasColumnsOpen(true);
-                if (aliasGridApi) syncAliasColumnVisibility(aliasGridApi);
-              }}
-              data-testid="cst-aliases-columns-open"
-            >
-              Columns
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={() => {
-                try {
-                  localStorage.removeItem(ALIAS_GRID_STATE_KEY);
-                  window.location.reload();
-                } catch {
-                  // no-op
-                }
-              }}
-              data-testid="cst-aliases-columns-reset"
-            >
-              Reset column layout
-            </Button>
-            <ModuleGridToolbar
-              onRefresh={() => void refetchAliases()}
-              busy={fetchingAliases}
-              sx={{ mb: 0 }}
-            />
-          </Stack>
           {bulkMessage ? (
             <Alert severity="info" sx={{ mb: 1.5 }} onClose={() => setBulkMessage(null)} data-testid="cst-aliases-bulk-result">
               {bulkMessage}
             </Alert>
           ) : null}
-          <ModuleDataSection
+          <MasterDataGridShell<AliasRow>
+            entityKey="cst-aliases"
+            rows={aliases ?? []}
+            columnDefs={aliasCols}
+            total={aliasesTotal}
             isLoading={loadingAliases}
             isError={errAliases}
             error={(aliasesError as Error) ?? null}
             onRetry={() => void refetchAliases()}
-            isEmpty={aliasesTotal === 0}
             empty={{
               title: 'No proposed aliases',
               description: aliasesEmptyDescription,
             }}
-          >
-            <EnterpriseDataGrid
-              rowData={aliases ?? []}
-              columnDefs={aliasCols}
-              height={560}
-              gridOptions={{
-                rowSelection: 'multiple',
-                suppressRowClickSelection: true,
-                getRowId: (p) => String(p.data.id),
-                onGridReady: onAliasesGridReady,
-                onSelectionChanged: onAliasSelectionChanged,
-                onColumnMoved: onAliasColumnStateEvent,
-                onColumnVisible: onAliasColumnStateEvent,
-                onColumnPinned: onAliasColumnStateEvent,
-                onColumnResized: onAliasColumnStateEvent,
-              }}
-            />
-            <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center" data-testid="cst-aliases-pager">
-              <Button
-                disabled={page <= 1 || fetchingAliases}
-                onClick={() => setParamState({ page: String(page - 1) })}
-              >
-                Prev
-              </Button>
-              <Typography variant="body2">
-                Page {page} / {aliasesTotalPages} ({aliasesTotal} rows)
-              </Typography>
-              <Button
-                disabled={page >= aliasesTotalPages || fetchingAliases}
-                onClick={() => setParamState({ page: String(page + 1) })}
-              >
-                Next
-              </Button>
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>Page size</InputLabel>
-                <Select
-                  label="Page size"
-                  value={String(pageSize)}
-                  onChange={(e) =>
-                    setParamState({ page_size: String(e.target.value || DEFAULT_PAGE_SIZE), page: '1' })
+            url={gridUrl}
+            onUrlChange={handleGridUrlChange}
+            defaultPageSize={DEFAULT_PAGE_SIZE}
+            defaultSortBy="article_no_normalized"
+            defaultSortDir="asc"
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            enableEmptyUrlSeed={false}
+            gridStateStorageKey={ALIAS_GRID_STATE_KEY}
+            columnPickerTitle="CST article-alias columns"
+            columnPickerGroups={ALIAS_COLUMN_GROUPS}
+            columnLabelByField={ALIAS_COLUMN_LABELS}
+            gridHeight={560}
+            gridOptions={{
+              getRowId: (p) => String(p.data.id),
+              onSelectionChanged: onAliasSelectionChanged,
+            }}
+            bulkSelectionEnabled
+            bulkSelectionMode={aliasBulkSelectionMode}
+            onBulkSelectionModeChange={setAliasBulkSelectionMode}
+            bulkBusy={batchConfirmAliases.isPending || batchRejectAliases.isPending}
+            onGridApiChange={setAliasGridApi}
+            onRefresh={() => void refetchAliases()}
+            refreshBusy={fetchingAliases}
+            toolbarStart={
+              <>
+                <Button
+                  variant="contained"
+                  disabled={
+                    selectedAliasIds.length === 0 ||
+                    batchConfirmAliases.isPending ||
+                    batchRejectAliases.isPending
                   }
-                  data-testid="cst-aliases-page-size"
+                  onClick={() => batchConfirmAliases.mutate(selectedAliasIds)}
+                  data-testid="cst-aliases-bulk-confirm"
                 >
-                  {PAGE_SIZE_OPTIONS.map((n) => (
-                    <MenuItem key={n} value={String(n)}>
-                      {n}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Stack>
-          </ModuleDataSection>
+                  Confirm selected ({selectedAliasIds.length})
+                </Button>
+                <Button
+                  variant="outlined"
+                  disabled={
+                    selectedAliasIds.length === 0 ||
+                    batchConfirmAliases.isPending ||
+                    batchRejectAliases.isPending
+                  }
+                  onClick={() => batchRejectAliases.mutate(selectedAliasIds)}
+                  data-testid="cst-aliases-bulk-reject"
+                >
+                  Reject selected ({selectedAliasIds.length})
+                </Button>
+              </>
+            }
+          />
         </>
       ) : null}
-
-      <MasterColumnPickerDialog
-        open={columnsOpen}
-        onClose={() => setColumnsOpen(false)}
-        title="CST key-account columns"
-        groups={KEY_ACCOUNT_COLUMN_GROUPS}
-        columnLabelByField={KEY_ACCOUNT_COLUMN_LABELS}
-        visibility={columnVisibility}
-        onToggle={toggleColumnVisibility}
-        gridReady={Boolean(gridApi)}
-        search={columnSearch}
-        onSearchChange={setColumnSearch}
-      />
-
-      <MasterColumnPickerDialog
-        open={aliasColumnsOpen}
-        onClose={() => setAliasColumnsOpen(false)}
-        title="CST article-alias columns"
-        groups={ALIAS_COLUMN_GROUPS}
-        columnLabelByField={ALIAS_COLUMN_LABELS}
-        visibility={aliasColumnVisibility}
-        onToggle={toggleAliasColumnVisibility}
-        gridReady={Boolean(aliasGridApi)}
-        search={aliasColumnSearch}
-        onSearchChange={setAliasColumnSearch}
-      />
 
       <Dialog open={dlg != null} onClose={() => !save.isPending && setDlg(null)} fullWidth maxWidth="sm">
         <DialogTitle>

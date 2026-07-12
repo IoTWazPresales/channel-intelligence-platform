@@ -9,7 +9,6 @@ import {
   TableBody,
   TableCell,
   TableHead,
-  TablePagination,
   TableRow,
   TextField,
   Typography,
@@ -19,10 +18,9 @@ import type { ColDef, GridOptions, ValueGetterParams } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
+import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
-import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
-import { gridRowMetrics, paginatedGridHeight } from '@/features/plan-vs-executed/gridPagination';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -50,6 +48,7 @@ type SelloutLine = {
 };
 
 type ChannelSelloutLine = {
+  id: string;
   date: string;
   distributor_name: string | null;
   customer_name: string | null;
@@ -69,14 +68,50 @@ type ChannelSelloutLine = {
 };
 
 type LinesResponse = { total: number; skip: number; limit: number; items: SelloutLine[] };
-type ChannelLinesResponse = { total: number; page: number; page_size: number; items: ChannelSelloutLine[] };
+type ChannelLinesResponse = {
+  total: number;
+  page: number;
+  page_size: number;
+  items: Omit<ChannelSelloutLine, 'id'>[];
+};
 
 type DistHit = { id: number; distributor_code: string; distributor_name: string };
 type CustHit = { id: number; customer_code: string; customer_name: string };
 type ZeroProduct = { product_id: number; sku: string; name: string };
 
-const CHANNEL_PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+const CHANNEL_PAGE_SIZE_OPTIONS = [25, 50, 100];
 const CHANNEL_DEFAULT_PAGE_SIZE = 50;
+const SELLOUT_GRID_STATE_KEY = 'cip.channel-ops.sell-out.shell.grid.v1';
+
+const CHANNEL_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  {
+    id: 'core',
+    label: 'Core',
+    fields: [
+      'date',
+      'sku',
+      'customer_name',
+      'distributor_name',
+      'product_spec_cpu',
+      'product_spec_gpu',
+      'product_spec_ram',
+      'product_spec_storage',
+      'product_spec_generation',
+      'product_spec_chassis',
+      'units',
+      'revenue',
+      'prior_period_units',
+    ],
+  },
+];
+
+const LEGACY_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  {
+    id: 'core',
+    label: 'Core',
+    fields: ['period_start', 'product_sku', 'distributor_code', 'units', 'revenue'],
+  },
+];
 
 export function SellOutTab({
   depth,
@@ -92,10 +127,9 @@ export function SellOutTab({
   const [customerPick, setCustomerPick] = useState<CustHit | null>(null);
   const [search, setSearch] = useState('');
   const [specSearch, setSpecSearch] = useState('');
-  const [channelPage, setChannelPage] = useState(0);
+  const [channelPage, setChannelPage] = useState(1);
   const [channelPageSize, setChannelPageSize] = useState(CHANNEL_DEFAULT_PAGE_SIZE);
   const useChannelApi = depthAtLeast(depth, 'operational');
-  const { rowHeight, headerHeight } = gridRowMetrics('comfortable');
 
   const summaryQ = useQuery({
     queryKey: ['sellout-commercial-summary'],
@@ -128,7 +162,7 @@ export function SellOutTab({
   }, [smartPreset]);
 
   useEffect(() => {
-    setChannelPage(0);
+    setChannelPage(1);
   }, [
     smartPreset,
     distributorPick?.id,
@@ -172,7 +206,7 @@ export function SellOutTab({
     queryFn: async ({ signal }) => {
       if (useChannelApi) {
         const params = new URLSearchParams({
-          page: String(channelPage + 1),
+          page: String(channelPage),
           page_size: String(channelPageSize),
         });
         if (distributorPick != null) params.set('distributor_id', String(distributorPick.id));
@@ -181,7 +215,10 @@ export function SellOutTab({
         if (businessUnit) params.set('business_unit', businessUnit);
         if (specSearch.trim()) params.set('spec_search', specSearch.trim());
         const res = await apiGet<ChannelLinesResponse>(`/api/v1/channel-ops/sell-out?${params}`, { signal });
-        let items = res.items;
+        let items = res.items.map((r, i) => ({
+          ...r,
+          id: `${r.date}|${r.sku}|${r.customer_name}|${i}`,
+        }));
         if (smartPreset === 'slowest_movers') {
           items = [...items].sort((a, b) => a.units - b.units);
         } else if (smartPreset === 'fastest_movers') {
@@ -307,12 +344,10 @@ export function SellOutTab({
     () => ({
       pagination: false,
       suppressPaginationPanel: true,
-      getRowId: (p) => `${p.data.date}|${p.data.sku}|${p.data.customer_name}|${p.rowIndex}`,
-      rowHeight,
-      headerHeight,
+      getRowId: (p) => String(p.data.id),
       defaultColDef: { resizable: true, sortable: true },
     }),
-    [rowHeight, headerHeight],
+    [],
   );
 
   const legacyGridOptions = useMemo<GridOptions<SelloutLine>>(
@@ -320,11 +355,9 @@ export function SellOutTab({
       pagination: false,
       suppressPaginationPanel: true,
       getRowId: (p) => String(p.data.id),
-      rowHeight,
-      headerHeight,
       defaultColDef: { resizable: true, sortable: true },
     }),
-    [rowHeight, headerHeight],
+    [],
   );
 
   const summary = summaryQ.data;
@@ -473,60 +506,77 @@ export function SellOutTab({
             </TableBody>
           </Table>
         </ModuleDataSection>
+      ) : lines?.channel ? (
+        <MasterDataGridShell
+          entityKey="channel-ops-sell-out"
+          rows={channelItems}
+          columnDefs={channelCols}
+          total={lines.total}
+          isLoading={linesQ.isLoading}
+          isError={linesQ.isError}
+          error={(linesQ.error as Error) ?? null}
+          onRetry={() => void linesQ.refetch()}
+          empty={{
+            title: 'No sell-out rows',
+            description: 'No sell-out rows match the current filters.',
+          }}
+          url={{
+            page: channelPage,
+            pageSize: channelPageSize,
+            q: '',
+            sortBy: 'date',
+            sortDir: 'desc',
+          }}
+          onUrlChange={(patch, resetPage) => {
+            if (patch.page_size != null) {
+              setChannelPageSize(Number(patch.page_size) || CHANNEL_DEFAULT_PAGE_SIZE);
+              setChannelPage(1);
+              return;
+            }
+            if (resetPage) setChannelPage(1);
+            if (patch.page != null) setChannelPage(Math.max(1, Number(patch.page) || 1));
+          }}
+          defaultPageSize={CHANNEL_DEFAULT_PAGE_SIZE}
+          defaultSortBy="date"
+          defaultSortDir="desc"
+          pageSizeOptions={[...CHANNEL_PAGE_SIZE_OPTIONS]}
+          enableEmptyUrlSeed={false}
+          gridStateStorageKey={SELLOUT_GRID_STATE_KEY}
+          columnPickerTitle="Sell-out columns"
+          columnPickerGroups={CHANNEL_COLUMN_GROUPS}
+          gridOptions={channelGridOptions}
+          bulkSelectionEnabled={false}
+          onRefresh={() => void linesQ.refetch()}
+          refreshBusy={linesQ.isFetching}
+        />
       ) : (
-        <>
-          <ModuleGridToolbar onRefresh={() => void linesQ.refetch()} busy={linesQ.isFetching} />
-          <ModuleDataSection
-            isLoading={linesQ.isLoading}
-            isError={linesQ.isError}
-            error={(linesQ.error as Error) ?? null}
-            onRetry={() => void linesQ.refetch()}
-            isEmpty={(lines?.items ?? []).length === 0}
-            empty={{
-              title: 'No sell-out rows',
-              description: 'No sell-out rows match the current filters.',
-            }}
-          >
-            {lines?.channel ? (
-              <>
-                <EnterpriseDataGrid
-                  rowData={channelItems}
-                  columnDefs={channelCols}
-                  height={paginatedGridHeight(
-                    Math.min(channelPageSize, Math.max(channelItems.length, 1)),
-                    { rowHeight, headerHeight },
-                  )}
-                  gridOptions={channelGridOptions}
-                />
-                <TablePagination
-                  component="div"
-                  count={lines.total}
-                  page={channelPage}
-                  onPageChange={(_e, nextPage) => setChannelPage(nextPage)}
-                  rowsPerPage={channelPageSize}
-                  onRowsPerPageChange={(e) => {
-                    setChannelPageSize(Number(e.target.value));
-                    setChannelPage(0);
-                  }}
-                  rowsPerPageOptions={[...CHANNEL_PAGE_SIZE_OPTIONS]}
-                  labelDisplayedRows={({ from, to, count }) =>
-                    `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
-                  }
-                />
-              </>
-            ) : (
-              <EnterpriseDataGrid
-                rowData={legacyItems}
-                columnDefs={legacyCols}
-                height={paginatedGridHeight(Math.max(legacyItems.length, 1), {
-                  rowHeight,
-                  headerHeight,
-                })}
-                gridOptions={legacyGridOptions}
-              />
-            )}
-          </ModuleDataSection>
-        </>
+        <MasterDataGridShell
+          entityKey="channel-ops-sell-out-legacy"
+          rows={legacyItems}
+          columnDefs={legacyCols}
+          total={lines?.total ?? legacyItems.length}
+          isLoading={linesQ.isLoading}
+          isError={linesQ.isError}
+          error={(linesQ.error as Error) ?? null}
+          onRetry={() => void linesQ.refetch()}
+          empty={{
+            title: 'No sell-out rows',
+            description: 'No sell-out rows match the current filters.',
+          }}
+          url={{ page: 1, pageSize: 50, q: search, sortBy: 'period_start', sortDir: 'desc' }}
+          onUrlChange={() => undefined}
+          defaultPageSize={50}
+          defaultSortBy="period_start"
+          defaultSortDir="desc"
+          enableEmptyUrlSeed={false}
+          gridStateStorageKey={`${SELLOUT_GRID_STATE_KEY}.legacy`}
+          columnPickerTitle="Sell-out columns (raw)"
+          columnPickerGroups={LEGACY_COLUMN_GROUPS}
+          gridOptions={legacyGridOptions}
+          bulkSelectionEnabled={false}
+          onRefresh={() => void linesQ.refetch()}
+          refreshBusy={linesQ.isFetching}
+        />
       )}
     </>
   );

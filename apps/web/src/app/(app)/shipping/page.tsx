@@ -13,18 +13,17 @@ import {
   Paper,
   Select,
   Stack,
-  TablePagination,
   TextField,
   Typography,
 } from '@mui/material';
 import type { ColDef, GridOptions, ValueFormatterParams } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { ModuleDataSection } from '@/components/ModuleDataSection';
-import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
+import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
 import { PageHeader } from '@/components/PageHeader';
 import { apiGet } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -40,8 +39,32 @@ import { gridRowMetrics } from '@/features/plan-vs-executed/gridPagination';
 import type { SmartPresetId } from './shippingSmartPresets';
 
 const LS_GRID = 'cip.commercial.inbound-shipments.grid.optional.v1';
+const LS_SHELL_GRID = 'cip.commercial.inbound-shipments.shell.grid.v1';
 const DEFAULT_LIMIT = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500] as const;
+
+const SHIPPING_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  {
+    id: 'core',
+    label: 'Core',
+    fields: [
+      'id',
+      'line_state',
+      'status',
+      'plan_quarter_label',
+      'landing_quarter',
+      'slipped',
+      'awaiting_pod_days',
+      'eta_date',
+      'promise_date',
+      'pod_date',
+      'customer_po',
+      'quantity',
+      'amount',
+      'currency_code',
+    ],
+  },
+];
 
 const DATE_FIELD_OPTIONS: { value: string; label: string }[] = [
   { value: 'eta_date', label: 'ETA date' },
@@ -562,8 +585,23 @@ export default function InboundShipmentsPage() {
   );
 
   const total = lines?.total ?? 0;
-  const page = limit > 0 ? Math.floor(skip / limit) : 0;
-  const pageCount = Math.max(0, Math.ceil(total / limit) - 1);
+  const shellPage = limit > 0 ? Math.floor(skip / limit) + 1 : 1;
+
+  const onShellUrlChange = useCallback(
+    (patch: Record<string, string | null>, resetPage?: boolean) => {
+      const next: Record<string, string | null> = {};
+      if (patch.page_size != null) {
+        next.limit = patch.page_size;
+        next.skip = null;
+      } else if (patch.page != null) {
+        const p = Math.max(1, Number(patch.page) || 1);
+        next.skip = p <= 1 ? null : String((p - 1) * limit);
+      }
+      if (resetPage) next.skip = null;
+      setParamState(next);
+    },
+    [limit, setParamState],
+  );
 
   return (
     <>
@@ -937,66 +975,69 @@ export default function InboundShipmentsPage() {
             sx={{ minWidth: 140 }}
           />
         </Stack>
+      </Paper>
 
-        <ModuleDataSection
-          intro="Sort and filter in the grid. Pagination applies to the server query — change filters to narrow the full result set."
-          introWhen="always"
+      <Box ref={gridSectionRef}>
+        <MasterDataGridShell
+          entityKey="shipping"
+          rows={lines?.items ?? []}
+          columnDefs={colDefs as ColDef[]}
+          total={total}
           isLoading={linesLoading}
           isError={linesIsError}
           error={toQueryError(linesError)}
           onRetry={() => void refetch()}
-          isEmpty={!linesLoading && (lines?.items?.length ?? 0) === 0}
+          intro="Sort and filter in the grid. Pagination applies to the server query — change filters to narrow the full result set."
           empty={{
             title: 'No shipment lines match',
             description: 'Adjust filters or run an inbound import apply to populate fact_inbound_shipment.',
             primary: { label: 'Data imports', href: '/admin/imports?template=inbound_shipments' },
             secondary: { label: 'Shipment evidence', href: '/admin/shipment-evidence' },
           }}
-          toolbar={
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 0 }}>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<ViewColumnIcon />}
-                onClick={() => setColDialogOpen(true)}
-                data-testid="shipping-additional-columns"
-              >
-                Additional columns
-              </Button>
-              <ModuleGridToolbar
-                onRefresh={() => void refetch()}
-                importsHref="/admin/imports?template=inbound_shipments"
-                sx={{ mb: 0 }}
-              />
-            </Stack>
+          url={{
+            page: shellPage,
+            pageSize: limit,
+            q: search,
+            sortBy: 'id',
+            sortDir: 'asc',
+          }}
+          onUrlChange={onShellUrlChange}
+          defaultPageSize={DEFAULT_LIMIT}
+          defaultSortBy="id"
+          defaultSortDir="asc"
+          pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+          enableEmptyUrlSeed={false}
+          gridStateStorageKey={LS_SHELL_GRID}
+          columnPickerTitle="Inbound shipment columns"
+          columnPickerGroups={SHIPPING_COLUMN_GROUPS}
+          gridHeight={520}
+          gridOptions={gridOptions as GridOptions}
+          bulkSelectionEnabled={false}
+          onRefresh={() => void refetch()}
+          refreshBusy={linesLoading}
+          toolbarStart={
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<ViewColumnIcon />}
+              onClick={() => setColDialogOpen(true)}
+              data-testid="shipping-additional-columns"
+            >
+              Additional columns
+            </Button>
           }
-        >
-          <EnterpriseDataGrid
-            rowData={lines?.items ?? []}
-            columnDefs={colDefs as ColDef[]}
-            gridOptions={gridOptions as GridOptions}
-            height={520}
-          />
-          <TablePagination
-            component="div"
-            count={total}
-            page={total === 0 ? 0 : Math.min(page, pageCount)}
-            onPageChange={(_, nextPage) => {
-              setParamState({ skip: String(nextPage * limit) });
-            }}
-            rowsPerPage={limit}
-            onRowsPerPageChange={(e) => {
-              const next = Number(e.target.value);
-              setParamState({ skip: null, limit: String(next) });
-            }}
-            rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
-            labelDisplayedRows={({ from, to, count }) =>
-              `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`
-            }
-            sx={{ borderTop: 1, borderColor: 'divider', mt: 1 }}
-          />
-        </ModuleDataSection>
-      </Paper>
+          toolbarEnd={
+            <Button
+              size="small"
+              variant="outlined"
+              href="/admin/imports?template=inbound_shipments"
+              component={Link}
+            >
+              Data imports
+            </Button>
+          }
+        />
+      </Box>
 
       <InboundShipmentsColumnsDialog
         open={colDialogOpen}

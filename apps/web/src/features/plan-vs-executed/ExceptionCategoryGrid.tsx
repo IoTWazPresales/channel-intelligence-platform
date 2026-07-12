@@ -1,23 +1,24 @@
 'use client';
 
-import { Box, Link as MuiLink, TablePagination, Tooltip, Typography } from '@mui/material';
+import { Box, Link as MuiLink, Tooltip, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import type { ColDef, GridOptions, ICellRendererParams, RowClickedEvent } from 'ag-grid-community';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
+import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
 
 import {
   ENTITY_LENS_HEADERS,
   gridRowMetrics,
   PAGINATED_GRID_PAGE_SIZE,
-  paginatedGridHeight,
   VALUE_UNAVAILABLE_TOOLTIP,
   type ExceptionLens,
 } from './gridPagination';
 
 export type ExceptionRow = {
+  id?: string;
   key: string | number;
   label: string;
   entity_primary?: string;
@@ -33,6 +34,8 @@ export type ExceptionRow = {
   business_unit_label?: string | null;
 };
 
+export type ExceptionGridRow = ExceptionRow & { id: string };
+
 export type ExceptionCategory =
   | 'short_ships'
   | 'over_ships'
@@ -46,6 +49,15 @@ export const EXCEPTION_CATEGORY_LABELS: Record<ExceptionCategory, string> = {
   no_po_blind_spots: 'No-PO blind spots',
 };
 
+const GRID_STATE_KEY = 'cip.pve.exceptions.grid.v1';
+
+const EXCEPTION_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  { label: 'Entity', fields: ['entity'] },
+  { label: 'Units', fields: ['units'] },
+  { label: 'Value', fields: ['value_plan', 'value_cost'] },
+  { label: 'Other', fields: ['line_count', 'po_action'] },
+];
+
 function fmtUnits(n: number): string {
   return new Intl.NumberFormat().format(Math.round(n));
 }
@@ -58,6 +70,10 @@ function fmtValue(n: number): string {
 export function formatEntityLine(primary: string, labelFallback?: boolean): string {
   if (!labelFallback) return primary;
   return `${primary} (no description)`;
+}
+
+function toGridRows(rows: ExceptionRow[]): ExceptionGridRow[] {
+  return rows.map((row) => ({ ...row, id: row.id ?? String(row.key) }));
 }
 
 function EntityCell({ primary, labelFallback }: { primary: string; labelFallback?: boolean }) {
@@ -153,17 +169,31 @@ export function ExceptionCategoryGrid({
   const theme = useTheme();
   const density = theme.density === 'compact' ? 'compact' : 'comfortable';
   const { rowHeight, headerHeight } = gridRowMetrics(density);
-  const visibleRows = Math.max(1, Math.min(rows.length || 1, pageSize));
-  const gridHeight = paginatedGridHeight(visibleRows, { rowHeight, headerHeight });
+  const gridHeight = headerHeight + rowHeight * pageSize;
+  const shellPage = page + 1;
+  const gridRows = useMemo(() => toGridRows(rows), [rows]);
 
   const showPoLink = category === 'short_ships' || category === 'no_po_blind_spots';
   const showLines = category === 'no_po_blind_spots';
   const entityHeader = ENTITY_LENS_HEADERS[lens];
 
-  const columnDefs = useMemo<ColDef<ExceptionRow>[]>(
+  const columnLabelByField = useMemo(
+    () => ({
+      entity: entityHeader,
+      units: 'Units',
+      value_plan: 'Value (plan)',
+      value_cost: 'Value (cost)',
+      line_count: 'Lines',
+      po_action: 'Action',
+    }),
+    [entityHeader],
+  );
+
+  const columnDefs = useMemo<ColDef<ExceptionGridRow>[]>(
     () => [
       {
         colId: 'entity',
+        field: 'entity',
         headerName: entityHeader,
         flex: 1,
         minWidth: 200,
@@ -175,7 +205,7 @@ export function ExceptionCategoryGrid({
         },
         valueGetter: (p) =>
           formatEntityLine(p.data?.entity_primary ?? p.data?.label ?? '', p.data?.label_fallback),
-        cellRenderer: (p: ICellRendererParams<ExceptionRow>) => (
+        cellRenderer: (p: ICellRendererParams<ExceptionGridRow>) => (
           <EntityCell
             primary={p.data?.entity_primary ?? p.data?.label ?? ''}
             labelFallback={p.data?.label_fallback}
@@ -207,7 +237,7 @@ export function ExceptionCategoryGrid({
           if (vb == null) return 1;
           return va - vb;
         },
-        cellRenderer: (p: ICellRendererParams<ExceptionRow>) => (
+        cellRenderer: (p: ICellRendererParams<ExceptionGridRow>) => (
           <ValueCell value={p.data?.value_plan} fxPartial={fxPartial} />
         ),
       },
@@ -226,7 +256,7 @@ export function ExceptionCategoryGrid({
           if (vb == null) return 1;
           return va - vb;
         },
-        cellRenderer: (p: ICellRendererParams<ExceptionRow>) => (
+        cellRenderer: (p: ICellRendererParams<ExceptionGridRow>) => (
           <ValueCell value={p.data?.value_cost} fxPartial={fxPartial} />
         ),
       },
@@ -240,10 +270,11 @@ export function ExceptionCategoryGrid({
       },
       {
         colId: 'po_action',
+        field: 'po_action',
         headerName: 'Action',
         width: 120,
         hide: !showPoLink,
-        cellRenderer: (p: ICellRendererParams<ExceptionRow>) => {
+        cellRenderer: (p: ICellRendererParams<ExceptionGridRow>) => {
           const row = p.data;
           if (!row || !periodForLink) return null;
           const bu = row.business_unit_label || defaultBusinessUnit || '';
@@ -263,19 +294,36 @@ export function ExceptionCategoryGrid({
     [entityHeader, showPoLink, showLines, periodForLink, defaultBusinessUnit, fxPartial],
   );
 
-  const gridOptions = useMemo<GridOptions<ExceptionRow>>(
+  const gridOptions = useMemo<GridOptions<ExceptionGridRow>>(
     () => ({
       pagination: false,
       suppressPaginationPanel: true,
       rowHeight,
       headerHeight,
       defaultColDef: { resizable: true },
-      onRowClicked: (e: RowClickedEvent<ExceptionRow>) => {
+      onRowClicked: (e: RowClickedEvent<ExceptionGridRow>) => {
         if (e.data && onRowClick) onRowClick(e.data);
       },
       rowStyle: onRowClick ? { cursor: 'pointer' } : undefined,
     }),
     [onRowClick, rowHeight, headerHeight],
+  );
+
+  const onShellUrlChange = useCallback(
+    (patch: Record<string, string | null>, resetPage?: boolean) => {
+      if (patch.page_size != null) {
+        onPageSizeChange(Number(patch.page_size) || pageSize);
+        return;
+      }
+      if (resetPage) {
+        onPageChange(0);
+        return;
+      }
+      if (patch.page != null) {
+        onPageChange(Math.max(0, Number(patch.page) - 1));
+      }
+    },
+    [onPageChange, onPageSizeChange, pageSize],
   );
 
   if (!total) {
@@ -290,23 +338,35 @@ export function ExceptionCategoryGrid({
 
   return (
     <Box data-testid="exception-category-grid" sx={{ width: '100%', overflow: 'visible' }}>
-      <EnterpriseDataGrid
-        rowData={rows}
+      <MasterDataGridShell
+        entityKey="pve-exceptions"
+        rows={gridRows}
         columnDefs={columnDefs}
-        height={gridHeight}
+        total={total}
+        empty={{
+          title: 'No exception rows on this page',
+          description: `None in range for ${EXCEPTION_CATEGORY_LABELS[category].toLowerCase()}.`,
+        }}
+        url={{
+          page: shellPage,
+          pageSize,
+          q: '',
+          sortBy: rankBy === 'value' ? 'value_plan' : 'units',
+          sortDir: 'desc',
+        }}
+        onUrlChange={onShellUrlChange}
+        defaultPageSize={PAGINATED_GRID_PAGE_SIZE}
+        defaultSortBy="units"
+        defaultSortDir="desc"
+        pageSizeOptions={[...(pageSizeOptions ?? [PAGINATED_GRID_PAGE_SIZE, 30, 50])]}
+        enableEmptyUrlSeed={false}
+        gridStateStorageKey={GRID_STATE_KEY}
+        columnPickerTitle="Exception list columns"
+        columnPickerGroups={EXCEPTION_COLUMN_GROUPS}
+        columnLabelByField={columnLabelByField}
+        gridHeight={gridHeight}
         gridOptions={gridOptions}
-      />
-      <TablePagination
-        component="div"
-        count={total}
-        page={page}
-        onPageChange={(_, nextPage) => onPageChange(nextPage)}
-        rowsPerPage={pageSize}
-        onRowsPerPageChange={(e) => onPageSizeChange(Number(e.target.value))}
-        rowsPerPageOptions={[...(pageSizeOptions ?? [PAGINATED_GRID_PAGE_SIZE, 30, 50])]}
-        labelDisplayedRows={({ from, to, count }) =>
-          count === 0 ? '0 of 0' : `${from}–${to} of ${count}`
-        }
+        bulkSelectionEnabled={false}
       />
     </Box>
   );

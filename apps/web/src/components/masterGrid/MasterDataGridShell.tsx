@@ -43,8 +43,8 @@ export type MasterGridUrlState = {
   sortDir: 'asc' | 'desc';
 };
 
-export type MasterDataGridShellProps<TRow extends { id: number }> = {
-  /** Stable id for testids / remount keys, e.g. "customers" | "products" | "distributors" */
+export type MasterDataGridShellProps<TRow extends { id: number | string }> = {
+  /** Stable id for testids / remount keys, e.g. "customers" | "products" | "distributors" | "shipping" */
   entityKey: string;
 
   rows: TRow[];
@@ -84,10 +84,11 @@ export type MasterDataGridShellProps<TRow extends { id: number }> = {
   onCellValueChanged?: (e: CellValueChangedEvent<TRow>) => void | Promise<void>;
   onGridApiChange?: (api: GridApi<TRow> | null) => void;
 
+  /** Masters default on; ops list surfaces typically pass false (no promote/delete bulk). */
   bulkSelectionEnabled?: boolean;
-  bulkSelectionMode: BulkTableSelectionMode;
-  onBulkSelectionModeChange: (mode: BulkTableSelectionMode) => void;
-  onPreviewBulkDelete: () => void;
+  bulkSelectionMode?: BulkTableSelectionMode;
+  onBulkSelectionModeChange?: (mode: BulkTableSelectionMode) => void;
+  onPreviewBulkDelete?: () => void;
   previewBulkDeleteDisabled?: boolean;
   bulkBusy?: boolean;
   bulkSelectingActions?: ReactNode;
@@ -108,7 +109,7 @@ export type MasterDataGridShellProps<TRow extends { id: number }> = {
   };
 };
 
-export function MasterDataGridShell<TRow extends { id: number }>({
+export function MasterDataGridShell<TRow extends { id: number | string }>({
   entityKey,
   rows,
   columnDefs,
@@ -137,7 +138,7 @@ export function MasterDataGridShell<TRow extends { id: number }>({
   onCellValueChanged,
   onGridApiChange,
   bulkSelectionEnabled = true,
-  bulkSelectionMode,
+  bulkSelectionMode = 'normal',
   onBulkSelectionModeChange,
   onPreviewBulkDelete,
   previewBulkDeleteDisabled,
@@ -288,6 +289,17 @@ export function MasterDataGridShell<TRow extends { id: number }>({
     }
   }, [bulkSelectionMode, gridApi, onBulkSelectedCountChange]);
 
+  const handleBulkModeChange = useCallback(
+    (mode: BulkTableSelectionMode) => {
+      onBulkSelectionModeChange?.(mode);
+    },
+    [onBulkSelectionModeChange],
+  );
+
+  const handlePreviewBulkDelete = useCallback(() => {
+    onPreviewBulkDelete?.();
+  }, [onPreviewBulkDelete]);
+
   useEffect(() => {
     setVisibleRowCount(rows.length);
   }, [rows]);
@@ -405,8 +417,8 @@ export function MasterDataGridShell<TRow extends { id: number }>({
             mode={bulkSelectionMode}
             selectedCount={bulkSelectedCount}
             visibleRowCount={visibleRowCount}
-            onEnterSelectionMode={() => onBulkSelectionModeChange('selecting')}
-            onExitSelectionMode={() => onBulkSelectionModeChange('normal')}
+            onEnterSelectionMode={() => handleBulkModeChange('selecting')}
+            onExitSelectionMode={() => handleBulkModeChange('normal')}
             onSelectAllVisible={() => {
               if (!gridApi) return;
               gridApi.forEachNodeAfterFilterAndSort((node) => {
@@ -414,7 +426,7 @@ export function MasterDataGridShell<TRow extends { id: number }>({
               });
             }}
             onDeselectAll={() => gridApi?.deselectAll()}
-            onPreviewDangerAction={onPreviewBulkDelete}
+            onPreviewDangerAction={handlePreviewBulkDelete}
             previewDangerDisabled={previewBulkDeleteDisabled}
             busy={bulkBusy}
           />

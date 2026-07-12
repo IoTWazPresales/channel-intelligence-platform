@@ -81,9 +81,13 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
           applyColumnState: () => undefined,
           getColumns: () => [],
           setColumnsVisible: () => undefined,
+          getDisplayedRowCount: () => rowData.length,
+          deselectAll: () => undefined,
+          forEachNodeAfterFilterAndSort: () => undefined,
+          getSelectedRows: () => [],
         },
       });
-    }, [gridOptions]);
+    }, [gridOptions, rowData.length]);
     return (
       <div data-testid="cst-grid">
         {rowData.map((row) => (
