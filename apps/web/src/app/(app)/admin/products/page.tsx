@@ -222,6 +222,10 @@ function AdminProductsPageContent() {
   const isActiveFilter = parseBool(searchParams.get('is_active'));
   const categoryFilter = searchParams.get('category') ?? '';
   const lifecycleFilter = searchParams.get('lifecycle_status') ?? '';
+  const businessUnitFilter = searchParams.get('business_unit') ?? '';
+  const productLineFilter = searchParams.get('product_line') ?? '';
+  const seriesNameFilter = searchParams.get('series_name') ?? '';
+  const specSearchFilter = searchParams.get('spec_search') ?? '';
   const launchDateFrom = searchParams.get('launch_date_from') ?? '';
   const launchDateTo = searchParams.get('launch_date_to') ?? '';
   const retiredDateFrom = searchParams.get('retired_date_from') ?? '';
@@ -245,6 +249,22 @@ function AdminProductsPageContent() {
   const [searchInput, setSearchInput] = useDebouncedUrlQuery(
     q,
     useCallback((next) => setParamState({ q: next }, true), [setParamState]),
+  );
+  const [specSearchInput, setSpecSearchInput] = useDebouncedUrlQuery(
+    specSearchFilter,
+    useCallback((next) => setParamState({ spec_search: next }, true), [setParamState]),
+  );
+  const [buInput, setBuInput] = useDebouncedUrlQuery(
+    businessUnitFilter,
+    useCallback((next) => setParamState({ business_unit: next }, true), [setParamState]),
+  );
+  const [productLineInput, setProductLineInput] = useDebouncedUrlQuery(
+    productLineFilter,
+    useCallback((next) => setParamState({ product_line: next }, true), [setParamState]),
+  );
+  const [seriesNameInput, setSeriesNameInput] = useDebouncedUrlQuery(
+    seriesNameFilter,
+    useCallback((next) => setParamState({ series_name: next }, true), [setParamState]),
   );
 
   useEffect(() => {
@@ -281,6 +301,10 @@ function AdminProductsPageContent() {
       isActiveFilter,
       categoryFilter,
       lifecycleFilter,
+      businessUnitFilter,
+      productLineFilter,
+      seriesNameFilter,
+      specSearchFilter,
       launchDateFrom,
       launchDateTo,
       retiredDateFrom,
@@ -298,6 +322,10 @@ function AdminProductsPageContent() {
       if (isActiveFilter != null) sp.set('is_active', String(isActiveFilter));
       if (categoryFilter) sp.set('category', categoryFilter);
       if (lifecycleFilter) sp.set('lifecycle_status', lifecycleFilter);
+      if (businessUnitFilter.trim()) sp.set('business_unit', businessUnitFilter.trim());
+      if (productLineFilter.trim()) sp.set('product_line', productLineFilter.trim());
+      if (seriesNameFilter.trim()) sp.set('series_name', seriesNameFilter.trim());
+      if (specSearchFilter.trim()) sp.set('spec_search', specSearchFilter.trim());
       if (launchDateFrom) sp.set('launch_date_from', launchDateFrom);
       if (launchDateTo) sp.set('launch_date_to', launchDateTo);
       if (retiredDateFrom) sp.set('retired_date_from', retiredDateFrom);
@@ -852,6 +880,38 @@ function AdminProductsPageContent() {
               </FormControl>
               <TextField
                 size="small"
+                label="Business unit"
+                value={buInput}
+                onChange={(e) => setBuInput(e.target.value)}
+                placeholder="Exact BU"
+                data-testid="products-business-unit"
+              />
+              <TextField
+                size="small"
+                label="Product line"
+                value={productLineInput}
+                onChange={(e) => setProductLineInput(e.target.value)}
+                placeholder="Contains"
+                data-testid="products-product-line"
+              />
+              <TextField
+                size="small"
+                label="Series"
+                value={seriesNameInput}
+                onChange={(e) => setSeriesNameInput(e.target.value)}
+                placeholder="Contains"
+                data-testid="products-series-name"
+              />
+              <TextField
+                size="small"
+                label="Spec search"
+                value={specSearchInput}
+                onChange={(e) => setSpecSearchInput(e.target.value)}
+                placeholder="CPU / RAM / … in specs"
+                data-testid="products-spec-search"
+              />
+              <TextField
+                size="small"
                 label="Launch from"
                 type="date"
                 value={launchDateFrom}
@@ -866,6 +926,22 @@ function AdminProductsPageContent() {
                 onChange={(e) => setParamState({ launch_date_to: e.target.value }, true)}
                 InputLabelProps={{ shrink: true }}
               />
+              <TextField
+                size="small"
+                label="Retired from"
+                type="date"
+                value={retiredDateFrom}
+                onChange={(e) => setParamState({ retired_date_from: e.target.value }, true)}
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                size="small"
+                label="Retired to"
+                type="date"
+                value={retiredDateTo}
+                onChange={(e) => setParamState({ retired_date_to: e.target.value }, true)}
+                InputLabelProps={{ shrink: true }}
+              />
               <FormControl size="small" sx={{ minWidth: 140 }}>
                 <InputLabel>Sort by</InputLabel>
                 <Select
@@ -876,6 +952,9 @@ function AdminProductsPageContent() {
                   <MenuItem value="sku">SKU</MenuItem>
                   <MenuItem value="name">Name</MenuItem>
                   <MenuItem value="category">Category</MenuItem>
+                  <MenuItem value="business_unit">Business unit</MenuItem>
+                  <MenuItem value="product_line">Product line</MenuItem>
+                  <MenuItem value="series_name">Series</MenuItem>
                   <MenuItem value="lifecycle_status">Lifecycle</MenuItem>
                   <MenuItem value="launch_date">Launch date</MenuItem>
                   <MenuItem value="retired_date">Retired date</MenuItem>
@@ -903,6 +982,10 @@ function AdminProductsPageContent() {
                       is_active: '',
                       category: '',
                       lifecycle_status: '',
+                      business_unit: '',
+                      product_line: '',
+                      series_name: '',
+                      spec_search: '',
                       launch_date_from: '',
                       launch_date_to: '',
                       retired_date_from: '',

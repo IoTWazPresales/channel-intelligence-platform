@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-12 — **Ops grid Wave 2 (uncommitted→commit):** Products BU/line/series/`spec_search` + retired dates; CPOR `q`/`customer_id` + MasterColumnPickerDialog. Tests: products+cpor API 7/7, cpor vitest 6/6. Next: Fable VERIFY. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-12 — **Ops grid Wave 1 Fable VERIFY PASS** (`70aab64` pushed): Channel Ops cohort filters, inventory paging, sell-out `spec_search`, PVE Apply; D1–D5 closed. Next: Wave 2 only on explicit proceed. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-12 — **Ops grid Wave 1 finish (Fable CONSULT READY):** D1–D5 applied (BU cohort flag, single `spec_search`, Overview periodGrain, docs). Premature IMPLEMENT acknowledged. Next: commit → VERIFY. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-12 — **Audit-gap fixes:** shipping overdue UTC↔KPI parity; stock-health empty UI; Related names nav/toolbar; customers exclude merged default; WoC sum(vel)+104w cap; OPEN_CHANNEL loser guard; shipping attribution 45s TTL. Pushed @ `b621a99`. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.

@@ -78,6 +78,8 @@ def test_products_list_response_shape_and_pagination_contract():
         assert body["items"][0]["specs_preview"] == {"CPU": "X1", "RAM": "16GB"}
         assert body["items"][0]["specs_flat"]["CPU"] == "X1"
         assert body["items"][0]["specs_flat"]["RAM"] == "16GB"
+        assert body["items"][0]["product_spec_cpu"] == "X1"
+        assert body["items"][0]["product_spec_ram"] == "16GB"
         assert set(body["specs_field_keys"]) == {"CPU", "RAM"}
         assert body["items"][1]["specs_preview"] == {}
         assert body["items"][1]["specs_flat"] == {}
@@ -109,5 +111,35 @@ def test_products_list_unknown_sort_falls_back_to_sku():
         assert body["sort_dir"] == "desc"
         assert body["items"] == []
         assert body["specs_field_keys"] == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_products_list_accepts_wave2_commercial_filters():
+    sess = MagicMock()
+    count_res = MagicMock()
+    count_res.scalar_one.return_value = 0
+    rows_res = MagicMock()
+    rows_res.all.return_value = []
+    sess.execute = AsyncMock(side_effect=[count_res, rows_res])
+
+    async def fake_db():
+        yield sess
+
+    app.dependency_overrides[get_db] = fake_db
+    try:
+        with TestClient(app) as client:
+            r = client.get(
+                "/api/v1/products",
+                params={
+                    "business_unit": "NB",
+                    "product_line": "Vivo",
+                    "series_name": "Book",
+                    "spec_search": "16GB",
+                },
+            )
+        assert r.status_code == 200
+        assert r.json()["items"] == []
+        assert sess.execute.await_count == 2
     finally:
         app.dependency_overrides.clear()

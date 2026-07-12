@@ -117,4 +117,20 @@ describe('CPOR cases list page pagination (BACKLOG-074 U4d)', () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId('cpor-refresh')).toBeInTheDocument());
   });
+
+  it('passes q and customer_id to the cases list API', async () => {
+    searchString = 'q=ACME&customer_id=42';
+    renderPage();
+    await waitFor(() => {
+      const casesCall = mockState.apiGetMock.mock.calls.find((c) => String(c[0]).includes('/cpor/cases'));
+      expect(casesCall?.[0]).toContain('q=ACME');
+      expect(casesCall?.[0]).toContain('customer_id=42');
+    });
+  });
+
+  it('renders search and Columns controls', async () => {
+    renderPage();
+    expect(await screen.findByTestId('cpor-search')).toBeInTheDocument();
+    expect(screen.getByTestId('cpor-columns')).toBeInTheDocument();
+  });
 });

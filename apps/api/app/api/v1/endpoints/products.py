@@ -2,14 +2,14 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import Date, and_, asc, desc, func, or_, select
+from sqlalchemy import Date, String, and_, asc, cast, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.models.dimensions import DimProduct
 from app.models.ingestion import ImportJob
 from app.models.product_catalog import CatalogProduct
-from app.services.commercial_planner.read_model import specs_json_flat_string_map
+from app.services.commercial_planner.read_model import product_specs_from_json, specs_json_flat_string_map
 from app.services.product_dsi_maintenance import (
     CLEAR_DISTRIBUTOR_INVENTORY_FOR_PRODUCT,
     clear_dsi_facts_for_product,
@@ -90,6 +90,13 @@ async def list_products(
     is_active: bool | None = Query(default=None),
     category: str | None = Query(default=None),
     lifecycle_status: str | None = Query(default=None),
+    business_unit: str | None = Query(default=None),
+    product_line: str | None = Query(default=None),
+    series_name: str | None = Query(default=None),
+    spec_search: str | None = Query(
+        default=None,
+        description="Contains-match across specs_json (catalogue specs blob; not per-key)",
+    ),
     launch_date_from: date | None = Query(default=None),
     launch_date_to: date | None = Query(default=None),
     retired_date_from: date | None = Query(default=None),
@@ -106,6 +113,9 @@ async def list_products(
         "retired_date": DimProduct.retired_date,
         "is_active": DimProduct.is_active,
         "updated_at": DimProduct.updated_at,
+        "business_unit": DimProduct.business_unit,
+        "product_line": DimProduct.product_line,
+        "series_name": DimProduct.series_name,
     }
     sort_col = allowed_sort.get(sort_by, DimProduct.sku)
     sort_fn = asc if sort_dir == "asc" else desc
@@ -148,6 +158,20 @@ async def list_products(
         filters.append(DimProduct.category == category.strip())
     if lifecycle_status and lifecycle_status.strip():
         filters.append(DimProduct.lifecycle_status == lifecycle_status.strip())
+    bu = (business_unit or "").strip()
+    if bu:
+        filters.append(func.lower(DimProduct.business_unit) == bu.lower())
+    pl = (product_line or "").strip()
+    if pl:
+        filters.append(DimProduct.product_line.ilike(f"%{pl}%"))
+    sn = (series_name or "").strip()
+    if sn:
+        filters.append(DimProduct.series_name.ilike(f"%{sn}%"))
+    spec_term = (spec_search or "").strip()
+    if spec_term:
+        # Honest blob contains — same contract as channel-ops sell-out Wave 1 D2.
+        # Per-key JSONB path filters remain a follow-up when nested flatten is SQL-expressible.
+        filters.append(cast(DimProduct.specs_json, String).ilike(f"%{spec_term}%"))
     if launch_date_from is not None:
         filters.append(DimProduct.launch_date >= launch_date_from)
     if launch_date_to is not None:
@@ -183,8 +207,10 @@ async def list_products(
             missing_required.append("lifecycle_status")
         # Channel is intentionally NOT a required product attribute — it is a go-to-market
         # dimension of transactions/pricing/customer, not an intrinsic product property.
-        specs_flat = specs_json_flat_string_map(p.specs_json if isinstance(p.specs_json, dict) else None, max_keys=48)
+        safe_specs = p.specs_json if isinstance(p.specs_json, dict) else None
+        specs_flat = specs_json_flat_string_map(safe_specs, max_keys=48)
         specs_field_keys.update(specs_flat.keys())
+        catalogue_specs = product_specs_from_json(safe_specs)
         items.append(
             {
                 "id": p.id,
@@ -209,6 +235,7 @@ async def list_products(
                 "last_import_date": last_import_date.isoformat() if last_import_date else None,
                 "specs_preview": _compact_specs_preview(p.specs_json),
                 "specs_flat": specs_flat,
+                **catalogue_specs,
             }
         )
     return {
