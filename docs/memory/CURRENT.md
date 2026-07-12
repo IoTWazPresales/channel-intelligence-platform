@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-12 (ops MasterDataGridShell parity — implementation ready for review)
+**Last updated:** 2026-07-12 (ops shell + column catalogs + CST key-account bulk)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,44 +10,44 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/ops-master-grid-shell-parity` |
-| **Base** | `4dfc541` (shipping-layout-rhythm tip) |
 | **Alembic (DB)** | **`20260710_0072`** (unchanged) |
-| **Lock** | Ops **list** grids use **`MasterDataGridShell`**. Composed-only ? parity. |
+| **Consultant default** | **Opus** (`docs/WORKFLOW_DUAL_AGENT.md`) — Fable optional |
 
 ---
 
 ## Exclusions (still)
 
-- Channel Ops **Overview** (charts only — no shell)
-- Import **`ImportStewardCandidateWorkspace`** (steward candidate UI)
+- Channel Ops **Overview** (charts only)
+- Import **`ImportStewardCandidateWorkspace`**
 
 ---
 
-## What works (this branch — uncommitted until Warren asks)
+## VERIFY queue (Opus default)
 
-| Surface | Shell |
-|---------|--------|
-| `/shipping` | Yes (`skip`/`limit` adapted) |
-| Channel Ops Sell-out / Inventory / Movements | Yes (not Overview) |
-| CST steward key-accounts / slots / aliases | Yes |
-| PVE `ExceptionCategoryGrid` | Yes (drill grid still EnterpriseDataGrid) |
+Use audit `.tmp/OPS_MASTER_GRID_SHELL_AUDIT.md` (update after this slice). Queue:
 
-Shell tweaks: `id: number \| string`; bulk props optional when `bulkSelectionEnabled={false}`.
+1. **Shell adoption** — shipping, Channel Ops data tabs, CST tabs, PVE exceptions on `MasterDataGridShell`
+2. **Column catalogs** — shipping optionals in shell Columns; Channel Ops / CST / PVE richer groups + default-hidden fields
+3. **CST key-account bulk** — `POST …/key-accounts/batch-patch` + UI (key on/off, strategic tier, reports expected)
 
-**Tests (focused):** shipping + channelOps pagination + CST steward + ExceptionCategoryGrid — green.
+**Follow-on (not this branch slice):** CPOR / PM gaps / PO / shipment evidence; PVE drill shell.
 
-**Audit for Fable/Opus:** `.tmp/OPS_MASTER_GRID_SHELL_AUDIT.md`
+---
+
+## What works (this branch)
+
+| Surface | Shell | Columns depth | Bulk |
+|---------|-------|---------------|------|
+| `/shipping` | Yes | Core + Additional (API optionals) | No |
+| Channel Ops Sell-out / Inventory / Movements | Yes | Split groups + default-hidden | No |
+| CST key-accounts | Yes | + partner_tier / threshold / notes | **Yes** (batch-patch) |
+| CST slots | Yes | Slot fields | No |
+| CST aliases | Yes | Alias/Product | Confirm/Reject batch |
+| PVE exceptions | Yes | Entity/Units/Value | No |
 
 ---
 
 ## Next
 
-1. Commit + push when Warren asks
-2. Fable/Opus review from audit (no re-CONSULT required for proceed — already greenlit)
-3. Follow-on (not this slice): CPOR cases, PM gaps, PO gap grids, shipment evidence
-
----
-
-## Prior queue note
-
-Units 1–5 composed-chrome work remains useful UX but is **not** the master-grid parity bar.
+1. Commit/push if not yet (Cursor) ? Opus VERIFY on queue items 1–3
+2. Browser soak: Columns picker + CST bulk selecting mode

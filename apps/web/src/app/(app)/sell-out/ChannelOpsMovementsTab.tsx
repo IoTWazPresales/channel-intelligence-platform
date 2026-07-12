@@ -30,11 +30,22 @@ const GRID_STATE_KEY = 'cip.channel-ops.movements.shell.grid.v1';
 
 const COLUMN_GROUPS: MasterColumnPickerGroup[] = [
   {
-    id: 'core',
     label: 'Core',
-    fields: ['ship_date', 'product_name', 'sku', 'order_no', 'delivery_no', 'units_shipped', 'line_state'],
+    fields: [
+      'ship_date',
+      'distributor_name',
+      'product_name',
+      'sku',
+      'product_id',
+      'order_no',
+      'delivery_no',
+      'units_shipped',
+      'line_state',
+    ],
   },
 ];
+
+const DEFAULT_HIDDEN_MOVEMENT_FIELDS = ['product_id'] as const;
 
 export function ChannelOpsMovementsTab({
   depth,
@@ -99,8 +110,17 @@ export function ChannelOpsMovementsTab({
   const columnDefs = useMemo<ColDef<MovementRow>[]>(
     () => [
       { field: 'ship_date', headerName: 'Ship date', width: 120 },
+      { field: 'distributor_name', headerName: 'Distributor', width: 140 },
       { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 160 },
       { field: 'sku', headerName: 'SKU', width: 120 },
+      {
+        field: 'product_id',
+        headerName: 'Product ID',
+        width: 100,
+        type: 'numericColumn',
+        hide: true,
+        valueFormatter: (p) => (p.value == null ? '—' : String(p.value)),
+      },
       { field: 'order_no', headerName: 'Order no', width: 120 },
       { field: 'delivery_no', headerName: 'Delivery no', width: 120 },
       {
@@ -187,6 +207,7 @@ export function ChannelOpsMovementsTab({
         pageSizeOptions={PAGE_SIZE_OPTIONS}
         enableEmptyUrlSeed={false}
         gridStateStorageKey={GRID_STATE_KEY}
+        defaultInitiallyHiddenFields={[...DEFAULT_HIDDEN_MOVEMENT_FIELDS]}
         columnPickerTitle="Movements columns"
         columnPickerGroups={COLUMN_GROUPS}
         gridOptions={gridOptions}

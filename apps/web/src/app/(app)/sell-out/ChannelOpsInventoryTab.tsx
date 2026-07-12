@@ -40,11 +40,20 @@ const GRID_STATE_KEY = 'cip.channel-ops.inventory.shell.grid.v1';
 
 const COLUMN_GROUPS: MasterColumnPickerGroup[] = [
   {
-    id: 'core',
     label: 'Core',
-    fields: ['product_name', 'sku', 'reported_soh', 'derived_stock', 'calculated_soh', 'variance_units', 'reconciliation_status', 'velocity_52wk', 'weeks_of_cover', 'reorder_signal'],
+    fields: ['product_name', 'sku', 'reported_soh', 'reconciliation_status'],
+  },
+  {
+    label: 'Stock',
+    fields: ['derived_stock', 'calculated_soh', 'variance_units', 'computed_through_date'],
+  },
+  {
+    label: 'Cover',
+    fields: ['velocity_52wk', 'weeks_of_cover', 'reorder_signal'],
   },
 ];
+
+const DEFAULT_HIDDEN_INVENTORY_FIELDS = ['computed_through_date'] as const;
 
 function fmtNum(n: number | null | undefined): string {
   if (n == null) return '—';
@@ -126,6 +135,13 @@ export function ChannelOpsInventoryTab({
           valueFormatter: (p) => fmtNum(p.value as number | null),
         },
         { field: 'reconciliation_status', headerName: 'Recon status', width: 130 },
+        {
+          field: 'computed_through_date',
+          headerName: 'Computed through',
+          width: 130,
+          hide: true,
+          valueFormatter: (p) => (p.value ? String(p.value) : '—'),
+        },
       );
     }
     if (depthAtLeast(depth, 'strategic')) {
@@ -219,6 +235,7 @@ export function ChannelOpsInventoryTab({
         pageSizeOptions={PAGE_SIZE_OPTIONS}
         enableEmptyUrlSeed={false}
         gridStateStorageKey={GRID_STATE_KEY}
+        defaultInitiallyHiddenFields={[...DEFAULT_HIDDEN_INVENTORY_FIELDS]}
         columnPickerTitle="Inventory columns"
         columnPickerGroups={COLUMN_GROUPS}
         gridOptions={gridOptions}

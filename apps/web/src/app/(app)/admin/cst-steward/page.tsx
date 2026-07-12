@@ -32,6 +32,7 @@ type KeyAccountRow = {
   customer_code: string;
   customer_name: string;
   is_key_account: boolean;
+  partner_tier: string | null;
   reports_expected: boolean;
   expected_cadence: string;
   overdue_threshold_days: number;
@@ -71,6 +72,10 @@ const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
 
 type ListEnvelope<T> = { items: T[]; total: number };
 
+const PARTNER_TIER_OPTIONS = ['', 'strategic', 'tier_1', 'tier_2', 'tier_3', 'core', 'long_tail'] as const;
+
+const KEY_ACCOUNT_DEFAULT_INITIALLY_HIDDEN = ['notes', 'overdue_threshold_days'] as const;
+
 const KEY_ACCOUNT_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
   {
     label: 'Identity',
@@ -78,7 +83,17 @@ const KEY_ACCOUNT_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
   },
   {
     label: 'Feed config',
-    fields: ['is_key_account', 'reports_expected', 'expected_cadence'],
+    fields: [
+      'is_key_account',
+      'partner_tier',
+      'reports_expected',
+      'expected_cadence',
+      'overdue_threshold_days',
+    ],
+  },
+  {
+    label: 'Notes',
+    fields: ['notes'],
   },
 ];
 
@@ -86,8 +101,11 @@ const KEY_ACCOUNT_COLUMN_LABELS: Record<string, string> = {
   customer_code: 'Code',
   customer_name: 'Name',
   is_key_account: 'Key account',
+  partner_tier: 'Partner tier',
   reports_expected: 'Reports expected',
   expected_cadence: 'Cadence',
+  overdue_threshold_days: 'Overdue threshold (days)',
+  notes: 'Notes',
 };
 
 const SLOT_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
@@ -146,11 +164,18 @@ export default function CstStewardPage() {
   const [debouncedQ, setDebouncedQ] = useState(urlQ);
   const [dlg, setDlg] = useState<KeyAccountRow | null>(null);
   const [keyFlag, setKeyFlag] = useState(false);
+  const [partnerTier, setPartnerTier] = useState('');
   const [reportsExpected, setReportsExpected] = useState(false);
   const [cadence, setCadence] = useState('weekly');
   const [threshold, setThreshold] = useState('10');
   const [notes, setNotes] = useState('');
   const [feedRaw, setFeedRaw] = useState('');
+
+  const [accountGridApi, setAccountGridApi] = useState<GridApi<KeyAccountGridRow> | null>(null);
+  const [accountBulkSelectionMode, setAccountBulkSelectionMode] =
+    useState<BulkTableSelectionMode>('normal');
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<number[]>([]);
+  const [accountsBulkMessage, setAccountsBulkMessage] = useState<string | null>(null);
 
   const [aliasGridApi, setAliasGridApi] = useState<GridApi<AliasRow> | null>(null);
   const [aliasBulkSelectionMode, setAliasBulkSelectionMode] = useState<BulkTableSelectionMode>('normal');
@@ -292,6 +317,7 @@ export default function CstStewardPage() {
       if (!dlg) throw new Error('No customer selected');
       return apiPatch<KeyAccountRow>(`/api/v1/cst-steward/key-accounts/${dlg.customer_id}`, {
         is_key_account: keyFlag,
+        partner_tier: partnerTier || null,
         reports_expected: reportsExpected,
         expected_cadence: cadence,
         overdue_threshold_days: Number(threshold),
@@ -361,9 +387,37 @@ export default function CstStewardPage() {
     },
   });
 
+  type KeyAccountBatchResponse = {
+    results: { customer_id: number; ok: boolean; error?: string }[];
+    ok_count: number;
+    error_count: number;
+  };
+
+  const batchPatchKeyAccounts = useMutation({
+    mutationFn: ({
+      customerIds,
+      patch,
+    }: {
+      customerIds: number[];
+      patch: Record<string, unknown>;
+    }) =>
+      apiPost<KeyAccountBatchResponse>('/api/v1/cst-steward/key-accounts/batch-patch', {
+        customer_ids: customerIds,
+        patch,
+      }),
+    onSuccess: async (data) => {
+      setAccountsBulkMessage(`Updated ${data.ok_count} · failed ${data.error_count}`);
+      setSelectedCustomerIds([]);
+      accountGridApi?.deselectAll();
+      await qc.invalidateQueries({ queryKey: ['cst-steward', 'key-accounts'] });
+      await refetchAccounts();
+    },
+  });
+
   const openEdit = (row: KeyAccountRow) => {
     setDlg(row);
     setKeyFlag(Boolean(row.is_key_account));
+    setPartnerTier(row.partner_tier ?? '');
     setReportsExpected(Boolean(row.reports_expected));
     setCadence(row.expected_cadence || 'weekly');
     setThreshold(String(row.overdue_threshold_days ?? 10));
@@ -381,6 +435,7 @@ export default function CstStewardPage() {
         width: 110,
         valueFormatter: (p) => (p.value ? 'Yes' : 'No'),
       },
+      { field: 'partner_tier', headerName: 'Partner tier', width: 120 },
       {
         field: 'reports_expected',
         headerName: 'Reports expected',
@@ -388,6 +443,8 @@ export default function CstStewardPage() {
         valueFormatter: (p) => (p.value ? 'Yes' : 'No'),
       },
       { field: 'expected_cadence', headerName: 'Cadence', width: 110 },
+      { field: 'overdue_threshold_days', headerName: 'Overdue (days)', width: 120 },
+      { field: 'notes', headerName: 'Notes', flex: 1, minWidth: 160 },
       {
         headerName: '',
         colId: 'actions',
@@ -449,9 +506,16 @@ export default function CstStewardPage() {
     [confirmAlias, rejectAlias],
   );
 
+  const onAccountSelectionChanged = useCallback((e: SelectionChangedEvent<KeyAccountGridRow>) => {
+    setSelectedCustomerIds(e.api.getSelectedRows().map((r) => r.customer_id));
+  }, []);
+
   const onAliasSelectionChanged = useCallback((e: SelectionChangedEvent<AliasRow>) => {
     setSelectedAliasIds(e.api.getSelectedRows().map((r) => r.id));
   }, []);
+
+  const accountBulkBusy = batchPatchKeyAccounts.isPending;
+  const accountBulkDisabled = selectedCustomerIds.length === 0 || accountBulkBusy;
 
   const filterActive = Boolean(debouncedQ.trim()) || keyOnly;
   const accountsEmptyDescription = filterActive
@@ -490,35 +554,110 @@ export default function CstStewardPage() {
       </Tabs>
 
       {tab === 0 ? (
-        <MasterDataGridShell<KeyAccountGridRow>
-          entityKey="cst-steward"
-          rows={accountRows}
-          columnDefs={accountCols}
-          total={accountsTotal}
-          isLoading={loadingAccounts}
-          isError={errAccounts}
-          error={(accountsError as Error) ?? null}
-          onRetry={() => void refetchAccounts()}
-          empty={{
-            title: 'No key-account / feed-profile rows',
-            description: accountsEmptyDescription,
-          }}
-          url={gridUrl}
-          onUrlChange={handleGridUrlChange}
-          defaultPageSize={DEFAULT_PAGE_SIZE}
-          defaultSortBy="customer_code"
-          defaultSortDir="asc"
-          pageSizeOptions={PAGE_SIZE_OPTIONS}
-          enableEmptyUrlSeed={false}
-          gridStateStorageKey={GRID_STATE_KEY}
-          columnPickerTitle="CST key-account columns"
-          columnPickerGroups={KEY_ACCOUNT_COLUMN_GROUPS}
-          columnLabelByField={KEY_ACCOUNT_COLUMN_LABELS}
-          gridOptions={{ getRowId: (p) => String(p.data.customer_id) }}
-          bulkSelectionEnabled={false}
-          onRefresh={() => void refetchAccounts()}
-          refreshBusy={fetchingAccounts}
-          filterSlot={
+        <>
+          {accountsBulkMessage ? (
+            <Alert
+              severity="info"
+              sx={{ mb: 1.5 }}
+              onClose={() => setAccountsBulkMessage(null)}
+              data-testid="cst-accounts-bulk-result"
+            >
+              {accountsBulkMessage}
+            </Alert>
+          ) : null}
+          <MasterDataGridShell<KeyAccountGridRow>
+            entityKey="cst-steward"
+            rows={accountRows}
+            columnDefs={accountCols}
+            total={accountsTotal}
+            isLoading={loadingAccounts}
+            isError={errAccounts}
+            error={(accountsError as Error) ?? null}
+            onRetry={() => void refetchAccounts()}
+            empty={{
+              title: 'No key-account / feed-profile rows',
+              description: accountsEmptyDescription,
+            }}
+            url={gridUrl}
+            onUrlChange={handleGridUrlChange}
+            defaultPageSize={DEFAULT_PAGE_SIZE}
+            defaultSortBy="customer_code"
+            defaultSortDir="asc"
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            enableEmptyUrlSeed={false}
+            gridStateStorageKey={GRID_STATE_KEY}
+            defaultInitiallyHiddenFields={KEY_ACCOUNT_DEFAULT_INITIALLY_HIDDEN}
+            columnPickerTitle="CST key-account columns"
+            columnPickerGroups={KEY_ACCOUNT_COLUMN_GROUPS}
+            columnLabelByField={KEY_ACCOUNT_COLUMN_LABELS}
+            gridOptions={{
+              getRowId: (p) => String(p.data.customer_id),
+              onSelectionChanged: onAccountSelectionChanged,
+            }}
+            bulkSelectionEnabled
+            bulkSelectionMode={accountBulkSelectionMode}
+            onBulkSelectionModeChange={setAccountBulkSelectionMode}
+            bulkBusy={accountBulkBusy}
+            onGridApiChange={setAccountGridApi}
+            onRefresh={() => void refetchAccounts()}
+            refreshBusy={fetchingAccounts}
+            toolbarStart={
+              <>
+                <Button
+                  variant="outlined"
+                  disabled={accountBulkDisabled}
+                  onClick={() =>
+                    batchPatchKeyAccounts.mutate({
+                      customerIds: selectedCustomerIds,
+                      patch: { is_key_account: true },
+                    })
+                  }
+                  data-testid="cst-accounts-bulk-key-on"
+                >
+                  Mark key account
+                </Button>
+                <Button
+                  variant="outlined"
+                  disabled={accountBulkDisabled}
+                  onClick={() =>
+                    batchPatchKeyAccounts.mutate({
+                      customerIds: selectedCustomerIds,
+                      patch: { is_key_account: false },
+                    })
+                  }
+                  data-testid="cst-accounts-bulk-key-off"
+                >
+                  Unmark key account
+                </Button>
+                <Button
+                  variant="outlined"
+                  disabled={accountBulkDisabled}
+                  onClick={() =>
+                    batchPatchKeyAccounts.mutate({
+                      customerIds: selectedCustomerIds,
+                      patch: { partner_tier: 'strategic' },
+                    })
+                  }
+                  data-testid="cst-accounts-bulk-strategic"
+                >
+                  Set strategic tier
+                </Button>
+                <Button
+                  variant="outlined"
+                  disabled={accountBulkDisabled}
+                  onClick={() =>
+                    batchPatchKeyAccounts.mutate({
+                      customerIds: selectedCustomerIds,
+                      patch: { reports_expected: true },
+                    })
+                  }
+                  data-testid="cst-accounts-bulk-reports-on"
+                >
+                  Expect reports
+                </Button>
+              </>
+            }
+            filterSlot={
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
               <TextField
                 size="small"
@@ -542,7 +681,8 @@ export default function CstStewardPage() {
               />
             </Stack>
           }
-        />
+          />
+        </>
       ) : null}
 
       {tab === 1 ? (
@@ -680,6 +820,22 @@ export default function CstStewardPage() {
               control={<Switch checked={keyFlag} onChange={(e) => setKeyFlag(e.target.checked)} />}
               label="Key account"
             />
+            <TextField
+              select
+              SelectProps={{ native: true }}
+              size="small"
+              label="Partner tier"
+              value={partnerTier}
+              onChange={(e) => setPartnerTier(e.target.value)}
+              fullWidth
+              data-testid="cst-key-partner-tier"
+            >
+              {PARTNER_TIER_OPTIONS.map((tier) => (
+                <option key={tier || 'none'} value={tier}>
+                  {tier || '(none)'}
+                </option>
+              ))}
+            </TextField>
             <FormControlLabel
               control={<Switch checked={reportsExpected} onChange={(e) => setReportsExpected(e.target.checked)} />}
               label="Reports expected"

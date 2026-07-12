@@ -24,13 +24,13 @@
 
 | Surface | Status (2026-07-12) | Notes |
 |---------|---------------------|--------|
-| Inbound shipping `/shipping` | **Done** (this branch) | `skip`/`limit` adapted to shell page/page_size |
-| Channel Ops Sell-out / Inventory / Movements | **Done** | Not Overview |
-| CST steward list tabs | **Done** | Key accounts / slots / aliases |
-| PVE exception lists | **Done** | Shell on exception grid only; drill stays EnterpriseDataGrid |
+| Inbound shipping `/shipping` | **Done** + columns | Optionals in shell Columns (Additional); skip/limit adapted |
+| Channel Ops Sell-out / Inventory / Movements | **Done** + columns | Split groups + default-hidden; not Overview |
+| CST steward list tabs | **Done** + key-account bulk | batch-patch; aliases already had confirm/reject |
+| PVE exception lists | **Done** + picker field fix | Exception grid only; drill stays EnterpriseDataGrid |
 | Follow-on | Open | CPOR cases, PM gaps, PO gap grids, shipment evidence |
 
-**Review pack:** `.tmp/OPS_MASTER_GRID_SHELL_AUDIT.md`
+**Review pack:** `.tmp/OPS_MASTER_GRID_SHELL_AUDIT.md` · Consultant default **Opus**
 
 ---
 

@@ -52,7 +52,7 @@ export const EXCEPTION_CATEGORY_LABELS: Record<ExceptionCategory, string> = {
 const GRID_STATE_KEY = 'cip.pve.exceptions.grid.v1';
 
 const EXCEPTION_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
-  { label: 'Entity', fields: ['entity'] },
+  { label: 'Entity', fields: ['label'] },
   { label: 'Units', fields: ['units'] },
   { label: 'Value', fields: ['value_plan', 'value_cost'] },
   { label: 'Other', fields: ['line_count', 'po_action'] },
@@ -179,7 +179,7 @@ export function ExceptionCategoryGrid({
 
   const columnLabelByField = useMemo(
     () => ({
-      entity: entityHeader,
+      label: entityHeader,
       units: 'Units',
       value_plan: 'Value (plan)',
       value_cost: 'Value (cost)',
@@ -193,7 +193,7 @@ export function ExceptionCategoryGrid({
     () => [
       {
         colId: 'entity',
-        field: 'entity',
+        field: 'label',
         headerName: entityHeader,
         flex: 1,
         minWidth: 200,

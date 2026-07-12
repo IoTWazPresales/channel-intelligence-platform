@@ -1,6 +1,5 @@
 'use client';
 
-import ViewColumnIcon from '@mui/icons-material/ViewColumn';
 import {
   Alert,
   Autocomplete,
@@ -30,7 +29,7 @@ import { toQueryError } from '@/lib/queryError';
 import { parseSkipLimitParams } from '@/lib/skipLimitSearchParams';
 
 import { buildShippingLinesUrl, type ShippingFilterParams } from './buildShippingLinesUrl';
-import { InboundShipmentsColumnsDialog, type OptionalColumnMeta } from './InboundShipmentsColumnsDialog';
+import type { OptionalColumnMeta } from './InboundShipmentsColumnsDialog';
 import { ShippingCommercialSummary } from './ShippingCommercialSummary';
 import { ShippingLineupQuarterSummary } from './ShippingLineupQuarterSummary';
 import { fmtCellForKey, fmtShortDate } from './shippingGridFormatters';
@@ -45,10 +44,12 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500] as const;
 
 const SHIPPING_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
   {
-    id: 'core',
     label: 'Core',
     fields: [
       'id',
+      'distributor',
+      'channel_partner',
+      'product',
       'line_state',
       'status',
       'plan_quarter_label',
@@ -195,7 +196,6 @@ export default function InboundShipmentsPage() {
   const [smartPreset, setSmartPreset] = useState<SmartPresetId | null>(null);
   const [deliveryLens, setDeliveryLens] = useState<DeliveryLensId | null>(null);
 
-  const [colDialogOpen, setColDialogOpen] = useState(false);
   const [optionalFields, setOptionalFields] = useState<string[]>([]);
   const [persistReady, setPersistReady] = useState(false);
 
@@ -204,7 +204,7 @@ export default function InboundShipmentsPage() {
 
   const resetPagination = useCallback(() => setParamState({ skip: null }), [setParamState]);
 
-  const { data: colMeta, isLoading: colMetaLoading } = useQuery({
+  const { data: colMeta } = useQuery({
     queryKey: ['shipping-inbound-optional-columns'],
     queryFn: ({ signal }) =>
       apiGet<{ items: OptionalColumnMeta[] }>('/api/v1/shipping/inbound-optional-columns', { signal }),
@@ -263,9 +263,40 @@ export default function InboundShipmentsPage() {
   const allowedOptional = colMeta?.items ?? [];
   const allowedSet = useMemo(() => new Set(allowedOptional.map((c) => c.field)), [allowedOptional]);
   const columnLabels = useMemo(() => new Map(allowedOptional.map((c) => [c.field, c.label])), [allowedOptional]);
-  const displayOptionalFields = useMemo(
-    () => optionalFields.filter((f) => optionalSet.has(f) && allowedSet.has(f)),
-    [optionalFields, optionalSet, allowedSet]
+
+  const columnPickerExtraGroups = useMemo<MasterColumnPickerGroup[] | undefined>(() => {
+    if (!allowedOptional.length) return undefined;
+    return [
+      {
+        label: 'Additional',
+        fields: allowedOptional.map((c) => c.field),
+      },
+    ];
+  }, [allowedOptional]);
+
+  const columnLabelByField = useMemo(() => {
+    const out: Record<string, string> = {
+      distributor: 'Distributor',
+      channel_partner: 'Channel partner',
+      product: 'Product (sales model)',
+    };
+    for (const c of allowedOptional) {
+      out[c.field] = c.label;
+    }
+    return out;
+  }, [allowedOptional]);
+
+  const syncOptionalFieldVisibility = useCallback(
+    (field: string | undefined, visible: boolean) => {
+      if (!field || !allowedSet.has(field)) return;
+      setOptionalFields((prev) => {
+        const has = prev.includes(field);
+        if (visible && !has) return [...prev, field];
+        if (!visible && has) return prev.filter((f) => f !== field);
+        return prev;
+      });
+    },
+    [allowedSet],
   );
 
   const clearSmartPreset = useCallback(() => {
@@ -396,7 +427,7 @@ export default function InboundShipmentsPage() {
   const distOptions = filterOptions?.distributors ?? [];
   const custOptions = filterOptions?.customers ?? [];
 
-  const includeRawRow = displayOptionalFields.includes('raw_source_row');
+  const includeRawRow = optionalSet.has('raw_source_row');
 
   // Deep-link: ?purchase_order_id=&po_label= or PvE ?plan_quarter=&customer_id=&plan_business_unit=
   useEffect(() => {
@@ -478,6 +509,7 @@ export default function InboundShipmentsPage() {
     () => [
       { field: 'id', headerName: 'ID', width: 88, pinned: 'left' },
       {
+        field: 'distributor',
         headerName: 'Distributor',
         minWidth: 160,
         tooltipValueGetter: (p) => {
@@ -492,11 +524,13 @@ export default function InboundShipmentsPage() {
         sortable: true,
       },
       {
+        field: 'channel_partner',
         headerName: 'Channel partner',
         minWidth: 160,
         valueGetter: (p) => (p.data?.channel_partner_label ?? '—') as string,
       },
       {
+        field: 'product',
         headerName: 'Product (sales model)',
         minWidth: 180,
         valueGetter: (p) =>
@@ -562,15 +596,16 @@ export default function InboundShipmentsPage() {
 
   const optionalColDefs: ColDef<ShippingLine>[] = useMemo(
     () =>
-      displayOptionalFields.map((f) => ({
-        field: f,
-        headerName: columnLabels.get(f) ?? f,
-        minWidth: f === 'raw_source_row' ? 220 : 130,
-        valueFormatter: (p: ValueFormatterParams<ShippingLine>) => fmtCellForKey(f, p.value),
-        wrapText: f === 'raw_source_row',
-        autoHeight: f === 'raw_source_row',
+      allowedOptional.map((c) => ({
+        field: c.field,
+        headerName: columnLabels.get(c.field) ?? c.label,
+        hide: !optionalSet.has(c.field),
+        minWidth: c.field === 'raw_source_row' ? 220 : 130,
+        valueFormatter: (p: ValueFormatterParams<ShippingLine>) => fmtCellForKey(c.field, p.value),
+        wrapText: c.field === 'raw_source_row',
+        autoHeight: c.field === 'raw_source_row',
       })),
-    [displayOptionalFields, columnLabels]
+    [allowedOptional, columnLabels, optionalSet],
   );
 
   const colDefs = useMemo(() => [...baseColDefs, ...optionalColDefs], [baseColDefs, optionalColDefs]);
@@ -580,8 +615,13 @@ export default function InboundShipmentsPage() {
       getRowId: (p: { data: ShippingLine }) => String(p.data.id),
       defaultColDef: { sortable: true, filter: true, resizable: true },
       ...gridRowMetrics('comfortable'),
+      onColumnVisible: (e: { column?: { getColDef?: () => { field?: string }; isVisible?: () => boolean } }) => {
+        const field = e.column?.getColDef?.()?.field;
+        const visible = Boolean(e.column?.isVisible?.());
+        syncOptionalFieldVisibility(field, visible);
+      },
     }),
-    []
+    [syncOptionalFieldVisibility],
   );
 
   const total = lines?.total ?? 0;
@@ -1010,22 +1050,13 @@ export default function InboundShipmentsPage() {
           gridStateStorageKey={LS_SHELL_GRID}
           columnPickerTitle="Inbound shipment columns"
           columnPickerGroups={SHIPPING_COLUMN_GROUPS}
+          columnPickerExtraGroups={columnPickerExtraGroups}
+          columnLabelByField={columnLabelByField}
           gridHeight={520}
           gridOptions={gridOptions as GridOptions}
           bulkSelectionEnabled={false}
           onRefresh={() => void refetch()}
           refreshBusy={linesLoading}
-          toolbarStart={
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<ViewColumnIcon />}
-              onClick={() => setColDialogOpen(true)}
-              data-testid="shipping-additional-columns"
-            >
-              Additional columns
-            </Button>
-          }
           toolbarEnd={
             <Button
               size="small"
@@ -1038,15 +1069,6 @@ export default function InboundShipmentsPage() {
           }
         />
       </Box>
-
-      <InboundShipmentsColumnsDialog
-        open={colDialogOpen}
-        onClose={() => setColDialogOpen(false)}
-        optionalFields={optionalFields}
-        onOptionalFieldsChange={setOptionalFields}
-        columnOptions={allowedOptional}
-        columnsLoading={colMetaLoading}
-      />
     </>
   );
 }

@@ -33,6 +33,9 @@ def _actor(x_user_id: str | None) -> str | None:
     return x_user_id
 
 
+_PARTNER_TIERS = frozenset({"strategic", "tier_1", "tier_2", "tier_3", "core", "long_tail"})
+
+
 def _config_json(
     cfg: CustomerReportConfig | None,
     *,
@@ -44,6 +47,7 @@ def _config_json(
         "customer_code": customer.code,
         "customer_name": customer.name,
         "is_key_account": bool(customer.is_key_account),
+        "partner_tier": customer.partner_tier,
         "reports_expected": bool(cfg.reports_expected) if cfg else False,
         "expected_cadence": cfg.expected_cadence if cfg else "weekly",
         "report_structure_type": cfg.report_structure_type if cfg else None,
@@ -90,6 +94,7 @@ def _slot_json(slot: CustomerCstReportSlot, customer: DimCustomer | None) -> dic
 
 class KeyAccountPatch(BaseModel):
     is_key_account: bool | None = None
+    partner_tier: str | None = None
     reports_expected: bool | None = None
     expected_cadence: str | None = Field(default=None, max_length=16)
     overdue_threshold_days: int | None = Field(default=None, ge=0, le=365)
@@ -107,6 +112,25 @@ class KeyAccountPatch(BaseModel):
             raise ValueError(f"expected_cadence must be one of {sorted(allowed)}")
         return v.strip().lower()
 
+    @field_validator("partner_tier")
+    @classmethod
+    def partner_tier_ok(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        raw = v.strip().lower()
+        if raw == "":
+            return None
+        if raw not in _PARTNER_TIERS:
+            raise ValueError(f"partner_tier must be one of {sorted(_PARTNER_TIERS)} or empty")
+        return raw
+
+
+class KeyAccountBatchPatch(BaseModel):
+    """Explicit steward selection — never auto-create customers. Cap 500."""
+
+    customer_ids: list[int] = Field(..., min_length=1, max_length=500)
+    patch: KeyAccountPatch
+
 
 class AliasRejectBody(BaseModel):
     reason: str | None = None
@@ -121,6 +145,83 @@ class AliasBatchBody(BaseModel):
 
 class SlotAdvanceBody(BaseModel):
     as_of: date | None = None
+
+
+def _normalize_key_account_patch_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Resolve feed_profile_raw → feed_profile_json; drop raw key."""
+    out = dict(data)
+    if "feed_profile_raw" in out and out["feed_profile_raw"] is not None:
+        raw = str(out.pop("feed_profile_raw") or "").strip()
+        if raw:
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise HTTPException(status_code=400, detail=f"feed_profile_json invalid: {exc}") from exc
+            if not isinstance(parsed, dict):
+                raise HTTPException(status_code=400, detail="feed_profile_json must be a JSON object")
+            out["feed_profile_json"] = parsed
+        else:
+            out["feed_profile_json"] = None
+    out.pop("feed_profile_raw", None)
+    return out
+
+
+def _apply_key_account_patch(
+    session: Session,
+    *,
+    customer_id: int,
+    data: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Apply steward patch to one customer + optional report config. None if missing."""
+    cust = session.get(DimCustomer, customer_id)
+    if not cust:
+        return None
+    if "is_key_account" in data and data["is_key_account"] is not None:
+        cust.is_key_account = bool(data["is_key_account"])
+        session.add(cust)
+    if "partner_tier" in data:
+        # Explicit null clears tier (empty string already normalized to None).
+        cust.partner_tier = data["partner_tier"]
+        session.add(cust)
+
+    cfg = session.scalar(
+        select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id)
+    )
+    needs_config = any(
+        k in data
+        for k in (
+            "reports_expected",
+            "expected_cadence",
+            "overdue_threshold_days",
+            "notes",
+            "feed_profile_json",
+        )
+    )
+    if cfg is None and needs_config:
+        cfg = CustomerReportConfig(customer_id=customer_id)
+        session.add(cfg)
+        session.flush()
+    if cfg is not None:
+        if "reports_expected" in data and data["reports_expected"] is not None:
+            cfg.reports_expected = bool(data["reports_expected"])
+        if "expected_cadence" in data and data["expected_cadence"] is not None:
+            cfg.expected_cadence = str(data["expected_cadence"])
+        if "overdue_threshold_days" in data and data["overdue_threshold_days"] is not None:
+            cfg.overdue_threshold_days = int(data["overdue_threshold_days"])
+        if "notes" in data:
+            cfg.notes = data["notes"]
+        if "feed_profile_json" in data:
+            cfg.feed_profile_json = (
+                to_jsonable(data["feed_profile_json"]) if data["feed_profile_json"] else None
+            )
+        session.add(cfg)
+
+    session.flush()
+    if cfg is None:
+        cfg = session.scalar(
+            select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id)
+        )
+    return _config_json(cfg, customer=cust)
 
 
 @router.get("/key-accounts")
@@ -180,70 +281,46 @@ def patch_key_account_steward(
     body: KeyAccountPatch,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ):
-    """Toggle is_key_account and upsert customer_report_config (steward-owned)."""
+    """Toggle is_key_account / partner_tier and upsert customer_report_config (steward-owned)."""
     _ = _actor(x_user_id)
-    data = body.model_dump(exclude_unset=True)
-    if "feed_profile_raw" in data and data["feed_profile_raw"] is not None:
-        raw = str(data.pop("feed_profile_raw") or "").strip()
-        if raw:
-            try:
-                parsed = json.loads(raw)
-            except json.JSONDecodeError as exc:
-                raise HTTPException(status_code=400, detail=f"feed_profile_json invalid: {exc}") from exc
-            if not isinstance(parsed, dict):
-                raise HTTPException(status_code=400, detail="feed_profile_json must be a JSON object")
-            data["feed_profile_json"] = parsed
-        else:
-            data["feed_profile_json"] = None
-    data.pop("feed_profile_raw", None)
+    data = _normalize_key_account_patch_data(body.model_dump(exclude_unset=True))
+    if not data:
+        raise HTTPException(status_code=400, detail="No patch fields provided")
 
     with SessionLocal() as session:
-        cust = session.get(DimCustomer, customer_id)
-        if not cust:
+        row = _apply_key_account_patch(session, customer_id=customer_id, data=data)
+        if row is None:
             raise HTTPException(status_code=404, detail="Customer not found")
-        if "is_key_account" in data and data["is_key_account"] is not None:
-            cust.is_key_account = bool(data["is_key_account"])
-            session.add(cust)
-
-        cfg = session.scalar(
-            select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id)
-        )
-        needs_config = any(
-            k in data
-            for k in (
-                "reports_expected",
-                "expected_cadence",
-                "overdue_threshold_days",
-                "notes",
-                "feed_profile_json",
-            )
-        )
-        if cfg is None and needs_config:
-            cfg = CustomerReportConfig(customer_id=customer_id)
-            session.add(cfg)
-            session.flush()
-        if cfg is not None:
-            if "reports_expected" in data and data["reports_expected"] is not None:
-                cfg.reports_expected = bool(data["reports_expected"])
-            if "expected_cadence" in data and data["expected_cadence"] is not None:
-                cfg.expected_cadence = str(data["expected_cadence"])
-            if "overdue_threshold_days" in data and data["overdue_threshold_days"] is not None:
-                cfg.overdue_threshold_days = int(data["overdue_threshold_days"])
-            if "notes" in data:
-                cfg.notes = data["notes"]
-            if "feed_profile_json" in data:
-                cfg.feed_profile_json = to_jsonable(data["feed_profile_json"]) if data["feed_profile_json"] else None
-            session.add(cfg)
-
         session.commit()
-        session.refresh(cust)
-        if cfg is not None:
-            session.refresh(cfg)
-        else:
-            cfg = session.scalar(
-                select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id)
-            )
-        return _config_json(cfg, customer=cust)
+        return row
+
+
+@router.post("/key-accounts/batch-patch")
+def batch_patch_key_accounts(
+    body: KeyAccountBatchPatch,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    """Apply the same steward patch to many customers. Partial success envelope. Cap 500."""
+    _ = _actor(x_user_id)
+    data = _normalize_key_account_patch_data(body.patch.model_dump(exclude_unset=True))
+    if not data:
+        raise HTTPException(status_code=400, detail="No patch fields provided")
+
+    with SessionLocal() as session:
+        results: list[dict[str, Any]] = []
+        for customer_id in body.customer_ids:
+            row = _apply_key_account_patch(session, customer_id=int(customer_id), data=data)
+            if row is None:
+                results.append({"customer_id": customer_id, "ok": False, "error": "not_found"})
+            else:
+                results.append({"customer_id": customer_id, "ok": True, "row": row})
+        session.commit()
+        ok_count = sum(1 for r in results if r["ok"])
+        return {
+            "results": results,
+            "ok_count": ok_count,
+            "error_count": len(results) - ok_count,
+        }
 
 
 @router.get("/report-slots/worklist")

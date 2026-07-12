@@ -83,27 +83,29 @@ const CHANNEL_PAGE_SIZE_OPTIONS = [25, 50, 100];
 const CHANNEL_DEFAULT_PAGE_SIZE = 50;
 const SELLOUT_GRID_STATE_KEY = 'cip.channel-ops.sell-out.shell.grid.v1';
 
-const CHANNEL_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+const CHANNEL_COLUMN_GROUPS_BASE: MasterColumnPickerGroup[] = [
   {
-    id: 'core',
     label: 'Core',
+    fields: ['date', 'sku', 'product_name', 'customer_name', 'distributor_name', 'business_unit', 'units', 'unit_price', 'revenue'],
+  },
+  {
+    label: 'Specs',
     fields: [
-      'date',
-      'sku',
-      'customer_name',
-      'distributor_name',
       'product_spec_cpu',
       'product_spec_gpu',
       'product_spec_ram',
       'product_spec_storage',
       'product_spec_generation',
       'product_spec_chassis',
-      'units',
-      'revenue',
-      'prior_period_units',
     ],
   },
+  {
+    label: 'Commercial',
+    fields: ['prior_period_units', 'change_pct'],
+  },
 ];
+
+const CHANNEL_DEFAULT_HIDDEN_FIELDS = ['product_name', 'business_unit', 'unit_price'] as const;
 
 const LEGACY_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
   {
@@ -255,12 +257,25 @@ export function SellOutTab({
     enabled: smartPreset === 'zero_sellout_products',
   });
 
+  const channelColumnGroups = useMemo<MasterColumnPickerGroup[]>(() => {
+    if (!depthAtLeast(depth, 'operational')) {
+      return CHANNEL_COLUMN_GROUPS_BASE.map((g) =>
+        g.label === 'Commercial'
+          ? { ...g, fields: g.fields.filter((f) => f !== 'change_pct' && f !== 'prior_period_units') }
+          : g,
+      ).filter((g) => g.fields.length > 0);
+    }
+    return CHANNEL_COLUMN_GROUPS_BASE;
+  }, [depth]);
+
   const channelCols = useMemo<ColDef<ChannelSelloutLine>[]>(() => {
     const cols: ColDef<ChannelSelloutLine>[] = [
       { field: 'date', headerName: 'Date', width: 110 },
       { field: 'sku', headerName: 'SKU', width: 120 },
+      { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 140, hide: true },
       { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 140 },
       { field: 'distributor_name', headerName: 'Distributor', width: 140 },
+      { field: 'business_unit', headerName: 'Business unit', width: 120, hide: true },
       { field: 'product_spec_cpu', headerName: 'CPU', width: 100 },
       { field: 'product_spec_gpu', headerName: 'GPU', width: 100 },
       { field: 'product_spec_ram', headerName: 'RAM', width: 90 },
@@ -273,6 +288,14 @@ export function SellOutTab({
         width: 100,
         type: 'numericColumn',
         valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
+      },
+      {
+        field: 'unit_price',
+        headerName: 'Unit price',
+        width: 110,
+        type: 'numericColumn',
+        hide: true,
+        valueFormatter: (p) => (p.value == null ? '—' : Number(p.value).toLocaleString()),
       },
       {
         field: 'revenue',
@@ -293,7 +316,7 @@ export function SellOutTab({
             p.value == null ? '—' : Number(p.value).toLocaleString(),
         },
         {
-          colId: 'change_pct',
+          field: 'change_pct',
           headerName: 'Change %',
           width: 110,
           type: 'numericColumn',
@@ -542,8 +565,9 @@ export function SellOutTab({
           pageSizeOptions={[...CHANNEL_PAGE_SIZE_OPTIONS]}
           enableEmptyUrlSeed={false}
           gridStateStorageKey={SELLOUT_GRID_STATE_KEY}
+          defaultInitiallyHiddenFields={[...CHANNEL_DEFAULT_HIDDEN_FIELDS]}
           columnPickerTitle="Sell-out columns"
-          columnPickerGroups={CHANNEL_COLUMN_GROUPS}
+          columnPickerGroups={channelColumnGroups}
           gridOptions={channelGridOptions}
           bulkSelectionEnabled={false}
           onRefresh={() => void linesQ.refetch()}

@@ -140,6 +140,7 @@ describe('CST steward page chrome (BACKLOG-074 Unit 3)', () => {
               customer_code: 'KA-1',
               customer_name: 'Key One',
               is_key_account: true,
+              partner_tier: 'strategic',
               reports_expected: true,
               expected_cadence: 'weekly',
               overdue_threshold_days: 10,
@@ -208,6 +209,7 @@ describe('CST steward page chrome (BACKLOG-074 Unit 3)', () => {
               customer_code: 'KA-1',
               customer_name: 'Key One',
               is_key_account: true,
+              partner_tier: 'strategic',
               reports_expected: true,
               expected_cadence: 'weekly',
               overdue_threshold_days: 10,
@@ -314,5 +316,14 @@ describe('CST steward page chrome (BACKLOG-074 Unit 3)', () => {
     expect(await screen.findByText('No open report slots')).toBeInTheDocument();
     expect(screen.getByTestId('cst-empty')).toHaveTextContent(/mint the current period/i);
     expect(screen.getByTestId('cst-slots-advance')).toBeInTheDocument();
+  });
+
+  it('exposes key-account bulk patch buttons on key-accounts tab', async () => {
+    renderPage();
+    await screen.findByText('KA-1');
+    expect(screen.getByTestId('cst-accounts-bulk-key-on')).toBeDisabled();
+    expect(screen.getByTestId('cst-accounts-bulk-key-off')).toBeDisabled();
+    expect(screen.getByTestId('cst-accounts-bulk-strategic')).toBeDisabled();
+    expect(screen.getByTestId('cst-accounts-bulk-reports-on')).toBeDisabled();
   });
 });

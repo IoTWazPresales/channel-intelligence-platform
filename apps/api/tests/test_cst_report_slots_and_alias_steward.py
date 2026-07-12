@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from app.services.imports.cst_d1 import (
     advance_cst_report_slots,
@@ -197,3 +197,40 @@ def test_alias_batch_partial_success(monkeypatch):
     assert out["error_count"] == 1
     assert out["results"][0] == {"alias_id": 1, "ok": True, "status": "confirmed"}
     assert out["results"][1] == {"alias_id": 99, "ok": False, "error": "not_found"}
+
+
+def test_key_account_batch_patch_partial_success(monkeypatch):
+    from app.api.v1.endpoints import cst_steward as ep
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    calls: list[int] = []
+
+    def fake_apply(session, *, customer_id, data):
+        calls.append(customer_id)
+        if customer_id == 99:
+            return None
+        return {"customer_id": customer_id, "is_key_account": True, "partner_tier": "strategic"}
+
+    monkeypatch.setattr(ep, "_apply_key_account_patch", fake_apply)
+    session = MagicMock()
+    session.__enter__ = MagicMock(return_value=session)
+    session.__exit__ = MagicMock(return_value=False)
+
+    client = TestClient(app)
+    with patch("app.api.v1.endpoints.cst_steward.SessionLocal", return_value=session):
+        res = client.post(
+            "/api/v1/cst-steward/key-accounts/batch-patch",
+            json={
+                "customer_ids": [10, 99],
+                "patch": {"is_key_account": True, "partner_tier": "strategic"},
+            },
+        )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok_count"] == 1
+    assert body["error_count"] == 1
+    assert body["results"][1]["error"] == "not_found"
+    assert calls == [10, 99]
+    session.commit.assert_called_once()
