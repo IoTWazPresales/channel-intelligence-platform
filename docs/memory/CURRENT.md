@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-12 (Wave 2 Products+CPOR — pending Fable VERIFY)
+**Last updated:** 2026-07-12 (Wave 2 Fable VERIFY **PASS** @ `6609ad2`)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,28 +10,22 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/channel-ops-kpi-and-gap-scan-perf` |
-| **HEAD** | see git (Wave 2 commit) |
+| **HEAD** | `6609ad2` pushed |
 | **PR** | Not opened |
 | **Alembic (DB)** | **`20260710_0072`** on cip — no new migrations |
-| **Fable** | Wave 1 PASS; Wave 2 VERIFY pending |
+| **Fable** | Wave 1 PASS · Wave 2 **PASS** |
 
 ---
 
-## Wave 2 (Products richer filters + CPOR list parity)
+## Wave 2 — PASS
 
-| Item | Status |
-|------|--------|
-| Products: BU / product line / series / spec_search + retired dates | implemented |
-| Products: `product_spec_*` on list rows | implemented |
-| CPOR: wire `q` + `customer_id` | implemented |
-| CPOR: standalone MasterColumnPickerDialog | implemented |
-| No MasterDataGridShell on CPOR | honored |
+Products commercial filters (BU / line / series / `spec_search`) + CPOR `q`/`customer_id` + standalone column picker.
 
-Wave 1 remain PASS @ `70aab64` / docs `d54639b`.
+**Nit (Wave 3 carry):** hydrate CPOR customer autocomplete from URL `customer_id`.
 
 ---
 
 ## Next
 
-1. Fable VERIFY Wave 2
-2. On PASS: Wave 3 CST empty-state copy (separate unit)
+1. **Wave 3** (say proceed): CST empty-state copy + optional CPOR customer URL hydrate
+2. Or open PR for Waves 1–2
