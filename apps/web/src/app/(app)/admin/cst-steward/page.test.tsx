@@ -40,7 +40,14 @@ vi.mock('@/components/ModuleDataSection', () => ({
       );
     }
     if (isLoading) return <div>Loading…</div>;
-    if (isEmpty) return <div>{empty?.title}</div>;
+    if (isEmpty) {
+      return (
+        <div data-testid="cst-empty">
+          <div>{empty?.title}</div>
+          <div>{empty?.description}</div>
+        </div>
+      );
+    }
     return <>{children}</>;
   },
 }));
@@ -278,5 +285,28 @@ describe('CST steward page chrome (BACKLOG-074 Unit 3)', () => {
     renderPage();
     await screen.findByText('KA-1');
     expect(screen.getByTestId('cst-aliases-columns-open')).toBeInTheDocument();
+  });
+
+  it('shows actionable empty-state copy on aliases and slots tabs (Wave 3)', async () => {
+    searchString = 'tab=aliases';
+    mockState.apiGetMock.mockResolvedValue({ total: 0, items: [], counts: { due: 0, late: 0, missing: 0 } });
+    renderPage();
+    expect(await screen.findByText('No proposed aliases')).toBeInTheDocument();
+    expect(screen.getByText(/Confirm\/Reject/i)).toBeInTheDocument();
+    expect(screen.getByTestId('cst-steward-guide')).toHaveTextContent(/Advance slots now/i);
+  });
+
+  it('shows Advance-slots guidance when report-slots worklist is empty', async () => {
+    searchString = 'tab=slots';
+    mockState.apiGetMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('report-slots')) {
+        return { total: 0, items: [], counts: { due: 0, late: 0, missing: 0 } };
+      }
+      return { total: 0, items: [] };
+    });
+    renderPage();
+    expect(await screen.findByText('No open report slots')).toBeInTheDocument();
+    expect(screen.getByTestId('cst-empty')).toHaveTextContent(/mint the current period/i);
+    expect(screen.getByTestId('cst-slots-advance')).toBeInTheDocument();
   });
 });

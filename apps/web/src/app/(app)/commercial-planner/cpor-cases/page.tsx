@@ -20,7 +20,7 @@ import {
 import type { ColDef, GridApi } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import {
@@ -143,6 +143,25 @@ export default function CporCasesListPage() {
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState('');
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (customerId == null) setFilterCustomer(null);
+  }, [customerId]);
+
+  // Hydrate filter autocomplete from deep-linked customer_id (filter still applied without this).
+  useQuery({
+    queryKey: ['cpor', 'cases', 'filter-customer', customerId],
+    queryFn: async ({ signal }) => {
+      const res = await apiGet<{ items: CustomerPick[]; total: number }>(
+        `/api/v1/customers?customer_id=${customerId}&page=1&page_size=1`,
+        { signal },
+      );
+      const hit = res.items[0] ?? null;
+      setFilterCustomer(hit);
+      return hit;
+    },
+    enabled: customerId != null && Number.isFinite(customerId) && filterCustomer?.id !== customerId,
+  });
 
   const { data: types } = useQuery({
     queryKey: ['cpor', 'promotion-types'],

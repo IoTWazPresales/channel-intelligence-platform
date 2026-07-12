@@ -524,16 +524,23 @@ export default function CstStewardPage() {
 
   const filterActive = Boolean(debouncedQ.trim()) || keyOnly;
   const accountsEmptyDescription = filterActive
-    ? 'No key-account rows match the current filter. Clear the search or turn off “Key accounts only”.'
-    : 'No CST key-account / feed-profile rows yet. Flag customers from Master Data or import CST feeds.';
+    ? 'No rows match the current search/key-account filter. Clear the search or turn off “Key accounts only”.'
+    : 'Nothing to edit yet. Open a row’s Edit dialog once customers appear here (flag key-account / cadence from Master Data → Customers, or after CST feed imports).';
+
+  const slotsEmptyDescription =
+    'Worklist is empty because there are no due, late, or missing slots right now. Click “Advance slots now” to mint the current period’s expectations for key accounts that report — received slots drop off this list by design.';
+
+  const aliasesEmptyDescription =
+    'No proposed article aliases awaiting Confirm/Reject. Aliases appear here after CST imports propose mappings; they never auto-resolve (FLAG ≠ BLOCK).';
 
   return (
     <>
       <PageHeader crumbs={[{ label: 'Master Data' }, { label: 'CST steward' }]} title="CST steward" />
       <Alert severity="info" sx={{ mb: 2 }} data-testid="cst-steward-guide">
-        Key-account flag, report cadence / feed profile, expected-report worklist, and article-alias confirm. FLAG ≠
-        BLOCK — unconfirmed aliases never auto-resolve. Slot advance is steward/dev triggered here; beat job is
-        registered but not run against cip from this page without intent.
+        What you can do here: <strong>Edit</strong> key-account / cadence / feed profile on the first tab;{' '}
+        <strong>Advance slots now</strong> on Report slots (worklist shows due/late/missing only);{' '}
+        <strong>Confirm / Reject</strong> proposed article aliases on the third tab. This is not a full customer
+        editor or CST analytics dashboard — use Master Data → Customers for create/edit identity.
       </Alert>
       <Tabs
         value={tab}
@@ -612,7 +619,7 @@ export default function CstStewardPage() {
             onRetry={() => void refetchAccounts()}
             isEmpty={accountsTotal === 0}
             empty={{
-              title: 'No key accounts',
+              title: 'No key-account / feed-profile rows',
               description: accountsEmptyDescription,
             }}
           >
@@ -697,7 +704,7 @@ export default function CstStewardPage() {
             isEmpty={slotsTotal === 0}
             empty={{
               title: 'No open report slots',
-              description: 'Due / late / missing slots appear here. Advance slots to mint the current week’s expectations.',
+              description: slotsEmptyDescription,
             }}
           >
             <EnterpriseDataGrid
@@ -788,7 +795,7 @@ export default function CstStewardPage() {
             isEmpty={aliasesTotal === 0}
             empty={{
               title: 'No proposed aliases',
-              description: 'Proposed customer article aliases awaiting confirm/reject will show here.',
+              description: aliasesEmptyDescription,
             }}
           >
             <EnterpriseDataGrid

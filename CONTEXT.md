@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-12 — **Ops grid Wave 3 (commit):** CST actionable empty-states + guide; CPOR customer_id autocomplete hydrate. Vitest 17/17. Next: Fable VERIFY. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-12 — **Ops grid Wave 2 Fable VERIFY PASS** (`6609ad2`): Products BU/line/series/spec_search; CPOR q/customer + column picker. Next: Wave 3 CST empty-state on proceed. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-12 — **Ops grid Wave 2 (uncommitted→commit):** Products BU/line/series/`spec_search` + retired dates; CPOR `q`/`customer_id` + MasterColumnPickerDialog. Tests: products+cpor API 7/7, cpor vitest 6/6. Next: Fable VERIFY. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-12 — **Ops grid Wave 1 Fable VERIFY PASS** (`70aab64` pushed): Channel Ops cohort filters, inventory paging, sell-out `spec_search`, PVE Apply; D1–D5 closed. Next: Wave 2 only on explicit proceed. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.

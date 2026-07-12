@@ -48,7 +48,17 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
 }));
 
 vi.mock('@/features/commercial-planner/EntitySearchAutocomplete', () => ({
-  EntitySearchAutocomplete: () => null,
+  EntitySearchAutocomplete: ({
+    value,
+    label,
+  }: {
+    value: { customer_code?: string; customer_name?: string } | null;
+    label: string;
+  }) => (
+    <div data-testid={label === 'Customer' ? 'cpor-customer-autocomplete' : 'entity-search'}>
+      {value ? `${value.customer_code} — ${value.customer_name}` : 'none'}
+    </div>
+  ),
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -132,5 +142,26 @@ describe('CPOR cases list page pagination (BACKLOG-074 U4d)', () => {
     renderPage();
     expect(await screen.findByTestId('cpor-search')).toBeInTheDocument();
     expect(screen.getByTestId('cpor-columns')).toBeInTheDocument();
+  });
+
+  it('hydrates customer filter label from customer_id URL param (Wave 3)', async () => {
+    searchString = 'customer_id=42';
+    mockState.apiGetMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('/cpor/meta/promotion-types')) {
+        return { promotion_types: ['Sell out PP'] };
+      }
+      if (String(url).includes('/customers?customer_id=42')) {
+        return {
+          total: 1,
+          items: [{ id: 42, customer_code: 'C42', customer_name: 'Hydrated Co' }],
+        };
+      }
+      if (String(url).includes('/cpor/cases')) {
+        return { total: 0, items: [] };
+      }
+      return { items: [], total: 0 };
+    });
+    renderPage();
+    expect(await screen.findByText('C42 — Hydrated Co')).toBeInTheDocument();
   });
 });
