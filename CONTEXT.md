@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-12 — **Sell-out catalogue Columns:** channel-ops sell-out returns `specs_flat` + `specs_field_keys` (Products pattern); UI accumulates discovered specs into shell Columns (default-hidden). Branch `feat/ops-master-grid-shell-parity`.
 - 2026-07-12 — **Ops columns + CST key bulk + Opus-default consult:** Shell Columns catalogs enriched (shipping optionals folded in); CST `batch-patch` + bulk key/strategic/reports; workflow Opus default / Fable optional. VERIFY queue in CURRENT. Branch `feat/ops-master-grid-shell-parity`.
 - 2026-07-12 — **Ops MasterDataGridShell adoption (impl):** shipping + Channel Ops Sell-out/Inventory/Movements + CST tabs + PVE exception grid. Overview + ImportStewardCandidateWorkspace excluded. Audit `.tmp/OPS_MASTER_GRID_SHELL_AUDIT.md`. Branch `feat/ops-master-grid-shell-parity` (uncommitted pending Warren).
 - 2026-07-12 — **BACKLOG-074 lock SUPERSEDED:** Warren — ops list surfaces use `MasterDataGridShell` (same as masters). Chart Overview + import steward candidate UI excluded. Branch `feat/ops-master-grid-shell-parity`. Prior composed-only “parity” revoked.

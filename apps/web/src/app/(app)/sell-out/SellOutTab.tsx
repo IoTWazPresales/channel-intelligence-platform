@@ -14,9 +14,9 @@ import {
   Typography,
   Paper,
 } from '@mui/material';
-import type { ColDef, GridOptions, ValueGetterParams } from 'ag-grid-community';
+import type { ColDef, GridApi, GridOptions, ValueGetterParams } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
@@ -55,16 +55,27 @@ type ChannelSelloutLine = {
   product_name: string | null;
   sku: string | null;
   business_unit?: string | null;
+  product_line?: string | null;
+  series_name?: string | null;
+  sales_model_name?: string | null;
+  category?: string | null;
+  lifecycle_status?: string | null;
   units: number;
   unit_price: number | null;
   revenue: number;
   prior_period_units: number | null;
+  specs_flat?: Record<string, string>;
   product_spec_cpu?: string | null;
   product_spec_gpu?: string | null;
   product_spec_ram?: string | null;
   product_spec_storage?: string | null;
   product_spec_generation?: string | null;
   product_spec_chassis?: string | null;
+  product_spec_processor?: string | null;
+  product_spec_display?: string | null;
+  product_spec_os?: string | null;
+  product_spec_colour?: string | null;
+  product_spec_warranty?: string | null;
 };
 
 type LinesResponse = { total: number; skip: number; limit: number; items: SelloutLine[] };
@@ -73,6 +84,7 @@ type ChannelLinesResponse = {
   page: number;
   page_size: number;
   items: Omit<ChannelSelloutLine, 'id'>[];
+  specs_field_keys?: string[];
 };
 
 type DistHit = { id: number; distributor_code: string; distributor_name: string };
@@ -81,23 +93,46 @@ type ZeroProduct = { product_id: number; sku: string; name: string };
 
 const CHANNEL_PAGE_SIZE_OPTIONS = [25, 50, 100];
 const CHANNEL_DEFAULT_PAGE_SIZE = 50;
-const SELLOUT_GRID_STATE_KEY = 'cip.channel-ops.sell-out.shell.grid.v1';
+/** v2: catalogue specs default-hidden; reset old layouts that forced specs visible. */
+const SELLOUT_GRID_STATE_KEY = 'cip.channel-ops.sell-out.shell.grid.v2';
+
+const COMMON_SPEC_FIELDS = [
+  'product_spec_cpu',
+  'product_spec_gpu',
+  'product_spec_ram',
+  'product_spec_storage',
+  'product_spec_generation',
+  'product_spec_chassis',
+  'product_spec_processor',
+  'product_spec_display',
+  'product_spec_os',
+  'product_spec_colour',
+  'product_spec_warranty',
+] as const;
+
+const CATALOGUE_STATIC_FIELDS = [
+  'product_name',
+  'business_unit',
+  'product_line',
+  'series_name',
+  'sales_model_name',
+  'category',
+  'lifecycle_status',
+  'unit_price',
+] as const;
 
 const CHANNEL_COLUMN_GROUPS_BASE: MasterColumnPickerGroup[] = [
   {
     label: 'Core',
-    fields: ['date', 'sku', 'product_name', 'customer_name', 'distributor_name', 'business_unit', 'units', 'unit_price', 'revenue'],
+    fields: ['date', 'sku', 'customer_name', 'distributor_name', 'units', 'revenue'],
   },
   {
-    label: 'Specs',
-    fields: [
-      'product_spec_cpu',
-      'product_spec_gpu',
-      'product_spec_ram',
-      'product_spec_storage',
-      'product_spec_generation',
-      'product_spec_chassis',
-    ],
+    label: 'Product catalogue',
+    fields: [...CATALOGUE_STATIC_FIELDS],
+  },
+  {
+    label: 'Common specs (named)',
+    fields: [...COMMON_SPEC_FIELDS],
   },
   {
     label: 'Commercial',
@@ -105,7 +140,15 @@ const CHANNEL_COLUMN_GROUPS_BASE: MasterColumnPickerGroup[] = [
   },
 ];
 
-const CHANNEL_DEFAULT_HIDDEN_FIELDS = ['product_name', 'business_unit', 'unit_price'] as const;
+const CHANNEL_DEFAULT_HIDDEN_FIELDS = [
+  ...CATALOGUE_STATIC_FIELDS,
+  ...COMMON_SPEC_FIELDS,
+] as const;
+
+function specColIdFromRawKey(rawKey: string): string {
+  const safe = rawKey.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 96);
+  return `spec:${safe || 'key'}`;
+}
 
 const LEGACY_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
   {
@@ -131,6 +174,9 @@ export function SellOutTab({
   const [specSearch, setSpecSearch] = useState('');
   const [channelPage, setChannelPage] = useState(1);
   const [channelPageSize, setChannelPageSize] = useState(CHANNEL_DEFAULT_PAGE_SIZE);
+  const [accumulatedSpecKeys, setAccumulatedSpecKeys] = useState<string[]>([]);
+  const prevAccumulatedSpecKeysRef = useRef<string[]>([]);
+  const [gridApi, setGridApi] = useState<GridApi<ChannelSelloutLine> | null>(null);
   const useChannelApi = depthAtLeast(depth, 'operational');
 
   const summaryQ = useQuery({
@@ -226,7 +272,14 @@ export function SellOutTab({
         } else if (smartPreset === 'fastest_movers') {
           items = [...items].sort((a, b) => b.units - a.units);
         }
-        return { total: res.total, skip: 0, limit: res.page_size, items, channel: true as const };
+        return {
+          total: res.total,
+          skip: 0,
+          limit: res.page_size,
+          items,
+          channel: true as const,
+          specs_field_keys: res.specs_field_keys ?? [],
+        };
       }
       const params = new URLSearchParams();
       params.set('limit', '50');
@@ -268,6 +321,91 @@ export function SellOutTab({
     return CHANNEL_COLUMN_GROUPS_BASE;
   }, [depth]);
 
+  const specsFieldKeysSig = useMemo(() => {
+    const fromApi =
+      linesQ.data && 'specs_field_keys' in linesQ.data && linesQ.data.channel
+        ? (linesQ.data.specs_field_keys ?? [])
+        : [];
+    const fromRows =
+      linesQ.data?.channel
+        ? (linesQ.data.items as ChannelSelloutLine[]).flatMap((r) => Object.keys(r.specs_flat ?? {}))
+        : [];
+    const keys = new Set([...fromApi, ...fromRows]);
+    return JSON.stringify([...keys].filter(Boolean).sort((a, b) => a.localeCompare(b)));
+  }, [linesQ.data]);
+
+  useEffect(() => {
+    if (!specsFieldKeysSig) return;
+    let incoming: string[] = [];
+    try {
+      incoming = JSON.parse(specsFieldKeysSig) as string[];
+    } catch {
+      return;
+    }
+    if (!incoming.length) return;
+    setAccumulatedSpecKeys((prev) => {
+      const s = new Set(prev);
+      for (const k of incoming) {
+        if (k) s.add(k);
+      }
+      const next = [...s].sort((a, b) => a.localeCompare(b));
+      if (next.length === prev.length && next.every((k, i) => k === prev[i])) return prev;
+      return next;
+    });
+  }, [specsFieldKeysSig]);
+
+  useEffect(() => {
+    if (!gridApi || !accumulatedSpecKeys.length) return;
+    const prev = new Set(prevAccumulatedSpecKeysRef.current);
+    const added = accumulatedSpecKeys.filter((k) => !prev.has(k));
+    prevAccumulatedSpecKeysRef.current = accumulatedSpecKeys;
+    if (!added.length) return;
+    const ids = added.map((k) => specColIdFromRawKey(k));
+    try {
+      gridApi.setColumnsVisible(ids, false);
+    } catch {
+      // no-op
+    }
+  }, [accumulatedSpecKeys, gridApi]);
+
+  const columnPickerExtraGroups = useMemo<MasterColumnPickerGroup[] | undefined>(() => {
+    if (!accumulatedSpecKeys.length) return undefined;
+    return [
+      {
+        label: 'Catalogue specs (flattened; grows as you page)',
+        fields: accumulatedSpecKeys.map(specColIdFromRawKey),
+      },
+    ];
+  }, [accumulatedSpecKeys]);
+
+  const columnLabelByField = useMemo(() => {
+    const out: Record<string, string> = {
+      product_name: 'Product name',
+      business_unit: 'Business unit',
+      product_line: 'Product line',
+      series_name: 'Series',
+      sales_model_name: 'Sales model',
+      category: 'Category',
+      lifecycle_status: 'Lifecycle',
+      unit_price: 'Unit price',
+      product_spec_cpu: 'CPU',
+      product_spec_gpu: 'GPU',
+      product_spec_ram: 'RAM',
+      product_spec_storage: 'Storage',
+      product_spec_generation: 'Generation',
+      product_spec_chassis: 'Chassis',
+      product_spec_processor: 'Processor',
+      product_spec_display: 'Display',
+      product_spec_os: 'OS',
+      product_spec_colour: 'Colour',
+      product_spec_warranty: 'Warranty',
+    };
+    for (const rawKey of accumulatedSpecKeys) {
+      out[specColIdFromRawKey(rawKey)] = `Spec: ${rawKey}`;
+    }
+    return out;
+  }, [accumulatedSpecKeys]);
+
   const channelCols = useMemo<ColDef<ChannelSelloutLine>[]>(() => {
     const cols: ColDef<ChannelSelloutLine>[] = [
       { field: 'date', headerName: 'Date', width: 110 },
@@ -276,12 +414,20 @@ export function SellOutTab({
       { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 140 },
       { field: 'distributor_name', headerName: 'Distributor', width: 140 },
       { field: 'business_unit', headerName: 'Business unit', width: 120, hide: true },
-      { field: 'product_spec_cpu', headerName: 'CPU', width: 100 },
-      { field: 'product_spec_gpu', headerName: 'GPU', width: 100 },
-      { field: 'product_spec_ram', headerName: 'RAM', width: 90 },
-      { field: 'product_spec_storage', headerName: 'Storage', width: 100 },
-      { field: 'product_spec_generation', headerName: 'Gen', width: 90 },
-      { field: 'product_spec_chassis', headerName: 'Chassis', width: 100 },
+      { field: 'product_line', headerName: 'Product line', width: 120, hide: true },
+      { field: 'series_name', headerName: 'Series', width: 120, hide: true },
+      { field: 'sales_model_name', headerName: 'Sales model', width: 140, hide: true },
+      { field: 'category', headerName: 'Category', width: 120, hide: true },
+      { field: 'lifecycle_status', headerName: 'Lifecycle', width: 110, hide: true },
+      ...COMMON_SPEC_FIELDS.map(
+        (field) =>
+          ({
+            field,
+            headerName: columnLabelByField[field] ?? field,
+            width: 110,
+            hide: true,
+          }) satisfies ColDef<ChannelSelloutLine>,
+      ),
       {
         field: 'units',
         headerName: 'Units',
@@ -329,8 +475,19 @@ export function SellOutTab({
         },
       );
     }
+    for (const rawKey of accumulatedSpecKeys) {
+      const colId = specColIdFromRawKey(rawKey);
+      cols.push({
+        colId,
+        field: colId,
+        headerName: `Spec: ${rawKey}`,
+        width: 130,
+        hide: true,
+        valueGetter: (p) => p.data?.specs_flat?.[rawKey] ?? '',
+      });
+    }
     return cols;
-  }, [depth]);
+  }, [depth, accumulatedSpecKeys, columnLabelByField]);
 
   const legacyCols = useMemo<ColDef<SelloutLine>[]>(
     () => [
@@ -568,8 +725,11 @@ export function SellOutTab({
           defaultInitiallyHiddenFields={[...CHANNEL_DEFAULT_HIDDEN_FIELDS]}
           columnPickerTitle="Sell-out columns"
           columnPickerGroups={channelColumnGroups}
+          columnPickerExtraGroups={columnPickerExtraGroups}
+          columnLabelByField={columnLabelByField}
           gridOptions={channelGridOptions}
           bulkSelectionEnabled={false}
+          onGridApiChange={setGridApi}
           onRefresh={() => void linesQ.refetch()}
           refreshBusy={linesQ.isFetching}
         />

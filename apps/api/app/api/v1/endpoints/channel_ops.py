@@ -35,7 +35,7 @@ from app.services.channel_ops_derived_stock import (
     weeks_of_cover_or_none,
     yoy_pct_or_none,
 )
-from app.services.commercial_planner.read_model import product_specs_from_json
+from app.services.commercial_planner.read_model import product_specs_from_json, specs_json_flat_string_map
 from app.services.imports.shipment_evidence_read import (
     apply_active_evidence_filter,
     shipment_evidence_read_model,
@@ -311,6 +311,11 @@ async def channel_ops_sell_out(
             DimProduct.sku,
             DimProduct.name.label("product_name"),
             DimProduct.business_unit,
+            DimProduct.product_line,
+            DimProduct.series_name,
+            DimProduct.sales_model_name,
+            DimProduct.category,
+            DimProduct.lifecycle_status,
             DimProduct.specs_json,
             DimCustomer.name.label("customer_name"),
             DimDistributor.name.label("distributor_name"),
@@ -378,6 +383,7 @@ async def channel_ops_sell_out(
     ).all()
 
     items: list[dict[str, Any]] = []
+    specs_field_keys: set[str] = set()
     for row in rows:
         s = row[0]
         unit_price: float | None = None
@@ -388,7 +394,10 @@ async def channel_ops_sell_out(
             key = (int(s.distributor_id or 0), int(s.product_id), int(s.customer_id))
             if key in prior_units_map:
                 prior_units = prior_units_map[key]
-        specs = product_specs_from_json(row.specs_json if isinstance(row.specs_json, dict) else None)
+        safe_specs = row.specs_json if isinstance(row.specs_json, dict) else None
+        specs_flat = specs_json_flat_string_map(safe_specs, max_keys=48)
+        specs_field_keys.update(specs_flat.keys())
+        catalogue_specs = product_specs_from_json(safe_specs)
         items.append(
             {
                 "date": s.transaction_date.isoformat(),
@@ -397,15 +406,27 @@ async def channel_ops_sell_out(
                 "product_name": row.product_name,
                 "sku": row.sku,
                 "business_unit": row.business_unit,
+                "product_line": row.product_line,
+                "series_name": row.series_name,
+                "sales_model_name": row.sales_model_name,
+                "category": row.category,
+                "lifecycle_status": row.lifecycle_status,
                 "units": float(s.units),
                 "unit_price": unit_price,
                 "revenue": float(s.revenue),
                 "prior_period_units": prior_units,
-                **specs,
+                "specs_flat": specs_flat,
+                **catalogue_specs,
             }
         )
 
-    return {"total": total, "page": page, "page_size": page_size, "items": items}
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": items,
+        "specs_field_keys": sorted(specs_field_keys),
+    }
 
 
 @router.get("/inventory")

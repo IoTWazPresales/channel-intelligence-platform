@@ -24,11 +24,12 @@
 
 ## VERIFY queue (Opus default)
 
-Use audit `.tmp/OPS_MASTER_GRID_SHELL_AUDIT.md` (update after this slice). Queue:
+Use audit `.tmp/OPS_MASTER_GRID_SHELL_AUDIT.md`. Queue:
 
 1. **Shell adoption** — shipping, Channel Ops data tabs, CST tabs, PVE exceptions on `MasterDataGridShell`
 2. **Column catalogs** — shipping optionals in shell Columns; Channel Ops / CST / PVE richer groups + default-hidden fields
 3. **CST key-account bulk** — `POST …/key-accounts/batch-patch` + UI (key on/off, strategic tier, reports expected)
+4. **Sell-out product catalogue Columns** — `specs_flat` / `specs_field_keys` + discovered catalogue specs in picker (Products parity); specs default-hidden
 
 **Follow-on (not this branch slice):** CPOR / PM gaps / PO / shipment evidence; PVE drill shell.
 

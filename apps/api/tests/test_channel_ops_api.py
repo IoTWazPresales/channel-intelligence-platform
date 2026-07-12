@@ -64,6 +64,56 @@ async def test_sell_out_accepts_spec_search_param() -> None:
 
 
 @pytest.mark.anyio
+async def test_sell_out_returns_specs_flat_and_field_keys() -> None:
+    """Catalogue parity: flattened specs_json + page union of keys (Products pattern)."""
+    from datetime import date
+    from types import SimpleNamespace
+
+    fact = SimpleNamespace(
+        transaction_date=date(2026, 6, 1),
+        distributor_id=1,
+        product_id=10,
+        customer_id=20,
+        units=2,
+        revenue=200.0,
+    )
+    row = SimpleNamespace(
+        _mapping=None,
+        distributor_name="Dist",
+        customer_name="Cust",
+        product_name="Notebook",
+        sku="SKU-1",
+        business_unit="NB",
+        product_line="UX",
+        series_name="Zenbook",
+        sales_model_name="UX3405",
+        category="Notebook",
+        lifecycle_status="active",
+        specs_json={"cpu": "Intel Core", "ram": "16GB", "nested": {"x": 1}},
+    )
+    # SQLAlchemy Row-like: index 0 is fact; attrs for labeled cols
+    class _Row(tuple):
+        def __getattr__(self, name: str):
+            return getattr(row, name)
+
+    db = AsyncMock()
+    db.scalar = AsyncMock(return_value=1)
+    db.execute = AsyncMock(
+        return_value=MagicMock(all=MagicMock(return_value=[_Row((fact,))]))
+    )
+    out = await co.channel_ops_sell_out(db, page=1, page_size=50)
+    assert out["total"] == 1
+    assert out["specs_field_keys"]  # at least cpu/ram from flat map
+    item = out["items"][0]
+    assert item["sku"] == "SKU-1"
+    assert item["product_line"] == "UX"
+    assert item["specs_flat"]["cpu"] == "Intel Core"
+    assert item["specs_flat"]["ram"] == "16GB"
+    assert "cpu" in out["specs_field_keys"]
+    assert item.get("product_spec_cpu") == "Intel Core"
+
+
+@pytest.mark.anyio
 async def test_summary_yoy_none_when_prior_zero() -> None:
     db = AsyncMock()
     db.scalar = AsyncMock(return_value=0)
