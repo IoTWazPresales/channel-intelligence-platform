@@ -143,6 +143,30 @@ def product_specs_from_json(specs_json: dict[str, Any] | None) -> dict[str, str 
             flat,
             ("colour", "color", "Colour", "Color", "finish", "Finish"),
         ),
+        "product_spec_generation": _pick_spec_value(
+            flat,
+            (
+                "generation",
+                "Generation",
+                "gen",
+                "Gen",
+                "cpu_generation",
+                "cpuGeneration",
+                "platform_generation",
+            ),
+        ),
+        "product_spec_chassis": _pick_spec_value(
+            flat,
+            (
+                "chassis",
+                "Chassis",
+                "form_factor",
+                "formFactor",
+                "form factor",
+                "housing",
+                "case",
+            ),
+        ),
     }
 
 

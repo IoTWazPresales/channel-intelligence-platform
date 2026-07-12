@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PlanVsExecutedView } from './PlanVsExecutedView';
@@ -131,6 +131,25 @@ describe('PlanVsExecutedView', () => {
           (url) => url.includes('exceptions_offset=30') && url.includes('exceptions_limit=15'),
         ),
       ).toBe(true);
+    });
+  });
+
+  it('keeps From/To as draft until Apply (no mid-selection refetch)', async () => {
+    renderView();
+    await waitFor(() => expect(screen.getByTestId('period-from')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('pve-apply-filters')).toHaveProperty('disabled', true));
+
+    const callsBefore = apiGetMock.mock.calls.length;
+    fireEvent.mouseDown(screen.getByLabelText('From'));
+    fireEvent.click(await screen.findByRole('option', { name: '26Q3' }));
+
+    expect(apiGetMock.mock.calls.length).toBe(callsBefore);
+    expect(screen.getByTestId('pve-apply-filters')).toHaveProperty('disabled', false);
+
+    fireEvent.click(screen.getByTestId('pve-apply-filters'));
+    await waitFor(() => {
+      const urls = apiGetMock.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.includes('period_from=26Q3'))).toBe(true);
     });
   });
 });

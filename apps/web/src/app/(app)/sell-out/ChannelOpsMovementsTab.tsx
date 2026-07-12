@@ -2,7 +2,6 @@
 
 import {
   Alert,
-  Autocomplete,
   Box,
   Paper,
   Stack,
@@ -22,8 +21,6 @@ import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
 
-type DistHit = { id: number; distributor_code: string; distributor_name: string };
-
 type MovementRow = {
   product_id: number | null;
   sku: string | null;
@@ -39,29 +36,38 @@ type MovementRow = {
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 50;
 
-export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
-  const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
+export function ChannelOpsMovementsTab({
+  depth,
+  distributorId,
+}: {
+  depth: IntelDepth;
+  distributorId?: number | null;
+}) {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const distId = distributorPick?.id;
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const distId = distributorId ?? null;
 
   useEffect(() => {
     setPage(0);
-  }, [distId]);
-
-  const { data: filterOptions } = useQuery({
-    queryKey: ['sellout-filter-options'],
-    queryFn: ({ signal }) =>
-      apiGet<{ distributors: DistHit[] }>('/api/v1/sellout/filter-options', { signal }),
-  });
+  }, [distId, dateFrom, dateTo]);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['channel-ops-movements', distId, page, pageSize],
-    queryFn: ({ signal }) =>
-      apiGet<{ items: MovementRow[]; total: number; page: number; page_size: number }>(
-        `/api/v1/channel-ops/movements?distributor_id=${distId}&page=${page + 1}&page_size=${pageSize}`,
+    queryKey: ['channel-ops-movements', distId, page, pageSize, dateFrom, dateTo],
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams({
+        distributor_id: String(distId),
+        page: String(page + 1),
+        page_size: String(pageSize),
+      });
+      if (dateFrom) params.set('date_from', dateFrom);
+      if (dateTo) params.set('date_to', dateTo);
+      return apiGet<{ items: MovementRow[]; total: number; page: number; page_size: number }>(
+        `/api/v1/channel-ops/movements?${params}`,
         { signal }
-      ),
+      );
+    },
     enabled: distId != null,
   });
 
@@ -83,34 +89,35 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
 
   if (distId == null) {
     return (
-      <Box>
-        <Autocomplete
-          sx={{ minWidth: 320, mb: 2 }}
-          size="small"
-          options={filterOptions?.distributors ?? []}
-          value={distributorPick}
-          onChange={(_e, v) => setDistributorPick(v)}
-          getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
-          isOptionEqualToValue={(a, b) => a.id === b.id}
-          renderInput={(params) => <TextField {...params} label="Distributor" required />}
-        />
-        <Alert severity="info">Select a distributor to view inbound shipment movements.</Alert>
-      </Box>
+      <Alert severity="info" data-testid="movements-distributor-required">
+        Select a distributor above to view inbound shipment movements. Movements read shipment evidence for that
+        distributor only.
+      </Alert>
     );
   }
 
   return (
     <Box>
-      <Autocomplete
-        sx={{ minWidth: 320, mb: 2 }}
-        size="small"
-        options={filterOptions?.distributors ?? []}
-        value={distributorPick}
-        onChange={(_e, v) => setDistributorPick(v)}
-        getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
-        isOptionEqualToValue={(a, b) => a.id === b.id}
-        renderInput={(params) => <TextField {...params} label="Distributor" required />}
-      />
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+        <TextField
+          size="small"
+          type="date"
+          label="Ship date from"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          inputProps={{ 'data-testid': 'movements-date-from' }}
+        />
+        <TextField
+          size="small"
+          type="date"
+          label="Ship date to"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          inputProps={{ 'data-testid': 'movements-date-to' }}
+        />
+      </Stack>
       {isError && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {(error as Error)?.message ?? 'Failed to load movements.'}
@@ -139,9 +146,11 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
           {isLoading ? (
             <Typography variant="body2">Loading…</Typography>
           ) : (data?.items ?? []).length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              No shipment evidence lines for this distributor.
-            </Typography>
+            <Alert severity="info">
+              No shipment evidence lines for this distributor
+              {dateFrom || dateTo ? ' in the selected date range' : ''}. Check inbound shipment imports or widen
+              the dates.
+            </Alert>
           ) : (
             <Table size="small">
               <TableHead>

@@ -51,10 +51,17 @@ type ChannelSelloutLine = {
   customer_name: string | null;
   product_name: string | null;
   sku: string | null;
+  business_unit?: string | null;
   units: number;
   unit_price: number | null;
   revenue: number;
   prior_period_units: number | null;
+  product_spec_cpu?: string | null;
+  product_spec_gpu?: string | null;
+  product_spec_ram?: string | null;
+  product_spec_storage?: string | null;
+  product_spec_generation?: string | null;
+  product_spec_chassis?: string | null;
 };
 
 type LinesResponse = { total: number; skip: number; limit: number; items: SelloutLine[] };
@@ -67,11 +74,20 @@ type ZeroProduct = { product_id: number; sku: string; name: string };
 const CHANNEL_PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 const CHANNEL_DEFAULT_PAGE_SIZE = 50;
 
-export function SellOutTab({ depth }: { depth: IntelDepth }) {
+export function SellOutTab({
+  depth,
+  distributorId,
+  businessUnit,
+}: {
+  depth: IntelDepth;
+  distributorId?: number | null;
+  businessUnit?: string | null;
+}) {
   const [smartPreset, setSmartPreset] = useState<SmartPresetId>('');
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const [customerPick, setCustomerPick] = useState<CustHit | null>(null);
   const [search, setSearch] = useState('');
+  const [specSearch, setSpecSearch] = useState('');
   const [channelPage, setChannelPage] = useState(0);
   const [channelPageSize, setChannelPageSize] = useState(CHANNEL_DEFAULT_PAGE_SIZE);
   const useChannelApi = depthAtLeast(depth, 'operational');
@@ -90,6 +106,15 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
   const distOptions = filterOptions?.distributors ?? [];
   const custOptions = filterOptions?.customers ?? [];
 
+  useEffect(() => {
+    if (distributorId == null) {
+      setDistributorPick(null);
+      return;
+    }
+    const hit = distOptions.find((d) => d.id === distributorId) ?? null;
+    setDistributorPick(hit);
+  }, [distributorId, distOptions]);
+
   const periodFrom = useMemo(() => {
     if (smartPreset !== 'new_this_period') return undefined;
     const d = new Date();
@@ -99,7 +124,15 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
 
   useEffect(() => {
     setChannelPage(0);
-  }, [smartPreset, distributorPick?.id, customerPick?.id, periodFrom, useChannelApi]);
+  }, [
+    smartPreset,
+    distributorPick?.id,
+    customerPick?.id,
+    periodFrom,
+    useChannelApi,
+    businessUnit,
+    specSearch,
+  ]);
 
   const linesQueryKey = useMemo(
     () =>
@@ -110,10 +143,23 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
         customerPick?.id ?? null,
         search,
         periodFrom,
+        businessUnit ?? null,
+        specSearch,
         useChannelApi ? channelPage : null,
         useChannelApi ? channelPageSize : null,
       ] as const,
-    [useChannelApi, smartPreset, distributorPick?.id, customerPick?.id, search, periodFrom, channelPage, channelPageSize]
+    [
+      useChannelApi,
+      smartPreset,
+      distributorPick?.id,
+      customerPick?.id,
+      search,
+      periodFrom,
+      businessUnit,
+      specSearch,
+      channelPage,
+      channelPageSize,
+    ]
   );
 
   const { data: lines, isLoading: linesLoading, isError: linesError, error: linesErr } = useQuery({
@@ -127,6 +173,8 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
         if (distributorPick != null) params.set('distributor_id', String(distributorPick.id));
         if (customerPick != null) params.set('customer_id', String(customerPick.id));
         if (periodFrom) params.set('date_from', periodFrom);
+        if (businessUnit) params.set('business_unit', businessUnit);
+        if (specSearch.trim()) params.set('spec_search', specSearch.trim());
         const res = await apiGet<ChannelLinesResponse>(`/api/v1/channel-ops/sell-out?${params}`, { signal });
         let items = res.items;
         if (smartPreset === 'slowest_movers') {
@@ -167,7 +215,8 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
     <>
       <Alert severity="info" sx={{ mb: 2 }}>
         Commercial view over <strong>fact_sales_sellout</strong> (populated when DSI import jobs are applied). Use{' '}
-        <strong>Admin → Imports</strong> for distributor sales &amp; inventory loads.
+        <strong>Admin → Imports</strong> for distributor sales &amp; inventory loads. Product specs come from{' '}
+        <code>dim_product.specs_json</code>.
       </Alert>
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
@@ -240,7 +289,7 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
           options={distOptions}
           value={distributorPick}
           onChange={(_e, v) => setDistributorPick(v)}
-          disabled={smartPreset === 'zero_sellout_products'}
+          disabled={smartPreset === 'zero_sellout_products' || distributorId != null}
           getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
           isOptionEqualToValue={(a, b) => a.id === b.id}
           renderInput={(params) => <TextField {...params} label="Distributor" placeholder="All distributors" />}
@@ -258,6 +307,18 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
           renderInput={(params) => <TextField {...params} label="Customer" placeholder="All customers" />}
         />
       </Stack>
+
+      {useChannelApi && smartPreset !== 'zero_sellout_products' ? (
+        <TextField
+          size="small"
+          label="Spec search (contains)"
+          value={specSearch}
+          onChange={(e) => setSpecSearch(e.target.value)}
+          placeholder="e.g. i7, 16GB, OLED"
+          sx={{ minWidth: 240, mb: 2 }}
+          helperText="Matches anywhere in product specs_json — not per-key filters yet"
+        />
+      ) : null}
 
       {smartPreset === 'zero_sellout_products' ? (
         <Paper variant="outlined">
@@ -336,6 +397,12 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
                     <TableCell>SKU</TableCell>
                     <TableCell>Customer</TableCell>
                     <TableCell>Distributor</TableCell>
+                    <TableCell>CPU</TableCell>
+                    <TableCell>GPU</TableCell>
+                    <TableCell>RAM</TableCell>
+                    <TableCell>Storage</TableCell>
+                    <TableCell>Gen</TableCell>
+                    <TableCell>Chassis</TableCell>
                     <TableCell align="right">Units</TableCell>
                     <TableCell align="right">Revenue</TableCell>
                     {depthAtLeast(depth, 'operational') && (
@@ -358,6 +425,12 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
                         <TableCell>{r.sku}</TableCell>
                         <TableCell>{r.customer_name}</TableCell>
                         <TableCell>{r.distributor_name ?? '—'}</TableCell>
+                        <TableCell>{r.product_spec_cpu ?? '—'}</TableCell>
+                        <TableCell>{r.product_spec_gpu ?? '—'}</TableCell>
+                        <TableCell>{r.product_spec_ram ?? '—'}</TableCell>
+                        <TableCell>{r.product_spec_storage ?? '—'}</TableCell>
+                        <TableCell>{r.product_spec_generation ?? '—'}</TableCell>
+                        <TableCell>{r.product_spec_chassis ?? '—'}</TableCell>
                         <TableCell align="right">{r.units.toLocaleString()}</TableCell>
                         <TableCell align="right">{r.revenue.toLocaleString()}</TableCell>
                         {depthAtLeast(depth, 'operational') && (

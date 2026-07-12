@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 export type IntelDepth = 'raw' | 'operational' | 'strategic' | 'forecast';
 
+export type PeriodGrain = 'quarter' | 'year' | 'rolling_weeks';
+
 export const INTEL_DEPTH_STORAGE_KEY = 'cip_intel_depth';
 
 export const INTEL_DEPTH_OPTIONS: { value: IntelDepth; label: string }[] = [

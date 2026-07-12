@@ -3,26 +3,22 @@
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
   Alert,
-  Autocomplete,
   Box,
   Paper,
-  Stack,
   Table,
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
-
-type DistHit = { id: number; distributor_code: string; distributor_name: string };
 
 type InvRow = {
   distributor_id: number;
@@ -45,21 +41,36 @@ type InvRow = {
   reorder_signal: boolean;
 };
 
-export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
-  const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 50;
 
-  const { data: filterOptions } = useQuery({
-    queryKey: ['sellout-filter-options'],
-    queryFn: ({ signal }) =>
-      apiGet<{ distributors: DistHit[] }>('/api/v1/sellout/filter-options', { signal }),
-  });
+export function ChannelOpsInventoryTab({
+  depth,
+  distributorId,
+}: {
+  depth: IntelDepth;
+  distributorId?: number | null;
+}) {
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const distId = distributorId ?? null;
 
-  const distId = distributorPick?.id;
+  useEffect(() => {
+    setPage(0);
+  }, [distId]);
+
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['channel-ops-inventory', distId],
+    queryKey: ['channel-ops-inventory', distId, page, pageSize],
     queryFn: ({ signal }) =>
-      apiGet<{ items: InvRow[]; total: number; truncated?: boolean }>(
-        `/api/v1/channel-ops/inventory?distributor_id=${distId}`,
+      apiGet<{
+        items: InvRow[];
+        total: number;
+        page: number;
+        page_size: number;
+        truncated?: boolean;
+        true_total?: number;
+      }>(
+        `/api/v1/channel-ops/inventory?distributor_id=${distId}&page=${page + 1}&page_size=${pageSize}`,
         { signal }
       ),
     enabled: distId != null,
@@ -67,40 +78,15 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
 
   if (distId == null) {
     return (
-      <Box>
-        <Stack direction="row" spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-          <Autocomplete
-            sx={{ minWidth: 320 }}
-            size="small"
-            options={filterOptions?.distributors ?? []}
-            value={distributorPick}
-            onChange={(_e, v) => setDistributorPick(v)}
-            getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
-            isOptionEqualToValue={(a, b) => a.id === b.id}
-            renderInput={(params) => <TextField {...params} label="Distributor" required />}
-          />
-        </Stack>
-        <Alert severity="info">
-          Select a distributor to view inventory intelligence for that channel.
-        </Alert>
-      </Box>
+      <Alert severity="info" data-testid="inventory-distributor-required">
+        Select a distributor above to load inventory. Inventory is computed per distributor from the latest DSI
+        snapshot (derived stock) — there is no all-distributor inventory grid yet.
+      </Alert>
     );
   }
 
   return (
     <Box>
-      <Stack direction="row" spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-        <Autocomplete
-          sx={{ minWidth: 320 }}
-          size="small"
-          options={filterOptions?.distributors ?? []}
-          value={distributorPick}
-          onChange={(_e, v) => setDistributorPick(v)}
-          getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
-          isOptionEqualToValue={(a, b) => a.id === b.id}
-          renderInput={(params) => <TextField {...params} label="Distributor" required />}
-        />
-      </Stack>
       {isError && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {(error as Error)?.message ?? 'Failed to load inventory.'}
@@ -108,18 +94,37 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
       )}
       {data?.truncated ? (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Showing first {data.items.length.toLocaleString()} of {data.total.toLocaleString()} products for this
-          distributor. Server cap applies until inventory paging is added.
+          Soft cap: paging the first {data.total.toLocaleString()} of{' '}
+          {(data.true_total ?? data.total).toLocaleString()} products for this distributor.
         </Alert>
       ) : null}
       <Paper variant="outlined">
         <Box sx={{ p: 2 }}>
+          {data != null && data.total > 0 ? (
+            <TablePagination
+              component="div"
+              count={data.total}
+              page={page}
+              onPageChange={(_e, nextPage) => setPage(nextPage)}
+              rowsPerPage={pageSize}
+              onRowsPerPageChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
+              labelDisplayedRows={({ from, to, count }) =>
+                `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
+              }
+              sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}
+            />
+          ) : null}
           {isLoading ? (
             <Typography variant="body2">Loading…</Typography>
           ) : (data?.items ?? []).length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              No distributor inventory rows for this selection.
-            </Typography>
+            <Alert severity="info">
+              No distributor inventory rows for this selection. Confirm DSI inventory snapshots exist for this
+              distributor (Admin → Imports), or try another distributor.
+            </Alert>
           ) : (
             <Table size="small">
               <TableHead>

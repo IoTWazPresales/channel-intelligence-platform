@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-12 (audit-gap fixes: shipping UTC overdue parity, stock-health empty UI, related nav, exclude merged customers, WoC, OPEN_CHANNEL loser guard, shipping attribution TTL cache)
+**Last updated:** 2026-07-12 (Wave 1 finish after Fable CONSULT READY — D1–D5)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,41 +10,41 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/channel-ops-kpi-and-gap-scan-perf` |
-| **HEAD** | see git (uncommitted audit fixes on working tree) |
+| **HEAD** | see git (Wave 1 finish pending commit) |
 | **PR** | Not opened |
 | **Alembic (DB)** | **`20260710_0072`** on cip — no new migrations |
+| **Fable** | CONSULT READY (ops_grid_wave1); VERIFY pending after push |
 
 ---
 
-## Shipped this session
+## Wave 1 (ops grid parity — Channel Ops + PVE Apply)
+
+Locked by Fable CONSULT READY:
+
+- Keep premature draft; fix D1–D5 before commit
+- No AG Grid this unit (MUI tables + paging)
+- Wave 2/3 = separate units after VERIFY PASS
 
 | Item | Status |
 |------|--------|
-| Related-name groups U1+U2 + alias seal + redirect-follow | pushed earlier |
-| OPEN_CHANNEL repair + alias backfill | applied on cip earlier |
-| Shipping overdue smart-preset ? KPI UTC alignment | implemented (uncommitted) |
-| Dashboard stock-health empty state (no `{}`) | implemented (uncommitted) |
-| Related names nav + customers toolbar link | implemented (uncommitted) |
-| Customers list excludes merged by default | implemented (uncommitted) |
-| Channel-ops weeks-of-cover: sum(vel) + max 104w | implemented (uncommitted) |
-| OPEN_CHANNEL cannot be merge loser | implemented (uncommitted) |
-| Shipping attribution context 45s TTL cache | implemented (uncommitted) |
+| Page cohort filters ? summary + weekly chart | done |
+| Inventory page/page_size + empty UX | done |
+| Movements date filters | done |
+| Sell-out: single `spec_search` + spec display columns | done (D2) |
+| PVE draft From/To/BU + Apply | done |
+| D1 BU cohort annotation (`business_unit_applies_to`) | done |
+| D3 remove Overview reviewer copy | done |
+| D4 Overview summary passes periodGrain/weeks | done |
+| D5 CURRENT docs claim corrected | this file |
 
----
+**FLAG (deferred):** BU filter on derived channel stock / WoC / reporting / customers — needs product?BU join in `sum_derived_channel_stock`.
 
-## Proven smoke (local)
-
-- Customers default **4908** / `include_merged=true` **5049**
-- Overdue KPI **827** = overdue chip grid **827**
-- Shipping `/lines` warm ~**0.4s** (was ~17s cold before cache)
-- Channel-ops weeks_of_cover ~**69** (was ~143k)
-- Dashboard: empty stock-health copy, no `{}`
+Audit-gap fixes already at pushed tip `b621a99` (not part of Wave 1 commit).
 
 ---
 
 ## Next
 
-1. Commit + push audit-gap fixes (Warren ask)
-2. Fable VERIFY / soak Related merge + re-upload
-3. Distributors related-names; lineup multi-folder (fresh chat)
-4. Test-fixture customer cleanup (optional)
+1. Commit + push Wave 1 ? Fable VERIFY
+2. On PASS: Wave 2 (Products filters + CPOR) — separate unit
+3. Wave 3: CST empty-state copy

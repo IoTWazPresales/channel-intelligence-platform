@@ -268,6 +268,9 @@ export function PlanVsExecutedView() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [draftFrom, setDraftFrom] = useState<string | null>(searchParams.get('period_from'));
+  const [draftTo, setDraftTo] = useState<string | null>(searchParams.get('period_to'));
+  const [draftProductLine, setDraftProductLine] = useState<string>(searchParams.get('product_line') ?? ALL_BU);
   const [periodFrom, setPeriodFrom] = useState<string | null>(searchParams.get('period_from'));
   const [periodTo, setPeriodTo] = useState<string | null>(searchParams.get('period_to'));
   const [productLine, setProductLine] = useState<string>(searchParams.get('product_line') ?? ALL_BU);
@@ -341,6 +344,8 @@ export function PlanVsExecutedView() {
     if (data?.default_period && periodFrom === null && periodTo === null) {
       setPeriodFrom(data.default_period);
       setPeriodTo(data.default_period);
+      setDraftFrom(data.default_period);
+      setDraftTo(data.default_period);
     }
   }, [data?.default_period, periodFrom, periodTo]);
 
@@ -349,8 +354,24 @@ export function PlanVsExecutedView() {
     [data?.available_periods],
   );
 
-  const selectedFrom = periodFrom ?? '';
-  const selectedTo = periodTo ?? '';
+  const selectedFrom = draftFrom ?? '';
+  const selectedTo = draftTo ?? '';
+  const filtersDirty =
+    draftFrom !== periodFrom || draftTo !== periodTo || draftProductLine !== productLine;
+
+  const applyPeriodFilters = useCallback(() => {
+    if (!draftFrom || !draftTo) return;
+    setPeriodFrom(draftFrom);
+    setPeriodTo(draftTo);
+    setProductLine(draftProductLine);
+    const next = new URLSearchParams(searchParams.toString());
+    next.set('period_from', draftFrom);
+    next.set('period_to', draftTo);
+    if (draftProductLine && draftProductLine !== ALL_BU) next.set('product_line', draftProductLine);
+    else next.delete('product_line');
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [draftFrom, draftTo, draftProductLine, pathname, router, searchParams]);
 
   const buOptions = useMemo(() => {
     const set = new Set<string>();
@@ -365,7 +386,7 @@ export function PlanVsExecutedView() {
   }, [data?.drill_rows, data?.available_periods]);
 
   const lensExceptions = data?.exceptions?.[lens];
-  const periodForPoLink = selectedTo || data?.period_range.to || data?.default_period || '';
+  const periodForPoLink = periodTo || data?.period_range.to || data?.default_period || '';
   const buForPoLink = productLine !== ALL_BU ? productLine : data?.product_line_filter;
 
   const clearDrill = useCallback(() => {
@@ -569,14 +590,14 @@ export function PlanVsExecutedView() {
         </Typography>
       </Alert>
 
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap" useFlexGap>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap" useFlexGap alignItems="center">
         <FormControl size="small" sx={{ minWidth: 120 }} disabled={!periodOptions.length && q.isLoading}>
           <InputLabel id="pve-from-label">From</InputLabel>
           <Select
             labelId="pve-from-label"
             label="From"
             value={selectedFrom}
-            onChange={(e) => setPeriodFrom(e.target.value)}
+            onChange={(e) => setDraftFrom(e.target.value)}
             data-testid="period-from"
           >
             {periodOptions.map((p) => (
@@ -592,7 +613,7 @@ export function PlanVsExecutedView() {
             labelId="pve-to-label"
             label="To"
             value={selectedTo}
-            onChange={(e) => setPeriodTo(e.target.value)}
+            onChange={(e) => setDraftTo(e.target.value)}
             data-testid="period-to"
           >
             {periodOptions.map((p) => (
@@ -607,9 +628,10 @@ export function PlanVsExecutedView() {
           <Select
             labelId="pve-bu-filter-label"
             label="BU filter"
-            value={productLine}
-            onChange={(e) => setProductLine(e.target.value)}
+            value={draftProductLine}
+            onChange={(e) => setDraftProductLine(e.target.value)}
             renderValue={(v) => (v === ALL_BU ? 'All BUs' : String(v))}
+            data-testid="pve-bu-filter"
           >
             <MenuItem value={ALL_BU}>All BUs</MenuItem>
             {buOptions.map((bu) => (
@@ -619,6 +641,20 @@ export function PlanVsExecutedView() {
             ))}
           </Select>
         </FormControl>
+        <Button
+          variant="contained"
+          size="small"
+          onClick={applyPeriodFilters}
+          disabled={!draftFrom || !draftTo || !filtersDirty}
+          data-testid="pve-apply-filters"
+        >
+          Apply
+        </Button>
+        {filtersDirty ? (
+          <Typography variant="caption" color="text.secondary">
+            Filters changed — click Apply to refresh
+          </Typography>
+        ) : null}
         <ToggleButtonGroup
           size="small"
           exclusive

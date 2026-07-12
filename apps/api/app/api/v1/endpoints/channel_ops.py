@@ -20,7 +20,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, func, select
+from sqlalchemy import String, cast, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect as sa_inspect
 
@@ -35,6 +35,7 @@ from app.services.channel_ops_derived_stock import (
     weeks_of_cover_or_none,
     yoy_pct_or_none,
 )
+from app.services.commercial_planner.read_model import product_specs_from_json
 from app.services.imports.shipment_evidence_read import (
     apply_active_evidence_filter,
     shipment_evidence_read_model,
@@ -44,8 +45,8 @@ EV = shipment_evidence_read_model()
 
 router = APIRouter()
 
-# Per-distributor inventory rows are derived in memory; cap list payload size (FLAG: no offset paging yet).
-INVENTORY_LIST_CAP = 500
+# Soft safety cap when building the in-memory derived inventory list (paging slices below this).
+INVENTORY_LIST_CAP = 5000
 
 
 def _parse_opt_date(s: str | None) -> date | None:
@@ -102,13 +103,60 @@ def _prior_year_quarter_bounds(d: date) -> tuple[date, date]:
     return start.replace(year=start.year - 1), end.replace(year=end.year - 1)
 
 
+def _normalize_business_unit(business_unit: str | None) -> str | None:
+    bu = (business_unit or "").strip()
+    return bu or None
+
+
+def _period_bounds_for_grain(
+    today: date, *, period_grain: str, weeks: int
+) -> tuple[date, date, date, date, str]:
+    """Return (cur_start, cur_end, prior_start, prior_end, grain_label)."""
+    grain = (period_grain or "quarter").strip().lower()
+    if grain == "year":
+        cur_start, cur_end = date(today.year, 1, 1), today
+        prior_end = date(today.year - 1, today.month, today.day)
+        prior_start = date(today.year - 1, 1, 1)
+        return cur_start, cur_end, prior_start, prior_end, "year"
+    if grain == "rolling_weeks":
+        cur_end = today
+        cur_start = today - timedelta(days=weeks * 7)
+        prior_end = cur_start - timedelta(days=1)
+        prior_start = prior_end - timedelta(days=weeks * 7)
+        return cur_start, cur_end, prior_start, prior_end, "rolling_weeks"
+    # default: current calendar quarter vs prior-year same quarter
+    cur_start, cur_end = _quarter_bounds(today)
+    prior_start, prior_end = _prior_year_quarter_bounds(today)
+    return cur_start, cur_end, prior_start, prior_end, "quarter"
+
+
+def _apply_sellout_cohort_filters(
+    q: Any,
+    *,
+    distributor_id: int | None,
+    business_unit: str | None,
+    join_product: bool = False,
+) -> Any:
+    """Apply distributor / BU filters; joins DimProduct when BU is set or join_product=True."""
+    needs_product = join_product or business_unit is not None
+    if needs_product:
+        q = q.join(DimProduct, FactSalesSellout.product_id == DimProduct.id)
+    if distributor_id is not None:
+        q = q.where(FactSalesSellout.distributor_id == int(distributor_id))
+    if business_unit is not None:
+        q = q.where(func.lower(DimProduct.business_unit) == business_unit.lower())
+    return q
+
+
 @router.get("/weekly-series")
 async def channel_ops_weekly_series(
     db: AsyncSession = Depends(get_db),
     distributor_id: int | None = None,
+    business_unit: str | None = None,
     weeks: int = Query(13, ge=1, le=52),
 ) -> dict[str, Any]:
     """Sell-out units by ISO week (last N weeks) for overview charts."""
+    bu = _normalize_business_unit(business_unit)
     end = date.today()
     start = end - timedelta(days=weeks * 7)
     week_col = func.date_trunc("week", FactSalesSellout.transaction_date)
@@ -118,8 +166,7 @@ async def channel_ops_weekly_series(
         .group_by(week_col)
         .order_by(week_col)
     )
-    if distributor_id is not None:
-        q = q.where(FactSalesSellout.distributor_id == int(distributor_id))
+    q = _apply_sellout_cohort_filters(q, distributor_id=distributor_id, business_unit=bu)
     rows = (await db.execute(q)).all()
     points: list[dict[str, Any]] = []
     for r in rows:
@@ -127,17 +174,22 @@ async def channel_ops_weekly_series(
         if hasattr(ws, "date"):
             ws = ws.date()
         points.append({"week_start": ws.isoformat() if isinstance(ws, date) else str(ws)[:10], "units": float(r.units or 0)})
-    return {"weeks": weeks, "points": points}
+    return {"weeks": weeks, "business_unit": bu, "points": points}
 
 
 @router.get("/summary")
 async def channel_ops_summary(
     db: AsyncSession = Depends(get_db),
     distributor_id: int | None = None,
+    business_unit: str | None = None,
+    period_grain: str = Query("quarter", pattern="^(quarter|year|rolling_weeks)$"),
+    weeks: int = Query(13, ge=1, le=52),
 ) -> dict[str, Any]:
     today = date.today()
-    q_start, q_end = _quarter_bounds(today)
-    py_start, py_end = _prior_year_quarter_bounds(today)
+    bu = _normalize_business_unit(business_unit)
+    q_start, q_end, py_start, py_end, grain = _period_bounds_for_grain(
+        today, period_grain=period_grain, weeks=weeks
+    )
 
     sell_q = select(
         func.coalesce(func.sum(FactSalesSellout.units), 0),
@@ -153,16 +205,14 @@ async def channel_ops_summary(
         FactSalesSellout.transaction_date >= py_start,
         FactSalesSellout.transaction_date <= py_end,
     )
-    if distributor_id is not None:
-        did = int(distributor_id)
-        sell_q = sell_q.where(FactSalesSellout.distributor_id == did)
-        sell_py = sell_py.where(FactSalesSellout.distributor_id == did)
+    sell_q = _apply_sellout_cohort_filters(sell_q, distributor_id=distributor_id, business_unit=bu)
+    sell_py = _apply_sellout_cohort_filters(sell_py, distributor_id=distributor_id, business_unit=bu)
 
     cur = (await db.execute(sell_q)).one()
     prior = (await db.execute(sell_py)).one()
     cur_units, cur_rev = float(cur[0]), float(cur[1])
     py_units, py_rev = float(prior[0]), float(prior[1])
-    # Denominator sanity: zero/missing prior quarter → n/a (never divide-by-zero).
+    # Denominator sanity: zero/missing prior period → n/a (never divide-by-zero).
     yoy_pct = yoy_pct_or_none(cur_units, py_units)
 
     # Channel stock = sum of derived latest per (distributor, product).
@@ -197,7 +247,7 @@ async def channel_ops_summary(
     distributors_reporting = int(await db.scalar(dist_reporting_q) or 0)
     distributors_expected = int(await db.scalar(dist_expected_q) or 0)
 
-    period_days = 90
+    period_days = 90 if grain != "rolling_weeks" else weeks * 7
     d_now = today - timedelta(days=period_days)
     d_prev_start = today - timedelta(days=period_days * 2)
     cust_now_q = select(func.count(func.distinct(FactSalesSellout.customer_id))).where(
@@ -213,6 +263,15 @@ async def channel_ops_summary(
         cust_prev_q = cust_prev_q.where(FactSalesSellout.distributor_id == did)
 
     return {
+        "period_grain": grain,
+        "period_start": q_start.isoformat(),
+        "period_end": q_end.isoformat(),
+        "business_unit": bu,
+        # Sell-out units/revenue/YoY honor BU when set. Stock / WoC / reporting / customers
+        # remain all-BU until sum_derived_channel_stock gains a product→BU join (FLAG).
+        "business_unit_applies_to": ["sell_out_units", "sell_out_revenue", "sell_out_yoy"]
+        if bu is not None
+        else ["all"],
         "sell_out_this_quarter": {"units": cur_units, "revenue": cur_rev},
         "sell_out_prior_year_quarter": {"units": py_units, "revenue": py_rev},
         "sell_out_yoy_pct": yoy_pct,
@@ -234,13 +293,16 @@ async def channel_ops_sell_out(
     distributor_id: int | None = None,
     product_id: int | None = None,
     customer_id: int | None = None,
+    business_unit: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    spec_search: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
 ) -> dict[str, Any]:
     df = _parse_opt_date(date_from)
     dt = _parse_opt_date(date_to)
+    bu = _normalize_business_unit(business_unit)
     skip = (page - 1) * page_size
 
     q = (
@@ -248,6 +310,8 @@ async def channel_ops_sell_out(
             FactSalesSellout,
             DimProduct.sku,
             DimProduct.name.label("product_name"),
+            DimProduct.business_unit,
+            DimProduct.specs_json,
             DimCustomer.name.label("customer_name"),
             DimDistributor.name.label("distributor_name"),
         )
@@ -261,10 +325,17 @@ async def channel_ops_sell_out(
         q = q.where(FactSalesSellout.product_id == int(product_id))
     if customer_id is not None:
         q = q.where(FactSalesSellout.customer_id == int(customer_id))
+    if bu is not None:
+        q = q.where(func.lower(DimProduct.business_unit) == bu.lower())
     if df is not None:
         q = q.where(FactSalesSellout.transaction_date >= df)
     if dt is not None:
         q = q.where(FactSalesSellout.transaction_date <= dt)
+
+    spec_term = (spec_search or "").strip()
+    if spec_term:
+        # Honest contains-search across specs_json blob (not per-key). Per-key JSONB filters = Wave 2.
+        q = q.where(cast(DimProduct.specs_json, String).ilike(f"%{spec_term}%"))
 
     total = int(await db.scalar(select(func.count()).select_from(q.subquery())) or 0)
 
@@ -317,6 +388,7 @@ async def channel_ops_sell_out(
             key = (int(s.distributor_id or 0), int(s.product_id), int(s.customer_id))
             if key in prior_units_map:
                 prior_units = prior_units_map[key]
+        specs = product_specs_from_json(row.specs_json if isinstance(row.specs_json, dict) else None)
         items.append(
             {
                 "date": s.transaction_date.isoformat(),
@@ -324,10 +396,12 @@ async def channel_ops_sell_out(
                 "customer_name": row.customer_name,
                 "product_name": row.product_name,
                 "sku": row.sku,
+                "business_unit": row.business_unit,
                 "units": float(s.units),
                 "unit_price": unit_price,
                 "revenue": float(s.revenue),
                 "prior_period_units": prior_units,
+                **specs,
             }
         )
 
@@ -339,6 +413,8 @@ async def channel_ops_inventory(
     db: AsyncSession = Depends(get_db),
     distributor_id: int | None = Query(None),
     product_id: int | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
 ) -> dict[str, Any]:
     if distributor_id is None:
         raise HTTPException(status_code=400, detail="distributor_id is required")
@@ -411,12 +487,21 @@ async def channel_ops_inventory(
             }
         )
 
-    total = len(items)
-    truncated = total > INVENTORY_LIST_CAP
-    if truncated:
-        items = items[:INVENTORY_LIST_CAP]
+    true_total = len(items)
+    truncated = true_total > INVENTORY_LIST_CAP
+    working = items[:INVENTORY_LIST_CAP] if truncated else items
+    total = len(working)
+    skip = (page - 1) * page_size
+    page_items = working[skip : skip + page_size]
 
-    return {"items": items, "total": total, "truncated": truncated}
+    return {
+        "items": page_items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "truncated": truncated,
+        "true_total": true_total,
+    }
 
 
 @router.get("/movements")

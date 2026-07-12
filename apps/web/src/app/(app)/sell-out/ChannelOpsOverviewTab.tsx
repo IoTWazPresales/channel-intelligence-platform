@@ -20,7 +20,7 @@ import {
 import { apiGet } from '@/lib/api';
 
 import { useChannelOpsSummary } from './ChannelOpsKpiCards';
-import { depthAtLeast, type IntelDepth } from './intelDepth';
+import { depthAtLeast, type IntelDepth, type PeriodGrain } from './intelDepth';
 
 type WeeklySeries = { weeks: number; points: { week_start: string; units: number }[] };
 
@@ -31,11 +31,17 @@ function bannerKey(id: string) {
 export function ChannelOpsOverviewTab({
   depth,
   distributorId,
+  businessUnit,
+  weeks = 13,
+  periodGrain = 'quarter',
 }: {
   depth: IntelDepth;
   distributorId?: number | null;
+  businessUnit?: string | null;
+  weeks?: number;
+  periodGrain?: PeriodGrain;
 }) {
-  const { data: summary } = useChannelOpsSummary(distributorId);
+  const { data: summary } = useChannelOpsSummary(distributorId, businessUnit, periodGrain, weeks);
   const [dismissed, setDismissed] = useState<Record<string, boolean>>(() => {
     if (typeof window === 'undefined') return {};
     return {
@@ -46,10 +52,11 @@ export function ChannelOpsOverviewTab({
   });
 
   const { data: weekly, isLoading: weeklyLoading, isError: weeklyError } = useQuery({
-    queryKey: ['channel-ops-weekly', distributorId ?? null],
+    queryKey: ['channel-ops-weekly', distributorId ?? null, businessUnit ?? null, weeks],
     queryFn: ({ signal }) => {
-      const params = new URLSearchParams({ weeks: '13' });
+      const params = new URLSearchParams({ weeks: String(weeks) });
       if (distributorId != null) params.set('distributor_id', String(distributorId));
+      if (businessUnit) params.set('business_unit', businessUnit);
       return apiGet<WeeklySeries>(`/api/v1/channel-ops/weekly-series?${params}`, { signal });
     },
   });
@@ -83,7 +90,7 @@ export function ChannelOpsOverviewTab({
       )}
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Typography variant="subtitle2" gutterBottom>
-          Sell-out by week
+          Sell-out by week (last {weeks})
           {depthAtLeast(depth, 'forecast') ? ' · with forecast overlay' : ''}
         </Typography>
         {weeklyError ? (
@@ -92,7 +99,9 @@ export function ChannelOpsOverviewTab({
           <Typography variant="body2">Loading chart…</Typography>
         ) : chartData.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
-            No sell-out transactions in the last 13 weeks.
+            No sell-out transactions in the last {weeks} weeks
+            {distributorId != null ? ' for this distributor' : ''}
+            {businessUnit ? ` / ${businessUnit}` : ''}.
           </Typography>
         ) : (
           <ResponsiveContainer width="100%" height={280}>

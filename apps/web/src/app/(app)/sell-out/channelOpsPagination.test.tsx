@@ -118,11 +118,7 @@ describe('Channel Operations pagination (BACKLOG-074 U4g)', () => {
       return {};
     });
 
-    renderWithQuery(<ChannelOpsMovementsTab depth="operational" />);
-
-    const combo = await screen.findByRole('combobox', { name: /distributor/i });
-    fireEvent.mouseDown(combo);
-    fireEvent.click(await screen.findByText(/Dist Seven/));
+    renderWithQuery(<ChannelOpsMovementsTab depth="operational" distributorId={7} />);
 
     expect(await screen.findByText('M-SKU-1')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Go to next page' }));

@@ -17,7 +17,9 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-07-12 — **Audit-gap fixes (uncommitted):** shipping overdue UTC↔KPI parity; stock-health empty UI; Related names nav/toolbar; customers exclude merged default; WoC sum(vel)+104w cap; OPEN_CHANNEL loser guard; shipping attribution 45s TTL (~17s→~0.4s warm). Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
+- 2026-07-12 — **Ops grid Wave 1 finish (Fable CONSULT READY):** D1–D5 applied (BU cohort flag, single `spec_search`, Overview periodGrain, docs). Premature IMPLEMENT acknowledged. Next: commit → VERIFY. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
+- 2026-07-12 — **Audit-gap fixes:** shipping overdue UTC↔KPI parity; stock-health empty UI; Related names nav/toolbar; customers exclude merged default; WoC sum(vel)+104w cap; OPEN_CHANNEL loser guard; shipping attribution 45s TTL. Pushed @ `b621a99`. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
+- 2026-07-12 — **Ops grid Wave 1 draft (pre-CONSULT, superseded):** Channel Ops shared filters + inventory paging + sell-out specs + PVE Apply — treated as draft until Fable READY + D1–D5. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-11 — **U5a+U5b + OPEN_CHANNEL repair:** merge seals loser-name aliases; DSI follows `merged_into`; backfill + wrong-merge repair ops scripts (applied on cip). Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-11 — **U5a+U5b merge alias seal (uncommitted):** full-merge mints global loser-name aliases; DSI resolve follows `merged_into_customer_id` (DB+cache). Tests green. Next: commit → VERIFY → soak. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-11 — **Related-master U1+U2 + search debounce pushed** (`792a9db`, `55a519f`): anchored containment + Related names tab (no job bounce); debounced master search `q`. Next: Fable VERIFY / soak. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
