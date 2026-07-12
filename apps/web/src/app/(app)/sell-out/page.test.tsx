@@ -58,4 +58,14 @@ describe('ChannelOperationsPage', () => {
     expect(screen.getByText('Overview')).toBeInTheDocument();
     expect(screen.getByText('Sell-out')).toBeInTheDocument();
   });
+
+  it('renders KPI cards above the shared filter bar', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('channel-ops-distributor')).toBeInTheDocument();
+    });
+    const kpi = screen.getByTestId('channel-ops-kpi-cards');
+    const filter = screen.getByTestId('channel-ops-distributor');
+    expect(kpi.compareDocumentPosition(filter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

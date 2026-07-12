@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-12 — **CO-LAYOUT (Unit 1):** Channel Ops KPI cards above shared filter bar. Branch `feat/channel-ops-kpi-first-layout`. Next: Fable VERIFY then U4f.
 - 2026-07-12 — **Ops grid Wave 3 Fable VERIFY PASS** (`7058822`): CST empty-states + CPOR customer_id hydrate. Queue empty (Waves 1–3). Optional: open PR. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-12 — **Ops grid Wave 3 (commit):** CST actionable empty-states + guide; CPOR customer_id autocomplete hydrate. Vitest 17/17. Next: Fable VERIFY. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.
 - 2026-07-12 — **Ops grid Wave 2 Fable VERIFY PASS** (`6609ad2`): Products BU/line/series/spec_search; CPOR q/customer + column picker. Next: Wave 3 CST empty-state on proceed. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.

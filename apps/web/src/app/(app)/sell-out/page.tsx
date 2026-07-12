@@ -68,6 +68,13 @@ export default function ChannelOperationsPage() {
         }
       />
 
+      <ChannelOpsKpiCards
+        distributorId={distributorId}
+        businessUnit={bu}
+        periodGrain={periodGrain}
+        weeks={weeks}
+      />
+
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
         <Autocomplete
           sx={{ minWidth: 280, flex: 1 }}
@@ -125,13 +132,6 @@ export default function ChannelOperationsPage() {
           inputProps={{ 'data-testid': 'channel-ops-bu' }}
         />
       </Stack>
-
-      <ChannelOpsKpiCards
-        distributorId={distributorId}
-        businessUnit={bu}
-        periodGrain={periodGrain}
-        weeks={weeks}
-      />
 
       <Tabs value={tab} onChange={(_e, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab label="Overview" />

@@ -83,7 +83,14 @@ export function ChannelOpsKpiCards({
     !data.business_unit_applies_to.includes('all');
 
   return (
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+    <Stack
+      data-testid="channel-ops-kpi-cards"
+      direction={{ xs: 'column', md: 'row' }}
+      spacing={2}
+      sx={{ mb: 2 }}
+      flexWrap="wrap"
+      useFlexGap
+    >
       <Paper variant="outlined" sx={{ p: 2, flex: '1 1 200px' }}>
         <Typography variant="overline" color="text.secondary">
           {periodLabel}

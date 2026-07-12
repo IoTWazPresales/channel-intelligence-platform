@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-12 (Ops grid Waves 1–3 complete — Fable PASS)
+**Last updated:** 2026-07-12 (CO-LAYOUT Unit 1 in progress)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,28 +9,24 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/channel-ops-kpi-and-gap-scan-perf` |
-| **HEAD** | see git (`7058822` Wave 3 tip when PASS recorded) |
-| **PR** | Not opened — ready when Warren says |
+| **Branch** | `feat/channel-ops-kpi-first-layout` |
+| **Base** | `dc614fe` (Waves 1–3 sealed on `feat/channel-ops-kpi-and-gap-scan-perf`) |
+| **PR** | Not opened |
 | **Alembic (DB)** | **`20260710_0072`** |
-| **Fable** | Waves 1–3 **PASS** (queue empty for ops grid parity) |
+| **Fable** | Queue CONSULT READY — Units: CO-LAYOUT ? U4f ? U4g ? CST-BULK ? SHIP-ALIGN |
 
 ---
 
-## What works (ops grid waves)
+## Next queue (locked)
 
-- **Wave 1:** Channel Ops cohort filters + inventory paging + sell-out `spec_search` + PVE Apply (`70aab64`)
-- **Wave 2:** Products BU/line/series/spec_search; CPOR q/customer + column picker (`6609ad2`)
-- **Wave 3:** CST actionable empty-states + guide; CPOR `customer_id` hydrate (`7058822`)
-
-## Deferred (FLAG — not this PR)
-
-- BU filter on derived stock / WoC / reporting / customers
-- AG Grid swap on Channel Ops (still EnterpriseDataGrid bar)
+1. **CO-LAYOUT** — KPI cards above filters (this branch)
+2. **U4f** — PVE exception-list server paging + chrome
+3. **U4g** — Channel Ops AG Grid (Sell-out/Inventory/Movements)
+4. **CST-BULK** — Alias batch Confirm/Reject
+5. **SHIP-ALIGN** — Inbound shipping vertical rhythm only
 
 ---
 
 ## Next
 
-1. Open PR for Waves 1–3 when Warren says (or soak / other TRIGGER)
-2. Do **not** start a new ops-grid theme without explicit proceed
+1. Finish CO-LAYOUT ? VERIFY ? next unit on new branch
