@@ -1,21 +1,15 @@
 'use client';
 
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import {
-  Alert,
-  Box,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TablePagination,
-  TableRow,
-  Typography,
-} from '@mui/material';
+import { Alert, Box, TablePagination } from '@mui/material';
+import type { ColDef, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import { gridRowMetrics, paginatedGridHeight } from '@/features/plan-vs-executed/gridPagination';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -44,6 +38,11 @@ type InvRow = {
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 50;
 
+function fmtNum(n: number | null | undefined): string {
+  if (n == null) return '—';
+  return n.toLocaleString();
+}
+
 export function ChannelOpsInventoryTab({
   depth,
   distributorId,
@@ -54,12 +53,13 @@ export function ChannelOpsInventoryTab({
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const distId = distributorId ?? null;
+  const { rowHeight, headerHeight } = gridRowMetrics('comfortable');
 
   useEffect(() => {
     setPage(0);
   }, [distId]);
 
-  const { data, isLoading, isError, error } = useQuery({
+  const q = useQuery({
     queryKey: ['channel-ops-inventory', distId, page, pageSize],
     queryFn: ({ signal }) =>
       apiGet<{
@@ -71,10 +71,97 @@ export function ChannelOpsInventoryTab({
         true_total?: number;
       }>(
         `/api/v1/channel-ops/inventory?distributor_id=${distId}&page=${page + 1}&page_size=${pageSize}`,
-        { signal }
+        { signal },
       ),
     enabled: distId != null,
   });
+
+  const columnDefs = useMemo<ColDef<InvRow>[]>(() => {
+    const cols: ColDef<InvRow>[] = [
+      { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 160 },
+      { field: 'sku', headerName: 'SKU', width: 120 },
+      {
+        field: 'reported_soh',
+        headerName: 'Reported SOH',
+        width: 120,
+        type: 'numericColumn',
+        valueFormatter: (p) => fmtNum(p.value as number),
+      },
+      {
+        colId: 'derived_stock',
+        headerName: 'Derived stock',
+        width: 120,
+        type: 'numericColumn',
+        valueGetter: (p) => p.data?.derived_stock ?? p.data?.reported_soh ?? null,
+        valueFormatter: (p) => fmtNum(p.value as number | null),
+      },
+    ];
+    if (depthAtLeast(depth, 'operational')) {
+      cols.push(
+        {
+          field: 'calculated_soh',
+          headerName: 'Calculated SOH',
+          width: 130,
+          type: 'numericColumn',
+          valueFormatter: (p) => fmtNum(p.value as number | null),
+        },
+        {
+          field: 'variance_units',
+          headerName: 'Variance',
+          width: 110,
+          type: 'numericColumn',
+          valueFormatter: (p) => fmtNum(p.value as number | null),
+        },
+        { field: 'reconciliation_status', headerName: 'Recon status', width: 130 },
+      );
+    }
+    if (depthAtLeast(depth, 'strategic')) {
+      cols.push(
+        {
+          field: 'velocity_52wk',
+          headerName: 'Velocity 52wk',
+          width: 120,
+          type: 'numericColumn',
+          valueFormatter: (p) =>
+            p.value == null ? '—' : Number(p.value).toFixed(2),
+        },
+        {
+          field: 'weeks_of_cover',
+          headerName: 'Weeks of cover',
+          width: 130,
+          type: 'numericColumn',
+          valueFormatter: (p) =>
+            p.value == null ? 'n/a' : Number(p.value).toFixed(1),
+        },
+      );
+    }
+    if (depthAtLeast(depth, 'forecast')) {
+      cols.push({
+        field: 'reorder_signal',
+        headerName: 'Reorder',
+        width: 100,
+        cellRenderer: (p: ICellRendererParams<InvRow>) =>
+          p.data?.reorder_signal ? (
+            <WarningAmberIcon color="warning" fontSize="small" titleAccess="Reorder signal" />
+          ) : (
+            '—'
+          ),
+      });
+    }
+    return cols;
+  }, [depth]);
+
+  const gridOptions = useMemo<GridOptions<InvRow>>(
+    () => ({
+      pagination: false,
+      suppressPaginationPanel: true,
+      getRowId: (p) => String(p.data.product_id),
+      rowHeight,
+      headerHeight,
+      defaultColDef: { resizable: true, sortable: true },
+    }),
+    [rowHeight, headerHeight],
+  );
 
   if (distId == null) {
     return (
@@ -85,116 +172,55 @@ export function ChannelOpsInventoryTab({
     );
   }
 
+  const items = q.data?.items ?? [];
+  const total = q.data?.total ?? 0;
+
   return (
     <Box>
-      {isError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {(error as Error)?.message ?? 'Failed to load inventory.'}
-        </Alert>
-      )}
-      {data?.truncated ? (
+      {q.data?.truncated ? (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Soft cap: paging the first {data.total.toLocaleString()} of{' '}
-          {(data.true_total ?? data.total).toLocaleString()} products for this distributor.
+          Soft cap: paging the first {total.toLocaleString()} of{' '}
+          {(q.data.true_total ?? total).toLocaleString()} products for this distributor.
         </Alert>
       ) : null}
-      <Paper variant="outlined">
-        <Box sx={{ p: 2 }}>
-          {data != null && data.total > 0 ? (
-            <TablePagination
-              component="div"
-              count={data.total}
-              page={page}
-              onPageChange={(_e, nextPage) => setPage(nextPage)}
-              rowsPerPage={pageSize}
-              onRowsPerPageChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(0);
-              }}
-              rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
-              labelDisplayedRows={({ from, to, count }) =>
-                `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
-              }
-              sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}
-            />
-          ) : null}
-          {isLoading ? (
-            <Typography variant="body2">Loading…</Typography>
-          ) : (data?.items ?? []).length === 0 ? (
-            <Alert severity="info">
-              No distributor inventory rows for this selection. Confirm DSI inventory snapshots exist for this
-              distributor (Admin → Imports), or try another distributor.
-            </Alert>
-          ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Product</TableCell>
-                  <TableCell>SKU</TableCell>
-                  <TableCell align="right">Reported SOH</TableCell>
-                  <TableCell align="right">Derived stock</TableCell>
-                  {depthAtLeast(depth, 'operational') && (
-                    <>
-                      <TableCell align="right">Calculated SOH</TableCell>
-                      <TableCell align="right">Variance</TableCell>
-                      <TableCell>Recon status</TableCell>
-                    </>
-                  )}
-                  {depthAtLeast(depth, 'strategic') && (
-                    <>
-                      <TableCell align="right">Velocity 52wk</TableCell>
-                      <TableCell align="right">Weeks of cover</TableCell>
-                    </>
-                  )}
-                  {depthAtLeast(depth, 'forecast') && <TableCell>Reorder</TableCell>}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(data?.items ?? []).map((r) => (
-                  <TableRow key={r.product_id}>
-                    <TableCell>{r.product_name}</TableCell>
-                    <TableCell>{r.sku}</TableCell>
-                    <TableCell align="right">{r.reported_soh.toLocaleString()}</TableCell>
-                    <TableCell align="right">
-                      {(r.derived_stock ?? r.reported_soh).toLocaleString()}
-                    </TableCell>
-                    {depthAtLeast(depth, 'operational') && (
-                      <>
-                        <TableCell align="right">
-                          {r.calculated_soh != null ? r.calculated_soh.toLocaleString() : '—'}
-                        </TableCell>
-                        <TableCell align="right">
-                          {r.variance_units != null ? r.variance_units.toLocaleString() : '—'}
-                        </TableCell>
-                        <TableCell>{r.reconciliation_status ?? '—'}</TableCell>
-                      </>
-                    )}
-                    {depthAtLeast(depth, 'strategic') && (
-                      <>
-                        <TableCell align="right">
-                          {r.velocity_52wk != null ? r.velocity_52wk.toFixed(2) : '—'}
-                        </TableCell>
-                        <TableCell align="right">
-                          {r.weeks_of_cover != null ? r.weeks_of_cover.toFixed(1) : 'n/a'}
-                        </TableCell>
-                      </>
-                    )}
-                    {depthAtLeast(depth, 'forecast') && (
-                      <TableCell>
-                        {r.reorder_signal ? (
-                          <WarningAmberIcon color="warning" fontSize="small" titleAccess="Reorder signal" />
-                        ) : (
-                          '—'
-                        )}
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Box>
-      </Paper>
+      <ModuleGridToolbar onRefresh={() => void q.refetch()} busy={q.isFetching} />
+      <ModuleDataSection
+        isLoading={q.isLoading}
+        isError={q.isError}
+        error={(q.error as Error) ?? null}
+        onRetry={() => void q.refetch()}
+        isEmpty={items.length === 0}
+        empty={{
+          title: 'No inventory rows',
+          description:
+            'No distributor inventory rows for this selection. Confirm DSI inventory snapshots exist for this distributor (Admin → Imports), or try another distributor.',
+        }}
+      >
+        <EnterpriseDataGrid
+          rowData={items}
+          columnDefs={columnDefs}
+          height={paginatedGridHeight(Math.min(pageSize, Math.max(items.length, 1)), {
+            rowHeight,
+            headerHeight,
+          })}
+          gridOptions={gridOptions}
+        />
+        <TablePagination
+          component="div"
+          count={total}
+          page={page}
+          onPageChange={(_e, nextPage) => setPage(nextPage)}
+          rowsPerPage={pageSize}
+          onRowsPerPageChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
+          }
+        />
+      </ModuleDataSection>
     </Box>
   );
 }

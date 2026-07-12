@@ -3,9 +3,7 @@
 import {
   Alert,
   Autocomplete,
-  Box,
   Chip,
-  Paper,
   Stack,
   Table,
   TableBody,
@@ -15,10 +13,16 @@ import {
   TableRow,
   TextField,
   Typography,
+  Paper,
 } from '@mui/material';
+import type { ColDef, GridOptions, ValueGetterParams } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import { gridRowMetrics, paginatedGridHeight } from '@/features/plan-vs-executed/gridPagination';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -91,8 +95,9 @@ export function SellOutTab({
   const [channelPage, setChannelPage] = useState(0);
   const [channelPageSize, setChannelPageSize] = useState(CHANNEL_DEFAULT_PAGE_SIZE);
   const useChannelApi = depthAtLeast(depth, 'operational');
+  const { rowHeight, headerHeight } = gridRowMetrics('comfortable');
 
-  const { data: summary } = useQuery({
+  const summaryQ = useQuery({
     queryKey: ['sellout-commercial-summary'],
     queryFn: ({ signal }) => apiGet<SelloutSummary>('/api/v1/sellout/commercial-summary', { signal }),
   });
@@ -159,10 +164,10 @@ export function SellOutTab({
       specSearch,
       channelPage,
       channelPageSize,
-    ]
+    ],
   );
 
-  const { data: lines, isLoading: linesLoading, isError: linesError, error: linesErr } = useQuery({
+  const linesQ = useQuery({
     queryKey: linesQueryKey,
     queryFn: async ({ signal }) => {
       if (useChannelApi) {
@@ -204,12 +209,128 @@ export function SellOutTab({
     enabled: smartPreset !== 'zero_sellout_products',
   });
 
-  const { data: zeroProducts, isLoading: zeroLoading } = useQuery({
+  const zeroQ = useQuery({
     queryKey: ['sellout-zero-products'],
     queryFn: ({ signal }) =>
-      apiGet<{ items: ZeroProduct[] }>('/api/v1/sellout/zero-sellout-products?lookback_days=365&limit=80', { signal }),
+      apiGet<{ items: ZeroProduct[] }>('/api/v1/sellout/zero-sellout-products?lookback_days=365&limit=80', {
+        signal,
+      }),
     enabled: smartPreset === 'zero_sellout_products',
   });
+
+  const channelCols = useMemo<ColDef<ChannelSelloutLine>[]>(() => {
+    const cols: ColDef<ChannelSelloutLine>[] = [
+      { field: 'date', headerName: 'Date', width: 110 },
+      { field: 'sku', headerName: 'SKU', width: 120 },
+      { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 140 },
+      { field: 'distributor_name', headerName: 'Distributor', width: 140 },
+      { field: 'product_spec_cpu', headerName: 'CPU', width: 100 },
+      { field: 'product_spec_gpu', headerName: 'GPU', width: 100 },
+      { field: 'product_spec_ram', headerName: 'RAM', width: 90 },
+      { field: 'product_spec_storage', headerName: 'Storage', width: 100 },
+      { field: 'product_spec_generation', headerName: 'Gen', width: 90 },
+      { field: 'product_spec_chassis', headerName: 'Chassis', width: 100 },
+      {
+        field: 'units',
+        headerName: 'Units',
+        width: 100,
+        type: 'numericColumn',
+        valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
+      },
+      {
+        field: 'revenue',
+        headerName: 'Revenue',
+        width: 110,
+        type: 'numericColumn',
+        valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
+      },
+    ];
+    if (depthAtLeast(depth, 'operational')) {
+      cols.push(
+        {
+          field: 'prior_period_units',
+          headerName: 'Prior period qty',
+          width: 130,
+          type: 'numericColumn',
+          valueFormatter: (p) =>
+            p.value == null ? '—' : Number(p.value).toLocaleString(),
+        },
+        {
+          colId: 'change_pct',
+          headerName: 'Change %',
+          width: 110,
+          type: 'numericColumn',
+          valueGetter: (p: ValueGetterParams<ChannelSelloutLine>) => {
+            const row = p.data;
+            if (!row || row.prior_period_units == null || row.prior_period_units <= 0) return null;
+            return ((row.units - row.prior_period_units) / row.prior_period_units) * 100;
+          },
+          valueFormatter: (p) => (p.value == null ? '—' : `${Number(p.value).toFixed(1)}%`),
+        },
+      );
+    }
+    return cols;
+  }, [depth]);
+
+  const legacyCols = useMemo<ColDef<SelloutLine>[]>(
+    () => [
+      { field: 'period_start', headerName: 'Period', width: 110 },
+      { field: 'product_sku', headerName: 'SKU', width: 120 },
+      {
+        colId: 'customer',
+        headerName: 'Customer',
+        flex: 1,
+        minWidth: 160,
+        valueGetter: (p) =>
+          p.data ? `${p.data.customer_name ?? ''} (${p.data.customer_code ?? ''})` : '',
+      },
+      { field: 'distributor_code', headerName: 'Distributor', width: 120 },
+      {
+        field: 'units',
+        headerName: 'Units',
+        width: 100,
+        type: 'numericColumn',
+        valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
+      },
+      {
+        field: 'revenue',
+        headerName: 'Revenue',
+        width: 110,
+        type: 'numericColumn',
+        valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
+      },
+    ],
+    [],
+  );
+
+  const channelGridOptions = useMemo<GridOptions<ChannelSelloutLine>>(
+    () => ({
+      pagination: false,
+      suppressPaginationPanel: true,
+      getRowId: (p) => `${p.data.date}|${p.data.sku}|${p.data.customer_name}|${p.rowIndex}`,
+      rowHeight,
+      headerHeight,
+      defaultColDef: { resizable: true, sortable: true },
+    }),
+    [rowHeight, headerHeight],
+  );
+
+  const legacyGridOptions = useMemo<GridOptions<SelloutLine>>(
+    () => ({
+      pagination: false,
+      suppressPaginationPanel: true,
+      getRowId: (p) => String(p.data.id),
+      rowHeight,
+      headerHeight,
+      defaultColDef: { resizable: true, sortable: true },
+    }),
+    [rowHeight, headerHeight],
+  );
+
+  const summary = summaryQ.data;
+  const lines = linesQ.data;
+  const channelItems = lines?.channel ? (lines.items as ChannelSelloutLine[]) : [];
+  const legacyItems = lines && !lines.channel ? (lines.items as SelloutLine[]) : [];
 
   return (
     <>
@@ -321,161 +442,91 @@ export function SellOutTab({
       ) : null}
 
       {smartPreset === 'zero_sellout_products' ? (
-        <Paper variant="outlined">
-          <Box sx={{ p: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Active products with no sell-out in the last 365 days
-            </Typography>
-            {zeroLoading ? (
-              <Typography variant="body2">Loading…</Typography>
-            ) : (zeroProducts?.items ?? []).length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No zero-sell-out products in lookback window.
-              </Typography>
-            ) : (
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>SKU</TableCell>
-                    <TableCell>Name</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(zeroProducts?.items ?? []).map((p) => (
-                    <TableRow key={p.product_id}>
-                      <TableCell>{p.sku}</TableCell>
-                      <TableCell>{p.name}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </Box>
-        </Paper>
+        <ModuleDataSection
+          isLoading={zeroQ.isLoading}
+          isError={zeroQ.isError}
+          error={(zeroQ.error as Error) ?? null}
+          onRetry={() => void zeroQ.refetch()}
+          isEmpty={(zeroQ.data?.items ?? []).length === 0}
+          empty={{
+            title: 'No zero-sell-out products',
+            description: 'No zero-sell-out products in lookback window.',
+          }}
+        >
+          <Typography variant="subtitle2" gutterBottom>
+            Active products with no sell-out in the last 365 days
+          </Typography>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>SKU</TableCell>
+                <TableCell>Name</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {(zeroQ.data?.items ?? []).map((p) => (
+                <TableRow key={p.product_id}>
+                  <TableCell>{p.sku}</TableCell>
+                  <TableCell>{p.name}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </ModuleDataSection>
       ) : (
-        <Paper variant="outlined">
-          <Box sx={{ p: 2 }}>
-            {linesError && (
-              <Alert severity="error" sx={{ mb: 1 }}>
-                {(linesErr as Error)?.message ?? 'Failed to load sell-out lines.'}
-              </Alert>
-            )}
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {lines != null
-                ? `${lines.total.toLocaleString()} matching rows · showing ${lines.items.length}`
-                : null}
-            </Typography>
-            {lines?.channel && lines.total > 0 ? (
-              <TablePagination
-                component="div"
-                count={lines.total}
-                page={channelPage}
-                onPageChange={(_e, nextPage) => setChannelPage(nextPage)}
-                rowsPerPage={channelPageSize}
-                onRowsPerPageChange={(e) => {
-                  setChannelPageSize(Number(e.target.value));
-                  setChannelPage(0);
-                }}
-                rowsPerPageOptions={[...CHANNEL_PAGE_SIZE_OPTIONS]}
-                labelDisplayedRows={({ from, to, count }) =>
-                  `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
-                }
-                sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}
-              />
-            ) : null}
-            {linesLoading ? (
-              <Typography variant="body2">Loading…</Typography>
-            ) : (lines?.items ?? []).length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No sell-out rows match the current filters.
-              </Typography>
-            ) : lines?.channel ? (
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Date</TableCell>
-                    <TableCell>SKU</TableCell>
-                    <TableCell>Customer</TableCell>
-                    <TableCell>Distributor</TableCell>
-                    <TableCell>CPU</TableCell>
-                    <TableCell>GPU</TableCell>
-                    <TableCell>RAM</TableCell>
-                    <TableCell>Storage</TableCell>
-                    <TableCell>Gen</TableCell>
-                    <TableCell>Chassis</TableCell>
-                    <TableCell align="right">Units</TableCell>
-                    <TableCell align="right">Revenue</TableCell>
-                    {depthAtLeast(depth, 'operational') && (
-                      <>
-                        <TableCell align="right">Prior period qty</TableCell>
-                        <TableCell align="right">Change %</TableCell>
-                      </>
-                    )}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(lines.items as ChannelSelloutLine[]).map((r, i) => {
-                    const chg =
-                      r.prior_period_units != null && r.prior_period_units > 0
-                        ? ((r.units - r.prior_period_units) / r.prior_period_units) * 100
-                        : null;
-                    return (
-                      <TableRow key={`${r.date}-${r.sku}-${i}`}>
-                        <TableCell>{r.date}</TableCell>
-                        <TableCell>{r.sku}</TableCell>
-                        <TableCell>{r.customer_name}</TableCell>
-                        <TableCell>{r.distributor_name ?? '—'}</TableCell>
-                        <TableCell>{r.product_spec_cpu ?? '—'}</TableCell>
-                        <TableCell>{r.product_spec_gpu ?? '—'}</TableCell>
-                        <TableCell>{r.product_spec_ram ?? '—'}</TableCell>
-                        <TableCell>{r.product_spec_storage ?? '—'}</TableCell>
-                        <TableCell>{r.product_spec_generation ?? '—'}</TableCell>
-                        <TableCell>{r.product_spec_chassis ?? '—'}</TableCell>
-                        <TableCell align="right">{r.units.toLocaleString()}</TableCell>
-                        <TableCell align="right">{r.revenue.toLocaleString()}</TableCell>
-                        {depthAtLeast(depth, 'operational') && (
-                          <>
-                            <TableCell align="right">
-                              {r.prior_period_units != null ? r.prior_period_units.toLocaleString() : '—'}
-                            </TableCell>
-                            <TableCell align="right">{chg != null ? `${chg.toFixed(1)}%` : '—'}</TableCell>
-                          </>
-                        )}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+        <>
+          <ModuleGridToolbar onRefresh={() => void linesQ.refetch()} busy={linesQ.isFetching} />
+          <ModuleDataSection
+            isLoading={linesQ.isLoading}
+            isError={linesQ.isError}
+            error={(linesQ.error as Error) ?? null}
+            onRetry={() => void linesQ.refetch()}
+            isEmpty={(lines?.items ?? []).length === 0}
+            empty={{
+              title: 'No sell-out rows',
+              description: 'No sell-out rows match the current filters.',
+            }}
+          >
+            {lines?.channel ? (
+              <>
+                <EnterpriseDataGrid
+                  rowData={channelItems}
+                  columnDefs={channelCols}
+                  height={paginatedGridHeight(
+                    Math.min(channelPageSize, Math.max(channelItems.length, 1)),
+                    { rowHeight, headerHeight },
+                  )}
+                  gridOptions={channelGridOptions}
+                />
+                <TablePagination
+                  component="div"
+                  count={lines.total}
+                  page={channelPage}
+                  onPageChange={(_e, nextPage) => setChannelPage(nextPage)}
+                  rowsPerPage={channelPageSize}
+                  onRowsPerPageChange={(e) => {
+                    setChannelPageSize(Number(e.target.value));
+                    setChannelPage(0);
+                  }}
+                  rowsPerPageOptions={[...CHANNEL_PAGE_SIZE_OPTIONS]}
+                  labelDisplayedRows={({ from, to, count }) =>
+                    `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
+                  }
+                />
+              </>
             ) : (
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Period</TableCell>
-                    <TableCell>SKU</TableCell>
-                    <TableCell>Customer</TableCell>
-                    <TableCell>Distributor</TableCell>
-                    <TableCell align="right">Units</TableCell>
-                    <TableCell align="right">Revenue</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(lines?.items as SelloutLine[]).map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell>{r.period_start}</TableCell>
-                      <TableCell>{r.product_sku}</TableCell>
-                      <TableCell>
-                        {r.customer_name} ({r.customer_code})
-                      </TableCell>
-                      <TableCell>{r.distributor_code ?? '—'}</TableCell>
-                      <TableCell align="right">{r.units.toLocaleString()}</TableCell>
-                      <TableCell align="right">{r.revenue.toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <EnterpriseDataGrid
+                rowData={legacyItems}
+                columnDefs={legacyCols}
+                height={paginatedGridHeight(Math.max(legacyItems.length, 1), {
+                  rowHeight,
+                  headerHeight,
+                })}
+                gridOptions={legacyGridOptions}
+              />
             )}
-          </Box>
-        </Paper>
+          </ModuleDataSection>
+        </>
       )}
     </>
   );

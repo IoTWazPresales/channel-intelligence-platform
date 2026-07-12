@@ -6,11 +6,22 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { apiGet } from '@/lib/api';
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
+import { ChannelOpsInventoryTab } from './ChannelOpsInventoryTab';
 import { ChannelOpsMovementsTab } from './ChannelOpsMovementsTab';
 import { SellOutTab } from './SellOutTab';
 
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(),
+}));
+
+vi.mock('@/components/EnterpriseDataGrid', () => ({
+  EnterpriseDataGrid: ({ rowData }: { rowData: Array<Record<string, unknown>> }) => (
+    <div data-testid="enterprise-grid-mock">
+      {rowData.map((r, i) => (
+        <div key={i}>{String(r.sku ?? r.product_sku ?? '')}</div>
+      ))}
+    </div>
+  ),
 }));
 
 const apiGetMock = vi.mocked(apiGet);
@@ -130,5 +141,14 @@ describe('Channel Operations pagination (BACKLOG-074 U4g)', () => {
       );
     });
     expect(await screen.findByText('M-SKU-2')).toBeInTheDocument();
+  });
+
+  it('ChannelOpsInventoryTab requires distributor before fetch', async () => {
+    renderWithQuery(<ChannelOpsInventoryTab depth="operational" />);
+    expect(await screen.findByTestId('inventory-distributor-required')).toBeInTheDocument();
+    expect(apiGetMock).not.toHaveBeenCalledWith(
+      expect.stringMatching(/channel-ops\/inventory/),
+      expect.any(Object),
+    );
   });
 });

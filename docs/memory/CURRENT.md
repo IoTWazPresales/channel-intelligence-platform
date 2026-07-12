@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-12 (U4f chrome Unit 2 shipping)
+**Last updated:** 2026-07-12 (queue continuing — Unit 2 VERIFY deferred)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,14 +9,16 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `feat/pve-exception-list-parity` |
-| **Prior** | Unit 1 CO-LAYOUT PASS @ `0a727ee` (`feat/channel-ops-kpi-first-layout`) |
+| **Branch** | continuing queue from `feat/pve-exception-list-parity` @ `44eb8bd` |
 | **Alembic (DB)** | **`20260710_0072`** |
-| **Fable queue** | CO-LAYOUT PASS ? U4f (this) ? U4g ? CST-BULK ? SHIP-ALIGN |
+| **Fable** | Unit 1 PASS @ `0a727ee`. Unit 2 VERIFY **deferred** (CLI session limit; Cursor self-checked; re-VERIFY when Fable available). Warren 2026-07-12: continue queue. |
 
 ---
 
-## Next
+## Queue
 
-1. Fable VERIFY U4f chrome
-2. Then U4g Channel Ops AG Grid
+1. CO-LAYOUT — PASS
+2. U4f chrome — shipped `44eb8bd` (VERIFY deferred)
+3. **U4g** — Channel Ops AG Grid (in progress)
+4. CST-BULK
+5. SHIP-ALIGN

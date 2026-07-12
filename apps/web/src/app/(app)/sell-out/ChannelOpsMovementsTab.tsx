@@ -3,7 +3,6 @@
 import {
   Alert,
   Box,
-  Paper,
   Stack,
   Table,
   TableBody,
@@ -14,9 +13,14 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import type { ColDef, GridOptions } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import { gridRowMetrics, paginatedGridHeight } from '@/features/plan-vs-executed/gridPagination';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -48,12 +52,13 @@ export function ChannelOpsMovementsTab({
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const distId = distributorId ?? null;
+  const { rowHeight, headerHeight } = gridRowMetrics('comfortable');
 
   useEffect(() => {
     setPage(0);
   }, [distId, dateFrom, dateTo]);
 
-  const { data, isLoading, isError, error } = useQuery({
+  const q = useQuery({
     queryKey: ['channel-ops-movements', distId, page, pageSize, dateFrom, dateTo],
     queryFn: ({ signal }) => {
       const params = new URLSearchParams({
@@ -65,16 +70,16 @@ export function ChannelOpsMovementsTab({
       if (dateTo) params.set('date_to', dateTo);
       return apiGet<{ items: MovementRow[]; total: number; page: number; page_size: number }>(
         `/api/v1/channel-ops/movements?${params}`,
-        { signal }
+        { signal },
       );
     },
     enabled: distId != null,
   });
 
   const productTotals = useMemo(() => {
-    if (!depthAtLeast(depth, 'strategic') || !data?.items?.length) return [];
+    if (!depthAtLeast(depth, 'strategic') || !q.data?.items?.length) return [];
     const map = new Map<number, { sku: string; name: string; inbound: number }>();
-    for (const r of data.items) {
+    for (const r of q.data.items) {
       if (r.product_id == null) continue;
       const cur = map.get(r.product_id) ?? {
         sku: r.sku ?? '—',
@@ -85,7 +90,40 @@ export function ChannelOpsMovementsTab({
       map.set(r.product_id, cur);
     }
     return [...map.entries()].map(([productId, v]) => ({ productId, ...v }));
-  }, [data?.items, depth]);
+  }, [q.data?.items, depth]);
+
+  const columnDefs = useMemo<ColDef<MovementRow>[]>(
+    () => [
+      { field: 'ship_date', headerName: 'Ship date', width: 120 },
+      { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 160 },
+      { field: 'sku', headerName: 'SKU', width: 120 },
+      { field: 'order_no', headerName: 'Order no', width: 120 },
+      { field: 'delivery_no', headerName: 'Delivery no', width: 120 },
+      {
+        field: 'units_shipped',
+        headerName: 'Units',
+        width: 100,
+        type: 'numericColumn',
+        valueFormatter: (p) =>
+          p.value == null ? '—' : Number(p.value).toLocaleString(),
+      },
+      { field: 'line_state', headerName: 'Status', width: 120 },
+    ],
+    [],
+  );
+
+  const gridOptions = useMemo<GridOptions<MovementRow>>(
+    () => ({
+      pagination: false,
+      suppressPaginationPanel: true,
+      getRowId: (p) =>
+        `${p.data.order_no ?? ''}|${p.data.delivery_no ?? ''}|${p.data.product_id ?? ''}|${p.data.ship_date ?? ''}|${p.rowIndex}`,
+      rowHeight,
+      headerHeight,
+      defaultColDef: { resizable: true, sortable: true },
+    }),
+    [rowHeight, headerHeight],
+  );
 
   if (distId == null) {
     return (
@@ -95,6 +133,9 @@ export function ChannelOpsMovementsTab({
       </Alert>
     );
   }
+
+  const items = q.data?.items ?? [];
+  const total = q.data?.total ?? 0;
 
   return (
     <Box>
@@ -118,75 +159,49 @@ export function ChannelOpsMovementsTab({
           inputProps={{ 'data-testid': 'movements-date-to' }}
         />
       </Stack>
-      {isError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {(error as Error)?.message ?? 'Failed to load movements.'}
-        </Alert>
-      )}
-      <Paper variant="outlined">
-        <Box sx={{ p: 2 }}>
-          {data != null && data.total > 0 ? (
-            <TablePagination
-              component="div"
-              count={data.total}
-              page={page}
-              onPageChange={(_e, nextPage) => setPage(nextPage)}
-              rowsPerPage={pageSize}
-              onRowsPerPageChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(0);
-              }}
-              rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
-              labelDisplayedRows={({ from, to, count }) =>
-                `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
-              }
-              sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}
-            />
-          ) : null}
-          {isLoading ? (
-            <Typography variant="body2">Loading…</Typography>
-          ) : (data?.items ?? []).length === 0 ? (
-            <Alert severity="info">
-              No shipment evidence lines for this distributor
-              {dateFrom || dateTo ? ' in the selected date range' : ''}. Check inbound shipment imports or widen
-              the dates.
-            </Alert>
-          ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Ship date</TableCell>
-                  <TableCell>Product</TableCell>
-                  <TableCell>SKU</TableCell>
-                  <TableCell>Order no</TableCell>
-                  <TableCell>Delivery no</TableCell>
-                  <TableCell align="right">Units</TableCell>
-                  <TableCell>Status</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data?.items.map((r, i) => (
-                  <TableRow key={`${r.order_no}-${i}`}>
-                    <TableCell>{r.ship_date ?? '—'}</TableCell>
-                    <TableCell>{r.product_name ?? '—'}</TableCell>
-                    <TableCell>{r.sku ?? '—'}</TableCell>
-                    <TableCell>{r.order_no ?? '—'}</TableCell>
-                    <TableCell>{r.delivery_no ?? '—'}</TableCell>
-                    <TableCell align="right">
-                      {r.units_shipped != null ? r.units_shipped.toLocaleString() : '—'}
-                    </TableCell>
-                    <TableCell>{r.line_state}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Box>
-      </Paper>
+      <ModuleGridToolbar onRefresh={() => void q.refetch()} busy={q.isFetching} />
+      <ModuleDataSection
+        isLoading={q.isLoading}
+        isError={q.isError}
+        error={(q.error as Error) ?? null}
+        onRetry={() => void q.refetch()}
+        isEmpty={items.length === 0}
+        empty={{
+          title: 'No movements',
+          description: `No shipment evidence lines for this distributor${
+            dateFrom || dateTo ? ' in the selected date range' : ''
+          }. Check inbound shipment imports or widen the dates.`,
+        }}
+      >
+        <EnterpriseDataGrid
+          rowData={items}
+          columnDefs={columnDefs}
+          height={paginatedGridHeight(Math.min(pageSize, Math.max(items.length, 1)), {
+            rowHeight,
+            headerHeight,
+          })}
+          gridOptions={gridOptions}
+        />
+        <TablePagination
+          component="div"
+          count={total}
+          page={page}
+          onPageChange={(_e, nextPage) => setPage(nextPage)}
+          rowsPerPage={pageSize}
+          onRowsPerPageChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
+          }
+        />
+      </ModuleDataSection>
       {depthAtLeast(depth, 'strategic') && productTotals.length > 0 && (
-        <Paper variant="outlined" sx={{ mt: 2, p: 2 }}>
+        <Box sx={{ mt: 2 }}>
           <Typography variant="subtitle2" gutterBottom>
-            Inbound totals by product (filtered page)
+            Inbound totals by product (current page only — not full filter set)
           </Typography>
           <Table size="small">
             <TableHead>
@@ -206,7 +221,7 @@ export function ChannelOpsMovementsTab({
               ))}
             </TableBody>
           </Table>
-        </Paper>
+        </Box>
       )}
     </Box>
   );
