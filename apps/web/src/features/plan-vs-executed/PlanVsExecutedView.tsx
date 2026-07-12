@@ -39,6 +39,7 @@ import {
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { ReconSummaryChips, type ReconSummary } from '@/features/commercial-planner/lineupReconciliationDisplay';
 import {
   ExceptionCategoryGrid,
@@ -171,6 +172,14 @@ const ALL_BU = '__all__';
 
 const EXCEPTION_PAGE_SIZE_OPTIONS = [15, 30, 50] as const;
 
+const LENS_OPTIONS = ['customer', 'product', 'bu'] as const;
+const EXCEPTION_CATEGORY_OPTIONS = [
+  'short_ships',
+  'over_ships',
+  'unplanned_intake',
+  'no_po_blind_spots',
+] as const;
+
 function parseExceptionPagination(sp: URLSearchParams): { offset: number; limit: number } {
   const offset = Math.max(0, Number(sp.get('exc_offset') || '0') || 0);
   const limitRaw = Number(sp.get('exc_limit') || String(PAGINATED_GRID_PAGE_SIZE)) || PAGINATED_GRID_PAGE_SIZE;
@@ -178,6 +187,18 @@ function parseExceptionPagination(sp: URLSearchParams): { offset: number; limit:
     ? limitRaw
     : PAGINATED_GRID_PAGE_SIZE;
   return { offset, limit };
+}
+
+function parseExceptionLens(sp: URLSearchParams): Lens {
+  const raw = sp.get('exc_lens');
+  return (LENS_OPTIONS as readonly string[]).includes(raw ?? '') ? (raw as Lens) : 'customer';
+}
+
+function parseExceptionCategory(sp: URLSearchParams): ExceptionCategory {
+  const raw = sp.get('exc_category');
+  return (EXCEPTION_CATEGORY_OPTIONS as readonly string[]).includes(raw ?? '')
+    ? (raw as ExceptionCategory)
+    : 'short_ships';
 }
 
 const EXCLUSIVE_TOGGLE_SX = {
@@ -274,8 +295,6 @@ export function PlanVsExecutedView() {
   const [periodFrom, setPeriodFrom] = useState<string | null>(searchParams.get('period_from'));
   const [periodTo, setPeriodTo] = useState<string | null>(searchParams.get('period_to'));
   const [productLine, setProductLine] = useState<string>(searchParams.get('product_line') ?? ALL_BU);
-  const [lens, setLens] = useState<Lens>('customer');
-  const [exceptionCategory, setExceptionCategory] = useState<ExceptionCategory>('short_ships');
   const [rankBy, setRankBy] = useState<'units' | 'value'>('units');
   const [productGroupBy, setProductGroupBy] = useState<ProductGroupBy>('description');
   const [drillCustomerId, setDrillCustomerId] = useState<number | null>(null);
@@ -283,18 +302,29 @@ export function PlanVsExecutedView() {
   const [drillSalesModel, setDrillSalesModel] = useState<string | null>(null);
   const drillRef = useRef<HTMLDivElement | null>(null);
 
+  const lens = useMemo(() => parseExceptionLens(searchParams), [searchParams]);
+  const exceptionCategory = useMemo(() => parseExceptionCategory(searchParams), [searchParams]);
   const { offset: excOffset, limit: excLimit } = useMemo(
     () => parseExceptionPagination(searchParams),
     [searchParams],
   );
 
   const setExceptionParamState = useCallback(
-    (patch: { exc_offset?: string | null; exc_limit?: string | null }) => {
+    (patch: {
+      exc_offset?: string | null;
+      exc_limit?: string | null;
+      exc_lens?: string | null;
+      exc_category?: string | null;
+    }) => {
       const next = new URLSearchParams(searchParams.toString());
       if (patch.exc_offset === null) next.delete('exc_offset');
       else if (patch.exc_offset != null) next.set('exc_offset', patch.exc_offset);
       if (patch.exc_limit === null) next.delete('exc_limit');
       else if (patch.exc_limit != null) next.set('exc_limit', patch.exc_limit);
+      if (patch.exc_lens === null) next.delete('exc_lens');
+      else if (patch.exc_lens != null) next.set('exc_lens', patch.exc_lens);
+      if (patch.exc_category === null) next.delete('exc_category');
+      else if (patch.exc_category != null) next.set('exc_category', patch.exc_category);
       const qs = next.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
@@ -804,16 +834,29 @@ export function PlanVsExecutedView() {
 
               <Card variant="outlined" sx={{ mb: 2 }}>
                 <CardContent sx={{ pb: '16px !important' }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5 }}>
-                    Exception lists
-                  </Typography>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    justifyContent="space-between"
+                    flexWrap="wrap"
+                    useFlexGap
+                    sx={{ mb: 1.5 }}
+                  >
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                      Exception lists
+                    </Typography>
+                    <ModuleGridToolbar onRefresh={() => void q.refetch()} busy={q.isFetching} sx={{ mb: 0 }} />
+                  </Stack>
                   <Stack spacing={1.5}>
                     <Tabs
                       value={lens}
                       onChange={(_, v) => {
-                        setLens(v);
                         clearDrill();
-                        setExceptionParamState({ exc_offset: null });
+                        setExceptionParamState({
+                          exc_lens: v,
+                          exc_offset: null,
+                        });
                       }}
                       sx={LENS_TABS_SX}
                     >
@@ -824,8 +867,10 @@ export function PlanVsExecutedView() {
                     <Tabs
                       value={exceptionCategory}
                       onChange={(_, v) => {
-                        setExceptionCategory(v);
-                        setExceptionParamState({ exc_offset: null });
+                        setExceptionParamState({
+                          exc_category: v,
+                          exc_offset: null,
+                        });
                       }}
                       variant="scrollable"
                       scrollButtons="auto"

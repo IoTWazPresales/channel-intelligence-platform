@@ -5,11 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlanVsExecutedView } from './PlanVsExecutedView';
 
 let searchString = '';
+const replaceMock = vi.fn((url: string) => {
+  searchString = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
+});
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(searchString),
   usePathname: () => '/plan-vs-executed',
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: replaceMock }),
 }));
 
 vi.mock('@/components/EnterpriseDataGrid', () => ({
@@ -24,7 +27,13 @@ import { apiGet } from '@/lib/api';
 
 const apiGetMock = vi.mocked(apiGet);
 
-function basePayload() {
+function basePayload(lens: 'customer' | 'product' | 'bu' = 'customer') {
+  const emptyCats = {
+    short_ships: { items: [] as { key: number; label: string; units: number; value_plan: null; value_cost: null }[], total: 0 },
+    over_ships: { items: [], total: 0 },
+    unplanned_intake: { items: [], total: 0 },
+    no_po_blind_spots: { items: [], total: 0 },
+  };
   return {
     data_unavailable: false,
     period_range: { from: '26Q2', to: '26Q2' },
@@ -66,18 +75,17 @@ function basePayload() {
       buckets: { executed_vs_plan: 17, off_plan: 3, pending: 4 },
     },
     exceptions: {
-      customer: {
+      [lens]: {
+        ...emptyCats,
         short_ships: {
           items: [{ key: 1, label: 'A', units: 10, value_plan: null, value_cost: null }],
           total: 1,
         },
-        over_ships: { items: [], total: 0 },
-        unplanned_intake: { items: [], total: 0 },
-        no_po_blind_spots: { items: [], total: 0 },
+        over_ships: { items: [], total: 2 },
       },
     },
     exceptions_paging: {
-      lens: 'customer',
+      lens,
       category: 'short_ships',
       limit: 15,
       offset: 0,
@@ -101,6 +109,7 @@ function renderView() {
 describe('PlanVsExecutedView', () => {
   beforeEach(() => {
     searchString = '';
+    replaceMock.mockClear();
     apiGetMock.mockReset();
     apiGetMock.mockResolvedValue(basePayload());
   });
@@ -129,6 +138,63 @@ describe('PlanVsExecutedView', () => {
       expect(
         urls.some(
           (url) => url.includes('exceptions_offset=30') && url.includes('exceptions_limit=15'),
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('hydrates lens and category from URL exc_lens / exc_category', async () => {
+    searchString = 'exc_lens=product&exc_category=over_ships';
+    apiGetMock.mockResolvedValue(basePayload('product'));
+    renderView();
+    await waitFor(() => {
+      const urls = apiGetMock.mock.calls.map((call) => String(call[0]));
+      expect(
+        urls.some(
+          (url) =>
+            url.includes('exceptions_lens=product') && url.includes('exceptions_category=over_ships'),
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('category tab change writes URL and clears exc_offset in one replace', async () => {
+    searchString = 'exc_offset=15';
+    renderView();
+    await waitFor(() => expect(screen.getByTestId('exception-category-tabs')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('tab', { name: /Over-ships \/ deal-stock/i }));
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalled());
+    const url = String(replaceMock.mock.calls.at(-1)?.[0] ?? '');
+    expect(url).toContain('exc_category=over_ships');
+    expect(url).not.toMatch(/exc_offset=/);
+
+    // Simulate Next.js searchParams update after replace, then remount query consumer.
+    searchString = url.includes('?') ? url.slice(url.indexOf('?') + 1) : url;
+    apiGetMock.mockClear();
+    renderView();
+    await waitFor(() => {
+      const urls = apiGetMock.mock.calls.map((call) => String(call[0]));
+      expect(
+        urls.some(
+          (u) =>
+            u.includes('exceptions_category=over_ships') &&
+            (u.includes('exceptions_offset=0') || !u.includes('exceptions_offset=')),
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('falls back to customer / short_ships for invalid URL lens or category', async () => {
+    searchString = 'exc_lens=bogus&exc_category=bogus';
+    renderView();
+    await waitFor(() => {
+      const urls = apiGetMock.mock.calls.map((call) => String(call[0]));
+      expect(
+        urls.some(
+          (url) =>
+            url.includes('exceptions_lens=customer') && url.includes('exceptions_category=short_ships'),
         ),
       ).toBe(true);
     });
