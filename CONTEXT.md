@@ -17,6 +17,9 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-12 — **SHIP-ALIGN (Unit 5):** Inbound pagination below AG Grid (toolbar→grid→pager rhythm). Branch `feat/shipping-layout-rhythm`. Queue 1–5 done; Fable re-VERIFY pending.
+- 2026-07-12 — **CST-BULK (Unit 4):** Alias batch-confirm/reject API + selection UI. Branch `feat/cst-alias-bulk-actions` @ `bf2afd4`.
+- 2026-07-12 — **U4g (Unit 3):** Channel Ops Sell-out/Inventory/Movements → EnterpriseDataGrid + ModuleDataSection. Branch `feat/channel-ops-ag-grid-chrome` @ `2a0eae6`.
 - 2026-07-12 — **U4f chrome (Unit 2):** PVE `exc_lens`/`exc_category` URL state + Exception lists ModuleGridToolbar. Branch `feat/pve-exception-list-parity`. Next: VERIFY → U4g.
 - 2026-07-12 — **CO-LAYOUT (Unit 1):** Channel Ops KPI cards above shared filter bar. Branch `feat/channel-ops-kpi-first-layout`. Next: Fable VERIFY then U4f.
 - 2026-07-12 — **Ops grid Wave 3 Fable VERIFY PASS** (`7058822`): CST empty-states + CPOR customer_id hydrate. Queue empty (Waves 1–3). Optional: open PR. Branch `feat/channel-ops-kpi-and-gap-scan-perf`.

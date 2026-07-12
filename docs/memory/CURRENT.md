@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-12 (queue continuing — Unit 2 VERIFY deferred)
+**Last updated:** 2026-07-12 (ops parity Units 1–5 shipped; Fable re-VERIFY pending)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -9,16 +9,27 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | continuing queue from `feat/pve-exception-list-parity` @ `44eb8bd` |
+| **Tip branch** | `feat/shipping-layout-rhythm` (stack tip) |
 | **Alembic (DB)** | **`20260710_0072`** |
-| **Fable** | Unit 1 PASS @ `0a727ee`. Unit 2 VERIFY **deferred** (CLI session limit; Cursor self-checked; re-VERIFY when Fable available). Warren 2026-07-12: continue queue. |
+| **Fable** | Unit 1 PASS. Units 2–5 **Cursor self-checked**; CLI Fable session-limited — **re-VERIFY when available** (Warren 2026-07-12). |
 
 ---
 
-## Queue
+## Queue status (all implemented + pushed)
 
-1. CO-LAYOUT — PASS
-2. U4f chrome — shipped `44eb8bd` (VERIFY deferred)
-3. **U4g** — Channel Ops AG Grid (in progress)
-4. CST-BULK
-5. SHIP-ALIGN
+| # | Unit | Branch | Tip |
+|---|------|--------|-----|
+| 1 | CO-LAYOUT | `feat/channel-ops-kpi-first-layout` | `0a727ee` PASS |
+| 2 | U4f PVE chrome | `feat/pve-exception-list-parity` | `44eb8bd` |
+| 3 | U4g AG Grid | `feat/channel-ops-ag-grid-chrome` | `2a0eae6` |
+| 4 | CST-BULK | `feat/cst-alias-bulk-actions` | `bf2afd4` |
+| 5 | SHIP-ALIGN | `feat/shipping-layout-rhythm` | (this) |
+
+Stack: each unit branched from prior tip (serial). Waves 1–3 still on `feat/channel-ops-kpi-and-gap-scan-perf` @ `dc614fe`.
+
+---
+
+## Next
+
+1. When Fable available: re-VERIFY Units 2–5 (or open PRs / merge stack)
+2. Do not start new themes without proceed

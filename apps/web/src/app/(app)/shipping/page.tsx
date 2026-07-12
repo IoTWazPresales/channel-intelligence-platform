@@ -938,23 +938,6 @@ export default function InboundShipmentsPage() {
           />
         </Stack>
 
-        <TablePagination
-          component="div"
-          count={total}
-          page={total === 0 ? 0 : Math.min(page, pageCount)}
-          onPageChange={(_, nextPage) => {
-            setParamState({ skip: String(nextPage * limit) });
-          }}
-          rowsPerPage={limit}
-          onRowsPerPageChange={(e) => {
-            const next = Number(e.target.value);
-            setParamState({ skip: null, limit: String(next) });
-          }}
-          rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
-          labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`}
-          sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}
-        />
-
         <ModuleDataSection
           intro="Sort and filter in the grid. Pagination applies to the server query — change filters to narrow the full result set."
           introWhen="always"
@@ -970,7 +953,7 @@ export default function InboundShipmentsPage() {
             secondary: { label: 'Shipment evidence', href: '/admin/shipment-evidence' },
           }}
           toolbar={
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 0 }}>
               <Button
                 size="small"
                 variant="outlined"
@@ -980,7 +963,11 @@ export default function InboundShipmentsPage() {
               >
                 Additional columns
               </Button>
-              <ModuleGridToolbar onRefresh={() => void refetch()} importsHref="/admin/imports?template=inbound_shipments" />
+              <ModuleGridToolbar
+                onRefresh={() => void refetch()}
+                importsHref="/admin/imports?template=inbound_shipments"
+                sx={{ mb: 0 }}
+              />
             </Stack>
           }
         >
@@ -989,6 +976,24 @@ export default function InboundShipmentsPage() {
             columnDefs={colDefs as ColDef[]}
             gridOptions={gridOptions as GridOptions}
             height={520}
+          />
+          <TablePagination
+            component="div"
+            count={total}
+            page={total === 0 ? 0 : Math.min(page, pageCount)}
+            onPageChange={(_, nextPage) => {
+              setParamState({ skip: String(nextPage * limit) });
+            }}
+            rowsPerPage={limit}
+            onRowsPerPageChange={(e) => {
+              const next = Number(e.target.value);
+              setParamState({ skip: null, limit: String(next) });
+            }}
+            rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`
+            }
+            sx={{ borderTop: 1, borderColor: 'divider', mt: 1 }}
           />
         </ModuleDataSection>
       </Paper>
