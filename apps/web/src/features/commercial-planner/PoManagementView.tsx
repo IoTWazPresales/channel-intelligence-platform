@@ -10,7 +10,6 @@ import {
   Divider,
   LinearProgress,
   Stack,
-  TablePagination,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -20,9 +19,10 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { ModuleDataSection } from '@/components/ModuleDataSection';
+import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
+import { pageFromSkipLimit, skipFromPage } from '@/lib/skipLimitSearchParams';
 
 import { PoAutoLinkProposalsSection, PO_AUTO_LINK_SECTION_ID } from './PoAutoLinkProposalsSection';
 import { LineupDuplicatePartitionPanel } from './LineupDuplicatePartitionPanel';
@@ -69,6 +69,8 @@ type GapRow = {
   row_key?: string;
 };
 
+type GapGridRow = GapRow & { id: string };
+
 type GapGroup = {
   year: number;
   quarter: number;
@@ -107,6 +109,19 @@ export const PO_GAP_SECTION_ID = 'po-mgmt-gap';
 
 const GAP_DEFAULT_LIMIT = 100;
 const GAP_PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
+const PO_GAP_GRID_STATE_KEY = 'cip.po-management.gap.shell.grid.v1';
+
+const PO_GAP_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  { label: 'PO', fields: ['quarter_label', 'po_number_raw', 'product_name', 'product_line', 'shipped_units'] },
+];
+
+const PO_GAP_COLUMN_LABELS: Record<string, string> = {
+  quarter_label: 'Period',
+  po_number_raw: 'PO',
+  product_name: 'Product',
+  product_line: 'Line',
+  shipped_units: 'Units',
+};
 
 function parseGapPagination(sp: URLSearchParams): { skip: number; limit: number } {
   const skip = Math.max(0, Number(sp.get('gap_skip') || '0') || 0);
@@ -231,14 +246,18 @@ export function PoManagementView() {
   const gap = gapQ.data;
   const loading = coverageQ.isLoading || backlogQ.isLoading;
 
-  const gapRows = useMemo<GapRow[]>(() => {
+  const gapRows = useMemo<GapGridRow[]>(() => {
     if (!gap?.groups.length) return [];
     return gap.groups.flatMap((g) =>
-      g.rows.map((r) => ({
-        ...r,
-        quarter_label: g.quarter_label,
-        row_key: `${g.year}-${g.quarter}-${r.purchase_order_id}-${r.product_id}`,
-      }))
+      g.rows.map((r) => {
+        const rowKey = `${g.year}-${g.quarter}-${r.purchase_order_id}-${r.product_id}`;
+        return {
+          ...r,
+          quarter_label: g.quarter_label,
+          row_key: rowKey,
+          id: rowKey,
+        };
+      })
     );
   }, [gap]);
 
@@ -257,21 +276,38 @@ export function PoManagementView() {
   };
 
   const gapTotal = gap?.total_gap_rows ?? 0;
-  const gapPage = gapLimit > 0 ? Math.floor(gapSkip / gapLimit) : 0;
-  const gapHasRows = gapRows.length > 0;
+  const gapShellPage = pageFromSkipLimit(gapSkip, gapLimit);
+
+  const onGapShellUrlChange = useCallback(
+    (patch: Record<string, string | null>, resetPage?: boolean) => {
+      const next: Record<string, string | null> = {};
+      if (patch.page_size != null) {
+        next.gap_limit = patch.page_size;
+        next.gap_skip = null;
+      } else if (patch.page != null) {
+        const p = Math.max(1, Number(patch.page) || 1);
+        const nextSkip = skipFromPage(p, gapLimit);
+        next.gap_skip = nextSkip <= 0 ? null : String(nextSkip);
+      }
+      if (resetPage) next.gap_skip = null;
+      setGapParamState(next);
+    },
+    [gapLimit, setGapParamState]
+  );
 
   const handleToggleDismissed = () => {
     setShowDismissed((v) => !v);
     setGapParamState({ gap_skip: null });
   };
 
-  const gapColumnDefs = useMemo<ColDef<GapRow>[]>(
+  const gapColumnDefs = useMemo<ColDef<GapGridRow>[]>(
     () => [
       { headerName: 'Period', field: 'quarter_label', width: 90 },
       {
         headerName: 'PO',
+        field: 'po_number_raw',
         width: 130,
-        cellRenderer: (p: ICellRendererParams<GapRow>) => {
+        cellRenderer: (p: ICellRendererParams<GapGridRow>) => {
           const row = p.data;
           if (!row) return null;
           return (
@@ -287,6 +323,7 @@ export function PoManagementView() {
       },
       {
         headerName: 'Product',
+        field: 'product_name',
         flex: 1,
         minWidth: 140,
         valueGetter: (p) => p.data?.product_name ?? (p.data ? `#${p.data.product_id}` : ''),
@@ -306,7 +343,7 @@ export function PoManagementView() {
         pinned: 'right',
         sortable: false,
         filter: false,
-        cellRenderer: (p: ICellRendererParams<GapRow>) => {
+        cellRenderer: (p: ICellRendererParams<GapGridRow>) => {
           const row = p.data;
           if (!row) return null;
           if (row.dismissed) {
@@ -338,9 +375,9 @@ export function PoManagementView() {
     [dismissMut.isPending, restoreMut]
   );
 
-  const gapGridOptions = useMemo<GridOptions<GapRow>>(
+  const gapGridOptions = useMemo<GridOptions<GapGridRow>>(
     () => ({
-      getRowId: (p) => p.data.row_key ?? `${p.data.purchase_order_id}-${p.data.product_id}`,
+      getRowId: (p) => p.data?.id ?? p.data?.row_key ?? `${p.data?.purchase_order_id}-${p.data?.product_id}`,
     }),
     []
   );
@@ -564,87 +601,85 @@ export function PoManagementView() {
       </Box>
 
       <Box id={PO_GAP_SECTION_ID}>
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-          <Typography variant="h6">POs with shipments but no covering lineup</Typography>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Button size="small" onClick={() => void gapQ.refetch()} disabled={gapQ.isFetching} data-testid="gap-refresh">
-              Refresh
-            </Button>
-            <Button size="small" onClick={handleToggleDismissed} data-testid="toggle-dismissed">
-              {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
-            </Button>
-          </Stack>
-        </Stack>
+        <Typography variant="h6" sx={{ mb: 1 }}>
+          POs with shipments but no covering lineup
+        </Typography>
         {dismissMut.isError ? <Alert severity="error">{safeDisplayError(dismissMut.error)}</Alert> : null}
-        <ModuleDataSection
-          isLoading={gapQ.isLoading}
-          isError={gapQ.isError}
-          error={gapQ.error instanceof Error ? gapQ.error : gapQ.error ? new Error(String(gapQ.error)) : null}
-          onRetry={() => void gapQ.refetch()}
-          isEmpty={!gap?.data_unavailable && gapTotal === 0}
-          empty={{
-            title: showDismissed ? 'No gap rows' : 'No gaps',
-            description: showDismissed
-              ? 'No dismissed gap POs match the current view.'
-              : 'Every shipment PO is covered by a confirmed lineup.',
-          }}
-          loadingLabel="Loading gap worklist…"
-        >
-          {gap?.data_unavailable ? (
-            <Alert severity="info">Gap worklist is unavailable.</Alert>
-          ) : (
-            <Stack spacing={1.5}>
-              <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
-                <Typography variant="body2" color="text.secondary" data-testid="po-gap-summary">
-                  {gapTotal.toLocaleString()} gap row{gapTotal === 1 ? '' : 's'}
-                  {gapTotal > 0
-                    ? ` · showing ${gapSkip + 1}–${Math.min(gapSkip + gapRows.length, gapTotal)}`
-                    : ''}
-                </Typography>
-                {gap?.groups[0]?.quarter_label ? (
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => startUpload(gap.groups[0]?.quarter_label ?? null)}
-                    data-testid="gap-upload-top"
-                  >
-                    Upload lineup
-                  </Button>
-                ) : null}
-              </Stack>
-              {gapHasRows ? (
-                <Box data-testid="po-gap-grid">
-                  <EnterpriseDataGrid
-                    rowData={gapRows}
-                    columnDefs={gapColumnDefs}
-                    gridOptions={gapGridOptions}
-                    height={Math.min(480, 120 + gapRows.length * 42)}
-                  />
-                </Box>
-              ) : null}
-              {gapTotal > 0 ? (
-                <TablePagination
-                  component="div"
-                  count={gapTotal}
-                  page={gapPage}
-                  onPageChange={(_e, nextPage) => {
-                    setGapParamState({ gap_skip: String(nextPage * gapLimit) });
-                  }}
-                  rowsPerPage={gapLimit}
-                  onRowsPerPageChange={(e) => {
-                    const next = Number.parseInt(e.target.value, 10);
-                    setGapParamState({ gap_skip: null, gap_limit: String(next) });
-                  }}
-                  rowsPerPageOptions={[...GAP_PAGE_SIZE_OPTIONS]}
-                  labelDisplayedRows={({ from, to, count }) =>
-                    `${from}–${to} of ${count !== -1 ? count.toLocaleString() : `more than ${to}`}`
-                  }
-                  data-testid="po-gap-pagination"
-                />
-              ) : null}
-            </Stack>
-          )}
-        </ModuleDataSection>
+        {gap?.data_unavailable ? (
+          <Alert severity="info">Gap worklist is unavailable.</Alert>
+        ) : (
+          <MasterDataGridShell<GapGridRow>
+            entityKey="po-gap"
+            rows={gapRows}
+            columnDefs={gapColumnDefs}
+            total={gapTotal}
+            isLoading={gapQ.isLoading}
+            isError={gapQ.isError}
+            error={gapQ.error instanceof Error ? gapQ.error : gapQ.error ? new Error(String(gapQ.error)) : null}
+            onRetry={() => void gapQ.refetch()}
+            empty={{
+              title: showDismissed ? 'No gap rows' : 'No gaps',
+              description: showDismissed
+                ? 'No dismissed gap POs match the current view.'
+                : 'Every shipment PO is covered by a confirmed lineup.',
+            }}
+            intro={
+              gapTotal > 0 ? (
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  justifyContent="space-between"
+                  flexWrap="wrap"
+                  useFlexGap
+                  sx={{ mb: 1 }}
+                >
+                  <Typography variant="body2" color="text.secondary" data-testid="po-gap-summary">
+                    {gapTotal.toLocaleString()} gap row{gapTotal === 1 ? '' : 's'}
+                    {` · showing ${gapSkip + 1}–${Math.min(gapSkip + gapRows.length, gapTotal)}`}
+                  </Typography>
+                  {gap?.groups[0]?.quarter_label ? (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => startUpload(gap.groups[0]?.quarter_label ?? null)}
+                      data-testid="gap-upload-top"
+                    >
+                      Upload lineup
+                    </Button>
+                  ) : null}
+                </Stack>
+              ) : null
+            }
+            url={{
+              page: gapShellPage,
+              pageSize: gapLimit,
+              q: '',
+              sortBy: 'quarter_label',
+              sortDir: 'asc',
+            }}
+            onUrlChange={onGapShellUrlChange}
+            defaultPageSize={GAP_DEFAULT_LIMIT}
+            defaultSortBy="quarter_label"
+            defaultSortDir="asc"
+            pageSizeOptions={[...GAP_PAGE_SIZE_OPTIONS]}
+            enableEmptyUrlSeed={false}
+            gridStateStorageKey={PO_GAP_GRID_STATE_KEY}
+            columnPickerTitle="PO gap columns"
+            columnPickerGroups={PO_GAP_COLUMN_GROUPS}
+            columnLabelByField={PO_GAP_COLUMN_LABELS}
+            gridHeight={Math.min(480, 120 + Math.max(gapRows.length, 1) * 42)}
+            gridOptions={gapGridOptions}
+            bulkSelectionEnabled={false}
+            onRefresh={() => void gapQ.refetch()}
+            refreshBusy={gapQ.isFetching}
+            toolbarStart={
+              <Button size="small" onClick={handleToggleDismissed} data-testid="toggle-dismissed">
+                {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
+              </Button>
+            }
+          />
+        )}
       </Box>
 
       <PoDismissReasonDialog

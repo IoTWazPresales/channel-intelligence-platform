@@ -37,7 +37,8 @@ import {
   YAxis,
 } from 'recharts';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
+import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { offsetFromZeroBasedPage, zeroBasedPageFromOffset } from '@/lib/skipLimitSearchParams';
@@ -49,7 +50,7 @@ import {
   type ExceptionCategory,
   type ExceptionRow,
 } from '@/features/plan-vs-executed/ExceptionCategoryGrid';
-import { DRILL_GRID_PAGE_SIZE, gridRowMetrics, paginatedGridHeight, PAGINATED_GRID_PAGE_SIZE } from '@/features/plan-vs-executed/gridPagination';
+import { DRILL_GRID_PAGE_SIZE, gridRowMetrics, PAGINATED_GRID_PAGE_SIZE } from '@/features/plan-vs-executed/gridPagination';
 import { resolveProductDisplay } from '@/features/plan-vs-executed/productDisplay';
 import { buildInboundShipmentsHref } from '@/app/(app)/shipping/buildInboundShipmentsHref';
 import { apiGet } from '@/lib/api';
@@ -170,6 +171,29 @@ type PlanVsExecutedResponse = {
 type Lens = 'customer' | 'product' | 'bu';
 
 const ALL_BU = '__all__';
+
+const DRILL_GRID_STATE_KEY = 'cip.pve.drill.grid.v1';
+const DRILL_PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+
+const DRILL_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  { label: 'Context', fields: ['period_label', 'business_unit_label', 'customer_label'] },
+  { label: 'Product', fields: ['product_entity'] },
+  { label: 'Units', fields: ['planned_units', 'shipped_units', 'pipeline_units'] },
+  { label: 'Status', fields: ['units_flag'] },
+  { label: 'Links', fields: ['inbound_shipments'] },
+];
+
+const DRILL_COLUMN_LABELS: Record<string, string> = {
+  period_label: 'Period',
+  business_unit_label: 'BU',
+  customer_label: 'Customer',
+  product_entity: 'Product',
+  planned_units: 'Planned',
+  shipped_units: 'Shipped',
+  pipeline_units: 'Pipeline',
+  units_flag: 'Flag',
+  inbound_shipments: 'Shipments',
+};
 
 const EXCEPTION_PAGE_SIZE_OPTIONS = [15, 30, 50] as const;
 
@@ -301,6 +325,8 @@ export function PlanVsExecutedView() {
   const [drillCustomerId, setDrillCustomerId] = useState<number | null>(null);
   const [drillProductId, setDrillProductId] = useState<number | null>(null);
   const [drillSalesModel, setDrillSalesModel] = useState<string | null>(null);
+  const [drillPage, setDrillPage] = useState(0);
+  const [drillPageSize, setDrillPageSize] = useState(DRILL_GRID_PAGE_SIZE);
   const drillRef = useRef<HTMLDivElement | null>(null);
 
   const lens = useMemo(() => parseExceptionLens(searchParams), [searchParams]);
@@ -424,7 +450,12 @@ export function PlanVsExecutedView() {
     setDrillCustomerId(null);
     setDrillProductId(null);
     setDrillSalesModel(null);
+    setDrillPage(0);
   }, []);
+
+  useEffect(() => {
+    setDrillPage(0);
+  }, [drillCustomerId, drillProductId, drillSalesModel]);
 
   const handleExceptionRowClick = useCallback(
     (row: ExceptionRow) => {
@@ -454,6 +485,7 @@ export function PlanVsExecutedView() {
       { field: 'customer_label', headerName: 'Customer', flex: 1, minWidth: 140, sortable: true },
       {
         colId: 'product_entity',
+        field: 'product_entity',
         headerName: 'Product',
         flex: 1,
         minWidth: 180,
@@ -512,6 +544,7 @@ export function PlanVsExecutedView() {
       },
       {
         colId: 'inbound_shipments',
+        field: 'inbound_shipments',
         headerName: 'Shipments',
         width: 100,
         sortable: false,
@@ -538,20 +571,58 @@ export function PlanVsExecutedView() {
     () => {
       const { rowHeight, headerHeight } = gridRowMetrics(theme.density === 'compact' ? 'compact' : 'comfortable');
       return {
-        pagination: true,
-        paginationPageSize: DRILL_GRID_PAGE_SIZE,
-        suppressPaginationPanel: false,
+        pagination: false,
+        suppressPaginationPanel: true,
         rowHeight,
         headerHeight,
+        defaultColDef: { resizable: true },
       };
     },
     [theme.density],
   );
 
+  type DrillGridRow = PlanVsExecutedResponse['drill_rows'][number] & { id: number };
+
+  const drillGridRows = useMemo<DrillGridRow[]>(
+    () => (data?.drill_rows ?? []).map((row) => ({ ...row, id: row.case_id })),
+    [data?.drill_rows],
+  );
+
+  const drillTotal = drillGridRows.length;
+  const drillShellPage = drillPage + 1;
+
+  const pagedDrillRows = useMemo(() => {
+    const start = drillPage * drillPageSize;
+    return drillGridRows.slice(start, start + drillPageSize);
+  }, [drillGridRows, drillPage, drillPageSize]);
+
   const drillGridHeight = useMemo(() => {
     const { rowHeight, headerHeight } = gridRowMetrics(theme.density === 'compact' ? 'compact' : 'comfortable');
-    return paginatedGridHeight(DRILL_GRID_PAGE_SIZE, { rowHeight, headerHeight });
-  }, [theme.density]);
+    const visibleRows = Math.max(1, Math.min(pagedDrillRows.length || 1, drillPageSize));
+    return headerHeight + rowHeight * visibleRows;
+  }, [pagedDrillRows.length, drillPageSize, theme.density]);
+
+  const onDrillShellUrlChange = useCallback(
+    (patch: Record<string, string | null>, resetPage?: boolean) => {
+      if (patch.page_size != null) {
+        const next = Number(patch.page_size) || drillPageSize;
+        setDrillPageSize(
+          (DRILL_PAGE_SIZE_OPTIONS as readonly number[]).includes(next) ? next : DRILL_GRID_PAGE_SIZE,
+        );
+        setDrillPage(0);
+        return;
+      }
+      if (resetPage) {
+        setDrillPage(0);
+        return;
+      }
+      if (patch.page != null) {
+        const oneBased = Math.max(1, Number(patch.page) || 1);
+        setDrillPage(oneBased - 1);
+      }
+    },
+    [drillPageSize],
+  );
 
   const sc = data?.scorecard;
   const fxNote = sc?.value.fx_partial ? ' (FX partial — some lines lack plan-currency bridge)' : '';
@@ -929,12 +1000,40 @@ export function PlanVsExecutedView() {
                       <Chip size="small" label={drillChipLabel} data-testid="drill-active-chip" />
                     ) : null}
                   </Stack>
-                  <EnterpriseDataGrid
-                    rowData={data?.drill_rows ?? []}
-                    columnDefs={drillCols}
-                    height={drillGridHeight}
-                    gridOptions={drillGridOptions}
-                  />
+                  <Box data-testid="pve-drill-grid" sx={{ width: '100%', overflow: 'visible' }}>
+                    <MasterDataGridShell
+                      entityKey="pve-drill"
+                      rows={pagedDrillRows}
+                      columnDefs={drillCols}
+                      total={drillTotal}
+                      empty={{
+                        title: 'No drill rows in range',
+                        description: hasDrill
+                          ? 'No six-flag grain lines match the active drill filter for this period and BU scope.'
+                          : 'Select a customer or product from the exception lists to drill into line-level detail.',
+                      }}
+                      url={{
+                        page: drillShellPage,
+                        pageSize: drillPageSize,
+                        q: '',
+                        sortBy: 'period_label',
+                        sortDir: 'asc',
+                      }}
+                      onUrlChange={onDrillShellUrlChange}
+                      defaultPageSize={DRILL_GRID_PAGE_SIZE}
+                      defaultSortBy="period_label"
+                      defaultSortDir="asc"
+                      pageSizeOptions={[...DRILL_PAGE_SIZE_OPTIONS]}
+                      enableEmptyUrlSeed={false}
+                      gridStateStorageKey={DRILL_GRID_STATE_KEY}
+                      columnPickerTitle="Drill grid columns"
+                      columnPickerGroups={DRILL_COLUMN_GROUPS}
+                      columnLabelByField={DRILL_COLUMN_LABELS}
+                      gridHeight={drillGridHeight}
+                      gridOptions={drillGridOptions}
+                      bulkSelectionEnabled={false}
+                    />
+                  </Box>
                 </CardContent>
               </Card>
             </>

@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-13 (BACKLOG-074 remaining shell surfaces A/B/D)
+**Last updated:** 2026-07-13 (BACKLOG-074 shell adoption complete — A–E)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -12,7 +12,7 @@
 | **Branch** | `feat/ops-master-grid-shell-parity` |
 | **Alembic (DB)** | **`20260710_0072`** (unchanged) |
 | **Consultant** | Opus default |
-| **Scope lock** | Opus CONSULT NEED_HUMAN ? Warren: Cursor picks best. Locked: ship A/B/D; defer C (PO gap) + E (PVE drill) |
+| **Scope** | All ops list surfaces on MasterDataGridShell (Warren: finish all — includes PO gap + PVE drill) |
 
 ---
 
@@ -24,14 +24,12 @@
 | CPOR cases list | **Done** |
 | PM gaps worklist | **Done** (inline selection; no shell modal bulk) |
 | Shipment evidence list | **Done** (raw columns dialog kept) |
-| PO gap grid (C) | **Deferred** |
-| PVE drill (E) | **Deferred** |
+| PO gap grid | **Done** (no row selection; dismiss/restore per-row) |
+| PVE drill | **Done** (client page; distinct storage key) |
 | Overview / ImportStewardCandidateWorkspace | Excluded |
 
 ---
 
 ## Next
 
-- Commit/push this slice ? optional Opus VERIFY on A/B/D
-- Open PR, or browser soak
-- Later opt-in: PO gap grid only
+- Optional Opus VERIFY on full shell pack, or open PR / browser soak

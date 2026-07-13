@@ -1,5 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,17 +33,23 @@ vi.mock('@/lib/api', () => ({
   safeDisplayError: (e: unknown) => String(e),
 }));
 
-vi.mock('@/components/EnterpriseDataGrid', () => ({
-  EnterpriseDataGrid: ({
-    rowData,
+vi.mock('@/components/masterGrid/MasterDataGridShell', () => ({
+  MasterDataGridShell: ({
+    rows,
     columnDefs,
+    toolbarStart,
+    intro,
   }: {
-    rowData: Array<Record<string, unknown>>;
+    rows: Array<Record<string, unknown>>;
     columnDefs?: Array<Record<string, unknown>>;
+    toolbarStart?: React.ReactNode;
+    intro?: React.ReactNode;
   }) => (
-    <div data-testid="po-gap-grid-mock">
-      {rowData.map((row) => (
-        <div key={String(row.row_key ?? row.purchase_order_id)}>
+    <div data-testid="po-gap-grid">
+      {toolbarStart}
+      {intro}
+      {rows.map((row) => (
+        <div key={String(row.id ?? row.row_key ?? row.purchase_order_id)}>
           {columnDefs?.map((c, idx) =>
             c?.cellRenderer ? (
               <div key={idx}>{(c.cellRenderer as (p: { data: typeof row }) => React.ReactNode)({ data: row })}</div>
@@ -52,6 +59,10 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
       ))}
     </div>
   ),
+}));
+
+vi.mock('@/components/masterGrid/MasterColumnPickerDialog', () => ({
+  MasterColumnPickerDialog: () => null,
 }));
 
 import { apiGet, apiPost } from '@/lib/api';

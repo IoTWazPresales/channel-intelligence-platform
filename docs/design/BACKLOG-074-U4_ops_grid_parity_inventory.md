@@ -27,13 +27,13 @@
 | Inbound shipping `/shipping` | **Done** + columns | Optionals in shell Columns (Additional); skip/limit adapted |
 | Channel Ops Sell-out / Inventory / Movements | **Done** + columns | Catalogue specs discovery on sell-out; not Overview |
 | CST steward list tabs | **Done** + key-account bulk | batch-patch; aliases confirm/reject |
-| PVE exception lists | **Done** + polish | Per-category storage key; drill deferred |
+| PVE exception lists | **Done** + polish | Per-category storage key |
 | CPOR cases list | **Done** | Shell; create + row→detail retained |
 | PM gaps worklist | **Done** | Inline selection; shell modal bulk off |
 | Shipment evidence list | **Done** | Shell + keep raw Additional columns dialog |
-| PO gap grid | **Deferred** | Opus: mid-page friction; separate opt-in later |
-| PVE drill | **Deferred** | Client nested drill |
-| Follow-on | — | PO gap opt-in when Warren asks |
+| PO gap grid | **Done** | Shell; dismiss/restore per-row; no bulk select |
+| PVE drill | **Done** | Shell; client page; `cip.pve.drill.grid.v1` |
+| Follow-on | — | Shell adoption complete for inventory list surfaces |
 
 **Review pack:** `.tmp/OPS_MASTER_GRID_SHELL_AUDIT.md` · Consultant default **Opus**
 

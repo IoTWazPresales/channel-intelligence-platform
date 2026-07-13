@@ -19,6 +19,12 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
   EnterpriseDataGrid: () => <div data-testid="enterprise-grid-mock" />,
 }));
 
+vi.mock('@/components/masterGrid/MasterDataGridShell', () => ({
+  MasterDataGridShell: ({ rows, entityKey }: { rows: unknown[]; entityKey: string }) => (
+    <div data-testid={`master-grid-shell-${entityKey}`}>{rows.length} rows</div>
+  ),
+}));
+
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(),
 }));
