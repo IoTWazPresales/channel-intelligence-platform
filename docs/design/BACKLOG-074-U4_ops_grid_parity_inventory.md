@@ -22,13 +22,18 @@
 
 ## Surfaces in scope for shell adoption
 
-| Surface | Status (2026-07-12) | Notes |
+| Surface | Status (2026-07-13) | Notes |
 |---------|---------------------|--------|
 | Inbound shipping `/shipping` | **Done** + columns | Optionals in shell Columns (Additional); skip/limit adapted |
-| Channel Ops Sell-out / Inventory / Movements | **Done** + columns | Split groups + default-hidden; not Overview |
-| CST steward list tabs | **Done** + key-account bulk | batch-patch; aliases already had confirm/reject |
-| PVE exception lists | **Done** + picker field fix | Exception grid only; drill stays EnterpriseDataGrid |
-| Follow-on | Open | CPOR cases, PM gaps, PO gap grids, shipment evidence |
+| Channel Ops Sell-out / Inventory / Movements | **Done** + columns | Catalogue specs discovery on sell-out; not Overview |
+| CST steward list tabs | **Done** + key-account bulk | batch-patch; aliases confirm/reject |
+| PVE exception lists | **Done** + polish | Per-category storage key; drill deferred |
+| CPOR cases list | **Done** | Shell; create + row→detail retained |
+| PM gaps worklist | **Done** | Inline selection; shell modal bulk off |
+| Shipment evidence list | **Done** | Shell + keep raw Additional columns dialog |
+| PO gap grid | **Deferred** | Opus: mid-page friction; separate opt-in later |
+| PVE drill | **Deferred** | Client nested drill |
+| Follow-on | — | PO gap opt-in when Warren asks |
 
 **Review pack:** `.tmp/OPS_MASTER_GRID_SHELL_AUDIT.md` · Consultant default **Opus**
 

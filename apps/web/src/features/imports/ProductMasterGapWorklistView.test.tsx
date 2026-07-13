@@ -20,26 +20,40 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(searchString),
 }));
 
-vi.mock('@/components/ModuleDataSection', () => ({
-  ModuleDataSection: ({ children, isEmpty, empty, isLoading }: any) => {
-    if (isLoading) return <div>Loading gaps…</div>;
-    if (isEmpty) return <div>{empty?.title}</div>;
-    return <>{children}</>;
-  },
-}));
-
-vi.mock('@/components/ModuleGridToolbar', () => ({
-  ModuleGridToolbar: ({ onRefresh }: { onRefresh?: () => void }) => (
-    <button type="button" data-testid="pmg-toolbar-refresh" onClick={onRefresh}>
-      Refresh
-    </button>
+vi.mock('@/components/masterGrid/MasterDataGridShell', () => ({
+  MasterDataGridShell: ({
+    rows,
+    onUrlChange,
+    url,
+    onRefresh,
+    filterSlot,
+    toolbarStart,
+  }: {
+    rows: unknown[];
+    onUrlChange: (patch: Record<string, string | null>) => void;
+    url: { page: number };
+    onRefresh?: () => void;
+    filterSlot?: React.ReactNode;
+    toolbarStart?: React.ReactNode;
+  }) => (
+    <div>
+      {toolbarStart}
+      {filterSlot}
+      <div data-testid="pmg-grid">{rows.length} rows</div>
+      <button type="button" onClick={() => onUrlChange({ page: String(url.page + 1) })}>
+        Next
+      </button>
+      {onRefresh ? (
+        <button type="button" data-testid="pmg-toolbar-refresh" onClick={onRefresh}>
+          Refresh
+        </button>
+      ) : null}
+    </div>
   ),
 }));
 
-vi.mock('@/components/EnterpriseDataGrid', () => ({
-  EnterpriseDataGrid: ({ rowData }: { rowData: any[] }) => (
-    <div data-testid="pmg-grid">{rowData.length} rows</div>
-  ),
+vi.mock('@/components/masterGrid/MasterColumnPickerDialog', () => ({
+  MasterColumnPickerDialog: () => null,
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -93,7 +107,7 @@ describe('ProductMasterGapWorklistView pagination (BACKLOG-074 U4c)', () => {
   it('syncs next page to URL skip param', async () => {
     renderView();
     await screen.findByTestId('pmg-grid');
-    fireEvent.click(screen.getByRole('button', { name: 'Go to next page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(replaceSpy).toHaveBeenCalled();
     const last = String(replaceSpy.mock.calls.at(-1)?.[0] ?? '');
     expect(last).toMatch(/skip=100/);

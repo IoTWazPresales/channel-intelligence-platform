@@ -16,23 +16,22 @@ import {
   MenuItem,
   Select,
   Stack,
-  TablePagination,
   Typography,
 } from '@mui/material';
-import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
+import type { ColDef, GridApi, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { ModuleDataSection } from '@/components/ModuleDataSection';
-import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
-import { parseSkipLimitParams } from '@/lib/skipLimitSearchParams';
+import { pageFromSkipLimit, parseSkipLimitParams, skipFromPage } from '@/lib/skipLimitSearchParams';
 
 const DEFAULT_LIMIT = 100;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200, 500] as const;
+const LS_SHELL_GRID = 'cip.admin.product-master-gaps.shell.grid.v1';
 
 type GapRow = {
   token: string;
@@ -47,6 +46,8 @@ type GapRow = {
   affected_job_ids: number[];
   deep_link: { href: string; label: string };
 };
+
+type GapGridRow = GapRow & { id: string };
 
 type WorklistResponse = {
   rows: GapRow[];
@@ -85,6 +86,28 @@ type ApplyResponse = {
   summary?: { tokens: number; repointed: number; skipped: number };
 };
 
+const PMG_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  {
+    label: 'Token',
+    fields: ['token', 'sources', 'status', 'resolution_statuses'],
+  },
+  {
+    label: 'Impact',
+    fields: ['occurrence_count', 'quantity_impact', 'sample_identifiers', 'affected_job_ids'],
+  },
+];
+
+const PMG_COLUMN_LABELS: Record<string, string> = {
+  token: 'Product token',
+  sources: 'Source(s)',
+  status: 'Status',
+  resolution_statuses: 'Resolution detail',
+  occurrence_count: 'Occurrences',
+  quantity_impact: 'Qty impact',
+  sample_identifiers: 'Sample IDs',
+  affected_job_ids: 'Jobs',
+};
+
 export function ProductMasterGapWorklistView() {
   const router = useRouter();
   const pathname = usePathname();
@@ -113,7 +136,7 @@ export function ProductMasterGapWorklistView() {
   const status = (searchParams.get('status') || 'all') as 'all' | 'unresolved' | 'ignored';
 
   const [selectedCount, setSelectedCount] = useState(0);
-  const [gridApi, setGridApi] = useState<GridApi<GapRow> | null>(null);
+  const [gridApi, setGridApi] = useState<GridApi<GapGridRow> | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [writeAlias, setWriteAlias] = useState(true);
@@ -185,7 +208,12 @@ export function ProductMasterGapWorklistView() {
     setSelectedCount(0);
   }, [skip, limit, source, status, gridApi]);
 
-  const columnDefs = useMemo<ColDef<GapRow>[]>(
+  const gridRows = useMemo<GapGridRow[]>(
+    () => (q.data?.rows ?? []).map((row) => ({ ...row, id: row.token })),
+    [q.data?.rows],
+  );
+
+  const columnDefs = useMemo<ColDef<GapGridRow>[]>(
     () => [
       { field: 'token', headerName: 'Product token', flex: 1, minWidth: 180 },
       {
@@ -198,7 +226,7 @@ export function ProductMasterGapWorklistView() {
         field: 'status',
         headerName: 'Status',
         width: 110,
-        cellRenderer: (p: ICellRendererParams<GapRow>) => {
+        cellRenderer: (p: ICellRendererParams<GapGridRow>) => {
           const v = p.data?.status;
           if (!v) return null;
           return (
@@ -241,7 +269,7 @@ export function ProductMasterGapWorklistView() {
         colId: 'action',
         headerName: 'Steward',
         width: 130,
-        cellRenderer: (p: ICellRendererParams<GapRow>) => {
+        cellRenderer: (p: ICellRendererParams<GapGridRow>) => {
           const link = p.data?.deep_link;
           if (!link) return null;
           return (
@@ -255,17 +283,16 @@ export function ProductMasterGapWorklistView() {
     [],
   );
 
-  const gridOptions = useMemo(
+  const gridOptions = useMemo<GridOptions<GapGridRow>>(
     () => ({
-      getRowId: (p: { data: GapRow }) => p.data.token,
+      getRowId: (p) => p.data?.id ?? p.data?.token ?? '',
       rowSelection: {
-        mode: 'multiRow' as const,
+        mode: 'multiRow',
         checkboxes: true,
         headerCheckbox: true,
         enableClickSelection: false,
       },
-      onGridReady: (e: { api: GridApi<GapRow> }) => setGridApi(e.api),
-      onSelectionChanged: (e: { api: GridApi<GapRow> }) => {
+      onSelectionChanged: (e) => {
         setSelectedCount(e.api.getSelectedRows().length);
       },
     }),
@@ -273,8 +300,24 @@ export function ProductMasterGapWorklistView() {
   );
 
   const total = q.data?.total ?? 0;
-  const page = limit > 0 ? Math.floor(skip / limit) : 0;
-  const pageCount = limit > 0 ? Math.max(1, Math.ceil(total / limit)) : 1;
+  const shellPage = pageFromSkipLimit(skip, limit);
+
+  const onShellUrlChange = useCallback(
+    (patch: Record<string, string | null>, resetPage?: boolean) => {
+      const next: Record<string, string | null> = {};
+      if (patch.page_size != null) {
+        next.limit = patch.page_size;
+        next.skip = null;
+      } else if (patch.page != null) {
+        const p = Math.max(1, Number(patch.page) || 1);
+        const nextSkip = skipFromPage(p, limit);
+        next.skip = nextSkip <= 0 ? null : String(nextSkip);
+      }
+      if (resetPage) next.skip = null;
+      setParamState(next);
+    },
+    [limit, setParamState],
+  );
 
   const job310Count = useMemo(
     () => (q.data?.rows ?? []).filter((r) => r.affected_job_ids.includes(310)).length,
@@ -305,71 +348,6 @@ export function ProductMasterGapWorklistView() {
         </Alert>
       ) : null}
 
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap" useFlexGap alignItems="center">
-        <FormControl size="small" sx={{ minWidth: 140 }}>
-          <InputLabel id="pmg-source">Source</InputLabel>
-          <Select
-            labelId="pmg-source"
-            label="Source"
-            value={source}
-            onChange={(e) =>
-              setParamState({ source: e.target.value === 'all' ? null : e.target.value, skip: null })
-            }
-          >
-            <MenuItem value="all">All</MenuItem>
-            <MenuItem value="shipment">Shipment</MenuItem>
-            <MenuItem value="dsi">DSI</MenuItem>
-            <MenuItem value="cpor_claim">CPOR claim</MenuItem>
-          </Select>
-        </FormControl>
-        <FormControl size="small" sx={{ minWidth: 140 }}>
-          <InputLabel id="pmg-status">Status</InputLabel>
-          <Select
-            labelId="pmg-status"
-            label="Status"
-            value={status}
-            onChange={(e) =>
-              setParamState({ status: e.target.value === 'all' ? null : e.target.value, skip: null })
-            }
-          >
-            <MenuItem value="all">All</MenuItem>
-            <MenuItem value="unresolved">Unresolved</MenuItem>
-            <MenuItem value="ignored">Ignored</MenuItem>
-          </Select>
-        </FormControl>
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={() => scanMut.mutate()}
-          disabled={scanMut.isPending}
-          data-testid="pmg-scan"
-        >
-          Scan for matches
-        </Button>
-        <Button
-          size="small"
-          variant="contained"
-          onClick={() => {
-            const tokens = selectedTokens();
-            if (!tokens.length) {
-              setBanner({ severity: 'warning', text: 'Select at least one token.' });
-              return;
-            }
-            previewMut.mutate(tokens);
-          }}
-          disabled={selectedCount === 0 || previewMut.isPending}
-          data-testid="pmg-preview-resolve"
-        >
-          Preview resolve ({selectedCount})
-        </Button>
-        <Box sx={{ flex: 1 }} />
-        <ModuleGridToolbar
-          onRefresh={() => void q.refetch()}
-          busy={q.isFetching}
-          sx={{ mb: 0 }}
-        />
-      </Stack>
-
       {q.data ? (
         <Typography variant="body2" color="text.secondary" data-testid="pmg-summary">
           {total} token{total === 1 ? '' : 's'}
@@ -377,43 +355,107 @@ export function ProductMasterGapWorklistView() {
         </Typography>
       ) : null}
 
-      <TablePagination
-        component="div"
-        count={total}
-        page={total === 0 ? 0 : Math.min(page, pageCount - 1)}
-        onPageChange={(_, nextPage) => {
-          setParamState({ skip: String(nextPage * limit) });
-        }}
-        rowsPerPage={limit}
-        onRowsPerPageChange={(e) => {
-          const next = Number(e.target.value);
-          setParamState({ skip: null, limit: String(next) });
-        }}
-        rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
-        labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${count}`}
-        data-testid="pmg-pagination"
-      />
-
-      <ModuleDataSection
+      <MasterDataGridShell<GapGridRow>
+        entityKey="product-master-gaps"
+        rows={gridRows}
+        columnDefs={columnDefs}
+        total={total}
         isLoading={q.isLoading}
         isError={q.isError}
-        error={q.error}
+        error={(q.error as Error) ?? null}
         onRetry={() => void q.refetch()}
-        isEmpty={Boolean(q.data && q.data.rows.length === 0)}
         empty={{
           title: 'No unresolved product tokens',
           description: 'All imported product identifiers resolved to Product Master for the current filters.',
         }}
-      >
-        <Box>
-          <EnterpriseDataGrid
-            rowData={q.data?.rows ?? []}
-            columnDefs={columnDefs}
-            height={560}
-            gridOptions={gridOptions}
-          />
-        </Box>
-      </ModuleDataSection>
+        url={{
+          page: shellPage,
+          pageSize: limit,
+          q: '',
+          sortBy: 'token',
+          sortDir: 'asc',
+        }}
+        onUrlChange={onShellUrlChange}
+        defaultPageSize={DEFAULT_LIMIT}
+        defaultSortBy="token"
+        defaultSortDir="asc"
+        pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+        enableEmptyUrlSeed={false}
+        gridStateStorageKey={LS_SHELL_GRID}
+        columnPickerTitle="Product master gap columns"
+        columnPickerGroups={PMG_COLUMN_GROUPS}
+        columnLabelByField={PMG_COLUMN_LABELS}
+        gridHeight={560}
+        gridOptions={gridOptions}
+        bulkSelectionEnabled={false}
+        onGridApiChange={setGridApi}
+        onRefresh={() => void q.refetch()}
+        refreshBusy={q.isFetching}
+        toolbarStart={
+          <>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scanMut.mutate()}
+              disabled={scanMut.isPending}
+              data-testid="pmg-scan"
+            >
+              Scan for matches
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => {
+                const tokens = selectedTokens();
+                if (!tokens.length) {
+                  setBanner({ severity: 'warning', text: 'Select at least one token.' });
+                  return;
+                }
+                previewMut.mutate(tokens);
+              }}
+              disabled={selectedCount === 0 || previewMut.isPending}
+              data-testid="pmg-preview-resolve"
+            >
+              Preview resolve ({selectedCount})
+            </Button>
+          </>
+        }
+        filterSlot={
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap" useFlexGap>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel id="pmg-source">Source</InputLabel>
+              <Select
+                labelId="pmg-source"
+                label="Source"
+                value={source}
+                onChange={(e) =>
+                  setParamState({ source: e.target.value === 'all' ? null : e.target.value, skip: null })
+                }
+              >
+                <MenuItem value="all">All</MenuItem>
+                <MenuItem value="shipment">Shipment</MenuItem>
+                <MenuItem value="dsi">DSI</MenuItem>
+                <MenuItem value="cpor_claim">CPOR claim</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel id="pmg-status">Status</InputLabel>
+              <Select
+                labelId="pmg-status"
+                label="Status"
+                value={status}
+                onChange={(e) =>
+                  setParamState({ status: e.target.value === 'all' ? null : e.target.value, skip: null })
+                }
+              >
+                <MenuItem value="all">All</MenuItem>
+                <MenuItem value="unresolved">Unresolved</MenuItem>
+                <MenuItem value="ignored">Ignored</MenuItem>
+              </Select>
+            </FormControl>
+          </Stack>
+        }
+      />
 
       <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Confirm catalogue gap resolve</DialogTitle>

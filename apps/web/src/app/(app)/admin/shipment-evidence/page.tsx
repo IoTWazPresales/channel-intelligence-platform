@@ -12,24 +12,22 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TablePagination,
   TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
-import type { ColDef, RowClickedEvent, ValueGetterParams } from 'ag-grid-community';
+import type { ColDef, GridOptions, RowClickedEvent, ValueGetterParams } from 'ag-grid-community';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { ModuleDataSection } from '@/components/ModuleDataSection';
-import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
+import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
 import { PageHeader } from '@/components/PageHeader';
 import { apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
-import { parseSkipLimitParams } from '@/lib/skipLimitSearchParams';
+import { pageFromSkipLimit, parseSkipLimitParams, skipFromPage } from '@/lib/skipLimitSearchParams';
 import { fetchDsiImportPipelineProgress } from '@/features/background-tasks/fetchImportJobProgress';
 
 import {
@@ -39,8 +37,34 @@ import {
 import { ShipmentEntityStewardPanel } from './ShipmentEntityStewardPanel';
 
 const LS_GRID = 'cip.admin.shipment-evidence.grid.v1';
+const LS_SHELL_GRID = 'cip.admin.shipment-evidence.shell.grid.v1';
 const DEFAULT_LIMIT = 100;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500, 1000] as const;
+
+const SHIPMENT_EVIDENCE_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  {
+    label: 'Core',
+    fields: [
+      'id',
+      'import_job_id',
+      'source_sheet',
+      'source_row_number',
+      'line_state',
+      'report_type',
+      'bill_to_raw',
+      'item_code',
+      'sales_model_name',
+      'product_resolution_status',
+      'product_sku',
+      'distributor_resolution_status',
+      'distributor_code',
+      'quantity',
+      'amount',
+      'currency_code',
+      'ship_confirm_date',
+    ],
+  },
+];
 
 export type ShipmentEvidenceGridRow = {
   id: number;
@@ -447,16 +471,53 @@ export default function ShipmentEvidenceAdminPage() {
   );
 
   const optionalColDefs = useMemo(() => {
-    return optionalFields.map((f) => {
-      const meta = SHIPMENT_EVIDENCE_OPTIONAL_FIELDS.find((x) => x.field === f);
+    return SHIPMENT_EVIDENCE_OPTIONAL_FIELDS.map((meta) => {
+      const f = meta.field;
       const wide = f.includes('detail') || f.includes('token');
       return {
         field: f as keyof ShipmentEvidenceGridRow & string,
-        headerName: meta?.label ?? f,
+        headerName: meta.label,
         minWidth: wide ? 220 : 130,
+        hide: !optionalFields.includes(f),
       } satisfies ColDef<ShipmentEvidenceGridRow>;
     });
   }, [optionalFields]);
+
+  const columnPickerExtraGroups = useMemo<MasterColumnPickerGroup[]>(
+    () => [
+      {
+        label: 'Optional',
+        fields: SHIPMENT_EVIDENCE_OPTIONAL_FIELDS.map((c) => c.field),
+      },
+    ],
+    [],
+  );
+
+  const columnLabelByField = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const c of SHIPMENT_EVIDENCE_OPTIONAL_FIELDS) {
+      out[c.field] = c.label;
+    }
+    return out;
+  }, []);
+
+  const allowedOptionalSet = useMemo(
+    () => new Set(SHIPMENT_EVIDENCE_OPTIONAL_FIELDS.map((c) => c.field)),
+    [],
+  );
+
+  const syncOptionalFieldVisibility = useCallback(
+    (field: string | undefined, visible: boolean) => {
+      if (!field || !allowedOptionalSet.has(field)) return;
+      setOptionalFields((prev) => {
+        const has = prev.includes(field);
+        if (visible && !has) return [...prev, field];
+        if (!visible && has) return prev.filter((f) => f !== field);
+        return prev;
+      });
+    },
+    [allowedOptionalSet],
+  );
 
   const rawColDefs = useMemo(() => {
     return rawKeys.map((k) => ({
@@ -485,13 +546,35 @@ export default function ShipmentEvidenceAdminPage() {
     () => ({
       onRowClicked,
       getRowId: (p: { data: ShipmentEvidenceGridRow }) => String(p.data.id),
+      defaultColDef: { sortable: true, filter: true, resizable: true },
+      onColumnVisible: (e: { column?: { getColDef?: () => { field?: string }; isVisible?: () => boolean } }) => {
+        const field = e.column?.getColDef?.()?.field;
+        const visible = Boolean(e.column?.isVisible?.());
+        syncOptionalFieldVisibility(field, visible);
+      },
     }),
-    [onRowClicked]
+    [onRowClicked, syncOptionalFieldVisibility],
   );
 
   const total = data?.total ?? 0;
-  const page = limit > 0 ? Math.floor(skip / limit) : 0;
-  const pageCount = Math.max(0, Math.ceil(total / limit) - 1);
+  const shellPage = pageFromSkipLimit(skip, limit);
+
+  const onShellUrlChange = useCallback(
+    (patch: Record<string, string | null>, resetPage?: boolean) => {
+      const next: Record<string, string | null> = {};
+      if (patch.page_size != null) {
+        next.limit = patch.page_size;
+        next.skip = null;
+      } else if (patch.page != null) {
+        const p = Math.max(1, Number(patch.page) || 1);
+        const nextSkip = skipFromPage(p, limit);
+        next.skip = nextSkip <= 0 ? null : String(nextSkip);
+      }
+      if (resetPage) next.skip = null;
+      setParamState(next);
+    },
+    [limit, setParamState],
+  );
 
   const canApplyImport = trackedImportJob?.stage === 'validated';
   const importApplied = trackedImportJob?.stage === 'loaded';
@@ -612,21 +695,6 @@ export default function ShipmentEvidenceAdminPage() {
               <MenuItem value="skipped_empty">skipped_empty</MenuItem>
             </TextField>
           </Stack>
-          <TablePagination
-            component="div"
-            count={total}
-            page={total === 0 ? 0 : Math.min(page, pageCount)}
-            onPageChange={(_, nextPage) => {
-              setParamState({ skip: String(nextPage * limit) });
-            }}
-            rowsPerPage={limit}
-            onRowsPerPageChange={(e) => {
-              const next = Number(e.target.value);
-              setParamState({ skip: null, limit: String(next) });
-            }}
-            rowsPerPageOptions={[...PAGE_SIZE_OPTIONS]}
-            labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`}
-          />
         </Paper>
 
         {parsedJobId != null ? (
@@ -756,46 +824,59 @@ export default function ShipmentEvidenceAdminPage() {
           </Alert>
         ) : null}
 
-        <ModuleDataSection
-          title="Evidence lines"
-          description="Click a row for raw JSON and tokens. Product resolution stays visible in the grid; distributor stewardship is above."
+        <MasterDataGridShell
+          entityKey="shipment-evidence"
+          rows={data?.items ?? []}
+          columnDefs={colDefs as ColDef[]}
+          total={total}
           isLoading={isLoading}
           isError={isError}
           error={toQueryError(error)}
           onRetry={() => void refetch()}
-          isEmpty={!isLoading && (data?.items?.length ?? 0) === 0}
-          emptyState={{
+          intro="Click a row for raw JSON and tokens. Product resolution stays visible in the grid; distributor stewardship is above."
+          empty={{
             title: 'No evidence rows yet',
             description: 'Run a Shipment / order evidence import job first.',
+            primary: { label: 'Data imports', href: '/admin/imports?template=inbound_shipments' },
           }}
-          toolbar={
-            <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap alignItems="center">
-              <Tooltip title="Choose optional canonical fields and raw source columns for the grid">
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<ViewColumnIcon />}
-                  onClick={() => setColDialogOpen(true)}
-                  data-testid="shipment-evidence-columns"
-                  sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
-                >
-                  Additional columns
-                </Button>
-              </Tooltip>
-              <ModuleGridToolbar
-                importsHref="/admin/imports?template=inbound_shipments"
-                onRefresh={() => void refetch()}
-              />
-            </Stack>
+          url={{
+            page: shellPage,
+            pageSize: limit,
+            q: search,
+            sortBy: 'id',
+            sortDir: 'asc',
+          }}
+          onUrlChange={onShellUrlChange}
+          defaultPageSize={DEFAULT_LIMIT}
+          defaultSortBy="id"
+          defaultSortDir="asc"
+          pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+          enableEmptyUrlSeed={false}
+          gridStateStorageKey={LS_SHELL_GRID}
+          columnPickerTitle="Shipment evidence columns"
+          columnPickerGroups={SHIPMENT_EVIDENCE_COLUMN_GROUPS}
+          columnPickerExtraGroups={columnPickerExtraGroups}
+          columnLabelByField={columnLabelByField}
+          gridHeight={520}
+          gridOptions={gridOptions as GridOptions}
+          bulkSelectionEnabled={false}
+          onRefresh={() => void refetch()}
+          refreshBusy={isLoading}
+          toolbarEnd={
+            <Tooltip title="Choose optional canonical fields and raw source columns for the grid">
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<ViewColumnIcon />}
+                onClick={() => setColDialogOpen(true)}
+                data-testid="shipment-evidence-columns"
+                sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+              >
+                Additional columns
+              </Button>
+            </Tooltip>
           }
-        >
-          <EnterpriseDataGrid
-            rowData={data?.items ?? []}
-            columnDefs={colDefs}
-            gridOptions={gridOptions}
-            height={520}
-          />
-        </ModuleDataSection>
+        />
       </Stack>
 
       <ShipmentEvidenceColumnsDialog

@@ -25,25 +25,55 @@ vi.mock('@/components/PageHeader', () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
 }));
 
-vi.mock('@/components/ModuleDataSection', () => ({
-  ModuleDataSection: ({ children, isEmpty, empty, isLoading }: any) => {
-    if (isLoading) return <div>Loading cases…</div>;
-    if (isEmpty) return <div>{empty?.title}</div>;
-    return <>{children}</>;
-  },
-}));
-
-vi.mock('@/components/ModuleGridToolbar', () => ({
-  ModuleGridToolbar: ({ onRefresh, busy }: { onRefresh?: () => void; busy?: boolean }) => (
-    <button type="button" onClick={onRefresh} disabled={busy} data-testid="cpor-refresh">
-      Refresh
-    </button>
-  ),
-}));
-
-vi.mock('@/components/EnterpriseDataGrid', () => ({
-  EnterpriseDataGrid: ({ rowData }: { rowData: any[] }) => (
-    <div data-testid="cpor-cases-grid">{rowData.length} rows</div>
+vi.mock('@/components/masterGrid/MasterDataGridShell', () => ({
+  MasterDataGridShell: ({
+    rows,
+    onUrlChange,
+    url,
+    onRefresh,
+    refreshBusy,
+    filterSlot,
+    isLoading,
+    total,
+    empty,
+  }: {
+    rows: unknown[];
+    onUrlChange: (patch: Record<string, string | null>) => void;
+    url: { page: number };
+    onRefresh?: () => void;
+    refreshBusy?: boolean;
+    filterSlot?: React.ReactNode;
+    isLoading?: boolean;
+    total?: number;
+    empty?: { title?: string };
+  }) => (
+    <div>
+      {filterSlot}
+      <button type="button" data-testid="cpor-cases-columns-open">
+        Columns
+      </button>
+      <button type="button" onClick={onRefresh} disabled={refreshBusy} data-testid="cpor-refresh">
+        Refresh
+      </button>
+      {isLoading ? (
+        <div>Loading cases…</div>
+      ) : rows.length === 0 && total === 0 ? (
+        <div>{empty?.title}</div>
+      ) : (
+        <>
+          <div data-testid="cpor-cases-grid">{rows.length} rows</div>
+          <div data-testid="cpor-cases-pager">
+            <button
+              type="button"
+              data-testid="cpor-cases-next"
+              onClick={() => onUrlChange({ page: String(url.page + 1) })}
+            >
+              Next
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   ),
 }));
 
@@ -141,7 +171,7 @@ describe('CPOR cases list page pagination (BACKLOG-074 U4d)', () => {
   it('renders search and Columns controls', async () => {
     renderPage();
     expect(await screen.findByTestId('cpor-search')).toBeInTheDocument();
-    expect(screen.getByTestId('cpor-columns')).toBeInTheDocument();
+    expect(screen.getByTestId('cpor-cases-columns-open')).toBeInTheDocument();
   });
 
   it('hydrates customer filter label from customer_id URL param (Wave 3)', async () => {

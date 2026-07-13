@@ -9,26 +9,17 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
-  InputLabel,
   MenuItem,
-  Select,
   Stack,
   TextField,
-  Typography,
 } from '@mui/material';
-import type { ColDef, GridApi } from 'ag-grid-community';
+import type { ColDef } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import {
-  MasterColumnPickerDialog,
-  type MasterColumnPickerGroup,
-} from '@/components/masterGrid/MasterColumnPickerDialog';
-import { ModuleDataSection } from '@/components/ModuleDataSection';
-import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
+import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
 import { PageHeader } from '@/components/PageHeader';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost } from '@/lib/api';
@@ -71,7 +62,7 @@ const STATUS_OPTIONS = [
 
 const DEFAULT_PAGE_SIZE = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
-const CPOR_GRID_STATE_KEY = 'cip.cpor-cases.gridState.v1';
+const CPOR_GRID_STATE_KEY = 'cip.cpor-cases.gridState.shell.v1';
 
 const CPOR_COLUMN_GROUPS: MasterColumnPickerGroup[] = [
   { label: 'Identity', fields: ['case_code', 'case_name', 'customer'] },
@@ -93,6 +84,8 @@ const CPOR_COLUMN_LABELS: Record<string, string> = {
   ttl_support_usd: 'Ttl USD',
   missing_roe: 'Missing ROE',
 };
+
+const CPOR_DEFAULT_INITIALLY_HIDDEN = ['case_name', 'missing_roe'] as const;
 
 export default function CporCasesListPage() {
   const router = useRouter();
@@ -125,6 +118,26 @@ export default function CporCasesListPage() {
     [pathname, router, searchKey],
   );
 
+  const handleGridUrlChange = useCallback(
+    (patch: Record<string, string | null>, resetPage?: boolean) => {
+      const changes = { ...patch };
+      if (resetPage) changes.page = '1';
+      setParamState(changes);
+    },
+    [setParamState],
+  );
+
+  const gridUrl = useMemo(
+    () => ({
+      page,
+      pageSize,
+      q,
+      sortBy: 'case_code',
+      sortDir: 'asc' as const,
+    }),
+    [page, pageSize, q],
+  );
+
   const [searchInput, setSearchInput] = useDebouncedUrlQuery(
     q,
     useCallback((next) => setParamState({ q: next || null, page: '1' }), [setParamState]),
@@ -139,10 +152,6 @@ export default function CporCasesListPage() {
   const [roe, setRoe] = useState('');
   const [caseCode, setCaseCode] = useState('');
   const [customerPickerHint, setCustomerPickerHint] = useState<string | null>(null);
-  const [gridApi, setGridApi] = useState<GridApi<CporCaseRow> | null>(null);
-  const [columnsOpen, setColumnsOpen] = useState(false);
-  const [columnSearch, setColumnSearch] = useState('');
-  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (customerId == null) setFilterCustomer(null);
@@ -190,7 +199,6 @@ export default function CporCasesListPage() {
 
   const cases = casesPage?.items ?? [];
   const total = casesPage?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const create = useMutation({
     mutationFn: () =>
@@ -209,26 +217,13 @@ export default function CporCasesListPage() {
     },
   });
 
-  const toggleColumnVisibility = useCallback(
-    (columnId: string, visible: boolean) => {
-      setColumnVisibility((prev) => ({ ...prev, [columnId]: visible }));
-      if (!gridApi?.setColumnsVisible) return;
-      gridApi.setColumnsVisible([columnId], visible);
-      try {
-        localStorage.setItem(CPOR_GRID_STATE_KEY, JSON.stringify(gridApi.getColumnState()));
-      } catch {
-        /* ignore */
-      }
-    },
-    [gridApi],
-  );
-
   const columnDefs = useMemo<ColDef<CporCaseRow>[]>(
     () => [
       { colId: 'case_code', field: 'case_code', headerName: 'Case', width: 130 },
-      { colId: 'case_name', field: 'case_name', headerName: 'Name', width: 160, hide: true },
+      { colId: 'case_name', field: 'case_name', headerName: 'Name', width: 160 },
       {
         colId: 'customer',
+        field: 'customer',
         headerName: 'Customer',
         flex: 1,
         minWidth: 160,
@@ -238,6 +233,7 @@ export default function CporCasesListPage() {
       { colId: 'promotion_type', field: 'promotion_type', headerName: 'Type', width: 140 },
       {
         colId: 'window',
+        field: 'window',
         headerName: 'Window',
         width: 180,
         valueGetter: (p) =>
@@ -273,7 +269,6 @@ export default function CporCasesListPage() {
         field: 'missing_roe',
         headerName: 'Missing ROE',
         width: 120,
-        hide: true,
         valueFormatter: (p) => (p.value ? 'yes' : ''),
       },
     ],
@@ -289,153 +284,100 @@ export default function CporCasesListPage() {
       <Alert severity="info" sx={{ mb: 2 }}>
         Reseller-channel promotion funding cases. Money is computed server-side (U2). Flags never block saves.
       </Alert>
-      <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
-        <TextField
-          size="small"
-          label="Search"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Case code / name / customer"
-          sx={{ minWidth: 220 }}
-          data-testid="cpor-search"
-        />
-        <TextField
-          select
-          size="small"
-          label="Status"
-          value={status}
-          onChange={(e) => setParamState({ status: e.target.value || null, page: '1' })}
-          sx={{ minWidth: 160 }}
-          data-testid="cpor-status-filter"
-        >
-          <MenuItem value="">All</MenuItem>
-          {STATUS_OPTIONS.map((s) => (
-            <MenuItem key={s} value={s}>
-              {s}
-            </MenuItem>
-          ))}
-        </TextField>
-        <Box sx={{ minWidth: 260, flex: '1 1 220px' }} data-testid="cpor-customer-filter">
-          <EntitySearchAutocomplete<CustomerPick>
-            label="Customer"
-            value={filterCustomer}
-            onChange={(v) => {
-              setFilterCustomer(v);
-              setParamState({
-                customer_id: v ? String(v.id) : null,
-                page: '1',
-              });
-            }}
-            getOptionLabel={(o) => `${o.customer_code} — ${o.customer_name}`}
-            fetchOptions={async (needle, signal) => {
-              const res = await apiGet<{ items: CustomerPick[]; total: number }>(
-                `/api/v1/customers?page=1&page_size=25&q=${encodeURIComponent(needle)}`,
-                { signal },
-              );
-              return res.items;
-            }}
-          />
-        </Box>
-        <Box sx={{ flex: 1 }} />
-        <Button variant="outlined" size="small" onClick={() => setColumnsOpen(true)} data-testid="cpor-columns">
-          Columns
-        </Button>
-        <ModuleGridToolbar onRefresh={() => void refetch()} busy={isFetching} sx={{ mb: 0 }} />
-        <Button variant="contained" onClick={() => setDlg(true)} data-testid="cpor-new-case">
-          New case
-        </Button>
-      </Stack>
-      <ModuleDataSection
+      <MasterDataGridShell
+        entityKey="cpor-cases"
+        rows={cases}
+        columnDefs={columnDefs}
+        total={total}
         isLoading={isLoading}
         isError={isError}
         error={(error as Error) ?? null}
         onRetry={() => void refetch()}
-        isEmpty={total === 0}
         empty={{
           title: 'No CPOR cases',
-          description: status || q || customerId
-            ? 'No cases match the current filters.'
-            : 'Create a case to get started.',
+          description:
+            status || q || customerId
+              ? 'No cases match the current filters.'
+              : 'Create a case to get started.',
         }}
-      >
-        <EnterpriseDataGrid
-          rowData={cases}
-          columnDefs={columnDefs}
-          height={560}
-          gridOptions={{
-            getRowId: (p) => String(p.data.id),
-            loading: isFetching,
-            onGridReady: (e) => {
-              setGridApi(e.api);
-              try {
-                const raw = localStorage.getItem(CPOR_GRID_STATE_KEY);
-                if (raw) {
-                  const state = JSON.parse(raw);
-                  if (Array.isArray(state)) e.api.applyColumnState({ state, applyOrder: true });
-                }
-              } catch {
-                /* ignore */
-              }
-              const vis: Record<string, boolean> = {};
-              for (const col of e.api.getColumns() ?? []) {
-                vis[col.getColId()] = col.isVisible();
-              }
-              setColumnVisibility(vis);
-            },
-            onRowClicked: (e) => {
-              if (e.data?.id) router.push(`/commercial-planner/cpor-cases/${e.data.id}`);
-            },
-          }}
-        />
-        <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center" data-testid="cpor-cases-pager">
-          <Button
-            disabled={page <= 1 || isFetching}
-            onClick={() => setParamState({ page: String(page - 1) })}
-            data-testid="cpor-cases-prev"
-          >
-            Prev
+        url={gridUrl}
+        onUrlChange={handleGridUrlChange}
+        defaultPageSize={DEFAULT_PAGE_SIZE}
+        defaultSortBy="case_code"
+        defaultSortDir="asc"
+        pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+        enableEmptyUrlSeed={false}
+        bulkSelectionEnabled={false}
+        gridStateStorageKey={CPOR_GRID_STATE_KEY}
+        defaultInitiallyHiddenFields={[...CPOR_DEFAULT_INITIALLY_HIDDEN]}
+        columnPickerTitle="CPOR case columns"
+        columnPickerGroups={CPOR_COLUMN_GROUPS}
+        columnLabelByField={CPOR_COLUMN_LABELS}
+        gridHeight={560}
+        onRefresh={() => void refetch()}
+        refreshBusy={isFetching}
+        gridOptions={{
+          getRowId: (p) => String(p.data.id),
+          loading: isFetching,
+          onRowClicked: (e) => {
+            if (e.data?.id) router.push(`/commercial-planner/cpor-cases/${e.data.id}`);
+          },
+        }}
+        toolbarEnd={
+          <Button variant="contained" onClick={() => setDlg(true)} data-testid="cpor-new-case">
+            New case
           </Button>
-          <Typography variant="body2">
-            Page {page} / {totalPages} ({total} cases)
-          </Typography>
-          <Button
-            disabled={page >= totalPages || isFetching}
-            onClick={() => setParamState({ page: String(page + 1) })}
-            data-testid="cpor-cases-next"
-          >
-            Next
-          </Button>
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>Page size</InputLabel>
-            <Select
-              label="Page size"
-              value={String(pageSize)}
-              onChange={(e) =>
-                setParamState({ page_size: String(e.target.value || DEFAULT_PAGE_SIZE), page: '1' })
-              }
-              data-testid="cpor-cases-page-size"
+        }
+        filterSlot={
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+            <TextField
+              size="small"
+              label="Search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Case code / name / customer"
+              sx={{ minWidth: 220 }}
+              data-testid="cpor-search"
+            />
+            <TextField
+              select
+              size="small"
+              label="Status"
+              value={status}
+              onChange={(e) => setParamState({ status: e.target.value || null, page: '1' })}
+              sx={{ minWidth: 160 }}
+              data-testid="cpor-status-filter"
             >
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <MenuItem key={n} value={String(n)}>
-                  {n}
+              <MenuItem value="">All</MenuItem>
+              {STATUS_OPTIONS.map((s) => (
+                <MenuItem key={s} value={s}>
+                  {s}
                 </MenuItem>
               ))}
-            </Select>
-          </FormControl>
-        </Stack>
-      </ModuleDataSection>
-
-      <MasterColumnPickerDialog
-        open={columnsOpen}
-        onClose={() => setColumnsOpen(false)}
-        title="CPOR case columns"
-        groups={CPOR_COLUMN_GROUPS}
-        columnLabelByField={CPOR_COLUMN_LABELS}
-        visibility={columnVisibility}
-        onToggle={toggleColumnVisibility}
-        gridReady={Boolean(gridApi)}
-        search={columnSearch}
-        onSearchChange={setColumnSearch}
+            </TextField>
+            <Box sx={{ minWidth: 260, flex: '1 1 220px' }} data-testid="cpor-customer-filter">
+              <EntitySearchAutocomplete<CustomerPick>
+                label="Customer"
+                value={filterCustomer}
+                onChange={(v) => {
+                  setFilterCustomer(v);
+                  setParamState({
+                    customer_id: v ? String(v.id) : null,
+                    page: '1',
+                  });
+                }}
+                getOptionLabel={(o) => `${o.customer_code} — ${o.customer_name}`}
+                fetchOptions={async (needle, signal) => {
+                  const res = await apiGet<{ items: CustomerPick[]; total: number }>(
+                    `/api/v1/customers?page=1&page_size=25&q=${encodeURIComponent(needle)}`,
+                    { signal },
+                  );
+                  return res.items;
+                }}
+              />
+            </Box>
+          </Stack>
+        }
       />
 
       <Dialog open={dlg} onClose={() => !create.isPending && setDlg(false)} fullWidth maxWidth="sm">

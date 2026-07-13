@@ -1,6 +1,6 @@
 # Current state
 
-**Last updated:** 2026-07-12 (Opus WEAK polish shipped)
+**Last updated:** 2026-07-13 (BACKLOG-074 remaining shell surfaces A/B/D)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,21 +10,28 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/ops-master-grid-shell-parity` |
-| **HEAD** | `95bfa13` (pushed) |
 | **Alembic (DB)** | **`20260710_0072`** (unchanged) |
-| **Opus VERIFY** | **PASS** @ `c00c1cb` (pack 1–4); WEAK polish implemented @ `95bfa13` |
 | **Consultant** | Opus default |
+| **Scope lock** | Opus CONSULT NEED_HUMAN ? Warren: Cursor picks best. Locked: ship A/B/D; defer C (PO gap) + E (PVE drill) |
 
 ---
 
-## Exclusions (still)
+## Shell adoption status
 
-- Channel Ops **Overview** (charts only)
-- Import **`ImportStewardCandidateWorkspace`**
+| Surface | Status |
+|---------|--------|
+| Shipping / Channel Ops data tabs / CST / PVE exceptions | Done (prior) |
+| CPOR cases list | **Done** |
+| PM gaps worklist | **Done** (inline selection; no shell modal bulk) |
+| Shipment evidence list | **Done** (raw columns dialog kept) |
+| PO gap grid (C) | **Deferred** |
+| PVE drill (E) | **Deferred** |
+| Overview / ImportStewardCandidateWorkspace | Excluded |
 
 ---
 
 ## Next
 
-- Optional: Opus re-VERIFY polish only
-- Browser soak / open PR
+- Commit/push this slice ? optional Opus VERIFY on A/B/D
+- Open PR, or browser soak
+- Later opt-in: PO gap grid only
