@@ -566,6 +566,18 @@ async def create_job(
     return {"id": job.id, "status": job.status, "stage": job.stage, "template_slug": job.template_slug, "import_mode": job.import_mode}
 
 
+@router.get("/dsi/coverage")
+async def get_dsi_coverage(
+    source_id: int | None = Query(None),
+    weeks: int = Query(12, ge=4, le=26),
+):
+    """Read-only DSI weekly coverage — missed sell-out / SOH weeks (FLAG only)."""
+    from app.services.imports.dsi_coverage import compute_dsi_coverage
+
+    with SessionLocal() as sync_db:
+        return compute_dsi_coverage(sync_db, source_id=source_id, weeks=weeks)
+
+
 @router.post("/dsi/batch-propose")
 async def dsi_batch_propose(
     files: list[UploadFile] = File(...),

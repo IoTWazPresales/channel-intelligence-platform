@@ -65,6 +65,7 @@ import { toQueryError } from '@/lib/queryError';
 import { ImportFileUploadZone } from './ImportFileUploadZone';
 import { BulkLineupBackfillDialog } from './BulkLineupBackfillDialog';
 import { DsiBulkUploadDialog } from './DsiBulkUploadDialog';
+import { DsiCoveragePanel } from './DsiCoveragePanel';
 import { UnifiedLineupImportDialog } from './UnifiedLineupImportDialog';
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
 import {
@@ -562,6 +563,12 @@ function AdminImportsPageContent() {
   // transient `validated` as "done", so apply needs its own poll terminal on `loaded`/`failed`.
   const [dsiApplyAsync, setDsiApplyAsync] = useState(false);
   const [dsiWorkflowMode, setDsiWorkflowMode] = useState<'auto' | 'historical' | 'weekly'>('auto');
+
+  const openDsiHistoricalBackfill = useCallback(() => {
+    setDsiWorkflowMode('historical');
+    setActiveStep(4);
+    setDsiBulkUploadOpen(true);
+  }, []);
 
   const jobIdParam = useMemo(() => {
     const v = searchParams.get('job');
@@ -3829,6 +3836,12 @@ function AdminImportsPageContent() {
             >
               Unified batch upload
             </Button>
+            {typeof sourceId === 'number' ? (
+              <DsiCoveragePanel
+                sourceId={sourceId}
+                onUploadHistorical={openDsiHistoricalBackfill}
+              />
+            ) : null}
             {upload.isSuccess && lastJobId != null ? (
               <Alert severity="success" data-testid="dsi-upload-success">
                 Job <strong>#{lastJobId}</strong> created. Continue to column mapping.
@@ -3991,6 +4004,13 @@ function AdminImportsPageContent() {
         {activeStep === 6 && isDsi && selectedTemplate ? (
           <Stack spacing={2}>
             <Typography variant="subtitle2">Validate (no fact writes)</Typography>
+            {typeof sourceId === 'number' ? (
+              <DsiCoveragePanel
+                sourceId={sourceId}
+                flagsOnly
+                onUploadHistorical={openDsiHistoricalBackfill}
+              />
+            ) : null}
             {dsiJobFailedAlert}
             {!dsiServerMappingGateOk ? (
               <Alert severity="warning" data-testid="dsi-validate-blocked">
