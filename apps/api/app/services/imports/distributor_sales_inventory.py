@@ -1725,7 +1725,19 @@ def process_distributor_sales_inventory(
     on_progress: Any = None,
 ) -> int:
     """Validate + stage (+ apply if job.import_mode == 'apply'). Returns blocking error count."""
-    if "distributor_token" not in mapping.values():
+    from app.services.imports.dsi_workbook import (
+        DSI_SHEET_META_KEY,
+        build_combined_dsi_dataframe,
+        flatten_dsi_field_mapping,
+        is_nested_dsi_field_mapping,
+        iter_dsi_dataframes_for_job,
+        job_has_multi_file_mapping,
+        persist_dsi_workbook_on_job,
+    )
+
+    # Nested multi-file / multi-sheet mappings are dict-of-dicts; flatten before required-target checks.
+    flat_for_gates = flatten_dsi_field_mapping(mapping)
+    if "distributor_token" not in flat_for_gates.values():
         db.add(
             ImportRowResult(
                 job_id=job.id,
@@ -1736,7 +1748,7 @@ def process_distributor_sales_inventory(
             )
         )
         return 1
-    if "product_identifier" not in mapping.values():
+    if "product_identifier" not in flat_for_gates.values():
         db.add(
             ImportRowResult(
                 job_id=job.id,
@@ -1747,15 +1759,6 @@ def process_distributor_sales_inventory(
             )
         )
         return 1
-
-    from app.services.imports.dsi_workbook import (
-        DSI_SHEET_META_KEY,
-        build_combined_dsi_dataframe,
-        is_nested_dsi_field_mapping,
-        iter_dsi_dataframes_for_job,
-        job_has_multi_file_mapping,
-        persist_dsi_workbook_on_job,
-    )
 
     sheet_frames = iter_dsi_dataframes_for_job(db, job, df)
     skipped_sheets: list[dict[str, str]] = []

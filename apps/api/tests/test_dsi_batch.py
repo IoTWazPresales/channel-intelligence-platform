@@ -93,3 +93,195 @@ def test_column_samples_in_workbook_structure() -> None:
     assert structure["sheets"]
     assert "column_samples" in structure["sheets"][0]
     assert structure["sheets"][0]["column_samples"]
+
+
+def _seed_dsi_source_for_batch_e2e() -> int:
+    """Minimal DSI catalog seed; skip if DSI tables missing."""
+    from sqlalchemy import inspect, select
+
+    from app.db.session_sync import SessionLocal
+    from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct, DimRegion
+    from app.models.ingestion import SourceDefinition
+    from app.services.commercial_planner.reference_bootstrap import (
+        ensure_commercial_planner_system_reference_data_sync,
+    )
+    from app.services.seed_demo import _seed_import_core
+
+    with SessionLocal() as db:
+        names = set(inspect(db.connection()).get_table_names())
+        if "import_distributor_si_staging_line" not in names:
+            pytest.skip("Database missing DSI tables")
+        _seed_import_core(db)
+        ensure_commercial_planner_system_reference_data_sync(db.connection())
+        r1 = db.scalar(select(DimRegion).where(DimRegion.code == "NA-W"))
+        if not r1:
+            r1 = DimRegion(code="NA-W", name="North America West")
+            db.add(r1)
+            db.flush()
+        ch = db.scalar(select(DimChannel).where(DimChannel.code == "RET"))
+        if not ch:
+            ch = DimChannel(code="RET", name="Retail")
+            db.add(ch)
+            db.flush()
+        if not db.scalar(select(DimDistributor).where(DimDistributor.code == "DIST-01")):
+            db.add(DimDistributor(code="DIST-01", name="Summit Supply Co."))
+        if not db.scalar(select(DimCustomer).where(DimCustomer.code == "CUST-1001")):
+            db.add(
+                DimCustomer(
+                    code="CUST-1001",
+                    name="Metro Market Group",
+                    region_id=r1.id,
+                    channel_id=ch.id,
+                )
+            )
+        if not db.scalar(select(DimProduct).where(DimProduct.sku == "SKU-ALPHA-01")):
+            db.add(
+                DimProduct(
+                    sku="SKU-ALPHA-01",
+                    name="Alpha Pro 200",
+                    category="Audio",
+                    channel_id=ch.id,
+                )
+            )
+        db.commit()
+        sid = db.scalar(select(SourceDefinition.id).where(SourceDefinition.code == "distributor_inventory"))
+        assert sid is not None
+        return int(sid)
+
+
+def test_process_import_job_sync_two_file_batch_validate_stages_both() -> None:
+    """U0e: nested multi-file must reach combine path (not missing_distributor_token_mapping)."""
+    from copy import deepcopy
+
+    from sqlalchemy import func, select
+
+    from app.db.session_sync import SessionLocal
+    from app.ingestion.pipeline import process_import_job_sync
+    from app.models.import_distributor_si import ImportDistributorSiStagingLine
+    from app.models.ingestion import ImportRowResult
+    from app.services.imports.dsi_batch import create_dsi_batch_job_sync
+    from app.services.imports.dsi_workbook import is_nested_dsi_field_mapping
+
+    source_id = _seed_dsi_source_for_batch_e2e()
+    csv_a = (
+        "distributor_code,sku,date,qty,customer_name,soh\n"
+        "DIST-01,SKU-ALPHA-01,2024-06-01,2,Mystery Dealer Zed,10\n"
+    ).encode("utf-8")
+    csv_b = (
+        "distributor_code,sku,date,qty,customer_name,soh\n"
+        "DIST-01,SKU-ALPHA-01,2024-06-08,1,Mystery Dealer Zed,8\n"
+    ).encode("utf-8")
+
+    with SessionLocal() as db:
+        job = create_dsi_batch_job_sync(
+            db,
+            source_id=source_id,
+            filenames_and_bytes=[("week1.csv", csv_a), ("week2.csv", csv_b)],
+            import_mode="validate",
+            # weekly avoids post-validate Celery enqueue (Redis) — U0e only needs pipeline entry
+            dsi_workflow_mode="weekly",
+        )
+        job_id = job.id
+        mapping_before = deepcopy(job.field_mapping)
+        assert is_nested_dsi_field_mapping(mapping_before)
+        assert (job.staged_metadata or {}).get("dsi_multi_file") is True
+
+        processed = process_import_job_sync(db, job_id)
+        assert processed.id == job_id
+
+        missing = db.scalars(
+            select(ImportRowResult).where(
+                ImportRowResult.job_id == job_id,
+                ImportRowResult.code == "missing_distributor_token_mapping",
+            )
+        ).first()
+        assert missing is None, "nested mapping must flatten before required-target gates"
+
+        staged_n = db.scalar(
+            select(func.count())
+            .select_from(ImportDistributorSiStagingLine)
+            .where(ImportDistributorSiStagingLine.import_job_id == job_id)
+        )
+        assert int(staged_n or 0) == 2
+
+        refreshed = db.get(type(processed), job_id)
+        assert refreshed is not None
+        assert refreshed.field_mapping == mapping_before
+        subtotals = (refreshed.staged_metadata or {}).get("dsi_file_row_subtotals") or {}
+        assert sum(int(v) for v in subtotals.values()) == 2
+
+
+def test_process_import_job_sync_nested_multisheet_mapping_survives() -> None:
+    """U0e: single-file multi-sheet nested mapping must survive validate byte-for-byte."""
+    from copy import deepcopy
+
+    from sqlalchemy import select
+
+    from app.db.session_sync import SessionLocal
+    from app.ingestion.pipeline import process_import_job_sync
+    from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata
+    from app.services.imports.dsi_mapping_workflow import infer_dsi_job_sync
+    from app.services.imports.dsi_workbook import is_nested_dsi_field_mapping
+    from app.storage.local import get_storage_backend
+    from app.utils.json_safe import to_jsonable
+
+    source_id = _seed_dsi_source_for_batch_e2e()
+    bio = io.BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+        pd.DataFrame(
+            {
+                "distributor_code": ["DIST-01"],
+                "sku": ["SKU-ALPHA-01"],
+                "date": ["2024-06-01"],
+                "qty": [2],
+                "customer_name": ["Mystery Dealer Zed"],
+                "soh": [10],
+            }
+        ).to_excel(writer, sheet_name="Sellout", index=False)
+        pd.DataFrame(
+            {
+                "distributor_code": ["DIST-01"],
+                "sku": ["SKU-ALPHA-01"],
+                "soh": [10],
+                "snap": ["2024-06-30"],
+            }
+        ).to_excel(writer, sheet_name="SOH", index=False)
+    xlsx_bytes = bio.getvalue()
+
+    storage = get_storage_backend()
+    with SessionLocal() as db:
+        job = ImportJob(
+            source_id=source_id,
+            template_slug="distributor_inventory",
+            import_mode="validate",
+            status="pending",
+            stage="uploaded",
+            file_name="multi.xlsx",
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            staged_metadata=to_jsonable({"dsi_workflow_mode_explicit": "weekly"}),
+        )
+        db.add(job)
+        db.flush()
+        key = f"imports/test/{job.id}/multi.xlsx"
+        storage.save(key, xlsx_bytes, job.content_type)
+        db.add(RawFileMetadata(job_id=job.id, storage_key=key, byte_size=len(xlsx_bytes), checksum=None))
+        db.commit()
+        job_id = job.id
+
+        infer_dsi_job_sync(db, job_id)
+        job = db.get(ImportJob, job_id)
+        assert job is not None
+        mapping_before = deepcopy(job.field_mapping)
+        assert is_nested_dsi_field_mapping(mapping_before)
+
+        process_import_job_sync(db, job_id)
+        missing = db.scalars(
+            select(ImportRowResult).where(
+                ImportRowResult.job_id == job_id,
+                ImportRowResult.code == "missing_distributor_token_mapping",
+            )
+        ).first()
+        assert missing is None
+        refreshed = db.get(ImportJob, job_id)
+        assert refreshed is not None
+        assert refreshed.field_mapping == mapping_before
