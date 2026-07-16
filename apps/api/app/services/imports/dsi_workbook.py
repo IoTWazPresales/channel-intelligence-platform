@@ -159,42 +159,157 @@ def flatten_dsi_field_mapping(field_mapping: dict[str, Any] | None) -> dict[str,
     return flat
 
 
-def load_dsi_workbook_sheet_frames(filename: str, raw_bytes: bytes) -> list[tuple[str | None, pd.DataFrame]]:
-    lower = (filename or "").lower()
-    if lower.endswith(".csv"):
-        return [(None, pd.read_csv(io.BytesIO(raw_bytes)))]
-    if lower.endswith((".xlsx", ".xlsm")):
-        xls = pd.ExcelFile(io.BytesIO(raw_bytes), engine="openpyxl")
-        out: list[tuple[str | None, pd.DataFrame]] = []
-        for sheet in xls.sheet_names:
-            sdf = pd.read_excel(xls, sheet_name=sheet)
-            if sdf.empty or sdf.shape[1] == 0:
-                continue
-            out.append((sheet, sdf))
-        return out or [(None, pd.DataFrame())]
-    return [(None, read_tabular(filename, raw_bytes))]
+# Corrective header sniff: only runs when default header=0 fails the DSI mappable bar.
+SNIFF_ROWS = 15
+HEADER_MIN_HINTS = 2
+
+_DSI_HEADER_HINTS = (
+    "distributor",
+    "sku",
+    "product",
+    "model",
+    "qty",
+    "quantity",
+    "soh",
+    "stock",
+    "customer",
+    "dealer",
+    "invoice",
+    "date",
+)
+
+
+def _cell_as_header_label(value: Any) -> str:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    if not text or text.lower().startswith("unnamed"):
+        return ""
+    return text
+
+
+def _header_hint_hits(labels: list[str] | Any) -> int:
+    cols = {_cell_as_header_label(c).lower() for c in labels}
+    cols.discard("")
+    return sum(1 for c in cols if any(h in c for h in _DSI_HEADER_HINTS))
 
 
 def _sheet_looks_dsi_mappable(df: pd.DataFrame) -> bool:
-    if df.empty:
+    if df is None or df.empty:
         return False
-    cols = {str(c).strip().lower() for c in df.columns}
-    hints = (
-        "distributor",
-        "sku",
-        "product",
-        "model",
-        "qty",
-        "quantity",
-        "soh",
-        "stock",
-        "customer",
-        "dealer",
-        "invoice",
-        "date",
-    )
-    hits = sum(1 for c in cols if any(h in c for h in hints))
-    return hits >= 2
+    return _header_hint_hits(list(df.columns)) >= HEADER_MIN_HINTS
+
+
+def _score_header_row(row_values: Any) -> int:
+    return _header_hint_hits(list(row_values))
+
+
+def _detect_header_row(grid: pd.DataFrame) -> int | None:
+    """Pick best header row in a raw (header=None) grid. Must clear hint bar and beat row 0."""
+    if grid is None or grid.empty:
+        return None
+    limit = min(int(len(grid)), SNIFF_ROWS)
+    row0_score = _score_header_row(grid.iloc[0].tolist()) if limit else 0
+    best_row: int | None = None
+    best_score = -1
+    for i in range(limit):
+        score = _score_header_row(grid.iloc[i].tolist())
+        if score >= HEADER_MIN_HINTS and score > best_score:
+            best_score = score
+            best_row = i
+    if best_row is None:
+        return None
+    if best_row == 0:
+        return None  # caller already tried header=0; no better offset
+    if best_score > row0_score:
+        return best_row
+    return None
+
+
+def _framed_sheet_read_csv(raw_bytes: bytes) -> tuple[pd.DataFrame, int]:
+    """Return (dataframe, header_row). Corrective sniff only when header=0 is not DSI-mappable."""
+    df0: pd.DataFrame | None = None
+    try:
+        df0 = pd.read_csv(io.BytesIO(raw_bytes))
+        if _sheet_looks_dsi_mappable(df0):
+            return df0, 0
+    except Exception:
+        df0 = None
+
+    # Banner CSVs often have 1-cell title rows; force a wide column set so the C parser
+    # does not refuse later wider header/data rows during the sniff pass.
+    try:
+        raw = pd.read_csv(
+            io.BytesIO(raw_bytes),
+            header=None,
+            nrows=SNIFF_ROWS,
+            names=list(range(64)),
+        )
+    except Exception:
+        return (df0 if df0 is not None else pd.DataFrame()), 0
+
+    detected = _detect_header_row(raw)
+    if detected is None:
+        return (df0 if df0 is not None else pd.DataFrame()), 0
+    try:
+        typed = pd.read_csv(io.BytesIO(raw_bytes), header=detected)
+    except Exception:
+        return (df0 if df0 is not None else pd.DataFrame()), 0
+    if _sheet_looks_dsi_mappable(typed):
+        return typed, int(detected)
+    return (df0 if df0 is not None else pd.DataFrame()), 0
+
+
+def _framed_sheet_read_excel(xls: pd.ExcelFile, sheet_name: str) -> tuple[pd.DataFrame, int] | None:
+    """Return (dataframe, header_row) or None if sheet is empty."""
+    sdf0 = pd.read_excel(xls, sheet_name=sheet_name)
+    if sdf0.empty or sdf0.shape[1] == 0:
+        return None
+    if _sheet_looks_dsi_mappable(sdf0):
+        return sdf0, 0
+    try:
+        raw = pd.read_excel(xls, sheet_name=sheet_name, header=None, nrows=SNIFF_ROWS)
+    except Exception:
+        return sdf0, 0
+    detected = _detect_header_row(raw)
+    if detected is None:
+        return sdf0, 0
+    typed = pd.read_excel(xls, sheet_name=sheet_name, header=detected)
+    if typed.empty or typed.shape[1] == 0:
+        return sdf0, 0
+    if _sheet_looks_dsi_mappable(typed):
+        return typed, int(detected)
+    return sdf0, 0
+
+
+def load_dsi_workbook_sheet_frames(
+    filename: str, raw_bytes: bytes
+) -> list[tuple[str | None, pd.DataFrame, int]]:
+    """Load sheets as (sheet_name, dataframe, header_row).
+
+    header_row is 0 for clean files; >0 when corrective sniff found a banner-offset header.
+    """
+    lower = (filename or "").lower()
+    if lower.endswith(".csv"):
+        df, header_row = _framed_sheet_read_csv(raw_bytes)
+        return [(None, df, header_row)]
+    if lower.endswith((".xlsx", ".xlsm")):
+        xls = pd.ExcelFile(io.BytesIO(raw_bytes), engine="openpyxl")
+        out: list[tuple[str | None, pd.DataFrame, int]] = []
+        for sheet in xls.sheet_names:
+            framed = _framed_sheet_read_excel(xls, sheet)
+            if framed is None:
+                continue
+            sdf, header_row = framed
+            out.append((sheet, sdf, header_row))
+        return out or [(None, pd.DataFrame(), 0)]
+    # Other tabular types: no sniff (preserve prior behavior).
+    return [(None, read_tabular(filename, raw_bytes), 0)]
 
 
 def build_dsi_workbook_structure(
@@ -211,7 +326,7 @@ def build_dsi_workbook_structure(
 
     sheets: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
-    for sheet_name, df in frames:
+    for sheet_name, df, header_row in frames:
         key = sheet_name or DSI_SINGLE_SHEET_KEY
         schema = infer_schema(df)
         from app.services.imports.dsi_mapping_workflow import column_samples_from_schema_dict
@@ -224,6 +339,7 @@ def build_dsi_workbook_structure(
             "column_samples": column_samples_from_schema_dict(schema),
             "user_mapped": key in mapped_sheets,
             "dsi_mappable": _sheet_looks_dsi_mappable(df),
+            "header_row": int(header_row),
         }
         if key in mapped_sheets or (len(frames) == 1 and _sheet_looks_dsi_mappable(df)):
             sheets.append(entry)
@@ -360,7 +476,7 @@ def iter_dsi_dataframes_for_job(
         filename = raw_file_display_name(raw.storage_key)
         data = storage.read(raw.storage_key)
         sheets = load_dsi_workbook_sheet_frames(filename, data)
-        file_frames[filename] = {sn: frame for sn, frame in sheets}
+        file_frames[filename] = {sn: frame for sn, frame, _header_row in sheets}
 
     multi_file = len(raws) > 1 or job_has_multi_file_mapping(job.field_mapping)
     out: list[tuple[str | None, pd.DataFrame, dict[str, str], str | None]] = []

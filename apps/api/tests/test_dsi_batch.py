@@ -28,8 +28,8 @@ def test_same_layout_files_share_signature() -> None:
     bio_b = io.BytesIO()
     a.to_csv(bio_a, index=False)
     b.to_csv(bio_b, index=False)
-    sig_a, _, _, unm_a = normalized_header_signature("a.csv", bio_a.getvalue())
-    sig_b, _, _, unm_b = normalized_header_signature("b.csv", bio_b.getvalue())
+    sig_a, _, _, unm_a, _reason_a = normalized_header_signature("a.csv", bio_a.getvalue())
+    sig_b, _, _, unm_b, _reason_b = normalized_header_signature("b.csv", bio_b.getvalue())
     assert not unm_a and not unm_b
     assert sig_a == sig_b
 

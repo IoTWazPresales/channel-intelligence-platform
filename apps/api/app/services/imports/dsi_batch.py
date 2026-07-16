@@ -29,6 +29,7 @@ class DsiFilePreview:
     column_count: int
     sheet_count: int
     unmappable: bool
+    unmappable_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -37,20 +38,27 @@ class DsiBatchGroupPreview:
     files: list[DsiFilePreview]
 
 
-def normalized_header_signature(filename: str, raw_bytes: bytes) -> tuple[str, int, int, bool]:
-    """Return (signature_hash, column_count, sheet_count, unmappable)."""
-    frames = load_dsi_workbook_sheet_frames(filename, raw_bytes)
+def normalized_header_signature(
+    filename: str, raw_bytes: bytes
+) -> tuple[str, int, int, bool, str | None]:
+    """Return (signature_hash, column_count, sheet_count, unmappable, unmappable_reason)."""
+    try:
+        frames = load_dsi_workbook_sheet_frames(filename, raw_bytes)
+    except Exception:
+        return ("unmappable", 0, 0, True, "parse_error")
     sheet_count = len(frames)
+    if not frames or all(df.empty for _sn, df, _hr in frames):
+        return ("unmappable", 0, sheet_count, True, "empty")
     primary_cols: set[str] = set()
-    for _sheet_name, df in frames:
+    for _sheet_name, df, _header_row in frames:
         if _sheet_looks_dsi_mappable(df):
             primary_cols = {str(c).strip().lower() for c in df.columns if str(c).strip()}
             break
     if not primary_cols:
-        return ("unmappable", 0, sheet_count, True)
+        return ("unmappable", 0, sheet_count, True, "no_dsi_headers")
     normalized = ",".join(sorted(primary_cols))
     sig = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
-    return (sig, len(primary_cols), sheet_count, False)
+    return (sig, len(primary_cols), sheet_count, False, None)
 
 
 def propose_dsi_batch_groups(
@@ -59,7 +67,9 @@ def propose_dsi_batch_groups(
     """Group uploaded files by header signature (read-only, no DB)."""
     previews: list[DsiFilePreview] = []
     for filename, raw_bytes in files:
-        sig, col_count, sheet_count, unmappable = normalized_header_signature(filename, raw_bytes)
+        sig, col_count, sheet_count, unmappable, reason = normalized_header_signature(
+            filename, raw_bytes
+        )
         previews.append(
             DsiFilePreview(
                 filename=filename,
@@ -67,6 +77,7 @@ def propose_dsi_batch_groups(
                 column_count=col_count,
                 sheet_count=sheet_count,
                 unmappable=unmappable,
+                unmappable_reason=reason,
             )
         )
 
@@ -169,6 +180,7 @@ def batch_groups_preview_to_dict(groups: list[DsiBatchGroupPreview]) -> list[dic
                     "column_count": f.column_count,
                     "sheet_count": f.sheet_count,
                     "unmappable": f.unmappable,
+                    "unmappable_reason": f.unmappable_reason,
                 }
                 for f in g.files
             ],

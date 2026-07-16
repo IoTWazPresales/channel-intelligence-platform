@@ -46,6 +46,7 @@ type BatchGroupPreview = {
     column_count: number;
     sheet_count: number;
     unmappable: boolean;
+    unmappable_reason?: string | null;
   }[];
 };
 
@@ -291,24 +292,60 @@ export function DsiBulkUploadDialog({
                 {preview.file_count} file{preview.file_count === 1 ? '' : 's'} →{' '}
                 {preview.group_count} job{preview.group_count === 1 ? '' : 's'}
               </Alert>
-              {preview.groups.map((g) => (
-                <Box key={g.signature} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Job group · signature {g.signature}
-                  </Typography>
-                  <Stack direction="row" flexWrap="wrap" gap={0.5}>
-                    {g.files.map((f) => (
-                      <Chip
-                        key={f.filename}
-                        size="small"
-                        label={f.filename}
-                        color={f.unmappable ? 'error' : 'default'}
-                        variant="outlined"
-                      />
-                    ))}
-                  </Stack>
-                </Box>
-              ))}
+              {preview.groups.map((g) => {
+                const unmappableFiles = g.files.filter((f) => f.unmappable);
+                const reasonCounts = unmappableFiles.reduce<Record<string, number>>((acc, f) => {
+                  const r = f.unmappable_reason || 'no_dsi_headers';
+                  acc[r] = (acc[r] || 0) + 1;
+                  return acc;
+                }, {});
+                const reasonLabel =
+                  unmappableFiles.length === 0
+                    ? null
+                    : Object.entries(reasonCounts)
+                        .map(([reason, n]) => {
+                          if (reason === 'no_dsi_headers') {
+                            return `${n} file${n === 1 ? '' : 's'} don't look like DSI sellout/SOH (no header row found)`;
+                          }
+                          if (reason === 'empty') return `${n} empty file${n === 1 ? '' : 's'}`;
+                          if (reason === 'parse_error') return `${n} could not be parsed`;
+                          return `${n} unmappable (${reason})`;
+                        })
+                        .join('; ');
+                return (
+                  <Box
+                    key={g.signature}
+                    sx={{
+                      border: 1,
+                      borderColor: unmappableFiles.length ? 'error.main' : 'divider',
+                      borderRadius: 1,
+                      p: 1.5,
+                    }}
+                  >
+                    <Typography variant="subtitle2" gutterBottom>
+                      {unmappableFiles.length
+                        ? `Skipped · not DSI-mappable (${unmappableFiles.length})`
+                        : `Job group · signature ${g.signature}`}
+                    </Typography>
+                    {reasonLabel ? (
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                        {reasonLabel}
+                      </Typography>
+                    ) : null}
+                    <Stack direction="row" flexWrap="wrap" gap={0.5}>
+                      {g.files.map((f) => (
+                        <Chip
+                          key={f.filename}
+                          size="small"
+                          label={f.filename}
+                          color={f.unmappable ? 'error' : 'default'}
+                          variant="outlined"
+                        />
+                      ))}
+                    </Stack>
+                  </Box>
+                );
+              })}
             </Stack>
           ) : null}
           {upload.isPending ? <LinearProgress /> : null}

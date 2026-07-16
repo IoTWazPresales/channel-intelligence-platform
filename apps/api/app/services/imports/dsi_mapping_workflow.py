@@ -492,7 +492,7 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
         }
 
         if len(sheet_frames) > 1:
-            for sheet_name, sheet_df in sheet_frames:
+            for sheet_name, sheet_df, _header_row in sheet_frames:
                 inner_key = sheet_name or DSI_SINGLE_SHEET_KEY
                 if mappable_keys and inner_key not in mappable_keys:
                     continue
