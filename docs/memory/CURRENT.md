@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-07-10 (PR #7 merged to main ù BACKLOG-061 Theme B)
-**Verify git:** `git branch --show-current` ù `git rev-parse --short HEAD`
+**Last updated:** 2026-07-16 (DSI unified multi-file batch)
+**Verify git:** `git branch --show-current` ? `git rev-parse --short HEAD`
 
 ---
 
@@ -9,25 +9,23 @@
 
 | Field | Value |
 |-------|--------|
-| **Branch** | `main` |
-| **HEAD** | `8866bbe` |
-| **PR** | [#7](https://github.com/IoTWazPresales/channel-intelligence-platform/pull/7) ù **merged** |
-| **Alembic (DB)** | **`20260710_0072`** on cip |
+| **Branch** | `feat/dsi-unified-multifile` |
+| **Alembic (DB)** | **`20260710_0072`** (unchanged) |
+| **Scope** | Unified DSI multi-file: matching layouts ? one job / one steward; divergent ? split jobs |
 
 ---
 
-## What shipped (PR #7)
+## Shipped this branch
 
-- BACKLOG-061 Theme B: MasterDataGridShell + customer/distributor promote-in-place (map, mint, park/exclude)
-- U-G2 / U-B2 / U-B3a / U-B3b Fable PASS
-- Migrations through `20260710_0072` (distributor code mint setting)
+- Workflow lock: **no thin-default** in `docs/WORKFLOW_DUAL_AGENT.md` + skills
+- DSI batch: signature grouping, `POST /dsi/batch-propose`, `POST /dsi/batch-jobs`
+- Multi-file per job: `file::sheet` mapping keys, `_dsi_source_file` provenance
+- UI: `DsiBulkUploadDialog` group preview + unified batch upload
 
 ---
 
 ## Next
 
-1. Optional human soak: `/admin/customers` + `/admin/distributors` promote/disposition.
-2. New feature branch when next TRIGGER fires ù likely BACKLOG-073 (import-job fact purge) if Warren prioritizes junk cleanup.
-3. CI note: GitHub Actions `pnpm/action-setup` fails on version clash (`version: 9` vs `packageManager: pnpm@9.15.9`) ù infra fix, not Theme B.
-
-**Do not re-audit:** U2a/U2b/U-D1/U-G2/U-B2/U-B3a/U-B3b PASSes.
+- Browser soak: Import Centre ? DSI unified batch (3 same-layout weekly files)
+- U-M5 deferred: missed-week coverage calendar (FLAG)
+- Merge after soak; shell PR separate on `feat/ops-master-grid-shell-parity`

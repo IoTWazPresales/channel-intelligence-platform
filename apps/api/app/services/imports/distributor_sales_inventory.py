@@ -1753,16 +1753,27 @@ def process_distributor_sales_inventory(
         build_combined_dsi_dataframe,
         is_nested_dsi_field_mapping,
         iter_dsi_dataframes_for_job,
+        job_has_multi_file_mapping,
         persist_dsi_workbook_on_job,
     )
 
     sheet_frames = iter_dsi_dataframes_for_job(db, job, df)
     skipped_sheets: list[dict[str, str]] = []
-    if len(sheet_frames) > 1 or is_nested_dsi_field_mapping(job.field_mapping):
+    if (
+        len(sheet_frames) > 1
+        or is_nested_dsi_field_mapping(job.field_mapping)
+        or job_has_multi_file_mapping(job.field_mapping)
+    ):
         df, mapping, skipped_sheets = build_combined_dsi_dataframe(sheet_frames)
         wb_meta = dict((job.staged_metadata or {}).get(DSI_SHEET_META_KEY) or {})
         wb_meta["skipped_sheets"] = skipped_sheets
         persist_dsi_workbook_on_job(job, wb_meta)
+        if "_dsi_source_file" in df.columns:
+            file_counts = {str(k): int(v) for k, v in df["_dsi_source_file"].value_counts().items()}
+            sm = dict(job.staged_metadata or {})
+            sm["dsi_file_row_subtotals"] = file_counts
+            job.staged_metadata = to_jsonable(sm)
+            db.add(job)
         if df.empty:
             db.add(
                 ImportRowResult(

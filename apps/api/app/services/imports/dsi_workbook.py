@@ -15,6 +15,31 @@ from app.storage.local import get_storage_backend
 
 DSI_SHEET_META_KEY = "dsi_workbook"
 DSI_SINGLE_SHEET_KEY = "__single__"
+DSI_FILE_SHEET_SEP = "::"
+
+
+def raw_file_display_name(storage_key: str) -> str:
+    return storage_key.rsplit("/", 1)[-1]
+
+
+def is_dsi_file_sheet_mapping_key(key: str) -> bool:
+    return DSI_FILE_SHEET_SEP in key
+
+
+def make_dsi_file_sheet_key(filename: str, sheet_key: str) -> str:
+    return f"{filename}{DSI_FILE_SHEET_SEP}{sheet_key}"
+
+
+def parse_dsi_mapping_key(key: str) -> tuple[str | None, str]:
+    if DSI_FILE_SHEET_SEP in key:
+        file_part, sheet_part = key.split(DSI_FILE_SHEET_SEP, 1)
+        return file_part, sheet_part
+    return None, key
+
+
+def job_has_multi_file_mapping(field_mapping: dict[str, Any] | None) -> bool:
+    fm = field_mapping or {}
+    return any(is_dsi_file_sheet_mapping_key(str(k)) for k in fm.keys())
 
 
 def is_nested_dsi_field_mapping(field_mapping: dict[str, Any] | None) -> bool:
@@ -112,43 +137,60 @@ def build_dsi_workbook_structure(
     }
 
 
-def resolve_dsi_sheet_mappings(job: ImportJob) -> list[tuple[str | None, dict[str, str]]]:
-    """Return (sheet_name, source→canonical mapping) pairs to process."""
+def resolve_dsi_sheet_mappings(
+    job: ImportJob,
+) -> list[tuple[str | None, dict[str, str], str | None]]:
+    """Return (sheet_name, source→canonical mapping, source_file) triples."""
     fm = dict(job.field_mapping or {})
     meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
     wb = meta.get(DSI_SHEET_META_KEY) if isinstance(meta.get(DSI_SHEET_META_KEY), dict) else {}
 
     if is_nested_dsi_field_mapping(fm):
-        out: list[tuple[str | None, dict[str, str]]] = []
+        out: list[tuple[str | None, dict[str, str], str | None]] = []
         for sheet_key, sheet_map in fm.items():
             if not isinstance(sheet_map, dict) or not sheet_map:
                 continue
-            sheet_name = None if sheet_key == DSI_SINGLE_SHEET_KEY else str(sheet_key)
-            out.append((sheet_name, {str(k): str(v) for k, v in sheet_map.items()}))
+            source_file, inner_key = parse_dsi_mapping_key(str(sheet_key))
+            sheet_name = None if inner_key == DSI_SINGLE_SHEET_KEY else inner_key
+            out.append(
+                (
+                    sheet_name,
+                    {str(k): str(v) for k, v in sheet_map.items()},
+                    source_file,
+                )
+            )
         return out
 
     flat = {str(k): str(v) for k, v in fm.items() if isinstance(v, str)}
     if flat:
-        return [(None, flat)]
+        return [(None, flat, None)]
 
     selected = wb.get("sheets") if isinstance(wb.get("sheets"), list) else []
     if len(selected) == 1 and isinstance(selected[0], dict):
         sn = selected[0].get("sheet_name")
-        return [(sn if isinstance(sn, str) else None, flat)]
-    return [(None, flat)]
+        return [(sn if isinstance(sn, str) else None, flat, None)]
+    return [(None, flat, None)]
 
 
 def build_combined_dsi_dataframe(
-    frames: list[tuple[str | None, pd.DataFrame, dict[str, str]]],
+    frames: list[tuple[str | None, pd.DataFrame, dict[str, str], str | None] | tuple[str | None, pd.DataFrame, dict[str, str]]],
 ) -> tuple[pd.DataFrame, dict[str, str], list[dict[str, str]]]:
     """Normalize each mapped sheet to canonical columns and concatenate for one pass."""
     parts: list[pd.DataFrame] = []
     skipped: list[dict[str, str]] = []
-    for sheet_name, sheet_df, sheet_map in frames:
+    for frame in frames:
+        if len(frame) == 4:
+            sheet_name, sheet_df, sheet_map, source_file = frame
+        else:
+            sheet_name, sheet_df, sheet_map = frame  # type: ignore[misc]
+            source_file = None
+        label = sheet_name or "(default)"
+        if source_file:
+            label = f"{source_file} / {label}"
         if not sheet_map or "distributor_token" not in sheet_map.values():
             skipped.append(
                 {
-                    "sheet_name": sheet_name or "(default)",
+                    "sheet_name": label,
                     "reason": "not_mapped_or_missing_distributor",
                 }
             )
@@ -156,7 +198,7 @@ def build_combined_dsi_dataframe(
         if "product_identifier" not in sheet_map.values():
             skipped.append(
                 {
-                    "sheet_name": sheet_name or "(default)",
+                    "sheet_name": label,
                     "reason": "not_mapped_or_missing_product_identifier",
                 }
             )
@@ -167,8 +209,10 @@ def build_combined_dsi_dataframe(
                 norm[canon] = sheet_df[src]
         if sheet_name:
             norm["_dsi_source_sheet"] = sheet_name
+        if source_file:
+            norm["_dsi_source_file"] = source_file
         if norm.empty:
-            skipped.append({"sheet_name": sheet_name or "(default)", "reason": "empty_after_normalize"})
+            skipped.append({"sheet_name": label, "reason": "empty_after_normalize"})
             continue
         parts.append(norm)
     if not parts:
@@ -182,34 +226,76 @@ def iter_dsi_dataframes_for_job(
     db: Any,
     job: ImportJob,
     df_fallback: pd.DataFrame,
-) -> list[tuple[str | None, pd.DataFrame, dict[str, str]]]:
-    """Load raw file and yield per-sheet dataframes with resolved mappings."""
+) -> list[tuple[str | None, pd.DataFrame, dict[str, str], str | None]]:
+    """Load raw file(s) and yield per-sheet dataframes with resolved mappings."""
     mappings = resolve_dsi_sheet_mappings(job)
-    if len(mappings) == 1 and mappings[0][0] is None and not is_nested_dsi_field_mapping(job.field_mapping):
-        return [(None, df_fallback, mappings[0][1])]
+    if (
+        len(mappings) == 1
+        and mappings[0][0] is None
+        and mappings[0][2] is None
+        and not is_nested_dsi_field_mapping(job.field_mapping)
+    ):
+        return [(None, df_fallback, mappings[0][1], None)]
 
-    raw = db.scalars(select(RawFileMetadata).where(RawFileMetadata.job_id == job.id)).first()
-    if raw is None:
-        return [(None, df_fallback, mappings[0][1] if mappings else {})]
+    raws = list(
+        db.scalars(
+            select(RawFileMetadata)
+            .where(RawFileMetadata.job_id == job.id)
+            .order_by(RawFileMetadata.id.asc())
+        ).all()
+    )
+    if not raws:
+        return [(None, df_fallback, mappings[0][1] if mappings else {}, None)]
 
     storage = get_storage_backend()
-    data = storage.read(raw.storage_key)
-    frames_by_name = {sn: frame for sn, frame in load_dsi_workbook_sheet_frames(job.file_name or "", data)}
+    file_frames: dict[str, dict[str | None, pd.DataFrame]] = {}
+    for raw in raws:
+        filename = raw_file_display_name(raw.storage_key)
+        data = storage.read(raw.storage_key)
+        sheets = load_dsi_workbook_sheet_frames(filename, data)
+        file_frames[filename] = {sn: frame for sn, frame in sheets}
 
-    out: list[tuple[str | None, pd.DataFrame, dict[str, str]]] = []
-    for sheet_name, mapping in mappings:
-        if sheet_name is None:
-            if len(frames_by_name) == 1:
-                only = next(iter(frames_by_name.values()))
-                out.append((None, only, mapping))
-            else:
-                out.append((None, df_fallback, mapping))
+    multi_file = len(raws) > 1 or job_has_multi_file_mapping(job.field_mapping)
+    out: list[tuple[str | None, pd.DataFrame, dict[str, str], str | None]] = []
+    for sheet_name, mapping, source_file in mappings:
+        if source_file:
+            sheets_map = file_frames.get(source_file)
+            if sheets_map is None:
+                continue
+            frame = sheets_map.get(sheet_name) if sheet_name is not None else sheets_map.get(None)
+            if frame is None and sheet_name is None and len(sheets_map) == 1:
+                frame = next(iter(sheets_map.values()))
+            if frame is not None and not frame.empty:
+                out.append((sheet_name, frame, mapping, source_file))
             continue
-        frame = frames_by_name.get(sheet_name)
-        if frame is not None and not frame.empty:
-            out.append((sheet_name, frame, mapping))
-    if not out:
-        return [(None, df_fallback, mappings[0][1] if mappings else {})]
+
+        if multi_file and len(raws) == 1:
+            filename = raw_file_display_name(raws[0].storage_key)
+            sheets_map = file_frames.get(filename, {})
+            frame = sheets_map.get(sheet_name) if sheet_name is not None else sheets_map.get(None)
+            if frame is None and sheet_name is None and len(sheets_map) == 1:
+                frame = next(iter(sheets_map.values()))
+            if frame is not None and not frame.empty:
+                out.append((sheet_name, frame, mapping, filename))
+            continue
+
+        if len(raws) == 1:
+            filename = raw_file_display_name(raws[0].storage_key)
+            data_frames = file_frames.get(filename, {})
+            if sheet_name is None:
+                if len(data_frames) == 1:
+                    only = next(iter(data_frames.values()))
+                    out.append((None, only, mapping, None))
+                else:
+                    out.append((None, df_fallback, mapping, None))
+                continue
+            frame = data_frames.get(sheet_name)
+            if frame is not None and not frame.empty:
+                out.append((sheet_name, frame, mapping, None))
+            continue
+
+    if not out and mappings:
+        return [(None, df_fallback, mappings[0][1], mappings[0][2])]
     return out
 
 

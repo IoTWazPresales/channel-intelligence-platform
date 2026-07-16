@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-16 — **DSI unified multi-file batch:** matching layouts → one job (one map/steward/apply); `batch-propose` + `batch-jobs` APIs; workflow product-bar lock (no thin-default). Branch `feat/dsi-unified-multifile`.
 - 2026-07-10 — **PR #7 merged to main (`4d1700b`):** BACKLOG-061 Theme B (promote-in-place + master grid shell + distributor parity). Next: soak or BACKLOG-073 when prioritized. CI pnpm-setup version clash noted (infra).
 - 2026-07-10 — **BACKLOG-061 Theme B complete — PR #7 open (`dd98683`):** U-B3b PASS; distributor bulk promote + disposition UI live; ready to merge when Warren says. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U-B3b Fable PASS (`fc7b6c4`):** distributor bulk promote + disposition UI; Theme B queue empty; ready for PR. Branch `feat/backlog-061-entity-promote-in-place`.

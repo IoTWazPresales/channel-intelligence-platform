@@ -566,6 +566,117 @@ async def create_job(
     return {"id": job.id, "status": job.status, "stage": job.stage, "template_slug": job.template_slug, "import_mode": job.import_mode}
 
 
+@router.post("/dsi/batch-propose")
+async def dsi_batch_propose(
+    files: list[UploadFile] = File(...),
+):
+    """Preview how DSI files group by header signature (no DB writes)."""
+    from app.services.imports.dsi_batch import batch_groups_preview_to_dict, propose_dsi_batch_groups
+
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one file is required")
+    payload: list[tuple[str, bytes]] = []
+    for f in files:
+        raw = await f.read()
+        payload.append((f.filename or "upload", raw))
+    groups = propose_dsi_batch_groups(payload)
+    return {
+        "group_count": len(groups),
+        "file_count": len(payload),
+        "groups": batch_groups_preview_to_dict(groups),
+    }
+
+
+@router.post("/dsi/batch-jobs")
+async def dsi_batch_create_jobs(
+    source_id: int = Form(...),
+    dsi_workflow_mode: str = Form(default="auto"),
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create one DSI import job per signature group (N files → 1 job when layouts match)."""
+    from app.services.imports.dsi_batch import (
+        batch_groups_preview_to_dict,
+        create_dsi_batch_job_sync,
+        propose_dsi_batch_groups,
+    )
+
+    source = await db.scalar(
+        select(SourceDefinition)
+        .options(joinedload(SourceDefinition.import_template))
+        .where(SourceDefinition.id == source_id)
+    )
+    if not source or not source.is_active:
+        raise HTTPException(status_code=400, detail="Unknown or inactive source_id")
+    tpl = source.import_template
+    if not tpl or tpl.slug != "distributor_inventory":
+        raise HTTPException(status_code=400, detail="DSI batch upload requires a distributor_inventory source")
+
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one file is required")
+
+    payload: list[tuple[str, bytes]] = []
+    for f in files:
+        raw = await f.read()
+        payload.append((f.filename or "upload", raw))
+
+    groups = propose_dsi_batch_groups(payload)
+    name_to_bytes = dict(payload)
+    created: list[dict[str, Any]] = []
+    with SessionLocal() as sync_db:
+        for group in groups:
+            group_payload = [
+                (p.filename, name_to_bytes[p.filename])
+                for p in group.files
+                if p.filename in name_to_bytes
+            ]
+            if not group_payload:
+                continue
+            if any(p.unmappable for p in group.files):
+                created.append(
+                    {
+                        "signature": group.signature,
+                        "outcome": "error",
+                        "error": "One or more files could not be mapped (no DSI-like columns)",
+                        "filenames": [p.filename for p in group.files],
+                    }
+                )
+                continue
+            try:
+                job = create_dsi_batch_job_sync(
+                    sync_db,
+                    source_id=source_id,
+                    filenames_and_bytes=group_payload,
+                    import_mode="validate",
+                    dsi_workflow_mode=dsi_workflow_mode,
+                )
+                created.append(
+                    {
+                        "signature": group.signature,
+                        "outcome": "created",
+                        "import_job_id": job.id,
+                        "stage": job.stage,
+                        "filenames": [p.filename for p in group.files],
+                        "file_count": len(group_payload),
+                    }
+                )
+            except Exception as exc:
+                created.append(
+                    {
+                        "signature": group.signature,
+                        "outcome": "error",
+                        "error": str(exc),
+                        "filenames": [p.filename for p in group.files],
+                    }
+                )
+
+    return {
+        "group_count": len(groups),
+        "groups_preview": batch_groups_preview_to_dict(groups),
+        "jobs": created,
+    }
+
+
 @router.get("/jobs/{job_id}/rows")
 async def list_job_rows(job_id: int, db: AsyncSession = Depends(get_db)):
     res = await db.execute(

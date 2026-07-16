@@ -897,6 +897,7 @@ function AdminImportsPageContent() {
     file_headers: string[];
     field_mapping: Record<string, string> | Record<string, Record<string, string>>;
     multi_sheet?: boolean;
+    multi_file?: boolean;
     dsi_workbook?: {
       multi_sheet?: boolean;
       sheet_count?: number;
@@ -3826,7 +3827,7 @@ function AdminImportsPageContent() {
               onClick={() => setDsiBulkUploadOpen(true)}
               data-testid="dsi-bulk-upload-open"
             >
-              Bulk upload (multiple files)
+              Unified batch upload
             </Button>
             {upload.isSuccess && lastJobId != null ? (
               <Alert severity="success" data-testid="dsi-upload-success">
@@ -3891,8 +3892,13 @@ function AdminImportsPageContent() {
             {dsiIsMultiSheet && dsiSheetKeys.length ? (
               <Stack spacing={2} data-testid="dsi-multi-sheet-mapping">
                 <Alert severity="info">
-                  Multi-sheet workbook detected ({dsiSheetKeys.length} mappable sheet
-                  {dsiSheetKeys.length === 1 ? '' : 's'}). Map each sheet, then save.
+                  {dsiMappingState?.multi_file
+                    ? `Multi-file batch (${dsiSheetKeys.length} sheet${
+                        dsiSheetKeys.length === 1 ? '' : 's'
+                      } across files). Map each source once — same layout is shared.`
+                    : `Multi-sheet workbook detected (${dsiSheetKeys.length} mappable sheet${
+                        dsiSheetKeys.length === 1 ? '' : 's'
+                      }). Map each sheet, then save.`}
                 </Alert>
                 <Tabs
                   value={dsiActiveSheetKey ?? dsiSheetKeys[0]}
