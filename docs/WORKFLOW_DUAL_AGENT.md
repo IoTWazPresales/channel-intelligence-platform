@@ -2,11 +2,39 @@
 
 **Purpose:** Channel Intelligence Platform standing rules for the dual-agent loop.  
 **Operational skill (any app):** `~/.cursor/skills/dual-agent-fable` — run `dual-agent-fable` or `cip-dual-agent-fable`.  
-**Status:** Active · 2026-07-12  
+**Status:** Active · 2026-07-16  
 
 **Consultant default: Opus.** Use Fable when Warren names Fable, or to finish an in-flight Fable VERIFY chain. Cursor states `Consultant: Opus|Fable` in every sync pin.
 
 **Do not put here:** current branch, HEAD, job IDs, Alembic tip — those live in `docs/memory/CURRENT.md`.
+
+---
+
+## Product / architecture bar (CONSULT + IMPLEMENT) — locked 2026-07-16
+
+**Never default to thin, lazy, or “smallest diff.”** That bias is **forbidden** in this workflow. It is not in any CIP rule, skill, or standing instruction.
+
+Standing engineering bar (also in Cursor user rules):
+
+- **Best practice is the default**, not an upgrade.
+- **Always propose the better path — not the quicker or safer one.**
+- **Patches are a last resort** — only when the problem is local and the fix creates no debt.
+
+### CONSULT must
+
+1. State the **operator experience** in one sentence before any unit plan.
+2. Ask: **does this pattern already exist at another grain** (sheet / file / job / distributor / importer)? If yes → **generalise that pattern** — do not invent a weaker parallel UX or write path.
+3. Recommend the **best product/architecture** that preserves governance (steward, no auto-create dims, FLAG≠BLOCK where required, idempotent apply).
+4. Mention a thinner alternative **only to reject it**, with why — never as the recommended READY path.
+5. If the plan requires N steward/mapping sessions for the **same layout**, justify that or reject it.
+
+### Cursor must
+
+- Seed CONSULT with the bar above (copy into every mushy CONSULT seed).
+- **Refuse** consultant READY that picks “thin queue / hop between jobs / chrome patch” when a correct unified architecture is available and governance-safe.
+- On Human challenge: re-CONSULT — do not defend the thin plan by default.
+
+**Incident that locked this:** DSI multi-file — first Fable READY kept one-job-per-file + “Next job”; Human correctly required unified multi-file job (extend multi-sheet union). Thin was consultant risk-bias + bad seed framing, not documented policy.
 
 ---
 
@@ -65,9 +93,9 @@ Warren may waive in writing only — record `<Opus|Fable> verify: WAIVED <YYYY-M
 
 | Situation | CONSULT does |
 |-----------|----------------|
-| Greenfield / mushy | Interview (max 5 questions/round) → READY with unit prompt |
+| Greenfield / mushy | Interview (max 5 questions/round) → READY with **best-path** unit prompt (see product bar above) |
 | BACKLOG entry complete | Short scope lock only — do not re-interview the whole idea |
-| Large effort | Prefer split into 2–3 Cursor units |
+| Large effort | Prefer split into 2–4 Cursor units **along the best architecture**, not along the smallest patch |
 
 Copy BACKLOG **Regression traps** / **Out of scope** into the unit prompt verbatim.
 

@@ -15,6 +15,10 @@ description: >-
 3. **Default consultant: Opus.** Use Fable when Warren names Fable or to finish an in-flight Fable VERIFY queue.
 4. **Default mode for mushy product work:** CONSULT in this chat — not browser Claude.
 5. **After a unit ships:** VERIFY (same consultant family) before starting the next unit.
+6. **Product bar (locked 2026-07-16):** Never thin-default. Best path only — see
+   `docs/WORKFLOW_DUAL_AGENT.md` § Product / architecture bar. Paste PRODUCT BAR into
+   every mushy CONSULT seed. Refuse READY that picks hop-between-jobs / chrome patches
+   when a unified architecture exists (e.g. DSI multi-file = extend multi-sheet union).
 
 New chat starter:
 
