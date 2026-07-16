@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-16 — **DSI U0e PASS:** nested mapping flatten before required-target gates; e2e 2-file/multi-sheet pipeline tests. Fable VERIFY PASS. Soak-ready. Branch `feat/dsi-unified-multifile` @ `4f3a434`.
 - 2026-07-16 — **DSI U0–U3 complete:** pipeline multi-file entry fix; nested column_samples; cross-file overlap FLAG; file exclusion strip. Ready for soak. Branch `feat/dsi-unified-multifile` @ `25182fe`.
 - 2026-07-16 — **DSI missed-week coverage (U-M5):** `GET /dsi/coverage` read model + Import Centre coverage panel + validate FLAG (historical backfill CTA). Branch `feat/dsi-unified-multifile`.
 - 2026-07-16 — **DSI unified multi-file batch:** matching layouts → one job; workflow product-bar lock. Branch `feat/dsi-unified-multifile`.
