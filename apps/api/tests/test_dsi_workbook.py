@@ -160,6 +160,66 @@ def test_banner_csv_sniffs_real_header_row() -> None:
     assert not unm and sig != "unmappable"
 
 
+def test_asus_weekly_sellout_form_header_at_row_19() -> None:
+    """Real PINNACLE/MUSTEK sellouts: form block then table header near row 19."""
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Sell Out"
+    ws["A5"] = "Subject: ASUS Weekly Sell Out Report"
+    ws["A7"] = "Method"
+    ws["B7"] = "SYS"
+    ws["A8"] = "Company Name"
+    ws["B8"] = "MUSTEK-ZA-C"
+    ws["A9"] = "Application Date"
+    ws["B9"] = "2026W24"
+    headers = [
+        "Invoice Date",
+        "Invoice No.",
+        "Customer Code (Dealer Code)",
+        "Dealer Name",
+        "Model Name",
+        "ASUS Part No.",
+        "Quantity",
+        "Unit Price",
+    ]
+    for col, h in enumerate(headers, start=1):
+        ws.cell(row=20, column=col, value=h)  # openpyxl 1-based → pandas header index 19
+    for col, v in enumerate(
+        ["2026-06-08", "1385729", "864966", "Hbits", "TP3407", "90NB14Y1", 1, 15304],
+        start=1,
+    ):
+        ws.cell(row=21, column=col, value=v)
+    bio = io.BytesIO()
+    wb.save(bio)
+    raw = bio.getvalue()
+    frames = load_dsi_workbook_sheet_frames("MUSTEK_SELLOUT WK24.xlsx", raw)
+    _sn, df, header_row = frames[0]
+    assert header_row == 19
+    assert _sheet_looks_dsi_mappable(df)
+    assert "Invoice Date" in list(df.columns)
+    sig, _, _, unm, reason = normalized_header_signature("MUSTEK_SELLOUT WK24.xlsx", raw)
+    assert not unm and reason is None and sig != "unmappable"
+
+
+def test_asus_weekly_sellout_csv_header_at_row_19() -> None:
+    rows = [""] * 19  # rows 0..18 form/blank
+    rows[4] = "Subject: ASUS Weekly Sell Out Report"
+    rows.append(
+        "Invoice Date,Invoice No.,Customer Code (Dealer Code),Dealer Name,"
+        "Model Name,ASUS Part No.,Quantity,Unit Price"
+    )  # row 19
+    rows.append("2026-07-08,INV1,C1,Dealer,MODEL,90NB,1,100")
+    csv = ("\n".join(rows) + "\n").encode("utf-8")
+    frames = load_dsi_workbook_sheet_frames("Sellout-PINNACLE.csv", csv)
+    _sn, df, header_row = frames[0]
+    assert header_row == 19
+    assert _sheet_looks_dsi_mappable(df)
+    sig, _, _, unm, _ = normalized_header_signature("Sellout-PINNACLE.csv", csv)
+    assert not unm and sig != "unmappable"
+
+
 def test_clean_xlsx_header_row_zero_unchanged() -> None:
     clean = pd.DataFrame(
         {

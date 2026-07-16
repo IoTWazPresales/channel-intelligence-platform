@@ -160,8 +160,11 @@ def flatten_dsi_field_mapping(field_mapping: dict[str, Any] | None) -> dict[str,
 
 
 # Corrective header sniff: only runs when default header=0 fails the DSI mappable bar.
-SNIFF_ROWS = 15
+# ASUS weekly sellout workbooks put a contact/form block above the table (~row 19).
+SNIFF_ROWS = 40
 HEADER_MIN_HINTS = 2
+# CSV exports of those workbooks can exceed 200 delimiter fields (sparse trailing commas).
+CSV_SNIFF_WIDTH = 300
 
 _DSI_HEADER_HINTS = (
     "distributor",
@@ -235,31 +238,67 @@ def _framed_sheet_read_csv(raw_bytes: bytes) -> tuple[pd.DataFrame, int]:
     """Return (dataframe, header_row). Corrective sniff only when header=0 is not DSI-mappable."""
     df0: pd.DataFrame | None = None
     try:
-        df0 = pd.read_csv(io.BytesIO(raw_bytes))
+        df0 = pd.read_csv(io.BytesIO(raw_bytes), encoding="utf-8-sig")
         if _sheet_looks_dsi_mappable(df0):
             return df0, 0
     except Exception:
-        df0 = None
+        try:
+            df0 = pd.read_csv(io.BytesIO(raw_bytes))
+            if _sheet_looks_dsi_mappable(df0):
+                return df0, 0
+        except Exception:
+            df0 = None
 
     # Banner CSVs often have 1-cell title rows; force a wide column set so the C parser
     # does not refuse later wider header/data rows during the sniff pass.
-    try:
-        raw = pd.read_csv(
-            io.BytesIO(raw_bytes),
-            header=None,
-            nrows=SNIFF_ROWS,
-            names=list(range(64)),
-        )
-    except Exception:
-        return (df0 if df0 is not None else pd.DataFrame()), 0
+    # Keep blank lines — ASUS weekly sellout forms use empty rows before the table header.
+    raw: pd.DataFrame | None = None
+    for width in (CSV_SNIFF_WIDTH, 128, 64):
+        try:
+            raw = pd.read_csv(
+                io.BytesIO(raw_bytes),
+                header=None,
+                nrows=SNIFF_ROWS,
+                names=list(range(width)),
+                encoding="utf-8-sig",
+                skip_blank_lines=False,
+            )
+            break
+        except Exception:
+            raw = None
+    if raw is None:
+        try:
+            raw = pd.read_csv(
+                io.BytesIO(raw_bytes),
+                header=None,
+                nrows=SNIFF_ROWS,
+                engine="python",
+                on_bad_lines="skip",
+                encoding="utf-8-sig",
+                skip_blank_lines=False,
+            )
+        except Exception:
+            return (df0 if df0 is not None else pd.DataFrame()), 0
 
     detected = _detect_header_row(raw)
     if detected is None:
         return (df0 if df0 is not None else pd.DataFrame()), 0
     try:
-        typed = pd.read_csv(io.BytesIO(raw_bytes), header=detected)
+        typed = pd.read_csv(
+            io.BytesIO(raw_bytes),
+            header=detected,
+            encoding="utf-8-sig",
+            skip_blank_lines=False,
+        )
     except Exception:
-        return (df0 if df0 is not None else pd.DataFrame()), 0
+        try:
+            typed = pd.read_csv(
+                io.BytesIO(raw_bytes),
+                header=detected,
+                skip_blank_lines=False,
+            )
+        except Exception:
+            return (df0 if df0 is not None else pd.DataFrame()), 0
     if _sheet_looks_dsi_mappable(typed):
         return typed, int(detected)
     return (df0 if df0 is not None else pd.DataFrame()), 0
