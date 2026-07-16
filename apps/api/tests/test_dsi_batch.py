@@ -15,6 +15,7 @@ from app.services.imports.dsi_batch import (
 from app.services.imports.dsi_workbook import (
     DSI_FILE_SHEET_SEP,
     build_combined_dsi_dataframe,
+    build_dsi_workbook_structure,
     make_dsi_file_sheet_key,
     parse_dsi_mapping_key,
 )
@@ -59,30 +60,36 @@ def test_file_sheet_mapping_key_roundtrip() -> None:
     assert DSI_FILE_SHEET_SEP in key
 
 
-def test_combined_dataframe_stamps_source_file() -> None:
-    sell = pd.DataFrame(
+def test_cross_file_overlap_flags_shared_grain() -> None:
+    import pandas as pd
+    from unittest.mock import MagicMock
+
+    from app.services.imports.dsi_workbook import flag_dsi_cross_file_raw_overlaps
+
+    df = pd.DataFrame(
         {
-            "Dist": ["D1"],
-            "SKU": ["P1"],
-            "Qty": [5],
-            "TxDate": ["2024-01-01"],
-            "Cust": ["C1"],
+            "distributor_token": ["Makro", "Makro"],
+            "product_identifier": ["SKU1", "SKU1"],
+            "customer_dealer_token": ["C1", "C1"],
+            "transaction_date": ["2026-07-01", "2026-07-01"],
+            "invoice_no": ["", ""],
+            "_dsi_source_file": ["week1.csv", "week2.csv"],
         }
     )
-    frames = [
-        (
-            None,
-            sell,
-            {
-                "Dist": "distributor_token",
-                "SKU": "product_identifier",
-                "Qty": "quantity_sold",
-                "TxDate": "transaction_date",
-                "Cust": "customer_dealer_token",
-            },
-            "week1.csv",
-        ),
-    ]
-    combined, _mapping, skipped = build_combined_dsi_dataframe(frames)
-    assert skipped == []
-    assert combined["_dsi_source_file"].iloc[0] == "week1.csv"
+    job = MagicMock()
+    job.id = 99
+    job.staged_metadata = {}
+    db = MagicMock()
+    n = flag_dsi_cross_file_raw_overlaps(db, job, df)
+    assert n >= 1
+    assert job.staged_metadata["dsi_cross_file_overlap"]["overlap_grain_count"] == 1
+
+
+def test_column_samples_in_workbook_structure() -> None:
+    sell = pd.DataFrame({"Dist": ["D1"], "SKU": ["P1"], "Qty": [1], "Date": ["2024-01-01"], "Cust": ["C1"]})
+    bio = io.BytesIO()
+    sell.to_csv(bio, index=False)
+    structure = build_dsi_workbook_structure("a.csv", bio.getvalue())
+    assert structure["sheets"]
+    assert "column_samples" in structure["sheets"][0]
+    assert structure["sheets"][0]["column_samples"]

@@ -1774,6 +1774,9 @@ def process_distributor_sales_inventory(
             sm["dsi_file_row_subtotals"] = file_counts
             job.staged_metadata = to_jsonable(sm)
             db.add(job)
+            from app.services.imports.dsi_workbook import flag_dsi_cross_file_raw_overlaps
+
+            flag_dsi_cross_file_raw_overlaps(db, job, df)
         if df.empty:
             db.add(
                 ImportRowResult(

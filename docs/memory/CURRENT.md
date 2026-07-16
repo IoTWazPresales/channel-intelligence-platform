@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-07-16 (DSI missed-week coverage U-M5)
-**Verify git:** `git branch --show-current` ? `git rev-parse --short HEAD`
+**Last updated:** 2026-07-16 (DSI U0–U3 completion after Fable CONSULT)
+**Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
 
@@ -11,20 +11,22 @@
 |-------|--------|
 | **Branch** | `feat/dsi-unified-multifile` |
 | **Alembic (DB)** | **`20260710_0072`** (unchanged) |
-| **Scope** | Unified DSI multi-file + missed-week coverage FLAG |
+| **Consultant** | Fable CONSULT READY — finish U0–U3 before soak |
 
 ---
 
-## Shipped this branch
+## Shipped
 
-- Unified multi-file batch (signature groups ? one job)
-- **Missed weeks:** `GET /imports/dsi/coverage` + `DsiCoveragePanel` (upload + validate FLAG)
-- Historical backfill CTA (does not block apply)
-- Workflow best-path lock in dual-agent docs
+- Unified multi-file batch + missed-week coverage
+- **U0** pipeline multi-file/nested skip (fixes MultipleResultsFound + mapping wipe)
+- **U1** per-sheet `column_samples` + hints in nested mapping state/UI
+- **U2** cross-file raw-grain overlap FLAG
+- **U3** file review strip + `POST …/dsi-file-exclusions`
 
 ---
 
 ## Next
 
-- Browser soak: batch upload + coverage grid on real cip data
+- Browser soak using Fable acceptance checklist
 - PR when soak passes
+- Shell branch still separate unmerged track

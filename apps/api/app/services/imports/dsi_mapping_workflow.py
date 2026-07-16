@@ -597,18 +597,42 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
         nested = dict(job.field_mapping or {})
         sheet_states: dict[str, Any] = {}
         blocking_all: list[dict[str, str]] = []
+        workbook_sheets = workbook.get("sheets") if isinstance(workbook, dict) else None
+        sheets_by_key: dict[str, dict[str, Any]] = {}
+        if isinstance(workbook_sheets, list):
+            for s in workbook_sheets:
+                if not isinstance(s, dict):
+                    continue
+                mk = s.get("mapping_key") or s.get("sheet_key")
+                if mk:
+                    sheets_by_key[str(mk)] = s
         for sheet_key, sheet_map in nested.items():
             if not isinstance(sheet_map, dict):
                 continue
-            headers = sorted({str(k) for k in sheet_map.keys()})
+            sheet_meta = sheets_by_key.get(str(sheet_key), {})
+            headers = list(sheet_meta.get("columns") or [])
+            if not headers:
+                headers = sorted({str(k) for k in sheet_map.keys()})
+            samples_raw = sheet_meta.get("column_samples")
+            samples: dict[str, list[str]] = {}
+            if isinstance(samples_raw, dict):
+                samples = {
+                    str(k): [str(x) for x in v] if isinstance(v, list) else []
+                    for k, v in samples_raw.items()
+                }
             smap, notices = sanitize_dsi_field_mapping(headers, sheet_map)
             gate = dsi_mapping_gate_errors(smap)
             blocking_all.extend(gate)
+            hints = suggest_dsi_column_mapping(
+                headers, job.source, column_samples=samples, current_field_mapping=smap
+            )
             sheet_states[str(sheet_key)] = {
                 "field_mapping": smap,
                 "blocking_mapping_errors": gate,
                 "mapping_valid": len(gate) == 0,
                 "mapping_adjustment_notices": notices,
+                "column_samples": samples,
+                "column_mapping_hints": hints,
             }
         inferred = job.inferred_schema if isinstance(job.inferred_schema, dict) else {}
         return {

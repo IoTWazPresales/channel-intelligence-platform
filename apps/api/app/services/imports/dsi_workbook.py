@@ -7,15 +7,114 @@ from typing import Any
 
 import pandas as pd
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.ingestion.infer import infer_schema, read_tabular
-from app.models.ingestion import ImportJob, RawFileMetadata
+from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata
 from app.services.imports.distributor_sales_inventory import CANONICAL
 from app.storage.local import get_storage_backend
+from app.utils.json_safe import to_jsonable
 
 DSI_SHEET_META_KEY = "dsi_workbook"
 DSI_SINGLE_SHEET_KEY = "__single__"
 DSI_FILE_SHEET_SEP = "::"
+
+
+def flag_dsi_cross_file_raw_overlaps(
+    db: Session,
+    job: ImportJob,
+    combined: pd.DataFrame,
+    *,
+    max_detail_flags: int = 20,
+) -> int:
+    """FLAG (warning) when the same raw business grain appears in >1 source file.
+
+    Uses raw-token grain (pre-resolution): distributor_token + product_identifier +
+    customer_dealer_token + transaction/snapshot date + invoice. Does not block apply.
+    Returns number of detail warning rows written (summary always written when overlaps exist).
+    """
+    if combined is None or combined.empty or "_dsi_source_file" not in combined.columns:
+        return 0
+    needed = ["distributor_token", "product_identifier"]
+    if any(c not in combined.columns for c in needed):
+        return 0
+
+    work = combined.copy()
+    for col in (
+        "distributor_token",
+        "product_identifier",
+        "customer_dealer_token",
+        "transaction_date",
+        "snapshot_date",
+        "invoice_no",
+    ):
+        if col not in work.columns:
+            work[col] = ""
+        work[col] = work[col].fillna("").astype(str).str.strip()
+
+    date_col = work["transaction_date"].where(work["transaction_date"] != "", work["snapshot_date"])
+    work["_raw_grain"] = (
+        work["distributor_token"]
+        + "|"
+        + work["product_identifier"]
+        + "|"
+        + work["customer_dealer_token"]
+        + "|"
+        + date_col
+        + "|"
+        + work["invoice_no"]
+    )
+    files_by_grain: dict[str, set[str]] = {}
+    counts_by_grain: dict[str, int] = {}
+    for grain, src in zip(work["_raw_grain"].tolist(), work["_dsi_source_file"].astype(str).tolist()):
+        if not grain or grain.startswith("||"):
+            continue
+        files_by_grain.setdefault(grain, set()).add(src)
+        counts_by_grain[grain] = counts_by_grain.get(grain, 0) + 1
+
+    overlaps = [
+        (g, sorted(files), counts_by_grain[g])
+        for g, files in files_by_grain.items()
+        if len(files) > 1
+    ]
+    if not overlaps:
+        return 0
+
+    summary = {
+        "overlap_grain_count": len(overlaps),
+        "samples": [
+            {"grain": g[:200], "files": files, "row_count": n} for g, files, n in overlaps[:10]
+        ],
+    }
+    sm = dict(job.staged_metadata or {})
+    sm["dsi_cross_file_overlap"] = summary
+    job.staged_metadata = to_jsonable(sm)
+    db.add(job)
+    db.add(
+        ImportRowResult(
+            job_id=job.id,
+            row_number=0,
+            severity="warning",
+            code="dsi_cross_file_duplicate",
+            message=(
+                f"Cross-file overlap: {len(overlaps)} raw business key(s) appear in more than one "
+                f"file in this batch. Latest-wins upsert still applies at fact grain; review before apply."
+            ),
+        )
+    )
+    written = 0
+    for g, files, n in overlaps[:max_detail_flags]:
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="warning",
+                code="dsi_cross_file_duplicate",
+                message=f"Overlap grain {g[:160]!r} in files {files} ({n} rows).",
+            )
+        )
+        written += 1
+    return written
 
 
 def raw_file_display_name(storage_key: str) -> str:
@@ -115,11 +214,14 @@ def build_dsi_workbook_structure(
     for sheet_name, df in frames:
         key = sheet_name or DSI_SINGLE_SHEET_KEY
         schema = infer_schema(df)
+        from app.services.imports.dsi_mapping_workflow import column_samples_from_schema_dict
+
         entry = {
             "sheet_name": sheet_name,
             "sheet_key": key,
             "row_count": int(len(df)),
             "columns": [c["name"] for c in schema.get("columns", [])],
+            "column_samples": column_samples_from_schema_dict(schema),
             "user_mapped": key in mapped_sheets,
             "dsi_mappable": _sheet_looks_dsi_mappable(df),
         }
@@ -146,11 +248,16 @@ def resolve_dsi_sheet_mappings(
     wb = meta.get(DSI_SHEET_META_KEY) if isinstance(meta.get(DSI_SHEET_META_KEY), dict) else {}
 
     if is_nested_dsi_field_mapping(fm):
+        from app.services.imports.dsi_batch import get_dsi_excluded_filenames
+
+        excluded = get_dsi_excluded_filenames(job)
         out: list[tuple[str | None, dict[str, str], str | None]] = []
         for sheet_key, sheet_map in fm.items():
             if not isinstance(sheet_map, dict) or not sheet_map:
                 continue
             source_file, inner_key = parse_dsi_mapping_key(str(sheet_key))
+            if source_file and source_file in excluded:
+                continue
             sheet_name = None if inner_key == DSI_SINGLE_SHEET_KEY else inner_key
             out.append(
                 (

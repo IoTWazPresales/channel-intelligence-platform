@@ -566,6 +566,36 @@ async def create_job(
     return {"id": job.id, "status": job.status, "stage": job.stage, "template_slug": job.template_slug, "import_mode": job.import_mode}
 
 
+@router.post("/jobs/{job_id}/dsi-file-exclusions")
+async def set_dsi_file_exclusions(
+    job_id: int,
+    body: dict[str, Any] = Body(...),
+):
+    """Exclude files from a multi-file DSI batch before re-validate (clears staging)."""
+    from app.services.imports.dsi_batch import set_dsi_file_exclusions_sync
+
+    excluded = body.get("excluded_filenames")
+    if not isinstance(excluded, list):
+        raise HTTPException(status_code=400, detail="excluded_filenames must be a list of filenames")
+    with SessionLocal() as sync_db:
+        try:
+            job = set_dsi_file_exclusions_sync(
+                sync_db,
+                job_id,
+                excluded_filenames=[str(x) for x in excluded],
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "id": job.id,
+            "stage": job.stage,
+            "status": job.status,
+            "dsi_excluded_files": (job.staged_metadata or {}).get("dsi_excluded_files")
+            if isinstance(job.staged_metadata, dict)
+            else [],
+        }
+
+
 @router.get("/dsi/coverage")
 async def get_dsi_coverage(
     source_id: int | None = Query(None),

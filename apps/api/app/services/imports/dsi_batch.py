@@ -185,3 +185,53 @@ def list_raw_files_for_job(db: Session, job_id: int) -> list[RawFileMetadata]:
             .order_by(RawFileMetadata.id.asc())
         ).all()
     )
+
+
+def get_dsi_excluded_filenames(job: ImportJob) -> set[str]:
+    sm = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    raw = sm.get("dsi_excluded_files")
+    if not isinstance(raw, list):
+        return set()
+    return {str(x) for x in raw if str(x).strip()}
+
+
+def set_dsi_file_exclusions_sync(
+    db: Session,
+    job_id: int,
+    *,
+    excluded_filenames: list[str],
+) -> ImportJob:
+    """Set pre-apply file exclusions; clear staging and return job to mapping-ready for re-validate."""
+    from sqlalchemy import delete
+
+    from app.models.import_distributor_si import ImportDistributorSiStagingLine, ImportEntityMappingCandidate
+    from app.models.ingestion import ImportRowResult
+
+    job = db.get(ImportJob, job_id)
+    if job is None or job.template_slug != "distributor_inventory":
+        raise ValueError("DSI file exclusions require a distributor_inventory job")
+
+    cleaned = sorted({str(x).strip() for x in excluded_filenames if str(x).strip()})
+    sm = dict(job.staged_metadata or {})
+    sm["dsi_excluded_files"] = cleaned
+    job.staged_metadata = to_jsonable(sm)
+
+    db.execute(
+        delete(ImportDistributorSiStagingLine).where(
+            ImportDistributorSiStagingLine.import_job_id == int(job_id)
+        )
+    )
+    db.execute(
+        delete(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.import_job_id == int(job_id)
+        )
+    )
+    db.execute(delete(ImportRowResult).where(ImportRowResult.job_id == int(job_id)))
+
+    job.stage = "dsi_mapping_ready"
+    job.status = "pending"
+    job.error_summary = None
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job

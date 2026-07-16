@@ -66,6 +66,7 @@ import { ImportFileUploadZone } from './ImportFileUploadZone';
 import { BulkLineupBackfillDialog } from './BulkLineupBackfillDialog';
 import { DsiBulkUploadDialog } from './DsiBulkUploadDialog';
 import { DsiCoveragePanel } from './DsiCoveragePanel';
+import { DsiFileReviewStrip } from './DsiFileReviewStrip';
 import { UnifiedLineupImportDialog } from './UnifiedLineupImportDialog';
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
 import {
@@ -911,8 +912,11 @@ function AdminImportsPageContent() {
       sheets?: Array<{
         sheet_name?: string | null;
         sheet_key?: string;
+        mapping_key?: string;
+        source_file?: string;
         row_count?: number;
         columns?: string[];
+        column_samples?: Record<string, string[]>;
         dsi_mappable?: boolean;
       }>;
       skipped_sheets?: Array<{ sheet_name?: string; reason?: string }>;
@@ -924,6 +928,8 @@ function AdminImportsPageContent() {
         blocking_mapping_errors: Array<{ code: string; message: string }>;
         mapping_valid: boolean;
         mapping_adjustment_notices?: Array<{ code: string; message: string }>;
+        column_samples?: Record<string, string[]>;
+        column_mapping_hints?: Record<string, unknown>;
       }
     >;
     canonical_targets: string[];
@@ -959,7 +965,7 @@ function AdminImportsPageContent() {
   const dsiSheetKeys = useMemo(() => {
     if (!dsiIsMultiSheet || !dsiMappingState) return [] as string[];
     const fromWb = (dsiMappingState.dsi_workbook?.sheets ?? [])
-      .map((s) => s.sheet_key)
+      .map((s) => s.mapping_key || s.sheet_key)
       .filter((k): k is string => Boolean(k));
     if (fromWb.length) return fromWb;
     if (isNestedDsiFieldMapping(dsiMappingState.field_mapping)) {
@@ -3934,7 +3940,10 @@ function AdminImportsPageContent() {
                 {(() => {
                   const activeKey = dsiActiveSheetKey ?? dsiSheetKeys[0];
                   const sheetMeta = (dsiMappingState?.dsi_workbook?.sheets ?? []).find(
-                    (s) => s.sheet_key === activeKey
+                    (s) =>
+                      s.mapping_key === activeKey ||
+                      s.sheet_key === activeKey ||
+                      `${s.source_file ?? ''}::${s.sheet_key ?? ''}` === activeKey
                   );
                   const headers =
                     sheetMeta?.columns?.length
@@ -3950,7 +3959,7 @@ function AdminImportsPageContent() {
                         setDsiNestedMapDraft((prev) => ({ ...prev, [activeKey]: next }))
                       }
                       targetOptions={dsiMappingTargetOptions}
-                      columnSamples={dsiMappingState?.column_samples}
+                      columnSamples={sheetState?.column_samples ?? sheetMeta?.column_samples}
                       blockingErrors={sheetState?.blocking_mapping_errors}
                       adjustmentNotices={sheetState?.mapping_adjustment_notices}
                       requiredGroups={DSI_MAPPING_REQUIRED_GROUPS}
@@ -4009,6 +4018,51 @@ function AdminImportsPageContent() {
                 sourceId={sourceId}
                 flagsOnly
                 onUploadHistorical={openDsiHistoricalBackfill}
+              />
+            ) : null}
+            {lastJobId != null &&
+            ((dsiMappingState?.dsi_workbook as { files?: string[] } | null | undefined)?.files?.length ||
+              Object.keys(
+                (
+                  (dsiValidatePollJob?.staged_metadata ?? dsiJobIntelligence?.staged_metadata) as
+                    | { dsi_file_row_subtotals?: Record<string, number> }
+                    | undefined
+                )?.dsi_file_row_subtotals ?? {}
+              ).length) ? (
+              <DsiFileReviewStrip
+                jobId={lastJobId}
+                filenames={
+                  (dsiMappingState?.dsi_workbook as { files?: string[] } | null | undefined)?.files?.length
+                    ? ((dsiMappingState?.dsi_workbook as { files?: string[] }).files as string[])
+                    : Object.keys(
+                        (
+                          (dsiValidatePollJob?.staged_metadata ?? dsiJobIntelligence?.staged_metadata) as
+                            | { dsi_file_row_subtotals?: Record<string, number> }
+                            | undefined
+                        )?.dsi_file_row_subtotals ?? {}
+                      )
+                }
+                rowSubtotals={
+                  (
+                    (dsiValidatePollJob?.staged_metadata ?? dsiJobIntelligence?.staged_metadata) as
+                      | { dsi_file_row_subtotals?: Record<string, number> }
+                      | undefined
+                  )?.dsi_file_row_subtotals ?? null
+                }
+                excludedFiles={
+                  (
+                    (dsiValidatePollJob?.staged_metadata ?? dsiJobIntelligence?.staged_metadata) as
+                      | { dsi_excluded_files?: string[] }
+                      | undefined
+                  )?.dsi_excluded_files ?? null
+                }
+                jobLoaded={String(dsiMappingState?.stage ?? dsiValidatePollJob?.stage ?? '') === 'loaded'}
+                onChanged={() => {
+                  void refetchDsiMapping();
+                  void qc.invalidateQueries({ queryKey: ['import-job', lastJobId] });
+                  void qc.invalidateQueries({ queryKey: ['dsi-job-intelligence', lastJobId] });
+                  void qc.invalidateQueries({ queryKey: ['dsi-async-validate-import-job', lastJobId] });
+                }}
               />
             ) : null}
             {dsiJobFailedAlert}
