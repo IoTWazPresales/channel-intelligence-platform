@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.ingestion import ImportJob, RawFileMetadata, SourceDefinition
 from app.services.imports.dsi_mapping_workflow import infer_dsi_job_sync
 from app.services.imports.dsi_workbook import (
-    DSI_SINGLE_SHEET_KEY,
+    DSI_SIGNATURE_MAX_ROWS,
     _sheet_looks_dsi_mappable,
     load_dsi_workbook_sheet_frames,
     raw_file_display_name,
@@ -43,11 +43,14 @@ def normalized_header_signature(
 ) -> tuple[str, int, int, bool, str | None]:
     """Return (signature_hash, column_count, sheet_count, unmappable, unmappable_reason)."""
     try:
-        frames = load_dsi_workbook_sheet_frames(filename, raw_bytes)
+        frames = load_dsi_workbook_sheet_frames(
+            filename, raw_bytes, max_data_rows=DSI_SIGNATURE_MAX_ROWS
+        )
     except Exception:
         return ("unmappable", 0, 0, True, "parse_error")
+
     sheet_count = len(frames)
-    if not frames or all(df.empty for _sn, df, _hr in frames):
+    if not frames or all(int(df.shape[1]) == 0 for _sn, df, _hr in frames):
         return ("unmappable", 0, sheet_count, True, "empty")
     primary_cols: set[str] = set()
     for _sheet_name, df, _header_row in frames:

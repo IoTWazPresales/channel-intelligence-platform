@@ -455,6 +455,7 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
 
     from app.services.imports.dsi_batch import list_raw_files_for_job
     from app.services.imports.dsi_workbook import (
+        DSI_INFER_SAMPLE_ROWS,
         DSI_SINGLE_SHEET_KEY,
         build_dsi_workbook_structure,
         load_dsi_workbook_sheet_frames,
@@ -479,8 +480,16 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
     for raw in raws:
         filename = raw_file_display_name(raw.storage_key)
         data = storage.read(raw.storage_key)
-        sheet_frames = load_dsi_workbook_sheet_frames(filename, data)
-        structure = build_dsi_workbook_structure(filename, data)
+        # Bounded sample for mapping/automap — full sheet load happens at validate.
+        sheet_frames = load_dsi_workbook_sheet_frames(
+            filename, data, max_data_rows=DSI_INFER_SAMPLE_ROWS
+        )
+        structure = build_dsi_workbook_structure(
+            filename,
+            data,
+            max_data_rows=DSI_INFER_SAMPLE_ROWS,
+            frames=sheet_frames,
+        )
         total_sheet_count += int(structure.get("sheet_count") or len(sheet_frames))
         if structure.get("multi_sheet"):
             any_multi_sheet = True

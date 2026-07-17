@@ -165,6 +165,9 @@ SNIFF_ROWS = 40
 HEADER_MIN_HINTS = 2
 # CSV exports of those workbooks can exceed 200 delimiter fields (sparse trailing commas).
 CSV_SNIFF_WIDTH = 300
+# Propose/signature + infer must not fully parse multi‑10MB inventory workbooks.
+DSI_SIGNATURE_MAX_ROWS = 5
+DSI_INFER_SAMPLE_ROWS = 100
 
 _DSI_HEADER_HINTS = (
     "distributor",
@@ -234,20 +237,35 @@ def _detect_header_row(grid: pd.DataFrame) -> int | None:
     return None
 
 
-def _framed_sheet_read_csv(raw_bytes: bytes) -> tuple[pd.DataFrame, int]:
+def _framed_sheet_read_csv(
+    raw_bytes: bytes,
+    *,
+    max_data_rows: int | None = None,
+) -> tuple[pd.DataFrame, int]:
     """Return (dataframe, header_row). Corrective sniff only when header=0 is not DSI-mappable."""
+    data_nrows = max_data_rows  # None = full file; int includes header row semantics in pandas
+
+    def _read_typed(*, header: int) -> pd.DataFrame:
+        kwargs: dict[str, Any] = {
+            "header": header,
+            "encoding": "utf-8-sig",
+            "skip_blank_lines": False,
+        }
+        if data_nrows is not None:
+            kwargs["nrows"] = data_nrows
+        try:
+            return pd.read_csv(io.BytesIO(raw_bytes), **kwargs)
+        except Exception:
+            kwargs.pop("encoding", None)
+            return pd.read_csv(io.BytesIO(raw_bytes), **kwargs)
+
     df0: pd.DataFrame | None = None
     try:
-        df0 = pd.read_csv(io.BytesIO(raw_bytes), encoding="utf-8-sig")
+        df0 = _read_typed(header=0)
         if _sheet_looks_dsi_mappable(df0):
             return df0, 0
     except Exception:
-        try:
-            df0 = pd.read_csv(io.BytesIO(raw_bytes))
-            if _sheet_looks_dsi_mappable(df0):
-                return df0, 0
-        except Exception:
-            df0 = None
+        df0 = None
 
     # Banner CSVs often have 1-cell title rows; force a wide column set so the C parser
     # does not refuse later wider header/data rows during the sniff pass.
@@ -284,29 +302,26 @@ def _framed_sheet_read_csv(raw_bytes: bytes) -> tuple[pd.DataFrame, int]:
     if detected is None:
         return (df0 if df0 is not None else pd.DataFrame()), 0
     try:
-        typed = pd.read_csv(
-            io.BytesIO(raw_bytes),
-            header=detected,
-            encoding="utf-8-sig",
-            skip_blank_lines=False,
-        )
+        typed = _read_typed(header=int(detected))
     except Exception:
-        try:
-            typed = pd.read_csv(
-                io.BytesIO(raw_bytes),
-                header=detected,
-                skip_blank_lines=False,
-            )
-        except Exception:
-            return (df0 if df0 is not None else pd.DataFrame()), 0
+        return (df0 if df0 is not None else pd.DataFrame()), 0
     if _sheet_looks_dsi_mappable(typed):
         return typed, int(detected)
     return (df0 if df0 is not None else pd.DataFrame()), 0
 
 
-def _framed_sheet_read_excel(xls: pd.ExcelFile, sheet_name: str) -> tuple[pd.DataFrame, int] | None:
+def _framed_sheet_read_excel(
+    xls: pd.ExcelFile,
+    sheet_name: str,
+    *,
+    max_data_rows: int | None = None,
+) -> tuple[pd.DataFrame, int] | None:
     """Return (dataframe, header_row) or None if sheet is empty."""
-    sdf0 = pd.read_excel(xls, sheet_name=sheet_name)
+    read_kw: dict[str, Any] = {}
+    if max_data_rows is not None:
+        read_kw["nrows"] = max_data_rows
+
+    sdf0 = pd.read_excel(xls, sheet_name=sheet_name, **read_kw)
     if sdf0.empty or sdf0.shape[1] == 0:
         return None
     if _sheet_looks_dsi_mappable(sdf0):
@@ -318,7 +333,7 @@ def _framed_sheet_read_excel(xls: pd.ExcelFile, sheet_name: str) -> tuple[pd.Dat
     detected = _detect_header_row(raw)
     if detected is None:
         return sdf0, 0
-    typed = pd.read_excel(xls, sheet_name=sheet_name, header=detected)
+    typed = pd.read_excel(xls, sheet_name=sheet_name, header=detected, **read_kw)
     if typed.empty or typed.shape[1] == 0:
         return sdf0, 0
     if _sheet_looks_dsi_mappable(typed):
@@ -327,21 +342,25 @@ def _framed_sheet_read_excel(xls: pd.ExcelFile, sheet_name: str) -> tuple[pd.Dat
 
 
 def load_dsi_workbook_sheet_frames(
-    filename: str, raw_bytes: bytes
+    filename: str,
+    raw_bytes: bytes,
+    *,
+    max_data_rows: int | None = None,
 ) -> list[tuple[str | None, pd.DataFrame, int]]:
     """Load sheets as (sheet_name, dataframe, header_row).
 
     header_row is 0 for clean files; >0 when corrective sniff found a banner-offset header.
+    Pass max_data_rows for propose/infer (bounded) — omit for validate (full sheet).
     """
     lower = (filename or "").lower()
     if lower.endswith(".csv"):
-        df, header_row = _framed_sheet_read_csv(raw_bytes)
+        df, header_row = _framed_sheet_read_csv(raw_bytes, max_data_rows=max_data_rows)
         return [(None, df, header_row)]
     if lower.endswith((".xlsx", ".xlsm")):
         xls = pd.ExcelFile(io.BytesIO(raw_bytes), engine="openpyxl")
         out: list[tuple[str | None, pd.DataFrame, int]] = []
         for sheet in xls.sheet_names:
-            framed = _framed_sheet_read_excel(xls, sheet)
+            framed = _framed_sheet_read_excel(xls, sheet, max_data_rows=max_data_rows)
             if framed is None:
                 continue
             sdf, header_row = framed
@@ -356,9 +375,13 @@ def build_dsi_workbook_structure(
     raw_bytes: bytes,
     *,
     field_mapping: dict[str, Any] | None = None,
+    max_data_rows: int | None = None,
+    frames: list[tuple[str | None, pd.DataFrame, int]] | None = None,
 ) -> dict[str, Any]:
     """Detect workbook sheets; classify mappable vs skipped."""
-    frames = load_dsi_workbook_sheet_frames(filename, raw_bytes)
+    frames = frames or load_dsi_workbook_sheet_frames(
+        filename, raw_bytes, max_data_rows=max_data_rows
+    )
     mapped_sheets = set()
     if is_nested_dsi_field_mapping(field_mapping):
         mapped_sheets = {k for k, v in (field_mapping or {}).items() if isinstance(v, dict) and v}
