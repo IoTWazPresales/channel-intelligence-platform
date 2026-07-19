@@ -341,6 +341,16 @@ def _framed_sheet_read_excel(
     return sdf0, 0
 
 
+def _excel_engine_for_filename(filename: str) -> str | None:
+    """Return pandas Excel engine for DSI workbooks, or None if not Excel."""
+    lower = (filename or "").lower()
+    if lower.endswith((".xlsx", ".xlsm")):
+        return "openpyxl"
+    if lower.endswith(".xls"):
+        return "xlrd"
+    return None
+
+
 def load_dsi_workbook_sheet_frames(
     filename: str,
     raw_bytes: bytes,
@@ -356,8 +366,9 @@ def load_dsi_workbook_sheet_frames(
     if lower.endswith(".csv"):
         df, header_row = _framed_sheet_read_csv(raw_bytes, max_data_rows=max_data_rows)
         return [(None, df, header_row)]
-    if lower.endswith((".xlsx", ".xlsm")):
-        xls = pd.ExcelFile(io.BytesIO(raw_bytes), engine="openpyxl")
+    engine = _excel_engine_for_filename(filename)
+    if engine is not None:
+        xls = pd.ExcelFile(io.BytesIO(raw_bytes), engine=engine)
         out: list[tuple[str | None, pd.DataFrame, int]] = []
         for sheet in xls.sheet_names:
             framed = _framed_sheet_read_excel(xls, sheet, max_data_rows=max_data_rows)
@@ -459,8 +470,14 @@ def resolve_dsi_sheet_mappings(
 
 def build_combined_dsi_dataframe(
     frames: list[tuple[str | None, pd.DataFrame, dict[str, str], str | None] | tuple[str | None, pd.DataFrame, dict[str, str]]],
+    *,
+    require_distributor_column: bool = True,
 ) -> tuple[pd.DataFrame, dict[str, str], list[dict[str, str]]]:
-    """Normalize each mapped sheet to canonical columns and concatenate for one pass."""
+    """Normalize each mapped sheet to canonical columns and concatenate for one pass.
+
+    When ``require_distributor_column`` is False (confirmed per-file distributor stamps),
+    sheets may omit a mapped distributor column — stamps fill ``distributor_token`` after combine.
+    """
     parts: list[pd.DataFrame] = []
     skipped: list[dict[str, str]] = []
     for frame in frames:
@@ -472,7 +489,15 @@ def build_combined_dsi_dataframe(
         label = sheet_name or "(default)"
         if source_file:
             label = f"{source_file} / {label}"
-        if not sheet_map or "distributor_token" not in sheet_map.values():
+        if not sheet_map:
+            skipped.append(
+                {
+                    "sheet_name": label,
+                    "reason": "not_mapped_or_missing_distributor",
+                }
+            )
+            continue
+        if require_distributor_column and "distributor_token" not in sheet_map.values():
             skipped.append(
                 {
                     "sheet_name": label,

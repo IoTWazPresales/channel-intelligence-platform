@@ -34,9 +34,9 @@ import { apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
 const DEMO_HEADERS = { 'X-User-Role': 'admin', 'X-User-Id': 'demo-user' };
 
 const ACCEPT =
-  '.csv,.xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12,text/csv';
+  '.csv,.xlsx,.xlsm,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel,text/csv';
 
-const ALLOWED_EXT = ['.csv', '.xlsx', '.xlsm'];
+const ALLOWED_EXT = ['.csv', '.xlsx', '.xlsm', '.xls'];
 
 type BatchGroupPreview = {
   signature: string;
@@ -88,8 +88,8 @@ function extOk(name: string): boolean {
 }
 
 /**
- * Unified multi-file DSI upload: files with matching layouts → one import job;
- * divergent layouts → separate jobs (shown in group preview before upload).
+ * Unified multi-file DSI upload: all DSI-capable files → one import job
+ * (nested per-file mapping + distributor stamps). Unmappable files are skipped.
  */
 export function DsiBulkUploadDialog({
   open,
@@ -172,6 +172,7 @@ export function DsiBulkUploadDialog({
         .filter((j) => j.outcome === 'created' && j.import_job_id != null)
         .map((j) => j.import_job_id as number);
       if (ids.length) onJobsCreated(ids);
+      onClose();
     },
   });
 
@@ -186,9 +187,8 @@ export function DsiBulkUploadDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            Files with the same column layout are combined into <strong>one import job</strong> — one
-            mapping, one steward pass, one apply. Different layouts are split into separate jobs (shown
-            below before upload).
+            All DSI-capable files combine into <strong>one import job</strong> — nested per-file mapping, per-file
+            distributor stamps, one steward pass, one apply. Unmappable files are skipped (shown below before upload).
           </Typography>
           <FormControl size="small" sx={{ maxWidth: 420 }}>
             <InputLabel id="dsi-bulk-workflow-mode-label">DSI workflow mode</InputLabel>
@@ -290,7 +290,10 @@ export function DsiBulkUploadDialog({
             <Stack spacing={1} data-testid="dsi-bulk-group-preview">
               <Alert severity="info">
                 {preview.file_count} file{preview.file_count === 1 ? '' : 's'} →{' '}
-                {preview.group_count} job{preview.group_count === 1 ? '' : 's'}
+                {preview.group_count} import job{preview.group_count === 1 ? '' : 's'}
+                {preview.group_count === 1
+                  ? ' (different column layouts stay in one batch — map each file in the wizard)'
+                  : ''}
               </Alert>
               {preview.groups.map((g) => {
                 const unmappableFiles = g.files.filter((f) => f.unmappable);
@@ -312,6 +315,7 @@ export function DsiBulkUploadDialog({
                           return `${n} unmappable (${reason})`;
                         })
                         .join('; ');
+                const isCapable = g.signature === 'dsi_capable';
                 return (
                   <Box
                     key={g.signature}
@@ -325,7 +329,9 @@ export function DsiBulkUploadDialog({
                     <Typography variant="subtitle2" gutterBottom>
                       {unmappableFiles.length
                         ? `Skipped · not DSI-mappable (${unmappableFiles.length})`
-                        : `Job group · signature ${g.signature}`}
+                        : isCapable
+                          ? `One import job · ${g.files.length} file${g.files.length === 1 ? '' : 's'}`
+                          : `Job group · ${g.signature}`}
                     </Typography>
                     {reasonLabel ? (
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
@@ -355,8 +361,8 @@ export function DsiBulkUploadDialog({
               <Alert severity={createdCount ? 'success' : 'warning'}>
                 Created {createdCount} batch job{createdCount === 1 ? '' : 's'}.
                 {createdCount === 1
-                  ? ' Continue in the wizard to map columns once for all files in this batch.'
-                  : ' Multiple layout groups — finish each job separately.'}
+                  ? ' Continue in the wizard — map columns and confirm distributors per file in one session.'
+                  : ' Finish each created job in the wizard.'}
               </Alert>
               <Table size="small">
                 <TableHead>

@@ -111,6 +111,55 @@ def test_product_inference_assigns_modelname_when_product_demoted() -> None:
     assert out.get("ModelName") == "product_identifier"
 
 
+def test_part_number_preferred_over_model_when_both_have_samples() -> None:
+    """Resolve-tier alignment: item/part grain beats sales-model when both are populated."""
+    headers = ["Model Name", "ASUS Part No.", "Customer Sku", "MFG model name", "Qty"]
+    mapping = {
+        "Model Name": "product_identifier",
+        "ASUS Part No.": "product_identifier",
+        "Customer Sku": "product_identifier",
+        "MFG model name": "product_identifier",
+        "Qty": "quantity_sold",
+    }
+    samples = {
+        "Model Name": ["B3402FVA-C716512B0W", "X1504VAP-I516512BL2W"],
+        "ASUS Part No.": ["90NX07N1-M02YP0", "90NB13Y1-M01M40"],
+        "Customer Sku": [],
+        "MFG model name": [],
+    }
+    out = apply_dsi_product_identifier_sample_inference(headers, mapping, samples)
+    assert out.get("ASUS Part No.") == "product_identifier"
+    assert out.get("Model Name") != "product_identifier"
+    assert out.get("Customer Sku") != "product_identifier"
+    assert out.get("MFG model name") != "product_identifier"
+
+
+def test_model_kept_when_part_column_empty() -> None:
+    headers = ["Model Name", "Part No.", "Qty"]
+    mapping = {
+        "Model Name": "product_identifier",
+        "Part No.": "product_identifier",
+        "Qty": "quantity_sold",
+    }
+    samples = {
+        "Model Name": ["B3402FVA-C716512B0W", "X1504VAP-I516512BL2W"],
+        "Part No.": [],
+    }
+    out = apply_dsi_product_identifier_sample_inference(headers, mapping, samples)
+    assert out.get("Model Name") == "product_identifier"
+    assert out.get("Part No.") != "product_identifier"
+
+
+def test_header_seeds_map_generic_part_and_ean_columns() -> None:
+    from app.services.imports.dsi_mapping_workflow import apply_dsi_product_identifier_header_seeds
+
+    headers = ["Dealer Name", "Vendor Part No.", "EAN Code", "Notes"]
+    out = apply_dsi_product_identifier_header_seeds(headers, {"Dealer Name": "customer_dealer_token"})
+    assert out.get("Vendor Part No.") == "product_identifier"
+    assert out.get("EAN Code") == "product_identifier"
+    assert "Notes" not in out or out.get("Notes") != "product_identifier"
+
+
 def test_customer_only_exact_header_sets_source_customer_name() -> None:
     headers = ["Customer name", "sku", "Qty"]
     m = {"Customer name": "dealer_group_token", "sku": "product_identifier", "Qty": "quantity_sold"}

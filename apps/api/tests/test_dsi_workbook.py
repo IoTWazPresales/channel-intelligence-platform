@@ -89,6 +89,31 @@ def test_extra_unmapped_sheet_skipped() -> None:
     assert any(s["sheet_name"] == "Notes" for s in skipped)
 
 
+def test_combine_allows_missing_distributor_when_file_stamps() -> None:
+    """Confirmed per-file stamps — sheets need product_id, not Dist column."""
+    frames = [
+        (
+            "Sellout",
+            pd.DataFrame({"SKU": ["P1"], "Qty": [2]}),
+            {"SKU": "product_identifier", "Qty": "quantity_sold"},
+            "mustek.xlsx",
+        ),
+    ]
+    empty, _mapping, skipped_strict = build_combined_dsi_dataframe(frames)
+    assert empty.empty
+    assert any(s["reason"] == "not_mapped_or_missing_distributor" for s in skipped_strict)
+
+    combined, mapping, skipped = build_combined_dsi_dataframe(
+        frames,
+        require_distributor_column=False,
+    )
+    assert skipped == []
+    assert len(combined) == 1
+    assert "distributor_token" not in combined.columns
+    assert mapping["product_identifier"] == "product_identifier"
+    assert combined["_dsi_source_file"].iloc[0] == "mustek.xlsx"
+
+
 def test_xlsx_loads_multiple_sheets() -> None:
     bio = io.BytesIO()
     with pd.ExcelWriter(bio, engine="openpyxl") as writer:

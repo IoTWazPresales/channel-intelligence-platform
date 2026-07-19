@@ -3,13 +3,16 @@ import { describe, expect, it } from 'vitest';
 import {
   computeDsiContinueGateKey,
   dsiContinueToApplyAllowed,
+  dsiDataQualityBlockingRows,
   dsiGateFromMapping,
   dsiGateFromNestedMapping,
   dsiHumanFixableBlockingRows,
   dsiSelectValue,
+  dsiStewardMapBlockingRows,
   dsiTargetDescription,
   dsiTargetLabel,
   formatDsiBlockerSummaryLine,
+  hydrateDsiNestedMapDraft,
   isNestedDsiFieldMapping,
   parseDistributorSiSummaryFromRows,
   stableFieldMappingJson,
@@ -53,6 +56,23 @@ describe('dsiStepUtils', () => {
         d: 'quantity_sold',
       })
     ).toBe(true);
+    expect(
+      dsiGateFromMapping(
+        {
+          b: 'product_identifier',
+          c: 'transaction_date',
+          d: 'quantity_sold',
+        },
+        { fileDistributorSatisfied: true }
+      )
+    ).toBe(true);
+    expect(
+      dsiGateFromMapping({
+        b: 'product_identifier',
+        c: 'transaction_date',
+        d: 'quantity_sold',
+      })
+    ).toBe(false);
   });
 
   it('dsiGateFromNestedMapping requires every sheet to pass', () => {
@@ -67,6 +87,38 @@ describe('dsiStepUtils', () => {
     expect(dsiGateFromNestedMapping({})).toBe(false);
     expect(isNestedDsiFieldMapping({ Sales: good })).toBe(true);
     expect(isNestedDsiFieldMapping({ a: 'distributor_token' })).toBe(false);
+  });
+
+  it('hydrateDsiNestedMapDraft fillMissing preserves dirty sheet edits', () => {
+    const canon = new Set(['product_identifier', 'quantity_sold', 'transaction_date']);
+    const prev = {
+      'a.xlsx::Sheet1': { Model: 'product_identifier', Qty: 'quantity_sold' },
+    };
+    const next = hydrateDsiNestedMapDraft({
+      sheetKeys: ['a.xlsx::Sheet1', 'b.xlsx::Sheet1'],
+      serverNested: {
+        'a.xlsx::Sheet1': { Model: 'product_identifier' },
+        'b.xlsx::Sheet1': { SKU: 'product_identifier', Date: 'transaction_date' },
+      },
+      prev,
+      canonSet: canon,
+      mode: 'fillMissing',
+    });
+    expect(next['a.xlsx::Sheet1']).toEqual(prev['a.xlsx::Sheet1']);
+    expect(next['b.xlsx::Sheet1']?.SKU).toBe('product_identifier');
+    expect(next['b.xlsx::Sheet1']?.Date).toBe('transaction_date');
+  });
+
+  it('hydrateDsiNestedMapDraft replace syncs from server when clean', () => {
+    const canon = new Set(['product_identifier']);
+    const next = hydrateDsiNestedMapDraft({
+      sheetKeys: ['Sheet1'],
+      serverNested: { Sheet1: { Model: 'product_identifier', Junk: 'nope' } },
+      prev: { Sheet1: { Old: 'product_identifier' } },
+      canonSet: canon,
+      mode: 'replace',
+    });
+    expect(next.Sheet1).toEqual({ Model: 'product_identifier' });
   });
 
   it('stableFieldMappingJson is order-independent', () => {
@@ -178,14 +230,23 @@ describe('dsiStepUtils', () => {
     expect(dsiContinueToApplyAllowed(key, 7, fm, summary, { isValidating: true, hasServerGate: true })).toBe(false);
   });
 
-  it('formatDsiBlockerSummaryLine splits master-merge vs steward-map vs auto-excluded', () => {
+  it('formatDsiBlockerSummaryLine splits master-merge vs steward-map vs blank-product vs auto-excluded', () => {
     expect(
       formatDsiBlockerSummaryLine({
         master_merge_excluded_rows: 21,
         steward_map_blocking_rows: 40,
+        data_quality_blocking_rows: 45,
         auto_excluded_rows: 121,
       })
-    ).toBe('21 master-merge · 40 steward-map · 121 auto-excluded');
-    expect(dsiHumanFixableBlockingRows({ human_fixable_blocking_rows: 40, blocking_rows: 61 })).toBe(40);
+    ).toBe('21 master-merge · 40 steward-map · 45 blank-product · 121 auto-excluded');
+    expect(dsiHumanFixableBlockingRows({ human_fixable_blocking_rows: 85, blocking_rows: 85 })).toBe(85);
+    expect(
+      dsiStewardMapBlockingRows({
+        human_fixable_blocking_rows: 85,
+        steward_map_blocking_rows: 40,
+        data_quality_blocking_rows: 45,
+      })
+    ).toBe(40);
+    expect(dsiDataQualityBlockingRows({ data_quality_blocking_rows: 45 })).toBe(45);
   });
 });

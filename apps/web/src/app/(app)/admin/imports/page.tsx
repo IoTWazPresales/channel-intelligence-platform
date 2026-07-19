@@ -97,13 +97,17 @@ import type { DsiCandidateRow } from '../mappings/DsiCandidateStewardPanel';
 import {
   computeDsiContinueGateKey,
   dsiContinueToApplyAllowed,
+  dsiDataQualityBlockingRows,
   dsiGateFromMapping,
   dsiGateFromNestedMapping,
   dsiHumanFixableBlockingRows,
   dsiSelectValue,
+  dsiStewardMapBlockingRows,
   dsiTargetDescription,
   dsiTargetLabel,
   formatDsiBlockerSummaryLine,
+  hydrateDsiFlatMapDraft,
+  hydrateDsiNestedMapDraft,
   isNestedDsiFieldMapping,
   formatDsiSamples,
   parseDistributorSiSummaryFromRows,
@@ -419,6 +423,21 @@ const DSI_MAPPING_REQUIRED_GROUPS: CanonicalRequiredGroup[] = [
   { id: 'date', label: 'Date', anyOf: ['transaction_date', 'snapshot_date'] },
   { id: 'quantity', label: 'Quantity or inventory', anyOf: ['quantity_sold', 'stock_on_hand'] },
 ];
+
+function dedupeMappingBlockingErrors(
+  errors: Array<{ code: string; message: string }> | undefined
+): Array<{ code: string; message: string }> {
+  if (!errors?.length) return [];
+  const seen = new Set<string>();
+  const out: Array<{ code: string; message: string }> = [];
+  for (const e of errors) {
+    const code = String(e.code || e.message);
+    if (seen.has(code)) continue;
+    seen.add(code);
+    out.push(e);
+  }
+  return out;
+}
 
 /** Phase rail + copy for the inbound-shipment validate progress panel (reads `imports.process_job` progress). */
 const SHIPMENT_PROGRESS_PHASES = [
@@ -949,6 +968,28 @@ function AdminImportsPageContent() {
       }
     >;
     field_target_descriptions?: Record<string, string>;
+    dsi_file_distributors?: Record<
+      string,
+      {
+        token?: string | null;
+        reason?: string | null;
+        confirmed?: boolean;
+        distributor_id?: number | null;
+        distributor_name?: string | null;
+      }
+    >;
+    dsi_file_distributors_all_confirmed?: boolean;
+    dsi_file_snapshot_periods?: Record<
+      string,
+      {
+        token?: string | null;
+        resolved_date?: string | null;
+        reason?: string | null;
+        confirmed?: boolean;
+        source?: string | null;
+      }
+    >;
+    dsi_file_snapshot_periods_all_confirmed?: boolean;
   };
 
   const { data: dsiMappingState, refetch: refetchDsiMapping } = useQuery({
@@ -974,11 +1015,121 @@ function AdminImportsPageContent() {
     return Object.keys(dsiMappingState.sheet_field_mappings ?? {});
   }, [dsiIsMultiSheet, dsiMappingState]);
 
+  const dsiFileDistributorsConfirmed = Boolean(dsiMappingState?.dsi_file_distributors_all_confirmed);
+  const dsiFileSnapshotPeriodsConfirmed = Boolean(
+    dsiMappingState?.dsi_file_snapshot_periods_all_confirmed ?? true
+  );
+
+  const dsiMappingRequiredGroups = useMemo<CanonicalRequiredGroup[]>(
+    () =>
+      DSI_MAPPING_REQUIRED_GROUPS.map((g) =>
+        g.id === 'distributor' ? { ...g, externallySatisfied: dsiFileDistributorsConfirmed } : g
+      ),
+    [dsiFileDistributorsConfirmed]
+  );
+
+  /** Prefer live draft gates over stale per-sheet server errors (avoids 5× duplicate date lines). */
+  const dsiMappingStepBlockingErrors = useMemo(() => {
+    const fileOk = dsiFileDistributorsConfirmed;
+    const snapOk = dsiFileSnapshotPeriodsConfirmed;
+    const gateOpts = { fileDistributorSatisfied: fileOk, fileSnapshotSatisfied: snapOk };
+    if (dsiIsMultiSheet) {
+      const errs: Array<{ code: string; message: string }> = [];
+      for (const key of dsiSheetKeys) {
+        const sheet = dsiNestedMapDraft[key] ?? {};
+        const vals = Object.values(sheet);
+        if (!dsiGateFromMapping(sheet, gateOpts)) {
+          const needsInvPeriod = vals.includes('stock_on_hand') && !vals.includes('snapshot_date');
+          if (needsInvPeriod && !snapOk) {
+            errs.push({
+              code: 'missing_snapshot_period_for_inventory_file',
+              message:
+                'Inventory rows need an as-of date: confirm Application Date period in the batch files strip, or map Inventory snapshot date.',
+            });
+          } else if (!vals.includes('transaction_date') && !vals.includes('snapshot_date') && !(needsInvPeriod && snapOk)) {
+            errs.push({
+              code: 'missing_column_mapping_date',
+              message:
+                'Required column mapping missing: map a date to Transaction / invoice date and/or Inventory snapshot date.',
+            });
+          }
+          if (!vals.includes('product_identifier')) {
+            errs.push({
+              code: 'missing_column_mapping_product',
+              message: 'Required column mapping missing: product identifier (SKU / part number / model / product code).',
+            });
+          }
+          if (!vals.includes('quantity_sold') && !vals.includes('stock_on_hand')) {
+            errs.push({
+              code: 'missing_column_mapping_quantity',
+              message: 'Required column mapping missing: quantity sold and/or stock on hand.',
+            });
+          }
+          if (!fileOk && !vals.includes('distributor_token')) {
+            errs.push({
+              code: 'missing_column_mapping_distributor',
+              message:
+                'Required: Distributor — confirm per-file identity in the batch files strip above (banner Company Name), or map a distributor column. Do not map Customer Code / Dealer Code to Distributor.',
+            });
+          }
+        }
+      }
+      return dedupeMappingBlockingErrors(errs);
+    }
+    if (!dsiGateFromMapping(dsiMapDraft, gateOpts)) {
+      const errs: Array<{ code: string; message: string }> = [];
+      if (!fileOk && !Object.values(dsiMapDraft).includes('distributor_token')) {
+        errs.push({
+          code: 'missing_column_mapping_distributor',
+          message:
+            'Required: Distributor — confirm per-file identity in the batch files strip above (banner Company Name), or map a distributor column. Do not map Customer Code / Dealer Code to Distributor.',
+        });
+      }
+      return dedupeMappingBlockingErrors([
+        ...errs,
+        ...(dsiMappingState?.blocking_mapping_errors ?? []).filter((e) => e.code !== 'missing_column_mapping_distributor'),
+      ]);
+    }
+    return [];
+  }, [
+    dsiIsMultiSheet,
+    dsiSheetKeys,
+    dsiNestedMapDraft,
+    dsiMapDraft,
+    dsiFileDistributorsConfirmed,
+    dsiFileSnapshotPeriodsConfirmed,
+    dsiMappingState?.blocking_mapping_errors,
+  ]);
+
   const dsiServerMappingGateOk = useMemo(() => {
+    const gateOpts = {
+      fileDistributorSatisfied: dsiFileDistributorsConfirmed,
+      fileSnapshotSatisfied: dsiFileSnapshotPeriodsConfirmed,
+    };
+    if (activeStep === 5) {
+      if (dsiIsMultiSheet) {
+        return dsiGateFromNestedMapping(dsiNestedMapDraft, gateOpts);
+      }
+      return dsiGateFromMapping(dsiMapDraft, gateOpts);
+    }
+    if (typeof dsiMappingState?.mapping_valid === 'boolean') {
+      return dsiMappingState.mapping_valid;
+    }
     const fm = dsiMappingState?.field_mapping;
-    if (isNestedDsiFieldMapping(fm)) return dsiGateFromNestedMapping(fm);
-    return dsiGateFromMapping((fm as Record<string, string>) ?? {});
-  }, [dsiMappingState?.field_mapping]);
+    if (isNestedDsiFieldMapping(fm)) {
+      return dsiGateFromNestedMapping(fm, gateOpts);
+    }
+    return dsiGateFromMapping((fm as Record<string, string>) ?? {}, gateOpts);
+  }, [
+    activeStep,
+    dsiIsMultiSheet,
+    dsiNestedMapDraft,
+    dsiMapDraft,
+    dsiFileDistributorsConfirmed,
+    dsiFileSnapshotPeriodsConfirmed,
+    dsiMappingState?.mapping_valid,
+    dsiMappingState?.field_mapping,
+  ]);
 
   const dsiCanonSet = useMemo(
     () => new Set(dsiMappingState?.canonical_targets ?? []),
@@ -1052,32 +1203,35 @@ function AdminImportsPageContent() {
     dsiMappingState,
   ]);
 
+  const dsiMappingDraftDirtyRef = useRef(false);
+  dsiMappingDraftDirtyRef.current = dsiMappingDraftDirty;
+
   useEffect(() => {
     if (!isDsi || activeStep < 5 || !dsiMappingState) return;
+    const mode = dsiMappingDraftDirtyRef.current ? 'fillMissing' : 'replace';
     if (dsiIsMultiSheet && isNestedDsiFieldMapping(dsiMappingState.field_mapping)) {
-      const next: Record<string, Record<string, string>> = {};
-      for (const key of dsiSheetKeys) {
-        const serverSheet =
-          dsiMappingState.sheet_field_mappings?.[key]?.field_mapping ??
-          dsiMappingState.field_mapping[key] ??
-          {};
-        const sheetNext: Record<string, string> = {};
-        for (const [h, v] of Object.entries(serverSheet)) {
-          if (v && dsiCanonSet.has(v)) sheetNext[h] = v;
-        }
-        next[key] = sheetNext;
-      }
-      setDsiNestedMapDraft(next);
+      setDsiNestedMapDraft((prev) =>
+        hydrateDsiNestedMapDraft({
+          sheetKeys: dsiSheetKeys,
+          serverNested: dsiMappingState.field_mapping,
+          sheetFieldMappings: dsiMappingState.sheet_field_mappings,
+          prev,
+          canonSet: dsiCanonSet,
+          mode,
+        })
+      );
       return;
     }
     if (!dsiMappingState.file_headers?.length) return;
-    const server = (dsiMappingState.field_mapping as Record<string, string>) ?? {};
-    const next: Record<string, string> = {};
-    for (const h of dsiMappingState.file_headers) {
-      const v = server[h];
-      if (v && dsiCanonSet.has(v)) next[h] = v;
-    }
-    setDsiMapDraft(next);
+    setDsiMapDraft((prev) =>
+      hydrateDsiFlatMapDraft({
+        fileHeaders: dsiMappingState.file_headers,
+        server: (dsiMappingState.field_mapping as Record<string, string>) ?? {},
+        prev,
+        canonSet: dsiCanonSet,
+        mode,
+      })
+    );
   }, [
     isDsi,
     activeStep,
@@ -1107,6 +1261,20 @@ function AdminImportsPageContent() {
       setDsiContinueGateKey(null);
     },
   });
+
+  // Debounced autosave so sheet/file tab switches and refetches cannot lose mapping work.
+  useEffect(() => {
+    if (!isDsi || activeStep !== 5 || lastJobId == null || !dsiMappingDraftDirty) return;
+    const handle = window.setTimeout(() => {
+      if (!dsiMappingDraftDirtyRef.current) return;
+      void saveDsiMapping.mutateAsync().catch(() => {
+        /* surfaced via saveDsiMapping.isError */
+      });
+    }, 900);
+    return () => window.clearTimeout(handle);
+    // Intentionally omit saveDsiMapping identity — fire on draft dirtiness / contents.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounce on draft only
+  }, [isDsi, activeStep, lastJobId, dsiMappingDraftDirty, dsiMapDraft, dsiNestedMapDraft, dsiIsMultiSheet]);
 
   const dsiValidate = useMutation({
     mutationFn: async () => {
@@ -1192,6 +1360,22 @@ function AdminImportsPageContent() {
     const j = dsiValidatePollJob;
     if (!j) return;
     const status = (j.status || '').trim().toLowerCase();
+    // Terminal job statuses always clear the validating flag (including early gate failures).
+    if (
+      status === 'completed' ||
+      status === 'completed_with_errors' ||
+      status === 'failed' ||
+      status === 'interrupted'
+    ) {
+      setDsiValidateAsync(false);
+      void (async () => {
+        await refetchDsiImportJobStewardQueries(qc, j.id, { includeImportJobsList: true });
+        void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+        await refetchDsiMapping();
+        await refetchPreview();
+      })();
+      return;
+    }
     if (status === 'running') return;
     const st = (j.stage || '').trim();
     const progressPhase = String(dsiProgress?.phase ?? '').trim();
@@ -1199,12 +1383,7 @@ function AdminImportsPageContent() {
       setDsiValidateAsync(false);
       return;
     }
-    if (
-      progressPhase === 'complete' ||
-      st === 'validated' ||
-      status === 'completed' ||
-      status === 'completed_with_errors'
-    ) {
+    if (progressPhase === 'complete' || st === 'validated') {
       setDsiValidateAsync(false);
       void (async () => {
         await refetchDsiImportJobStewardQueries(qc, j.id, { includeImportJobsList: true });
@@ -1518,9 +1697,18 @@ function AdminImportsPageContent() {
   }, [isDsi, dsiMappingDraftDirty]);
 
   const dsiGateOk = useMemo(() => {
-    if (dsiIsMultiSheet) return dsiGateFromNestedMapping(dsiNestedMapDraft);
-    return dsiGateFromMapping(dsiMapDraft);
-  }, [dsiIsMultiSheet, dsiMapDraft, dsiNestedMapDraft]);
+    const fileOk = Boolean(dsiMappingState?.dsi_file_distributors_all_confirmed);
+    const snapOk = Boolean(dsiMappingState?.dsi_file_snapshot_periods_all_confirmed ?? true);
+    const opts = { fileDistributorSatisfied: fileOk, fileSnapshotSatisfied: snapOk };
+    if (dsiIsMultiSheet) return dsiGateFromNestedMapping(dsiNestedMapDraft, opts);
+    return dsiGateFromMapping(dsiMapDraft, opts);
+  }, [
+    dsiIsMultiSheet,
+    dsiMapDraft,
+    dsiNestedMapDraft,
+    dsiMappingState?.dsi_file_distributors_all_confirmed,
+    dsiMappingState?.dsi_file_snapshot_periods_all_confirmed,
+  ]);
 
   const dsiJobDisplay = useMemo(
     () =>
@@ -3875,6 +4063,33 @@ function AdminImportsPageContent() {
                 — the name from the file, kept as alias / evidence for matching.
               </Typography>
             </Alert>
+            {lastJobId != null &&
+            ((dsiMappingState?.dsi_workbook as { files?: string[] } | null | undefined)?.files?.length ||
+              Object.keys(dsiMappingState?.dsi_file_distributors ?? {}).length) ? (
+              <DsiFileReviewStrip
+                jobId={lastJobId}
+                filenames={
+                  (dsiMappingState?.dsi_workbook as { files?: string[] } | null | undefined)?.files?.length
+                    ? ((dsiMappingState?.dsi_workbook as { files?: string[] }).files as string[])
+                    : Object.keys(dsiMappingState?.dsi_file_distributors ?? {})
+                }
+                fileDistributors={dsiMappingState?.dsi_file_distributors ?? null}
+                fileSnapshotPeriods={dsiMappingState?.dsi_file_snapshot_periods ?? null}
+                excludedFiles={
+                  (
+                    (dsiValidatePollJob?.staged_metadata ?? dsiJobIntelligence?.staged_metadata) as
+                      | { dsi_excluded_files?: string[] }
+                      | undefined
+                  )?.dsi_excluded_files ?? null
+                }
+                jobLoaded={String(dsiMappingState?.stage ?? '') === 'loaded'}
+                onChanged={() => {
+                  void refetchDsiMapping();
+                  void qc.invalidateQueries({ queryKey: ['import-job', lastJobId] });
+                  void qc.invalidateQueries({ queryKey: ['dsi-job-intelligence', lastJobId] });
+                }}
+              />
+            ) : null}
             {dsiJobFailedAlert}
             <Alert severity="info" data-testid="dsi-mapping-missing-vs-unresolved">
               <strong>Missing mapping</strong> means no file column is linked to a required field.{' '}
@@ -3887,13 +4102,20 @@ function AdminImportsPageContent() {
             {dsiIsMultiSheet && !dsiSheetKeys.length ? (
               <Alert severity="warning">Loading workbook sheets…</Alert>
             ) : null}
-            {dsiMappingState?.blocking_mapping_errors?.length ? (
+            {dsiMappingStepBlockingErrors.length ? (
               <Alert severity="warning">
-                {dsiMappingState.blocking_mapping_errors.map((e) => (
+                {dsiMappingStepBlockingErrors.map((e) => (
                   <Typography key={e.code} variant="body2" display="block">
                     {e.message}
                   </Typography>
                 ))}
+              </Alert>
+            ) : null}
+            {!dsiFileDistributorsConfirmed ? (
+              <Alert severity="info" data-testid="dsi-file-distributor-hint">
+                These ASUS-style sellout forms put the distributor in the <strong>Company Name</strong> banner, not a
+                table column. Confirm each file in the batch strip above — do <strong>not</strong> map Customer Code /
+                Dealer Code to Distributor.
               </Alert>
             ) : null}
             {dsiMappingState?.mapping_adjustment_notices?.length ? (
@@ -3914,10 +4136,10 @@ function AdminImportsPageContent() {
                   {dsiMappingState?.multi_file
                     ? `Multi-file batch (${dsiSheetKeys.length} sheet${
                         dsiSheetKeys.length === 1 ? '' : 's'
-                      } across files). Map each source once — same layout is shared.`
-                    : `Multi-sheet workbook detected (${dsiSheetKeys.length} mappable sheet${
+                      } across files). Map each layout once — edits autosave; switch tabs freely.`
+                    : `Multi-sheet workbook (${dsiSheetKeys.length} mappable sheet${
                         dsiSheetKeys.length === 1 ? '' : 's'
-                      }). Map each sheet, then save.`}
+                      }). Edits autosave as you go — switch sheets freely.`}
                 </Alert>
                 <Tabs
                   value={dsiActiveSheetKey ?? dsiSheetKeys[0]}
@@ -3926,7 +4148,12 @@ function AdminImportsPageContent() {
                   scrollButtons="auto"
                 >
                   {dsiSheetKeys.map((key) => {
-                    const sheetOk = dsiGateFromMapping(dsiNestedMapDraft[key] ?? {});
+                    const sheetOk = dsiGateFromMapping(dsiNestedMapDraft[key] ?? {}, {
+                      fileDistributorSatisfied: Boolean(dsiMappingState?.dsi_file_distributors_all_confirmed),
+                      fileSnapshotSatisfied: Boolean(
+                        dsiMappingState?.dsi_file_snapshot_periods_all_confirmed ?? true
+                      ),
+                    });
                     return (
                       <Tab
                         key={key}
@@ -3962,7 +4189,7 @@ function AdminImportsPageContent() {
                       columnSamples={sheetState?.column_samples ?? sheetMeta?.column_samples}
                       blockingErrors={sheetState?.blocking_mapping_errors}
                       adjustmentNotices={sheetState?.mapping_adjustment_notices}
-                      requiredGroups={DSI_MAPPING_REQUIRED_GROUPS}
+                      requiredGroups={dsiMappingRequiredGroups}
                       formatSamples={formatDsiSamples}
                       dirty={dsiMappingDraftDirty}
                     />
@@ -3979,19 +4206,19 @@ function AdminImportsPageContent() {
                 columnSamples={dsiMappingState.column_samples}
                 blockingErrors={dsiMappingState.blocking_mapping_errors}
                 adjustmentNotices={dsiMappingState.mapping_adjustment_notices}
-                requiredGroups={DSI_MAPPING_REQUIRED_GROUPS}
+                requiredGroups={dsiMappingRequiredGroups}
                 formatSamples={formatDsiSamples}
                 dirty={dsiMappingDraftDirty}
               />
             )}
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
               <Button onClick={() => setActiveStep(4)}>Back</Button>
               <Button
                 variant="outlined"
                 disabled={!dsiGateOk || saveDsiMapping.isPending}
                 onClick={() => void saveDsiMapping.mutateAsync()}
               >
-                Save mapping
+                {saveDsiMapping.isPending ? 'Saving…' : 'Save mapping'}
               </Button>
               <Button
                 variant="contained"
@@ -4002,10 +4229,24 @@ function AdminImportsPageContent() {
                     setActiveStep(6);
                   })
                 }
+                data-testid="dsi-continue-to-validate"
               >
-                Save & continue to validate
+                Continue to validate
               </Button>
+              {dsiMappingDraftDirty ? (
+                <Typography variant="caption" color="text.secondary" data-testid="dsi-mapping-autosave-pending">
+                  {saveDsiMapping.isPending ? 'Saving…' : 'Unsaved — autosaving…'}
+                </Typography>
+              ) : dsiMappingState ? (
+                <Typography variant="caption" color="text.secondary" data-testid="dsi-mapping-autosave-ok">
+                  Mapping saved
+                </Typography>
+              ) : null}
             </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Validate builds staging + steward candidates. Entity stewarding (customers/products) comes after validate —
+              this button does not finish the import.
+            </Typography>
             {saveDsiMapping.isError ? <Alert severity="error">{safeDisplayError(saveDsiMapping.error)}</Alert> : null}
           </Stack>
         ) : null}
@@ -4049,6 +4290,8 @@ function AdminImportsPageContent() {
                       | undefined
                   )?.dsi_file_row_subtotals ?? null
                 }
+                fileDistributors={dsiMappingState?.dsi_file_distributors ?? null}
+                fileSnapshotPeriods={dsiMappingState?.dsi_file_snapshot_periods ?? null}
                 excludedFiles={
                   (
                     (dsiValidatePollJob?.staged_metadata ?? dsiJobIntelligence?.staged_metadata) as
@@ -4097,8 +4340,18 @@ function AdminImportsPageContent() {
                 }
                 data-testid="dsi-validate-finished"
               >
-                {distributorSiSummary != null && dsiHumanFixableBlockingRows(distributorSiSummary) > 0 ? (
-                  'Validation finished with steward-map blockers. Resolve unmapped customers below, or merge master-data alias conflicts on the duplicates page, then re-run validation before applying.'
+                {distributorSiSummary != null && dsiDataQualityBlockingRows(distributorSiSummary) > 0 ? (
+                  <>
+                    Validation finished with <strong>{dsiDataQualityBlockingRows(distributorSiSummary)}</strong>{' '}
+                    blank-product row(s). These have no steward candidate — fix product column mapping, exclude the
+                    file/sheet, or remove blank product lines, then re-validate
+                    {dsiStewardMapBlockingRows(distributorSiSummary) > 0
+                      ? '. Remaining steward-map blockers still need entity mapping below'
+                      : ''}
+                    .
+                  </>
+                ) : distributorSiSummary != null && dsiStewardMapBlockingRows(distributorSiSummary) > 0 ? (
+                  'Validation finished with steward-map blockers. Resolve unmapped customers/products below, or merge master-data alias conflicts on the duplicates page, then re-run validation before applying.'
                 ) : distributorSiSummary != null &&
                   ((distributorSiSummary.warning_rows ?? 0) > 0 ||
                     (distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0) ? (
@@ -4124,7 +4377,8 @@ function AdminImportsPageContent() {
               <Alert severity="info" data-testid="dsi-preview-summary">
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
                   Import summary: {distributorSiSummary.staging_rows ?? '—'} rows processed;{' '}
-                  <strong>{dsiHumanFixableBlockingRows(distributorSiSummary)}</strong> steward-map blocking;{' '}
+                  <strong>{dsiStewardMapBlockingRows(distributorSiSummary)}</strong> steward-map blocking;{' '}
+                  <strong>{dsiDataQualityBlockingRows(distributorSiSummary)}</strong> blank-product;{' '}
                   <strong>{distributorSiSummary.warning_rows ?? 0}</strong> warnings;{' '}
                   <strong>{distributorSiSummary.aggregated_candidates ?? 0}</strong> aggregated mapping candidate groups.
                 </Typography>

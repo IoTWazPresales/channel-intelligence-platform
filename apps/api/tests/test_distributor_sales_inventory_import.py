@@ -542,7 +542,8 @@ def test_dsi_missing_mapping_message_vs_unresolved_distributor(dsi_source_id: in
             )
         ).first()
         assert miss is not None
-        assert "Required column mapping missing: Distributor" in (miss.message or "")
+        assert "Distributor" in (miss.message or "")
+        assert "confirm a per-file" in (miss.message or "") or "column mapping" in (miss.message or "").lower()
 
     job2 = _run_dsi_job(
         dsi_source_id,

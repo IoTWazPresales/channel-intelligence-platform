@@ -53,6 +53,11 @@ export type CanonicalRequiredGroup = {
   id: string;
   label: string;
   anyOf: string[];
+  /**
+   * When true, the group counts as satisfied without a column mapping
+   * (e.g. DSI per-file distributor banner stamps).
+   */
+  externallySatisfied?: boolean;
 };
 
 export type CanonicalColumnMappingPanelProps = {
@@ -144,7 +149,7 @@ export function CanonicalColumnMappingPanel({
     () =>
       (requiredGroups ?? []).map((g) => ({
         ...g,
-        satisfied: g.anyOf.some((t) => mappedTargetValues.has(t)),
+        satisfied: Boolean(g.externallySatisfied) || g.anyOf.some((t) => mappedTargetValues.has(t)),
       })),
     [requiredGroups, mappedTargetValues]
   );
@@ -245,7 +250,9 @@ export function CanonicalColumnMappingPanel({
               key={g.id}
               size="small"
               color={g.satisfied ? 'success' : 'warning'}
-              label={`${g.label}: ${g.satisfied ? 'OK' : 'needs mapping'}`}
+              label={`${g.label}: ${
+                g.satisfied ? (g.externallySatisfied ? 'OK (file stamp)' : 'OK') : 'needs mapping'
+              }`}
             />
           ))}
         </Stack>

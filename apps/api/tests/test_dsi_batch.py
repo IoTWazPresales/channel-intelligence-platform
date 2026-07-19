@@ -34,7 +34,10 @@ def test_same_layout_files_share_signature() -> None:
     assert sig_a == sig_b
 
 
-def test_divergent_layouts_split_groups() -> None:
+def test_divergent_layouts_merge_into_one_capable_group() -> None:
+    """Sellout + SOH layouts differ but both are DSI-capable → one steward job."""
+    from app.services.imports.dsi_batch import DSI_CAPABLE_GROUP_SIGNATURE
+
     sell = pd.DataFrame({"Dist": ["D1"], "SKU": ["P1"], "Qty": [1], "Date": ["2024-01-01"]})
     soh = pd.DataFrame({"Dist": ["D1"], "SKU": ["P1"], "SOH": [10], "Snap": ["2024-01-31"]})
     bio_s = io.BytesIO()
@@ -47,9 +50,39 @@ def test_divergent_layouts_split_groups() -> None:
             ("soh.csv", bio_h.getvalue()),
         ]
     )
-    assert len(groups) == 2
+    assert len(groups) == 1
+    assert groups[0].signature == DSI_CAPABLE_GROUP_SIGNATURE
+    assert len(groups[0].files) == 2
+    assert {f.filename for f in groups[0].files} == {"sell.csv", "soh.csv"}
+    # Per-file fingerprints still differ for diagnostics
+    assert groups[0].files[0].signature != groups[0].files[1].signature
     preview = batch_groups_preview_to_dict(groups)
-    assert len(preview) == 2
+    assert len(preview) == 1
+
+
+def test_unmappable_files_separate_from_capable() -> None:
+    from app.services.imports.dsi_batch import (
+        DSI_CAPABLE_GROUP_SIGNATURE,
+        DSI_UNMAPPABLE_GROUP_SIGNATURE,
+    )
+
+    sell = pd.DataFrame({"Dist": ["D1"], "SKU": ["P1"], "Qty": [1], "Date": ["2024-01-01"]})
+    junk = pd.DataFrame({"foo": [1], "bar": [2]})
+    bio_s = io.BytesIO()
+    bio_j = io.BytesIO()
+    sell.to_csv(bio_s, index=False)
+    junk.to_csv(bio_j, index=False)
+    groups = propose_dsi_batch_groups(
+        [
+            ("sell.csv", bio_s.getvalue()),
+            ("junk.csv", bio_j.getvalue()),
+        ]
+    )
+    by_sig = {g.signature: g for g in groups}
+    assert DSI_CAPABLE_GROUP_SIGNATURE in by_sig
+    assert DSI_UNMAPPABLE_GROUP_SIGNATURE in by_sig
+    assert [f.filename for f in by_sig[DSI_CAPABLE_GROUP_SIGNATURE].files] == ["sell.csv"]
+    assert by_sig[DSI_UNMAPPABLE_GROUP_SIGNATURE].files[0].unmappable is True
 
 
 def test_file_sheet_mapping_key_roundtrip() -> None:
@@ -160,6 +193,7 @@ def test_process_import_job_sync_two_file_batch_validate_stages_both() -> None:
     from app.models.import_distributor_si import ImportDistributorSiStagingLine
     from app.models.ingestion import ImportRowResult
     from app.services.imports.dsi_batch import create_dsi_batch_job_sync
+    from app.services.imports.dsi_file_snapshot import set_dsi_file_snapshot_periods
     from app.services.imports.dsi_workbook import is_nested_dsi_field_mapping
 
     source_id = _seed_dsi_source_for_batch_e2e()
@@ -182,6 +216,28 @@ def test_process_import_job_sync_two_file_batch_validate_stages_both() -> None:
             dsi_workflow_mode="weekly",
         )
         job_id = job.id
+        # SOH without snapshot_date column requires confirmed per-file period stamps.
+        set_dsi_file_snapshot_periods(
+            job,
+            {
+                "week1.csv": {
+                    "token": "2024-06-01",
+                    "resolved_date": "2024-06-01",
+                    "confirmed": True,
+                    "reason": "steward_override",
+                    "source": "steward_override",
+                },
+                "week2.csv": {
+                    "token": "2024-06-08",
+                    "resolved_date": "2024-06-08",
+                    "confirmed": True,
+                    "reason": "steward_override",
+                    "source": "steward_override",
+                },
+            },
+        )
+        db.add(job)
+        db.commit()
         mapping_before = deepcopy(job.field_mapping)
         assert is_nested_dsi_field_mapping(mapping_before)
         assert (job.staged_metadata or {}).get("dsi_multi_file") is True

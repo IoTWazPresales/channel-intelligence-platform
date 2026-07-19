@@ -1737,14 +1737,28 @@ def process_distributor_sales_inventory(
 
     # Nested multi-file / multi-sheet mappings are dict-of-dicts; flatten before required-target checks.
     flat_for_gates = flatten_dsi_field_mapping(mapping)
-    if "distributor_token" not in flat_for_gates.values():
+    from app.services.imports.dsi_file_distributor import (
+        apply_file_distributor_stamps_to_dataframe,
+        file_distributors_all_confirmed,
+    )
+    from app.services.imports.dsi_file_snapshot import (
+        apply_file_snapshot_stamps_to_dataframe,
+        file_snapshot_periods_all_confirmed,
+    )
+
+    distributor_via_column = "distributor_token" in flat_for_gates.values()
+    distributor_via_file_stamps = file_distributors_all_confirmed(job)
+    if not distributor_via_column and not distributor_via_file_stamps:
         db.add(
             ImportRowResult(
                 job_id=job.id,
                 row_number=0,
                 severity="error",
                 code="missing_distributor_token_mapping",
-                message="Required column mapping missing: Distributor.",
+                message=(
+                    "Required: Distributor — map a distributor column, or confirm a per-file "
+                    "distributor identity (banner/company) for every included file."
+                ),
             )
         )
         return 1
@@ -1760,6 +1774,24 @@ def process_distributor_sales_inventory(
         )
         return 1
 
+    # Inventory files that map stock_on_hand without snapshot_date need confirmed period stamps.
+    needs_inventory = "stock_on_hand" in flat_for_gates.values()
+    has_snap_col = "snapshot_date" in flat_for_gates.values()
+    if needs_inventory and not has_snap_col and not file_snapshot_periods_all_confirmed(job):
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="error",
+                code="missing_snapshot_period_for_inventory_file",
+                message=(
+                    "Inventory rows need an as-of date: map Inventory snapshot date, or confirm "
+                    "the Application Date banner period for every inventory file in this job."
+                ),
+            )
+        )
+        return 1
+
     sheet_frames = iter_dsi_dataframes_for_job(db, job, df)
     skipped_sheets: list[dict[str, str]] = []
     if (
@@ -1767,7 +1799,10 @@ def process_distributor_sales_inventory(
         or is_nested_dsi_field_mapping(job.field_mapping)
         or job_has_multi_file_mapping(job.field_mapping)
     ):
-        df, mapping, skipped_sheets = build_combined_dsi_dataframe(sheet_frames)
+        df, mapping, skipped_sheets = build_combined_dsi_dataframe(
+            sheet_frames,
+            require_distributor_column=not distributor_via_file_stamps,
+        )
         wb_meta = dict((job.staged_metadata or {}).get(DSI_SHEET_META_KEY) or {})
         wb_meta["skipped_sheets"] = skipped_sheets
         persist_dsi_workbook_on_job(job, wb_meta)
@@ -1787,7 +1822,7 @@ def process_distributor_sales_inventory(
                     row_number=0,
                     severity="error",
                     code="dsi_no_mapped_sheets",
-                    message="No mapped DSI sheets to process. Map at least one sheet with distributor and product columns.",
+                    message="No mapped DSI sheets to process. Map at least one sheet with product and date/quantity columns.",
                 )
             )
             return 1
@@ -1801,6 +1836,22 @@ def process_distributor_sales_inventory(
                     message=f"Sheet {skip['sheet_name']!r} skipped: {skip['reason']}",
                 )
             )
+
+    # Stamp distributor_token from confirmed per-file identity (banner) — single- and multi-file.
+    df = apply_file_distributor_stamps_to_dataframe(job, df)
+    # Stamp snapshot_date from confirmed Application Date banner periods.
+    df = apply_file_snapshot_stamps_to_dataframe(job, df)
+    if is_nested_dsi_field_mapping(mapping):
+        mapping = dict(flatten_dsi_field_mapping(mapping))
+    else:
+        mapping = dict(mapping)
+    if "distributor_token" in df.columns and "distributor_token" not in mapping.values():
+        mapping["distributor_token"] = "distributor_token"
+    if "snapshot_date" in df.columns and "snapshot_date" not in mapping.values():
+        # Only inject when stamps actually filled values (inventory path).
+        snap_series = df["snapshot_date"].fillna("").astype(str).str.strip()
+        if snap_series.ne("").any():
+            mapping["snapshot_date"] = "snapshot_date"
 
     if job.source and isinstance(job.source.column_mapping_memory, dict):
         from app.services.imports.ai_resolver_wiring import record_format_drift_on_job
@@ -2048,6 +2099,7 @@ def process_distributor_sales_inventory(
         compute_dsi_sellout_block_with_customer_auto_exclude,
         IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT,
         IGNORE_REASON_NO_CUSTOMER,
+        is_dsi_data_quality_block_diag,
         new_product_running_change_stats_bucket,
         product_auto_exclude_terminal_status,
         strip_ambiguous_product_match_from_diags,
@@ -2057,6 +2109,7 @@ def process_distributor_sales_inventory(
 
     blocking = 0
     warnings = 0
+    data_quality_blocking_rows = 0
     master_merge_excluded_rows = 0
     auto_excluded_rows = 0
     first_unresolved_dist_raw: str | None = None
@@ -2635,6 +2688,8 @@ def process_distributor_sales_inventory(
 
         if sev == "error":
             blocking += 1
+            if is_dsi_data_quality_block_diag(diag):
+                data_quality_blocking_rows += 1
         elif sev == "warning":
             warnings += 1
 
@@ -3145,12 +3200,15 @@ def process_distributor_sales_inventory(
             f"inventory facts={applied_inv} (upsert by source_key)."
         )
 
+    steward_map_blocking_rows = max(0, int(blocking) - int(data_quality_blocking_rows))
     summary = {
         "staging_rows": int(len(df)),
         "blocking_rows": blocking,
+        # Apply / Continue still gate on all hard blocks (steward-map + blank-token data quality).
         "human_fixable_blocking_rows": blocking,
         "master_merge_excluded_rows": master_merge_excluded_rows,
-        "steward_map_blocking_rows": blocking,
+        "steward_map_blocking_rows": steward_map_blocking_rows,
+        "data_quality_blocking_rows": int(data_quality_blocking_rows),
         "auto_excluded_rows": auto_excluded_rows,
         "warning_rows": warnings,
         "aggregated_candidates": len(agg),

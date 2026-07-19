@@ -263,6 +263,65 @@ def _samples_have_model_or_part_shape(samples: list[str]) -> bool:
     return False
 
 
+def _samples_look_like_gtin(samples: list[str]) -> bool:
+    """True when samples look like EAN/UPC/GTIN digits (resolution tier ahead of sales model)."""
+    digitish = 0
+    for raw in samples[:12]:
+        s = str(raw).strip()
+        if not s or s.lower() in ("nan", "nat", "none", "<na>", "null", "#n/a", "n/a"):
+            continue
+        digits = "".join(ch for ch in s if ch.isdigit())
+        if len(digits) in (8, 12, 13, 14) and len(digits) >= len(s) - 2:
+            digitish += 1
+    return digitish >= 2 or (digitish >= 1 and len([x for x in samples if str(x).strip()]) <= 3)
+
+
+def _header_is_customer_sku_slot(nk: str) -> bool:
+    """Dealer/customer SKU columns are usually empty form slots — not catalog identity."""
+    return "customer" in nk and "sku" in nk
+
+
+def _header_is_gtin_column(nk: str) -> bool:
+    return any(t in nk for t in ("ean", "upc", "gtin", "barcode", "bar code"))
+
+
+def _header_is_item_or_part_column(nk: str) -> bool:
+    """Item / SKU / part-number grain — aligns with item_code resolve tier (not sales model)."""
+    if _header_is_customer_sku_slot(nk):
+        return False
+    if _header_is_gtin_column(nk):
+        return True
+    if any(t in nk for t in ("itemcode", "item_code", "productcode", "product_code", "productsku")):
+        return True
+    if "sku" in nk:
+        return True
+    if "part" in nk and any(t in nk for t in ("no", "num", "code", "id")):
+        return True
+    return False
+
+
+def _header_is_sales_model_column(nk: str) -> bool:
+    if _header_is_item_or_part_column(nk) or _header_is_customer_sku_slot(nk):
+        return False
+    if "model" in nk:
+        return True
+    if "salesmodel" in nk.replace(" ", ""):
+        return True
+    return False
+
+
+def _header_is_weak_secondary_product_column(nk: str) -> bool:
+    """Generic secondary / often-empty labels — not preferred when a stronger column exists."""
+    if _header_is_customer_sku_slot(nk):
+        return True
+    if nk in ("description", "desc", "other", "notes"):
+        return True
+    # Manufacturer *model* label without part — often blank beside a real model/part column
+    if ("mfg" in nk or "manufacturer" in nk) and "part" not in nk:
+        return True
+    return False
+
+
 def _bare_product_header_looks_like_category_samples(header: str, samples: list[str]) -> bool:
     """True when header is bare ``PRODUCT`` and samples look like low-cardinality category codes (e.g. NB)."""
     if norm_header_key(header) != "product":
@@ -281,21 +340,59 @@ def _bare_product_header_looks_like_category_samples(header: str, samples: list[
 
 
 def _product_identifier_column_score(header: str, samples: list[str]) -> float:
+    """Score candidate product columns for auto-map tie-break.
+
+    Aligns with DSI resolve order: item/part/EAN ahead of sales-model. Samples outweigh
+    header labels. Brand/OEM-specific header names are not special-cased — classifiers
+    are generic (part/sku/ean/model/customer-sku/description).
+    """
     nk = norm_header_key(header)
     score = 0.0
-    if nk in ("modelname", "model_name"):
-        score += 12.0
-    elif "model" in nk and "name" in nk:
-        score += 10.0
-    elif "model" in nk:
-        score += 6.0
-    if _samples_have_model_or_part_shape(samples):
+    has_shape = _samples_have_model_or_part_shape(samples)
+    has_gtin = _samples_look_like_gtin(samples) or (_header_is_gtin_column(nk) and has_shape)
+
+    if has_gtin:
+        score += 30.0
+    elif _header_is_item_or_part_column(nk) and has_shape:
+        score += 28.0
+    elif _header_is_sales_model_column(nk) and has_shape:
         score += 22.0
+    elif has_shape:
+        score += 20.0
+
+    if _header_is_gtin_column(nk):
+        score += 15.0
+    elif _header_is_item_or_part_column(nk):
+        score += 12.0
+    elif nk in ("modelname", "model_name"):
+        score += 6.0
+    elif _header_is_sales_model_column(nk):
+        score += 5.0
+
+    if _header_is_weak_secondary_product_column(nk):
+        score -= 12.0
+        if not samples:
+            score -= 10.0
     if nk == "product":
         score -= 6.0
         if _bare_product_header_looks_like_category_samples(header, samples):
             score -= 40.0
     return score
+
+
+def apply_dsi_product_identifier_header_seeds(
+    headers: list[str],
+    mapping: dict[str, str],
+) -> dict[str, str]:
+    """Map unmapped item/part/EAN-like headers to product_identifier (generic; any feed)."""
+    out = dict(mapping or {})
+    for h in headers:
+        if out.get(h):
+            continue
+        nk = norm_header_key(h)
+        if _header_is_item_or_part_column(nk) or _header_is_gtin_column(nk):
+            out[h] = "product_identifier"
+    return out
 
 
 def apply_dsi_product_identifier_sample_inference(
@@ -306,9 +403,10 @@ def apply_dsi_product_identifier_sample_inference(
     """Adjust ``product_identifier`` auto-mapping using inferred column samples (mapping suggestions only).
 
     - Demotes bare ``PRODUCT`` when samples look like short category codes (e.g. NB), not model/SKU tokens.
-    - When multiple columns map to ``product_identifier``, keeps the best-scoring column (prefers ModelName-style).
+    - When multiple columns map to ``product_identifier``, keeps the best-scoring column
+      (item/part/EAN ahead of sales-model when samples support it).
     - If nothing maps to ``product_identifier`` after demotion, assigns an unmapped column that strongly
-      resembles a model/SKU column from header + samples.
+      resembles a catalog identity column from header + samples.
     """
     out = dict(mapping or {})
     for h in list(headers):
@@ -374,20 +472,32 @@ def build_initial_dsi_field_mapping(
             mapping[h] = tgt
     mapping = apply_exact_raw_customer_header_overrides(headers, mapping)
     mapping = apply_dsi_customer_column_target_resolution(headers, mapping)
+    # Normalize legacy sku/name → DSI targets before product demotion so weak columns
+    # (e.g. customer sku → sku) participate in the single-winner tie-break.
+    mapping, _ = sanitize_dsi_field_mapping(headers, mapping)
+    mapping = apply_dsi_product_identifier_header_seeds(headers, mapping)
     mapping = apply_dsi_product_identifier_sample_inference(headers, mapping, column_samples or {})
     sanitized, _ = sanitize_dsi_field_mapping(headers, mapping)
     return sanitized
 
 
-def dsi_mapping_gate_errors(mapping: dict[str, str]) -> list[dict[str, str]]:
+def dsi_mapping_gate_errors(
+    mapping: dict[str, str],
+    *,
+    file_distributor_satisfied: bool = False,
+    file_snapshot_satisfied: bool = False,
+) -> list[dict[str, str]]:
     """Blocking issues before running DSI pipeline (column mapping completeness)."""
     vals = set(mapping.values())
     errs: list[dict[str, str]] = []
-    if "distributor_token" not in vals:
+    if "distributor_token" not in vals and not file_distributor_satisfied:
         errs.append(
             {
                 "code": "missing_column_mapping_distributor",
-                "message": "Required column mapping missing: Distributor.",
+                "message": (
+                    "Required: Distributor — map a distributor column, or confirm a per-file "
+                    "distributor identity (banner/company) for every included file."
+                ),
             }
         )
     if "product_identifier" not in vals:
@@ -397,8 +507,20 @@ def dsi_mapping_gate_errors(mapping: dict[str, str]) -> list[dict[str, str]]:
                 "message": "Required column mapping missing: product identifier (SKU / part number / model / product code).",
             }
         )
-    has_date = "transaction_date" in vals or "snapshot_date" in vals
-    if not has_date:
+    needs_inventory_period = "stock_on_hand" in vals and "snapshot_date" not in vals
+    has_tx_or_snap_col = "transaction_date" in vals or "snapshot_date" in vals
+    has_date = has_tx_or_snap_col or (needs_inventory_period and file_snapshot_satisfied)
+    if needs_inventory_period and not file_snapshot_satisfied:
+        errs.append(
+            {
+                "code": "missing_snapshot_period_for_inventory_file",
+                "message": (
+                    "Inventory rows need an as-of date: map Inventory snapshot date, or confirm "
+                    "the Application Date banner period (ISO week → Monday) for this file."
+                ),
+            }
+        )
+    elif not has_date:
         errs.append(
             {
                 "code": "missing_column_mapping_date",
@@ -546,6 +668,14 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
                 job.file_headers = cols
                 job.field_mapping = mapping
                 persist_dsi_workbook_on_job(job, structure)
+                try:
+                    from app.services.imports.dsi_file_distributor import propose_file_distributors_for_job
+                    from app.services.imports.dsi_file_snapshot import propose_file_snapshot_periods_for_job
+
+                    propose_file_distributors_for_job(db, job)
+                    propose_file_snapshot_periods_for_job(db, job)
+                except Exception:
+                    pass
                 job.stage = "dsi_mapping_ready"
                 job.status = "pending"
                 db.add(job)
@@ -580,6 +710,15 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
         }
         persist_dsi_workbook_on_job(job, workbook_structure)
 
+    try:
+        from app.services.imports.dsi_file_distributor import propose_file_distributors_for_job
+        from app.services.imports.dsi_file_snapshot import propose_file_snapshot_periods_for_job
+
+        propose_file_distributors_for_job(db, job)
+        propose_file_snapshot_periods_for_job(db, job)
+    except Exception:
+        pass
+
     job.stage = "dsi_mapping_ready"
     job.status = "pending"
     db.add(job)
@@ -601,6 +740,23 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
 
     meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
     workbook = meta.get(DSI_SHEET_META_KEY) if isinstance(meta.get(DSI_SHEET_META_KEY), dict) else None
+    from app.services.imports.dsi_file_distributor import (
+        DSI_FILE_DISTRIBUTORS_KEY,
+        distributor_identity_satisfied,
+        file_distributors_all_confirmed,
+        get_dsi_file_distributors,
+    )
+    from app.services.imports.dsi_file_snapshot import (
+        DSI_FILE_SNAPSHOT_PERIODS_KEY,
+        file_snapshot_periods_all_confirmed,
+        get_dsi_file_snapshot_periods,
+        snapshot_identity_satisfied,
+    )
+
+    file_dist_ok = file_distributors_all_confirmed(job)
+    file_distributors = get_dsi_file_distributors(job)
+    file_snap_ok = file_snapshot_periods_all_confirmed(job)
+    file_snapshots = get_dsi_file_snapshot_periods(job)
 
     if is_nested_dsi_field_mapping(job.field_mapping):
         nested = dict(job.field_mapping or {})
@@ -630,7 +786,13 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
                     for k, v in samples_raw.items()
                 }
             smap, notices = sanitize_dsi_field_mapping(headers, sheet_map)
-            gate = dsi_mapping_gate_errors(smap)
+            sheet_ok = distributor_identity_satisfied(job, smap, mapping_key=str(sheet_key))
+            sheet_snap = snapshot_identity_satisfied(job, smap, mapping_key=str(sheet_key))
+            gate = dsi_mapping_gate_errors(
+                smap,
+                file_distributor_satisfied=sheet_ok,
+                file_snapshot_satisfied=sheet_snap,
+            )
             blocking_all.extend(gate)
             hints = suggest_dsi_column_mapping(
                 headers, job.source, column_samples=samples, current_field_mapping=smap
@@ -643,6 +805,20 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
                 "column_samples": samples,
                 "column_mapping_hints": hints,
             }
+        # Deduplicate distributor / snapshot gate messages across sheets
+        seen_codes: set[str] = set()
+        deduped: list[dict[str, str]] = []
+        for e in blocking_all:
+            code = str(e.get("code") or "")
+            if code in (
+                "missing_column_mapping_distributor",
+                "missing_snapshot_period_for_inventory_file",
+            ):
+                if code in seen_codes:
+                    continue
+                seen_codes.add(code)
+            deduped.append(e)
+        blocking_all = deduped
         inferred = job.inferred_schema if isinstance(job.inferred_schema, dict) else {}
         return {
             "id": job.id,
@@ -664,12 +840,22 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
             "dsi_workflow_mode": meta.get("dsi_workflow_mode"),
             "dsi_workflow_mode_explicit": meta.get("dsi_workflow_mode_explicit"),
             "dsi_predominantly_old_sellout_dates": meta.get("dsi_predominantly_old_sellout_dates"),
+            DSI_FILE_DISTRIBUTORS_KEY: file_distributors,
+            "dsi_file_distributors_all_confirmed": file_dist_ok,
+            DSI_FILE_SNAPSHOT_PERIODS_KEY: file_snapshots,
+            "dsi_file_snapshot_periods_all_confirmed": file_snap_ok,
         }
 
     headers = list(job.file_headers or [])
     raw_mapping = dict(job.field_mapping or {})
     mapping, notices = sanitize_dsi_field_mapping(headers, raw_mapping)
-    gate = dsi_mapping_gate_errors(mapping)
+    flat_ok = distributor_identity_satisfied(job, mapping)
+    flat_snap = snapshot_identity_satisfied(job, mapping)
+    gate = dsi_mapping_gate_errors(
+        mapping,
+        file_distributor_satisfied=flat_ok,
+        file_snapshot_satisfied=flat_snap,
+    )
     samples = column_samples_from_inferred(job)
     column_mapping_hints = suggest_dsi_column_mapping(
         headers, job.source, column_samples=samples, current_field_mapping=mapping
@@ -687,16 +873,16 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
         "canonical_targets": sorted(DSI_MEMORY_TARGETS),
         "blocking_mapping_errors": gate,
         "mapping_valid": len(gate) == 0,
-        "column_samples": samples,
         "mapping_adjustment_notices": notices,
+        "column_samples": samples,
+        "multi_sheet": False,
+        "dsi_workbook": workbook,
         "field_target_descriptions": dict(DSI_FIELD_TARGET_DESCRIPTIONS),
-        "dsi_workflow_mode": (job.staged_metadata or {}).get("dsi_workflow_mode")
-        if isinstance(job.staged_metadata, dict)
-        else None,
-        "dsi_workflow_mode_explicit": (job.staged_metadata or {}).get("dsi_workflow_mode_explicit")
-        if isinstance(job.staged_metadata, dict)
-        else None,
-        "dsi_predominantly_old_sellout_dates": (job.staged_metadata or {}).get("dsi_predominantly_old_sellout_dates")
-        if isinstance(job.staged_metadata, dict)
-        else None,
+        "dsi_workflow_mode": meta.get("dsi_workflow_mode"),
+        "dsi_workflow_mode_explicit": meta.get("dsi_workflow_mode_explicit"),
+        "dsi_predominantly_old_sellout_dates": meta.get("dsi_predominantly_old_sellout_dates"),
+        DSI_FILE_DISTRIBUTORS_KEY: file_distributors,
+        "dsi_file_distributors_all_confirmed": file_dist_ok,
+        DSI_FILE_SNAPSHOT_PERIODS_KEY: file_snapshots,
+        "dsi_file_snapshot_periods_all_confirmed": file_snap_ok,
     }

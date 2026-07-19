@@ -1,4 +1,4 @@
-"""DSI multi-file batch: header-signature grouping and unified job creation."""
+"""DSI multi-file batch: capability grouping and unified job creation."""
 
 from __future__ import annotations
 
@@ -21,6 +21,10 @@ from app.services.imports.dsi_workbook import (
 from app.storage.local import get_storage_backend
 from app.utils.json_safe import to_jsonable
 
+# Stable group ids for propose/create (not exact-header hashes).
+DSI_CAPABLE_GROUP_SIGNATURE = "dsi_capable"
+DSI_UNMAPPABLE_GROUP_SIGNATURE = "unmappable"
+
 
 @dataclass(frozen=True)
 class DsiFilePreview:
@@ -41,7 +45,11 @@ class DsiBatchGroupPreview:
 def normalized_header_signature(
     filename: str, raw_bytes: bytes
 ) -> tuple[str, int, int, bool, str | None]:
-    """Return (signature_hash, column_count, sheet_count, unmappable, unmappable_reason)."""
+    """Diagnose a file: header fingerprint + mappable flag.
+
+    The fingerprint is retained for UI transparency / debugging. Batch grouping no longer
+    splits on exact header equality — see ``propose_dsi_batch_groups``.
+    """
     try:
         frames = load_dsi_workbook_sheet_frames(
             filename, raw_bytes, max_data_rows=DSI_SIGNATURE_MAX_ROWS
@@ -67,7 +75,13 @@ def normalized_header_signature(
 def propose_dsi_batch_groups(
     files: list[tuple[str, bytes]],
 ) -> list[DsiBatchGroupPreview]:
-    """Group uploaded files by header signature (read-only, no DB)."""
+    """Group uploaded files by DSI capability (read-only, no DB).
+
+    All files that parse and expose DSI-like headers join **one** ``dsi_capable`` group so
+    nested per-file mapping + per-file distributor stamps share a single steward session.
+    Exact column-layout equality is not required (Power BI–style combine). Unmappable files
+    are returned in a separate ``unmappable`` group and are not turned into jobs.
+    """
     previews: list[DsiFilePreview] = []
     for filename, raw_bytes in files:
         sig, col_count, sheet_count, unmappable, reason = normalized_header_signature(
@@ -84,14 +98,21 @@ def propose_dsi_batch_groups(
             )
         )
 
-    by_sig: dict[str, list[DsiFilePreview]] = {}
-    for p in previews:
-        by_sig.setdefault(p.signature, []).append(p)
+    capable = [p for p in previews if not p.unmappable]
+    unmappable_files = [p for p in previews if p.unmappable]
 
-    return [
-        DsiBatchGroupPreview(signature=sig, files=group_files)
-        for sig, group_files in sorted(by_sig.items(), key=lambda x: x[0])
-    ]
+    groups: list[DsiBatchGroupPreview] = []
+    if capable:
+        groups.append(
+            DsiBatchGroupPreview(signature=DSI_CAPABLE_GROUP_SIGNATURE, files=capable)
+        )
+    if unmappable_files:
+        groups.append(
+            DsiBatchGroupPreview(
+                signature=DSI_UNMAPPABLE_GROUP_SIGNATURE, files=unmappable_files
+            )
+        )
+    return groups
 
 
 def _batch_job_display_name(filenames: list[str]) -> str:

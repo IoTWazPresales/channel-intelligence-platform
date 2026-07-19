@@ -41,20 +41,36 @@ _TRADING_AS_INLINE = re.compile(
 )
 _TRADING_AS_SUFFIX = re.compile(r"\s+(?:t/a|a/t)\s*$", re.IGNORECASE)
 
+# Split raw display names into legal + trade parts (before normalize strips T/A).
+_TRADING_AS_PAREN_SPLIT = re.compile(
+    r"^(?P<legal>.+?)\s*\(\s*(?:t/a|a/t|ta:)\s*\)\s*(?P<trade>.+)$",
+    re.IGNORECASE,
+)
+_TRADING_AS_INLINE_SPLIT = re.compile(
+    r"^(?P<legal>.+?)\s+(?:t/a|a/t|trading\s+as|trading-as|ta:)\s+(?P<trade>.+)$",
+    re.IGNORECASE,
+)
+
 
 def normalize_customer_name_for_similarity(raw: str | None) -> str:
-    """Strip legal suffixes and noise, lowercase, collapse whitespace — for duplicate/compare only."""
+    """Strip legal suffixes and noise, lowercase, collapse whitespace — for duplicate/compare only.
+
+    Parentheses/dots are removed *before* legal-suffix patterns so forms like
+    ``EVETECH (PROPRIETARY) LIMITED`` normalize to ``evetech`` (not ``evetech proprietary``).
+    Trading-as markers are stripped first so ``(t/a)`` is not treated as punctuation noise.
+    """
     s = (raw or "").strip()
     if not s:
         return ""
     s = _TRADING_AS_PAREN.sub(" ", s)
     s = _TRADING_AS_INLINE.sub(" ", s)
     s = _TRADING_AS_SUFFIX.sub(" ", s)
+    # Before legal suffixes: "(PROPRIETARY) LIMITED" → "PROPRIETARY LIMITED"
+    s = re.sub(r"[.()]+", " ", s)
     for pat in _LEGAL_SUFFIX_PATTERNS:
         s = pat.sub(" ", s)
     s = re.sub(r"\s*&\s*", " and ", s)
     s = re.sub(r"[,;]+", " ", s)
-    s = re.sub(r"[.()]+", " ", s)
     s = re.sub(r"\s+", " ", s).strip().lower()
     return s
 
@@ -62,6 +78,75 @@ def normalize_customer_name_for_similarity(raw: str | None) -> str:
 def normalize_customer_name_token(raw: str | None) -> str:
     """Normalised token stored on candidate context for downstream matching (may be empty)."""
     return normalize_customer_name_for_similarity(raw)
+
+
+def split_trading_as_raw_parts(raw: str | None) -> tuple[str, str] | None:
+    """If ``raw`` has a trading-as marker, return ``(legal_part, trade_part)``; else ``None``."""
+    s = (raw or "").strip()
+    if not s:
+        return None
+    m = _TRADING_AS_PAREN_SPLIT.match(s) or _TRADING_AS_INLINE_SPLIT.match(s)
+    if m is None:
+        return None
+    legal = (m.group("legal") or "").strip()
+    trade = (m.group("trade") or "").strip()
+    if not legal or not trade:
+        return None
+    return legal, trade
+
+
+def customer_similarity_lookup_keys(raw: str | None) -> list[str]:
+    """Ordered unique sim keys for dim lookup: full normalize, then T/A legal-only, trade-only."""
+    keys: list[str] = []
+    seen: set[str] = set()
+
+    def _add(key: str) -> None:
+        if key and key not in seen:
+            seen.add(key)
+            keys.append(key)
+
+    _add(normalize_customer_name_for_similarity(raw))
+    parts = split_trading_as_raw_parts(raw)
+    if parts is not None:
+        legal, trade = parts
+        _add(normalize_customer_name_for_similarity(legal))
+        _add(normalize_customer_name_for_similarity(trade))
+    return keys
+
+
+def unique_sim_customer_id(
+    sim_name_to_ids: dict[str, list[int]],
+    raw: str | None,
+) -> tuple[int | None, str | None]:
+    """Resolve a unique dim customer via sim keys (full, then T/A legal, then trade).
+
+    Tries keys in order. Returns ``(customer_id, resolution_signal)`` when a key has
+    exactly one id. Returns ``(None, None)`` when a tried key is ambiguous (>1) or all miss.
+    Does not union hits across keys — preserves the uniqueness gate.
+    """
+    keys = customer_similarity_lookup_keys(raw)
+    if not keys:
+        return None, None
+    full_key = keys[0]
+    parts = split_trading_as_raw_parts(raw)
+    legal_key = normalize_customer_name_for_similarity(parts[0]) if parts else ""
+    trade_key = normalize_customer_name_for_similarity(parts[1]) if parts else ""
+
+    for key in keys:
+        ids = list(dict.fromkeys(sim_name_to_ids.get(key, [])))
+        if len(ids) > 1:
+            return None, None
+        if len(ids) == 1:
+            if key == full_key:
+                signal = "similar_customer_name"
+            elif key == legal_key:
+                signal = "similar_customer_name_trading_as_legal"
+            elif key == trade_key:
+                signal = "similar_customer_name_trading_as_trade"
+            else:
+                signal = "similar_customer_name"
+            return int(ids[0]), signal
+    return None, None
 
 
 # Industry / legal noise tokens — not used alone to flag duplicates (avoids "X Technologies" vs "Y Technologies").

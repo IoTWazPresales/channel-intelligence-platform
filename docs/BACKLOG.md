@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-074 — DSI weekly email-attachment auto-ingest (mailbox → propose queue)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-18 |
+| **Effort** | Large (mailbox connector + allowlist + activity-feed failures + same propose/batch path) |
+| **Source** | Warren product discussion (2026-07-18): weekly DSI ops speed — email attach → app auto-upload; agree not silly, but premature until unified multi-file batch + mapping autosave + per-file distributor stamps soak-stable. |
+| **Idea** | Inbound mailbox (allowlisted senders) drops attachments into the existing DSI **batch-propose** path: capability merge (one job for all mappable files), mapping memory, file stamps, steward queue. Never silent apply to facts. |
+| **Why it matters / deferrable** | Removes manual Downloads→upload friction for weekly MUSTEK/PINNACLE/etc. Deferrable while batch UX still soaking; email would amplify wipe/gate/automap breakages. |
+| **What the work is** | (1) Mailbox/poll or webhook + attachment extract. (2) Sender/subject/filename → source_id rules. (3) Call same `batch-propose` / `batch-jobs` as UI. (4) Land jobs in Import Centre review (mapping/stamps/steward). (5) Activity-feed FLAG on parse/auth failures — no silent drop. (6) Ops runbook for mailbox credentials. |
+| **Regression traps** | No auto-create masters; no skip steward; no auto-apply; do not invent a second ingest pipeline; respect weekly vs historical mode; FLAG≠BLOCK leftovers stay reviewable. |
+| **Behavior to retain** | Unified multi-file capability batch (not exact-header splits); per-file distributor stamps; durable mapping autosave; one steward surface for sell-out + SOH. |
+| **Out of scope** | Silent fact apply from email; arbitrary public inbox; splitting sell-out vs SOH into separate steward products. |
+| **TRIGGER** | Weekly multi-file batch soak passes (stamps + autosave + no mapping wipe) **and** Warren prioritizes mailbox ingest; **or** operators request email drop as the weekly intake path. |
+
+---
+
 ## BACKLOG-073 — Import-job fact rollback / purge (test-junk cleanup; not park/exclude)
 
 | Field | Detail |

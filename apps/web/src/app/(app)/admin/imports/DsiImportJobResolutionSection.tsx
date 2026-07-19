@@ -61,7 +61,10 @@ import {
 
 import { buildDsiResolutionWorkspaceColumns } from './dsiResolutionWorkspaceTableProps';
 import type { DistributorSiSummary } from './dsiStepUtils';
-import { dsiHumanFixableBlockingRows } from './dsiStepUtils';
+import {
+  dsiDataQualityBlockingRows,
+  dsiStewardMapBlockingRows,
+} from './dsiStepUtils';
 
 export function DsiImportJobResolutionSection({
   importJobId,
@@ -508,10 +511,11 @@ export function DsiImportJobResolutionSection({
     [candidates]
   );
   const masterMergeExcluded = validateSummary?.master_merge_excluded_rows ?? 0;
-  const humanFixableBlockers = dsiHumanFixableBlockingRows(validateSummary);
+  const stewardMapBlockers = dsiStewardMapBlockingRows(validateSummary);
+  const dataQualityBlockers = dsiDataQualityBlockingRows(validateSummary);
   const showBlockerEmptyState =
     !candidatesLoading &&
-    (humanFixableBlockers > 0 || masterMergeExcluded > 0) &&
+    (stewardMapBlockers > 0 || dataQualityBlockers > 0 || masterMergeExcluded > 0) &&
     openActionableCandidates.length === 0;
 
   const candidateWorkspace = (
@@ -775,19 +779,27 @@ export function DsiImportJobResolutionSection({
       {showBlockerEmptyState ? (
         <Alert severity="warning" data-testid="dsi-blocker-empty-state">
           <Typography variant="body2" component="div">
-            {humanFixableBlockers > 0 ? (
+            {dataQualityBlockers > 0 ? (
               <>
-                <strong>{humanFixableBlockers}</strong> row(s) still need steward mapping (unmapped customers or other
-                fixable errors). Open the <strong>Customers</strong> tab and clear default filters, or use the global{' '}
+                <strong>{dataQualityBlockers}</strong> row(s) have a blank product identifier — there is no steward
+                candidate for these. Fix the product column mapping on the mapping step, exclude the source file/sheet,
+                or remove blank product lines from the file, then re-validate.
+                {stewardMapBlockers > 0 || masterMergeExcluded > 0 ? ' ' : null}
+              </>
+            ) : null}
+            {stewardMapBlockers > 0 ? (
+              <>
+                <strong>{stewardMapBlockers}</strong> row(s) still need steward mapping (unmapped customers or products).
+                Open the matching entity tab and clear default filters, or use the global{' '}
                 <Link component={NextLink} href={`/admin/mappings?import_job_id=${importJobId}`}>
                   mapping queue
                 </Link>
                 .
+                {masterMergeExcluded > 0 ? ' ' : null}
               </>
             ) : null}
             {masterMergeExcluded > 0 ? (
               <>
-                {humanFixableBlockers > 0 ? ' ' : null}
                 <strong>{masterMergeExcluded}</strong> sell-out row(s) are held for master-data alias conflicts — merge
                 duplicate customers on{' '}
                 <Link component={NextLink} href="/admin/customers/duplicates?tab=alias_scope">

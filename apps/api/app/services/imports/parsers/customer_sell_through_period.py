@@ -14,7 +14,7 @@ import pandas as pd
 
 from app.services.imports.parsers.customer_sell_through_flat import _monday_of_week, _normalize_text, _parse_date_value
 
-_ISO_WEEK_HEADER = re.compile(r"^(\d{4})-W(\d{1,2})$", re.IGNORECASE)
+_ISO_WEEK_HEADER = re.compile(r"^(\d{4})-?W(\d{1,2})$", re.IGNORECASE)
 _WEEK_YEAR_HEADER = re.compile(r"^W(\d{1,2})[-/](\d{4})$", re.IGNORECASE)
 _WEEK_ONLY_HEADER = re.compile(r"^W(\d{1,2})$", re.IGNORECASE)
 _FW_HEADER = re.compile(r"^FW[-\s]?(\d{1,2})$", re.IGNORECASE)

@@ -68,6 +68,18 @@ def test_missing_product_token_not_auto_excluded() -> None:
     assert not any(str(d).startswith("steward_ignored_line:") for d in diag)
 
 
+def test_missing_product_token_is_data_quality_not_steward_bucket() -> None:
+    from app.services.imports.dsi_product_running_change import (
+        DSI_DATA_QUALITY_BLOCK_ERROR_CODES,
+        is_dsi_data_quality_block_diag,
+    )
+
+    assert "missing_product_token" in DSI_DATA_QUALITY_BLOCK_ERROR_CODES
+    assert is_dsi_data_quality_block_diag(["missing_product_token"]) is True
+    assert is_dsi_data_quality_block_diag(["customer_unresolved"]) is False
+    assert is_dsi_data_quality_block_diag(["missing_product_token", "customer_unresolved"]) is True
+
+
 def test_no_catalogue_softens_hard_row_and_tags_diagnostic() -> None:
     diag: list[str] = []
     hard_row, reason = compute_dsi_hard_row_with_product_auto_exclude(
