@@ -101,6 +101,9 @@ import {
   dsiGateFromMapping,
   dsiGateFromNestedMapping,
   dsiHumanFixableBlockingRows,
+  dsiMappingRequiredGroupsFromDraft,
+  fanOutDsiLayoutDraft,
+  groupDsiSheetKeys,
   dsiSelectValue,
   dsiStewardMapBlockingRows,
   dsiTargetDescription,
@@ -563,6 +566,9 @@ function AdminImportsPageContent() {
   const [dsiMapDraft, setDsiMapDraft] = useState<Record<string, string>>({});
   const [dsiNestedMapDraft, setDsiNestedMapDraft] = useState<Record<string, Record<string, string>>>({});
   const [dsiActiveSheetKey, setDsiActiveSheetKey] = useState<string | null>(null);
+  /** Layout-coalesce: keys the operator split out of a shared layout tab. */
+  const [dsiDetachedLayoutKeys, setDsiDetachedLayoutKeys] = useState<string[]>([]);
+  const [dsiActiveLayoutSignature, setDsiActiveLayoutSignature] = useState<string | null>(null);
   const [dsiBulkUploadOpen, setDsiBulkUploadOpen] = useState(false);
   const [jobsBulkSelectionMode, setJobsBulkSelectionMode] = useState<'normal' | 'selecting'>('normal');
   const [jobsSelectedCount, setJobsSelectedCount] = useState(0);
@@ -990,6 +996,12 @@ function AdminImportsPageContent() {
       }
     >;
     dsi_file_snapshot_periods_all_confirmed?: boolean;
+    layout_groups?: Array<{
+      signature: string;
+      mapping_keys: string[];
+      files?: string[];
+    }>;
+    dsi_excluded_mapping_keys?: string[];
   };
 
   const { data: dsiMappingState, refetch: refetchDsiMapping } = useQuery({
@@ -1005,14 +1017,15 @@ function AdminImportsPageContent() {
 
   const dsiSheetKeys = useMemo(() => {
     if (!dsiIsMultiSheet || !dsiMappingState) return [] as string[];
+    const excluded = new Set(dsiMappingState.dsi_excluded_mapping_keys ?? []);
     const fromWb = (dsiMappingState.dsi_workbook?.sheets ?? [])
       .map((s) => s.mapping_key || s.sheet_key)
-      .filter((k): k is string => Boolean(k));
+      .filter((k): k is string => Boolean(k) && !excluded.has(String(k)));
     if (fromWb.length) return fromWb;
     if (isNestedDsiFieldMapping(dsiMappingState.field_mapping)) {
-      return Object.keys(dsiMappingState.field_mapping);
+      return Object.keys(dsiMappingState.field_mapping).filter((k) => !excluded.has(k));
     }
-    return Object.keys(dsiMappingState.sheet_field_mappings ?? {});
+    return Object.keys(dsiMappingState.sheet_field_mappings ?? {}).filter((k) => !excluded.has(k));
   }, [dsiIsMultiSheet, dsiMappingState]);
 
   const dsiFileDistributorsConfirmed = Boolean(dsiMappingState?.dsi_file_distributors_all_confirmed);
@@ -1020,13 +1033,24 @@ function AdminImportsPageContent() {
     dsiMappingState?.dsi_file_snapshot_periods_all_confirmed ?? true
   );
 
-  const dsiMappingRequiredGroups = useMemo<CanonicalRequiredGroup[]>(
-    () =>
-      DSI_MAPPING_REQUIRED_GROUPS.map((g) =>
-        g.id === 'distributor' ? { ...g, externallySatisfied: dsiFileDistributorsConfirmed } : g
-      ),
-    [dsiFileDistributorsConfirmed]
-  );
+  const dsiMappingRequiredGroups = useMemo<CanonicalRequiredGroup[]>(() => {
+    const activeDraft = dsiIsMultiSheet
+      ? dsiNestedMapDraft[dsiActiveSheetKey ?? dsiSheetKeys[0] ?? ''] ?? {}
+      : dsiMapDraft;
+    return dsiMappingRequiredGroupsFromDraft(activeDraft, {
+      baseGroups: DSI_MAPPING_REQUIRED_GROUPS,
+      fileDistributorSatisfied: dsiFileDistributorsConfirmed,
+      fileSnapshotSatisfied: dsiFileSnapshotPeriodsConfirmed,
+    });
+  }, [
+    dsiIsMultiSheet,
+    dsiNestedMapDraft,
+    dsiActiveSheetKey,
+    dsiSheetKeys,
+    dsiMapDraft,
+    dsiFileDistributorsConfirmed,
+    dsiFileSnapshotPeriodsConfirmed,
+  ]);
 
   /** Prefer live draft gates over stale per-sheet server errors (avoids 5× duplicate date lines). */
   const dsiMappingStepBlockingErrors = useMemo(() => {
@@ -1162,14 +1186,38 @@ function AdminImportsPageContent() {
     setDsiMapDraft({});
     setDsiNestedMapDraft({});
     setDsiActiveSheetKey(null);
+    setDsiActiveLayoutSignature(null);
+    setDsiDetachedLayoutKeys([]);
     setDsiContinueGateKey(null);
   }, [isDsi, lastJobId]);
 
+  const dsiLayoutTabGroups = useMemo(
+    () =>
+      groupDsiSheetKeys(
+        dsiMappingState?.layout_groups,
+        dsiSheetKeys,
+        dsiDetachedLayoutKeys,
+        dsiNestedMapDraft
+      ),
+    [dsiMappingState?.layout_groups, dsiSheetKeys, dsiDetachedLayoutKeys, dsiNestedMapDraft]
+  );
+
   useEffect(() => {
-    if (!dsiIsMultiSheet || !dsiSheetKeys.length) return;
-    if (dsiActiveSheetKey && dsiSheetKeys.includes(dsiActiveSheetKey)) return;
-    setDsiActiveSheetKey(dsiSheetKeys[0] ?? null);
-  }, [dsiIsMultiSheet, dsiSheetKeys, dsiActiveSheetKey]);
+    if (!dsiIsMultiSheet || !dsiLayoutTabGroups.length) return;
+    const active =
+      dsiLayoutTabGroups.find((g) => g.signature === dsiActiveLayoutSignature) ??
+      dsiLayoutTabGroups.find((g) => g.keys.includes(dsiActiveSheetKey ?? '')) ??
+      dsiLayoutTabGroups[0];
+    if (!active) return;
+    if (dsiActiveLayoutSignature !== active.signature) {
+      setDsiActiveLayoutSignature(active.signature);
+      setDsiActiveSheetKey(active.representativeKey);
+      return;
+    }
+    if (!dsiActiveSheetKey || !active.keys.includes(dsiActiveSheetKey)) {
+      setDsiActiveSheetKey(active.representativeKey);
+    }
+  }, [dsiIsMultiSheet, dsiLayoutTabGroups, dsiActiveLayoutSignature, dsiActiveSheetKey]);
 
   const dsiMappingDraftDirty = useMemo(() => {
     if (!isDsi || !dsiMappingState) return false;
@@ -4134,38 +4182,56 @@ function AdminImportsPageContent() {
               <Stack spacing={2} data-testid="dsi-multi-sheet-mapping">
                 <Alert severity="info">
                   {dsiMappingState?.multi_file
-                    ? `Multi-file batch (${dsiSheetKeys.length} sheet${
+                    ? `Multi-file batch (${dsiLayoutTabGroups.length} layout${
+                        dsiLayoutTabGroups.length === 1 ? '' : 's'
+                      } across ${dsiSheetKeys.length} file/sheet${
                         dsiSheetKeys.length === 1 ? '' : 's'
-                      } across files). Map each layout once — edits autosave; switch tabs freely.`
-                    : `Multi-sheet workbook (${dsiSheetKeys.length} mappable sheet${
-                        dsiSheetKeys.length === 1 ? '' : 's'
+                      }). Map each layout once — edits apply to every file in that layout; switch tabs freely.`
+                    : `Multi-sheet workbook (${dsiLayoutTabGroups.length} layout${
+                        dsiLayoutTabGroups.length === 1 ? '' : 's'
                       }). Edits autosave as you go — switch sheets freely.`}
                 </Alert>
                 <Tabs
-                  value={dsiActiveSheetKey ?? dsiSheetKeys[0]}
-                  onChange={(_e, v) => setDsiActiveSheetKey(String(v))}
+                  value={dsiActiveLayoutSignature ?? dsiLayoutTabGroups[0]?.signature ?? ''}
+                  onChange={(_e, v) => {
+                    const sig = String(v);
+                    setDsiActiveLayoutSignature(sig);
+                    const g = dsiLayoutTabGroups.find((x) => x.signature === sig);
+                    if (g) setDsiActiveSheetKey(g.representativeKey);
+                  }}
                   variant="scrollable"
                   scrollButtons="auto"
                 >
-                  {dsiSheetKeys.map((key) => {
-                    const sheetOk = dsiGateFromMapping(dsiNestedMapDraft[key] ?? {}, {
+                  {dsiLayoutTabGroups.map((g, idx) => {
+                    const gateOpts = {
                       fileDistributorSatisfied: Boolean(dsiMappingState?.dsi_file_distributors_all_confirmed),
                       fileSnapshotSatisfied: Boolean(
                         dsiMappingState?.dsi_file_snapshot_periods_all_confirmed ?? true
                       ),
-                    });
+                    };
+                    const groupOk = g.keys.every((k) =>
+                      dsiGateFromMapping(dsiNestedMapDraft[k] ?? {}, gateOpts)
+                    );
+                    const label =
+                      g.keys.length > 1
+                        ? `Layout ${idx + 1} · ${g.keys.length} files${groupOk ? '' : ' *'}`
+                        : `${g.keys[0]}${groupOk ? '' : ' *'}`;
                     return (
                       <Tab
-                        key={key}
-                        value={key}
-                        label={`${key}${sheetOk ? '' : ' *'}`}
-                        data-testid={`dsi-sheet-tab-${key}`}
+                        key={g.signature}
+                        value={g.signature}
+                        label={label}
+                        data-testid={`dsi-layout-tab-${g.signature}`}
                       />
                     );
                   })}
                 </Tabs>
                 {(() => {
-                  const activeKey = dsiActiveSheetKey ?? dsiSheetKeys[0];
+                  const activeGroup =
+                    dsiLayoutTabGroups.find((g) => g.signature === dsiActiveLayoutSignature) ??
+                    dsiLayoutTabGroups[0];
+                  if (!activeGroup) return null;
+                  const activeKey = activeGroup.representativeKey;
                   const sheetMeta = (dsiMappingState?.dsi_workbook?.sheets ?? []).find(
                     (s) =>
                       s.mapping_key === activeKey ||
@@ -4178,21 +4244,60 @@ function AdminImportsPageContent() {
                       : Object.keys(dsiNestedMapDraft[activeKey] ?? {});
                   const sheetState = dsiMappingState?.sheet_field_mappings?.[activeKey];
                   return (
-                    <CanonicalColumnMappingPanel
-                      testIdPrefix={`dsi-sheet-${activeKey}`}
-                      fileHeaders={headers}
-                      draft={dsiNestedMapDraft[activeKey] ?? {}}
-                      onChange={(next) =>
-                        setDsiNestedMapDraft((prev) => ({ ...prev, [activeKey]: next }))
-                      }
-                      targetOptions={dsiMappingTargetOptions}
-                      columnSamples={sheetState?.column_samples ?? sheetMeta?.column_samples}
-                      blockingErrors={sheetState?.blocking_mapping_errors}
-                      adjustmentNotices={sheetState?.mapping_adjustment_notices}
-                      requiredGroups={dsiMappingRequiredGroups}
-                      formatSamples={formatDsiSamples}
-                      dirty={dsiMappingDraftDirty}
-                    />
+                    <Stack spacing={1}>
+                      {activeGroup.keys.length > 1 ? (
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          flexWrap="wrap"
+                          useFlexGap
+                          alignItems="center"
+                          data-testid="dsi-layout-member-chips"
+                        >
+                          <Typography variant="caption" color="text.secondary">
+                            Same layout — mapping applies to:
+                          </Typography>
+                          {activeGroup.keys.map((k) => {
+                            const fname = k.includes('::') ? k.split('::', 1)[0] : k;
+                            return (
+                              <Chip
+                                key={k}
+                                size="small"
+                                label={fname}
+                                onDelete={() => {
+                                  setDsiDetachedLayoutKeys((prev) =>
+                                    prev.includes(k) ? prev : [...prev, k]
+                                  );
+                                  setDsiActiveLayoutSignature(`solo:${k}`);
+                                  setDsiActiveSheetKey(k);
+                                }}
+                                data-testid={`dsi-layout-member-${k}`}
+                              />
+                            );
+                          })}
+                          <Typography variant="caption" color="text.secondary">
+                            Remove a chip to map that file separately
+                          </Typography>
+                        </Stack>
+                      ) : null}
+                      <CanonicalColumnMappingPanel
+                        testIdPrefix={`dsi-sheet-${activeKey}`}
+                        fileHeaders={headers}
+                        draft={dsiNestedMapDraft[activeKey] ?? {}}
+                        onChange={(next) =>
+                          setDsiNestedMapDraft((prev) =>
+                            fanOutDsiLayoutDraft(prev, activeGroup.keys, next)
+                          )
+                        }
+                        targetOptions={dsiMappingTargetOptions}
+                        columnSamples={sheetState?.column_samples ?? sheetMeta?.column_samples}
+                        blockingErrors={sheetState?.blocking_mapping_errors}
+                        adjustmentNotices={sheetState?.mapping_adjustment_notices}
+                        requiredGroups={dsiMappingRequiredGroups}
+                        formatSamples={formatDsiSamples}
+                        dirty={dsiMappingDraftDirty}
+                      />
+                    </Stack>
                   );
                 })()}
               </Stack>

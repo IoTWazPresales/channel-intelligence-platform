@@ -578,22 +578,26 @@ async def set_dsi_file_exclusions(
     excluded = body.get("excluded_filenames")
     if not isinstance(excluded, list):
         raise HTTPException(status_code=400, detail="excluded_filenames must be a list of filenames")
+    excluded_keys = body.get("excluded_mapping_keys")
     with SessionLocal() as sync_db:
         try:
             job = set_dsi_file_exclusions_sync(
                 sync_db,
                 job_id,
                 excluded_filenames=[str(x) for x in excluded],
+                excluded_mapping_keys=(
+                    [str(x) for x in excluded_keys] if isinstance(excluded_keys, list) else None
+                ),
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        sm = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
         return {
             "id": job.id,
             "stage": job.stage,
             "status": job.status,
-            "dsi_excluded_files": (job.staged_metadata or {}).get("dsi_excluded_files")
-            if isinstance(job.staged_metadata, dict)
-            else [],
+            "dsi_excluded_files": sm.get("dsi_excluded_files") or [],
+            "dsi_excluded_mapping_keys": sm.get("dsi_excluded_mapping_keys") or [],
         }
 
 

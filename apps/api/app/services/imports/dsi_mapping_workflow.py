@@ -752,11 +752,13 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
         get_dsi_file_snapshot_periods,
         snapshot_identity_satisfied,
     )
+    from app.services.imports.dsi_batch import get_dsi_excluded_mapping_keys
 
     file_dist_ok = file_distributors_all_confirmed(job)
     file_distributors = get_dsi_file_distributors(job)
     file_snap_ok = file_snapshot_periods_all_confirmed(job)
     file_snapshots = get_dsi_file_snapshot_periods(job)
+    excluded_mapping_keys = get_dsi_excluded_mapping_keys(job)
 
     if is_nested_dsi_field_mapping(job.field_mapping):
         nested = dict(job.field_mapping or {})
@@ -771,8 +773,12 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
                 mk = s.get("mapping_key") or s.get("sheet_key")
                 if mk:
                     sheets_by_key[str(mk)] = s
+        from app.services.imports.dsi_batch import dsi_layout_signature
+
         for sheet_key, sheet_map in nested.items():
             if not isinstance(sheet_map, dict):
+                continue
+            if str(sheet_key) in excluded_mapping_keys:
                 continue
             sheet_meta = sheets_by_key.get(str(sheet_key), {})
             headers = list(sheet_meta.get("columns") or [])
@@ -797,6 +803,7 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
             hints = suggest_dsi_column_mapping(
                 headers, job.source, column_samples=samples, current_field_mapping=smap
             )
+            layout_sig = dsi_layout_signature([str(h) for h in headers])
             sheet_states[str(sheet_key)] = {
                 "field_mapping": smap,
                 "blocking_mapping_errors": gate,
@@ -804,6 +811,7 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
                 "mapping_adjustment_notices": notices,
                 "column_samples": samples,
                 "column_mapping_hints": hints,
+                "layout_signature": layout_sig,
             }
         # Deduplicate distributor / snapshot gate messages across sheets
         seen_codes: set[str] = set()
@@ -819,6 +827,28 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
                 seen_codes.add(code)
             deduped.append(e)
         blocking_all = deduped
+        # Presentation-grain layout groups (storage stays per file::sheet).
+        layout_groups: list[dict[str, Any]] = []
+        sig_order: list[str] = []
+        sig_to_keys: dict[str, list[str]] = {}
+        for sheet_key, st in sheet_states.items():
+            sig = str(st.get("layout_signature") or "")
+            if not sig:
+                continue
+            if sig not in sig_to_keys:
+                sig_order.append(sig)
+                sig_to_keys[sig] = []
+            sig_to_keys[sig].append(sheet_key)
+        for sig in sig_order:
+            keys = sig_to_keys[sig]
+            files: list[str] = []
+            for k in keys:
+                fname = str(k).split("::", 1)[0] if "::" in str(k) else str(k)
+                if fname not in files:
+                    files.append(fname)
+            layout_groups.append(
+                {"signature": sig, "mapping_keys": keys, "files": files}
+            )
         inferred = job.inferred_schema if isinstance(job.inferred_schema, dict) else {}
         return {
             "id": job.id,
@@ -844,6 +874,8 @@ def dsi_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
             "dsi_file_distributors_all_confirmed": file_dist_ok,
             DSI_FILE_SNAPSHOT_PERIODS_KEY: file_snapshots,
             "dsi_file_snapshot_periods_all_confirmed": file_snap_ok,
+            "layout_groups": layout_groups,
+            "dsi_excluded_mapping_keys": sorted(excluded_mapping_keys),
         }
 
     headers = list(job.file_headers or [])

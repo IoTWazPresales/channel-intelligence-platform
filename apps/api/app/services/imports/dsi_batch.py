@@ -42,6 +42,17 @@ class DsiBatchGroupPreview:
     files: list[DsiFilePreview]
 
 
+def dsi_layout_signature(headers: list[str]) -> str:
+    """Stable fingerprint of a column layout (presentation-grain for mapping tabs).
+
+    Normalize: strip + lower; drop empties; keep duplicates; sort; sha256[:16].
+    """
+    norms = [str(h).strip().lower() for h in headers if str(h).strip()]
+    norms.sort()
+    normalized = ",".join(norms)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
 def normalized_header_signature(
     filename: str, raw_bytes: bytes
 ) -> tuple[str, int, int, bool, str | None]:
@@ -67,8 +78,7 @@ def normalized_header_signature(
             break
     if not primary_cols:
         return ("unmappable", 0, sheet_count, True, "no_dsi_headers")
-    normalized = ",".join(sorted(primary_cols))
-    sig = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+    sig = dsi_layout_signature(list(primary_cols))
     return (sig, len(primary_cols), sheet_count, False, None)
 
 
@@ -231,13 +241,23 @@ def get_dsi_excluded_filenames(job: ImportJob) -> set[str]:
     return {str(x) for x in raw if str(x).strip()}
 
 
+def get_dsi_excluded_mapping_keys(job: ImportJob) -> set[str]:
+    """Per-sheet exclusions within an included file (e.g. undateable Sell out sheet)."""
+    sm = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    raw = sm.get("dsi_excluded_mapping_keys")
+    if not isinstance(raw, list):
+        return set()
+    return {str(x) for x in raw if str(x).strip()}
+
+
 def set_dsi_file_exclusions_sync(
     db: Session,
     job_id: int,
     *,
     excluded_filenames: list[str],
+    excluded_mapping_keys: list[str] | None = None,
 ) -> ImportJob:
-    """Set pre-apply file exclusions; clear staging and return job to mapping-ready for re-validate."""
+    """Set pre-apply file/sheet exclusions; clear staging and return job to mapping-ready for re-validate."""
     from sqlalchemy import delete
 
     from app.models.import_distributor_si import ImportDistributorSiStagingLine, ImportEntityMappingCandidate
@@ -250,6 +270,10 @@ def set_dsi_file_exclusions_sync(
     cleaned = sorted({str(x).strip() for x in excluded_filenames if str(x).strip()})
     sm = dict(job.staged_metadata or {})
     sm["dsi_excluded_files"] = cleaned
+    if excluded_mapping_keys is not None:
+        sm["dsi_excluded_mapping_keys"] = sorted(
+            {str(x).strip() for x in excluded_mapping_keys if str(x).strip()}
+        )
     job.staged_metadata = to_jsonable(sm)
 
     db.execute(

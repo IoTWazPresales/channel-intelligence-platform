@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-075 — DSI layout-coalesce follow-ons (templates, fuzzy match, sheet-exclude UI)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-20 |
+| **Effort** | Medium–Large |
+| **Source** | Fable CONSULT U6 READY (2026-07-20) + browser smoke job 553: presentation layout tabs shipped; API `dsi_excluded_mapping_keys` works; UI still lacks Exclude-sheet control on layout tab. |
+| **Idea** | (1) Cross-batch layout memory/templates so next week’s same layouts auto-map. (2) Fuzzy/near-match layout grouping (superset headers). (3) Mapping-step UI to exclude undateable sheets (calls existing exclusions endpoint). (4) Optional per-member stamp chips inside a layout group. |
+| **Why it matters / deferrable** | Operators still re-map weekly and must API/hack sheet exclude for junk Sell out sheets. Core coalesce + stamps soak first. |
+| **What the work is** | UI exclude sheet; persist layout→mapping templates per source; optional fuzzy signature; stamp chips in group panel. |
+| **Regression traps** | Do not re-key `field_mapping` away from `file::sheet`; do not auto-apply facts; stamps stay confirm-always. |
+| **Behavior to retain** | One capable job; layout tabs with fan-out; detach/map separately; Dist/Period file stamps. |
+| **Out of scope** | Exact-header batch splits (capability-merge locked). |
+| **TRIGGER** | After job 553 (or successor) weekly soak completes steward→apply; **or** Warren hits undateable sheet again without API; **or** operators ask for “remember this layout”. |
+
+---
+
 ## BACKLOG-074 — DSI weekly email-attachment auto-ingest (mailbox → propose queue)
 
 | Field | Detail |

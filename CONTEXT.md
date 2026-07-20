@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-20 — **DSI date-chip + layout-coalesce (U6) + sheet exclude:** Date summary chip honors snapshot stamps; mapping tabs group by layout signature with fan-out; `dsi_excluded_mapping_keys` for undateable sheets. Browser smoke job 553 validated (steward open). Branch `feat/dsi-unified-multifile`.
 - 2026-07-19 — **DSI snapshot-period + capability-merge ship:** Application Date banner → ISO Monday stamps; shared `dsi_file_stamp`; capability-merge batch; xlrd; blank-product taxonomy; customer P0; distributor stamps. Opus CLI VERIFY rate-limited — Cursor evidence 22+14 PASS. Branch `feat/dsi-unified-multifile`.
 - 2026-07-16 — **DSI U4b:** sniff window 40 rows for ASUS weekly sellout form (header @ row 19). Proven on real PINNACLE/MUSTEK Downloads files. Branch `feat/dsi-unified-multifile` @ `8b46938`.
 - 2026-07-16 — **DSI U4 PASS (Opus):** corrective banner header-row sniff at load grain; `unmappable_reason` on batch propose. Re-soak 14-file batch. Branch `feat/dsi-unified-multifile` @ `1dc237d`.

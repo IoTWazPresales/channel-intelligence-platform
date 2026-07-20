@@ -4,9 +4,13 @@ import {
   computeDsiContinueGateKey,
   dsiContinueToApplyAllowed,
   dsiDataQualityBlockingRows,
+  dsiDateSatisfiedBySnapshotStamp,
   dsiGateFromMapping,
   dsiGateFromNestedMapping,
   dsiHumanFixableBlockingRows,
+  dsiMappingRequiredGroupsFromDraft,
+  fanOutDsiLayoutDraft,
+  groupDsiSheetKeys,
   dsiSelectValue,
   dsiStewardMapBlockingRows,
   dsiTargetDescription,
@@ -46,34 +50,77 @@ describe('dsiStepUtils', () => {
     expect(dsiSelectValue('channel_key_token', canon)).toBe('channel_key_token');
   });
 
-  it('dsiGateFromMapping enforces required DSI mappings', () => {
-    expect(dsiGateFromMapping({})).toBe(false);
+  it('dsiGateFromMapping accepts inventory date via snapshot stamp', () => {
     expect(
-      dsiGateFromMapping({
-        a: 'distributor_token',
-        b: 'product_identifier',
-        c: 'transaction_date',
-        d: 'quantity_sold',
-      })
+      dsiGateFromMapping(
+        {
+          b: 'product_identifier',
+          d: 'stock_on_hand',
+        },
+        { fileDistributorSatisfied: true, fileSnapshotSatisfied: true }
+      )
     ).toBe(true);
     expect(
       dsiGateFromMapping(
         {
           b: 'product_identifier',
-          c: 'transaction_date',
-          d: 'quantity_sold',
+          d: 'stock_on_hand',
         },
-        { fileDistributorSatisfied: true }
+        { fileDistributorSatisfied: true, fileSnapshotSatisfied: false }
+      )
+    ).toBe(false);
+  });
+
+  it('dsiDateSatisfiedBySnapshotStamp only when SOH and no date column', () => {
+    expect(
+      dsiDateSatisfiedBySnapshotStamp(
+        { a: 'product_identifier', b: 'stock_on_hand' },
+        { fileSnapshotSatisfied: true }
       )
     ).toBe(true);
     expect(
-      dsiGateFromMapping({
-        b: 'product_identifier',
-        c: 'transaction_date',
-        d: 'quantity_sold',
-      })
+      dsiDateSatisfiedBySnapshotStamp(
+        { a: 'snapshot_date', b: 'stock_on_hand' },
+        { fileSnapshotSatisfied: true }
+      )
+    ).toBe(false);
+    expect(
+      dsiDateSatisfiedBySnapshotStamp(
+        { a: 'product_identifier', b: 'quantity_sold' },
+        { fileSnapshotSatisfied: true }
+      )
     ).toBe(false);
   });
+
+  it('dsiMappingRequiredGroupsFromDraft marks Date OK from stamp for inventory sheets', () => {
+    const base = [
+      { id: 'distributor', label: 'Distributor', anyOf: ['distributor_token'] },
+      { id: 'product', label: 'Product identifier', anyOf: ['product_identifier'] },
+      { id: 'date', label: 'Date', anyOf: ['transaction_date', 'snapshot_date'] },
+      { id: 'quantity', label: 'Quantity or inventory', anyOf: ['quantity_sold', 'stock_on_hand'] },
+    ];
+    const groups = dsiMappingRequiredGroupsFromDraft(
+      { Model: 'product_identifier', SOH: 'stock_on_hand' },
+      {
+        baseGroups: base,
+        fileDistributorSatisfied: true,
+        fileSnapshotSatisfied: true,
+      }
+    );
+    expect(groups.find((g) => g.id === 'distributor')?.externallySatisfied).toBe(true);
+    expect(groups.find((g) => g.id === 'date')?.externallySatisfied).toBe(true);
+
+    const sellout = dsiMappingRequiredGroupsFromDraft(
+      { Model: 'product_identifier', Qty: 'quantity_sold' },
+      {
+        baseGroups: base,
+        fileDistributorSatisfied: true,
+        fileSnapshotSatisfied: true,
+      }
+    );
+    expect(sellout.find((g) => g.id === 'date')?.externallySatisfied).toBe(false);
+  });
+
 
   it('dsiGateFromNestedMapping requires every sheet to pass', () => {
     const good = {
@@ -88,6 +135,38 @@ describe('dsiStepUtils', () => {
     expect(isNestedDsiFieldMapping({ Sales: good })).toBe(true);
     expect(isNestedDsiFieldMapping({ a: 'distributor_token' })).toBe(false);
   });
+
+  it('groupDsiSheetKeys collapses same layout and detach makes singleton', () => {
+    const groups = [
+      { signature: 'aaa', mapping_keys: ['a.xlsx::__single__', 'b.xlsx::__single__'], files: ['a.xlsx', 'b.xlsx'] },
+      { signature: 'bbb', mapping_keys: ['c.xlsx::__single__'], files: ['c.xlsx'] },
+    ];
+    const drafts = {
+      'a.xlsx::__single__': { Model: 'product_identifier' },
+      'b.xlsx::__single__': { Model: 'product_identifier', Qty: 'quantity_sold', Date: 'transaction_date' },
+      'c.xlsx::__single__': {},
+    };
+    const tabs = groupDsiSheetKeys(groups, Object.keys(drafts), [], drafts);
+    expect(tabs).toHaveLength(2);
+    expect(tabs[0].keys).toHaveLength(2);
+    expect(tabs[0].representativeKey).toBe('b.xlsx::__single__');
+    expect(tabs[1].keys).toEqual(['c.xlsx::__single__']);
+
+    const detached = groupDsiSheetKeys(groups, Object.keys(drafts), ['a.xlsx::__single__'], drafts);
+    expect(detached.some((g) => g.keys.length === 1 && g.keys[0] === 'a.xlsx::__single__')).toBe(true);
+    expect(detached.find((g) => g.signature === 'aaa')?.keys).toEqual(['b.xlsx::__single__']);
+  });
+
+  it('fanOutDsiLayoutDraft writes the same draft to all member keys', () => {
+    const next = fanOutDsiLayoutDraft(
+      { 'a.xlsx::__single__': { Old: 'x' } },
+      ['a.xlsx::__single__', 'b.xlsx::__single__'],
+      { Model: 'product_identifier', Qty: 'quantity_sold' }
+    );
+    expect(next['a.xlsx::__single__']).toEqual({ Model: 'product_identifier', Qty: 'quantity_sold' });
+    expect(next['b.xlsx::__single__']).toEqual({ Model: 'product_identifier', Qty: 'quantity_sold' });
+  });
+
 
   it('hydrateDsiNestedMapDraft fillMissing preserves dirty sheet edits', () => {
     const canon = new Set(['product_identifier', 'quantity_sold', 'transaction_date']);

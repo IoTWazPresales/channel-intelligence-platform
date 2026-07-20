@@ -9,6 +9,7 @@ import pytest
 
 from app.services.imports.dsi_batch import (
     batch_groups_preview_to_dict,
+    dsi_layout_signature,
     normalized_header_signature,
     propose_dsi_batch_groups,
 )
@@ -19,6 +20,11 @@ from app.services.imports.dsi_workbook import (
     make_dsi_file_sheet_key,
     parse_dsi_mapping_key,
 )
+
+
+def test_dsi_layout_signature_case_and_whitespace_normalize() -> None:
+    assert dsi_layout_signature(["Dist", "SKU"]) == dsi_layout_signature([" dist ", "sku"])
+    assert dsi_layout_signature(["A", "B"]) != dsi_layout_signature(["A", "C"])
 
 
 def test_same_layout_files_share_signature() -> None:

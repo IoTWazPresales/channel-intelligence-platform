@@ -437,12 +437,15 @@ def resolve_dsi_sheet_mappings(
     wb = meta.get(DSI_SHEET_META_KEY) if isinstance(meta.get(DSI_SHEET_META_KEY), dict) else {}
 
     if is_nested_dsi_field_mapping(fm):
-        from app.services.imports.dsi_batch import get_dsi_excluded_filenames
+        from app.services.imports.dsi_batch import get_dsi_excluded_filenames, get_dsi_excluded_mapping_keys
 
         excluded = get_dsi_excluded_filenames(job)
+        excluded_keys = get_dsi_excluded_mapping_keys(job)
         out: list[tuple[str | None, dict[str, str], str | None]] = []
         for sheet_key, sheet_map in fm.items():
             if not isinstance(sheet_map, dict) or not sheet_map:
+                continue
+            if str(sheet_key) in excluded_keys:
                 continue
             source_file, inner_key = parse_dsi_mapping_key(str(sheet_key))
             if source_file and source_file in excluded:

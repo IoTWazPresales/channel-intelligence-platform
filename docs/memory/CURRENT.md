@@ -1,6 +1,6 @@
-# Current state
+# CURRENT state
 
-**Last updated:** 2026-07-19 (DSI snapshot-period stamps ship)
+**Last updated:** 2026-07-20 (Date-chip parity + layout-coalesce U6 + browser smoke mid-steward)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,27 +10,35 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/dsi-unified-multifile` |
-| **HEAD** | see `git rev-parse --short HEAD` after push |
-| **Alembic (DB)** | **`20260710_0072`** (unchanged — no migration) |
-| **Consultant** | Opus CONSULT READY; formal VERIFY CLI rate-limited — Cursor evidence PASS (22 API + 14 web); ship per Warren ask |
+| **HEAD** | uncommitted: date-chip + layout-coalesce + sheet exclude |
+| **Alembic (DB)** | **`20260710_0072`** |
+| **Consultant** | Fable CONSULT READY U6 (layout-coalesce); Cursor implementing + browser smoke |
 
 ---
 
-## Shipped this session
+## Shipped / in flight
 
-- Capability-merge batch + xlrd + blank-product taxonomy + customer P0 + distributor stamps
-- **D — per-file inventory snapshot period:** shared `dsi_file_stamp.py`; distributor rewired; `dsi_file_snapshot.py` sniffs Application Date (`2026W26` → Monday); confirm / confirm-all / date override; apply inherit; per-file gate `missing_snapshot_period_for_inventory_file`; UI strip period column. AGP filename out of scope.
+- **Date chip:** `dsiMappingRequiredGroupsFromDraft` — inventory Date shows `OK (file stamp)` when SOH + period stamps (parity with Dist)
+- **U6 layout-coalesce:** presentation tabs by `layout_signature`; fan-out edits; detach/map separately; storage stays per `file::sheet`
+- **Sheet exclude:** `dsi_excluded_mapping_keys` on same exclusions endpoint (undateable sheets without killing whole file)
+- **Smoke job 553:** 9-file weekly batch validated — Dist stamps OK (0 distributor candidates); layout tabs collapsed; steward in progress (customers/products)
 
 ---
 
-## Proven
+## Smoke proven (job 553)
 
-- Real files: MUSTEK → `2026W26` → `2026-06-22`; PINNACLE copy → `2025W24` → `2025-06-09`
-- API: `test_dsi_file_snapshot` + distributor + batch = 22 passed; web dsiStepUtils 14 passed
+- Preview: 9 files → 1 job
+- After stamps: Dist ✓ · Period ✓ all files
+- Layouts: ~4 tabs (MUSTEK+some PINNACLE sellout merged; inventaries; PINNACLE sellout pair; SOH)
+- Excluded: `Inventory-PINNACLE-…::Sell out` (no date columns)
+- Validate: 2187 rows; 1532 steward-map; 184 blank-product; 358 customers / 276 products open
+- Date chip: `OK (file stamp)` on SOH layout
 
 ---
 
 ## Next
 
-- UI soak: bulk MUSTEK + PINNACLE inventory — confirm distributor + Application Date period on strip, then validate/apply
-- Optional: re-run formal Opus VERIFY after CLI quota resets (~15:50 SAST)
+- Finish steward on job 553 (customers then products → revalidate → apply)
+- UI: Exclude sheet control on layout tab (API already accepts keys)
+- BACKLOG: cross-batch layout templates; fuzzy layouts; per-member stamp chips in group
+- Commit + push when Warren asks (or after steward soak)

@@ -33,10 +33,22 @@ export function dsiTargetDescription(t: string): string | undefined {
   return descriptions[t];
 }
 
-export function dsiGateFromMapping(
+export type DsiMappingStampOpts = {
+  fileDistributorSatisfied?: boolean;
+  fileSnapshotSatisfied?: boolean;
+};
+
+/** True when this sheet's date requirement is met only via confirmed Application Date stamps (not a date column). */
+export function dsiDateSatisfiedBySnapshotStamp(
   m: Record<string, string>,
-  opts?: { fileDistributorSatisfied?: boolean; fileSnapshotSatisfied?: boolean }
+  opts?: Pick<DsiMappingStampOpts, 'fileSnapshotSatisfied'>
 ): boolean {
+  const vals = new Set(Object.values(m).filter(Boolean));
+  if (vals.has('transaction_date') || vals.has('snapshot_date')) return false;
+  return vals.has('stock_on_hand') && Boolean(opts?.fileSnapshotSatisfied);
+}
+
+export function dsiGateFromMapping(m: Record<string, string>, opts?: DsiMappingStampOpts): boolean {
   const vals = new Set(Object.values(m).filter(Boolean));
   const distributorOk = vals.has('distributor_token') || Boolean(opts?.fileDistributorSatisfied);
   const needsInventoryPeriod = vals.has('stock_on_hand') && !vals.has('snapshot_date');
@@ -52,14 +64,114 @@ export function dsiGateFromMapping(
   );
 }
 
+/**
+ * Live requirement chips for CanonicalColumnMappingPanel.
+ * Distributor and inventory Date may be satisfied by per-file stamps (same gate as dsiGateFromMapping).
+ */
+export function dsiMappingRequiredGroupsFromDraft(
+  draft: Record<string, string>,
+  opts: DsiMappingStampOpts & {
+    baseGroups: Array<{ id: string; label: string; anyOf: string[]; externallySatisfied?: boolean }>;
+  }
+): Array<{ id: string; label: string; anyOf: string[]; externallySatisfied?: boolean }> {
+  const dateFromStamp = dsiDateSatisfiedBySnapshotStamp(draft, opts);
+  return opts.baseGroups.map((g) => {
+    if (g.id === 'distributor') {
+      return { ...g, externallySatisfied: Boolean(opts.fileDistributorSatisfied) };
+    }
+    if (g.id === 'date') {
+      return { ...g, externallySatisfied: dateFromStamp };
+    }
+    return { ...g };
+  });
+}
+
 /** True when every sheet in a nested (multi-sheet) mapping passes the flat gate. */
 export function dsiGateFromNestedMapping(
   m: Record<string, Record<string, string>>,
-  opts?: { fileDistributorSatisfied?: boolean; fileSnapshotSatisfied?: boolean }
+  opts?: DsiMappingStampOpts
 ): boolean {
   const sheets = Object.values(m).filter((s) => s && Object.keys(s).length > 0);
   if (!sheets.length) return false;
   return sheets.every((sheet) => dsiGateFromMapping(sheet, opts));
+}
+
+export type DsiLayoutGroup = {
+  signature: string;
+  mapping_keys: string[];
+  files?: string[];
+};
+
+export type DsiLayoutTabGroup = {
+  signature: string;
+  keys: string[];
+  representativeKey: string;
+};
+
+/**
+ * Collapse sheet keys into layout tabs. Detached keys become singletons.
+ * When layoutGroups is missing/empty, every key is its own group (legacy jobs).
+ */
+export function groupDsiSheetKeys(
+  layoutGroups: DsiLayoutGroup[] | null | undefined,
+  sheetKeys: string[],
+  detachedKeys: Set<string> | Iterable<string>,
+  drafts?: Record<string, Record<string, string>>
+): DsiLayoutTabGroup[] {
+  const detached = detachedKeys instanceof Set ? detachedKeys : new Set(detachedKeys);
+  const keySet = new Set(sheetKeys);
+  const pickRepresentative = (keys: string[]): string => {
+    if (!drafts || keys.length === 1) return keys[0];
+    let best = keys[0];
+    let bestCount = -1;
+    for (const k of keys) {
+      const n = Object.values(drafts[k] ?? {}).filter(Boolean).length;
+      if (n > bestCount) {
+        bestCount = n;
+        best = k;
+      }
+    }
+    return best;
+  };
+
+  if (!layoutGroups?.length) {
+    return sheetKeys.map((k) => ({
+      signature: `solo:${k}`,
+      keys: [k],
+      representativeKey: k,
+    }));
+  }
+
+  const out: DsiLayoutTabGroup[] = [];
+  const consumed = new Set<string>();
+  for (const g of layoutGroups) {
+    const members = (g.mapping_keys ?? []).filter((k) => keySet.has(k) && !detached.has(k));
+    if (!members.length) continue;
+    for (const k of members) consumed.add(k);
+    out.push({
+      signature: g.signature,
+      keys: members,
+      representativeKey: pickRepresentative(members),
+    });
+  }
+  for (const k of sheetKeys) {
+    if (consumed.has(k)) continue;
+    out.push({ signature: `solo:${k}`, keys: [k], representativeKey: k });
+  }
+  return out;
+}
+
+/** Fan a layout draft out to every member mapping key (presentation merge; storage stays nested). */
+export function fanOutDsiLayoutDraft(
+  prev: Record<string, Record<string, string>>,
+  memberKeys: string[],
+  draft: Record<string, string>
+): Record<string, Record<string, string>> {
+  const next = { ...prev };
+  for (const k of memberKeys) {
+    next[k] = { ...draft };
+  }
+  return next;
 }
 
 export function isNestedDsiFieldMapping(
