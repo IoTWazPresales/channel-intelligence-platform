@@ -73,7 +73,11 @@ def test_case_apply_blockers_clear_when_resolved():
     assert case_apply_blockers(row) == []
 
 
-def test_staging_row_to_values_preserves_flags_and_snapshot():
+def test_bulk_map_staging_tokens_helper_exists():
+    from app.services.cpor.historical_import.resolve import map_staging_tokens
+
+    assert callable(map_staging_tokens)
+
     vals = _row_to_values(
         9,
         {

@@ -2,9 +2,26 @@
 
 **Purpose:** Channel Intelligence Platform standing rules for the dual-agent loop.  
 **Operational skill (any app):** `~/.cursor/skills/dual-agent-fable` — run `dual-agent-fable` or `cip-dual-agent-fable`.  
-**Status:** Active · 2026-07-10  
+**Status:** Active · 2026-07-20  
 
 **Do not put here:** current branch, HEAD, job IDs, Alembic tip — those live in `docs/memory/CURRENT.md`.
+
+---
+
+## Quality bar (non-negotiable — Warren 2026-07-20)
+
+Optimize for **UX, design, architecture, scalability, flexibility, best business practice, best solution, best intelligence, and best-in-market** — never for speed or “smallest diff.”
+
+| Rule | Meaning |
+|------|---------|
+| **Canonical clone or STOP** | When a feature has a living reference (DSI steward, shipment apply, Import Centre progress, etc.), Cursor must **clone that behaviour and operator experience**, not merely import a shared primitive. Naming the shared file is not done. |
+| **No half-PASS** | Thin mounts, stub wizards, sync-only paths where the bar is async+progress, missing tabs/bulk/debounce/error summaries — **incomplete unit**. Do not claim PASS; do not start the next unit. |
+| **Never skim** | Double- and triple-check against the named canonical files before shipping. Side-by-side the operator path (upload → map → validate → steward → apply → progress). |
+| **Own surface ≠ weaker UX** | Own route/CTA only. Same steward/apply/progress bar as the canonical importer. |
+
+**VERIFY must STOP when:** the unit prompt named a canonical (e.g. `DsiImportJobResolutionSection` / shipment resolution section / `dsi-progress` poll) and the shipped UI/API does not match that experience — even if tests are green and shared components are imported.
+
+Record waivers only as `Fable verify: WAIVED <YYYY-MM-DD>` in `CURRENT.md` with Warren’s written OK.
 
 ---
 
@@ -13,8 +30,8 @@
 | Role | Where | Owns | Must not |
 |------|--------|------|----------|
 | **Warren** | Human | Priorities, merge/promote, cip writes, alembic upgrade approval | — |
-| **Cursor** | This IDE | Phase A → implement → tests → SELECT-only validate → CURRENT/CONTEXT → commit/push → seed Fable | Start next unit before PASS; apply alembic without Warren; `git add -A` |
-| **CLI Fable** | `claude -p --model fable` | CONSULT (interview/scope/prompt), VERIFY (PASS/STOP) | Edit files during consult/verify; run migrations; invent schema against locked specs |
+| **Cursor** | This IDE | Phase A → implement → tests → SELECT-only validate → CURRENT/CONTEXT → commit/push → seed Fable | Start next unit before PASS; apply alembic without Warren; `git add -A`; half-parity PASS |
+| **CLI Fable** | `claude -p --model fable` | CONSULT (interview/scope/prompt), VERIFY (PASS/STOP) | Edit files during consult/verify; run migrations; invent schema against locked specs; PASS a thin mount when clone bar was locked |
 
 **Browser Claude / claude.ai project chat is retired for this loop.** Interviews and brainstorming run in the Cursor chat via CLI Fable (CONSULT mode). Warren stays in one thread.
 
@@ -45,6 +62,8 @@
 **Hard gate:** no next-unit implementation until CLI Fable writes **`VERDICT: PASS`**.  
 Warren may waive in writing only — record `Fable verify: WAIVED <YYYY-MM-DD>` in CURRENT.md.
 
+**Unit prompts must name the clone target file(s)** when parity applies (e.g. “clone `ShipmentImportJobResolutionSection` behaviour”). Keyword-only (“use shared workspace”) is insufficient.
+
 ---
 
 ## CIP standing rules (always unless Warren waives in writing)
@@ -56,6 +75,7 @@ Warren may waive in writing only — record `Fable verify: WAIVED <YYYY-MM-DD>` 
 - Explicit `git add <paths>` — never `-A` / `.`
 - FLAG ≠ BLOCK where domain requires
 - Never auto-create `dim_product` / `dim_customer` / `dim_distributor` from import evidence
+- Import / steward / apply work: obey `.cursor/rules/import-parity.mdc` at the **DSI/shipment experience bar**, not checkbox imports of shared files
 
 ---
 
@@ -115,4 +135,5 @@ Mode: CONSULT
 - Project skill: `.cursor/skills/cip-dual-agent-fable`
 - `docs/memory/CURRENT.md` — now
 - `docs/BACKLOG.md` — deferred + TRIGGER
+- `.cursor/rules/import-parity.mdc` — importer experience bar
 - `.cursor/skills/cip-session-handover` — orient new chat

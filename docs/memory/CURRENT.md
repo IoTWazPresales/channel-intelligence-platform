@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-20 (CPOR H2 steward UX parity)
+**Last updated:** 2026-07-20 (quality bar lock + CPOR steward parity fix)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,29 +10,33 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
-| **HEAD** | `995a418` ? CPOR historical steward/progress UX parity |
-| **Alembic (DB)** | **`20260720_0073` on cip** (applied + grants) |
-| **Next** | Fable VERIFY H2 steward UX ? H3 export round-trip / pivot filters when prioritized |
+| **Alembic (DB)** | **`20260720_0073` on cip** |
+| **Next** | Fable VERIFY steward parity (clone bar) ? H3 only after PASS |
+
+---
+
+## Standing quality bar (Warren 2026-07-20)
+
+Locked in `docs/WORKFLOW_DUAL_AGENT.md`, import-parity, cip-dual-agent skill:
+**Canonical clone or STOP · no half-PASS · never skim · own surface ? weaker UX.**
+Optimize for UX/architecture/best-in-market ? never speed.
 
 ---
 
 ## CPOR historical import
 
-- H1 PASS (Fable): parse/validate/profile + migration
-- **H2 API:** pipeline stage ? steward map-token / bulk-map-token ? async apply + progress
-- **H2 web UX (`995a418`):** shipment-shaped `CporHistoricalImportJobResolutionSection` (entity tabs, selection, bulk map, drawer, 300ms search); wizard Upload ? async validate progress ? Resolve ? Apply; `cpor_historical_import` progress kind
-- cip smoke: job 556 case `H2-SMOKE-556` applied `origin=historical_import`
-- Locks: frozen Result; FLAG?BLOCK per case; no claim-evidence fabrication; no auto-create dims
+- H1 PASS; H2 apply path existed but steward UX was a **thin mount** (rejected)
+- **Parity fix (in flight):** shipment-shaped `CporHistoricalImportJobResolutionSection` (tabs, selection, bulk map, drawer), async validate + Celery-shaped `/progress`, `BackgroundTaskKind` + poll, wizard steps upload?validate?resolve?apply
+- Smoke earlier: `H2-SMOKE-556` applied OK
 
 ---
 
 ## Parked ? DSI unified multifile
 
 - Branch `feat/dsi-unified-multifile` @ `2c2391e`; stash `park-dsi-asus-dealer-name-automap`
-- Resume TRIGGER: Warren asks to finish job 553 steward/apply
 
 ---
 
 ## Do not
 
-- Push main; auto-create dims; invent waterfall rewrite of settled Results; fabricate claim-evidence from Result totals
+- Half-parity PASS; push main; auto-create dims; waterfall rewrite of settled Results

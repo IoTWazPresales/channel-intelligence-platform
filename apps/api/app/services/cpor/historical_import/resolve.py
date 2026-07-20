@@ -95,9 +95,21 @@ def map_staging_token(
     dim_id: int,
 ) -> int:
     """Steward map: set resolved_*_id for all staging rows matching token. Returns updated count."""
+    return map_staging_tokens(db, job_id=job_id, entity=entity, tokens=[token], dim_id=dim_id)
+
+
+def map_staging_tokens(
+    db: Session,
+    *,
+    job_id: int,
+    entity: str,
+    tokens: list[str],
+    dim_id: int,
+) -> int:
+    """Bulk steward map: one dim_id applied to many tokens of the same entity."""
     entity_l = entity.strip().lower()
-    tok = (token or "").strip()
-    if not tok:
+    wanted = {_norm(t) for t in tokens if (t or "").strip()}
+    if not wanted:
         return 0
 
     q = select(ImportCporHistoricalStagingLine).where(
@@ -106,13 +118,13 @@ def map_staging_token(
     rows = list(db.scalars(q).all())
     updated = 0
     for row in rows:
-        if entity_l == "product" and _norm(row.sales_model_token) == _norm(tok):
+        if entity_l == "product" and _norm(row.sales_model_token) in wanted:
             row.resolved_product_id = dim_id
             updated += 1
-        elif entity_l == "customer" and _norm(row.customer_token) == _norm(tok):
+        elif entity_l == "customer" and _norm(row.customer_token) in wanted:
             row.resolved_customer_id = dim_id
             updated += 1
-        elif entity_l == "distributor" and _norm(row.distributor_token) == _norm(tok):
+        elif entity_l == "distributor" and _norm(row.distributor_token) in wanted:
             row.resolved_distributor_id = dim_id
             updated += 1
     db.flush()

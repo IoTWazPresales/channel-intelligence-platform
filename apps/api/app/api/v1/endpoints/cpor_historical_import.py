@@ -24,8 +24,12 @@ from app.services.cpor.historical_import.resolve import (
     case_apply_blockers,
     list_unresolved_candidates,
     map_staging_token,
+    map_staging_tokens,
 )
 from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
+from app.services.imports.import_dispatch import enqueue_import_worker_task
+from app.services.imports.import_pipeline_dispatch_claim import claim_import_pipeline_dispatch
+from app.ingestion.pipeline import process_import_job_sync
 from app.services.task_run_ledger import (
     ENTITY_IMPORT_JOB,
     TRANSPORT_BROKER,
@@ -46,6 +50,12 @@ TEMPLATE_SLUG = "cpor_historical_cases"
 class MapTokenBody(BaseModel):
     entity: Literal["product", "customer", "distributor"]
     token: str = Field(min_length=1, max_length=256)
+    dim_id: int = Field(gt=0)
+
+
+class BulkMapTokenBody(BaseModel):
+    entity: Literal["product", "customer", "distributor"]
+    tokens: list[str] = Field(min_length=1)
     dim_id: int = Field(gt=0)
 
 
@@ -232,6 +242,62 @@ def historical_map_token(
         return {"updated": updated, "entity": body.entity, "token": body.token, "dim_id": body.dim_id}
 
 
+@router.post("/historical-import/jobs/{job_id}/bulk-map-token")
+def historical_bulk_map_token(
+    job_id: int,
+    body: BulkMapTokenBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    tokens = [t.strip() for t in body.tokens if (t or "").strip()]
+    if not tokens:
+        raise HTTPException(status_code=400, detail={"error": "tokens_required"})
+    with SessionLocal() as db:
+        _get_job_sync(db, job_id)
+        updated = map_staging_tokens(
+            db, job_id=job_id, entity=body.entity, tokens=tokens, dim_id=body.dim_id
+        )
+        db.commit()
+        return {
+            "updated": updated,
+            "entity": body.entity,
+            "token_count": len(tokens),
+            "dim_id": body.dim_id,
+        }
+
+
+@router.post("/historical-import/jobs/{job_id}/validate")
+def historical_validate(
+    job_id: int,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    """Async validate (parse → stage → deterministic resolve) — same bar as DSI validate."""
+    _require_admin(x_user_role)
+    with SessionLocal() as db:
+        _get_job_sync(db, job_id)
+    claim_import_pipeline_dispatch(job_id, import_mode="validate")
+
+    dispatched, task_id = enqueue_import_worker_task(
+        job_id,
+        task_name="imports.process_job",
+        log_label="CPOR historical validate",
+        in_process_thread_name=f"cpor-hist-validate-{job_id}",
+        sync_work=process_import_job_sync,
+    )
+    if task_id:
+        with SessionLocal() as db:
+            job = db.get(ImportJob, job_id)
+            if job is not None:
+                set_task_slot_on_job(job, SLOT_MAIN, task_id=task_id)
+                db.commit()
+    return {
+        "id": job_id,
+        "async": dispatched,
+        "task_id": task_id,
+        "message": "Historical CPOR validate queued" if dispatched else "Historical CPOR validate completed inline",
+    }
+
+
 @router.post("/historical-import/jobs/{job_id}/apply")
 def historical_apply(
     job_id: int,
@@ -286,16 +352,83 @@ def historical_progress(
     job_id: int,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
 ) -> dict[str, Any]:
+    """Celery PROGRESS + DB fallback — same shape as DSI ``dsi-progress``."""
     _require_admin(x_user_role)
+    from app.services.imports.background_tasks import read_celery_with_timeout
+    from app.services.imports.import_job_background_metadata import (
+        ACTIVE_CELERY_STATES,
+        job_db_indicates_pipeline_finished,
+    )
+
     with SessionLocal() as db:
         job = _get_job_sync(db, job_id)
-        hist = (job.staged_metadata or {}).get("cpor_historical") or {}
-        return {
-            "id": job.id,
-            "stage": job.stage,
-            "status": job.status,
+        stage = (job.stage or "").strip()
+        status = (job.status or "").strip()
+        meta = dict(job.staged_metadata or {})
+        hist = meta.get("cpor_historical") or {}
+        task_id: str | None = meta.get("celery_task_id")
+        if isinstance(task_id, dict):
+            task_id = task_id.get("task_id")  # type: ignore[assignment]
+        total_rows = int(hist.get("row_count") or hist.get("staging_upserted") or 0)
+
+        progress: dict[str, Any] = {
+            "job_id": job_id,
+            "id": job_id,
+            "stage": stage,
+            "status": status,
+            "phase": "idle",
+            "phase_label": "Idle",
+            "current_row": 0,
+            "total_rows": total_rows,
+            "pct": 0,
+            "task_state": None,
+            "pipeline_queued_at": meta.get("pipeline_queued_at"),
+            "pipeline_started_at": meta.get("pipeline_started_at"),
             "error_summary": job.error_summary,
             "apply": hist.get("apply"),
-            "staged_metadata_task": (job.staged_metadata or {}).get("celery_task_id")
-            or (job.staged_metadata or {}).get("task_id"),
+            "cpor_historical": hist,
         }
+
+        if job_db_indicates_pipeline_finished(job) and (job.import_mode or "") != "apply":
+            # Validate finished
+            progress["phase"] = "complete"
+            progress["phase_label"] = "Validated" if stage == "validated" else stage or "Complete"
+            progress["pct"] = 100
+            progress["current_row"] = total_rows
+            if status in ("failed", "interrupted") or stage in ("failed", "stage_failed"):
+                progress["phase"] = "failed"
+                progress["phase_label"] = "Failed"
+            return progress
+
+        if stage == "loaded" and status in ("completed", "completed_with_errors"):
+            progress["phase"] = "complete"
+            progress["phase_label"] = "Apply complete"
+            progress["pct"] = 100
+            return progress
+
+    if task_id:
+        try:
+            task_state, info = read_celery_with_timeout(str(task_id), timeout_s=3.0)
+            progress["task_state"] = task_state
+            state_u = (str(task_state or "PENDING")).strip().upper()
+            if isinstance(info, dict) and state_u in ACTIVE_CELERY_STATES:
+                progress["phase"] = info.get("phase", "processing_rows")
+                progress["phase_label"] = info.get("phase_label", "Processing")
+                progress["current_row"] = info.get("current_row", 0)
+                progress["total_rows"] = info.get("total_rows", 0) or total_rows
+                progress["pct"] = info.get("pct", 0)
+                progress["progress_at"] = info.get("progress_at")
+                if state_u in ("PENDING", "STARTED") and not info:
+                    progress["phase"] = "queued"
+                    progress["phase_label"] = "Queued"
+                return progress
+        except Exception as exc:
+            logger.debug("historical_progress: Celery read failed job_id=%s: %s", job_id, exc)
+
+    if status == "running":
+        progress["phase"] = "processing_rows"
+        progress["phase_label"] = "Processing historical CPOR import"
+    elif status in ("failed", "interrupted") or stage in ("failed", "stage_failed"):
+        progress["phase"] = "failed"
+        progress["phase_label"] = "Failed"
+    return progress

@@ -7,13 +7,21 @@ alwaysApply: true
 
 Every importer (`product_master`, `distributor_master`, `customer_master`,
 `distributor_inventory`/DSI, `inbound_shipments`, `historical_lineup`, `current_lineup`,
-`customer_sell_through`, scaffolds) shares one conceptual pipeline
+`customer_sell_through`, scaffolds, **`cpor_historical_cases`**) shares one conceptual pipeline
 (`upload → parse → map → validate → steward → apply → derive`). Past drift came from each
 importer hand-rolling its own version of each step. When adding or changing an importer, **level up
 to the existing bar — do not invent a new pattern.** The canonical implementations:
 
+**Done means operator experience parity with the named reference — not “imported a shared file.”**
+Mounting `ImportStewardCandidateWorkspace` or `CanonicalColumnMappingPanel` without the surrounding
+resolution section (entity tabs, selection, bulk map, drawer/row actions, debounce, error summaries,
+progress poll) is a **thin mount** and is **not** import-parity complete. Own-surface routes keep
+their CTA/page chrome only; steward/apply/progress must still match DSI/shipment.
+
 1. **Steward surface = shared `ImportStewardCandidateWorkspace` + entity tabs.**
-   Reference: DSI (`DsiImportJobResolutionSection` + `DsiEntityTabsBar` + the candidate-list adapter).
+   Reference: DSI (`DsiImportJobResolutionSection` + `DsiEntityTabsBar` + the candidate-list adapter)
+   and shipment (`ShipmentImportJobResolutionSection`). New importers clone that **section** shape
+   on their surface — not a one-off Tabs + bare workspace + TextField.
    Group by entity (distributor / customer / product) with per-tab counts; band confidence with the
    shared `confidenceBand` helper (≥0.90 high / ≥0.70 medium). The shared workspace is **layout
    only** — port each importer's search debounce (300ms), bulk-action progress, and in-modal /
@@ -23,10 +31,11 @@ to the existing bar — do not invent a new pattern.** The canonical implementat
    Reference: shipment `_dispatch_shipment_apply` / DSI `_dispatch_dsi_apply`. The endpoint marks the
    job `running` + `pipeline_queued_at`, dispatches, writes the task slot, and returns immediately
    with `{async, task_id}`; the worker runs the sync orchestrator with `update_state` progress; the
-   UI fires-and-polls (`dsi-progress` / a bulk-task status route). No synchronous long-running write
-   in the request path (proxy-timeout risk). Register every background task in
-   `import_background_slots.py` so `clear_all_task_slots` clears it on cancel/retry (never write a
-   slot without a registry entry — that reintroduces the orphan-slot bug).
+   UI fires-and-polls (`dsi-progress` / importer-equivalent progress with the same phase/pct shape).
+   No synchronous long-running write in the request path (proxy-timeout risk). Register every
+   background task in `import_background_slots.py` so `clear_all_task_slots` clears it on
+   cancel/retry (never write a slot without a registry entry — that reintroduces the orphan-slot
+   bug). Wire web `BackgroundTaskKind` + progress query for the new kind.
 
 3. **Entity resolution = the shared `try_ai_token_resolution` wrapper.**
    Deterministic-first; AI only on miss and only auto-resolves at confidence ≥ `AI_AUTO_RESOLVE_THRESHOLD`
@@ -38,11 +47,16 @@ to the existing bar — do not invent a new pattern.** The canonical implementat
 4. **Column mapping = shared `CanonicalColumnMappingPanel`.**
    Reference: DSI + shipment. New importers needing an explicit mapping step mount this component
    (with a `testIdPrefix` + canonical target options), not a bespoke mapping table.
+   A **disabled/read-only** panel used only as documentation is **not** a completed mapping step.
 
 5. **Fact/master writes = set-based, chunked `INSERT … ON CONFLICT`.**
    No per-row round-trips. Preserve the importer's conflict semantics (e.g. `source_key` upsert /
    latest-job-wins; sell-out transaction-immutable) — batch the *mechanism* only. De-dup by conflict
    key within a chunk (Postgres rejects touching the same key twice in one statement).
+
+**Validate** for large files: prefer async `imports.process_job` (or dedicated validate task) +
+progress poll — same bar as DSI validate — not `run_sync=true` on upload when the workbook can be
+large.
 
 **Governance (always):** provisional master creation stays steward-initiated (no auto-create on
 apply); SOH is calculated-not-stored; fact tables are current truth while evidence/staging are

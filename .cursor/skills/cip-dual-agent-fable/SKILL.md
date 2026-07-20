@@ -2,18 +2,26 @@
 name: cip-dual-agent-fable
 description: >-
   CIP entry point for the Cursor ↔ CLI Fable dual-agent loop. Use when Warren
-  says Fable, dual-agent, consult, interview, verify unit, or multi-unit CIP
-  work. Loads personal skill dual-agent-fable plus CIP overlay
+  says Fable, Opus, dual-agent, consult, interview, verify unit, or multi-unit
+  CIP work. Loads personal skill dual-agent-fable plus CIP overlay
   docs/WORKFLOW_DUAL_AGENT.md.
 ---
 
 # CIP Dual-agent Fable
 
-1. **Read first:** personal skill `dual-agent-fable`  
+1. **Read first:** personal skill `dual-agent-fable`
    (`~/.cursor/skills/dual-agent-fable/SKILL.md`).
 2. **Then apply CIP overlay:** `docs/WORKFLOW_DUAL_AGENT.md` + `docs/memory/CURRENT.md`.
 3. **Default mode for mushy product work:** CONSULT in this chat (CLI Fable interview) — not browser Claude.
 4. **After a unit ships:** VERIFY before starting the next unit.
+
+## Quality bar (always)
+
+- Optimize for UX / architecture / best-in-market — **never** for speed or smallest diff.
+- **Canonical clone or STOP** — if a living reference exists (DSI steward, shipment apply, progress poll), clone that operator experience. Importing a shared primitive without the section behaviour is **not done**.
+- **No half-PASS** — thin mounts, stub wizards, missing async/progress when the bar requires them → incomplete; VERIFY must **STOP**.
+- **Never skim** — double- and triple-check against named canonical files before claiming ship.
+- **Own surface ≠ weaker UX** — different route/CTA only.
 
 New chat starter:
 
