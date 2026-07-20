@@ -1,7 +1,7 @@
 # CURRENT state
 
 **Last updated:** 2026-07-20 (CPOR H1 historical import backbone)
-**Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
+**Verify git:** `git branch --show-current` ? `git rev-parse --short HEAD`
 
 ---
 
@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
-| **HEAD** | (pending commit) CPOR H1 historical import |
+| **HEAD** | `66f8342` ? CPOR H1 historical import backbone |
 | **Alembic (DB)** | **`20260710_0072`** on cip ? code head adds **`20260720_0073` NOT applied** |
 | **Next** | Warren: smoke/apply `0073` on cip ? **H2** steward + async apply |
 
