@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-20 — **CPOR H2 steward UX parity (`995a418`):** shipment-shaped resolution section + CPOR progress poll on `/commercial-planner/cpor-cases/historical-import`; thin Tabs+TextField map replaced. Branch `feat/cpor-listing-status-audit`. Next: Fable VERIFY H2 → H3.
 - 2026-07-20 — **CPOR H2 steward + async apply:** pipeline `cpor_historical_cases_import` → staging/resolve; apply task `imports.cpor_historical_apply`; wizard + shared steward workspace; `0073` on cip + grants; smoke case `H2-SMOKE-556`. Branch `feat/cpor-listing-status-audit`. Next: Fable VERIFY H2 → H3 export.
 - 2026-07-20 — **CPOR H1 historical import backbone:** Fable READY locks (both sheets, frozen Result snapshot, tenant mapping profile, shared steward in H2). Migration `20260720_0073` authored NOT on cip; parser/validate + template `cpor_historical_cases`; real workbook smoke ~17k rows / ~1.1k cases. Branch `feat/cpor-listing-status-audit`. Next: Warren applies 0073 → H2.
 - 2026-07-20 — **CPOR+listing status audit (SELECT-only):** branch `feat/cpor-listing-status-audit` from origin/main `618448c`; cip alembic `0072`; grants OK; 2 cancelled smoke cases; listings/seeds/CST facts = 0; live fetch not wired. Canvas board; stop for Warren pick A–F. No Fable. DSI parked on `feat/dsi-unified-multifile` + stash `park-dsi-asus-dealer-name-automap`.

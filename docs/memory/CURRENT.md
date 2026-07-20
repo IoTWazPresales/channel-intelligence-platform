@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-20 (CPOR H2 steward + async apply)
+**Last updated:** 2026-07-20 (CPOR H2 steward UX parity)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,17 +10,18 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
-| **HEAD** | `10d2544` ? CPOR H2 steward + async apply |
+| **HEAD** | `995a418` ? CPOR historical steward/progress UX parity |
 | **Alembic (DB)** | **`20260720_0073` on cip** (applied + grants) |
-| **Next** | Fable VERIFY H2 ? H3 export round-trip / pivot filters when prioritized |
+| **Next** | Fable VERIFY H2 steward UX ? H3 export round-trip / pivot filters when prioritized |
 
 ---
 
 ## CPOR historical import
 
 - H1 PASS (Fable): parse/validate/profile + migration
-- **H2 shipped:** pipeline stage ? steward map-token ? async `imports.cpor_historical_apply`; wizard at `/commercial-planner/cpor-cases/historical-import`; shared `ImportStewardCandidateWorkspace` + `CanonicalColumnMappingPanel`
-- cip smoke: job 556 case `H2-SMOKE-556` applied `origin=historical_import`, 1 line, `historical_import` event
+- **H2 API:** pipeline stage ? steward map-token / bulk-map-token ? async apply + progress
+- **H2 web UX (`995a418`):** shipment-shaped `CporHistoricalImportJobResolutionSection` (entity tabs, selection, bulk map, drawer, 300ms search); wizard Upload ? async validate progress ? Resolve ? Apply; `cpor_historical_import` progress kind
+- cip smoke: job 556 case `H2-SMOKE-556` applied `origin=historical_import`
 - Locks: frozen Result; FLAG?BLOCK per case; no claim-evidence fabrication; no auto-create dims
 
 ---
