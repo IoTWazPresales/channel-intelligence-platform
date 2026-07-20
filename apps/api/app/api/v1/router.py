@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     commercial_planner,
     cpor_cases,
     cpor_exports,
+    cpor_historical_import,
     cst_steward,
     dev_wipe,
     catalog,
@@ -67,6 +68,7 @@ if commercial_planner_enabled():
     api_router.include_router(plan_vs_executed.router, prefix="/plan-vs-executed", tags=["plan-vs-executed"])
     api_router.include_router(cpor_cases.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cpor_exports.router, prefix="/cpor", tags=["cpor"])
+    api_router.include_router(cpor_historical_import.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cst_steward.router, prefix="/cst-steward", tags=["cst-steward"])
 api_router.include_router(pricing.router, prefix="/pricing", tags=["pricing"])
 api_router.include_router(promotions.router, prefix="/promotions", tags=["promotions"])

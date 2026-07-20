@@ -625,13 +625,13 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "display_name": "CPOR historical cases",
         "description": (
             "Bulk import of past CPOR tracking workbooks (case codes preserved). "
-            "Steward mapping profile + entity resolve; apply in H2."
+            "Steward mapping profile + entity resolve; async apply after steward."
         ),
         "enabled": True,
         "hidden": True,
         "admin_only": True,
         "requires_provider": False,
-        "pipeline_handler": "stub_noop",
+        "pipeline_handler": "cpor_historical_cases_import",
         "destructive_apply_requires_confirm": True,
         "accepted_file_types": [".xlsx", ".xlsm"],
         "expected_columns": {

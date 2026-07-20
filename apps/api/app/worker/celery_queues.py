@@ -30,6 +30,7 @@ BATCH_TASK_NAMES: frozenset[str] = frozenset(
         "imports.product_master_commit",
         "imports.product_master_validate",
         "imports.dsi_apply",
+        "imports.cpor_historical_apply",
         "imports.shipment_apply",
         "imports.dsi_soh_reconciliation",
         "imports.dsi_velocity_compute",

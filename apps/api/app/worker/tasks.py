@@ -242,6 +242,34 @@ def shipment_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dic
         raise
 
 
+@celery_app.task(name="imports.cpor_historical_apply", bind=True, ack_late=True)
+def cpor_historical_apply_task(self, job_id: int) -> dict:
+    """Background apply for ``cpor_historical_cases`` (staging → case/line upsert)."""
+    from app.services.cpor.historical_import.apply_sync import run_cpor_historical_apply_sync
+
+    def _on_progress(phase: str, phase_label: str, current_row: int, total_rows: int) -> None:
+        try:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "phase": phase,
+                    "phase_label": phase_label,
+                    "current_row": current_row,
+                    "total_rows": total_rows,
+                    "pct": round(current_row / total_rows * 100) if total_rows else 0,
+                },
+            )
+        except Exception:
+            pass
+
+    try:
+        return run_cpor_historical_apply_sync(job_id, on_progress=_on_progress)
+    except Exception:
+        logger.exception("cpor_historical_apply_task failed job_id=%s", job_id)
+        _write_task_level_failure(job_id)
+        raise
+
+
 @celery_app.task(name="imports.dsi_apply", bind=True, ack_late=True)
 def dsi_apply_task(self, job_id: int) -> dict:
     """Background apply for a ``distributor_inventory`` job (pipeline apply → complete-to-loaded)."""

@@ -17,6 +17,7 @@ import {
 import type { ColDef } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
@@ -157,6 +158,14 @@ export default function CporCasesListPage() {
           )}
         </TextField>
         <Box sx={{ flex: 1 }} />
+        <Button
+          component={Link}
+          variant="outlined"
+          href="/commercial-planner/cpor-cases/historical-import"
+          data-testid="cpor-historical-import"
+        >
+          Import historical
+        </Button>
         <Button variant="contained" onClick={() => setDlg(true)} data-testid="cpor-new-case">
           New case
         </Button>

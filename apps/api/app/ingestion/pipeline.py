@@ -852,6 +852,14 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
             db.refresh(job)
             return job
 
+        if handler == "cpor_historical_cases_import" or (job.template_slug or "") == "cpor_historical_cases":
+            from app.services.cpor.historical_import.pipeline import process_cpor_historical_import
+
+            process_cpor_historical_import(db, job, data)
+            db.commit()
+            db.refresh(job)
+            return job
+
         if (job.template_slug or "") == "inbound_shipments":
             df = pd.DataFrame()
             mapping = dict(job.field_mapping or {})

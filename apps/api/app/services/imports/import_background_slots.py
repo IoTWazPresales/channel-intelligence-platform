@@ -42,6 +42,7 @@ KIND_DSI_FORECASTING = "dsi_forecasting"
 KIND_SHIPMENT_IMPORT = "shipment_import"
 KIND_SHIPMENT_BULK = "shipment_bulk"
 KIND_COMMERCIAL_PLANNER_LINEUP_PARSE = "commercial_planner_lineup_parse"
+KIND_CPOR_HISTORICAL_IMPORT = "cpor_historical_import"
 
 # Allowed resolved kinds for the shared ``dsi_bulk_task`` slot. Anything else (e.g. the
 # legacy ``dsi_bulk_provisional_customers`` string still written by the endpoint) is
@@ -213,6 +214,8 @@ def task_label(job: ImportJob, *, kind: str) -> str:
         return f"Parsing current lineup (job {jid})"
     if kind == KIND_SHIPMENT_BULK:
         return f"Applying shipment steward bulk action (job {jid})"
+    if kind == KIND_CPOR_HISTORICAL_IMPORT:
+        return f"Applying historical CPOR import {jid}"
     if slug == "distributor_inventory":
         if mode == "validate":
             return f"Validating DSI import {jid}"
@@ -221,6 +224,10 @@ def task_label(job: ImportJob, *, kind: str) -> str:
         return f"Processing shipment import {jid}"
     if slug == "product_master":
         return f"Applying product master (job {jid})"
+    if slug == "cpor_historical_cases":
+        if mode == "apply":
+            return f"Applying historical CPOR import {jid}"
+        return f"Validating historical CPOR import {jid}"
     return f"Import job {jid}"
 
 
@@ -230,6 +237,8 @@ def _kind_from_template_slug(job: ImportJob) -> str:
         return KIND_SHIPMENT_IMPORT
     if slug == "product_master":
         return KIND_PRODUCT_MASTER_COMMIT
+    if slug == "cpor_historical_cases":
+        return KIND_CPOR_HISTORICAL_IMPORT
     return KIND_DSI_PIPELINE
 
 
