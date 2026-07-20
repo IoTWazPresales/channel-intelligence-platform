@@ -10,7 +10,7 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
-| **HEAD** | (H2 commit pending / see git) |
+| **HEAD** | `10d2544` ? CPOR H2 steward + async apply |
 | **Alembic (DB)** | **`20260720_0073` on cip** (applied + grants) |
 | **Next** | Fable VERIFY H2 ? H3 export round-trip / pivot filters when prioritized |
 
