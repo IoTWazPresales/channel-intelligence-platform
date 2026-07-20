@@ -108,6 +108,10 @@ from app.models.cpor import (
     CporCaseLine,
     CporClaimEvidenceLine,
 )
+from app.models.cpor_historical import (
+    CporHistoricalMappingProfile,
+    ImportCporHistoricalStagingLine,
+)
 from app.models.commercial_lineup import (
     CommercialLineupCase,
     CommercialLineupCasePo,
@@ -202,6 +206,8 @@ __all__ = [
     "CporCaseLine",
     "CporCaseEvent",
     "CporClaimEvidenceLine",
+    "CporHistoricalMappingProfile",
+    "ImportCporHistoricalStagingLine",
     "HistoricalLineupImportHeader",
     "HistoricalLineupImportLine",
     "ImportDistributorSiStagingLine",

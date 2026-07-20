@@ -208,6 +208,7 @@ The exact current step arrays map cleanly:
 | **customer_master** | type,provider,details,mode,upload | no | `none` | no | — | `master_upsert` | no | no | yes (validate/apply) | no | *(none — inline sync)* |
 | **historical_lineup** (admin) | type,provider,details,mode,upload | yes (override) | `historical_lineup` | no | — | `parse_to_history` | no | no | yes | no | *(none — inline sync)* |
 | **customer_sell_through** | *(own surface)* | yes | own surface (deferred) | **yes** | own surface (deferred) | `fact_upsert_after_steward` | no | no | own surface (deferred) | **yes** | *(own surface — parsers, see §1d / §10 D1)* |
+| **cpor_historical_cases** | *(own surface — H2 wizard)* | yes | `cpor_canonical` | **yes** | `dsi_resolution_section` (shared workspace) | `fact_upsert_after_steward` | yes | no | no | **yes** | `cpor_historical_import` (H2) |
 | **current_lineup** (hidden) | *(Commercial Planner upload)* | yes (parse) | external | no | — | `external_surface` | no | n/a | n/a | **yes** | `commercial_planner_lineup_parse` |
 
 > † **`inbound_shipments` steward surface** (updated 2026-06-24): 7-step wizard aligned with DSI

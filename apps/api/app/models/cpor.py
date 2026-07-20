@@ -30,6 +30,7 @@ class CporCase(Base, TimestampMixin):
     roe_snapshot: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
     currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="ZAR")
     channel: Mapped[str] = mapped_column(String(32), nullable=False, default="reseller")
+    origin: Mapped[str] = mapped_column(String(32), nullable=False, default="native", index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
@@ -95,6 +96,7 @@ class CporCaseLine(Base, TimestampMixin):
     ttl_support_usd: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     ttl_result_usd: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_snapshot_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     case: Mapped["CporCase"] = relationship("CporCase", back_populates="lines")
 

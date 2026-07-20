@@ -620,6 +620,32 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
             "ean": {"aliases": ["ean_code", "barcode"], "required": False},
         },
     },
+    {
+        "slug": "cpor_historical_cases",
+        "display_name": "CPOR historical cases",
+        "description": (
+            "Bulk import of past CPOR tracking workbooks (case codes preserved). "
+            "Steward mapping profile + entity resolve; apply in H2."
+        ),
+        "enabled": True,
+        "hidden": True,
+        "admin_only": True,
+        "requires_provider": False,
+        "pipeline_handler": "stub_noop",
+        "destructive_apply_requires_confirm": True,
+        "accepted_file_types": [".xlsx", ".xlsm"],
+        "expected_columns": {
+            "case_code": {"aliases": ["case id", "case_id"], "required": True},
+            "sales_model_token": {
+                "aliases": ["sales model name", "sales_model", "model"],
+                "required": True,
+            },
+            "customer_token": {
+                "aliases": ["dealer/retailer", "customer", "dealer"],
+                "required": True,
+            },
+        },
+    },
 ]
 
 DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
@@ -648,6 +674,12 @@ DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
         "Default CPOR claim evidence feed",
         "cpor_claim_evidence",
         "settlement_extract",
+    ),
+    (
+        "cpor_historical_cases_default",
+        "Default CPOR historical tracking workbook feed",
+        "cpor_historical_cases",
+        "historical_cpor_extract",
     ),
     ("current_lineup_system", "Current working lineup (Commercial Planner upload)", "current_lineup", "planning_extract"),
     ("unified_lineup_system", "Unified lineup import (Import Centre, multi-file)", "unified_lineup", "planning_extract"),

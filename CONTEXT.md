@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-20 — **CPOR H1 historical import backbone:** Fable READY locks (both sheets, frozen Result snapshot, tenant mapping profile, shared steward in H2). Migration `20260720_0073` authored NOT on cip; parser/validate + template `cpor_historical_cases`; real workbook smoke ~17k rows / ~1.1k cases. Branch `feat/cpor-listing-status-audit`. Next: Warren applies 0073 → H2.
+- 2026-07-20 — **CPOR+listing status audit (SELECT-only):** branch `feat/cpor-listing-status-audit` from origin/main `618448c`; cip alembic `0072`; grants OK; 2 cancelled smoke cases; listings/seeds/CST facts = 0; live fetch not wired. Canvas board; stop for Warren pick A–F. No Fable. DSI parked on `feat/dsi-unified-multifile` + stash `park-dsi-asus-dealer-name-automap`.
 - 2026-07-10 — **PR #7 merged to main (`4d1700b`):** BACKLOG-061 Theme B (promote-in-place + master grid shell + distributor parity). Next: soak or BACKLOG-073 when prioritized. CI pnpm-setup version clash noted (infra).
 - 2026-07-10 — **BACKLOG-061 Theme B complete — PR #7 open (`dd98683`):** U-B3b PASS; distributor bulk promote + disposition UI live; ready to merge when Warren says. Branch `feat/backlog-061-entity-promote-in-place`.
 - 2026-07-10 — **BACKLOG-061-U-B3b Fable PASS (`fc7b6c4`):** distributor bulk promote + disposition UI; Theme B queue empty; ready for PR. Branch `feat/backlog-061-entity-promote-in-place`.
