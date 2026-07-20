@@ -39,7 +39,8 @@ export type BackgroundTaskKind =
   | 'shipment_bulk'
   | 'product_master_commit'
   | 'product_master_validate'
-  | 'commercial_planner_lineup_parse';
+  | 'commercial_planner_lineup_parse'
+  | 'cpor_historical_import';
 
 export type BackgroundTaskStatus = 'running' | 'succeeded' | 'failed';
 
