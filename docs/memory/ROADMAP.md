@@ -4,9 +4,13 @@
 and backlog items. **`docs/BACKLOG.md`** holds full entry detail + TRIGGERs; this file
 holds **priority order** and **done vs open** (verified against `main` @ PR #5 merge).
 
-**Last verified:** 2026-06-22 · **Active branch:** `feat/dsi-async-topology`  
+**Last verified:** 2026-07-20 · **Active branch:** `feat/cpor-listing-status-audit`  
 **How to use:** Pick the lowest open phase item whose TRIGGER is met (or waived by Warren).
 Update status here + `CURRENT.md` when items complete; add deferrals to `BACKLOG.md`.
+
+**2026-07-20 prune:** Removed shipped / ignore-Supabase / ignore-deploy / fixed-069 entries from
+`docs/BACKLOG.md` (see prune note there + `.tmp/BACKLOG_DISPOSITION_OVERVIEW_2026-07-20.md`).
+Opus CONSULT READY. ROADMAP rows below refreshed for Done items that were stale as Open.
 
 ---
 
@@ -34,7 +38,7 @@ compute (task often succeeds after UI gives up). Structural fixes, not poll-only
 | **BACKLOG-040** | Defer historical **post-validate auto-apply** until steward idle | **Done** | `dsi_post_validate_auto_apply.py`; Windows default defer; flush task + steward completion hooks. |
 | **BACKLOG-041** | Raise compute **poll queue grace** + queue-aware UI messaging | **Done** | Scaled compute grace in `stewardAsyncPoll.ts`; clearer queue-timeout copy. |
 | **BACKLOG-042** | Dedupe duplicate resolution-plan error banners | **Done** | Error only in `DsiResolutionPlanToolbar.tsx`. |
-| **BACKLOG-043** | Triage **CI `test` failure** on `main` post PR #5 | **Done** | Fixed `test_product_usage_delete_semantics.py` import after `_SPECS` refactor. |
+| **BACKLOG-043** | Triage **CI `test` failure** on `main` post PR #5 | **Done** | Fixed `test_product_usage_delete_semantics.py` import after `_SPECS` refactor. Removed from BACKLOG 2026-07-21 re-audit. |
 
 **Done (related, do not re-implement):**
 
@@ -52,8 +56,8 @@ compute (task often succeeds after UI gives up). Structural fixes, not poll-only
 | ID | Item | Status | Evidence / notes |
 |----|------|--------|------------------|
 | — | Daily dev on **local `cip`**; Supabase for **scheduled soaks** | **Partial** | Warren on **local `cip`** since 2026-06-22 (Supabase clone + `.env` repoint). Supabase remains rollback backup; periodic remote soaks still optional. |
-| **BACKLOG-002** | Async connection pooling (`:5432` session pooler + modest pool) | **Parked** | Async still `NullPool` / `:6543` per project rules. TRIGGER: explicit approval + staged test. |
-| **BACKLOG-003** | EU **co-location** API + worker with Supabase | **Parked** | Infra-only. TRIGGER: hosting region pinned + team approval. |
+| **BACKLOG-002** | Async connection pooling (`:5432` session pooler + modest pool) | **Removed** | Ignored — Supabase stopped; NullPool/`6543` locked. |
+| **BACKLOG-003** | EU **co-location** API + worker with Supabase | **Removed** | Ignored — not redeploying. |
 | **BACKLOG-028** | Sync Celery engine off pooler replica routing | **Done** | `sync_url.py`, `resolve_sync_engine_url()`; `commit_session_with_transient_retry`. |
 | **BACKLOG-030** | DSI validate batched staging + chunked commits | **Done** | 2k chunks, 50k commit boundary; job #43 soak accepted. |
 | — | Sync `idle_in_transaction_session_timeout` backstop | **Done** | `session_sync.py` `build_sync_connect_args()` |
@@ -67,11 +71,11 @@ compute (task often succeeds after UI gives up). Structural fixes, not poll-only
 | ID | Item | Status | Evidence / notes |
 |----|------|--------|------------------|
 | **BACKLOG-004** | Import Flow **Phase 3**: capability-driven wizard; split `admin/imports/page.tsx` | **Parked** | Page still **~4,015 lines**; no `ImportFlowCapability` in `packages/types/`. TRIGGER: PM core-loop re-run + approval. |
-| **BACKLOG-001** | Shipment steward → shared `ImportStewardCandidateWorkspace` | **Open** | DSI uses workspace (`DsiImportJobResolutionSection.tsx`). Shipment still `ShipmentEntityStewardPanel` — no `ImportStewardCandidateWorkspace` on shipment paths. **TRIGGER partially met:** PR #5 merged 2026-06-21; awaits Warren steward-perf smoke signoff. |
-| **BACKLOG-044** | Shipment steward UX + resolution intelligence parity (plan/ready/bulk vs DSI) | **Parked** | Session 2026-06-23 (ACZA backfill); extends BACKLOG-001 — workspace swap alone insufficient. TRIGGER: shipment parity audit or backfill workflow scale-up. |
-| **BACKLOG-005** | DSI → `CanonicalColumnMappingPanel` | **Done** | BACKLOG entry 2026-06-06. |
-| **BACKLOG-006** | Slim shipment `mapping-candidates` API (paginate / omit `line_ids`) | **Parked** | TRIGGER: steward GET still slow on 100+ candidates post-merge smoke. |
-| **BACKLOG-007** | Shipment post-validation re-map + `source_key` stability | **Addressed** (operator soak pending) | UI + orphan purge shipped 2026-06-24. |
+| **BACKLOG-001** | Shipment steward → shared `ImportStewardCandidateWorkspace` | **Done** | Mounted in `ShipmentImportJobResolutionSection` (2026-07). Full intelligence parity remains **044/045**. |
+| **BACKLOG-044** | Shipment steward UX + resolution intelligence parity (plan/ready/bulk vs DSI) | **Parked** | Workspace + plan toolbar exist; drawer peers/clusters/verify-name still open. Viewport shell shared via **069** (Done 2026-07-20). |
+| **BACKLOG-005** | DSI → `CanonicalColumnMappingPanel` | **Done** | |
+| **BACKLOG-006** | Slim shipment `mapping-candidates` API (paginate / omit `line_ids`) | **Parked** | Paginated list; `line_ids` still in context payload. |
+| **BACKLOG-007** | Shipment post-validation re-map + `source_key` stability | **Done** | UI + orphan purge shipped; soak is ops watch only. |
 | **BACKLOG-022** | Unified `import_dispatch.enqueue_import_worker_task` | **Done** | `import_dispatch.py` exists; imports + shipment delegate. |
 | **BACKLOG-025** | Generic pipeline apply → async | **Partial** | `/process` async (2026-06-05). **Remaining:** frontend progress for CST/masters (`BACKLOG-029` part b). |
 | **BACKLOG-026** | PM: consolidate dual apply pipelines | **Parked** | `product_master_workflow.py` vs `pipeline.py::_process_product_master`. |
@@ -95,7 +99,7 @@ compute (task often succeeds after UI gives up). Structural fixes, not poll-only
 | **BACKLOG-017** | Embedding duplicate detection | **Parked** | Still `difflib`; doc says not implemented. |
 | **BACKLOG-018** | DSI geo token indexes | **Parked** | TRIGGER: EXPLAIN still slow. |
 | **BACKLOG-008** | DSI region hints from shipment evidence | **Parked** | TRIGGER: region Phases A–B stable. |
-| **BACKLOG-033** | Bitemporal shipment evidence (observations + current-state view) | **Parked** | TRIGGER: weekly shipment cadence or ETA prediction work. |
+| **BACKLOG-033** | Bitemporal shipment evidence (observations + current-state view) | **Done** | Core Plan D shipped; follow-ons **057-D4** / **058-D5** remain open. |
 | **BACKLOG-034** | PM launch/retire date integrity | **Parked** | TRIGGER: commercial outputs depend on lifecycle windows. |
 | — | `task_run` ledger at dispatch | **Done** | `task_run.py`, migration `20260609_0049`; read path not fully unified with activity feed. |
 | — | `db_transient_retry` on all sync writers | **Partial** | Used in DSI bulk paths + validate; **not** all commit paths — verify before assuming coverage. |
@@ -135,16 +139,16 @@ Verified on `main` after merge `0540435` (2026-06-21).
 | **BACKLOG-015** Cancel revokes all slot tasks | **Done** | |
 | **BACKLOG-023** DSI progress terminal label | **Done** | |
 | **BACKLOG-024** AI resolver on distributor_master + historical_lineup | **Done** | |
+| **BACKLOG-072** Catalogue-gap confirm-resolve (scan/preview/apply) | **Done** | `product_master_gap_resolve.py` + `/product-master-gaps/*` + Confirm resolve UI; removed from BACKLOG 2026-07-21. DSI *facts* stay FLAG-only (`source_key` includes product_id) by design. |
 
 ---
 
-## Suggested execution order (next 3 sprints)
+## Suggested execution order (next)
 
-1. **Phase A soak** on **local `cip`** (`feat/dsi-async-topology`) — job #96 class compute queue timeout.
-2. **Open PR** for Phase A when soak passes.
-3. **BACKLOG-001** shipment workspace swap after Phase A soak + Warren signoff.
-4. **BACKLOG-031** data health when operating remote Supabase for periodic soaks.
-5. **BACKLOG-004** only after explicit PM core-loop re-run + approval.
+1. **CPOR historical** VERIFY steward parity → H3 (active branch).
+2. **BACKLOG-044/045** shipment steward intelligence parity when TRIGGER fires.
+3. **BACKLOG-047** / **060** import UX friction when prioritized.
+4. **BACKLOG-004** only after explicit PM core-loop re-run + approval.
 
 ---
 

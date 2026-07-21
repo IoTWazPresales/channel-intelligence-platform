@@ -6,6 +6,9 @@
 
 ---
 
+**Prune note (2026-07-20):** Removed shipped items (001, 005, 007, 012, 015, 022–024, 028, 030, 033, 035–036, 038–042, 043, 050, 056, 061, 061-U2, 069, 072) and ignored Supabase/deploy items (002, 003). Plan D follow-ons renumbered **057-D4** / **058-D5** to end the 057/058 ID collision with bulk-backfill entries. Full disposition archive: `.tmp/backlog_prune_consult_opus_response.md`.
+
+
 ## BACKLOG-073 — Import-job fact rollback / purge (test-junk cleanup; not park/exclude)
 
 | Field | Detail |
@@ -20,23 +23,6 @@
 | **Behavior to retain** | Hard-delete blocked while refs exist; park/exclude stays TMP no-code disposition only; merge soft-redirect for real duplicate identity. |
 | **Out of scope** | Default-hiding parked/excluded rows as a substitute; prod cascade-purge tool; inventing `archived` status until a real-facts/no-merge case appears. |
 | **TRIGGER** | Warren prioritizes cleaning test-import junk from cip/admin masters; **or** operators cannot promote/steward because TMP/test dims dominate lists; **or** after BACKLOG-061 Theme B (U-G2/U-B2) when master UX cleanup is next. |
-
----
-
-## BACKLOG-072 — Product catalogue gaps: governed bulk resolve after PM (not job re-apply)
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Parked** · 2026-07-09 |
-| **Effort** | Large (cross-importer set-based repoint + steward confirm UI + activity feed) |
-| **Source** | Warren session (2026-07-09): Channel Ops / PM discussion — “re-resolving a job after Product Master upload is silly”; Product catalogue gaps (`/admin/product-master-gaps`, W3 worklist) is flag-only today (`ProductMasterGapWorklistView` + `product_master_gap_worklist.py`); does not create PM rows or bulk-repoint facts. Enterprise expectation: PM lands → propose matches → steward confirm → resolve across affected tables/jobs. |
-| **Idea** | Close the loop on catalogue gaps: after PM commit (or steward product confirm), surface tokens that now exact-match Product Master tiers; steward confirm screen shows affected shipment lines / DSI staging-or-facts / job ids; on confirm, set-based repoint + optional alias write. Intelligence = one steward surface, not “remember which import job to re-apply.” |
-| **Why it matters / deferrable** | Operators cannot clear cross-import unresolved debt without reopening jobs; looks unintelligent vs worklist intent. Deferrable while CPOR Batch 1–3 / Channel Ops derived-stock (Batch 2) run — gap worklist still useful as read-only triage. |
-| **What the work is** | (1) Post-PM (and on-demand) scan: open gap tokens → eligible `dim_product` via existing tier order (item_code → EAN/UPC → sales_model → alias); no fuzzy. (2) Preview API: token → product_id, counts by source (shipment / DSI / …), job ids. (3) Confirm apply: chunked set-based updates to evidence/staging/facts per importer contracts; write `ProductAlias` / source-token alias where steward opts in. (4) UI on `/admin/product-master-gaps`: select rows → Confirm resolve (not Create product). (5) Activity-feed progress; idempotent re-run. (6) Extend worklist sources beyond shipment+DSI only if discovery shows other product-resolving importers in scope. |
-| **Regression traps** | No auto-create `dim_product`; no silent confirm; no weak/substring joins; do not bypass DSI eligibility / historical vs weekly rules; shipment latest-job-wins vs sell-out transaction-immutability (update resolution FKs only where that contract applies); do not force full job re-validate as the only path; FLAG≠BLOCK for leftovers. |
-| **Behavior to retain** | Current read-only worklist + deep-links into job steward; ignore status; PM commit unchanged; steward-initiated provisional create stays elsewhere. |
-| **Out of scope** | Auto-resolve without steward confirm; fuzzy description matching; customer/distributor promote (BACKLOG-061); Channel Ops derived stock (CPOR Batch 2); rebuilding import wizards. |
-| **TRIGGER** | Warren prioritizes catalogue-gap close-the-loop after a PM upload leaves large unresolved debt; **or** operators refuse job re-apply as the remediation path; **or** post–CPOR Batch 2/3 when import-intelligence UX is next. |
 
 ---
 
@@ -71,23 +57,6 @@
 | **Behavior to retain** | Never write to `cip` from gate scripts; drop clone after proof. |
 | **Out of scope** | Cloud/Supabase clone automation. |
 | **TRIGGER** | Any future clone-gate or destructive-class apply proof task. |
-
----
-
-## BACKLOG-069 — Shipment steward drawer: off-screen on Review when scrolled (layout vs DSI)
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Parked** · 2026-07-07 |
-| **Effort** | Small–medium (web layout only; no API) |
-| **Source** | Warren steward session (2026-07-07): shipment import **Review…** opens **Channel partner steward** drawer at top of page while operator is scrolled lower in candidate list; `apps/web/src/app/(app)/admin/shipment-evidence/ShipmentImportJobResolutionSection.tsx` vs `DsiImportJobResolutionSection.tsx`; `ShipmentCandidateStewardDrawer.tsx` (`position: sticky`, `top: 80`); embedded in `apps/web/src/app/(app)/admin/imports/page.tsx` validate step. Related: **BACKLOG-045** (steward UI parity). |
-| **Idea** | Clicking **Review…** on a shipment mapping candidate should open the side steward panel **in view** beside the row being worked — same operator expectation as DSI steward. Today the drawer mounts at the **top** of the flex workspace; on a long imports wizard page the panel stays off-screen until the operator scrolls back up. |
-| **Why it matters / deferrable** | Blocks efficient steward sessions on large candidate queues (backfill / ACZA). Deferrable only while stewards work around it by scrolling up — but it is a daily friction bug, not polish. |
-| **What the work is** | (1) **Root cause:** DSI left column caps height (`maxHeight: calc(100vh - 120px)`, `overflow: hidden`) so the candidate table scrolls **inside** the workspace and the drawer stays viewport-visible; shipment section omits this cap — flex row grows with full table height, drawer `alignSelf: flex-start` + `sticky top: 80` anchors to container top. (2) **Fix direction:** port DSI viewport-bound workspace shell to `ShipmentImportJobResolutionSection` (preferred) **or** `scrollIntoView` on drawer open with a ref on `ShipmentCandidateStewardDrawer` (fallback; less ideal on mobile). (3) **Parity check:** confirm `ShipmentMappingStewardPanel` behaviours still differ from DSI (verify-name chip vs interactive flow, duplicate cluster, peer lookup) under **BACKLOG-045** — separate from scroll bug. |
-| **Regression traps** | Breaking embedded `ImportStewardCandidateWorkspace` internal scroll; pagination toolbar clipped; mobile column stack order; sticky nav offset (`top: 80`) vs app shell height changes. |
-| **Behavior to retain** | Side drawer pattern (not modal); shipment-evidence API family; row click + Review both open same drawer; governance flows unchanged. |
-| **Out of scope** | Full `DsiMappingStewardPanel` feature parity (BACKLOG-045); backend steward logic. |
-| **TRIGGER** | **Fired** — Warren reported during live steward session (2026-07-07); resume on next import-parity / steward UX pass. |
 
 ---
 
@@ -142,40 +111,6 @@
 
 ---
 
-## BACKLOG-061 — Entity verification / promote-in-place module (customers + distributors)
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Shipped on main** (PR #7 merged 2026-07-10) · Theme B complete: B1–B4 + BP1 + U2 mint + U3 disposition + U-G2/U-B2 shell + U-B3 distributor bulk/mint/disposition |
-| **Effort** | Medium (API promote endpoint, admin UI, status taxonomy cleanup, distributor parity) |
-| **Source** | Read-only audits (2026-07-02): IC/lineup alias gap; provisional customer promote investigation (`dim_customer` 4,886 unverified `TMP-CUST-%`; distributors ~23 `TMP-DIST-%`). No promote-in-place exists — only merge (soft redirect) or ad-hoc PATCH without code reassignment. |
-| **Idea** | Governed **promote-in-place**: same `dim_customer` / `dim_distributor` id, flip `unverified` → verified master (`active` or canonical `verified`), assign real business code on the row, audit trail — distinct from merge-into-existing-master. |
-| **Why it matters / deferrable** | Stable ids + merge soft-redirect already protect fact integrity; deferral is safe for **data corruption** risk. Costs without promotion: duplicate provisional minting on code-keyed imports (`bulk` upsert mints new rows while old rows keep `TMP-*` codes), merge-survivor UX noise, operator confusion. `verified` status is **orphaned** (7 rows in DB, not in API `ALLOWED_CUSTOMER_STATUS`, gates nothing at runtime). |
-| **What the work is** | (1) **Design first** — decide what `verified` gates: stop provisional reuse, merge-survivor preference, reporting eligibility, import filters. (2) Customer promote API + admin action (code reassignment on same id, uniqueness checks). (3) Distributor parity (`TMP-DIST-%`, 23 rows). (4) Align API allow-list vs DB statuses; remove or formalize orphaned `verified`. (5) Document interaction with alias tables (no auto-repoint on promote — same id). (6) **BP1 done:** CSV/paste bulk promote. (7) **Unit 2:** per-tenant mint — see BACKLOG-061-U2. |
-| **Regression traps** | Do not break `merged_into_*` soft redirect; do not auto-create on promote; code uniqueness; bulk upsert-by-code must not silently duplicate when steward intended promote; lineup/shipment resolution must keep using aliases + dim codes regardless of status until gates are defined. |
-| **Behavior to retain** | Merge repoint (`customer_full_merge`, `customer_alias_scope_merge`); provisional reuse only for `unverified` + `TMP-*`; PATCH provisional-reuse warning (2026-07-02). |
-| **Out of scope** | Building promote in the IC/lineup alias pass; changing DSI resolution tier order. |
-| **TRIGGER** | Before **tagged-customer sell-through reporting** starts; **or** before **second-tenant onboarding** — whichever comes first. |
-
----
-
-## BACKLOG-061-U2 — Per-tenant customer code mint convention
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Shipped on branch** (customers U2a/U2b + distributors U-B3a mint) · 0070 + 0072 on cip |
-| **Effort** | Medium (settings schema + mint service + bulk “mint for me” + ERP research) |
-| **Source** | Warren answers 2026-07-10 (consult bulk promote): codes may come from import **or** system mint; format is per-business (region/segment); do not hardcode one global format; CIP is multi-tenant. Fable Unit 1 deliberately ships CSV mapping only (no mint). |
-| **Idea** | Configurable per-tenant customer-code convention (research NetSuite/Dynamics/SAP-style auto-numbering), stored in app settings; bulk “mint for me” promote that assigns codes under that convention for code-less businesses (including Warren’s ~4,886 TMP backlog when no external codes exist). |
-| **Why it matters / deferrable** | Unit 1 CSV path clears tenants that already have ERP codes; Warren’s own tenant may clear few rows until mint exists. Deferrable until second-tenant onboarding or until steward needs to clear TMP backlog without an external code list. |
-| **What the work is** | (1) ERP numbering research note. (2) Settings table / alembic (first schema step). (3) Mint service + collision-safe sequence. (4) Bulk promote “mint” mode wired to BP1 batch endpoint. (5) Optional no-code disposition policy. |
-| **Regression traps** | Never invent a global hard-coded format; never auto-create dim_customer; FLAG≠BLOCK on collisions; partial success semantics from BP1. |
-| **Behavior to retain** | CSV/paste mapping path from BP1; single-row promote. |
-| **Out of scope** | Grid-shell extraction (Theme B); distributor batch (optional follow-on). |
-| **TRIGGER** | Steward needs to clear TMP-CUST backlog without an external code CSV; **or** second-tenant onboarding that requires mint; **or** Warren asks for Unit 2. |
-
----
-
 ## BACKLOG-054 — Disposable-smoke migrate safety gap (`DATABASE_URL_SYNC_MIGRATE` fall-through)
 
 | Field | Detail |
@@ -213,19 +148,6 @@
 ### Q4 — Supersession retention
 
 **RESOLVED 2026-07-01.** Soft latest-wins — superseded case retained + flagged, not deleted. See §7.
-
----
-
-## BACKLOG-056 — Bulk backfill UI steward overrides (period/BU + collision winner)
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Resolved** · 2026-07-01 (`feat/unit-6-unified-lineup-import-centre`) |
-| **Effort** | Small–medium (dialog controls + wire `manual_overrides` / `supersession_confirmations` to preview re-run) |
-| **Source** | Spec C Step B delivery (`BulkLineupBackfillDialog.tsx`, `execute_bulk_lineup_preview` / `execute_bulk_lineup_apply`). |
-| **Idea** | API accepts `manual_overrides` for period/BU and collision winner selection; dialog ships auto-path only. Editable overrides are the enhancement before stewards rely on bulk backfill for conflict-heavy archives. |
-| **Resolution** | `BulkLineupBackfillDialog` — editable period/BU per proposal, collision winner radio groups, re-run preview with overrides, apply wires `supersession_confirmations`. API preview/apply routes accept `manual_overrides` + `supersession_confirmations`. |
-| **TRIGGER** | ~~Before first steward runs a backfill where auto-detection conflicts are frequent.~~ **Fired** — production-ready panel pass (2026-07-01). |
 
 ---
 
@@ -338,23 +260,6 @@
 
 ---
 
-## BACKLOG-050 — DSI derivation dispatch wrapper deadlocks on `import_job.staged_metadata`
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **RESOLVED** · 2026-06-27 — single-writer fix shipped on `feat/dsi-async-topology`. `dispatch_dsi_soh_reconciliation_after_apply` / `dispatch_dsi_velocity_after_apply` no longer write/flush the slot on the caller session; `enqueue_*` (`set_task_slot_by_job_id`, own committed session) is the sole writer. Derivation dispatch in `complete_dsi_import_job_to_loaded` wrapped in try/except (loaded job never reverts to failed). Test asserts `session.flush` not called. Proven deadlock-free on fresh job #199 (full SOH+velocity+forecast derive chain). Remaining sub-item below kept only if a multi-concurrency worker reopens it. |
-| **Effort** | Small–medium (session/transaction boundary fix + concurrency test) |
-| **Source** | Warren session (2026-06-27) job #96 finalize recovery: when `complete_dsi_import_job_to_loaded` dispatched SOH reconciliation + velocity, two connections both ran `UPDATE import_job SET staged_metadata=...` and **app-level deadlocked** (one `idle in transaction` holding the row lock, the other `Lock/transactionid` waiting). The `run_*_sync` work itself is trivially fast (SOH 0.4s, velocity 3.5s inline). Files: `dsi_apply_completion.py` (dispatch tail), `dsi_soh_reconciliation_enqueue.py` / `dsi_velocity_enqueue.py` (`set_task_slot_on_job` + `_persist_*_metadata` open separate sessions), `import_background_slots.py`. |
-| **Idea** | The derivation **dispatch wrapper** writes task-slot bookkeeping to `import_job.staged_metadata` from multiple concurrent sessions (caller session still holding the row lock pre-commit + helper sessions + the picked-up worker task), producing a lock-ordering deadlock on a single hot row. Only manifests when dispatch runs while another writer holds the `import_job` row (out-of-band finalize, or two derivation tasks racing on a multi-slot worker). |
-| **Why it matters / deferrable** | Did not corrupt data (job #96 reached `loaded`; facts intact) and the dev solo worker normally serializes, so it is masked day-to-day. Deferrable until a multi-concurrency worker or another out-of-band finalize is needed; but it is a latent hang risk for the canonical worker path under concurrency. |
-| **What the work is** | (1) Ensure the caller **commits the stage flip + releases the `import_job` row lock before** dispatching derivations (or dispatch after commit). (2) Make slot writes single-session / use a short autonomous transaction, or batch SOH+velocity slot writes into one update. (3) Consider `SELECT ... FOR UPDATE` ordering or advisory lock keyed on job id. (4) Concurrency test: two derivations dispatched for the same job must not deadlock. |
-| **Regression traps** | Don't drop activity-feed slot registration (import-parity); don't reintroduce orphan slots; keep broker → in-process-thread → sync fallback intact; preserve idempotent derivations. |
-| **Behavior to retain** | Every background task registered in `import_background_slots`; `clear_all_task_slots` on cancel/retry; SOH/velocity idempotency. |
-| **Out of scope** | Rewriting the derivation tasks themselves; queue split (BACKLOG-039); broad async refactor (BACKLOG-048). |
-| **TRIGGER** | Worker concurrency raised above solo; **or** another `staged_metadata` deadlock / finalize hang observed; **or** BACKLOG-048 background-parity audit starts. |
-
----
-
 ## BACKLOG-049 — Unresolved module (ignore → unresolved worklist)
 
 | Field | Detail |
@@ -457,85 +362,6 @@
 
 ---
 
-## BACKLOG-043 — CI: triage failing `test` workflow on `main` (post PR #5)
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Open** · 2026-06-21 |
-| **Effort** | Small–medium (depends on failure) |
-| **Source** | PR #5 merged with failing GitHub Actions `test` job (run `27911253557`); `docs/memory/ROADMAP.md` Phase A |
-| **Idea** | Restore green CI on `main` before the next large feature PR. |
-| **What the work is** | Reproduce failure locally or from Actions log; fix or quarantine unrelated flakes; document if env-specific. |
-| **TRIGGER** | Before opening next merge PR from `feat/dsi-async-topology` or any branch with CI gate. |
-
----
-
-## BACKLOG-042 — Dedupe duplicate DSI resolution-plan error banners
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Open** · 2026-06-21 |
-| **Effort** | Small (web) |
-| **Source** | Jun 21 modular/UX audit; `DsiImportJobResolutionSection.tsx` + `DsiResolutionPlanToolbar.tsx` both render `suggestionsQuery.isError` |
-| **Idea** | Single error surface for plan compute/load failures (toolbar **or** section, not both). |
-| **Regression traps** | Do not hide errors when toolbar is collapsed; preserve retry actions. |
-| **TRIGGER** | Phase A DSI topology work on `feat/dsi-async-topology` (pairs with BACKLOG-041). |
-
----
-
-## BACKLOG-041 — DSI resolution-plan compute poll queue grace + queue-aware UI
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Open** · 2026-06-21 |
-| **Effort** | Small (web) |
-| **Source** | Job #96 audit; `stewardAsyncPoll.ts` `COMPUTE_QUEUE_GRACE_ATTEMPTS=150` (~120s); apply poll already uses scaled grace |
-| **Idea** | Scale compute queue grace like apply (row count / known long-running validate ahead); distinguish queue-wait vs execution timeout in UI copy. |
-| **Regression traps** | Do not mask true failures; solo worker may need 4+ min behind validate + post-validate apply — grace is a **dev mitigation** until BACKLOG-039. |
-| **TRIGGER** | Phase A on `feat/dsi-async-topology`; or false "timed out while waiting in queue" reported again. |
-
----
-
-## BACKLOG-040 — Defer DSI historical post-validate auto-apply until steward idle
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Open** · 2026-06-21 |
-| **Effort** | Medium (API + metadata) |
-| **Source** | Job #96 audit; `dsi_validate_post_sync.py` enqueues `dsi_resolution_plan_apply` immediately after validate |
-| **Idea** | After historical validate, **hold** auto-apply until no interactive steward task is active (compute/apply/bulk) or user explicitly starts apply. |
-| **Why / deferrable** | Auto-apply is correct for unattended historical backfill; defer only on **interactive** dev paths or via env flag. |
-| **Regression traps** | Do not block unattended historical soak; preserve `dsi_historical_product_eligibility_relaxed` auto-confirm rules at apply time. |
-| **TRIGGER** | Phase A on `feat/dsi-async-topology`. |
-
----
-
-## BACKLOG-039 — Celery queue split (interactive steward vs batch validate/apply)
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Open** · 2026-06-21 |
-| **Effort** | Medium (worker config + task routes + dev/prod docs) |
-| **Source** | Strategic audit + `docs/DEV_TOPOLOGY.md`; job #96 solo-worker backlog |
-| **Idea** | Route `dsi_resolution_plan_compute`, steward bulk tasks, and similar to an **interactive** queue; `process_job`, validate, apply chunks, reaper to **batch** queue. Prod: two workers; dev: document limitation on solo. |
-| **Regression traps** | Docker Compose must start worker(s) consuming both queues; do not break `in_process_thread` dev fallback. |
-| **TRIGGER** | Phase A on `feat/dsi-async-topology`; or before on-prem / Docker prod cutover. |
-
----
-
-## BACKLOG-038 — Windows solo dev: optional disable Celery beat + running-job reaper
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Open** · 2026-06-21 |
-| **Effort** | Small |
-| **Source** | Job #96 audit; `scripts/dev-worker.js` spawns sibling beat on Windows; `celery_app.py` `imports.reap_stale_running_jobs` schedule |
-| **Idea** | `CIP_DISABLE_DEV_BEAT=1` (or similar) skips beat/reaper on Windows solo — reaper is no-op when `inspect()` returns no workers but still consumes queue time. |
-| **Regression traps** | Docker/prod beat unchanged; document that stale-job cleanup needs inspect-capable worker in prod. |
-| **TRIGGER** | Phase A on `feat/dsi-async-topology`; default **off** beat on Windows until queue split ships. |
-
----
-
 ## BACKLOG-037 — DSI validate/refresh post-resolution orchestrator unification
 
 | Field | Detail |
@@ -550,91 +376,6 @@
 | **Behavior to retain** | Validate remains canonical until unified; steward manual alias override unchanged; cross-distributor auto-resolve guard. |
 | **Out of scope** | Changing resolution tier semantics; schema migration. |
 | **TRIGGER** | After Tier B + Tier C validate soak on job #43; or steward refresh bug where post-receipt auto-resolve is expected on re-resolve. |
-
----
-
-## BACKLOG-035 — Re-add migration 0048 (approved alias partial-unique indexes)
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Done** · applied Supabase 2026-06-16 (`662f68f` branch + dedupe pre-step) |
-| **Effort** | Small (migration file restore + apply) |
-| **Source** | CIP close-out brief Unit 1; `apps/api/alembic/versions/20260608_0048_source_token_alias_unique.py` removed @ `8ec5978` |
-| **Idea** | Restore `20260608_0048` partial-unique indexes on approved `distributor_source_token_alias` and `customer_source_token_alias` rows. |
-| **Why / deferrable** | Customer-scope pre-check fails today: 16 approved-alias keys map to multiple `customer_id` values; migration `_assert_no_alias_conflicts` will RAISE until Unit 2b consolidation clears them. Distributor scope is clean (0 conflicts). |
-| **What the work is** | Re-commit migration (same revision id / `down_revision` 0047); run conflict diagnostics; `alembic upgrade` on dev Supabase after customer dup aliases repointed. |
-| **Regression traps** | Applying before customer conflicts = 0; changing index scope without updating INT-03 diagnostics. |
-| **Behavior to retain** | INT-03 validate-time conflict surfacing (`source_token_alias_conflicts.py`). |
-| **Out of scope** | Provisional create-path dedup (Unit 2a — shipped). |
-| **TRIGGER** | Supabase `customer_source_token_alias` approved-scope multi-`customer_id` conflict count = **0** after Unit 2b governed merge. |
-
----
-
-## BACKLOG-036 — DSI weekly SKU-strict product resolution refinement
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Done** · 2026-06-16 (`dsi_weekly_product_resolution.py` + validate warnings; weekly path enables `shipment_sku_item_code_anchor`) |
-| **Effort** | Medium |
-| **Source** | CIP close-out brief; job #43 is historical model-grain; weekly DSI files carry SKU |
-| **Idea** | After distributor-receipt disambiguation tier (Unit 3), tighten weekly-mode imports to prefer `item_code`/SKU tier first and surface explicit steward guidance when weekly files omit SKU. |
-| **Why / deferrable** | Historical backfill needs model-grain receipt disambiguation; weekly path already has SKU column — refinement is UX/validation polish, not blocker for job #43. |
-| **What the work is** | Template/mapping guard for weekly DSI; optional validate warning when `product_identifier` resolves only at `sales_model_name` but mapped SKU column is empty. |
-| **Regression traps** | Applying weekly strict rules to historical relaxed imports. |
-| **Behavior to retain** | Historical `dsi_historical_product_eligibility_relaxed` path; Unit 3 receipt-tier for model-grain. |
-| **Out of scope** | Global `product_alias` distributor dimension. |
-| **TRIGGER** | Unit 3 shipped + job #43 historical apply soak signed off; weekly DSI import template in active use. |
-
----
-
-## BACKLOG-001 — Shipment steward panel → shared `ImportStewardCandidateWorkspace` (adapter swap)
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Open** · TRIGGER partially met 2026-06-21 (PR #5 merged to `main`); awaits Warren steward-perf smoke signoff before workspace swap |
-| **Effort** | Large (web); adapter + tests; no API contract change if done correctly |
-| **Source** | Read-only swap audit (conversation); `apps/web/src/features/import-steward/dsi-mapping-steward-panel.tsx` (lines 94–97); `useInboundEvidenceMappingCandidatesListModel.ts` (lines 11–13); `inboundEvidenceMappingCandidates.domain.ts` (lines 7–8) |
-| **Idea** | Replace the monolithic `ShipmentEntityStewardPanel` list shell with `ImportStewardCandidateWorkspace`, wired through a shipment-specific section adapter (pattern: `DsiImportJobResolutionSection`), while keeping all steward mutations on **shipment-evidence** endpoints. |
-| **Why it matters / deferrable** | Reduces ~1,900-line duplication and aligns shipment with DSI list UX; deferrable until Phase 1 steward perf (debounce, bulk-map modal, invalidate-only) and Phase 2 batching (`b8ccfd0`) are merged and stable. |
-| **What the work is** | (1) `ShipmentImportJobResolutionSection` (or equivalent) composing `ImportStewardCandidateWorkspace` + `useInboundEvidenceMappingCandidatesListModel` + `buildInboundEvidenceMappingCandidateColumns`. (2) Shipment-only bulk/single-row dialogs and mutations (map, provisional, bulk-map, bulk-provisional, apply-plans, special-category, reject). (3) **Do not** drop in `DsiMappingStewardPanel` or `useDsiBulkSteward` wholesale. |
-| **Regression traps** | Wrong API family (`/api/v1/mappings/...` bypasses Phase 2 shipment batching); entity types (`shipment_distributor` / `shipment_customer_token` ≠ DSI tokens); losing 300ms search debounce, bulk-map “Mapping N…”, in-modal errors; double `refetch` after `invalidate`; `steward_rejected` terminal handling. |
-| **Behavior to retain** | All `POST /api/v1/shipment-evidence/import-candidates/...` paths including `bulk-map-customer`, `bulk-create-provisional-customers`, `bulk-apply-confirmed-plans`; governance (no auto-create masters); `created_from_import_job_id` on aliases; resolution/scoring/enrichment logic unchanged. |
-| **Out of scope** | DSI product resolve, duplicate-review, open-channel, ignore bulk, resolution-plan toolbar, region/channel tab, paginated DSI candidate API. |
-| **TRIGGER** | PR #5 merged (**met** 2026-06-21) **and** Warren signs off steward perf smoke; then dedicated “shipment steward workspace swap” task approved. See `docs/memory/ROADMAP.md` Phase C. |
-
----
-
-## BACKLOG-002 — Phase 4: Supabase connection pooling (`:5432` session pooler + modest pool)
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | Parked · 2026-05-31 |
-| **Effort** | Medium–large (config + validation across API/worker/Celery) |
-| **Source** | `CONTEXT.md` (Jun 1 validate perf “Remaining”; May 31 PM EAV “Not done”; May 31 import audit “Phase 4 … pending approval”); `docs/PRODUCT_MASTER_PIM_DESIGN_BRIEF.md` (§1 NullPool / `:5432` session pooler recommendation) |
-| **Idea** | Move async engine from `NullPool` + transaction pooler `:6543` to session pooler `:5432` with a modest connection pool so requests reuse connections. |
-| **Why / deferrable** | Biggest cross-importer latency lever after query batching; deferrable until correctness path is stable and pooling change can be validated without `ECHECKOUTTIMEOUT` regressions. |
-| **What the work is** | Update `DATABASE_URL` / `app/db/session.py` pool settings; keep `statement_cache_size=0` / `prepare_threshold` fixes; load-test validate, steward, PM commit; document revert to NullPool. |
-| **Regression traps** | Prior **ECHECKOUTTIMEOUT** history; `DuplicatePreparedStatementError` on wrong pooler; Celery worker + API must share compatible config. |
-| **Behavior to retain** | Correctness on Supabase; ability to revert to NullPool quickly. |
-| **Out of scope** | Changing business logic; schema migrations. |
-| **TRIGGER** | Explicit approval to change DB connection strategy + successful staged test on dev Supabase (no production until signed off). |
-
----
-
-## BACKLOG-003 — EU co-location: deploy API + worker next to Supabase DB
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | Parked · 2026-05-31 |
-| **Effort** | Infra / deployment (not app code) |
-| **Source** | `CONTEXT.md` (Jun 1 “Phase 4 connection pooling / EU co-location”; May 31 “deployment co-location (API next to DB in EU) as the biggest latency lever”) |
-| **Idea** | Run application tier in the same region as the Postgres instance to cut ~2–3s round-trip tax on remote dev DB. |
-| **Why / deferrable** | Complements pooling; pure infra; no value until target hosting region is chosen. |
-| **What the work is** | Deployment topology change (API, worker, Redis if needed) in EU; update env URLs; smoke importers. |
-| **Regression traps** | Secrets, CI, and local-dev docs must stay coherent with `AGENTS.md` local-no-Docker mode. |
-| **Behavior to retain** | Same DB identity (`cip`); no data migration. |
-| **Out of scope** | Application feature work. |
-| **TRIGGER** | Production or shared dev Supabase is pinned to EU and team approves infra move. |
 
 ---
 
@@ -655,23 +396,6 @@
 
 ---
 
-## BACKLOG-005 — Roll `CanonicalColumnMappingPanel` to DSI column mapping
-
-| Field | Detail |
-|-------|--------|
-| **Status** | **Done · 2026-06-06** — DSI mapping step uses `CanonicalColumnMappingPanel` with `DSI_MAPPING_REQUIRED_GROUPS` (parity with shipment). |
-| **Effort** | Medium (web) |
-| **Source** | `apps/web/src/features/import-mapping/CanonicalColumnMappingPanel.tsx` (lines 26–35: “DSI / shipment” family); `CONTEXT.md` (Jun 1: panel built, “used by shipment mapping”); `admin/imports/page.tsx` (shipment mount ~3558; DSI still uses legacy DSI mapping UI elsewhere in same file) |
-| **Idea** | Use the shared mapping panel for DSI canonical column mapping (parity: summary chips, mapped/unmapped filter, searchable targets, duplicate warnings). |
-| **Why / deferrable** | Shipment mapping UX was the first adopter; DSI mapping works today. |
-| **What the work is** | Wire DSI mapping step to `CanonicalColumnMappingPanel` with DSI `targetOptions` / required groups; preserve save + validate mutations. |
-| **Regression traps** | DSI disposition model differs from PM; do not pull PM-only disposition into DSI. |
-| **Behavior to retain** | Existing DSI mapping payload and validate/revalidate flows. |
-| **Out of scope** | Shipment steward swap (BACKLOG-001). |
-| **TRIGGER** | Shipment mapping panel stable on `main` and DSI import mapping UX task is prioritized. |
-
----
-
 ## BACKLOG-006 — Slim shipment `mapping-candidates` API response (paginate / omit `line_ids`)
 
 | Field | Detail |
@@ -686,23 +410,6 @@
 | **Behavior to retain** | Steward apply semantics and job-bound line verification. |
 | **Out of scope** | Changing enrichment/scoring. |
 | **TRIGGER** | Post-merge steward perf smoke shows `mapping-candidates` GET still dominant in browser waterfall for jobs with 100+ candidates. |
-
----
-
-## BACKLOG-007 — Shipment post-validation: edit mapping, re-validate, and `source_key` stability
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Addressed** · 2026-06-24 (post-validate re-map UI + orphan line purge on re-validate; operator soak pending) |
-| **Effort** | Medium–large (web + validate pipeline) |
-| **Source** | `CONTEXT.md` (Jun 1: re-map only at `shipment_mapping_ready` / pre-validation); `apps/web/src/app/(app)/admin/imports/page.tsx` (lines 3468–3477 revisit read-only; 3543–3573 mapping panel gated to `shipment_mapping_ready`); `apps/api/app/models/shipment_evidence.py` (lines 19–20: upsert on `(import_job_id, source_key)`); `apps/api/app/services/imports/shipment_evidence_source_keys.py` (business key from mapped canonical fields) |
-| **Idea** | Allow “edit mapping & re-validate” on a revisited shipment job **after** validation (not only pre-validation), with explicit handling when mapping changes alter `source_key` fragments (upsert vs orphan lines / candidate rebuild). |
-| **Why / deferrable** | Pre-validation re-map was shipped first; post-validation requires pipeline + UX design for evidence line lifecycle. |
-| **What the work is** | Stage-aware UI; re-run `process_shipment_evidence_import`; document operator flow for mapping corrections; tests for `source_key` change when mapped columns shift. |
-| **Regression traps** | Duplicate evidence lines; stale `import_entity_mapping_candidate` rows; steward mappings tied to old line ids; latest-job-wins semantics on `fact_inbound_shipment`. |
-| **Behavior to retain** | Idempotent re-validate intent (replace-in-place per job, not duplicate jobs); governance boundaries. |
-| **Out of scope** | Auto-create masters from evidence. |
-| **TRIGGER** | Operator story approved: fix column mapping on job #N after validate without re-uploading file. |
 
 ---
 
@@ -744,7 +451,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | **N/A for this branch · 2026-06-06** — destructive ops require explicit Warren approval + Supabase PITR; no code change. Remains a future ops task when PM `specs_json` path is production-proven. |
+| **Status** | **N/A for this branch · 2026-06-06** — destructive ops require explicit Warren approval + local `pg_dump` backup (or PITR if remote ever returns); no code change. Remains a future ops task when PM `specs_json` path is production-proven. |
 | **Effort** | Medium (ops) + approval |
 | **Source** | `CONTEXT.md` (May 31 PM EAV: “left in place (dropping … needs explicit approval)”; import audit “still pending: drop existing 2M PAV rows”) |
 | **Idea** | Remove dead write-only PAV data after `specs_json` commit path is proven in production. |
@@ -753,7 +460,7 @@
 | **Regression traps** | Any hidden reader; `PM_WRITE_LEGACY_EAV` escape hatch users. |
 | **Behavior to retain** | `specs_json` commit path. |
 | **Out of scope** | Re-enabling EAV writes by default. |
-| **TRIGGER** | Explicit Warren approval + Supabase restore point taken. |
+| **TRIGGER** | Explicit Warren approval + database restore point taken. |
 
 ---
 
@@ -767,20 +474,6 @@
 | **Idea** | Batch catalog upsert on PM commit like product bulk upsert. |
 | **Why / deferrable** | PM commit already fast after EAV write removal; diminishing returns until large catalogs return. |
 | **TRIGGER** | PM commit profiling shows catalog flush as dominant cost again. |
-
----
-
-## BACKLOG-012 — AG Grid test mock: `getDisplayedRowCount` for products web suite
-
-| Field | Detail |
-|-------|--------|
-| **Status** | **Done · 2026-06-06** — shared `agGridReactMock.tsx` + products page test mock extended (`getDisplayedRowCount`, `deselectAll`); 15/15 pass. |
-| **Effort** | Small |
-| **Source** | `CONTEXT.md` (Jun 1 Option A: “pre-existing … AG Grid mock lacks `getDisplayedRowCount`”; fails on pre-change commit too) |
-| **Idea** | Extend shared AG Grid test mock so `admin/products/page.test.tsx` passes. |
-| **Why / deferrable** | Unrelated to product channel removal; test-only. |
-| **What the work is** | Add `getDisplayedRowCount` to vitest grid mock (match `CatalogDimensionGridPanel` usage). |
-| **TRIGGER** | Products page test suite required in CI gate. |
 
 ---
 
@@ -804,18 +497,6 @@
 | **Effort** | Medium |
 | **Source** | `apps/api/app/services/imports/template_definitions.py` (line 298: “intentionally deferred; not wired for apply yet”) |
 | **TRIGGER** | Business requests customer classification import apply path. |
-
----
-
-## BACKLOG-015 — Import cancel: revoke all Celery tasks in slot registry (follow-up)
-
-| Field | Detail |
-|-------|--------|
-| **Status** | **Done · prior to 2026-06-06** — `import_job_task_control._collect_celery_task_ids` uses `iter_slot_task_ids` across all registered slots (main, dsi_bulk, pm_*, dsi_*, lineup). |
-| **Effort** | Small–medium |
-| **Source** | `CONTEXT.md` (May 31 Phase 2: “Known follow-up … extend revoke via the registry”) |
-| **Idea** | On cancel, revoke `pm_commit` / `pm_validate` / `dsi_soh` / velocity / forecasting / lineup tasks, not only main + `dsi_bulk`. |
-| **TRIGGER** | Orphan workers observed after cancel or user reports zombie tasks. |
 
 ---
 
@@ -888,52 +569,6 @@
 
 ---
 
-## BACKLOG-022 — Unify the import worker enqueue helper (validate vs shipment apply)
-
-| Field | Detail |
-|-------|--------|
-| **Status** | **Done · 2026-06-05** (triggered by CST apply — third caller) |
-| **Effort** | Small |
-| **Source** | `apps/api/app/api/v1/endpoints/imports.py` (`_enqueue_import_worker_task`, ~line 71); `apps/api/app/api/v1/endpoints/shipment_evidence.py` (`_dispatch_shipment_apply`) |
-| **Idea** | `_dispatch_shipment_apply` deliberately duplicates the broker-send → dev in-process thread → sync fallback logic of `imports._enqueue_import_worker_task` (only `task_name` + `sync_work` differ). Extract the helper into a shared service (e.g. `app/services/imports/import_dispatch.py`) and import it from both endpoints. |
-| **Why / deferrable** | Duplication chosen to avoid coupling the apply path to the validate endpoint module and to keep the working validate dispatch untouched while shipping the apply fix. Pure refactor; no behavior change. |
-| **Shipped** | `app/services/imports/import_dispatch.py` — `enqueue_import_worker_task(job_id, *, task_name, log_label, in_process_thread_name, sync_work) → (bool, str\|None)`. `imports._enqueue_import_worker_task` now delegates to it; `shipment_evidence._dispatch_shipment_apply` now delegates to it. Preserves `(dispatched, task_id)` contract and both dev-fallback paths. |
-
----
-
-## BACKLOG-023 — Generalize `dsi-progress` terminal label beyond "Validation complete"
-
-| Field | Detail |
-|-------|--------|
-| **Status** | **Done · 2026-06-06** — `_dsi_terminal_progress_label()` returns "Apply complete" when `stage=loaded` / apply mode; validate label unchanged. |
-| **Effort** | Small |
-| **Source** | `apps/api/app/api/v1/endpoints/imports.py` (`get_dsi_job_progress`, the `job_db_indicates_pipeline_finished` branch hardcodes `phase_label = "Validation complete"`) |
-| **Idea** | The shared progress reader is reused by shipment **apply** (which finishes at stage `loaded`), but its terminal label always says "Validation complete". Derive the label from `import_mode` / stage (e.g. "Apply complete" when `import_mode == 'apply'`). |
-| **Why / deferrable** | Cosmetic only — the apply progress panel transitions to the success state correctly; just the transient terminal label is validate-flavored. |
-| **What the work is** | Branch the terminal `phase_label` on `import_mode`/stage in `get_dsi_job_progress`; optionally thread a label through the progress response. |
-| **Regression traps** | Don't change `phase`/`pct`/`status` shape consumed by `useImportJobProgressQuery` and the global indicator. |
-| **Behavior to retain** | DSI + shipment validate progress labels unchanged. |
-| **Out of scope** | Changing how completion is detected. |
-| **TRIGGER** | Apply progress label is reported as confusing, or a per-mode label is otherwise prioritized. |
-
----
-
-## BACKLOG-024 — AI resolver absent for `distributor_master` + `historical_lineup`
-
-| Field | Detail |
-|-------|--------|
-| **Status** | **Done · 2026-06-06** — `try_ai_token_resolution` wired in `_process_distributor_master` (in-memory candidates via `distributor_candidates_from_dim_list`) and `historical_lineup.py` for customer/distributor/product misses. |
-| **Effort** | Small–medium per importer |
-| **Source** | This branch's importer audit; `apps/api/app/ingestion/pipeline.py::_process_distributor_master` (no AI); `apps/api/app/services/imports/historical_lineup.py` (no `ai_*` import) |
-| **Idea** | Wire the shared `try_ai_token_resolution` wrapper into the two importers that currently hard-error on unknown FK/token instead of offering an AI suggestion — matching `customer_master` (FK codes) and DSI/shipment. |
-| **Why / deferrable** | Same class of unresolved-token failure the wrapper already handles elsewhere; deferrable because these importers are lower-traffic and were not on the shipment→DSI→customer-reports critical path. |
-| **What the work is** | In `_process_distributor_master`, AI-resolve unknown codes via the wrapper + `distributor_candidates`; in historical lineup parsing, AI-resolve customer/distributor/sku tokens on deterministic miss. Deterministic-first, ≥0.90 auto. |
-| **Regression traps** | Don't auto-create masters (governance); keep deterministic resolution first; wrapper no-op when AI disabled. |
-| **Behavior to retain** | Existing hard-error path when AI disabled or below threshold. |
-| **TRIGGER** | An importer-resolution-consistency task is approved, or one of these importers hits real unresolved-token volume. |
-
----
-
 ## BACKLOG-025 — Generic-pipeline apply → async (masters / historical / sell-through)
 
 | Field | Detail |
@@ -977,21 +612,6 @@
 
 ---
 
-## BACKLOG-028 — Infra: sync Celery engine read-only mid-run on Supabase pooler
-
-| Field | Detail |
-|-------|--------|
-| **Status / parked** | **Done · 2026-06-14** — job #43 revalidate reproduced `ReadOnlySqlTransaction` on staging chunk DELETE (~26k rows, chunk ~13) while primary verified read-write. Root cause: sync engine on **session pooler** (`aws-*.pooler.supabase.com:5432`), not transaction pooler `:6543` (async only). Pooler can route mid-run to read-only replica. **Fix:** `resolve_sync_engine_url()` rewrites pooler `:5432` → direct `db.<ref>.supabase.co:5432` (`sync_url.py`, `session_sync.py`); optional `DATABASE_URL_SYNC_WRITABLE`; `commit_session_with_transient_retry` invalidates connection + retries once on `ReadOnlySqlTransaction`. Async `NullPool` / `:6543` / `statement_cache_size=0` unchanged. |
-| **Effort** | Investigation (infra), then config |
-| **Source** | DSI validate job #43 revalidate (2026-06-14): `ReadOnlySqlTransaction` on `_flush_dsi_staging_batch` DELETE; prior Jun 9 supersede assumed `:5432` session pooler was sufficient — partial chunk commits (BACKLOG-030) exposed pooler replica routing. |
-| **Idea** | Long DSI validate/apply holds a sync session open; Supabase **session pooler** can hand a read-only backend mid-run even when `:5432` (not `:6543`). Direct primary DSN avoids replica routing for batch writers. |
-| **Why / deferrable** | Environmental for remote Supabase batch paths — code must not assume pooler session mode is always writable. |
-| **What the work is** | Point `SessionLocal` / Celery sync engine at writable primary; keep async on transaction pooler; chunk-commit read-only retry as backstop. |
-| **Regression traps** | Don't change async engine; don't disable `statement_cache_size=0`/`prepare_threshold`; Alembic still uses `database_url_sync_migrate` or raw `database_url_sync` (not auto-rewrite unless wired separately). |
-| **TRIGGER** | **Met** — job #43 revalidate `ReadOnlySqlTransaction` on remote Supabase with verified RW primary. |
-
----
-
 ## BACKLOG-029 — Unit 3 sell-through surface + `ImportFileUploadZone` extraction decision
 
 | Field | Detail |
@@ -1005,24 +625,6 @@
 | **Regression traps** | Apply poll: transits through `validated` before `loaded` — terminal condition must stay `loaded`/`failed` only (already correct). Upload zones: preserve drag-and-drop, `canUpload` gating, `pending` progress bar; do not break the DSI / shipment / generic upload flows. |
 | **Governance** | Provisional creation stays steward-initiated; no auto-create. |
 | **TRIGGER** | (b) sell-through: surface prioritized in roadmap + running browser available. (c) upload-zone: a browser-verified frontend task is approved for this branch, or the unused import is flagged by linter in CI. |
-
----
-
-## BACKLOG-030 — DSI validate: batched staging upsert + chunked commits (remote Supabase reliability)
-
-| Field | Detail |
-|-------|--------|
-| **Status** | **Done (Phase 1) · 2026-06-06** — batched staging (2k chunks), commit every 50k rows, cache-backed AI candidates, SQL month filter on corroboration. **169k Supabase soak (job #43):** 168,839 staging lines, ~3,190 s (~53 min, ~53 rows/s) — **accepted** (62 rows/s gate waived). `fact_sales_sellout` still 0 until apply. |
-| **Effort** | Large (API); integration test against remote Supabase required |
-| **Source** | Jun 5 audit: job #43 `failed` with `psycopg.OperationalError` on `SELECT dim_customer LIMIT 60` after ~45 min; full rollback → 0 candidates. Shipment validate already batched (`shipment_evidence_import.py`); DSI still per-row `db.add` + monolithic transaction. |
-| **Idea** | Bring DSI validate write path to import-parity bar: chunked `INSERT … ON CONFLICT` for `import_distributor_si_staging_line` (and related row results where applicable); optional **chunked commits** with checkpoint metadata so pooler drops do not zero entire 45-minute runs; eliminate per-row `customer_candidates(db, …)` DB round-trips (use `_build_resolution_cache` / in-memory slice). |
-| **Why / deferrable** | **Not deferrable** for remote Supabase 100k+ row DSI files — BACKLOG-028/002/003 help but do not replace shorter transactions. Warren explicitly staying on remote Supabase for realistic testing. |
-| **What the work is** | (1) Bulk staging upsert mirroring shipment pattern. (2) Chunk boundary + `staged_metadata` checkpoint (design: commit every N rows or per chunk with idempotent re-run). (3) Remove hot-loop `customer_candidates` SELECT. (4) Real Supabase E2E validation per SQL rule. (5) Record wall time vs baseline (~62 rows/sec / ~45 min @ 169k). |
-| **Regression traps** | DSI resolution tier order; eligibility before corroboration; governance (no auto-create); historical vs weekly mode; `source_key` / staging line identity on re-chunk; Celery `process_job` still catches exceptions → job `failed` (document or fix separately). |
-| **Behavior to retain** | `ShipmentCorroborationCache` preload; steward candidate aggregation semantics; idempotent re-validate intent. |
-| **Out of scope** | Temp-file shipment evidence download (wrong layer); switching dev to local `cip`; changing corroboration order. |
-| **Pairs with** | BACKLOG-028 (pooler tuning), BACKLOG-002 (pooling), BACKLOG-003 (EU co-location). |
-| **TRIGGER** | **Met** — job #43 failed on remote Supabase during validate. Implement Phase 1 of `SESSION_HANDOVER_2026_06_05_DSI_REMOTE_SUPABASE.md`. |
 
 ---
 
@@ -1049,27 +651,18 @@
 |-------|--------|
 | **Status / parked** | Parked · 2026-06-06 |
 | **Effort** | Small (ops script + docs) · Medium if automated after delete |
-| **Source** | Supabase dev: bulk delete of import jobs (except active job #43); repeated `VACUUM` in SQL editor; `VACUUM FULL` times out; dashboard disk size unchanged. |
-| **Idea** | Document and optionally script **targeted** post-delete maintenance: `VACUUM (ANALYZE)` on evidence/staging tables affected by import job bulk delete; `VACUUM FULL` only as a manual, maintenance-window ops step when dead-tuple bloat is confirmed — not from the app or SQL editor transaction wrapper. |
-| **Why / deferrable** | Regular `VACUUM` does not return disk to the OS; `VACUUM FULL` requires exclusive locks + long runtime (timeouts on Supabase dashboard / pooler). Autovacuum handles most dead tuples; ops step needed only after large evidence deletes when dashboard disk stays high. |
+| **Source** | Postgres dev: bulk delete of import jobs (except active job #43); repeated `VACUUM` in SQL editor; `VACUUM FULL` times out; dashboard disk size unchanged. |
+| **Idea** | (local-cip relevant)  Document and optionally script **targeted** post-delete maintenance: `VACUUM (ANALYZE)` on evidence/staging tables affected by import job bulk delete; `VACUUM FULL` only as a manual, maintenance-window ops step when dead-tuple bloat is confirmed — not from the app or SQL editor transaction wrapper. |
+| **Why / deferrable** | Regular `VACUUM` does not return disk to the OS; `VACUUM FULL` requires exclusive locks + long runtime (timeouts on Postgres dashboard / pooler). Autovacuum handles most dead tuples; ops step needed only after large evidence deletes when dashboard disk stays high. |
 | **What the work is** | (1) Ops doc: connect via **session** `:5432` psql, `SET statement_timeout = 0`, stop API/worker, one table at a time. (2) Read-only bloat query (`pg_stat_user_tables`, `pg_total_relation_size`) before choosing FULL vs ANALYZE. (3) Optional `apps/api/scripts/vacuum_import_evidence_tables.py` (explicit table list, dry-run, confirms `current_database()`). (4) Do **not** hook into app delete path automatically — governance + lock risk. |
 | **Regression traps** | `VACUUM FULL` on `import_distributor_si_staging_line` while job #43 is active blocks steward/validate; never run inside a transaction; avoid `:6543` pooler for long maintenance; credentials never in repo. |
 | **Behavior to retain** | Import bulk delete remains the supported cleanup path; vacuum is follow-up ops only. |
 | **Out of scope** | Embedded pgAdmin; app-triggered `VACUUM FULL` on every delete; `VACUUM FULL` on all public tables. |
-| **TRIGGER** | After large import evidence bulk delete AND (`n_dead_tup` still high 24h later OR Supabase disk quota pressure) AND Warren approves maintenance window. |
+| **TRIGGER** | After large import evidence bulk delete AND (`n_dead_tup` still high 24h later OR Postgres disk quota pressure) AND Warren approves maintenance window. |
 
 ---
 
-## BACKLOG-033 — Bitemporal shipment evidence model (append-only observations + current-state view)
-
-| Field | Detail |
-|-------|--------|
-| **Status** | **Closed** · 2026-07-02 — Plan D phases 1–4 shipped on `cip` (`9109664` → `91f227e`). See `docs/SHIPMENT_BITEMPORAL_PLAN_D.md`. |
-| **Follow-on** | BACKLOG-057 (D4), BACKLOG-058 (D5), BACKLOG-062 (open→shipped fact double-count), BACKLOG-063 (cancelled-candidate events v2), BACKLOG-064 (change-event UI). |
-
----
-
-## BACKLOG-057 — Plan D D4: stop duplicating observation payload on legacy evidence lines
+## BACKLOG-057-D4 — Plan D D4: stop duplicating observation payload on legacy evidence lines
 
 | Field | Detail |
 |-------|--------|
@@ -1080,7 +673,7 @@
 
 ---
 
-## BACKLOG-058 — Plan D D5: drop redundant shipment_evidence_line columns
+## BACKLOG-058-D5 — Plan D D5: drop redundant shipment_evidence_line columns
 
 | Field | Detail |
 |-------|--------|

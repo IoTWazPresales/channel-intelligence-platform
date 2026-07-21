@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-21 — **Backlog re-audit:** user-correct — **072** (catalogue-gap scan/preview/Confirm resolve) and **043** (CI `_SPECS` fix) were wrongly kept; removed. 49 remain. Suspects 025/029/060/058/068 etc still open/partial with code proof. Branch `feat/cpor-listing-status-audit`.
+- 2026-07-20 — **Backlog prune + 069 viewport shell:** Opus CONSULT READY; removed 25 shipped/ignore entries (incl. 002/003 Supabase/deploy); 51 remain; Plan D renumbered 057-D4/058-D5. Shared `StewardWorkspaceViewportShell` (DSI+shipment); vitest 18/18. Overview `.tmp/BACKLOG_DISPOSITION_OVERVIEW_2026-07-20.md`. Branch `feat/cpor-listing-status-audit`. Next: CPOR VERIFY → H3.
 - 2026-07-20 — **CPOR H2 steward UX parity (`995a418`):** shipment-shaped resolution section + CPOR progress poll on `/commercial-planner/cpor-cases/historical-import`; thin Tabs+TextField map replaced. Branch `feat/cpor-listing-status-audit`. Next: Fable VERIFY H2 → H3.
 - 2026-07-20 — **Quality bar lock + CPOR steward parity fix:** Canonical-clone-or-STOP / no half-PASS in WORKFLOW_DUAL_AGENT + import-parity + dual-agent skills. CPOR historical wizard rebuilt toward shipment resolution section (tabs/selection/bulk/drawer) + async validate + progress poll. Branch `feat/cpor-listing-status-audit`. Next: Fable VERIFY clone bar.
 - 2026-07-20 — **CPOR H2 steward + async apply:** pipeline `cpor_historical_cases_import` → staging/resolve; apply task `imports.cpor_historical_apply`; wizard + shared steward workspace; `0073` on cip + grants; smoke case `H2-SMOKE-556`. Branch `feat/cpor-listing-status-audit`. Next: Fable VERIFY H2 → H3 export.

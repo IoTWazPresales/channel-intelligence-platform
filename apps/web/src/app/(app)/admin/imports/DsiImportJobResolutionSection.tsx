@@ -33,6 +33,7 @@ import {
   DsiStewardLoadingCallout,
   DSI_STEWARD_CONFIG,
   ImportStewardCandidateWorkspace,
+  StewardWorkspaceViewportShell,
   useDsiCandidatesPage,
   useDsiEntityTabCounts,
   PlanDialogRowDetail,
@@ -846,77 +847,62 @@ export function DsiImportJobResolutionSection({
         </Alert>
       ) : null}
 
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', md: 'row' },
-          alignItems: 'stretch',
-          gap: 0,
-          minHeight: 360,
-        }}
-      >
-        <Box
-          sx={{
-            flex: 1,
-            minWidth: 0,
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 1.5,
-            maxHeight: { md: 'calc(100vh - 120px)' },
-            overflow: { md: 'hidden' },
-          }}
-        >
-          {planApplySummary ? (
-            <Alert
-              severity={planApplySummary.severity}
-              data-testid="dsi-plan-apply-summary"
-              onClose={() => setPlanApplySummary(null)}
-            >
-              {planApplySummary.message}
-            </Alert>
-          ) : null}
-          {plan.applyResolutionPlan.isError && !planApplySummary ? (
-            <Alert severity="error" data-testid="dsi-plan-apply-error">
-              Apply failed. Check the activity bell or try again with a smaller batch.
-            </Alert>
-          ) : null}
-          <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-            {candidateWorkspace}
-          </Box>
+      <StewardWorkspaceViewportShell
+        rootTestId="dsi-steward-workspace-viewport-shell"
+        left={
+          <>
+            {planApplySummary ? (
+              <Alert
+                severity={planApplySummary.severity}
+                data-testid="dsi-plan-apply-summary"
+                onClose={() => setPlanApplySummary(null)}
+              >
+                {planApplySummary.message}
+              </Alert>
+            ) : null}
+            {plan.applyResolutionPlan.isError && !planApplySummary ? (
+              <Alert severity="error" data-testid="dsi-plan-apply-error">
+                Apply failed. Check the activity bell or try again with a smaller batch.
+              </Alert>
+            ) : null}
+            <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+              {candidateWorkspace}
+            </Box>
 
-          {tabbedMode && isCandidateTab ? (
-            <DsiCandidatesPagination
-              page={candidatesPage.page}
-              pageCount={clientQueueFilterActive ? filteredPageCount : candidatesPage.pageCount}
-              pageSize={candidatesPage.pageSize}
-              total={clientQueueFilterActive ? filteredCandidates.length : candidatesPage.total}
-              skip={candidatesPage.skip}
-              pageItemCount={displayedCandidates.length}
-              busy={candidatesPage.query.isFetching}
-              onPageChange={candidatesPage.setPage}
-              onPageSizeChange={candidatesPage.setPageSize}
+            {tabbedMode && isCandidateTab ? (
+              <DsiCandidatesPagination
+                page={candidatesPage.page}
+                pageCount={clientQueueFilterActive ? filteredPageCount : candidatesPage.pageCount}
+                pageSize={candidatesPage.pageSize}
+                total={clientQueueFilterActive ? filteredCandidates.length : candidatesPage.total}
+                skip={candidatesPage.skip}
+                pageItemCount={displayedCandidates.length}
+                busy={candidatesPage.query.isFetching}
+                onPageChange={candidatesPage.setPage}
+                onPageSizeChange={candidatesPage.setPageSize}
+              />
+            ) : null}
+          </>
+        }
+        drawer={
+          effectiveDetailCandidate && isCandidateTab ? (
+            <DsiCandidateStewardDrawer
+              importJobId={importJobId}
+              candidate={effectiveDetailCandidate}
+              planRow={plan.planByCandidateId.get(effectiveDetailCandidate.id) ?? null}
+              onClose={() => setDetailCandidate(null)}
+              onRowActionStart={(candidateId) => setRowActionPendingId(candidateId)}
+              onRowActionEnd={() => setRowActionPendingId(null)}
+              onDone={() => setDetailCandidate(null)}
+              onStewardFastComplete={plan.evictResolvedCandidates}
+              lookupPeerCandidate={lookupPeerCandidateByNormalizedKey}
+              onOpenPeerByNormalizedKey={openPeerCandidateByNormalizedKey}
+              customerNormalizedKeysOnPage={customerNormalizedKeysOnPage}
+              duplicateClusterMembers={duplicateClusterMembersForSelection}
             />
-          ) : null}
-        </Box>
-
-        {effectiveDetailCandidate && isCandidateTab ? (
-          <DsiCandidateStewardDrawer
-            importJobId={importJobId}
-            candidate={effectiveDetailCandidate}
-            planRow={plan.planByCandidateId.get(effectiveDetailCandidate.id) ?? null}
-            onClose={() => setDetailCandidate(null)}
-            onRowActionStart={(candidateId) => setRowActionPendingId(candidateId)}
-            onRowActionEnd={() => setRowActionPendingId(null)}
-            onDone={() => setDetailCandidate(null)}
-            onStewardFastComplete={plan.evictResolvedCandidates}
-            lookupPeerCandidate={lookupPeerCandidateByNormalizedKey}
-            onOpenPeerByNormalizedKey={openPeerCandidateByNormalizedKey}
-            customerNormalizedKeysOnPage={customerNormalizedKeysOnPage}
-            duplicateClusterMembers={duplicateClusterMembersForSelection}
-          />
-        ) : null}
-      </Box>
+          ) : null
+        }
+      />
 
       <DsiBulkStewardSection
         bulkMode={bulkMode}

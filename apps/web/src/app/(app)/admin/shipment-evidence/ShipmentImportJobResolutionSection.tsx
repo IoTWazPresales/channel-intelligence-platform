@@ -19,6 +19,7 @@ import { DsiCandidatesPagination } from '@/features/import-steward/DsiCandidates
 import { DsiPendingButton } from '@/features/import-steward/DsiPendingButton';
 import { DsiStewardCandidateFilters } from '@/features/import-steward/DsiStewardCandidateFilters';
 import { ImportStewardCandidateWorkspace } from '@/features/import-steward/ImportStewardCandidateWorkspace';
+import { StewardWorkspaceViewportShell } from '@/features/import-steward/StewardWorkspaceViewportShell';
 import { computeImportStewardSelectionHeaderState } from '@/features/import-steward/importStewardSelectionUtils';
 import { paginateDsiStewardCandidateRows } from '@/features/import-steward/dsiStewardCandidateFilterLogic';
 import { ShipmentCandidateStewardDrawer } from '@/features/import-steward/ShipmentCandidateStewardDrawer';
@@ -264,24 +265,15 @@ export function ShipmentImportJobResolutionSection({
           setApplyAllConfirmOpen={plan.setApplyAllConfirmOpen}
         />
 
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
-            alignItems: 'stretch',
-            gap: 0,
-            minHeight: 360,
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            overflow: 'hidden',
-          }}
-        >
-          <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', p: 2 }}>
-            <ImportStewardCandidateWorkspace
-              embedded
-              keepTableWhenFilterEmpty
-              rootTestId="shipment-steward-candidate-workspace"
+        <StewardWorkspaceViewportShell
+          bordered
+          rootTestId="shipment-steward-workspace-viewport-shell"
+          left={
+            <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+              <ImportStewardCandidateWorkspace
+                embedded
+                keepTableWhenFilterEmpty
+                rootTestId="shipment-steward-candidate-workspace"
               listDomainId={SHIPMENT_STEWARD_CONFIG.listDomainId}
               importJobId={importJobId}
               copy={SHIPMENT_STEWARD_CONFIG.listShellCopy}
@@ -420,19 +412,21 @@ export function ShipmentImportJobResolutionSection({
                 />
               }
             />
-          </Box>
-
-          {effectiveDetailCandidate ? (
-            <ShipmentCandidateStewardDrawer
-              candidate={effectiveDetailCandidate}
-              planRow={plan.planByCandidateId.get(effectiveDetailCandidate.id) ?? null}
-              onClose={() => setDetailCandidate(null)}
-              applyPlanPending={plan.applyResolutionPlan.isPending}
-              onApplyPlanRow={(candidateId) => plan.applyResolutionPlan.mutate([candidateId])}
-              rowActionPending={rowActionPendingId === effectiveDetailCandidate.id}
-            />
-          ) : null}
-        </Box>
+            </Box>
+          }
+          drawer={
+            effectiveDetailCandidate ? (
+              <ShipmentCandidateStewardDrawer
+                candidate={effectiveDetailCandidate}
+                planRow={plan.planByCandidateId.get(effectiveDetailCandidate.id) ?? null}
+                onClose={() => setDetailCandidate(null)}
+                applyPlanPending={plan.applyResolutionPlan.isPending}
+                onApplyPlanRow={(candidateId) => plan.applyResolutionPlan.mutate([candidateId])}
+                rowActionPending={rowActionPendingId === effectiveDetailCandidate.id}
+              />
+            ) : null
+          }
+        />
 
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
           <DsiPendingButton

@@ -26,6 +26,8 @@ export {
 export { DsiStewardCandidateFilters } from './DsiStewardCandidateFilters';
 
 export { ImportStewardCandidateWorkspace } from './ImportStewardCandidateWorkspace';
+export { StewardWorkspaceViewportShell } from './StewardWorkspaceViewportShell';
+export type { StewardWorkspaceViewportShellProps } from './StewardWorkspaceViewportShell';
 export type {
   ImportStewardActionFeedback,
   ImportStewardCandidateRowBase,
