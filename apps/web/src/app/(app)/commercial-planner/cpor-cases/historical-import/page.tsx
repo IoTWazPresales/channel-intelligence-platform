@@ -1,13 +1,16 @@
 ﻿'use client';
 
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
-  Box,
   Button,
   Chip,
   Stack,
   Typography,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -248,30 +251,17 @@ export default function CporHistoricalImportPage() {
       </Stack>
 
       {step === 'upload' ? (
-        <Stack spacing={2}>
+        <Stack spacing={2} data-testid="cpor-historical-upload-step">
           {!sourceId ? (
             <Alert severity="warning">
               No active source for <code>cpor_historical_cases</code>. Ensure default sources are seeded.
             </Alert>
           ) : null}
           {profile ? (
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Mapping profile: {profile.display_name} ({profile.profile_code})
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Profile-driven column map (read-only). The resolve step maps unresolved entity tokens to
-                masters — that is the steward work, not re-mapping headers here.
-              </Typography>
-              <CanonicalColumnMappingPanel
-                fileHeaders={Object.values(profile.column_map_json || {}).flat()}
-                draft={mappingDraft}
-                onChange={() => undefined}
-                targetOptions={targetOptions}
-                disabled
-                testIdPrefix="cpor-historical"
-              />
-            </Box>
+            <Typography variant="body2" color="text.secondary" data-testid="cpor-historical-profile-summary">
+              Profile: {profile.display_name} ({profile.profile_code}) — column map is profile-driven;
+              entity tokens are stewarded after validate.
+            </Typography>
           ) : (
             <Alert severity="info">Loading mapping profiles…</Alert>
           )}
@@ -293,6 +283,34 @@ export default function CporHistoricalImportPage() {
             {upload.isPending ? 'Uploading…' : 'Upload & validate'}
           </Button>
           {upload.isError ? <Alert severity="error">{safeDisplayError(upload.error)}</Alert> : null}
+          {profile ? (
+            <Accordion
+              disableGutters
+              elevation={0}
+              defaultExpanded={false}
+              slotProps={{ transition: { unmountOnExit: true } }}
+              sx={{ border: 1, borderColor: 'divider', '&:before': { display: 'none' } }}
+              data-testid="cpor-historical-advanced-mapping"
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2">Advanced: mapping profile (read-only)</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Headers are fixed by the seeded profile. Steward work maps unresolved entity tokens after
+                  validate — not re-mapping columns here.
+                </Typography>
+                <CanonicalColumnMappingPanel
+                  fileHeaders={Object.values(profile.column_map_json || {}).flat()}
+                  draft={mappingDraft}
+                  onChange={() => undefined}
+                  targetOptions={targetOptions}
+                  disabled
+                  testIdPrefix="cpor-historical"
+                />
+              </AccordionDetails>
+            </Accordion>
+          ) : null}
         </Stack>
       ) : null}
 
