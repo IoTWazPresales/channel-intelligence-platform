@@ -27,7 +27,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiPost, safeDisplayError } from '@/lib/api';
 
 import { invalidateDsiCatalogQueries, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
-import { DsiPendingButton } from './DsiPendingButton';
+import { StewardPendingButton } from './StewardPendingButton';
 import { prefillGeoCreateFromFileToken } from './geoStewardFilePrefill';
 import { GeoStewardRegisterFromFile } from './GeoStewardRegisterFromFile';
 import { geoRowHasRegionHint, geoRowIsoHint, geoRowRegionAliasRegistered } from './geoStewardHints';
@@ -151,7 +151,7 @@ function GeoStewardTableRow({
               {regionAliasRegistered ? (
                 <Chip label="Registered" size="small" color="success" variant="outlined" sx={{ height: 22 }} />
               ) : onRegisterFromHint ? (
-                <DsiPendingButton
+                <StewardPendingButton
                   size="small"
                   variant="contained"
                   pending={Boolean(hintPending)}
@@ -161,7 +161,7 @@ function GeoStewardTableRow({
                   data-testid={`dsi-geo-hint-region-${row.normalized_token}`}
                 >
                   Register ISO region
-                </DsiPendingButton>
+                </StewardPendingButton>
               ) : null}
             </Stack>
           ) : (
@@ -190,7 +190,7 @@ function GeoStewardTableRow({
                 ))}
               </Select>
             </FormControl>
-            <DsiPendingButton
+            <StewardPendingButton
               size="small"
               variant="outlined"
               pending={aliasPending}
@@ -200,7 +200,7 @@ function GeoStewardTableRow({
               data-testid={`dsi-geo-${kind === 'channel' ? 'ch' : 'rg'}-alias-${row.normalized_token}`}
             >
               Save alias
-            </DsiPendingButton>
+            </StewardPendingButton>
           </Stack>
         </TableCell>
         <TableCell sx={{ verticalAlign: 'top', minWidth: 200 }}>
@@ -210,7 +210,7 @@ function GeoStewardTableRow({
                 {code} — {name}
               </Typography>
               <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
-                <DsiPendingButton
+                <StewardPendingButton
                   size="small"
                   variant="contained"
                   pending={registerPending}
@@ -220,7 +220,7 @@ function GeoStewardTableRow({
                   data-testid={`dsi-geo-${kind === 'channel' ? 'ch' : 'rg'}-${row.normalized_token}-register-btn`}
                 >
                   Register from file
-                </DsiPendingButton>
+                </StewardPendingButton>
                 <Typography
                   component="button"
                   type="button"
@@ -546,7 +546,7 @@ export function UnresolvedGeoStewardPanel({
         <Button size="small" variant="text" onClick={toggleAll} disabled={geoBusy || tableRows.length === 0}>
           {allSelected ? 'Deselect all' : 'Select all'}
         </Button>
-        <DsiPendingButton
+        <StewardPendingButton
           size="small"
           variant="contained"
           pending={bulkApplyMut.isPending}
@@ -556,8 +556,8 @@ export function UnresolvedGeoStewardPanel({
           data-testid="dsi-geo-bulk-register-regions"
         >
           Register ISO regions ({geographicChannelRows.length})
-        </DsiPendingButton>
-        <DsiPendingButton
+        </StewardPendingButton>
+        <StewardPendingButton
           size="small"
           variant="outlined"
           pending={bulkApplyMut.isPending}
@@ -567,7 +567,7 @@ export function UnresolvedGeoStewardPanel({
           data-testid="dsi-geo-bulk-register-from-file"
         >
           Register from file ({registerFromFileRows.length})
-        </DsiPendingButton>
+        </StewardPendingButton>
         <Typography variant="caption" color="text.secondary">
           Geographic tokens: bulk ISO region (left) or bulk channel create (Register from file). Per-row
           actions work the same.

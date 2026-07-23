@@ -17,7 +17,7 @@ import { registerClientBackgroundTask } from '@/features/background-tasks/backgr
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 import { CanonicalColumnMappingPanel } from '@/features/import-mapping/CanonicalColumnMappingPanel';
 import { apiGet, apiPostFormData, safeDisplayError } from '@/lib/api';
-import { DsiValidateProgressPanel } from '@/app/(app)/admin/imports/DsiValidateProgressPanel';
+import { ImportJobValidateProgressPanel } from '@/features/import-steward/ImportJobValidateProgressPanel';
 
 import { CporHistoricalImportJobResolutionSection } from './CporHistoricalImportJobResolutionSection';
 import {
@@ -298,7 +298,7 @@ export default function CporHistoricalImportPage() {
 
       {(step === 'validate' || (pollProgress && stepIndex <= 1)) && jobId != null ? (
         <Stack spacing={2} sx={{ mb: 2 }}>
-          <DsiValidateProgressPanel
+          <ImportJobValidateProgressPanel
             progress={progress}
             isRunning={pipelineRunning && step === 'validate'}
             title="CPOR historical validation"
@@ -400,7 +400,7 @@ export default function CporHistoricalImportPage() {
 
       {(step === 'apply' || (pollProgress && step === 'apply')) && jobId != null ? (
         <Stack spacing={2} sx={{ mt: 2 }}>
-          <DsiValidateProgressPanel
+          <ImportJobValidateProgressPanel
             progress={progress}
             isRunning={pipelineRunning}
             title="CPOR historical apply"

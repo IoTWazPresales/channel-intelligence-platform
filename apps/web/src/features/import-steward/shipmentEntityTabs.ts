@@ -52,7 +52,7 @@ export function shipmentStewardFiltersMatchTabDefault(
 }
 
 export function formatShipmentEntityTabLabel(
-  tab: ShipmentEntityTabMeta,
+  tab: Pick<ShipmentEntityTabMeta, 'label'>,
   total: number | null,
   needsWork: number | null
 ): string {

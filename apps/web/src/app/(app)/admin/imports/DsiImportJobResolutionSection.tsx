@@ -20,18 +20,19 @@ import {
   DsiBulkActionInlineForm,
   DsiBulkStewardSection,
   DsiCandidateStewardDrawer,
-  DsiCandidatesPagination,
-  DsiEntityTabsBar,
-  DsiPendingButton,
+  StewardCandidatesPagination,
+  StewardPendingButton,
+  StewardEntityTabsBar,
   DsiProductCandidateExportToolbar,
   DsiCountryRegionFallback,
   DsiRegionChannelTabPanel,
   DsiResolutionPlanToolbar,
   isDsiEntityCandidateTab,
   type DsiRegionEvidenceDto,
-  DsiStewardCandidateFilters,
+  StewardCandidateFilters,
   DsiStewardLoadingCallout,
   DSI_STEWARD_CONFIG,
+  DSI_ENTITY_TABS,
   ImportStewardCandidateWorkspace,
   StewardWorkspaceViewportShell,
   useDsiCandidatesPage,
@@ -43,6 +44,7 @@ import {
   dsiStewardFiltersMatchTabDefault,
   dsiTabDependencyNudge,
   filterDsiStewardCandidates,
+  formatDsiEntityTabLabel,
   formatPlanActionLabel,
   paginateDsiStewardCandidateRows,
   useDsiBulkSteward,
@@ -532,11 +534,15 @@ export function DsiImportJobResolutionSection({
       tabsSlot={
         tabbedMode ? (
           <Stack spacing={1}>
-            <DsiEntityTabsBar
+            <StewardEntityTabsBar
+              tabs={DSI_ENTITY_TABS}
               activeTab={activeTab}
               onChange={onTabChange}
               counts={tabCounts}
               busy={stewardOverlayBusy}
+              testIdPrefix="dsi"
+              ariaLabel="DSI entity resolution"
+              formatTabAriaLabel={formatDsiEntityTabLabel}
             />
             {dependencyNudge ? (
               <Alert severity="warning" variant="outlined" data-testid="dsi-tab-dependency-nudge">
@@ -548,7 +554,7 @@ export function DsiImportJobResolutionSection({
       }
       filtersSlot={
         isRegionChannelTab ? null : (
-          <DsiStewardCandidateFilters
+          <StewardCandidateFilters
             filters={activeFilters}
             onChange={setActiveFilters}
             visibleCount={
@@ -680,7 +686,7 @@ export function DsiImportJobResolutionSection({
                   {selectedIds.length} selected · Ready {plan.readyPlanCandidateIds.length}
                 </Typography>
                 <Box sx={{ flexGrow: 1 }} />
-                <DsiPendingButton
+                <StewardPendingButton
                   variant="outlined"
                   size="small"
                   pending={plan.applyResolutionPlan.isPending}
@@ -702,8 +708,8 @@ export function DsiImportJobResolutionSection({
                   data-testid="dsi-resolution-plan-apply-selected"
                 >
                   Apply selected ready ({selectedReadyPlanIds.length})
-                </DsiPendingButton>
-                <DsiPendingButton
+                </StewardPendingButton>
+                <StewardPendingButton
                   variant="contained"
                   size="small"
                   pending={plan.applyResolutionPlan.isPending}
@@ -717,7 +723,7 @@ export function DsiImportJobResolutionSection({
                   data-testid="dsi-resolution-plan-apply-all"
                 >
                   Apply all ready ({plan.readyPlanCandidateIds.length})
-                </DsiPendingButton>
+                </StewardPendingButton>
               </>
             ) : (
               <Box sx={{ flexGrow: 1 }} />
@@ -870,7 +876,7 @@ export function DsiImportJobResolutionSection({
             </Box>
 
             {tabbedMode && isCandidateTab ? (
-              <DsiCandidatesPagination
+              <StewardCandidatesPagination
                 page={candidatesPage.page}
                 pageCount={clientQueueFilterActive ? filteredPageCount : candidatesPage.pageCount}
                 pageSize={candidatesPage.pageSize}
@@ -918,7 +924,7 @@ export function DsiImportJobResolutionSection({
       />
 
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
-        <DsiPendingButton
+        <StewardPendingButton
           variant="outlined"
           pending={revalidatePipelineBusy}
           pendingLabel="Re-running import validation…"
@@ -927,7 +933,7 @@ export function DsiImportJobResolutionSection({
           data-testid="dsi-import-revalidate-server"
         >
           Re-run import validation (server)
-        </DsiPendingButton>
+        </StewardPendingButton>
         <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 520 }}>
           Runs the DSI import validator on the server so staging and blockers refresh. Use after steward saves (single-row,
           bulk, or resolution plan apply). This is <strong>not</strong> the same as <strong>Refresh suggestions</strong>{' '}

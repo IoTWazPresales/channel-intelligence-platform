@@ -27,7 +27,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { DsiPendingButton } from './DsiPendingButton';
+import { StewardPendingButton } from './StewardPendingButton';
 import { apiGet, apiPost } from '@/lib/api';
 import { invalidateShipmentImportJobStewardQueries, isShipmentStewardRowActionBlocked } from './shipmentSteward.config';
 import {
@@ -617,7 +617,7 @@ export function ShipmentCandidateInlineActions({
   }
 
   return (
-    <DsiPendingButton
+    <StewardPendingButton
       size="small"
       variant="outlined"
       onClick={(ev) => {
@@ -627,6 +627,6 @@ export function ShipmentCandidateInlineActions({
       data-testid={`shipment-action-review-${row.id}`}
     >
       Review…
-    </DsiPendingButton>
+    </StewardPendingButton>
   );
 }

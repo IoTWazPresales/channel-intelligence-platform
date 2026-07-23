@@ -5,7 +5,7 @@ import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 
 import { safeDisplayError } from '@/lib/api';
 
-import { DsiPendingButton } from './DsiPendingButton';
+import { StewardPendingButton } from './StewardPendingButton';
 
 type ShipmentPlanToolbarSlice = {
   candidatesCount: number;
@@ -29,7 +29,7 @@ export function ShipmentResolutionPlanToolbar(plan: ShipmentPlanToolbarSlice) {
   return (
     <Stack spacing={1} data-testid="shipment-resolution-plan-toolbar">
       <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
-        <DsiPendingButton
+        <StewardPendingButton
           variant="outlined"
           size="small"
           pending={suggestionsQuery.isFetching}
@@ -39,10 +39,10 @@ export function ShipmentResolutionPlanToolbar(plan: ShipmentPlanToolbarSlice) {
           data-testid="shipment-resolution-plan-refresh"
         >
           Refresh plan
-        </DsiPendingButton>
+        </StewardPendingButton>
         <Chip size="small" label={`Candidates ${candidatesCount}`} />
         <Chip size="small" color="success" variant="outlined" label={`Ready ${readyCount}`} />
-        <DsiPendingButton
+        <StewardPendingButton
           variant="contained"
           size="small"
           pending={applyResolutionPlan.isPending}
@@ -52,7 +52,7 @@ export function ShipmentResolutionPlanToolbar(plan: ShipmentPlanToolbarSlice) {
           data-testid="shipment-resolution-plan-apply-all"
         >
           Apply all ready ({readyCount})
-        </DsiPendingButton>
+        </StewardPendingButton>
       </Stack>
       {planComputing ? (
         <Alert severity="info" data-testid="shipment-resolution-plan-loading">

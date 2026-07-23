@@ -2,10 +2,10 @@
 
 import { FormControl, InputLabel, MenuItem, Select, Stack, Typography } from '@mui/material';
 
-import { DsiPendingButton } from './DsiPendingButton';
+import { StewardPendingButton } from './StewardPendingButton';
 import { DSI_CANDIDATE_PAGE_SIZE_OPTIONS, type DsiCandidatePageSize } from './dsiCandidatesQuery';
 
-export function DsiCandidatesPagination({
+export function StewardCandidatesPagination({
   page,
   pageCount,
   pageSize,
@@ -59,7 +59,7 @@ export function DsiCandidatesPagination({
             ))}
           </Select>
         </FormControl>
-        <DsiPendingButton
+        <StewardPendingButton
           size="small"
           variant="outlined"
           disabled={page <= 0 || busy}
@@ -67,11 +67,11 @@ export function DsiCandidatesPagination({
           data-testid="dsi-candidates-prev-page"
         >
           Previous
-        </DsiPendingButton>
+        </StewardPendingButton>
         <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }}>
           Page {page + 1} of {pageCount}
         </Typography>
-        <DsiPendingButton
+        <StewardPendingButton
           size="small"
           variant="outlined"
           disabled={page + 1 >= pageCount || busy}
@@ -79,7 +79,7 @@ export function DsiCandidatesPagination({
           data-testid="dsi-candidates-next-page"
         >
           Next
-        </DsiPendingButton>
+        </StewardPendingButton>
       </Stack>
     </Stack>
   );

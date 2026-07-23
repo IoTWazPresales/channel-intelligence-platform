@@ -15,7 +15,7 @@ export const CPOR_ENTITY_TAB_DEFS: ReadonlyArray<{
 ] as const;
 
 export function formatCporEntityTabLabel(
-  tab: (typeof CPOR_ENTITY_TAB_DEFS)[number],
+  tab: Pick<(typeof CPOR_ENTITY_TAB_DEFS)[number], 'label'>,
   total: number | null,
   needsWork: number | null
 ): string {

@@ -24,7 +24,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatDsiRegionEvidenceDisplay } from './dsiRegionEvidenceDisplay';
 import type { DsiRegionEvidenceDto } from './dsiSteward.types';
 import { DsiCustomerSearchFields } from './DsiCustomerSearchFields';
-import { DsiPendingButton } from './DsiPendingButton';
+import { StewardPendingButton } from './StewardPendingButton';
 import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
 import {
   buildDupSameEntitySubmitBody,
@@ -312,10 +312,10 @@ export function DsiDuplicateSameEntityDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <DsiPendingButton onClick={onClose} disabled={pending}>
+        <StewardPendingButton onClick={onClose} disabled={pending}>
           Cancel
-        </DsiPendingButton>
-        <DsiPendingButton
+        </StewardPendingButton>
+        <StewardPendingButton
           variant="contained"
           pending={pending}
           pendingLabel="Mapping…"
@@ -324,7 +324,7 @@ export function DsiDuplicateSameEntityDialog({
           data-testid="dsi-duplicate-same-entity-submit"
         >
           Map both to customer
-        </DsiPendingButton>
+        </StewardPendingButton>
       </DialogActions>
     </Dialog>
   );

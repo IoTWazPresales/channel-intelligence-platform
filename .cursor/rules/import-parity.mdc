@@ -18,6 +18,12 @@ resolution section (entity tabs, selection, bulk map, drawer/row actions, deboun
 progress poll) is a **thin mount** and is **not** import-parity complete. Own-surface routes keep
 their CTA/page chrome only; steward/apply/progress must still match DSI/shipment.
 
+**Code is evidence; docs are claims.** BACKLOG/CURRENT/ROADMAP/commit “Done” or “parity” text is a
+claim. Before calling an importer complete, audit the **filled** section against
+`DsiImportJobResolutionSection` / `ShipmentImportJobResolutionSection` (viewport shell, chip filters
+not a bare TextField, column density, drawer chrome + body, plan/bulk/progress as required). Do not
+delete backlog entries or claim PASS because a document says so.
+
 1. **Steward surface = shared `ImportStewardCandidateWorkspace` + entity tabs.**
    Reference: DSI (`DsiImportJobResolutionSection` + `DsiEntityTabsBar` + the candidate-list adapter)
    and shipment (`ShipmentImportJobResolutionSection`). New importers clone that **section** shape

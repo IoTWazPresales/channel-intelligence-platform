@@ -14,7 +14,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { alpha, keyframes } from '@mui/material/styles';
 import { useEffect, useRef, useState } from 'react';
 
-export type DsiValidateProgress = {
+export type ImportJobValidateProgress = {
   job_id?: number;
   stage?: string;
   status?: string;
@@ -30,7 +30,10 @@ export type DsiValidateProgress = {
   progress_at?: string | null;
 };
 
-const DSI_PROGRESS_PHASES = [
+/** @deprecated Prefer ImportJobValidateProgress */
+export type DsiValidateProgress = ImportJobValidateProgress;
+
+const DEFAULT_IMPORT_PROGRESS_PHASES = [
   { id: 'loading_caches', label: 'Load caches' },
   { id: 'processing_rows', label: 'Process rows' },
   { id: 'building_candidates', label: 'Build candidates' },
@@ -56,24 +59,24 @@ function formatNum(n: number): string {
   return n.toLocaleString();
 }
 
-export type DsiValidateProgressPanelProps = {
-  progress: DsiValidateProgress | null | undefined;
+export type ImportJobValidateProgressPanelProps = {
+  progress: ImportJobValidateProgress | null | undefined;
   isRunning: boolean;
-  /** Overline title. Defaults to "DSI Validation". */
+  /** Overline title. Defaults to "Import validation". */
   title?: string;
-  /** Phase rail steps. Defaults to the DSI pipeline phases. */
+  /** Phase rail steps. Defaults to the shared DSI-style pipeline phases. */
   phases?: readonly ValidateProgressPhase[];
-  /** Optional per-phase description text (keyed by phase id) overriding the built-in DSI copy. */
+  /** Optional per-phase description text (keyed by phase id) overriding the built-in copy. */
   phaseDescriptions?: Record<string, string>;
 };
 
-export function DsiValidateProgressPanel({
+export function ImportJobValidateProgressPanel({
   progress,
   isRunning,
   title = 'DSI Validation',
-  phases = DSI_PROGRESS_PHASES,
+  phases = DEFAULT_IMPORT_PROGRESS_PHASES,
   phaseDescriptions,
-}: DsiValidateProgressPanelProps) {
+}: ImportJobValidateProgressPanelProps) {
   const phaseOrder: string[] = phases.map((p) => p.id);
   const startRef = useRef<number | null>(null);
   const [tick, setTick] = useState(0);

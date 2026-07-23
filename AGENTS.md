@@ -20,6 +20,12 @@ AI-assisted development.
 **If docs conflict with code or with each other — stop and ask Warren** which
 source is correct before implementing. Then update `CURRENT.md`.
 
+**Code is evidence; docs are claims.** `CURRENT.md`, BACKLOG, ROADMAP, and commit
+messages saying “done” or “parity” are claims until proven in the **running tree**
+(read the section/API, compare to the named canonical). Do not delete backlog or
+claim PASS on paper alone. Import/steward UX: see `.cursor/rules/import-parity.mdc`
+and `docs/WORKFLOW_DUAL_AGENT.md` confirmation checklist.
+
 **After completing any significant task:** update `docs/memory/CURRENT.md` and
 append one line to `CONTEXT.md` changelog. Use `Run cip-context-update` skill.
 Deferrals go to `docs/BACKLOG.md` — not chat-only.

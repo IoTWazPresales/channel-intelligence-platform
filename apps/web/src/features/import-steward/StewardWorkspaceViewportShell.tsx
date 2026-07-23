@@ -20,7 +20,7 @@ export type StewardWorkspaceViewportShellProps = {
 /**
  * Two-column steward workspace shell: left column is viewport-capped on md+
  * so the candidate table scrolls inside the workspace and the sticky drawer
- * stays on-screen (DSI pattern). Used by DSI + shipment; CPOR may adopt later.
+ * stays on-screen (DSI pattern). Used by DSI, shipment, and CPOR historical.
  */
 export function StewardWorkspaceViewportShell({
   left,

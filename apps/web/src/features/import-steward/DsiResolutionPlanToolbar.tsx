@@ -18,7 +18,7 @@ import { useState } from 'react';
 
 import { safeDisplayError } from '@/lib/api';
 
-import { DsiPendingButton } from './DsiPendingButton';
+import { StewardPendingButton } from './StewardPendingButton';
 
 type PlanToolbarSlice = {
   candidatesCount: number;
@@ -57,7 +57,7 @@ export function DsiResolutionPlanToolbar(plan: PlanToolbarSlice) {
   return (
     <Stack spacing={1} data-testid="dsi-resolution-plan-toolbar">
       <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
-        <DsiPendingButton
+        <StewardPendingButton
           variant="outlined"
           size="small"
           pending={suggestionsQuery.isFetching}
@@ -67,7 +67,7 @@ export function DsiResolutionPlanToolbar(plan: PlanToolbarSlice) {
           data-testid="dsi-resolution-suggestions-refresh"
         >
           Refresh suggestions
-        </DsiPendingButton>
+        </StewardPendingButton>
         {resolutionPlan?.summary && typeof resolutionPlan.summary === 'object' ? (
           <>
             <Chip

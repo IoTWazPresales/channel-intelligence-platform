@@ -9,7 +9,7 @@ import {
 } from '@/features/import-steward/confidenceBand';
 import { formatPlanActionLabel, planTargetSummary } from '@/features/import-steward/dsiResolutionPlanDisplay';
 
-import { DsiPendingButton } from './DsiPendingButton';
+import { StewardPendingButton } from './StewardPendingButton';
 import {
   isShipmentCustomerEntity,
   isShipmentDistributorEntity,
@@ -79,7 +79,7 @@ export function ShipmentMappingStewardPanel({
           ) : null}
           {onApplyPlanRow ? (
             <Box sx={{ mt: 1 }}>
-              <DsiPendingButton
+              <StewardPendingButton
                 size="small"
                 variant="contained"
                 pending={applyPlanPending}
@@ -88,7 +88,7 @@ export function ShipmentMappingStewardPanel({
                 data-testid="shipment-steward-apply-plan-row"
               >
                 Apply plan for this row
-              </DsiPendingButton>
+              </StewardPendingButton>
             </Box>
           ) : null}
         </Alert>

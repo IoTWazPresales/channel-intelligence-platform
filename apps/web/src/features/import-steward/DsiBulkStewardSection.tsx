@@ -23,7 +23,7 @@ import {
 } from "@mui/material";
 import type { BulkTableSelectionMode } from "@/components/bulkTable/BulkSelectionToolbar";
 
-import { DsiPendingButton } from "./DsiPendingButton";
+import { StewardPendingButton } from "./StewardPendingButton";
 
 import { bulkPreviewAliasEvidence, bulkPreviewProposedLabel } from "./dsiBulkStewardDisplay";
 import type { useDsiBulkSteward } from "./useDsiBulkSteward";
@@ -165,7 +165,7 @@ export function DsiBulkStewardSection({
               </DialogContent>
               <DialogActions>
                 <Button onClick={() => setPreviewOpen(false)}>Close</Button>
-                <DsiPendingButton
+                <StewardPendingButton
                   variant="contained"
                   pending={bulkApply.isPending}
                   pendingLabel="Applying…"
@@ -173,7 +173,7 @@ export function DsiBulkStewardSection({
                   onClick={() => void bulkApply.mutateAsync().catch(() => {})}
                 >
                   Apply
-                </DsiPendingButton>
+                </StewardPendingButton>
               </DialogActions>
             </Dialog>
 
@@ -203,7 +203,7 @@ export function DsiBulkStewardSection({
               </DialogContent>
               <DialogActions>
                 <Button onClick={() => setApplyAllConfirmOpen(false)}>Cancel</Button>
-                <DsiPendingButton
+                <StewardPendingButton
                   variant="contained"
                   pending={applyResolutionPlan.isPending}
                   pendingLabel="Applying…"
@@ -220,7 +220,7 @@ export function DsiBulkStewardSection({
                   data-testid="dsi-resolution-plan-apply-all-confirm"
                 >
                   Apply all ready
-                </DsiPendingButton>
+                </StewardPendingButton>
               </DialogActions>
             </Dialog>
     </>

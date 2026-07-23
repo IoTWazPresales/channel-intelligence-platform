@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 
-import { DsiPendingButton } from './DsiPendingButton';
+import { StewardPendingButton } from './StewardPendingButton';
 import type { useShipmentBulkSteward } from './useShipmentBulkSteward';
 
 type BulkSteward = ReturnType<typeof useShipmentBulkSteward>;
@@ -112,7 +112,7 @@ export function ShipmentBulkStewardSection({
           ))}
         </Stack>
       ) : null}
-      <DsiPendingButton
+      <StewardPendingButton
         variant="contained"
         size="small"
         pending={bulkApply.isPending}
@@ -122,7 +122,7 @@ export function ShipmentBulkStewardSection({
         data-testid="shipment-bulk-apply"
       >
         Apply bulk action ({selectedIds.length})
-      </DsiPendingButton>
+      </StewardPendingButton>
     </Stack>
   );
 }

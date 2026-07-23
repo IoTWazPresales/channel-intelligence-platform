@@ -22,6 +22,11 @@ description: >-
 - **No half-PASS** — thin mounts, stub wizards, missing async/progress when the bar requires them → incomplete; VERIFY must **STOP**.
 - **Never skim** — double- and triple-check against named canonical files before claiming ship.
 - **Own surface ≠ weaker UX** — different route/CTA only.
+- **Code is evidence; docs are claims** — CURRENT/BACKLOG/commits saying “done” or “parity” are claims. Confirm in the tree (filled props / section shape vs canonical). Do not self-PASS; seed VERIFY.
+
+## Confirmation before claim (Cursor)
+
+When the unit touches steward/import UX, Cursor’s report must list a **comparative slot checklist** (canonical → shipped + path:line) vs the named canonical (viewport shell · entity tabs · filters · columns · drawer chrome · drawer body · plan/bulk · progress). Missing or PARTIAL slots → do not claim done; do not ask VERIFY for PASS. VERIFY independently re-reads each cited path — the filled table is a claim, not proof.
 
 New chat starter:
 

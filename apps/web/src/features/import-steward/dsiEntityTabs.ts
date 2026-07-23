@@ -79,7 +79,7 @@ export function dsiStewardFiltersMatchTabDefault(
 }
 
 export function formatDsiEntityTabLabel(
-  tab: DsiEntityTabMeta,
+  tab: Pick<DsiEntityTabMeta, 'label'>,
   total: number | null,
   needsWork: number | null
 ): string {

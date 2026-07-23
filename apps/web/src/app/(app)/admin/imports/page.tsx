@@ -89,8 +89,8 @@ import { useImportJobProgressQuery } from '@/features/background-tasks/useImport
 
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
 import { DsiIntelligenceStatusPanel, type DsiIntelligenceState } from './DsiIntelligenceStatusPanel';
-import { DsiValidateProgressPanel } from './DsiValidateProgressPanel';
-import type { DsiValidateProgress } from './DsiValidateProgressPanel';
+import { ImportJobValidateProgressPanel } from '@/features/import-steward/ImportJobValidateProgressPanel';
+import type { DsiValidateProgress } from '@/features/import-steward/ImportJobValidateProgressPanel';
 import type { DsiCandidateRow } from '../mappings/DsiCandidateStewardPanel';
 import {
   computeDsiContinueGateKey,
@@ -3646,7 +3646,7 @@ function AdminImportsPageContent() {
             ) : null}
             {shipmentValidating ? (
               <Stack spacing={1}>
-                <DsiValidateProgressPanel
+                <ImportJobValidateProgressPanel
                   progress={shipmentProgress}
                   isRunning={shipmentValidating}
                   title="Shipment validation"
@@ -3993,7 +3993,7 @@ function AdminImportsPageContent() {
               </Alert>
             ) : null}
             {dsiPipelineInFlight ? (
-              <DsiValidateProgressPanel
+              <ImportJobValidateProgressPanel
                 progress={dsiProgress}
                 isRunning={dsiPipelineInFlight || (dsiValidate.isPending ?? false)}
               />

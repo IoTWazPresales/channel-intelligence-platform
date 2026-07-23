@@ -3,7 +3,7 @@
 import { Button, CircularProgress, type ButtonProps } from '@mui/material';
 
 /** MUI Button with spinner, disabled while pending — prevents double-submit. */
-export function DsiPendingButton({
+export function StewardPendingButton({
   pending = false,
   pendingLabel,
   children,

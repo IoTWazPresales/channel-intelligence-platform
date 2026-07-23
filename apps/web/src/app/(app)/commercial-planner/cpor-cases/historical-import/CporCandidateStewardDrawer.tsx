@@ -1,10 +1,10 @@
 'use client';
 
-import CloseIcon from '@mui/icons-material/Close';
-import { Alert, Box, Button, IconButton, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { useCallback, useState } from 'react';
 
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { StewardDrawerChrome } from '@/features/import-steward/StewardDrawerChrome';
 import type { ImportStewardCandidateRowBase } from '@/features/import-steward/importStewardCandidateWorkspace.types';
 import { safeDisplayError } from '@/lib/api';
 
@@ -55,77 +55,44 @@ export function CporCandidateStewardDrawer({
   };
 
   return (
-    <Box
-      component="aside"
-      role="complementary"
-      aria-label="CPOR historical candidate steward"
-      data-testid="cpor-historical-candidate-steward-drawer"
-      sx={{
-        width: { xs: '100%', md: '40%' },
-        minWidth: { md: 320 },
-        maxWidth: '100%',
-        flexShrink: 0,
-        borderLeft: { md: 1 },
-        borderColor: 'divider',
-        bgcolor: 'background.paper',
-        display: 'flex',
-        flexDirection: 'column',
-        maxHeight: { xs: 'none', md: 'min(72vh, calc(100vh - 96px))' },
-        overflow: 'hidden',
-        position: { md: 'sticky' },
-        top: { md: 80 },
-        alignSelf: { md: 'flex-start' },
-      }}
+    <StewardDrawerChrome
+      title={`Map ${entity}`}
+      onClose={onClose}
+      rootTestId="cpor-historical-candidate-steward-drawer"
+      closeTestId="cpor-historical-steward-drawer-close"
+      ariaLabel="CPOR historical candidate steward"
     >
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
-      >
-        <Typography variant="subtitle1">Map {entity}</Typography>
-        <IconButton
-          size="small"
-          aria-label="Close steward drawer"
-          onClick={onClose}
-          data-testid="cpor-historical-steward-drawer-close"
-        >
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      </Stack>
-      <Box sx={{ flex: 1, overflow: 'auto', px: 2, py: 1.5 }}>
-        <Stack spacing={2}>
-          <Box>
-            <Typography variant="caption" color="text.secondary">
-              Token
-            </Typography>
-            <Typography variant="body1" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
-              {candidate.token}
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="text.secondary">
-            Appears on {candidate.row_count} staging row{candidate.row_count === 1 ? '' : 's'} · status{' '}
-            {candidate.status}
+      <Stack spacing={2}>
+        <Box>
+          <Typography variant="caption" color="text.secondary">
+            Token
           </Typography>
-          <EntitySearchAutocomplete<CporDimPick>
-            label={`Map ${entity} to…`}
-            value={target}
-            onChange={setTarget}
-            fetchOptions={fetchOptions}
-            getOptionLabel={cporDimLabel}
-            disabled={busy || pending}
-          />
-          {error ? <Alert severity="error">{error}</Alert> : null}
-          <Button
-            variant="contained"
-            disabled={!target || busy || pending}
-            onClick={() => void handleMap()}
-            data-testid="cpor-historical-drawer-map"
-          >
-            {pending ? 'Mapping…' : 'Map token'}
-          </Button>
-        </Stack>
-      </Box>
-    </Box>
+          <Typography variant="body1" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
+            {candidate.token}
+          </Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary">
+          Appears on {candidate.row_count} staging row{candidate.row_count === 1 ? '' : 's'} · status{' '}
+          {candidate.status}
+        </Typography>
+        <EntitySearchAutocomplete<CporDimPick>
+          label={`Map ${entity} to…`}
+          value={target}
+          onChange={setTarget}
+          fetchOptions={fetchOptions}
+          getOptionLabel={cporDimLabel}
+          disabled={busy || pending}
+        />
+        {error ? <Alert severity="error">{error}</Alert> : null}
+        <Button
+          variant="contained"
+          disabled={!target || busy || pending}
+          onClick={() => void handleMap()}
+          data-testid="cpor-historical-drawer-map"
+        >
+          {pending ? 'Mapping…' : 'Map token'}
+        </Button>
+      </Stack>
+    </StewardDrawerChrome>
   );
 }

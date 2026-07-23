@@ -15,6 +15,13 @@ import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectio
 import { BulkSelectionToolbar } from '@/components/bulkTable/BulkSelectionToolbar';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { ImportStewardCandidateWorkspace } from '@/features/import-steward/ImportStewardCandidateWorkspace';
+import { StewardCandidateFilters } from '@/features/import-steward/StewardCandidateFilters';
+import { StewardEntityTabsBar, type StewardEntityTabCounts } from '@/features/import-steward/StewardEntityTabsBar';
+import { StewardWorkspaceViewportShell } from '@/features/import-steward/StewardWorkspaceViewportShell';
+import {
+  defaultDsiStewardCandidateFilterState,
+  type DsiStewardCandidateFilterState,
+} from '@/features/import-steward/dsiStewardCandidateFilterLogic';
 import { computeImportStewardSelectionHeaderState } from '@/features/import-steward/importStewardSelectionUtils';
 import { safeDisplayError } from '@/lib/api';
 
@@ -22,7 +29,6 @@ import {
   CporCandidateStewardDrawer,
   type CporStewardRow,
 } from './CporCandidateStewardDrawer';
-import { CporEntityTabsBar, type CporEntityTabCounts } from './CporEntityTabsBar';
 import {
   bulkMapCporHistoricalTokens,
   cporDimLabel,
@@ -34,10 +40,14 @@ import {
   type CporDimPick,
 } from './cporHistoricalImportApi';
 import {
+  CPOR_ENTITY_TAB_DEFS,
   CPOR_HISTORICAL_STEWARD_CONFIG,
+  formatCporEntityTabLabel,
   invalidateCporHistoricalStewardQueries,
   type CporEntityTabId,
 } from './cporHistoricalSteward.config';
+
+type CporEntityTabCounts = StewardEntityTabCounts<CporEntityTabId>;
 
 function emptyCounts(): CporEntityTabCounts {
   return {
@@ -45,6 +55,37 @@ function emptyCounts(): CporEntityTabCounts {
     customer: { total: null, needsWork: null },
     distributor: { total: null, needsWork: null },
   };
+}
+
+function defaultCporFiltersForTab(tab: CporEntityTabId): DsiStewardCandidateFilterState {
+  return {
+    ...defaultDsiStewardCandidateFilterState(),
+    entity: tab,
+    party: 'all',
+  };
+}
+
+/** CPOR unresolved tokens map onto the shared chip chrome without inventing DSI plan semantics. */
+function filterCporStewardRows(
+  rows: CporStewardRow[],
+  filters: DsiStewardCandidateFilterState,
+  search: string
+): CporStewardRow[] {
+  let next = rows;
+  if (filters.queue === 'ready_to_map' || filters.queue === 'provisional' || filters.queue === 'ambiguous_eligible') {
+    next = [];
+  } else if (filters.queue === 'needs_review' || filters.queue === 'no_match') {
+    next = next.filter((r) => r.status === 'unresolved' || r.status === 'needs_review' || r.status === 'no_match');
+  }
+  // verifyName / specialCategory / duplicate toggles have no CPOR evidence fields — no-op.
+  if (!search) return next;
+  const needle = search.toLowerCase();
+  return next.filter(
+    (r) =>
+      r.token.toLowerCase().includes(needle) ||
+      r.status.toLowerCase().includes(needle) ||
+      String(r.row_count).includes(needle)
+  );
 }
 
 export function CporHistoricalImportJobResolutionSection({
@@ -60,6 +101,9 @@ export function CporHistoricalImportJobResolutionSection({
 }) {
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<CporEntityTabId>('product');
+  const [activeFilters, setActiveFilters] = useState<DsiStewardCandidateFilterState>(() =>
+    defaultCporFiltersForTab('product')
+  );
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -116,16 +160,10 @@ export function CporHistoricalImportJobResolutionSection({
     [candidatesQuery.data?.candidates]
   );
 
-  const filteredRows = useMemo(() => {
-    if (!debouncedSearch) return stewardRows;
-    const needle = debouncedSearch.toLowerCase();
-    return stewardRows.filter(
-      (r) =>
-        r.token.toLowerCase().includes(needle) ||
-        r.status.toLowerCase().includes(needle) ||
-        String(r.row_count).includes(needle)
-    );
-  }, [stewardRows, debouncedSearch]);
+  const filteredRows = useMemo(
+    () => filterCporStewardRows(stewardRows, activeFilters, debouncedSearch),
+    [stewardRows, activeFilters, debouncedSearch]
+  );
 
   const counts: CporEntityTabCounts = useMemo(() => {
     const unresolved = summaryQuery.data?.unresolved_counts;
@@ -145,6 +183,7 @@ export function CporHistoricalImportJobResolutionSection({
     setBulkTarget(null);
     setSearchInput('');
     setDebouncedSearch('');
+    setActiveFilters(defaultCporFiltersForTab(activeTab));
   }, [importJobId, activeTab]);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -214,8 +253,7 @@ export function CporHistoricalImportJobResolutionSection({
 
   const stewardOverlayBusy = mapMutation.isPending || pipelineRunning;
   const candidatesLoading =
-    candidatesQuery.isLoading ||
-    (candidatesQuery.isFetching && stewardRows.length === 0);
+    candidatesQuery.isLoading || (candidatesQuery.isFetching && stewardRows.length === 0);
 
   const fetchBulkOptions = useCallback(
     (q: string, signal: AbortSignal) => fetchCporDimOptions(activeTab, q, signal),
@@ -242,6 +280,19 @@ export function CporHistoricalImportJobResolutionSection({
     );
   }
 
+  const drawer =
+    effectiveDetailCandidate != null ? (
+      <CporCandidateStewardDrawer
+        candidate={effectiveDetailCandidate}
+        entity={activeTab}
+        busy={stewardOverlayBusy}
+        onClose={() => setDetailCandidate(null)}
+        onMap={async ({ token, dimId }) => {
+          await mapMutation.mutateAsync({ tokens: [token], dimId });
+        }}
+      />
+    ) : null;
+
   return (
     <Stack spacing={2} data-testid="cpor-historical-import-job-resolution-section">
       {summaryQuery.data ? (
@@ -251,206 +302,215 @@ export function CporHistoricalImportJobResolutionSection({
         </Alert>
       ) : null}
 
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', md: 'row' },
-          alignItems: 'stretch',
-          gap: 0,
-          minHeight: 360,
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 1,
-          overflow: 'hidden',
-        }}
-      >
-        <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', p: 2 }}>
-          <ImportStewardCandidateWorkspace
-            embedded
-            keepTableWhenFilterEmpty
-            rootTestId="cpor-historical-steward-candidate-workspace"
-            listDomainId={CPOR_HISTORICAL_STEWARD_CONFIG.listDomainId}
-            importJobId={importJobId}
-            copy={CPOR_HISTORICAL_STEWARD_CONFIG.listShellCopy}
-            openRows={stewardRows}
-            filteredRows={filteredRows}
-            isLoading={candidatesLoading}
-            busy={stewardOverlayBusy}
-            busyOverlay={{
-              message: mapMutation.isPending ? 'Mapping tokens…' : 'Pipeline running…',
-            }}
-            actionFeedback={
-              actionFeedback
-                ? {
-                    ...actionFeedback,
-                    onDismiss: () => setActionFeedback(null),
-                  }
-                : null
-            }
-            columns={[
-              {
-                id: 'token',
-                header: 'Token',
-                cell: (r) => (
-                  <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
-                    {r.token}
-                  </Typography>
-                ),
-              },
-              {
-                id: 'rows',
-                header: 'Rows',
-                align: 'right',
-                cell: (r) => r.row_count,
-              },
-              {
-                id: 'status',
-                header: 'Status',
-                cell: (r) => r.status,
-              },
-              {
-                id: 'actions',
-                header: 'Actions',
-                cell: (r) => (
-                  <Button
-                    size="small"
-                    variant="text"
-                    disabled={stewardOverlayBusy}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDetailCandidate(r);
-                    }}
-                    data-testid={`cpor-historical-row-map-${r.id}`}
-                  >
-                    Map…
-                  </Button>
-                ),
-              },
-            ]}
-            selection={workspaceSelection}
-            onRowClick={(row) => setDetailCandidate(row)}
-            getRowSx={(row) => {
-              const selected = selectedIdSet.has(row.id);
-              const drawerOpen = effectiveDetailCandidate?.id === row.id;
-              if (selected || drawerOpen) {
-                return { bgcolor: 'action.selected', cursor: 'pointer' };
-              }
-              return { cursor: 'pointer' };
-            }}
-            tabsSlot={
-              <CporEntityTabsBar
-                activeTab={activeTab}
-                onChange={setActiveTab}
-                counts={counts}
-                busy={stewardOverlayBusy}
-              />
-            }
-            filtersSlot={
-              <TextField
-                size="small"
-                fullWidth
-                label="Search tokens"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Filter by token, status, or row count"
-                disabled={stewardOverlayBusy}
-                data-testid="cpor-historical-steward-search"
-                helperText={
-                  debouncedSearch
-                    ? `Showing ${filteredRows.length} of ${stewardRows.length}`
-                    : `${stewardRows.length} unresolved on this tab`
-                }
-              />
-            }
-            toolbarSlot={
-              <Stack
-                ref={workspaceToolbarRef}
-                direction="row"
-                spacing={1}
-                alignItems="center"
-                flexWrap="wrap"
-                useFlexGap
-              >
-                {bulkMode === 'selecting' ? (
-                  <BulkSelectionToolbar
-                    mode={bulkMode}
-                    selectedCount={selectedIds.length}
-                    visibleRowCount={filteredRows.length}
-                    onEnterSelectionMode={() => setBulkMode('selecting')}
-                    onExitSelectionMode={() => {
-                      setBulkMode('normal');
-                      setSelectedIds([]);
-                      setBulkTarget(null);
-                      workspaceToolbarRef.current?.querySelector<HTMLElement>('button')?.focus();
-                    }}
-                    onSelectAllVisible={() => setSelectedIds(filteredRows.map((r) => r.id))}
-                    onDeselectAll={() => setSelectedIds([])}
-                    busy={mapMutation.isPending}
-                    previewDangerLabel="Map selected"
-                    previewDangerDisabled={
-                      selectedIds.length === 0 || !bulkTarget || mapMutation.isPending
+      <StewardWorkspaceViewportShell
+        bordered
+        rootTestId="cpor-historical-steward-workspace-viewport-shell"
+        left={
+          <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+            <ImportStewardCandidateWorkspace
+              embedded
+              keepTableWhenFilterEmpty
+              rootTestId="cpor-historical-steward-candidate-workspace"
+              listDomainId={CPOR_HISTORICAL_STEWARD_CONFIG.listDomainId}
+              importJobId={importJobId}
+              copy={CPOR_HISTORICAL_STEWARD_CONFIG.listShellCopy}
+              openRows={stewardRows}
+              filteredRows={filteredRows}
+              isLoading={candidatesLoading}
+              busy={stewardOverlayBusy}
+              busyOverlay={{
+                message: mapMutation.isPending ? 'Mapping tokens…' : 'Pipeline running…',
+              }}
+              actionFeedback={
+                actionFeedback
+                  ? {
+                      ...actionFeedback,
+                      onDismiss: () => setActionFeedback(null),
                     }
-                    onPreviewDangerAction={() => {
-                      if (!bulkTarget || selectedTokens.length === 0) return;
-                      void mapMutation.mutateAsync({
-                        tokens: selectedTokens,
-                        dimId: bulkTarget.id,
-                      });
-                    }}
-                  />
-                ) : (
-                  <>
+                  : null
+              }
+              columns={[
+                {
+                  id: 'token',
+                  header: 'Token',
+                  cell: (r) => (
+                    <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
+                      {r.token}
+                    </Typography>
+                  ),
+                },
+                {
+                  id: 'rows',
+                  header: 'Rows',
+                  align: 'right',
+                  cell: (r) => r.row_count,
+                },
+                {
+                  id: 'status',
+                  header: 'Status',
+                  cell: (r) => r.status,
+                },
+                {
+                  id: 'confidence',
+                  header: 'Confidence',
+                  align: 'right',
+                  cell: (r) =>
+                    r.confidence_score == null ? '—' : Number(r.confidence_score).toFixed(2),
+                },
+                {
+                  id: 'actions',
+                  header: 'Actions',
+                  cell: (r) => (
                     <Button
                       size="small"
-                      variant="outlined"
-                      disabled={filteredRows.length === 0 && selectedIds.length === 0}
-                      onClick={openBulkMap}
-                      data-testid="cpor-historical-bulk-map-open"
+                      variant="text"
+                      disabled={stewardOverlayBusy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDetailCandidate(r);
+                      }}
+                      data-testid={`cpor-historical-row-map-${r.id}`}
                     >
-                      Map selected to…
+                      Map…
                     </Button>
-                    <Typography variant="caption" color="text.secondary">
-                      {selectedIds.length} selected · Click a row to map one token
-                    </Typography>
-                    <Box sx={{ flexGrow: 1 }} />
-                  </>
-                )}
-              </Stack>
-            }
-            bulkFormSlot={
-              bulkMode === 'selecting' ? (
-                <Box sx={{ maxWidth: 420 }} data-testid="cpor-historical-bulk-map-form">
-                  <EntitySearchAutocomplete<CporDimPick>
-                    label={`Map selected ${activeTab} tokens to…`}
-                    value={bulkTarget}
-                    onChange={setBulkTarget}
-                    fetchOptions={fetchBulkOptions}
-                    getOptionLabel={cporDimLabel}
-                    disabled={stewardOverlayBusy}
-                    helperText={
-                      selectedTokens.length
-                        ? `${selectedTokens.length} token(s) will receive this mapping`
-                        : 'Select tokens first'
-                    }
+                  ),
+                },
+              ]}
+              selection={workspaceSelection}
+              onRowClick={(row) => setDetailCandidate(row)}
+              getRowSx={(row) => {
+                const selected = selectedIdSet.has(row.id);
+                const drawerOpen = effectiveDetailCandidate?.id === row.id;
+                if (selected || drawerOpen) {
+                  return { bgcolor: 'action.selected', cursor: 'pointer' };
+                }
+                return { cursor: 'pointer' };
+              }}
+              tabsSlot={
+                <StewardEntityTabsBar
+                  tabs={CPOR_ENTITY_TAB_DEFS}
+                  activeTab={activeTab}
+                  onChange={setActiveTab}
+                  counts={counts}
+                  busy={stewardOverlayBusy}
+                  testIdPrefix="cpor-historical"
+                  ariaLabel="CPOR historical entity resolution"
+                  formatTabAriaLabel={formatCporEntityTabLabel}
+                />
+              }
+              filtersSlot={
+                <Stack spacing={1.5}>
+                  <StewardCandidateFilters
+                    filters={activeFilters}
+                    onChange={setActiveFilters}
+                    visibleCount={filteredRows.length}
+                    totalCount={stewardRows.length}
+                    hideEntityFilter
+                    hidePartyFilter
+                    clearToDefault={() => defaultCporFiltersForTab(activeTab)}
+                    isAtDefault={(filters) => {
+                      const def = defaultCporFiltersForTab(activeTab);
+                      return (
+                        filters.queue === def.queue &&
+                        filters.entity === def.entity &&
+                        filters.party === def.party &&
+                        filters.verifyNameOnly === def.verifyNameOnly &&
+                        filters.specialCategoryOnly === def.specialCategoryOnly &&
+                        filters.duplicateUnresolvedOnly === def.duplicateUnresolvedOnly
+                      );
+                    }}
                   />
-                </Box>
-              ) : null
-            }
-          />
-        </Box>
-
-        {effectiveDetailCandidate ? (
-          <CporCandidateStewardDrawer
-            candidate={effectiveDetailCandidate}
-            entity={activeTab}
-            busy={stewardOverlayBusy}
-            onClose={() => setDetailCandidate(null)}
-            onMap={async ({ token, dimId }) => {
-              await mapMutation.mutateAsync({ tokens: [token], dimId });
-            }}
-          />
-        ) : null}
-      </Box>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label="Search tokens"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    placeholder="Refine by token, status, or row count"
+                    disabled={stewardOverlayBusy}
+                    data-testid="cpor-historical-steward-search"
+                  />
+                </Stack>
+              }
+              toolbarSlot={
+                <Stack
+                  ref={workspaceToolbarRef}
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  flexWrap="wrap"
+                  useFlexGap
+                >
+                  {bulkMode === 'selecting' ? (
+                    <BulkSelectionToolbar
+                      mode={bulkMode}
+                      selectedCount={selectedIds.length}
+                      visibleRowCount={filteredRows.length}
+                      onEnterSelectionMode={() => setBulkMode('selecting')}
+                      onExitSelectionMode={() => {
+                        setBulkMode('normal');
+                        setSelectedIds([]);
+                        setBulkTarget(null);
+                        workspaceToolbarRef.current?.querySelector<HTMLElement>('button')?.focus();
+                      }}
+                      onSelectAllVisible={() => setSelectedIds(filteredRows.map((r) => r.id))}
+                      onDeselectAll={() => setSelectedIds([])}
+                      busy={mapMutation.isPending}
+                      previewDangerLabel="Map selected"
+                      previewDangerDisabled={
+                        selectedIds.length === 0 || !bulkTarget || mapMutation.isPending
+                      }
+                      onPreviewDangerAction={() => {
+                        if (!bulkTarget || selectedTokens.length === 0) return;
+                        void mapMutation.mutateAsync({
+                          tokens: selectedTokens,
+                          dimId: bulkTarget.id,
+                        });
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={filteredRows.length === 0 && selectedIds.length === 0}
+                        onClick={openBulkMap}
+                        data-testid="cpor-historical-bulk-map-open"
+                      >
+                        Map selected to…
+                      </Button>
+                      <Typography variant="caption" color="text.secondary">
+                        {selectedIds.length} selected · Click a row to map one token
+                      </Typography>
+                      <Box sx={{ flexGrow: 1 }} />
+                    </>
+                  )}
+                </Stack>
+              }
+              bulkFormSlot={
+                bulkMode === 'selecting' ? (
+                  <Box sx={{ maxWidth: 420 }} data-testid="cpor-historical-bulk-map-form">
+                    <EntitySearchAutocomplete<CporDimPick>
+                      label={`Map selected ${activeTab} tokens to…`}
+                      value={bulkTarget}
+                      onChange={setBulkTarget}
+                      fetchOptions={fetchBulkOptions}
+                      getOptionLabel={cporDimLabel}
+                      disabled={stewardOverlayBusy}
+                      helperText={
+                        selectedTokens.length
+                          ? `${selectedTokens.length} token(s) will receive this mapping`
+                          : 'Select tokens first'
+                      }
+                    />
+                  </Box>
+                ) : null
+              }
+            />
+          </Box>
+        }
+        drawer={drawer}
+      />
     </Stack>
   );
 }

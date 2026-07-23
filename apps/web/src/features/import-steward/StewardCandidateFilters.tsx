@@ -4,7 +4,7 @@ import { Button, Chip, Stack, Typography } from '@mui/material';
 import type { DsiStewardCandidateFilterState, DsiStewardEntityFilter, DsiStewardPartyFilter, DsiStewardQueueFilter } from './dsiStewardCandidateFilterLogic';
 import { defaultDsiStewardCandidateFilterState, dsiStewardFiltersAreDefault } from './dsiStewardCandidateFilterLogic';
 
-export function DsiStewardCandidateFilters({
+export function StewardCandidateFilters({
   filters,
   onChange,
   visibleCount,

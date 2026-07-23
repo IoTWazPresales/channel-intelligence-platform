@@ -17,7 +17,7 @@ import {
 import { safeDisplayError } from '@/lib/api';
 
 import { DsiCustomerSearchFields } from './DsiCustomerSearchFields';
-import { DsiPendingButton } from './DsiPendingButton';
+import { StewardPendingButton } from './StewardPendingButton';
 import type { useDsiBulkSteward } from './useDsiBulkSteward';
 import type { DsiBulkAction, DsiCatalogOpt } from './dsiSteward.types';
 
@@ -321,7 +321,7 @@ export function DsiBulkActionInlineForm({
         />
       ) : null}
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        <DsiPendingButton
+        <StewardPendingButton
           variant="outlined"
           pending={bulkPreview.isPending}
           pendingLabel="Previewing…"
@@ -330,8 +330,8 @@ export function DsiBulkActionInlineForm({
           data-testid="dsi-bulk-preview-inline"
         >
           Preview bulk steward
-        </DsiPendingButton>
-        <DsiPendingButton
+        </StewardPendingButton>
+        <StewardPendingButton
           variant="contained"
           pending={bulkApply.isPending}
           pendingLabel="Applying…"
@@ -340,7 +340,7 @@ export function DsiBulkActionInlineForm({
           data-testid="dsi-bulk-apply"
         >
           Apply bulk steward
-        </DsiPendingButton>
+        </StewardPendingButton>
       </Stack>
       {bulkPreview.isError ? (
         <Alert severity="error" data-testid="dsi-bulk-preview-error">

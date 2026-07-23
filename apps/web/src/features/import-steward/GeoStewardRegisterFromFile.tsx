@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Accordion, AccordionDetails, AccordionSummary, Stack, TextField, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
-import { DsiPendingButton } from './DsiPendingButton';
+import { StewardPendingButton } from './StewardPendingButton';
 import { prefillGeoCreateFromFileToken } from './geoStewardFilePrefill';
 import type { DsiUnresolvedGeoRowDto } from './dsiSteward.types';
 
@@ -44,7 +44,7 @@ export function GeoStewardRegisterFromFile({
         <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 200px' }}>
           <strong>Suggested from file:</strong> {code} — {name}
         </Typography>
-        <DsiPendingButton
+        <StewardPendingButton
           size="small"
           variant="contained"
           pending={pending}
@@ -60,7 +60,7 @@ export function GeoStewardRegisterFromFile({
           data-testid={`${testIdPrefix}-register-btn`}
         >
           Register from file
-        </DsiPendingButton>
+        </StewardPendingButton>
       </Stack>
       <Accordion
         expanded={overrideOpen}

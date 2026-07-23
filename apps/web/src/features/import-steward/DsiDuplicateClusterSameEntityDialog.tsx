@@ -21,7 +21,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { DsiCustomerSearchFields } from './DsiCustomerSearchFields';
-import { DsiPendingButton } from './DsiPendingButton';
+import { StewardPendingButton } from './StewardPendingButton';
 import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
 import {
   buildDupClusterSameEntitySubmitBody,
@@ -222,10 +222,10 @@ export function DsiDuplicateClusterSameEntityDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <DsiPendingButton onClick={onClose} disabled={pending}>
+        <StewardPendingButton onClick={onClose} disabled={pending}>
           Cancel
-        </DsiPendingButton>
-        <DsiPendingButton
+        </StewardPendingButton>
+        <StewardPendingButton
           variant="contained"
           pending={pending}
           pendingLabel="Mapping…"
@@ -244,7 +244,7 @@ export function DsiDuplicateClusterSameEntityDialog({
           }}
         >
           Map cluster ({keys.length} tokens)
-        </DsiPendingButton>
+        </StewardPendingButton>
       </DialogActions>
     </Dialog>
   );

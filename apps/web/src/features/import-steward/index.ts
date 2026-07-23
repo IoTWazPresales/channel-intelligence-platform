@@ -23,11 +23,18 @@ export {
   DSI_ENTITY_PRODUCT,
   type DsiStewardCandidateFilterState,
 } from './dsiStewardCandidateFilterLogic';
-export { DsiStewardCandidateFilters } from './DsiStewardCandidateFilters';
+export { StewardCandidateFilters } from './StewardCandidateFilters';
 
 export { ImportStewardCandidateWorkspace } from './ImportStewardCandidateWorkspace';
 export { StewardWorkspaceViewportShell } from './StewardWorkspaceViewportShell';
 export type { StewardWorkspaceViewportShellProps } from './StewardWorkspaceViewportShell';
+export { StewardEntityTabsBar } from './StewardEntityTabsBar';
+export type {
+  StewardEntityTabCounts,
+  StewardEntityTabDef,
+} from './StewardEntityTabsBar';
+export { StewardDrawerChrome } from './StewardDrawerChrome';
+export type { StewardDrawerChromeProps } from './StewardDrawerChrome';
 export type {
   ImportStewardActionFeedback,
   ImportStewardCandidateRowBase,
@@ -79,9 +86,8 @@ export {
   SHIPMENT_ENTITY_CUSTOMER,
   SHIPMENT_ENTITY_DISTRIBUTOR,
 } from './shipmentStewardCandidateFilterLogic';
-export { ShipmentEntityTabsBar } from './ShipmentEntityTabsBar';
-export { ShipmentResolutionPlanToolbar } from './ShipmentResolutionPlanToolbar';
 export { ShipmentBulkStewardSection } from './ShipmentBulkStewardSection';
+export { ShipmentResolutionPlanToolbar } from './ShipmentResolutionPlanToolbar';
 export { useShipmentBulkSteward } from './useShipmentBulkSteward';
 export { notifyDsiAsyncPipelineStarted } from './dsiAsyncPipelineRun';
 export { DsiBulkActionInlineForm } from './DsiBulkActionInlineForm';
@@ -100,14 +106,13 @@ export {
   REGION_EVIDENCE_SOURCE_LABELS,
 } from './dsiRegionEvidenceDisplay';
 export { DsiEligibleProductPicker, type DsiEligibleProductSnapshot } from './DsiEligibleProductPicker';
-export { DsiCandidatesPagination } from './DsiCandidatesPagination';
+export { StewardCandidatesPagination } from './StewardCandidatesPagination';
 export { DsiCandidateStewardDrawer } from './DsiCandidateStewardDrawer';
 export {
   ImportJobLoadedSuccessCallout,
   importJobApplyIsLoaded,
   type ImportJobLoadedSuccessCalloutProps,
 } from './ImportJobLoadedSuccessCallout';
-export { DsiEntityTabsBar } from './DsiEntityTabsBar';
 export { useDsiCandidatesPage } from './useDsiCandidatesPage';
 export { useDsiEntityTabCounts } from './useDsiEntityTabCounts';
 export type { DsiEntityTabCounts } from './useDsiEntityTabCounts';
@@ -122,7 +127,14 @@ export {
 } from './dsiEntityTabs';
 export type { DsiMappingCandidatesPageResponse, DsiCandidatePageSize, DsiCandidateListStatus } from './dsiCandidatesQuery';
 export { DSI_CANDIDATE_PAGE_SIZE_OPTIONS } from './dsiCandidatesQuery';
-export { DsiPendingButton } from './DsiPendingButton';
+export { StewardPendingButton } from './StewardPendingButton';
+export { ImportJobValidateProgressPanel } from './ImportJobValidateProgressPanel';
+export type {
+  ImportJobValidateProgress,
+  ImportJobValidateProgressPanelProps,
+  DsiValidateProgress,
+  ValidateProgressPhase,
+} from './ImportJobValidateProgressPanel';
 export { DsiProductCandidateExportToolbar } from './DsiProductCandidateExportToolbar';
 export {
   buildDsiProductCandidateExportRows,
@@ -144,4 +156,4 @@ export {
   formatPlanRulePathLabel,
   type DsiPlanWhy,
 } from './dsiPlanExplainabilityDisplay';
-export type { DsiBulkAction, DsiCatalogOpt, DsiPlanRowOverride, DsiUnresolvedGeoRowDto } from './dsiSteward.types';
+export type { DsiBulkAction, DsiCatalogOpt, DsiPlanRowOverride, DsiRegionEvidenceDto, DsiUnresolvedGeoRowDto } from './dsiSteward.types';

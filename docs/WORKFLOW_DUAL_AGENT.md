@@ -8,7 +8,7 @@
 
 ---
 
-## Quality bar (non-negotiable — Warren 2026-07-20)
+## Quality bar (non-negotiable — Warren 2026-07-20 / hardened 2026-07-22)
 
 Optimize for **UX, design, architecture, scalability, flexibility, best business practice, best solution, best intelligence, and best-in-market** — never for speed or “smallest diff.”
 
@@ -18,10 +18,22 @@ Optimize for **UX, design, architecture, scalability, flexibility, best business
 | **No half-PASS** | Thin mounts, stub wizards, sync-only paths where the bar is async+progress, missing tabs/bulk/debounce/error summaries — **incomplete unit**. Do not claim PASS; do not start the next unit. |
 | **Never skim** | Double- and triple-check against the named canonical files before shipping. Side-by-side the operator path (upload → map → validate → steward → apply → progress). |
 | **Own surface ≠ weaker UX** | Own route/CTA only. Same steward/apply/progress bar as the canonical importer. |
+| **Code is evidence; docs are claims** | `CURRENT.md`, BACKLOG “Done”, commit messages, ROADMAP, and “parity” prose are **claims**. Confirmation and audit must prove the claim in the **running tree** (section files, props filled, API shape). A document saying it is done does **not** make it done. |
+
+### Confirmation / audit discipline (Warren 2026-07-22)
+
+Before Cursor claims “done,” “parity,” “shipped,” or “PASS-ready”:
+
+1. **Open both sides** — named canonical section (e.g. `DsiImportJobResolutionSection`) and the target section. Compare slot-by-slot: viewport shell, entity tabs, filters (chips vs TextField), columns density, drawer chrome + body richness, plan toolbar, bulk, progress poll.
+2. **Filled experience, not imports** — `import { ImportStewardCandidateWorkspace }` is not evidence. What was passed into `columns` / `filtersSlot` / `drawer` is evidence.
+3. **Do not trust paper** — if BACKLOG/CURRENT/commit says complete and the section is thin, report **incomplete** and keep/restore the backlog item. Never remove a backlog entry on doc status alone.
+4. **No screenshot requirement** — attention to code structure and props is enough; do not substitute screenshots for reading the tree.
+5. **Cursor must not self-PASS** — after a clone/parity unit, seed CLI Opus/Fable VERIFY. Only `VERDICT: PASS` closes the unit.
+6. **Verifier re-reads, does not trust the table** — CLI VERIFY opens each cited `path:line` itself and compares canonical→shipped values; Cursor’s filled checklist is a claim under test, not evidence. Unlocatable or PARTIAL slot on a locked bar → STOP.
 
 **VERIFY must STOP when:** the unit prompt named a canonical (e.g. `DsiImportJobResolutionSection` / shipment resolution section / `dsi-progress` poll) and the shipped UI/API does not match that experience — even if tests are green and shared components are imported.
 
-Record waivers only as `Fable verify: WAIVED <YYYY-MM-DD>` in `CURRENT.md` with Warren’s written OK.
+Record waivers only as `Fable verify: WAIVED <YYYY-MM-DD>` (or Opus) in `CURRENT.md` with Warren’s written OK.
 
 ---
 

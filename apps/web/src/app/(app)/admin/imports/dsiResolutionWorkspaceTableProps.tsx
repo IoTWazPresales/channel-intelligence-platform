@@ -3,7 +3,7 @@
 import type { MouseEvent } from 'react';
 import { Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import NextLink from 'next/link';
-import { DsiPendingButton } from '@/features/import-steward/DsiPendingButton';
+import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
 import type { DsiCandidateRow, ImportStewardWorkspaceColumn } from '@/features/import-steward';
 import {
   DSI_ENTITY_CUSTOMER,
@@ -467,7 +467,7 @@ function DsiRowActions({
 
   return (
     <Stack direction="row" spacing={0.5} justifyContent="flex-end" flexWrap="wrap" useFlexGap>
-      <DsiPendingButton
+      <StewardPendingButton
         size="small"
         variant="outlined"
         disabled={terminal}
@@ -475,7 +475,7 @@ function DsiRowActions({
         data-testid={`dsi-action-review-${row.id}`}
       >
         Review…
-      </DsiPendingButton>
+      </StewardPendingButton>
     </Stack>
   );
 }

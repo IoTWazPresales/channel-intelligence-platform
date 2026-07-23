@@ -45,6 +45,8 @@ describe('CporHistoricalImportJobResolutionSection', () => {
     expect(screen.getByTestId('cpor-historical-tab-product')).toBeInTheDocument();
     expect(screen.getByTestId('cpor-historical-tab-customer')).toBeInTheDocument();
     expect(screen.getByTestId('cpor-historical-tab-distributor')).toBeInTheDocument();
+    expect(screen.getByTestId('cpor-historical-steward-workspace-viewport-shell')).toBeInTheDocument();
+    expect(screen.getByTestId('dsi-steward-candidate-filters')).toBeInTheDocument();
   });
 
   it('shows prompt when jobId is null', () => {

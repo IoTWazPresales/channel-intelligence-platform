@@ -15,9 +15,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 import { BulkSelectionToolbar } from '@/components/bulkTable/BulkSelectionToolbar';
 
-import { DsiCandidatesPagination } from '@/features/import-steward/DsiCandidatesPagination';
-import { DsiPendingButton } from '@/features/import-steward/DsiPendingButton';
-import { DsiStewardCandidateFilters } from '@/features/import-steward/DsiStewardCandidateFilters';
+import { StewardCandidatesPagination } from '@/features/import-steward/StewardCandidatesPagination';
+import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
+import { StewardCandidateFilters } from '@/features/import-steward/StewardCandidateFilters';
 import { ImportStewardCandidateWorkspace } from '@/features/import-steward/ImportStewardCandidateWorkspace';
 import { StewardWorkspaceViewportShell } from '@/features/import-steward/StewardWorkspaceViewportShell';
 import { computeImportStewardSelectionHeaderState } from '@/features/import-steward/importStewardSelectionUtils';
@@ -32,10 +32,12 @@ import {
   ShipmentStewardActionsProvider,
 } from '@/features/import-steward/shipmentStewardRowActions';
 import { ShipmentBulkStewardSection } from '@/features/import-steward/ShipmentBulkStewardSection';
-import { ShipmentEntityTabsBar } from '@/features/import-steward/ShipmentEntityTabsBar';
+import { StewardEntityTabsBar } from '@/features/import-steward/StewardEntityTabsBar';
 import { ShipmentResolutionPlanToolbar } from '@/features/import-steward/ShipmentResolutionPlanToolbar';
 import {
   defaultShipmentStewardFiltersForTab,
+  formatShipmentEntityTabLabel,
+  SHIPMENT_ENTITY_TAB_DEFS,
   shipmentStewardFiltersMatchTabDefault,
   type ShipmentEntityTabId,
 } from '@/features/import-steward/shipmentEntityTabs';
@@ -303,15 +305,19 @@ export function ShipmentImportJobResolutionSection({
                 return { cursor: 'pointer' };
               }}
               tabsSlot={
-                <ShipmentEntityTabsBar
+                <StewardEntityTabsBar
+                  tabs={SHIPMENT_ENTITY_TAB_DEFS}
                   activeTab={activeTab}
                   onChange={setActiveTab}
                   counts={counts}
                   busy={stewardOverlayBusy}
+                  testIdPrefix="shipment"
+                  ariaLabel="Shipment entity resolution"
+                  formatTabAriaLabel={formatShipmentEntityTabLabel}
                 />
               }
               filtersSlot={
-                <DsiStewardCandidateFilters
+                <StewardCandidateFilters
                   filters={activeFilters}
                   onChange={(next) => setFiltersByTab((prev) => ({ ...prev, [activeTab]: next }))}
                   visibleCount={
@@ -391,7 +397,7 @@ export function ShipmentImportJobResolutionSection({
                       <Box sx={{ flexGrow: 1 }} />
                     </>
                   )}
-                  <DsiCandidatesPagination
+                  <StewardCandidatesPagination
                     page={candidatesPage.page}
                     pageCount={clientQueueFilterActive ? filteredPageCount : candidatesPage.pageCount}
                     pageSize={candidatesPage.pageSize}
@@ -429,7 +435,7 @@ export function ShipmentImportJobResolutionSection({
         />
 
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
-          <DsiPendingButton
+          <StewardPendingButton
             variant="outlined"
             pending={revalidatePipelineBusy}
             pendingLabel="Re-running import validation…"
@@ -438,7 +444,7 @@ export function ShipmentImportJobResolutionSection({
             data-testid="shipment-import-revalidate-server"
           >
             Re-run import validation (server)
-          </DsiPendingButton>
+          </StewardPendingButton>
           <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 520 }}>
             Runs the shipment validator on the server so evidence lines and steward candidates refresh. Use after steward
             saves or column re-mapping. Not the same as <strong>Refresh plan</strong>.

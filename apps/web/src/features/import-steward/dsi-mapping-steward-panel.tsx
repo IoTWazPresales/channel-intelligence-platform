@@ -43,7 +43,7 @@ import {
   restoreDsiCandidatesCache,
   type DsiStewardRowAction,
 } from './dsiStewardCacheUpdates';
-import { DsiPendingButton } from './DsiPendingButton';
+import { StewardPendingButton } from './StewardPendingButton';
 import { planTargetSummary } from './dsiResolutionPlanDisplay';
 import {
   DsiEligibleProductPicker,
@@ -620,14 +620,14 @@ export function DsiMappingStewardPanel({
           </Typography>
           {dupUnresolved && !isTerminal ? (
             <Box sx={{ mt: 1 }}>
-              <DsiPendingButton
+              <StewardPendingButton
                 size="small"
                 variant="outlined"
                 data-testid="dsi-duplicate-cluster-map"
                 onClick={() => setDupClusterOpen(true)}
               >
                 Map cluster to one customer…
-              </DsiPendingButton>
+              </StewardPendingButton>
             </Box>
           ) : null}
         </Alert>
@@ -695,7 +695,7 @@ export function DsiMappingStewardPanel({
             ) : null}
             {dupUnresolved && !isTerminal ? (
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
-                <DsiPendingButton
+                <StewardPendingButton
                   size="small"
                   variant="contained"
                   pending={duplicateSameEntity.isPending}
@@ -721,8 +721,8 @@ export function DsiMappingStewardPanel({
                   data-testid="dsi-duplicate-same-entity"
                 >
                   Same entity (map both)
-                </DsiPendingButton>
-                <DsiPendingButton
+                </StewardPendingButton>
+                <StewardPendingButton
                   size="small"
                   variant="outlined"
                   pending={duplicateDifferentEntity.isPending}
@@ -738,7 +738,7 @@ export function DsiMappingStewardPanel({
                   data-testid="dsi-duplicate-different-entity"
                 >
                   Different entity
-                </DsiPendingButton>
+                </StewardPendingButton>
               </Stack>
             ) : null}
             {planDuplicateBlocked ? (
@@ -785,7 +785,7 @@ export function DsiMappingStewardPanel({
         </Alert>
       ) : null}
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        <DsiPendingButton
+        <StewardPendingButton
           variant="outlined"
           size="small"
           pending={createProvCustomer.isPending}
@@ -802,8 +802,8 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-create-provisional-customer"
         >
           Create provisional customer
-        </DsiPendingButton>
-        <DsiPendingButton
+        </StewardPendingButton>
+        <StewardPendingButton
           variant="outlined"
           size="small"
           pending={mapCustomer.isPending}
@@ -817,8 +817,8 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-map-customer"
         >
           Map to existing customer
-        </DsiPendingButton>
-        <DsiPendingButton
+        </StewardPendingButton>
+        <StewardPendingButton
           variant="outlined"
           size="small"
           pending={markOpenChannel.isPending}
@@ -832,8 +832,8 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-open-channel"
         >
           Mark Open Channel (alias)
-        </DsiPendingButton>
-        <DsiPendingButton
+        </StewardPendingButton>
+        <StewardPendingButton
           variant="outlined"
           size="small"
           pending={mapDistributor.isPending}
@@ -847,8 +847,8 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-map-distributor"
         >
           Map to existing distributor
-        </DsiPendingButton>
-        <DsiPendingButton
+        </StewardPendingButton>
+        <StewardPendingButton
           variant="outlined"
           size="small"
           pending={createProvDistributor.isPending}
@@ -862,8 +862,8 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-create-provisional-distributor"
         >
           Create provisional distributor
-        </DsiPendingButton>
-        <DsiPendingButton
+        </StewardPendingButton>
+        <StewardPendingButton
           variant="outlined"
           size="small"
           pending={resolveProduct.isPending}
@@ -880,8 +880,8 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-resolve-product"
         >
           Map to Product Master (alias)
-        </DsiPendingButton>
-        <DsiPendingButton
+        </StewardPendingButton>
+        <StewardPendingButton
           variant="outlined"
           color="warning"
           size="small"
@@ -892,7 +892,7 @@ export function DsiMappingStewardPanel({
           data-testid="dsi-action-ignore"
         >
           Ignore candidate
-        </DsiPendingButton>
+        </StewardPendingButton>
       </Stack>
       {(mapCustomer.isError ||
         createProvCustomer.isError ||
@@ -945,10 +945,10 @@ export function DsiMappingStewardPanel({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <DsiPendingButton onClick={() => setMapCustOpen(false)} disabled={mapCustomer.isPending}>
+          <StewardPendingButton onClick={() => setMapCustOpen(false)} disabled={mapCustomer.isPending}>
             Cancel
-          </DsiPendingButton>
-          <DsiPendingButton
+          </StewardPendingButton>
+          <StewardPendingButton
             variant="contained"
             pending={mapCustomer.isPending}
             pendingLabel="Saving…"
@@ -959,7 +959,7 @@ export function DsiMappingStewardPanel({
             }}
           >
             Save alias
-          </DsiPendingButton>
+          </StewardPendingButton>
         </DialogActions>
       </Dialog>
 
@@ -1027,10 +1027,10 @@ export function DsiMappingStewardPanel({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <DsiPendingButton onClick={() => setCreateCustOpen(false)} disabled={createProvCustomer.isPending}>
+          <StewardPendingButton onClick={() => setCreateCustOpen(false)} disabled={createProvCustomer.isPending}>
             Cancel
-          </DsiPendingButton>
-          <DsiPendingButton
+          </StewardPendingButton>
+          <StewardPendingButton
             variant="contained"
             pending={createProvCustomer.isPending}
             pendingLabel="Creating…"
@@ -1046,7 +1046,7 @@ export function DsiMappingStewardPanel({
             }
           >
             Create &amp; alias
-          </DsiPendingButton>
+          </StewardPendingButton>
         </DialogActions>
       </Dialog>
 
@@ -1083,10 +1083,10 @@ export function DsiMappingStewardPanel({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <DsiPendingButton onClick={() => setOcOpen(false)} disabled={markOpenChannel.isPending}>
+          <StewardPendingButton onClick={() => setOcOpen(false)} disabled={markOpenChannel.isPending}>
             Cancel
-          </DsiPendingButton>
-          <DsiPendingButton
+          </StewardPendingButton>
+          <StewardPendingButton
             variant="contained"
             pending={markOpenChannel.isPending}
             pendingLabel="Saving…"
@@ -1104,7 +1104,7 @@ export function DsiMappingStewardPanel({
             }
           >
             Save Open Channel alias
-          </DsiPendingButton>
+          </StewardPendingButton>
         </DialogActions>
       </Dialog>
 
@@ -1131,10 +1131,10 @@ export function DsiMappingStewardPanel({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <DsiPendingButton onClick={() => setMapDistOpen(false)} disabled={mapDistributor.isPending}>
+          <StewardPendingButton onClick={() => setMapDistOpen(false)} disabled={mapDistributor.isPending}>
             Cancel
-          </DsiPendingButton>
-          <DsiPendingButton
+          </StewardPendingButton>
+          <StewardPendingButton
             variant="contained"
             pending={mapDistributor.isPending}
             pendingLabel="Saving…"
@@ -1145,7 +1145,7 @@ export function DsiMappingStewardPanel({
             }}
           >
             Save alias
-          </DsiPendingButton>
+          </StewardPendingButton>
         </DialogActions>
       </Dialog>
 
@@ -1171,10 +1171,10 @@ export function DsiMappingStewardPanel({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <DsiPendingButton onClick={() => setCreateDistOpen(false)} disabled={createProvDistributor.isPending}>
+          <StewardPendingButton onClick={() => setCreateDistOpen(false)} disabled={createProvDistributor.isPending}>
             Cancel
-          </DsiPendingButton>
-          <DsiPendingButton
+          </StewardPendingButton>
+          <StewardPendingButton
             variant="contained"
             pending={createProvDistributor.isPending}
             pendingLabel="Creating…"
@@ -1189,7 +1189,7 @@ export function DsiMappingStewardPanel({
             }
           >
             Create &amp; alias
-          </DsiPendingButton>
+          </StewardPendingButton>
         </DialogActions>
       </Dialog>
 
@@ -1268,10 +1268,10 @@ export function DsiMappingStewardPanel({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <DsiPendingButton onClick={() => setMapProdOpen(false)} disabled={resolveProduct.isPending}>
+          <StewardPendingButton onClick={() => setMapProdOpen(false)} disabled={resolveProduct.isPending}>
             Cancel
-          </DsiPendingButton>
-          <DsiPendingButton
+          </StewardPendingButton>
+          <StewardPendingButton
             variant="contained"
             pending={resolveProduct.isPending}
             pendingLabel="Saving…"
@@ -1291,7 +1291,7 @@ export function DsiMappingStewardPanel({
             data-testid="dsi-product-resolve-save"
           >
             Save ProductAlias &amp; resolve
-          </DsiPendingButton>
+          </StewardPendingButton>
         </DialogActions>
       </Dialog>
 
