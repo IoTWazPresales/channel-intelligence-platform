@@ -46,6 +46,12 @@ export const CPOR_HISTORICAL_STEWARD_CONFIG = {
     ['import-job-pipeline-progress', 'cpor_historical_import', importJobId] as const,
 } as const;
 
+export type CporPlanClass =
+  | 'ready_to_map'
+  | 'ambiguous_eligible'
+  | 'no_match'
+  | 'needs_review';
+
 export type CporHistoricalSummary = {
   id: number;
   stage: string;
@@ -53,9 +59,19 @@ export type CporHistoricalSummary = {
   file_name: string | null;
   staging_count: number;
   unresolved_counts: Partial<Record<CporEntityTabId, number>>;
+  plan_class_counts?: Partial<
+    Record<CporEntityTabId, Partial<Record<CporPlanClass, number>>>
+  >;
   cases_ready: number;
   cases_blocked: number;
   cpor_historical?: Record<string, unknown>;
+};
+
+export type CporCandidateSuggestion = {
+  dim_id: number;
+  label: string;
+  score: number;
+  reason: string;
 };
 
 export type CporHistoricalCandidate = {
@@ -64,6 +80,9 @@ export type CporHistoricalCandidate = {
   row_count: number;
   status: string;
   confidence?: number | null;
+  plan_class?: CporPlanClass | string | null;
+  match_reason?: string | null;
+  suggestions?: CporCandidateSuggestion[];
 };
 
 export function invalidateCporHistoricalStewardQueries(qc: QueryClient, importJobId: number) {

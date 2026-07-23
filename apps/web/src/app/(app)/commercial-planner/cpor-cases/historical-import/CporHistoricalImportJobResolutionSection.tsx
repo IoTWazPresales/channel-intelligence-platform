@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   Stack,
   TextField,
   Typography,
@@ -14,6 +15,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 import { BulkSelectionToolbar } from '@/components/bulkTable/BulkSelectionToolbar';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import {
+  confidenceBand,
+  confidenceBandColor,
+  confidenceBandLabel,
+} from '@/features/import-steward/confidenceBand';
 import { ImportStewardCandidateWorkspace } from '@/features/import-steward/ImportStewardCandidateWorkspace';
 import { StewardCandidateFilters } from '@/features/import-steward/StewardCandidateFilters';
 import { StewardEntityTabsBar, type StewardEntityTabCounts } from '@/features/import-steward/StewardEntityTabsBar';
@@ -45,6 +51,7 @@ import {
   formatCporEntityTabLabel,
   invalidateCporHistoricalStewardQueries,
   type CporEntityTabId,
+  type CporPlanClass,
 } from './cporHistoricalSteward.config';
 
 type CporEntityTabCounts = StewardEntityTabCounts<CporEntityTabId>;
@@ -65,28 +72,64 @@ function defaultCporFiltersForTab(tab: CporEntityTabId): DsiStewardCandidateFilt
   };
 }
 
-/** CPOR unresolved tokens map onto the shared chip chrome without inventing DSI plan semantics. */
+/** Drive queue chips from Unit 1 plan_class — no inert DSI-only queues. */
 function filterCporStewardRows(
   rows: CporStewardRow[],
   filters: DsiStewardCandidateFilterState,
   search: string
 ): CporStewardRow[] {
   let next = rows;
-  if (filters.queue === 'ready_to_map' || filters.queue === 'provisional' || filters.queue === 'ambiguous_eligible') {
+  const queue = filters.queue;
+  if (queue === 'ready_to_map') {
+    next = next.filter((r) => r.plan_class === 'ready_to_map');
+  } else if (queue === 'ambiguous_eligible') {
+    next = next.filter((r) => r.plan_class === 'ambiguous_eligible');
+  } else if (queue === 'no_match') {
+    next = next.filter((r) => r.plan_class === 'no_match');
+  } else if (queue === 'needs_review') {
+    next = next.filter((r) => r.plan_class === 'needs_review');
+  } else if (queue === 'provisional') {
+    // CPOR has no provisional masters — keep empty rather than invent semantics.
     next = [];
-  } else if (filters.queue === 'needs_review' || filters.queue === 'no_match') {
-    next = next.filter((r) => r.status === 'unresolved' || r.status === 'needs_review' || r.status === 'no_match');
   }
-  // verifyName / specialCategory / duplicate toggles have no CPOR evidence fields — no-op.
   if (!search) return next;
   const needle = search.toLowerCase();
   return next.filter(
     (r) =>
       r.token.toLowerCase().includes(needle) ||
       r.status.toLowerCase().includes(needle) ||
+      String(r.plan_class ?? '').toLowerCase().includes(needle) ||
+      String(r.match_reason ?? '').toLowerCase().includes(needle) ||
+      (r.suggestions ?? []).some((s) => s.label.toLowerCase().includes(needle)) ||
       String(r.row_count).includes(needle)
   );
 }
+
+function ConfidenceBandCell({ score }: { score: number | null }) {
+  const band = confidenceBand(score);
+  if (band == null) {
+    return (
+      <Typography variant="body2" color="text.secondary" data-testid="cpor-historical-confidence-empty">
+        —
+      </Typography>
+    );
+  }
+  return (
+    <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="flex-end">
+      <Chip
+        size="small"
+        variant="outlined"
+        color={confidenceBandColor(band)}
+        label={confidenceBandLabel(band)}
+        data-testid="cpor-historical-confidence-band"
+      />
+      <Typography variant="caption" color="text.secondary">
+        {Number(score).toFixed(2)}
+      </Typography>
+    </Stack>
+  );
+}
+
 
 export function CporHistoricalImportJobResolutionSection({
   importJobId,
@@ -153,9 +196,11 @@ export function CporHistoricalImportJobResolutionSection({
         total_reported_value: null,
         sample_raw_values: [c.token],
         status: c.status,
-        match_reason: null,
+        match_reason: c.match_reason ?? null,
         confidence_score: c.confidence ?? null,
         context: null,
+        plan_class: (c.plan_class as CporPlanClass | null | undefined) ?? null,
+        suggestions: c.suggestions ?? [],
       })),
     [candidatesQuery.data?.candidates]
   );
@@ -175,6 +220,24 @@ export function CporHistoricalImportJobResolutionSection({
     }
     return next;
   }, [summaryQuery.data?.unresolved_counts, candidatesQuery.data?.counts]);
+
+  const planClassCountsForTab = useMemo(() => {
+    const fromSummary = summaryQuery.data?.plan_class_counts?.[activeTab];
+    const fromCandidates = candidatesQuery.data?.plan_class_counts?.[activeTab];
+    return fromSummary ?? fromCandidates ?? {};
+  }, [
+    activeTab,
+    summaryQuery.data?.plan_class_counts,
+    candidatesQuery.data?.plan_class_counts,
+  ]);
+
+  const productMatchStatusCounts = useMemo(
+    () => ({
+      no_match: planClassCountsForTab.no_match,
+      ambiguous_eligible: planClassCountsForTab.ambiguous_eligible,
+    }),
+    [planClassCountsForTab]
+  );
 
   useEffect(() => {
     setDetailCandidate(null);
@@ -346,16 +409,44 @@ export function CporHistoricalImportJobResolutionSection({
                   cell: (r) => r.row_count,
                 },
                 {
-                  id: 'status',
-                  header: 'Status',
-                  cell: (r) => r.status,
+                  id: 'plan_class',
+                  header: 'Plan class',
+                  cell: (r) =>
+                    r.plan_class ? (
+                      <Chip size="small" label={String(r.plan_class).replace(/_/g, ' ')} />
+                    ) : (
+                      '—'
+                    ),
+                },
+                {
+                  id: 'top_suggestion',
+                  header: 'Top suggestion',
+                  cell: (r) => {
+                    const top = r.suggestions?.[0];
+                    if (!top) {
+                      return (
+                        <Typography variant="body2" color="text.secondary">
+                          —
+                        </Typography>
+                      );
+                    }
+                    return (
+                      <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
+                          {top.label}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {r.match_reason ?? top.reason}
+                        </Typography>
+                      </Stack>
+                    );
+                  },
                 },
                 {
                   id: 'confidence',
                   header: 'Confidence',
                   align: 'right',
-                  cell: (r) =>
-                    r.confidence_score == null ? '—' : Number(r.confidence_score).toFixed(2),
+                  cell: (r) => <ConfidenceBandCell score={r.confidence_score} />,
                 },
                 {
                   id: 'actions',
@@ -407,17 +498,14 @@ export function CporHistoricalImportJobResolutionSection({
                     totalCount={stewardRows.length}
                     hideEntityFilter
                     hidePartyFilter
+                    hideProvisionalQueue
+                    hideMatchToggles
+                    showProductMatchStatusChips
+                    productMatchStatusCounts={productMatchStatusCounts}
                     clearToDefault={() => defaultCporFiltersForTab(activeTab)}
                     isAtDefault={(filters) => {
                       const def = defaultCporFiltersForTab(activeTab);
-                      return (
-                        filters.queue === def.queue &&
-                        filters.entity === def.entity &&
-                        filters.party === def.party &&
-                        filters.verifyNameOnly === def.verifyNameOnly &&
-                        filters.specialCategoryOnly === def.specialCategoryOnly &&
-                        filters.duplicateUnresolvedOnly === def.duplicateUnresolvedOnly
-                      );
+                      return filters.queue === def.queue && filters.entity === def.entity;
                     }}
                   />
                   <TextField

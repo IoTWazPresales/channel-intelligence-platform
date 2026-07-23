@@ -33,11 +33,19 @@ export async function fetchCporHistoricalCandidates(
   jobId: number,
   entity: CporEntityTabId,
   signal?: AbortSignal
-): Promise<{ candidates: CporHistoricalCandidate[]; counts: Record<string, number> }> {
-  return apiGet<{ candidates: CporHistoricalCandidate[]; counts: Record<string, number> }>(
-    `/api/v1/cpor/historical-import/jobs/${jobId}/candidates?entity=${entity}`,
-    { signal, ...ADMIN }
-  );
+): Promise<{
+  candidates: CporHistoricalCandidate[];
+  counts: Record<string, number>;
+  plan_class_counts?: CporHistoricalSummary['plan_class_counts'];
+}> {
+  return apiGet<{
+    candidates: CporHistoricalCandidate[];
+    counts: Record<string, number>;
+    plan_class_counts?: CporHistoricalSummary['plan_class_counts'];
+  }>(`/api/v1/cpor/historical-import/jobs/${jobId}/candidates?entity=${entity}`, {
+    signal,
+    ...ADMIN,
+  });
 }
 
 export async function mapCporHistoricalToken(args: {

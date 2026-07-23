@@ -15,6 +15,8 @@ export function StewardCandidateFilters({
   isAtDefault,
   showProductMatchStatusChips = false,
   productMatchStatusCounts,
+  hideProvisionalQueue = false,
+  hideMatchToggles = false,
 }: {
   filters: DsiStewardCandidateFilterState;
   onChange: (next: DsiStewardCandidateFilterState) => void;
@@ -32,6 +34,10 @@ export function StewardCandidateFilters({
   showProductMatchStatusChips?: boolean;
   /** Optional counts for product no_match / ambiguous_eligible (tab-counts API; full job scope). */
   productMatchStatusCounts?: { no_match?: number; ambiguous_eligible?: number };
+  /** Hide DSI-only provisional queue chip (e.g. CPOR has no provisional masters). */
+  hideProvisionalQueue?: boolean;
+  /** Hide verify-name / special-category / duplicate refine toggles when unused. */
+  hideMatchToggles?: boolean;
 }) {
   const resolveClearTarget = clearToDefault ?? defaultDsiStewardCandidateFilterState;
   const filtersAreDefault = isAtDefault ?? dsiStewardFiltersAreDefault;
@@ -68,7 +74,7 @@ export function StewardCandidateFilters({
               ['all', 'All'],
               ['needs_review', 'Needs review'],
               ['ready_to_map', 'Ready to map'],
-              ['provisional', 'Provisional'],
+              ...(hideProvisionalQueue ? [] : ([['provisional', 'Provisional']] as const)),
               ['no_match', 'No match'],
               ...(showProductMatchStatusChips
                 ? ([['ambiguous_eligible', 'Ambiguous']] as const)
@@ -170,6 +176,7 @@ export function StewardCandidateFilters({
         </Stack>
       </Stack>
       )}
+      {hideMatchToggles ? null : (
       <Stack spacing={0.75}>
         <Typography variant="caption" color="text.secondary">
           Refine (combine)
@@ -206,6 +213,7 @@ export function StewardCandidateFilters({
           />
         </Stack>
       </Stack>
+      )}
     </Stack>
   );
 }

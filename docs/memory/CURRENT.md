@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-23 (Unit 1 CPOR suggestion contract — VERIFY pending)
+**Last updated:** 2026-07-23 (Unit 2 CPOR intelligence — VERIFY pending)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -11,9 +11,9 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260720_0073` on cip** |
-| **HEAD** | tip on branch — **verify:** `git rev-parse --short HEAD` |
-| **Pushed?** | verify after Unit 1 commit |
-| **Next** | Opus VERIFY Unit 1 → then Unit 2 frontend intelligence → Unit 3 upload-first |
+| **HEAD** | tip — Unit 2 commit (verify short hash) |
+| **Pushed?** | verify after push |
+| **Next** | Opus VERIFY Unit 2 → Unit 3 upload-first |
 
 ---
 
@@ -25,13 +25,8 @@ Locked in `docs/WORKFLOW_DUAL_AGENT.md` + dual-agent skills:
 
 ### Warren override (2026-07-22) — CPOR historical resolve
 
-**Overrides** prior Opus CONSULT “keep lean drawer / chrome-only parity”:
-
-CPOR historical **Resolve** must mirror **DSI + shipment operator intelligence**, not shared-layout only:
-suggestions / plan-class UX, dense steward list, meaningful drawer, filters that mean something.
-Chrome consolidation alone is **incomplete**. Prior Opus VERIFY PASS on Units 1–3 = **chrome only — not product done.**
-
-Also: **upload-first wizard** — no profile map wall / no token steward grid until a real job exists; chase stale-job-on-entry if hard refresh still shows Resolve without upload.
+CPOR historical **Resolve** must mirror **DSI + shipment operator intelligence**, not shared-layout only.
+Also: **upload-first wizard** (Unit 3 — not done yet).
 
 ---
 
@@ -39,11 +34,10 @@ Also: **upload-first wizard** — no profile map wall / no token steward grid un
 
 | Label | Fact |
 |-------|------|
-| **Proven** | H1 PASS; H2 apply path exists; smoke `H2-SMOKE-556` |
-| **Wired + unit-tested (chrome)** | Shared tabs/drawer/viewport/filter renames on CPOR — chrome VERIFY PASS; **Warren product bar NOT met** |
-| **In progress** | Unit 1 backend: candidates emit `suggestions` / `confidence` / `plan_class` / `match_reason` + `plan_class_counts` — **VERIFY pending** |
-| **Not done** | Unit 2 DSI-class frontend intelligence; Unit 3 upload-first first paint |
-| **Out of scope this arc** | Unit 4 config-driven `ImportJobResolutionSection`; relocate into `admin/imports/page.tsx` |
+| **Proven** | H1 PASS; H2 apply; smoke `H2-SMOKE-556`; Unit 1 suggestions contract Opus PASS @ `50c1ee8` |
+| **In progress** | Unit 2 frontend intelligence — **VERIFY pending** |
+| **Not done** | Unit 3 upload-first first paint |
+| **Out of scope** | Unit 4 config-driven section; relocate into `admin/imports/page.tsx` |
 
 Route (keep): `/commercial-planner/cpor-cases/historical-import`  
 Canonical references: `DsiImportJobResolutionSection`, `ShipmentImportJobResolutionSection`
@@ -58,8 +52,6 @@ Canonical references: `DsiImportJobResolutionSection`, `ShipmentImportJobResolut
 
 ## Do not
 
-- Claim CPOR steward parity / PASS from chrome VERIFY alone
-- Self-PASS; relocate CPOR into imports monolith
-- Auto-create dims; change DSI resolution tiers
-- Re-litigate “lean body was correct” — Warren overrode it
-- Start Unit 2 before Unit 1 `VERDICT: PASS`
+- Claim product complete without Unit 2+3 VERIFY PASS
+- Self-PASS; auto-create dims; change DSI tiers
+- Start Unit 3 before Unit 2 `VERDICT: PASS`
