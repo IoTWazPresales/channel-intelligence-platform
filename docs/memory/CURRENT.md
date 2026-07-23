@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-23 (Unit 3 upload-first — VERIFY pending)
+**Last updated:** 2026-07-23 (CPOR intelligence + upload-first Units 1–3 PASS)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -11,16 +11,16 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260720_0073` on cip** |
-| **HEAD** | tip — Unit 3 commit |
-| **Pushed?** | verify after push |
-| **Next** | Opus VERIFY Unit 3 → arc complete (or soak) |
+| **HEAD** | `5044fce` (Unit 3) on `ade5624` (U2) on `50c1ee8` (U1) |
+| **Pushed?** | yes |
+| **Next** | Operator soak on Resolve + upload-first; then PR or next TRIGGER. Unit 4 config-driven section = separate PR later. |
 
 ---
 
 ## Standing quality bar
 
 **Canonical clone or STOP · no half-PASS · code is evidence.**  
-Warren override: CPOR Resolve = DSI+shipment **intelligence** + upload-first wizard.
+Warren override (2026-07-22): CPOR Resolve = DSI+shipment **operator intelligence** + upload-first wizard.
 
 ---
 
@@ -28,11 +28,12 @@ Warren override: CPOR Resolve = DSI+shipment **intelligence** + upload-first wiz
 
 | Label | Fact |
 |-------|------|
-| **Proven** | H1; H2 apply; smoke `H2-SMOKE-556`; Unit 1 PASS `50c1ee8`; Unit 2 PASS `ade5624` |
-| **In progress** | Unit 3 upload-first — **VERIFY pending** |
-| **Out of scope** | Unit 4 config-driven section; relocate into `admin/imports/page.tsx` |
+| **Proven** | H1; H2 apply; smoke `H2-SMOKE-556` |
+| **Proven (this arc)** | Unit 1 suggestions contract PASS @ `50c1ee8`; Unit 2 frontend intelligence PASS @ `ade5624`; Unit 3 upload-first PASS @ `5044fce` |
+| **Out of scope** | Unit 4 config-driven `ImportJobResolutionSection`; relocate into `admin/imports/page.tsx` |
 
-Route (keep): `/commercial-planner/cpor-cases/historical-import`
+Route (keep): `/commercial-planner/cpor-cases/historical-import`  
+Canonical references: `DsiImportJobResolutionSection`, `ShipmentImportJobResolutionSection`
 
 ---
 
@@ -44,5 +45,6 @@ Route (keep): `/commercial-planner/cpor-cases/historical-import`
 
 ## Do not
 
-- Self-PASS; claim product complete without Unit 3 VERIFY
-- Auto-create dims; change DSI tiers
+- Relocate CPOR into imports monolith
+- Auto-create dims; change DSI resolution tiers
+- Claim Unit 4 done
