@@ -11,8 +11,8 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260720_0073` on cip** |
-| **HEAD** | (this commit) — steward chrome Units 1–3 + confirm-discipline docs |
-| **Pushed?** | check `git status` — push after commit if remote behind |
+| **HEAD** | tip on branch — **verify:** `git rev-parse --short HEAD` (chrome commit `a44f244`) |
+| **Pushed?** | **ahead of origin** — **must** `git push -u origin HEAD` before new chat / other env |
 | **Next** | New chat CONSULT: CPOR Resolve = DSI+shipment **intelligence** (Warren override). Upload-first wizard. |
 
 ---
