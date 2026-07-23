@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-23 — **CPOR Unit 1 (backend suggestions):** `list_unresolved_candidates` emits ranked `suggestions` + `confidence` + `plan_class` + `match_reason`; summary/candidates add `plan_class_counts`. No dim auto-create; validate tiers untouched. Tests 12 green. VERIFY pending. Branch `feat/cpor-listing-status-audit`.
 - 2026-07-23 — **Committed** steward chrome U1–3 + confirm-discipline docs on `feat/cpor-listing-status-audit` (shared tabs/drawer/renames; CPOR still **not** intelligence-parity). Warren override stands. Next chat: CONSULT intelligence + upload-first. Left untracked: `.tmp/`, `apps/**/.tmp/`, ops audit script.
 - 2026-07-22 — **Handover / product-bar reset:** Warren overrides Opus “lean drawer / chrome-only” for CPOR historical Resolve — must mirror DSI+shipment **intelligence**, not shell only. Chrome U1–3 VERIFY PASS = incomplete. Dirty tree uncommitted on `feat/cpor-listing-status-audit` @ `a515d10`. Next chat: CONSULT under that bar + upload-first wizard. Skip re-defending chrome PASS.
 - 2026-07-22 — **CPOR steward chrome U1–3 Opus VERIFY PASS:** StewardEntityTabsBar + StewardDrawerChrome; renamed StewardCandidateFilters / StewardCandidatesPagination / StewardPendingButton / ImportJobValidateProgressPanel; CPOR section on StewardWorkspaceViewportShell + chip filters; lean Map drawer; own route kept. Uncommitted on `feat/cpor-listing-status-audit`. Next: commit/push; Unit 4 separate PR.

@@ -3,40 +3,308 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any
+from difflib import SequenceMatcher
+from typing import Any, Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.cpor_historical import ImportCporHistoricalStagingLine
-from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
+from app.models.dimensions import DimCustomer, DimDistributor
 from app.services.cpor.claim_evidence import load_product_resolution_index, resolve_claim_product_id
+from app.services.imports.distributor_sales_inventory import (
+    ProductResolutionIndex,
+    ProductResolutionProductRow,
+    _product_token_key,
+)
+
+PlanClass = Literal["ready_to_map", "ambiguous_eligible", "no_match", "needs_review"]
+
+# Align with web confidenceBand / AI_AUTO_RESOLVE_THRESHOLD.
+_HIGH_SCORE = 0.90
+_MEDIUM_SCORE = 0.70
+_MAX_SUGGESTIONS = 5
+_MIN_PREFIX_LEN = 3
+
+PLAN_CLASS_ORDER: tuple[PlanClass, ...] = (
+    "ready_to_map",
+    "ambiguous_eligible",
+    "needs_review",
+    "no_match",
+)
 
 
 def _norm(token: str | None) -> str:
     return " ".join(str(token or "").strip().upper().split())
 
 
-def _load_customer_token_index(db: Session) -> dict[str, list[int]]:
+def _load_party_token_index(
+    db: Session, *, model: type[DimCustomer] | type[DimDistributor]
+) -> tuple[dict[str, list[int]], dict[int, str]]:
     idx: dict[str, list[int]] = defaultdict(list)
-    for cid, code, name in db.execute(select(DimCustomer.id, DimCustomer.code, DimCustomer.name)).all():
+    labels: dict[int, str] = {}
+    for did, code, name in db.execute(select(model.id, model.code, model.name)).all():
+        dim_id = int(did)
+        label = (str(name or "").strip() or str(code or "").strip() or str(dim_id))
+        labels[dim_id] = label
         for raw in (code, name):
             key = _norm(raw)
-            if key and int(cid) not in idx[key]:
-                idx[key].append(int(cid))
+            if key and dim_id not in idx[key]:
+                idx[key].append(dim_id)
+    return idx, labels
+
+
+def _load_customer_token_index(db: Session) -> dict[str, list[int]]:
+    idx, _labels = _load_party_token_index(db, model=DimCustomer)
     return idx
 
 
 def _load_distributor_token_index(db: Session) -> dict[str, list[int]]:
-    idx: dict[str, list[int]] = defaultdict(list)
-    for did, code, name in db.execute(
-        select(DimDistributor.id, DimDistributor.code, DimDistributor.name)
-    ).all():
-        for raw in (code, name):
-            key = _norm(raw)
-            if key and int(did) not in idx[key]:
-                idx[key].append(int(did))
+    idx, _labels = _load_party_token_index(db, model=DimDistributor)
     return idx
+
+
+def _product_label(row: ProductResolutionProductRow | None, dim_id: int) -> str:
+    if row is None:
+        return str(dim_id)
+    return (
+        (row.sales_model_name or "").strip()
+        or (row.marketing_name or "").strip()
+        or (row.model_name or "").strip()
+        or (row.sku or "").strip()
+        or str(dim_id)
+    )
+
+
+def _suggestion(dim_id: int, label: str, score: float, reason: str) -> dict[str, Any]:
+    return {
+        "dim_id": int(dim_id),
+        "label": label,
+        "score": round(float(score), 4),
+        "reason": reason,
+    }
+
+
+def _score_fuzzy_key(token_key: str, index_key: str) -> tuple[float, str] | None:
+    """Deterministic prefix / similarity score. None = below medium bar."""
+    if not token_key or not index_key or token_key == index_key:
+        return None
+    if len(token_key) >= _MIN_PREFIX_LEN and (
+        index_key.startswith(token_key) or token_key.startswith(index_key)
+    ):
+        return 0.92, "prefix_match"
+    ratio = SequenceMatcher(None, token_key, index_key).ratio()
+    if ratio >= _HIGH_SCORE:
+        return float(ratio), "fuzzy_high"
+    if ratio >= _MEDIUM_SCORE:
+        return float(ratio), "fuzzy_medium"
+    return None
+
+
+def _fuzzy_suggestions_from_index(
+    *,
+    token_key: str,
+    key_to_ids: dict[str, list[int]] | dict[str, tuple[int, ...]],
+    labels: dict[int, str],
+) -> list[dict[str, Any]]:
+    best: dict[int, dict[str, Any]] = {}
+    for index_key, raw_ids in key_to_ids.items():
+        scored = _score_fuzzy_key(token_key, str(index_key))
+        if scored is None:
+            continue
+        score, reason = scored
+        for dim_id in raw_ids:
+            did = int(dim_id)
+            prev = best.get(did)
+            if prev is None or score > float(prev["score"]):
+                best[did] = _suggestion(did, labels.get(did, str(did)), score, reason)
+    ranked = sorted(best.values(), key=lambda s: (-float(s["score"]), int(s["dim_id"])))
+    return ranked[:_MAX_SUGGESTIONS]
+
+
+def _classify_from_suggestions(
+    suggestions: list[dict[str, Any]],
+    *,
+    forced_class: PlanClass | None = None,
+) -> tuple[PlanClass, float | None, str | None]:
+    if forced_class is not None:
+        top = suggestions[0] if suggestions else None
+        return (
+            forced_class,
+            float(top["score"]) if top else None,
+            str(top["reason"]) if top else None,
+        )
+    if not suggestions:
+        return "no_match", None, None
+    top = suggestions[0]
+    confidence = float(top["score"])
+    match_reason = str(top["reason"])
+    high = [s for s in suggestions if float(s["score"]) >= _HIGH_SCORE]
+    if len(high) == 1:
+        return "ready_to_map", confidence, match_reason
+    return "needs_review", confidence, match_reason
+
+
+def suggest_party_token(
+    token: str,
+    *,
+    index: dict[str, list[int]],
+    labels: dict[int, str],
+) -> dict[str, Any]:
+    """Ranked suggestions + plan_class for a customer/distributor token (never creates dims)."""
+    key = _norm(token)
+    exact_ids = list(index.get(key) or [])
+    if len(exact_ids) > 1:
+        suggestions = [
+            _suggestion(did, labels.get(did, str(did)), 1.0, "exact_key_collision")
+            for did in exact_ids
+        ]
+        plan_class, confidence, match_reason = _classify_from_suggestions(
+            suggestions, forced_class="ambiguous_eligible"
+        )
+    elif len(exact_ids) == 1:
+        did = exact_ids[0]
+        suggestions = [_suggestion(did, labels.get(did, str(did)), 1.0, "exact_key")]
+        plan_class, confidence, match_reason = _classify_from_suggestions(
+            suggestions, forced_class="ready_to_map"
+        )
+    else:
+        suggestions = _fuzzy_suggestions_from_index(
+            token_key=key, key_to_ids=index, labels=labels
+        )
+        plan_class, confidence, match_reason = _classify_from_suggestions(suggestions)
+    return {
+        "suggestions": suggestions,
+        "confidence": confidence,
+        "plan_class": plan_class,
+        "match_reason": match_reason,
+    }
+
+
+def _product_exact_ids(
+    product_index: ProductResolutionIndex, token: str
+) -> tuple[list[int], str]:
+    """Return (ids, tier_reason) for exact identity hits used by claim resolve."""
+    sm_key = _product_token_key(token)
+    sm_ids = [int(x) for x in (product_index.sales_model_name_to_ids.get(sm_key) or ())]
+    if len(sm_ids) >= 1:
+        return sm_ids, "sales_model_name"
+
+    _pid, _tok, status = resolve_claim_product_id(product_index, item_code=token)
+    if status == "ambiguous":
+        sku_key = _product_token_key(token)
+        part_ids = [int(x) for x in (product_index.part_number_to_ids.get(sku_key) or ())]
+        if part_ids:
+            return part_ids, "part_number"
+    if status == "resolved" and _pid is not None:
+        return [int(_pid)], "item_code"
+    return [], "none"
+
+
+def suggest_product_token(token: str, *, product_index: ProductResolutionIndex) -> dict[str, Any]:
+    """Ranked suggestions + plan_class for a sales-model token (never creates dims)."""
+    labels = {
+        pid: _product_label(row, pid) for pid, row in product_index.products_by_id.items()
+    }
+    exact_ids, tier = _product_exact_ids(product_index, token)
+    if len(exact_ids) > 1:
+        suggestions = [
+            _suggestion(did, labels.get(did, str(did)), 1.0, f"exact_key_collision:{tier}")
+            for did in exact_ids
+        ]
+        plan_class, confidence, match_reason = _classify_from_suggestions(
+            suggestions, forced_class="ambiguous_eligible"
+        )
+    elif len(exact_ids) == 1:
+        did = exact_ids[0]
+        suggestions = [_suggestion(did, labels.get(did, str(did)), 1.0, f"exact_key:{tier}")]
+        plan_class, confidence, match_reason = _classify_from_suggestions(
+            suggestions, forced_class="ready_to_map"
+        )
+    else:
+        # Bounded fuzzy over sales-model / model / marketing identity maps only.
+        merged: dict[str, list[int]] = defaultdict(list)
+        for mmap in (
+            product_index.sales_model_name_to_ids,
+            product_index.model_name_to_ids,
+            product_index.marketing_name_to_ids,
+        ):
+            for k, ids in mmap.items():
+                for did in ids:
+                    if int(did) not in merged[str(k)]:
+                        merged[str(k)].append(int(did))
+        suggestions = _fuzzy_suggestions_from_index(
+            token_key=_product_token_key(token),
+            key_to_ids=merged,
+            labels=labels,
+        )
+        plan_class, confidence, match_reason = _classify_from_suggestions(suggestions)
+    return {
+        "suggestions": suggestions,
+        "confidence": confidence,
+        "plan_class": plan_class,
+        "match_reason": match_reason,
+    }
+
+
+def enrich_unresolved_candidate(
+    *,
+    entity: str,
+    token: str,
+    row_count: int,
+    product_index: ProductResolutionIndex | None = None,
+    customer_index: dict[str, list[int]] | None = None,
+    customer_labels: dict[int, str] | None = None,
+    distributor_index: dict[str, list[int]] | None = None,
+    distributor_labels: dict[int, str] | None = None,
+) -> dict[str, Any]:
+    """Build one steward candidate dict with suggestions / plan_class (no DB writes)."""
+    entity_l = entity.strip().lower()
+    if entity_l == "product":
+        if product_index is None:
+            raise ValueError("product_index required")
+        intel = suggest_product_token(token, product_index=product_index)
+    elif entity_l == "customer":
+        intel = suggest_party_token(
+            token,
+            index=customer_index or {},
+            labels=customer_labels or {},
+        )
+    elif entity_l == "distributor":
+        intel = suggest_party_token(
+            token,
+            index=distributor_index or {},
+            labels=distributor_labels or {},
+        )
+    else:
+        raise ValueError(f"unsupported entity: {entity}")
+
+    return {
+        "entity": entity_l,
+        "token": token,
+        "row_count": int(row_count),
+        "status": "unresolved",
+        "confidence": intel["confidence"],
+        "plan_class": intel["plan_class"],
+        "match_reason": intel["match_reason"],
+        "suggestions": intel["suggestions"],
+    }
+
+
+def plan_class_counts(
+    candidates_by_entity: dict[str, list[dict[str, Any]]],
+) -> dict[str, dict[str, int]]:
+    """Per-entity plan_class breakdown for summary / queue chips."""
+    out: dict[str, dict[str, int]] = {}
+    for entity, rows in candidates_by_entity.items():
+        counts = {pc: 0 for pc in PLAN_CLASS_ORDER}
+        for row in rows:
+            pc = str(row.get("plan_class") or "needs_review")
+            if pc not in counts:
+                counts[pc] = 0
+            counts[pc] += 1
+        out[entity] = counts
+    return out
 
 
 def resolve_staging_entities(db: Session, *, job_id: int) -> dict[str, Any]:
@@ -132,7 +400,7 @@ def map_staging_tokens(
 
 
 def list_unresolved_candidates(db: Session, *, job_id: int) -> dict[str, list[dict[str, Any]]]:
-    """Group unresolved tokens for steward workspace tabs."""
+    """Group unresolved tokens for steward workspace tabs — with ranked suggestions."""
     rows = list(
         db.scalars(
             select(ImportCporHistoricalStagingLine).where(
@@ -152,17 +420,30 @@ def list_unresolved_candidates(db: Session, *, job_id: int) -> dict[str, list[di
         if row.distributor_token and row.resolved_distributor_id is None:
             distributors[str(row.distributor_token).strip()] += 1
 
+    product_index = load_product_resolution_index(db) if products else None
+    customer_index, customer_labels = (
+        _load_party_token_index(db, model=DimCustomer) if customers else ({}, {})
+    )
+    distributor_index, distributor_labels = (
+        _load_party_token_index(db, model=DimDistributor) if distributors else ({}, {})
+    )
+
     def _pack(d: dict[str, int], entity: str) -> list[dict[str, Any]]:
-        return [
-            {
-                "entity": entity,
-                "token": tok,
-                "row_count": cnt,
-                "confidence": None,
-                "status": "unresolved",
-            }
-            for tok, cnt in sorted(d.items(), key=lambda x: (-x[1], x[0].lower()))
-        ]
+        packed: list[dict[str, Any]] = []
+        for tok, cnt in sorted(d.items(), key=lambda x: (-x[1], x[0].lower())):
+            packed.append(
+                enrich_unresolved_candidate(
+                    entity=entity,
+                    token=tok,
+                    row_count=cnt,
+                    product_index=product_index,
+                    customer_index=customer_index,
+                    customer_labels=customer_labels,
+                    distributor_index=distributor_index,
+                    distributor_labels=distributor_labels,
+                )
+            )
+        return packed
 
     return {
         "product": _pack(products, "product"),

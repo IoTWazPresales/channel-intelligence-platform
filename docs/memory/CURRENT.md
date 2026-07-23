@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-23 (commit steward chrome + discipline; product bar reset)
+**Last updated:** 2026-07-23 (Unit 1 CPOR suggestion contract — VERIFY pending)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -11,9 +11,9 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260720_0073` on cip** |
-| **HEAD** | tip on branch — **verify:** `git rev-parse --short HEAD` (chrome commit `a44f244`) |
-| **Pushed?** | **ahead of origin** — **must** `git push -u origin HEAD` before new chat / other env |
-| **Next** | New chat CONSULT: CPOR Resolve = DSI+shipment **intelligence** (Warren override). Upload-first wizard. |
+| **HEAD** | tip on branch — **verify:** `git rev-parse --short HEAD` |
+| **Pushed?** | verify after Unit 1 commit |
+| **Next** | Opus VERIFY Unit 1 → then Unit 2 frontend intelligence → Unit 3 upload-first |
 
 ---
 
@@ -41,7 +41,8 @@ Also: **upload-first wizard** — no profile map wall / no token steward grid un
 |-------|------|
 | **Proven** | H1 PASS; H2 apply path exists; smoke `H2-SMOKE-556` |
 | **Wired + unit-tested (chrome)** | Shared tabs/drawer/viewport/filter renames on CPOR — chrome VERIFY PASS; **Warren product bar NOT met** |
-| **Not done** | DSI-class intelligence on CPOR resolve; upload-first first paint |
+| **In progress** | Unit 1 backend: candidates emit `suggestions` / `confidence` / `plan_class` / `match_reason` + `plan_class_counts` — **VERIFY pending** |
+| **Not done** | Unit 2 DSI-class frontend intelligence; Unit 3 upload-first first paint |
 | **Out of scope this arc** | Unit 4 config-driven `ImportJobResolutionSection`; relocate into `admin/imports/page.tsx` |
 
 Route (keep): `/commercial-planner/cpor-cases/historical-import`  
@@ -61,3 +62,4 @@ Canonical references: `DsiImportJobResolutionSection`, `ShipmentImportJobResolut
 - Self-PASS; relocate CPOR into imports monolith
 - Auto-create dims; change DSI resolution tiers
 - Re-litigate “lean body was correct” — Warren overrode it
+- Start Unit 2 before Unit 1 `VERDICT: PASS`

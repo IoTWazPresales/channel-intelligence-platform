@@ -25,6 +25,7 @@ from app.services.cpor.historical_import.resolve import (
     list_unresolved_candidates,
     map_staging_token,
     map_staging_tokens,
+    plan_class_counts,
 )
 from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
 from app.services.imports.import_dispatch import enqueue_import_worker_task
@@ -206,6 +207,7 @@ def historical_job_summary(
             "file_name": job.file_name,
             "staging_count": staging_count,
             "unresolved_counts": {k: len(v) for k, v in unresolved.items()},
+            "plan_class_counts": plan_class_counts(unresolved),
             "cases_ready": ready,
             "cases_blocked": blocked,
             "cpor_historical": hist,
@@ -223,7 +225,12 @@ def historical_candidates(
         _get_job_sync(db, job_id)
         all_c = list_unresolved_candidates(db, job_id=job_id)
         rows = all_c.get(entity) or []
-        return {"entity": entity, "candidates": rows, "counts": {k: len(v) for k, v in all_c.items()}}
+        return {
+            "entity": entity,
+            "candidates": rows,
+            "counts": {k: len(v) for k, v in all_c.items()},
+            "plan_class_counts": plan_class_counts(all_c),
+        }
 
 
 @router.post("/historical-import/jobs/{job_id}/map-token")
