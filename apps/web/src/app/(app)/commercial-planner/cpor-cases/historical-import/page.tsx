@@ -1,24 +1,19 @@
 ﻿'use client';
 
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Alert,
   Button,
   Chip,
   Stack,
   Typography,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
 import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
-import { CanonicalColumnMappingPanel } from '@/features/import-mapping/CanonicalColumnMappingPanel';
 import { apiGet, apiPostFormData, safeDisplayError } from '@/lib/api';
 import { ImportJobValidateProgressPanel } from '@/features/import-steward/ImportJobValidateProgressPanel';
 
@@ -46,7 +41,7 @@ type Profile = {
 type WizardStep = 'upload' | 'validate' | 'resolve' | 'apply';
 
 const STEP_LABELS: { id: WizardStep; label: string }[] = [
-  { id: 'upload', label: 'Upload & profile' },
+  { id: 'upload', label: 'Upload' },
   { id: 'validate', label: 'Validate' },
   { id: 'resolve', label: 'Resolve entities' },
   { id: 'apply', label: 'Apply' },
@@ -115,24 +110,6 @@ export default function CporHistoricalImportPage() {
       setStep('resolve');
     }
   }, [pollProgress, progressTerminal, progressPhase, jobId, qc, refetchSummary, step]);
-
-  const targetOptions = useMemo(() => {
-    if (!profile) return [];
-    return Object.keys(profile.column_map_json || {}).map((k) => ({
-      value: k,
-      label: k,
-    }));
-  }, [profile]);
-
-  const mappingDraft = useMemo(() => {
-    const draft: Record<string, string> = {};
-    if (!profile) return draft;
-    for (const [canon, aliases] of Object.entries(profile.column_map_json || {})) {
-      const header = aliases?.[0];
-      if (header) draft[header] = canon;
-    }
-    return draft;
-  }, [profile]);
 
   const startPipelinePoll = useCallback(
     (args: { importJobId: number; taskId?: string | null; label: string }) => {
@@ -283,34 +260,6 @@ export default function CporHistoricalImportPage() {
             {upload.isPending ? 'Uploading…' : 'Upload & validate'}
           </Button>
           {upload.isError ? <Alert severity="error">{safeDisplayError(upload.error)}</Alert> : null}
-          {profile ? (
-            <Accordion
-              disableGutters
-              elevation={0}
-              defaultExpanded={false}
-              slotProps={{ transition: { unmountOnExit: true } }}
-              sx={{ border: 1, borderColor: 'divider', '&:before': { display: 'none' } }}
-              data-testid="cpor-historical-advanced-mapping"
-            >
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography variant="subtitle2">Advanced: mapping profile (read-only)</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  Headers are fixed by the seeded profile. Steward work maps unresolved entity tokens after
-                  validate — not re-mapping columns here.
-                </Typography>
-                <CanonicalColumnMappingPanel
-                  fileHeaders={Object.values(profile.column_map_json || {}).flat()}
-                  draft={mappingDraft}
-                  onChange={() => undefined}
-                  targetOptions={targetOptions}
-                  disabled
-                  testIdPrefix="cpor-historical"
-                />
-              </AccordionDetails>
-            </Accordion>
-          ) : null}
         </Stack>
       ) : null}
 

@@ -201,10 +201,12 @@ def create_queued_task_run(
         )
         db.add(row)
         try:
-            with db.begin_nested():
-                db.flush()
+            # Plain flush (not begin_nested): nested savepoints still flush the outer
+            # transaction first, so a UniqueViolation leaves PendingRollbackError and the
+            # recovery get() fails. Fresh-session writers can rollback the whole unit.
+            db.flush()
         except IntegrityError:
-            # Race with worker LedgerTask or duplicate enqueue — row already exists.
+            db.rollback()
             return
 
     _fresh_session_commit(_write)
@@ -240,10 +242,10 @@ def ensure_task_run_running(
         )
         db.add(row)
         try:
-            with db.begin_nested():
-                db.flush()
+            db.flush()
         except IntegrityError:
             # Race with create_queued_task_run on fast broker pickup — promote existing row.
+            db.rollback()
             existing = db.get(TaskRun, task_run_id)
             if existing is None:
                 raise

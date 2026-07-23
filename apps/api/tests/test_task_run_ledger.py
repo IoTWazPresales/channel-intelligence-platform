@@ -130,8 +130,6 @@ def test_ensure_task_run_running_recovers_from_insert_race() -> None:
     existing.state = STATE_QUEUED
     existing.started_at = None
     db.get.side_effect = [None, existing]
-    db.begin_nested.return_value.__enter__.return_value = None
-    db.begin_nested.return_value.__exit__.return_value = False
     db.flush.side_effect = IntegrityError("insert", {}, Exception("dup"))
 
     with patch("app.db.session_sync.SessionLocal", return_value=session_cm):
@@ -145,6 +143,7 @@ def test_ensure_task_run_running_recovers_from_insert_race() -> None:
 
     assert existing.state == STATE_RUNNING
     assert existing.started_at is not None
+    db.rollback.assert_called()
     db.commit.assert_called_once()
 
 

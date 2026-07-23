@@ -45,14 +45,13 @@ describe('CporHistoricalImportPage upload-first', () => {
     sessionStorage.clear();
   });
 
-  it('first paint is upload CTA without always-open mapping wall', async () => {
+  it('first paint is upload CTA with no mapping table', async () => {
     wrap(<CporHistoricalImportPage />);
     expect(await screen.findByTestId('cpor-historical-upload-step')).toBeInTheDocument();
     expect(screen.getByTestId('cpor-historical-file')).toBeInTheDocument();
     expect(screen.getByTestId('cpor-historical-upload')).toBeInTheDocument();
     expect(await screen.findByTestId('cpor-historical-profile-summary')).toBeInTheDocument();
-    // Mapping panel unmounts until Advanced is expanded (unmountOnExit).
-    expect(screen.getByTestId('cpor-historical-advanced-mapping')).toBeInTheDocument();
+    expect(screen.queryByTestId('cpor-historical-advanced-mapping')).not.toBeInTheDocument();
     expect(screen.queryByTestId('cpor-historical-samples-Case ID')).not.toBeInTheDocument();
   });
 });
