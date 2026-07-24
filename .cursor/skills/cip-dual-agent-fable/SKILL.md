@@ -18,7 +18,9 @@ description: >-
 ## Quality bar (always)
 
 - Optimize for UX / architecture / best-in-market — **never** for speed or smallest diff.
-- **Canonical clone or STOP** — if a living reference exists (DSI steward, shipment apply, progress poll), clone that operator experience. Importing a shared primitive without the section behaviour is **not done**.
+- **Contract or STOP** — steward/import surfaces are graded against
+  `docs/STEWARD_EXPERIENCE_CONTRACT.md` S-rows. Consume/extend the shared engine;
+  never fork or copy-rename reference modules.
 - **No half-PASS** — thin mounts, stub wizards, missing async/progress when the bar requires them → incomplete; VERIFY must **STOP**.
 - **Never skim** — double- and triple-check against named canonical files before claiming ship.
 - **Own surface ≠ weaker UX** — different route/CTA only.
@@ -26,7 +28,8 @@ description: >-
 
 ## Confirmation before claim (Cursor)
 
-When the unit touches steward/import UX, Cursor’s report must list a **comparative slot checklist** (canonical → shipped + path:line) vs the named canonical (viewport shell · entity tabs · filters · columns · drawer chrome · drawer body · plan/bulk · progress). Missing or PARTIAL slots → do not claim done; do not ask VERIFY for PASS. VERIFY independently re-reads each cited path — the filled table is a claim, not proof.
+When the unit touches steward/import UX, the checklist IS the contract's S-rows; Cursor's report
+lists S1–S14 with path:line; VERIFY re-walks them from the template seed. Missing or PARTIAL slots → do not claim done; do not ask VERIFY for PASS.
 
 New chat starter:
 

@@ -30,6 +30,10 @@ Before Cursor claims “done,” “parity,” “shipped,” or “PASS-ready�
 4. **No screenshot requirement** — attention to code structure and props is enough; do not substitute screenshots for reading the tree.
 5. **Cursor must not self-PASS** — after a clone/parity unit, seed CLI Opus/Fable VERIFY. Only `VERDICT: PASS` closes the unit.
 6. **Verifier re-reads, does not trust the table** — CLI VERIFY opens each cited `path:line` itself and compares canonical→shipped values; Cursor’s filled checklist is a claim under test, not evidence. Unlocatable or PARTIAL slot on a locked bar → STOP.
+7. **VERIFY walks the contract, not the prompt.** For steward/import units the
+   verifier iterates S1–S14 against the shipped tree regardless of what the unit
+   prompt's own checklist contains. REQUIRED row absent/PARTIAL without a waiver
+   line → `VERDICT: STOP`, naming the row.
 
 **VERIFY must STOP when:** the unit prompt named a canonical (e.g. `DsiImportJobResolutionSection` / shipment resolution section / `dsi-progress` poll) and the shipped UI/API does not match that experience — even if tests are green and shared components are imported.
 
@@ -101,6 +105,13 @@ Warren may waive in writing only — record `Fable verify: WAIVED <YYYY-MM-DD>` 
 
 Copy BACKLOG **Regression traps** / **Out of scope** into the unit prompt verbatim.
 
+**Contract scoping (steward/import surfaces):** CONSULT must enumerate the
+S-rows of `docs/STEWARD_EXPERIENCE_CONTRACT.md` in the unit prompt. Rows not
+listed are in scope by default. A row may be excluded ONLY by a verbatim line
+`Warren waived S<id> <date>: <reason>` written by Warren. CONSULT proposing a
+reduced scope ("lean", "chrome-only", "defer intelligence") without waiver lines
+is a defective prompt — Cursor must bounce it back, not implement it.
+
 ---
 
 ## Artifacts
@@ -113,6 +124,11 @@ Copy BACKLOG **Regression traps** / **Out of scope** into the unit prompt verbat
 | `.tmp/<unit>_fable_*.md` | Cursor / CLI Fable |
 | `docs/memory/CURRENT.md` | Cursor after unit + verify line |
 | `CONTEXT.md` changelog | Cursor |
+
+VERIFY seeds are instantiated from `.cursor/templates/verify_seed_template.md`.
+Cursor fills ONLY the marked fields (branch, commit, unit id, changed paths,
+waiver lines copied verbatim from the unit prompt). Cursor does not author
+free-form verify framing.
 
 `.tmp/` is never committed.
 

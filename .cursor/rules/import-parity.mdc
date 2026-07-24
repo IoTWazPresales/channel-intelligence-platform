@@ -13,6 +13,9 @@ importer hand-rolling its own version of each step. When adding or changing an i
 to the existing bar — do not invent a new pattern.** The canonical implementations:
 
 **Done means operator experience parity with the named reference — not “imported a shared file.”**
+The authoritative slot inventory is
+`docs/STEWARD_EXPERIENCE_CONTRACT.md`; 'parity' means contract rows, enumerated,
+not resemblance to a reference file.
 Mounting `ImportStewardCandidateWorkspace` or `CanonicalColumnMappingPanel` without the surrounding
 resolution section (entity tabs, selection, bulk map, drawer/row actions, debounce, error summaries,
 progress poll) is a **thin mount** and is **not** import-parity complete. Own-surface routes keep
@@ -24,10 +27,13 @@ claim. Before calling an importer complete, audit the **filled** section against
 not a bare TextField, column density, drawer chrome + body, plan/bulk/progress as required). Do not
 delete backlog entries or claim PASS because a document says so.
 
-1. **Steward surface = shared `ImportStewardCandidateWorkspace` + entity tabs.**
-   Reference: DSI (`DsiImportJobResolutionSection` + `DsiEntityTabsBar` + the candidate-list adapter)
-   and shipment (`ShipmentImportJobResolutionSection`). New importers clone that **section** shape
-   on their surface — not a one-off Tabs + bare workspace + TextField.
+1. **Steward surface = consume the shared steward engine.** New importers mount the
+   generic engine modules in `features/import-steward/` (workspace, tabs, filters,
+   bulk, resolution plan, drawer, progress) with a domain config + one section file +
+   domain evidence for the drawer body. If a required slot
+   (see `docs/STEWARD_EXPERIENCE_CONTRACT.md`) exists only inside a DSI- or
+   shipment-named module, **extracting it into the shared engine is IN scope for the
+   unit** — do not fork it, do not copy-rename it, do not scope around it.
    Group by entity (distributor / customer / product) with per-tab counts; band confidence with the
    shared `confidenceBand` helper (≥0.90 high / ≥0.70 medium). The shared workspace is **layout
    only** — port each importer's search debounce (300ms), bulk-action progress, and in-modal /
@@ -71,3 +77,8 @@ preserved.
 **Locked, not subject to this rule:** async DB config (NullPool / `:6543` / `statement_cache_size=0`)
 — only sync-session writes get batched. See `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` for the
 per-importer matrix and `docs/BACKLOG.md` for the deferred alignment items (with triggers).
+
+**Prohibited:** creating any new file in `features/import-steward/` with an
+importer prefix (`Dsi*`, `Shipment*`, `Cpor*`, etc.). Importer-specific code lives
+in the importer's own route folder; anything in `import-steward/` must be generic.
+Existing prefixed twins are consolidation-arc debt, not a pattern to extend.
