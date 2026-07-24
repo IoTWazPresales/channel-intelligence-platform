@@ -18,6 +18,8 @@ export type StewardUnresolvedGeoRow = {
   };
 };
 
+/** Catalog option shared by region/channel pickers. */
+export type StewardCatalogOpt = { id: number; code: string; name: string };
 
 /** Minimal candidate row the resolution-plan / bulk engine needs. */
 export type StewardEngineCandidateRow = {
