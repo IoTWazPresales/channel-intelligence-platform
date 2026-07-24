@@ -44,6 +44,7 @@ Route (keep): `/commercial-planner/cpor-cases/historical-import`
 | Label | Fact |
 |-------|------|
 | **Wired + unit-tested** | Generic engine under `features/import-steward/`: `useStewardResolutionPlan`, `StewardResolutionPlanToolbar`, `useStewardBulkSteward`, `StewardBulkSection`, `StewardBulkActionInlineForm`, `StewardCandidateDrawer`, `stewardCandidateFilterLogic` + `DSI_ENGINE_CONFIG` bind. DSI thin `@deprecated` wrappers. |
+| **Opus VERIFY** | **PASS** @ `ce1ca27` (prior STOP on missing `StewardCatalogOpt` fixed) |
 | **Baseline** | Web vitest import-steward+imports: 190/190 before+after. API DSI steward/plan/bulk subset: 93 passed, 6 skipped. No cip writes. |
 | **Not proven** | Live operator soak of DSI Resolve after extraction |
 
