@@ -1,8 +1,10 @@
 'use client';
 
-import { StewardDrawerChrome } from './StewardDrawerChrome';
+import { DSI_ENGINE_CONFIG } from './dsiSteward.engineConfig';
 import { DsiMappingStewardPanel, type DsiCandidateRow } from './dsi-mapping-steward-panel';
+import { StewardCandidateDrawer } from './StewardCandidateDrawer';
 
+/** @deprecated Prefer {@link StewardCandidateDrawer} with evidence body slot. */
 export function DsiCandidateStewardDrawer({
   importJobId,
   candidate,
@@ -31,20 +33,14 @@ export function DsiCandidateStewardDrawer({
   customerNormalizedKeysOnPage?: readonly string[];
   duplicateClusterMembers?: readonly string[];
 }) {
-  const title =
-    candidate.entity_type === 'distributor_token'
-      ? 'Distributor steward'
-      : candidate.entity_type === 'product_identifier'
-        ? 'Product steward'
-        : 'Customer steward';
-
+  const { drawerTestIds, titleForCandidate } = DSI_ENGINE_CONFIG;
   return (
-    <StewardDrawerChrome
-      title={title}
+    <StewardCandidateDrawer
+      title={titleForCandidate(candidate)}
       onClose={onClose}
-      rootTestId="dsi-candidate-steward-drawer"
-      closeTestId="dsi-steward-drawer-close"
-      ariaLabel="Candidate steward"
+      rootTestId={drawerTestIds.root}
+      closeTestId={drawerTestIds.close}
+      ariaLabel={drawerTestIds.ariaLabel}
     >
       <DsiMappingStewardPanel
         importJobId={importJobId}
@@ -59,6 +55,6 @@ export function DsiCandidateStewardDrawer({
         customerNormalizedKeysOnPage={customerNormalizedKeysOnPage}
         duplicateClusterMembers={duplicateClusterMembers}
       />
-    </StewardDrawerChrome>
+    </StewardCandidateDrawer>
   );
 }

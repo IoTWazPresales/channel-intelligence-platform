@@ -1,55 +1,46 @@
 import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
 import { parseDsiPossibleDuplicateHint, type DsiPossibleDuplicateHint } from './dsiDuplicateHintContract';
+import {
+  countStewardCandidatesForQueue,
+  defaultStewardCandidateFilterState,
+  effectiveSuggestedAction,
+  filterStewardCandidates,
+  paginateStewardCandidateRows,
+  productMatchStatusFromContext,
+  stewardFiltersAreDefault,
+  stewardQueueFilterRequiresFullLoad,
+  type StewardCandidateFilterState,
+  type StewardEntityFilter,
+  type StewardEntityTypes,
+  type StewardPartyFilter,
+  type StewardQueueFilter,
+} from './stewardCandidateFilterLogic';
 
 /** DSI mapping candidate entity types (import job resolution). */
 export const DSI_ENTITY_CUSTOMER = 'customer_dealer_token' as const;
 export const DSI_ENTITY_DISTRIBUTOR = 'distributor_token' as const;
 export const DSI_ENTITY_PRODUCT = 'product_identifier' as const;
 
-export type DsiStewardQueueFilter =
-  | 'all'
-  | 'needs_review'
-  | 'ready_to_map'
-  | 'provisional'
-  | 'no_match'
-  | 'ambiguous_eligible';
-export type DsiStewardEntityFilter = 'all' | 'customer' | 'distributor' | 'product';
-export type DsiStewardPartyFilter = 'all' | 'bill_to' | 'ship_to';
-
-export type DsiStewardCandidateFilterState = {
-  queue: DsiStewardQueueFilter;
-  entity: DsiStewardEntityFilter;
-  party: DsiStewardPartyFilter;
-  verifyNameOnly: boolean;
-  specialCategoryOnly: boolean;
-  duplicateUnresolvedOnly: boolean;
+export const DSI_ENTITY_TYPES: StewardEntityTypes = {
+  customer: DSI_ENTITY_CUSTOMER,
+  distributor: DSI_ENTITY_DISTRIBUTOR,
+  product: DSI_ENTITY_PRODUCT,
 };
 
-export const defaultDsiStewardCandidateFilterState = (): DsiStewardCandidateFilterState => ({
-  queue: 'all',
-  entity: 'all',
-  party: 'all',
-  verifyNameOnly: false,
-  specialCategoryOnly: false,
-  duplicateUnresolvedOnly: false,
-});
+/** @deprecated Prefer StewardQueueFilter */
+export type DsiStewardQueueFilter = StewardQueueFilter;
+/** @deprecated Prefer StewardEntityFilter */
+export type DsiStewardEntityFilter = StewardEntityFilter;
+/** @deprecated Prefer StewardPartyFilter */
+export type DsiStewardPartyFilter = StewardPartyFilter;
+/** @deprecated Prefer StewardCandidateFilterState */
+export type DsiStewardCandidateFilterState = StewardCandidateFilterState;
 
-type FilterSlice = Pick<
-  DsiCandidateRow,
-  'id' | 'entity_type' | 'status' | 'match_reason' | 'context'
-> & { suggested_action: string | null };
-
-function contextNeedsNameReview(ctx: Record<string, unknown> | null): boolean {
-  return Boolean(ctx && ctx.needs_name_review === true);
-}
-
-function contextSpecialCategory(ctx: Record<string, unknown> | null): string | null {
-  if (!ctx || typeof ctx.special_category !== 'string') return null;
-  const t = ctx.special_category.trim();
-  return t || null;
-}
+/** @deprecated Prefer defaultStewardCandidateFilterState */
+export const defaultDsiStewardCandidateFilterState = defaultStewardCandidateFilterState;
 
 export type { DsiPossibleDuplicateHint } from './dsiDuplicateHintContract';
+export { productMatchStatusFromContext };
 
 export function contextDuplicateReview(
   ctx: Record<string, unknown> | null
@@ -133,165 +124,38 @@ export function contextPossibleDuplicateOf(ctx: Record<string, unknown> | null):
   return out.slice(0, 8);
 }
 
-function contextPartyRaw(ctx: Record<string, unknown> | null): string | null {
-  if (!ctx || typeof ctx.party !== 'string') return null;
-  const t = ctx.party.trim();
-  return t || null;
-}
-
+/** @deprecated Prefer effectiveSuggestedAction */
 export function dsiEffectiveSuggestedAction(
   row: DsiCandidateRow,
   planRow?: Record<string, unknown> | null
 ): string {
-  if (planRow && planRow.suggested_action != null && String(planRow.suggested_action).trim()) {
-    return String(planRow.suggested_action).trim();
-  }
-  return '';
+  return effectiveSuggestedAction(row, planRow);
 }
 
-function toFilterSlice(row: DsiCandidateRow, planRow?: Record<string, unknown> | null): FilterSlice {
-  return {
-    id: row.id,
-    entity_type: row.entity_type,
-    status: row.status,
-    match_reason: row.match_reason,
-    context: row.context,
-    suggested_action: dsiEffectiveSuggestedAction(row, planRow) || null,
-  };
-}
-
-function rowNeedsReview(r: FilterSlice): boolean {
-  const act = (r.suggested_action || '').trim();
-  return act === 'needs_review' || ((!act || act === '') && (r.status || '').trim() === 'needs_review');
-}
-
-function rowReadyToMap(r: FilterSlice): boolean {
-  const act = (r.suggested_action || '').trim();
-  return act === 'map_customer' || act === 'map_distributor' || act === 'resolve_product';
-}
-
-function rowProvisionalPath(r: FilterSlice): boolean {
-  const act = (r.suggested_action || '').trim();
-  return act === 'create_provisional_customer' || act === 'create_provisional_distributor';
-}
-
-export function productMatchStatusFromContext(ctx: Record<string, unknown> | null): string | null {
-  if (!ctx || typeof ctx.product_match_status !== 'string') return null;
-  const t = ctx.product_match_status.trim();
-  return t || null;
-}
-
-function rowProductNoMatch(r: FilterSlice): boolean {
-  return r.entity_type === DSI_ENTITY_PRODUCT && productMatchStatusFromContext(r.context) === 'no_match';
-}
-
-function rowProductAmbiguousEligible(r: FilterSlice): boolean {
-  return (
-    r.entity_type === DSI_ENTITY_PRODUCT &&
-    productMatchStatusFromContext(r.context) === 'ambiguous_eligible'
-  );
-}
-
-function rowNoMatch(r: FilterSlice): boolean {
-  if (r.entity_type === DSI_ENTITY_PRODUCT) {
-    return rowProductNoMatch(r);
-  }
-  const mr = (r.match_reason || '').trim();
-  if (mr === 'no_alias_or_exact_dim_match') return true;
-  if (r.entity_type === DSI_ENTITY_DISTRIBUTOR && !mr) return true;
-  return false;
-}
-
-function matchesQueue(r: FilterSlice, queue: DsiStewardQueueFilter): boolean {
-  if (queue === 'all') return true;
-  if (queue === 'needs_review') return rowNeedsReview(r);
-  if (queue === 'ready_to_map') return rowReadyToMap(r);
-  if (queue === 'provisional') return rowProvisionalPath(r);
-  if (queue === 'no_match') return rowNoMatch(r);
-  if (queue === 'ambiguous_eligible') return rowProductAmbiguousEligible(r);
-  return true;
-}
-
-/** Client-side queue counts for the loaded candidate page (same mechanism as queue chip filters). */
+/** @deprecated Prefer countStewardCandidatesForQueue */
 export function countDsiStewardCandidatesForQueue(
   rows: DsiCandidateRow[],
   queue: DsiStewardQueueFilter,
   planByCandidateId: Map<number, Record<string, unknown>>
 ): number {
-  if (queue === 'all') return rows.length;
-  return rows.filter((row) => {
-    const slice = toFilterSlice(row, planByCandidateId.get(row.id));
-    return matchesQueue(slice, queue);
-  }).length;
+  return countStewardCandidatesForQueue(rows, queue, planByCandidateId, DSI_ENTITY_TYPES);
 }
 
-function matchesEntity(r: FilterSlice, entity: DsiStewardEntityFilter): boolean {
-  if (entity === 'all') return true;
-  if (entity === 'customer') return r.entity_type === DSI_ENTITY_CUSTOMER;
-  if (entity === 'distributor') return r.entity_type === DSI_ENTITY_DISTRIBUTOR;
-  if (entity === 'product') return r.entity_type === DSI_ENTITY_PRODUCT;
-  return true;
-}
-
-function matchesParty(r: FilterSlice, party: DsiStewardPartyFilter): boolean {
-  if (party === 'all') return true;
-  if (r.entity_type !== DSI_ENTITY_DISTRIBUTOR) return false;
-  const p = contextPartyRaw(r.context);
-  if (party === 'bill_to') return p === 'bill_to';
-  if (party === 'ship_to') return p === 'ship_to';
-  return true;
-}
-
-function matchesToggles(r: FilterSlice, s: DsiStewardCandidateFilterState): boolean {
-  if (s.verifyNameOnly) {
-    const ok =
-      r.entity_type === DSI_ENTITY_DISTRIBUTOR ||
-      (r.entity_type === DSI_ENTITY_CUSTOMER && contextNeedsNameReview(r.context));
-    if (!ok) return false;
-  }
-  if (s.specialCategoryOnly && !contextSpecialCategory(r.context)) return false;
-  if (s.duplicateUnresolvedOnly && !hasUnresolvedDuplicateReview(r.context)) return false;
-  return true;
-}
-
+/** @deprecated Prefer filterStewardCandidates */
 export function filterDsiStewardCandidates(
   rows: DsiCandidateRow[],
   filters: DsiStewardCandidateFilterState,
   planByCandidateId: Map<number, Record<string, unknown>>
 ): DsiCandidateRow[] {
-  return rows.filter((row) => {
-    const slice = toFilterSlice(row, planByCandidateId.get(row.id));
-    if (!matchesQueue(slice, filters.queue)) return false;
-    if (!matchesEntity(slice, filters.entity)) return false;
-    if (!matchesParty(slice, filters.party)) return false;
-    if (!matchesToggles(slice, filters)) return false;
-    return true;
+  return filterStewardCandidates(rows, filters, planByCandidateId, DSI_ENTITY_TYPES, {
+    hasUnresolvedDuplicateReview,
   });
 }
 
-export function dsiStewardFiltersAreDefault(filters: DsiStewardCandidateFilterState): boolean {
-  return (
-    filters.queue === 'all' &&
-    filters.entity === 'all' &&
-    filters.party === 'all' &&
-    !filters.verifyNameOnly &&
-    !filters.specialCategoryOnly &&
-    !filters.duplicateUnresolvedOnly
-  );
-}
+/** @deprecated Prefer stewardFiltersAreDefault */
+export const dsiStewardFiltersAreDefault = stewardFiltersAreDefault;
 
-/** Plan/match queue chips filter client-side on ``context`` / plan — load full tab set first. */
-export function stewardQueueFilterRequiresFullLoad(filters: DsiStewardCandidateFilterState): boolean {
-  return filters.queue !== 'all';
-}
+export { stewardQueueFilterRequiresFullLoad };
 
-/** Slice a client-filtered candidate list for grid pagination (stable order preserved). */
-export function paginateDsiStewardCandidateRows<T>(
-  rows: T[],
-  page: number,
-  pageSize: number
-): T[] {
-  if (pageSize <= 0) return [];
-  const start = Math.max(0, page) * pageSize;
-  return rows.slice(start, start + pageSize);
-}
+/** @deprecated Prefer paginateStewardCandidateRows */
+export const paginateDsiStewardCandidateRows = paginateStewardCandidateRows;

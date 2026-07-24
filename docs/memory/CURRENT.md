@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-24 (Steward Experience Contract v1.0 + consolidation arc opened)
+**Last updated:** 2026-07-24 (Unit A — generic steward engine extracted; DSI consumer #1)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -11,9 +11,9 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260720_0073` on cip** |
-| **HEAD** | (see git — docs commit lands this session) |
-| **Pushed?** | after this commit |
-| **Next** | Consolidation arc Units A–C (generic steward engine → CPOR meets contract v1.0). No new import surfaces until then. Operator soak on CPOR Resolve + upload-first still open. |
+| **HEAD** | (see git after Unit A commit) |
+| **Pushed?** | after Unit A commit |
+| **Next** | Unit B — migrate shipment twins onto generic engine; delete `Shipment*` steward twins. Then Unit C — CPOR mounts engine (S6/S8/S9) + rowId fix. |
 
 ---
 
@@ -21,10 +21,8 @@
 
 **Contract or STOP · no half-PASS · code is evidence.**  
 Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (v1.0).  
-Warren override (2026-07-22): CPOR Resolve = DSI+shipment **operator intelligence** + upload-first wizard — now graded via contract S-rows.
 
-**Consolidation arc open (Units A–C).**  
-No new import surfaces until the steward engine is generic and CPOR meets contract v1.0.
+**Consolidation arc:** Unit A shipped (wired + unit-tested). Units B–C open.
 
 ---
 
@@ -33,12 +31,21 @@ No new import surfaces until the steward engine is generic and CPOR meets contra
 | Label | Fact |
 |-------|------|
 | **Proven** | H1; H2 apply; smoke `H2-SMOKE-556` |
-| **Proven (this arc)** | Unit 1 suggestions contract PASS @ `50c1ee8`; Unit 2 frontend intelligence PASS @ `ade5624`; Unit 3 upload-first PASS @ `5044fce` |
-| **Known contract gaps (v1.0)** | S9 absent; S6 nulled evidence; S12 unverified at volume; S14 violated by `cporTokenRowId` string-hash keys |
+| **Proven (this arc)** | Unit 1 suggestions @ `50c1ee8`; Unit 2 intelligence @ `ade5624`; Unit 3 upload-first @ `5044fce` |
+| **Known contract gaps (v1.0)** | S9 absent; S6 nulled evidence; S12 unverified at volume; S14 violated by `cporTokenRowId` string-hash keys — close in Unit C |
 | **Out of scope** | Unit 4 config-driven `ImportJobResolutionSection`; relocate into `admin/imports/page.tsx` |
 
-Route (keep): `/commercial-planner/cpor-cases/historical-import`  
-Canonical references: contract S-rows + shared `features/import-steward/` engine (post-consolidation)
+Route (keep): `/commercial-planner/cpor-cases/historical-import`
+
+---
+
+## Unit A (this session)
+
+| Label | Fact |
+|-------|------|
+| **Wired + unit-tested** | Generic engine under `features/import-steward/`: `useStewardResolutionPlan`, `StewardResolutionPlanToolbar`, `useStewardBulkSteward`, `StewardBulkSection`, `StewardBulkActionInlineForm`, `StewardCandidateDrawer`, `stewardCandidateFilterLogic` + `DSI_ENGINE_CONFIG` bind. DSI thin `@deprecated` wrappers. |
+| **Baseline** | Web vitest import-steward+imports: 190/190 before+after. API DSI steward/plan/bulk subset: 93 passed, 6 skipped. No cip writes. |
+| **Not proven** | Live operator soak of DSI Resolve after extraction |
 
 ---
 
@@ -53,5 +60,5 @@ Canonical references: contract S-rows + shared `features/import-steward/` engine
 - Relocate CPOR into imports monolith
 - Auto-create dims; change DSI resolution tiers
 - Claim Unit 4 done
-- Start Unit A in the same commit as this docs land
-- Create new `Dsi*` / `Shipment*` / `Cpor*` files under `features/import-steward/`
+- Create new `Dsi*` / `Shipment*` / `Cpor*` files under `features/import-steward/` (except existing `dsiSteward.*` bind/config pattern)
+- Touch shipment twins until Unit B
