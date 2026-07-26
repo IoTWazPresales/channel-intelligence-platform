@@ -43,8 +43,9 @@ export const DSI_ENGINE_CONFIG: StewardEngineConfig = {
   unresolvedGeoTokensQueryKey: (importJobId) =>
     DSI_STEWARD_CONFIG.unresolvedGeoTokensQueryKey(importJobId),
 
-  resolutionSuggestionsQueryKey: (...args) =>
-    DSI_STEWARD_CONFIG.resolutionSuggestionsQueryKey(...args),
+  /** Core plan key — DSI geo extras are composed in useDsiResolutionPlan via suggestionsQueryKey factory. */
+  resolutionSuggestionsQueryKey: (importJobId, candidateIdsKey) =>
+    DSI_STEWARD_CONFIG.resolutionSuggestionsQueryKey(importJobId, candidateIdsKey, '', ''),
   resolutionSuggestionsQueryKeyPrefix: (importJobId) =>
     DSI_STEWARD_CONFIG.resolutionSuggestionsQueryKeyPrefix(importJobId),
   candidatesQueryKey: (importJobId) => DSI_STEWARD_CONFIG.candidatesQueryKey(importJobId),

@@ -4,16 +4,16 @@ import { useQuery } from '@tanstack/react-query';
 
 import { apiGet } from '@/lib/api';
 
-import type { DsiStewardCandidateFilterState } from './dsiStewardCandidateFilterLogic';
-import { defaultDsiStewardCandidateFilterState } from './dsiStewardCandidateFilterLogic';
+import type { DsiStewardCandidateFilterState } from '@/features/import-steward/dsiStewardCandidateFilterLogic';
+import { defaultDsiStewardCandidateFilterState } from '@/features/import-steward/dsiStewardCandidateFilterLogic';
 import { SHIPMENT_STEWARD_CONFIG } from './shipmentSteward.config';
 import {
   buildShipmentCandidatesListUrl,
   SHIPMENT_CANDIDATE_FULL_LOAD_LIMIT,
   type ShipmentMappingCandidatesPageResponse,
 } from './shipmentCandidatesQuery';
-import type { DsiCandidatePageSize } from './dsiCandidatesQuery';
-import { stewardQueueFilterRequiresFullLoad } from './dsiStewardCandidateFilterLogic';
+import type { DsiCandidatePageSize } from '@/features/import-steward/dsiCandidatesQuery';
+import { stewardQueueFilterRequiresFullLoad } from '@/features/import-steward/dsiStewardCandidateFilterLogic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export function useShipmentCandidatesPage(

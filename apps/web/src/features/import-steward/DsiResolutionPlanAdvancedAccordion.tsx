@@ -33,20 +33,34 @@ type PlanHookSlice = {
 
 /** @deprecated Prefer {@link DsiResolutionPlanToolbar} + {@link DsiRegionChannelTabPanel} on the Region & channel tab. */
 export function DsiResolutionSuggestionsBar(plan: PlanHookSlice) {
-  return <DsiResolutionPlanToolbar plan={plan} />;
+  return <DsiResolutionPlanToolbar {...plan} />;
 }
 
 /** @deprecated Geo stewardship lives on the Region & channel tab — use {@link DsiRegionChannelTabPanel}. */
 export function DsiUnresolvedGeoStewardBlock(plan: PlanHookSlice) {
-  return <DsiRegionChannelTabPanel importJobId={plan.importJobId} {...plan} />;
+  return (
+    <DsiRegionChannelTabPanel
+      importJobId={plan.importJobId}
+      unresolvedGeoQuery={plan.unresolvedGeoQuery}
+      catalogChannels={plan.channels}
+      catalogRegions={plan.regions}
+      onInvalidate={plan.onInvalidate}
+    />
+  );
 }
 
 /** @deprecated */
 export function DsiResolutionPlanAdvancedAccordion(plan: PlanHookSlice) {
   return (
     <>
-      <DsiResolutionPlanToolbar plan={plan} />
-      <DsiRegionChannelTabPanel importJobId={plan.importJobId} {...plan} />
+      <DsiResolutionPlanToolbar {...plan} />
+      <DsiRegionChannelTabPanel
+        importJobId={plan.importJobId}
+        unresolvedGeoQuery={plan.unresolvedGeoQuery}
+        catalogChannels={plan.channels}
+        catalogRegions={plan.regions}
+        onInvalidate={plan.onInvalidate}
+      />
     </>
   );
 }

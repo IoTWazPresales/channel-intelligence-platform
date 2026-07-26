@@ -1,9 +1,8 @@
 /**
  * Entity type strings aligned with shipment steward filters — kept in features to avoid
- * `features` → `app` cross-imports (same values as shipmentEntityStewardFilters).
+ * `features` → `app` cross-imports. API entity_type literals contain "shipment_" (contract
+ * values) — Phase 4 follow-up debt: see STEWARD_EXPERIENCE_CONTRACT consolidation arc.
  */
-import { shipmentEntityChipLabel } from './shipmentMappingCandidateDisplay';
-
 export const INBOUND_STEWARD_ENTITY_DIST = 'shipment_distributor' as const;
 export const INBOUND_STEWARD_ENTITY_CUST = 'shipment_customer_token' as const;
 
@@ -55,7 +54,22 @@ export function inboundEvidenceContextPossibleDuplicateOf(ctx: Record<string, un
 }
 
 export function inboundEvidenceEntityChipLabel(entityType: string): string {
-  return shipmentEntityChipLabel(entityType);
+  const et = (entityType || '').trim();
+  if (
+    et === INBOUND_STEWARD_ENTITY_DIST ||
+    et === 'distributor_token' ||
+    et === 'shipment_distributor'
+  ) {
+    return 'Distributor';
+  }
+  if (
+    et === INBOUND_STEWARD_ENTITY_CUST ||
+    et === 'customer_dealer_token' ||
+    et === 'shipment_customer_token'
+  ) {
+    return 'Channel partner';
+  }
+  return entityType;
 }
 
 export function inboundEvidenceHumanizeSnakeTitle(s: string | null): string {

@@ -13,7 +13,7 @@ import {
 import {
   SHIPMENT_ENTITY_CUSTOMER,
   SHIPMENT_ENTITY_DISTRIBUTOR,
-} from '@/features/import-steward/shipmentStewardCandidateFilterLogic';
+} from './shipmentStewardCandidateFilterLogic';
 
 function shipmentActionChipColor(action: string): 'success' | 'warning' | 'error' | 'default' {
   if (action === 'map_customer' || action === 'map_distributor') return 'success';

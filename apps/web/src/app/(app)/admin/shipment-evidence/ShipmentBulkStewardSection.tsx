@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 
-import { StewardPendingButton } from './StewardPendingButton';
+import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
 import type { useShipmentBulkSteward } from './useShipmentBulkSteward';
 
 type BulkSteward = ReturnType<typeof useShipmentBulkSteward>;

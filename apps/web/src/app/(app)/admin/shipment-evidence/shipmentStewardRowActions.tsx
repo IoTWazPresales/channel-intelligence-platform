@@ -27,7 +27,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { StewardPendingButton } from './StewardPendingButton';
+import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
 import { apiGet, apiPost } from '@/lib/api';
 import { invalidateShipmentImportJobStewardQueries, isShipmentStewardRowActionBlocked } from './shipmentSteward.config';
 import {

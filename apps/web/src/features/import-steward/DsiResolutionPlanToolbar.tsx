@@ -1,10 +1,40 @@
 'use client';
 
 import { DSI_ENGINE_CONFIG } from './dsiSteward.engineConfig';
-import { StewardResolutionPlanToolbar } from './StewardResolutionPlanToolbar';
-import type { StewardResolutionPlanToolbarSlice } from './StewardResolutionPlanToolbar';
+import {
+  StewardResolutionPlanToolbar,
+  type StewardResolutionPlanToolbarDsiExtras,
+  type StewardResolutionPlanToolbarSlice,
+} from './StewardResolutionPlanToolbar';
 
-/** @deprecated Prefer {@link StewardResolutionPlanToolbar} with engine testIds. */
-export function DsiResolutionPlanToolbar(plan: StewardResolutionPlanToolbarSlice) {
-  return <StewardResolutionPlanToolbar plan={plan} testIds={DSI_ENGINE_CONFIG.planToolbarTestIds} />;
+type DsiToolbarPlan = StewardResolutionPlanToolbarSlice & StewardResolutionPlanToolbarDsiExtras;
+
+/** @deprecated Prefer {@link StewardResolutionPlanToolbar} with engine testIds + dsiExtras. */
+export function DsiResolutionPlanToolbar(plan: DsiToolbarPlan) {
+  const {
+    candidatesCount,
+    suggestionsQuery,
+    resolutionPlan,
+    planGlobalSuspicious,
+    setPlanGlobalSuspicious,
+    planLoadToken,
+    planTableRows,
+    refreshPlanEffective,
+    overridesPayload,
+  } = plan;
+  return (
+    <StewardResolutionPlanToolbar
+      plan={{ candidatesCount, suggestionsQuery }}
+      testIds={DSI_ENGINE_CONFIG.planToolbarTestIds}
+      dsiExtras={{
+        resolutionPlan,
+        planGlobalSuspicious,
+        setPlanGlobalSuspicious,
+        planLoadToken,
+        planTableRows,
+        refreshPlanEffective,
+        overridesPayload,
+      }}
+    />
+  );
 }

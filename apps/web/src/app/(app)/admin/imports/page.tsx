@@ -83,7 +83,7 @@ import {
   shipmentJobHasValidationComplete,
   shipmentPipelineInFlight as shipmentJobPipelineInFlight,
   shipmentWizardActiveStepFromServer,
-} from '@/features/import-steward/shipmentImportWizardRouting';
+} from '@/app/(app)/admin/shipment-evidence/shipmentImportWizardRouting';
 
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 

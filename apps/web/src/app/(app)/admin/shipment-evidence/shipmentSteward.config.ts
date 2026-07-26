@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import type { ImportStewardListCopy } from './importStewardCandidateWorkspace.types';
+import type { ImportStewardListCopy } from '@/features/import-steward/importStewardCandidateWorkspace.types';
 
 export const SHIPMENT_STEWARD_TERMINAL_STATUSES = [
   'resolved',

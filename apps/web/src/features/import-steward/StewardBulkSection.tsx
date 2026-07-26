@@ -21,10 +21,10 @@ import {
 import { StewardPendingButton } from './StewardPendingButton';
 import type { StewardBulkTestIds } from './stewardEngine.types';
 import type { useStewardBulkSteward } from './useStewardBulkSteward';
-import type { useStewardResolutionPlan } from './useStewardResolutionPlan';
+import type { useDsiResolutionPlan } from './useDsiResolutionPlan';
 
 type BulkSteward = ReturnType<typeof useStewardBulkSteward>;
-type PlanSteward = ReturnType<typeof useStewardResolutionPlan>;
+type PlanSteward = ReturnType<typeof useDsiResolutionPlan>;
 
 export function StewardBulkSection({
   bulk,
@@ -87,9 +87,6 @@ export function StewardBulkSection({
     applyResolutionPlan,
     readyPlanCandidateIds,
     applyAllProvisionalStats,
-    overridesPayload,
-    planGlobalSuspicious,
-    refreshPlanEffective,
   } = plan;
 
   return (
@@ -192,13 +189,7 @@ export function StewardBulkSection({
                   pendingLabel="Applying…"
                   onClick={() => {
                     setApplyAllConfirmOpen(false);
-                    void applyResolutionPlan
-                      .mutateAsync({
-                        candidateIds: readyPlanCandidateIds,
-                        overrides: overridesPayload(),
-                        globalSuspicious: planGlobalSuspicious,
-                      })
-                      .catch(() => {});
+                    void applyResolutionPlan.mutateAsync(readyPlanCandidateIds).catch(() => {});
                   }}
                   data-testid={testIds.applyAllConfirm}
                 >

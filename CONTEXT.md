@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-26 — **Unit B revised (engine genericity + shipment consumer #2):** geo lifted from `useStewardResolutionPlan` into DSI composition; shipment binds core plan/toolbar/drawer via `SHIPMENT_ENGINE_CONFIG`; shipment domain+bulk relocated to `shipment-evidence/`; contract v1.1. Steward vitest 199/199. Next: Opus VERIFY. Branch `feat/cpor-listing-status-audit`.
 - 2026-07-24 — **Unit A Opus VERIFY PASS @ `ce1ca27`:** generic steward engine + DSI_ENGINE_CONFIG; CatalogOpt export fix after first STOP. Next: Unit B shipment twins. Branch `feat/cpor-listing-status-audit`.
 - 2026-07-24 — **Unit A steward engine extract:** generic `useStewardResolutionPlan` / `StewardResolutionPlanToolbar` / bulk trio / `StewardCandidateDrawer` / `stewardCandidateFilterLogic` + `DSI_ENGINE_CONFIG`; DSI thin `@deprecated` wrappers; behavior-identical vitest 190/190. Next: Unit B shipment. Branch `feat/cpor-listing-status-audit`.
 - 2026-07-24 — **Steward Experience Contract v1.0 + rule edits:** `docs/STEWARD_EXPERIENCE_CONTRACT.md`; import-parity / WORKFLOW / cip-dual-agent + verify_seed_template; consolidation arc Units A–C opened. Branch `feat/cpor-listing-status-audit`.

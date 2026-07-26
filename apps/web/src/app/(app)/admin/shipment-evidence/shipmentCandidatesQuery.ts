@@ -1,9 +1,9 @@
 'use client';
 
-import type { DsiStewardCandidateFilterState } from './dsiStewardCandidateFilterLogic';
-import type { InboundEvidenceMappingCandidateRow } from './inboundEvidenceMappingCandidateWorkspaceColumns';
+import type { DsiStewardCandidateFilterState } from '@/features/import-steward/dsiStewardCandidateFilterLogic';
+import type { InboundEvidenceMappingCandidateRow } from '@/features/import-steward/inboundEvidenceMappingCandidateWorkspaceColumns';
 
-import { DSI_CANDIDATE_PAGE_SIZE_OPTIONS, type DsiCandidatePageSize } from './dsiCandidatesQuery';
+import { DSI_CANDIDATE_PAGE_SIZE_OPTIONS, type DsiCandidatePageSize } from '@/features/import-steward/dsiCandidatesQuery';
 
 export type ShipmentMappingCandidatesPageResponse = {
   items: InboundEvidenceMappingCandidateRow[];

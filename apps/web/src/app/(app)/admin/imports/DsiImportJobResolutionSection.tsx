@@ -697,13 +697,7 @@ export function DsiImportJobResolutionSection({
                     (stewardOverlayBusy && !plan.applyResolutionPlan.isPending)
                   }
                   onClick={() =>
-                    void plan.applyResolutionPlan
-                      .mutateAsync({
-                        candidateIds: selectedReadyPlanIds,
-                        overrides: plan.overridesPayload(),
-                        globalSuspicious: plan.planGlobalSuspicious,
-                      })
-                      .catch(() => {})
+                    void plan.applyResolutionPlan.mutateAsync(selectedReadyPlanIds).catch(() => {})
                   }
                   data-testid="dsi-resolution-plan-apply-selected"
                 >

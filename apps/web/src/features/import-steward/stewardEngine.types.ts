@@ -1,7 +1,7 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-/** Unresolved geo token row (importer-supplied shape). */
+/** Unresolved geo token row (importer-supplied shape — DSI geo compose only). */
 export type StewardUnresolvedGeoRow = {
   dimension: string;
   normalized_token: string;
@@ -18,7 +18,7 @@ export type StewardUnresolvedGeoRow = {
   };
 };
 
-/** Catalog option shared by region/channel pickers. */
+/** Catalog option shared by region/channel pickers (DSI geo compose). */
 export type StewardCatalogOpt = { id: number; code: string; name: string };
 
 /** Minimal candidate row the resolution-plan / bulk engine needs. */
@@ -58,6 +58,7 @@ export type StewardBulkAsyncEnqueueResponse = {
   async_poll?: boolean;
 };
 
+/** Core plan toolbar testids (refresh / loading / errors). DSI options use the same bag. */
 export type StewardResolutionPlanTestIds = {
   toolbar: string;
   refresh: string;
@@ -107,46 +108,24 @@ export type StewardEntityTypes = {
 };
 
 /**
- * Importer-agnostic steward engine config. Consumers (DSI first) supply endpoints,
- * query keys, pollers, cache invalidation, background-task kinds, and testids.
+ * Domain-neutral plan engine config — no region/channel/geo, no bulk preview.
+ * Consumers supply endpoints, pollers, cache invalidation, and core toolbar testids.
  */
-export type StewardEngineConfig = {
-  catalogRegionsPath: string;
-  catalogChannelsPath: string;
-  catalogRegionsQueryKey: () => QueryKey;
-  catalogChannelsQueryKey: () => QueryKey;
-
-  unresolvedGeoTokensPath: (importJobId: number) => string;
-  unresolvedGeoTokensQueryKey: (importJobId: number) => QueryKey;
-
-  resolutionSuggestionsQueryKey: (
-    importJobId: number,
-    candidateIdsKey: string,
-    planRegionFallbackKey: string,
-    planChannelId: string
-  ) => QueryKey;
+export type StewardPlanEngineConfig = {
+  /** Core key is (jobId, candidateIdsKey). Consumers that need extras wrap via hook factory. */
+  resolutionSuggestionsQueryKey: (importJobId: number, candidateIdsKey: string) => QueryKey;
   resolutionSuggestionsQueryKeyPrefix: (importJobId: number) => QueryKey;
   candidatesQueryKey: (importJobId: number) => QueryKey;
 
   computePlanAsyncPath: (importJobId: number) => string;
-  effectivePlanPath: (importJobId: number) => string;
   applyPlanAsyncPath: (importJobId: number) => string;
   revalidatePath: (importJobId: number) => string;
 
-  bulkPreviewPath: (importJobId: number) => string;
-  bulkApplyPath: (importJobId: number) => string;
-  bulkIgnoreAsyncPath: (importJobId: number) => string;
-  bulkProvisionalCustomersAsyncPath: (importJobId: number) => string;
-
   computeBackgroundKind: string;
   applyBackgroundKind: string;
-  bulkIgnoreBackgroundKind: string;
-  bulkProvisionalBackgroundKind: string;
 
   computeBackgroundLabel: (importJobId: number) => string;
   applyBackgroundLabel: (importJobId: number) => string;
-  bulkIgnoreBackgroundLabel: (importJobId: number) => string;
-  bulkProvisionalBackgroundLabel: (importJobId: number) => string;
 
   pollComputeTask: (
     importJobId: number,
@@ -162,11 +141,6 @@ export type StewardEngineConfig = {
     importJobId: number,
     taskId: string
   ) => Promise<Record<string, unknown> | null>;
-  pollBulkProvisionalTask: (
-    importJobId: number,
-    taskId: string,
-    opts: { rowCount: number }
-  ) => Promise<StewardBulkApplyResponse>;
 
   waitForBulkIdle: (importJobId: number) => Promise<void>;
   notifyAsyncPipelineStarted: (
@@ -181,9 +155,55 @@ export type StewardEngineConfig = {
     options?: { includeImportJobsList?: boolean }
   ) => void;
   invalidateTabCounts: (qc: QueryClient, importJobId: number) => void;
-  invalidateCatalogQueries: (qc: QueryClient) => void;
   removeCandidatesFromCache: (qc: QueryClient, importJobId: number, ids: number[]) => void;
   evictCandidatesFromPlanCache: (qc: QueryClient, importJobId: number, ids: number[]) => void;
+
+  planToolbarTestIds: StewardResolutionPlanTestIds;
+  drawerTestIds: StewardDrawerTestIds;
+
+  titleForCandidate: (candidate: { entity_type?: string }) => string;
+
+  /** Optional copy for refresh button / loading alerts (defaults are DSI-ish legacy strings). */
+  planToolbarCopy?: {
+    refreshLabel?: string;
+    refreshPendingLabel?: string;
+    computingMessage?: string;
+    refreshingMessage?: string;
+  };
+};
+
+/**
+ * Full DSI (and future bulk-bound) engine config = plan core + geo + bulk.
+ * Geo/bulk fields are for composed DSI hooks and useStewardBulkSteward — not the plan core.
+ */
+export type StewardEngineConfig = StewardPlanEngineConfig & {
+  catalogRegionsPath: string;
+  catalogChannelsPath: string;
+  catalogRegionsQueryKey: () => QueryKey;
+  catalogChannelsQueryKey: () => QueryKey;
+
+  unresolvedGeoTokensPath: (importJobId: number) => string;
+  unresolvedGeoTokensQueryKey: (importJobId: number) => QueryKey;
+
+  effectivePlanPath: (importJobId: number) => string;
+
+  bulkPreviewPath: (importJobId: number) => string;
+  bulkApplyPath: (importJobId: number) => string;
+  bulkIgnoreAsyncPath: (importJobId: number) => string;
+  bulkProvisionalCustomersAsyncPath: (importJobId: number) => string;
+
+  bulkIgnoreBackgroundKind: string;
+  bulkProvisionalBackgroundKind: string;
+  bulkIgnoreBackgroundLabel: (importJobId: number) => string;
+  bulkProvisionalBackgroundLabel: (importJobId: number) => string;
+
+  pollBulkProvisionalTask: (
+    importJobId: number,
+    taskId: string,
+    opts: { rowCount: number }
+  ) => Promise<StewardBulkApplyResponse>;
+
+  invalidateCatalogQueries: (qc: QueryClient) => void;
 
   summarizeApplyAllReadyProvisional: (rows: Array<Record<string, unknown>>) => {
     provisionalCustomerReady: number;
@@ -215,9 +235,5 @@ export type StewardEngineConfig = {
   formatBulkProposedLabel: (row: Record<string, unknown>) => string;
   formatBulkAliasEvidence: (row: Record<string, unknown>) => ReactNode | string;
 
-  planToolbarTestIds: StewardResolutionPlanTestIds;
   bulkTestIds: StewardBulkTestIds;
-  drawerTestIds: StewardDrawerTestIds;
-
-  titleForCandidate: (candidate: { entity_type?: string }) => string;
 };

@@ -9,7 +9,7 @@ import {
 } from '@/features/import-steward/confidenceBand';
 import { formatPlanActionLabel, planTargetSummary } from '@/features/import-steward/dsiResolutionPlanDisplay';
 
-import { StewardPendingButton } from './StewardPendingButton';
+import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
 import {
   isShipmentCustomerEntity,
   isShipmentDistributorEntity,

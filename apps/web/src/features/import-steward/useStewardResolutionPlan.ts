@@ -1,21 +1,25 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { QueryKey } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
+import { apiPost, safeDisplayError } from '@/lib/api';
 
 import { registerClientBackgroundTask, finishClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 
 import { nextPlanScopeCandidateIds, shrinkPlanScopeCandidateIds } from './stewardPlanScope';
 import type {
-  StewardCatalogOpt,
   StewardEngineCandidateRow,
-  StewardEngineConfig,
   StewardPlanApplyFeedback,
+  StewardPlanEngineConfig,
   StewardPlanRowOverride,
-  StewardUnresolvedGeoRow,
 } from './stewardEngine.types';
+
+/** Canonical apply signature — consumers adapt at their wrapper; core has one entry. */
+export type StewardApplyResolutionPlanArgs = number[];
+
+const defaultReadyRow = (r: Record<string, unknown>) => r.ready === true;
 
 export function useStewardResolutionPlan({
   importJobId,
@@ -25,6 +29,11 @@ export function useStewardResolutionPlan({
   setSelectedIds,
   setPlanApplySummary,
   config,
+  suggestionsQueryKey,
+  buildComputeBody,
+  buildApplyBody,
+  readyRowFilter = defaultReadyRow,
+  formatPlanApplySummary,
 }: {
   importJobId: number;
   candidates: StewardEngineCandidateRow[];
@@ -32,61 +41,30 @@ export function useStewardResolutionPlan({
   onAsyncPipelineStarted?: (args: { importJobId: number; taskId?: string | null }) => void;
   setSelectedIds: (ids: number[] | ((prev: number[]) => number[])) => void;
   setPlanApplySummary: (msg: StewardPlanApplyFeedback | null) => void;
-  config: StewardEngineConfig;
+  config: StewardPlanEngineConfig;
+  /** Override when consumer needs extra key parts (e.g. DSI region/channel). */
+  suggestionsQueryKey?: (candidateIdsKey: string) => QueryKey;
+  buildComputeBody?: (candidateIds: number[]) => Record<string, unknown>;
+  buildApplyBody?: (args: {
+    candidateIds: number[];
+    overrides: Array<Record<string, unknown>>;
+  }) => Record<string, unknown>;
+  /** Domain ready gate. Default: ready === true. DSI composes duplicate_review on top. */
+  readyRowFilter?: (row: Record<string, unknown>) => boolean;
+  formatPlanApplySummary?: (data: Record<string, unknown>) => StewardPlanApplyFeedback;
 }) {
   const qc = useQueryClient();
 
-  const [planRegionFallbackEnabled, setPlanRegionFallbackEnabled] = useState(false);
-  const [planRegionId, setPlanRegionId] = useState('');
-  const [planChannelId, setPlanChannelId] = useState('');
   const [resolutionPlan, setResolutionPlan] = useState<Record<string, unknown> | null>(null);
   const [suggestionDrawerId, setSuggestionDrawerId] = useState<number | null>(null);
   const [planOverrideMap, setPlanOverrideMap] = useState<Record<number, StewardPlanRowOverride>>({});
-  const [planGlobalSuspicious, setPlanGlobalSuspicious] = useState(false);
   const planDebounceSkipRef = useRef(false);
   const planEvictSkipRef = useRef(false);
   const [planLoadToken, setPlanLoadToken] = useState(0);
   const [applyAllConfirmOpen, setApplyAllConfirmOpen] = useState(false);
 
-  const { data: regions = [] } = useQuery({
-    queryKey: config.catalogRegionsQueryKey(),
-    queryFn: ({ signal }) => apiGet<StewardCatalogOpt[]>(config.catalogRegionsPath, { signal }),
-  });
-  const { data: channels = [] } = useQuery({
-    queryKey: config.catalogChannelsQueryKey(),
-    queryFn: ({ signal }) => apiGet<StewardCatalogOpt[]>(config.catalogChannelsPath, { signal }),
-  });
-
-  const unresolvedGeoQuery = useQuery({
-    queryKey: config.unresolvedGeoTokensQueryKey(importJobId),
-    enabled: importJobId > 0,
-    refetchOnWindowFocus: false,
-    queryFn: ({ signal }) =>
-      apiGet<{ import_job_id: number; channels: StewardUnresolvedGeoRow[]; regions: StewardUnresolvedGeoRow[] }>(
-        config.unresolvedGeoTokensPath(importJobId),
-        { signal }
-      ),
-  });
-
-  const planRegionFallbackKey = planRegionFallbackEnabled && planRegionId.trim() !== '' ? planRegionId : '';
-
-  const planDefaultsBody = useCallback(
-    () => ({
-      default_region_id:
-        planRegionFallbackEnabled &&
-        planRegionId.trim() !== '' &&
-        Number.isFinite(Number(planRegionId))
-          ? Number(planRegionId)
-          : null,
-      default_channel_id:
-        planChannelId.trim() !== '' && Number.isFinite(Number(planChannelId)) ? Number(planChannelId) : null,
-    }),
-    [planRegionFallbackEnabled, planRegionId, planChannelId]
-  );
-
   const pageCandidateIds = useMemo(() => candidates.map((c) => c.id), [candidates]);
 
-  /** Stable plan scope — do not shrink when steward actions optimistically remove rows from the page cache. */
   const [planScopeCandidateIds, setPlanScopeCandidateIds] = useState<number[]>([]);
   useEffect(() => {
     const current = pageCandidateIds;
@@ -102,19 +80,24 @@ export function useStewardResolutionPlan({
     [planScopeCandidateIds]
   );
 
+  const resolvedSuggestionsKey = useMemo(
+    () =>
+      suggestionsQueryKey
+        ? suggestionsQueryKey(candidateIdsKey)
+        : config.resolutionSuggestionsQueryKey(importJobId, candidateIdsKey),
+    [suggestionsQueryKey, config, importJobId, candidateIdsKey]
+  );
+
   const suggestionsQuery = useQuery({
-    queryKey: config.resolutionSuggestionsQueryKey(
-      importJobId,
-      candidateIdsKey,
-      planRegionFallbackKey,
-      planChannelId
-    ),
+    queryKey: resolvedSuggestionsKey,
     enabled: importJobId > 0 && planScopeCandidateIds.length > 0,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     staleTime: 10 * 60 * 1000,
     queryFn: async ({ signal }) => {
-      const body = { ...planDefaultsBody(), candidate_ids: planScopeCandidateIds };
+      const body = buildComputeBody
+        ? buildComputeBody(planScopeCandidateIds)
+        : { candidate_ids: planScopeCandidateIds };
       const enqueued = await apiPost<{
         import_job_id: number;
         task_id: string;
@@ -147,10 +130,13 @@ export function useStewardResolutionPlan({
     if (!suggestionsQuery.data) return;
     planDebounceSkipRef.current = true;
     setPlanOverrideMap({});
-    setPlanGlobalSuspicious(false);
     setResolutionPlan(suggestionsQuery.data);
     setPlanLoadToken((n) => n + 1);
   }, [suggestionsQuery.data]);
+
+  const replaceResolutionPlan = useCallback((data: Record<string, unknown>) => {
+    setResolutionPlan(data);
+  }, []);
 
   const overridesPayload = useCallback((): Array<Record<string, unknown>> => {
     return Object.entries(planOverrideMap).map(([cid, o]) => ({
@@ -166,61 +152,19 @@ export function useStewardResolutionPlan({
     }));
   }, []);
 
-  const refreshPlanEffective = useMutation({
-    mutationFn: async (args: { overrides: Array<Record<string, unknown>>; globalSuspicious: boolean }) =>
-      apiPost<Record<string, unknown>>(config.effectivePlanPath(importJobId), {
-        ...planDefaultsBody(),
-        candidate_ids: pageCandidateIds,
-        confirm_for_suspicious_distributor_token: args.globalSuspicious,
-        overrides: args.overrides,
-      }),
-    onSuccess: (data) => {
-      setResolutionPlan(data);
-    },
-  });
-
-  const refreshEffectiveAsyncRef = useRef(refreshPlanEffective.mutateAsync);
-  refreshEffectiveAsyncRef.current = refreshPlanEffective.mutateAsync;
-
-  useEffect(() => {
-    if (planLoadToken === 0) return;
-    if (planDebounceSkipRef.current) {
-      planDebounceSkipRef.current = false;
-      return;
-    }
-    if (planEvictSkipRef.current) {
-      planEvictSkipRef.current = false;
-      return;
-    }
-    const ovList = Object.entries(planOverrideMap).map(([cid, o]) => ({
-      candidate_id: Number(cid),
-      ...o,
-    }));
-    const t = window.setTimeout(() => {
-      void refreshEffectiveAsyncRef
-        .current({ overrides: ovList, globalSuspicious: planGlobalSuspicious })
-        .catch(() => {});
-    }, 450);
-    return () => window.clearTimeout(t);
-  }, [planOverrideMap, planGlobalSuspicious, planLoadToken]);
-
+  /** Canonical apply: candidate id list only. Body extras via buildApplyBody composition. */
   const applyResolutionPlan = useMutation({
-    mutationFn: async (args: {
-      candidateIds: number[];
-      overrides: Array<Record<string, unknown>>;
-      globalSuspicious: boolean;
-    }) => {
+    mutationFn: async (candidateIds: StewardApplyResolutionPlanArgs) => {
       await config.waitForBulkIdle(importJobId);
+      const overrides = overridesPayload();
       let taskId: string | undefined;
       try {
-        const body = {
-          candidate_ids: args.candidateIds,
-          ...planDefaultsBody(),
-          partner_tier: 'unmanaged',
-          provisional_notes_summary: null,
-          confirm_for_suspicious_distributor_token: args.globalSuspicious,
-          overrides: args.overrides.length ? args.overrides : null,
-        };
+        const body = buildApplyBody
+          ? buildApplyBody({ candidateIds, overrides })
+          : {
+              candidate_ids: candidateIds,
+              overrides: overrides.length ? overrides : null,
+            };
         const enqueued = await apiPost<{
           import_job_id: number;
           task_id: string;
@@ -236,7 +180,7 @@ export function useStewardResolutionPlan({
         void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
         try {
           return await config.pollApplyTask(importJobId, enqueued.task_id, {
-            rowCount: args.candidateIds.length,
+            rowCount: candidateIds.length,
           });
         } catch (pollErr) {
           const late = await config.fetchApplyResultIfTerminal(importJobId, enqueued.task_id);
@@ -266,16 +210,19 @@ export function useStewardResolutionPlan({
         config.evictCandidatesFromPlanCache(qc, importJobId, appliedIds);
       }
 
-      setPlanApplySummary({
-        severity: partial ? 'warning' : 'success',
-        message: partial
-          ? `Resolution plan partially applied: ${applied} of ${processed} processed before interruption (${interruptMsg}). Failed ${failed}, skipped (hold) ${skippedHold}, skipped (not ready) ${skippedNr}. Refresh candidate counts and retry remaining rows.`
-          : `Resolution plan: applied ${applied}, failed ${failed}, skipped (hold) ${skippedHold}, skipped (not ready) ${skippedNr}. Remaining rows are refreshing — re-run import validation (server) when you want staging updated.`,
-      });
+      if (formatPlanApplySummary) {
+        setPlanApplySummary(formatPlanApplySummary(data));
+      } else {
+        setPlanApplySummary({
+          severity: partial ? 'warning' : 'success',
+          message: partial
+            ? `Resolution plan partially applied: ${applied} of ${processed} processed before interruption (${interruptMsg}). Failed ${failed}, skipped (hold) ${skippedHold}, skipped (not ready) ${skippedNr}. Refresh candidate counts and retry remaining rows.`
+            : `Resolution plan: applied ${applied}, failed ${failed}, skipped (hold) ${skippedHold}, skipped (not ready) ${skippedNr}. Remaining rows are refreshing — re-run import validation (server) when you want staging updated.`,
+        });
+      }
       if (!partial) {
         setSuggestionDrawerId(null);
         setPlanOverrideMap({});
-        setPlanGlobalSuspicious(false);
         const appliedSet = new Set(appliedIds);
         setPlanScopeCandidateIds(
           candidates.map((c) => c.id).filter((id) => !appliedSet.has(id))
@@ -316,10 +263,7 @@ export function useStewardResolutionPlan({
         import_job_id?: number;
         task_id?: string | null;
         message?: string;
-      }>(
-        config.revalidatePath(importJobId),
-        {}
-      );
+      }>(config.revalidatePath(importJobId), {});
       if (res.async) {
         if (onAsyncPipelineStarted) {
           onAsyncPipelineStarted({ importJobId, taskId: res.task_id });
@@ -344,11 +288,6 @@ export function useStewardResolutionPlan({
     return raw as Array<Record<string, unknown>>;
   }, [resolutionPlan]);
 
-  const applyAllProvisionalStats = useMemo(
-    () => config.summarizeApplyAllReadyProvisional(planTableRows),
-    [planTableRows]
-  );
-
   const planByCandidateId = useMemo(() => {
     const m = new Map<number, Record<string, unknown>>();
     for (const r of planTableRows) {
@@ -360,16 +299,10 @@ export function useStewardResolutionPlan({
 
   const readyPlanCandidateIds = useMemo(() => {
     return planTableRows
-      .filter(
-        (r) =>
-          r.ready === true &&
-          r.duplicate_review_required !== true &&
-          !(Array.isArray(r.resolution_blockers) &&
-            (r.resolution_blockers as unknown[]).includes('duplicate_review_required'))
-      )
+      .filter(readyRowFilter)
       .map((r) => Number(r.candidate_id))
       .filter((id) => Number.isFinite(id));
-  }, [planTableRows]);
+  }, [planTableRows, readyRowFilter]);
 
   const planDrawerRow = useMemo(() => {
     if (suggestionDrawerId == null) return null;
@@ -379,12 +312,6 @@ export function useStewardResolutionPlan({
   const handleOpenSuggestionRow = useCallback((id: number | undefined) => {
     if (id != null) setSuggestionDrawerId(id);
   }, []);
-
-  const invalidateGeoAndPlan = useCallback(() => {
-    config.invalidateStewardQueries(qc, importJobId);
-    config.invalidateCatalogQueries(qc);
-    onInvalidate();
-  }, [importJobId, onInvalidate, qc]);
 
   const evictResolvedCandidates = useCallback(
     (candidateIds: number[]) => {
@@ -417,41 +344,30 @@ export function useStewardResolutionPlan({
       });
       config.evictCandidatesFromPlanCache(qc, importJobId, ids);
     },
-    [importJobId, qc]
+    [config, importJobId, qc]
   );
 
   return {
-    regions,
-    channels,
-    unresolvedGeoQuery,
-    planRegionFallbackEnabled,
-    setPlanRegionFallbackEnabled,
-    planRegionId,
-    setPlanRegionId,
-    planChannelId,
-    setPlanChannelId,
     resolutionPlan,
+    replaceResolutionPlan,
     suggestionDrawerId,
     setSuggestionDrawerId,
     planOverrideMap,
-    planGlobalSuspicious,
-    setPlanGlobalSuspicious,
     planLoadToken,
+    planDebounceSkipRef,
+    planEvictSkipRef,
     applyAllConfirmOpen,
     setApplyAllConfirmOpen,
     suggestionsQuery,
-    refreshPlanEffective,
     applyResolutionPlan,
     revalidateFromServer,
     overridesPayload,
     patchPlanOverride,
     planTableRows,
-    applyAllProvisionalStats,
     planByCandidateId,
     readyPlanCandidateIds,
     planDrawerRow,
     handleOpenSuggestionRow,
-    invalidateGeoAndPlan,
     evictResolvedCandidates,
     shrinkPlanScope,
     refreshSuggestions,

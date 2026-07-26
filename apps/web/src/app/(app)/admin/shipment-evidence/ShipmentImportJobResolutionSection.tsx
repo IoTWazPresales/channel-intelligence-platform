@@ -21,41 +21,61 @@ import { StewardCandidateFilters } from '@/features/import-steward/StewardCandid
 import { ImportStewardCandidateWorkspace } from '@/features/import-steward/ImportStewardCandidateWorkspace';
 import { StewardWorkspaceViewportShell } from '@/features/import-steward/StewardWorkspaceViewportShell';
 import { computeImportStewardSelectionHeaderState } from '@/features/import-steward/importStewardSelectionUtils';
-import { paginateDsiStewardCandidateRows } from '@/features/import-steward/dsiStewardCandidateFilterLogic';
-import { ShipmentCandidateStewardDrawer } from '@/features/import-steward/ShipmentCandidateStewardDrawer';
+import { paginateStewardCandidateRows } from '@/features/import-steward/stewardCandidateFilterLogic';
+import { StewardCandidateDrawer } from '@/features/import-steward/StewardCandidateDrawer';
+import { StewardEntityTabsBar } from '@/features/import-steward/StewardEntityTabsBar';
+import { StewardResolutionPlanToolbar } from '@/features/import-steward/StewardResolutionPlanToolbar';
+import { useStewardResolutionPlan } from '@/features/import-steward/useStewardResolutionPlan';
+import type { StewardPlanApplyFeedback } from '@/features/import-steward/stewardEngine.types';
+import type { InboundEvidenceMappingCandidateRow } from '@/features/import-steward/inboundEvidenceMappingCandidateWorkspaceColumns';
+import { safeDisplayError } from '@/lib/api';
+import { useQueryClient } from '@tanstack/react-query';
+
 import {
   shipmentContextNeedsNameReview,
+  shipmentEntityChipLabel,
   type ShipmentMappingCandidateRow,
-} from '@/features/import-steward/shipmentMappingCandidateDisplay';
+} from './shipmentMappingCandidateDisplay';
 import {
   ShipmentCandidateInlineActions,
   ShipmentStewardActionsProvider,
-} from '@/features/import-steward/shipmentStewardRowActions';
-import { ShipmentBulkStewardSection } from '@/features/import-steward/ShipmentBulkStewardSection';
-import { StewardEntityTabsBar } from '@/features/import-steward/StewardEntityTabsBar';
-import { ShipmentResolutionPlanToolbar } from '@/features/import-steward/ShipmentResolutionPlanToolbar';
+} from './shipmentStewardRowActions';
+import { ShipmentBulkStewardSection } from './ShipmentBulkStewardSection';
 import {
   defaultShipmentStewardFiltersForTab,
   formatShipmentEntityTabLabel,
   SHIPMENT_ENTITY_TAB_DEFS,
   shipmentStewardFiltersMatchTabDefault,
   type ShipmentEntityTabId,
-} from '@/features/import-steward/shipmentEntityTabs';
-import { filterShipmentStewardCandidates } from '@/features/import-steward/shipmentStewardCandidateFilterLogic';
-import type { InboundEvidenceMappingCandidateRow } from '@/features/import-steward/inboundEvidenceMappingCandidateWorkspaceColumns';
-import { invalidateShipmentImportJobStewardQueries, SHIPMENT_STEWARD_CONFIG } from '@/features/import-steward/shipmentSteward.config';
-import { useShipmentBulkSteward } from '@/features/import-steward/useShipmentBulkSteward';
-import { useShipmentCandidatesPage } from '@/features/import-steward/useShipmentCandidatesPage';
-import { useShipmentEntityTabCounts } from '@/features/import-steward/useShipmentEntityTabCounts';
-import {
-  useShipmentResolutionPlan,
-  type ShipmentPlanApplyFeedback,
-} from '@/features/import-steward/useShipmentResolutionPlan';
-import { safeDisplayError } from '@/lib/api';
-import { useQueryClient } from '@tanstack/react-query';
-
+} from './shipmentEntityTabs';
+import { filterShipmentStewardCandidates } from './shipmentStewardCandidateFilterLogic';
+import { invalidateShipmentImportJobStewardQueries, SHIPMENT_STEWARD_CONFIG } from './shipmentSteward.config';
+import { useShipmentBulkSteward } from './useShipmentBulkSteward';
+import { useShipmentCandidatesPage } from './useShipmentCandidatesPage';
+import { useShipmentEntityTabCounts } from './useShipmentEntityTabCounts';
+import { SHIPMENT_ENGINE_CONFIG } from './shipmentSteward.engineConfig';
+import { ShipmentMappingStewardPanel } from './ShipmentMappingStewardPanel';
 import { buildShipmentResolutionWorkspaceColumns } from './shipmentResolutionWorkspaceTableProps';
 import { ShipmentEntityStewardPanelLegacy } from './ShipmentEntityStewardPanelLegacy';
+
+function formatShipmentPlanApplySummary(data: Record<string, unknown>): StewardPlanApplyFeedback {
+  const applied = Number(data.applied ?? 0);
+  const failed = Number(data.failed ?? 0);
+  const skipped = Number(data.skipped_not_ready ?? 0);
+  if (applied > 0 && failed === 0) {
+    return { severity: 'success', message: `Applied ${applied} plan row(s).` };
+  }
+  if (applied > 0) {
+    return {
+      severity: 'warning',
+      message: `Partial success: applied ${applied}, failed ${failed}, skipped ${skipped}.`,
+    };
+  }
+  return {
+    severity: 'warning',
+    message: `No rows applied (failed ${failed}, skipped ${skipped}).`,
+  };
+}
 
 export function ShipmentImportJobResolutionSection({
   importJobId,
@@ -77,7 +97,7 @@ export function ShipmentImportJobResolutionSection({
   }));
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [bulkMode, setBulkMode] = useState<BulkTableSelectionMode>('normal');
-  const [planApplySummary, setPlanApplySummary] = useState<ShipmentPlanApplyFeedback | null>(null);
+  const [planApplySummary, setPlanApplySummary] = useState<StewardPlanApplyFeedback | null>(null);
   const [legacyOpen, setLegacyOpen] = useState(false);
   const [detailCandidate, setDetailCandidate] = useState<ShipmentMappingCandidateRow | null>(null);
   const [rowActionPendingId, setRowActionPendingId] = useState<number | null>(null);
@@ -108,14 +128,18 @@ export function ShipmentImportJobResolutionSection({
     candidatesPage.query.isLoading ||
     (candidatesPage.query.isFetching && candidatesPage.candidates.length === 0);
 
-  const plan = useShipmentResolutionPlan({
+  const plan = useStewardResolutionPlan({
     importJobId: importJobId ?? 0,
     candidates: candidates as unknown as InboundEvidenceMappingCandidateRow[],
     onInvalidate,
     onAsyncPipelineStarted,
     setSelectedIds,
     setPlanApplySummary,
+    config: SHIPMENT_ENGINE_CONFIG,
+    formatPlanApplySummary: formatShipmentPlanApplySummary,
   });
+
+  const shipmentRevalidateFromServer = plan.revalidateFromServer;
 
   const bulk = useShipmentBulkSteward({
     importJobId: importJobId ?? 0,
@@ -129,7 +153,7 @@ export function ShipmentImportJobResolutionSection({
   const filteredCandidates = useMemo(
     () =>
       filterShipmentStewardCandidates(
-        candidates as unknown as ShipmentMappingCandidateRow[],
+        candidates as ShipmentMappingCandidateRow[],
         activeFilters,
         plan.planByCandidateId
       ),
@@ -144,7 +168,7 @@ export function ShipmentImportJobResolutionSection({
 
   const gridCandidates = useMemo(() => {
     if (!clientQueueFilterActive) return filteredCandidates;
-    return paginateDsiStewardCandidateRows(filteredCandidates, candidatesPage.page, candidatesPage.pageSize);
+    return paginateStewardCandidateRows(filteredCandidates, candidatesPage.page, candidatesPage.pageSize);
   }, [filteredCandidates, clientQueueFilterActive, candidatesPage.page, candidatesPage.pageSize]);
 
   useEffect(() => {
@@ -206,7 +230,7 @@ export function ShipmentImportJobResolutionSection({
     shipmentPipelineRunning;
 
   const revalidatePipelineBusy =
-    shipmentPipelineRunning || plan.shipmentRevalidateFromServer.isPending;
+    shipmentPipelineRunning || shipmentRevalidateFromServer.isPending;
 
   const columns = useMemo(
     () =>
@@ -257,14 +281,21 @@ export function ShipmentImportJobResolutionSection({
           </Alert>
         ) : null}
 
-        <ShipmentResolutionPlanToolbar
-          candidatesCount={candidates.length}
-          planByCandidateId={plan.planByCandidateId}
-          readyPlanCandidateIds={plan.readyPlanCandidateIds}
-          suggestionsQuery={plan.suggestionsQuery}
-          applyResolutionPlan={plan.applyResolutionPlan}
-          applyAllConfirmOpen={plan.applyAllConfirmOpen}
-          setApplyAllConfirmOpen={plan.setApplyAllConfirmOpen}
+        <StewardResolutionPlanToolbar
+          plan={{
+            candidatesCount: candidates.length,
+            readyCount: plan.readyPlanCandidateIds.length,
+            suggestionsQuery: plan.suggestionsQuery,
+          }}
+          testIds={SHIPMENT_ENGINE_CONFIG.planToolbarTestIds}
+          copy={SHIPMENT_ENGINE_CONFIG.planToolbarCopy}
+          onApplyAllReady={() => plan.setApplyAllConfirmOpen(true)}
+          applyAllPending={plan.applyResolutionPlan.isPending}
+          applyAllDisabled={
+            plan.readyPlanCandidateIds.length === 0 || plan.applyResolutionPlan.isPending
+          }
+          applyAllLabel={`Apply all ready (${plan.readyPlanCandidateIds.length})`}
+          applyAllTestId="shipment-resolution-plan-apply-all"
         />
 
         <StewardWorkspaceViewportShell
@@ -422,14 +453,21 @@ export function ShipmentImportJobResolutionSection({
           }
           drawer={
             effectiveDetailCandidate ? (
-              <ShipmentCandidateStewardDrawer
-                candidate={effectiveDetailCandidate}
-                planRow={plan.planByCandidateId.get(effectiveDetailCandidate.id) ?? null}
+              <StewardCandidateDrawer
+                title={`${shipmentEntityChipLabel(effectiveDetailCandidate.entity_type)} steward`}
                 onClose={() => setDetailCandidate(null)}
-                applyPlanPending={plan.applyResolutionPlan.isPending}
-                onApplyPlanRow={(candidateId) => plan.applyResolutionPlan.mutate([candidateId])}
-                rowActionPending={rowActionPendingId === effectiveDetailCandidate.id}
-              />
+                rootTestId={SHIPMENT_ENGINE_CONFIG.drawerTestIds.root}
+                closeTestId={SHIPMENT_ENGINE_CONFIG.drawerTestIds.close}
+                ariaLabel={SHIPMENT_ENGINE_CONFIG.drawerTestIds.ariaLabel}
+              >
+                <ShipmentMappingStewardPanel
+                  candidate={effectiveDetailCandidate as ShipmentMappingCandidateRow}
+                  planRow={plan.planByCandidateId.get(effectiveDetailCandidate.id) ?? null}
+                  applyPlanPending={plan.applyResolutionPlan.isPending}
+                  onApplyPlanRow={(candidateId) => plan.applyResolutionPlan.mutate([candidateId])}
+                  rowActionPending={rowActionPendingId === effectiveDetailCandidate.id}
+                />
+              </StewardCandidateDrawer>
             ) : null
           }
         />
@@ -440,7 +478,7 @@ export function ShipmentImportJobResolutionSection({
             pending={revalidatePipelineBusy}
             pendingLabel="Re-running import validation…"
             disabled={stewardOverlayBusy && !revalidatePipelineBusy}
-            onClick={() => void plan.shipmentRevalidateFromServer.mutateAsync().catch(() => {})}
+            onClick={() => void shipmentRevalidateFromServer.mutateAsync().catch(() => {})}
             data-testid="shipment-import-revalidate-server"
           >
             Re-run import validation (server)
@@ -450,8 +488,8 @@ export function ShipmentImportJobResolutionSection({
             saves or column re-mapping. Not the same as <strong>Refresh plan</strong>.
           </Typography>
         </Stack>
-        {plan.shipmentRevalidateFromServer.isError ? (
-          <Alert severity="error">{safeDisplayError(plan.shipmentRevalidateFromServer.error)}</Alert>
+        {shipmentRevalidateFromServer.isError ? (
+          <Alert severity="error">{safeDisplayError(shipmentRevalidateFromServer.error)}</Alert>
         ) : null}
 
         <Dialog open={plan.applyAllConfirmOpen} onClose={() => plan.setApplyAllConfirmOpen(false)}>

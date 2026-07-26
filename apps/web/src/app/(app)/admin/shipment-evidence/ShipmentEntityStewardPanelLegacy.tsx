@@ -38,7 +38,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { apiGet, apiPost } from '@/lib/api';
 import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
-import { pollShipmentBulkTask } from '@/features/import-steward/shipmentBulkTaskPoll';
+import { pollShipmentBulkTask } from './shipmentBulkTaskPoll';
 import {
   confidenceBand,
   confidenceBandColor,
