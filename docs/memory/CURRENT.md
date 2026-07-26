@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-26 (Unit B2 implement — awaiting Opus VERIFY)
+**Last updated:** 2026-07-26 (Unit B2 Opus VERIFY PASS)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -11,9 +11,9 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260720_0073` on cip** |
-| **HEAD** | (see git after Unit B2 commit) |
-| **Pushed?** | after Unit B2 commit |
-| **Next** | Unit B2 Opus VERIFY → then Unit C (CPOR) in this session (chained arc B2→C→D→E→F) |
+| **HEAD** | `f9c49f9` |
+| **Pushed?** | yes |
+| **Next** | **Unit C** — CPOR historical steward (S9/S6/S14 gaps). Chained arc C→D→E→F continues this session. |
 
 ---
 
@@ -43,10 +43,11 @@ Route (keep): `/commercial-planner/cpor-cases/historical-import`
 
 | Label | Fact |
 |-------|------|
+| **Opus VERIFY** | **PASS** @ `f9c49f9` — response `.tmp/unit_b2_verify_opus_response.md` |
 | **Wired + unit-tested** | Shipment bulk preview→apply; binds `useStewardBulkSteward` + `StewardBulkSection`; deleted local bulk modules; toolbar summary chips + effective refresh; D-011/D-012; contract v1.2 |
 | **Baselines (D-007)** | Locked API 17 files: PRE **113p/6s** → AFTER **114p/6s** (+1 ignore enqueue in shipment async). New preview suite 19p. Web vitest AFTER **204p**. Full tsc path+code NEW=0 vs PRE. |
 | **D-002** | No `bulkStrategy`; provisional names via `getBulkBodyExtras`; global-suspicious waived (D-012) |
-| **Not proven** | Opus VERIFY; live operator soak |
+| **Not proven** | Live operator soak |
 
 ---
 
