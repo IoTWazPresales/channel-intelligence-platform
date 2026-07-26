@@ -125,6 +125,12 @@ is a defective prompt — Cursor must bounce it back, not implement it.
 | `docs/memory/CURRENT.md` | Cursor after unit + verify line |
 | `CONTEXT.md` changelog | Cursor |
 
+CONSULT seeds are instantiated from `.cursor/templates/consult_seed_template.md`.
+Cursor fills ONLY the marked fields. CONSULT must read
+`docs/STEWARD_ENGINE_DECISIONS.md` (all entries) before scoping any steward/import
+unit; a proposal that contradicts a locked decision without citing and
+superseding it is a defective prompt.
+
 VERIFY seeds are instantiated from `.cursor/templates/verify_seed_template.md`.
 Cursor fills ONLY the marked fields (branch, commit, unit id, changed paths,
 waiver lines copied verbatim from the unit prompt). Cursor does not author
