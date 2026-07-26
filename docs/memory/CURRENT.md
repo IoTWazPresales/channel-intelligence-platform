@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-26 (Unit B revised — engine genericity + shipment consumer #2)
+**Last updated:** 2026-07-26 (Unit B Opus VERIFY PASS)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -11,9 +11,9 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260720_0073` on cip** |
-| **HEAD** | (see git after Unit B commit) |
-| **Pushed?** | after Unit B commit |
-| **Next** | Unit B VERIFY (Opus). Then Unit B2 (shipment bulk preview + S9-partial) or Unit C (CPOR). |
+| **HEAD** | `e625388` |
+| **Pushed?** | yes |
+| **Next** | **Unit B2** — shipment bulk preview (closes S8) + plan-toolbar parity (closes S9-partial), then bind `StewardBulkSection`. Or Unit C (CPOR) if Warren reorders. |
 
 ---
 
@@ -43,11 +43,13 @@ Route (keep): `/commercial-planner/cpor-cases/historical-import`
 
 | Label | Fact |
 |-------|------|
+| **Opus VERIFY** | **PASS** @ `e625388` — response `.tmp/unit_b_verify_opus_response.md` |
 | **Wired + unit-tested** | Core `useStewardResolutionPlan` geo-free; DSI composes geo via `useDsiResolutionPlan`; shipment binds `SHIPMENT_ENGINE_CONFIG` + core toolbar/drawer/paginate; shipment domain relocated to `admin/shipment-evidence/`; bulk relocated untouched |
 | **Predicate** | Shipment plan payload has **no** `duplicate_review_required` — core ready=`ready===true`; DSI composes duplicate gate |
-| **Baselines** | Steward vitest 199/199 before+after; shipment+DSI API steward 84 passed; no cip writes |
+| **Baselines (VERIFY integrity)** | Locked identical API set 17 files: PRE=`ead4e9f` **113 passed / 6 skipped** = HEAD; full web `tsc --noEmit` lists not byte-identical but **0 new path+TScode** (7 resolved away). Ship report 19/93→84 superseded. |
 | **Contract** | v1.1 — gaps + consolidation arc + apply-all dual placement note |
-| **Not proven** | Live operator soak; Opus VERIFY pending |
+| **Genericity** | Core zero DSI-domain logic refs; both DSI + shipment bind core (STOP-able even if suites green — graded PASS) |
+| **Not proven** | Live operator soak |
 
 ---
 
