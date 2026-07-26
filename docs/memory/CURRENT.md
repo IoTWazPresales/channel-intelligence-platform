@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-26 (Unit B Opus VERIFY PASS)
+**Last updated:** 2026-07-26 (Unit B2 implement — awaiting Opus VERIFY)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -11,18 +11,18 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260720_0073` on cip** |
-| **HEAD** | `e625388` |
-| **Pushed?** | yes |
-| **Next** | **Unit B2** — shipment bulk preview (closes S8) + plan-toolbar parity (closes S9-partial), then bind `StewardBulkSection`. Or Unit C (CPOR) if Warren reorders. |
+| **HEAD** | (see git after Unit B2 commit) |
+| **Pushed?** | after Unit B2 commit |
+| **Next** | Unit B2 Opus VERIFY → then Unit C (CPOR) in this session (chained arc B2→C→D→E→F) |
 
 ---
 
 ## Standing quality bar
 
 **Contract or STOP · no half-PASS · code is evidence.**  
-Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v1.1**).
+Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v1.2**).
 
-**Consolidation arc:** Units A–B shipped (wired + unit-tested). Unit B2 / C / D / E open.
+**Consolidation arc:** Units A–B shipped; Unit B2 implemented (VERIFY pending). C/D/E/F open (same session).
 
 ---
 
@@ -32,23 +32,30 @@ Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v
 |-------|------|
 | **Proven** | H1; H2 apply; smoke `H2-SMOKE-556` |
 | **Proven (this arc)** | Unit 1 suggestions @ `50c1ee8`; Unit 2 intelligence @ `ade5624`; Unit 3 upload-first @ `5044fce` |
-| **Known contract gaps (v1.1)** | S9 absent; S6 nulled evidence; S12 unverified at volume; S14 `cporTokenRowId` — close in Unit C |
+| **Known contract gaps (v1.2)** | S9 absent; S6 nulled evidence; S12 unverified at volume; S14 `cporTokenRowId` — close in Unit C |
 | **Out of scope** | Unit 4 config-driven `ImportJobResolutionSection`; relocate into `admin/imports/page.tsx` |
 
 Route (keep): `/commercial-planner/cpor-cases/historical-import`
 
 ---
 
-## Unit B (this session)
+## Unit B2 (this session)
+
+| Label | Fact |
+|-------|------|
+| **Wired + unit-tested** | Shipment bulk preview→apply; binds `useStewardBulkSteward` + `StewardBulkSection`; deleted local bulk modules; toolbar summary chips + effective refresh; D-011/D-012; contract v1.2 |
+| **Baselines (D-007)** | Locked API 17 files: PRE **113p/6s** → AFTER **114p/6s** (+1 ignore enqueue in shipment async). New preview suite 19p. Web vitest AFTER **204p**. Full tsc path+code NEW=0 vs PRE. |
+| **D-002** | No `bulkStrategy`; provisional names via `getBulkBodyExtras`; global-suspicious waived (D-012) |
+| **Not proven** | Opus VERIFY; live operator soak |
+
+---
+
+## Unit B
 
 | Label | Fact |
 |-------|------|
 | **Opus VERIFY** | **PASS** @ `e625388` — response `.tmp/unit_b_verify_opus_response.md` |
-| **Wired + unit-tested** | Core `useStewardResolutionPlan` geo-free; DSI composes geo via `useDsiResolutionPlan`; shipment binds `SHIPMENT_ENGINE_CONFIG` + core toolbar/drawer/paginate; shipment domain relocated to `admin/shipment-evidence/`; bulk relocated untouched |
-| **Predicate** | Shipment plan payload has **no** `duplicate_review_required` — core ready=`ready===true`; DSI composes duplicate gate |
-| **Baselines (VERIFY integrity)** | Locked identical API set 17 files: PRE=`ead4e9f` **113 passed / 6 skipped** = HEAD; full web `tsc --noEmit` lists not byte-identical but **0 new path+TScode** (7 resolved away). Ship report 19/93→84 superseded. |
-| **Contract** | v1.1 — gaps + consolidation arc + apply-all dual placement note |
-| **Genericity** | Core zero DSI-domain logic refs; both DSI + shipment bind core (STOP-able even if suites green — graded PASS) |
+| **Wired + unit-tested** | Core `useStewardResolutionPlan` geo-free; DSI composes geo; shipment binds plan engine |
 | **Not proven** | Live operator soak |
 
 ---
@@ -74,4 +81,4 @@ Route (keep): `/commercial-planner/cpor-cases/historical-import`
 - Claim Unit 4 done
 - Create new `Dsi*` / `Shipment*` / `Cpor*` files under `features/import-steward/`
 - Add `bulkStrategy` / capability flags that fossilize S8 in the engine core
-- Close S6/S7/S8/S9-partial in this unit (B2/D)
+- Close S6/S7 in this unit (Unit D)

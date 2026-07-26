@@ -1,11 +1,21 @@
 /**
- * Shipment consumer #2 — binds domain-neutral plan engine (no geo, no bulk preview).
- * Bulk steward stays shipment-local (S8 → Unit B2).
+ * Shipment consumer #2 — plan core + bulk steward engine binding (no DSI geo compose).
  */
 import type { QueryClient } from '@tanstack/react-query';
 
-import type { StewardPlanEngineConfig } from '@/features/import-steward/stewardEngine.types';
+import {
+  chunkDsiBulkCandidateIds,
+  dsiBulkStewardChunkSize,
+  mergeDsiBulkApplyResponses,
+  mergeDsiBulkPreviewResponses,
+} from '@/features/import-steward/dsiBulkStewardChunking';
+import { bulkPreviewAliasEvidence, bulkPreviewProposedLabel } from '@/features/import-steward/dsiBulkStewardDisplay';
+import type {
+  StewardBulkEngineConfig,
+  StewardPlanEngineConfig,
+} from '@/features/import-steward/stewardEngine.types';
 
+import { pollShipmentBulkStewardTask } from './shipmentBulkStewardPoll';
 import { pollShipmentBulkTask } from './shipmentBulkTaskPoll';
 import {
   invalidateShipmentImportJobStewardQueries,
@@ -29,7 +39,11 @@ function shipmentNoopCache(_qc: QueryClient, _importJobId: number, _ids: number[
   /* shipment invalidates queries wholesale after apply */
 }
 
-export const SHIPMENT_ENGINE_CONFIG: StewardPlanEngineConfig = {
+function shipmentNoopOptimistic() {
+  return undefined;
+}
+
+const SHIPMENT_PLAN_ENGINE_CONFIG: StewardPlanEngineConfig = {
   resolutionSuggestionsQueryKey: (importJobId, candidateIdsKey) =>
     SHIPMENT_STEWARD_CONFIG.resolutionSuggestionsQueryKey(importJobId, candidateIdsKey),
   resolutionSuggestionsQueryKeyPrefix: (importJobId) =>
@@ -41,6 +55,8 @@ export const SHIPMENT_ENGINE_CONFIG: StewardPlanEngineConfig = {
   applyPlanAsyncPath: (importJobId) =>
     `/api/v1/shipment-evidence/import-jobs/${importJobId}/resolution-plan/apply-async`,
   revalidatePath: (importJobId) => `/api/v1/imports/jobs/${importJobId}/shipment-validate`,
+  effectivePlanPath: (importJobId) =>
+    `/api/v1/shipment-evidence/import-jobs/${importJobId}/resolution-plan/effective`,
 
   computeBackgroundKind: 'shipment_bulk',
   applyBackgroundKind: 'shipment_bulk',
@@ -100,3 +116,69 @@ export const SHIPMENT_ENGINE_CONFIG: StewardPlanEngineConfig = {
     refreshingMessage: 'Refreshing resolution plan…',
   },
 };
+
+const SHIPMENT_BULK_ENGINE_CONFIG: StewardBulkEngineConfig = {
+  candidatesQueryKey: (importJobId) => SHIPMENT_STEWARD_CONFIG.candidatesQueryKey(importJobId),
+  invalidateStewardQueries: (qc, importJobId, _options) =>
+    invalidateShipmentImportJobStewardQueries(qc, importJobId),
+
+  bulkPreviewPath: (importJobId) =>
+    `/api/v1/shipment-evidence/import-jobs/${importJobId}/shipment-steward-bulk-preview`,
+  bulkApplyPath: (importJobId) =>
+    `/api/v1/shipment-evidence/import-jobs/${importJobId}/shipment-steward-bulk-apply`,
+  bulkIgnoreAsyncPath: (importJobId) =>
+    `/api/v1/shipment-evidence/import-jobs/${importJobId}/shipment-steward-bulk-ignore/apply-async`,
+  bulkProvisionalCustomersAsyncPath: (importJobId) =>
+    `/api/v1/shipment-evidence/import-jobs/${importJobId}/shipment-steward-bulk-provisional-customers/apply-async`,
+
+  bulkIgnoreBackgroundKind: 'shipment_bulk',
+  bulkProvisionalBackgroundKind: 'shipment_bulk',
+  bulkIgnoreBackgroundLabel: (importJobId) => `Ignoring shipment steward candidates (job ${importJobId})`,
+  bulkProvisionalBackgroundLabel: (importJobId) =>
+    `Creating provisional channel partners (shipment job ${importJobId})`,
+
+  pollBulkProvisionalTask: pollShipmentBulkStewardTask,
+
+  bulkChunkSize: (action) => dsiBulkStewardChunkSize(action as never),
+  chunkBulkCandidateIds: chunkDsiBulkCandidateIds,
+  mergeBulkPreviewResponses: (importJobId, action, parts) =>
+    mergeDsiBulkPreviewResponses(importJobId, action as never, parts as never),
+  mergeBulkApplyResponses: (importJobId, action, parts) =>
+    mergeDsiBulkApplyResponses(importJobId, action as never, parts as never),
+
+  bulkActionToStewardAction: () => null,
+  optimisticallyApplyBulk: shipmentNoopOptimistic,
+
+  formatBulkProposedLabel: (row) => bulkPreviewProposedLabel(row),
+  formatBulkAliasEvidence: (row) => bulkPreviewAliasEvidence(row),
+
+  bulkTestIds: {
+    actionForm: 'shipment-bulk-action-form',
+    formCancel: 'shipment-bulk-form-cancel',
+    actionSelectLabelId: 'shipment-bulk-action-inline',
+    planChannelLabelId: 'shipment-bulk-plan-channel-inline',
+    provCustomerHint: 'shipment-bulk-prov-customer-hint',
+    regionLabelId: 'shipment-bulk-region-inline',
+    channelLabelId: 'shipment-bulk-channel-inline',
+    tierLabelId: 'shipment-bulk-tier-inline',
+    provDistHint: 'shipment-bulk-prov-dist-hint',
+    distSuspicious: 'shipment-bulk-dist-suspicious',
+    previewInline: 'shipment-bulk-preview-inline',
+    apply: 'shipment-bulk-apply',
+    previewError: 'shipment-bulk-preview-error',
+    applyError: 'shipment-bulk-apply-error',
+    applySummary: 'shipment-bulk-apply-summary',
+    previewTable: 'shipment-bulk-preview-table',
+    applyAllConfirm: 'shipment-resolution-plan-apply-all-confirm',
+    customerSearch: 'shipment-bulk-customer-search',
+    customerSelect: 'shipment-bulk-customer-select',
+  },
+};
+
+/** Plan + bulk binding for shipment resolution section. */
+export const SHIPMENT_ENGINE_CONFIG: StewardPlanEngineConfig & StewardBulkEngineConfig = {
+  ...SHIPMENT_PLAN_ENGINE_CONFIG,
+  ...SHIPMENT_BULK_ENGINE_CONFIG,
+};
+
+export { SHIPMENT_BULK_ENGINE_CONFIG };

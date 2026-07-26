@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
@@ -32,15 +32,25 @@ from app.services.imports.import_background_slots import (
 from app.services.imports.import_job_background_metadata import persist_pipeline_queued_at
 from app.services.imports.shipment_bulk_steward_enqueue import (
     TASK_SHIPMENT_BULK_APPLY_PLANS,
+    TASK_SHIPMENT_BULK_IGNORE,
     TASK_SHIPMENT_BULK_MAP_CUSTOMER,
     TASK_SHIPMENT_BULK_PROVISIONAL_CUSTOMERS,
     dev_shipment_bulk_task_results,
     enqueue_shipment_bulk_task,
     run_shipment_bulk_apply_plans_sync,
+    run_shipment_bulk_ignore_sync,
     run_shipment_bulk_map_customer_sync,
     run_shipment_bulk_provisional_customers_sync,
 )
 from app.services.imports.shipment_apply_sync import run_shipment_apply_sync
+from app.services.imports.shipment_steward_bulk_preview import (
+    preview_create_provisional_shipment_customer,
+    preview_create_provisional_shipment_distributor,
+    preview_map_shipment_customer,
+    preview_map_shipment_distributor,
+    preview_reject_shipment_candidate,
+    shipment_bulk_totals_from_rows,
+)
 from app.services.imports.shipment_evidence_resolution_plan import (
     SHIPMENT_CUSTOMER_ENTITY,
     SHIPMENT_DISTRIBUTOR_ENTITY,
@@ -524,6 +534,87 @@ class ShipmentBulkApplyPlansBody(BaseModel):
     candidate_ids: list[int] = Field(..., min_length=1)
 
 
+SHIPMENT_BULK_STEWARD_MAX_CANDIDATE_IDS = 200
+SHIPMENT_BULK_STEWARD_MAX_IGNORE_CANDIDATE_IDS = 1000
+
+
+class ShipmentBulkStewardBody(BaseModel):
+    """Bulk steward preview/apply for shipment evidence mapping candidates (engine-shaped body)."""
+
+    action: Literal[
+        "ignore",
+        "map_customer",
+        "map_distributor",
+        "create_provisional_customer",
+        "create_provisional_distributor",
+    ]
+    candidate_ids: list[int] = Field(..., min_length=1)
+    notes: str | None = Field(default=None, max_length=2000)
+    customer_id: int | None = Field(default=None, ge=1)
+    distributor_id: int | None = Field(default=None, ge=1)
+    raw_token: str | None = Field(default=None, max_length=512)
+    display_names: dict[str, str] | None = Field(default=None)
+    confirm_for_suspicious_distributor_token: bool = False
+    provisional_distributor_code: str | None = Field(default=None, max_length=32)
+
+    @model_validator(mode="after")
+    def _payload_for_action(self) -> Self:
+        cap = (
+            SHIPMENT_BULK_STEWARD_MAX_IGNORE_CANDIDATE_IDS
+            if self.action == "ignore"
+            else SHIPMENT_BULK_STEWARD_MAX_CANDIDATE_IDS
+        )
+        if len(self.candidate_ids) > cap:
+            raise ValueError(
+                f"candidate_ids exceeds maximum of {cap} for action {self.action!r} "
+                f"(received {len(self.candidate_ids)})"
+            )
+        if self.action == "map_customer":
+            if self.customer_id is None:
+                raise ValueError("customer_id is required for map_customer")
+        elif self.action == "map_distributor":
+            if self.distributor_id is None:
+                raise ValueError("distributor_id is required for map_distributor")
+        return self
+
+
+def _shipment_bulk_totals_from_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    return shipment_bulk_totals_from_rows(rows)
+
+
+def _assert_shipment_import_job_sync(session: Session, job_id: int) -> ImportJob:
+    job = session.get(ImportJob, job_id)
+    if not job or (job.template_slug or "") != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Shipment import job not found")
+    return job
+
+
+def _shipment_bulk_ignore_payload_from_body(body: ShipmentBulkStewardBody) -> dict[str, Any]:
+    return {"candidate_ids": list(body.candidate_ids)}
+
+
+def _shipment_bulk_provisional_payload_from_steward_body(body: ShipmentBulkStewardBody) -> dict[str, Any]:
+    return {
+        "candidate_ids": list(body.candidate_ids),
+        "display_names": dict(body.display_names) if body.display_names else None,
+    }
+
+
+def _shipment_candidate_meta(cand: ImportEntityMappingCandidate) -> dict[str, Any]:
+    return {
+        "entity_type": cand.entity_type,
+        "candidate_status": cand.status,
+        "row_count": cand.row_count,
+        "total_units": float(cand.total_units) if cand.total_units is not None else None,
+        "total_reported_value": float(cand.total_reported_value)
+        if cand.total_reported_value is not None
+        else None,
+        "sample_raw_preview": (cand.sample_raw_values or [])[:3]
+        if isinstance(cand.sample_raw_values, list)
+        else [],
+    }
+
+
 def _write_shipment_bulk_slot(job_id: int, task_id: str, *, async_poll: bool, label: str) -> None:
     """Record the shipment bulk Celery task on the job so the activity feed shows it and
     cancel/retry clears it (registered slot ``shipment_bulk_task``)."""
@@ -762,19 +853,276 @@ async def shipment_import_job_bulk_create_provisional_customers(
         "partner_tier": body.partner_tier,
         "notes_summary": body.notes_summary,
     }
-    task_id, async_poll = enqueue_shipment_bulk_task(
-        task_name=TASK_SHIPMENT_BULK_PROVISIONAL_CUSTOMERS,
-        job_id=job_id,
-        payload=payload,
-        run_sync=lambda: run_shipment_bulk_provisional_customers_sync(job_id, payload),
-        dev_prefix="ship-bulk-prov",
-    )
+    task_id, async_poll = await _enqueue_shipment_bulk_provisional_customers(job_id, payload)
     _write_shipment_bulk_slot(job_id, task_id, async_poll=async_poll, label="Creating provisional customers…")
     return {
         "import_job_id": job_id,
         "task_id": task_id,
         "async_poll": async_poll,
         "action": "bulk_create_provisional_customers",
+    }
+
+
+async def _enqueue_shipment_bulk_provisional_customers(
+    job_id: int,
+    payload: dict[str, Any],
+) -> tuple[str, bool]:
+    return enqueue_shipment_bulk_task(
+        task_name=TASK_SHIPMENT_BULK_PROVISIONAL_CUSTOMERS,
+        job_id=job_id,
+        payload=payload,
+        run_sync=lambda: run_shipment_bulk_provisional_customers_sync(job_id, payload),
+        dev_prefix="ship-bulk-prov",
+    )
+
+
+@router.post("/import-jobs/{job_id}/shipment-steward-bulk-provisional-customers/apply-async", status_code=202)
+async def shipment_steward_bulk_provisional_apply_async(
+    job_id: int,
+    body: ShipmentBulkStewardBody,
+    db: AsyncSession = Depends(get_db),
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    """Enqueue batch provisional customer creation (DSI-shaped route alias)."""
+    _require_admin(x_user_role)
+    job = await db.get(ImportJob, job_id)
+    if not job or (job.template_slug or "") != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Shipment import job not found")
+    if body.action != "create_provisional_customer":
+        raise HTTPException(
+            status_code=400,
+            detail="action must be create_provisional_customer for this endpoint",
+        )
+    steward_payload = _shipment_bulk_provisional_payload_from_steward_body(body)
+    payload: dict[str, Any] = {
+        **steward_payload,
+        "region_id": None,
+        "channel_id": None,
+        "preferred_distributor_id": None,
+        "partner_tier": "unmanaged",
+        "notes_summary": None,
+    }
+    task_id, async_poll = await _enqueue_shipment_bulk_provisional_customers(job_id, payload)
+    _write_shipment_bulk_slot(job_id, task_id, async_poll=async_poll, label="Creating provisional customers…")
+    return {
+        "import_job_id": job_id,
+        "task_id": task_id,
+        "async_poll": async_poll,
+        "action": body.action,
+    }
+
+
+@router.post("/import-jobs/{job_id}/shipment-steward-bulk-preview", status_code=200)
+async def shipment_steward_bulk_preview(job_id: int, body: ShipmentBulkStewardBody) -> dict[str, Any]:
+    with SessionLocal() as s:
+        _assert_shipment_import_job_sync(s, job_id)
+        res = s.execute(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == job_id,
+                ImportEntityMappingCandidate.id.in_(body.candidate_ids),
+            )
+        )
+        found = {c.id: c for c in res.scalars().all()}
+        display_names = body.display_names or {}
+        results: list[dict[str, Any]] = []
+        for cid in body.candidate_ids:
+            if cid not in found:
+                results.append(
+                    {
+                        "candidate_id": cid,
+                        "ok": False,
+                        "skip_reason": "not_found_or_wrong_job",
+                        "detail": "Candidate not found for this job",
+                    }
+                )
+                continue
+            cand = found[cid]
+            dn_override = display_names.get(str(cid)) or display_names.get(str(cand.id))
+            if body.action == "ignore":
+                pv = preview_reject_shipment_candidate(cand)
+            elif body.action == "map_customer":
+                pv = preview_map_shipment_customer(
+                    s,
+                    cand,
+                    customer_id=int(body.customer_id or 0),
+                    raw_token=body.raw_token,
+                )
+            elif body.action == "map_distributor":
+                pv = preview_map_shipment_distributor(
+                    s,
+                    cand,
+                    distributor_id=int(body.distributor_id or 0),
+                    raw_token=body.raw_token,
+                )
+            elif body.action == "create_provisional_customer":
+                pv = preview_create_provisional_shipment_customer(
+                    s,
+                    cand,
+                    display_name_override=dn_override,
+                )
+            elif body.action == "create_provisional_distributor":
+                pv = preview_create_provisional_shipment_distributor(
+                    s,
+                    cand,
+                    display_name_override=dn_override,
+                    distributor_code_override=body.provisional_distributor_code,
+                    confirm_for_suspicious_token=body.confirm_for_suspicious_distributor_token,
+                )
+            else:
+                pv = {"ok": False, "skip_reason": "unsupported_action", "detail": f"Unsupported action {body.action!r}"}
+            results.append({"candidate_id": cand.id, **_shipment_candidate_meta(cand), **pv})
+    return {
+        "import_job_id": job_id,
+        "action": body.action,
+        "results": results,
+        "totals": _shipment_bulk_totals_from_rows(results),
+    }
+
+
+@router.post("/import-jobs/{job_id}/shipment-steward-bulk-apply", status_code=200)
+async def shipment_steward_bulk_apply(job_id: int, body: ShipmentBulkStewardBody) -> dict[str, Any]:
+    if body.action == "create_provisional_customer":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": (
+                    "Bulk provisional customer apply must use "
+                    "POST .../shipment-steward-bulk-provisional-customers/apply-async "
+                    "(or .../bulk-create-provisional-customers) and poll "
+                    ".../shipment-bulk-task/{task_id}."
+                ),
+                "code": "use_async_bulk_provisional",
+            },
+        )
+    if body.action == "ignore":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": (
+                    "Bulk ignore apply must use "
+                    "POST .../shipment-steward-bulk-ignore/apply-async and poll "
+                    ".../shipment-bulk-task/{task_id}."
+                ),
+                "code": "use_async_bulk_ignore",
+            },
+        )
+
+    results: list[dict[str, Any]] = []
+    with SessionLocal() as s:
+        _assert_shipment_import_job_sync(s, job_id)
+        for cid in body.candidate_ids:
+            cand = s.get(ImportEntityMappingCandidate, cid)
+            if cand is None or cand.import_job_id != job_id:
+                results.append(
+                    {
+                        "candidate_id": cid,
+                        "ok": False,
+                        "detail": "Candidate not found for this job",
+                        "row_count": None,
+                        "total_units": None,
+                        "total_reported_value": None,
+                    }
+                )
+                continue
+            rc = cand.row_count
+            tu = float(cand.total_units) if cand.total_units is not None else None
+            trv = float(cand.total_reported_value) if cand.total_reported_value is not None else None
+            dn_override = (body.display_names or {}).get(str(cid)) or (body.display_names or {}).get(str(cand.id))
+            try:
+                if body.action == "map_customer":
+                    out = execute_map_shipment_customer(
+                        s,
+                        cand,
+                        customer_id=int(body.customer_id or 0),
+                        raw_token=body.raw_token,
+                    )
+                elif body.action == "map_distributor":
+                    out = execute_map_shipment_distributor(
+                        s,
+                        cand,
+                        distributor_id=int(body.distributor_id or 0),
+                        raw_token=body.raw_token,
+                    )
+                elif body.action == "create_provisional_distributor":
+                    out = execute_create_provisional_shipment_distributor(
+                        s,
+                        cand,
+                        display_name=dn_override,
+                        distributor_code=body.provisional_distributor_code,
+                        confirm_for_suspicious_token=body.confirm_for_suspicious_distributor_token,
+                    )
+                else:
+                    out = {"ok": False, "detail": f"Unsupported action {body.action!r}"}
+                    results.append(
+                        {
+                            "candidate_id": cid,
+                            "ok": False,
+                            "detail": out["detail"],
+                            "row_count": rc,
+                            "total_units": tu,
+                            "total_reported_value": trv,
+                        }
+                    )
+                    continue
+                results.append(
+                    {
+                        "candidate_id": cid,
+                        "ok": True,
+                        "entity_type": cand.entity_type,
+                        "result": out,
+                        "row_count": rc,
+                        "total_units": tu,
+                        "total_reported_value": trv,
+                    }
+                )
+            except ShipmentStewardOpError as exc:
+                results.append(
+                    {
+                        "candidate_id": cid,
+                        "ok": False,
+                        "detail": exc.detail,
+                        "row_count": rc,
+                        "total_units": tu,
+                        "total_reported_value": trv,
+                    }
+                )
+    ok_n = sum(1 for r in results if r.get("ok"))
+    return {
+        "import_job_id": job_id,
+        "action": body.action,
+        "applied": ok_n,
+        "failed": len(results) - ok_n,
+        "results": results,
+        "totals": _shipment_bulk_totals_from_rows(results),
+    }
+
+
+@router.post("/import-jobs/{job_id}/shipment-steward-bulk-ignore/apply-async", status_code=202)
+async def shipment_steward_bulk_ignore_apply_async(
+    job_id: int,
+    body: ShipmentBulkStewardBody,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Enqueue batch steward reject (ignore) for shipment mapping candidates."""
+    job = await db.get(ImportJob, job_id)
+    if not job or (job.template_slug or "") != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Shipment import job not found")
+    if body.action != "ignore":
+        raise HTTPException(status_code=400, detail="action must be ignore for this endpoint")
+    payload = _shipment_bulk_ignore_payload_from_body(body)
+    task_id, async_poll = enqueue_shipment_bulk_task(
+        task_name=TASK_SHIPMENT_BULK_IGNORE,
+        job_id=job_id,
+        payload=payload,
+        run_sync=lambda: run_shipment_bulk_ignore_sync(job_id, payload),
+        dev_prefix="ship-bulk-ignore",
+    )
+    _write_shipment_bulk_slot(job_id, task_id, async_poll=async_poll, label="Rejecting steward candidates…")
+    return {
+        "import_job_id": job_id,
+        "task_id": task_id,
+        "async_poll": async_poll,
+        "action": body.action,
     }
 
 

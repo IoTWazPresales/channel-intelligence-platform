@@ -19,12 +19,10 @@ import {
 } from '@mui/material';
 
 import { StewardPendingButton } from './StewardPendingButton';
-import type { StewardBulkTestIds } from './stewardEngine.types';
+import type { StewardBulkPlanSlice, StewardBulkTestIds } from './stewardEngine.types';
 import type { useStewardBulkSteward } from './useStewardBulkSteward';
-import type { useDsiResolutionPlan } from './useDsiResolutionPlan';
 
 type BulkSteward = ReturnType<typeof useStewardBulkSteward>;
-type PlanSteward = ReturnType<typeof useDsiResolutionPlan>;
 
 export function StewardBulkSection({
   bulk,
@@ -32,12 +30,15 @@ export function StewardBulkSection({
   testIds,
   formatProposedLabel,
   formatAliasEvidence,
+  showApplyAllDialog = true,
 }: {
   bulk: BulkSteward;
-  plan: PlanSteward;
+  plan: StewardBulkPlanSlice;
   testIds: StewardBulkTestIds;
   formatProposedLabel: (row: Record<string, unknown>) => string;
   formatAliasEvidence: (row: Record<string, unknown>) => string | React.ReactNode;
+  /** Shipment keeps apply-all in the plan toolbar — suppress duplicate dialog. */
+  showApplyAllDialog?: boolean;
 }) {
   const {
     bulkAction,
@@ -157,6 +158,7 @@ export function StewardBulkSection({
               </DialogActions>
             </Dialog>
 
+            {showApplyAllDialog ? (
             <Dialog open={applyAllConfirmOpen} onClose={() => setApplyAllConfirmOpen(false)}>
               <DialogTitle>Apply all ready rows?</DialogTitle>
               <DialogContent>
@@ -197,6 +199,7 @@ export function StewardBulkSection({
                 </StewardPendingButton>
               </DialogActions>
             </Dialog>
+            ) : null}
     </>
   );
 }

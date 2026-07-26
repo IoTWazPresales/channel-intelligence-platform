@@ -11,9 +11,9 @@ import { registerClientBackgroundTask, finishClientBackgroundTask } from '@/feat
 import type {
   StewardBulkApplyResponse,
   StewardBulkAsyncEnqueueResponse,
+  StewardBulkEngineConfig,
   StewardBulkPreviewResponse,
   StewardEngineCandidateRow,
-  StewardEngineConfig,
 } from './stewardEngine.types';
 
 export function useStewardBulkSteward({
@@ -28,6 +28,8 @@ export function useStewardBulkSteward({
   onPlanRefresh,
   onEvictResolvedCandidates,
   onShrinkPlanScope,
+  getBulkBodyExtras,
+  validateBulkForm,
   config,
 }: {
   importJobId: number;
@@ -45,7 +47,11 @@ export function useStewardBulkSteward({
   onPlanRefresh?: () => void | Promise<unknown>;
   onEvictResolvedCandidates?: (candidateIds: number[]) => void;
   onShrinkPlanScope?: (candidateIds: number[]) => void;
-  config: StewardEngineConfig;
+  /** Consumer composition seam (e.g. shipment per-candidate display_names). */
+  getBulkBodyExtras?: (action: string) => Record<string, unknown>;
+  /** When set, replaces default ready check for create_provisional_customer (and may gate other actions). */
+  validateBulkForm?: () => boolean;
+  config: StewardBulkEngineConfig;
 }) {
   const qc = useQueryClient();
 
@@ -106,6 +112,9 @@ export function useStewardBulkSteward({
       base.confirm_for_suspicious_distributor_token = bulkDistSuspiciousOk;
       base.provisional_distributor_code = bulkProvisionalDistCode.trim() || null;
     }
+    if (getBulkBodyExtras) {
+      Object.assign(base, getBulkBodyExtras(bulkAction));
+    }
     return base;
   }, [
     selectedIds,
@@ -124,6 +133,7 @@ export function useStewardBulkSteward({
     bulkProvisionalNotes,
     bulkDistSuspiciousOk,
     bulkProvisionalDistCode,
+    getBulkBodyExtras,
   ]);
 
   const previewToken = useMemo(() => JSON.stringify(buildBulkBody()), [buildBulkBody]);
@@ -142,7 +152,9 @@ export function useStewardBulkSteward({
       if (bulkConfirmIneligible && bulkAuditNote.trim().length < 8) return false;
       return true;
     }
-    if (bulkAction === 'create_provisional_customer') return true;
+    if (bulkAction === 'create_provisional_customer') {
+      return validateBulkForm ? validateBulkForm() : true;
+    }
     if (bulkAction === 'create_provisional_distributor') return true;
     if (bulkAction === 'set_plan_fallback_region' || bulkAction === 'set_plan_fallback_channel') return true;
     if (bulkAction === 'apply_suggested_region') return selectedIds.length > 0;
@@ -156,6 +168,7 @@ export function useStewardBulkSteward({
     bulkAuditNote,
     bulkRegionId,
     bulkChannelId,
+    validateBulkForm,
   ]);
 
   const bulkPreview = useMutation({

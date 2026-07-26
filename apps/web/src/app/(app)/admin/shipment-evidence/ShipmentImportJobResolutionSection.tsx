@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -25,6 +26,8 @@ import { paginateStewardCandidateRows } from '@/features/import-steward/stewardC
 import { StewardCandidateDrawer } from '@/features/import-steward/StewardCandidateDrawer';
 import { StewardEntityTabsBar } from '@/features/import-steward/StewardEntityTabsBar';
 import { StewardResolutionPlanToolbar } from '@/features/import-steward/StewardResolutionPlanToolbar';
+import { StewardBulkSection } from '@/features/import-steward/StewardBulkSection';
+import { useStewardBulkSteward } from '@/features/import-steward/useStewardBulkSteward';
 import { useStewardResolutionPlan } from '@/features/import-steward/useStewardResolutionPlan';
 import type { StewardPlanApplyFeedback } from '@/features/import-steward/stewardEngine.types';
 import type { InboundEvidenceMappingCandidateRow } from '@/features/import-steward/inboundEvidenceMappingCandidateWorkspaceColumns';
@@ -40,7 +43,8 @@ import {
   ShipmentCandidateInlineActions,
   ShipmentStewardActionsProvider,
 } from './shipmentStewardRowActions';
-import { ShipmentBulkStewardSection } from './ShipmentBulkStewardSection';
+import { ShipmentBulkActionInlineForm } from './ShipmentBulkActionInlineForm';
+import { ShipmentPlanOptionsMenu } from './ShipmentPlanOptionsMenu';
 import {
   defaultShipmentStewardFiltersForTab,
   formatShipmentEntityTabLabel,
@@ -50,13 +54,13 @@ import {
 } from './shipmentEntityTabs';
 import { filterShipmentStewardCandidates } from './shipmentStewardCandidateFilterLogic';
 import { invalidateShipmentImportJobStewardQueries, SHIPMENT_STEWARD_CONFIG } from './shipmentSteward.config';
-import { useShipmentBulkSteward } from './useShipmentBulkSteward';
 import { useShipmentCandidatesPage } from './useShipmentCandidatesPage';
 import { useShipmentEntityTabCounts } from './useShipmentEntityTabCounts';
 import { SHIPMENT_ENGINE_CONFIG } from './shipmentSteward.engineConfig';
 import { ShipmentMappingStewardPanel } from './ShipmentMappingStewardPanel';
 import { buildShipmentResolutionWorkspaceColumns } from './shipmentResolutionWorkspaceTableProps';
 import { ShipmentEntityStewardPanelLegacy } from './ShipmentEntityStewardPanelLegacy';
+import { useShipmentPlanEffectiveRefresh } from './useShipmentPlanEffectiveRefresh';
 
 function formatShipmentPlanApplySummary(data: Record<string, unknown>): StewardPlanApplyFeedback {
   const applied = Number(data.applied ?? 0);
@@ -75,6 +79,27 @@ function formatShipmentPlanApplySummary(data: Record<string, unknown>): StewardP
     severity: 'warning',
     message: `No rows applied (failed ${failed}, skipped ${skipped}).`,
   };
+}
+
+function shipmentSummaryChips(summary: Record<string, unknown>) {
+  return (
+    <>
+      <Chip size="small" label={`Candidates ${String(summary.total ?? '—')}`} />
+      <Chip
+        size="small"
+        color="success"
+        variant="outlined"
+        label={`Ready ${String(summary.ready ?? '—')}`}
+      />
+      <Chip
+        size="small"
+        color="warning"
+        variant="outlined"
+        label={`Needs work ${String(summary.not_ready ?? '—')}`}
+      />
+      <Chip size="small" variant="outlined" label={`On hold ${String(summary.hold ?? '—')}`} />
+    </>
+  );
 }
 
 export function ShipmentImportJobResolutionSection({
@@ -97,6 +122,7 @@ export function ShipmentImportJobResolutionSection({
   }));
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [bulkMode, setBulkMode] = useState<BulkTableSelectionMode>('normal');
+  const [bulkProvNamesById, setBulkProvNamesById] = useState<Record<number, string>>({});
   const [planApplySummary, setPlanApplySummary] = useState<StewardPlanApplyFeedback | null>(null);
   const [legacyOpen, setLegacyOpen] = useState(false);
   const [detailCandidate, setDetailCandidate] = useState<ShipmentMappingCandidateRow | null>(null);
@@ -139,16 +165,61 @@ export function ShipmentImportJobResolutionSection({
     formatPlanApplySummary: formatShipmentPlanApplySummary,
   });
 
+  const { refreshPlanEffective } = useShipmentPlanEffectiveRefresh({
+    importJobId: importJobId ?? 0,
+    candidateIds: candidates.map((c) => c.id),
+    effectivePlanPath: SHIPMENT_ENGINE_CONFIG.effectivePlanPath!,
+    planOverrideMap: plan.planOverrideMap,
+    replaceResolutionPlan: plan.replaceResolutionPlan,
+  });
+
   const shipmentRevalidateFromServer = plan.revalidateFromServer;
 
-  const bulk = useShipmentBulkSteward({
+  const focusWorkspaceToolbar = useCallback(() => {
+    workspaceToolbarRef.current?.querySelector<HTMLElement>('button')?.focus();
+  }, []);
+
+  const getBulkBodyExtras = useCallback(
+    (action: string) => {
+      if (action !== 'create_provisional_customer') return {};
+      const display_names: Record<string, string> = {};
+      for (const id of selectedIds) {
+        display_names[String(id)] = (bulkProvNamesById[id] ?? '').trim();
+      }
+      return { display_names };
+    },
+    [selectedIds, bulkProvNamesById]
+  );
+
+  const validateBulkForm = useCallback(() => {
+    if (selectedIds.length === 0) return false;
+    return selectedIds.every((id) => (bulkProvNamesById[id] ?? '').trim().length > 0);
+  }, [selectedIds, bulkProvNamesById]);
+
+  const bulk = useStewardBulkSteward({
     importJobId: importJobId ?? 0,
     selectedIds,
     setSelectedIds,
     setBulkMode,
     onInvalidate,
-    onBulkClosed: () => workspaceToolbarRef.current?.querySelector<HTMLElement>('button')?.focus(),
+    onBulkClosed: focusWorkspaceToolbar,
+    onPlanRefresh: () => plan.refreshSuggestions(),
+    onEvictResolvedCandidates: plan.evictResolvedCandidates,
+    onShrinkPlanScope: plan.shrinkPlanScope,
+    getBulkBodyExtras,
+    validateBulkForm,
+    config: SHIPMENT_ENGINE_CONFIG,
   });
+
+  const closeBulkForm = useCallback(() => {
+    setBulkMode('normal');
+    setSelectedIds([]);
+    setBulkProvNamesById({});
+    bulk.setPreviewOpen(false);
+    bulk.setBulkCustomerId('');
+    bulk.setBulkDistributorId('');
+    focusWorkspaceToolbar();
+  }, [bulk, focusWorkspaceToolbar]);
 
   const filteredCandidates = useMemo(
     () =>
@@ -216,6 +287,7 @@ export function ShipmentImportJobResolutionSection({
   useEffect(() => {
     setDetailCandidate(null);
     setSelectedIds([]);
+    setBulkProvNamesById({});
   }, [importJobId, activeTab, candidatesPage.page, candidatesPage.pageSize]);
 
   const effectiveDetailCandidate = useMemo(() => {
@@ -226,7 +298,9 @@ export function ShipmentImportJobResolutionSection({
   const stewardOverlayBusy =
     plan.applyResolutionPlan.isPending ||
     plan.suggestionsQuery.isFetching ||
+    bulk.bulkPreview.isPending ||
     bulk.bulkApply.isPending ||
+    refreshPlanEffective.isPending ||
     shipmentPipelineRunning;
 
   const revalidatePipelineBusy =
@@ -247,14 +321,19 @@ export function ShipmentImportJobResolutionSection({
     [plan.planByCandidateId, rowActionPendingId]
   );
 
-  const openBulkWorkflow = useCallback((action: typeof bulk.bulkAction) => {
-    bulk.setBulkAction(action);
-    bulk.resetBulkForm();
-    setBulkMode('selecting');
-    if (selectedIds.length === 0 && displayedCandidates.length > 0) {
-      setSelectedIds(displayedCandidates.map((c) => c.id));
-    }
-  }, [bulk, displayedCandidates, selectedIds.length]);
+  const openBulkWorkflow = useCallback(
+    (action: string) => {
+      bulk.setBulkAction(action);
+      bulk.setBulkCustomerId('');
+      bulk.setBulkDistributorId('');
+      setBulkProvNamesById({});
+      setBulkMode('selecting');
+      if (selectedIds.length === 0 && displayedCandidates.length > 0) {
+        setSelectedIds(displayedCandidates.map((c) => c.id));
+      }
+    },
+    [bulk, displayedCandidates, selectedIds.length]
+  );
 
   const selectVisibleReadyInGrid = useCallback(() => {
     const ready = displayedCandidates
@@ -263,6 +342,31 @@ export function ShipmentImportJobResolutionSection({
     setSelectedIds(ready);
     setBulkMode('selecting');
   }, [displayedCandidates, plan.planByCandidateId]);
+
+  const planSummary =
+    plan.resolutionPlan?.summary && typeof plan.resolutionPlan.summary === 'object'
+      ? (plan.resolutionPlan.summary as Record<string, unknown>)
+      : null;
+
+  const bulkPlanSlice = useMemo(
+    () => ({
+      applyAllConfirmOpen: plan.applyAllConfirmOpen,
+      setApplyAllConfirmOpen: plan.setApplyAllConfirmOpen,
+      applyResolutionPlan: plan.applyResolutionPlan,
+      readyPlanCandidateIds: plan.readyPlanCandidateIds,
+      applyAllProvisionalStats: {
+        provisionalCustomerReady: 0,
+        unassignedGeoReady: 0,
+        fallbackGeoReady: 0,
+      },
+    }),
+    [
+      plan.applyAllConfirmOpen,
+      plan.setApplyAllConfirmOpen,
+      plan.applyResolutionPlan,
+      plan.readyPlanCandidateIds,
+    ]
+  );
 
   if (importJobId == null) {
     return (
@@ -296,7 +400,22 @@ export function ShipmentImportJobResolutionSection({
           }
           applyAllLabel={`Apply all ready (${plan.readyPlanCandidateIds.length})`}
           applyAllTestId="shipment-resolution-plan-apply-all"
+          summaryChipsSlot={planSummary ? shipmentSummaryChips(planSummary) : undefined}
+          planOptionsSlot={
+            <ShipmentPlanOptionsMenu
+              planLoadToken={plan.planLoadToken}
+              refreshPlanEffective={refreshPlanEffective}
+              optionsOpenTestId={SHIPMENT_ENGINE_CONFIG.planToolbarTestIds.optionsOpen}
+              optionsMenuTestId={SHIPMENT_ENGINE_CONFIG.planToolbarTestIds.optionsMenu}
+              refreshEffectiveTestId={SHIPMENT_ENGINE_CONFIG.planToolbarTestIds.refreshEffective}
+            />
+          }
         />
+        {refreshPlanEffective.isError ? (
+          <Alert severity="error" data-testid={SHIPMENT_ENGINE_CONFIG.planToolbarTestIds.effectiveError}>
+            {safeDisplayError(refreshPlanEffective.error)}
+          </Alert>
+        ) : null}
 
         <StewardWorkspaceViewportShell
           bordered
@@ -307,148 +426,157 @@ export function ShipmentImportJobResolutionSection({
                 embedded
                 keepTableWhenFilterEmpty
                 rootTestId="shipment-steward-candidate-workspace"
-              listDomainId={SHIPMENT_STEWARD_CONFIG.listDomainId}
-              importJobId={importJobId}
-              copy={SHIPMENT_STEWARD_CONFIG.listShellCopy}
-              openRows={candidates as unknown as InboundEvidenceMappingCandidateRow[]}
-              filteredRows={displayedCandidates as unknown as InboundEvidenceMappingCandidateRow[]}
-              isLoading={candidatesLoading}
-              busy={stewardOverlayBusy}
-              columns={columns}
-              selection={workspaceSelection}
-              onRowClick={(row) => setDetailCandidate(row as unknown as ShipmentMappingCandidateRow)}
-              getRowSx={(row) => {
-                const r = row as unknown as ShipmentMappingCandidateRow;
-                const selected = selectedIdSet.has(r.id);
-                const drawerOpen = effectiveDetailCandidate?.id === r.id;
-                const verify =
-                  r.entity_type === 'shipment_customer_token' && shipmentContextNeedsNameReview(r.context);
-                if (verify) {
-                  return (theme) => ({
-                    ...(selected || drawerOpen ? { bgcolor: 'action.selected' } : {}),
-                    boxShadow: `inset 3px 0 0 ${theme.palette.warning.main}`,
-                    cursor: 'pointer',
-                  });
-                }
-                if (selected || drawerOpen) {
-                  return { bgcolor: 'action.selected', cursor: 'pointer' };
-                }
-                return { cursor: 'pointer' };
-              }}
-              tabsSlot={
-                <StewardEntityTabsBar
-                  tabs={SHIPMENT_ENTITY_TAB_DEFS}
-                  activeTab={activeTab}
-                  onChange={setActiveTab}
-                  counts={counts}
-                  busy={stewardOverlayBusy}
-                  testIdPrefix="shipment"
-                  ariaLabel="Shipment entity resolution"
-                  formatTabAriaLabel={formatShipmentEntityTabLabel}
-                />
-              }
-              filtersSlot={
-                <StewardCandidateFilters
-                  filters={activeFilters}
-                  onChange={(next) => setFiltersByTab((prev) => ({ ...prev, [activeTab]: next }))}
-                  visibleCount={
-                    clientQueueFilterActive ? filteredCandidates.length : displayedCandidates.length
+                listDomainId={SHIPMENT_STEWARD_CONFIG.listDomainId}
+                importJobId={importJobId}
+                copy={SHIPMENT_STEWARD_CONFIG.listShellCopy}
+                openRows={candidates as unknown as InboundEvidenceMappingCandidateRow[]}
+                filteredRows={displayedCandidates as unknown as InboundEvidenceMappingCandidateRow[]}
+                isLoading={candidatesLoading}
+                busy={stewardOverlayBusy}
+                columns={columns}
+                selection={workspaceSelection}
+                onRowClick={(row) => setDetailCandidate(row as unknown as ShipmentMappingCandidateRow)}
+                getRowSx={(row) => {
+                  const r = row as unknown as ShipmentMappingCandidateRow;
+                  const selected = selectedIdSet.has(r.id);
+                  const drawerOpen = effectiveDetailCandidate?.id === r.id;
+                  const verify =
+                    r.entity_type === 'shipment_customer_token' && shipmentContextNeedsNameReview(r.context);
+                  if (verify) {
+                    return (theme) => ({
+                      ...(selected || drawerOpen ? { bgcolor: 'action.selected' } : {}),
+                      boxShadow: `inset 3px 0 0 ${theme.palette.warning.main}`,
+                      cursor: 'pointer',
+                    });
                   }
-                  totalCount={tabbedMode ? candidatesPage.total : Math.max(candidatesPage.total, candidates.length)}
-                  hideEntityFilter
-                  hidePartyFilter={activeTab !== 'distributor'}
-                  clearToDefault={() => defaultShipmentStewardFiltersForTab(activeTab)}
-                  isAtDefault={(filters) => shipmentStewardFiltersMatchTabDefault(filters, activeTab)}
-                />
-              }
-              toolbarSlot={
-                <Stack ref={workspaceToolbarRef} direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                  {bulkMode === 'selecting' ? (
-                    <BulkSelectionToolbar
-                      mode={bulkMode}
-                      selectedCount={selectedIds.length}
-                      visibleRowCount={displayedCandidates.length}
-                      onEnterSelectionMode={() => setBulkMode('selecting')}
-                      onExitSelectionMode={() => {
-                        setBulkMode('normal');
-                        setSelectedIds([]);
-                        bulk.resetBulkForm();
-                      }}
-                      onSelectAllVisible={() => setSelectedIds(displayedCandidates.map((c) => c.id))}
-                      onDeselectAll={() => setSelectedIds([])}
-                      busy={bulk.bulkApply.isPending || plan.applyResolutionPlan.isPending}
-                      previewDangerLabel="Apply bulk steward"
-                      previewDangerDisabled={selectedIds.length === 0 || bulk.bulkApply.isPending || !bulk.bulkFormReady}
-                      onPreviewDangerAction={() => void bulk.bulkApply.mutateAsync()}
-                    />
-                  ) : (
-                    <>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={displayedCandidates.length === 0 && selectedIds.length === 0}
-                        onClick={() => openBulkWorkflow('map_customer')}
-                        data-testid="shipment-bulk-map-open"
-                      >
-                        Bulk map…
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={displayedCandidates.length === 0 && selectedIds.length === 0}
-                        onClick={() => openBulkWorkflow('create_provisional_customer')}
-                        data-testid="shipment-bulk-provisional-open"
-                      >
-                        Bulk provisional…
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={!displayedCandidates.some((c) => plan.planByCandidateId.get(c.id)?.ready === true)}
-                        onClick={selectVisibleReadyInGrid}
-                        data-testid="shipment-plan-select-visible-ready"
-                      >
-                        Select visible ready
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={selectedIds.length === 0 || plan.applyResolutionPlan.isPending}
-                        onClick={() => plan.applyResolutionPlan.mutate(selectedIds)}
-                        data-testid="shipment-resolution-plan-apply-selected"
-                      >
-                        Apply selected ({selectedIds.length})
-                      </Button>
-                      <Button size="small" variant="text" onClick={() => setLegacyOpen(true)}>
-                        Advanced panel…
-                      </Button>
-                      <Typography variant="caption" color="text.secondary">
-                        {selectedIds.length} selected · Ready {plan.readyPlanCandidateIds.length}
-                      </Typography>
-                      <Box sx={{ flexGrow: 1 }} />
-                    </>
-                  )}
-                  <StewardCandidatesPagination
-                    page={candidatesPage.page}
-                    pageCount={clientQueueFilterActive ? filteredPageCount : candidatesPage.pageCount}
-                    pageSize={candidatesPage.pageSize}
-                    total={clientQueueFilterActive ? filteredCandidates.length : candidatesPage.total}
-                    skip={candidatesPage.skip}
-                    pageItemCount={displayedCandidates.length}
-                    onPageChange={candidatesPage.setPage}
-                    onPageSizeChange={candidatesPage.setPageSize}
+                  if (selected || drawerOpen) {
+                    return { bgcolor: 'action.selected', cursor: 'pointer' };
+                  }
+                  return { cursor: 'pointer' };
+                }}
+                tabsSlot={
+                  <StewardEntityTabsBar
+                    tabs={SHIPMENT_ENTITY_TAB_DEFS}
+                    activeTab={activeTab}
+                    onChange={setActiveTab}
+                    counts={counts}
+                    busy={stewardOverlayBusy}
+                    testIdPrefix="shipment"
+                    ariaLabel="Shipment entity resolution"
+                    formatTabAriaLabel={formatShipmentEntityTabLabel}
                   />
-                </Stack>
-              }
-              bulkFormSlot={
-                <ShipmentBulkStewardSection
-                  bulkMode={bulkMode}
-                  selectedIds={selectedIds}
-                  bulk={bulk}
-                  stewardOverlayBusy={stewardOverlayBusy}
-                />
-              }
-            />
+                }
+                filtersSlot={
+                  <StewardCandidateFilters
+                    filters={activeFilters}
+                    onChange={(next) => setFiltersByTab((prev) => ({ ...prev, [activeTab]: next }))}
+                    visibleCount={
+                      clientQueueFilterActive ? filteredCandidates.length : displayedCandidates.length
+                    }
+                    totalCount={tabbedMode ? candidatesPage.total : Math.max(candidatesPage.total, candidates.length)}
+                    hideEntityFilter
+                    hidePartyFilter={activeTab !== 'distributor'}
+                    clearToDefault={() => defaultShipmentStewardFiltersForTab(activeTab)}
+                    isAtDefault={(filters) => shipmentStewardFiltersMatchTabDefault(filters, activeTab)}
+                  />
+                }
+                toolbarSlot={
+                  <Stack ref={workspaceToolbarRef} direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                    {bulkMode === 'selecting' ? (
+                      <BulkSelectionToolbar
+                        mode={bulkMode}
+                        selectedCount={selectedIds.length}
+                        visibleRowCount={displayedCandidates.length}
+                        onEnterSelectionMode={() => setBulkMode('selecting')}
+                        onExitSelectionMode={closeBulkForm}
+                        onSelectAllVisible={() => setSelectedIds(displayedCandidates.map((c) => c.id))}
+                        onDeselectAll={() => setSelectedIds([])}
+                        busy={
+                          bulk.bulkPreview.isPending ||
+                          bulk.bulkApply.isPending ||
+                          plan.applyResolutionPlan.isPending ||
+                          refreshPlanEffective.isPending
+                        }
+                        previewDangerLabel="Preview bulk steward"
+                        previewDangerDisabled={
+                          selectedIds.length === 0 || bulk.bulkPreview.isPending || !bulk.bulkFormReady
+                        }
+                        onPreviewDangerAction={() => void bulk.bulkPreview.mutateAsync()}
+                      />
+                    ) : (
+                      <>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={displayedCandidates.length === 0 && selectedIds.length === 0}
+                          onClick={() => openBulkWorkflow('map_customer')}
+                          data-testid="shipment-bulk-map-open"
+                        >
+                          Bulk map…
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={displayedCandidates.length === 0 && selectedIds.length === 0}
+                          onClick={() => openBulkWorkflow('create_provisional_customer')}
+                          data-testid="shipment-bulk-provisional-open"
+                        >
+                          Bulk provisional…
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={!displayedCandidates.some((c) => plan.planByCandidateId.get(c.id)?.ready === true)}
+                          onClick={selectVisibleReadyInGrid}
+                          data-testid="shipment-plan-select-visible-ready"
+                        >
+                          Select visible ready
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={selectedIds.length === 0 || plan.applyResolutionPlan.isPending}
+                          onClick={() => plan.applyResolutionPlan.mutate(selectedIds)}
+                          data-testid="shipment-resolution-plan-apply-selected"
+                        >
+                          Apply selected ({selectedIds.length})
+                        </Button>
+                        <Button size="small" variant="text" onClick={() => setLegacyOpen(true)}>
+                          Advanced panel…
+                        </Button>
+                        <Typography variant="caption" color="text.secondary">
+                          {selectedIds.length} selected · Ready {plan.readyPlanCandidateIds.length}
+                        </Typography>
+                        <Box sx={{ flexGrow: 1 }} />
+                      </>
+                    )}
+                    <StewardCandidatesPagination
+                      page={candidatesPage.page}
+                      pageCount={clientQueueFilterActive ? filteredPageCount : candidatesPage.pageCount}
+                      pageSize={candidatesPage.pageSize}
+                      total={clientQueueFilterActive ? filteredCandidates.length : candidatesPage.total}
+                      skip={candidatesPage.skip}
+                      pageItemCount={displayedCandidates.length}
+                      onPageChange={candidatesPage.setPage}
+                      onPageSizeChange={candidatesPage.setPageSize}
+                    />
+                  </Stack>
+                }
+                bulkFormSlot={
+                  bulkMode === 'selecting' && selectedIds.length > 0 ? (
+                    <ShipmentBulkActionInlineForm
+                      bulk={bulk}
+                      selectedIds={selectedIds}
+                      bulkProvNamesById={bulkProvNamesById}
+                      setBulkProvName={(id, name) =>
+                        setBulkProvNamesById((prev) => ({ ...prev, [id]: name }))
+                      }
+                      onCancel={closeBulkForm}
+                      testIds={SHIPMENT_ENGINE_CONFIG.bulkTestIds}
+                    />
+                  ) : null
+                }
+              />
             </Box>
           }
           drawer={
@@ -470,6 +598,15 @@ export function ShipmentImportJobResolutionSection({
               </StewardCandidateDrawer>
             ) : null
           }
+        />
+
+        <StewardBulkSection
+          bulk={bulk}
+          plan={bulkPlanSlice}
+          testIds={SHIPMENT_ENGINE_CONFIG.bulkTestIds}
+          formatProposedLabel={SHIPMENT_ENGINE_CONFIG.formatBulkProposedLabel}
+          formatAliasEvidence={SHIPMENT_ENGINE_CONFIG.formatBulkAliasEvidence}
+          showApplyAllDialog={false}
         />
 
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">

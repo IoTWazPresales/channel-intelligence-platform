@@ -92,3 +92,17 @@ rows to make a unit smaller under schedule pressure (attempted and rejected for
 Unit B2). **Session** boundaries between units are pure re-context tax and should be
 collapsed: chain units inside one Cursor session, each keeping its own discovery,
 baseline, commit, and CURRENT update.
+
+## D-011 · 2026-07-26 · Provisional display_names via getBulkBodyExtras
+**Locked.** Per-candidate provisional customer `display_names` are supplied by the
+consumer through optional `getBulkBodyExtras(action)` merged into `buildBulkBody()` —
+not an engine mode or shipment-specific branch inside `useStewardBulkSteward`.
+Shipment keeps `bulkProvNamesById` local and gates ready state via optional
+`validateBulkForm`. DSI unchanged (shared geo/tier fields remain in the hook body).
+
+## D-012 · 2026-07-26 · Shipment waives plan-level global-suspicious toolbar
+**Locked (variance).** Shipment resolution plan apply bypasses
+`confirm_for_suspicious_distributor_token` at plan level; there is no plan payload
+field for global suspicious confirm. Do **not** render the DSI global-suspicious
+checkbox on shipment plan toolbar — single-row create retains its own confirm.
+Shipment toolbar options menu: **Update plan after edits** only (effective refresh).

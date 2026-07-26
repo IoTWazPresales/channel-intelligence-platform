@@ -1,6 +1,6 @@
 # Steward Experience Contract
 
-**Version:** 1.1 · 2026-07-26 · Owner: Warren  
+**Version:** 1.2 · 2026-07-26 · Owner: Warren  
 **Role:** The definition of done for ANY import steward/resolve surface. CONSULT may
 only scope units as subsets of these rows. VERIFY walks these rows — not the unit
 prompt's own checklist. Any row excluded from a unit requires an explicit
@@ -14,7 +14,7 @@ composition). Update this column when the consolidation arc moves modules.
 
 ## Slot inventory
 
-| ID | Slot | Requirement | Behavior (what the operator gets) | Canonical (v1.1) |
+| ID | Slot | Requirement | Behavior (what the operator gets) | Canonical (v1.2) |
 |----|------|-------------|-----------------------------------|------------------|
 | S1 | Viewport shell | REQUIRED | Two-column workspace; list scrolls inside viewport on md+; drawer sticky beside list | `features/import-steward/StewardWorkspaceViewportShell.tsx` |
 | S2 | Entity tabs + counts | REQUIRED | Per-entity tabs with total + needs-work counts; tab switch resets filters/selection to tab default | `StewardEntityTabsBar` + consumer tab-count hooks (`useDsiEntityTabCounts` / shipment route `useShipmentEntityTabCounts`) |
@@ -23,8 +23,8 @@ composition). Update this column when the consolidation arc moves modules.
 | S5 | Drawer — chrome | REQUIRED | Shared drawer chrome, close affordance, a11y label, testids | `StewardDrawerChrome` / `StewardCandidateDrawer` |
 | S6 | Drawer — evidence body | REQUIRED | Sample raw source values, affected rows/cases, value at stake for THIS candidate. Operator never maps blind. | DSI drawer body; shipment/CPOR → Unit D shared body |
 | S7 | Drawer — ranked suggestions + override | REQUIRED | Ranked suggestion cards (band/score/reason), one-click map per card, override search-any-master below; never auto-create | CPOR drawer card mechanics; DSI evidence; shared cards → Unit D |
-| S8 | Selection + bulk | REQUIRED | Selection model w/ header state + select-all-visible; bulk actions run **preview → apply** two-step with per-row error summary. Direct bulk apply without preview = PARTIAL. | `StewardBulkSection` + `useStewardBulkSteward` (DSI via `DSI_ENGINE_CONFIG`); shipment bulk remains local until Unit B2 |
-| S9 | Resolution plan | REQUIRED | Compute plan (async, non-blocking) → preview dialog with per-row detail → **apply-all-ready where each row goes to its own suggested target** → async apply with progress. plan_class labels without a consuming apply engine = annotation, NOT this slot. | `useStewardResolutionPlan` + `StewardResolutionPlanToolbar` (core); DSI composes geo via `useDsiResolutionPlan`; shipment binds core via `SHIPMENT_ENGINE_CONFIG` |
+| S8 | Selection + bulk | REQUIRED | Selection model w/ header state + select-all-visible; bulk actions run **preview → apply** two-step with per-row error summary. Direct bulk apply without preview = PARTIAL. | `StewardBulkSection` + `useStewardBulkSteward` (DSI via `DSI_ENGINE_CONFIG`; shipment via `SHIPMENT_ENGINE_CONFIG`) |
+| S9 | Resolution plan | REQUIRED | Compute plan (async, non-blocking) → preview dialog with per-row detail → **apply-all-ready where each row goes to its own suggested target** → async apply with progress. plan_class labels without a consuming apply engine = annotation, NOT this slot. | `useStewardResolutionPlan` + `StewardResolutionPlanToolbar` (core); DSI composes geo via `useDsiResolutionPlan`; shipment binds core + effective refresh via `SHIPMENT_ENGINE_CONFIG` |
 | S10 | Async dispatch | REQUIRED | Validate/apply endpoints mark running + `pipeline_queued_at`, dispatch-claim guard, write task slot, return `{async, task_id}` immediately; broker → dev in-process thread → sync fallback. No long sync write in request path. | shipment `_dispatch_shipment_apply` / `cpor_historical_import.py` endpoints |
 | S11 | Progress | REQUIRED | Fire-and-poll progress with phase/pct shape (`dsi-progress` contract); phase descriptions; background-task (bell) registration; terminal + failed states rendered | `ImportJobValidateProgressPanel` + `dsi-progress` endpoint shape |
 | S12 | Pagination | CONDITIONAL | Server pagination when candidate volume can exceed ~500; client-side acceptable below with a written volume rationale in the unit prompt | `StewardCandidatesPagination` + consumer page hooks |
@@ -60,13 +60,13 @@ Both are contract-valid until Unit D normalizes to one placement. Do not treat e
    region/channel/geo or assume bulk preview. Geo is composed by the consumer (DSI).
    Do not add `bulkStrategy` / capability flags that fossilize S8 gaps in the core.
 
-## Known gaps (v1.1)
+## Known gaps (v1.2)
 
 - **CPOR historical:** S9 absent, S6 absent (nulled evidence), S12 unverified at volume,
   S14 violated by `cporTokenRowId` string-hash row keys → Unit C.
-- **Shipment:** S6/S7 (drawer evidence + ranked suggestions → Unit D);
-  S8 (bulk preview absent → Unit B2);
-  S9-partial (toolbar lacks DSI summary chips / options / effective refresh → Unit B2).
+- **Shipment:** S6/S7 (drawer evidence + ranked suggestions → Unit D).
+- **Waivers (shipment, D-012):** plan toolbar omits DSI global-suspicious checkbox;
+  plan apply does not use plan-level suspicious confirm (variance, not gap).
 - **inboundEvidence\* entity-type leakage:** `inboundEvidenceMappingCandidateDisplayUtils`
   retains API literals `shipment_distributor` / `shipment_customer_token` inside
   `features/import-steward/` (cannot rename without endpoint change). Follow-up debt —
@@ -78,7 +78,7 @@ Both are contract-valid until Unit D normalizes to one placement. Do not treat e
 
 - **Unit A** — engine extracted; DSI consumer #1 (PASS `ead4e9f`)
 - **Unit B** — engine genericity via composition; shipment consumer #2
-- **Unit B2** — shipment bulk preview (closes S8) + toolbar parity (closes S9-partial)
+- **Unit B2** — shipment bulk preview + toolbar parity (shipped in B2 Phase 3)
 - **Unit C** — CPOR mounts plan engine + drawer evidence + `cporTokenRowId` fix
 - **Unit D** — shared drawer evidence body + ranked suggestions (closes S6/S7 for
   shipment and CPOR); normalize apply-all placement

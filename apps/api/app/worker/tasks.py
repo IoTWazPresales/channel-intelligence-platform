@@ -212,6 +212,39 @@ def shipment_bulk_provisional_customers_task(self, job_id: int, payload: dict) -
         raise
 
 
+@celery_app.task(name="imports.shipment_bulk_ignore", bind=True, ack_late=True)
+def shipment_bulk_ignore_task(self, job_id: int, payload: dict) -> dict:
+    """Batch reject shipment mapping candidates (steward_rejected per candidate commit)."""
+    from app.services.imports.shipment_bulk_steward_enqueue import run_shipment_bulk_ignore_sync
+
+    candidate_ids = payload.get("candidate_ids") or []
+
+    def _on_progress(current: int, total: int) -> None:
+        try:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "phase": "rejecting_candidates",
+                    "phase_label": "Rejecting steward candidates",
+                    "current_row": current,
+                    "total_rows": total,
+                    "pct": round(current / total * 100) if total else 0,
+                },
+            )
+        except Exception:
+            pass
+
+    try:
+        return run_shipment_bulk_ignore_sync(
+            job_id,
+            payload,
+            on_progress=_on_progress,
+        )
+    except Exception:
+        logger.exception("shipment_bulk_ignore failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.shipment_resolution_plan_compute", bind=True, ack_late=True)
 def shipment_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
     from app.services.imports.shipment_resolution_plan_compute_sync import run_shipment_resolution_plan_compute_sync

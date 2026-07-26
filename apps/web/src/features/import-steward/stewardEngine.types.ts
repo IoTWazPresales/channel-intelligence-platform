@@ -170,23 +170,16 @@ export type StewardPlanEngineConfig = {
     computingMessage?: string;
     refreshingMessage?: string;
   };
+
+  /** When set, consumer may POST overrides to merge steward edits into the cached plan. */
+  effectivePlanPath?: (importJobId: number) => string;
 };
 
-/**
- * Full DSI (and future bulk-bound) engine config = plan core + geo + bulk.
- * Geo/bulk fields are for composed DSI hooks and useStewardBulkSteward — not the plan core.
- */
-export type StewardEngineConfig = StewardPlanEngineConfig & {
-  catalogRegionsPath: string;
-  catalogChannelsPath: string;
-  catalogRegionsQueryKey: () => QueryKey;
-  catalogChannelsQueryKey: () => QueryKey;
-
-  unresolvedGeoTokensPath: (importJobId: number) => string;
-  unresolvedGeoTokensQueryKey: (importJobId: number) => QueryKey;
-
-  effectivePlanPath: (importJobId: number) => string;
-
+/** Bulk steward binding — no geo catalogs required (shipment binds without faking DSI geo). */
+export type StewardBulkEngineConfig = Pick<
+  StewardPlanEngineConfig,
+  'candidatesQueryKey' | 'invalidateStewardQueries'
+> & {
   bulkPreviewPath: (importJobId: number) => string;
   bulkApplyPath: (importJobId: number) => string;
   bulkIgnoreAsyncPath: (importJobId: number) => string;
@@ -202,14 +195,6 @@ export type StewardEngineConfig = StewardPlanEngineConfig & {
     taskId: string,
     opts: { rowCount: number }
   ) => Promise<StewardBulkApplyResponse>;
-
-  invalidateCatalogQueries: (qc: QueryClient) => void;
-
-  summarizeApplyAllReadyProvisional: (rows: Array<Record<string, unknown>>) => {
-    provisionalCustomerReady: number;
-    unassignedGeoReady: number;
-    fallbackGeoReady: number;
-  };
 
   bulkChunkSize: (action: string) => number;
   chunkBulkCandidateIds: (ids: number[], chunkSize: number) => number[][];
@@ -236,4 +221,46 @@ export type StewardEngineConfig = StewardPlanEngineConfig & {
   formatBulkAliasEvidence: (row: Record<string, unknown>) => ReactNode | string;
 
   bulkTestIds: StewardBulkTestIds;
+};
+
+/** DSI geo compose — not required for shipment bulk/plan core. */
+export type StewardGeoEngineConfig = {
+  catalogRegionsPath: string;
+  catalogChannelsPath: string;
+  catalogRegionsQueryKey: () => QueryKey;
+  catalogChannelsQueryKey: () => QueryKey;
+
+  unresolvedGeoTokensPath: (importJobId: number) => string;
+  unresolvedGeoTokensQueryKey: (importJobId: number) => QueryKey;
+
+  effectivePlanPath: (importJobId: number) => string;
+
+  invalidateCatalogQueries: (qc: QueryClient) => void;
+
+  summarizeApplyAllReadyProvisional: (rows: Array<Record<string, unknown>>) => {
+    provisionalCustomerReady: number;
+    unassignedGeoReady: number;
+    fallbackGeoReady: number;
+  };
+};
+
+/**
+ * Full DSI engine config = plan core + bulk + geo.
+ * Shipment binds plan + bulk only (`StewardPlanEngineConfig & StewardBulkEngineConfig`).
+ */
+export type StewardEngineConfig = StewardPlanEngineConfig &
+  StewardBulkEngineConfig &
+  StewardGeoEngineConfig;
+
+/** Minimal plan slice for StewardBulkSection apply-all dialog. */
+export type StewardBulkPlanSlice = {
+  applyAllConfirmOpen: boolean;
+  setApplyAllConfirmOpen: (open: boolean) => void;
+  applyResolutionPlan: { isPending: boolean; mutateAsync: (ids: number[]) => Promise<unknown> };
+  readyPlanCandidateIds: number[];
+  applyAllProvisionalStats: {
+    provisionalCustomerReady: number;
+    unassignedGeoReady: number;
+    fallbackGeoReady: number;
+  };
 };

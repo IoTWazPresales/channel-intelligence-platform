@@ -108,6 +108,30 @@ def test_enqueue_sync_fallback_when_no_dev_thread(monkeypatch) -> None:
     assert enq.dev_shipment_bulk_task_results()[task_id]["result"]["ok"] is True
 
 
+def test_enqueue_ignore_uses_broker_task_name(monkeypatch) -> None:
+    sent: dict[str, object] = {}
+
+    def _fake_send_task(name, args=None, **kw):
+        sent["name"] = name
+        sent["args"] = args
+        return SimpleNamespace(id="broker-ignore-1")
+
+    monkeypatch.setattr(enq.celery_app, "send_task", _fake_send_task)
+
+    task_id, async_poll = enq.enqueue_shipment_bulk_task(
+        task_name=enq.TASK_SHIPMENT_BULK_IGNORE,
+        job_id=12,
+        payload={"candidate_ids": [1, 2]},
+        run_sync=lambda: {"applied": 0, "failed": 2, "results": []},
+        dev_prefix="ship-bulk-ignore",
+    )
+
+    assert async_poll is True
+    assert task_id == "broker-ignore-1"
+    assert sent["name"] == enq.TASK_SHIPMENT_BULK_IGNORE
+    assert sent["args"] == [12, {"candidate_ids": [1, 2]}]
+
+
 # --- on_progress passthrough ----------------------------------------------------
 
 
