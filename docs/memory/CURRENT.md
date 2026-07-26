@@ -13,7 +13,7 @@
 | **Alembic (DB)** | **`20260720_0073` on cip** |
 | **HEAD** | `f9c49f9` |
 | **Pushed?** | yes |
-| **Next** | **Unit C** — CPOR historical steward (S9/S6/S14 gaps). Chained arc C→D→E→F continues this session. |
+| **Next** | **Unit C CONSULT blocked** — Claude CLI monthly spend limit (Opus + Fable). Raise limit / switch credits, then re-seed Unit C from `.cursor/templates/consult_seed_template.md` (seed already at `.tmp/unit_c_consult_opus_seed.md`). |
 
 ---
 
