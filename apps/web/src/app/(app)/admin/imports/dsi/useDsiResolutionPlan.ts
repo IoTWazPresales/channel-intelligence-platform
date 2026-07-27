@@ -132,7 +132,7 @@ export function useDsiResolutionPlan({
       partner_tier: 'unmanaged',
       provisional_notes_summary: null,
       confirm_for_suspicious_distributor_token: planGlobalSuspicious,
-      overrides: overrides.length ? overrides : null,
+      overrides,
     }),
     readyRowFilter: dsiPlanRowIsReady,
     formatPlanApplySummary,

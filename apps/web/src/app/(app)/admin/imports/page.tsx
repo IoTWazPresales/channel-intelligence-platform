@@ -76,6 +76,7 @@ import {
   notifyDsiAsyncPipelineStarted,
   refetchDsiImportJobStewardQueries,
 } from '@/app/(app)/admin/imports/dsi';
+import { notifyShipmentAsyncPipelineStarted } from '@/app/(app)/admin/shipment-evidence/shipmentSteward.engineConfig';
 import { deriveDsiJobDisplayState } from '@/app/(app)/admin/imports/dsi/dsiJobDisplayState';
 import {
   dsiJobHasValidationComplete,
@@ -1802,15 +1803,21 @@ function AdminImportsPageContent() {
         headers: defaultHeaders,
       });
       if (!res.ok) throw new Error(await readFetchError(res));
-      const body = (await res.json()) as { async?: boolean };
-      return { jid, async: Boolean(body?.async) };
+      const body = (await res.json()) as { async?: boolean; task_id?: string | null };
+      return { jid, async: Boolean(body?.async), taskId: body?.task_id ?? null };
     },
     onSuccess: (data) => {
-      if (data.async) setShipmentValidateAsync(true);
+      if (data.async) {
+        notifyShipmentAsyncPipelineStarted(qc, data.jid, {
+          taskId: data.taskId,
+          onSetAsync: setShipmentValidateAsync,
+        });
+      }
       void qc.invalidateQueries({ queryKey: ['import-job', data.jid] });
       void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', data.jid] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', data.jid] });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+      void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
       void refetchPreview();
     },
   });
@@ -3684,7 +3691,12 @@ function AdminImportsPageContent() {
                     void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', shipmentMappingJobId] });
                     void qc.invalidateQueries({ queryKey: ['import-job-rows', shipmentMappingJobId] });
                   }}
-                  onAsyncPipelineStarted={() => setShipmentValidateAsync(true)}
+                  onAsyncPipelineStarted={(args) => {
+                    notifyShipmentAsyncPipelineStarted(qc, args.importJobId, {
+                      taskId: args.taskId,
+                      onSetAsync: setShipmentValidateAsync,
+                    });
+                  }}
                 />
               </>
             ) : !shipmentValidationComplete && !shipmentValidating ? (

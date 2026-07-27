@@ -3,6 +3,7 @@
  */
 import type { QueryClient } from '@tanstack/react-query';
 
+import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 import {
   chunkDsiBulkCandidateIds,
   dsiBulkStewardChunkSize,
@@ -26,13 +27,34 @@ async function shipmentWaitForBulkIdle(_importJobId: number): Promise<void> {
   /* shipment plan apply does not gate on bulk idle */
 }
 
+/** Wire shipment validate/revalidate async dispatch to nav bell + imports page progress. */
+export function notifyShipmentAsyncPipelineStarted(
+  qc: QueryClient,
+  importJobId: number,
+  options: {
+    taskId?: string | null;
+    onSetAsync?: (running: boolean) => void;
+  }
+): void {
+  options.onSetAsync?.(true);
+  void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+  void qc.invalidateQueries({ queryKey: ['import-job', importJobId] });
+  const taskId =
+    (options.taskId && String(options.taskId).trim()) || `shipment-pipeline-client-${importJobId}`;
+  registerClientBackgroundTask({
+    taskId,
+    importJobId,
+    kind: 'shipment_import',
+    label: `Validating shipment import ${importJobId}`,
+  });
+}
+
 function shipmentNotifyAsyncPipelineStarted(
   qc: QueryClient,
   importJobId: number,
-  _args: { taskId?: string | null }
+  args: { taskId?: string | null }
 ) {
-  void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
-  void qc.invalidateQueries({ queryKey: ['import-job', importJobId] });
+  notifyShipmentAsyncPipelineStarted(qc, importJobId, { taskId: args.taskId });
 }
 
 function shipmentNoopCache(_qc: QueryClient, _importJobId: number, _ids: number[]) {

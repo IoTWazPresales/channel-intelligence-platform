@@ -378,12 +378,13 @@ class ShipmentResolutionPlanOverride(BaseModel):
 
 class ShipmentResolutionPlanEffectiveBody(BaseModel):
     candidate_ids: list[int] | None = None
-    overrides: list[ShipmentResolutionPlanOverride] = Field(default_factory=list)
+    overrides: list[ShipmentResolutionPlanOverride] | None = Field(default=None)
 
 
 class ShipmentResolutionPlanApplyBody(BaseModel):
     candidate_ids: list[int] = Field(..., min_length=1)
-    overrides: list[ShipmentResolutionPlanOverride] = Field(default_factory=list)
+    # Accept null for older clients; treat as []. Prefer list from steward engine.
+    overrides: list[ShipmentResolutionPlanOverride] | None = Field(default=None)
 
 
 @router.post("/import-jobs/{job_id}/resolution-plan/compute-async", status_code=202)
@@ -448,7 +449,7 @@ async def shipment_resolution_plan_effective(
             sess,
             job_id,
             candidate_ids=body.candidate_ids,
-            overrides=[o.model_dump(exclude_unset=True) for o in body.overrides],
+            overrides=[o.model_dump(exclude_unset=True) for o in (body.overrides or [])],
         )
 
     with SessionLocal() as sess:
@@ -471,7 +472,7 @@ async def shipment_resolution_plan_apply_async(
             raise HTTPException(status_code=404, detail="Shipment import job not found")
     payload = {
         "candidate_ids": [int(x) for x in body.candidate_ids],
-        "overrides": [o.model_dump(exclude_unset=True) for o in body.overrides],
+        "overrides": [o.model_dump(exclude_unset=True) for o in (body.overrides or [])],
     }
     from app.services.imports.shipment_bulk_steward_enqueue import (
         TASK_SHIPMENT_RESOLUTION_PLAN_APPLY,

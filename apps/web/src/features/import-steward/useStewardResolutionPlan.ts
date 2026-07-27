@@ -159,11 +159,13 @@ export function useStewardResolutionPlan({
       const overrides = overridesPayload();
       let taskId: string | undefined;
       try {
+        // Always send a list — shipment (and most plan apply bodies) reject JSON null for
+        // ``overrides`` with Pydantic "Input should be a valid list".
         const body = buildApplyBody
           ? buildApplyBody({ candidateIds, overrides })
           : {
               candidate_ids: candidateIds,
-              overrides: overrides.length ? overrides : null,
+              overrides,
             };
         const enqueued = await apiPost<{
           import_job_id: number;

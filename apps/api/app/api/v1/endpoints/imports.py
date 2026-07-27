@@ -1009,6 +1009,7 @@ async def post_shipment_validate(job_id: int, db: AsyncSession = Depends(get_db)
         return {
             "async": True,
             "id": job_id,
+            "task_id": shipment_task_id,
             "status": job2.status if job2 else None,
             "stage": job2.stage if job2 else None,
             "message": "Validation started in the background worker.",
