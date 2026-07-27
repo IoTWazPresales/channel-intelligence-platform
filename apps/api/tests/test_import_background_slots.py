@@ -158,4 +158,5 @@ def test_slot_meta_keys_cover_all_known_slots() -> None:
         "pm_commit_task",
         "lineup_parse_task",
         "shipment_bulk_task",
+        "cpor_resolution_plan_task",
     }

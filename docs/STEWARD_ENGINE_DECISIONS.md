@@ -106,3 +106,28 @@ Shipment keeps `bulkProvNamesById` local and gates ready state via optional
 field for global suspicious confirm. Do **not** render the DSI global-suspicious
 checkbox on shipment plan toolbar — single-row create retains its own confirm.
 Shipment toolbar options menu: **Update plan after edits** only (effective refresh).
+
+## D-013 · 2026-07-27 · CPOR gets a real resolution plan; plan-apply ≠ case-apply
+**Locked.** CPOR historical builds the S9 resolution-plan engine (compute-async →
+preview → apply-all-ready → apply-async) by mirroring shipment — **no S9 waiver**.
+Plan apply is a **new, separately-named** operation:
+`imports.cpor_historical_resolution_plan_compute` /
+`imports.cpor_historical_resolution_plan_apply`. Distinct from
+`imports.cpor_historical_apply` (whole *cases* → production). Plan-apply is
+**per-token → its own suggested target** (never bulk single-target map — that stays
+"Map selected to…"). Ledger kind `"steward"`; own slot
+`SLOT_CPOR_RESOLUTION_PLAN` / `cpor_resolution_plan_task` — **never `SLOT_MAIN`**
+(owned by validate/case-apply).
+**Rejected:** reusing case-apply for plan apply; sharing SLOT_MAIN.
+
+## D-014 · 2026-07-27 · Persisted reversible token surrogate is S14/S9/S12 identity
+**Locked.** Table `import_cpor_historical_token_surrogate`
+(`id BIGSERIAL PK`, `UNIQUE (import_job_id, entity, token)`, FK CASCADE). Get-or-create
+on candidate list; that `id` is the row key, plan `candidate_ids`, and page key.
+**Rejected:** client `cporTokenRowId` string-hash; teaching the engine string keys
+(D-002/D-003); `min(staging_line_id)` (cross-entity collision).
+
+## D-015 · 2026-07-27 · CPOR renders apply-all in the plan toolbar
+**Locked (resolves D-005 for CPOR).** CPOR uses `StewardResolutionPlanToolbar`
+`onApplyAllReady` — same placement as shipment. DSI workspace-toolbar placement
+unchanged until Unit D normalizes globally.

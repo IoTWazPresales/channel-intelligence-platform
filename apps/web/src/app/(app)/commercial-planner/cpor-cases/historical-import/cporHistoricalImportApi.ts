@@ -1,8 +1,9 @@
 import { apiGet, apiPost, apiUrl, parseApiErrorDetailText } from '@/lib/api';
 
 import type {
+  CporCandidatesPageResponse,
   CporEntityTabId,
-  CporHistoricalCandidate,
+  CporPlanClass,
   CporHistoricalSummary,
 } from './cporHistoricalSteward.config';
 
@@ -29,23 +30,32 @@ export async function fetchCporHistoricalSummary(
   });
 }
 
+/** Build the server-paginated candidates URL — plan_class filters server-side (Unit C, S12/S9). */
+export function buildCporHistoricalCandidatesUrl(
+  jobId: number,
+  entity: CporEntityTabId,
+  skip: number,
+  limit: number,
+  planClass?: CporPlanClass | null
+): string {
+  const q = new URLSearchParams();
+  q.set('entity', entity);
+  q.set('skip', String(skip));
+  q.set('limit', String(limit));
+  if (planClass) q.set('plan_class', planClass);
+  return `/api/v1/cpor/historical-import/jobs/${jobId}/candidates?${q.toString()}`;
+}
+
 export async function fetchCporHistoricalCandidates(
   jobId: number,
   entity: CporEntityTabId,
+  opts: { skip: number; limit: number; planClass?: CporPlanClass | null },
   signal?: AbortSignal
-): Promise<{
-  candidates: CporHistoricalCandidate[];
-  counts: Record<string, number>;
-  plan_class_counts?: CporHistoricalSummary['plan_class_counts'];
-}> {
-  return apiGet<{
-    candidates: CporHistoricalCandidate[];
-    counts: Record<string, number>;
-    plan_class_counts?: CporHistoricalSummary['plan_class_counts'];
-  }>(`/api/v1/cpor/historical-import/jobs/${jobId}/candidates?entity=${entity}`, {
-    signal,
-    ...ADMIN,
-  });
+): Promise<CporCandidatesPageResponse> {
+  return apiGet<CporCandidatesPageResponse>(
+    buildCporHistoricalCandidatesUrl(jobId, entity, opts.skip, opts.limit, opts.planClass),
+    { signal, ...ADMIN }
+  );
 }
 
 export async function mapCporHistoricalToken(args: {
@@ -176,11 +186,4 @@ export async function fetchCporDimOptions(
     items: Array<{ id: number; distributor_code: string; distributor_name: string }>;
   }>(`/api/v1/distributors?page=1&page_size=25&q=${encodeURIComponent(q)}`, { signal });
   return res.items ?? [];
-}
-
-/** Stable numeric id from token string for workspace row keys. */
-export function cporTokenRowId(token: string): number {
-  let h = 0;
-  for (let i = 0; i < token.length; i += 1) h = (h * 31 + token.charCodeAt(i)) | 0;
-  return Math.abs(h) || 1;
 }

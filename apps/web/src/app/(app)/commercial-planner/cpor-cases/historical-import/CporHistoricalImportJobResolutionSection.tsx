@@ -5,6 +5,10 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Stack,
   TextField,
   Typography,
@@ -22,13 +26,18 @@ import {
 } from '@/features/import-steward/confidenceBand';
 import { ImportStewardCandidateWorkspace } from '@/features/import-steward/ImportStewardCandidateWorkspace';
 import { StewardCandidateFilters } from '@/features/import-steward/StewardCandidateFilters';
+import { StewardCandidatesPagination } from '@/features/import-steward/StewardCandidatesPagination';
 import { StewardEntityTabsBar, type StewardEntityTabCounts } from '@/features/import-steward/StewardEntityTabsBar';
+import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
+import { StewardResolutionPlanToolbar } from '@/features/import-steward/StewardResolutionPlanToolbar';
 import { StewardWorkspaceViewportShell } from '@/features/import-steward/StewardWorkspaceViewportShell';
 import {
   defaultDsiStewardCandidateFilterState,
   type DsiStewardCandidateFilterState,
 } from '@/features/import-steward/dsiStewardCandidateFilterLogic';
 import { computeImportStewardSelectionHeaderState } from '@/features/import-steward/importStewardSelectionUtils';
+import type { StewardPlanApplyFeedback } from '@/features/import-steward/stewardEngine.types';
+import { useStewardResolutionPlan } from '@/features/import-steward/useStewardResolutionPlan';
 import { safeDisplayError } from '@/lib/api';
 
 import {
@@ -38,13 +47,12 @@ import {
 import {
   bulkMapCporHistoricalTokens,
   cporDimLabel,
-  cporTokenRowId,
   fetchCporDimOptions,
-  fetchCporHistoricalCandidates,
   fetchCporHistoricalSummary,
   mapCporHistoricalToken,
   type CporDimPick,
 } from './cporHistoricalImportApi';
+import { CPOR_HISTORICAL_ENGINE_CONFIG } from './cporHistoricalSteward.engineConfig';
 import {
   CPOR_ENTITY_TAB_DEFS,
   CPOR_HISTORICAL_STEWARD_CONFIG,
@@ -53,8 +61,16 @@ import {
   type CporEntityTabId,
   type CporPlanClass,
 } from './cporHistoricalSteward.config';
+import { useCporCandidatesPage } from './useCporCandidatesPage';
 
 type CporEntityTabCounts = StewardEntityTabCounts<CporEntityTabId>;
+
+const PLAN_CLASS_QUEUES = new Set<string>([
+  'ready_to_map',
+  'ambiguous_eligible',
+  'no_match',
+  'needs_review',
+]);
 
 function emptyCounts(): CporEntityTabCounts {
   return {
@@ -72,24 +88,20 @@ function defaultCporFiltersForTab(tab: CporEntityTabId): DsiStewardCandidateFilt
   };
 }
 
-/** Drive queue chips from Unit 1 plan_class — no inert DSI-only queues. */
+function queueToPlanClass(queue: string): CporPlanClass | null {
+  if (PLAN_CLASS_QUEUES.has(queue)) return queue as CporPlanClass;
+  return null;
+}
+
+/** Client search only — plan_class queue chips filter server-side via useCporCandidatesPage. */
 function filterCporStewardRows(
   rows: CporStewardRow[],
   filters: DsiStewardCandidateFilterState,
   search: string
 ): CporStewardRow[] {
   let next = rows;
-  const queue = filters.queue;
-  if (queue === 'ready_to_map') {
-    next = next.filter((r) => r.plan_class === 'ready_to_map');
-  } else if (queue === 'ambiguous_eligible') {
-    next = next.filter((r) => r.plan_class === 'ambiguous_eligible');
-  } else if (queue === 'no_match') {
-    next = next.filter((r) => r.plan_class === 'no_match');
-  } else if (queue === 'needs_review') {
-    next = next.filter((r) => r.plan_class === 'needs_review');
-  } else if (queue === 'provisional') {
-    // CPOR has no provisional masters — keep empty rather than invent semantics.
+  // CPOR has no provisional masters — keep empty rather than invent semantics.
+  if (filters.queue === 'provisional') {
     next = [];
   }
   if (!search) return next;
@@ -101,7 +113,48 @@ function filterCporStewardRows(
       String(r.plan_class ?? '').toLowerCase().includes(needle) ||
       String(r.match_reason ?? '').toLowerCase().includes(needle) ||
       (r.suggestions ?? []).some((s) => s.label.toLowerCase().includes(needle)) ||
-      String(r.row_count).includes(needle)
+      String(r.row_count).includes(needle) ||
+      (r.sample_raw_values ?? []).some((v) => v.toLowerCase().includes(needle)) ||
+      (r.case_codes ?? []).some((c) => c.toLowerCase().includes(needle))
+  );
+}
+
+function formatCporPlanApplySummary(data: Record<string, unknown>): StewardPlanApplyFeedback {
+  const applied = Number(data.applied ?? 0);
+  const failed = Number(data.failed ?? 0);
+  const skipped = Number(data.skipped_not_ready ?? 0);
+  if (applied > 0 && failed === 0) {
+    return { severity: 'success', message: `Applied ${applied} plan row(s).` };
+  }
+  if (applied > 0) {
+    return {
+      severity: 'warning',
+      message: `Partial success: applied ${applied}, failed ${failed}, skipped ${skipped}.`,
+    };
+  }
+  return {
+    severity: 'warning',
+    message: `No rows applied (failed ${failed}, skipped ${skipped}).`,
+  };
+}
+
+function cporPlanSummaryChips(summary: Record<string, unknown>) {
+  return (
+    <>
+      <Chip size="small" label={`Candidates ${String(summary.total ?? '—')}`} />
+      <Chip
+        size="small"
+        color="success"
+        variant="outlined"
+        label={`Ready ${String(summary.ready ?? '—')}`}
+      />
+      <Chip
+        size="small"
+        color="warning"
+        variant="outlined"
+        label={`Needs work ${String(summary.not_ready ?? '—')}`}
+      />
+    </>
   );
 }
 
@@ -130,6 +183,10 @@ function ConfidenceBandCell({ score }: { score: number | null }) {
   );
 }
 
+function formatNullableNumber(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(Number(n))) return '—';
+  return String(n);
+}
 
 export function CporHistoricalImportJobResolutionSection({
   importJobId,
@@ -153,6 +210,7 @@ export function CporHistoricalImportJobResolutionSection({
   const [bulkMode, setBulkMode] = useState<BulkTableSelectionMode>('normal');
   const [bulkTarget, setBulkTarget] = useState<CporDimPick | null>(null);
   const [detailCandidate, setDetailCandidate] = useState<CporStewardRow | null>(null);
+  const [planApplySummary, setPlanApplySummary] = useState<StewardPlanApplyFeedback | null>(null);
   const [actionFeedback, setActionFeedback] = useState<{
     message: string;
     severity: 'error' | 'warning';
@@ -160,6 +218,7 @@ export function CporHistoricalImportJobResolutionSection({
   const workspaceToolbarRef = useRef<HTMLDivElement | null>(null);
 
   const tabbedMode = importJobId != null;
+  const planClassFilter = queueToPlanClass(activeFilters.queue);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
@@ -178,23 +237,25 @@ export function CporHistoricalImportJobResolutionSection({
     queryFn: ({ signal }) => fetchCporHistoricalSummary(importJobId!, signal),
   });
 
-  const candidatesQuery = useQuery({
-    queryKey: CPOR_HISTORICAL_STEWARD_CONFIG.candidatesQueryKey(importJobId ?? 0, activeTab),
-    enabled: tabbedMode,
-    queryFn: ({ signal }) => fetchCporHistoricalCandidates(importJobId!, activeTab, signal),
-  });
+  const candidatesPage = useCporCandidatesPage(
+    importJobId ?? 0,
+    activeTab,
+    planClassFilter,
+    { enabled: tabbedMode }
+  );
 
   const stewardRows: CporStewardRow[] = useMemo(
     () =>
-      (candidatesQuery.data?.candidates ?? []).map((c) => ({
-        id: cporTokenRowId(c.token),
+      candidatesPage.candidates.map((c) => ({
+        id: c.id,
         entity_type: c.entity,
         normalized_key: c.token,
         token: c.token,
         row_count: c.row_count,
-        total_units: null,
-        total_reported_value: null,
-        sample_raw_values: [c.token],
+        total_units: c.total_units ?? null,
+        total_reported_value: c.total_reported_value ?? null,
+        sample_raw_values: c.sample_raw_values ?? [],
+        case_codes: c.case_codes ?? [],
         status: c.status,
         match_reason: c.match_reason ?? null,
         confidence_score: c.confidence ?? null,
@@ -202,7 +263,7 @@ export function CporHistoricalImportJobResolutionSection({
         plan_class: (c.plan_class as CporPlanClass | null | undefined) ?? null,
         suggestions: c.suggestions ?? [],
       })),
-    [candidatesQuery.data?.candidates]
+    [candidatesPage.candidates]
   );
 
   const filteredRows = useMemo(
@@ -210,26 +271,33 @@ export function CporHistoricalImportJobResolutionSection({
     [stewardRows, activeFilters, debouncedSearch]
   );
 
+  const plan = useStewardResolutionPlan({
+    importJobId: importJobId ?? 0,
+    candidates: filteredRows,
+    onInvalidate,
+    onAsyncPipelineStarted,
+    setSelectedIds,
+    setPlanApplySummary,
+    config: CPOR_HISTORICAL_ENGINE_CONFIG,
+    formatPlanApplySummary: formatCporPlanApplySummary,
+  });
+
   const counts: CporEntityTabCounts = useMemo(() => {
     const unresolved = summaryQuery.data?.unresolved_counts;
-    const fromCandidates = candidatesQuery.data?.counts;
+    const fromCandidates = candidatesPage.counts;
     const next = emptyCounts();
     for (const id of ['product', 'customer', 'distributor'] as const) {
       const n = unresolved?.[id] ?? fromCandidates?.[id] ?? null;
       next[id] = { total: n, needsWork: n != null && n > 0 ? n : 0 };
     }
     return next;
-  }, [summaryQuery.data?.unresolved_counts, candidatesQuery.data?.counts]);
+  }, [summaryQuery.data?.unresolved_counts, candidatesPage.counts]);
 
   const planClassCountsForTab = useMemo(() => {
     const fromSummary = summaryQuery.data?.plan_class_counts?.[activeTab];
-    const fromCandidates = candidatesQuery.data?.plan_class_counts?.[activeTab];
+    const fromCandidates = candidatesPage.planClassCounts?.[activeTab];
     return fromSummary ?? fromCandidates ?? {};
-  }, [
-    activeTab,
-    summaryQuery.data?.plan_class_counts,
-    candidatesQuery.data?.plan_class_counts,
-  ]);
+  }, [activeTab, summaryQuery.data?.plan_class_counts, candidatesPage.planClassCounts]);
 
   const productMatchStatusCounts = useMemo(
     () => ({
@@ -248,6 +316,11 @@ export function CporHistoricalImportJobResolutionSection({
     setDebouncedSearch('');
     setActiveFilters(defaultCporFiltersForTab(activeTab));
   }, [importJobId, activeTab]);
+
+  useEffect(() => {
+    setDetailCandidate(null);
+    setSelectedIds([]);
+  }, [candidatesPage.page, candidatesPage.pageSize, planClassFilter]);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const visibleRowIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
@@ -314,9 +387,15 @@ export function CporHistoricalImportJobResolutionSection({
     },
   });
 
-  const stewardOverlayBusy = mapMutation.isPending || pipelineRunning;
+  const stewardOverlayBusy =
+    mapMutation.isPending ||
+    pipelineRunning ||
+    plan.applyResolutionPlan.isPending ||
+    plan.suggestionsQuery.isFetching;
+
   const candidatesLoading =
-    candidatesQuery.isLoading || (candidatesQuery.isFetching && stewardRows.length === 0);
+    candidatesPage.query.isLoading ||
+    (candidatesPage.query.isFetching && stewardRows.length === 0);
 
   const fetchBulkOptions = useCallback(
     (q: string, signal: AbortSignal) => fetchCporDimOptions(activeTab, q, signal),
@@ -334,6 +413,19 @@ export function CporHistoricalImportJobResolutionSection({
       setSelectedIds(filteredRows.map((r) => r.id));
     }
   }, [filteredRows, selectedIds.length]);
+
+  const selectVisibleReadyInGrid = useCallback(() => {
+    const ready = filteredRows
+      .filter((c) => plan.planByCandidateId.get(c.id)?.ready === true)
+      .map((c) => c.id);
+    setSelectedIds(ready);
+    setBulkMode('selecting');
+  }, [filteredRows, plan.planByCandidateId]);
+
+  const planSummary =
+    plan.resolutionPlan?.summary && typeof plan.resolutionPlan.summary === 'object'
+      ? (plan.resolutionPlan.summary as Record<string, unknown>)
+      : null;
 
   if (importJobId == null) {
     return (
@@ -365,6 +457,60 @@ export function CporHistoricalImportJobResolutionSection({
         </Alert>
       ) : null}
 
+      {planApplySummary ? (
+        <Alert severity={planApplySummary.severity} onClose={() => setPlanApplySummary(null)}>
+          {planApplySummary.message}
+        </Alert>
+      ) : null}
+
+      <StewardResolutionPlanToolbar
+        plan={{
+          candidatesCount: filteredRows.length,
+          readyCount: plan.readyPlanCandidateIds.length,
+          suggestionsQuery: plan.suggestionsQuery,
+        }}
+        testIds={CPOR_HISTORICAL_ENGINE_CONFIG.planToolbarTestIds}
+        copy={CPOR_HISTORICAL_ENGINE_CONFIG.planToolbarCopy}
+        onApplyAllReady={() => plan.setApplyAllConfirmOpen(true)}
+        applyAllPending={plan.applyResolutionPlan.isPending}
+        applyAllDisabled={
+          plan.readyPlanCandidateIds.length === 0 || plan.applyResolutionPlan.isPending
+        }
+        applyAllLabel={`Apply all ready (${plan.readyPlanCandidateIds.length})`}
+        applyAllTestId="cpor-resolution-plan-apply-all"
+        summaryChipsSlot={planSummary ? cporPlanSummaryChips(planSummary) : undefined}
+      />
+
+      <Dialog
+        open={plan.applyAllConfirmOpen}
+        onClose={() => plan.setApplyAllConfirmOpen(false)}
+        data-testid="cpor-resolution-plan-apply-all-dialog"
+      >
+        <DialogTitle>Apply all ready rows?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            You are about to map <strong>{plan.readyPlanCandidateIds.length}</strong> ready
+            token(s) — each to its own top suggestion target. This is steward plan-apply, not
+            case apply.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => plan.setApplyAllConfirmOpen(false)}>Cancel</Button>
+          <StewardPendingButton
+            variant="contained"
+            pending={plan.applyResolutionPlan.isPending}
+            pendingLabel="Applying…"
+            onClick={() => {
+              plan.setApplyAllConfirmOpen(false);
+              void plan.applyResolutionPlan.mutateAsync(plan.readyPlanCandidateIds).catch(() => {});
+            }}
+            data-testid="cpor-resolution-plan-apply-all-confirm"
+          >
+            Apply all ready
+          </StewardPendingButton>
+        </DialogActions>
+      </Dialog>
+
       <StewardWorkspaceViewportShell
         bordered
         rootTestId="cpor-historical-steward-workspace-viewport-shell"
@@ -382,7 +528,13 @@ export function CporHistoricalImportJobResolutionSection({
               isLoading={candidatesLoading}
               busy={stewardOverlayBusy}
               busyOverlay={{
-                message: mapMutation.isPending ? 'Mapping tokens…' : 'Pipeline running…',
+                message: mapMutation.isPending
+                  ? 'Mapping tokens…'
+                  : plan.applyResolutionPlan.isPending
+                    ? 'Applying resolution plan…'
+                    : plan.suggestionsQuery.isFetching
+                      ? 'Computing resolution plan…'
+                      : 'Pipeline running…',
               }}
               actionFeedback={
                 actionFeedback
@@ -407,6 +559,18 @@ export function CporHistoricalImportJobResolutionSection({
                   header: 'Rows',
                   align: 'right',
                   cell: (r) => r.row_count,
+                },
+                {
+                  id: 'units',
+                  header: 'Units',
+                  align: 'right',
+                  cell: (r) => formatNullableNumber(r.total_units),
+                },
+                {
+                  id: 'value',
+                  header: 'Value',
+                  align: 'right',
+                  cell: (r) => formatNullableNumber(r.total_reported_value),
                 },
                 {
                   id: 'plan_class',
@@ -495,7 +659,7 @@ export function CporHistoricalImportJobResolutionSection({
                     filters={activeFilters}
                     onChange={setActiveFilters}
                     visibleCount={filteredRows.length}
-                    totalCount={stewardRows.length}
+                    totalCount={candidatesPage.total}
                     hideEntityFilter
                     hidePartyFilter
                     hideProvisionalQueue
@@ -567,12 +731,43 @@ export function CporHistoricalImportJobResolutionSection({
                       >
                         Map selected to…
                       </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={
+                          !filteredRows.some((c) => plan.planByCandidateId.get(c.id)?.ready === true)
+                        }
+                        onClick={selectVisibleReadyInGrid}
+                        data-testid="cpor-plan-select-visible-ready"
+                      >
+                        Select visible ready
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={selectedIds.length === 0 || plan.applyResolutionPlan.isPending}
+                        onClick={() => plan.applyResolutionPlan.mutate(selectedIds)}
+                        data-testid="cpor-resolution-plan-apply-selected"
+                      >
+                        Apply selected ({selectedIds.length})
+                      </Button>
                       <Typography variant="caption" color="text.secondary">
-                        {selectedIds.length} selected · Click a row to map one token
+                        {selectedIds.length} selected · Ready {plan.readyPlanCandidateIds.length}
                       </Typography>
                       <Box sx={{ flexGrow: 1 }} />
                     </>
                   )}
+                  <StewardCandidatesPagination
+                    page={candidatesPage.page}
+                    pageCount={candidatesPage.pageCount}
+                    pageSize={candidatesPage.pageSize}
+                    total={candidatesPage.total}
+                    skip={candidatesPage.skip}
+                    pageItemCount={filteredRows.length}
+                    busy={stewardOverlayBusy}
+                    onPageChange={candidatesPage.setPage}
+                    onPageSizeChange={candidatesPage.setPageSize}
+                  />
                 </Stack>
               }
               bulkFormSlot={

@@ -28,6 +28,8 @@ export type CporStewardRow = ImportStewardCandidateRowBase & {
   token: string;
   plan_class?: CporPlanClass | string | null;
   suggestions?: CporCandidateSuggestion[];
+  /** Affected case codes from staging enrichment (Unit C S6 payload). */
+  case_codes?: string[];
 };
 
 export function CporCandidateStewardDrawer({

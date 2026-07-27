@@ -54,6 +54,8 @@ TASK_CLASS_BY_NAME: dict[str, str] = {
     "imports.shipment_bulk_ignore": "steward",
     "imports.shipment_resolution_plan_compute": "steward",
     "imports.shipment_resolution_plan_apply": "steward",
+    "imports.cpor_historical_resolution_plan_compute": "steward",
+    "imports.cpor_historical_resolution_plan_apply": "steward",
     "imports.dsi_soh_reconciliation": "derive",
     "imports.dsi_velocity_compute": "derive",
     "imports.dsi_forecasting": "derive",

@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-26 (Unit B2 Opus VERIFY PASS)
+**Last updated:** 2026-07-27 (Unit C implement — VERIFY pending)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,19 +10,19 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
-| **Alembic (DB)** | **`20260720_0073` on cip** |
-| **HEAD** | `f9c49f9` |
-| **Pushed?** | yes |
-| **Next** | **Unit C CONSULT blocked** — Claude CLI monthly spend limit (Opus + Fable). Raise limit / switch credits, then re-seed Unit C from `.cursor/templates/consult_seed_template.md` (seed already at `.tmp/unit_c_consult_opus_seed.md`). |
+| **Alembic (DB)** | **`20260727_0074` on cip** (token surrogate) |
+| **HEAD** | *(set after Unit C commit)* |
+| **Pushed?** | pending Unit C commit |
+| **Next** | Opus VERIFY Unit C → Unit D CONSULT (S6/S7 UI + apply-all normalize) |
 
 ---
 
 ## Standing quality bar
 
 **Contract or STOP · no half-PASS · code is evidence.**  
-Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v1.2**).
+Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v1.3**).
 
-**Consolidation arc:** Units A–B shipped; Unit B2 implemented (VERIFY pending). C/D/E/F open (same session).
+**Consolidation arc:** A–B2 PASS; **Unit C implemented** (VERIFY next); D/E/F open (same session).
 
 ---
 
@@ -31,41 +31,42 @@ Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v
 | Label | Fact |
 |-------|------|
 | **Proven** | H1; H2 apply; smoke `H2-SMOKE-556` |
-| **Proven (this arc)** | Unit 1 suggestions @ `50c1ee8`; Unit 2 intelligence @ `ade5624`; Unit 3 upload-first @ `5044fce` |
-| **Known contract gaps (v1.2)** | S9 absent; S6 nulled evidence; S12 unverified at volume; S14 `cporTokenRowId` — close in Unit C |
-| **Out of scope** | Unit 4 config-driven `ImportJobResolutionSection`; relocate into `admin/imports/page.tsx` |
+| **Proven (this arc)** | Unit 1–3; Unit C: S9 plan + S12 pagination + S14 surrogate + S6/S4 payload |
+| **Known contract gaps (v1.3)** | S6/S7 **drawer UI** → Unit D (payload done) |
+| **Out of scope** | Unit 4 config-driven section; relocate into imports monolith |
 
 Route (keep): `/commercial-planner/cpor-cases/historical-import`
 
 ---
 
-## Unit B2 (this session)
+## Unit C (this session)
 
 | Label | Fact |
 |-------|------|
-| **Opus VERIFY** | **PASS** @ `f9c49f9` — response `.tmp/unit_b2_verify_opus_response.md` |
-| **Wired + unit-tested** | Shipment bulk preview→apply; binds `useStewardBulkSteward` + `StewardBulkSection`; deleted local bulk modules; toolbar summary chips + effective refresh; D-011/D-012; contract v1.2 |
-| **Baselines (D-007)** | Locked API 17 files: PRE **113p/6s** → AFTER **114p/6s** (+1 ignore enqueue in shipment async). New preview suite 19p. Web vitest AFTER **204p**. Full tsc path+code NEW=0 vs PRE. |
-| **D-002** | No `bulkStrategy`; provisional names via `getBulkBodyExtras`; global-suspicious waived (D-012) |
-| **Not proven** | Live operator soak |
+| **Status** | Implemented; Opus VERIFY pending |
+| **Migration** | `20260727_0074` — `import_cpor_historical_token_surrogate` (+ grants); applied on cip |
+| **Backend** | Surrogate get-or-create; candidates enrichment + server pagination/`plan_class`; resolution-plan compute/apply async; tasks `imports.cpor_historical_resolution_plan_*`; slot `SLOT_CPOR_RESOLUTION_PLAN` ≠ SLOT_MAIN; case-apply untouched |
+| **Web** | `CPOR_HISTORICAL_ENGINE_CONFIG` + `useStewardResolutionPlan`; `useCporCandidatesPage` + `StewardCandidatesPagination`; deleted `cporTokenRowId`; apply-all in plan toolbar (D-015) |
+| **Decisions** | D-013, D-014, D-015; contract **v1.3** |
+| **Tests** | API `test_cpor_historical_unit_c.py` 28p + slots; web section 7p |
+| **Not proven** | Live operator soak; Opus VERIFY |
 
 ---
 
-## Unit B
+## Unit B2
 
 | Label | Fact |
 |-------|------|
-| **Opus VERIFY** | **PASS** @ `e625388` — response `.tmp/unit_b_verify_opus_response.md` |
-| **Wired + unit-tested** | Core `useStewardResolutionPlan` geo-free; DSI composes geo; shipment binds plan engine |
-| **Not proven** | Live operator soak |
+| **Opus VERIFY** | **PASS** @ `f9c49f9` |
 
 ---
 
-## Unit A
+## Unit B / A
 
 | Label | Fact |
 |-------|------|
-| **Opus VERIFY** | **PASS** @ `ce1ca27` / pin `ead4e9f` |
+| **Unit B PASS** | @ `e625388` |
+| **Unit A PASS** | @ `ce1ca27` / pin `ead4e9f` |
 
 ---
 
@@ -78,8 +79,7 @@ Route (keep): `/commercial-planner/cpor-cases/historical-import`
 ## Do not
 
 - Relocate CPOR into imports monolith
-- Auto-create dims; change DSI resolution tiers
 - Claim Unit 4 done
-- Create new `Dsi*` / `Shipment*` / `Cpor*` files under `features/import-steward/`
-- Add `bulkStrategy` / capability flags that fossilize S8 in the engine core
-- Close S6/S7 in this unit (Unit D)
+- Invent `bulkStrategy` / engine capabilities
+- Put `Cpor*` modules under `features/import-steward/`
+- Close S6/S7 drawer **UI** in Unit C (Unit D)

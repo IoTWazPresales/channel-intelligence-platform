@@ -20,6 +20,7 @@ from app.models.cpor_historical import CporHistoricalMappingProfile, ImportCporH
 from app.models.ingestion import ImportJob
 from app.services.cpor.historical_import.apply_sync import run_cpor_historical_apply_sync
 from app.services.cpor.historical_import.pipeline import ensure_default_mapping_profile
+from app.services.cpor.historical_import.resolution_plan import build_cpor_historical_resolution_plan_sync
 from app.services.cpor.historical_import.resolve import (
     case_apply_blockers,
     list_unresolved_candidates,
@@ -27,8 +28,14 @@ from app.services.cpor.historical_import.resolve import (
     map_staging_tokens,
     plan_class_counts,
 )
-from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
+from app.services.imports.import_background_slots import (
+    SLOT_CPOR_RESOLUTION_PLAN,
+    SLOT_MAIN,
+    clear_task_slot_on_job,
+    set_task_slot_on_job,
+)
 from app.services.imports.import_dispatch import enqueue_import_worker_task
+from app.services.imports.import_job_background_metadata import ACTIVE_CELERY_STATES, read_main_celery_state
 from app.services.imports.import_pipeline_dispatch_claim import claim_import_pipeline_dispatch
 from app.ingestion.pipeline import process_import_job_sync
 from app.services.task_run_ledger import (
@@ -64,6 +71,14 @@ class ApplyBody(BaseModel):
     confirm: bool = False
 
 
+class ResolutionPlanGenerateBody(BaseModel):
+    candidate_ids: list[int] | None = None
+
+
+class ResolutionPlanApplyBody(BaseModel):
+    candidate_ids: list[int] = Field(min_length=1)
+
+
 def _require_admin(x_user_role: str | None) -> None:
     if (x_user_role or "").strip().lower() != "admin":
         raise HTTPException(
@@ -77,6 +92,68 @@ def _get_job_sync(db: Session, job_id: int) -> ImportJob:
     if job is None or (job.template_slug or "") != TEMPLATE_SLUG:
         raise HTTPException(status_code=404, detail={"error": "job_not_found"})
     return job
+
+
+def _cpor_resolution_plan_task_id(job: ImportJob) -> str | None:
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    slot = meta.get("cpor_resolution_plan_task")
+    if not isinstance(slot, dict):
+        return None
+    tid = slot.get("task_id")
+    return tid.strip() if isinstance(tid, str) and tid.strip() else None
+
+
+def _assert_cpor_resolution_plan_dispatch_allowed(job: ImportJob) -> None:
+    """409 guard (Unit C, D-013 dispatch-claim) — block a new plan compute/apply while case
+    validate/apply (SLOT_MAIN) or another resolution-plan task (SLOT_CPOR_RESOLUTION_PLAN) is
+    already in flight for this job. Concurrent writers to the same staging rows would race.
+    """
+    if (job.status or "").strip().lower() == "running":
+        state = read_main_celery_state(job)
+        if state is not None and state in ACTIVE_CELERY_STATES:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "cpor_pipeline_busy",
+                    "message": f"Historical CPOR validate/apply is already running for job {job.id}.",
+                },
+            )
+
+    tid = _cpor_resolution_plan_task_id(job)
+    if tid:
+        from app.services.imports.background_tasks import read_celery_with_timeout
+
+        try:
+            state, _info = read_celery_with_timeout(tid, timeout_s=2.0)
+        except Exception:
+            state = None
+        if state in ACTIVE_CELERY_STATES:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "cpor_resolution_plan_busy",
+                    "message": f"A CPOR resolution plan task is already in flight for job {job.id}.",
+                },
+            )
+
+
+def _write_cpor_resolution_plan_slot(job_id: int, task_id: str, *, async_poll: bool, label: str) -> None:
+    """Record the CPOR resolution-plan Celery task on the job (own slot, never SLOT_MAIN)."""
+    with SessionLocal() as meta_db:
+        job = meta_db.get(ImportJob, job_id)
+        if job is not None:
+            set_task_slot_on_job(
+                job, SLOT_CPOR_RESOLUTION_PLAN, task_id=task_id, async_poll=async_poll, label=label
+            )
+            meta_db.commit()
+
+
+def _clear_cpor_resolution_plan_slot(job_id: int) -> None:
+    with SessionLocal() as sess:
+        job = sess.get(ImportJob, job_id)
+        if job is not None:
+            clear_task_slot_on_job(job, SLOT_CPOR_RESOLUTION_PLAN)
+            sess.commit()
 
 
 def _dispatch_cpor_historical_apply(job_id: int) -> tuple[bool, str | None]:
@@ -178,6 +255,7 @@ def historical_job_summary(
             or 0
         )
         unresolved = list_unresolved_candidates(db, job_id=job_id)
+        db.commit()  # persist any newly get-or-created token surrogate ids (D-014)
         rows = list(
             db.scalars(
                 select(ImportCporHistoricalStagingLine).where(
@@ -218,18 +296,43 @@ def historical_job_summary(
 def historical_candidates(
     job_id: int,
     entity: Annotated[Literal["product", "customer", "distributor"], Query()] = "product",
+    plan_class: Annotated[
+        Literal["ready_to_map", "ambiguous_eligible", "needs_review", "no_match"] | None, Query()
+    ] = None,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int | None, Query(ge=1, le=5000)] = None,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
 ) -> dict[str, Any]:
+    """Steward candidates for one entity tab (Unit C S12 server pagination, S9 plan_class filter).
+
+    ``plan_class`` filters the returned page server-side (avoids the queue-chip collision from
+    client-side filtering a truncated page). ``counts`` / ``plan_class_counts`` always reflect
+    the *full* unfiltered/unpaginated set so queue chips stay correct regardless of the current
+    page. When ``limit`` is omitted, all matching rows are returned (byte-compatible with the
+    pre-Unit-C response) — pass ``skip``/``limit`` to opt into pagination.
+    """
     _require_admin(x_user_role)
     with SessionLocal() as db:
         _get_job_sync(db, job_id)
         all_c = list_unresolved_candidates(db, job_id=job_id)
+        db.commit()  # persist any newly get-or-created token surrogate ids (D-014)
+        counts = {k: len(v) for k, v in all_c.items()}
+        pcc = plan_class_counts(all_c)
         rows = all_c.get(entity) or []
+        if plan_class is not None:
+            rows = [r for r in rows if r.get("plan_class") == plan_class]
+        total = len(rows)
+        limit_val = limit if limit is not None else (total or 1)
+        page_rows = rows[skip : skip + limit_val]
         return {
             "entity": entity,
-            "candidates": rows,
-            "counts": {k: len(v) for k, v in all_c.items()},
-            "plan_class_counts": plan_class_counts(all_c),
+            "candidates": page_rows,
+            "items": page_rows,
+            "total": total,
+            "skip": skip,
+            "limit": limit_val,
+            "counts": counts,
+            "plan_class_counts": pcc,
         }
 
 
@@ -438,4 +541,143 @@ def historical_progress(
     elif status in ("failed", "interrupted") or stage in ("failed", "stage_failed"):
         progress["phase"] = "failed"
         progress["phase_label"] = "Failed"
+    return progress
+
+
+# --- Resolution plan (Unit C, D-013) -------------------------------------------------------
+#
+# Transient steward resolution plan over the same unresolved token candidates as
+# .../candidates (S9 plan engine). Own background-task slot (``SLOT_CPOR_RESOLUTION_PLAN``) —
+# never ``SLOT_MAIN``, which stays reserved for validate/case-apply (``historical_validate`` /
+# ``historical_apply`` above). Poll via .../resolution-plan-task/{task_id}, mirroring
+# ``shipment_evidence.shipment_bulk_task_status`` — the shared .../progress endpoint above is
+# scoped to SLOT_MAIN pipeline-stage tracking and does not read this slot.
+
+
+@router.post("/historical-import/jobs/{job_id}/resolution-plan", status_code=200)
+def historical_resolution_plan_generate(
+    job_id: int,
+    body: ResolutionPlanGenerateBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    """Synchronous plan generation — small jobs / tests. Prefer compute-async for steward UI."""
+    _require_admin(x_user_role)
+    with SessionLocal() as db:
+        try:
+            out = build_cpor_historical_resolution_plan_sync(db, job_id, candidate_ids=body.candidate_ids)
+            db.commit()  # persist any newly get-or-created token surrogate ids (D-014)
+            return out
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/historical-import/jobs/{job_id}/resolution-plan/compute-async", status_code=202)
+def historical_resolution_plan_compute_async(
+    job_id: int,
+    body: ResolutionPlanGenerateBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    with SessionLocal() as s:
+        job = _get_job_sync(s, job_id)
+        _assert_cpor_resolution_plan_dispatch_allowed(job)
+
+    payload = {"candidate_ids": list(body.candidate_ids) if body.candidate_ids else None}
+    from app.services.cpor.historical_import.resolution_plan_enqueue import (
+        TASK_CPOR_RESOLUTION_PLAN_COMPUTE,
+        enqueue_cpor_resolution_plan_task,
+        run_cpor_historical_resolution_plan_compute_sync,
+    )
+
+    task_id, async_poll = enqueue_cpor_resolution_plan_task(
+        task_name=TASK_CPOR_RESOLUTION_PLAN_COMPUTE,
+        job_id=job_id,
+        payload=payload,
+        run_sync=lambda: run_cpor_historical_resolution_plan_compute_sync(job_id, payload),
+        dev_prefix="cpor-plan-compute",
+    )
+    _write_cpor_resolution_plan_slot(
+        job_id, task_id, async_poll=async_poll, label="Computing CPOR resolution plan…"
+    )
+    return {"import_job_id": job_id, "task_id": task_id, "async_poll": async_poll, "async": True}
+
+
+@router.post("/historical-import/jobs/{job_id}/resolution-plan/apply-async", status_code=202)
+def historical_resolution_plan_apply_async(
+    job_id: int,
+    body: ResolutionPlanApplyBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> dict[str, Any]:
+    """Apply ready resolution-plan rows — per-token map_staging_token (D-013; never bulk single-target)."""
+    _require_admin(x_user_role)
+    with SessionLocal() as s:
+        job = _get_job_sync(s, job_id)
+        _assert_cpor_resolution_plan_dispatch_allowed(job)
+
+    payload = {"candidate_ids": [int(x) for x in body.candidate_ids]}
+    from app.services.cpor.historical_import.resolution_plan_enqueue import (
+        TASK_CPOR_RESOLUTION_PLAN_APPLY,
+        enqueue_cpor_resolution_plan_task,
+        run_cpor_historical_resolution_plan_apply_sync,
+    )
+
+    task_id, async_poll = enqueue_cpor_resolution_plan_task(
+        task_name=TASK_CPOR_RESOLUTION_PLAN_APPLY,
+        job_id=job_id,
+        payload=payload,
+        run_sync=lambda: run_cpor_historical_resolution_plan_apply_sync(job_id, payload),
+        dev_prefix="cpor-plan-apply",
+    )
+    _write_cpor_resolution_plan_slot(
+        job_id, task_id, async_poll=async_poll, label="Applying CPOR resolution plan…"
+    )
+    return {"import_job_id": job_id, "task_id": task_id, "async_poll": async_poll, "async": True}
+
+
+@router.get("/historical-import/jobs/{job_id}/resolution-plan-task/{task_id}", status_code=200)
+def historical_resolution_plan_task_status(job_id: int, task_id: str) -> dict[str, Any]:
+    """Poll a CPOR resolution-plan Celery task (or dev in-process / sync fallback) state + result.
+
+    Mirrors ``shipment_evidence.shipment_bulk_task_status``: clears the registered
+    ``cpor_resolution_plan_task`` slot once the task is terminal.
+    """
+    from app.services.cpor.historical_import.resolution_plan_enqueue import (
+        dev_cpor_resolution_plan_task_results,
+    )
+
+    dev_store = dev_cpor_resolution_plan_task_results()
+    dev_hit = dev_store.get(task_id)
+    if dev_hit is not None:
+        state = dev_hit.get("state", "SUCCESS")
+        if state in ("SUCCESS", "FAILURE"):
+            dev_store.pop(task_id, None)
+        out: dict[str, Any] = {"import_job_id": job_id, "task_id": task_id, "state": state}
+        if state == "SUCCESS":
+            out["result"] = dev_hit.get("result")
+        else:
+            out["error"] = dev_hit.get("error")
+        if state in ("SUCCESS", "FAILURE"):
+            _clear_cpor_resolution_plan_slot(job_id)
+        return out
+
+    from celery.result import AsyncResult
+
+    result = AsyncResult(task_id, app=celery_app)
+    task_state = result.state
+    info = result.info
+    progress: dict[str, Any] = {"import_job_id": job_id, "task_id": task_id, "state": task_state}
+    if task_state == "PROGRESS" and isinstance(info, dict):
+        progress["phase"] = info.get("phase")
+        progress["phase_label"] = info.get("phase_label")
+        progress["current_row"] = info.get("current_row", 0)
+        progress["total_rows"] = info.get("total_rows", 0)
+        progress["pct"] = info.get("pct", 0)
+    elif task_state == "SUCCESS":
+        progress["result"] = result.result if isinstance(result.result, dict) else None
+    elif task_state == "FAILURE":
+        progress["error"] = str(info)[:800] if info is not None else "Task failed"
+
+    if task_state in ("SUCCESS", "FAILURE", "REVOKED"):
+        _clear_cpor_resolution_plan_slot(job_id)
+
     return progress

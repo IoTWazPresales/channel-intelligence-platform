@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.models.cpor_historical import ImportCporHistoricalStagingLine
 from app.models.dimensions import DimCustomer, DimDistributor
 from app.services.cpor.claim_evidence import load_product_resolution_index, resolve_claim_product_id
+from app.services.cpor.historical_import.token_surrogate import get_or_create_token_surrogate
 from app.services.imports.distributor_sales_inventory import (
     ProductResolutionIndex,
     ProductResolutionProductRow,
@@ -257,8 +258,20 @@ def enrich_unresolved_candidate(
     customer_labels: dict[int, str] | None = None,
     distributor_index: dict[str, list[int]] | None = None,
     distributor_labels: dict[int, str] | None = None,
+    candidate_id: int | None = None,
+    sample_raw_values: list[str] | None = None,
+    case_codes: list[str] | None = None,
+    total_units: float | None = None,
+    total_reported_value: float | None = None,
 ) -> dict[str, Any]:
-    """Build one steward candidate dict with suggestions / plan_class (no DB writes)."""
+    """Build one steward candidate dict with suggestions / plan_class (no DB writes).
+
+    ``candidate_id`` (Unit C, D-014) is the stable numeric token-surrogate id — callers that
+    already resolved/created one (e.g. :func:`list_unresolved_candidates`) pass it through so
+    it lands on the returned dict as ``"id"``. ``sample_raw_values`` / ``case_codes`` /
+    ``total_units`` / ``total_reported_value`` are optional S6/S4 enrichment aggregates from
+    staging lines (Unit C Phase 2) — omitted fields default to empty/``None``.
+    """
     entity_l = entity.strip().lower()
     if entity_l == "product":
         if product_index is None:
@@ -280,6 +293,7 @@ def enrich_unresolved_candidate(
         raise ValueError(f"unsupported entity: {entity}")
 
     return {
+        "id": int(candidate_id) if candidate_id is not None else None,
         "entity": entity_l,
         "token": token,
         "row_count": int(row_count),
@@ -288,6 +302,10 @@ def enrich_unresolved_candidate(
         "plan_class": intel["plan_class"],
         "match_reason": intel["match_reason"],
         "suggestions": intel["suggestions"],
+        "sample_raw_values": list(sample_raw_values) if sample_raw_values else [],
+        "case_codes": list(case_codes) if case_codes else [],
+        "total_units": total_units,
+        "total_reported_value": total_reported_value,
     }
 
 
@@ -399,8 +417,57 @@ def map_staging_tokens(
     return updated
 
 
+def _new_token_aggregate() -> dict[str, Any]:
+    return {
+        "row_count": 0,
+        "samples": [],
+        "case_codes": set(),
+        "total_units": 0.0,
+        "total_reported_value": 0.0,
+        "has_reported_value": False,
+    }
+
+
+def _raw_sample_for_token(row: ImportCporHistoricalStagingLine, token: str) -> str:
+    """Best-effort original (un-normalized) raw value for ``token`` from the source row.
+
+    Falls back to the resolved token string itself when no raw value round-trips to the
+    same normalized key (e.g. tenant column-map surprises) — never blocks enrichment.
+    """
+    norm_token = _norm(token)
+    raw = row.raw_source_row if isinstance(row.raw_source_row, dict) else {}
+    for value in raw.values():
+        if isinstance(value, str) and _norm(value) == norm_token:
+            return value.strip()
+    return token
+
+
+def _accumulate_token(agg: dict[str, Any], row: ImportCporHistoricalStagingLine, token: str) -> None:
+    agg["row_count"] += 1
+    if len(agg["samples"]) < 3:
+        sample = _raw_sample_for_token(row, token)
+        if sample and sample not in agg["samples"]:
+            agg["samples"].append(sample)
+    code = (row.case_code or "").strip()
+    if code:
+        agg["case_codes"].add(code)
+    unit_val = row.result_qty if row.result_qty is not None else row.estimate_qty
+    if unit_val is not None:
+        agg["total_units"] += float(unit_val)
+    if row.ttl_result_usd is not None:
+        agg["total_reported_value"] += float(row.ttl_result_usd)
+        agg["has_reported_value"] = True
+
+
 def list_unresolved_candidates(db: Session, *, job_id: int) -> dict[str, list[dict[str, Any]]]:
-    """Group unresolved tokens for steward workspace tabs — with ranked suggestions."""
+    """Group unresolved tokens for steward workspace tabs — with ranked suggestions.
+
+    Also get-or-creates a stable numeric token-surrogate id per (entity, token) — see
+    :func:`app.services.cpor.historical_import.token_surrogate.get_or_create_token_surrogate`
+    (Unit C, D-014). Callers own the transaction; commit to persist newly created surrogate
+    rows (they are flushed via a SAVEPOINT so a race is harmless, but remain uncommitted
+    until the caller commits).
+    """
     rows = list(
         db.scalars(
             select(ImportCporHistoricalStagingLine).where(
@@ -409,16 +476,19 @@ def list_unresolved_candidates(db: Session, *, job_id: int) -> dict[str, list[di
             )
         ).all()
     )
-    products: dict[str, int] = defaultdict(int)
-    customers: dict[str, int] = defaultdict(int)
-    distributors: dict[str, int] = defaultdict(int)
+    products: dict[str, dict[str, Any]] = defaultdict(_new_token_aggregate)
+    customers: dict[str, dict[str, Any]] = defaultdict(_new_token_aggregate)
+    distributors: dict[str, dict[str, Any]] = defaultdict(_new_token_aggregate)
     for row in rows:
         if row.sales_model_token and row.resolved_product_id is None:
-            products[str(row.sales_model_token).strip()] += 1
+            tok = str(row.sales_model_token).strip()
+            _accumulate_token(products[tok], row, tok)
         if row.customer_token and row.resolved_customer_id is None:
-            customers[str(row.customer_token).strip()] += 1
+            tok = str(row.customer_token).strip()
+            _accumulate_token(customers[tok], row, tok)
         if row.distributor_token and row.resolved_distributor_id is None:
-            distributors[str(row.distributor_token).strip()] += 1
+            tok = str(row.distributor_token).strip()
+            _accumulate_token(distributors[tok], row, tok)
 
     product_index = load_product_resolution_index(db) if products else None
     customer_index, customer_labels = (
@@ -428,19 +498,27 @@ def list_unresolved_candidates(db: Session, *, job_id: int) -> dict[str, list[di
         _load_party_token_index(db, model=DimDistributor) if distributors else ({}, {})
     )
 
-    def _pack(d: dict[str, int], entity: str) -> list[dict[str, Any]]:
+    def _pack(d: dict[str, dict[str, Any]], entity: str) -> list[dict[str, Any]]:
         packed: list[dict[str, Any]] = []
-        for tok, cnt in sorted(d.items(), key=lambda x: (-x[1], x[0].lower())):
+        for tok, agg in sorted(d.items(), key=lambda x: (-x[1]["row_count"], x[0].lower())):
+            candidate_id = get_or_create_token_surrogate(db, job_id=job_id, entity=entity, token=tok)
             packed.append(
                 enrich_unresolved_candidate(
                     entity=entity,
                     token=tok,
-                    row_count=cnt,
+                    row_count=agg["row_count"],
                     product_index=product_index,
                     customer_index=customer_index,
                     customer_labels=customer_labels,
                     distributor_index=distributor_index,
                     distributor_labels=distributor_labels,
+                    candidate_id=candidate_id,
+                    sample_raw_values=agg["samples"],
+                    case_codes=sorted(agg["case_codes"]),
+                    total_units=round(agg["total_units"], 4),
+                    total_reported_value=(
+                        round(agg["total_reported_value"], 4) if agg["has_reported_value"] else None
+                    ),
                 )
             )
         return packed

@@ -275,6 +275,42 @@ def shipment_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dic
         raise
 
 
+@celery_app.task(name="imports.cpor_historical_resolution_plan_compute", bind=True, ack_late=True)
+def cpor_historical_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
+    """Build the CPOR historical steward resolution plan off the HTTP request path (D-013)."""
+    from app.services.cpor.historical_import.resolution_plan_enqueue import (
+        run_cpor_historical_resolution_plan_compute_sync,
+    )
+
+    try:
+        return run_cpor_historical_resolution_plan_compute_sync(
+            job_id,
+            payload,
+            on_progress=_shipment_bulk_progress(self, "computing_plan", "Computing CPOR resolution plan"),
+        )
+    except Exception:
+        logger.exception("cpor_historical_resolution_plan_compute failed job_id=%s", job_id)
+        raise
+
+
+@celery_app.task(name="imports.cpor_historical_resolution_plan_apply", bind=True, ack_late=True)
+def cpor_historical_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
+    """Apply CPOR historical resolution-plan rows — per-token map_staging_token calls (D-013)."""
+    from app.services.cpor.historical_import.resolution_plan_enqueue import (
+        run_cpor_historical_resolution_plan_apply_sync,
+    )
+
+    try:
+        return run_cpor_historical_resolution_plan_apply_sync(
+            job_id,
+            payload,
+            on_progress=_shipment_bulk_progress(self, "applying_plan", "Applying CPOR resolution plan"),
+        )
+    except Exception:
+        logger.exception("cpor_historical_resolution_plan_apply failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.cpor_historical_apply", bind=True, ack_late=True)
 def cpor_historical_apply_task(self, job_id: int) -> dict:
     """Background apply for ``cpor_historical_cases`` (staging → case/line upsert)."""

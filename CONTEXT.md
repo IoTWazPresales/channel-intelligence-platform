@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-27 — **Unit C (CPOR S9/S12/S14 + S6 payload):** surrogate `0074`; plan compute/apply async ≠ case-apply; pagination; payload enrichment; web engine bind; D-013/14/15; contract v1.3. Next: Opus VERIFY → Unit D. Branch `feat/cpor-listing-status-audit`.
 - 2026-07-26 — **Unit B2 Opus VERIFY PASS @ `f9c49f9`:** S8 preview→apply + S9 toolbar chips/effective; D-012 waiver OK; no bulkStrategy. Next: Unit C CONSULT (CPOR). Branch `feat/cpor-listing-status-audit`.
 - 2026-07-26 — **Unit B2 (shipment S8 + S9-partial):** bulk preview→apply + StewardBulkSection bind; toolbar chips + effective refresh; D-011/D-012; contract v1.2. Next: Opus VERIFY → Unit C. Branch `feat/cpor-listing-status-audit`.
 - 2026-07-26 — **Unit B Opus VERIFY PASS @ `e625388`:** locked API 17-file set 113=113 PRE/HEAD; full tsc 0 new path+code (lists not byte-identical; 7 resolved); core genericity + dual bind PASS. Next: Unit B2 (S8 + S9-partial). Branch `feat/cpor-listing-status-audit`.

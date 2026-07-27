@@ -1,10 +1,22 @@
-"""CPOR historical import models — mapping profile + staging (H1)."""
+"""CPOR historical import models — mapping profile + staging (H1) + token surrogate (Unit C)."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -82,3 +94,28 @@ class ImportCporHistoricalStagingLine(Base, TimestampMixin):
     flags_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     source_snapshot_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     raw_source_row: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class ImportCporHistoricalTokenSurrogate(Base):
+    """Stable numeric id for an (import_job, entity, token) pair (Unit C, D-014).
+
+    Bookkeeping only — never a dimension, never resolution truth. Replaces the client-side
+    hash id (``cporTokenRowId``) used for steward workspace row keys / plan candidate ids.
+    Rows are created lazily (get-or-create) as unresolved candidates are enriched; existence
+    of a row carries no resolution meaning beyond "this token was seen for this job".
+    """
+
+    __tablename__ = "import_cpor_historical_token_surrogate"
+    __table_args__ = (
+        UniqueConstraint(
+            "import_job_id", "entity", "token", name="uq_cpor_historical_token_surrogate_job_entity_token"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    import_job_id: Mapped[int] = mapped_column(
+        ForeignKey("import_job.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    entity: Mapped[str] = mapped_column(String(16), nullable=False)
+    token: Mapped[str] = mapped_column(String(256), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

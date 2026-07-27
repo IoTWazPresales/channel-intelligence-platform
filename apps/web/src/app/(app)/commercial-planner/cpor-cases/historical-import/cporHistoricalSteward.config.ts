@@ -38,10 +38,31 @@ export const CPOR_HISTORICAL_STEWARD_CONFIG = {
   listDomainId: 'cpor_historical_cases',
   listShellCopy,
   summaryQueryKey: (importJobId: number) => ['cpor', 'historical', 'summary', importJobId] as const,
-  candidatesQueryKey: (importJobId: number, entity: CporEntityTabId) =>
-    ['cpor', 'historical', 'candidates', importJobId, entity] as const,
   candidatesRootQueryKey: (importJobId: number) =>
     ['cpor', 'historical', 'candidates', importJobId] as const,
+  /** Server-paginated candidates page (Unit C, S12) — plan_class filters server-side (S9 collision fix). */
+  candidatesPageQueryKey: (
+    importJobId: number,
+    entity: CporEntityTabId,
+    skip: number,
+    limit: number,
+    planClass?: CporPlanClass | null
+  ) =>
+    [
+      'cpor',
+      'historical',
+      'candidates',
+      importJobId,
+      'page',
+      entity,
+      skip,
+      limit,
+      planClass ?? 'all',
+    ] as const,
+  resolutionSuggestionsQueryKeyPrefix: (importJobId: number) =>
+    ['cpor', 'historical', 'resolution-suggestions', importJobId] as const,
+  resolutionSuggestionsQueryKey: (importJobId: number, candidateIdsKey: string) =>
+    ['cpor', 'historical', 'resolution-suggestions', importJobId, candidateIdsKey] as const,
   progressQueryKey: (importJobId: number) =>
     ['import-job-pipeline-progress', 'cpor_historical_import', importJobId] as const,
 } as const;
@@ -75,6 +96,8 @@ export type CporCandidateSuggestion = {
 };
 
 export type CporHistoricalCandidate = {
+  /** Persisted token-surrogate row key (Unit C, D-014) — stable across pagination/re-fetch. */
+  id: number;
   entity: string;
   token: string;
   row_count: number;
@@ -83,12 +106,31 @@ export type CporHistoricalCandidate = {
   plan_class?: CporPlanClass | string | null;
   match_reason?: string | null;
   suggestions?: CporCandidateSuggestion[];
+  /** S6/S4 staging-line enrichment aggregates (Unit C Phase 2) — never null-stubbed on the client. */
+  sample_raw_values?: string[];
+  case_codes?: string[];
+  total_units?: number | null;
+  total_reported_value?: number | null;
+};
+
+export type CporCandidatesPageResponse = {
+  entity: CporEntityTabId;
+  candidates: CporHistoricalCandidate[];
+  items: CporHistoricalCandidate[];
+  total: number;
+  skip: number;
+  limit: number;
+  counts: Record<string, number>;
+  plan_class_counts?: CporHistoricalSummary['plan_class_counts'];
 };
 
 export function invalidateCporHistoricalStewardQueries(qc: QueryClient, importJobId: number) {
   void qc.invalidateQueries({ queryKey: CPOR_HISTORICAL_STEWARD_CONFIG.summaryQueryKey(importJobId) });
   void qc.invalidateQueries({
     queryKey: CPOR_HISTORICAL_STEWARD_CONFIG.candidatesRootQueryKey(importJobId),
+  });
+  void qc.invalidateQueries({
+    queryKey: CPOR_HISTORICAL_STEWARD_CONFIG.resolutionSuggestionsQueryKeyPrefix(importJobId),
   });
   void qc.invalidateQueries({ queryKey: ['cpor', 'historical'] });
 }
