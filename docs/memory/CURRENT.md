@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-27 (Unit C implement — VERIFY pending)
+**Last updated:** 2026-07-27 (Unit C Opus VERIFY PASS)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -11,9 +11,9 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260727_0074` on cip** (token surrogate) |
-| **HEAD** | `32e4afb` (implement `4a63a30` + CURRENT pin) |
+| **HEAD** | `4a63a30` (implement; docs pins after) |
 | **Pushed?** | yes |
-| **Next** | **Unit C VERIFY blocked** — Claude CLI monthly spend limit (Opus + Fable). Raise limit / switch credits, then re-run `.tmp/unit_c_verify_opus_seed.md`. On PASS → Unit D CONSULT. |
+| **Next** | **Unit D CONSULT** — shared S6/S7 drawer UI (shipment+CPOR) + apply-all normalize (D-005/D-015) |
 
 ---
 
@@ -43,13 +43,12 @@ Route (keep): `/commercial-planner/cpor-cases/historical-import`
 
 | Label | Fact |
 |-------|------|
-| **Status** | Implemented; Opus VERIFY pending |
+| **Opus VERIFY** | **PASS** @ `4a63a30` — response `.tmp/unit_c_verify_opus_response.md` |
 | **Migration** | `20260727_0074` — `import_cpor_historical_token_surrogate` (+ grants); applied on cip |
 | **Backend** | Surrogate get-or-create; candidates enrichment + server pagination/`plan_class`; resolution-plan compute/apply async; tasks `imports.cpor_historical_resolution_plan_*`; slot `SLOT_CPOR_RESOLUTION_PLAN` ≠ SLOT_MAIN; case-apply untouched |
 | **Web** | `CPOR_HISTORICAL_ENGINE_CONFIG` + `useStewardResolutionPlan`; `useCporCandidatesPage` + `StewardCandidatesPagination`; deleted `cporTokenRowId`; apply-all in plan toolbar (D-015) |
 | **Decisions** | D-013, D-014, D-015; contract **v1.3** |
-| **Tests** | API `test_cpor_historical_unit_c.py` 28p + slots; web section 7p |
-| **Not proven** | Live operator soak; Opus VERIFY |
+| **Not proven** | Live operator soak |
 
 ---
 
