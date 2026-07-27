@@ -130,7 +130,7 @@ describe('DsiImportJobResolutionSection bulk steward', () => {
     );
   }
 
-  it('opens bulk map form without crashing (DsiBulkActionInlineForm import)', async () => {
+  it('opens bulk map form without crashing (StewardBulkActionInlineForm)', async () => {
     const user = userEvent.setup();
     renderSection();
     await user.click(screen.getByTestId('dsi-bulk-map-open'));

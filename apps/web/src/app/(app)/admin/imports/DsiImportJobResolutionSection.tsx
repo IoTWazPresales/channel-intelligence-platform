@@ -17,9 +17,7 @@ import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/
 
 import type { PlanApplyFeedback } from '@/features/import-steward/dsiSteward.types';
 import {
-  DsiBulkActionInlineForm,
-  DsiBulkStewardSection,
-  DsiCandidateStewardDrawer,
+  DsiMappingStewardPanel,
   StewardCandidatesPagination,
   StewardPendingButton,
   StewardEntityTabsBar,
@@ -36,6 +34,9 @@ import {
   DSI_ENTITY_TABS,
   ImportStewardCandidateWorkspace,
   StewardWorkspaceViewportShell,
+  StewardBulkActionInlineForm,
+  StewardBulkSection,
+  StewardCandidateDrawer,
   useDsiCandidatesPage,
   useDsiEntityTabCounts,
   PlanDialogRowDetail,
@@ -48,13 +49,14 @@ import {
   formatDsiEntityTabLabel,
   formatPlanActionLabel,
   paginateDsiStewardCandidateRows,
-  useDsiBulkSteward,
+  useStewardBulkSteward,
   useDsiResolutionPlan,
   type DsiBulkAction,
   type DsiCandidateRow,
   type DsiEntityTabId,
   type DsiStewardCandidateFilterState,
 } from '@/features/import-steward';
+import { DsiCustomerSearchFields } from '@/features/import-steward/DsiCustomerSearchFields';
 import { useDsiStewardBulkBusy } from '@/features/import-steward/useDsiStewardBulkBusy';
 import { safeDisplayError } from '@/lib/api';
 
@@ -183,7 +185,7 @@ export function DsiImportJobResolutionSection({
     stewardBulk.applyActive ||
     plan.refreshPlanEffective.isPending;
 
-  const bulk = useDsiBulkSteward({
+  const bulk = useStewardBulkSteward({
     importJobId,
     selectedIds,
     setSelectedIds,
@@ -213,6 +215,7 @@ export function DsiImportJobResolutionSection({
         globalSuspicious: plan.planGlobalSuspicious,
       });
     },
+    config: DSI_ENGINE_CONFIG,
   });
 
   const closeBulkForm = useCallback(() => {
@@ -712,11 +715,13 @@ export function DsiImportJobResolutionSection({
       }
       bulkFormSlot={
         bulkMode === 'selecting' ? (
-          <DsiBulkActionInlineForm
+          <StewardBulkActionInlineForm
             bulk={bulk}
             regions={plan.regions}
             channels={plan.channels}
             onCancel={closeBulkForm}
+            testIds={DSI_ENGINE_CONFIG.bulkTestIds}
+            renderMapCustomerFields={(args) => <DsiCustomerSearchFields {...args} />}
           />
         ) : null
       }
@@ -887,35 +892,37 @@ export function DsiImportJobResolutionSection({
         }
         drawer={
           effectiveDetailCandidate && isCandidateTab ? (
-            <DsiCandidateStewardDrawer
-              importJobId={importJobId}
-              candidate={effectiveDetailCandidate}
-              planRow={plan.planByCandidateId.get(effectiveDetailCandidate.id) ?? null}
+            <StewardCandidateDrawer
+              title={DSI_ENGINE_CONFIG.titleForCandidate(effectiveDetailCandidate)}
               onClose={() => setDetailCandidate(null)}
-              onRowActionStart={(candidateId) => setRowActionPendingId(candidateId)}
-              onRowActionEnd={() => setRowActionPendingId(null)}
-              onDone={() => setDetailCandidate(null)}
-              onStewardFastComplete={plan.evictResolvedCandidates}
-              lookupPeerCandidate={lookupPeerCandidateByNormalizedKey}
-              onOpenPeerByNormalizedKey={openPeerCandidateByNormalizedKey}
-              customerNormalizedKeysOnPage={customerNormalizedKeysOnPage}
-              duplicateClusterMembers={duplicateClusterMembersForSelection}
-            />
+              rootTestId={DSI_ENGINE_CONFIG.drawerTestIds.root}
+              closeTestId={DSI_ENGINE_CONFIG.drawerTestIds.close}
+              ariaLabel={DSI_ENGINE_CONFIG.drawerTestIds.ariaLabel}
+            >
+              <DsiMappingStewardPanel
+                importJobId={importJobId}
+                candidate={effectiveDetailCandidate}
+                planRow={plan.planByCandidateId.get(effectiveDetailCandidate.id) ?? null}
+                onRowActionStart={(candidateId) => setRowActionPendingId(candidateId)}
+                onRowActionEnd={() => setRowActionPendingId(null)}
+                onDone={() => setDetailCandidate(null)}
+                onStewardFastComplete={plan.evictResolvedCandidates}
+                lookupPeerCandidate={lookupPeerCandidateByNormalizedKey}
+                onOpenPeerByNormalizedKey={openPeerCandidateByNormalizedKey}
+                customerNormalizedKeysOnPage={customerNormalizedKeysOnPage}
+                duplicateClusterMembers={duplicateClusterMembersForSelection}
+              />
+            </StewardCandidateDrawer>
           ) : null
         }
       />
 
-      <DsiBulkStewardSection
-        bulkMode={bulkMode}
-        setBulkMode={setBulkMode}
-        selectedIds={selectedIds}
-        setSelectedIds={setSelectedIds}
-        displayedCandidateIds={displayedCandidates.map((c) => c.id)}
+      <StewardBulkSection
         bulk={bulk}
         plan={plan}
-        regions={plan.regions}
-        channels={plan.channels}
-        stewardOverlayBusy={stewardOverlayBusy}
+        testIds={DSI_ENGINE_CONFIG.bulkTestIds}
+        formatProposedLabel={DSI_ENGINE_CONFIG.formatBulkProposedLabel}
+        formatAliasEvidence={DSI_ENGINE_CONFIG.formatBulkAliasEvidence}
       />
 
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">

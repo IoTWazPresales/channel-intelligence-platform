@@ -61,27 +61,13 @@ export type {
 export { computeImportStewardSelectionHeaderState } from './importStewardSelectionUtils';
 export type { MappingCandidatesListDomainConfig } from './mappingCandidatesListDomain.types';
 export {
-  inboundEvidenceMappingCandidatesListDomain,
-  inboundEvidenceMappingCandidatesListShellCopy,
-} from './inboundEvidenceMappingCandidates.domain';
-export {
   buildInboundEvidenceMappingCandidateWorkspaceColumns,
   type InboundEvidenceMappingCandidateRow,
   type InboundEvidenceMappingCandidateWorkspaceColumnOptions,
 } from './inboundEvidenceMappingCandidateWorkspaceColumns';
-export { useInboundEvidenceMappingCandidatesListModel } from './useInboundEvidenceMappingCandidatesListModel';
-
-export { DsiGeoStewardAccordion } from './DsiGeoStewardAccordion';
-/** @deprecated Prefer StewardResolutionPlanToolbar */
-export { DsiResolutionPlanToolbar } from './DsiResolutionPlanToolbar';
 export { StewardResolutionPlanToolbar } from './StewardResolutionPlanToolbar';
 export { DsiRegionChannelTabPanel } from './DsiRegionChannelTabPanel';
 export { DsiCountryRegionFallback } from './DsiCountryRegionFallback';
-export {
-  DsiResolutionPlanAdvancedAccordion,
-  DsiResolutionSuggestionsBar,
-  DsiUnresolvedGeoStewardBlock,
-} from './DsiResolutionPlanAdvancedAccordion';
 export {
   DSI_ENTITY_CANDIDATE_TABS,
   isDsiEntityCandidateTab,
@@ -93,18 +79,12 @@ export {
   type DsiWizardJobSnapshot,
 } from './dsiImportWizardRouting';
 export { notifyDsiAsyncPipelineStarted } from './dsiAsyncPipelineRun';
-/** @deprecated Prefer StewardBulkActionInlineForm */
-export { DsiBulkActionInlineForm } from './DsiBulkActionInlineForm';
 export { StewardBulkActionInlineForm } from './StewardBulkActionInlineForm';
-/** @deprecated Prefer StewardBulkSection */
-export { DsiBulkStewardSection } from './DsiBulkStewardSection';
 export { StewardBulkSection } from './StewardBulkSection';
 export { UnresolvedGeoStewardPanel } from './UnresolvedGeoStewardPanel';
 /** @deprecated Prefer useStewardResolutionPlan */
 export { useDsiResolutionPlan } from './useDsiResolutionPlan';
 export { useStewardResolutionPlan } from './useStewardResolutionPlan';
-/** @deprecated Prefer useStewardBulkSteward */
-export { useDsiBulkSteward } from './useDsiBulkSteward';
 export { useStewardBulkSteward } from './useStewardBulkSteward';
 export {
   PlanDialogRowDetail,
@@ -118,8 +98,6 @@ export {
 } from './dsiRegionEvidenceDisplay';
 export { DsiEligibleProductPicker, type DsiEligibleProductSnapshot } from './DsiEligibleProductPicker';
 export { StewardCandidatesPagination } from './StewardCandidatesPagination';
-/** @deprecated Prefer StewardCandidateDrawer */
-export { DsiCandidateStewardDrawer } from './DsiCandidateStewardDrawer';
 export {
   ImportJobLoadedSuccessCallout,
   importJobApplyIsLoaded,

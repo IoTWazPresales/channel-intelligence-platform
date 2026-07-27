@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { nextPlanScopeCandidateIds, shrinkPlanScopeCandidateIds } from './dsiPlanScope';
+import { nextPlanScopeCandidateIds, shrinkPlanScopeCandidateIds } from './stewardPlanScope';
 
 describe('nextPlanScopeCandidateIds', () => {
   it('initializes from current page ids', () => {
