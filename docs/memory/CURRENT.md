@@ -11,9 +11,9 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260727_0074` on cip** |
-| **HEAD** | Unit F @ `a80f58a` + **uncommitted** shipping KPI rebuild |
-| **Pushed?** | Unit F yes; shipping KPI **not committed yet** |
-| **Next** | Commit/push shipping KPI when Warren asks; browser smoke `/shipping`; Opus VERIFY Unit E when usage resets. |
+| **HEAD** | `26dbf99` (shipping commercial KPI rebuild) |
+| **Pushed?** | yes |
+| **Next** | Merge `feat/dsi-unified-multifile` **into this branch** (expect heavy conflict from Unit F renames); then PR → main. |
 
 ---
 
