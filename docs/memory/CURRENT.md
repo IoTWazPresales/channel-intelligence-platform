@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-27 (Unit D implement — VERIFY pending)
+**Last updated:** 2026-07-27 (Unit D Opus VERIFY PASS)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -11,9 +11,9 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260727_0074` on cip** |
-| **HEAD** | `a41b89e` |
+| **HEAD** | `cc0138a` (Unit D + STOP fix) |
 | **Pushed?** | yes |
-| **Next** | Opus VERIFY Unit D → Unit E CONSULT (CST steward) |
+| **Next** | **Unit E CONSULT** — CST steward `/admin/cst-steward` onto engine |
 
 ---
 
@@ -30,11 +30,11 @@ Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v
 
 | Label | Fact |
 |-------|------|
-| **Status** | Implemented; Opus VERIFY pending |
+| **Opus VERIFY** | **PASS** @ `cc0138a` — response `.tmp/unit_d_verify_opus_response2.md` (first STOP fixed) |
 | **Shared** | `StewardEvidenceSummary` + `StewardSuggestionCards` (D-017); CPOR + shipment bind both |
 | **Apply-all** | DSI moved to plan toolbar `onApplyAllReady`; workspace apply-all removed; apply-selected retained (D-016) |
 | **Decisions** | D-016, D-017; contract **v1.4** |
-| **Not proven** | Opus VERIFY; live soak |
+| **Not proven** | Live soak |
 
 ---
 
