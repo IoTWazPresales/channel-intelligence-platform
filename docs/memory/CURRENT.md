@@ -11,7 +11,7 @@
 |-------|--------|
 | **Branch** | `main` |
 | **Alembic (DB)** | **`20260727_0074` on cip** |
-| **HEAD** | `28a5e94` (docs pin after promote `30b1525`) |
+| **HEAD** | tip of `main` (verify: `git rev-parse --short HEAD`) |
 | **Pushed?** | yes |
 | **Next** | Soak; then pick a follow-on (ASUS automap stash / ops-master shell / PM channel_id CASE). |
 
