@@ -11,9 +11,9 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260727_0074` on cip** (token surrogate) |
-| **HEAD** | `4a63a30` |
-| **Pushed?** | pending push |
-| **Next** | Opus VERIFY Unit C → Unit D CONSULT (S6/S7 UI + apply-all normalize) |
+| **HEAD** | `32e4afb` (implement `4a63a30` + CURRENT pin) |
+| **Pushed?** | yes |
+| **Next** | **Unit C VERIFY blocked** — Claude CLI monthly spend limit (Opus + Fable). Raise limit / switch credits, then re-run `.tmp/unit_c_verify_opus_seed.md`. On PASS → Unit D CONSULT. |
 
 ---
 
