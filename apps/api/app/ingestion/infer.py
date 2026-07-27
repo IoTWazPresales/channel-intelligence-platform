@@ -15,7 +15,9 @@ def read_tabular(filename: str, raw: bytes) -> pd.DataFrame:
         return pd.read_csv(bio)
     if lower.endswith(".xlsx") or lower.endswith(".xlsm"):
         return pd.read_excel(bio, engine="openpyxl")
-    raise ValueError("Unsupported file type; use .csv or .xlsx")
+    if lower.endswith(".xls"):
+        return pd.read_excel(bio, engine="xlrd")
+    raise ValueError("Unsupported file type; use .csv, .xlsx, or .xls")
 
 
 def infer_schema(df: pd.DataFrame) -> dict[str, Any]:

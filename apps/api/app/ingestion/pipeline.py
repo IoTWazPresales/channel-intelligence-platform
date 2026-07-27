@@ -808,7 +808,16 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
 
     try:
         storage = get_storage_backend()
-        raw = db.scalars(select(RawFileMetadata).where(RawFileMetadata.job_id == job_id)).one()
+        raws = list(
+            db.scalars(
+                select(RawFileMetadata)
+                .where(RawFileMetadata.job_id == job_id)
+                .order_by(RawFileMetadata.id.asc())
+            ).all()
+        )
+        if not raws:
+            raise ValueError(f"import job {job_id} has no raw files")
+        raw = raws[0]
         data = storage.read(raw.storage_key)
 
         job.stage = STAGE_RAW_STORED
@@ -860,7 +869,24 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
             db.refresh(job)
             return job
 
-        if (job.template_slug or "") == "inbound_shipments":
+        # DSI multi-file / nested mapping: infer + mapping already done by infer_dsi_job_sync /
+        # mapping-save. Do not re-read a single file, clobber inferred_schema, or sanitize nested
+        # file::sheet keys as if they were headers (that would wipe field_mapping).
+        dsi_premapped = False
+        if (job.template_slug or "") == "distributor_inventory":
+            from app.services.imports.dsi_workbook import (
+                is_nested_dsi_field_mapping,
+                job_has_multi_file_mapping,
+            )
+
+            dsi_premapped = (
+                len(raws) > 1
+                or is_nested_dsi_field_mapping(job.field_mapping)
+                or job_has_multi_file_mapping(job.field_mapping)
+                or bool((job.staged_metadata or {}).get("dsi_multi_file"))
+            )
+
+        if (job.template_slug or "") == "inbound_shipments" or dsi_premapped:
             df = pd.DataFrame()
             mapping = dict(job.field_mapping or {})
             job.stage = STAGE_MAPPED

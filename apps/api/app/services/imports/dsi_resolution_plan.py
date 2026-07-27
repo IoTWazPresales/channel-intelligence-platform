@@ -989,27 +989,42 @@ def plan_dsi_candidate_sync(
                 dealer_group_raw=dg_raw,
             )
             if rcid is None and primary:
-                sim_key = normalize_customer_name_for_similarity(primary)
-                if sim_key:
-                    sim_ids = list(
-                        dict.fromkeys(plan_ctx.res_cache.customer_sim_name_to_ids.get(sim_key, []))
-                    )
-                    if len(sim_ids) == 1:
-                        return _fin({
-                            **base,
-                            "suggested_action": "map_customer",
-                            "plan_status": "ready",
-                            "ready": True,
-                            "confidence": 0.9,
-                            "reason": (
-                                "Matched existing customer on normalized name "
-                                "(legal-suffix/punctuation-insensitive)"
-                            ),
-                            "suggested_target_id": int(sim_ids[0]),
-                            "needs_defaults": False,
-                            "needs_confirm_suspicious_distributor": False,
-                            "resolution_signal": "similar_customer_name",
-                        })
+                from app.services.imports.dsi_customer_name_normalization import (
+                    unique_sim_customer_id,
+                )
+
+                sim_cid, sim_signal = unique_sim_customer_id(
+                    plan_ctx.res_cache.customer_sim_name_to_ids,
+                    primary,
+                )
+                if sim_cid is not None and sim_signal:
+                    if sim_signal == "similar_customer_name_trading_as_legal":
+                        reason = (
+                            "Matched existing customer on trading-as legal name "
+                            "(unique, legal-suffix/punctuation-insensitive)"
+                        )
+                    elif sim_signal == "similar_customer_name_trading_as_trade":
+                        reason = (
+                            "Matched existing customer on trading-as trade name "
+                            "(unique, legal-suffix/punctuation-insensitive)"
+                        )
+                    else:
+                        reason = (
+                            "Matched existing customer on normalized name "
+                            "(legal-suffix/punctuation-insensitive)"
+                        )
+                    return _fin({
+                        **base,
+                        "suggested_action": "map_customer",
+                        "plan_status": "ready",
+                        "ready": True,
+                        "confidence": 0.9,
+                        "reason": reason,
+                        "suggested_target_id": int(sim_cid),
+                        "needs_defaults": False,
+                        "needs_confirm_suspicious_distributor": False,
+                        "resolution_signal": sim_signal,
+                    })
         else:
             rcid, diag = _resolve_customer(
                 session,

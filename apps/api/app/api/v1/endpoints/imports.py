@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import threading
@@ -581,6 +582,271 @@ async def create_job(
     return {"id": job.id, "status": job.status, "stage": job.stage, "template_slug": job.template_slug, "import_mode": job.import_mode}
 
 
+@router.post("/jobs/{job_id}/dsi-file-exclusions")
+async def set_dsi_file_exclusions(
+    job_id: int,
+    body: dict[str, Any] = Body(...),
+):
+    """Exclude files from a multi-file DSI batch before re-validate (clears staging)."""
+    from app.services.imports.dsi_batch import set_dsi_file_exclusions_sync
+
+    excluded = body.get("excluded_filenames")
+    if not isinstance(excluded, list):
+        raise HTTPException(status_code=400, detail="excluded_filenames must be a list of filenames")
+    excluded_keys = body.get("excluded_mapping_keys")
+    with SessionLocal() as sync_db:
+        try:
+            job = set_dsi_file_exclusions_sync(
+                sync_db,
+                job_id,
+                excluded_filenames=[str(x) for x in excluded],
+                excluded_mapping_keys=(
+                    [str(x) for x in excluded_keys] if isinstance(excluded_keys, list) else None
+                ),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        sm = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+        return {
+            "id": job.id,
+            "stage": job.stage,
+            "status": job.status,
+            "dsi_excluded_files": sm.get("dsi_excluded_files") or [],
+            "dsi_excluded_mapping_keys": sm.get("dsi_excluded_mapping_keys") or [],
+        }
+
+
+@router.post("/jobs/{job_id}/dsi-file-distributors")
+async def post_dsi_file_distributors(
+    job_id: int,
+    body: dict[str, Any] = Body(...),
+):
+    """Confirm or assign per-file distributor identity (banner/company stamp)."""
+    from app.services.imports.dsi_file_distributor import (
+        DSI_FILE_DISTRIBUTORS_KEY,
+        confirm_dsi_file_distributor,
+        file_distributors_all_confirmed,
+    )
+
+    filename = body.get("filename")
+    if not isinstance(filename, str) or not filename.strip():
+        raise HTTPException(status_code=400, detail="filename is required")
+    distributor_id = body.get("distributor_id")
+    if distributor_id is not None:
+        try:
+            distributor_id = int(distributor_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="distributor_id must be an integer") from exc
+    confirm = bool(body.get("confirm", True))
+    clear = bool(body.get("clear", False))
+
+    with SessionLocal() as sync_db:
+        job = sync_db.get(ImportJob, job_id)
+        if not job or job.template_slug != "distributor_inventory":
+            raise HTTPException(status_code=404, detail="Job not found")
+        try:
+            stamps = confirm_dsi_file_distributor(
+                sync_db,
+                job,
+                filename=filename.strip(),
+                distributor_id=distributor_id,
+                confirm=confirm,
+                clear=clear,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        sync_db.refresh(job)
+        return {
+            "id": job.id,
+            DSI_FILE_DISTRIBUTORS_KEY: stamps,
+            "dsi_file_distributors_all_confirmed": file_distributors_all_confirmed(job),
+            **dsi_mapping_state_dict(job),
+        }
+
+
+@router.post("/jobs/{job_id}/dsi-file-snapshot-periods")
+async def post_dsi_file_snapshot_periods(
+    job_id: int,
+    body: dict[str, Any] = Body(...),
+):
+    """Confirm or override per-file inventory snapshot period (Application Date banner)."""
+    from app.services.imports.dsi_file_snapshot import (
+        DSI_FILE_SNAPSHOT_PERIODS_KEY,
+        confirm_dsi_file_snapshot_period,
+        file_snapshot_periods_all_confirmed,
+    )
+
+    confirm_all = bool(body.get("confirm_all_sniffed", False))
+    filename = body.get("filename")
+    if not confirm_all and (not isinstance(filename, str) or not filename.strip()):
+        raise HTTPException(status_code=400, detail="filename is required (or confirm_all_sniffed)")
+    confirm = bool(body.get("confirm", True))
+    clear = bool(body.get("clear", False))
+    resolved_date = body.get("resolved_date")
+
+    with SessionLocal() as sync_db:
+        job = sync_db.get(ImportJob, job_id)
+        if not job or job.template_slug != "distributor_inventory":
+            raise HTTPException(status_code=404, detail="Job not found")
+        try:
+            stamps = confirm_dsi_file_snapshot_period(
+                sync_db,
+                job,
+                filename=(filename or "").strip(),
+                confirm=confirm,
+                clear=clear,
+                resolved_date=resolved_date,
+                confirm_all_sniffed=confirm_all,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        sync_db.refresh(job)
+        return {
+            "id": job.id,
+            DSI_FILE_SNAPSHOT_PERIODS_KEY: stamps,
+            "dsi_file_snapshot_periods_all_confirmed": file_snapshot_periods_all_confirmed(job),
+            **dsi_mapping_state_dict(job),
+        }
+
+
+@router.get("/dsi/coverage")
+async def get_dsi_coverage(
+    source_id: int | None = Query(None),
+    weeks: int = Query(12, ge=4, le=26),
+):
+    """Read-only DSI weekly coverage — missed sell-out / SOH weeks (FLAG only)."""
+    from app.services.imports.dsi_coverage import compute_dsi_coverage
+
+    with SessionLocal() as sync_db:
+        return compute_dsi_coverage(sync_db, source_id=source_id, weeks=weeks)
+
+
+@router.post("/dsi/batch-propose")
+async def dsi_batch_propose(
+    files: list[UploadFile] = File(...),
+):
+    """Preview DSI batch groups (no DB writes).
+
+    All DSI-capable files form one ``dsi_capable`` group (exact header equality not required).
+    Unmappable files are listed separately and will not become jobs.
+    """
+    from app.services.imports.dsi_batch import (
+        DSI_CAPABLE_GROUP_SIGNATURE,
+        batch_groups_preview_to_dict,
+        propose_dsi_batch_groups,
+    )
+
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one file is required")
+    payload: list[tuple[str, bytes]] = []
+    for f in files:
+        raw = await f.read()
+        payload.append((f.filename or "upload", raw))
+    groups = propose_dsi_batch_groups(payload)
+    job_groups = [g for g in groups if g.signature == DSI_CAPABLE_GROUP_SIGNATURE]
+    return {
+        "group_count": len(job_groups),
+        "file_count": len(payload),
+        "groups": batch_groups_preview_to_dict(groups),
+    }
+
+
+@router.post("/dsi/batch-jobs")
+async def dsi_batch_create_jobs(
+    source_id: int = Form(...),
+    dsi_workflow_mode: str = Form(default="auto"),
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create DSI import jobs from a multi-file upload.
+
+    All DSI-capable files become **one** job (nested per-file mapping + distributor stamps).
+    Unmappable files return an error outcome and are not attached to a job.
+    """
+    from app.services.imports.dsi_batch import (
+        DSI_CAPABLE_GROUP_SIGNATURE,
+        batch_groups_preview_to_dict,
+        create_dsi_batch_job_sync,
+        propose_dsi_batch_groups,
+    )
+
+    source = await db.scalar(
+        select(SourceDefinition)
+        .options(joinedload(SourceDefinition.import_template))
+        .where(SourceDefinition.id == source_id)
+    )
+    if not source or not source.is_active:
+        raise HTTPException(status_code=400, detail="Unknown or inactive source_id")
+    tpl = source.import_template
+    if not tpl or tpl.slug != "distributor_inventory":
+        raise HTTPException(status_code=400, detail="DSI batch upload requires a distributor_inventory source")
+
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one file is required")
+
+    payload: list[tuple[str, bytes]] = []
+    for f in files:
+        raw = await f.read()
+        payload.append((f.filename or "upload", raw))
+
+    groups = propose_dsi_batch_groups(payload)
+    name_to_bytes = dict(payload)
+    created: list[dict[str, Any]] = []
+    with SessionLocal() as sync_db:
+        for group in groups:
+            group_payload = [
+                (p.filename, name_to_bytes[p.filename])
+                for p in group.files
+                if p.filename in name_to_bytes
+            ]
+            if not group_payload:
+                continue
+            if group.signature != DSI_CAPABLE_GROUP_SIGNATURE or any(p.unmappable for p in group.files):
+                created.append(
+                    {
+                        "signature": group.signature,
+                        "outcome": "error",
+                        "error": "One or more files could not be mapped (no DSI-like columns)",
+                        "filenames": [p.filename for p in group.files],
+                    }
+                )
+                continue
+            try:
+                job = create_dsi_batch_job_sync(
+                    sync_db,
+                    source_id=source_id,
+                    filenames_and_bytes=group_payload,
+                    import_mode="validate",
+                    dsi_workflow_mode=dsi_workflow_mode,
+                )
+                created.append(
+                    {
+                        "signature": group.signature,
+                        "outcome": "created",
+                        "import_job_id": job.id,
+                        "stage": job.stage,
+                        "filenames": [p.filename for p in group.files],
+                        "file_count": len(group_payload),
+                    }
+                )
+            except Exception as exc:
+                created.append(
+                    {
+                        "signature": group.signature,
+                        "outcome": "error",
+                        "error": str(exc),
+                        "filenames": [p.filename for p in group.files],
+                    }
+                )
+
+    job_groups = [g for g in groups if g.signature == DSI_CAPABLE_GROUP_SIGNATURE]
+    return {
+        "group_count": len(job_groups),
+        "groups_preview": batch_groups_preview_to_dict(groups),
+        "jobs": created,
+    }
+
+
 @router.get("/jobs/{job_id}/rows")
 async def list_job_rows(job_id: int, db: AsyncSession = Depends(get_db)):
     res = await db.execute(
@@ -1028,8 +1294,31 @@ async def get_dsi_mapping_state(job_id: int, db: AsyncSession = Depends(get_db))
     job = await _async_import_job_with_source(db, job_id)
     if not job or job.template_slug != "distributor_inventory":
         raise HTTPException(status_code=404, detail="DSI mapping state not found for this job")
-    headers = list(job.file_headers or [])
+    from app.services.imports.dsi_workbook import is_nested_dsi_field_mapping
+
     raw = dict(job.field_mapping or {})
+    # Nested multi-file/sheet maps use file::sheet keys — never flatten-sanitize them as headers
+    # (that previously wiped automap to {} and committed it).
+    if is_nested_dsi_field_mapping(raw):
+        return dsi_mapping_state_dict(job)
+
+    # Recovery: multi-file job whose nested mapping was wiped by the old GET path.
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    wb = meta.get("dsi_workbook") if isinstance(meta.get("dsi_workbook"), dict) else {}
+    if meta.get("dsi_multi_file") and not raw and (wb.get("sheets") or meta.get("dsi_batch_filenames")):
+
+        def _reinfer() -> None:
+            with SessionLocal() as sync_db:
+                infer_dsi_job_sync(sync_db, job_id)
+
+        await asyncio.to_thread(_reinfer)
+        job = await _async_import_job_with_source(db, job_id)
+        if not job or job.template_slug != "distributor_inventory":
+            raise HTTPException(status_code=404, detail="DSI mapping state not found for this job")
+        if is_nested_dsi_field_mapping(job.field_mapping):
+            return dsi_mapping_state_dict(job)
+
+    headers = list(job.file_headers or [])
     clean, _ = sanitize_dsi_field_mapping(headers, raw)
     if clean != raw:
         job.field_mapping = clean
@@ -1096,20 +1385,36 @@ async def post_dsi_validate(job_id: int, db: AsyncSession = Depends(get_db)):
     job = await db.get(ImportJob, job_id)
     if not job or job.template_slug != "distributor_inventory":
         raise HTTPException(status_code=404, detail="Job not found")
+    from app.services.imports.dsi_file_distributor import distributor_identity_satisfied
+    from app.services.imports.dsi_file_snapshot import snapshot_identity_satisfied
     from app.services.imports.dsi_workbook import is_nested_dsi_field_mapping
 
     if is_nested_dsi_field_mapping(job.field_mapping):
         gate: list[dict[str, str]] = []
-        for sheet_map in (job.field_mapping or {}).values():
+        for sheet_key, sheet_map in (job.field_mapping or {}).items():
             if isinstance(sheet_map, dict):
-                gate.extend(dsi_mapping_gate_errors(sheet_map))
+                ok = distributor_identity_satisfied(job, sheet_map, mapping_key=str(sheet_key))
+                snap_ok = snapshot_identity_satisfied(job, sheet_map, mapping_key=str(sheet_key))
+                gate.extend(
+                    dsi_mapping_gate_errors(
+                        sheet_map,
+                        file_distributor_satisfied=ok,
+                        file_snapshot_satisfied=snap_ok,
+                    )
+                )
     else:
         headers = list(job.file_headers or [])
         clean, _ = sanitize_dsi_field_mapping(headers, dict(job.field_mapping or {}))
         job.field_mapping = clean
         await db.commit()
         await db.refresh(job)
-        gate = dsi_mapping_gate_errors(job.field_mapping or {})
+        ok = distributor_identity_satisfied(job, job.field_mapping or {})
+        snap_ok = snapshot_identity_satisfied(job, job.field_mapping or {})
+        gate = dsi_mapping_gate_errors(
+            job.field_mapping or {},
+            file_distributor_satisfied=ok,
+            file_snapshot_satisfied=snap_ok,
+        )
     if gate:
         raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
 
@@ -1164,20 +1469,36 @@ async def post_dsi_apply(
                 status_code=400,
                 detail="This import can change canonical facts; pass confirm_destructive=true.",
             )
+    from app.services.imports.dsi_file_distributor import distributor_identity_satisfied
+    from app.services.imports.dsi_file_snapshot import snapshot_identity_satisfied
     from app.services.imports.dsi_workbook import is_nested_dsi_field_mapping
 
     if is_nested_dsi_field_mapping(job.field_mapping):
         gate = []
-        for sheet_map in (job.field_mapping or {}).values():
+        for sheet_key, sheet_map in (job.field_mapping or {}).items():
             if isinstance(sheet_map, dict):
-                gate.extend(dsi_mapping_gate_errors(sheet_map))
+                ok = distributor_identity_satisfied(job, sheet_map, mapping_key=str(sheet_key))
+                snap_ok = snapshot_identity_satisfied(job, sheet_map, mapping_key=str(sheet_key))
+                gate.extend(
+                    dsi_mapping_gate_errors(
+                        sheet_map,
+                        file_distributor_satisfied=ok,
+                        file_snapshot_satisfied=snap_ok,
+                    )
+                )
     else:
         headers = list(job.file_headers or [])
         clean, _ = sanitize_dsi_field_mapping(headers, dict(job.field_mapping or {}))
         job.field_mapping = clean
         await db.commit()
         await db.refresh(job)
-        gate = dsi_mapping_gate_errors(job.field_mapping or {})
+        ok = distributor_identity_satisfied(job, job.field_mapping or {})
+        snap_ok = snapshot_identity_satisfied(job, job.field_mapping or {})
+        gate = dsi_mapping_gate_errors(
+            job.field_mapping or {},
+            file_distributor_satisfied=ok,
+            file_snapshot_satisfied=snap_ok,
+        )
     if gate:
         raise HTTPException(status_code=422, detail={"blocking_mapping_errors": gate})
     # Mark running + record dispatch time + import_mode=apply in a sync session before handing off,

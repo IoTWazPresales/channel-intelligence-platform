@@ -170,3 +170,146 @@ def test_plan_customer_dealer_group_suffix_variant_matches_master() -> None:
     assert out["ready"] is True
     assert out["suggested_target_id"] == 200
     assert out.get("resolution_signal") == "similar_customer_name"
+
+
+def test_plan_customer_proprietary_paren_matches_pty_master() -> None:
+    """Paren PROPRIETARY form must normalize to same sim_key as (Pty) Ltd master."""
+    master_name = "Evetech"
+    token = "EVETECH (PROPRIETARY) LIMITED"
+    sim_key = normalize_customer_name_for_similarity(master_name)
+    assert sim_key == normalize_customer_name_for_similarity(token) == "evetech"
+
+    cache = DSIResolutionCache(
+        all_distributors=[],
+        dist_aliases=[],
+        all_customers=[DSIResolutionCustomerRow(id=52, code="EV", name=master_name)],
+        customer_code_to_id={},
+        customer_name_to_ids={master_name.strip().lower(): [52]},
+        customer_sim_name_to_ids={sim_key: [52]},
+        cust_aliases=[],
+        open_channel_cid=None,
+    )
+    plan_ctx = _customer_plan_ctx(cache=cache)
+    job = MagicMock()
+    job.source.id = 9
+    job.staged_metadata = {}
+
+    out = plan_dsi_candidate_sync(
+        MagicMock(),
+        _customer_cand(primary=token),
+        job,
+        MagicMock(),
+        default_region_id=None,
+        default_channel_id=None,
+        plan_ctx=plan_ctx,
+    )
+    assert out["suggested_action"] == "map_customer"
+    assert out["suggested_target_id"] == 52
+    assert out.get("resolution_signal") == "similar_customer_name"
+
+
+def test_plan_customer_trading_as_legal_unique_maps() -> None:
+    master_name = "COMXPERT INTERNATIONAL CC"
+    token = "COMXPERT INTERNATIONAL CC T/A COMX COMPUTERS"
+    legal_key = normalize_customer_name_for_similarity(master_name)
+    assert legal_key == "comxpert international"
+
+    cache = DSIResolutionCache(
+        all_distributors=[],
+        dist_aliases=[],
+        all_customers=[DSIResolutionCustomerRow(id=160, code="COMX", name=master_name)],
+        customer_code_to_id={},
+        customer_name_to_ids={master_name.strip().lower(): [160]},
+        customer_sim_name_to_ids={legal_key: [160]},
+        cust_aliases=[],
+        open_channel_cid=None,
+    )
+    plan_ctx = _customer_plan_ctx(cache=cache)
+    job = MagicMock()
+    job.source.id = 9
+    job.staged_metadata = {}
+
+    out = plan_dsi_candidate_sync(
+        MagicMock(),
+        _customer_cand(primary=token),
+        job,
+        MagicMock(),
+        default_region_id=None,
+        default_channel_id=None,
+        plan_ctx=plan_ctx,
+    )
+    assert out["suggested_action"] == "map_customer"
+    assert out["suggested_target_id"] == 160
+    assert out.get("resolution_signal") == "similar_customer_name_trading_as_legal"
+
+
+def test_plan_customer_trading_as_trade_unique_maps() -> None:
+    master_name = "Kloppers"
+    token = "SIX SONS (PTY) LTD T/A KLOPPERS"
+    trade_key = normalize_customer_name_for_similarity(master_name)
+
+    cache = DSIResolutionCache(
+        all_distributors=[],
+        dist_aliases=[],
+        all_customers=[DSIResolutionCustomerRow(id=1916, code="KLOP", name=master_name)],
+        customer_code_to_id={},
+        customer_name_to_ids={master_name.strip().lower(): [1916]},
+        customer_sim_name_to_ids={trade_key: [1916]},
+        cust_aliases=[],
+        open_channel_cid=None,
+    )
+    plan_ctx = _customer_plan_ctx(cache=cache)
+    job = MagicMock()
+    job.source.id = 9
+    job.staged_metadata = {}
+
+    out = plan_dsi_candidate_sync(
+        MagicMock(),
+        _customer_cand(primary=token),
+        job,
+        MagicMock(),
+        default_region_id=None,
+        default_channel_id=None,
+        plan_ctx=plan_ctx,
+    )
+    assert out["suggested_action"] == "map_customer"
+    assert out["suggested_target_id"] == 1916
+    assert out.get("resolution_signal") == "similar_customer_name_trading_as_trade"
+
+
+def test_plan_customer_division_qualifier_does_not_map_parent() -> None:
+    """First Technology Central must not auto-map to First Technology (no T/A dual-key)."""
+    master_name = "First Technology (PTY) LTD"
+    token = "First Technology (Central) (Pty) Ltd"
+    parent_key = normalize_customer_name_for_similarity(master_name)
+    token_key = normalize_customer_name_for_similarity(token)
+    assert parent_key == "first technology"
+    assert token_key == "first technology central"
+    assert parent_key != token_key
+
+    cache = DSIResolutionCache(
+        all_distributors=[],
+        dist_aliases=[],
+        all_customers=[DSIResolutionCustomerRow(id=785, code="FT", name=master_name)],
+        customer_code_to_id={},
+        customer_name_to_ids={master_name.strip().lower(): [785]},
+        customer_sim_name_to_ids={parent_key: [785]},
+        cust_aliases=[],
+        open_channel_cid=None,
+    )
+    plan_ctx = _customer_plan_ctx(cache=cache)
+    job = MagicMock()
+    job.source.id = 9
+    job.staged_metadata = {}
+
+    out = plan_dsi_candidate_sync(
+        MagicMock(),
+        _customer_cand(primary=token),
+        job,
+        MagicMock(),
+        default_region_id=None,
+        default_channel_id=None,
+        plan_ctx=plan_ctx,
+    )
+    assert out["suggested_action"] == "create_provisional_customer"
+    assert out.get("suggested_target_id") is None

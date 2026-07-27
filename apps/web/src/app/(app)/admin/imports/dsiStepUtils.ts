@@ -33,21 +33,145 @@ export function dsiTargetDescription(t: string): string | undefined {
   return descriptions[t];
 }
 
-export function dsiGateFromMapping(m: Record<string, string>): boolean {
+export type DsiMappingStampOpts = {
+  fileDistributorSatisfied?: boolean;
+  fileSnapshotSatisfied?: boolean;
+};
+
+/** True when this sheet's date requirement is met only via confirmed Application Date stamps (not a date column). */
+export function dsiDateSatisfiedBySnapshotStamp(
+  m: Record<string, string>,
+  opts?: Pick<DsiMappingStampOpts, 'fileSnapshotSatisfied'>
+): boolean {
   const vals = new Set(Object.values(m).filter(Boolean));
+  if (vals.has('transaction_date') || vals.has('snapshot_date')) return false;
+  return vals.has('stock_on_hand') && Boolean(opts?.fileSnapshotSatisfied);
+}
+
+export function dsiGateFromMapping(m: Record<string, string>, opts?: DsiMappingStampOpts): boolean {
+  const vals = new Set(Object.values(m).filter(Boolean));
+  const distributorOk = vals.has('distributor_token') || Boolean(opts?.fileDistributorSatisfied);
+  const needsInventoryPeriod = vals.has('stock_on_hand') && !vals.has('snapshot_date');
+  const dateOk =
+    vals.has('transaction_date') ||
+    vals.has('snapshot_date') ||
+    (needsInventoryPeriod && Boolean(opts?.fileSnapshotSatisfied));
   return (
-    vals.has('distributor_token') &&
+    distributorOk &&
     vals.has('product_identifier') &&
-    (vals.has('transaction_date') || vals.has('snapshot_date')) &&
+    dateOk &&
     (vals.has('quantity_sold') || vals.has('stock_on_hand'))
   );
 }
 
+/**
+ * Live requirement chips for CanonicalColumnMappingPanel.
+ * Distributor and inventory Date may be satisfied by per-file stamps (same gate as dsiGateFromMapping).
+ */
+export function dsiMappingRequiredGroupsFromDraft(
+  draft: Record<string, string>,
+  opts: DsiMappingStampOpts & {
+    baseGroups: Array<{ id: string; label: string; anyOf: string[]; externallySatisfied?: boolean }>;
+  }
+): Array<{ id: string; label: string; anyOf: string[]; externallySatisfied?: boolean }> {
+  const dateFromStamp = dsiDateSatisfiedBySnapshotStamp(draft, opts);
+  return opts.baseGroups.map((g) => {
+    if (g.id === 'distributor') {
+      return { ...g, externallySatisfied: Boolean(opts.fileDistributorSatisfied) };
+    }
+    if (g.id === 'date') {
+      return { ...g, externallySatisfied: dateFromStamp };
+    }
+    return { ...g };
+  });
+}
+
 /** True when every sheet in a nested (multi-sheet) mapping passes the flat gate. */
-export function dsiGateFromNestedMapping(m: Record<string, Record<string, string>>): boolean {
+export function dsiGateFromNestedMapping(
+  m: Record<string, Record<string, string>>,
+  opts?: DsiMappingStampOpts
+): boolean {
   const sheets = Object.values(m).filter((s) => s && Object.keys(s).length > 0);
   if (!sheets.length) return false;
-  return sheets.every((sheet) => dsiGateFromMapping(sheet));
+  return sheets.every((sheet) => dsiGateFromMapping(sheet, opts));
+}
+
+export type DsiLayoutGroup = {
+  signature: string;
+  mapping_keys: string[];
+  files?: string[];
+};
+
+export type DsiLayoutTabGroup = {
+  signature: string;
+  keys: string[];
+  representativeKey: string;
+};
+
+/**
+ * Collapse sheet keys into layout tabs. Detached keys become singletons.
+ * When layoutGroups is missing/empty, every key is its own group (legacy jobs).
+ */
+export function groupDsiSheetKeys(
+  layoutGroups: DsiLayoutGroup[] | null | undefined,
+  sheetKeys: string[],
+  detachedKeys: Set<string> | Iterable<string>,
+  drafts?: Record<string, Record<string, string>>
+): DsiLayoutTabGroup[] {
+  const detached = detachedKeys instanceof Set ? detachedKeys : new Set(detachedKeys);
+  const keySet = new Set(sheetKeys);
+  const pickRepresentative = (keys: string[]): string => {
+    if (!drafts || keys.length === 1) return keys[0];
+    let best = keys[0];
+    let bestCount = -1;
+    for (const k of keys) {
+      const n = Object.values(drafts[k] ?? {}).filter(Boolean).length;
+      if (n > bestCount) {
+        bestCount = n;
+        best = k;
+      }
+    }
+    return best;
+  };
+
+  if (!layoutGroups?.length) {
+    return sheetKeys.map((k) => ({
+      signature: `solo:${k}`,
+      keys: [k],
+      representativeKey: k,
+    }));
+  }
+
+  const out: DsiLayoutTabGroup[] = [];
+  const consumed = new Set<string>();
+  for (const g of layoutGroups) {
+    const members = (g.mapping_keys ?? []).filter((k) => keySet.has(k) && !detached.has(k));
+    if (!members.length) continue;
+    for (const k of members) consumed.add(k);
+    out.push({
+      signature: g.signature,
+      keys: members,
+      representativeKey: pickRepresentative(members),
+    });
+  }
+  for (const k of sheetKeys) {
+    if (consumed.has(k)) continue;
+    out.push({ signature: `solo:${k}`, keys: [k], representativeKey: k });
+  }
+  return out;
+}
+
+/** Fan a layout draft out to every member mapping key (presentation merge; storage stays nested). */
+export function fanOutDsiLayoutDraft(
+  prev: Record<string, Record<string, string>>,
+  memberKeys: string[],
+  draft: Record<string, string>
+): Record<string, Record<string, string>> {
+  const next = { ...prev };
+  for (const k of memberKeys) {
+    next[k] = { ...draft };
+  }
+  return next;
 }
 
 export function isNestedDsiFieldMapping(
@@ -55,6 +179,76 @@ export function isNestedDsiFieldMapping(
 ): m is Record<string, Record<string, string>> {
   if (!m || typeof m !== 'object') return false;
   return Object.values(m).some((v) => v != null && typeof v === 'object' && !Array.isArray(v));
+}
+
+/** Build one sheet's draft map from server state (canonical targets only). */
+export function sheetDraftFromServer(
+  serverSheet: Record<string, string> | undefined,
+  canonSet: Set<string>
+): Record<string, string> {
+  const sheetNext: Record<string, string> = {};
+  for (const [h, v] of Object.entries(serverSheet ?? {})) {
+    if (v && canonSet.has(v)) sheetNext[h] = v;
+  }
+  return sheetNext;
+}
+
+/**
+ * Hydrate nested DSI mapping drafts from server.
+ * - `replace`: full sync when local draft is clean
+ * - `fillMissing`: when dirty, only seed sheet keys the operator has not edited yet
+ *   so tab switches / refetches cannot wipe in-progress maps
+ */
+export function hydrateDsiNestedMapDraft(args: {
+  sheetKeys: string[];
+  serverNested: Record<string, Record<string, string>>;
+  sheetFieldMappings?: Record<string, { field_mapping?: Record<string, string> }> | null;
+  prev: Record<string, Record<string, string>>;
+  canonSet: Set<string>;
+  mode: 'replace' | 'fillMissing';
+}): Record<string, Record<string, string>> {
+  const { sheetKeys, serverNested, sheetFieldMappings, prev, canonSet, mode } = args;
+  if (mode === 'replace') {
+    const next: Record<string, Record<string, string>> = {};
+    for (const key of sheetKeys) {
+      const serverSheet = sheetFieldMappings?.[key]?.field_mapping ?? serverNested[key] ?? {};
+      next[key] = sheetDraftFromServer(serverSheet, canonSet);
+    }
+    return next;
+  }
+  const next: Record<string, Record<string, string>> = { ...prev };
+  for (const key of sheetKeys) {
+    const existing = next[key];
+    if (existing && Object.keys(existing).length > 0) continue;
+    const serverSheet = sheetFieldMappings?.[key]?.field_mapping ?? serverNested[key] ?? {};
+    next[key] = sheetDraftFromServer(serverSheet, canonSet);
+  }
+  return next;
+}
+
+export function hydrateDsiFlatMapDraft(args: {
+  fileHeaders: string[];
+  server: Record<string, string>;
+  prev: Record<string, string>;
+  canonSet: Set<string>;
+  mode: 'replace' | 'fillMissing';
+}): Record<string, string> {
+  const { fileHeaders, server, prev, canonSet, mode } = args;
+  if (mode === 'replace') {
+    const next: Record<string, string> = {};
+    for (const h of fileHeaders) {
+      const v = server[h];
+      if (v && canonSet.has(v)) next[h] = v;
+    }
+    return next;
+  }
+  if (Object.keys(prev).length > 0) return prev;
+  const next: Record<string, string> = {};
+  for (const h of fileHeaders) {
+    const v = server[h];
+    if (v && canonSet.has(v)) next[h] = v;
+  }
+  return next;
 }
 
 export function formatDsiSamples(samples: string[] | undefined): string {
@@ -86,6 +280,8 @@ export type DistributorSiSummary = {
   human_fixable_blocking_rows?: number;
   master_merge_excluded_rows?: number;
   steward_map_blocking_rows?: number;
+  /** Blank product token / mapping data-quality hard blocks (no steward candidate). */
+  data_quality_blocking_rows?: number;
   auto_excluded_rows?: number;
   warning_rows?: number;
   aggregated_candidates?: number;
@@ -96,19 +292,40 @@ export type DistributorSiSummary = {
   rows_inventory_ready_with_sellout_warnings?: number;
 };
 
-/** Human-fixable blockers that still require steward action before apply. */
+/** All hard blocks that still gate Continue → apply (steward-map + data-quality). */
 export function dsiHumanFixableBlockingRows(summary: DistributorSiSummary | null | undefined): number {
   if (!summary) return 0;
   return summary.human_fixable_blocking_rows ?? summary.blocking_rows ?? 0;
 }
 
+/** Rows that need steward entity mapping (not blank-token data-quality). */
+export function dsiStewardMapBlockingRows(summary: DistributorSiSummary | null | undefined): number {
+  if (!summary) return 0;
+  if (summary.steward_map_blocking_rows != null) return summary.steward_map_blocking_rows;
+  const total = dsiHumanFixableBlockingRows(summary);
+  const dq = summary.data_quality_blocking_rows ?? 0;
+  return Math.max(0, total - dq);
+}
+
+export function dsiDataQualityBlockingRows(summary: DistributorSiSummary | null | undefined): number {
+  if (!summary) return 0;
+  return summary.data_quality_blocking_rows ?? 0;
+}
+
 export function formatDsiBlockerSummaryLine(summary: DistributorSiSummary | null | undefined): string | null {
   if (!summary) return null;
   const master = summary.master_merge_excluded_rows ?? 0;
-  const steward = summary.steward_map_blocking_rows ?? summary.human_fixable_blocking_rows ?? summary.blocking_rows ?? 0;
+  const steward = dsiStewardMapBlockingRows(summary);
+  const dataQuality = dsiDataQualityBlockingRows(summary);
   const auto = summary.auto_excluded_rows ?? 0;
-  if (master === 0 && steward === 0 && auto === 0) return null;
-  return `${master} master-merge · ${steward} steward-map · ${auto} auto-excluded`;
+  if (master === 0 && steward === 0 && dataQuality === 0 && auto === 0) return null;
+  const parts = [
+    `${master} master-merge`,
+    `${steward} steward-map`,
+    `${dataQuality} blank-product`,
+    `${auto} auto-excluded`,
+  ];
+  return parts.join(' · ');
 }
 
 /** Parse distributor_si_summary row from import job preview rows (DSI validate). */

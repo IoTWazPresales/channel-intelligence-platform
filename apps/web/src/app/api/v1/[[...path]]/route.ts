@@ -60,7 +60,7 @@ function upstreamOrigin(): string {
   return resolvedApiUpstreamOrigin();
 }
 
-/** Long-running import apply/validate/commit can exceed the default undici/fetch timeout. */
+/** Long-running import apply/validate/commit/batch can exceed undici defaults (~300s headers). */
 const LONG_PROXY_TIMEOUT_MS = 600_000;
 
 function proxyFetchInitNeedsLongTimeout(method: string, pathSuffix: string): boolean {
@@ -70,8 +70,25 @@ function proxyFetchInitNeedsLongTimeout(method: string, pathSuffix: string): boo
     p.includes('/validate') ||
     p.includes('/commit') ||
     p.endsWith('/apply') ||
-    p.includes('/apply/')
+    p.includes('/apply/') ||
+    p.includes('/dsi/batch-propose') ||
+    p.includes('/dsi/batch-jobs')
   );
+}
+
+/** Undici's headersTimeout is independent of AbortSignal — raise both for long routes. */
+function longProxyDispatcher(): import('undici').Dispatcher | undefined {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Agent } = require('undici') as typeof import('undici');
+    return new Agent({
+      headersTimeout: LONG_PROXY_TIMEOUT_MS,
+      bodyTimeout: LONG_PROXY_TIMEOUT_MS,
+      connectTimeout: 60_000,
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 async function proxy(request: NextRequest, pathSegments: string[] | undefined) {
@@ -89,14 +106,17 @@ async function proxy(request: NextRequest, pathSegments: string[] | undefined) {
     }
   });
 
-  const init: RequestInit & { duplex?: 'half' } = {
+  const long = proxyFetchInitNeedsLongTimeout(request.method, suffix);
+  const init: RequestInit & { duplex?: 'half'; dispatcher?: import('undici').Dispatcher } = {
     method: request.method,
     headers,
     redirect: 'manual',
   };
 
-  if (proxyFetchInitNeedsLongTimeout(request.method, suffix)) {
+  if (long) {
     init.signal = AbortSignal.timeout(LONG_PROXY_TIMEOUT_MS);
+    const dispatcher = longProxyDispatcher();
+    if (dispatcher) init.dispatcher = dispatcher;
   }
 
   if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS') {
@@ -125,3 +145,6 @@ export const PATCH = handle;
 export const PUT = handle;
 export const DELETE = handle;
 export const OPTIONS = handle;
+
+/** Allow long-running batch/import proxy on platforms that honor route segment config. */
+export const maxDuration = 600;

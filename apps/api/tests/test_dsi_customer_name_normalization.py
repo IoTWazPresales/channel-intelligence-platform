@@ -14,6 +14,60 @@ def test_normalize_strips_pty_ltd_and_whitespace() -> None:
     assert normalize_customer_name_for_similarity("Foo Bar t/a Baz Inc") == "foo bar baz"
 
 
+def test_normalize_paren_proprietary_limited_before_suffix_strip() -> None:
+    """(PROPRIETARY) LIMITED must not leave a leftover 'proprietary' token."""
+    assert normalize_customer_name_for_similarity("EVETECH (PROPRIETARY) LIMITED") == "evetech"
+    assert (
+        normalize_customer_name_for_similarity("EVETECH (PROPRIETARY) LIMITED")
+        == normalize_customer_name_for_similarity("Evetech (Pty) Ltd")
+    )
+    assert (
+        normalize_customer_name_for_similarity("THE OFFICE CENTRE (PROPRIETARY) LIMITED")
+        == "the office centre"
+    )
+
+
+def test_trading_as_dual_lookup_keys() -> None:
+    from app.services.imports.dsi_customer_name_normalization import (
+        customer_similarity_lookup_keys,
+        split_trading_as_raw_parts,
+        unique_sim_customer_id,
+    )
+
+    raw = "COMXPERT INTERNATIONAL CC T/A COMX COMPUTERS"
+    parts = split_trading_as_raw_parts(raw)
+    assert parts is not None
+    assert parts[0].upper().startswith("COMXPERT")
+    assert "COMX" in parts[1].upper()
+    keys = customer_similarity_lookup_keys(raw)
+    assert keys[0] == "comxpert international comx computers"
+    assert "comxpert international" in keys
+    assert "comx computers" in keys
+
+    # Unique legal hit (full miss) → map via legal
+    cid, signal = unique_sim_customer_id(
+        {"comxpert international": [160]},
+        raw,
+    )
+    assert cid == 160
+    assert signal == "similar_customer_name_trading_as_legal"
+
+    # Unique trade hit → map via trade
+    cid2, signal2 = unique_sim_customer_id(
+        {"kloppers": [1916]},
+        "SIX SONS (PTY) LTD T/A KLOPPERS",
+    )
+    assert cid2 == 1916
+    assert signal2 == "similar_customer_name_trading_as_trade"
+
+    # Ambiguous trade → refuse (do not auto-map)
+    cid3, signal3 = unique_sim_customer_id(
+        {"kloppers": [1, 2]},
+        "SIX SONS (PTY) LTD T/A KLOPPERS",
+    )
+    assert cid3 is None and signal3 is None
+
+
 def test_normalize_strips_cc_npc_and_ampersand() -> None:
     assert normalize_customer_name_for_similarity("Amoeba Trading CC") == "amoeba trading"
     assert normalize_customer_name_for_similarity("Acme NPC") == "acme"

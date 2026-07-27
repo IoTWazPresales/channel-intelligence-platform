@@ -8,6 +8,8 @@
 
 **Prune note (2026-07-20):** Removed shipped items (001, 005, 007, 012, 015, 022–024, 028, 030, 033, 035–036, 038–042, 043, 050, 056, 061, 061-U2, 069, 072) and ignored Supabase/deploy items (002, 003). Plan D follow-ons renumbered **057-D4** / **058-D5** to end the 057/058 ID collision with bulk-backfill entries. Full disposition archive: `.tmp/backlog_prune_consult_opus_response.md`.
 
+**ID remap (2026-07-27 merge):** On merge of `feat/dsi-unified-multifile`, that branch’s **074** (email ingest) and **075** (layout-coalesce) were renumbered to **077** / **078** because this branch already used 074/075 for CST E2 / Unit F (shipped) and **076** for amount-scale junk.
+
 
 ## BACKLOG-075 — Unit F remainder (DSI relocate + inboundEvidence + rename shared helpers)
 
@@ -31,6 +33,40 @@
 | **Source** | Unit E CONSULT NEED_HUMAN + Warren no-Opus E1 authorization; D-018; contract v1.5 Known-gap |
 | **Shipped as** | `cst_resolution_plan*.py` + `/jobs/{id}/cst-resolution-plan*` endpoints + `CST_IMPORT_ENGINE_CONFIG` + `SLOT_CST_RESOLUTION_PLAN` (D-019) |
 | **TRIGGER** | ~~Unit E1 Opus VERIFY PASS (or Warren waives VERIFY); or Warren prioritizes CST plan async before Unit F.~~ **Fired** — Warren prioritized E2 (VERIFY waived). |
+
+---
+
+## BACKLOG-078 — DSI layout-coalesce follow-ons (templates, fuzzy match, sheet-exclude UI)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-20 · renumbered from multifile **075** on 2026-07-27 merge |
+| **Effort** | Medium–Large |
+| **Source** | Fable CONSULT U6 READY (2026-07-20) + browser smoke job 553: presentation layout tabs shipped; API `dsi_excluded_mapping_keys` works; UI still lacks Exclude-sheet control on layout tab. |
+| **Idea** | (1) Cross-batch layout memory/templates so next week’s same layouts auto-map. (2) Fuzzy/near-match layout grouping (superset headers). (3) Mapping-step UI to exclude undateable sheets (calls existing exclusions endpoint). (4) Optional per-member stamp chips inside a layout group. |
+| **Why it matters / deferrable** | Operators still re-map weekly and must API/hack sheet exclude for junk Sell out sheets. Core coalesce + stamps soak first. |
+| **What the work is** | UI exclude sheet; persist layout→mapping templates per source; optional fuzzy signature; stamp chips in group panel. |
+| **Regression traps** | Do not re-key `field_mapping` away from `file::sheet`; do not auto-apply facts; stamps stay confirm-always. |
+| **Behavior to retain** | One capable job; layout tabs with fan-out; detach/map separately; Dist/Period file stamps. |
+| **Out of scope** | Exact-header batch splits (capability-merge locked). |
+| **TRIGGER** | After job 553 (or successor) weekly soak completes steward→apply; **or** Warren hits undateable sheet again without API; **or** operators ask for “remember this layout”. |
+
+---
+
+## BACKLOG-077 — DSI weekly email-attachment auto-ingest (mailbox → propose queue)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-18 · renumbered from multifile **074** on 2026-07-27 merge |
+| **Effort** | Large (mailbox connector + allowlist + activity-feed failures + same propose/batch path) |
+| **Source** | Warren product discussion (2026-07-18): weekly DSI ops speed — email attach → app auto-upload; agree not silly, but premature until unified multi-file batch + mapping autosave + per-file distributor stamps soak-stable. |
+| **Idea** | Inbound mailbox (allowlisted senders) drops attachments into the existing DSI **batch-propose** path: capability merge (one job for all mappable files), mapping memory, file stamps, steward queue. Never silent apply to facts. |
+| **Why it matters / deferrable** | Removes manual Downloads→upload friction for weekly MUSTEK/PINNACLE/etc. Deferrable while batch UX still soaking; email would amplify wipe/gate/automap breakages. |
+| **What the work is** | (1) Mailbox/poll or webhook + attachment extract. (2) Sender/subject/filename → source_id rules. (3) Call same `batch-propose` / `batch-jobs` as UI. (4) Land jobs in Import Centre review (mapping/stamps/steward). (5) Activity-feed FLAG on parse/auth failures — no silent drop. (6) Ops runbook for mailbox credentials. |
+| **Regression traps** | No auto-create masters; no skip steward; no auto-apply; do not invent a second ingest pipeline; respect weekly vs historical mode; FLAG≠BLOCK leftovers stay reviewable. |
+| **Behavior to retain** | Unified multi-file capability batch (not exact-header splits); per-file distributor stamps; durable mapping autosave; one steward surface for sell-out + SOH. |
+| **Out of scope** | Silent fact apply from email; arbitrary public inbox; splitting sell-out vs SOH into separate steward products. |
+| **TRIGGER** | Weekly multi-file batch soak passes (stamps + autosave + no mapping wipe) **and** Warren prioritizes mailbox ingest; **or** operators request email drop as the weekly intake path. |
 
 ---
 

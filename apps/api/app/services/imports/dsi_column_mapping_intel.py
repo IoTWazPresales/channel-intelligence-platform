@@ -34,7 +34,10 @@ def _reason_label(code: str) -> str:
 
 
 DSI_FIELD_TARGET_DESCRIPTIONS: dict[str, str] = {
-    "distributor_token": "Distributor code or name token from the file — must resolve to a known distributor.",
+    "distributor_token": (
+        "Distributor code or name from a file column — or confirm per-file identity "
+        "from the Company Name banner when the form has no distributor column."
+    ),
     "dealer_group_token": "Primary customer account column (e.g. Dealer Name Group on RAW workbooks).",
     "customer_dealer_token": "Secondary raw customer / site label (e.g. Customer name); evidence only under the account.",
     "product_identifier": "SKU, model, part number, or other product token used for catalog matching.",

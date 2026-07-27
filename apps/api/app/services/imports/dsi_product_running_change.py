@@ -212,6 +212,21 @@ PRODUCT_HARD_BLOCK_ERROR_CODES = frozenset(
     }
 )
 
+# Hard blocks with no steward candidate — fix mapping / exclude rows, do not open entity tabs.
+DSI_DATA_QUALITY_BLOCK_ERROR_CODES = frozenset(
+    {
+        "missing_product_token",
+    }
+)
+
+
+def is_dsi_data_quality_block_diag(diag: list[Any] | None) -> bool:
+    """True when diagnostics are a blank-token / mapping data-quality hard block (no steward path)."""
+    if not isinstance(diag, list):
+        return False
+    codes = {str(c) for c in diag if c is not None}
+    return bool(codes & DSI_DATA_QUALITY_BLOCK_ERROR_CODES)
+
 
 def build_validate_line_product_context(perr: str | None, pev: Any) -> dict[str, Any]:
     """Minimal candidate-shaped context for per-line ignore reason inference at validate."""
