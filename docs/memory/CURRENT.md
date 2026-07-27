@@ -11,8 +11,8 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260727_0074` on cip** |
-| **HEAD** | *(set after Unit D commit)* |
-| **Pushed?** | pending |
+| **HEAD** | `a41b89e` |
+| **Pushed?** | yes |
 | **Next** | Opus VERIFY Unit D → Unit E CONSULT (CST steward) |
 
 ---
