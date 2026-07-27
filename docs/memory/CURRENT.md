@@ -11,7 +11,7 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260727_0074` on cip** |
-| **HEAD** | `218b807` (E2 + F Tier 0) |
+| **HEAD** | `c5ff71b` (E2 + F Tier 0 + docs pin) |
 | **Pushed?** | yes |
 | **Next** | Unit F remainder ([BACKLOG-075](../BACKLOG.md)). Opus VERIFY Unit E when usage resets. |
 
