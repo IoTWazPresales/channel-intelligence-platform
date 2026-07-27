@@ -45,6 +45,11 @@ export type {
 export { StewardDrawerChrome } from './StewardDrawerChrome';
 export type { StewardDrawerChromeProps } from './StewardDrawerChrome';
 export { StewardCandidateDrawer } from './StewardCandidateDrawer';
+export { StewardEvidenceSummary } from './StewardEvidenceSummary';
+export {
+  StewardSuggestionCards,
+  type StewardSuggestionCardItem,
+} from './StewardSuggestionCards';
 export type {
   ImportStewardActionFeedback,
   ImportStewardCandidateRowBase,

@@ -1,7 +1,7 @@
 'use client';
 
-import { Alert, Box, Button, Chip, Divider, Stack, Typography } from '@mui/material';
-import { useCallback, useState } from 'react';
+import { Alert, Box, Button, Chip, Stack, Typography } from '@mui/material';
+import { useCallback, useMemo, useState } from 'react';
 
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import {
@@ -10,6 +10,8 @@ import {
   confidenceBandLabel,
 } from '@/features/import-steward/confidenceBand';
 import { StewardDrawerChrome } from '@/features/import-steward/StewardDrawerChrome';
+import { StewardEvidenceSummary } from '@/features/import-steward/StewardEvidenceSummary';
+import { StewardSuggestionCards } from '@/features/import-steward/StewardSuggestionCards';
 import type { ImportStewardCandidateRowBase } from '@/features/import-steward/importStewardCandidateWorkspace.types';
 import { safeDisplayError } from '@/lib/api';
 
@@ -74,6 +76,26 @@ export function CporCandidateStewardDrawer({
   const suggestions = candidate.suggestions ?? [];
   const band = confidenceBand(candidate.confidence_score);
 
+  const suggestionItems = useMemo(
+    () =>
+      suggestions.map((s) => ({
+        targetId: s.dim_id,
+        label: s.label,
+        score: s.score,
+        reason: s.reason,
+        onMap: (dimId: number) => {
+          void runMap(dimId);
+        },
+        mapPending: pending && mappingDimId === s.dim_id,
+        mapDisabled: Boolean(busy || pending),
+      })),
+    // runMap closes over latest candidate/busy — recreate when those change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [suggestions, pending, mappingDimId, busy, candidate.token, entity]
+  );
+
+  const caseCodes = (candidate.case_codes ?? []).filter(Boolean);
+
   return (
     <StewardDrawerChrome
       title={`Map ${entity}`}
@@ -92,9 +114,6 @@ export function CporCandidateStewardDrawer({
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
-          <Typography variant="body2" color="text.secondary">
-            Appears on {candidate.row_count} staging row{candidate.row_count === 1 ? '' : 's'}
-          </Typography>
           {candidate.plan_class ? (
             <Chip
               size="small"
@@ -118,86 +137,56 @@ export function CporCandidateStewardDrawer({
           </Typography>
         ) : null}
 
-        <Box data-testid="cpor-historical-drawer-suggestions">
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Suggested masters
-          </Typography>
-          {suggestions.length === 0 ? (
-            <Alert severity="info">
-              No ranked suggestions for this token. Search an existing master below — never auto-created.
-            </Alert>
-          ) : (
-            <Stack spacing={1}>
-              {suggestions.map((s) => {
-                const sBand = confidenceBand(s.score);
-                return (
-                  <Box
-                    key={`${s.dim_id}-${s.reason}`}
-                    sx={{
-                      border: 1,
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                      p: 1.25,
-                    }}
-                    data-testid={`cpor-historical-suggestion-${s.dim_id}`}
-                  >
-                    <Stack spacing={0.75}>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {s.label}
-                      </Typography>
-                      <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-                        {sBand ? (
-                          <Chip
-                            size="small"
-                            variant="outlined"
-                            color={confidenceBandColor(sBand)}
-                            label={confidenceBandLabel(sBand)}
-                          />
-                        ) : null}
-                        <Chip size="small" variant="outlined" label={`score ${Number(s.score).toFixed(2)}`} />
-                        <Chip size="small" variant="outlined" label={s.reason} />
-                      </Stack>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        disabled={busy || pending}
-                        onClick={() => void runMap(s.dim_id)}
-                        data-testid={`cpor-historical-suggestion-map-${s.dim_id}`}
-                      >
-                        {pending && mappingDimId === s.dim_id ? 'Mapping…' : 'Map to this master'}
-                      </Button>
-                    </Stack>
-                  </Box>
-                );
-              })}
+        <StewardEvidenceSummary
+          sampleRawValues={candidate.sample_raw_values}
+          affectedRowCount={candidate.row_count}
+          totalUnits={candidate.total_units}
+          totalReportedValue={candidate.total_reported_value}
+          testId="cpor-historical-drawer-evidence"
+          extras={
+            caseCodes.length > 0 ? (
+              <Stack spacing={0.5}>
+                <Typography variant="caption" color="text.secondary">
+                  Affected cases
+                </Typography>
+                <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                  {caseCodes.map((c) => (
+                    <Chip key={c} size="small" label={c} data-testid={`cpor-historical-drawer-case-${c}`} />
+                  ))}
+                </Stack>
+              </Stack>
+            ) : null
+          }
+        />
+
+        <StewardSuggestionCards
+          suggestions={suggestionItems}
+          testId="cpor-historical-suggestion"
+          overrideSlot={
+            <Stack spacing={1} data-testid="cpor-historical-drawer-override-search">
+              <Typography variant="subtitle2">None of these — search…</Typography>
+              <EntitySearchAutocomplete<CporDimPick>
+                label={`Map ${entity} to…`}
+                value={target}
+                onChange={setTarget}
+                fetchOptions={fetchOptions}
+                getOptionLabel={cporDimLabel}
+                disabled={busy || pending}
+              />
+              <Button
+                variant="outlined"
+                disabled={!target || busy || pending}
+                onClick={() => {
+                  if (!target) return;
+                  void runMap(target.id);
+                }}
+                data-testid="cpor-historical-drawer-map"
+              >
+                {pending && mappingDimId === target?.id ? 'Mapping…' : 'Map token (override)'}
+              </Button>
             </Stack>
-          )}
-        </Box>
-
-        <Divider />
-
-        <Stack spacing={1} data-testid="cpor-historical-drawer-override-search">
-          <Typography variant="subtitle2">None of these — search…</Typography>
-          <EntitySearchAutocomplete<CporDimPick>
-            label={`Map ${entity} to…`}
-            value={target}
-            onChange={setTarget}
-            fetchOptions={fetchOptions}
-            getOptionLabel={cporDimLabel}
-            disabled={busy || pending}
-          />
-          <Button
-            variant="outlined"
-            disabled={!target || busy || pending}
-            onClick={() => {
-              if (!target) return;
-              void runMap(target.id);
-            }}
-            data-testid="cpor-historical-drawer-map"
-          >
-            {pending && mappingDimId === target?.id ? 'Mapping…' : 'Map token (override)'}
-          </Button>
-        </Stack>
+          }
+        />
 
         {error ? <Alert severity="error">{error}</Alert> : null}
       </Stack>

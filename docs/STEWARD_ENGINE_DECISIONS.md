@@ -131,3 +131,21 @@ on candidate list; that `id` is the row key, plan `candidate_ids`, and page key.
 **Locked (resolves D-005 for CPOR).** CPOR uses `StewardResolutionPlanToolbar`
 `onApplyAllReady` — same placement as shipment. DSI workspace-toolbar placement
 unchanged until Unit D normalizes globally.
+
+## D-016 · 2026-07-27 · Apply-all normalizes to the plan toolbar (resolves D-005)
+**Locked.** Canonical placement for apply-all-ready is `StewardResolutionPlanToolbar`
+`onApplyAllReady` (shipment/CPOR placement; D-015). DSI converges: wire
+`onApplyAllReady`/`applyAll*` into its existing shared-toolbar mount and remove the
+workspace-toolbar apply-all button; **"Apply selected ready" stays in the workspace
+toolbar**. Supersedes the "two valid placements" clause of D-005. Opportunistically
+retire deprecated `DsiResolutionPlanToolbar` by inlining its call site.
+**Origin:** Unit D CONSULT READY 2026-07-27.
+
+## D-017 · 2026-07-27 · S6/S7 drawer UI is shared by extraction, not per-consumer
+**Locked.** `StewardEvidenceSummary` (S6: samples, affected rows, units, value, +
+neutral `extras` ReactNode slot) and `StewardSuggestionCards` (S7: 1..N ranked cards
+`{label, band, score, reason, targetId, onMap}` + override-search slot) live in
+`features/import-steward/` with **no importer prefix and no importer-typed imports**
+(D-006). Consumers pass neutral data + callbacks. Second consumer proves genericity
+(D-008): evidence summary = shipment + CPOR; cards = CPOR + shipment.
+**Origin:** Unit D CONSULT READY 2026-07-27.

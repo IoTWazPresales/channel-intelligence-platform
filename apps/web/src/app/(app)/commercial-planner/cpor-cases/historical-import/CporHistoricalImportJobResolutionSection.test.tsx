@@ -159,7 +159,8 @@ describe('CporHistoricalImportJobResolutionSection', () => {
     const mapButtons = await screen.findAllByRole('button', { name: 'Map…' });
     await user.click(mapButtons[0]!);
     expect(await screen.findByTestId('cpor-historical-drawer-intelligence')).toBeInTheDocument();
-    expect(screen.getByTestId('cpor-historical-drawer-suggestions')).toBeInTheDocument();
+    expect(screen.getByTestId('cpor-historical-drawer-evidence')).toBeInTheDocument();
+    expect(screen.getByTestId('cpor-historical-suggestion')).toBeInTheDocument();
     expect(screen.getByTestId('cpor-historical-suggestion-map-11')).toBeInTheDocument();
     expect(screen.getByTestId('cpor-historical-drawer-override-search')).toBeInTheDocument();
   });

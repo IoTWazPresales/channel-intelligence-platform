@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-27 (Unit C Opus VERIFY PASS)
+**Last updated:** 2026-07-27 (Unit D implement — VERIFY pending)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,75 +10,55 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
-| **Alembic (DB)** | **`20260727_0074` on cip** (token surrogate) |
-| **HEAD** | `4a63a30` (implement; docs pins after) |
-| **Pushed?** | yes |
-| **Next** | **Unit D CONSULT** — shared S6/S7 drawer UI (shipment+CPOR) + apply-all normalize (D-005/D-015) |
+| **Alembic (DB)** | **`20260727_0074` on cip** |
+| **HEAD** | *(set after Unit D commit)* |
+| **Pushed?** | pending |
+| **Next** | Opus VERIFY Unit D → Unit E CONSULT (CST steward) |
 
 ---
 
 ## Standing quality bar
 
 **Contract or STOP · no half-PASS · code is evidence.**  
-Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v1.3**).
+Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v1.4**).
 
-**Consolidation arc:** A–B2 PASS; **Unit C implemented** (VERIFY next); D/E/F open (same session).
+**Consolidation arc:** A–C PASS; **Unit D implemented** (VERIFY next); E/F open.
 
 ---
 
-## CPOR historical import — status language
+## Unit D (this session)
 
 | Label | Fact |
 |-------|------|
-| **Proven** | H1; H2 apply; smoke `H2-SMOKE-556` |
-| **Proven (this arc)** | Unit 1–3; Unit C: S9 plan + S12 pagination + S14 surrogate + S6/S4 payload |
-| **Known contract gaps (v1.3)** | S6/S7 **drawer UI** → Unit D (payload done) |
-| **Out of scope** | Unit 4 config-driven section; relocate into imports monolith |
-
-Route (keep): `/commercial-planner/cpor-cases/historical-import`
+| **Status** | Implemented; Opus VERIFY pending |
+| **Shared** | `StewardEvidenceSummary` + `StewardSuggestionCards` (D-017); CPOR + shipment bind both |
+| **Apply-all** | DSI moved to plan toolbar `onApplyAllReady`; workspace apply-all removed; apply-selected retained (D-016) |
+| **Decisions** | D-016, D-017; contract **v1.4** |
+| **Not proven** | Opus VERIFY; live soak |
 
 ---
 
-## Unit C (this session)
+## Unit C
 
 | Label | Fact |
 |-------|------|
-| **Opus VERIFY** | **PASS** @ `4a63a30` — response `.tmp/unit_c_verify_opus_response.md` |
-| **Migration** | `20260727_0074` — `import_cpor_historical_token_surrogate` (+ grants); applied on cip |
-| **Backend** | Surrogate get-or-create; candidates enrichment + server pagination/`plan_class`; resolution-plan compute/apply async; tasks `imports.cpor_historical_resolution_plan_*`; slot `SLOT_CPOR_RESOLUTION_PLAN` ≠ SLOT_MAIN; case-apply untouched |
-| **Web** | `CPOR_HISTORICAL_ENGINE_CONFIG` + `useStewardResolutionPlan`; `useCporCandidatesPage` + `StewardCandidatesPagination`; deleted `cporTokenRowId`; apply-all in plan toolbar (D-015) |
-| **Decisions** | D-013, D-014, D-015; contract **v1.3** |
-| **Not proven** | Live operator soak |
+| **Opus VERIFY** | **PASS** @ `4a63a30` |
 
 ---
 
-## Unit B2
+## Unit B2 / B / A
 
 | Label | Fact |
 |-------|------|
-| **Opus VERIFY** | **PASS** @ `f9c49f9` |
-
----
-
-## Unit B / A
-
-| Label | Fact |
-|-------|------|
-| **Unit B PASS** | @ `e625388` |
-| **Unit A PASS** | @ `ce1ca27` / pin `ead4e9f` |
-
----
-
-## Parked — DSI unified multifile
-
-- Branch `feat/dsi-unified-multifile` @ `2c2391e`; stash `park-dsi-asus-dealer-name-automap`
+| **B2 PASS** | @ `f9c49f9` |
+| **B PASS** | @ `e625388` |
+| **A PASS** | @ `ce1ca27` / pin `ead4e9f` |
 
 ---
 
 ## Do not
 
 - Relocate CPOR into imports monolith
-- Claim Unit 4 done
+- Claim Unit 4 / Unit E done
 - Invent `bulkStrategy` / engine capabilities
-- Put `Cpor*` modules under `features/import-steward/`
-- Close S6/S7 drawer **UI** in Unit C (Unit D)
+- Put importer-prefixed modules under `features/import-steward/` (D-006)

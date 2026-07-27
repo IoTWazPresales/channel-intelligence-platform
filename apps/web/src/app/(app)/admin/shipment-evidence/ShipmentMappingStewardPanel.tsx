@@ -1,6 +1,7 @@
 'use client';
 
 import { Alert, Box, Chip, Stack, Typography } from '@mui/material';
+import { useMemo } from 'react';
 
 import {
   confidenceBand,
@@ -8,7 +9,11 @@ import {
   confidenceBandLabel,
 } from '@/features/import-steward/confidenceBand';
 import { formatPlanActionLabel, planTargetSummary } from '@/features/import-steward/dsiResolutionPlanDisplay';
-
+import { StewardEvidenceSummary } from '@/features/import-steward/StewardEvidenceSummary';
+import {
+  StewardSuggestionCards,
+  type StewardSuggestionCardItem,
+} from '@/features/import-steward/StewardSuggestionCards';
 import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
 import {
   isShipmentCustomerEntity,
@@ -23,6 +28,11 @@ import {
   type ShipmentMappingCandidateRow,
 } from './shipmentMappingCandidateDisplay';
 import { ShipmentCandidateDrawerActions } from './shipmentStewardRowActions';
+
+function isExistingMasterMapAction(action: string | null): boolean {
+  if (!action) return false;
+  return action.startsWith('map_') || action === 'map_customer' || action === 'map_distributor';
+}
 
 export function ShipmentMappingStewardPanel({
   candidate,
@@ -40,6 +50,10 @@ export function ShipmentMappingStewardPanel({
   const ready = planRow?.ready === true;
   const suggestedAction =
     typeof planRow?.suggested_action === 'string' ? planRow.suggested_action : null;
+  const suggestedTargetId =
+    planRow?.suggested_target_id != null && Number.isFinite(Number(planRow.suggested_target_id))
+      ? Number(planRow.suggested_target_id)
+      : null;
   const planConfidence =
     typeof planRow?.confidence === 'number'
       ? planRow.confidence
@@ -53,6 +67,38 @@ export function ShipmentMappingStewardPanel({
   const blockers = Array.isArray(planRow?.resolution_blockers)
     ? (planRow.resolution_blockers as string[])
     : [];
+
+  const suggestionCards: StewardSuggestionCardItem[] = useMemo(() => {
+    if (!isExistingMasterMapAction(suggestedAction) || suggestedTargetId == null) return [];
+    const label = planTargetSummary(
+      suggestedAction!,
+      suggestedTargetId,
+      candidate as unknown as Record<string, unknown>,
+      planRow ?? undefined
+    );
+    return [
+      {
+        targetId: suggestedTargetId,
+        label,
+        score: planConfidence,
+        reason: typeof planRow?.reason === 'string' ? planRow.reason : suggestedAction,
+        onMap: () => {
+          onApplyPlanRow?.(candidate.id);
+        },
+        mapPending: Boolean(applyPlanPending),
+        mapDisabled: !ready || !onApplyPlanRow || Boolean(applyPlanPending),
+      },
+    ];
+  }, [
+    suggestedAction,
+    suggestedTargetId,
+    candidate,
+    planRow,
+    planConfidence,
+    onApplyPlanRow,
+    applyPlanPending,
+    ready,
+  ]);
 
   return (
     <Stack spacing={2} data-testid="shipment-mapping-steward-panel">
@@ -131,16 +177,25 @@ export function ShipmentMappingStewardPanel({
         ) : null}
       </Typography>
 
-      <Stack spacing={0.5}>
-        <Typography variant="body2">
-          <strong>{shipmentSampleToken(candidate)}</strong>
+      {isShipmentDistributorEntity(candidate.entity_type) ? (
+        <Typography variant="caption" color="text.secondary">
+          Party: {shipmentContextParty(candidate.context)}
         </Typography>
-        {isShipmentDistributorEntity(candidate.entity_type) ? (
-          <Typography variant="caption" color="text.secondary">
-            Party: {shipmentContextParty(candidate.context)}
+      ) : null}
+
+      <StewardEvidenceSummary
+        sampleRawValues={candidate.sample_raw_values}
+        affectedRowCount={candidate.row_count}
+        totalUnits={candidate.total_units}
+        totalReportedValue={candidate.total_reported_value}
+        testId="shipment-drawer-evidence"
+        extras={
+          <Typography variant="body2" color="text.secondary">
+            Suggested name:{' '}
+            {shipmentSuggestedNameFromContext(candidate.context, shipmentSampleToken(candidate))}
           </Typography>
-        ) : null}
-      </Stack>
+        }
+      />
 
       {isShipmentCustomerEntity(candidate.entity_type) && shipmentContextNeedsNameReview(candidate.context) ? (
         <Chip size="small" color="warning" variant="outlined" label="Verify name" />
@@ -185,13 +240,18 @@ export function ShipmentMappingStewardPanel({
         </Stack>
       ) : null}
 
-      <Typography variant="body2" color="text.secondary">
-        Suggested name: {shipmentSuggestedNameFromContext(candidate.context, shipmentSampleToken(candidate))}
-      </Typography>
-
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        <ShipmentCandidateDrawerActions row={candidate} />
-      </Stack>
+      <StewardSuggestionCards
+        suggestions={suggestionCards}
+        testId="shipment-suggestion"
+        emptyMessage="No ranked master suggestion for this row. Use Map / provisional actions below — never auto-created."
+        mapLabel="Apply plan map"
+        mapPendingLabel="Applying…"
+        overrideSlot={
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap data-testid="shipment-drawer-override-actions">
+            <ShipmentCandidateDrawerActions row={candidate} />
+          </Stack>
+        }
+      />
     </Stack>
   );
 }

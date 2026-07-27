@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-27 — **Unit D (shared S6/S7 + apply-all normalize):** StewardEvidenceSummary + StewardSuggestionCards; CPOR/shipment bind; DSI apply-all → plan toolbar (D-016/D-017); contract v1.4. Next: Opus VERIFY → Unit E. Branch `feat/cpor-listing-status-audit`.
 - 2026-07-27 — **Unit C Opus VERIFY PASS @ `4a63a30`:** S4/S6-payload/S9–S12/S14 PASS; S6-UI/S7 → Unit D per v1.3. Next: Unit D CONSULT (shared drawer + apply-all normalize). Branch `feat/cpor-listing-status-audit`.
 - 2026-07-27 — **Unit C (CPOR S9/S12/S14 + S6 payload):** surrogate `0074`; plan compute/apply async ≠ case-apply; pagination; payload enrichment; web engine bind; D-013/14/15; contract v1.3. Next: Opus VERIFY → Unit D. Branch `feat/cpor-listing-status-audit`.
 - 2026-07-26 — **Unit B2 Opus VERIFY PASS @ `f9c49f9`:** S8 preview→apply + S9 toolbar chips/effective; D-012 waiver OK; no bulkStrategy. Next: Unit C CONSULT (CPOR). Branch `feat/cpor-listing-status-audit`.

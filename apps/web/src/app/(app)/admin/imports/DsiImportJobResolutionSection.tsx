@@ -26,12 +26,13 @@ import {
   DsiProductCandidateExportToolbar,
   DsiCountryRegionFallback,
   DsiRegionChannelTabPanel,
-  DsiResolutionPlanToolbar,
+  StewardResolutionPlanToolbar,
   isDsiEntityCandidateTab,
   type DsiRegionEvidenceDto,
   StewardCandidateFilters,
   DsiStewardLoadingCallout,
   DSI_STEWARD_CONFIG,
+  DSI_ENGINE_CONFIG,
   DSI_ENTITY_TABS,
   ImportStewardCandidateWorkspace,
   StewardWorkspaceViewportShell,
@@ -703,21 +704,6 @@ export function DsiImportJobResolutionSection({
                 >
                   Apply selected ready ({selectedReadyPlanIds.length})
                 </StewardPendingButton>
-                <StewardPendingButton
-                  variant="contained"
-                  size="small"
-                  pending={plan.applyResolutionPlan.isPending}
-                  pendingLabel="Applying…"
-                  disabled={
-                    plan.readyPlanCandidateIds.length === 0 ||
-                    planApplyBlocked ||
-                    (stewardOverlayBusy && !plan.applyResolutionPlan.isPending)
-                  }
-                  onClick={() => plan.setApplyAllConfirmOpen(true)}
-                  data-testid="dsi-resolution-plan-apply-all"
-                >
-                  Apply all ready ({plan.readyPlanCandidateIds.length})
-                </StewardPendingButton>
               </>
             ) : (
               <Box sx={{ flexGrow: 1 }} />
@@ -801,16 +787,31 @@ export function DsiImportJobResolutionSection({
         </Alert>
       ) : null}
 
-      <DsiResolutionPlanToolbar
-        candidatesCount={candidatesTotal}
-        resolutionPlan={plan.resolutionPlan}
-        planGlobalSuspicious={plan.planGlobalSuspicious}
-        setPlanGlobalSuspicious={plan.setPlanGlobalSuspicious}
-        planLoadToken={plan.planLoadToken}
-        planTableRows={plan.planTableRows}
-        suggestionsQuery={plan.suggestionsQuery}
-        refreshPlanEffective={plan.refreshPlanEffective}
-        overridesPayload={plan.overridesPayload}
+      <StewardResolutionPlanToolbar
+        plan={{
+          candidatesCount: candidatesTotal,
+          readyCount: plan.readyPlanCandidateIds.length,
+          suggestionsQuery: plan.suggestionsQuery,
+        }}
+        testIds={DSI_ENGINE_CONFIG.planToolbarTestIds}
+        onApplyAllReady={() => plan.setApplyAllConfirmOpen(true)}
+        applyAllPending={plan.applyResolutionPlan.isPending}
+        applyAllDisabled={
+          plan.readyPlanCandidateIds.length === 0 ||
+          planApplyBlocked ||
+          (stewardOverlayBusy && !plan.applyResolutionPlan.isPending)
+        }
+        applyAllLabel={`Apply all ready (${plan.readyPlanCandidateIds.length})`}
+        applyAllTestId="dsi-resolution-plan-apply-all"
+        dsiExtras={{
+          resolutionPlan: plan.resolutionPlan,
+          planGlobalSuspicious: plan.planGlobalSuspicious,
+          setPlanGlobalSuspicious: plan.setPlanGlobalSuspicious,
+          planLoadToken: plan.planLoadToken,
+          planTableRows: plan.planTableRows,
+          refreshPlanEffective: plan.refreshPlanEffective,
+          overridesPayload: plan.overridesPayload,
+        }}
       />
 
       {supervisedAutoResolvedRows.length > 0 ? (
