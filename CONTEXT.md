@@ -17,7 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-07-27 — **Merged `feat/dsi-unified-multifile` (`2c2391e`) into `feat/cpor-listing-status-audit`:** restored DSI batch/coverage/header sniff/file stamps + pipeline premapped skip; kept Unit F layout + CPOR/steward A–F + shipping KPIs. BACKLOG multifile 074/075 → **077/078**. Conflicts resolved; Warren smoke next (no DB tests this session).
+- 2026-07-27 — **Merged `feat/dsi-unified-multifile` (`2c2391e`) into `feat/cpor-listing-status-audit` @ `7f04c79`:** restored DSI batch/coverage/header sniff/file stamps + pipeline premapped skip; kept Unit F layout + CPOR/steward A–F + shipping KPIs. BACKLOG multifile 074/075 → **077/078**. Conflicts resolved; Warren smoke next (no DB tests this session).
 - 2026-07-27 — **Shipping commercial KPI rebuild:** Phase 0 proved $288M = all-scheduled (incl. $214M no-date junk); contract + gated current-incoming (~$63.4M); `/commercial-summary` filter parity + `cohort=`; cards show value/qty/lines; smart presets aligned; BACKLOG-076 + 062 refresh. Uncommitted on `feat/cpor-listing-status-audit`.
 - 2026-07-27 — **Unit F complete (BACKLOG-075):** Tier 1 inboundEvidence→shipment-evidence; Tier 2 DSI cluster→`admin/imports/dsi/`; Tier 3 shared helpers→`steward*` (+ DSI filter logic under dsi/). Zero importer-prefixed filenames in `import-steward/`; contract v1.6. Vitest 207/207 focused. Branch `feat/cpor-listing-status-audit`.
 - 2026-07-27 — **Unit F Tier 0:** retired orphan Dsi* plan accordion/toolbar/geo accordion + dead inboundEvidence list model; DSI section uses Steward bulk/drawer directly. Remainder → BACKLOG-075. Branch `feat/cpor-listing-status-audit`.
