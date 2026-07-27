@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Accordion, AccordionDetails, AccordionSummary, Stack, TextField, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
-import { StewardPendingButton } from './StewardPendingButton';
+import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
 import { prefillGeoCreateFromFileToken } from './geoStewardFilePrefill';
 import type { DsiUnresolvedGeoRowDto } from './dsiSteward.types';
 

@@ -1,5 +1,8 @@
 import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
-import { parseDsiPossibleDuplicateHint, type DsiPossibleDuplicateHint } from './dsiDuplicateHintContract';
+import {
+  parseStewardPossibleDuplicateHint,
+  type StewardPossibleDuplicateHint,
+} from '@/features/import-steward/stewardDuplicateHintContract';
 import {
   countStewardCandidatesForQueue,
   defaultStewardCandidateFilterState,
@@ -14,7 +17,7 @@ import {
   type StewardEntityTypes,
   type StewardPartyFilter,
   type StewardQueueFilter,
-} from './stewardCandidateFilterLogic';
+} from '@/features/import-steward/stewardCandidateFilterLogic';
 
 /** DSI mapping candidate entity types (import job resolution). */
 export const DSI_ENTITY_CUSTOMER = 'customer_dealer_token' as const;
@@ -39,7 +42,7 @@ export type DsiStewardCandidateFilterState = StewardCandidateFilterState;
 /** @deprecated Prefer defaultStewardCandidateFilterState */
 export const defaultDsiStewardCandidateFilterState = defaultStewardCandidateFilterState;
 
-export type { DsiPossibleDuplicateHint } from './dsiDuplicateHintContract';
+export type { StewardPossibleDuplicateHint as DsiPossibleDuplicateHint } from '@/features/import-steward/stewardDuplicateHintContract';
 export { productMatchStatusFromContext };
 
 export function contextDuplicateReview(
@@ -114,11 +117,11 @@ export function contextDistributorMasterCollision(
   return { distributor_id, distributor_name };
 }
 
-export function contextPossibleDuplicateOf(ctx: Record<string, unknown> | null): DsiPossibleDuplicateHint[] {
+export function contextPossibleDuplicateOf(ctx: Record<string, unknown> | null): StewardPossibleDuplicateHint[] {
   if (!ctx || !Array.isArray(ctx.possible_duplicate_of)) return [];
-  const out: DsiPossibleDuplicateHint[] = [];
+  const out: StewardPossibleDuplicateHint[] = [];
   for (const x of ctx.possible_duplicate_of) {
-    const parsed = parseDsiPossibleDuplicateHint(x);
+    const parsed = parseStewardPossibleDuplicateHint(x);
     if (parsed) out.push(parsed);
   }
   return out.slice(0, 8);

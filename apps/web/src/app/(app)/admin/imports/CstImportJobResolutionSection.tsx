@@ -33,9 +33,9 @@ import { StewardCandidatesPagination } from '@/features/import-steward/StewardCa
 import { StewardEntityTabsBar, type StewardEntityTabCounts } from '@/features/import-steward/StewardEntityTabsBar';
 import { StewardWorkspaceViewportShell } from '@/features/import-steward/StewardWorkspaceViewportShell';
 import {
-  defaultDsiStewardCandidateFilterState,
-  type DsiStewardCandidateFilterState,
-} from '@/features/import-steward/dsiStewardCandidateFilterLogic';
+  defaultStewardCandidateFilterState,
+  type StewardCandidateFilterState,
+} from '@/features/import-steward/stewardCandidateFilterLogic';
 import { computeImportStewardSelectionHeaderState } from '@/features/import-steward/importStewardSelectionUtils';
 import type { ImportStewardCandidateRowBase } from '@/features/import-steward/importStewardCandidateWorkspace.types';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
@@ -67,9 +67,9 @@ function emptyCounts(): CstEntityTabCounts {
   };
 }
 
-function defaultCstFiltersForTab(tab: CstEntityTabId): DsiStewardCandidateFilterState {
+function defaultCstFiltersForTab(tab: CstEntityTabId): StewardCandidateFilterState {
   return {
-    ...defaultDsiStewardCandidateFilterState(),
+    ...defaultStewardCandidateFilterState(),
     entity: tab,
     party: 'all',
     queue: 'needs_review',
@@ -170,7 +170,7 @@ export function CstImportJobResolutionSection({
 }) {
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<CstEntityTabId>('product');
-  const [activeFilters, setActiveFilters] = useState<DsiStewardCandidateFilterState>(() =>
+  const [activeFilters, setActiveFilters] = useState<StewardCandidateFilterState>(() =>
     defaultCstFiltersForTab('product')
   );
   const [searchInput, setSearchInput] = useState('');

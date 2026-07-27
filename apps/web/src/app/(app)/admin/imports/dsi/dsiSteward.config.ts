@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import type { ImportStewardListCopy } from './importStewardCandidateWorkspace.types';
+import type { ImportStewardListCopy } from '@/features/import-steward/importStewardCandidateWorkspace.types';
 
 /** Terminal candidate statuses — aligned with `DsiMappingStewardPanel` single-row steward. */
 export const DSI_STEWARD_TERMINAL_STATUSES = ['resolved', 'ignored', 'waived_open_channel'] as const;

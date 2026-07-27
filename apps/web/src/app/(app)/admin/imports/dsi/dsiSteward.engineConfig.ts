@@ -8,15 +8,15 @@ import {
   dsiBulkStewardChunkSize,
   mergeDsiBulkApplyResponses,
   mergeDsiBulkPreviewResponses,
-} from './dsiBulkStewardChunking';
-import { bulkPreviewAliasEvidence, bulkPreviewProposedLabel } from './dsiBulkStewardDisplay';
+} from '@/features/import-steward/stewardBulkStewardChunking';
+import { bulkPreviewAliasEvidence, bulkPreviewProposedLabel } from '@/features/import-steward/stewardBulkStewardDisplay';
 import { pollDsiBulkProvisionalTask } from './dsiBulkProvisionalPoll';
 import {
   fetchDsiResolutionPlanApplyResultIfTerminal,
   pollDsiResolutionPlanApplyTask,
 } from './dsiResolutionPlanApplyPoll';
 import { pollDsiResolutionPlanComputeTask } from './dsiResolutionPlanComputePoll';
-import { summarizeApplyAllReadyProvisional } from './dsiResolutionPlanDisplay';
+import { summarizeApplyAllReadyProvisional } from '@/features/import-steward/stewardResolutionPlanDisplay';
 import {
   DSI_STEWARD_CONFIG,
   invalidateDsiCatalogQueries,
@@ -29,7 +29,7 @@ import {
   optimisticallyApplyStewardBulk,
   removeCandidatesFromDsiCache,
 } from './dsiStewardCacheUpdates';
-import type { StewardEngineConfig } from './stewardEngine.types';
+import type { StewardEngineConfig } from '@/features/import-steward/stewardEngine.types';
 import { waitForDsiStewardBulkIdle } from './waitForDsiStewardBulkIdle';
 
 export const DSI_ENGINE_CONFIG: StewardEngineConfig = {

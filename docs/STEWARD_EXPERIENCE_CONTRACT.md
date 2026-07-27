@@ -1,6 +1,6 @@
 # Steward Experience Contract
 
-**Version:** 1.5 · 2026-07-27 · Owner: Warren  
+**Version:** 1.6 · 2026-07-27 · Owner: Warren  
 **Role:** The definition of done for ANY import steward/resolve surface. CONSULT may
 only scope units as subsets of these rows. VERIFY walks these rows — not the unit
 prompt's own checklist. Any row excluded from a unit requires an explicit
@@ -64,19 +64,15 @@ provisional D-005.)
    region/channel/geo or assume bulk preview. Geo is composed by the consumer (DSI).
    Do not add `bulkStrategy` / capability flags that fossilize S8 gaps in the core.
 
-## Known gaps (v1.5)
+## Known gaps (v1.6)
 
 - **`/admin/cst-steward`:** key-account / report-slot / article-alias **ops** page —
   **outside** this contract (D-018). Not an import-resolution surface.
 - **Waivers (shipment, D-012):** plan toolbar omits DSI global-suspicious checkbox;
   plan apply does not use plan-level suspicious confirm (variance, not gap).
-- **inboundEvidence\* entity-type leakage:** `inboundEvidenceMappingCandidateDisplayUtils`
-  retains API literals `shipment_distributor` / `shipment_customer_token` inside
-  `features/import-steward/` (cannot rename without endpoint change). Follow-up debt —
-  isolate or alias without changing wire values.
-- **Remaining `Dsi*` domain modules** still under `features/import-steward/` (geo panels,
-  product export, candidates page, cache updates, display helpers) — relocate follow-up
-  (Unit F). Deprecated `DsiResolutionPlanToolbar` retained for advanced accordion only.
+- **Shipment API entity_type literals** (`shipment_distributor` / `shipment_customer_token`)
+  remain wire values under `admin/shipment-evidence/` — cannot rename without endpoint
+  change (not an `import-steward/` leakage after Unit F).
 
 ## Consolidation arc
 
@@ -87,5 +83,5 @@ provisional D-005.)
 - **Unit D** — shared drawer evidence + suggestion cards; apply-all normalize (PASS `cc0138a`)
 - **Unit E1** — CST import steward (suggestions + resolve + UI on Import Centre); VERIFY deferred (no-Opus)
 - **Unit E2** — CST resolution-plan + async (shipped 2026-07-27; VERIFY deferred)
-- **Unit F / follow-up debt** — relocate remaining `Dsi*` domain modules out of
-  `features/import-steward/`; clear inboundEvidence entity-type string leakage
+- **Unit F** — DSI domain → `admin/imports/dsi/`; inboundEvidence → shipment-evidence;
+  shared helpers renamed `steward*` in `import-steward/` (BACKLOG-075 shipped)

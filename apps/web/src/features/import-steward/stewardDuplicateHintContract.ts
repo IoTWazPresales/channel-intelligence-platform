@@ -38,7 +38,7 @@ const KNOWN_MATCH_BASES: ReadonlySet<string> = new Set([
   DSI_MATCH_BASIS_CROSS_DISTI,
 ]);
 
-export type DsiPossibleDuplicateHintEvidence = {
+export type StewardPossibleDuplicateHintEvidence = {
   matched_value?: string;
   matched_field?: string;
   dealer_group_norm?: string;
@@ -47,12 +47,12 @@ export type DsiPossibleDuplicateHintEvidence = {
   evidence_reason?: string;
 };
 
-export type DsiPossibleDuplicateHint = {
+export type StewardPossibleDuplicateHint = {
   normalized_key: string;
   similarity_score?: number;
   /** Known Phase A/reserved values, or future strings preserved as-is when parsing. */
   match_basis?: DsiDuplicateMatchBasis | string;
-} & DsiPossibleDuplicateHintEvidence;
+} & StewardPossibleDuplicateHintEvidence;
 
 function optionalString(value: unknown, maxLen: number): string | undefined {
   if (typeof value !== 'string') return undefined;
@@ -72,7 +72,7 @@ function optionalDistributorScope(value: unknown): number[] | undefined {
 }
 
 /** Parse one hint entry from context JSONB; preserves unknown match_basis for forward compatibility. */
-export function parseDsiPossibleDuplicateHint(raw: unknown): DsiPossibleDuplicateHint | null {
+export function parseStewardPossibleDuplicateHint(raw: unknown): StewardPossibleDuplicateHint | null {
   if (typeof raw === 'string') {
     const nk = raw.trim();
     return nk ? { normalized_key: nk } : null;
@@ -81,7 +81,7 @@ export function parseDsiPossibleDuplicateHint(raw: unknown): DsiPossibleDuplicat
   const rec = raw as Record<string, unknown>;
   const nk = String(rec.normalized_key ?? '').trim();
   if (!nk) return null;
-  const hint: DsiPossibleDuplicateHint = { normalized_key: nk };
+  const hint: StewardPossibleDuplicateHint = { normalized_key: nk };
   const score = rec.similarity_score;
   if (typeof score === 'number' && Number.isFinite(score)) {
     hint.similarity_score = score;

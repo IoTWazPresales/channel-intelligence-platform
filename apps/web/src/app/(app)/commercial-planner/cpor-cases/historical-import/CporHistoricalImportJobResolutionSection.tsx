@@ -32,9 +32,9 @@ import { StewardPendingButton } from '@/features/import-steward/StewardPendingBu
 import { StewardResolutionPlanToolbar } from '@/features/import-steward/StewardResolutionPlanToolbar';
 import { StewardWorkspaceViewportShell } from '@/features/import-steward/StewardWorkspaceViewportShell';
 import {
-  defaultDsiStewardCandidateFilterState,
-  type DsiStewardCandidateFilterState,
-} from '@/features/import-steward/dsiStewardCandidateFilterLogic';
+  defaultStewardCandidateFilterState,
+  type StewardCandidateFilterState,
+} from '@/features/import-steward/stewardCandidateFilterLogic';
 import { computeImportStewardSelectionHeaderState } from '@/features/import-steward/importStewardSelectionUtils';
 import type { StewardPlanApplyFeedback } from '@/features/import-steward/stewardEngine.types';
 import { useStewardResolutionPlan } from '@/features/import-steward/useStewardResolutionPlan';
@@ -80,9 +80,9 @@ function emptyCounts(): CporEntityTabCounts {
   };
 }
 
-function defaultCporFiltersForTab(tab: CporEntityTabId): DsiStewardCandidateFilterState {
+function defaultCporFiltersForTab(tab: CporEntityTabId): StewardCandidateFilterState {
   return {
-    ...defaultDsiStewardCandidateFilterState(),
+    ...defaultStewardCandidateFilterState(),
     entity: tab,
     party: 'all',
   };
@@ -96,7 +96,7 @@ function queueToPlanClass(queue: string): CporPlanClass | null {
 /** Client search only — plan_class queue chips filter server-side via useCporCandidatesPage. */
 function filterCporStewardRows(
   rows: CporStewardRow[],
-  filters: DsiStewardCandidateFilterState,
+  filters: StewardCandidateFilterState,
   search: string
 ): CporStewardRow[] {
   let next = rows;
@@ -201,7 +201,7 @@ export function CporHistoricalImportJobResolutionSection({
 }) {
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<CporEntityTabId>('product');
-  const [activeFilters, setActiveFilters] = useState<DsiStewardCandidateFilterState>(() =>
+  const [activeFilters, setActiveFilters] = useState<StewardCandidateFilterState>(() =>
     defaultCporFiltersForTab('product')
   );
   const [searchInput, setSearchInput] = useState('');

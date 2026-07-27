@@ -43,8 +43,8 @@ import {
   restoreDsiCandidatesCache,
   type DsiStewardRowAction,
 } from './dsiStewardCacheUpdates';
-import { StewardPendingButton } from './StewardPendingButton';
-import { planTargetSummary } from './dsiResolutionPlanDisplay';
+import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
+import { planTargetSummary } from '@/features/import-steward/stewardResolutionPlanDisplay';
 import {
   DsiEligibleProductPicker,
   type DsiEligibleProductSnapshot,

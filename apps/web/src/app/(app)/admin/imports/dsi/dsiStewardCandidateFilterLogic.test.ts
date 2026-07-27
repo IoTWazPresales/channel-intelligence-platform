@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
+import type { DsiCandidateRow } from '@/app/(app)/admin/imports/dsi/dsi-mapping-steward-panel';
 import {
   classifyDuplicateSameEntityCase,
   contextDistributorMasterCollision,

@@ -1,6 +1,6 @@
 import { fetchBulkProvisionalTaskProgress } from '@/features/background-tasks/fetchImportJobProgress';
 
-import { stewardAsyncPollOptions } from './stewardAsyncPoll';
+import { stewardAsyncPollOptions } from '@/features/import-steward/stewardAsyncPoll';
 import type { DsiBulkApplyResponse, DsiBulkTaskStatusResponse } from './dsiSteward.types';
 
 const TERMINAL = new Set(['SUCCESS', 'FAILURE']);

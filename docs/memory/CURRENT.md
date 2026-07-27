@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-27 (E2 + Unit F Tier 0; VERIFY deferred)
+**Last updated:** 2026-07-27 (Unit F complete; E VERIFY deferred)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -11,20 +11,32 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260727_0074` on cip** |
-| **HEAD** | `c5ff71b` (E2 + F Tier 0 + docs pin) |
-| **Pushed?** | yes |
-| **Next** | Unit F remainder ([BACKLOG-075](../BACKLOG.md)). Opus VERIFY Unit E when usage resets. |
+| **HEAD** | (see git after Unit F commit) |
+| **Pushed?** | pending after Unit F commit |
+| **Next** | Opus VERIFY Unit E when usage resets; then PR soak / promote when ready. |
 
 ---
 
 ## Standing quality bar
 
 **Contract or STOP · no half-PASS · code is evidence.**  
-Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v1.5**).
+Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v1.6**).
 
 **No-Opus mode:** E1+E2 **implemented, VERIFY deferred** — do **not** claim PASS. C PASS @ `4a63a30`; D PASS @ `cc0138a`.
 
-**Consolidation arc:** A–D PASS; **E1+E2 implemented (VERIFY deferred)**; **F Tier 0 shipped**; F remainder = BACKLOG-075.
+**Consolidation arc:** A–D PASS; **E1+E2 implemented (VERIFY deferred)**; **Unit F shipped** (BACKLOG-075).
+
+---
+
+## Unit F (complete)
+
+| Label | Fact |
+|-------|------|
+| **Tier 0** | Orphan/deprecated Dsi wrappers retired; DSI uses Steward bulk/drawer |
+| **Tier 1** | `inboundEvidence*` → `admin/shipment-evidence/`; shared context utils → `stewardEvidenceContextDisplayUtils` |
+| **Tier 2** | DSI-only cluster → `admin/imports/dsi/` (+ domain barrel) |
+| **Tier 3** | Shared helpers → `steward*` names; DSI filter logic → `dsi/dsiStewardCandidateFilterLogic` |
+| **Engine** | Zero `dsi*` / `Dsi*` filenames remain under `features/import-steward/` |
 
 ---
 
@@ -35,15 +47,6 @@ Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v
 | **E2** | Resolution-plan compute/apply-async + `SLOT_CST_RESOLUTION_PLAN` (D-019); BACKLOG-074 shipped |
 | **E1** | Suggestions + resolve/ignore/bulk + Import Centre UI (D-018) |
 | **Opus VERIFY** | **Deferred** |
-
----
-
-## Unit F (Tier 0)
-
-| Label | Fact |
-|-------|------|
-| **Shipped** | Orphan/deprecated retirements + DSI section inlines Steward bulk/drawer |
-| **Remainder** | BACKLOG-075 — inboundEvidence move, DSI cluster relocate, rename shared helpers |
 
 ---
 

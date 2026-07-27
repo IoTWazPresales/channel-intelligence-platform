@@ -4,42 +4,43 @@ import type { MouseEvent } from 'react';
 import { Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import NextLink from 'next/link';
 import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
-import type { DsiCandidateRow, ImportStewardWorkspaceColumn } from '@/features/import-steward';
+import type { ImportStewardWorkspaceColumn } from '@/features/import-steward/importStewardCandidateWorkspace.types';
+import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
 import {
   DSI_ENTITY_CUSTOMER,
   DSI_ENTITY_DISTRIBUTOR,
   DSI_ENTITY_PRODUCT,
   dsiEffectiveSuggestedAction,
-} from '@/features/import-steward/dsiStewardCandidateFilterLogic';
+} from './dsiStewardCandidateFilterLogic';
 import {
   dsiCandidateCorroborationChipLabel,
   formatPlanRulePathLabel,
   type DsiPlanWhy,
-} from '@/features/import-steward/dsiPlanExplainabilityDisplay';
+} from './dsiPlanExplainabilityDisplay';
 import {
   formatDsiProductMatchFifoWarning,
   formatDsiProductRunningChangeSummary,
   type DsiProductRunningChangeContext,
-} from '@/features/import-steward/dsiProductRunningChangeDisplay';
+} from './dsiProductRunningChangeDisplay';
 import {
   formatDsiPlanFileChannelLabel,
   formatDsiPlanFileRegionLabel,
-} from '@/features/import-steward/dsiPlanFileGeoDisplay';
+} from './dsiPlanFileGeoDisplay';
 import {
   formatDsiRegionEvidenceDisplay,
   formatDsiRegionEvidenceTitle,
-} from '@/features/import-steward/dsiRegionEvidenceDisplay';
-import type { DsiRegionEvidenceDto } from '@/features/import-steward/dsiSteward.types';
+} from './dsiRegionEvidenceDisplay';
+import type { DsiRegionEvidenceDto } from './dsiSteward.types';
 import {
-  inboundEvidenceContextNeedsNameReview,
-  inboundEvidenceContextParty,
-  inboundEvidenceContextPossibleDuplicateOf,
-  inboundEvidenceContextSpecialCategory,
-  inboundEvidenceHumanizeMatchReasonCaption,
-  inboundEvidenceHumanizeSnakeTitle,
-  inboundEvidenceSampleToken,
-  inboundEvidenceSuggestedNameFromContext,
-} from '@/features/import-steward/inboundEvidenceMappingCandidateDisplayUtils';
+  stewardEvidenceContextNeedsNameReview as inboundEvidenceContextNeedsNameReview,
+  stewardEvidenceContextParty as inboundEvidenceContextParty,
+  stewardEvidenceContextPossibleDuplicateOf as inboundEvidenceContextPossibleDuplicateOf,
+  stewardEvidenceContextSpecialCategory as inboundEvidenceContextSpecialCategory,
+  stewardEvidenceHumanizeMatchReasonCaption as inboundEvidenceHumanizeMatchReasonCaption,
+  stewardEvidenceHumanizeSnakeTitle as inboundEvidenceHumanizeSnakeTitle,
+  stewardEvidenceSampleToken as inboundEvidenceSampleToken,
+  stewardEvidenceSuggestedNameFromContext as inboundEvidenceSuggestedNameFromContext,
+} from '@/features/import-steward/stewardEvidenceContextDisplayUtils';
 
 function dsiEntityChipLabel(entityType: string): string {
   if (entityType === DSI_ENTITY_CUSTOMER) return 'Channel partner';

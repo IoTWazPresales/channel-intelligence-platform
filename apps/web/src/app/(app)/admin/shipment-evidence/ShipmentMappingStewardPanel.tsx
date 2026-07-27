@@ -8,7 +8,7 @@ import {
   confidenceBandColor,
   confidenceBandLabel,
 } from '@/features/import-steward/confidenceBand';
-import { formatPlanActionLabel, planTargetSummary } from '@/features/import-steward/dsiResolutionPlanDisplay';
+import { formatPlanActionLabel, planTargetSummary } from '@/features/import-steward/stewardResolutionPlanDisplay';
 import { StewardEvidenceSummary } from '@/features/import-steward/StewardEvidenceSummary';
 import {
   StewardSuggestionCards,

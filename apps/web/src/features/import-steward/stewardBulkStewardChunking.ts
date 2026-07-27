@@ -1,4 +1,4 @@
-import type { DsiBulkAction, DsiBulkApplyResponse, DsiBulkPreviewResponse } from './dsiSteward.types';
+import type { DsiBulkAction, DsiBulkApplyResponse, DsiBulkPreviewResponse } from '@/app/(app)/admin/imports/dsi/dsiSteward.types';
 
 /** Align with API `DsiBulkStewardBody` caps in mappings.py */
 export const DSI_BULK_STEWARD_MAX_CANDIDATE_IDS = 200;

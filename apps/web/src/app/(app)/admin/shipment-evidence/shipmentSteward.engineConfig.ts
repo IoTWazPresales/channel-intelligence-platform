@@ -8,8 +8,8 @@ import {
   dsiBulkStewardChunkSize,
   mergeDsiBulkApplyResponses,
   mergeDsiBulkPreviewResponses,
-} from '@/features/import-steward/dsiBulkStewardChunking';
-import { bulkPreviewAliasEvidence, bulkPreviewProposedLabel } from '@/features/import-steward/dsiBulkStewardDisplay';
+} from '@/features/import-steward/stewardBulkStewardChunking';
+import { bulkPreviewAliasEvidence, bulkPreviewProposedLabel } from '@/features/import-steward/stewardBulkStewardDisplay';
 import type {
   StewardBulkEngineConfig,
   StewardPlanEngineConfig,

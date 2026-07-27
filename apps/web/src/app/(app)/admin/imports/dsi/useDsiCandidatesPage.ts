@@ -8,10 +8,10 @@ import { apiGet } from '@/lib/api';
 import { DSI_STEWARD_CONFIG } from './dsiSteward.config';
 import {
   buildDsiCandidatesListUrl,
-  DSI_CANDIDATE_FULL_LOAD_LIMIT,
-  type DsiCandidatePageSize,
-  type DsiMappingCandidatesPageResponse,
-} from './dsiCandidatesQuery';
+  STEWARD_CANDIDATE_FULL_LOAD_LIMIT,
+  type StewardCandidatePageSize,
+  type StewardMappingCandidatesPageResponse,
+} from '@/features/import-steward/stewardCandidatesQuery';
 import type { DsiStewardCandidateFilterState } from './dsiStewardCandidateFilterLogic';
 import {
   defaultDsiStewardCandidateFilterState,
@@ -26,13 +26,13 @@ export function useDsiCandidatesPage(
 ) {
   const queryEnabled = options?.enabled !== false && importJobId > 0;
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState<DsiCandidatePageSize>(100);
+  const [pageSize, setPageSize] = useState<StewardCandidatePageSize>(100);
 
   const clientQueueFilterActive = stewardQueueFilterRequiresFullLoad(stewardFilters);
 
   const skip = page * pageSize;
   const fetchSkip = clientQueueFilterActive ? 0 : skip;
-  const fetchLimit = clientQueueFilterActive ? DSI_CANDIDATE_FULL_LOAD_LIMIT : pageSize;
+  const fetchLimit = clientQueueFilterActive ? STEWARD_CANDIDATE_FULL_LOAD_LIMIT : pageSize;
 
   const serverFilterSlice = useMemo(
     () => ({
@@ -83,7 +83,7 @@ export function useDsiCandidatesPage(
     placeholderData: (previousData, previousQuery) =>
       keepDsiCandidatesPageDataIfSameEntity(previousData, previousQuery, serverFilterSlice.entity),
     queryFn: ({ signal }) =>
-      apiGet<DsiMappingCandidatesPageResponse>(
+      apiGet<StewardMappingCandidatesPageResponse>(
         buildDsiCandidatesListUrl(importJobId, fetchSkip, fetchLimit, stewardFilters),
         { signal }
       ),
@@ -101,7 +101,7 @@ export function useDsiCandidatesPage(
     }
   }, [page, pageCount, query.isFetching, clientQueueFilterActive]);
 
-  const setPageSizeAndReset = useCallback((size: DsiCandidatePageSize) => {
+  const setPageSizeAndReset = useCallback((size: StewardCandidatePageSize) => {
     setPageSize(size);
     setPage(0);
   }, []);
@@ -118,6 +118,6 @@ export function useDsiCandidatesPage(
     skip: clientQueueFilterActive ? page * pageSize : skip,
     clientQueueFilterActive,
     fullLoadTruncated:
-      clientQueueFilterActive && serverTotal > DSI_CANDIDATE_FULL_LOAD_LIMIT,
+      clientQueueFilterActive && serverTotal > STEWARD_CANDIDATE_FULL_LOAD_LIMIT,
   };
 }

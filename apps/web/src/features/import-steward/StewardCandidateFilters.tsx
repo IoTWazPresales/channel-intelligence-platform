@@ -1,8 +1,13 @@
 'use client';
 
 import { Button, Chip, Stack, Typography } from '@mui/material';
-import type { DsiStewardCandidateFilterState, DsiStewardEntityFilter, DsiStewardPartyFilter, DsiStewardQueueFilter } from './dsiStewardCandidateFilterLogic';
-import { defaultDsiStewardCandidateFilterState, dsiStewardFiltersAreDefault } from './dsiStewardCandidateFilterLogic';
+import type {
+  StewardCandidateFilterState,
+  StewardEntityFilter,
+  StewardPartyFilter,
+  StewardQueueFilter,
+} from './stewardCandidateFilterLogic';
+import { defaultStewardCandidateFilterState, stewardFiltersAreDefault } from './stewardCandidateFilterLogic';
 
 export function StewardCandidateFilters({
   filters,
@@ -18,8 +23,8 @@ export function StewardCandidateFilters({
   hideProvisionalQueue = false,
   hideMatchToggles = false,
 }: {
-  filters: DsiStewardCandidateFilterState;
-  onChange: (next: DsiStewardCandidateFilterState) => void;
+  filters: StewardCandidateFilterState;
+  onChange: (next: StewardCandidateFilterState) => void;
   visibleCount: number;
   totalCount: number;
   /** When true, entity is fixed by the active tab (tabbed resolution workspace). */
@@ -27,9 +32,9 @@ export function StewardCandidateFilters({
   /** Hide Bill To / Ship To when not on the Distributors tab. */
   hidePartyFilter?: boolean;
   /** Tab-aware clear target; defaults to global all-entity state when omitted. */
-  clearToDefault?: () => DsiStewardCandidateFilterState;
+  clearToDefault?: () => StewardCandidateFilterState;
   /** Tab-aware default check; falls back to global default when omitted. */
-  isAtDefault?: (filters: DsiStewardCandidateFilterState) => boolean;
+  isAtDefault?: (filters: StewardCandidateFilterState) => boolean;
   /** Products tab: split validate-time product_match_status filters. */
   showProductMatchStatusChips?: boolean;
   /** Optional counts for product no_match / ambiguous_eligible (tab-counts API; full job scope). */
@@ -39,8 +44,8 @@ export function StewardCandidateFilters({
   /** Hide verify-name / special-category / duplicate refine toggles when unused. */
   hideMatchToggles?: boolean;
 }) {
-  const resolveClearTarget = clearToDefault ?? defaultDsiStewardCandidateFilterState;
-  const filtersAreDefault = isAtDefault ?? dsiStewardFiltersAreDefault;
+  const resolveClearTarget = clearToDefault ?? defaultStewardCandidateFilterState;
+  const filtersAreDefault = isAtDefault ?? stewardFiltersAreDefault;
   return (
     <Stack spacing={1} data-testid="dsi-steward-candidate-filters" role="region" aria-label="Filter mapping candidates">
       <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
@@ -98,7 +103,7 @@ export function StewardCandidateFilters({
                 label={chipLabel}
                 variant={filters.queue === value ? 'filled' : 'outlined'}
                 color={filters.queue === value ? 'primary' : 'default'}
-                onClick={() => onChange({ ...filters, queue: value as DsiStewardQueueFilter })}
+                onClick={() => onChange({ ...filters, queue: value as StewardQueueFilter })}
                 sx={{ cursor: 'pointer' }}
                 data-testid={`dsi-filter-queue-${value}`}
               />
@@ -129,7 +134,7 @@ export function StewardCandidateFilters({
                 onClick={() =>
                   onChange({
                     ...filters,
-                    entity: value as DsiStewardEntityFilter,
+                    entity: value as StewardEntityFilter,
                     party: value === 'customer' || value === 'product' ? 'all' : filters.party,
                   })
                 }
@@ -162,7 +167,7 @@ export function StewardCandidateFilters({
               onClick={() =>
                 onChange({
                   ...filters,
-                  party: value as DsiStewardPartyFilter,
+                  party: value as StewardPartyFilter,
                   entity:
                     value !== 'all' && (filters.entity === 'customer' || filters.entity === 'product')
                       ? 'all'

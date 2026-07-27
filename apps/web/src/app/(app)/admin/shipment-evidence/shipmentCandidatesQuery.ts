@@ -1,9 +1,9 @@
 'use client';
 
-import type { DsiStewardCandidateFilterState } from '@/features/import-steward/dsiStewardCandidateFilterLogic';
-import type { InboundEvidenceMappingCandidateRow } from '@/features/import-steward/inboundEvidenceMappingCandidateWorkspaceColumns';
+import type { StewardCandidateFilterState } from '@/features/import-steward/stewardCandidateFilterLogic';
+import type { InboundEvidenceMappingCandidateRow } from './inboundEvidenceMappingCandidateWorkspaceColumns';
 
-import { DSI_CANDIDATE_PAGE_SIZE_OPTIONS, type DsiCandidatePageSize } from '@/features/import-steward/dsiCandidatesQuery';
+import { STEWARD_CANDIDATE_PAGE_SIZE_OPTIONS, type StewardCandidatePageSize } from '@/features/import-steward/stewardCandidatesQuery';
 
 export type ShipmentMappingCandidatesPageResponse = {
   items: InboundEvidenceMappingCandidateRow[];
@@ -14,11 +14,13 @@ export type ShipmentMappingCandidatesPageResponse = {
 
 export const SHIPMENT_CANDIDATE_FULL_LOAD_LIMIT = 2000;
 
+export { STEWARD_CANDIDATE_PAGE_SIZE_OPTIONS };
+
 export function buildShipmentCandidatesListUrl(
   importJobId: number,
   skip: number,
   limit: number,
-  filters: DsiStewardCandidateFilterState
+  filters: StewardCandidateFilterState
 ): string {
   const params = new URLSearchParams({
     skip: String(skip),
@@ -32,3 +34,5 @@ export function buildShipmentCandidatesListUrl(
   if (filters.duplicateUnresolvedOnly) params.set('duplicate_unresolved_only', 'true');
   return `/api/v1/shipment-evidence/import-jobs/${importJobId}/mapping-candidates/paginated?${params}`;
 }
+
+export type { StewardCandidatePageSize };

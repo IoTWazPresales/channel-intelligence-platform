@@ -5,4 +5,4 @@ export {
   DsiMappingStewardPanel as DsiCandidateStewardPanel,
   dsiRawProductTokenForCandidate,
   type DsiCandidateRow,
-} from '@/features/import-steward/dsi-mapping-steward-panel';
+} from '@/app/(app)/admin/imports/dsi/dsi-mapping-steward-panel';

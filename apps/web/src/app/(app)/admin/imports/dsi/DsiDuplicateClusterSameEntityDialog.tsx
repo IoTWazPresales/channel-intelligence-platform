@@ -21,7 +21,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { DsiCustomerSearchFields } from './DsiCustomerSearchFields';
-import { StewardPendingButton } from './StewardPendingButton';
+import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
 import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
 import {
   buildDupClusterSameEntitySubmitBody,

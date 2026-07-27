@@ -3,7 +3,7 @@
 import { FormControl, InputLabel, MenuItem, Select, Stack, Typography } from '@mui/material';
 
 import { StewardPendingButton } from './StewardPendingButton';
-import { DSI_CANDIDATE_PAGE_SIZE_OPTIONS, type DsiCandidatePageSize } from './dsiCandidatesQuery';
+import { STEWARD_CANDIDATE_PAGE_SIZE_OPTIONS, type StewardCandidatePageSize } from './stewardCandidatesQuery';
 
 export function StewardCandidatesPagination({
   page,
@@ -18,13 +18,13 @@ export function StewardCandidatesPagination({
 }: {
   page: number;
   pageCount: number;
-  pageSize: DsiCandidatePageSize;
+  pageSize: StewardCandidatePageSize;
   total: number;
   skip: number;
   pageItemCount: number;
   busy?: boolean;
   onPageChange: (page: number) => void;
-  onPageSizeChange: (size: DsiCandidatePageSize) => void;
+  onPageSizeChange: (size: StewardCandidatePageSize) => void;
 }) {
   const from = total === 0 ? 0 : skip + 1;
   const to = skip + pageItemCount;
@@ -49,10 +49,10 @@ export function StewardCandidatesPagination({
             labelId="dsi-candidates-page-size"
             label="Rows per page"
             value={String(pageSize)}
-            onChange={(e) => onPageSizeChange(Number(e.target.value) as DsiCandidatePageSize)}
+            onChange={(e) => onPageSizeChange(Number(e.target.value) as StewardCandidatePageSize)}
             disabled={busy}
           >
-            {DSI_CANDIDATE_PAGE_SIZE_OPTIONS.map((n) => (
+            {STEWARD_CANDIDATE_PAGE_SIZE_OPTIONS.map((n) => (
               <MenuItem key={n} value={String(n)}>
                 {n}
               </MenuItem>

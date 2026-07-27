@@ -4,7 +4,10 @@ import type { ReactNode } from 'react';
 import { Chip, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api';
-import type { ImportStewardCandidateRowBase, ImportStewardWorkspaceColumn } from './importStewardCandidateWorkspace.types';
+import type {
+  ImportStewardCandidateRowBase,
+  ImportStewardWorkspaceColumn,
+} from '@/features/import-steward/importStewardCandidateWorkspace.types';
 import {
   INBOUND_STEWARD_ENTITY_CUST,
   INBOUND_STEWARD_ENTITY_DIST,

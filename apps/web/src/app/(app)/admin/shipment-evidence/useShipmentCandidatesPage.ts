@@ -4,26 +4,26 @@ import { useQuery } from '@tanstack/react-query';
 
 import { apiGet } from '@/lib/api';
 
-import type { DsiStewardCandidateFilterState } from '@/features/import-steward/dsiStewardCandidateFilterLogic';
-import { defaultDsiStewardCandidateFilterState } from '@/features/import-steward/dsiStewardCandidateFilterLogic';
+import type { StewardCandidateFilterState } from '@/features/import-steward/stewardCandidateFilterLogic';
+import { defaultStewardCandidateFilterState } from '@/features/import-steward/stewardCandidateFilterLogic';
 import { SHIPMENT_STEWARD_CONFIG } from './shipmentSteward.config';
 import {
   buildShipmentCandidatesListUrl,
   SHIPMENT_CANDIDATE_FULL_LOAD_LIMIT,
   type ShipmentMappingCandidatesPageResponse,
+  type StewardCandidatePageSize,
 } from './shipmentCandidatesQuery';
-import type { DsiCandidatePageSize } from '@/features/import-steward/dsiCandidatesQuery';
-import { stewardQueueFilterRequiresFullLoad } from '@/features/import-steward/dsiStewardCandidateFilterLogic';
+import { stewardQueueFilterRequiresFullLoad } from '@/features/import-steward/stewardCandidateFilterLogic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export function useShipmentCandidatesPage(
   importJobId: number,
-  stewardFilters: DsiStewardCandidateFilterState = defaultDsiStewardCandidateFilterState(),
+  stewardFilters: StewardCandidateFilterState = defaultStewardCandidateFilterState(),
   options?: { enabled?: boolean; tabKey?: string }
 ) {
   const queryEnabled = options?.enabled !== false && importJobId > 0;
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState<DsiCandidatePageSize>(100);
+  const [pageSize, setPageSize] = useState<StewardCandidatePageSize>(100);
   const clientQueueFilterActive = stewardQueueFilterRequiresFullLoad(stewardFilters);
   const skip = page * pageSize;
   const fetchSkip = clientQueueFilterActive ? 0 : skip;
@@ -76,7 +76,7 @@ export function useShipmentCandidatesPage(
     if (page > 0 && page >= pageCount) setPage(Math.max(0, pageCount - 1));
   }, [page, pageCount, query.isFetching, clientQueueFilterActive]);
 
-  const setPageSizeAndReset = useCallback((size: DsiCandidatePageSize) => {
+  const setPageSizeAndReset = useCallback((size: StewardCandidatePageSize) => {
     setPageSize(size);
     setPage(0);
   }, []);

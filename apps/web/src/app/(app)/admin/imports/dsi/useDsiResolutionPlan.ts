@@ -13,8 +13,8 @@ import type {
   StewardCatalogOpt,
   StewardPlanApplyFeedback,
   StewardUnresolvedGeoRow,
-} from './stewardEngine.types';
-import { useStewardResolutionPlan } from './useStewardResolutionPlan';
+} from '@/features/import-steward/stewardEngine.types';
+import { useStewardResolutionPlan } from '@/features/import-steward/useStewardResolutionPlan';
 
 /** DSI ready gate — duplicate_review is DSI-payload-only (shipment plan never emits it). */
 export function dsiPlanRowIsReady(r: Record<string, unknown>): boolean {

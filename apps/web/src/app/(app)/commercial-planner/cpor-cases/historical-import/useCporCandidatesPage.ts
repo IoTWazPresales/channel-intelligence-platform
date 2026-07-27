@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { DSI_CANDIDATE_PAGE_SIZE_OPTIONS, type DsiCandidatePageSize } from '@/features/import-steward/dsiCandidatesQuery';
+import { STEWARD_CANDIDATE_PAGE_SIZE_OPTIONS, type StewardCandidatePageSize } from '@/features/import-steward/stewardCandidatesQuery';
 
 import { fetchCporHistoricalCandidates } from './cporHistoricalImportApi';
 import {
@@ -12,7 +12,7 @@ import {
   type CporPlanClass,
 } from './cporHistoricalSteward.config';
 
-export { DSI_CANDIDATE_PAGE_SIZE_OPTIONS };
+export { STEWARD_CANDIDATE_PAGE_SIZE_OPTIONS };
 
 /**
  * Server-paginated CPOR historical candidates for one entity tab (Unit C, S12).
@@ -29,7 +29,7 @@ export function useCporCandidatesPage(
 ) {
   const queryEnabled = options?.enabled !== false && importJobId > 0;
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState<DsiCandidatePageSize>(100);
+  const [pageSize, setPageSize] = useState<StewardCandidatePageSize>(100);
   const skip = page * pageSize;
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export function useCporCandidatesPage(
     }
   }, [page, pageCount, query.isFetching]);
 
-  const setPageSizeAndReset = useCallback((size: DsiCandidatePageSize) => {
+  const setPageSizeAndReset = useCallback((size: StewardCandidatePageSize) => {
     setPageSize(size);
     setPage(0);
   }, []);

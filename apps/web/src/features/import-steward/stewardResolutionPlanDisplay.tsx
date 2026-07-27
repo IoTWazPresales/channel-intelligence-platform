@@ -17,20 +17,20 @@ import {
 import {
   formatDsiRegionEvidenceDisplay,
   formatDsiRegionEvidenceTitle,
-} from "./dsiRegionEvidenceDisplay";
-import type { DsiCatalogOpt, DsiPlanRowOverride, DsiRegionEvidenceDto } from "./dsiSteward.types";
-import type { DsiCandidateRow } from "./dsi-mapping-steward-panel";
+} from "@/app/(app)/admin/imports/dsi/dsiRegionEvidenceDisplay";
+import type { DsiCatalogOpt, DsiPlanRowOverride, DsiRegionEvidenceDto } from "@/app/(app)/admin/imports/dsi/dsiSteward.types";
+import type { DsiCandidateRow } from "@/app/(app)/admin/imports/dsi/dsi-mapping-steward-panel";
 import {
   formatDsiProductRunningChangeSummary,
   isDsiTokenLevelResolveProductBlocked,
   dsiIgnoreReasonCodeLabel,
-} from "./dsiProductRunningChangeDisplay";
-import { DsiProductResolutionEvidenceCard } from "./DsiProductResolutionEvidenceCard";
+} from "@/app/(app)/admin/imports/dsi/dsiProductRunningChangeDisplay";
+import { DsiProductResolutionEvidenceCard } from "@/app/(app)/admin/imports/dsi/DsiProductResolutionEvidenceCard";
 import {
   DsiPlanWhyPanel,
   formatPlanRulePathLabel,
   type DsiPlanWhy,
-} from "./dsiPlanExplainabilityDisplay";
+} from "@/app/(app)/admin/imports/dsi/dsiPlanExplainabilityDisplay";
 
 function dsiSourceCustomerNameCell(ctx: Record<string, unknown> | null | undefined): string {
   if (!ctx) return '';

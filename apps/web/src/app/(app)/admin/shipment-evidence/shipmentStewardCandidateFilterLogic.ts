@@ -1,9 +1,13 @@
 import {
-  defaultDsiStewardCandidateFilterState,
+  defaultStewardCandidateFilterState,
+  filterStewardCandidates,
+  stewardQueueFilterRequiresFullLoad,
+  type StewardCandidateFilterState,
+} from '@/features/import-steward/stewardCandidateFilterLogic';
+import {
   filterDsiStewardCandidates,
-  type DsiStewardCandidateFilterState,
-} from '@/features/import-steward/dsiStewardCandidateFilterLogic';
-import type { DsiCandidateRow } from '@/features/import-steward/dsi-mapping-steward-panel';
+} from '@/app/(app)/admin/imports/dsi/dsiStewardCandidateFilterLogic';
+import type { DsiCandidateRow } from '@/app/(app)/admin/imports/dsi/dsi-mapping-steward-panel';
 
 import {
   SHIPMENT_ENTITY_DIST,
@@ -17,9 +21,9 @@ export const SHIPMENT_ENTITY_CUSTOMER = SHIPMENT_ENTITY_CUST;
 
 export type ShipmentStewardEntityFilter = 'all' | 'customer' | 'distributor';
 
-export type ShipmentStewardCandidateFilterState = DsiStewardCandidateFilterState;
+export type ShipmentStewardCandidateFilterState = StewardCandidateFilterState;
 
-export const defaultShipmentStewardCandidateFilterState = defaultDsiStewardCandidateFilterState;
+export const defaultShipmentStewardCandidateFilterState = defaultStewardCandidateFilterState;
 
 /** Map shipment tab entity filter to API / server list param (same strings as DSI tab filters). */
 export function shipmentTabEntityFilter(tabId: 'distributor' | 'customer'): ShipmentStewardEntityFilter {
@@ -63,3 +67,5 @@ export function filterShipmentStewardCandidates<T extends ShipmentFilterableCand
   const normalized = rows.map((row) => toShipmentFilterSlice(row, planByCandidateId.get(row.id)));
   return filterDsiStewardCandidates(normalized, filters, planByCandidateId) as unknown as T[];
 }
+
+export { stewardQueueFilterRequiresFullLoad };

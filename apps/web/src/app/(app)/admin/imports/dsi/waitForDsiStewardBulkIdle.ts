@@ -1,6 +1,6 @@
 import { fetchBackgroundTasksList } from '@/features/background-tasks/fetchImportJobProgress';
 
-import { DEFAULT_INTERVAL_MS } from './stewardAsyncPoll';
+import { DEFAULT_INTERVAL_MS } from '@/features/import-steward/stewardAsyncPoll';
 
 const STEWARD_BULK_KINDS = new Set(['dsi_resolution_plan_compute', 'dsi_resolution_plan_apply']);
 

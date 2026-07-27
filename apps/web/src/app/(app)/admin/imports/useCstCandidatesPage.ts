@@ -5,9 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { apiGet } from '@/lib/api';
 import {
-  DSI_CANDIDATE_PAGE_SIZE_OPTIONS,
-  type DsiCandidatePageSize,
-} from '@/features/import-steward/dsiCandidatesQuery';
+  STEWARD_CANDIDATE_PAGE_SIZE_OPTIONS,
+  type StewardCandidatePageSize,
+} from '@/features/import-steward/stewardCandidatesQuery';
 
 import {
   CST_IMPORT_STEWARD_CONFIG,
@@ -15,7 +15,7 @@ import {
   type CstEntityTabId,
 } from './cstImportSteward.config';
 
-export { DSI_CANDIDATE_PAGE_SIZE_OPTIONS };
+export { STEWARD_CANDIDATE_PAGE_SIZE_OPTIONS };
 
 export function useCstCandidatesPage(
   importJobId: number,
@@ -25,7 +25,7 @@ export function useCstCandidatesPage(
 ) {
   const queryEnabled = options?.enabled !== false && importJobId > 0;
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState<DsiCandidatePageSize>(100);
+  const [pageSize, setPageSize] = useState<StewardCandidatePageSize>(100);
   const skip = page * pageSize;
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export function useCstCandidatesPage(
     }
   }, [page, pageCount, query.isFetching]);
 
-  const setPageSizeAndReset = useCallback((size: DsiCandidatePageSize) => {
+  const setPageSizeAndReset = useCallback((size: StewardCandidatePageSize) => {
     setPageSize(size);
     setPage(0);
   }, []);

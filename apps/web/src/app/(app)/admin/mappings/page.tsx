@@ -8,7 +8,7 @@ import type { ColDef } from 'ag-grid-community';
 import { Suspense, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from '@/features/import-steward';
+import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from '@/app/(app)/admin/imports/dsi';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
@@ -130,7 +130,7 @@ function AdminMappingsPageContent() {
         `/api/v1/mappings/import-jobs/${importJobId}/revalidate-distributor-sales-inventory`
       );
       if (res.async) {
-        const { notifyDsiAsyncPipelineStarted } = await import('@/features/import-steward/dsiAsyncPipelineRun');
+        const { notifyDsiAsyncPipelineStarted } = await import('@/app/(app)/admin/imports/dsi/dsiAsyncPipelineRun');
         notifyDsiAsyncPipelineStarted(qc, importJobId, { taskId: res.task_id });
       }
       return res;

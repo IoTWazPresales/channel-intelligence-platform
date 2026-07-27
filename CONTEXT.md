@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-27 — **Unit F complete (BACKLOG-075):** Tier 1 inboundEvidence→shipment-evidence; Tier 2 DSI cluster→`admin/imports/dsi/`; Tier 3 shared helpers→`steward*` (+ DSI filter logic under dsi/). Zero importer-prefixed filenames in `import-steward/`; contract v1.6. Vitest 207/207 focused. Branch `feat/cpor-listing-status-audit`.
 - 2026-07-27 — **Unit F Tier 0:** retired orphan Dsi* plan accordion/toolbar/geo accordion + dead inboundEvidence list model; DSI section uses Steward bulk/drawer directly. Remainder → BACKLOG-075. Branch `feat/cpor-listing-status-audit`.
 - 2026-07-27 — **Unit E2 CST resolution-plan async (no-Opus):** compute/apply-async + `SLOT_CST_RESOLUTION_PLAN`; `CST_IMPORT_ENGINE_CONFIG` + plan toolbar on Import Centre; D-019; BACKLOG-074 shipped. E1+E2 **implemented, VERIFY deferred** (not PASS). Branch `feat/cpor-listing-status-audit`.
 - 2026-07-27 — **Unit E1 CST import steward (no-Opus):** suggestion enrich + resolve/ignore/bulk; `CstImportJobResolutionSection` on Import Centre; D-018; contract v1.5; BACKLOG-074 E2. **Implemented, VERIFY deferred** (not PASS). C/D unchanged PASS. Branch `feat/cpor-listing-status-audit`.

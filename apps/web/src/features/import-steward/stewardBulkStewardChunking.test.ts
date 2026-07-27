@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   chunkDsiBulkCandidateIds,
   mergeDsiBulkPreviewResponses,
-} from './dsiBulkStewardChunking';
+} from './stewardBulkStewardChunking';
 
-describe('dsiBulkStewardChunking', () => {
+describe('stewardBulkStewardChunking', () => {
   it('chunks ids above ignore cap', () => {
     const ids = Array.from({ length: 505 }, (_, i) => i + 1);
     const chunks = chunkDsiBulkCandidateIds(ids, 1000);

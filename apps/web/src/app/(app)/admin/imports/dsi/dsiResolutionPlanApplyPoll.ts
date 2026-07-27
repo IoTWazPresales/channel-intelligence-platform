@@ -1,6 +1,6 @@
 import { fetchBulkProvisionalTaskProgress } from '@/features/background-tasks/fetchImportJobProgress';
 
-import { stewardAsyncPollApplyOptions } from './stewardAsyncPoll';
+import { stewardAsyncPollApplyOptions } from '@/features/import-steward/stewardAsyncPoll';
 
 const TERMINAL = new Set(['SUCCESS', 'FAILURE']);
 

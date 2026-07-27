@@ -4,12 +4,12 @@ import type { ReactNode } from 'react';
 import { Chip, Stack, Typography } from '@mui/material';
 
 import type { ImportStewardWorkspaceColumn } from '@/features/import-steward/importStewardCandidateWorkspace.types';
-import { dsiEffectiveSuggestedAction } from '@/features/import-steward/dsiStewardCandidateFilterLogic';
-import { formatPlanActionLabel } from '@/features/import-steward/dsiResolutionPlanDisplay';
+import { effectiveSuggestedAction } from '@/features/import-steward/stewardCandidateFilterLogic';
+import { formatPlanActionLabel } from '@/features/import-steward/stewardResolutionPlanDisplay';
 import {
   buildInboundEvidenceMappingCandidateWorkspaceColumns,
   type InboundEvidenceMappingCandidateRow,
-} from '@/features/import-steward/inboundEvidenceMappingCandidateWorkspaceColumns';
+} from './inboundEvidenceMappingCandidateWorkspaceColumns';
 import {
   SHIPMENT_ENTITY_CUSTOMER,
   SHIPMENT_ENTITY_DISTRIBUTOR,
@@ -49,7 +49,7 @@ export function buildShipmentResolutionWorkspaceColumns(
               ? 'customer_dealer_token'
               : r.entity_type,
       };
-      const act = dsiEffectiveSuggestedAction(slice, pr);
+      const act = effectiveSuggestedAction(slice, pr);
       const ready = pr?.ready === true;
       const conf =
         pr && typeof pr.confidence === 'number'

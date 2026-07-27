@@ -4,13 +4,13 @@ import {
   DSI_MATCH_BASIS_CROSS_DISTI,
   DSI_MATCH_BASIS_TEMPORAL_SAME_DISTI,
   isReservedDsiDuplicateMatchBasis,
-  parseDsiPossibleDuplicateHint,
-} from './dsiDuplicateHintContract';
-import { contextPossibleDuplicateOf } from './dsiStewardCandidateFilterLogic';
+  parseStewardPossibleDuplicateHint,
+} from './stewardDuplicateHintContract';
+import { contextPossibleDuplicateOf } from '@/app/(app)/admin/imports/dsi/dsiStewardCandidateFilterLogic';
 
-describe('parseDsiPossibleDuplicateHint', () => {
+describe('parseStewardPossibleDuplicateHint', () => {
   it('parses reserved match_basis values without dropping them', () => {
-    const hint = parseDsiPossibleDuplicateHint({
+    const hint = parseStewardPossibleDuplicateHint({
       normalized_key: 'peer',
       similarity_score: 0.9,
       match_basis: DSI_MATCH_BASIS_TEMPORAL_SAME_DISTI,
@@ -20,7 +20,7 @@ describe('parseDsiPossibleDuplicateHint', () => {
   });
 
   it('parses optional evidence metadata', () => {
-    const hint = parseDsiPossibleDuplicateHint({
+    const hint = parseStewardPossibleDuplicateHint({
       normalized_key: 'peer',
       similarity_score: 1,
       match_basis: DSI_MATCH_BASIS_CROSS_DISTI,

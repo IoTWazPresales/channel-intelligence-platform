@@ -1,27 +1,27 @@
 'use client';
 
-import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
-import type { DsiStewardCandidateFilterState } from './dsiStewardCandidateFilterLogic';
-import { dsiStewardFiltersAreDefault } from './dsiStewardCandidateFilterLogic';
+import type { DsiCandidateRow } from '@/app/(app)/admin/imports/dsi/dsi-mapping-steward-panel';
+import type { StewardCandidateFilterState } from './stewardCandidateFilterLogic';
+import { stewardFiltersAreDefault } from './stewardCandidateFilterLogic';
 
-export const DSI_CANDIDATE_PAGE_SIZE_OPTIONS = [100, 250, 500, 1000] as const;
-export type DsiCandidatePageSize = (typeof DSI_CANDIDATE_PAGE_SIZE_OPTIONS)[number];
+export const STEWARD_CANDIDATE_PAGE_SIZE_OPTIONS = [100, 250, 500, 1000] as const;
+export type StewardCandidatePageSize = (typeof STEWARD_CANDIDATE_PAGE_SIZE_OPTIONS)[number];
 
 /** Max server page size — used when Plan/match queue filter requires a full tab load. */
-export const DSI_CANDIDATE_FULL_LOAD_LIMIT = 1000 as const;
+export const STEWARD_CANDIDATE_FULL_LOAD_LIMIT = 1000 as const;
 
-export type DsiMappingCandidatesPageResponse = {
+export type StewardMappingCandidatesPageResponse = {
   items: DsiCandidateRow[];
   total: number;
   skip: number;
   limit: number;
 };
 
-export type DsiCandidateListStatus = 'open' | 'needs_review' | 'terminal' | 'all';
+export type StewardCandidateListStatus = 'open' | 'needs_review' | 'terminal' | 'all';
 
 export function serverFilterParamsFromStewardState(
-  filters: DsiStewardCandidateFilterState,
-  options?: { status?: DsiCandidateListStatus }
+  filters: StewardCandidateFilterState,
+  options?: { status?: StewardCandidateListStatus }
 ): Record<string, string | boolean> {
   const params: Record<string, string | boolean> = {
     status: options?.status ?? 'open',
@@ -48,8 +48,8 @@ export function buildDsiCandidatesListUrl(
   importJobId: number,
   skip: number,
   limit: number,
-  filters: DsiStewardCandidateFilterState,
-  options?: { status?: DsiCandidateListStatus }
+  filters: StewardCandidateFilterState,
+  options?: { status?: StewardCandidateListStatus }
 ): string {
   const q = new URLSearchParams();
   q.set('skip', String(skip));
@@ -65,6 +65,6 @@ export function buildDsiCandidatesListUrl(
   return `/api/v1/mappings/import-jobs/${importJobId}/distributor-si-candidates?${q.toString()}`;
 }
 
-export function stewardFiltersAffectServerQuery(filters: DsiStewardCandidateFilterState): boolean {
-  return !dsiStewardFiltersAreDefault(filters) || filters.entity !== 'all' || filters.party !== 'all';
+export function stewardFiltersAffectServerQuery(filters: StewardCandidateFilterState): boolean {
+  return !stewardFiltersAreDefault(filters) || filters.entity !== 'all' || filters.party !== 'all';
 }

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
-import type { DsiCandidateRow } from '@/features/import-steward';
+import type { DsiCandidateRow } from '@/app/(app)/admin/imports/dsi/dsi-mapping-steward-panel';
 
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
 
@@ -105,7 +105,7 @@ function installResolutionPlanMocks(
   });
 }
 
-vi.mock('@/features/import-steward/dsi-mapping-steward-panel', () => ({
+vi.mock('@/app/(app)/admin/imports/dsi/dsi-mapping-steward-panel', () => ({
   DsiMappingStewardPanel: () => <div data-testid="dsi-steward-panel">steward</div>,
 }));
 

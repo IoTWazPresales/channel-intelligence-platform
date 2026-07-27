@@ -27,7 +27,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiPost, safeDisplayError } from '@/lib/api';
 
 import { invalidateDsiCatalogQueries, invalidateDsiImportJobStewardQueries } from './dsiSteward.config';
-import { StewardPendingButton } from './StewardPendingButton';
+import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
 import { prefillGeoCreateFromFileToken } from './geoStewardFilePrefill';
 import { GeoStewardRegisterFromFile } from './GeoStewardRegisterFromFile';
 import { geoRowHasRegionHint, geoRowIsoHint, geoRowRegionAliasRegistered } from './geoStewardHints';

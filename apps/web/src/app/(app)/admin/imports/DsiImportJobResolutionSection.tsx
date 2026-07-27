@@ -15,57 +15,61 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent } from 'react';
 import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 
-import type { PlanApplyFeedback } from '@/features/import-steward/dsiSteward.types';
+import type { PlanApplyFeedback } from '@/app/(app)/admin/imports/dsi/dsiSteward.types';
 import {
-  DsiMappingStewardPanel,
   StewardCandidatesPagination,
   StewardPendingButton,
   StewardEntityTabsBar,
-  DsiProductCandidateExportToolbar,
-  DsiCountryRegionFallback,
-  DsiRegionChannelTabPanel,
   StewardResolutionPlanToolbar,
-  isDsiEntityCandidateTab,
-  type DsiRegionEvidenceDto,
   StewardCandidateFilters,
-  DsiStewardLoadingCallout,
-  DSI_STEWARD_CONFIG,
-  DSI_ENGINE_CONFIG,
-  DSI_ENTITY_TABS,
   ImportStewardCandidateWorkspace,
   StewardWorkspaceViewportShell,
   StewardBulkActionInlineForm,
   StewardBulkSection,
   StewardCandidateDrawer,
+  computeImportStewardSelectionHeaderState,
+  formatPlanActionLabel,
+  useStewardBulkSteward,
+  PlanDialogRowDetail,
+} from '@/features/import-steward';
+import {
+  defaultDsiStewardCandidateFilterState,
+  filterDsiStewardCandidates,
+  paginateDsiStewardCandidateRows,
+  type DsiStewardCandidateFilterState,
+} from '@/app/(app)/admin/imports/dsi';
+import {
+  DsiMappingStewardPanel,
+  DsiProductCandidateExportToolbar,
+  DsiCountryRegionFallback,
+  DsiRegionChannelTabPanel,
+  isDsiEntityCandidateTab,
+  DsiStewardLoadingCallout,
+  DSI_STEWARD_CONFIG,
+  DSI_ENGINE_CONFIG,
+  DSI_ENTITY_TABS,
   useDsiCandidatesPage,
   useDsiEntityTabCounts,
-  PlanDialogRowDetail,
-  computeImportStewardSelectionHeaderState,
-  defaultDsiStewardCandidateFilterState,
   defaultDsiStewardFiltersForTab,
   dsiStewardFiltersMatchTabDefault,
   dsiTabDependencyNudge,
-  filterDsiStewardCandidates,
   formatDsiEntityTabLabel,
-  formatPlanActionLabel,
-  paginateDsiStewardCandidateRows,
-  useStewardBulkSteward,
   useDsiResolutionPlan,
   type DsiBulkAction,
   type DsiCandidateRow,
   type DsiEntityTabId,
-  type DsiStewardCandidateFilterState,
-} from '@/features/import-steward';
-import { DsiCustomerSearchFields } from '@/features/import-steward/DsiCustomerSearchFields';
-import { useDsiStewardBulkBusy } from '@/features/import-steward/useDsiStewardBulkBusy';
+  type DsiRegionEvidenceDto,
+} from '@/app/(app)/admin/imports/dsi';
+import { DsiCustomerSearchFields } from '@/app/(app)/admin/imports/dsi/DsiCustomerSearchFields';
+import { useDsiStewardBulkBusy } from '@/app/(app)/admin/imports/dsi/useDsiStewardBulkBusy';
 import { safeDisplayError } from '@/lib/api';
 
 import {
   buildDuplicateClusterIndex,
   duplicateClusterMembersForKey,
-} from '@/features/import-steward/dsiDuplicateCluster';
+} from '@/app/(app)/admin/imports/dsi/dsiDuplicateCluster';
 
-import { buildDsiResolutionWorkspaceColumns } from './dsiResolutionWorkspaceTableProps';
+import { buildDsiResolutionWorkspaceColumns } from './dsi/dsiResolutionWorkspaceTableProps';
 import type { DistributorSiSummary } from './dsiStepUtils';
 import { dsiHumanFixableBlockingRows } from './dsiStepUtils';
 

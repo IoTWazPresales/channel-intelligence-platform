@@ -30,7 +30,7 @@ import { StewardBulkSection } from '@/features/import-steward/StewardBulkSection
 import { useStewardBulkSteward } from '@/features/import-steward/useStewardBulkSteward';
 import { useStewardResolutionPlan } from '@/features/import-steward/useStewardResolutionPlan';
 import type { StewardPlanApplyFeedback } from '@/features/import-steward/stewardEngine.types';
-import type { InboundEvidenceMappingCandidateRow } from '@/features/import-steward/inboundEvidenceMappingCandidateWorkspaceColumns';
+import type { InboundEvidenceMappingCandidateRow } from './inboundEvidenceMappingCandidateWorkspaceColumns';
 import { safeDisplayError } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 

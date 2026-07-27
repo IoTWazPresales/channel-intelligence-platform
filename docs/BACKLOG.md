@@ -13,16 +13,11 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-27 |
+| **Status** | **Shipped** · Unit F Tiers 1–3 · 2026-07-27 |
 | **Effort** | Large (Tier 1–3 from `.tmp/unit_f_inventory.md`) |
 | **Source** | Steward contract Known-gap Unit F; inventory 2026-07-27; Tier 0 orphan retire shipped same day |
-| **Idea** | Finish consolidating DSI-named modules out of `features/import-steward/`: move shipment `inboundEvidence*` to `shipment-evidence/`; move DSI-only cluster to `admin/imports/dsi/`; rename cross-used helpers (`dsiStewardCandidateFilterLogic`, page-size constants, plan display, bulk chunking) to neutral `steward*` names. |
-| **Why it matters / deferrable** | Engine genericity / D-006 hygiene. Deferrable after Tier 0 deleted orphans and DSI section already uses Steward* bulk/drawer. |
-| **What the work is** | Tier 1 inboundEvidence move; Tier 2 DSI cluster move; Tier 3 extract/rename shared helpers; trim barrel. |
-| **Regression traps** | Do not break shipment/CPOR/CST imports of filter/page-size helpers; no importer-prefixed modules left in engine. |
-| **Behavior to retain** | DSI steward behavior; shared Steward* engine APIs. |
-| **Out of scope** | Opus VERIFY of Unit E; inventing new steward slots. |
-| **TRIGGER** | After E2 commit lands; **or** Warren prioritizes import-steward barrel cleanup before next importer. |
+| **Shipped as** | `inboundEvidence*` → `shipment-evidence/`; DSI cluster → `admin/imports/dsi/`; shared helpers → `steward*` in `import-steward/`; DSI filter logic → `dsi/dsiStewardCandidateFilterLogic` |
+| **TRIGGER** | ~~After E2 commit lands; **or** Warren prioritizes import-steward barrel cleanup before next importer.~~ **Fired** — Warren finished Unit F. |
 
 ---
 

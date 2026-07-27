@@ -68,17 +68,19 @@ import { DsiBulkUploadDialog } from './DsiBulkUploadDialog';
 import { UnifiedLineupImportDialog } from './UnifiedLineupImportDialog';
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
 import {
-  DSI_STEWARD_CONFIG,
   ImportJobLoadedSuccessCallout,
   importJobApplyIsLoaded,
+} from '@/features/import-steward';
+import {
+  DSI_STEWARD_CONFIG,
   notifyDsiAsyncPipelineStarted,
   refetchDsiImportJobStewardQueries,
-} from '@/features/import-steward';
-import { deriveDsiJobDisplayState } from '@/features/import-steward/dsiJobDisplayState';
+} from '@/app/(app)/admin/imports/dsi';
+import { deriveDsiJobDisplayState } from '@/app/(app)/admin/imports/dsi/dsiJobDisplayState';
 import {
   dsiJobHasValidationComplete,
   dsiWizardActiveStepFromServer,
-} from '@/features/import-steward/dsiImportWizardRouting';
+} from '@/app/(app)/admin/imports/dsi/dsiImportWizardRouting';
 import {
   shipmentJobHasValidationComplete,
   shipmentPipelineInFlight as shipmentJobPipelineInFlight,
