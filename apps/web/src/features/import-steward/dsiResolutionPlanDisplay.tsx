@@ -268,7 +268,7 @@ function planProvisionalGeoNarrative(r: Record<string, unknown>): ReactNode {
 export function planTargetSummary(
   action: string,
   targetId: unknown,
-  c: DsiCandidateRow | undefined,
+  c: DsiCandidateRow | Record<string, unknown> | undefined,
   planRow?: Record<string, unknown>
 ): string {
   if (targetId == null || targetId === '') {
@@ -294,7 +294,11 @@ export function planTargetSummary(
   }
   if (action === 'resolve_product') {
     if (planLabel) return `${planLabel} (id ${id})`;
-    const pm = c ? dsiProductMatchSummaryCell(c.context) : '';
+    const ctx =
+      c && typeof c === 'object' && 'context' in c
+        ? (c as DsiCandidateRow).context
+        : undefined;
+    const pm = ctx ? dsiProductMatchSummaryCell(ctx) : '';
     return pm ? `Product id ${id} · ${pm}` : `Product master · id ${id}`;
   }
   return planLabel ? `${planLabel} (id ${id})` : `Id ${id}`;
