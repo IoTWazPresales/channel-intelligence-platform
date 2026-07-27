@@ -11,8 +11,8 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260727_0074` on cip** |
-| **HEAD** | `7f04c79` — merge feat/dsi-unified-multifile into this branch |
-| **Pushed?** | pending push |
+| **HEAD** | `7f04c79` merge (branch tip may include docs pin) |
+| **Pushed?** | yes |
 | **Next** | Warren smoke-test (DSI multifile + steward); then PR → main when ready. |
 
 ---
