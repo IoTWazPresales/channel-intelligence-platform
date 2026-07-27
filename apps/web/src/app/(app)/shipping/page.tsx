@@ -42,6 +42,7 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500] as const;
 
 const DATE_FIELD_OPTIONS: { value: string; label: string }[] = [
   { value: 'eta_date', label: 'ETA date' },
+  { value: 'effective_arrival_date', label: 'Effective arrival (ETA else promise)' },
   { value: 'promise_date', label: 'Promise date' },
   { value: 'pod_date', label: 'POD date' },
   { value: 'ship_confirm_date', label: 'Ship confirm date' },
@@ -161,6 +162,7 @@ export default function InboundShipmentsPage() {
   const [poFilterLabel, setPoFilterLabel] = useState<string | null>(null);
   const [smartPreset, setSmartPreset] = useState<SmartPresetId | null>(null);
   const [deliveryLens, setDeliveryLens] = useState<DeliveryLensId | null>(null);
+  const [cohort, setCohort] = useState<ShippingFilterParams['cohort']>('');
   const [skip, setSkip] = useState(0);
   const [limit, setLimit] = useState<number>(50);
 
@@ -223,6 +225,7 @@ export default function InboundShipmentsPage() {
   const clearSmartPreset = useCallback(() => {
     setSmartPreset(null);
     setDeliveryLens(null);
+    setCohort('');
     setLineState('');
     setCargoStatus('');
     setDateField('eta_date');
@@ -236,6 +239,7 @@ export default function InboundShipmentsPage() {
     (id: DeliveryLensId) => {
       setSmartPreset(null);
       setDeliveryLens(id);
+      setCohort('');
       resetPagination();
       setDateField('eta_date');
       setDateFrom('');
@@ -267,27 +271,31 @@ export default function InboundShipmentsPage() {
       const w0 = startOfISOWeek(today);
       const w6 = addDaysCal(w0, 6);
       const yest = addDaysCal(today, -1);
+      const staleCut = addDaysCal(today, -180);
       setSmartPreset(id);
       setDeliveryLens(null);
       resetPagination();
       switch (id) {
         case 'arriving_week':
+          setCohort('arriving_week');
           setDateField('eta_date');
           setDateFrom(localDateYMD(w0));
           setDateTo(localDateYMD(w6));
           setCargoStatus('scheduled');
           setLineState('');
-          setPodDateFilter('');
+          setPodDateFilter('true');
           break;
         case 'overdue':
+          setCohort('overdue');
           setDateField('promise_date');
-          setDateFrom('');
+          setDateFrom(localDateYMD(staleCut));
           setDateTo(localDateYMD(yest));
           setCargoStatus('scheduled');
           setLineState('');
           setPodDateFilter('true');
           break;
         case 'landed_week':
+          setCohort('landed_week');
           setDateField('pod_date');
           setDateFrom(localDateYMD(w0));
           setDateTo(localDateYMD(w6));
@@ -296,6 +304,7 @@ export default function InboundShipmentsPage() {
           setPodDateFilter('false');
           break;
         case 'outstanding':
+          setCohort('');
           setLineState('open_order');
           setDateField('eta_date');
           setDateFrom('');
@@ -312,14 +321,20 @@ export default function InboundShipmentsPage() {
   );
 
   const filterScheduledPipeline = useCallback(() => {
-    clearSmartPreset();
+    const today = new Date();
+    const horizon = addDaysCal(today, 90);
+    setSmartPreset(null);
     setDeliveryLens(null);
+    setCohort('current_incoming');
     setCargoStatus('scheduled');
     setLineState('');
-    setPodDateFilter('');
+    setPodDateFilter('true');
+    setDateField('effective_arrival_date');
+    setDateFrom(localDateYMD(today));
+    setDateTo(localDateYMD(horizon));
     resetPagination();
     gridSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [clearSmartPreset, resetPagination]);
+  }, [resetPagination]);
 
   const toggleSmartPreset = (id: SmartPresetId) => {
     if (smartPreset === id) {
@@ -393,6 +408,7 @@ export default function InboundShipmentsPage() {
       lineupAttribution,
       lifecycleBucket,
       slipDirection,
+      cohort,
     }),
     [
       lineState,
@@ -414,6 +430,7 @@ export default function InboundShipmentsPage() {
       lineupAttribution,
       lifecycleBucket,
       slipDirection,
+      cohort,
     ]
   );
 
@@ -713,15 +730,18 @@ export default function InboundShipmentsPage() {
           color={smartPreset === 'outstanding' ? 'primary' : 'default'}
           onClick={() => toggleSmartPreset('outstanding')}
         />
-        {smartPreset || deliveryLens ? (
+        {smartPreset || deliveryLens || cohort ? (
           <Button size="small" onClick={clearSmartPreset}>
             Clear view
           </Button>
         ) : null}
       </Stack>
 
-      <Paper ref={gridSectionRef} sx={{ p: 2, mb: 2 }}>
-        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap alignItems="flex-start">
+      <Paper ref={gridSectionRef} variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+          Filters
+        </Typography>
+        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap alignItems="flex-start">
           <TextField
             size="small"
             label="Search"
@@ -731,12 +751,13 @@ export default function InboundShipmentsPage() {
               setSearch(e.target.value);
               setSmartPreset(null);
               setDeliveryLens(null);
+              setCohort('');
               resetPagination();
             }}
-            sx={{ minWidth: 260, flex: 1 }}
+            sx={{ minWidth: 240, flex: 1 }}
           />
           <Autocomplete
-            sx={{ minWidth: 280, flex: 1 }}
+            sx={{ minWidth: 240, flex: 1 }}
             size="small"
             loading={!filterOptions}
             options={distOptions}
@@ -745,6 +766,7 @@ export default function InboundShipmentsPage() {
               setDistributorPick(v);
               setSmartPreset(null);
               setDeliveryLens(null);
+              setCohort('');
               resetPagination();
             }}
             getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
@@ -754,7 +776,7 @@ export default function InboundShipmentsPage() {
             )}
           />
           <Autocomplete
-            sx={{ minWidth: 260, flex: 1 }}
+            sx={{ minWidth: 220, flex: 1 }}
             size="small"
             loading={!filterOptions}
             options={custOptions}
@@ -763,6 +785,7 @@ export default function InboundShipmentsPage() {
               setCustomerPick(v);
               setSmartPreset(null);
               setDeliveryLens(null);
+              setCohort('');
               resetPagination();
             }}
             getOptionLabel={(o) => `${o.customer_name} (${o.customer_code})`}
@@ -771,7 +794,7 @@ export default function InboundShipmentsPage() {
               <TextField {...params} label="Channel partner (customer)" placeholder="All customers · type to filter" />
             )}
           />
-          <FormControl size="small" sx={{ minWidth: 160 }}>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel id="flt-line-state">Line state</InputLabel>
             <Select
               labelId="flt-line-state"
@@ -781,6 +804,7 @@ export default function InboundShipmentsPage() {
                 setLineState(String(e.target.value));
                 setSmartPreset(null);
                 setDeliveryLens(null);
+                setCohort('');
                 resetPagination();
               }}
             >
@@ -792,7 +816,7 @@ export default function InboundShipmentsPage() {
               ))}
             </Select>
           </FormControl>
-          <FormControl size="small" sx={{ minWidth: 160 }}>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel id="flt-cargo">Cargo status</InputLabel>
             <Select
               labelId="flt-cargo"
@@ -802,6 +826,7 @@ export default function InboundShipmentsPage() {
                 setCargoStatus(String(e.target.value));
                 setSmartPreset(null);
                 setDeliveryLens(null);
+                setCohort('');
                 resetPagination();
               }}
             >
@@ -823,6 +848,7 @@ export default function InboundShipmentsPage() {
                 setDateField(String(e.target.value));
                 setSmartPreset(null);
                 setDeliveryLens(null);
+                setCohort('');
                 resetPagination();
               }}
             >

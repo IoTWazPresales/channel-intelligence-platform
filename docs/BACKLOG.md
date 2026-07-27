@@ -713,10 +713,27 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-07-02 |
-| **Source** | Plan D phase 1 diagnostic (`open_order_shipped_fact_double_count_diagnostic`); measured on `cip`: **104** matching open+shipped fact pairs, open qty sum **5,752**, shipped qty sum **7,224** |
+| **Status / parked** | Parked · 2026-07-02 · **re-measured 2026-07-27** (shipping KPI Phase 0) |
+| **Source** | Plan D phase 1 diagnostic (`open_order_shipped_fact_double_count_diagnostic`); Phase 0 `apps/api/.tmp/shipping_kpi_phase0_diag.json` |
 | **Idea** | When order grain graduates to shipped, retire or supersede open-order fact rows — separate from evidence cutover. |
-| **TRIGGER** | Warren approves fact-layer remediation policy after reviewing diagnostic. |
+| **Evidence (cip)** | Plan D: **104** pairs. Phase 0 (looser order_no+product join): **312** pairs, open qty **24,839**, shipped qty **26,750**, open amount **~$18.2M**. Also **109** `status=scheduled` + `line_state=shipped` rows ($5.7M) sit in the scheduled book. |
+| **TRIGGER** | Warren approves fact-layer remediation policy after reviewing diagnostic; **or** after shipping KPI rewrite lands and operators still see open+shipped twins in current-incoming. |
+
+---
+
+## BACKLOG-076 — Inbound fact amount / unit-price scale corruption (unship junk)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked · 2026-07-27 |
+| **Effort** | Medium (import mapping audit + optional purge of junk job facts) |
+| **Source** | Shipping KPI Phase 0 (`docs/SHIPPING_COMMERCIAL_KPI_CONTRACT.md` §Phase 0; `.tmp/shipping_kpi_phase0_diag.json`). Old “Pipeline value” = **$288M**; **$214M** of that is on **267** scheduled lines with **null ETA and null promise**. Top rows show qty **36** with amount **~$36M** each (`~1e6` unit price) from `acza_workbook_unship` source keys. |
+| **Idea** | Diagnose whether OEM amount/unit_price columns were mapped with wrong scale or currency; quarantine or re-import affected jobs. Do **not** silently rewrite amounts from the `/shipping` UI. |
+| **Why deferrable** | KPI rewrite gates Pipeline to current-incoming (excludes no-date $214M). Remaining current-incoming (~$63M) may still include inflated lines with dates — separate from card semantics. |
+| **What the work is** | (1) Reproduce top-20 amount rows vs raw workbook. (2) Confirm mapping/unit semantics. (3) Job-scoped purge or corrective re-import (pairs with BACKLOG-073). (4) Regression test on amount reasonableness. |
+| **Regression traps** | Do not change DAP vs PM cost concepts; do not mass-UPDATE fact amounts without audit trail; preserve `source_key` upsert semantics. |
+| **Out of scope** | Changing commercial KPI predicates again; MasterDataGridShell rewrite. |
+| **TRIGGER** | Warren prioritizes cleaning ACZA unship amount inflation; **or** current-incoming Pipeline still commercially unbelievable after KPI rewrite. |
 
 ---
 

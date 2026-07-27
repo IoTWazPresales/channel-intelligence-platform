@@ -18,6 +18,8 @@ export type ShippingFilterParams = {
   lineupAttribution: '' | 'unattributed';
   lifecycleBucket: '' | 'shipped' | 'pipeline' | 'landed';
   slipDirection: '' | 'slipped_in' | 'slipped_out';
+  /** Smart-preset / card-click cohort — same predicates as commercial KPI contract. */
+  cohort: '' | 'current_incoming' | 'overdue' | 'arriving_week' | 'landed_week';
 };
 
 export type ShippingLinesQueryParams = ShippingFilterParams & {
@@ -48,6 +50,7 @@ export function appendShippingFilterParams(params: URLSearchParams, p: ShippingF
   if (p.lineupAttribution === 'unattributed') params.set('lineup_attribution', 'unattributed');
   if (p.lifecycleBucket) params.set('lifecycle_bucket', p.lifecycleBucket);
   if (p.slipDirection) params.set('slip_direction', p.slipDirection);
+  if (p.cohort) params.set('cohort', p.cohort);
 }
 
 export function buildShippingLineupQuarterSummaryUrl(

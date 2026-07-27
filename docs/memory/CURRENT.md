@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-27 (Unit F complete; E VERIFY deferred)
+**Last updated:** 2026-07-27 (Shipping commercial KPI contract rebuild)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -11,9 +11,22 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260727_0074` on cip** |
-| **HEAD** | `a80f58a` (Unit F complete / BACKLOG-075) |
-| **Pushed?** | yes |
-| **Next** | Opus VERIFY Unit E when usage resets; then PR soak / promote when ready. |
+| **HEAD** | Unit F @ `a80f58a` + **uncommitted** shipping KPI rebuild |
+| **Pushed?** | Unit F yes; shipping KPI **not committed yet** |
+| **Next** | Commit/push shipping KPI when Warren asks; browser smoke `/shipping`; Opus VERIFY Unit E when usage resets. |
+
+---
+
+## Shipping commercial KPIs (implemented, uncommitted)
+
+| Label | Fact |
+|-------|------|
+| **Contract** | `docs/SHIPPING_COMMERCIAL_KPI_CONTRACT.md` |
+| **Predicates** | `shipping_commercial_kpis.py` — current-incoming ≤90d; overdue = promise past ∩ not stale ∩ ETA in window; arriving hero = **qty** |
+| **API** | `/commercial-summary` + `/eta-shifts` + `/lines` full filter parity (lineup + `cohort=`) |
+| **Phase 0 (cip)** | All-scheduled **$288M** → gated **~$63.4M**; arriving **6,653 units** / 57 lines; overdue 1049→884 |
+| **BACKLOG** | **076** amount scale junk; **062** re-measured open+shipped pairs |
+| **Out of scope** | MasterDataGridShell migration (not done) |
 
 ---
 
@@ -37,21 +50,3 @@ Authoritative steward slot inventory: `docs/STEWARD_EXPERIENCE_CONTRACT.md` (**v
 | **Tier 2** | DSI-only cluster → `admin/imports/dsi/` (+ domain barrel) |
 | **Tier 3** | Shared helpers → `steward*` names; DSI filter logic → `dsi/dsiStewardCandidateFilterLogic` |
 | **Engine** | Zero `dsi*` / `Dsi*` filenames remain under `features/import-steward/` |
-
----
-
-## Unit E2 / E1
-
-| Label | Fact |
-|-------|------|
-| **E2** | Resolution-plan compute/apply-async + `SLOT_CST_RESOLUTION_PLAN` (D-019); BACKLOG-074 shipped |
-| **E1** | Suggestions + resolve/ignore/bulk + Import Centre UI (D-018) |
-| **Opus VERIFY** | **Deferred** |
-
----
-
-## Do not
-
-- Claim Unit E PASS without Opus VERIFY
-- Put importer-prefixed modules under `features/import-steward/` (D-006)
-- Change DSI product tier order
