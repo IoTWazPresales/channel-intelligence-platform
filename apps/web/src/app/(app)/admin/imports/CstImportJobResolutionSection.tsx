@@ -5,6 +5,10 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Stack,
   TextField,
   Typography,
@@ -19,6 +23,10 @@ import {
   confidenceBandColor,
   confidenceBandLabel,
 } from '@/features/import-steward/confidenceBand';
+import { StewardResolutionPlanToolbar } from '@/features/import-steward/StewardResolutionPlanToolbar';
+import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
+import type { StewardPlanApplyFeedback } from '@/features/import-steward/stewardEngine.types';
+import { useStewardResolutionPlan } from '@/features/import-steward/useStewardResolutionPlan';
 import { ImportStewardCandidateWorkspace } from '@/features/import-steward/ImportStewardCandidateWorkspace';
 import { StewardCandidateFilters } from '@/features/import-steward/StewardCandidateFilters';
 import { StewardCandidatesPagination } from '@/features/import-steward/StewardCandidatesPagination';
@@ -42,6 +50,7 @@ import {
   type CstMappingCandidate,
   type CstMappingState,
 } from './cstImportSteward.config';
+import { CST_IMPORT_ENGINE_CONFIG } from './cstImportSteward.engineConfig';
 import { useCstCandidatesPage } from './useCstCandidatesPage';
 
 export type CstStewardRow = ImportStewardCandidateRowBase & {
@@ -72,6 +81,45 @@ function statusFilterFromQueue(queue: string): string {
   if (queue === 'ready_to_map') return 'open';
   if (queue === 'no_match') return 'needs_review';
   return 'needs_review';
+}
+
+function formatCstPlanApplySummary(data: Record<string, unknown>): StewardPlanApplyFeedback {
+  const applied = Number(data.applied ?? 0);
+  const failed = Number(data.failed ?? 0);
+  const skipped = Number(data.skipped_not_ready ?? 0);
+  if (applied > 0 && failed === 0) {
+    return { severity: 'success', message: `Applied ${applied} plan row(s).` };
+  }
+  if (applied > 0) {
+    return {
+      severity: 'warning',
+      message: `Partial success: applied ${applied}, failed ${failed}, skipped ${skipped}.`,
+    };
+  }
+  return {
+    severity: 'warning',
+    message: `No rows applied (failed ${failed}, skipped ${skipped}).`,
+  };
+}
+
+function cstPlanSummaryChips(summary: Record<string, unknown>) {
+  return (
+    <>
+      <Chip size="small" label={`Candidates ${String(summary.total ?? '—')}`} />
+      <Chip
+        size="small"
+        color="success"
+        variant="outlined"
+        label={`Ready ${String(summary.ready ?? '—')}`}
+      />
+      <Chip
+        size="small"
+        color="warning"
+        variant="outlined"
+        label={`Needs work ${String(summary.not_ready ?? '—')}`}
+      />
+    </>
+  );
 }
 
 function filterCstStewardRows(rows: CstStewardRow[], search: string): CstStewardRow[] {
@@ -136,6 +184,7 @@ export function CstImportJobResolutionSection({
     severity: 'error' | 'warning';
   } | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [planApplySummary, setPlanApplySummary] = useState<StewardPlanApplyFeedback | null>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
@@ -217,6 +266,18 @@ export function CstImportJobResolutionSection({
     () => filterCstStewardRows(stewardRows, debouncedSearch),
     [stewardRows, debouncedSearch]
   );
+
+  const plan = useStewardResolutionPlan({
+    importJobId,
+    candidates: filteredRows,
+    onInvalidate,
+    setSelectedIds,
+    setPlanApplySummary,
+    config: CST_IMPORT_ENGINE_CONFIG,
+    formatPlanApplySummary: formatCstPlanApplySummary,
+  });
+
+  const planSummary = plan.suggestionsQuery.data?.summary as Record<string, unknown> | undefined;
 
   useEffect(() => {
     setDetailCandidate(null);
@@ -327,11 +388,63 @@ export function CstImportJobResolutionSection({
           {actionMsg}
         </Alert>
       ) : null}
+      {planApplySummary ? (
+        <Alert severity={planApplySummary.severity} onClose={() => setPlanApplySummary(null)}>
+          {planApplySummary.message}
+        </Alert>
+      ) : null}
       {candidatesPage.query.isError ? (
         <Alert severity="error" data-testid="cst-import-load-error">
           {safeDisplayError(candidatesPage.query.error)}
         </Alert>
       ) : null}
+
+      <StewardResolutionPlanToolbar
+        plan={{
+          candidatesCount: filteredRows.length,
+          readyCount: plan.readyPlanCandidateIds.length,
+          suggestionsQuery: plan.suggestionsQuery,
+        }}
+        testIds={CST_IMPORT_ENGINE_CONFIG.planToolbarTestIds}
+        copy={CST_IMPORT_ENGINE_CONFIG.planToolbarCopy}
+        onApplyAllReady={() => plan.setApplyAllConfirmOpen(true)}
+        applyAllPending={plan.applyResolutionPlan.isPending}
+        applyAllDisabled={
+          plan.readyPlanCandidateIds.length === 0 || plan.applyResolutionPlan.isPending
+        }
+        applyAllLabel={`Apply all ready (${plan.readyPlanCandidateIds.length})`}
+        applyAllTestId="cst-resolution-plan-apply-all"
+        summaryChipsSlot={planSummary ? cstPlanSummaryChips(planSummary) : undefined}
+      />
+
+      <Dialog
+        open={plan.applyAllConfirmOpen}
+        onClose={() => plan.setApplyAllConfirmOpen(false)}
+        data-testid="cst-resolution-plan-apply-all-dialog"
+      >
+        <DialogTitle>Apply all ready rows?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            You are about to map <strong>{plan.readyPlanCandidateIds.length}</strong> ready token(s)
+            — each to its own top suggestion target.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => plan.setApplyAllConfirmOpen(false)}>Cancel</Button>
+          <StewardPendingButton
+            variant="contained"
+            pending={plan.applyResolutionPlan.isPending}
+            pendingLabel="Applying…"
+            onClick={() => {
+              plan.setApplyAllConfirmOpen(false);
+              void plan.applyResolutionPlan.mutateAsync(plan.readyPlanCandidateIds).catch(() => {});
+            }}
+            data-testid="cst-resolution-plan-apply-all-confirm"
+          >
+            Apply all ready
+          </StewardPendingButton>
+        </DialogActions>
+      </Dialog>
 
       <StewardWorkspaceViewportShell
         rootTestId="cst-import-steward-viewport"

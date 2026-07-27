@@ -67,7 +67,7 @@ export function formatCstEntityTabLabel(
 const listShellCopy = {
   title: 'CST unresolved tokens',
   description:
-    'Map product and location tokens for this customer sell-through job. Never auto-create masters. Resolution-plan async is deferred (E2).',
+    'Map product and location tokens for this customer sell-through job. Never auto-create masters.',
   emptyOpenListMessage: 'No open CST mapping candidates for this entity.',
   emptyFilteredMessage: 'No tokens match this search. Clear the filter or pick another entity tab.',
   loadingLabel: 'Loading…',
@@ -85,6 +85,10 @@ export const CST_IMPORT_STEWARD_CONFIG = {
     skip: number,
     limit: number
   ) => ['imports', 'cst-candidates', importJobId, entity, status, skip, limit] as const,
+  resolutionSuggestionsQueryKeyPrefix: (importJobId: number) =>
+    ['imports', 'cst', 'resolution-suggestions', importJobId] as const,
+  resolutionSuggestionsQueryKey: (importJobId: number, candidateIdsKey: string) =>
+    ['imports', 'cst', 'resolution-suggestions', importJobId, candidateIdsKey] as const,
 };
 
 export function invalidateCstImportStewardQueries(qc: QueryClient, importJobId: number) {

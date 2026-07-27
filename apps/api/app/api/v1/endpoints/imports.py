@@ -42,7 +42,13 @@ from app.services.imports.shipment_field_mapping import (
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
 from app.storage.local import get_storage_backend
-from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
+from app.services.imports.import_background_slots import (
+    SLOT_CST_RESOLUTION_PLAN,
+    SLOT_MAIN,
+    clear_task_slot_on_job,
+    set_task_slot_on_job,
+)
+from app.services.imports.import_job_background_metadata import ACTIVE_CELERY_STATES, read_main_celery_state
 from app.services.imports.import_job_bulk_delete import bulk_delete_import_jobs, normalize_job_ids, preview_import_job_bulk_delete
 from app.services.imports.db_transient_retry import is_readonly_db_error
 from app.services.imports.template_definitions import product_master_sample_csv
@@ -1308,3 +1314,194 @@ async def bulk_resolve_cst_candidates(job_id: int, body: CstBulkResolveCandidate
         except CstCandidateOpError as exc:
             sync_db.rollback()
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+CST_TEMPLATE_SLUG = "customer_sell_through"
+
+
+def _get_cst_job_sync(db: Session, job_id: int) -> ImportJob:
+    job = db.get(ImportJob, job_id)
+    if job is None or (job.template_slug or "") != CST_TEMPLATE_SLUG:
+        raise HTTPException(status_code=404, detail="Import job not found")
+    return job
+
+
+def _cst_resolution_plan_task_id(job: ImportJob) -> str | None:
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    slot = meta.get("cst_resolution_plan_task")
+    if not isinstance(slot, dict):
+        return None
+    tid = slot.get("task_id")
+    return tid.strip() if isinstance(tid, str) and tid.strip() else None
+
+
+def _assert_cst_resolution_plan_dispatch_allowed(job: ImportJob) -> None:
+    """409 guard — block plan compute/apply while pipeline (SLOT_MAIN) or another plan task runs."""
+    if (job.status or "").strip().lower() == "running":
+        state = read_main_celery_state(job)
+        if state is not None and state in ACTIVE_CELERY_STATES:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "cst_pipeline_busy",
+                    "message": f"CST import process is already running for job {job.id}.",
+                },
+            )
+
+    tid = _cst_resolution_plan_task_id(job)
+    if tid:
+        from app.services.imports.background_tasks import read_celery_with_timeout
+
+        try:
+            state, _info = read_celery_with_timeout(tid, timeout_s=2.0)
+        except Exception:
+            state = None
+        if state in ACTIVE_CELERY_STATES:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "cst_resolution_plan_busy",
+                    "message": f"A CST resolution plan task is already in flight for job {job.id}.",
+                },
+            )
+
+
+def _write_cst_resolution_plan_slot(job_id: int, task_id: str, *, async_poll: bool, label: str) -> None:
+    with SessionLocal() as meta_db:
+        job = meta_db.get(ImportJob, job_id)
+        if job is not None:
+            set_task_slot_on_job(
+                job, SLOT_CST_RESOLUTION_PLAN, task_id=task_id, async_poll=async_poll, label=label
+            )
+            meta_db.commit()
+
+
+def _clear_cst_resolution_plan_slot(job_id: int) -> None:
+    with SessionLocal() as sess:
+        job = sess.get(ImportJob, job_id)
+        if job is not None:
+            clear_task_slot_on_job(job, SLOT_CST_RESOLUTION_PLAN)
+            sess.commit()
+
+
+class CstResolutionPlanGenerateBody(BaseModel):
+    candidate_ids: list[int] | None = None
+
+
+class CstResolutionPlanApplyBody(BaseModel):
+    candidate_ids: list[int] = Field(min_length=1)
+
+
+@router.post("/jobs/{job_id}/cst-resolution-plan", status_code=200)
+def cst_resolution_plan_generate(job_id: int, body: CstResolutionPlanGenerateBody) -> dict[str, Any]:
+    """Synchronous CST resolution-plan generation — small jobs / tests."""
+    from app.services.imports.cst_resolution_plan import build_cst_resolution_plan_sync
+
+    with SessionLocal() as db:
+        try:
+            _get_cst_job_sync(db, job_id)
+            return build_cst_resolution_plan_sync(db, job_id, candidate_ids=body.candidate_ids)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/jobs/{job_id}/cst-resolution-plan/compute-async", status_code=202)
+def cst_resolution_plan_compute_async(
+    job_id: int,
+    body: CstResolutionPlanGenerateBody,
+) -> dict[str, Any]:
+    with SessionLocal() as s:
+        job = _get_cst_job_sync(s, job_id)
+        _assert_cst_resolution_plan_dispatch_allowed(job)
+
+    payload = {"candidate_ids": list(body.candidate_ids) if body.candidate_ids else None}
+    from app.services.imports.cst_resolution_plan_enqueue import (
+        TASK_CST_RESOLUTION_PLAN_COMPUTE,
+        enqueue_cst_resolution_plan_task,
+        run_cst_resolution_plan_compute_sync,
+    )
+
+    task_id, async_poll = enqueue_cst_resolution_plan_task(
+        task_name=TASK_CST_RESOLUTION_PLAN_COMPUTE,
+        job_id=job_id,
+        payload=payload,
+        run_sync=lambda: run_cst_resolution_plan_compute_sync(job_id, payload),
+        dev_prefix="cst-plan-compute",
+    )
+    _write_cst_resolution_plan_slot(
+        job_id, task_id, async_poll=async_poll, label="Computing CST resolution plan…"
+    )
+    return {"import_job_id": job_id, "task_id": task_id, "async_poll": async_poll, "async": True}
+
+
+@router.post("/jobs/{job_id}/cst-resolution-plan/apply-async", status_code=202)
+def cst_resolution_plan_apply_async(
+    job_id: int,
+    body: CstResolutionPlanApplyBody,
+) -> dict[str, Any]:
+    """Apply ready CST resolution-plan rows — per-candidate own target (never bulk single-target)."""
+    with SessionLocal() as s:
+        job = _get_cst_job_sync(s, job_id)
+        _assert_cst_resolution_plan_dispatch_allowed(job)
+
+    payload = {"candidate_ids": [int(x) for x in body.candidate_ids]}
+    from app.services.imports.cst_resolution_plan_enqueue import (
+        TASK_CST_RESOLUTION_PLAN_APPLY,
+        enqueue_cst_resolution_plan_task,
+        run_cst_resolution_plan_apply_sync,
+    )
+
+    task_id, async_poll = enqueue_cst_resolution_plan_task(
+        task_name=TASK_CST_RESOLUTION_PLAN_APPLY,
+        job_id=job_id,
+        payload=payload,
+        run_sync=lambda: run_cst_resolution_plan_apply_sync(job_id, payload),
+        dev_prefix="cst-plan-apply",
+    )
+    _write_cst_resolution_plan_slot(
+        job_id, task_id, async_poll=async_poll, label="Applying CST resolution plan…"
+    )
+    return {"import_job_id": job_id, "task_id": task_id, "async_poll": async_poll, "async": True}
+
+
+@router.get("/jobs/{job_id}/cst-resolution-plan-task/{task_id}", status_code=200)
+def cst_resolution_plan_task_status(job_id: int, task_id: str) -> dict[str, Any]:
+    """Poll a CST resolution-plan Celery task (or dev in-process / sync fallback) state + result."""
+    from app.services.imports.cst_resolution_plan_enqueue import dev_cst_resolution_plan_task_results
+
+    dev_store = dev_cst_resolution_plan_task_results()
+    dev_hit = dev_store.get(task_id)
+    if dev_hit is not None:
+        state = dev_hit.get("state", "SUCCESS")
+        if state in ("SUCCESS", "FAILURE"):
+            dev_store.pop(task_id, None)
+        out: dict[str, Any] = {"import_job_id": job_id, "task_id": task_id, "state": state}
+        if state == "SUCCESS":
+            out["result"] = dev_hit.get("result")
+        else:
+            out["error"] = dev_hit.get("error")
+        if state in ("SUCCESS", "FAILURE"):
+            _clear_cst_resolution_plan_slot(job_id)
+        return out
+
+    from celery.result import AsyncResult
+
+    result = AsyncResult(task_id, app=celery_app)
+    task_state = result.state
+    info = result.info
+    progress: dict[str, Any] = {"import_job_id": job_id, "task_id": task_id, "state": task_state}
+    if task_state == "PROGRESS" and isinstance(info, dict):
+        progress["phase"] = info.get("phase")
+        progress["phase_label"] = info.get("phase_label")
+        progress["current_row"] = info.get("current_row", 0)
+        progress["total_rows"] = info.get("total_rows", 0)
+        progress["pct"] = info.get("pct", 0)
+    elif task_state == "SUCCESS":
+        progress["result"] = result.result if isinstance(result.result, dict) else None
+    elif task_state == "FAILURE":
+        progress["error"] = str(info)[:800] if info is not None else "Task failed"
+
+    if task_state in ("SUCCESS", "FAILURE", "REVOKED"):
+        _clear_cst_resolution_plan_slot(job_id)
+
+    return progress

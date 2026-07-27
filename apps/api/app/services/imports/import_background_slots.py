@@ -44,6 +44,7 @@ KIND_SHIPMENT_BULK = "shipment_bulk"
 KIND_COMMERCIAL_PLANNER_LINEUP_PARSE = "commercial_planner_lineup_parse"
 KIND_CPOR_HISTORICAL_IMPORT = "cpor_historical_import"
 KIND_CPOR_RESOLUTION_PLAN = "cpor_resolution_plan"
+KIND_CST_RESOLUTION_PLAN = "cst_resolution_plan"
 
 # Allowed resolved kinds for the shared ``dsi_bulk_task`` slot. Anything else (e.g. the
 # legacy ``dsi_bulk_provisional_customers`` string still written by the endpoint) is
@@ -96,6 +97,7 @@ SLOT_SHIPMENT_BULK = "shipment_bulk_task"
 # Unit C (D-013): own slot — never SLOT_MAIN. Case apply (imports.cpor_historical_apply) keeps
 # using SLOT_MAIN; resolution-plan compute/apply are a separate interactive steward action.
 SLOT_CPOR_RESOLUTION_PLAN = "cpor_resolution_plan_task"
+SLOT_CST_RESOLUTION_PLAN = "cst_resolution_plan_task"
 
 
 TASK_SLOTS: tuple[SlotDescriptor, ...] = (
@@ -185,6 +187,15 @@ TASK_SLOTS: tuple[SlotDescriptor, ...] = (
         fixed_kind=KIND_CPOR_RESOLUTION_PLAN,
         default_label="Computing CPOR resolution plan…",
     ),
+    SlotDescriptor(
+        slot_key=SLOT_CST_RESOLUTION_PLAN,
+        meta_key="cst_resolution_plan_task",
+        kind_resolution=FIXED,
+        payload_shape=SHAPE_DICT,
+        label_source=LABEL_PAYLOAD,
+        fixed_kind=KIND_CST_RESOLUTION_PLAN,
+        default_label="Computing CST resolution plan…",
+    ),
 )
 
 _SLOTS_BY_KEY: dict[str, SlotDescriptor] = {s.slot_key: s for s in TASK_SLOTS}
@@ -231,6 +242,8 @@ def task_label(job: ImportJob, *, kind: str) -> str:
         return f"Applying historical CPOR import {jid}"
     if kind == KIND_CPOR_RESOLUTION_PLAN:
         return f"Applying CPOR resolution plan (job {jid})"
+    if kind == KIND_CST_RESOLUTION_PLAN:
+        return f"Applying CST resolution plan (job {jid})"
     if slug == "distributor_inventory":
         if mode == "validate":
             return f"Validating DSI import {jid}"

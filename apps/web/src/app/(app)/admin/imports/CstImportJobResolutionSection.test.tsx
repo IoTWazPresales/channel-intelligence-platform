@@ -23,6 +23,16 @@ const PRODUCT_CANDIDATES: CstMappingCandidate[] = [
   },
 ];
 
+vi.mock('@/features/import-steward/useStewardResolutionPlan', () => ({
+  useStewardResolutionPlan: () => ({
+    readyPlanCandidateIds: [],
+    suggestionsQuery: { data: null, isLoading: false, isFetching: false, isError: false, error: null },
+    applyResolutionPlan: { isPending: false, mutateAsync: vi.fn() },
+    setApplyAllConfirmOpen: vi.fn(),
+    applyAllConfirmOpen: false,
+  }),
+}));
+
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
   return {
@@ -68,6 +78,7 @@ describe('CstImportJobResolutionSection', () => {
     renderWithClient(<CstImportJobResolutionSection importJobId={7} />);
 
     expect(await screen.findByTestId('cst-import-job-resolution-section')).toBeInTheDocument();
+    expect(await screen.findByTestId('cst-resolution-plan-toolbar')).toBeInTheDocument();
     expect(await screen.findByTestId('cst-import-entity-tabs')).toBeInTheDocument();
     expect(await screen.findByText('widget-x')).toBeInTheDocument();
 

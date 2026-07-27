@@ -156,6 +156,13 @@ neutral `extras` ReactNode slot) and `StewardSuggestionCards` (S7: 1..N ranked c
 the shared engine on Import Centre. `/admin/cst-steward` (key accounts, report
 slots, article aliases) is **outside** the import-steward contract (ops/master
 config — not per-job token→dim resolution). Article-alias curation is out of Unit E.
-**E1 (this pass):** suggestion enrich + resolve/ignore + steward UI. **E2 (deferred):**
-resolution-plan compute/apply-async + own steward slot (mirror D-013).
+**E1 (this pass):** suggestion enrich + resolve/ignore + steward UI. **E2 (shipped 2026-07-27):**
+resolution-plan compute/apply-async + own steward slot (D-019, mirror D-013).
 **Origin:** Unit E CONSULT NEED_HUMAN + Warren no-Opus execute authorization 2026-07-27.
+
+## D-019 · 2026-07-27 · CST gets a real resolution plan; own steward slot
+**Locked (mirror D-013).** CST import steward (`customer_sell_through`) uses
+`SLOT_CST_RESOLUTION_PLAN` (never SLOT_MAIN) for resolution-plan compute/apply-async.
+Ready rule: open status, exactly one suggestion with score ≥ 0.90; collisions not ready.
+Plan apply maps per-candidate → its own suggested target via `resolve_cst_candidate_sync`.
+**Origin:** Unit E2 BACKLOG-074 TRIGGER (Warren prioritized, VERIFY waived) 2026-07-27.

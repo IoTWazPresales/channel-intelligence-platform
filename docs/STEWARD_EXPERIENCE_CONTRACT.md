@@ -66,9 +66,6 @@ provisional D-005.)
 
 ## Known gaps (v1.5)
 
-- **CST import steward E2:** resolution-plan compute/apply-async + own steward slot
-  (TRIGGER: after E1 VERIFY PASS or Warren waives mid-flight VERIFY). E1 ships
-  suggestion enrich + resolve/ignore + Import Centre UI without plan engine.
 - **`/admin/cst-steward`:** key-account / report-slot / article-alias **ops** page —
   **outside** this contract (D-018). Not an import-resolution surface.
 - **Waivers (shipment, D-012):** plan toolbar omits DSI global-suspicious checkbox;
@@ -89,6 +86,6 @@ provisional D-005.)
 - **Unit C** — CPOR S9 plan + S12 pagination + S14 surrogate + S6/S4 payload (PASS `4a63a30`)
 - **Unit D** — shared drawer evidence + suggestion cards; apply-all normalize (PASS `cc0138a`)
 - **Unit E1** — CST import steward (suggestions + resolve + UI on Import Centre); VERIFY deferred (no-Opus)
-- **Unit E2** — CST resolution-plan + async (deferred)
+- **Unit E2** — CST resolution-plan + async (shipped 2026-07-27; VERIFY deferred)
 - **Unit F / follow-up debt** — relocate remaining `Dsi*` domain modules out of
   `features/import-steward/`; clear inboundEvidence entity-type string leakage
