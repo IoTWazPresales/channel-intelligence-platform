@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-27 — **On main @ `30b1525`:** fast-forward promote of `feat/cpor-listing-status-audit` (CPOR+steward A–F, CST E1/E2 VERIFY deferred, DSI multifile + mapping clarity, shipping KPIs, alembic 0074). Parked: ASUS automap stash; ops-master shell; PM channel_id CASE.
 - 2026-07-27 — **Promote `feat/cpor-listing-status-audit` → main:** CPOR+steward A–F, CST E1/E2 (VERIFY deferred), DSI multifile + mapping clarity (`da7d491`), shipping commercial KPIs, alembic 0074. Left parked: ASUS automap stash; ops-master shell stack; PM channel_id CASE.
 - 2026-07-27 — **DSI mapping seamlessness (clarity):** named layout blockers + click-to-tab; Layouts ready N/M; sell-out Period N/A on file strip (stamps = SOH as-of only). Gates unchanged. Vitest dsiStepUtils 21/21. Uncommitted on `feat/cpor-listing-status-audit`.
 - 2026-07-27 — **Merged `feat/dsi-unified-multifile` (`2c2391e`) into `feat/cpor-listing-status-audit` @ `7f04c79`:** restored DSI batch/coverage/header sniff/file stamps + pipeline premapped skip; kept Unit F layout + CPOR/steward A–F + shipping KPIs. BACKLOG multifile 074/075 → **077/078**. Conflicts resolved; Warren smoke next (no DB tests this session).
