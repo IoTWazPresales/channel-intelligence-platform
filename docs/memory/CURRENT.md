@@ -11,8 +11,8 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260727_0074` on cip** |
-| **HEAD** | (see git after Unit F commit) |
-| **Pushed?** | pending after Unit F commit |
+| **HEAD** | `a80f58a` (Unit F complete / BACKLOG-075) |
+| **Pushed?** | yes |
 | **Next** | Opus VERIFY Unit E when usage resets; then PR soak / promote when ready. |
 
 ---
