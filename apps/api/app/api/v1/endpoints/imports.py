@@ -17,8 +17,12 @@ from app.core.dev_celery_logging import DEV_CELERY_LOGGER
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
 from app.services.imports.cst_mapping_candidates import (
+    CstCandidateOpError,
+    bulk_resolve_cst_candidates_sync,
     cst_mapping_state_dict,
+    ignore_cst_candidate_sync,
     list_cst_mapping_candidates_sync,
+    resolve_cst_candidate_sync,
 )
 from app.services.imports.dsi_mapping_workflow import (
     dsi_mapping_gate_errors,
@@ -1251,3 +1255,56 @@ async def list_cst_candidates(
             sync_db, job_id, skip=skip, limit=limit, entity=entity, status=status
         )
     return result
+
+
+class CstResolveCandidateBody(BaseModel):
+    entity_id: int = Field(..., ge=1)
+
+
+class CstBulkResolveCandidatesBody(BaseModel):
+    candidate_ids: list[int] = Field(..., min_length=1)
+    entity_id: int = Field(..., ge=1)
+
+
+@router.post("/jobs/{job_id}/cst-candidates/{candidate_id}/resolve", status_code=200)
+async def resolve_cst_candidate(
+    job_id: int,
+    candidate_id: int,
+    body: CstResolveCandidateBody,
+):
+    with SessionLocal() as sync_db:
+        try:
+            result = resolve_cst_candidate_sync(
+                sync_db, job_id, candidate_id, body.entity_id
+            )
+            sync_db.commit()
+            return result
+        except CstCandidateOpError as exc:
+            sync_db.rollback()
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.post("/jobs/{job_id}/cst-candidates/{candidate_id}/ignore", status_code=200)
+async def ignore_cst_candidate(job_id: int, candidate_id: int):
+    with SessionLocal() as sync_db:
+        try:
+            result = ignore_cst_candidate_sync(sync_db, job_id, candidate_id)
+            sync_db.commit()
+            return result
+        except CstCandidateOpError as exc:
+            sync_db.rollback()
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.post("/jobs/{job_id}/cst-candidates/bulk-resolve", status_code=200)
+async def bulk_resolve_cst_candidates(job_id: int, body: CstBulkResolveCandidatesBody):
+    with SessionLocal() as sync_db:
+        try:
+            result = bulk_resolve_cst_candidates_sync(
+                sync_db, job_id, body.candidate_ids, body.entity_id
+            )
+            sync_db.commit()
+            return result
+        except CstCandidateOpError as exc:
+            sync_db.rollback()
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc

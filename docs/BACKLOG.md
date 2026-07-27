@@ -9,7 +9,25 @@
 **Prune note (2026-07-20):** Removed shipped items (001, 005, 007, 012, 015, 022–024, 028, 030, 033, 035–036, 038–042, 043, 050, 056, 061, 061-U2, 069, 072) and ignored Supabase/deploy items (002, 003). Plan D follow-ons renumbered **057-D4** / **058-D5** to end the 057/058 ID collision with bulk-backfill entries. Full disposition archive: `.tmp/backlog_prune_consult_opus_response.md`.
 
 
+## BACKLOG-074 — CST import steward E2 (resolution-plan compute/apply-async)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-27 |
+| **Effort** | Medium (mirror CPOR D-013 plan path + web toolbar) |
+| **Source** | Unit E CONSULT NEED_HUMAN + Warren no-Opus E1 authorization; D-018; contract v1.5 Known-gap |
+| **Idea** | After E1 (suggestions + resolve/ignore + Import Centre UI), add CST **resolution-plan** compute → preview → apply-all-ready (each row → own suggested target) → async apply with progress; own steward slot ≠ SLOT_MAIN; ledger kind `steward` (mirror D-013). |
+| **Why it matters / deferrable** | E1 unblocks operators mapping tokens; plan/async is scale/UX polish. Deferrable while CLI Opus usage resets and E1 VERIFY is outstanding. |
+| **What the work is** | (1) Plan compute task + apply-async for `cst_product_token` / `cst_location_token`. (2) Slot registry entry ≠ SLOT_MAIN. (3) Wire `useStewardResolutionPlan` + `StewardResolutionPlanToolbar` on `CstImportJobResolutionSection`. (4) Progress poll + activity bell. |
+| **Regression traps** | Do not reuse case/process SLOT_MAIN; do not auto-create dims; do not invent fuzzy engines; do not put `Cst*` under `features/import-steward/` (D-006). |
+| **Behavior to retain** | E1 resolve/ignore + apply via `load_resolved_cst_candidates`; `/admin/cst-steward` stays ops-only (D-018). |
+| **Out of scope** | Article-alias curation; relocating `/admin/cst-steward` into the engine. |
+| **TRIGGER** | Unit E1 Opus VERIFY PASS (or Warren waives VERIFY); **or** Warren prioritizes CST plan async before Unit F. |
+
+---
+
 ## BACKLOG-073 — Import-job fact rollback / purge (test-junk cleanup; not park/exclude)
+
 
 | Field | Detail |
 |-------|--------|

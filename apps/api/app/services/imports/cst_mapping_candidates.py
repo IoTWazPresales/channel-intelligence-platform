@@ -20,6 +20,11 @@ from sqlalchemy.orm import Session
 from app.models.import_customer_sellthrough_staging import ImportCustomerSellthroughStagingLine
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
+from app.services.imports.cst_candidate_suggestions import (
+    build_cst_suggestions_for_candidate,
+    load_product_index,
+)
+from app.services.imports.customer_sell_through import resolve_customer_id_for_job
 from app.services.imports.distributor_sales_inventory import _product_token_key
 from app.utils.json_safe import to_jsonable
 
@@ -31,11 +36,74 @@ _CST_ENTITY_TYPES = (CST_PRODUCT_ENTITY, CST_LOCATION_ENTITY)
 _CST_TERMINAL_STATUSES = frozenset({"resolved", "ignored"})
 
 
+class CstCandidateOpError(Exception):
+    """HTTP-mappable steward operation error."""
+
+    def __init__(self, status_code: int, detail: str) -> None:
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+
+
 def _location_token_key(raw: str | None) -> str:
     if raw is None:
         return ""
     t = str(raw).strip().lower()
     return t if t and t != "nan" else ""
+
+
+def _apply_suggestions_to_candidate(
+    cand: ImportEntityMappingCandidate, suggestions: list[dict[str, Any]]
+) -> None:
+    ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
+    if suggestions:
+        top = suggestions[0]
+        cand.suggested_entity_id = int(top["dim_id"])
+        cand.match_reason = str(top["reason"])
+        cand.confidence_score = float(top["score"])
+        ctx["suggestions"] = to_jsonable(suggestions)
+    else:
+        cand.suggested_entity_id = None
+        cand.match_reason = None
+        cand.confidence_score = None
+        ctx.pop("suggestions", None)
+    cand.context = to_jsonable(ctx)
+
+
+def enrich_cst_open_candidates(db: Session, job_id: int) -> None:
+    """Enrich open CST candidates with deterministic product/location suggestions."""
+    job = db.get(ImportJob, job_id)
+    if job is None:
+        return
+
+    customer_id = resolve_customer_id_for_job(db, job)
+    product_index = load_product_index(db)
+
+    open_candidates = list(
+        db.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == job_id,
+                ImportEntityMappingCandidate.entity_type.in_(_CST_ENTITY_TYPES),
+                ImportEntityMappingCandidate.status.notin_(tuple(_CST_TERMINAL_STATUSES)),
+            )
+        ).all()
+    )
+    if not open_candidates:
+        return
+
+    for cand in open_candidates:
+        samples = cand.sample_raw_values if isinstance(cand.sample_raw_values, list) else None
+        suggestions = build_cst_suggestions_for_candidate(
+            db,
+            entity_type=str(cand.entity_type),
+            normalized_key=str(cand.normalized_key),
+            product_index=product_index,
+            customer_id=customer_id,
+            sample_raw_values=samples,
+        )
+        _apply_suggestions_to_candidate(cand, suggestions)
+
+    db.flush()
 
 
 def upsert_cst_mapping_candidates(db: Session, job_id: int) -> None:
@@ -128,6 +196,7 @@ def upsert_cst_mapping_candidates(db: Session, job_id: int) -> None:
             db.delete(ex)
 
     db.flush()
+    enrich_cst_open_candidates(db, job_id)
 
 
 def load_resolved_cst_candidates(
@@ -166,14 +235,54 @@ def cst_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
     if parse_error and isinstance(parse_error, dict) and parse_error.get("message"):
         blocking_errors.append(str(parse_error["message"])[:500])
 
+    customer_id: int | None = None
+    raw_cid = meta.get("customer_id")
+    if raw_cid is not None:
+        try:
+            customer_id = int(raw_cid)
+        except (TypeError, ValueError):
+            customer_id = None
+    if customer_id is None:
+        source = getattr(job, "source", None)
+        if source is not None:
+            expected = getattr(source, "expected_template", None)
+            if isinstance(expected, dict) and expected.get("customer_id") is not None:
+                try:
+                    customer_id = int(expected["customer_id"])
+                except (TypeError, ValueError):
+                    customer_id = None
+
     return {
         "job_id": job.id,
         "status": job.status,
         "stage": job.stage,
         "import_mode": job.import_mode,
+        "customer_id": customer_id,
         "blocking_errors": blocking_errors,
         "staged_metadata": meta,
     }
+
+
+def _suggestions_from_candidate(r: ImportEntityMappingCandidate) -> list[dict[str, Any]]:
+    ctx = r.context if isinstance(r.context, dict) else {}
+    stored = ctx.get("suggestions")
+    if isinstance(stored, list):
+        return list(stored)
+    if r.suggested_entity_id is not None:
+        return [
+            {
+                "dim_id": int(r.suggested_entity_id),
+                "label": str(r.suggested_entity_id),
+                "score": float(r.confidence_score) if r.confidence_score is not None else 1.0,
+                "reason": str(r.match_reason or "steward"),
+            }
+        ]
+    return []
+
+
+def serialize_cst_candidate(r: ImportEntityMappingCandidate) -> dict[str, Any]:
+    """Public serializer for API responses."""
+    return _serialize_cst_candidate(r)
 
 
 def _serialize_cst_candidate(r: ImportEntityMappingCandidate) -> dict[str, Any]:
@@ -190,9 +299,91 @@ def _serialize_cst_candidate(r: ImportEntityMappingCandidate) -> dict[str, Any]:
         "confidence_score": float(r.confidence_score) if r.confidence_score is not None else None,
         "status": r.status,
         "context": r.context,
+        "suggestions": _suggestions_from_candidate(r),
         "created_at": r.created_at.isoformat() if r.created_at is not None else None,
         "updated_at": r.updated_at.isoformat() if r.updated_at is not None else None,
     }
+
+
+def _get_cst_candidate_or_raise(
+    session: Session, job_id: int, candidate_id: int
+) -> ImportEntityMappingCandidate:
+    cand = session.get(ImportEntityMappingCandidate, candidate_id)
+    if cand is None or int(cand.import_job_id) != int(job_id):
+        raise CstCandidateOpError(404, "CST mapping candidate not found for this job")
+    if cand.entity_type not in _CST_ENTITY_TYPES:
+        raise CstCandidateOpError(400, f"Unsupported entity_type: {cand.entity_type}")
+    return cand
+
+
+def _patch_staging_for_resolved_candidate(
+    session: Session, cand: ImportEntityMappingCandidate
+) -> None:
+    entity_id = cand.suggested_entity_id
+    if entity_id is None:
+        return
+
+    lines = session.scalars(
+        select(ImportCustomerSellthroughStagingLine).where(
+            ImportCustomerSellthroughStagingLine.import_job_id == cand.import_job_id
+        )
+    ).all()
+
+    if cand.entity_type == CST_PRODUCT_ENTITY:
+        for line in lines:
+            if line.resolved_product_id is not None:
+                continue
+            if _product_token_key(line.raw_product_token) == cand.normalized_key:
+                line.resolved_product_id = int(entity_id)
+    elif cand.entity_type == CST_LOCATION_ENTITY:
+        for line in lines:
+            if line.resolved_location_id is not None:
+                continue
+            if _location_token_key(line.raw_location_token) == cand.normalized_key:
+                line.resolved_location_id = int(entity_id)
+
+
+def resolve_cst_candidate_sync(
+    session: Session,
+    job_id: int,
+    candidate_id: int,
+    entity_id: int,
+) -> dict[str, Any]:
+    cand = _get_cst_candidate_or_raise(session, job_id, candidate_id)
+    cand.status = "resolved"
+    cand.suggested_entity_id = int(entity_id)
+    cand.match_reason = "steward_resolve"
+    cand.confidence_score = 1.0
+    ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
+    ctx["steward_resolved_entity_id"] = int(entity_id)
+    cand.context = to_jsonable(ctx)
+    _patch_staging_for_resolved_candidate(session, cand)
+    session.flush()
+    return serialize_cst_candidate(cand)
+
+
+def ignore_cst_candidate_sync(
+    session: Session,
+    job_id: int,
+    candidate_id: int,
+) -> dict[str, Any]:
+    cand = _get_cst_candidate_or_raise(session, job_id, candidate_id)
+    if cand.status != "ignored":
+        cand.status = "ignored"
+        session.flush()
+    return serialize_cst_candidate(cand)
+
+
+def bulk_resolve_cst_candidates_sync(
+    session: Session,
+    job_id: int,
+    candidate_ids: list[int],
+    entity_id: int,
+) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    for cid in candidate_ids:
+        items.append(resolve_cst_candidate_sync(session, job_id, int(cid), entity_id))
+    return {"items": items, "count": len(items)}
 
 
 def list_cst_mapping_candidates_sync(

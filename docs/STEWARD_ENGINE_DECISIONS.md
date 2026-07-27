@@ -149,3 +149,13 @@ neutral `extras` ReactNode slot) and `StewardSuggestionCards` (S7: 1..N ranked c
 (D-006). Consumers pass neutral data + callbacks. Second consumer proves genericity
 (D-008): evidence summary = shipment + CPOR; cards = CPOR + shipment.
 **Origin:** Unit D CONSULT READY 2026-07-27.
+
+## D-018 · 2026-07-27 · Unit E is CST import resolution (not /admin/cst-steward ops)
+**Locked.** Unit E brings **customer_sell_through** import token steward
+(`cst_product_token` / `cst_location_token` on `ImportEntityMappingCandidate`) onto
+the shared engine on Import Centre. `/admin/cst-steward` (key accounts, report
+slots, article aliases) is **outside** the import-steward contract (ops/master
+config — not per-job token→dim resolution). Article-alias curation is out of Unit E.
+**E1 (this pass):** suggestion enrich + resolve/ignore + steward UI. **E2 (deferred):**
+resolution-plan compute/apply-async + own steward slot (mirror D-013).
+**Origin:** Unit E CONSULT NEED_HUMAN + Warren no-Opus execute authorization 2026-07-27.

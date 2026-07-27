@@ -87,6 +87,7 @@ import {
 
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 
+import { CstImportJobResolutionSection } from './CstImportJobResolutionSection';
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
 import { DsiIntelligenceStatusPanel, type DsiIntelligenceState } from './DsiIntelligenceStatusPanel';
 import { ImportJobValidateProgressPanel } from '@/features/import-steward/ImportJobValidateProgressPanel';
@@ -571,6 +572,7 @@ function AdminImportsPageContent() {
   const isPm = selectedSlug === 'product_master';
   const isDsi = selectedSlug === 'distributor_inventory';
   const isShipmentEvidence = selectedSlug === 'inbound_shipments';
+  const isCst = selectedSlug === 'customer_sell_through';
   const steps = isPm ? stepsPm : isDsi ? stepsDsi : isShipmentEvidence ? stepsShipmentEvidence : stepsDefault;
   const { data: templates } = useQuery({
     queryKey: ['import-templates'],
@@ -4276,6 +4278,14 @@ function AdminImportsPageContent() {
                   Refresh validation preview
                 </Button>
               </Alert>
+            ) : null}
+            {isCst && lastJobId != null ? (
+              <CstImportJobResolutionSection
+                importJobId={lastJobId}
+                onInvalidate={() => {
+                  void refetchPreview();
+                }}
+              />
             ) : null}
             {selectedTemplate?.slug === 'historical_lineup' && historicalValidatedJobId != null && hlSheetDetail ? (
               <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}>

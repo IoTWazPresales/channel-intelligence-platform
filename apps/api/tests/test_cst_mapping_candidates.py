@@ -16,9 +16,15 @@ import pytest
 from app.services.imports.cst_mapping_candidates import (
     CST_LOCATION_ENTITY,
     CST_PRODUCT_ENTITY,
+    CstCandidateOpError,
     _location_token_key,
+    _serialize_cst_candidate,
+    bulk_resolve_cst_candidates_sync,
     cst_mapping_state_dict,
+    enrich_cst_open_candidates,
+    ignore_cst_candidate_sync,
     load_resolved_cst_candidates,
+    resolve_cst_candidate_sync,
     upsert_cst_mapping_candidates,
 )
 
@@ -26,6 +32,25 @@ from app.services.imports.cst_mapping_candidates import (
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _disable_cst_enrich_unless_enrich_test(request, monkeypatch):
+    if request.node.name.startswith(
+        (
+            "test_enrich_",
+            "test_serialize_suggestions",
+            "test_resolve_",
+            "test_ignore_",
+            "test_bulk_resolve_",
+            "test_suggest_",
+        )
+    ):
+        return
+    monkeypatch.setattr(
+        "app.services.imports.cst_mapping_candidates.enrich_cst_open_candidates",
+        lambda *_args, **_kwargs: None,
+    )
+
 
 def _line(
     *,
@@ -247,10 +272,12 @@ def test_cst_mapping_state_dict_no_error():
         status="completed",
         stage="validated",
         import_mode="validate",
-        staged_metadata={"some_key": "val"},
+        staged_metadata={"some_key": "val", "customer_id": 99},
+        source=None,
     )
     result = cst_mapping_state_dict(job)
     assert result["job_id"] == 5
+    assert result["customer_id"] == 99
     assert result["blocking_errors"] == []
     assert result["stage"] == "validated"
 
@@ -262,6 +289,7 @@ def test_cst_mapping_state_dict_with_parse_error():
         stage="failed",
         import_mode="validate",
         staged_metadata={"customer_sellthrough_error": {"message": "bad header"}},
+        source=None,
     )
     result = cst_mapping_state_dict(job)
     assert result["blocking_errors"] == ["bad header"]
@@ -331,3 +359,138 @@ def test_pipeline_cst_apply_with_errors_keeps_stage_validated():
         stage = STAGE_VALIDATED
 
     assert stage == STAGE_VALIDATED
+
+
+# ---------------------------------------------------------------------------
+# serialize suggestions
+# ---------------------------------------------------------------------------
+
+def test_serialize_suggestions_from_context():
+    cand = SimpleNamespace(
+        id=1,
+        import_job_id=9,
+        entity_type=CST_PRODUCT_ENTITY,
+        normalized_key="sku-a",
+        row_count=2,
+        total_units=10.0,
+        sample_raw_values=["SKU-A"],
+        suggested_entity_id=42,
+        match_reason="item_code",
+        confidence_score=1.0,
+        status="needs_review",
+        context={
+            "suggestions": [
+                {"dim_id": 42, "label": "Widget", "score": 1.0, "reason": "item_code"},
+            ]
+        },
+        created_at=None,
+        updated_at=None,
+    )
+    out = _serialize_cst_candidate(cand)
+    assert out["suggestions"] == [
+        {"dim_id": 42, "label": "Widget", "score": 1.0, "reason": "item_code"},
+    ]
+
+
+def test_serialize_suggestions_fallback_from_columns():
+    cand = SimpleNamespace(
+        id=2,
+        import_job_id=9,
+        entity_type=CST_LOCATION_ENTITY,
+        normalized_key="store 1",
+        row_count=1,
+        total_units=None,
+        sample_raw_values=["Store 1"],
+        suggested_entity_id=7,
+        match_reason="location_code_exact",
+        confidence_score=1.0,
+        status="needs_review",
+        context=None,
+        created_at=None,
+        updated_at=None,
+    )
+    out = _serialize_cst_candidate(cand)
+    assert len(out["suggestions"]) == 1
+    assert out["suggestions"][0]["dim_id"] == 7
+    assert out["suggestions"][0]["reason"] == "location_code_exact"
+
+
+# ---------------------------------------------------------------------------
+# resolve / ignore
+# ---------------------------------------------------------------------------
+
+def _full_candidate(**overrides):
+    base = dict(
+        id=100,
+        import_job_id=5,
+        entity_type=CST_PRODUCT_ENTITY,
+        normalized_key="widget x",
+        row_count=1,
+        total_units=None,
+        sample_raw_values=["Widget X"],
+        suggested_entity_id=None,
+        match_reason=None,
+        confidence_score=None,
+        status="needs_review",
+        context={},
+        created_at=None,
+        updated_at=None,
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def test_resolve_cst_candidate_sets_resolved_status():
+    cand = _full_candidate()
+    session = MagicMock()
+    session.get.return_value = cand
+    session.scalars.return_value.all.return_value = []
+
+    out = resolve_cst_candidate_sync(session, job_id=5, candidate_id=100, entity_id=55)
+
+    assert cand.status == "resolved"
+    assert cand.suggested_entity_id == 55
+    assert out["status"] == "resolved"
+    assert out["suggested_entity_id"] == 55
+    session.flush.assert_called()
+
+
+def test_ignore_cst_candidate_idempotent():
+    cand = _full_candidate(status="ignored")
+    session = MagicMock()
+    session.get.return_value = cand
+
+    out = ignore_cst_candidate_sync(session, job_id=5, candidate_id=100)
+
+    assert out["status"] == "ignored"
+    session.flush.assert_not_called()
+
+
+def test_resolve_wrong_job_raises():
+    cand = _full_candidate(import_job_id=99)
+    session = MagicMock()
+    session.get.return_value = cand
+
+    with pytest.raises(CstCandidateOpError) as exc:
+        resolve_cst_candidate_sync(session, job_id=5, candidate_id=100, entity_id=1)
+
+    assert exc.value.status_code == 404
+
+
+def test_bulk_resolve_returns_all_items():
+    cand_a = _full_candidate(id=1)
+    cand_b = _full_candidate(id=2, normalized_key="other")
+    session = MagicMock()
+
+    def _get(_model, pk):
+        return {1: cand_a, 2: cand_b}.get(pk)
+
+    session.get.side_effect = _get
+    session.scalars.return_value.all.return_value = []
+
+    out = bulk_resolve_cst_candidates_sync(session, job_id=5, candidate_ids=[1, 2], entity_id=77)
+
+    assert out["count"] == 2
+    assert len(out["items"]) == 2
+    assert cand_a.suggested_entity_id == 77
+    assert cand_b.suggested_entity_id == 77

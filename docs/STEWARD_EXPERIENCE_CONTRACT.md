@@ -1,23 +1,26 @@
 # Steward Experience Contract
 
-**Version:** 1.4 · 2026-07-27 · Owner: Warren  
+**Version:** 1.5 · 2026-07-27 · Owner: Warren  
 **Role:** The definition of done for ANY import steward/resolve surface. CONSULT may
 only scope units as subsets of these rows. VERIFY walks these rows — not the unit
 prompt's own checklist. Any row excluded from a unit requires an explicit
 `Warren waived <row-id> <YYYY-MM-DD>` line in the unit prompt. No waiver line = row
 is in scope = missing row is a STOP.
 
-**Canonical paths** are the living reference after Unit A–D (generic engine +
-composition + CPOR + shared drawer evidence/cards). Update this column when the consolidation arc moves modules.
+**Canonical paths** are the living reference after Unit A–E1 (generic engine +
+composition + CPOR + shared drawer + CST import steward). Update this column when the consolidation arc moves modules.
 
 **S6 split (v1.3):** payload enrichment (candidate API + list columns) vs drawer
 evidence **UI** body. Unit C owns payload; Unit D owns shared drawer body UI (`StewardEvidenceSummary` / `StewardSuggestionCards`).
+
+**Unit E (v1.5 / D-018):** CST **import** resolution (`customer_sell_through` candidates),
+not the `/admin/cst-steward` ops page.
 
 ---
 
 ## Slot inventory
 
-| ID | Slot | Requirement | Behavior (what the operator gets) | Canonical (v1.4) |
+| ID | Slot | Requirement | Behavior (what the operator gets) | Canonical (v1.5) |
 |----|------|-------------|-----------------------------------|------------------|
 | S1 | Viewport shell | REQUIRED | Two-column workspace; list scrolls inside viewport on md+; drawer sticky beside list | `features/import-steward/StewardWorkspaceViewportShell.tsx` |
 | S2 | Entity tabs + counts | REQUIRED | Per-entity tabs with total + needs-work counts; tab switch resets filters/selection to tab default | `StewardEntityTabsBar` + consumer tab-count hooks (`useDsiEntityTabCounts` / shipment route `useShipmentEntityTabCounts`) |
@@ -61,8 +64,13 @@ provisional D-005.)
    region/channel/geo or assume bulk preview. Geo is composed by the consumer (DSI).
    Do not add `bulkStrategy` / capability flags that fossilize S8 gaps in the core.
 
-## Known gaps (v1.4)
+## Known gaps (v1.5)
 
+- **CST import steward E2:** resolution-plan compute/apply-async + own steward slot
+  (TRIGGER: after E1 VERIFY PASS or Warren waives mid-flight VERIFY). E1 ships
+  suggestion enrich + resolve/ignore + Import Centre UI without plan engine.
+- **`/admin/cst-steward`:** key-account / report-slot / article-alias **ops** page —
+  **outside** this contract (D-018). Not an import-resolution surface.
 - **Waivers (shipment, D-012):** plan toolbar omits DSI global-suspicious checkbox;
   plan apply does not use plan-level suspicious confirm (variance, not gap).
 - **inboundEvidence\* entity-type leakage:** `inboundEvidenceMappingCandidateDisplayUtils`
@@ -79,8 +87,8 @@ provisional D-005.)
 - **Unit B** — engine genericity via composition; shipment consumer #2
 - **Unit B2** — shipment bulk preview + toolbar parity (PASS `f9c49f9`)
 - **Unit C** — CPOR S9 plan + S12 pagination + S14 surrogate + S6/S4 payload (PASS `4a63a30`)
-- **Unit D** — shared drawer evidence + suggestion cards; apply-all normalize (D-016/D-017)
-- **Unit E** — CST steward (`/admin/cst-steward`) onto the engine; currently a bare
-  `EnterpriseDataGrid` with no shell/tabs/filters/toolbar — fully non-compliant
+- **Unit D** — shared drawer evidence + suggestion cards; apply-all normalize (PASS `cc0138a`)
+- **Unit E1** — CST import steward (suggestions + resolve + UI on Import Centre); VERIFY deferred (no-Opus)
+- **Unit E2** — CST resolution-plan + async (deferred)
 - **Unit F / follow-up debt** — relocate remaining `Dsi*` domain modules out of
   `features/import-steward/`; clear inboundEvidence entity-type string leakage
