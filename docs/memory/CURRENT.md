@@ -11,8 +11,8 @@
 |-------|--------|
 | **Branch** | `feat/cpor-listing-status-audit` |
 | **Alembic (DB)** | **`20260727_0074` on cip** (token surrogate) |
-| **HEAD** | *(set after Unit C commit)* |
-| **Pushed?** | pending Unit C commit |
+| **HEAD** | `4a63a30` |
+| **Pushed?** | pending push |
 | **Next** | Opus VERIFY Unit C → Unit D CONSULT (S6/S7 UI + apply-all normalize) |
 
 ---
