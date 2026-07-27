@@ -229,12 +229,12 @@ export function ShipmentMappingStewardPanel({
             color={ready ? 'success' : 'default'}
             variant="outlined"
           />
-          {planConfidence != null ? (
+          {planConfidence != null && confidenceBand(planConfidence) ? (
             <Chip
               size="small"
               variant="outlined"
-              color={confidenceBandColor(confidenceBand(planConfidence))}
-              label={confidenceBandLabel(confidenceBand(planConfidence))}
+              color={confidenceBandColor(confidenceBand(planConfidence)!)}
+              label={confidenceBandLabel(confidenceBand(planConfidence)!)}
             />
           ) : null}
         </Stack>
