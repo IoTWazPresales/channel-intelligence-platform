@@ -96,6 +96,169 @@ export function dsiGateFromNestedMapping(
   return sheets.every((sheet) => dsiGateFromMapping(sheet, opts));
 }
 
+export type DsiMissingRequirementId =
+  | 'distributor'
+  | 'product'
+  | 'date'
+  | 'quantity'
+  | 'inventory_period';
+
+export type DsiMissingRequirement = {
+  id: DsiMissingRequirementId;
+  label: string;
+};
+
+const MISSING_LABELS: Record<DsiMissingRequirementId, string> = {
+  distributor: 'Distributor (column or per-file Dist stamp)',
+  product: 'Product identifier',
+  date: 'Transaction / invoice date (or Inventory snapshot date)',
+  quantity: 'Quantity sold and/or stock on hand',
+  inventory_period:
+    'Inventory as-of period (confirm Application Date stamp, or map Inventory snapshot date)',
+};
+
+/**
+ * Structured gaps for one sheet mapping — same rules as dsiGateFromMapping /
+ * the Import Centre blocking banner (no new gate semantics).
+ */
+export function dsiSheetMissingRequirements(
+  sheet: Record<string, string>,
+  opts?: DsiMappingStampOpts
+): DsiMissingRequirement[] {
+  const vals = new Set(Object.values(sheet).filter(Boolean));
+  const missing: DsiMissingRequirement[] = [];
+  const distributorOk = vals.has('distributor_token') || Boolean(opts?.fileDistributorSatisfied);
+  if (!distributorOk) {
+    missing.push({ id: 'distributor', label: MISSING_LABELS.distributor });
+  }
+  if (!vals.has('product_identifier')) {
+    missing.push({ id: 'product', label: MISSING_LABELS.product });
+  }
+  const needsInventoryPeriod = vals.has('stock_on_hand') && !vals.has('snapshot_date');
+  const hasTxOrSnap = vals.has('transaction_date') || vals.has('snapshot_date');
+  const dateOk =
+    hasTxOrSnap || (needsInventoryPeriod && Boolean(opts?.fileSnapshotSatisfied));
+  if (needsInventoryPeriod && !opts?.fileSnapshotSatisfied) {
+    missing.push({ id: 'inventory_period', label: MISSING_LABELS.inventory_period });
+  } else if (!dateOk) {
+    missing.push({ id: 'date', label: MISSING_LABELS.date });
+  }
+  if (!vals.has('quantity_sold') && !vals.has('stock_on_hand')) {
+    missing.push({ id: 'quantity', label: MISSING_LABELS.quantity });
+  }
+  return missing;
+}
+
+export type DsiLayoutFailure = {
+  signature: string;
+  label: string;
+  keys: string[];
+  representativeKey: string;
+  missing: DsiMissingRequirement[];
+};
+
+export type DsiLayoutReadiness = {
+  readyCount: number;
+  total: number;
+  failing: DsiLayoutFailure[];
+};
+
+/** Layout tab label used in tabs / banner (Layout N · K files, or solo key). */
+export function dsiLayoutTabLabel(group: DsiLayoutTabGroup, index: number): string {
+  if (group.keys.length > 1) {
+    return `Layout ${index + 1} · ${group.keys.length} files`;
+  }
+  return group.keys[0] ?? group.signature;
+}
+
+/**
+ * Per-layout gate readiness for multi-file / multi-sheet mapping.
+ * A layout is ready when every member sheet passes dsiGateFromMapping.
+ */
+export function dsiLayoutReadiness(
+  layoutGroups: DsiLayoutTabGroup[],
+  nestedDraft: Record<string, Record<string, string>>,
+  opts?: DsiMappingStampOpts
+): DsiLayoutReadiness {
+  const failing: DsiLayoutFailure[] = [];
+  let readyCount = 0;
+  layoutGroups.forEach((g, idx) => {
+    const unionMissing = new Map<DsiMissingRequirementId, DsiMissingRequirement>();
+    let groupOk = true;
+    for (const k of g.keys) {
+      const sheet = nestedDraft[k] ?? {};
+      if (!dsiGateFromMapping(sheet, opts)) {
+        groupOk = false;
+        for (const m of dsiSheetMissingRequirements(sheet, opts)) {
+          if (!unionMissing.has(m.id)) unionMissing.set(m.id, m);
+        }
+      }
+    }
+    if (groupOk) {
+      readyCount += 1;
+      return;
+    }
+    failing.push({
+      signature: g.signature,
+      label: dsiLayoutTabLabel(g, idx),
+      keys: g.keys,
+      representativeKey: g.representativeKey,
+      missing: [...unionMissing.values()],
+    });
+  });
+  return { readyCount, total: layoutGroups.length, failing };
+}
+
+/**
+ * True when any nested sheet for this filename maps stock_on_hand without snapshot_date
+ * (same intent as backend file_needs_snapshot_period_stamp).
+ */
+export function dsiFileNeedsInventoryPeriod(
+  nestedDraft: Record<string, Record<string, string>>,
+  filename: string
+): boolean {
+  const prefix = `${filename}::`;
+  for (const [key, sheet] of Object.entries(nestedDraft)) {
+    const matches =
+      key === filename || key.startsWith(prefix) || (key.includes('::') ? key.split('::', 1)[0] === filename : false);
+    if (!matches) continue;
+    const vals = new Set(Object.values(sheet ?? {}).filter(Boolean));
+    if (vals.has('stock_on_hand') && !vals.has('snapshot_date')) return true;
+  }
+  return false;
+}
+
+export type DsiLayoutBlockingError = {
+  code: string;
+  message: string;
+  signature: string;
+  representativeKey: string;
+  missingId: DsiMissingRequirementId;
+};
+
+/** Banner lines named by layout; dedupe by layout+missing kind (not bare code). */
+export function formatDsiBlockingErrorsByLayout(
+  readiness: DsiLayoutReadiness
+): DsiLayoutBlockingError[] {
+  const out: DsiLayoutBlockingError[] = [];
+  const seen = new Set<string>();
+  for (const f of readiness.failing) {
+    for (const m of f.missing) {
+      const dedupeKey = `${f.signature}::${m.id}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      out.push({
+        code: `layout_${m.id}_${f.signature}`,
+        message: `${f.label} — needs ${m.label}.`,
+        signature: f.signature,
+        representativeKey: f.representativeKey,
+        missingId: m.id,
+      });
+    }
+  }
+  return out;
+}
+
 export type DsiLayoutGroup = {
   signature: string;
   mapping_keys: string[];

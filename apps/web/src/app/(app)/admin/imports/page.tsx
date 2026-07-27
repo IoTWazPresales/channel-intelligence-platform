@@ -102,11 +102,14 @@ import {
   computeDsiContinueGateKey,
   dsiContinueToApplyAllowed,
   dsiDataQualityBlockingRows,
+  dsiFileNeedsInventoryPeriod,
   dsiGateFromMapping,
   dsiGateFromNestedMapping,
   dsiHumanFixableBlockingRows,
+  dsiLayoutReadiness,
   dsiMappingRequiredGroupsFromDraft,
   fanOutDsiLayoutDraft,
+  formatDsiBlockingErrorsByLayout,
   groupDsiSheetKeys,
   dsiSelectValue,
   dsiStewardMapBlockingRows,
@@ -119,6 +122,7 @@ import {
   formatDsiSamples,
   parseDistributorSiSummaryFromRows,
   stableFieldMappingJson,
+  type DsiLayoutBlockingError,
 } from './dsiStepUtils';
 import {
   initPmColumnDrafts,
@@ -1062,48 +1066,9 @@ function AdminImportsPageContent() {
     const fileOk = dsiFileDistributorsConfirmed;
     const snapOk = dsiFileSnapshotPeriodsConfirmed;
     const gateOpts = { fileDistributorSatisfied: fileOk, fileSnapshotSatisfied: snapOk };
+    // Multi-sheet / multi-file: named layout blockers come from dsiLayoutBlockingErrors (after layout tabs).
     if (dsiIsMultiSheet) {
-      const errs: Array<{ code: string; message: string }> = [];
-      for (const key of dsiSheetKeys) {
-        const sheet = dsiNestedMapDraft[key] ?? {};
-        const vals = Object.values(sheet);
-        if (!dsiGateFromMapping(sheet, gateOpts)) {
-          const needsInvPeriod = vals.includes('stock_on_hand') && !vals.includes('snapshot_date');
-          if (needsInvPeriod && !snapOk) {
-            errs.push({
-              code: 'missing_snapshot_period_for_inventory_file',
-              message:
-                'Inventory rows need an as-of date: confirm Application Date period in the batch files strip, or map Inventory snapshot date.',
-            });
-          } else if (!vals.includes('transaction_date') && !vals.includes('snapshot_date') && !(needsInvPeriod && snapOk)) {
-            errs.push({
-              code: 'missing_column_mapping_date',
-              message:
-                'Required column mapping missing: map a date to Transaction / invoice date and/or Inventory snapshot date.',
-            });
-          }
-          if (!vals.includes('product_identifier')) {
-            errs.push({
-              code: 'missing_column_mapping_product',
-              message: 'Required column mapping missing: product identifier (SKU / part number / model / product code).',
-            });
-          }
-          if (!vals.includes('quantity_sold') && !vals.includes('stock_on_hand')) {
-            errs.push({
-              code: 'missing_column_mapping_quantity',
-              message: 'Required column mapping missing: quantity sold and/or stock on hand.',
-            });
-          }
-          if (!fileOk && !vals.includes('distributor_token')) {
-            errs.push({
-              code: 'missing_column_mapping_distributor',
-              message:
-                'Required: Distributor — confirm per-file identity in the batch files strip above (banner Company Name), or map a distributor column. Do not map Customer Code / Dealer Code to Distributor.',
-            });
-          }
-        }
-      }
-      return dedupeMappingBlockingErrors(errs);
+      return [] as Array<{ code: string; message: string }>;
     }
     if (!dsiGateFromMapping(dsiMapDraft, gateOpts)) {
       const errs: Array<{ code: string; message: string }> = [];
@@ -1122,8 +1087,6 @@ function AdminImportsPageContent() {
     return [];
   }, [
     dsiIsMultiSheet,
-    dsiSheetKeys,
-    dsiNestedMapDraft,
     dsiMapDraft,
     dsiFileDistributorsConfirmed,
     dsiFileSnapshotPeriodsConfirmed,
@@ -1205,6 +1168,51 @@ function AdminImportsPageContent() {
         dsiNestedMapDraft
       ),
     [dsiMappingState?.layout_groups, dsiSheetKeys, dsiDetachedLayoutKeys, dsiNestedMapDraft]
+  );
+
+  const dsiLayoutGateOpts = useMemo(
+    () => ({
+      fileDistributorSatisfied: dsiFileDistributorsConfirmed,
+      fileSnapshotSatisfied: dsiFileSnapshotPeriodsConfirmed,
+    }),
+    [dsiFileDistributorsConfirmed, dsiFileSnapshotPeriodsConfirmed]
+  );
+
+  const dsiLayoutReadinessState = useMemo(
+    () =>
+      dsiIsMultiSheet
+        ? dsiLayoutReadiness(dsiLayoutTabGroups, dsiNestedMapDraft, dsiLayoutGateOpts)
+        : { readyCount: 0, total: 0, failing: [] },
+    [dsiIsMultiSheet, dsiLayoutTabGroups, dsiNestedMapDraft, dsiLayoutGateOpts]
+  );
+
+  const dsiLayoutBlockingErrors = useMemo<DsiLayoutBlockingError[]>(
+    () => (dsiIsMultiSheet ? formatDsiBlockingErrorsByLayout(dsiLayoutReadinessState) : []),
+    [dsiIsMultiSheet, dsiLayoutReadinessState]
+  );
+
+  const dsiFilesNeedingInventoryPeriod = useMemo(() => {
+    // null = strip uses legacy period UI for every file (single-file / flat mapping).
+    if (!dsiIsMultiSheet) return null as string[] | null;
+    const files =
+      (dsiMappingState?.dsi_workbook as { files?: string[] } | null | undefined)?.files ??
+      Object.keys(dsiMappingState?.dsi_file_distributors ?? {});
+    return files.filter((f) => dsiFileNeedsInventoryPeriod(dsiNestedMapDraft, f));
+  }, [
+    dsiIsMultiSheet,
+    dsiNestedMapDraft,
+    dsiMappingState?.dsi_workbook,
+    dsiMappingState?.dsi_file_distributors,
+  ]);
+
+  const dsiMappingBannerErrors = dsiIsMultiSheet ? dsiLayoutBlockingErrors : dsiMappingStepBlockingErrors;
+
+  const jumpToDsiLayout = useCallback(
+    (signature: string, representativeKey: string) => {
+      setDsiActiveLayoutSignature(signature);
+      setDsiActiveSheetKey(representativeKey);
+    },
+    []
   );
 
   useEffect(() => {
@@ -4139,6 +4147,7 @@ function AdminImportsPageContent() {
                 }
                 fileDistributors={dsiMappingState?.dsi_file_distributors ?? null}
                 fileSnapshotPeriods={dsiMappingState?.dsi_file_snapshot_periods ?? null}
+                filesNeedingInventoryPeriod={dsiFilesNeedingInventoryPeriod}
                 excludedFiles={
                   (
                     (dsiValidatePollJob?.staged_metadata ?? dsiJobIntelligence?.staged_metadata) as
@@ -4166,13 +4175,41 @@ function AdminImportsPageContent() {
             {dsiIsMultiSheet && !dsiSheetKeys.length ? (
               <Alert severity="warning">Loading workbook sheets…</Alert>
             ) : null}
-            {dsiMappingStepBlockingErrors.length ? (
-              <Alert severity="warning">
-                {dsiMappingStepBlockingErrors.map((e) => (
-                  <Typography key={e.code} variant="body2" display="block">
-                    {e.message}
+            {dsiMappingBannerErrors.length ? (
+              <Alert severity="warning" data-testid="dsi-mapping-blocking-errors">
+                {dsiIsMultiSheet && dsiLayoutReadinessState.total > 0 ? (
+                  <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }} data-testid="dsi-layouts-ready-chip">
+                    Layouts ready: {dsiLayoutReadinessState.readyCount}/{dsiLayoutReadinessState.total}
+                    {dsiLayoutReadinessState.readyCount < dsiLayoutReadinessState.total
+                      ? ' — open a line below to finish that layout'
+                      : ''}
                   </Typography>
-                ))}
+                ) : null}
+                {dsiIsMultiSheet
+                  ? (dsiMappingBannerErrors as DsiLayoutBlockingError[]).map((e) => (
+                      <Button
+                        key={e.code}
+                        size="small"
+                        color="inherit"
+                        onClick={() => jumpToDsiLayout(e.signature, e.representativeKey)}
+                        sx={{
+                          display: 'block',
+                          textAlign: 'left',
+                          textTransform: 'none',
+                          fontWeight: 400,
+                          px: 0,
+                          minWidth: 0,
+                        }}
+                        data-testid={`dsi-mapping-blocker-${e.signature}-${e.missingId}`}
+                      >
+                        {e.message}
+                      </Button>
+                    ))
+                  : dsiMappingBannerErrors.map((e) => (
+                      <Typography key={e.code} variant="body2" display="block">
+                        {e.message}
+                      </Typography>
+                    ))}
               </Alert>
             ) : null}
             {!dsiFileDistributorsConfirmed ? (
@@ -4196,7 +4233,7 @@ function AdminImportsPageContent() {
             ) : null}
             {dsiIsMultiSheet && dsiSheetKeys.length ? (
               <Stack spacing={2} data-testid="dsi-multi-sheet-mapping">
-                <Alert severity="info">
+                <Alert severity="info" data-testid="dsi-multi-layout-progress">
                   {dsiMappingState?.multi_file
                     ? `Multi-file batch (${dsiLayoutTabGroups.length} layout${
                         dsiLayoutTabGroups.length === 1 ? '' : 's'
@@ -4205,7 +4242,11 @@ function AdminImportsPageContent() {
                       }). Map each layout once — edits apply to every file in that layout; switch tabs freely.`
                     : `Multi-sheet workbook (${dsiLayoutTabGroups.length} layout${
                         dsiLayoutTabGroups.length === 1 ? '' : 's'
-                      }). Edits autosave as you go — switch sheets freely.`}
+                      }). Edits autosave as you go — switch sheets freely.`}{' '}
+                  <strong>
+                    Layouts ready: {dsiLayoutReadinessState.readyCount}/{dsiLayoutReadinessState.total}.
+                  </strong>{' '}
+                  Incomplete tabs are marked with *. Inventory period stamps cover SOH as-of only — sell-out layouts still need Transaction / invoice date.
                 </Alert>
                 <Tabs
                   value={dsiActiveLayoutSignature ?? dsiLayoutTabGroups[0]?.signature ?? ''}
@@ -4413,6 +4454,7 @@ function AdminImportsPageContent() {
                 }
                 fileDistributors={dsiMappingState?.dsi_file_distributors ?? null}
                 fileSnapshotPeriods={dsiMappingState?.dsi_file_snapshot_periods ?? null}
+                filesNeedingInventoryPeriod={dsiFilesNeedingInventoryPeriod}
                 excludedFiles={
                   (
                     (dsiValidatePollJob?.staged_metadata ?? dsiJobIntelligence?.staged_metadata) as

@@ -44,6 +44,8 @@ export type DsiFileReviewStripProps = {
   excludedFiles?: string[] | null;
   fileDistributors?: Record<string, DsiFileDistributorStamp> | null;
   fileSnapshotPeriods?: Record<string, DsiFileSnapshotPeriodStamp> | null;
+  /** Filenames that map stock_on_hand without snapshot_date — period stamp is required. */
+  filesNeedingInventoryPeriod?: string[] | null;
   jobLoaded?: boolean;
   onChanged?: () => void;
 };
@@ -102,10 +104,16 @@ export function DsiFileReviewStrip({
   excludedFiles,
   fileDistributors,
   fileSnapshotPeriods,
+  filesNeedingInventoryPeriod,
   jobLoaded = false,
   onChanged,
 }: DsiFileReviewStripProps) {
   const initial = useMemo(() => new Set(excludedFiles ?? []), [excludedFiles]);
+  const periodFilterActive = filesNeedingInventoryPeriod != null;
+  const needsPeriod = useMemo(
+    () => new Set(filesNeedingInventoryPeriod ?? []),
+    [filesNeedingInventoryPeriod]
+  );
   const [excluded, setExcluded] = useState<Set<string>>(initial);
   const [changeFor, setChangeFor] = useState<string | null>(null);
   const [periodEditFor, setPeriodEditFor] = useState<string | null>(null);
@@ -188,6 +196,7 @@ export function DsiFileReviewStrip({
   const actionError = exclusionMutation.error ?? confirmMutation.error ?? periodMutation.error;
   const sniffPending = filenames.filter((n) => {
     if (excluded.has(n)) return false;
+    if (periodFilterActive && !needsPeriod.has(n)) return false;
     const st = fileSnapshotPeriods?.[n];
     return Boolean(st?.resolved_date) && !st?.confirmed;
   });
@@ -197,8 +206,9 @@ export function DsiFileReviewStrip({
       <Stack spacing={1}>
         <Typography variant="subtitle2">Batch files in this job</Typography>
         <Typography variant="caption" color="text.secondary">
-          Confirm distributor (Company Name banner) and inventory period (Application Date → ISO week Monday)
-          per file. Map columns instead where the file has them. Exclude a file to drop it before re-validate.
+          Confirm distributor (Company Name banner) per file. <strong>Inventory period</strong> (Application Date →
+          ISO week Monday) is the SOH as-of stamp only — it does not replace Transaction / invoice date on sell-out
+          layouts. Map invoice dates on the column-mapping tabs. Exclude a file to drop it before re-validate.
         </Typography>
         {sniffPending.length > 0 && !jobLoaded ? (
           <Button
@@ -234,6 +244,7 @@ export function DsiFileReviewStrip({
               const canConfirm = Boolean(st?.token || st?.distributor_id);
               const canConfirmPeriod = Boolean(period?.resolved_date);
               const excludedRow = excluded.has(name);
+              const periodRequired = !periodFilterActive || needsPeriod.has(name);
               return (
                 <TableRow key={name}>
                   <TableCell padding="checkbox">
@@ -283,7 +294,14 @@ export function DsiFileReviewStrip({
                     )}
                   </TableCell>
                   <TableCell>
-                    {periodEditFor === name ? (
+                    {!periodRequired ? (
+                      <>
+                        <Typography variant="body2">N/A</Typography>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Sell-out — map invoice date on layout tabs
+                        </Typography>
+                      </>
+                    ) : periodEditFor === name ? (
                       <Stack direction="row" spacing={0.5} alignItems="center">
                         <TextField
                           size="small"
@@ -321,7 +339,9 @@ export function DsiFileReviewStrip({
                   <TableCell>
                     {excludedRow
                       ? 'Excluded'
-                      : `${confirmed ? 'Dist ✓' : 'Dist?'} · ${periodConfirmed ? 'Period ✓' : period?.resolved_date ? 'Period?' : 'Period —'}`}
+                      : periodRequired
+                        ? `${confirmed ? 'Dist ✓' : 'Dist?'} · ${periodConfirmed ? 'Period ✓' : period?.resolved_date ? 'Period?' : 'Period —'}`
+                        : `${confirmed ? 'Dist ✓' : 'Dist?'} · Period N/A`}
                   </TableCell>
                   <TableCell align="right">
                     <Stack direction="row" spacing={0.5} justifyContent="flex-end" flexWrap="wrap">
@@ -338,7 +358,7 @@ export function DsiFileReviewStrip({
                           Confirm dist
                         </Button>
                       ) : null}
-                      {!excludedRow && !periodConfirmed && canConfirmPeriod ? (
+                      {periodRequired && !excludedRow && !periodConfirmed && canConfirmPeriod ? (
                         <Button
                           size="small"
                           variant="contained"
@@ -362,7 +382,7 @@ export function DsiFileReviewStrip({
                           {changeFor === name ? 'Cancel' : 'Change dist'}
                         </Button>
                       ) : null}
-                      {!excludedRow ? (
+                      {periodRequired && !excludedRow ? (
                         <Button
                           size="small"
                           disabled={jobLoaded || periodMutation.isPending}

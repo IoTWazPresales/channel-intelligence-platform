@@ -10,8 +10,12 @@ import {
   dsiHumanFixableBlockingRows,
   dsiMappingRequiredGroupsFromDraft,
   fanOutDsiLayoutDraft,
+  formatDsiBlockingErrorsByLayout,
   groupDsiSheetKeys,
+  dsiFileNeedsInventoryPeriod,
+  dsiLayoutReadiness,
   dsiSelectValue,
+  dsiSheetMissingRequirements,
   dsiStewardMapBlockingRows,
   dsiTargetDescription,
   dsiTargetLabel,
@@ -165,6 +169,90 @@ describe('dsiStepUtils', () => {
     );
     expect(next['a.xlsx::__single__']).toEqual({ Model: 'product_identifier', Qty: 'quantity_sold' });
     expect(next['b.xlsx::__single__']).toEqual({ Model: 'product_identifier', Qty: 'quantity_sold' });
+  });
+
+  it('dsiSheetMissingRequirements matches gate gaps (sell-out needs txn date even with stamps)', () => {
+    const opts = { fileDistributorSatisfied: true, fileSnapshotSatisfied: true };
+    expect(
+      dsiSheetMissingRequirements(
+        { Model: 'product_identifier', Qty: 'quantity_sold' },
+        opts
+      ).map((m) => m.id)
+    ).toEqual(['date']);
+    expect(
+      dsiSheetMissingRequirements(
+        { Model: 'product_identifier', SOH: 'stock_on_hand' },
+        opts
+      )
+    ).toEqual([]);
+    expect(
+      dsiSheetMissingRequirements(
+        { Model: 'product_identifier', SOH: 'stock_on_hand' },
+        { fileDistributorSatisfied: true, fileSnapshotSatisfied: false }
+      ).map((m) => m.id)
+    ).toEqual(['inventory_period']);
+  });
+
+  it('dsiLayoutReadiness + formatDsiBlockingErrorsByLayout name incomplete layouts', () => {
+    const opts = { fileDistributorSatisfied: true, fileSnapshotSatisfied: true };
+    const groups = [
+      {
+        signature: 'sellout',
+        keys: ['a.xlsx::__single__', 'b.xlsx::__single__'],
+        representativeKey: 'a.xlsx::__single__',
+      },
+      {
+        signature: 'inv',
+        keys: ['c.xlsx::__single__'],
+        representativeKey: 'c.xlsx::__single__',
+      },
+    ];
+    const drafts = {
+      'a.xlsx::__single__': {
+        Model: 'product_identifier',
+        Qty: 'quantity_sold',
+        Date: 'transaction_date',
+      },
+      'b.xlsx::__single__': {
+        Model: 'product_identifier',
+        Qty: 'quantity_sold',
+        Date: 'transaction_date',
+      },
+      'c.xlsx::__single__': { Model: 'product_identifier', Qty: 'quantity_sold' },
+    };
+    const readiness = dsiLayoutReadiness(groups, drafts, opts);
+    expect(readiness.readyCount).toBe(1);
+    expect(readiness.total).toBe(2);
+    expect(readiness.failing).toHaveLength(1);
+    expect(readiness.failing[0].signature).toBe('inv');
+    expect(readiness.failing[0].missing.map((m) => m.id)).toEqual(['date']);
+    const lines = formatDsiBlockingErrorsByLayout(readiness);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].message).toMatch(/c\.xlsx/);
+    expect(lines[0].message).toMatch(/Transaction \/ invoice date/);
+    expect(lines[0].signature).toBe('inv');
+  });
+
+  it('dsiFileNeedsInventoryPeriod only when SOH mapped without snapshot_date', () => {
+    const draft = {
+      'MUSTEK_SELLOUT.xlsx::__single__': {
+        Model: 'product_identifier',
+        Qty: 'quantity_sold',
+        Date: 'transaction_date',
+      },
+      'MUSTEK_Inventory.xls::SOH': {
+        Model: 'product_identifier',
+        SOH: 'stock_on_hand',
+      },
+      'PINNACLE.xlsx::SOH': {
+        Model: 'product_identifier',
+        SOH: 'stock_on_hand',
+        Snap: 'snapshot_date',
+      },
+    };
+    expect(dsiFileNeedsInventoryPeriod(draft, 'MUSTEK_SELLOUT.xlsx')).toBe(false);
+    expect(dsiFileNeedsInventoryPeriod(draft, 'MUSTEK_Inventory.xls')).toBe(true);
+    expect(dsiFileNeedsInventoryPeriod(draft, 'PINNACLE.xlsx')).toBe(false);
   });
 
 
