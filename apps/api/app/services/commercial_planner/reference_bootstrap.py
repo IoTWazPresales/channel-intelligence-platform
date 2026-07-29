@@ -50,13 +50,14 @@ def ensure_commercial_planner_system_reference_data_sync(conn) -> None:
         text(
             """
             INSERT INTO dim_customer (
-                code, name, customer_status, partner_tier, account_owner_internal, notes_summary,
+                code, name, customer_status, is_key_account, partner_tier, account_owner_internal, notes_summary,
                 region_id, channel_id, preferred_distributor_id, created_at, updated_at
             )
             SELECT
                 CAST(:code AS VARCHAR(64)),
                 CAST(:name AS VARCHAR(256)),
                 CAST('active' AS VARCHAR(32)),
+                CAST(FALSE AS BOOLEAN),
                 CAST(NULL AS VARCHAR(32)),
                 CAST(NULL AS VARCHAR(128)),
                 CAST(NULL AS VARCHAR(512)),
