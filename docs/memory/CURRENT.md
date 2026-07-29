@@ -12,7 +12,7 @@
 | **Branch** | `main` |
 | **Alembic (DB)** | **`20260727_0074` on cip** |
 | **HEAD** | tip of `main` (verify: `git rev-parse --short HEAD`) |
-| **Pushed?** | pending this hygiene push |
+| **Pushed?** | yes @ `76f19c7` |
 | **Phase source of truth** | **`docs/ROADMAP.md`** (Warren-approved v1.0) |
 | **Current phase** | **P0 — Stabilise the base** |
 | **Next** | P0 remaining only — no P0 implementation this session |
