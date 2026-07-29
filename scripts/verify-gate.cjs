@@ -13,12 +13,14 @@ const failures = [];
 const warnings = [];
 const notes = [];
 
-function run(command, args, cwd = root) {
+function run(command, args, cwd = root, opts = {}) {
+  // Windows .cmd shims (pnpm.cmd) require shell:true; shell:false yields EINVAL and empty output.
+  const useShell = opts.shell === true || (process.platform === "win32" && /\.cmd$/i.test(command));
   const result = spawnSync(command, args, {
     cwd,
     encoding: "utf8",
     windowsHide: true,
-    shell: false,
+    shell: useShell,
   });
   return {
     status: result.status === null ? 1 : result.status,
@@ -127,19 +129,51 @@ function formatSet(set) {
   return [...set].sort().join("\n");
 }
 
+function resolveTscJs(cwd) {
+  const candidates = [
+    path.join(cwd, "apps", "web", "node_modules", "typescript", "bin", "tsc"),
+    path.join(cwd, "node_modules", "typescript", "bin", "tsc"),
+    path.join(root, "apps", "web", "node_modules", "typescript", "bin", "tsc"),
+    path.join(root, "node_modules", "typescript", "bin", "tsc"),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
 function runTsc(cwd) {
-  const result = run(pnpm, ["--filter", "@cip/web", "exec", "tsc", "--noEmit"], cwd);
-  return { ...result, text: `${result.stdout}\n${result.stderr}` };
+  const tscJs = resolveTscJs(cwd);
+  const webDir = path.join(cwd, "apps", "web");
+  let result;
+  if (tscJs && fs.existsSync(path.join(webDir, "tsconfig.json"))) {
+    result = run(process.execPath, [tscJs, "--noEmit", "-p", "tsconfig.json"], webDir);
+  } else {
+    result = run(pnpm, ["--filter", "@cip/web", "exec", "tsc", "--noEmit"], cwd);
+  }
+  const text = `${result.stdout}\n${result.stderr}`;
+  if (result.error) {
+    failures.push(`tsc: failed to spawn (${result.error.message})`);
+  } else if (result.status !== 0 && !/error TS\d+/.test(text)) {
+    failures.push(
+      `tsc: exited ${result.status} without parseable TypeScript errors (tooling failure, not a clean tree):\n${text.slice(0, 800)}`,
+    );
+  }
+  return { ...result, text };
 }
 
 function symlinkNodeModules(worktree) {
-  const source = path.join(root, "node_modules");
-  const target = path.join(worktree, "node_modules");
-  if (!fs.existsSync(source) || fs.existsSync(target)) return;
-  try {
-    fs.symlinkSync(source, target, process.platform === "win32" ? "junction" : "dir");
-  } catch (error) {
-    warnings.push(`could not link node_modules into base worktree: ${error.message}`);
+  const links = [
+    ["node_modules", "node_modules"],
+    [path.join("apps", "web", "node_modules"), path.join("apps", "web", "node_modules")],
+  ];
+  for (const [relSource, relTarget] of links) {
+    const source = path.join(root, relSource);
+    const target = path.join(worktree, relTarget);
+    if (!fs.existsSync(source) || fs.existsSync(target)) continue;
+    try {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.symlinkSync(source, target, process.platform === "win32" ? "junction" : "dir");
+    } catch (error) {
+      warnings.push(`could not link ${relSource} into base worktree: ${error.message}`);
+    }
   }
 }
 
@@ -157,11 +191,16 @@ function makeBaseWorktree(baseSha) {
 
 function removeBaseWorktree(worktree) {
   if (!worktree) return;
-  const linkedModules = path.join(worktree, "node_modules");
-  try {
-    if (fs.lstatSync(linkedModules).isSymbolicLink()) fs.unlinkSync(linkedModules);
-  } catch (error) {
-    if (error.code !== "ENOENT") warnings.push(`could not unlink temporary node_modules junction: ${error.message}`);
+  for (const rel of ["node_modules", path.join("apps", "web", "node_modules")]) {
+    const linkedModules = path.join(worktree, rel);
+    try {
+      const stat = fs.lstatSync(linkedModules);
+      if (stat.isSymbolicLink() || (process.platform === "win32" && stat.isDirectory())) {
+        fs.rmSync(linkedModules, { recursive: true, force: true });
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") warnings.push(`could not unlink temporary ${rel}: ${error.message}`);
+    }
   }
   const removed = gitRun(["worktree", "remove", "--force", worktree]);
   if (removed.status !== 0) {
@@ -208,7 +247,9 @@ function runTests(cwd, files, runner) {
   if (runner === "pytest") {
     return run(python, ["-m", "pytest", ...files], cwd);
   }
-  return run(pnpm, ["--filter", "@cip/web", "exec", "vitest", "run", ...files], cwd);
+  return run(pnpm, ["--filter", "@cip/web", "exec", "vitest", "run", ...files], cwd, {
+    shell: process.platform === "win32",
+  });
 }
 
 function testCheck(options, baseSha) {
