@@ -91,12 +91,15 @@ jobs:
           python - <<'PY'
           from sqlalchemy import create_engine
           from app.core.config import get_settings
+          from app.db.sync_url import sqlalchemy_sync_engine_url
           from app.services.commercial_planner.reference_bootstrap import (
               ensure_commercial_planner_system_reference_data_sync,
           )
 
           settings = get_settings()
-          url = settings.database_url_sync_migrate or settings.database_url_sync
+          url = sqlalchemy_sync_engine_url(
+              settings.database_url_sync_migrate or settings.database_url_sync
+          )
           print("bootstrap via", url)
           engine = create_engine(url)
           with engine.begin() as conn:
@@ -107,9 +110,12 @@ jobs:
           python - <<'PY'
           from sqlalchemy import create_engine, text
           from app.core.config import get_settings
+          from app.db.sync_url import sqlalchemy_sync_engine_url
 
           settings = get_settings()
-          url = settings.database_url_sync_migrate or settings.database_url_sync
+          url = sqlalchemy_sync_engine_url(
+              settings.database_url_sync_migrate or settings.database_url_sync
+          )
           engine = create_engine(url)
           with engine.connect() as conn:
               db = conn.execute(text("SELECT current_database()")).scalar()
