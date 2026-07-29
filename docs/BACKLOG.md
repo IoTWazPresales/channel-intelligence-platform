@@ -10,16 +10,85 @@
 
 **ID remap (2026-07-27 merge):** On merge of `feat/dsi-unified-multifile`, that branch’s **074** (email ingest) and **075** (layout-coalesce) were renumbered to **077** / **078** because this branch already used 074/075 for CST E2 / Unit F (shipped) and **076** for amount-scale junk.
 
-**P0 extract (2026-07-29 / D-014 / D-015):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**082**. Branch delete **blocked** pending Warren call (diff has substantial extras beyond the three named extracts).
+**P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
-## BACKLOG-082 — DSI header vocabulary → template config (ASUS seed + denylist; D-015)
+## BACKLOG-086 — PM bulk upsert `channel_id` CASE + typed cast (redo `558d088`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-29 · cherry-pick skipped |
+| **Effort** | Small–Medium |
+| **Source** | `fix/pm-bulk-upsert-coercion-and-sql-types` @ `558d088`; ROADMAP P0 item 3; hygiene session conflict abort |
+| **Idea** | Re-apply the psycopg3 typeless-NULL fix: typed casts on VALUES staging columns mixed with ORM columns in CASE (notably `channel_id`), plus any still-needed tabular coercion from that commit. |
+| **Why it matters / deferrable** | Untyped `None` → PostgreSQL `text` NULL; CASE vs Integer/Date ORM columns raises `DatatypeMismatch`. Real hazard on PM bulk upsert. Deferrable until next PM bulk-write / import-apply touch. |
+| **What the work is** | Redo natively on current `main` `product_import_sync.py` — do **not** force-merge the old branch tip. Cherry-pick `558d088` already **conflicted** there (abort). |
+| **Conflict location** | `apps/api/app/services/catalog/product_import_sync.py` (main already has some date `cast()` work; `channel_id` CASE still missing / diverged). |
+| **Regression traps** | Project gotcha: wrap non-text VALUES staging columns in `cast(col, Type)` inside CASE/SELECT mixing ORM columns; string columns usually OK. Must prove with real DB execution (SQL validation rule), not mocks only. |
+| **Behavior to retain** | Existing PM upsert semantics / source keys; do not broaden into unrelated coercion unless still required after conflict resolve. |
+| **Out of scope** | Landing the whole `fix/pm-bulk-upsert-coercion-and-sql-types` branch; schema migrations. |
+| **TRIGGER** | Next PM bulk upsert / product-import-sync change; **or** a live `DatatypeMismatch` on `channel_id` CASE; **or** Warren prioritizes P0 item 3. |
+
+---
+
+## BACKLOG-085 — Ops-list pagination chrome (fold into phase — not standalone)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Effort** | Small (mechanical per page) |
+| **Source** | D-021 fuller diff; CST steward / CPOR / PM gaps / PO gap / PVE list paging chrome on ops-master |
+| **Idea** | When touching those ops list pages, bring skip/limit (or equivalent) pagination UX to the current route layout — same fold-in rule as BACKLOG-079. |
+| **Why it matters / deferrable** | Consistency for long ops queues. **Do not schedule standalone.** |
+| **What the work is** | Native pagination on current post–Unit F routes; may use BACKLOG-084 helpers if still missing. |
+| **Regression traps** | Do not revive pre–Unit F paths; do not pull channel-ops KPI or shippingUtcDates from ops-master (D-021 supersede). |
+| **Behavior to retain** | Existing filter/query contracts; Enterprise AG Grid pattern. |
+| **Out of scope** | Standalone pagination epic; ops-master merge. |
+| **TRIGGER** | Phase work that already edits the named ops list pages; **or** Warren asks for paging on a named page. |
+
+---
+
+## BACKLOG-084 — Shared URL helpers (`useDebouncedUrlQuery` + `skipLimitSearchParams`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Effort** | Small (mechanical) |
+| **Source** | D-021; ops-master shared helper modules used by ops list paging |
+| **Idea** | Debounced URL query sync + skip/limit search-param helpers for list pages. |
+| **Why it matters / deferrable** | Reduces duplicated URL↔filter glue. Cheap to redo natively when a consuming page needs them. |
+| **What the work is** | Re-implement on `main` against current App Router patterns when first consumer needs them (often with BACKLOG-079/085). |
+| **Regression traps** | Do not import from deleted ops-master tip; keep debounce UX (~300ms) consistent with steward search where applicable. |
+| **Behavior to retain** | Shareable URL state for filters/paging. |
+| **Out of scope** | Pulling unrelated ops-master chrome. |
+| **TRIGGER** | First ops/list page change that needs URL-synced skip/limit or debounced query; **or** fold-in with BACKLOG-079/085. |
+
+---
+
+## BACKLOG-083 — Customer merge companions (redirect, related-name, repair/backfill)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Effort** | Medium–Large |
+| **Source** | D-021 fuller diff; `customer_merge_redirect.py`, `customer_related_master_groups.py`, RelatedName UI, ops scripts `backfill_merged_customer_alias_seals.py` / `repair_open_channel_wrong_merge.py` (and peers on tip) |
+| **Idea** | Merge-engine adjacent surfaces: follow redirects after merge, related-name worklist for subset merges, repair/backfill scripts for wrong OPEN_CHANNEL / seal gaps. |
+| **Why it matters / deferrable** | Completes alias-seal (BACKLOG-081) into a safe merge story. Deferrable until merge-heavy steward wave. |
+| **What the work is** | Rebuild against current `main` merge APIs; **clone-proven end-to-end** before claiming done (project clone-gate / disposable DB rule — not mock-only). |
+| **Regression traps** | Merge-engine adjacent — wrong redirect or related-name mapping corrupts identity; OPEN_CHANNEL must not absorb wrong merges; scripts must verify `current_database() = cip` (or disposable clone) before writes. |
+| **Behavior to retain** | Steward-initiated merges only; no auto-create dims from import evidence. |
+| **Out of scope** | Alias seal core (BACKLOG-081); ops-master wholesale merge. |
+| **TRIGGER** | Pairs with BACKLOG-081 when customer-duplicate cleanup is prioritized; **or** Warren schedules merge-engine wave. |
+
+---
+
+## BACKLOG-082 — DSI header vocabulary → template config (ASUS seed + denylist; D-022)
 
 | Field | Detail |
 |-------|--------|
 | **Status / parked** | **Parked** · 2026-07-29 · P0 remaining |
 | **Effort** | Medium |
-| **Source** | D-015; ROADMAP P0 item 1; stash `park-dsi-asus-dealer-name-automap` (knowledge only — implementation dropped) |
+| **Source** | D-022; ROADMAP P0 item 1; stash `park-dsi-asus-dealer-name-automap` (knowledge only — implementation dropped) |
 | **Idea** | Retire hardcoded header strings in `dsi_mapping_workflow.py`. Per-template header-alias map + never-auto-map denylist. Precedence: **confirmed memory > template alias > heuristic** (today `apply_exact_raw_customer_header_overrides` beats memory — backwards). |
 | **Why it matters / deferrable** | Mis-mapped identity columns poison customer resolution / aliases permanently. Deferrable until P0 header-config unit; blocks clean P1 ASUS weekly load. |
 | **What the work is** | Config surface for template aliases + denylist; migrate RAW/ASUS seeds; fix precedence; remove literal tenant headers from Python. |
@@ -31,19 +100,19 @@
 
 ---
 
-## BACKLOG-081 — Customer merge alias seal (+ redirect / related-name companions)
+## BACKLOG-081 — Customer merge alias seal
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-014 |
+| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
 | **Effort** | Medium–Large |
-| **Source** | D-014 extract; branch tip files `customer_merge_alias_seal.py`, `customer_merge_redirect.py`, `customer_related_master_groups.py`, ops scripts `backfill_merged_customer_alias_seals.py` / `repair_open_channel_wrong_merge.py` |
-| **Idea** | On full customer merge, mint approved aliases from loser display names → keeper so future DSI resolution does not re-steward merged tokens; follow merge redirects; related-name worklist for subset merges. |
+| **Source** | D-021 extract; branch tip `customer_merge_alias_seal.py` |
+| **Idea** | On full customer merge, mint approved aliases from loser display names → keeper so future DSI resolution does not re-steward merged tokens. |
 | **Why it matters / deferrable** | Without seal, merged customers keep reappearing as unresolved steward work. Deferrable until a merge-heavy steward wave or P1 entity-resolution volume forces it. |
-| **What the work is** | Port/rebuild seal + redirect + related-name UI/API against current `main` (post–Unit F / post–BACKLOG-061). |
-| **Regression traps** | Never overwrite third-party aliases; never abort merge on conflict; OPEN_CHANNEL must not absorb wrong merges; idempotent seal. |
+| **What the work is** | Port/rebuild seal against current `main` (post–Unit F / post–BACKLOG-061). Companions → BACKLOG-083. |
+| **Regression traps** | Never overwrite third-party aliases; never abort merge on conflict; OPEN_CHANNEL must not absorb wrong merges; idempotent seal; clone-proven E2E when paired with BACKLOG-083. |
 | **Behavior to retain** | Steward-initiated merges only; no auto-create dims from import evidence. |
-| **Out of scope** | Reconciling the entire ops-master branch; park/exclude as merge substitute. |
+| **Out of scope** | Redirect / related-name / repair scripts (BACKLOG-083); ops-master wholesale merge. |
 | **TRIGGER** | P1 steward volume shows re-open tokens after merges; **or** Warren prioritizes customer-duplicate cleanup. |
 
 ---
@@ -52,9 +121,9 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` @ `bf2afd4` per D-014 |
+| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` @ `bf2afd4` per D-021 |
 | **Effort** | Small–Medium |
-| **Source** | D-014; commit `bf2afd4` — `cst_steward.py` batch endpoints + `/admin/cst-steward` UI |
+| **Source** | D-021; commit `bf2afd4` — `cst_steward.py` batch endpoints + `/admin/cst-steward` UI |
 | **Idea** | Batch Confirm/Reject for CST article aliases with partial-success envelope (not only per-row). |
 | **Why it matters / deferrable** | Operators waste time confirming aliases one-by-one before P3. Deferrable until CST ops volume rises; import-steward CST E1/E2 already shipped separately. |
 | **What the work is** | Re-implement batch confirm/reject + UI against current `cst_steward` on `main` (do not merge ops-master wholesale). |
@@ -69,15 +138,15 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-014 |
+| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
 | **Effort** | Medium (mechanical per page) |
-| **Source** | D-014; commits `ddb712c`…`d789ad9` — shell on CPOR cases, PM gaps, shipment evidence, PVE (+ related paging chrome) |
+| **Source** | D-021; commits `ddb712c`…`d789ad9` — shell on CPOR cases, PM gaps, shipment evidence, PVE |
 | **Idea** | Re-apply `MasterDataGridShell` / ops list chrome to CPOR cases, product-master gaps, shipment evidence, PVE exception lists when those pages are touched. |
 | **Why it matters / deferrable** | Masters already have the shell (BACKLOG-061 Theme B on main). Ops lists lag for consistency. **Do not schedule as a standalone project** — fold into whichever phase next edits those pages (P1 / A-lane touch CPOR and PM gaps). |
-| **What the work is** | Native re-application on current routes (post–Unit F `shipment-evidence/` paths); optional skip/limit URL sync helpers if still missing. |
-| **Regression traps** | Do not revive pre–Unit F paths; do not force community AG Grid (`fix/web-grid-community-stabilization` rejected); shipping layout on ops-master is **superseded** by main’s commercial KPI rebuild — do not overwrite KPIs with old rhythm-only chrome. |
+| **What the work is** | Native re-application on current routes (post–Unit F `shipment-evidence/` paths). Pagination → BACKLOG-085; URL helpers → BACKLOG-084. |
+| **Regression traps** | Do not revive pre–Unit F paths; do not force community AG Grid (`fix/web-grid-community-stabilization` rejected). Per D-021: **do not resurrect** channel-ops KPI cards or `shippingUtcDates.ts` from ops-master — superseded by main’s commercial KPI rebuild. |
 | **Behavior to retain** | Enterprise AG Grid pattern; existing filters/paging contracts. |
-| **Out of scope** | Standalone “ops shell parity” epic; merging the whole ops-master branch. |
+| **Out of scope** | Standalone “ops shell parity” epic; KPI/shippingUtcDates from ops-master; merging the whole ops-master branch. |
 | **TRIGGER** | Phase work that already edits CPOR cases / PM gaps / shipment evidence / PVE pages; **or** Warren asks for chrome parity on a named page. |
 
 ---

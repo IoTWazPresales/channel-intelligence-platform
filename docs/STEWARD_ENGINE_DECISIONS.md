@@ -167,7 +167,7 @@ Ready rule: open status, exactly one suggestion with score ≥ 0.90; collisions 
 Plan apply maps per-candidate → its own suggested target via `resolve_cst_candidate_sync`.
 **Origin:** Unit E2 BACKLOG-074 TRIGGER (Warren prioritized, VERIFY waived) 2026-07-27.
 
-## D-013 · 2026-07-28 · Audit branch content, never branch labels
+## D-020 · 2026-07-28 · Audit branch content, never branch labels
 **Locked.** Before proposing a merge, cherry-pick, or kill on any branch, diff its
 actual content against `main`. Branch names describe intent at creation time and
 age badly — work named in a branch may already have shipped by another route.
@@ -179,25 +179,33 @@ to *ops lists*. Warren caught the error; the recommendation had been built from 
 branch name plus a discovery line that was read past.
 **Applies to:** any branch-hygiene pass, and to the base-integrity check in
 `scripts/verify-gate`.
+**Note:** Renumbered from colliding D-013 (2026-07-28) → D-020 so 2026-07-27
+D-013–D-019 (CPOR/CST) stay authoritative under their original IDs.
 
-## D-014 · 2026-07-28 · Kill `feat/ops-master-grid-shell-parity`
-**Locked.** Delete the branch rather than reconcile it.
-**Reasoning:** ~36 commits based at `618448c`; `main` has since advanced ~45 commits
-including Unit F, which relocated essentially every file the branch touches. Its
-content is mostly mechanical re-application of an already-shipped component to ops
-lists (CPOR cases, PM gaps, shipment evidence, PVE) — cheaper to redo natively than
-to reconcile.
-**Extract to BACKLOG before deleting:**
-- `customer_merge_alias_seal` — non-trivial, genuinely unshipped
-- CST alias batch confirm/reject — non-trivial, genuinely unshipped
-- Ops-list grid-shell parity — mechanical; fold into whichever phase touches those
-  pages (P1 / A-lane touch CPOR and PM gaps anyway), do not schedule standalone
-**Rejected:** merging. Conflict cost against the post-Unit-F layout exceeds the
-value of the recoverable work.
-**Do not take:** `fix/web-grid-community-stabilization` — forces community AG Grid,
-conflicts with the Enterprise pattern.
+## D-021 · 2026-07-28 · Kill `feat/ops-master-grid-shell-parity`
+**Locked.** Delete the branch (local + remote) rather than reconcile it.
+**Reasoning:** Tip was `d789ad9` (~36 ahead / ~66 behind `main` at kill time); base
+`618448c`. `main` advanced through Unit F (path moves), shipping commercial KPI
+rebuild, and steward A–F — conflict cost exceeds recoverable value.
+**Diff findings (content audit, not labels — D-020):**
+- **Extract (non-trivial):** `customer_merge_alias_seal`; CST article-alias batch
+  confirm/reject (`bf2afd4`); customer merge companions
+  (`customer_merge_redirect.py`, `customer_related_master_groups.py`, RelatedName UI,
+  repair/backfill scripts) — merge-engine adjacent, clone-proven E2E required.
+- **Extract (mechanical / fold-in):** Ops-list `MasterDataGridShell` parity (CPOR
+  cases, PM gaps, shipment evidence, PVE); ops-list pagination chrome; shared
+  helpers `useDebouncedUrlQuery` + `skipLimitSearchParams`. Fold into whichever
+  phase touches those pages — **do not schedule standalone**.
+- **Do not extract / do not resurrect:** Channel-ops KPI cards (Waves 1–3) and
+  `shippingUtcDates.ts` (+ tests) — **superseded by `main`'s commercial KPI
+  rebuild**. Re-applying ops-master shipping/ops KPI chrome would overwrite newer
+  correct contracts.
+**BACKLOG targets:** 079–081, 083–085 (plus 082 from D-022 stash extract).
+**Rejected:** merging. **Do not take:** `fix/web-grid-community-stabilization`
+(forces community AG Grid; conflicts with Enterprise pattern).
+**Note:** Renumbered from colliding D-014 (2026-07-28) → D-021.
 
-## D-015 · 2026-07-28 · Header vocabulary is template config, never code constants
+## D-022 · 2026-07-28 · Header vocabulary is template config, never code constants
 **Locked.** Accepted spellings for a canonical import field, and the never-auto-map
 denylist, are **per-template configuration**. No tenant or vendor header string is a
 literal in Python.
@@ -218,3 +226,4 @@ sets the wrong customer resolution identity, and per the docstring on
 `dsi_customer_alias_normalized_token`, an alias stored under one token while the
 resolver looks up another leaves rows `customer_unresolved` permanently while the
 candidate reads `resolved`. Silent and persistent.
+**Note:** Renumbered from colliding D-015 (2026-07-28) → D-022.
