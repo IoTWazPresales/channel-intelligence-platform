@@ -38,6 +38,7 @@
     "test:e2e": "pnpm --filter @cip/web test:e2e",
     "test": "pnpm test:api && pnpm test:web",
     "test:all": "pnpm test && pnpm test:e2e",
+    "verify-gate": "node scripts/verify-gate.cjs",
     "verify": "pnpm test && pnpm build"
   },
   "devDependencies": {
