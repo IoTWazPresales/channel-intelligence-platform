@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-087 — GitHub required status check for CI (branch protection / rulesets)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-29 · GitHub Free private repo |
+| **Effort** | Small (settings once Pro available) |
+| **Source** | ROADMAP P0 “CI becomes a required gate”; PR #7 merged with `--admin` while CI was broken; 2026-07-29 attempt returned HTTP 403 on branch protection + rulesets |
+| **Idea** | Make the `CI` / `test` check a **required** status on `main` so red builds cannot merge (including no `--admin` bypass in normal process). |
+| **Why it matters / deferrable** | Without a required check, green process depends on discipline only. Deferrable because the Free private-repo plan cannot enable protection/rulesets. |
+| **What the work is** | After Pro: enable branch protection or ruleset requiring the CI `test` job on `main` (and PR merges); confirm a red PR cannot merge without override. |
+| **Regression traps** | Do not re-break pnpm `packageManager` vs `pnpm/action-setup` version clash; keep `ALLOW_TESTS_ON_DEV_DB` unset in CI; keep migrate URL on `DATABASE_URL_SYNC_MIGRATE` for `cip_test`. |
+| **Behavior to retain** | Process-only gate until then: **no `--admin` merges**; treat CI + `scripts/verify-gate` as the gate. |
+| **Out of scope** | Making the private repo public solely to unlock free protection; fixing individual API test failures. |
+| **TRIGGER** | **GitHub Pro purchased** (or org plan that unlocks private-repo branch protection / rulesets). |
+
+---
+
 ## BACKLOG-086 — PM bulk upsert `channel_id` CASE + typed cast (redo `558d088`)
 
 | Field | Detail |
