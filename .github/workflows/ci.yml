@@ -80,7 +80,43 @@ jobs:
 
       - name: Alembic migrate cip_test
         working-directory: apps/api
-        run: alembic upgrade head
+        run: |
+          set -euo pipefail
+          # Revision 0001 is Base.metadata.create_all from *current* models, so a
+          # brand-new DB already has the tip schema after that one revision.
+          # Running the full chain then re-adds columns (e.g. 0063 distributor_status)
+          # and fails. Fresh-DB path: upgrade 0001 → stamp head → system reference rows.
+          alembic upgrade 20260412_0001
+          alembic stamp head
+          python - <<'PY'
+          from sqlalchemy import create_engine
+          from app.core.config import get_settings
+          from app.services.commercial_planner.reference_bootstrap import (
+              ensure_commercial_planner_system_reference_data_sync,
+          )
+
+          settings = get_settings()
+          url = settings.database_url_sync_migrate or settings.database_url_sync
+          print("bootstrap via", url)
+          engine = create_engine(url)
+          with engine.begin() as conn:
+              ensure_commercial_planner_system_reference_data_sync(conn)
+          print("system reference rows ensured")
+          PY
+          alembic current
+          python - <<'PY'
+          from sqlalchemy import create_engine, text
+          from app.core.config import get_settings
+
+          settings = get_settings()
+          url = settings.database_url_sync_migrate or settings.database_url_sync
+          engine = create_engine(url)
+          with engine.connect() as conn:
+              db = conn.execute(text("SELECT current_database()")).scalar()
+              tip = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+              print(f"current_database={db} alembic_version={tip}")
+              assert db == "cip_test", db
+          PY
 
       - name: API tests
         id: api_tests

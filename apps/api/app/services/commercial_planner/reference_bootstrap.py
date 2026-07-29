@@ -32,8 +32,13 @@ def ensure_commercial_planner_system_reference_data_sync(conn) -> None:
     conn.execute(
         text(
             """
-            INSERT INTO dim_distributor (code, name, created_at, updated_at)
-            SELECT CAST(:code AS VARCHAR(32)), CAST(:name AS VARCHAR(256)), NOW(), NOW()
+            INSERT INTO dim_distributor (code, name, distributor_status, created_at, updated_at)
+            SELECT
+                CAST(:code AS VARCHAR(32)),
+                CAST(:name AS VARCHAR(256)),
+                CAST('active' AS VARCHAR(32)),
+                NOW(),
+                NOW()
             WHERE NOT EXISTS (
                 SELECT 1 FROM dim_distributor d WHERE d.code = CAST(:code AS VARCHAR(32))
             )
