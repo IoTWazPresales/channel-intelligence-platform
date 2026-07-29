@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-29 — **P0 CI + verify-gate on main:** PR #9 `scripts/verify-gate` (tsc list diff + prohibited + base-integrity; Windows spawn fix); PR #8 pnpm clash fix + Postgres `cip_test` + migrate path + API suite (1550/79/30 — defects in `docs/CI_API_DEFECT_LOG_2026-07-29.md`). BACKLOG-087 required checks (TRIGGER: GitHub Pro). Process-only: no `--admin` merges.
 - 2026-07-29 — **P0 hygiene (docs) follow-up:** renumbered 2026-07-28 decisions → D-020/D-021/D-022; expanded D-021; BACKLOG-083–086; deleted `feat/ops-master-grid-shell-parity` local+remote (`d789ad9`). No P0 implementation.
 - 2026-07-29 — **P0 hygiene (docs):** committed `docs/ROADMAP.md` v1.0; appended D-013/D-014/D-015 (2026-07-28) to STEWARD_ENGINE_DECISIONS; BACKLOG-079–082 from ops-master + ASUS stash seed; stash `park-dsi-asus-dealer-name-automap` dropped; ops-master branch **not** deleted (STOP — extras beyond three extracts). Cherry-pick `558d088` **skipped** (conflict in `product_import_sync.py`).
 - 2026-07-27 — **On main @ `30b1525`:** fast-forward promote of `feat/cpor-listing-status-audit` (CPOR+steward A–F, CST E1/E2 VERIFY deferred, DSI multifile + mapping clarity, shipping KPIs, alembic 0074). Parked: ASUS automap stash; ops-master shell; PM channel_id CASE.
