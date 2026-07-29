@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-27 (On main after promote)
+**Last updated:** 2026-07-29 (P0 hygiene — ROADMAP + decisions + backlog extract)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -12,30 +12,39 @@
 | **Branch** | `main` |
 | **Alembic (DB)** | **`20260727_0074` on cip** |
 | **HEAD** | tip of `main` (verify: `git rev-parse --short HEAD`) |
-| **Pushed?** | yes |
-| **Next** | Soak; then pick a follow-on (ASUS automap stash / ops-master shell / PM channel_id CASE). |
+| **Pushed?** | pending this hygiene push |
+| **Phase source of truth** | **`docs/ROADMAP.md`** (Warren-approved v1.0) |
+| **Current phase** | **P0 — Stabilise the base** |
+| **Next** | P0 remaining only — no P0 implementation this session |
 
 ---
 
-## On main (this promote)
+## P0 remaining
 
-- CPOR historical import + steward Units A–F
-- CST E1+E2 (**VERIFY deferred** — not PASS)
-- DSI unified multifile + mapping seamlessness clarity
-- Shipping commercial KPI contract rebuild
-- Alembic **`20260727_0074`**
+| Item | Status |
+|------|--------|
+| CI pnpm gate (required) | Open |
+| `scripts/verify-gate` | Open |
+| Header-vocabulary config unit (D-015 / BACKLOG-**082**) | Open — ASUS seed extracted; stash dropped |
+| Cherry-pick `558d088` channel_id CASE | **Skipped** — conflicts in `product_import_sync.py`; not applied |
+| Kill `feat/ops-master-grid-shell-parity` | **STOPPED** — diff has substantial extras beyond D-014’s three extracts; BACKLOG-079–081 written; branch **not** deleted |
 
 ---
 
 ## Standing quality bar
 
-**Contract or STOP · no half-PASS · code is evidence.** Steward contract **v1.6**.
+**Contract or STOP · no half-PASS · code is evidence.** Steward contract **v1.6**.  
+Decisions append-only: D-013–D-015 (2026-07-28 hygiene) appended after existing D-013–D-019 (CPOR/CST) — **ID reuse by date**; do not renumber.
 
 ---
 
-## Parked (not on main from this promote)
+## Parked / extracted
 
-- Stash `park-dsi-asus-dealer-name-automap`
-- `feat/ops-master-grid-shell-parity` stack
-- PM bulk `channel_id` CASE (`558d088`) — verify before cherry-pick
-- BACKLOG-078 exclude-sheet UI
+| Item | Where |
+|------|--------|
+| Header ASUS seed + denylist | BACKLOG-**082** |
+| Customer merge alias seal | BACKLOG-**081** |
+| CST alias batch confirm/reject | BACKLOG-**080** |
+| Ops-list shell parity (fold-in, not standalone) | BACKLOG-**079** |
+| `feat/ops-master-grid-shell-parity` | Still on origin — awaiting Warren delete call |
+| Stash `park-dsi-asus-dealer-name-automap` | **Dropped** after knowledge extract |

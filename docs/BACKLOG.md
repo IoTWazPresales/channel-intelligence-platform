@@ -1,6 +1,6 @@
 # Backlog — intentionally deferred work
 
-**Scope:** Intentionally deferred / future work. Each entry has a **trigger condition** for when to resume. Distinct from **`docs/memory/CURRENT.md`** (what is true now), **`docs/memory/ROADMAP.md`** (phased schedule + done verification), and **`CONTEXT.md`** (changelog router).
+**Scope:** Intentionally deferred / future work. Each entry has a **trigger condition** for when to resume. Distinct from **`docs/memory/CURRENT.md`** (what is true now), **`docs/ROADMAP.md`** (phase-level path — authoritative for what's next), and **`CONTEXT.md`** (changelog router). Legacy phased notes may still exist under `docs/memory/ROADMAP.md` — prefer `docs/ROADMAP.md`.
 
 **Entry template:** ID + title · status/parked-date · effort · the idea · why it matters (and why deferrable) · what the work is · regression traps / hard constraints · behavior to retain · out-of-scope · **TRIGGER**
 
@@ -10,6 +10,77 @@
 
 **ID remap (2026-07-27 merge):** On merge of `feat/dsi-unified-multifile`, that branch’s **074** (email ingest) and **075** (layout-coalesce) were renumbered to **077** / **078** because this branch already used 074/075 for CST E2 / Unit F (shipped) and **076** for amount-scale junk.
 
+**P0 extract (2026-07-29 / D-014 / D-015):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**082**. Branch delete **blocked** pending Warren call (diff has substantial extras beyond the three named extracts).
+
+
+## BACKLOG-082 — DSI header vocabulary → template config (ASUS seed + denylist; D-015)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-29 · P0 remaining |
+| **Effort** | Medium |
+| **Source** | D-015; ROADMAP P0 item 1; stash `park-dsi-asus-dealer-name-automap` (knowledge only — implementation dropped) |
+| **Idea** | Retire hardcoded header strings in `dsi_mapping_workflow.py`. Per-template header-alias map + never-auto-map denylist. Precedence: **confirmed memory > template alias > heuristic** (today `apply_exact_raw_customer_header_overrides` beats memory — backwards). |
+| **Why it matters / deferrable** | Mis-mapped identity columns poison customer resolution / aliases permanently. Deferrable until P0 header-config unit; blocks clean P1 ASUS weekly load. |
+| **What the work is** | Config surface for template aliases + denylist; migrate RAW/ASUS seeds; fix precedence; remove literal tenant headers from Python. |
+| **ASUS template seed (from stash — domain knowledge only)** | **Map:** `Dealer Name` → `customer_dealer_token` (Source customer name); prefer RAW `Customer name` when both present; `Dealer Name Group` → `dealer_group_token`; `ASUS Part No.` → `product_identifier`; prefer `Unit Price` over `Total Price` / line totals. **Never auto-map (denylist):** `Customer Code (Dealer Code)`; `Dealer Name 1` (and `dealer_name_1` / `dealer-name-N` pattern). Also treat distributor dealer-code headers (`dealer code`, `customer code`+`dealer`) as non-identity. |
+| **Regression traps** | Do not land stash implementation as constants; do not let heuristic override confirmed memory; denylist must clear prior wrong maps on those columns. |
+| **Behavior to retain** | Steward-confirmed mapping memory wins; FLAG≠BLOCK leftovers stay reviewable. |
+| **Out of scope** | Landing `park-dsi-asus-dealer-name-automap` as written; new importer surfaces. |
+| **TRIGGER** | P0 header-vocabulary config unit starts; **or** Warren prioritizes before P1 ASUS weekly load. |
+
+---
+
+## BACKLOG-081 — Customer merge alias seal (+ redirect / related-name companions)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-014 |
+| **Effort** | Medium–Large |
+| **Source** | D-014 extract; branch tip files `customer_merge_alias_seal.py`, `customer_merge_redirect.py`, `customer_related_master_groups.py`, ops scripts `backfill_merged_customer_alias_seals.py` / `repair_open_channel_wrong_merge.py` |
+| **Idea** | On full customer merge, mint approved aliases from loser display names → keeper so future DSI resolution does not re-steward merged tokens; follow merge redirects; related-name worklist for subset merges. |
+| **Why it matters / deferrable** | Without seal, merged customers keep reappearing as unresolved steward work. Deferrable until a merge-heavy steward wave or P1 entity-resolution volume forces it. |
+| **What the work is** | Port/rebuild seal + redirect + related-name UI/API against current `main` (post–Unit F / post–BACKLOG-061). |
+| **Regression traps** | Never overwrite third-party aliases; never abort merge on conflict; OPEN_CHANNEL must not absorb wrong merges; idempotent seal. |
+| **Behavior to retain** | Steward-initiated merges only; no auto-create dims from import evidence. |
+| **Out of scope** | Reconciling the entire ops-master branch; park/exclude as merge substitute. |
+| **TRIGGER** | P1 steward volume shows re-open tokens after merges; **or** Warren prioritizes customer-duplicate cleanup. |
+
+---
+
+## BACKLOG-080 — CST article-alias batch Confirm/Reject (partial-success envelope)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` @ `bf2afd4` per D-014 |
+| **Effort** | Small–Medium |
+| **Source** | D-014; commit `bf2afd4` — `cst_steward.py` batch endpoints + `/admin/cst-steward` UI |
+| **Idea** | Batch Confirm/Reject for CST article aliases with partial-success envelope (not only per-row). |
+| **Why it matters / deferrable** | Operators waste time confirming aliases one-by-one before P3. Deferrable until CST ops volume rises; import-steward CST E1/E2 already shipped separately. |
+| **What the work is** | Re-implement batch confirm/reject + UI against current `cst_steward` on `main` (do not merge ops-master wholesale). |
+| **Regression traps** | Partial success must surface per-id failures; do not confuse with CST **import** token steward (`D-018` — Import Centre path). |
+| **Behavior to retain** | Per-row confirm/reject still works; no silent apply to facts. |
+| **Out of scope** | CST historical backfill; import-job resolution plan (already BACKLOG-074 shipped). |
+| **TRIGGER** | P3 CST forward pilot; **or** `/admin/cst-steward` alias queue volume justifies batch. |
+
+---
+
+## BACKLOG-079 — Ops-list MasterDataGridShell parity (fold into phase — not standalone)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-014 |
+| **Effort** | Medium (mechanical per page) |
+| **Source** | D-014; commits `ddb712c`…`d789ad9` — shell on CPOR cases, PM gaps, shipment evidence, PVE (+ related paging chrome) |
+| **Idea** | Re-apply `MasterDataGridShell` / ops list chrome to CPOR cases, product-master gaps, shipment evidence, PVE exception lists when those pages are touched. |
+| **Why it matters / deferrable** | Masters already have the shell (BACKLOG-061 Theme B on main). Ops lists lag for consistency. **Do not schedule as a standalone project** — fold into whichever phase next edits those pages (P1 / A-lane touch CPOR and PM gaps). |
+| **What the work is** | Native re-application on current routes (post–Unit F `shipment-evidence/` paths); optional skip/limit URL sync helpers if still missing. |
+| **Regression traps** | Do not revive pre–Unit F paths; do not force community AG Grid (`fix/web-grid-community-stabilization` rejected); shipping layout on ops-master is **superseded** by main’s commercial KPI rebuild — do not overwrite KPIs with old rhythm-only chrome. |
+| **Behavior to retain** | Enterprise AG Grid pattern; existing filters/paging contracts. |
+| **Out of scope** | Standalone “ops shell parity” epic; merging the whole ops-master branch. |
+| **TRIGGER** | Phase work that already edits CPOR cases / PM gaps / shipment evidence / PVE pages; **or** Warren asks for chrome parity on a named page. |
+
+---
 
 ## BACKLOG-075 — Unit F remainder (DSI relocate + inboundEvidence + rename shared helpers)
 
