@@ -167,13 +167,6 @@ jobs:
             .tmp/ci-api-pytest.txt
           if-no-files-found: warn
 
-      - name: Fail job if API tests failed
-        if: steps.api_tests.outcome == 'failure'
-        run: |
-          echo "API suite failed against cip_test — see ci-api-defect-log artifact."
-          echo "Defects are recorded, not fixed in this unit."
-          exit 1
-
       - name: Web unit & integration tests
         run: pnpm test:web
 
@@ -187,3 +180,10 @@ jobs:
 
       - name: Production build
         run: pnpm build
+
+      - name: Fail job if API tests failed
+        if: steps.api_tests.outcome == 'failure'
+        run: |
+          echo "API suite failed against cip_test — see ci-api-defect-log artifact."
+          echo "Defects are recorded, not fixed in this unit."
+          exit 1
