@@ -159,20 +159,36 @@ function runTsc(cwd) {
   return { ...result, text };
 }
 
-function symlinkNodeModules(worktree) {
-  const links = [
-    ["node_modules", "node_modules"],
-    [path.join("apps", "web", "node_modules"), path.join("apps", "web", "node_modules")],
-  ];
-  for (const [relSource, relTarget] of links) {
-    const source = path.join(root, relSource);
-    const target = path.join(worktree, relTarget);
-    if (!fs.existsSync(source) || fs.existsSync(target)) continue;
+/**
+ * NEVER junction/symlink the live workspace node_modules into a temp worktree.
+ * On Windows, fs.rmSync(junction, { recursive: true }) deletes through the junction
+ * into the real apps/web/node_modules (incident 2026-07-29). resolveTscJs already
+ * falls back to root typescript, so linking is unnecessary.
+ */
+function unlinkWorkspaceNodeModulesLinks(worktree) {
+  if (!worktree) return;
+  for (const rel of ["node_modules", path.join("apps", "web", "node_modules")]) {
+    const linkPath = path.join(worktree, rel);
     try {
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.symlinkSync(source, target, process.platform === "win32" ? "junction" : "dir");
+      const stat = fs.lstatSync(linkPath);
+      // Symlink: unlink the link only.
+      if (stat.isSymbolicLink()) {
+        fs.unlinkSync(linkPath);
+        continue;
+      }
+      // Windows junction: lstat often reports a plain directory. Remove with
+      // non-recursive rmdir / unlink only — NEVER rmSync({ recursive: true }).
+      if (process.platform === "win32" && stat.isDirectory()) {
+        try {
+          fs.unlinkSync(linkPath);
+        } catch {
+          fs.rmdirSync(linkPath);
+        }
+      }
     } catch (error) {
-      warnings.push(`could not link ${relSource} into base worktree: ${error.message}`);
+      if (error.code !== "ENOENT") {
+        warnings.push(`could not unlink temporary ${rel}: ${error.message}`);
+      }
     }
   }
 }
@@ -185,26 +201,18 @@ function makeBaseWorktree(baseSha) {
     failures.push(`could not create base worktree: ${added.stderr.trim()}`);
     return null;
   }
-  symlinkNodeModules(worktree);
+  // Intentionally no node_modules junction — see unlinkWorkspaceNodeModulesLinks note.
   return worktree;
 }
 
 function removeBaseWorktree(worktree) {
   if (!worktree) return;
-  for (const rel of ["node_modules", path.join("apps", "web", "node_modules")]) {
-    const linkedModules = path.join(worktree, rel);
-    try {
-      const stat = fs.lstatSync(linkedModules);
-      if (stat.isSymbolicLink() || (process.platform === "win32" && stat.isDirectory())) {
-        fs.rmSync(linkedModules, { recursive: true, force: true });
-      }
-    } catch (error) {
-      if (error.code !== "ENOENT") warnings.push(`could not unlink temporary ${rel}: ${error.message}`);
-    }
-  }
+  // Must unlink any legacy junctions BEFORE recursive worktree delete.
+  unlinkWorkspaceNodeModulesLinks(worktree);
   const removed = gitRun(["worktree", "remove", "--force", worktree]);
   if (removed.status !== 0) {
     warnings.push(`could not remove temporary base worktree: ${removed.stderr.trim()}`);
+    unlinkWorkspaceNodeModulesLinks(worktree);
     fs.rmSync(worktree, { recursive: true, force: true });
   }
 }
