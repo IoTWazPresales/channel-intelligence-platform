@@ -34,7 +34,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 · defect logged, not fixed inline |
+| **Status / parked** | **Resolved 2026-08-01** — sell-out velocity at distributor×product; portfolio Σstock/Σvelocity |
 | **Effort** | Medium (need dist×product velocity or sell-out-derived velocity at same grain) |
 | **Source** | `docs/COMMERCIAL_SEMANTICS.md` A3-02; live code audit 2026-08-01 |
 | **Idea** | Fix Channel Ops weeks-of-cover so numerator and denominator share **distributor × product** grain. |

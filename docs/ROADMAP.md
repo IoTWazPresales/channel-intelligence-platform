@@ -144,11 +144,13 @@ on reservation-column discovery. Do not put on Plan vs Executed.
 ### A2 — CPOR intelligence
 **Entry:** P1 CPOR historical signed off.
 **Scope:** support spend by customer/BU/promo type (**BU = `dim_product.product_line`**);
-**delivery rate** (`result_qty/estimate_qty`); **claim rate** (`claimed/approved`);
-support cost per unit sold under promo (`support ÷ result_qty`); over/under-delivery
-patterns; per-customer support norms (trailing 4Q, % and absolute, window config);
-comparable-case lookup ranked (customer → BU → promo type → quarter proximity → volume).
-**Out of scope:** cost per **incremental** unit — no counterfactual; see BACKLOG-089.
+**delivery rate** (`result_qty/estimate_qty`); support cost per unit sold under promo
+(`support ÷ result_qty`); over/under-delivery patterns; per-customer support norms
+(trailing 4Q, % and absolute, window config); comparable-case lookup ranked
+(customer → BU → promo type → quarter proximity → volume).
+**Currency:** USD compute/aggregate; display ZAR alongside; ZAR sums at each case’s FX.
+**Out of scope:** cost per **incremental** unit (BACKLOG-089); **claim rate** (non-computable
+until settlement stores a paid amount ≠ computed support — see `COMMERCIAL_SEMANTICS`).
 **Exit:** promo effectiveness surface.
 
 ### A3 — Channel stock + velocity

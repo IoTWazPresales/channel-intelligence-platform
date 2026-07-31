@@ -17,7 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-08-01 — **A-lane continue:** Q-005/006/007 → Resolved (semantics). Q-008 opened (A2-03 claim rate mapping). A2 pre-build: no promo-effectiveness surface exists; A2-U1 = A2-01/02/06 only — STOP at column mapping before code.
+- 2026-08-01 — **A2-U1 + A3 WoC:** Q-008 → claim rate non-computable (D-027). Portfolio intel A2-01/02/06 on CPOR Cases (USD compute, ZAR per-case FX). WoC grain fix: sell-out dist×product velocity; cip before ~78956w → after ~13.6w (stock 33571). BACKLOG-090 resolved.
+- 2026-08-01 — **A-lane continue:** Q-005/006/007 → Resolved (semantics). Q-008 opened then resolved same day. A2 pre-build: no promo-effectiveness surface existed.
 - 2026-08-01 — **Governing reconcile:** D-026 autonomy zones sole DB-write rule; ROADMAP A3 snapshot-sum claim removed; CURRENT → charter v1.2 + COMMERCIAL_SEMANTICS; PvE SPEC stubbed; BACKLOG-090 WoC grain defect (evidence, no fix); BACKLOG-091 over-plan intake UI rename. (`cd95c5f`)
 - 2026-08-01 — **Docs consolidate:** charter v1.2 + COMMERCIAL_SEMANTICS; stubs for ownership/taxonomy/workflow; domain 4.2/4.3; D-025; BACKLOG-089.
 

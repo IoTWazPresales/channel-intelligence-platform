@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-08-01 (governing set → charter v1.2 + COMMERCIAL_SEMANTICS)
+**Last updated:** 2026-08-01 (A2-U1 + A3 WoC grain fix)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -11,10 +11,10 @@
 |-------|--------|
 | **Branch** | `main` |
 | **Alembic (DB)** | **`20260730_0075` on cip** |
-| **HEAD** | `cd95c5f` on `main` (in sync with origin) |
-| **Pushed?** | yes @ `cd95c5f` |
-| **Current phase** | **A-lane** (P1 exit sealed; A1 fill VERIFIED) |
-| **Next** | **A2-U1** portfolio metrics (A2-01/02/06) on CPOR Cases — halted at data-mapping gate (support USD + voided lines). **Q-008** blocks A2-03. Do not start A3 WoC fix until A3 unit (BACKLOG-090). |
+| **HEAD** | tip of `main` (verify) |
+| **Pushed?** | verify before claiming |
+| **Current phase** | **A-lane** — A2-U1 shipped; A3 WoC grain fixed |
+| **Next** | A2-04/05 norms + comparable; A1 bias/slip SPEC ONLY tiles; BACKLOG-091 UI rename on next A1 touch |
 
 ---
 
@@ -30,36 +30,23 @@
 | [`docs/STEWARD_EXPERIENCE_CONTRACT.md`](../STEWARD_EXPERIENCE_CONTRACT.md) | What done means for steward surfaces |
 | [`docs/STEWARD_ENGINE_DECISIONS.md`](../STEWARD_ENGINE_DECISIONS.md) | Why steward / process is built this way |
 
-Stubs (do not edit for content): `SURFACE_OWNERSHIP.md`, `PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md`, `PLAN_VS_EXECUTED_SPEC.md`, `WORKFLOW_DUAL_AGENT.md` → point at the docs above.
-
-If CURRENT disagrees with ROADMAP about what's next for the session, CURRENT wins and ROADMAP gets corrected.
+Stubs: `SURFACE_OWNERSHIP.md`, `PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md`, `PLAN_VS_EXECUTED_SPEC.md`, `WORKFLOW_DUAL_AGENT.md`.
 
 ---
 
-## P1 exit (sealed 2026-08-01)
+## Just shipped (2026-08-01)
 
-| Artifact | Path |
-|----------|------|
-| Census | [`docs/DATA_CENSUS.md`](../DATA_CENSUS.md) |
-| Defect log | [`docs/P1_LOAD_DEFECT_LOG.md`](../P1_LOAD_DEFECT_LOG.md) |
-| Batch deferral | P1-D004 → BACKLOG-088 |
+| Item | Evidence |
+|------|----------|
+| **Q-008** | Claim rate **non-computable** (D-027); no distinct paid amount in U5 settlement |
+| **A2-U1** | `GET /cpor/intelligence/portfolio` + panel on CPOR Cases — A2-01/02/06; USD+ZAR per-case FX |
+| **A3 WoC** | Sell-out velocity at dist×product; portfolio Σstock/Σvelocity. **Before** ~78 956 weeks · **After** ~13.6 weeks (cip; stock 33 571) |
+| **BACKLOG-090** | Resolved |
 
 ---
 
 ## Standing quality bar
 
-**Contract or STOP · no half-PASS · code is evidence.** Metrics only from `COMMERCIAL_SEMANTICS`.  
+**Contract or STOP · code is evidence.** Metrics only from `COMMERCIAL_SEMANTICS`.  
 AMBER: design-stage for new metrics/tiles; post-build for domain number judgment.  
-RED: merges/supersessions without clone-proof; migrations/schema without Warren approval.  
-Import/steward loads: unattended per autonomy zones (D-026).
-
----
-
-## Open defects / backlog (A-lane)
-
-| Item | Where |
-|------|--------|
-| Channel Ops summary WoC grain mismatch | BACKLOG-**090** |
-| Evidence POD → fact/current | BACKLOG-**088** |
-| Over-plan intake UI rename | BACKLOG-**091** |
-| Cost per incremental unit | BACKLOG-**089** (do not build) |
+RED: merges/supersessions without clone-proof; migrations/schema without Warren approval.

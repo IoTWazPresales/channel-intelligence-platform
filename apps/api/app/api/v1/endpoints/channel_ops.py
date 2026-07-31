@@ -31,6 +31,7 @@ from app.models.fact_dsi_forecast import FactDsiForecast
 from app.models.facts import FactInventoryReconciliation, FactSalesSellout
 from app.services.channel_ops_derived_stock import (
     derived_stock_rows_for_distributor,
+    sellout_velocity_52wk_by_dist_product,
     sum_derived_channel_stock,
     weeks_of_cover_or_none,
     yoy_pct_or_none,
@@ -169,16 +170,14 @@ async def channel_ops_summary(
     )
     total_inv = float(total_inv_i)
 
-    weeks_of_cover: float | None = None
-    if await _table_exists(db, "fact_customer_velocity"):
-        vel_q = select(func.avg(FactCustomerVelocity.velocity_52wk)).where(
-            FactCustomerVelocity.velocity_52wk.isnot(None),
-            FactCustomerVelocity.velocity_52wk > 0,
-        )
-        if distributor_id is not None:
-            vel_q = vel_q.where(FactCustomerVelocity.distributor_id == int(distributor_id))
-        avg_vel = await db.scalar(vel_q)
-        weeks_of_cover = weeks_of_cover_or_none(total_inv, avg_vel)
+    # WoC grain = distributor × product only (COMMERCIAL_SEMANTICS A3-02).
+    # Never average FactCustomerVelocity (customer grain) against channel stock.
+    vel_by_pair = await sellout_velocity_52wk_by_dist_product(
+        db, distributor_id=int(distributor_id) if distributor_id is not None else None
+    )
+    total_weekly_velocity = sum(vel_by_pair.values()) if vel_by_pair else 0.0
+    weeks_of_cover = weeks_of_cover_or_none(total_inv, total_weekly_velocity or None)
+    has_sellout_velocity = bool(vel_by_pair)
 
     since_35 = today - timedelta(days=35)
     dist_reporting_q = select(func.count(func.distinct(FactSalesSellout.distributor_id))).where(
@@ -217,9 +216,12 @@ async def channel_ops_summary(
         "distributors_expected": distributors_expected,
         "active_customers_this_period": int(await db.scalar(cust_now_q) or 0),
         "active_customers_prior_period": int(await db.scalar(cust_prev_q) or 0),
-        "has_velocity_data": await _has_rows(db, "fact_customer_velocity"),
+        "has_velocity_data": has_sellout_velocity
+        or await _has_rows(db, "fact_customer_velocity"),
         "has_forecast_data": await _has_rows(db, "fact_dsi_forecast"),
         "has_reconciliation_data": await _has_rows(db, "fact_inventory_reconciliation"),
+        "velocity_grain": "distributor_product",
+        "velocity_weekly_units": float(total_weekly_velocity),
     }
 
 
@@ -357,28 +359,16 @@ async def channel_ops_inventory(
             select(DimDistributor.name).where(DimDistributor.id == int(distributor_id))
         )
 
-    velocity_map: dict[int, FactCustomerVelocity] = {}
-    if await _table_exists(db, "fact_customer_velocity"):
-        vel_rows = (
-            await db.scalars(
-                select(FactCustomerVelocity).where(
-                    FactCustomerVelocity.distributor_id == int(distributor_id)
-                )
-            )
-        ).all()
-        for v in vel_rows:
-            pid = int(v.product_id)
-            cur = velocity_map.get(pid)
-            v52 = float(v.velocity_52wk or 0)
-            if cur is None or v52 > float(cur.velocity_52wk or 0):
-                velocity_map[pid] = v
+    vel_by_pair = await sellout_velocity_52wk_by_dist_product(
+        db, distributor_id=int(distributor_id)
+    )
+    velocity_by_product = {pid: vel for (_did, pid), vel in vel_by_pair.items()}
 
     items: list[dict[str, Any]] = []
     for row in derived_rows:
         pid = int(row["product_id"])
         sku, pname = product_meta.get(pid, (None, None))
-        v = velocity_map.get(pid)
-        v52 = float(v.velocity_52wk) if v and v.velocity_52wk is not None else None
+        v52 = velocity_by_product.get(pid)
         derived = float(row["derived_stock"])
         weeks = weeks_of_cover_or_none(derived, v52)
         items.append(
@@ -399,10 +389,9 @@ async def channel_ops_inventory(
                 "reconciliation_status": row.get("reconciliation_status"),
                 "velocity_52wk": v52,
                 "weeks_of_cover": weeks,
-                "computed_through_date": v.computed_through_date.isoformat()
-                if v and v.computed_through_date
-                else None,
+                "computed_through_date": None,
                 "reorder_signal": bool(weeks is not None and 0 < weeks < 4),
+                "velocity_grain": "distributor_product",
             }
         )
 

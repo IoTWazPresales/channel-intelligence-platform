@@ -24,7 +24,10 @@ async def test_summary_returns_zeros_on_empty_tables() -> None:
     with patch.object(co, "_table_exists", AsyncMock(return_value=False)):
         with patch.object(co, "_has_rows", AsyncMock(return_value=False)):
             with patch.object(co, "sum_derived_channel_stock", AsyncMock(return_value=(0, 0))):
-                out = await co.channel_ops_summary(db)
+                with patch.object(
+                    co, "sellout_velocity_52wk_by_dist_product", AsyncMock(return_value={})
+                ):
+                    out = await co.channel_ops_summary(db)
 
     assert out["sell_out_this_quarter"]["units"] == 0
     assert out["total_inventory_units"] == 0
@@ -48,9 +51,16 @@ async def test_summary_yoy_none_when_prior_zero() -> None:
     with patch.object(co, "_table_exists", AsyncMock(return_value=False)):
         with patch.object(co, "_has_rows", AsyncMock(return_value=False)):
             with patch.object(co, "sum_derived_channel_stock", AsyncMock(return_value=(42, 3))):
-                out = await co.channel_ops_summary(db)
+                with patch.object(
+                    co,
+                    "sellout_velocity_52wk_by_dist_product",
+                    AsyncMock(return_value={(1, 10): 2.0, (1, 11): 3.0}),
+                ):
+                    out = await co.channel_ops_summary(db)
     assert out["total_inventory_units"] == 42
     assert out["sell_out_yoy_pct"] is None
+    assert out["weeks_of_cover"] == 42 / 5.0
+    assert out["velocity_grain"] == "distributor_product"
 
 
 @pytest.mark.anyio

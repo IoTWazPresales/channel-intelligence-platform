@@ -67,23 +67,16 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 | **Raise by** | P4 entry / first customer file |
 | **Source** | Domain rules Still open #4 |
 
-### Q-008 — A2-03 claim rate column mapping
-
-| Field | Value |
-|-------|--------|
-| **What is unclear** | Semantics lock claim rate = `claimed / approved`, but live schema has no columns named claimed/approved. Candidates: claim-evidence Σ units vs estimate; case counts with claims vs `status/workflow_status ∈ {approved,…}`; USD claim vs approved support. |
-| **Why it matters** | Wrong mapping silently invents a commercial KPI next to delivery rate (`result_qty/estimate_qty`). |
-| **Interim assumption** | **Do not build A2-03** until Warren picks the mapping. A2-U1 can ship A2-01/02/06 without it. |
-| **What would change** | Numerator/denominator SQL for portfolio claim rate |
-| **Blocking?** | **Yes for A2-03 only** |
-| **Blocks** | Claim-rate tile / field |
-| **Owner** | Warren |
-| **Raise by** | A2-U1 |
-| **Source** | `COMMERCIAL_SEMANTICS` A2-03; `cpor_case` / `cpor_claim_evidence_line` tree 2026-08-01 |
-
 ---
 
 ## Resolved
+
+### Q-008 — A2-03 claim rate — **Resolved 2026-08-01 (non-computable)**
+
+| Field | Value |
+|-------|--------|
+| **Answer** | **No** independent settled/paid amount. U5 claim evidence = product × date × **units** (+ optional unit_price); rollup sets `result_qty`; `ttl_result` = `support_unit × result_qty` with the **same** approval `support_unit`. Settlement tab shows estimate/result/ttl_* — no paid/short-paid field. Therefore claim rate collapses into delivery rate → **do not build**; removed from catalogue → non-computable register (TRIGGER: paid amount distinct from computed support). |
+| **Source** | Tree audit `claim_evidence*.py`, `settlement.py`, `waterfall.py`, settlement UI; Warren 2026-08-01 |
 
 ### Q-005 — A1 PM planning bias surface — **Resolved 2026-08-01**
 

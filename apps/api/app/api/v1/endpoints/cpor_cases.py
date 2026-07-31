@@ -29,6 +29,7 @@ from app.services.cpor.lifecycle import (
     target_status,
 )
 from app.services.cpor.pivot import build_case_pivot
+from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PROMOTION_TYPE_SET
 from app.services.cpor.recompute import recompute_case, recompute_case_line
 from app.services.cpor.settlement import (
@@ -865,6 +866,13 @@ def transition_case(
         out = _case_json(case, customer=cust, lines=line_jsons, include_lines=True)
         out["drifts"] = drifts
         return out
+
+
+@router.get("/intelligence/portfolio")
+def cpor_portfolio_intelligence() -> dict[str, Any]:
+    """A2-U1: support spend, delivery rate, support per unit sold (USD + ZAR display)."""
+    with SessionLocal() as session:
+        return build_portfolio_intelligence(session)
 
 
 @router.get("/meta/promotion-types")

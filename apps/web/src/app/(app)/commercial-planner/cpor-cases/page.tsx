@@ -25,6 +25,8 @@ import { PageHeader } from '@/components/PageHeader';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost } from '@/lib/api';
 
+import { CporPortfolioIntelligencePanel } from './CporPortfolioIntelligencePanel';
+
 type CporCaseRow = {
   id: number;
   case_code: string;
@@ -139,6 +141,7 @@ export default function CporCasesListPage() {
       <Alert severity="info" sx={{ mb: 2 }}>
         Reseller-channel promotion funding cases. Money is computed server-side (U2). Flags never block saves.
       </Alert>
+      <CporPortfolioIntelligencePanel />
       <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center">
         <TextField
           select

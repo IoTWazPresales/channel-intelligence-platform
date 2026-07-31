@@ -271,3 +271,11 @@ deleting the job** — they run unattended under GREEN/AMBER as already stated i
 bulk applies (physically irreversible pointer rewrites). **Still require Warren’s explicit
 approval:** Alembic migrations against `cip`, and any schema change (STOP and report).
 **Do not** reintroduce a second contradicting blanket ban in skills or overlays.
+
+## D-027 · 2026-08-01 · CPOR claim rate is non-computable (no distinct paid amount)
+**Locked.** Do not ship a “claim rate” KPI alongside delivery rate. Settlement / claim evidence
+captures **units**, then recomputes `ttl_result = support_unit × result_qty` with approval
+`support_unit` — no independent paid/settled amount. Former A2-03 lives in
+`COMMERCIAL_SEMANTICS` **non-computable register**. **TRIGGER:** settlement stores paid ≠
+computed support. **Currency for A2:** USD aggregate; ZAR display summed per-case FX
+(never one period rate on a USD total).

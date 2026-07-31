@@ -131,15 +131,24 @@ UI label note: scorecard still shows “Deal-stock landing” in code — rename
 
 **BU grain:** `dim_product.product_line` (locked).
 
+**Currency (locked 2026-08-01):** compute and aggregate in **USD**. Always **display ZAR alongside**.
+Aggregate ZAR by summing each line/case’s own ZAR totals (each case’s booked or floating FX —
+domain §1.5). **Never** convert a USD portfolio total through one period FX rate into ZAR.
+
 | ID | Metric | Status | Formula / rule | Owner |
 |---|---|---|---|---|
-| A2-01 | Support spend by customer / BU / promo type | SPEC ONLY | Portfolio aggregate of support over cases/lines | CPOR |
-| A2-02 | **Delivery rate** | SPEC ONLY | `result_qty / estimate_qty` — named apart from claim rate | CPOR |
-| A2-03 | **Claim rate** | SPEC ONLY | `claimed / approved` — named apart from delivery rate | CPOR |
+| A2-01 | Support spend by customer / BU / promo type | IMPLEMENTED (A2-U1) | Σ `ttl_support_usd` (compute) + Σ `ttl_support` ZAR (display); voided excluded | CPOR |
+| A2-02 | **Delivery rate** | IMPLEMENTED (A2-U1) | Σ `result_qty` / Σ `estimate_qty` (voided / zero-estimate excluded) | CPOR |
 | A2-04 | Support norms | SPEC ONLY | Trailing **4** quarters; **%** and **absolute**; window length is **tenant config** | CPOR |
 | A2-05 | Comparable-case lookup | SPEC ONLY | **Ranked** (never filtered): customer → BU → promo type → quarter proximity → volume | CPOR |
-| A2-06 | **Support cost per unit sold under promo** | SPEC ONLY | `support ÷ result_qty` | CPOR |
+| A2-06 | **Support cost per unit sold under promo** | IMPLEMENTED (A2-U1) | Σ `ttl_support_usd` / Σ `result_qty` (result > 0); ZAR companion = Σ `ttl_support` / Σ `result_qty` | CPOR |
 | A2-X | Cost per **incremental** unit | **DO NOT BUILD** | No counterfactual/baseline → would fabricate. BACKLOG trigger: validated baseline model exists | — |
+
+#### Non-computable register
+
+| Former ID | Name | Reason | TRIGGER to reconsider |
+|---|---|---|---|
+| A2-03 | Claim rate (`settled ÷ approved`) | Settlement does **not** capture a paid/settled amount independent of `support_unit × result_qty`. Claim evidence is units (+ optional `unit_price`); rollup writes `result_qty`; `ttl_result` is recomputed from the **same** `support_unit` as approved estimate. Settled÷approved money collapses to delivery rate (`result/estimate`). Building both would be two names for one number. | Settlement captures a **paid amount distinct from computed support** (and/or support-per-unit can differ between approval and settlement). |
 
 ### 4.4 Channel Ops — `/sell-out`
 
@@ -148,7 +157,7 @@ UI label note: scorecard still shows “Deal-stock landing” in code — rename
 | ID | Metric | Status | Formula / rule | Grain | Owner |
 |---|---|---|---|---|---|
 | A3-01 | **Derived channel stock** | IMPLEMENTED | latest reported SOH − sell-out since snapshot + POD-landed shipped since (`line_state='shipped'` ∧ `pod_date` > snapshot). Pipeline/`open_order` **never** counts. Latest-per-(distributor, product) only — never sum all snapshots. | distributor × product | Channel Operations |
-| A3-02 | **Weeks of cover** | IMPLEMENTED (formula) / SPEC corrected | `derived_stock / velocity` at **distributor × product only**. Customer-grain velocity against distributor stock is a **grain mismatch — not allowed**. Zero / near-zero velocity → **undefined** (never infinity). Code today uses `VELOCITY_NEAR_ZERO≈0.01` → `None`. | distributor × product | Channel Operations |
+| A3-02 | **Weeks of cover** | IMPLEMENTED | `derived_stock / velocity` at **distributor × product only**. Velocity = sell-out units over 364d ÷ 52 from `fact_sales_sellout` (same grain). Portfolio = Σstock / Σvelocity. Zero / near-zero velocity → **undefined**. | distributor × product | Channel Operations |
 | A3-03 | **Replenishment flag (v1)** | SPEC ONLY (thin flag exists in API) | Threshold flag vs WoC; **default 4 weeks**; **tenant config**. Not a recommendation engine. | distributor × product | Channel Operations |
 
 CST `/channel-intelligence` remains a **separate** customer×product×site velocity surface — do not conflate with Channel Ops WoC grain.

@@ -14,7 +14,7 @@ is surfaced as a FLAG — never silently corrected.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Sequence
 
@@ -104,6 +104,58 @@ def weeks_of_cover_or_none(
     if vel <= near_zero:
         return None
     return float(Decimal(str(stock)) / vel)
+
+
+VELOCITY_WINDOW_DAYS = 364
+VELOCITY_WEEK_DIVISOR = Decimal("52")
+
+
+async def sellout_velocity_52wk_by_dist_product(
+    db: AsyncSession,
+    *,
+    distributor_id: int | None = None,
+) -> dict[tuple[int, int], float]:
+    """Weekly avg sell-out units over 364d, grain distributor × product only.
+
+    Matches DSI velocity window math (sum units in window / 52) without customer grain.
+    """
+    anchor_q = select(func.max(FactSalesSellout.transaction_date)).where(
+        FactSalesSellout.distributor_id.isnot(None),
+        FactSalesSellout.product_id.isnot(None),
+    )
+    if distributor_id is not None:
+        anchor_q = anchor_q.where(FactSalesSellout.distributor_id == int(distributor_id))
+    anchor = await db.scalar(anchor_q)
+    if anchor is None:
+        return {}
+
+    window_start = anchor - timedelta(days=VELOCITY_WINDOW_DAYS)
+    q = (
+        select(
+            FactSalesSellout.distributor_id,
+            FactSalesSellout.product_id,
+            func.coalesce(func.sum(FactSalesSellout.units), 0),
+        )
+        .where(
+            FactSalesSellout.transaction_date >= window_start,
+            FactSalesSellout.transaction_date <= anchor,
+            FactSalesSellout.distributor_id.isnot(None),
+            FactSalesSellout.product_id.isnot(None),
+        )
+        .group_by(FactSalesSellout.distributor_id, FactSalesSellout.product_id)
+    )
+    if distributor_id is not None:
+        q = q.where(FactSalesSellout.distributor_id == int(distributor_id))
+    rows = (await db.execute(q)).all()
+    out: dict[tuple[int, int], float] = {}
+    for dist_id, product_id, units in rows:
+        if dist_id is None or product_id is None:
+            continue
+        total = Decimal(str(units or 0))
+        if total <= 0:
+            continue
+        out[(int(dist_id), int(product_id))] = float(total / VELOCITY_WEEK_DIVISOR)
+    return out
 
 
 def yoy_pct_or_none(
