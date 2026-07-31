@@ -57,13 +57,13 @@ Until (4), the maximum bucket is `UNVERIFIED` even if counts match.
 
 | Domain | Unit | Status | Sign-off |
 |--------|------|--------|----------|
-| Scaffold | P1-0 | Done (this file) | n/a |
-| Header vocabulary (082) | P1-1 | Code in dirty tree; alembic `0075` **not applied** | n/a (code unit) |
-| DSI weekly | P1-2 | Leave alone (pre-loaded corpus) — sellout 35 592 / SOH 47 411 | Halt for Warren |
-| Shipment inbound | P1-3 | Job `#605` loaded; open-order key repair (P1-D002); **14k = full corpus**, file evidence **7 328** | **Warren OK 2026-07-31** |
-| CPOR historical | P1-4 | Job `#560` applied; trailer strip + `ignore_no_catalogue` (P1-D003); ~297 cases | **Warren OK 2026-07-31** |
-| Lineups | P1-5 | Already on cip (3 `po_issued` + A1 surface) — do not rebuild | Halt for Warren |
-| Boundary batch-fix | P1-X | Pending | after all domains |
+| Scaffold | P1-0 | Done | n/a |
+| Header vocabulary (082) | P1-1 | **Done** — `20260730_0075` on cip; D-022 `_policy` live | code unit verified (pytest 20/20) |
+| DSI weekly | P1-2 | Leave alone (pre-loaded) — sellout 35 592 / SOH 47 411 | Leave-alone (Warren) |
+| Shipment inbound | P1-3 | Job `#605`; P1-D002 fixed; **14 366** facts / file evidence **7 328** | **Warren OK 2026-07-31** |
+| CPOR historical | P1-4 | Job `#560`; P1-D003 fixed; **297** cases / **583** lines | **Warren OK 2026-07-31** |
+| Lineups | P1-5 | **Leave-alone confirmed** — 3 `po_issued` (NR 26Q1, NV/NB 26Q2); **285** lines; **52** PO links; A1 = `/plan-vs-executed` | **Warren leave-alone OK** (2026-07-31; census sealed 2026-08-01) |
+| Boundary batch-fix | P1-X | **Closed 2026-08-01** — D001–D003 fixed-inline; D004 → BACKLOG-088 | P1 exit |
 
 ---
 
@@ -119,7 +119,10 @@ Until (4), the maximum bucket is `UNVERIFIED` even if counts match.
 
 | Quarter | Lineup lines | Products | Customers | PO auto-link % | In credible core? | Thin? | Bucket | Defect id |
 |---------|--------------|----------|-----------|----------------|-------------------|-------|--------|-----------|
-| live (3 `po_issued` NB/NV/NR) | **285** lines · **52** PO links · **3** cases | — | — | 52 links / 3 cases | yes (26Q1–26Q2) | thin vs full history | `UNVERIFIED` | — |
+| 26Q1 NR (`#90` po_issued) | **104** lines · **23** PO links | — | — | 23 links / 1 case | yes | thin vs full history | `UNVERIFIED` (leave-alone) | — |
+| 26Q2 NV (`#7` po_issued) | **22** lines · **1** PO link | — | — | 1 / 1 | yes | thin | `UNVERIFIED` (leave-alone) | — |
+| 26Q2 NB (`#9` po_issued) | **159** lines · **28** PO links | — | — | 28 / 1 | yes | thin vs full history | `UNVERIFIED` (leave-alone) | — |
+| **P1-5 total** | **285** lines · **52** PO links · **3** cases | — | — | — | 26Q1–26Q2 | yes | leave-alone sealed | — |
 
 ---
 
@@ -127,8 +130,8 @@ Until (4), the maximum bucket is `UNVERIFIED` even if counts match.
 
 | Domain | Date | Warren VERIFIED? | Notes |
 |--------|------|------------------|-------|
-| DSI | | | Leave alone — pre-loaded |
-| Shipment | 2026-07-31 | **yes** | `#605` file ~7.3k evidence; UI 14 366 = full corpus (prior jobs retained); Unship 799/799; ~441 shipped evidence unmatched (steward) |
-| CPOR | 2026-07-31 | **yes** | ~297 cases OK; sell-out = disti→reseller, sell-through = retailer→end user |
-| Lineups | 2026-07-31 | **leave-alone OK** | 3 po_issued cases (26Q1 NR, 26Q2 NB/NV) + 52 PO links; A1 surface live |
-| P1-X census | | | |
+| DSI | 2026-07-31 | leave-alone | Pre-loaded; P1-2 do not re-touch |
+| Shipment | 2026-07-31 | **yes** | `#605` file ~7.3k evidence; UI 14 366 = full corpus; Unship 799/799; ~441 shipped evidence unmatched (steward) |
+| CPOR | 2026-07-31 | **yes** | ~297 cases OK |
+| Lineups | 2026-07-31 / sealed 2026-08-01 | **leave-alone OK** | 3 po_issued + 52 PO links; census rows above; do not rebuild; A1 = existing `/plan-vs-executed` |
+| P1-X census | 2026-08-01 | **P1 closed** | Defect batch: D001–D003 fixed-inline; D004 → BACKLOG-088. Exit artifacts: this file + `P1_LOAD_DEFECT_LOG.md` |

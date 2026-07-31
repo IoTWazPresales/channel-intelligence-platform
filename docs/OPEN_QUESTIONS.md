@@ -29,16 +29,30 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 | Field | Value |
 |-------|--------|
 | **What is unclear** | Is the lineup reservation an **explicit column** in the PM workbook, or **purely derived** from PM bottom vs planned price? |
-| **Why it matters** | Lineup schema, CPOR linkage, budget consumption, and fill-rate attribution all depend on the answer — settle before A1 ships |
-| **Interim assumption** | At P1 lineup load, discovery handles both: capture explicit reservation/split column if present; otherwise derive from PM bottom vs planned price |
-| **What would change** | Schema columns, import mapping, and A1 support-bias metric inputs |
-| **Blocking?** | **Yes for A1 ship**; discovery is P1 work |
-| **Blocks** | Lineup schema |
-| **Owner** | **P1 discovery** |
-| **Raise by** | P1 lineup load |
-| **Source** | Domain rules Still open #2 |
+| **Why it matters** | Lineup schema, CPOR linkage, budget consumption, and support-bias inputs depend on the answer |
+| **Interim assumption** | P1-5 leave-alone: no new lineup file discovery this phase. Existing `po_issued` cases (3 / 285 lines / 52 PO links) power A1 **fill** without reservation discovery. Support-bias remains CPOR-owned (`SURFACE_OWNERSHIP`); do not invent a PvE support tile until this is answered |
+| **What would change** | Schema columns, import mapping, and any cross-read of reservation into A1/CPOR |
+| **Blocking?** | **No for A1 fill-rate surface**; **Yes for support-bias / B2 reservation authoring** |
+| **Blocks** | Support-bias attribution; B2 lineup schema |
+| **Owner** | Warren / PMs |
+| **Raise by** | Before A1 claims support-bias; before B2 |
+| **Source** | Domain rules Still open #2; P1-5 leave-alone 2026-08-01 |
 
-### Q-003 — Hosting target
+### Q-005 — A1 PM planning bias surface
+
+| Field | Value |
+|-------|--------|
+| **What is unclear** | Does “PM planning bias across years” already exist as a tile/API on `/plan-vs-executed`, or is it a new metric to design? |
+| **Why it matters** | ROADMAP A1 scope lists PM bias; pre-build audit required before any new tile (D-023/D-024) |
+| **Interim assumption** | A1 exit for this run = existing fill / deal-stock / short / unplanned / no-PO surface + default-period fix. PM bias is a **separate design-stage AMBER** if missing |
+| **What would change** | New scorecard fields / tiles on Plan vs Executed only if audit finds no owner |
+| **Blocking?** | No for fill-rate credibility; Yes before claiming full ROADMAP A1 scope complete |
+| **Blocks** | Full A1 “PM bias” claim |
+| **Owner** | Cursor (audit) → Warren if new metric |
+| **Raise by** | A1 module |
+| **Source** | ROADMAP A1 scope; SURFACE_OWNERSHIP |
+
+---
 
 | Field | Value |
 |-------|--------|

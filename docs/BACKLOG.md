@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-088 — Propagate evidence `pod_date` to current view / facts (P1-D004)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 · P1-X batch deferral |
+| **Effort** | Medium (apply-path / view COALESCE / optional fact backfill — may need approved migration for view redefine) |
+| **Source** | `docs/P1_LOAD_DEFECT_LOG.md` P1-D004; Shipping owns POD (`docs/SURFACE_OWNERSHIP.md`); apply already copies `pod_date` on new writes (`shipment_inbound_facts.py`) |
+| **Idea** | Make Shipping landed/POD KPIs truthful: `shipment_evidence_current` and `fact_inbound_shipment` must expose the same `pod_date` as active `shipment_evidence_line` for shipped rows (COALESCE or rewrite observation/fact). |
+| **Why it matters / deferrable** | Landed-week / awaiting-POD cohorts under-count when fact/current omit POD that evidence has. Deferrable past P1 exit because fill rate stays shipped-basis and P1 census already measured the gap; blocks accurate Shipping commercial KPIs and A3 POD-landed stock. |
+| **What the work is** | (1) Root-cause why current observation / older facts lack POD while evidence has it. (2) Fix write path and/or redefine current view. (3) Backfill facts only with approved data repair (clone-proof if destructive). (4) Prove Shipping `/shipping` landed/POD cohorts match evidence. |
+| **Regression traps** | Do **not** put POD completeness tiles on Plan vs Executed; do not gate fill on POD; do not invent a second lifecycle owner. |
+| **Behavior to retain** | Shipping = lifecycle authority; evidence is source of truth for POD; fill = shipped-basis. |
+| **Out of scope** | Landing-quarter reattribution KPI (BACKLOG-068); PvE rebuild. |
+| **TRIGGER** | Shipping commercial KPI soak shows landed under-count; **or** A3 needs POD-landed stock; **or** Warren prioritizes P1-D004. |
+
+---
+
 ## BACKLOG-087 — GitHub required status check for CI (branch protection / rulesets)
 
 | Field | Detail |
@@ -292,7 +309,7 @@
 | **Regression traps** | Do NOT gate v1 shipped-basis fill on landed (keep the two lenses distinct); do not double-count a unit in both plan quarter (shipped) and landing quarter (landed) within the same KPI; `pod_date` is nullable — null must mean "not landed yet", never "excluded"; no migration (fields exist). |
 | **Behavior to retain** | Shipped-basis fill = `line_state='shipped'` (BACKLOG-068 does not change it); pipeline = `open_order`; shipping module remains lifecycle authority for `pod_date`. |
 | **Out of scope** | Cancellation modeling (BACKLOG-063); sell-through/velocity (DSI); changing the shipped/pipeline gate; branch/location tagging; re-opening A1 fill gating (settled ungated). |
-| **TRIGGER** | When A1 lands the optional Landed tile / **landing-quarter reattribution KPI** is scoped; **or** transit lag makes the shipped-not-landed gap material on a reported period. |
+| **TRIGGER** | When **Shipping** (not PvE) scopes landing-quarter reattribution / budget consumption lens; **or** transit lag makes shipped-not-landed gap material. Prerequisite: BACKLOG-088 POD propagation so measurement is truthful. |
 
 ---
 

@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **P1 closed:** census + defect log sealed; P1-5 lineup leave-alone (3 po_issued / 285 lines / 52 PO links); P1-X batch: D001–D003 fixed-inline, D004→BACKLOG-088. Next: A-lane.
 - 2026-08-01 — **P1-1 BACKLOG-082 / D-022:** DSI header `_policy` in template_definitions; workflow denylist + exact/prefer + memory-last precedence; alembic `20260730_0075` applied on cip; pytest `test_dsi_customer_header_resolution` 20/20. Tree cleared for P1 close.
 - 2026-08-01 — **Surface ownership lock:** `docs/SURFACE_OWNERSHIP.md` authoritative (tree-audited; ingest/ops/read split). Charter AMBER design-halt + pre-build audit; ROADMAP A1 POD→Shipping + constraint 9 + Operating guide restored; D-023/D-024. PvE POD wiring stays reverted; P1-D004 Shipping-owned.
 - 2026-07-31 — **STOP / revert:** mistaken A1 POD KPI tiles on `/plan-vs-executed` reverted (Shipping already owns landed/POD). Kept **P1-D004** (evidence `pod_date` not on current/fact). Do not duplicate landing onto PvE.

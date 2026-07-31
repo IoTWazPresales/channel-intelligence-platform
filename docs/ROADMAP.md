@@ -378,9 +378,8 @@ rewrite.)*
 
 ### What you can start right now
 
-Anything whose blocker is satisfied. Currently **P1** is in progress (shipment `#605` and
-CPOR `#560` signed 2026-08-01; lineups leave-alone). A1/A2/A3 open when P1 exits.
-Lane X runs continuously in GREEN alongside anything.
+Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect log sealed).
+**A1 / A2 / A3** are open. Lane X runs continuously in GREEN alongside anything.
 
 ### What you cannot do
 
