@@ -49,7 +49,14 @@ blob-report/
 
 # Accidental DB dumps / one-off scratch files
 *.dump
+*.sql.gz
+*.backup
 queryex
+
+# Source commercial files / uploads (never commit)
+*.xlsx
+*.xls
+*.csv
 
 # Local agent diagnostics (underscore-prefixed scripts and scratch JSON under apps/api)
 apps/api/scripts/_*
