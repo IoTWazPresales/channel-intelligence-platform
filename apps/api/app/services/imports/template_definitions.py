@@ -99,6 +99,9 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                     "part no",
                     "part no.",
                     "partno",
+                    "asus part no",
+                    "asus part no.",
+                    "asus_part_no",
                     "mfg part no",
                     "mfg part no.",
                     "manufacturer part number",
@@ -242,6 +245,40 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                     "tender_remark",
                 ],
                 "required": False,
+            },
+            # D-022 / BACKLOG-082: per-template header policy (not workflow literals).
+            # Reserved key — skipped by default_field_mapping / effective_mapping_template.
+            "_policy": {
+                "exact_target_by_norm": {
+                    "customer_name": "customer_dealer_token",
+                    "dealer_name_group": "dealer_group_token",
+                    "dealer_group": "dealer_group_token",
+                },
+                "never_auto_map_exact_lower": [
+                    "customer code (dealer code)",
+                    "dealer name 1",
+                    "dealer code",
+                ],
+                "never_auto_map_norm_regex": [
+                    "^dealer_name_\\d+$",
+                ],
+                "never_auto_map_if": [
+                    {"all_of_substrings_lower": ["customer code", "dealer"]},
+                    {"all_of_substrings_lower": ["dealer code"]},
+                ],
+                "prefer_header_norms_for_target": {
+                    "customer_dealer_token": ["customer_name", "dealer_name"],
+                    "unit_sellout_price_ex_tax_amount": ["unit_price", "unit_sellout_price", "unit_sell_price"],
+                },
+                "demote_header_norms_for_target": {
+                    "unit_sellout_price_ex_tax_amount": [
+                        "total_price",
+                        "total_value",
+                        "line_value",
+                        "line_revenue",
+                        "total_revenue",
+                    ]
+                },
             },
         },
     },

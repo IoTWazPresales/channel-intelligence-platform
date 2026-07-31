@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from app.services.imports.dsi_mapping_workflow import (
     apply_dsi_customer_column_target_resolution,
+    apply_dsi_never_auto_map_denylist,
+    apply_dsi_prefer_header_targets,
     apply_dsi_product_identifier_sample_inference,
     apply_exact_raw_customer_header_overrides,
+    build_initial_dsi_field_mapping,
     sanitize_dsi_field_mapping,
 )
 
@@ -54,7 +59,7 @@ def test_customer_only_sold_to_untouched_when_no_raw_customer_pattern() -> None:
     assert apply_dsi_customer_column_target_resolution(headers, raw) == raw
 
 
-def test_exact_raw_customer_headers_override_bad_memory_with_extra_customerish_columns() -> None:
+def test_exact_raw_customer_headers_set_primary_pair_with_extra_customerish_columns() -> None:
     headers = [
         "Bill to customer name",
         "Customer name",
@@ -77,6 +82,65 @@ def test_exact_raw_customer_headers_override_bad_memory_with_extra_customerish_c
     m2 = apply_dsi_customer_column_target_resolution(headers, m)
     assert m2["Customer name"] == "customer_dealer_token"
     assert m2["Dealer Name Group"] == "dealer_group_token"
+
+
+def test_confirmed_memory_beats_template_exact_overrides() -> None:
+    """D-022 precedence: confirmed memory > template exact > heuristic."""
+    headers = ["Customer name", "Dealer Name Group", "sku"]
+    source = SimpleNamespace(
+        column_mapping_memory={
+            "schema_version": "1",
+            "by_header_norm": {
+                "customer_name": {"target": "region_or_province_token", "confirmations": 2},
+            },
+        }
+    )
+    template = {
+        "product_identifier": {"aliases": ["sku"]},
+        "customer_dealer_token": {"aliases": ["customer name"]},
+        "dealer_group_token": {"aliases": ["dealer name group"]},
+    }
+    out = build_initial_dsi_field_mapping(None, headers, source, template)  # type: ignore[arg-type]
+    assert out["Customer name"] == "region_or_province_token"
+    assert out["Dealer Name Group"] == "dealer_group_token"
+
+
+def test_denylist_clears_dealer_name_1_and_dealer_code() -> None:
+    headers = ["Dealer Name 1", "Customer Code (Dealer Code)", "Dealer Name", "sku"]
+    raw = {
+        "Dealer Name 1": "customer_dealer_token",
+        "Customer Code (Dealer Code)": "customer_dealer_token",
+        "Dealer Name": "customer_dealer_token",
+        "sku": "product_identifier",
+    }
+    cleared = apply_dsi_never_auto_map_denylist(headers, raw)
+    assert "Dealer Name 1" not in cleared
+    assert "Customer Code (Dealer Code)" not in cleared
+    assert cleared.get("Dealer Name") == "customer_dealer_token"
+
+
+def test_prefer_customer_name_over_dealer_name_when_both_map_to_source() -> None:
+    headers = ["Customer name", "Dealer Name", "sku"]
+    m = {
+        "Customer name": "customer_dealer_token",
+        "Dealer Name": "customer_dealer_token",
+        "sku": "product_identifier",
+    }
+    out = apply_dsi_prefer_header_targets(headers, m)
+    assert out.get("Customer name") == "customer_dealer_token"
+    assert "Dealer Name" not in out or out.get("Dealer Name") != "customer_dealer_token"
+
+
+def test_demote_total_price_when_unit_price_present() -> None:
+    headers = ["Unit Price", "Total Price", "sku"]
+    m = {
+        "Unit Price": "unit_sellout_price_ex_tax_amount",
+        "Total Price": "unit_sellout_price_ex_tax_amount",
+        "sku": "product_identifier",
+    }
+    out = apply_dsi_prefer_header_targets(headers, m)
+    assert out.get("Unit Price") == "unit_sellout_price_ex_tax_amount"
+    assert out.get("Total Price") != "unit_sellout_price_ex_tax_amount"
 
 
 def test_product_column_nb_like_product_header_demoted_modelname_kept() -> None:
@@ -165,6 +229,33 @@ def test_customer_only_exact_header_sets_source_customer_name() -> None:
     m = {"Customer name": "dealer_group_token", "sku": "product_identifier", "Qty": "quantity_sold"}
     m = apply_exact_raw_customer_header_overrides(headers, m)
     assert m["Customer name"] == "customer_dealer_token"
+
+
+def test_asus_dealer_name_maps_via_build_initial_without_customer_name() -> None:
+    headers = ["Dealer Name", "ASUS Part No.", "Unit Price", "Qty"]
+    template = {
+        "customer_dealer_token": {"aliases": ["dealer name", "dealer_name"]},
+        "product_identifier": {"aliases": ["asus part no.", "asus part no"]},
+        "unit_sellout_price_ex_tax_amount": {"aliases": ["unit price"]},
+        "quantity_sold": {"aliases": ["qty"]},
+    }
+    out = build_initial_dsi_field_mapping(None, headers, None, template)  # type: ignore[arg-type]
+    assert out.get("Dealer Name") == "customer_dealer_token"
+    assert out.get("ASUS Part No.") == "product_identifier"
+    assert out.get("Unit Price") == "unit_sellout_price_ex_tax_amount"
+
+
+def test_sanitize_clears_denylisted_customer_code_header() -> None:
+    headers = ["Customer Code (Dealer Code)", "Dealer Name", "sku"]
+    raw = {
+        "Customer Code (Dealer Code)": "customer_dealer_token",
+        "Dealer Name": "customer_dealer_token",
+        "sku": "product_identifier",
+    }
+    clean, notices = sanitize_dsi_field_mapping(headers, raw)
+    assert "Customer Code (Dealer Code)" not in clean
+    assert clean.get("Dealer Name") == "customer_dealer_token"
+    assert any(n.get("code") == "dsi_denylist_cleared" for n in notices)
 
 
 def test_sanitize_dsi_does_not_mutate_valid_manual_mapping() -> None:

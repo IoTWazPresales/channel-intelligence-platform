@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from sqlalchemy import select
@@ -12,88 +13,276 @@ from app.ingestion.pipeline import default_field_mapping, effective_mapping_temp
 from app.models.ingestion import ImportJob, RawFileMetadata, SourceDefinition
 from app.services.imports.distributor_sales_inventory import CANONICAL as DSI_CANONICAL
 from app.services.imports.pm_mapping_memory import load_by_header_norm, norm_header_key
+from app.services.imports.template_definitions import IMPORT_TEMPLATE_ROWS
 from app.storage.local import get_storage_backend
 
 # Targets persisted in column_mapping_memory (same JSON shape as PM: {target, confirmations}).
 DSI_MEMORY_TARGETS = frozenset(DSI_CANONICAL)
+DSI_TEMPLATE_SLUG = "distributor_inventory"
+_IDENTITY_TARGETS = frozenset({"customer_dealer_token", "dealer_group_token"})
 
 
 def _norm_header_lower(h: str) -> str:
     return (h or "").strip().lower()
 
 
-def _looks_like_dealer_name_group_column(header: str) -> bool:
-    """RAW-style account / rollup column (Dealer Name Group, dealer + group, etc.)."""
+def dsi_header_mapping_policy() -> dict[str, Any]:
+    """Per-template header policy from IMPORT_TEMPLATE_ROWS (D-022). Runtime source of truth."""
+    row = next((t for t in IMPORT_TEMPLATE_ROWS if t.get("slug") == DSI_TEMPLATE_SLUG), None)
+    if not row:
+        return {}
+    ec = row.get("expected_columns") or {}
+    pol = ec.get("_policy") if isinstance(ec, dict) else None
+    return dict(pol) if isinstance(pol, dict) else {}
+
+
+def _policy_exact_target_by_norm(policy: dict[str, Any] | None = None) -> dict[str, str]:
+    pol = policy if policy is not None else dsi_header_mapping_policy()
+    raw = pol.get("exact_target_by_norm") or {}
+    return {str(k): str(v) for k, v in raw.items() if k and v} if isinstance(raw, dict) else {}
+
+
+def _header_is_never_auto_map(header: str, policy: dict[str, Any] | None = None) -> bool:
+    """True when template denylist says this header must not receive an auto identity map."""
+    pol = policy if policy is not None else dsi_header_mapping_policy()
+    lower = _norm_header_lower(header)
+    nh = norm_header_key(header)
+    for exact in pol.get("never_auto_map_exact_lower") or []:
+        if lower == str(exact).strip().lower():
+            return True
+    for pat in pol.get("never_auto_map_norm_regex") or []:
+        try:
+            if nh and re.search(str(pat), nh):
+                return True
+        except re.error:
+            continue
+    for rule in pol.get("never_auto_map_if") or []:
+        if not isinstance(rule, dict):
+            continue
+        subs = rule.get("all_of_substrings_lower") or []
+        if subs and all(str(s).lower() in lower for s in subs):
+            return True
+    return False
+
+
+def apply_dsi_never_auto_map_denylist(
+    headers: list[str],
+    mapping: dict[str, str],
+    *,
+    policy: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    """Clear auto maps on denylisted headers (identity poison prevention)."""
+    out = dict(mapping or {})
+    pol = policy if policy is not None else dsi_header_mapping_policy()
+    for h in headers:
+        if not _header_is_never_auto_map(h, pol):
+            continue
+        tgt = out.get(h)
+        if tgt in _IDENTITY_TARGETS or tgt in (
+            "customer_code",
+            "customer_name",
+            "dealer_group_token",
+            "customer_dealer_token",
+        ):
+            del out[h]
+        elif h in out and tgt in DSI_MEMORY_TARGETS:
+            # Denylist is for identity columns — drop any accidental canonical map on listed headers.
+            del out[h]
+    return out
+
+
+def _looks_like_dealer_name_group_column(header: str, policy: dict[str, Any] | None = None) -> bool:
+    """Account / rollup column — exact norms from template policy, else structural dealer+group."""
+    if _header_is_never_auto_map(header, policy):
+        return False
+    nh = norm_header_key(header)
+    exact = _policy_exact_target_by_norm(policy)
+    if nh and exact.get(nh) == "dealer_group_token":
+        return True
     k = _norm_header_lower(header)
     if not k:
         return False
-    if k in ("dealer name group", "dealer_name_group", "dealer group", "dealer_group"):
-        return True
     return "dealer" in k and "group" in k
 
 
-def _looks_like_raw_source_customer_name_column(header: str) -> bool:
-    """RAW-style source customer label column (Customer name); not the account rollup column."""
+def _looks_like_raw_source_customer_name_column(header: str, policy: dict[str, Any] | None = None) -> bool:
+    """Source customer label — exact norms from policy, else structural customer+name (not dealer/group)."""
+    if _header_is_never_auto_map(header, policy):
+        return False
+    nh = norm_header_key(header)
+    exact = _policy_exact_target_by_norm(policy)
+    if nh and exact.get(nh) == "customer_dealer_token":
+        return True
     k = _norm_header_lower(header)
     if not k or "to be mapped" in k:
         return False
-    if _looks_like_dealer_name_group_column(header):
+    if _looks_like_dealer_name_group_column(header, policy):
         return False
-    if k in ("customer name", "customer_name"):
-        return True
     if "customer" in k and "name" in k and "group" not in k and "dealer" not in k:
         return True
     return False
 
 
-def apply_exact_raw_customer_header_overrides(headers: list[str], mapping: dict[str, str]) -> dict[str, str]:
-    """Force canonical RAW workbook customer columns regardless of learned memory or generic heuristics.
+def apply_template_exact_header_targets(
+    headers: list[str],
+    mapping: dict[str, str],
+    *,
+    policy: dict[str, Any] | None = None,
+    protected_headers: set[str] | None = None,
+) -> dict[str, str]:
+    """Apply template ``exact_target_by_norm`` for headers not locked by confirmed memory.
 
-    Matches ``Customer name`` / ``Dealer Name Group`` (case- and norm-insensitive). Runs before fuzzy
-    :func:`apply_dsi_customer_column_target_resolution` so extra customer-like headers do not block
-    the primary RAW pair.
+    Replaces the former ``apply_exact_raw_customer_header_overrides`` behaviour. Confirmed
+    steward memory must win (D-022) — pass those headers in ``protected_headers``.
     """
     out = dict(mapping or {})
-    dealer_h: str | None = None
-    cust_h: str | None = None
+    pol = policy if policy is not None else dsi_header_mapping_policy()
+    exact = _policy_exact_target_by_norm(pol)
+    protected = protected_headers or set()
+    if not exact:
+        return out
     for h in headers:
-        k = _norm_header_lower(h)
+        if h in protected or _header_is_never_auto_map(h, pol):
+            continue
         nh = norm_header_key(h)
-        if dealer_h is None and (nh == "dealer_name_group" or k in ("dealer name group", "dealer_name_group")):
-            dealer_h = h
-        if cust_h is None and (nh == "customer_name" or k in ("customer name", "customer_name")):
-            cust_h = h
-    if dealer_h is not None:
-        out[dealer_h] = "dealer_group_token"
-    if cust_h is not None:
-        out[cust_h] = "customer_dealer_token"
+        tgt = exact.get(nh) if nh else None
+        if tgt:
+            out[h] = tgt
     return out
 
 
-def apply_dsi_customer_column_target_resolution(headers: list[str], mapping: dict[str, str]) -> dict[str, str]:
-    """Align RAW-style customer headers with DSI canonicals before sanitize.
+# Back-compat name used by tests / pipeline — delegates to template policy; does not beat memory.
+def apply_exact_raw_customer_header_overrides(
+    headers: list[str],
+    mapping: dict[str, str],
+    *,
+    protected_headers: set[str] | None = None,
+) -> dict[str, str]:
+    return apply_template_exact_header_targets(
+        headers, mapping, protected_headers=protected_headers
+    )
+
+
+def apply_dsi_prefer_header_targets(
+    headers: list[str],
+    mapping: dict[str, str],
+    *,
+    policy: dict[str, Any] | None = None,
+    protected_headers: set[str] | None = None,
+) -> dict[str, str]:
+    """When multiple headers share a target, keep the preferred norm; demote listed rivals."""
+    out = dict(mapping or {})
+    pol = policy if policy is not None else dsi_header_mapping_policy()
+    protected = protected_headers or set()
+    prefer = pol.get("prefer_header_norms_for_target") or {}
+    demote = pol.get("demote_header_norms_for_target") or {}
+    if not isinstance(prefer, dict):
+        prefer = {}
+    if not isinstance(demote, dict):
+        demote = {}
+
+    by_target: dict[str, list[str]] = {}
+    for h in headers:
+        tgt = out.get(h)
+        if tgt:
+            by_target.setdefault(str(tgt), []).append(h)
+
+    for tgt, prefs in prefer.items():
+        cols = by_target.get(str(tgt)) or []
+        if len(cols) < 2:
+            # Still demote rivals that wrongly hold this target
+            pass
+        pref_norms = [str(p) for p in (prefs or [])]
+        ranked = sorted(
+            cols,
+            key=lambda h: (
+                pref_norms.index(norm_header_key(h))
+                if norm_header_key(h) in pref_norms
+                else 10_000,
+                h,
+            ),
+        )
+        keep = None
+        for h in ranked:
+            if norm_header_key(h) in pref_norms:
+                keep = h
+                break
+        if keep is None and ranked:
+            keep = ranked[0]
+        if keep is None:
+            continue
+        for h in cols:
+            if h != keep and h not in protected:
+                del out[h]
+
+    for tgt, bad_norms in demote.items():
+        bad = {str(n) for n in (bad_norms or [])}
+        for h in list(headers):
+            if h in protected:
+                continue
+            if out.get(h) == tgt and norm_header_key(h) in bad:
+                del out[h]
+
+    # Prefer customer_name over dealer_name for customer_dealer_token when both present
+    # even if dealer_name was only assigned by template alias (single-column ASUS case).
+    cust_cols = [h for h in headers if out.get(h) == "customer_dealer_token"]
+    if len(cust_cols) > 1:
+        prefs = list((prefer.get("customer_dealer_token") or []))
+        ranked = sorted(
+            cust_cols,
+            key=lambda h: (
+                prefs.index(norm_header_key(h)) if norm_header_key(h) in prefs else 10_000,
+                h,
+            ),
+        )
+        keep = ranked[0]
+        for h in cust_cols:
+            if h != keep and h not in protected:
+                del out[h]
+
+    return out
+
+
+def apply_dsi_customer_column_target_resolution(
+    headers: list[str],
+    mapping: dict[str, str],
+    *,
+    policy: dict[str, Any] | None = None,
+    protected_headers: set[str] | None = None,
+) -> dict[str, str]:
+    """Align customer headers with DSI canonicals before sanitize.
 
     - Dealer Name Group (and similar) → dealer_group_token (Customer account in UI).
-    - Customer name (and similar, excluding dealer+group headers) → customer_dealer_token (Source customer name).
+    - Customer name (and similar, excluding dealer+group headers) → customer_dealer_token.
 
-    Runs after template defaults + optional header memory so legacy swaps and the shared
-    ``name`` heuristic (``dealer name group`` contains ``name``) are corrected. Used on
-    initial DSI infer and on pipeline auto-mapping when the job has no saved ``field_mapping``;
-    saved job mappings from the admin UI are not reprocessed through this helper on validate/apply.
+    Skips headers locked by confirmed steward memory (D-022).
     """
     out = dict(mapping or {})
-    dealer_cols = [h for h in headers if _looks_like_dealer_name_group_column(h)]
-    cust_cols = [h for h in headers if _looks_like_raw_source_customer_name_column(h)]
+    pol = policy if policy is not None else dsi_header_mapping_policy()
+    protected = protected_headers or set()
+    dealer_cols = [
+        h
+        for h in headers
+        if h not in protected and _looks_like_dealer_name_group_column(h, pol)
+    ]
+    cust_cols = [
+        h
+        for h in headers
+        if h not in protected and _looks_like_raw_source_customer_name_column(h, pol)
+    ]
 
     if len(dealer_cols) == 1 and len(cust_cols) == 1 and dealer_cols[0] != cust_cols[0]:
-        out[dealer_cols[0]] = "dealer_group_token"
-        out[cust_cols[0]] = "customer_dealer_token"
+        if dealer_cols[0] not in protected:
+            out[dealer_cols[0]] = "dealer_group_token"
+        if cust_cols[0] not in protected:
+            out[cust_cols[0]] = "customer_dealer_token"
         return out
 
-    if len(dealer_cols) == 1:
+    if len(dealer_cols) == 1 and dealer_cols[0] not in protected:
         out[dealer_cols[0]] = "dealer_group_token"
     if len(cust_cols) == 1 and not (len(dealer_cols) == 1 and cust_cols[0] == dealer_cols[0]):
-        out[cust_cols[0]] = "customer_dealer_token"
+        if cust_cols[0] not in protected:
+            out[cust_cols[0]] = "customer_dealer_token"
 
     return out
 
@@ -213,6 +402,16 @@ def sanitize_dsi_field_mapping(
         _notice(
             "dsi_target_dropped",
             f"Column {src!r}: removed invalid DSI target {tgt!r}.",
+        )
+
+    # D-022 / BACKLOG-082: never leave denylisted identity headers mapped (incl. legacy
+    # customer_code → customer_dealer_token upgrades above, and saved mappings).
+    before = set(out.keys())
+    out = apply_dsi_never_auto_map_denylist(list(header_set), out)
+    for dropped in sorted(before - set(out.keys())):
+        _notice(
+            "dsi_denylist_cleared",
+            f"Column {dropped!r}: cleared — never-auto-map identity header (template denylist).",
         )
 
     return out, notices
@@ -448,6 +647,24 @@ def column_samples_from_inferred(job: ImportJob) -> dict[str, list[str]]:
     return column_samples_from_schema_dict(job.inferred_schema)
 
 
+def merge_dsi_template_aliases_from_code(template: dict[str, Any] | None) -> dict[str, Any]:
+    """Union DB/effective aliases with IMPORT_TEMPLATE_ROWS so new seeds work before DB refresh."""
+    out: dict[str, Any] = dict(template or {})
+    row = next((t for t in IMPORT_TEMPLATE_ROWS if t.get("slug") == DSI_TEMPLATE_SLUG), None)
+    ec = (row or {}).get("expected_columns") or {}
+    if not isinstance(ec, dict):
+        return out
+    for k, v in ec.items():
+        if str(k).startswith("_") or not isinstance(v, dict):
+            continue
+        code_aliases = [str(a) for a in (v.get("aliases") or [])]
+        prev = out.get(k) if isinstance(out.get(k), dict) else {"aliases": []}
+        existing = [str(a) for a in (prev.get("aliases") or [])]
+        merged = list(dict.fromkeys([*existing, *code_aliases]))
+        out[k] = {**prev, "aliases": merged}
+    return out
+
+
 def build_initial_dsi_field_mapping(
     db: Session,
     headers: list[str],
@@ -456,27 +673,49 @@ def build_initial_dsi_field_mapping(
     *,
     column_samples: dict[str, list[str]] | None = None,
 ) -> dict[str, str]:
-    """Template + default_field_mapping, overlaid with saved per-header targets for this source."""
+    """Template defaults → denylist → exact/heuristic → confirmed memory last (D-022).
+
+    Precedence: confirmed steward memory > template alias/exact > heuristic.
+    """
+    policy = dsi_header_mapping_policy()
+    template = merge_dsi_template_aliases_from_code(template)
     memory = load_by_header_norm(source) if source else {}
-    mapping: dict[str, str] = {}
+    protected: set[str] = set()
+    memory_overlay: dict[str, str] = {}
     for h in headers:
         nh = norm_header_key(h)
         entry = memory.get(nh) if nh else None
         if isinstance(entry, dict):
             tgt = entry.get("target")
             if tgt and str(tgt).strip() and str(tgt) in DSI_MEMORY_TARGETS:
-                mapping[h] = str(tgt)
-    defaults = default_field_mapping(headers, template)
-    for h, tgt in defaults.items():
-        if h not in mapping:
-            mapping[h] = tgt
-    mapping = apply_exact_raw_customer_header_overrides(headers, mapping)
-    mapping = apply_dsi_customer_column_target_resolution(headers, mapping)
+                memory_overlay[h] = str(tgt)
+                protected.add(h)
+
+    # 1) Template aliases + shared defaults (no memory yet — memory wins at the end).
+    mapping = default_field_mapping(headers, template)
+    # 2) Denylist clears poisoned identity maps.
+    mapping = apply_dsi_never_auto_map_denylist(headers, mapping, policy=policy)
+    # 3) Template exact targets (skip memory-protected).
+    mapping = apply_template_exact_header_targets(
+        headers, mapping, policy=policy, protected_headers=protected
+    )
+    # 4) Structural customer heuristics (skip memory-protected).
+    mapping = apply_dsi_customer_column_target_resolution(
+        headers, mapping, policy=policy, protected_headers=protected
+    )
+    # 5) Prefer / demote among competing headers for the same target.
+    mapping = apply_dsi_prefer_header_targets(
+        headers, mapping, policy=policy, protected_headers=protected
+    )
     # Normalize legacy sku/name → DSI targets before product demotion so weak columns
     # (e.g. customer sku → sku) participate in the single-winner tie-break.
     mapping, _ = sanitize_dsi_field_mapping(headers, mapping)
     mapping = apply_dsi_product_identifier_header_seeds(headers, mapping)
     mapping = apply_dsi_product_identifier_sample_inference(headers, mapping, column_samples or {})
+    # Re-apply denylist after product seeds (identity poison stays cleared).
+    mapping = apply_dsi_never_auto_map_denylist(headers, mapping, policy=policy)
+    # 6) Confirmed memory overlays last.
+    mapping.update(memory_overlay)
     sanitized, _ = sanitize_dsi_field_mapping(headers, mapping)
     return sanitized
 
@@ -637,6 +876,7 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
                 from app.services.imports.dsi_column_mapping_intel import apply_high_confidence_dsi_automap
 
                 sheet_map, _ = apply_high_confidence_dsi_automap(cols, source, sheet_map, column_samples=samples)
+                sheet_map = apply_dsi_never_auto_map_denylist(cols, sheet_map)
                 map_key = (
                     make_dsi_file_sheet_key(filename, inner_key) if multi_file else inner_key
                 )
@@ -659,6 +899,7 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
             from app.services.imports.dsi_column_mapping_intel import apply_high_confidence_dsi_automap
 
             mapping, _ = apply_high_confidence_dsi_automap(cols, source, mapping, column_samples=samples)
+            mapping = apply_dsi_never_auto_map_denylist(cols, mapping)
             inner_key = DSI_SINGLE_SHEET_KEY
             map_key = make_dsi_file_sheet_key(filename, inner_key) if multi_file else inner_key
             if multi_file:

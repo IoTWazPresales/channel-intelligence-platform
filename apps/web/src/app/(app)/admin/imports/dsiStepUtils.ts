@@ -212,18 +212,35 @@ export function dsiLayoutReadiness(
 /**
  * True when any nested sheet for this filename maps stock_on_hand without snapshot_date
  * (same intent as backend file_needs_snapshot_period_stamp).
+ *
+ * Prefer the client draft; fall back to server ``sheet_field_mappings[].field_mapping``
+ * so the file strip still shows inventory periods before / without a hydrated draft.
  */
 export function dsiFileNeedsInventoryPeriod(
   nestedDraft: Record<string, Record<string, string>>,
-  filename: string
+  filename: string,
+  serverSheetFieldMappings?: Record<string, { field_mapping?: Record<string, string> }> | null
 ): boolean {
   const prefix = `${filename}::`;
-  for (const [key, sheet] of Object.entries(nestedDraft)) {
-    const matches =
-      key === filename || key.startsWith(prefix) || (key.includes('::') ? key.split('::', 1)[0] === filename : false);
-    if (!matches) continue;
+  const fileMatches = (key: string) =>
+    key === filename ||
+    key.startsWith(prefix) ||
+    (key.includes('::') && key.split('::')[0] === filename);
+
+  const needsFromMap = (sheet: Record<string, string> | undefined) => {
     const vals = new Set(Object.values(sheet ?? {}).filter(Boolean));
-    if (vals.has('stock_on_hand') && !vals.has('snapshot_date')) return true;
+    return vals.has('stock_on_hand') && !vals.has('snapshot_date');
+  };
+
+  for (const [key, sheet] of Object.entries(nestedDraft)) {
+    if (!fileMatches(key)) continue;
+    if (needsFromMap(sheet)) return true;
+  }
+  if (serverSheetFieldMappings) {
+    for (const [key, wrap] of Object.entries(serverSheetFieldMappings)) {
+      if (!fileMatches(key)) continue;
+      if (needsFromMap(wrap?.field_mapping)) return true;
+    }
   }
   return false;
 }

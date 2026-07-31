@@ -103,17 +103,17 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · P0 remaining |
+| **Status / parked** | **Done** · 2026-08-01 · P1-1 — `20260730_0075` applied on cip; `_policy` on `distributor_inventory`; precedence memory>alias>heuristic; pytest header suite 20/20 |
 | **Effort** | Medium |
-| **Source** | D-022; ROADMAP P0 item 1; stash `park-dsi-asus-dealer-name-automap` (knowledge only — implementation dropped) |
+| **Source** | D-022; ROADMAP P0 item 1 → pulled into P1 as DSI load-blocker; stash `park-dsi-asus-dealer-name-automap` (knowledge only — implementation dropped) |
 | **Idea** | Retire hardcoded header strings in `dsi_mapping_workflow.py`. Per-template header-alias map + never-auto-map denylist. Precedence: **confirmed memory > template alias > heuristic** (today `apply_exact_raw_customer_header_overrides` beats memory — backwards). |
-| **Why it matters / deferrable** | Mis-mapped identity columns poison customer resolution / aliases permanently. Deferrable until P0 header-config unit; blocks clean P1 ASUS weekly load. |
-| **What the work is** | Config surface for template aliases + denylist; migrate RAW/ASUS seeds; fix precedence; remove literal tenant headers from Python. |
+| **Why it matters / deferrable** | Mis-mapped identity columns poison customer resolution / aliases permanently. **Not deferrable inside P1** — blocks clean ASUS weekly load (P1-2). |
+| **What the work is** | Config surface for template aliases + denylist; migrate RAW/ASUS seeds; fix precedence; remove literal tenant headers from workflow heuristics (config lives in `template_definitions`). |
 | **ASUS template seed (from stash — domain knowledge only)** | **Map:** `Dealer Name` → `customer_dealer_token` (Source customer name); prefer RAW `Customer name` when both present; `Dealer Name Group` → `dealer_group_token`; `ASUS Part No.` → `product_identifier`; prefer `Unit Price` over `Total Price` / line totals. **Never auto-map (denylist):** `Customer Code (Dealer Code)`; `Dealer Name 1` (and `dealer_name_1` / `dealer-name-N` pattern). Also treat distributor dealer-code headers (`dealer code`, `customer code`+`dealer`) as non-identity. |
 | **Regression traps** | Do not land stash implementation as constants; do not let heuristic override confirmed memory; denylist must clear prior wrong maps on those columns. |
 | **Behavior to retain** | Steward-confirmed mapping memory wins; FLAG≠BLOCK leftovers stay reviewable. |
 | **Out of scope** | Landing `park-dsi-asus-dealer-name-automap` as written; new importer surfaces. |
-| **TRIGGER** | P0 header-vocabulary config unit starts; **or** Warren prioritizes before P1 ASUS weekly load. |
+| **TRIGGER** | **Fired** — P1 entered; implement as P1-1 before P1-2 DSI weekly. |
 
 ---
 
@@ -283,16 +283,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-07 |
+| **Status / parked** | **Parked** · 2026-07-07 · **A1 gating settled 2026-07-30** (Open Decision #4) |
 | **Effort** | Medium (recon read model gains a landed sub-state + landing-quarter reattribution; new KPI surface; no schema — `pod_date` already on evidence + fact) |
 | **Source** | PvE shipped/pipeline taxonomy fix (2026-07-07). Fill rate now correctly counts `line_state='shipped'` only, but recon still has **no landed gate**: `reconcile_case` reads `resolved_customer_id, product_id, quantity, amount, unit_price` — never `pod_date`. Confirmed on cip: of shipped-state units on linked POs, ~3% (88 rows / 5,331 units) have `pod_date IS NULL` (shipped, in-transit, not yet delivered) yet are credited as executed in the plan quarter. `docs/PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md` §Landed. |
 | **Idea** | Add **Landed** as a sub-state of Shipped (`pod_date IS NOT NULL`) and, for a **landed-basis sales KPI**, attribute landed units to the **quarter they landed** (pod_date quarter), not the plan quarter. PvE v1 fill deliberately stays plan-quarter shipped-basis; landed is an additional lens, not a replacement. |
 | **Why it matters / deferrable** | Sales/finance care about stock that actually **arrived** in a period (revenue recognition, sell-in timing). Deferrable because v1 fill (shipped-basis) is now correct and the shipped-not-landed gap is small (~3%); becomes material when landed-basis reporting or DSI landing attribution is scoped, or when transit times lengthen. |
-| **What the work is** | (1) Decide the KPI contract: landed-basis fill vs a separate "landed this quarter" tile. (2) `reconcile_case` (or a sibling read) reads `pod_date`; split shipped into shipped-not-landed vs landed; optionally reattribute landed units to pod_date quarter. (3) Surface a Landed tile + shipped-not-landed pending sub-signal. (4) Tests: landed excluded from a plan-quarter landed KPI until pod_date present; reattribution to landing quarter. |
+| **What the work is** | (1) ~~Decide the KPI contract~~ **Decided 2026-07-30:** A1 v1 stays shipped-basis ungated; form = separate "Landed this quarter" tile + shipped-not-landed sub-signal (not landed-basis fill). (2) `reconcile_case` (or a sibling read) reads `pod_date`; split shipped into shipped-not-landed vs landed; optionally reattribute landed units to pod_date quarter. (3) Surface a Landed tile + shipped-not-landed pending sub-signal. (4) Tests: landed excluded from a plan-quarter landed KPI until pod_date present; reattribution to landing quarter. **P1 obligation:** shipment census reports `pod_date` present vs NULL % (measurement only — not this build). |
 | **Regression traps** | Do NOT gate v1 shipped-basis fill on landed (keep the two lenses distinct); do not double-count a unit in both plan quarter (shipped) and landing quarter (landed) within the same KPI; `pod_date` is nullable — null must mean "not landed yet", never "excluded"; no migration (fields exist). |
 | **Behavior to retain** | Shipped-basis fill = `line_state='shipped'` (BACKLOG-068 does not change it); pipeline = `open_order`; shipping module remains lifecycle authority for `pod_date`. |
-| **Out of scope** | Cancellation modeling (BACKLOG-063); sell-through/velocity (DSI); changing the shipped/pipeline gate; branch/location tagging. |
-| **TRIGGER** | When a **landed-basis KPI** or **DSI landing/arrival reporting** is scoped; **or** transit lag makes the shipped-not-landed gap material on a reported period. |
+| **Out of scope** | Cancellation modeling (BACKLOG-063); sell-through/velocity (DSI); changing the shipped/pipeline gate; branch/location tagging; re-opening A1 fill gating (settled ungated). |
+| **TRIGGER** | When A1 lands the optional Landed tile / **landing-quarter reattribution KPI** is scoped; **or** transit lag makes the shipped-not-landed gap material on a reported period. |
 
 ---
 

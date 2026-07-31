@@ -1197,12 +1197,19 @@ function AdminImportsPageContent() {
     const files =
       (dsiMappingState?.dsi_workbook as { files?: string[] } | null | undefined)?.files ??
       Object.keys(dsiMappingState?.dsi_file_distributors ?? {});
-    return files.filter((f) => dsiFileNeedsInventoryPeriod(dsiNestedMapDraft, f));
+    return files.filter((f) =>
+      dsiFileNeedsInventoryPeriod(
+        dsiNestedMapDraft,
+        f,
+        dsiMappingState?.sheet_field_mappings ?? null
+      )
+    );
   }, [
     dsiIsMultiSheet,
     dsiNestedMapDraft,
     dsiMappingState?.dsi_workbook,
     dsiMappingState?.dsi_file_distributors,
+    dsiMappingState?.sheet_field_mappings,
   ]);
 
   const dsiMappingBannerErrors = dsiIsMultiSheet ? dsiLayoutBlockingErrors : dsiMappingStepBlockingErrors;

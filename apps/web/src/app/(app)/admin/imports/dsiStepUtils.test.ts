@@ -255,6 +255,26 @@ describe('dsiStepUtils', () => {
     expect(dsiFileNeedsInventoryPeriod(draft, 'PINNACLE.xlsx')).toBe(false);
   });
 
+  it('dsiFileNeedsInventoryPeriod falls back to server sheet_field_mappings', () => {
+    const server = {
+      'MUSTEK_Inventory WK28.xlsx::__single__': {
+        field_mapping: {
+          'ASUS Part No.': 'product_identifier',
+          'Current Opening Inventory': 'stock_on_hand',
+        },
+      },
+      'MUSTEK_SELLOUT WK28.xlsx::__single__': {
+        field_mapping: {
+          'Dealer Name': 'customer_dealer_token',
+          Quantity: 'quantity_sold',
+          'Invoice Date': 'transaction_date',
+        },
+      },
+    };
+    expect(dsiFileNeedsInventoryPeriod({}, 'MUSTEK_Inventory WK28.xlsx', server)).toBe(true);
+    expect(dsiFileNeedsInventoryPeriod({}, 'MUSTEK_SELLOUT WK28.xlsx', server)).toBe(false);
+  });
+
 
   it('hydrateDsiNestedMapDraft fillMissing preserves dirty sheet edits', () => {
     const canon = new Set(['product_identifier', 'quantity_sold', 'transaction_date']);

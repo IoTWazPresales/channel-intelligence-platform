@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-08-01 (SURFACE_OWNERSHIP authoritative; Operating guide restored)
+**Last updated:** 2026-08-01 (P1-1 header policy on cip @ `20260730_0075`)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -10,11 +10,11 @@
 | Field | Value |
 |-------|--------|
 | **Branch** | `main` (P1 units may use short-lived `feat/p1-*` same-day merge) |
-| **Alembic (DB)** | **`20260727_0074` on cip** (`20260730_0075` authored, **not applied**) |
+| **Alembic (DB)** | **`20260730_0075` on cip** |
 | **HEAD** | tip of `main` (verify: `git rev-parse --short HEAD`) |
 | **Pushed?** | verify before claiming |
-| **Current phase** | **P1 — Load the corpus** |
-| **Next** | **P1-D004** open — **Shipping-owned** (`pod_date` on evidence, missing on current/fact); not a PvE concern. Do not start P1-D004 remediation until asked. Surface ownership map confirmed authoritative. |
+| **Current phase** | **P1 — Load the corpus** (closing) |
+| **Next** | P1-X boundary: batch-fix defect log + finalise census + P1-5 lineup census sign-off → then A-lane |
 
 ---
 
@@ -82,7 +82,7 @@ If CURRENT disagrees with ROADMAP about what's next for the session, CURRENT win
 | Unit | Status |
 |------|--------|
 | P1-0 Census + defect-log scaffold | **Done** (numbers filled 2026-07-31) |
-| P1-1 BACKLOG-082 header config | **Implemented in dirty tree** — migration `20260730_0075` authored, **not applied** |
+| P1-1 BACKLOG-082 header config | **Done** — `20260730_0075` on cip; D-022 policy live |
 | P1-2 DSI | Pre-loaded — **leave alone** |
 | P1-3 Shipment | Job `#605` — **signed** (14k corpus vs 7.3k file explained) |
 | P1-4 CPOR | Job `#560` — **signed** (~297 OK) |
@@ -104,7 +104,7 @@ CI API defects: `docs/CI_API_DEFECT_LOG_2026-07-29.md` — batch-fix later, not 
 | Item | Where |
 |------|--------|
 | GitHub required CI check | BACKLOG-**087** |
-| Header ASUS seed + denylist | BACKLOG-**082** (Active — P1-1) |
+| Header ASUS seed + denylist | BACKLOG-**082** — **Done** (P1-1) |
 | Customer merge alias seal | BACKLOG-**081** |
 | CST alias batch confirm/reject | BACKLOG-**080** |
 | Ops-list shell parity (fold-in) | BACKLOG-**079** |

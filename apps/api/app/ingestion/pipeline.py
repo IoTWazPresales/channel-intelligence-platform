@@ -42,10 +42,14 @@ def effective_mapping_template(source: SourceDefinition | None) -> dict[str, Any
     tpl = source.import_template if source else None
     if tpl and tpl.expected_columns:
         for k, v in tpl.expected_columns.items():
+            if str(k).startswith("_"):
+                continue
             if isinstance(v, dict):
                 merged[k] = {"aliases": list(v.get("aliases", []))}
     if source and source.expected_template:
         for k, v in source.expected_template.items():
+            if str(k).startswith("_"):
+                continue
             if isinstance(v, dict):
                 merged.setdefault(k, {"aliases": list(v.get("aliases", []))})
             else:
@@ -901,18 +905,23 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
             mapping = job.field_mapping or default_field_mapping(cols, template)
             if job.template_slug == "distributor_inventory":
                 from app.services.imports.dsi_mapping_workflow import (
-                    apply_exact_raw_customer_header_overrides,
                     apply_dsi_customer_column_target_resolution,
+                    apply_dsi_never_auto_map_denylist,
+                    apply_dsi_prefer_header_targets,
                     apply_dsi_product_identifier_sample_inference,
+                    apply_template_exact_header_targets,
                     column_samples_from_schema_dict,
                     sanitize_dsi_field_mapping,
                 )
 
                 if not job.field_mapping:
                     samp = column_samples_from_schema_dict(schema)
-                    mapping = apply_exact_raw_customer_header_overrides(cols, mapping)
+                    mapping = apply_dsi_never_auto_map_denylist(cols, mapping)
+                    mapping = apply_template_exact_header_targets(cols, mapping)
                     mapping = apply_dsi_customer_column_target_resolution(cols, mapping)
+                    mapping = apply_dsi_prefer_header_targets(cols, mapping)
                     mapping = apply_dsi_product_identifier_sample_inference(cols, mapping, samp)
+                    mapping = apply_dsi_never_auto_map_denylist(cols, mapping)
                 mapping, _ = sanitize_dsi_field_mapping(cols, mapping)
             job.field_mapping = mapping
             job.stage = STAGE_MAPPED

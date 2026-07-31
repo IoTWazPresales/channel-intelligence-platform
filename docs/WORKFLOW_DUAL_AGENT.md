@@ -120,6 +120,47 @@ Warren may waive in writing only — record `<Opus|Fable> verify: WAIVED <YYYY-M
 - FLAG ≠ BLOCK where domain requires
 - Never auto-create `dim_product` / `dim_customer` / `dim_distributor` from import evidence
 - Import / steward / apply work: obey `.cursor/rules/import-parity.mdc` at the **DSI/shipment experience bar**, not checkbox imports of shared files
+- **Verification sequence (below)** — required on every behaviour-changing unit
+
+---
+
+## Verification sequence (standing — Warren 2026-07-30)
+
+Any unit that **changes behaviour** (import/apply/mapping/resolution, load, KPI, steward write path, or operator-visible flow) must ship a `## Verification sequence` section in the **same shape** as below.
+
+**Hard rules:**
+
+1. **Author before implementation** — write the sequence in the unit prompt / Cursor report plan **before** editing behaviour. Never improvise it after the fact.
+2. **Not “eyeball it”** — each step is an exact action a human can run.
+3. **Numbered steps** — `1.`, `2.`, … with fail criteria on every step.
+4. **Minimum content per domain/load-style unit:**
+   - Source-file totals vs loaded fact totals (with tolerance if any)
+   - Row counts in vs out, with every drop explained
+   - The domain invariant for that unit
+   - The specific screens/URLs/controls to open or click
+5. **VERIFIED is Warren’s word** — Cursor may mark `UNVERIFIED` when counts match; only Warren’s sign-off after running the sequence flips to VERIFIED (see P1 census discipline).
+
+### Required shape (copy into unit prompt / halt message / Cursor report)
+
+```markdown
+## Verification sequence
+
+**Domain / unit:** <name>
+**Invariant:** <one sentence>
+**Source under test:** <exact file path(s) or job id>
+
+1. **Action:** <exact — which file to upload, which URL/screen to open, which control to click>
+   **Expected:** <result with actual numbers>
+   **Fail if:** <concrete fail condition>
+
+2. **Action:** …
+   **Expected:** …
+   **Fail if:** …
+
+… (include source vs fact totals, in/out row counts + drop explanation, invariant check, screens)
+```
+
+Hygiene-only / docs-only units that cannot change runtime behaviour may omit the sequence and state `N/A — docs-only` once in the Cursor report.
 
 ---
 
