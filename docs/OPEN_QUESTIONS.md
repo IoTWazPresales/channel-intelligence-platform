@@ -38,20 +38,6 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 | **Raise by** | Before A1 claims support-bias; before B2 |
 | **Source** | Domain rules Still open #2; P1-5 leave-alone 2026-08-01 |
 
-### Q-005 — A1 PM planning bias surface
-
-| Field | Value |
-|-------|--------|
-| **What is unclear** | Does “PM planning bias across years” already exist as a tile/API on `/plan-vs-executed`, or is it a new metric to design? |
-| **Why it matters** | ROADMAP A1 scope lists PM bias; pre-build audit required before any new tile (D-023/D-024) |
-| **Interim assumption** | A1 exit for this run = existing fill / deal-stock / short / unplanned / no-PO surface + default-period fix. PM bias is a **separate design-stage AMBER** if missing |
-| **What would change** | New scorecard fields / tiles on Plan vs Executed only if audit finds no owner |
-| **Blocking?** | No for fill-rate credibility; Yes before claiming full ROADMAP A1 scope complete |
-| **Blocks** | Full A1 “PM bias” claim |
-| **Owner** | Cursor (audit) → Warren if new metric |
-| **Raise by** | A1 module |
-| **Source** | ROADMAP A1 scope; SURFACE_OWNERSHIP |
-
 ### Q-003 — Hosting target
 
 | Field | Value |
@@ -81,36 +67,41 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 | **Raise by** | P4 entry / first customer file |
 | **Source** | Domain rules Still open #4 |
 
-### Q-006 — A2 promo-effectiveness metrics (design lock)
+### Q-008 — A2-03 claim rate column mapping
 
 | Field | Value |
 |-------|--------|
-| **What is unclear** | Definitions for portfolio support spend by customer/BU/promo type, settlement rate, cost per incremental unit, support norms, comparable-case similarity axes |
-| **Why it matters** | A2 exit is a promo-effectiveness surface; case CRUD alone is not it. Building without definitions invents commercial semantics |
-| **Interim assumption** | Do **not** build A2 analytics tiles until Warren locks formulas (design-stage AMBER). Case list/detail/settlement remain the CPOR ops surface |
-| **What would change** | New owning route or section under CPOR Cases; API aggregates |
-| **Blocking?** | **Yes for A2 exit** |
-| **Blocks** | A2 |
+| **What is unclear** | Semantics lock claim rate = `claimed / approved`, but live schema has no columns named claimed/approved. Candidates: claim-evidence Σ units vs estimate; case counts with claims vs `status/workflow_status ∈ {approved,…}`; USD claim vs approved support. |
+| **Why it matters** | Wrong mapping silently invents a commercial KPI next to delivery rate (`result_qty/estimate_qty`). |
+| **Interim assumption** | **Do not build A2-03** until Warren picks the mapping. A2-U1 can ship A2-01/02/06 without it. |
+| **What would change** | Numerator/denominator SQL for portfolio claim rate |
+| **Blocking?** | **Yes for A2-03 only** |
+| **Blocks** | Claim-rate tile / field |
 | **Owner** | Warren |
-| **Raise by** | A2 entry |
-| **Source** | ROADMAP A2; tree audit 2026-08-01 |
-
-### Q-007 — A3 replenishment + WoC grain
-
-| Field | Value |
-|-------|--------|
-| **What is unclear** | Replenishment thresholds (today hardcoded `<4` weeks icon) and whether summary WoC may average customer-grain velocity against channel stock |
-| **Why it matters** | Wrong grain misstates cover; wrong threshold creates noise alerts |
-| **Interim assumption** | Keep existing Channel Ops derived-stock + thin reorder until formulas locked; prove latest-per-pair (code path exists) |
-| **What would change** | KPI card math, inventory signals |
-| **Blocking?** | No for derived-stock proof; Yes for “replenishment signal” product claim |
-| **Blocks** | Full A3 exit claim |
-| **Owner** | Warren |
-| **Raise by** | A3 |
-| **Source** | ROADMAP A3; channel-ops audit 2026-08-01 |
+| **Raise by** | A2-U1 |
+| **Source** | `COMMERCIAL_SEMANTICS` A2-03; `cpor_case` / `cpor_claim_evidence_line` tree 2026-08-01 |
 
 ---
 
 ## Resolved
 
-*(none yet)*
+### Q-005 — A1 PM planning bias surface — **Resolved 2026-08-01**
+
+| Field | Value |
+|-------|--------|
+| **Answer** | Not present as a live tile. Locked as **SPEC ONLY** in `COMMERCIAL_SEMANTICS` A1-07 (signed volume bias by BU×PM) and A1-08 (slip = ship-date quarter delta, not POD). Building those tiles is a later A1 unit (AMBER design-stage for new tiles if formulas change; formulas already locked). |
+| **Source** | Warren → COMMERCIAL_SEMANTICS consolidation |
+
+### Q-006 — A2 promo-effectiveness metrics — **Resolved 2026-08-01**
+
+| Field | Value |
+|-------|--------|
+| **Answer** | Formulas locked in `COMMERCIAL_SEMANTICS` §4.3 (A2-01…A2-06). Cost per **incremental** unit = DO NOT BUILD (BACKLOG-089). BU = `dim_product.product_line`. Charter: A2 is GREEN once formulas locked. Remaining: implement on CPOR Cases; **A2-03 still needs Q-008** column mapping. |
+| **Source** | Warren → COMMERCIAL_SEMANTICS / ROADMAP A2 |
+
+### Q-007 — A3 replenishment + WoC grain — **Resolved 2026-08-01**
+
+| Field | Value |
+|-------|--------|
+| **Answer** | WoC grain = **distributor × product only**; customer-grain velocity vs channel stock is a defect (BACKLOG-090 — do not “fix” with another average). Replenishment v1 = threshold flag, **default 4 weeks**, tenant config. Derived stock latest-per-pair already correct (ROADMAP false claim removed). |
+| **Source** | Warren → COMMERCIAL_SEMANTICS A3; code audit `channel_ops_derived_stock` / `channel_ops.py` |

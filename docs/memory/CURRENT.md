@@ -11,10 +11,10 @@
 |-------|--------|
 | **Branch** | `main` |
 | **Alembic (DB)** | **`20260730_0075` on cip** |
-| **HEAD** | tip of `main` (verify: `git rev-parse --short HEAD`) |
-| **Pushed?** | verify before claiming |
+| **HEAD** | `cd95c5f` on `main` (in sync with origin) |
+| **Pushed?** | yes @ `cd95c5f` |
 | **Current phase** | **A-lane** (P1 exit sealed; A1 fill VERIFIED) |
-| **Next** | A2/A3 build only for metrics defined in `COMMERCIAL_SEMANTICS`. Open: Q-005–Q-007 answers; BACKLOG-090 WoC grain defect (do not fix inline). |
+| **Next** | **A2-U1** portfolio metrics (A2-01/02/06) on CPOR Cases — halted at data-mapping gate (support USD + voided lines). **Q-008** blocks A2-03. Do not start A3 WoC fix until A3 unit (BACKLOG-090). |
 
 ---
 

@@ -17,7 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-08-01 — **Governing reconcile:** D-026 autonomy zones sole DB-write rule; ROADMAP A3 snapshot-sum claim removed; CURRENT → charter v1.2 + COMMERCIAL_SEMANTICS; PvE SPEC stubbed; BACKLOG-090 WoC grain defect (evidence, no fix); BACKLOG-091 over-plan intake UI rename.
+- 2026-08-01 — **A-lane continue:** Q-005/006/007 → Resolved (semantics). Q-008 opened (A2-03 claim rate mapping). A2 pre-build: no promo-effectiveness surface exists; A2-U1 = A2-01/02/06 only — STOP at column mapping before code.
+- 2026-08-01 — **Governing reconcile:** D-026 autonomy zones sole DB-write rule; ROADMAP A3 snapshot-sum claim removed; CURRENT → charter v1.2 + COMMERCIAL_SEMANTICS; PvE SPEC stubbed; BACKLOG-090 WoC grain defect (evidence, no fix); BACKLOG-091 over-plan intake UI rename. (`cd95c5f`)
 - 2026-08-01 — **Docs consolidate:** charter v1.2 + COMMERCIAL_SEMANTICS; stubs for ownership/taxonomy/workflow; domain 4.2/4.3; D-025; BACKLOG-089.
 
 - 2026-08-01 — **P1 closed:** census + defect log sealed; P1-5 lineup leave-alone (3 po_issued / 285 lines / 52 PO links); P1-X batch: D001–D003 fixed-inline, D004→BACKLOG-088. Next: A-lane.
