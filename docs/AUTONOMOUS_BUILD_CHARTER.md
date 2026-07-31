@@ -384,9 +384,10 @@ in CURRENT).
 ### CIP standing rules (dual-agent)
 
 - Spec / BACKLOG entry read-only unless Warren says edit
-- No cip writes without Warren approval (SELECT-only OK) — except where this charter’s
-  autonomy zones already permit unattended load/steward
-- No alembic upgrade without Warren
+- Database writes follow **Autonomy zones** above (single rule — no blanket ban):
+  GREEN/AMBER permitted unattended for import loads and steward applies (job-reversible);
+  RED for merges / supersessions / destructive bulk without clone-proof; migrations and
+  schema changes need Warren’s explicit approval
 - Explicit `git add <paths>` — never `-A` / `.`
 - FLAG ≠ BLOCK where domain requires
 - Never auto-create dims from import evidence

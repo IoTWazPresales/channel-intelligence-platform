@@ -156,8 +156,6 @@ comparable-case lookup ranked (customer → BU → promo type → quarter proxim
 **Scope:** derived channel stock (latest reported SOH per distributor×product − sell-out since
 snapshot + POD-landed since; pipeline never counts); velocity; weeks of cover with
 zero-velocity guard; replenishment signal.
-**Known defect to close here:** channel stock tile summing all SOH snapshots rather than
-latest-per-pair.
 
 ---
 

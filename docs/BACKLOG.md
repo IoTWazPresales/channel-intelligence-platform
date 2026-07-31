@@ -13,6 +13,41 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-091 — Rename PvE “Deal-stock landing” tile → “Over-plan intake”
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Trivial (UI string + tooltip; optional test ids) |
+| **Source** | `docs/COMMERCIAL_SEMANTICS.md` A1-02; Warren 2026-08-01 (end POD collision) |
+| **Idea** | Rename scorecard label “Deal-stock landing” to **Over-plan intake** (and exception copy “Over-ships / deal-stock” accordingly) so it cannot be read as POD landing. |
+| **Why it matters / deferrable** | Docs already renamed; live UI still says landing. Deferrable to next A1 touch. |
+| **What the work is** | `PlanVsExecutedView.tsx` (+ tests if they assert the string). |
+| **Regression traps** | Do not change the formula (still Σ max(S−P,0)); do not add POD. |
+| **Behavior to retain** | Same units/value secondary line. |
+| **Out of scope** | Shipping POD tiles. |
+| **TRIGGER** | **Next A1 unit** that touches Plan vs Executed UI. |
+
+---
+
+## BACKLOG-090 — Channel Ops summary WoC mixes customer-grain velocity with channel stock
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 · defect logged, not fixed inline |
+| **Effort** | Medium (need dist×product velocity or sell-out-derived velocity at same grain) |
+| **Source** | `docs/COMMERCIAL_SEMANTICS.md` A3-02; live code audit 2026-08-01 |
+| **Idea** | Fix Channel Ops weeks-of-cover so numerator and denominator share **distributor × product** grain. |
+| **Evidence (wrong today)** | `GET /api/v1/channel-ops/summary` (`channel_ops.py` ~165–181): `total_inv` = `sum_derived_channel_stock` (dist×product); `weeks_of_cover` = that stock ÷ `avg(FactCustomerVelocity.velocity_52wk)`. `FactCustomerVelocity` is keyed **distributor × product × customer** (`fact_customer_velocity.py`). Averaging customer-grain rows against channel stock is a grain mismatch. Inventory tab (~360–383) picks **max** customer `velocity_52wk` per product — still customer-grain, not dist×product sell-out velocity. |
+| **Why it matters / deferrable** | Summary “weeks of cover” on `/sell-out` is wrong on screen. Deferrable until A3 unit; do not patch with another mismatched average. |
+| **What the work is** | Define/implement velocity at dist×product (or document sell-out rate at that grain); wire summary + inventory WoC; zero velocity → undefined. |
+| **Regression traps** | Do not “fix” by averaging harder; do not use CST `/channel-intelligence` customer×site grain for Channel Ops. |
+| **Behavior to retain** | Derived stock latest-per-pair; `weeks_of_cover_or_none` near-zero → None. |
+| **Out of scope** | Replenishment engine (flag v1 only). |
+| **TRIGGER** | A3 weeks-of-cover / replenishment unit starts. |
+
+---
+
 ## BACKLOG-089 — Cost per incremental unit (promo) — do not build without baseline
 
 | Field | Detail |

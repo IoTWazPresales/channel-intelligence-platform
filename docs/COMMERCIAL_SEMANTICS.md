@@ -159,10 +159,10 @@ CST `/channel-intelligence` remains a **separate** customer×product×site veloc
 
 | Doc | Role |
 |---|---|
-| `docs/PLAN_VS_EXECUTED_SPEC.md` | PvE product/UX spec (personas, layout) — still valid; metrics defer to **this** file |
+| `docs/PLAN_VS_EXECUTED_SPEC.md` | **Stub** → this file (no parallel metric copy) |
 | `docs/COMMERCIAL_DOMAIN_RULES.md` | Domain ground truth — never overridden; corrected when it conflicts with this file |
 | `docs/STEWARD_EXPERIENCE_CONTRACT.md` | Steward UX contract rows |
-| `docs/BACKLOG.md` | Deferred work + TRIGGER (incl. incremental-unit cost, POD propagation) |
+| `docs/BACKLOG.md` | Deferred work + TRIGGER (incl. incremental-unit cost, POD propagation, WoC grain) |
 
 ---
 

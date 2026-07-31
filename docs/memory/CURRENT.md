@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-08-01 (A1 AMBER halt — fill surface live; A2/A3 design queue)
+**Last updated:** 2026-08-01 (governing set → charter v1.2 + COMMERCIAL_SEMANTICS)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -13,8 +13,8 @@
 | **Alembic (DB)** | **`20260730_0075` on cip** |
 | **HEAD** | tip of `main` (verify: `git rev-parse --short HEAD`) |
 | **Pushed?** | verify before claiming |
-| **Current phase** | **A-lane** (P1 exit sealed) |
-| **Next** | A1 fill **Warren VERIFIED**. Awaiting answers on Q-005 (PM bias/slip), Q-006 (A2 metrics), Q-007 (A3 replenishment/WoC) before building those. |
+| **Current phase** | **A-lane** (P1 exit sealed; A1 fill VERIFIED) |
+| **Next** | A2/A3 build only for metrics defined in `COMMERCIAL_SEMANTICS`. Open: Q-005–Q-007 answers; BACKLOG-090 WoC grain defect (do not fix inline). |
 
 ---
 
@@ -23,12 +23,14 @@
 | Doc | Role |
 |-----|------|
 | [`docs/ROADMAP.md`](../ROADMAP.md) **v3.0** | What to build, phase order |
-| [`docs/AUTONOMOUS_BUILD_CHARTER.md`](../AUTONOMOUS_BUILD_CHARTER.md) **v1.1** | How work is executed (zones, gates, question queue) |
+| [`docs/AUTONOMOUS_BUILD_CHARTER.md`](../AUTONOMOUS_BUILD_CHARTER.md) **v1.2** | Execution: zones, gates, dual-agent loop |
 | [`docs/COMMERCIAL_DOMAIN_RULES.md`](../COMMERCIAL_DOMAIN_RULES.md) **v1.0** | **Domain ground truth — never overridden by any agent** |
-| [`docs/SURFACE_OWNERSHIP.md`](../SURFACE_OWNERSHIP.md) | Which surface owns which concept — **authoritative** |
+| [`docs/COMMERCIAL_SEMANTICS.md`](../COMMERCIAL_SEMANTICS.md) | Metrics, grains, lifecycle, owning surfaces — **authoritative** |
 | [`docs/OPEN_QUESTIONS.md`](../OPEN_QUESTIONS.md) | Question queue (charter protocol) |
 | [`docs/STEWARD_EXPERIENCE_CONTRACT.md`](../STEWARD_EXPERIENCE_CONTRACT.md) | What done means for steward surfaces |
-| [`docs/STEWARD_ENGINE_DECISIONS.md`](../STEWARD_ENGINE_DECISIONS.md) | Why steward is built this way |
+| [`docs/STEWARD_ENGINE_DECISIONS.md`](../STEWARD_ENGINE_DECISIONS.md) | Why steward / process is built this way |
+
+Stubs (do not edit for content): `SURFACE_OWNERSHIP.md`, `PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md`, `PLAN_VS_EXECUTED_SPEC.md`, `WORKFLOW_DUAL_AGENT.md` → point at the docs above.
 
 If CURRENT disagrees with ROADMAP about what's next for the session, CURRENT wins and ROADMAP gets corrected.
 
@@ -40,40 +42,24 @@ If CURRENT disagrees with ROADMAP about what's next for the session, CURRENT win
 |----------|------|
 | Census | [`docs/DATA_CENSUS.md`](../DATA_CENSUS.md) |
 | Defect log | [`docs/P1_LOAD_DEFECT_LOG.md`](../P1_LOAD_DEFECT_LOG.md) |
-| Batch deferral | P1-D004 → [`BACKLOG-088`](../BACKLOG.md) (Shipping POD propagation) |
-
-| Unit | Outcome |
-|------|---------|
-| P1-0 | Scaffold done |
-| P1-1 | D-022 header `_policy` + `0075` on cip |
-| P1-2 | DSI leave-alone |
-| P1-3 | Shipment `#605` Warren OK |
-| P1-4 | CPOR `#560` Warren OK |
-| P1-5 | Lineups leave-alone: 3 `po_issued` / 285 lines / 52 PO links |
-| P1-X | D001–D003 fixed-inline; D004 deferred |
-
-**Pre-P1 dump:** `C:\Users\warren_eliason\cip-db-snapshots\cip_pre_p1_2026-07-31_172744.dump`
+| Batch deferral | P1-D004 → BACKLOG-088 |
 
 ---
 
 ## Standing quality bar
 
-**Contract or STOP · no half-PASS · code is evidence.** Surface ownership + pre-build audit mandatory.  
+**Contract or STOP · no half-PASS · code is evidence.** Metrics only from `COMMERCIAL_SEMANTICS`.  
 AMBER: design-stage for new metrics/tiles; post-build for domain number judgment.  
-RED: migrations beyond `0075`, schema, merges without clone-proof.
+RED: merges/supersessions without clone-proof; migrations/schema without Warren approval.  
+Import/steward loads: unattended per autonomy zones (D-026).
 
 ---
 
-## Parked / extracted
+## Open defects / backlog (A-lane)
 
 | Item | Where |
 |------|--------|
-| Evidence POD → fact/current | BACKLOG-**088** (P1-D004) |
-| Landing-quarter reattribution | BACKLOG-**068** (Shipping measurement first) |
-| GitHub required CI check | BACKLOG-**087** |
-| Customer merge alias seal | BACKLOG-**081** |
-| CST alias batch confirm/reject | BACKLOG-**080** |
-| Ops-list shell / pagination | BACKLOG-**079** / **085** |
-| Customer merge companions | BACKLOG-**083** |
-| URL helpers | BACKLOG-**084** |
-| PM channel_id CASE redo | BACKLOG-**086** |
+| Channel Ops summary WoC grain mismatch | BACKLOG-**090** |
+| Evidence POD → fact/current | BACKLOG-**088** |
+| Over-plan intake UI rename | BACKLOG-**091** |
+| Cost per incremental unit | BACKLOG-**089** (do not build) |

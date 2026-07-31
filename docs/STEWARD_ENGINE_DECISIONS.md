@@ -261,3 +261,13 @@ not POD). Execution process (zones, dual-agent) lives in `docs/AUTONOMOUS_BUILD_
 v1.2; former `WORKFLOW_DUAL_AGENT.md` is a stub.
 **Origin:** governing-doc sprawl + contradictory ownership/taxonomy/roadmap claims after the
 PvE POD misfire.
+
+## D-026 · 2026-08-01 · DB writes follow autonomy zones (not a blanket ban)
+**Locked.** The charter’s **Autonomy zones** are the single rule for `cip` writes.
+**Supersedes** the dual-agent standing line “no cip writes without Warren” (blanket).
+**Rationale:** Import loads and steward resolution applies are **idempotent / reversible by
+deleting the job** — they run unattended under GREEN/AMBER as already stated in zones.
+**Still require clone-proof + halt:** customer/distributor merges, supersessions, destructive
+bulk applies (physically irreversible pointer rewrites). **Still require Warren’s explicit
+approval:** Alembic migrations against `cip`, and any schema change (STOP and report).
+**Do not** reintroduce a second contradicting blanket ban in skills or overlays.
