@@ -112,6 +112,74 @@ def test_product_ready_to_map_prefix_fuzzy():
     assert out["confidence"] is not None and out["confidence"] >= 0.90
 
 
+def test_product_ready_via_shared_channel_suffix_strip():
+    """CPOR reuses DSI product_identity_lookup_keys (-CM/-E), not a forked heuristic."""
+    rows = {9: _product_row(9, sales_model="GU605MV-OI91610G0W")}
+    index = _empty_product_index(
+        sales_model_name_to_ids={"gu605mv-oi91610g0w": (9,)},
+        products_by_id=rows,
+    )
+    out = suggest_product_token("GU605MV-OI91610G0W-CM", product_index=index)
+    assert out["plan_class"] == "ready_to_map"
+    assert out["suggestions"][0]["dim_id"] == 9
+    assert out["confidence"] == 1.0
+    assert str(out["match_reason"]).startswith("exact_key")
+    assert "trailer_stripped" in str(out["match_reason"])
+
+
+def test_product_ready_via_underscore_deal_trailer():
+    rows = {11: _product_row(11, sales_model="E1504FA-O58512B0W")}
+    index = _empty_product_index(
+        sales_model_name_to_ids={"e1504fa-o58512b0w": (11,)},
+        products_by_id=rows,
+    )
+    out = suggest_product_token("E1504FA-O58512B0W_Deal", product_index=index)
+    assert out["plan_class"] == "ready_to_map"
+    assert out["suggestions"][0]["dim_id"] == 11
+    assert "trailer_stripped" in str(out["match_reason"])
+
+
+def test_product_ready_via_hyphen_dg_trailer():
+    rows = {12: _product_row(12, sales_model="RC72LA-Z12410B0W")}
+    index = _empty_product_index(
+        sales_model_name_to_ids={"rc72la-z12410b0w": (12,)},
+        products_by_id=rows,
+    )
+    out = suggest_product_token("RC72LA-Z12410B0W-DG", product_index=index)
+    assert out["plan_class"] == "ready_to_map"
+    assert out["suggestions"][0]["dim_id"] == 12
+    assert "trailer_stripped" in str(out["match_reason"])
+
+
+def test_oem_hyphen_full_hit_not_false_peeled():
+    """Full OEM code hit wins before one-level peel to a shorter base."""
+    rows = {
+        20: _product_row(20, sales_model="FA506NF-58512B0W"),
+        21: _product_row(21, sales_model="FA506NF"),
+    }
+    index = _empty_product_index(
+        sales_model_name_to_ids={
+            "fa506nf-58512b0w": (20,),
+            "fa506nf": (21,),
+        },
+        products_by_id=rows,
+    )
+    out = suggest_product_token("FA506NF-58512B0W", product_index=index)
+    assert out["plan_class"] == "ready_to_map"
+    assert out["suggestions"][0]["dim_id"] == 20
+    assert "trailer_stripped" not in str(out["match_reason"])
+
+
+def test_product_absolute_no_match_stays_no_match():
+    index = _empty_product_index(
+        sales_model_name_to_ids={"x515": (1,)},
+        products_by_id={1: _product_row(1, sales_model="X515")},
+    )
+    out = suggest_product_token("90XB05WN-BSO010", product_index=index)
+    assert out["plan_class"] == "no_match"
+    assert out["suggestions"] == []
+
+
 def test_enrich_candidate_shape_and_plan_class_counts():
     index = {"ACME": [1, 2]}
     labels = {1: "A", 2: "B"}
@@ -158,3 +226,32 @@ def test_suggest_helpers_do_not_mutate_index():
     suggest_party_token("ZZZ", index=index, labels=labels)
     assert set(index.keys()) == before_keys
     assert {k: list(v) for k, v in index.items()} == before_ids
+
+
+def test_demote_cpor_line_ignore_no_catalogue_unblocks_product():
+    from types import SimpleNamespace
+
+    from app.services.cpor.historical_import.resolve import (
+        case_apply_blockers,
+        demote_cpor_staging_line_for_product_ignore,
+    )
+    from app.services.imports.dsi_product_running_change import IGNORE_REASON_NO_CATALOGUE
+
+    row = SimpleNamespace(
+        resolved_product_id=None,
+        resolved_customer_id=1,
+        distributor_token=None,
+        resolved_distributor_id=None,
+        window_start="2026-01-01",
+        window_end="2026-01-31",
+        flags_json={"flags": []},
+        skip_apply=False,
+    )
+    assert "unresolved_product" in case_apply_blockers(row)  # type: ignore[arg-type]
+    demote_cpor_staging_line_for_product_ignore(row, IGNORE_REASON_NO_CATALOGUE)  # type: ignore[arg-type]
+    assert row.skip_apply is True
+    assert row.flags_json["steward_ignore_reason_code"] == IGNORE_REASON_NO_CATALOGUE
+    assert any(
+        str(d).startswith("steward_ignored_line:") for d in row.flags_json["diagnostics"]
+    )
+    assert "unresolved_product" not in case_apply_blockers(row)  # type: ignore[arg-type]

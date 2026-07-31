@@ -32,6 +32,42 @@ _GENERIC_DERIVED_BLOCKLIST = frozenset(
     }
 )
 
+# Final hyphen segments distributors append for dealer/channel/demo tagging.
+# Allowlist only — do not peel arbitrary trailing segments (OEM codes can end in letters).
+# -CM = Computer Mania, -E = Evetech (and similar), -DEMO/-DEM = demo units of the base model.
+_CHANNEL_SUFFIX_SEGMENTS = frozenset({"cm", "e", "demo", "dem"})
+
+
+def channel_suffix_stripped_key(full_token_key: str) -> str | None:
+    """If *full_token_key* ends with a known dealer/channel suffix, return the base key."""
+    key = (full_token_key or "").strip().lower()
+    if not key or "-" not in key:
+        return None
+    left, _, right = key.rpartition("-")
+    if right in _CHANNEL_SUFFIX_SEGMENTS and left:
+        return left
+    return None
+
+
+def trailing_separator_bases(key: str) -> tuple[str, ...]:
+    """One-level base after the final ``-`` or ``_`` trailer (tenant-agnostic).
+
+    Evidence-gated callers try the full key first; these bases are only meaningful when
+    the full key misses PM exact lookup. No recursion, no ASUS trailer vocabulary —
+    catalogue presence of the base is what gates acceptance.
+    """
+    k = (key or "").strip().lower()
+    if not k:
+        return ()
+    cut = max(k.rfind("-"), k.rfind("_"))
+    if cut <= 0:
+        return ()
+    base = k[:cut]
+    trailer = k[cut + 1 :]
+    if not base or not trailer:
+        return ()
+    return (base,)
+
 
 def _is_valid_derived_sales_model_code(candidate: str) -> bool:
     c = candidate.strip().lower()
@@ -72,13 +108,31 @@ def extract_derived_sales_model_codes(raw: str | None) -> tuple[str, ...]:
 
 
 def product_identity_lookup_keys(raw: str | None) -> tuple[str, ...]:
-    """Ordered unique keys: full ``_product_token_key`` first, then derived sales-model codes."""
+    """Ordered unique keys for PM / shipment identity matching.
+
+    Order: full ``_product_token_key`` → legacy channel-suffix strip (``-CM``/``-E``/``-DEMO``)
+    → one-level ``-``/``_`` trailer base → derived embedded sales-model codes.
+
+    Trailer bases are only meaningful when the full key misses exact PM lookup — callers that
+    short-circuit on the first hit keep OEM hyphenated full codes from false peel (e.g.
+    ``FA506NF-58512B0W`` hits before ``FA506NF`` is consulted). Candidate ``normalized_key``
+    stays the full token.
+    """
     full = _product_token_key(raw)
+    derived = extract_derived_sales_model_codes(raw)
     if not full:
-        return tuple(extract_derived_sales_model_codes(raw))
+        return derived
     seen: set[str] = {full}
     ordered: list[str] = [full]
-    for dk in extract_derived_sales_model_codes(raw):
+    stripped = channel_suffix_stripped_key(full)
+    if stripped and stripped not in seen:
+        seen.add(stripped)
+        ordered.append(stripped)
+    for base in trailing_separator_bases(full):
+        if base not in seen:
+            seen.add(base)
+            ordered.append(base)
+    for dk in derived:
         if dk not in seen:
             seen.add(dk)
             ordered.append(dk)

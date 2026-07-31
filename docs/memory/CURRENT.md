@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-31 (governing docs v3/v1.1 + domain rules; pre-P1 pg_dump)
+**Last updated:** 2026-07-31 (CPOR trailer strip + no-catalogue ignore soak on `#560`)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -14,7 +14,7 @@
 | **HEAD** | tip of `main` (verify: `git rev-parse --short HEAD`) |
 | **Pushed?** | verify before claiming |
 | **Current phase** | **P1 — Load the corpus** |
-| **Next** | New chat: P1 kickoff — do **not** start loads until Warren uploads source files on request |
+| **Next** | **HALT** — Warren VERIFIED for P1-3 shipment `#605` + P1-4 CPOR `#560` (census filled). Steward leftovers = ambig/needs_review (log-and-continue). Do not rebuild lineups/A1. |
 
 ---
 
@@ -23,7 +23,7 @@
 | Doc | Role |
 |-----|------|
 | [`docs/ROADMAP.md`](../ROADMAP.md) **v3.0** | What to build, phase order |
-| [`docs/AUTONOMOUS_BUILD_CHARTER.md`](../AUTONOMOUS_BUILD_CHARTER.md) **v1.1** | How work is executed (zones, gates, question queue) |
+| [`docs/AUTONOMOUS_BUILD_CHARTER.md`](../AUTONOMOUS_BUILD_CHARTER.md) **v1.1** | How work is executed (zones, gates, question queue) — refreshed from Downloads 2026-07-31 |
 | [`docs/COMMERCIAL_DOMAIN_RULES.md`](../COMMERCIAL_DOMAIN_RULES.md) **v1.0** | **Domain ground truth — never overridden by any agent** |
 | [`docs/OPEN_QUESTIONS.md`](../OPEN_QUESTIONS.md) | Question queue (charter protocol) |
 | [`docs/STEWARD_EXPERIENCE_CONTRACT.md`](../STEWARD_EXPERIENCE_CONTRACT.md) | What done means for steward surfaces |
@@ -39,17 +39,27 @@ If CURRENT disagrees with ROADMAP about what's next for the session, CURRENT win
 |-------|--------|
 | **Binary** | `C:\Program Files\PostgreSQL\18\bin\pg_dump.exe` |
 | **Database** | `cip` (verified `current_database() = cip` before dump) |
-| **Dump path** | `C:\Users\warren_eliason\cip-db-snapshots\cip_pre_p1_2026-07-31.dump` |
+| **Dump path** | `C:\Users\warren_eliason\cip-db-snapshots\cip_pre_p1_2026-07-31_172744.dump` |
+| **Prior dump** | `C:\Users\warren_eliason\cip-db-snapshots\cip_pre_p1_2026-07-31.dump` (earlier same day) |
 | **Format** | custom (`-F c`) |
-| **Taken** | 2026-07-31 |
+| **Taken** | 2026-07-31 17:27 |
 
 ---
 
-## Source-file access (session override)
+## Source-file access (charter Q6 — authoritative)
 
-**No staging folder on disk.** When a step needs real data, STOP and tell Warren exactly what to upload (domain, periods, file count, what will be done). Do not search for or assume file locations.
+**No staging folder on disk.** Upload on request / explicit paths only. Every file-dependent step is **AMBER**.
 
-`.gitignore` excludes `*.xlsx`, `*.xls`, `*.csv`, `*.dump` (and related dump patterns) so uploaded commercial data / dumps are never committed.
+`.gitignore` excludes `*.xlsx`, `*.xls`, `*.csv`, `*.dump` (and related dump patterns).
+
+### P1 inventory paths (2026-07-31)
+
+| Domain | Source | Status |
+|--------|--------|--------|
+| **Shipment** | `ACZA Shipped Unshipped 20260728.xlsx` | Job **`#605` loaded**; open-order key casing repaired (P1-D002) |
+| **CPOR** | `Consumer CPOR Tracking Table 20260623.xlsx` | Job **`#560`**: **297** cases / **583** lines; trailer strip + `ignore_no_catalogue` (P1-D003 fixed-inline); product queue 115 (no active no_match) |
+| **DSI** | leave alone | sellout 35 592 · SOH 47 411 |
+| **Lineups** | already on cip | 3 `po_issued` cases (NB/NV/NR) + 52 linked POs; **A1 = existing** `/plan-vs-executed` (27 periods) — do not rebuild |
 
 ---
 
@@ -70,9 +80,12 @@ If CURRENT disagrees with ROADMAP about what's next for the session, CURRENT win
 
 | Unit | Status |
 |------|--------|
-| P1-0 Census + defect-log scaffold | **Done** (scaffold files may be uncommitted — verify) |
-| P1-1 BACKLOG-082 header config | **Implemented in dirty tree** — migration `20260730_0075` authored, **not applied**; not part of governing-docs commit |
-| P1-2…P1-5 domain loads | Pending (halt after each) — **not started this session** |
+| P1-0 Census + defect-log scaffold | **Done** (numbers filled 2026-07-31) |
+| P1-1 BACKLOG-082 header config | **Implemented in dirty tree** — migration `20260730_0075` authored, **not applied** |
+| P1-2 DSI | Pre-loaded — **leave alone** |
+| P1-3 Shipment | Job `#605` loaded + P1-D002 repair — **HALT awaiting VERIFIED** |
+| P1-4 CPOR | Job `#560` trailer+ignore soak — **HALT awaiting VERIFIED** |
+| P1-5 Lineups | Existing corpus + `/plan-vs-executed` — no reload |
 | P1-X boundary batch-fix | Pending |
 
 ---

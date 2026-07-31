@@ -18,6 +18,12 @@ from app.services.imports.distributor_sales_inventory import (
     ProductResolutionProductRow,
     _product_token_key,
 )
+from app.services.imports.dsi_product_running_change import (
+    IGNORE_REASON_NO_CATALOGUE,
+    STEWARD_IGNORED_LINE_DIAG_PREFIX,
+    steward_ignored_line_diagnostic,
+)
+from app.services.imports.dsi_product_token_identity import product_identity_lookup_keys
 
 PlanClass = Literal["ready_to_map", "ambiguous_eligible", "no_match", "needs_review"]
 
@@ -185,11 +191,21 @@ def suggest_party_token(
 def _product_exact_ids(
     product_index: ProductResolutionIndex, token: str
 ) -> tuple[list[int], str]:
-    """Return (ids, tier_reason) for exact identity hits used by claim resolve."""
-    sm_key = _product_token_key(token)
-    sm_ids = [int(x) for x in (product_index.sales_model_name_to_ids.get(sm_key) or ())]
-    if len(sm_ids) >= 1:
-        return sm_ids, "sales_model_name"
+    """Return (ids, tier_reason) for exact identity hits used by claim resolve.
+
+    Uses the shared ``product_identity_lookup_keys`` path (full token → channel-suffix
+    strip → one-level ``-``/``_`` trailer base → derived codes) so CPOR steward matches
+    DSI identity (P1-D001 / trailer strip). Full-key hits short-circuit before trailer
+    bases are needed — OEM hyphens are not blindly peeled.
+    """
+    keys = product_identity_lookup_keys(token)
+    full = keys[0] if keys else ""
+    for key in keys:
+        sm_ids = [int(x) for x in (product_index.sales_model_name_to_ids.get(key) or ())]
+        if len(sm_ids) >= 1:
+            if key == full:
+                return sm_ids, "sales_model_name"
+            return sm_ids, "trailer_stripped"
 
     _pid, _tok, status = resolve_claim_product_id(product_index, item_code=token)
     if status == "ambiguous":
@@ -344,11 +360,9 @@ def resolve_staging_entities(db: Session, *, job_id: int) -> dict[str, Any]:
     p_n = c_n = d_n = 0
     for row in rows:
         if row.resolved_product_id is None and row.sales_model_token:
-            pid, _tok, status = resolve_claim_product_id(
-                product_index, sales_model=row.sales_model_token
-            )
-            if status == "resolved" and pid is not None:
-                row.resolved_product_id = pid
+            exact_ids, _tier = _product_exact_ids(product_index, row.sales_model_token)
+            if len(exact_ids) == 1:
+                row.resolved_product_id = exact_ids[0]
                 p_n += 1
 
         if row.resolved_customer_id is None and row.customer_token:
@@ -530,6 +544,105 @@ def list_unresolved_candidates(db: Session, *, job_id: int) -> dict[str, list[di
     }
 
 
+def _cpor_flags_dict(row: ImportCporHistoricalStagingLine) -> dict[str, Any]:
+    fj = row.flags_json
+    return dict(fj) if isinstance(fj, dict) else {}
+
+
+def _cpor_line_product_catalogue_ignored(row: ImportCporHistoricalStagingLine) -> bool:
+    """True when the line was demoted for product ignore_no_catalogue (or sibling ignore codes)."""
+    fj = _cpor_flags_dict(row)
+    reason = str(fj.get("steward_ignore_reason_code") or "").strip()
+    if reason == IGNORE_REASON_NO_CATALOGUE:
+        return True
+    for code in fj.get("diagnostics") or []:
+        if isinstance(code, str) and code.startswith(STEWARD_IGNORED_LINE_DIAG_PREFIX):
+            return True
+    return False
+
+
+def demote_cpor_staging_line_for_product_ignore(
+    row: ImportCporHistoricalStagingLine, reason_code: str
+) -> None:
+    """Mark a CPOR staging line as steward-ignored for product — drop out of apply + queue.
+
+    Mirrors DSI demote semantics as closely as CPOR staging allows: ``skip_apply=True`` plus
+    ``flags_json`` diagnostic ``steward_ignored_line:<reason>``. Never clears resolved FKs.
+    """
+    if row.resolved_product_id is not None:
+        return
+    reason = (reason_code or "").strip() or IGNORE_REASON_NO_CATALOGUE
+    fj = _cpor_flags_dict(row)
+    diag = list(fj.get("diagnostics") or [])
+    tag = steward_ignored_line_diagnostic(reason)
+    if tag not in diag:
+        diag.append(tag)
+    fj["diagnostics"] = diag
+    fj["steward_ignore_reason_code"] = reason
+    row.flags_json = fj
+    row.skip_apply = True
+
+
+def ignore_cpor_product_tokens(
+    db: Session,
+    *,
+    job_id: int,
+    tokens: list[str],
+    reason_code: str = IGNORE_REASON_NO_CATALOGUE,
+) -> dict[str, Any]:
+    """Demote staging lines for the given product tokens (skip_apply + ignore diagnostic)."""
+    wanted = {str(t).strip() for t in tokens if str(t).strip()}
+    if not wanted:
+        return {"tokens": 0, "lines_demoted": 0, "reason_code": reason_code}
+    rows = list(
+        db.scalars(
+            select(ImportCporHistoricalStagingLine).where(
+                ImportCporHistoricalStagingLine.import_job_id == job_id,
+                ImportCporHistoricalStagingLine.skip_apply.is_(False),
+                ImportCporHistoricalStagingLine.resolved_product_id.is_(None),
+            )
+        ).all()
+    )
+    n = 0
+    hit_tokens: set[str] = set()
+    for row in rows:
+        tok = (row.sales_model_token or "").strip()
+        if tok not in wanted:
+            continue
+        demote_cpor_staging_line_for_product_ignore(row, reason_code)
+        hit_tokens.add(tok)
+        n += 1
+    db.flush()
+    return {
+        "tokens": len(hit_tokens),
+        "lines_demoted": n,
+        "reason_code": reason_code,
+        "ignored_tokens": sorted(hit_tokens),
+    }
+
+
+def ignore_cpor_product_no_match_tokens(db: Session, *, job_id: int) -> dict[str, Any]:
+    """Absolute product ``no_match`` after trailer-aware suggest → ``ignore_no_catalogue``.
+
+    Reuses the DSI reason code; ignored lines leave the active steward queue
+    (``list_unresolved_candidates`` filters ``skip_apply``) and no longer hard-block case apply.
+    """
+    unresolved = list_unresolved_candidates(db, job_id=job_id)
+    no_match_tokens = [
+        str(c["token"]).strip()
+        for c in unresolved.get("product") or []
+        if c.get("plan_class") == "no_match" and str(c.get("token") or "").strip()
+    ]
+    out = ignore_cpor_product_tokens(
+        db,
+        job_id=job_id,
+        tokens=no_match_tokens,
+        reason_code=IGNORE_REASON_NO_CATALOGUE,
+    )
+    out["discovered_no_match"] = len(no_match_tokens)
+    return out
+
+
 def case_apply_blockers(row: ImportCporHistoricalStagingLine) -> list[str]:
     """Hard blockers for a staging line's case (FLAG≠BLOCK: parity alone does not block)."""
     blockers: list[str] = []
@@ -543,7 +656,7 @@ def case_apply_blockers(row: ImportCporHistoricalStagingLine) -> list[str]:
     ):
         if f in flags:
             blockers.append(f)
-    if row.resolved_product_id is None:
+    if row.resolved_product_id is None and not _cpor_line_product_catalogue_ignored(row):
         blockers.append("unresolved_product")
     if row.resolved_customer_id is None:
         blockers.append("unresolved_customer")
