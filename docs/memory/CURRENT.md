@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-08-01 (P1 closed — exit census + defect log)
+**Last updated:** 2026-08-01 (A1 AMBER halt — fill surface live; A2/A3 design queue)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -14,7 +14,7 @@
 | **HEAD** | tip of `main` (verify: `git rev-parse --short HEAD`) |
 | **Pushed?** | verify before claiming |
 | **Current phase** | **A-lane** (P1 exit sealed) |
-| **Next** | **A1** Proposed vs Executed — existing `/plan-vs-executed` (do not rebuild). Then A2 ∥ A3 per operating guide. |
+| **Next** | **AMBER — Warren:** A1 fill plausibility (26Q2 ~46.5%). Design-halt: A2 metrics (Q-006), A3 replenishment/WoC grain (Q-007), PM bias/slip (Q-005). Do not invent A2 analytics or new PvE tiles. |
 
 ---
 

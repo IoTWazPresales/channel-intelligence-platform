@@ -80,6 +80,34 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 | **Raise by** | P4 entry / first customer file |
 | **Source** | Domain rules Still open #4 |
 
+### Q-006 — A2 promo-effectiveness metrics (design lock)
+
+| Field | Value |
+|-------|--------|
+| **What is unclear** | Definitions for portfolio support spend by customer/BU/promo type, settlement rate, cost per incremental unit, support norms, comparable-case similarity axes |
+| **Why it matters** | A2 exit is a promo-effectiveness surface; case CRUD alone is not it. Building without definitions invents commercial semantics |
+| **Interim assumption** | Do **not** build A2 analytics tiles until Warren locks formulas (design-stage AMBER). Case list/detail/settlement remain the CPOR ops surface |
+| **What would change** | New owning route or section under CPOR Cases; API aggregates |
+| **Blocking?** | **Yes for A2 exit** |
+| **Blocks** | A2 |
+| **Owner** | Warren |
+| **Raise by** | A2 entry |
+| **Source** | ROADMAP A2; tree audit 2026-08-01 |
+
+### Q-007 — A3 replenishment + WoC grain
+
+| Field | Value |
+|-------|--------|
+| **What is unclear** | Replenishment thresholds (today hardcoded `<4` weeks icon) and whether summary WoC may average customer-grain velocity against channel stock |
+| **Why it matters** | Wrong grain misstates cover; wrong threshold creates noise alerts |
+| **Interim assumption** | Keep existing Channel Ops derived-stock + thin reorder until formulas locked; prove latest-per-pair (code path exists) |
+| **What would change** | KPI card math, inventory signals |
+| **Blocking?** | No for derived-stock proof; Yes for “replenishment signal” product claim |
+| **Blocks** | Full A3 exit claim |
+| **Owner** | Warren |
+| **Raise by** | A3 |
+| **Source** | ROADMAP A3; channel-ops audit 2026-08-01 |
+
 ---
 
 ## Resolved

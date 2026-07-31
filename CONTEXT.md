@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **A-lane entry / A1 AMBER:** `/plan-vs-executed` live (default 26Q2, fill ~46.5%, deal-stock/short/unplanned/no-PO). No PM bias/slip tiles (Q-005). A2 promo analytics MISSING (Q-006). A3 derived-stock code uses latest-per-pair (dist 21 raw 598k vs latest 12.7k); replenishment/WoC grain open (Q-007). Pytest PvE 21/21 (mock lineup quarters). Awaiting Warren on A1 numbers + design locks.
 - 2026-08-01 — **P1 closed:** census + defect log sealed; P1-5 lineup leave-alone (3 po_issued / 285 lines / 52 PO links); P1-X batch: D001–D003 fixed-inline, D004→BACKLOG-088. Next: A-lane.
 - 2026-08-01 — **P1-1 BACKLOG-082 / D-022:** DSI header `_policy` in template_definitions; workflow denylist + exact/prefer + memory-last precedence; alembic `20260730_0075` applied on cip; pytest `test_dsi_customer_header_resolution` 20/20. Tree cleared for P1 close.
 - 2026-08-01 — **Surface ownership lock:** `docs/SURFACE_OWNERSHIP.md` authoritative (tree-audited; ingest/ops/read split). Charter AMBER design-halt + pre-build audit; ROADMAP A1 POD→Shipping + constraint 9 + Operating guide restored; D-023/D-024. PvE POD wiring stays reverted; P1-D004 Shipping-owned.

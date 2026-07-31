@@ -13,7 +13,12 @@ def _no_live_duplicate_ingestion_audit(monkeypatch):
     async def _empty(_db):
         return []
 
+    async def _no_lineup_quarters(_db):
+        return set()
+
     monkeypatch.setattr(mod, "_load_duplicate_ingestion_samples", _empty)
+    # Read-model tests use AsyncMock db; avoid live SQL in default-period path.
+    monkeypatch.setattr(mod, "lineup_linked_year_quarters", _no_lineup_quarters)
 
 
 def _cov_for_periods(period_labels: list[str]) -> dict[str, Any]:
