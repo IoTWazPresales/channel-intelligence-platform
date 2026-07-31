@@ -188,19 +188,55 @@ def resolve_default_period(
     all_periods: list[dict[str, Any]],
     *,
     coverage_groups: list[dict[str, Any]] | None = None,
+    lineup_linked_quarters: set[tuple[int, int]] | None = None,
 ) -> str | None:
-    """Latest observed quarter with linked PO reconciliation (skips near-empty unlinked latest)."""
+    """Latest period with lineup↔PO reconciliation, else latest observed coverage quarter.
+
+    Prefer ``lineup_linked_quarters`` (cases with linked POs, keyed by
+    ``inferred_period_start``). Coverage ``linked_po_count`` alone is insufficient: a PO
+    observed in 26Q3 can be linked to a 26Q2 lineup and falsely mark 26Q3 as default.
+    """
     if not all_periods:
         return None
-    linked_quarters: set[tuple[int, int]] = set()
-    for g in coverage_groups or []:
-        if g.get("status") == "linked" and int(g.get("linked_po_count") or 0) > 0:
+    linked_quarters: set[tuple[int, int]] = set(lineup_linked_quarters or ())
+    if not linked_quarters:
+        for g in coverage_groups or []:
+            linked_n = int(g.get("linked_po_count") or 0)
+            if linked_n <= 0:
+                continue
+            status = g.get("status")
+            if status is not None and status != "linked":
+                continue
             linked_quarters.add((int(g["year"]), int(g["quarter"])))
     for p in all_periods:
         key = (int(p["year"]), int(p["quarter"]))
         if key in linked_quarters:
             return str(p["label"])
     return str(all_periods[0]["label"])
+
+
+async def lineup_linked_year_quarters(db: AsyncSession) -> set[tuple[int, int]]:
+    """Year/quarter keys for active lineup cases that have at least one linked PO."""
+    rows = (
+        await db.execute(
+            select(CommercialLineupCase.inferred_period_start)
+            .join(
+                CommercialLineupCasePo,
+                CommercialLineupCasePo.case_id == CommercialLineupCase.id,
+            )
+            .where(
+                *active_lineup_case_filters(),
+                CommercialLineupCase.inferred_period_start.is_not(None),
+            )
+            .distinct()
+        )
+    ).scalars().all()
+    out: set[tuple[int, int]] = set()
+    for ps in rows:
+        if ps is None:
+            continue
+        out.add(quarter_from_period_start(ps))
+    return out
 
 
 def _period_slots_in_range(
@@ -825,7 +861,12 @@ async def plan_vs_executed_read_model(
     try:
         cov = await coverage(db)
         all_periods = periods_from_coverage(cov)
-        default_period = resolve_default_period(all_periods, coverage_groups=cov.get("groups"))
+        lineup_quarters = await lineup_linked_year_quarters(db)
+        default_period = resolve_default_period(
+            all_periods,
+            coverage_groups=cov.get("groups"),
+            lineup_linked_quarters=lineup_quarters,
+        )
         effective_from = period_from or default_period
         effective_to = period_to or default_period
         bu_filter = product_line or drill_bu

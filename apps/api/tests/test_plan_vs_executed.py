@@ -221,6 +221,42 @@ def test_resolve_default_period_prefers_latest_linked_quarter():
     assert mod.resolve_default_period(all_periods, coverage_groups=groups) == "26Q2"
 
 
+def test_resolve_default_period_coverage_groups_without_status():
+    """``coverage()`` omits status — linked_po_count alone must drive the default."""
+    all_periods = [
+        {"year": 2026, "quarter": 3, "label": "26Q3"},
+        {"year": 2026, "quarter": 2, "label": "26Q2"},
+        {"year": 2026, "quarter": 1, "label": "26Q1"},
+    ]
+    groups = [
+        {"year": 2026, "quarter": 3, "linked_po_count": 0},
+        {"year": 2026, "quarter": 2, "linked_po_count": 28},
+        {"year": 2026, "quarter": 1, "linked_po_count": 23},
+    ]
+    assert mod.resolve_default_period(all_periods, coverage_groups=groups) == "26Q2"
+
+
+def test_resolve_default_period_prefers_lineup_linked_over_coverage_observation():
+    """PO observed in 26Q3 but linked to 26Q2 lineup must not default empty 26Q3."""
+    all_periods = [
+        {"year": 2026, "quarter": 3, "label": "26Q3"},
+        {"year": 2026, "quarter": 2, "label": "26Q2"},
+        {"year": 2026, "quarter": 1, "label": "26Q1"},
+    ]
+    groups = [
+        {"year": 2026, "quarter": 3, "linked_po_count": 40},
+        {"year": 2026, "quarter": 2, "linked_po_count": 5},
+    ]
+    assert (
+        mod.resolve_default_period(
+            all_periods,
+            coverage_groups=groups,
+            lineup_linked_quarters={(2026, 2), (2026, 1)},
+        )
+        == "26Q2"
+    )
+
+
 def test_available_periods_independent_of_period_filter():
     all_periods = [
         {"year": 2026, "quarter": 3, "label": "26Q3"},

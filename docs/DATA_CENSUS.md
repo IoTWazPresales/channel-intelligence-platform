@@ -60,8 +60,8 @@ Until (4), the maximum bucket is `UNVERIFIED` even if counts match.
 | Scaffold | P1-0 | Done (this file) | n/a |
 | Header vocabulary (082) | P1-1 | Code in dirty tree; alembic `0075` **not applied** | n/a (code unit) |
 | DSI weekly | P1-2 | Leave alone (pre-loaded corpus) — sellout 35 592 / SOH 47 411 | Halt for Warren |
-| Shipment inbound | P1-3 | Job `#605` loaded; open-order key repair (P1-D002) | **HALT** — awaiting VERIFIED |
-| CPOR historical | P1-4 | Job `#560` applied; trailer strip + `ignore_no_catalogue` (P1-D003) | **HALT** — awaiting VERIFIED |
+| Shipment inbound | P1-3 | Job `#605` loaded; open-order key repair (P1-D002); **14k = full corpus**, file evidence **7 328** | **Warren OK 2026-07-31** |
+| CPOR historical | P1-4 | Job `#560` applied; trailer strip + `ignore_no_catalogue` (P1-D003); ~297 cases | **Warren OK 2026-07-31** |
 | Lineups | P1-5 | Already on cip (3 `po_issued` + A1 surface) — do not rebuild | Halt for Warren |
 | Boundary batch-fix | P1-X | Pending | after all domains |
 
@@ -105,7 +105,7 @@ Until (4), the maximum bucket is `UNVERIFIED` even if counts match.
 
 | Period | Rows | Shipped | Open order | Unshipped | pod_date present % | pod_date NULL % | Shipped-not-landed | Res % | Bucket | Defect id |
 |--------|------|---------|------------|-----------|--------------------|-----------------|--------------------|-------|--------|-----------|
-| job 605 corpus | **14 366** | **13 129** | **1 237** | — | **48.8%** (7 012) | **51.2%** (7 354) | shipped∧NULL pod **6 117** | steward leftovers remain on job | `UNVERIFIED` | P1-D002 (fixed-inline) |
+| job 605 corpus | **14 366** (all jobs) · this file evidence **7 328** | **13 129** | **1 237** | — | **48.8%** (7 012) | **51.2%** (7 354) | shipped∧NULL pod **6 117** | file Unship **799**/799 applied; Shipped file **6 538** → evidence **6 529** → ~**441** evidence still unmatched to facts (steward) | `UNVERIFIED` | P1-D002 (fixed-inline); **14k ≠ file** — cumulative fact table |
 
 ---
 
@@ -128,7 +128,7 @@ Until (4), the maximum bucket is `UNVERIFIED` even if counts match.
 | Domain | Date | Warren VERIFIED? | Notes |
 |--------|------|------------------|-------|
 | DSI | | | Leave alone — pre-loaded |
-| Shipment | 2026-07-31 | **awaiting** | `#605` loaded; P1-D002 repaired; print numbers above |
-| CPOR | 2026-07-31 | **awaiting** | `#560` trailer+ignore soak; product no_match=0; steward=ambig/needs_review |
-| Lineups | | | Existing corpus + A1 surface — no reload |
+| Shipment | 2026-07-31 | **yes** | `#605` file ~7.3k evidence; UI 14 366 = full corpus (prior jobs retained); Unship 799/799; ~441 shipped evidence unmatched (steward) |
+| CPOR | 2026-07-31 | **yes** | ~297 cases OK; sell-out = disti→reseller, sell-through = retailer→end user |
+| Lineups | 2026-07-31 | **leave-alone OK** | 3 po_issued cases (26Q1 NR, 26Q2 NB/NV) + 52 PO links; A1 surface live |
 | P1-X census | | | |

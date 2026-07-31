@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-07-31 — **A1 default period fix:** `resolve_default_period` prefers lineup-linked quarters (`inferred_period_start` + PO links) over coverage observation buckets — stops empty 26Q3 default when only 26Q1/26Q2 lineups exist. Live default **26Q2**, fill ~46%.
 - 2026-07-31 — **P1 census + HALT:** filled `DATA_CENSUS` for shipment `#605` (14 366 facts) + CPOR `#560` (297 cases / 583 lines; product no_match=0). Awaiting Warren **VERIFIED** on P1-3/P1-4. Trailer-strip unit committed separately.
 - 2026-07-31 — **CPOR trailer strip + no-catalogue ignore:** `trailing_separator_bases` + identity keys; CPOR demote `ignore_no_catalogue` (DSI reason). Soak `#560`: +44 exact products; 3 no_match→ignored (10 lines); product no_match=0; cases **297**/lines **583**; P1-D003 fixed-inline. Ambiguous twins still steward.
 - 2026-07-31 — **CPOR case-apply + steward:** `#560` applied clear cases → **296** `cpor_case` / **579** lines; reused DSI `product_identity_lookup_keys` in CPOR resolve (+88 ready maps, 0 failed); **155** tokens remain (P1-D003). Lineups confirmed allocated (3 po_issued + POs); A1 surface **already exists** (`/plan-vs-executed` — 26Q2 NB fill ~48%). No new PvE/lineup feature built.

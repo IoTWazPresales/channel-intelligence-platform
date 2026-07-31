@@ -14,7 +14,7 @@
 | **HEAD** | tip of `main` (verify: `git rev-parse --short HEAD`) |
 | **Pushed?** | verify before claiming |
 | **Current phase** | **P1 — Load the corpus** |
-| **Next** | **HALT** — Warren VERIFIED for P1-3 shipment `#605` + P1-4 CPOR `#560` (census filled). Steward leftovers = ambig/needs_review (log-and-continue). Do not rebuild lineups/A1. |
+| **Next** | **A1** in progress: default period fixed to lineup-linked **26Q2** (was empty 26Q3). P1-3/P1-4 signed. Continue A1 credibility (pod/landing) — do not rebuild PvE. |
 
 ---
 
@@ -83,9 +83,9 @@ If CURRENT disagrees with ROADMAP about what's next for the session, CURRENT win
 | P1-0 Census + defect-log scaffold | **Done** (numbers filled 2026-07-31) |
 | P1-1 BACKLOG-082 header config | **Implemented in dirty tree** — migration `20260730_0075` authored, **not applied** |
 | P1-2 DSI | Pre-loaded — **leave alone** |
-| P1-3 Shipment | Job `#605` loaded + P1-D002 repair — **HALT awaiting VERIFIED** |
-| P1-4 CPOR | Job `#560` trailer+ignore soak — **HALT awaiting VERIFIED** |
-| P1-5 Lineups | Existing corpus + `/plan-vs-executed` — no reload |
+| P1-3 Shipment | Job `#605` — **signed** (14k corpus vs 7.3k file explained) |
+| P1-4 CPOR | Job `#560` — **signed** (~297 OK) |
+| P1-5 Lineups | Existing corpus + `/plan-vs-executed` — leave-alone check in progress |
 | P1-X boundary batch-fix | Pending |
 
 ---
