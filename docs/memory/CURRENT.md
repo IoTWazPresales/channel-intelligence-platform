@@ -14,7 +14,7 @@
 | **HEAD** | tip of `main` (verify: `git rev-parse --short HEAD`) |
 | **Pushed?** | verify before claiming |
 | **Current phase** | **A-lane** (P1 exit sealed) |
-| **Next** | **AMBER — Warren:** A1 fill plausibility (26Q2 ~46.5%). Design-halt: A2 metrics (Q-006), A3 replenishment/WoC grain (Q-007), PM bias/slip (Q-005). Do not invent A2 analytics or new PvE tiles. |
+| **Next** | A1 fill **Warren VERIFIED**. Awaiting answers on Q-005 (PM bias/slip), Q-006 (A2 metrics), Q-007 (A3 replenishment/WoC) before building those. |
 
 ---
 

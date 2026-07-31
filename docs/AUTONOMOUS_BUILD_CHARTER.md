@@ -1,18 +1,18 @@
 # CIP Autonomous Build Charter
 
-**Version:** 1.1 · 2026-07-31 · Owner: Warren
-**Status:** proposed — commit to `docs/AUTONOMOUS_BUILD_CHARTER.md` after the interview
-section is answered.
+**Version:** 1.2 · 2026-08-01 · Owner: Warren  
+**Status:** authoritative execution doc (absorbs former `docs/WORKFLOW_DUAL_AGENT.md`).
 
-This governs how Cursor builds the remainder of CIP with bounded autonomy. It sits
-**under** `docs/ROADMAP.md` (what to build, in what order), is bound by
-`docs/COMMERCIAL_DOMAIN_RULES.md` (**domain ground truth — never overridden**), and sits
-**beside**
+This governs how Cursor builds the remainder of CIP with bounded autonomy — zones, gates,
+verification, and the Cursor ↔ CLI dual-agent loop. It sits **under** `docs/ROADMAP.md`
+(what to build, in what order), is bound by `docs/COMMERCIAL_DOMAIN_RULES.md` (**domain
+ground truth — never overridden**), and sits **beside**
 `docs/STEWARD_EXPERIENCE_CONTRACT.md` (what done means),
 `docs/STEWARD_ENGINE_DECISIONS.md` (why it's built this way), and
-`docs/SURFACE_OWNERSHIP.md` (which surface owns which concept — **authoritative**).
+`docs/COMMERCIAL_SEMANTICS.md` (metrics, grains, owning surfaces — **authoritative**).
 A metric mattering to a phase does not make that phase's screen its home. Where they
-conflict, the contract, decisions log, and surface-ownership map win.
+conflict, the contract, decisions log, and commercial semantics win.
+
 
 ---
 
@@ -87,7 +87,7 @@ Verify `current_database()` before any write; if it is not the expected target, 
 
 - **Design-stage halt (before any code):** new commercial semantics — a new metric,
   a new lifecycle state, or any tile/filter added to a user-facing surface. Report:
-  the concept, its owning surface per `SURFACE_OWNERSHIP.md`, the pre-build
+  the concept, its owning surface per `COMMERCIAL_SEMANTICS.md`, the pre-build
   existence-audit output, and — if proposing a new home — why the existing owner
   cannot be extended. Wait for Warren.
 - **Post-build halt (after verification):** domain data load sign-off, and first use
@@ -113,9 +113,9 @@ logged · committed and pushed · CURRENT + CONTEXT updated.
 | Module | Contract rows | Exit criterion | Zone | Budget |
 |---|---|---|---|---|
 | **P1 loads** (DSI, shipment, CPOR, lineups) | Census buckets per domain × period | Census reconciles: rows in = rows out, drops explained, domain invariant holds | AMBER at sign-off | 1 session per domain |
-| **A1 Proposed-vs-Executed** | Plan accuracy, fill rate (shipped-only), deal-stock landing, PM bias | Numbers reconcile to `fact_inbound_shipment`; Warren confirms plausibility | AMBER | 2 sessions |
-| **A2 CPOR intelligence** | Spend by customer/BU/promo type, cost per unit, settlement rate | Totals reconcile to loaded CPOR cases | GREEN | 2 sessions |
-| **A3 Channel stock + velocity** | Derived SOH, weeks of cover, zero-velocity guard | Latest-per-(distributor, product) snapshot rule proven; no snapshot summing | GREEN | 2 sessions |
+| **A1 Proposed-vs-Executed** | Plan accuracy, fill rate (shipped-only), over-plan intake, short/unplanned/no-PO; PM bias/slip per `COMMERCIAL_SEMANTICS` | Numbers reconcile to shipped facts; Warren confirms plausibility | AMBER | 2 sessions |
+| **A2 CPOR intelligence** | Spend by customer/BU/promo type; delivery rate; claim rate; support cost per unit sold; norms; comparable-case | Totals reconcile to loaded CPOR cases | GREEN once formulas locked in semantics | 2 sessions |
+| **A3 Channel stock + velocity** | Derived SOH, weeks of cover (dist×product), zero-velocity guard, replenishment flag v1 | Latest-per-(distributor, product) proven; no snapshot summing | GREEN | 2 sessions |
 | **P2-1 Deployment** | *(deferred — no hosting target set)* | — | RED until hosting decided | — |
 | **P2-2 Alembic replayability** | Chain replays on empty DB without `stamp head` | Fresh DB provisions from migrations alone | GREEN | 1 session |
 | **P2-3 Auth + RBAC + user mgmt** | Login, sessions, 4 roles, admin-adds-users, tenant scoping, steward audit | Cross-tenant leakage impossible; roles enforced server-side | AMBER | 2 sessions |
@@ -172,9 +172,9 @@ duplication defect — report it, do not treat it as coverage.
 **Pre-build existence audit — mandatory before any UI work.**
 `grep -rn "<concept>" apps/web/src` and `apps/api/app/services`. A hit means the
 concept exists — STOP, report where, extend that surface. No hit — consult
-`docs/SURFACE_OWNERSHIP.md`; owner listed, build there; no owner, halt and ask.
+`docs/COMMERCIAL_SEMANTICS.md`; owner listed, build there; no owner, halt and ask.
 Print the audit output in the unit report. A UI change claimed without it is
-rejected.
+rejected. Metrics not defined in `COMMERCIAL_SEMANTICS.md` are not built.
 
 ---
 
@@ -322,3 +322,108 @@ These are the questions Cursor cannot resolve. Unanswered, they hard-block their
 
 **Answered already:** A1 quarter window — all quarters with lineup coverage, credible core
 26Q1 → current.
+
+---
+
+## Dual-agent loop (Cursor ↔ CLI Opus | Fable)
+
+**Absorbed from** former `docs/WORKFLOW_DUAL_AGENT.md` (2026-08-01 merge).  
+**Operational skill:** `~/.cursor/skills/dual-agent-fable` / project `cip-dual-agent-fable`.  
+**Consultant default: Opus.** Use Fable when Warren names Fable, or to finish an in-flight
+Fable VERIFY chain. Cursor states `Consultant: Opus|Fable` in every sync pin.
+
+**Do not put here:** current branch, HEAD, job IDs, Alembic tip — those live in
+`docs/memory/CURRENT.md`.
+
+### Quality bar (non-negotiable)
+
+Optimize for UX, design, architecture, scalability, flexibility, best business practice —
+never for speed or “smallest diff.”
+
+| Rule | Meaning |
+|------|---------|
+| **Canonical clone or STOP** | Clone living reference behaviour/operator experience, not merely import a shared primitive. |
+| **No half-PASS** | Thin mounts / stub wizards / sync-only where async+progress is the bar → incomplete. |
+| **Code is evidence; docs are claims** | CURRENT/BACKLOG/ROADMAP “done” must be proven in the running tree. |
+| **Cursor must not self-PASS** | After clone/parity units, seed CLI VERIFY; only `VERDICT: PASS` closes. |
+| **VERIFY walks the contract** | Steward/import: S1–S14 against shipped tree; REQUIRED absent without waiver → STOP. |
+
+**Product bar:** best practice is default; propose the better path; patches are last resort.
+CONSULT states operator experience first; never recommend thin when a correct unified
+architecture exists.
+
+### Roles
+
+| Role | Owns | Must not |
+|------|------|----------|
+| **Warren** | Priorities, merge/promote, cip writes, alembic approval | — |
+| **Cursor** | Implement → tests → CURRENT/CONTEXT → commit/push → seed consultant | Next unit before PASS; alembic without Warren; `git add -A`; half-parity PASS |
+| **CLI consultant** | CONSULT / VERIFY | Edit files during consult/verify; migrations; PASS thin mounts |
+
+Browser Claude / claude.ai project chat is **retired** for this loop.
+
+### When to use
+
+Multi-unit roadmap / BACKLOG Large / mushy product decisions / independent verify.  
+**Not required for:** one-line fixes, typo commits, single-file obvious bugs.
+
+### Loop (one unit)
+
+```
+0. Sync pin (Cursor) — include Consultant: Opus|Fable
+1. CONSULT (CLI) — interview if mushy; short scope lock if BACKLOG complete
+2. Unit prompt → Warren skims → Cursor IMPLEMENT
+3. Cursor: tests → CURRENT/CONTEXT → explicit git add → commit → push → report
+4. VERIFY → VERDICT: PASS | STOP
+5. On PASS: next unit; on STOP: fix and re-verify
+```
+
+**Hard gate:** no next-unit implementation until `VERDICT: PASS` (or Warren written waiver
+in CURRENT).
+
+### CIP standing rules (dual-agent)
+
+- Spec / BACKLOG entry read-only unless Warren says edit
+- No cip writes without Warren approval (SELECT-only OK) — except where this charter’s
+  autonomy zones already permit unattended load/steward
+- No alembic upgrade without Warren
+- Explicit `git add <paths>` — never `-A` / `.`
+- FLAG ≠ BLOCK where domain requires
+- Never auto-create dims from import evidence
+- Import/steward: `.cursor/rules/import-parity.mdc` at DSI/shipment experience bar
+- Behaviour-changing units ship a `## Verification sequence` (shape in Browser verification
+  section above)
+
+### Scope lock / contract scoping
+
+Greenfield → interview (max 5 questions/round). Complete BACKLOG → short scope lock.
+Steward/import: CONSULT enumerates S-rows of `STEWARD_EXPERIENCE_CONTRACT.md`; exclude only
+with Warren waiver line. Reduced “lean/chrome-only” scope without waiver → defective prompt.
+
+### Artifacts
+
+`.tmp/<topic>_consult_*.md`, `_cursor_prompt.md`, `_cursor_report.md`, `_verify_*.md` —
+never committed. Templates: `.cursor/templates/consult_seed_template.md`,
+`verify_seed_template.md`.
+
+### Invoke (repo root, PowerShell)
+
+```powershell
+Get-Content .tmp\<name>_consult_opus_seed.md -Raw |
+  claude -p --model opus --output-format text --dangerously-skip-permissions |
+  Out-File .tmp\<name>_consult_opus_response.md -Encoding utf8
+```
+
+(Fable: `--model fable` and matching filenames.)
+
+### Handover starter
+
+```
+Run cip-session-handover
+Run cip-dual-agent-fable
+Branch: <name> @ <short SHA>
+Next: <unit from CURRENT>
+Skip: <do not re-audit>
+Consultant: Opus
+Mode: CONSULT
+```

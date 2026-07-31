@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-089 — Cost per incremental unit (promo) — do not build without baseline
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 · removed from ROADMAP A2 scope |
+| **Effort** | Large (requires validated counterfactual / baseline model) |
+| **Source** | Warren 2026-08-01 metric lock; `docs/COMMERCIAL_SEMANTICS.md` A2-X |
+| **Idea** | Cost per **incremental** unit sold under promo (support attributable to lift vs baseline). |
+| **Why it matters / deferrable** | Without a validated baseline, the number is fabricated. Deferrable until a baseline model exists; A2 ships **support cost per unit sold** (`support ÷ result_qty`) instead. |
+| **What the work is** | Define and validate a baseline/lift model; then add the metric to `COMMERCIAL_SEMANTICS` and build on CPOR. |
+| **Regression traps** | Do not ship a placeholder “incremental” that is just support÷qty under another name. |
+| **Behavior to retain** | Delivery rate / claim rate / support÷result_qty remain the A2 unit-economics set. |
+| **Out of scope** | Inventing a baseline in the A2 unit. |
+| **TRIGGER** | **Validated baseline model exists** (Warren + domain sign-off). |
+
+---
+
 ## BACKLOG-088 — Propagate evidence `pod_date` to current view / facts (P1-D004)
 
 | Field | Detail |

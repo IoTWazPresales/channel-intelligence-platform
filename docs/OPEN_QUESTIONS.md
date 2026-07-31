@@ -52,7 +52,7 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 | **Raise by** | A1 module |
 | **Source** | ROADMAP A1 scope; SURFACE_OWNERSHIP |
 
----
+### Q-003 — Hosting target
 
 | Field | Value |
 |-------|--------|
@@ -64,6 +64,7 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 | **Blocks** | Deployment |
 | **Owner** | Warren (deferred by choice) |
 | **Raise by** | When Warren sets a hosting target |
+| **Source** | Domain rules Still open #3 |
 | **Source** | Domain rules Still open #3 |
 
 ### Q-004 — Per-customer CST file formats

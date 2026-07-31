@@ -47,9 +47,9 @@ makes them unavoidable.
 7. **Never gap-fill actuals with predictions.** Forecast is a separate labelled layer.
 8. **Freshness is declared, never assumed.** Every surface states its data vintage.
 9. **One concept, one owning surface.** Every metric, filter and lifecycle state has
-   exactly one owning screen (`docs/SURFACE_OWNERSHIP.md`). Other surfaces read or
+   exactly one owning screen (`docs/COMMERCIAL_SEMANTICS.md`). Other surfaces read or
    link; they never re-implement. A metric mattering to a phase does not make that
-   phase's screen its home.
+   phase's screen its home. Metrics not defined in `COMMERCIAL_SEMANTICS.md` are not built.
 
 ---
 
@@ -127,24 +127,28 @@ the verification sequence and signed off** — never "rows exist".
 
 ### A1 — Proposed vs Executed
 **Entry:** P1 lineups + shipment signed off.
-**Scope:** plan accuracy by quarter/BU/customer; fill rate (shipped-only); deal-stock landing;
-over-ship as met-plan not penalty; PM planning bias across years; slip and timing.
+**Scope:** plan accuracy by quarter/BU/customer; fill rate (shipped-only); over-plan intake
+(formerly “deal-stock landing”); over-ship as met-plan not penalty; PM volume bias and slip
+per `docs/COMMERCIAL_SEMANTICS.md` (SPEC ONLY until built).
 **BACKLOG-068 SUPERSEDED:** Budget attaches to the quarter stock **landed**, so
 landing-quarter derivation is a first-class **dimension** available to A1/A2 analysis —
 it is **not** a new tile on the Plan-vs-Executed screen. **`pod_date` completeness is
-owned by Shipping** (`/shipping`), which already renders shipped / pipeline / landed and
-POD ageing; A1 consumes that measurement, it does not re-render it. See
-`docs/SURFACE_OWNERSHIP.md`. Two axes coexist: fill rate / plan execution stays
+owned by Shipping** (`/shipping`); A1 consumes that measurement, it does not re-render it.
+See `docs/COMMERCIAL_SEMANTICS.md`. Two axes coexist: fill rate / plan execution stays
 **shipped**-basis; budget consumption is **landed**-basis. Never conflated.
-**Added metric — support bias:** planned reservation vs actual CPOR spend, alongside volume
-bias ("PMs reserve 12% and spend 19%").
+**Support bias:** planned reservation vs actual CPOR spend — **CPOR-owned**, not PvE; blocked
+on reservation-column discovery. Do not put on Plan vs Executed.
 **Window:** all quarters with lineup coverage; credible core 26Q1 → current.
-**Exit:** plan-accuracy surface. This is the credibility artifact.
+**Exit:** plan-accuracy surface (fill + exceptions). Credibility artifact.
 
 ### A2 — CPOR intelligence
 **Entry:** P1 CPOR historical signed off.
-**Scope:** support spend by customer/BU/promo type; cost per incremental unit; settlement rate;
-over/under-delivery patterns; per-customer support norms; comparable-case lookup (B4's input).
+**Scope:** support spend by customer/BU/promo type (**BU = `dim_product.product_line`**);
+**delivery rate** (`result_qty/estimate_qty`); **claim rate** (`claimed/approved`);
+support cost per unit sold under promo (`support ÷ result_qty`); over/under-delivery
+patterns; per-customer support norms (trailing 4Q, % and absolute, window config);
+comparable-case lookup ranked (customer → BU → promo type → quarter proximity → volume).
+**Out of scope:** cost per **incremental** unit — no counterfactual; see BACKLOG-089.
 **Exit:** promo effectiveness surface.
 
 ### A3 — Channel stock + velocity
@@ -192,9 +196,10 @@ commercial planning*, because generic BI hands people columns and everyone inven
 fill rate. CIP hands people **governed metrics**. Three analysts get one number.
 
 ### P3-1 Semantic layer (the actual product)
-- **Metric registry** — locked definitions: fill rate, plan accuracy, PM bias, deal-stock
-  landing, velocity, weeks of cover, cost per incremental unit, settlement rate, support per
-  unit, channel stock. Each with formula, source facts, and invariants.
+- **Metric registry** — locked definitions in `docs/COMMERCIAL_SEMANTICS.md`: fill rate,
+  plan accuracy, PM volume bias, over-plan intake, velocity, weeks of cover (dist×product),
+  support cost per unit sold, delivery rate, claim rate, channel stock. Each with formula,
+  source facts, grain, and owning surface. Metrics not in that file are not built.
 - **Dimension registry** — period, customer/account, distributor, product, BU, sales model,
   channel, region, `site_label`.
 - **Validity rules** — each metric declares the grains at which it is meaningful. The builder
@@ -387,7 +392,7 @@ Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect l
 - Fix defects inline during a load phase — they go to the log, batched at the boundary.
   This is the single discipline that stops modules running for weeks.
 - Add a new import surface while the previous one has no real data through it.
-- Build a metric onto a surface that doesn't own it (`docs/SURFACE_OWNERSHIP.md`).
+- Build a metric onto a surface that doesn't own it (`docs/COMMERCIAL_SEMANTICS.md`).
 - Leave a branch unmerged for more than a day.
 
 ### Parallel work — the test
@@ -398,7 +403,7 @@ Two units may run in parallel **only if all five hold**:
 2. **At most one migration in flight.**
 3. **Neither is destructive or engine-level** — merges, supersession, bulk apply, and
    steward-engine edits run alone.
-4. **Different owning surfaces** (`docs/SURFACE_OWNERSHIP.md`) — two units touching the
+4. **Different owning surfaces** (`docs/COMMERCIAL_SEMANTICS.md`) — two units touching the
    same surface serialize even if the files differ.
 5. **Both merge to `main` the same day.**
 
@@ -443,9 +448,10 @@ Reserve paid judgment for decisions, not verification.
 
 ### Phase entry checklist
 
-1. Read this file, the charter, `COMMERCIAL_DOMAIN_RULES.md`, `SURFACE_OWNERSHIP.md`.
+1. Read this file, the charter, `COMMERCIAL_DOMAIN_RULES.md`, `COMMERCIAL_SEMANTICS.md`.
 2. **Name the owning surface for every metric the phase introduces.** No owner = design
-   decision for Warren, never an agent default.
+   decision for Warren, never an agent default. Metric must be defined in
+   `COMMERCIAL_SEMANTICS.md` or not built.
 3. Run consult once: lock scope, name the exit artifact, reject thin paths.
 4. Units inside the phase run on the gate script.
 
@@ -462,9 +468,9 @@ Reserve paid judgment for decisions, not verification.
 
 Docs whose content is **factual claims about the codebase** — surface ownership, route
 inventories, module status — are generated from the tree by Cursor and reviewed by
-Warren/consult. They are not drafted from memory. The v1 `SURFACE_OWNERSHIP.md` draft was
+Warren/consult. They are not drafted from memory. The v1 surface-ownership draft was
 written from memory and was wrong in 5 of 13 rows, including two errors of exactly the
-kind it existed to prevent.
+kind it existed to prevent. Authoritative map: `docs/COMMERCIAL_SEMANTICS.md`.
 
 Docs whose content is **decisions and process** — this roadmap's phases, the charter, the
 decisions log — are authored by Warren/consult and verified against the tree where they

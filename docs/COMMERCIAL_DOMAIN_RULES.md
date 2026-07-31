@@ -106,13 +106,18 @@ lineup linking.
 **4.1 B2 and B3 merge.** A lineup builder that does not compute profit-with-reservation is not
 usable by a PM. Budget is not a separate downstream module; it is part of authoring a lineup.
 
-**4.2 A1 gains a support-bias metric.** Planned reservation versus actual CPOR spend, sitting
-alongside volume bias. ("PMs reserve 12% and spend 19%.") This requires landing-quarter
-derivation in A1/A2 core.
+**4.2 Support bias is CPOR-owned.** Planned reservation versus actual CPOR spend
+("PMs reserve 12% and spend 19%") is a **CPOR Cases** metric, not a Plan-vs-Executed tile.
+It sits alongside volume bias as a commercial finding but does **not** render on
+`/plan-vs-executed`. **Blocked** until lineup discovery answers whether reservation is an
+explicit workbook column or derived from PM bottom vs planned price (Still open #2). See
+`docs/COMMERCIAL_SEMANTICS.md` A1-09.
 
-**4.3 BACKLOG-068 is superseded.** Landing-quarter derivation and `pod_date` completeness move
-from deferred to **A1/A2 core scope**. Fill rate stays shipped-basis; budget consumption is
-landed-basis.
+**4.3 Landing-quarter vs fill.** Fill rate stays **shipped**-basis (Plan vs Executed).
+Budget consumption is **landed**-basis. Landing measurement is **Shipping-owned**;
+landing-quarter reattribution is deferred (BACKLOG-068) until POD propagation
+(BACKLOG-088) makes measurement truthful. ROADMAP “A1/A2 core” means the **dimension**
+is available to analysis — not that PvE owns POD tiles. See `docs/COMMERCIAL_SEMANTICS.md`.
 
 ---
 

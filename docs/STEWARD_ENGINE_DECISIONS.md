@@ -230,7 +230,7 @@ candidate reads `resolved`. Silent and persistent.
 
 ## D-023 · 2026-08-01 · One concept, one owning surface
 **Locked.** Every metric, filter and lifecycle state has exactly one owning surface
-(`docs/SURFACE_OWNERSHIP.md`). Other surfaces read or link; they never re-implement.
+(`docs/COMMERCIAL_SEMANTICS.md`). Other surfaces read or link; they never re-implement.
 **Origin:** ROADMAP v3 stated POD completeness was "A1 core scope". A1 is the
 Plan-vs-Executed screen, so POD-completeness tiles and a `landing` scorecard block
 were built onto Plan-vs-Executed — duplicating Shipping, which already owns
@@ -249,3 +249,15 @@ and first-use-of-a-new-file-family remain post-build halts.
 POD work passed its unit tests and rendered fine; it was simply on the wrong screen.
 **Companion gate:** pre-build existence audit (grep `apps/web/src` +
 `apps/api/app/services`) is mandatory and its output is printed in the unit report.
+
+## D-025 · 2026-08-01 · Metrics live in COMMERCIAL_SEMANTICS or are not built
+**Locked.** Metric definitions (formula, grain, source facts, owning surface) are
+authoritative in `docs/COMMERCIAL_SEMANTICS.md`. If a metric is absent from that file, agents
+do **not** invent or ship it. WoC grain is **distributor × product only** — matching
+customer-grain velocity to distributor-grain stock is a **correctness error**, not a
+preference. Cost per incremental unit is **DO NOT BUILD** until a validated baseline model
+exists (BACKLOG-089). “Deal-stock landing” is renamed **over-plan intake** (overship vs plan,
+not POD). Execution process (zones, dual-agent) lives in `docs/AUTONOMOUS_BUILD_CHARTER.md`
+v1.2; former `WORKFLOW_DUAL_AGENT.md` is a stub.
+**Origin:** governing-doc sprawl + contradictory ownership/taxonomy/roadmap claims after the
+PvE POD misfire.
