@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-07-31 (CPOR trailer strip + no-catalogue ignore soak on `#560`)
+**Last updated:** 2026-08-01 (SURFACE_OWNERSHIP authoritative; Operating guide restored)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -14,7 +14,7 @@
 | **HEAD** | tip of `main` (verify: `git rev-parse --short HEAD`) |
 | **Pushed?** | verify before claiming |
 | **Current phase** | **P1 — Load the corpus** |
-| **Next** | **A1** in progress: default period fixed to lineup-linked **26Q2** (was empty 26Q3). P1-3/P1-4 signed. Continue A1 credibility (pod/landing) — do not rebuild PvE. |
+| **Next** | **P1-D004** open — **Shipping-owned** (`pod_date` on evidence, missing on current/fact); not a PvE concern. Do not start P1-D004 remediation until asked. Surface ownership map confirmed authoritative. |
 
 ---
 
@@ -25,6 +25,7 @@
 | [`docs/ROADMAP.md`](../ROADMAP.md) **v3.0** | What to build, phase order |
 | [`docs/AUTONOMOUS_BUILD_CHARTER.md`](../AUTONOMOUS_BUILD_CHARTER.md) **v1.1** | How work is executed (zones, gates, question queue) — refreshed from Downloads 2026-07-31 |
 | [`docs/COMMERCIAL_DOMAIN_RULES.md`](../COMMERCIAL_DOMAIN_RULES.md) **v1.0** | **Domain ground truth — never overridden by any agent** |
+| [`docs/SURFACE_OWNERSHIP.md`](../SURFACE_OWNERSHIP.md) | Which surface owns which concept — **authoritative** (tree-audited 2026-08-01) |
 | [`docs/OPEN_QUESTIONS.md`](../OPEN_QUESTIONS.md) | Question queue (charter protocol) |
 | [`docs/STEWARD_EXPERIENCE_CONTRACT.md`](../STEWARD_EXPERIENCE_CONTRACT.md) | What done means for steward surfaces |
 | [`docs/STEWARD_ENGINE_DECISIONS.md`](../STEWARD_ENGINE_DECISIONS.md) | Why steward is built this way |
@@ -85,7 +86,7 @@ If CURRENT disagrees with ROADMAP about what's next for the session, CURRENT win
 | P1-2 DSI | Pre-loaded — **leave alone** |
 | P1-3 Shipment | Job `#605` — **signed** (14k corpus vs 7.3k file explained) |
 | P1-4 CPOR | Job `#560` — **signed** (~297 OK) |
-| P1-5 Lineups | Existing corpus + `/plan-vs-executed` — leave-alone check in progress |
+| P1-5 Lineups | Existing corpus + `/plan-vs-executed` — default period fixed to lineup-linked **26Q2**; do not rebuild PvE |
 | P1-X boundary batch-fix | Pending |
 
 ---

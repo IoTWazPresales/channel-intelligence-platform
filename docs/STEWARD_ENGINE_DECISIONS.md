@@ -227,3 +227,25 @@ sets the wrong customer resolution identity, and per the docstring on
 resolver looks up another leaves rows `customer_unresolved` permanently while the
 candidate reads `resolved`. Silent and persistent.
 **Note:** Renumbered from colliding D-015 (2026-07-28) → D-022.
+
+## D-023 · 2026-08-01 · One concept, one owning surface
+**Locked.** Every metric, filter and lifecycle state has exactly one owning surface
+(`docs/SURFACE_OWNERSHIP.md`). Other surfaces read or link; they never re-implement.
+**Origin:** ROADMAP v3 stated POD completeness was "A1 core scope". A1 is the
+Plan-vs-Executed screen, so POD-completeness tiles and a `landing` scorecard block
+were built onto Plan-vs-Executed — duplicating Shipping, which already owns
+shipped/pipeline/landed/POD ageing. Warren caught it; the PvE wiring was reverted.
+**Root cause:** the roadmap named the metric but never named the owner. "Matters to
+phase X" collapsed into "renders on phase X's screen."
+**Rule:** a metric mattering to a phase means that phase may *consume* it. Ownership
+is declared separately and explicitly.
+
+## D-024 · 2026-08-01 · AMBER halts at design for new commercial semantics
+**Locked.** New metrics, lifecycle states, or tiles/filters on user-facing surfaces
+halt **before any code** — reporting concept, owning surface, pre-build
+existence-audit output, and justification if proposing a new home. Data-load sign-off
+and first-use-of-a-new-file-family remain post-build halts.
+**Reasoning:** a post-build halt cannot catch building the wrong thing correctly. The
+POD work passed its unit tests and rendered fine; it was simply on the wrong screen.
+**Companion gate:** pre-build existence audit (grep `apps/web/src` +
+`apps/api/app/services`) is mandatory and its output is printed in the unit report.

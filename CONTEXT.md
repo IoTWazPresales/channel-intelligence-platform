@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **Surface ownership lock:** `docs/SURFACE_OWNERSHIP.md` authoritative (tree-audited; ingest/ops/read split). Charter AMBER design-halt + pre-build audit; ROADMAP A1 POD→Shipping + constraint 9 + Operating guide restored; D-023/D-024. PvE POD wiring stays reverted; P1-D004 Shipping-owned.
+- 2026-07-31 — **STOP / revert:** mistaken A1 POD KPI tiles on `/plan-vs-executed` reverted (Shipping already owns landed/POD). Kept **P1-D004** (evidence `pod_date` not on current/fact). Do not duplicate landing onto PvE.
 - 2026-07-31 — **A1 default period fix:** `resolve_default_period` prefers lineup-linked quarters (`inferred_period_start` + PO links) over coverage observation buckets — stops empty 26Q3 default when only 26Q1/26Q2 lineups exist. Live default **26Q2**, fill ~46%.
 - 2026-07-31 — **P1 census + HALT:** filled `DATA_CENSUS` for shipment `#605` (14 366 facts) + CPOR `#560` (297 cases / 583 lines; product no_match=0). Awaiting Warren **VERIFIED** on P1-3/P1-4. Trailer-strip unit committed separately.
 - 2026-07-31 — **CPOR trailer strip + no-catalogue ignore:** `trailing_separator_bases` + identity keys; CPOR demote `ignore_no_catalogue` (DSI reason). Soak `#560`: +44 exact products; 3 no_match→ignored (10 lines); product no_match=0; cases **297**/lines **583**; P1-D003 fixed-inline. Ambiguous twins still steward.

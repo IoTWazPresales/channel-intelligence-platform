@@ -46,6 +46,10 @@ makes them unavoidable.
 6. **No new import surface** until the previous one has loaded real data.
 7. **Never gap-fill actuals with predictions.** Forecast is a separate labelled layer.
 8. **Freshness is declared, never assumed.** Every surface states its data vintage.
+9. **One concept, one owning surface.** Every metric, filter and lifecycle state has
+   exactly one owning screen (`docs/SURFACE_OWNERSHIP.md`). Other surfaces read or
+   link; they never re-implement. A metric mattering to a phase does not make that
+   phase's screen its home.
 
 ---
 
@@ -125,10 +129,13 @@ the verification sequence and signed off** — never "rows exist".
 **Entry:** P1 lineups + shipment signed off.
 **Scope:** plan accuracy by quarter/BU/customer; fill rate (shipped-only); deal-stock landing;
 over-ship as met-plan not penalty; PM planning bias across years; slip and timing.
-**BACKLOG-068 SUPERSEDED:** budget attaches to the quarter stock **landed**, so
-landing-quarter derivation and `pod_date` completeness are **A1/A2 core scope**, not a deferred
-lens. Two axes coexist: fill rate / plan execution stays **shipped**-basis; budget consumption
-is **landed**-basis. Never conflated.
+**BACKLOG-068 SUPERSEDED:** Budget attaches to the quarter stock **landed**, so
+landing-quarter derivation is a first-class **dimension** available to A1/A2 analysis —
+it is **not** a new tile on the Plan-vs-Executed screen. **`pod_date` completeness is
+owned by Shipping** (`/shipping`), which already renders shipped / pipeline / landed and
+POD ageing; A1 consumes that measurement, it does not re-render it. See
+`docs/SURFACE_OWNERSHIP.md`. Two axes coexist: fill rate / plan execution stays
+**shipped**-basis; budget consumption is **landed**-basis. Never conflated.
 **Added metric — support bias:** planned reservation vs actual CPOR spend, alongside volume
 bias ("PMs reserve 12% and spend 19%").
 **Window:** all quarters with lineup coverage; credible core 26Q1 → current.
@@ -353,6 +360,120 @@ The app is **done enough to sell** when all hold:
 10. The defect log contains no open item that would mislead a commercial decision
 
 Items 1–6 are the demo. Items 7–10 are what make it a product rather than a demo.
+
+---
+
+## Operating guide
+
+*(Restored 2026-08-01 — this section existed in v2 and was dropped by the v3 full-file
+rewrite.)*
+
+### How to read this file
+
+- **Phase** = a destination with an exit artifact. Weeks, not days.
+- **Unit** = one Cursor session's work. Hours to a day. Units live in the phase, not here.
+- The **phase overview** tells you what is legal to start. The **dependency graph** tells
+  you why. If a phase's blocker hasn't produced its exit artifact, that phase is not
+  startable — the downstream work would be built on guesses.
+
+### What you can start right now
+
+Anything whose blocker is satisfied. Currently **P1** is in progress (shipment `#605` and
+CPOR `#560` signed 2026-08-01; lineups leave-alone). A1/A2/A3 open when P1 exits.
+Lane X runs continuously in GREEN alongside anything.
+
+### What you cannot do
+
+- Start a phase whose blocker hasn't exited.
+- Fix defects inline during a load phase — they go to the log, batched at the boundary.
+  This is the single discipline that stops modules running for weeks.
+- Add a new import surface while the previous one has no real data through it.
+- Build a metric onto a surface that doesn't own it (`docs/SURFACE_OWNERSHIP.md`).
+- Leave a branch unmerged for more than a day.
+
+### Parallel work — the test
+
+Two units may run in parallel **only if all five hold**:
+
+1. **Disjoint file surfaces** — no file appears in both diffs. Overlap means serialize.
+2. **At most one migration in flight.**
+3. **Neither is destructive or engine-level** — merges, supersession, bulk apply, and
+   steward-engine edits run alone.
+4. **Different owning surfaces** (`docs/SURFACE_OWNERSHIP.md`) — two units touching the
+   same surface serialize even if the files differ.
+5. **Both merge to `main` the same day.**
+
+If any fails: serialize. The bottleneck is your attention and merge conflicts, not
+Cursor's throughput.
+
+**Naturally parallel:** A1 ∥ A2 ∥ A3 · Lane X ∥ anything · P6 config extraction ∥ anything.
+**Never parallel:** two units on the steward engine · two units with migrations ·
+anything ∥ a P1 domain load (that needs your eyes, not your attention split).
+
+### How to run parallel work
+
+1. Each unit gets its **own branch off current `main`**, named for the unit.
+2. Each gets its **own Cursor session**.
+3. Each ends with commit + push + **merge to `main` the same day**.
+4. Rebase the sibling branch off the new `main` before continuing.
+
+Two in flight is the practical ceiling. Three means one is drifting.
+
+**Why the same-day rule:** `feat/ops-master-grid-shell-parity` reached ~36 commits while
+`main` moved ~45 past its base, and became cheaper to delete than reconcile. A separate
+incident lost a week of DSI work to a silent branch reset. Long-lived branches are this
+project's most expensive recurring failure.
+
+### When consult fires
+
+| Situation | Consult? |
+|-----------|----------|
+| Phase entry — lock scope, name exit artifact, name owning surfaces, reject thin paths | **Yes** |
+| Domain fork — variance vs capability gap, budget semantics, forecast grain | **Yes** (or Warren directly) |
+| New metric with no owning surface | **Yes** |
+| Destructive path — merge, supersession, bulk apply | **Yes** |
+| Two failed fix attempts without root cause | **Yes** (charter no-patches rule) |
+| A unit inside an open phase, scope already locked | No — gate script |
+| Hygiene, config extraction, mechanical re-application | No |
+| Bug with a known cause | No |
+| Anything the gate script can prove mechanically | No |
+
+**Gate script covers:** tsc error-list diff, matched test file sets, prohibited-pattern
+grep, base-integrity check, pre-build existence audit. Cheap, every unit, no usage cap.
+Reserve paid judgment for decisions, not verification.
+
+### Phase entry checklist
+
+1. Read this file, the charter, `COMMERCIAL_DOMAIN_RULES.md`, `SURFACE_OWNERSHIP.md`.
+2. **Name the owning surface for every metric the phase introduces.** No owner = design
+   decision for Warren, never an agent default.
+3. Run consult once: lock scope, name the exit artifact, reject thin paths.
+4. Units inside the phase run on the gate script.
+
+### Weekly rhythm
+
+- **Start of week:** what phase, what's its exit artifact?
+- **Daily:** one or two units. Merge to `main` before stopping.
+- **Phase exit:** batch-fix the defect log, produce the artifact, update CURRENT +
+  CONTEXT changelog, re-read this file.
+- **When a phase runs long:** the question is never "push harder." It's "did the defect
+  log turn back into inline fixing?"
+
+### Document discipline
+
+Docs whose content is **factual claims about the codebase** — surface ownership, route
+inventories, module status — are generated from the tree by Cursor and reviewed by
+Warren/consult. They are not drafted from memory. The v1 `SURFACE_OWNERSHIP.md` draft was
+written from memory and was wrong in 5 of 13 rows, including two errors of exactly the
+kind it existed to prevent.
+
+Docs whose content is **decisions and process** — this roadmap's phases, the charter, the
+decisions log — are authored by Warren/consult and verified against the tree where they
+make factual claims.
+
+**Full-file rewrites drop sections.** This Operating guide was lost that way. When
+replacing a governing doc wholesale, diff the section list before and after and report
+any section that disappears.
 
 ---
 

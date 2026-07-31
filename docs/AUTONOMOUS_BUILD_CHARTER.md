@@ -8,9 +8,11 @@ This governs how Cursor builds the remainder of CIP with bounded autonomy. It si
 **under** `docs/ROADMAP.md` (what to build, in what order), is bound by
 `docs/COMMERCIAL_DOMAIN_RULES.md` (**domain ground truth — never overridden**), and sits
 **beside**
-`docs/STEWARD_EXPERIENCE_CONTRACT.md` (what done means) and
-`docs/STEWARD_ENGINE_DECISIONS.md` (why it's built this way). Where they conflict, the
-contract and decisions log win.
+`docs/STEWARD_EXPERIENCE_CONTRACT.md` (what done means),
+`docs/STEWARD_ENGINE_DECISIONS.md` (why it's built this way), and
+`docs/SURFACE_OWNERSHIP.md` (which surface owns which concept — **authoritative**).
+A metric mattering to a phase does not make that phase's screen its home. Where they
+conflict, the contract, decisions log, and surface-ownership map win.
 
 ---
 
@@ -81,12 +83,18 @@ Verify `current_database()` before any write; if it is not the expected target, 
 - Backlog batch-fixes, test repair, mechanical refactors
 - Anything the gate script can prove
 
-**AMBER — build and verify, then HALT for Warren before committing to `cip` data or
-proceeding.**
-- Any domain data load sign-off (does this number match reality?)
-- New commercial semantics: fill rate, bias, landing, budget math, forecast outputs
-- First use of a new source file family
-- Anything where the *definition* of a metric is being chosen
+**AMBER — halt at the point the risk is real, not after the work is done.**
+
+- **Design-stage halt (before any code):** new commercial semantics — a new metric,
+  a new lifecycle state, or any tile/filter added to a user-facing surface. Report:
+  the concept, its owning surface per `SURFACE_OWNERSHIP.md`, the pre-build
+  existence-audit output, and — if proposing a new home — why the existing owner
+  cannot be extended. Wait for Warren.
+- **Post-build halt (after verification):** domain data load sign-off, and first use
+  of a new source file family.
+
+Building the wrong thing correctly is the failure this prevents. A halt that occurs
+after the build is finished cannot catch a wrong-surface error.
 
 **RED — do not proceed. Queue and stop.**
 - Merges, supersessions, destructive bulk applies without a clone-proof run
@@ -156,6 +164,17 @@ Minimum coverage per module:
 
 **Cursor runs this before claiming a module complete.** A module claimed complete without a
 run sequence and printed results is rejected.
+
+Verification opens the **owning** surface for the concept, plus any surface the
+change claims to affect. If the concept renders on two surfaces, that is a
+duplication defect — report it, do not treat it as coverage.
+
+**Pre-build existence audit — mandatory before any UI work.**
+`grep -rn "<concept>" apps/web/src` and `apps/api/app/services`. A hit means the
+concept exists — STOP, report where, extend that surface. No hit — consult
+`docs/SURFACE_OWNERSHIP.md`; owner listed, build there; no owner, halt and ask.
+Print the audit output in the unit report. A UI change claimed without it is
+rejected.
 
 ---
 
@@ -284,10 +303,17 @@ These are the questions Cursor cannot resolve. Unanswered, they hard-block their
 4. **A1 quarter window** — confirmed as all quarters with lineup coverage, core 26Q1 →
    current. *(Answered)*
 5. **CST pilot customer** — which account, and who sends the weekly file? *(Blocks P3)*
-6. **Source file access** — **ANSWERED.** Files are on local disk at the staging root given at
-   kickoff. Cursor reads them directly; never request uploads. Staging root lives **outside the
-   repo**; `.gitignore` must exclude source data (`*.xlsx`, `*.xls`, `*.csv`, dumps). Folder
-   layout is tenant config, not a constant.
+6. **Source file access** — **ANSWERED: upload on request.** There is no staging folder and no
+   disk path. Cursor must never look for source files on disk or assume a file location. When
+   a step needs real data, **STOP and request the upload**, stating: which domain, which
+   periods, how many files, and what will be done with them. Warren uploads to the chat.
+   `.gitignore` must exclude source data (`*.xlsx`, `*.xls`, `*.csv`, dumps) so uploaded data
+   is never committed. Uploaded files are working copies, not an archive — a later re-run may
+   require re-upload.
+
+   **Consequence:** every file-dependent step is **AMBER by definition** — it cannot chain
+   unattended. P1 runs at Warren's pace. Work downstream of loaded facts (analytics, planning,
+   app shell) still chains freely in GREEN.
 7. **Hosting** — **DEFERRED BY CHOICE.** Completing locally. P2-1 deployment is out of scope
    until Warren sets a target.
 8. **Rollout users** — **ANSWERED.** Admin adds users and assigns roles; no self-registration.
