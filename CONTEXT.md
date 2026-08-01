@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **PR #15 BACKLOG-100:** CST orphan bulk-resolve deleted; API suite green on cip_test (1760 pass); hard CI API gate restored. Next: merge #15 → BACKLOG-099.
 - 2026-08-01 — **PR #14 merged to main** (`e66f257`): mocked e2e green; production build unblocked; API suite soft-report + BACKLOG-100. Next: Warren pick TRIGGER.
 - 2026-08-01 — **CI e2e topology** (`fix/ci-e2e-topology`): mocked e2e green (3 pass / 2 live skipped); BACKLOG-099; browser smoke getting-started + Data & imports. Next: PR.
 - 2026-08-01 — **PR #13 merged to main** (`d65fbfc`): alembic fresh-upgrade + web vitest. Alembic/API/web green; e2e still red (ECONNREFUSED :8001). Next: Warren pick TRIGGER.

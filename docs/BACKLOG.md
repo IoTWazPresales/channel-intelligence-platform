@@ -17,18 +17,20 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 |
+| **Status / parked** | **Shipped** · 2026-08-01 · PR #15 |
 | **Effort** | Large (batch-fix known defect classes on disposable DB) |
 | **Source** | `docs/CI_API_DEFECT_LOG_2026-07-29.md`; CI run on PR #14 (~87 failed / 30 errors); workflow had a hard `exit 1` after record-only API step which blocked merge despite green e2e/build |
 | **Idea** | Fix API suite against ephemeral `cip_test` so CI can hard-fail on API regressions (restore real merge gate for backend). |
-| **Why it matters / deferrable** | Today API runs with `continue-on-error` + artifact log; e2e/web/build are the merge gate. Known classes: hard-coded `current_database()=="cip"`, `DimProduct(channel_id=...)`, missing `pod_date` mocks, missing `cip_bulk_smoke` DB. |
+| **Why it matters / deferrable** | ~~Today API runs with `continue-on-error` + artifact log~~ — suite green on cip_test (1760 passed); hard gate restored. |
 | **What the work is** | Batch-fix defect classes in the 2026-07-29 log; drop continue-on-error; restore hard fail step; keep `ALLOW_TESTS_ON_DEV_DB` unset in CI. |
 | **Regression traps** | Do not point CI API tests at `cip`; do not set `ALLOW_TESTS_ON_DEV_DB=1` in Actions. |
-| **Behavior to retain** | Defect artifact upload until suite is green; alembic migrate assert tip `20260801_0008`. |
+| **Behavior to retain** | Alembic migrate assert tip `20260801_0008`; upload pytest log on API failure. |
 | **Out of scope** | Live e2e API wiring (BACKLOG-099); required-check unlock (BACKLOG-087). |
-| **TRIGGER** | Warren prioritizes green API on GitHub CI **or** a backend regression ships that e2e/web cannot catch. |
+| **TRIGGER** | — shipped — |
 
 ---
+
+## BACKLOG-099 — Wire live API into GitHub Actions e2e
 
 | Field | Detail |
 |-------|--------|

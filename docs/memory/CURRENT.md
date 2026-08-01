@@ -1,22 +1,21 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-01 (PR #14 merged)
+**Last updated:** 2026-08-01 (PR #15 BACKLOG-100)
 
-**Branch:** `main` @ `e66f257` (PR #14 merge)
+**Branch:** `feat/cst-orphan-and-api-cip-test` @ tip (PR #15 open)
 
 **Alembic:** `20260801_0008` on cip / code head
 
 ## Done (this session)
 
-- **PR #14 merged** — CI e2e topology + production build unblock.
-  - Mocked Playwright e2e green (3 pass / 2 live skipped); BACKLOG-099 live API e2e.
-  - Production build: steward hooks order, undici, EnterpriseDataGrid generics, production TS debt.
-  - CI API suite on `cip_test` remains record-only (warning annotation); hard gate → **BACKLOG-100**.
-- **CI green on merge run:** alembic, web vitest, e2e, production build PASS.
+- **CST:** deleted orphan `POST .../cst-candidates/bulk-resolve` (preview-bypass); steward bulk remains canonical.
+- **BACKLOG-100:** API suite green on CI `cip_test` (**1760 passed / 0 failed**); hard merge gate restored (no `continue-on-error`).
+  - Disposable smoke DBs + tip migrate; `CIP_DEV_CELERY_DISPATCH=in_process_thread` in CI.
+  - Merge gate now: alembic + **API** + web vitest + e2e + production build.
 
 ## Next
 
-1. Warren pick: orphaned CST `bulk-resolve` **or** BACKLOG-100 (API cip_test green) **or** other TRIGGER.
-2. Fresh feature branch off `main` before next unit.
+1. Merge PR #15 when hard-gate CI is green.
+2. Fresh branch off `main` for **BACKLOG-099** (live API e2e).
 
 **Env:** local Windows. API `:8001`, web `:3000`.

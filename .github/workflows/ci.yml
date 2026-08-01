@@ -143,44 +143,18 @@ jobs:
 
       - name: API tests
         id: api_tests
-        continue-on-error: true
         run: |
           set -o pipefail
           mkdir -p .tmp
           pnpm test:api 2>&1 | tee .tmp/ci-api-pytest.txt
           echo "API_TEST_EXIT=${PIPESTATUS[0]}" | tee -a .tmp/ci-api-pytest.txt
 
-      - name: Write API defect log (failures recorded, not fixed)
-        if: always() && steps.api_tests.outcome != 'skipped'
-        run: |
-          mkdir -p .tmp
-          {
-            echo "# CI API defect log — $(date -u +%Y-%m-%dT%H:%MZ)"
-            echo
-            echo "Ephemeral DB: cip_test (ALLOW_TESTS_ON_DEV_DB unset)."
-            echo "Non-goal this unit: fixing failing tests — record only."
-            echo
-            echo "## Outcome"
-            echo "api_tests step conclusion: ${{ steps.api_tests.outcome }}"
-            echo
-            echo "## pytest output (tail)"
-            echo '```'
-            if [ -f .tmp/ci-api-pytest.txt ]; then
-              tail -n 200 .tmp/ci-api-pytest.txt
-            else
-              echo "(no pytest capture)"
-            fi
-            echo '```'
-          } > .tmp/CI_API_DEFECT_LOG.md
-          echo "Defect log written to .tmp/CI_API_DEFECT_LOG.md"
-
-      - name: Upload API defect log
-        if: always() && steps.api_tests.outcome != 'skipped'
+      - name: Upload API pytest log (on failure)
+        if: failure() && steps.api_tests.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: ci-api-defect-log
           path: |
-            .tmp/CI_API_DEFECT_LOG.md
             .tmp/ci-api-pytest.txt
           if-no-files-found: warn
 
@@ -197,11 +171,3 @@ jobs:
 
       - name: Production build
         run: pnpm build
-
-      - name: Report API test outcome (record-only; not merge gate)
-        if: always() && steps.api_tests.outcome == 'failure'
-        run: |
-          echo "::warning::API suite failed against cip_test — see ci-api-defect-log artifact."
-          echo "Defects are recorded, not fixed in this unit (see docs/CI_API_DEFECT_LOG_2026-07-29.md)."
-          echo "Merge gate remains: alembic migrate, web vitest, e2e, production build."
-          echo "Hard API gate deferred — BACKLOG-100."
