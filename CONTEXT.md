@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **P3-5 live on cip:** applied `20260801_0007`; browser export + inbox WoC≈13.6 / vintage pair_count=2481 PASS. Beat→BACKLOG-098. Next P3-6 or PR.
+- 2026-08-01 — **P3-5 authored (halt for `20260801_0007`):** export xlsx/pdf + vintage; delivery/schedule schema+API; `/inbox` UI; BACKLOG-098 beat/import-event. cip still at `0006`.
 - 2026-08-01 — **P3-4 live on cip:** applied `20260801_0006`; browser dashboard tile WoC ≈13.6 PASS. Next P3-5 or PR.
 - 2026-08-01 — **P3-4 authored (await apply):** alembic `20260801_0006` saved_report/dashboard/tiles + APIs + `/reports` save + `/dashboards`. Stop before upgrade on cip.
 - 2026-08-01 — **P3-3 report builder v1:** `/reports` metric→grain→visual→`/query/execute`; nav + browser WoC smoke PASS. Save/share still P3-4.

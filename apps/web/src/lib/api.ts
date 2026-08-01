@@ -318,13 +318,28 @@ export async function fetchProductReferenceBreakdown(
 }
 
 export async function apiDownloadBlob(path: string, filename: string, init?: RequestInit): Promise<void> {
+  const method = String(init?.method || 'GET').toUpperCase();
+  const wantsJson =
+    Boolean(init?.body) &&
+    !(typeof FormData !== 'undefined' && init?.body instanceof FormData) &&
+    method !== 'GET' &&
+    method !== 'HEAD';
+  const base = defaultHeaders(init, wantsJson) as Record<string, string>;
+  const extra =
+    init?.headers == null
+      ? {}
+      : init.headers instanceof Headers
+        ? Object.fromEntries(init.headers.entries())
+        : Array.isArray(init.headers)
+          ? Object.fromEntries(init.headers)
+          : { ...(init.headers as Record<string, string>) };
   const res = await fetch(apiUrl(path), {
     ...init,
-    headers: defaultHeaders(init, false),
+    headers: { ...base, ...extra },
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(`${res.status} ${await res.text()}`);
+    throw new Error(`${res.status} ${await readFetchError(res)}`);
   }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);

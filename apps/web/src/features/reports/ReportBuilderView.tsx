@@ -40,7 +40,7 @@ import {
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
-import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
+import { apiDownloadBlob, apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
 type SemanticMetric = {
   id: string;
@@ -142,6 +142,12 @@ export function ReportBuilderView() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [publishOnSave, setPublishOnSave] = useState(false);
+  const [loadedSavedId, setLoadedSavedId] = useState<number | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleName, setScheduleName] = useState('');
+  const [exportBusy, setExportBusy] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [actionErr, setActionErr] = useState<string | null>(null);
 
   const selected = queryableMetrics.find((m) => m.key === metricKey) ?? null;
 
@@ -187,14 +193,85 @@ export function ReportBuilderView() {
         visibility: publishOnSave ? 'published' : 'personal',
         shared_roles: [],
       }),
-    onSuccess: async () => {
+    onSuccess: async (row) => {
       setSaveOpen(false);
       setSaveName('');
+      setLoadedSavedId(row.id);
       await qc.invalidateQueries({ queryKey: ['saved-reports'] });
     },
   });
 
+  const deliverMut = useMutation({
+    mutationFn: async (reportId: number) =>
+      apiPost<{ id: number; subject: string; missing_data_alert: boolean }>(
+        `/api/v1/reports/saved/${reportId}/deliver`,
+        { format: 'xlsx' }
+      ),
+    onSuccess: (d) => {
+      setActionErr(null);
+      setActionMsg(
+        `Delivered to inbox #${d.id}${d.missing_data_alert ? ' (missing-data alert)' : ''}: ${d.subject}`
+      );
+    },
+    onError: (e) => {
+      setActionMsg(null);
+      setActionErr(safeDisplayError(e));
+    },
+  });
+
+  const scheduleMut = useMutation({
+    mutationFn: async () => {
+      if (loadedSavedId == null) throw new Error('Load or save a report first');
+      const sched = await apiPost<{ id: number }>('/api/v1/reports/schedules', {
+        name: scheduleName.trim() || `${metricKey} weekly`,
+        saved_report_id: loadedSavedId,
+        cadence: 'weekly_monday_0700',
+        format: 'xlsx',
+        enabled: true,
+        subscriber_user_ids: [],
+      });
+      await apiPost(`/api/v1/reports/schedules/${sched.id}/run-now`, {});
+      return sched;
+    },
+    onSuccess: (sched) => {
+      setScheduleOpen(false);
+      setScheduleName('');
+      setActionErr(null);
+      setActionMsg(`Schedule #${sched.id} created and run — check Inbox.`);
+    },
+    onError: (e) => {
+      setActionMsg(null);
+      setActionErr(safeDisplayError(e));
+    },
+  });
+
+  const exportCurrent = async (fmt: 'xlsx' | 'pdf') => {
+    setExportBusy(true);
+    setActionErr(null);
+    setActionMsg(null);
+    try {
+      const stem = `${metricKey}_${grains.join('-')}`;
+      // Always export the current author form (not a stale saved definition).
+      await apiDownloadBlob(`/api/v1/reports/export`, `${stem}.${fmt}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          metric: metricKey,
+          grains,
+          filters: buildFilters(),
+          format: fmt,
+          title: selected?.label || metricKey,
+        }),
+      });
+      setActionMsg(`Exported ${fmt.toUpperCase()} (vintage on cover).`);
+    } catch (e) {
+      setActionErr(safeDisplayError(e));
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
   const loadSaved = (s: SavedReport) => {
+    setLoadedSavedId(s.id);
     setMetricKey(s.metric_key);
     setGrains([...(s.grains || [])]);
     setVisual(s.visual || 'kpi');
@@ -365,11 +442,61 @@ export function ReportBuilderView() {
           >
             Save
           </Button>
+          <Button
+            variant="outlined"
+            disabled={exportBusy || !metricKey || grains.length === 0}
+            onClick={() => void exportCurrent('xlsx')}
+            data-testid="report-export-xlsx"
+          >
+            {exportBusy ? 'Exporting…' : 'Export Excel'}
+          </Button>
+          <Button
+            variant="outlined"
+            disabled={exportBusy || !metricKey || grains.length === 0}
+            onClick={() => void exportCurrent('pdf')}
+            data-testid="report-export-pdf"
+          >
+            Export PDF
+          </Button>
+          <Button
+            variant="outlined"
+            disabled={loadedSavedId == null || deliverMut.isPending}
+            onClick={() => loadedSavedId != null && deliverMut.mutate(loadedSavedId)}
+            data-testid="report-deliver-inbox"
+          >
+            {deliverMut.isPending ? 'Sending…' : 'Send to inbox'}
+          </Button>
+          <Button
+            variant="outlined"
+            disabled={loadedSavedId == null}
+            onClick={() => {
+              setScheduleName(`${selected?.label || metricKey} weekly`);
+              setScheduleOpen(true);
+            }}
+            data-testid="report-schedule"
+          >
+            Schedule Mon 07:00
+          </Button>
         </Stack>
+        {loadedSavedId != null && (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }} data-testid="report-loaded-saved">
+            Loaded saved report #{loadedSavedId}
+          </Typography>
+        )}
       </Paper>
 
       {runMut.isError && (
         <Alert severity="error">{safeDisplayError(runMut.error)}</Alert>
+      )}
+      {actionErr && (
+        <Alert severity="error" onClose={() => setActionErr(null)}>
+          {actionErr}
+        </Alert>
+      )}
+      {actionMsg && (
+        <Alert severity="success" onClose={() => setActionMsg(null)} data-testid="report-action-msg">
+          {actionMsg}
+        </Alert>
       )}
 
       <ModuleDataSection
@@ -463,7 +590,7 @@ export function ReportBuilderView() {
           Saved reports
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          Personal + published (role-aware). Requires migration <code>20260801_0006</code>.
+          Personal + published (role-aware). Load one to export, deliver, or schedule.
         </Typography>
         {savedQ.isError && (
           <Alert severity="warning" sx={{ mb: 1 }}>
@@ -472,7 +599,12 @@ export function ReportBuilderView() {
         )}
         <List dense>
           {(savedQ.data?.items ?? []).map((s) => (
-            <ListItemButton key={s.id} onClick={() => loadSaved(s)} data-testid={`saved-report-${s.id}`}>
+            <ListItemButton
+              key={s.id}
+              selected={loadedSavedId === s.id}
+              onClick={() => loadSaved(s)}
+              data-testid={`saved-report-${s.id}`}
+            >
               <ListItemText
                 primary={s.name}
                 secondary={`${s.metric_key} · ${s.visibility}`}
@@ -522,6 +654,37 @@ export function ReportBuilderView() {
             data-testid="report-save-confirm"
           >
             {saveMut.isPending ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={scheduleOpen} onClose={() => setScheduleOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Schedule delivery</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Cadence: Monday 07:00 UTC (tenant weekly rule). Missing data is still delivered — that is the
+              intelligence. Creates the schedule and runs once into Inbox now.
+            </Typography>
+            <TextField
+              label="Schedule name"
+              value={scheduleName}
+              onChange={(e) => setScheduleName(e.target.value)}
+              fullWidth
+              inputProps={{ 'data-testid': 'report-schedule-name' }}
+            />
+            {scheduleMut.isError && <Alert severity="error">{safeDisplayError(scheduleMut.error)}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setScheduleOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => scheduleMut.mutate()}
+            disabled={scheduleMut.isPending || loadedSavedId == null || !scheduleName.trim()}
+            data-testid="report-schedule-confirm"
+          >
+            {scheduleMut.isPending ? 'Scheduling…' : 'Schedule + run now'}
           </Button>
         </DialogActions>
       </Dialog>

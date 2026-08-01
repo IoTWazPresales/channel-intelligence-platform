@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-098 — P3-5 Celery beat + import-complete report schedules
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Medium (beat task + import hook; small) |
+| **Source** | P3-5 authored 2026-08-01 — `report_schedule` + `run-now` inbox path; ROADMAP P3-5 calendar + event delivery |
+| **Idea** | Wire Celery beat for `weekly_monday_0700` / `daily_0700` and fan-out `on_import_complete` schedules after DSI/shipment apply completes. |
+| **Why it matters / deferrable** | True unattended Monday 07:00 delivery. Deferrable while `POST /reports/schedules/{id}/run-now` + UI “Schedule + run now” prove vintage inbox path. |
+| **What the work is** | Beat entry + task iterating enabled schedules due; import apply progress-complete hook for `on_import_complete`; optional email_stub channel later. |
+| **Regression traps** | Never skip delivery when metric returns empty — missing data is the alert; always stamp `data_vintage`. |
+| **Behavior to retain** | Inbox channel + missing_data_alert + tenant scope. |
+| **Out of scope** | External SMTP productization; P3-6 SQL viewer. |
+| **TRIGGER** | After P3-5 smoke on cip with `20260801_0007` **and** Warren asks for unattended Monday delivery / import-event fan-out. |
+
+---
+
 ## BACKLOG-097 — P3-2 materialised aggregates / set-based A3 stock
 
 | Field | Detail |

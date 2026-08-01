@@ -10,8 +10,8 @@ export default function ReportsPage() {
     <>
       <PageHeader crumbs={[{ label: 'Reports' }]} title="Report builder" />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
-        Build a governed report from the commercial semantic layer. Authors choose metric, grain, and visual; viewers
-        see the same query path. Save/share and scheduled delivery come in later P3 units.
+        Build a governed report from the commercial semantic layer. Export Excel/PDF with data vintage on the cover,
+        deliver to the inbox, or schedule Monday 07:00 UTC.
       </Typography>
       <ReportBuilderView />
     </>

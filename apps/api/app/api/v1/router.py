@@ -39,6 +39,7 @@ from app.api.v1.endpoints import (
     promotions,
     query,
     reference,
+    report_exports,
     roadmap,
     saved_reports,
     sellout,
@@ -61,6 +62,7 @@ api_router.include_router(semantics.router, prefix="/semantics", tags=["semantic
 api_router.include_router(query.router, prefix="/query", tags=["query"])
 api_router.include_router(saved_reports.router, prefix="/saved-reports", tags=["saved-reports"])
 api_router.include_router(dashboards.router, prefix="/dashboards", tags=["dashboards"])
+api_router.include_router(report_exports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(channel_ops.router, prefix="/channel-ops", tags=["channel-ops"])
 api_router.include_router(
     channel_intelligence.router, prefix="/channel-intelligence", tags=["channel-intelligence"]

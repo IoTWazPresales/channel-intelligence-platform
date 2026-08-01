@@ -19,6 +19,7 @@ describe('nav role gating', () => {
     expect(hrefs).toContain('/dashboard');
     expect(hrefs).toContain('/reports');
     expect(hrefs).toContain('/dashboards');
+    expect(hrefs).toContain('/inbox');
     expect(hrefs).toContain('/sell-out');
     expect(hrefs).not.toContain('/admin/users');
     expect(hrefs).not.toContain('/admin/imports');
