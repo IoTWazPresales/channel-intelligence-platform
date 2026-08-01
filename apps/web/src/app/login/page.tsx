@@ -11,6 +11,8 @@ import Alert from '@mui/material/Alert';
 
 import { apiPost, apiUrl, safeDisplayError } from '@/lib/api';
 import { setAuthToken } from '@/lib/authSession';
+import { AUTH_ME_QUERY_KEY } from '@/features/shell/useCurrentUser';
+import { useQueryClient } from '@tanstack/react-query';
 
 type LoginResponse = {
   token: string;
@@ -20,6 +22,7 @@ type LoginResponse = {
 
 export default function LoginPage() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [email, setEmail] = useState('admin@local');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +35,8 @@ export default function LoginPage() {
     try {
       const res = await apiPost<LoginResponse>('/api/v1/auth/login', { email, password });
       setAuthToken(res.token);
-      router.replace('/');
+      await qc.invalidateQueries({ queryKey: AUTH_ME_QUERY_KEY });
+      router.replace('/dashboard');
     } catch (err) {
       setError(safeDisplayError(err));
     } finally {

@@ -69,6 +69,7 @@ async def me(user: dict = Depends(get_current_user)):
         "role": user["role"].value if isinstance(user["role"], Role) else user["role"],
         "tenant_id": user.get("tenant_id"),
         "email": user.get("email"),
+        "display_name": user.get("display_name"),
         "auth_mode": settings.cip_auth_mode,
         "roles_supported": [r.value for r in Role],
     }

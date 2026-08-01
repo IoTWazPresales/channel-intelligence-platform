@@ -45,12 +45,20 @@ def normalize_role(raw: str | None) -> Role:
     return _ROLE_ALIASES.get(key, Role.VIEWER)
 
 
-def _user_payload(user_id: str, role: Role, *, tenant_id: str | None = None, email: str | None = None) -> dict:
+def _user_payload(
+    user_id: str,
+    role: Role,
+    *,
+    tenant_id: str | None = None,
+    email: str | None = None,
+    display_name: str | None = None,
+) -> dict:
     return {
         "id": user_id,
         "role": role,
         "tenant_id": tenant_id,
         "email": email,
+        "display_name": display_name,
     }
 
 
@@ -89,6 +97,7 @@ async def get_current_user(
             normalize_role(user.role),
             tenant_id=user.tenant_id,
             email=user.email,
+            display_name=user.display_name,
         )
 
     if mode == "session":
@@ -103,6 +112,7 @@ async def get_current_user(
         normalize_role(x_user_role or Role.ADMIN.value),
         tenant_id="default",
         email=None,
+        display_name=None,
     )
 
 

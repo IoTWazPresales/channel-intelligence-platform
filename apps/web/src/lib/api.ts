@@ -90,11 +90,14 @@ const defaultHeaders = (init?: RequestInit, includeJsonContentType = true): Head
   const token = getAuthToken();
   const headers: Record<string, string> = {
     ...(includeJsonContentType ? { 'Content-Type': 'application/json' } : {}),
-    // Stub-mode fallback while CIP_AUTH_MODE=stub; ignored once session mode is enforced.
-    'X-User-Role': 'admin',
-    'X-User-Id': 'demo-user',
   };
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  } else {
+    // Stub-mode fallback while CIP_AUTH_MODE=stub; session mode rejects these without Bearer.
+    headers['X-User-Role'] = 'admin';
+    headers['X-User-Id'] = 'demo-user';
+  }
   return {
     ...headers,
     ...init?.headers,
