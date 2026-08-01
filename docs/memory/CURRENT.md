@@ -1,7 +1,7 @@
 ﻿# CURRENT state
 
 **Last updated:** 2026-08-01 (P3-1 semantic layer scaffold)
-**Branch:** `feat/p2-auth-rbac` @ (pending P3-1 push)
+**Branch:** `feat/p2-auth-rbac` @ `0e12aa5`
 **Alembic:** `20260801_0005` on cip
 
 ## Done
