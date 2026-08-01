@@ -1,13 +1,13 @@
 ﻿# CURRENT state
 
 **Last updated:** 2026-08-01 (P3-5 live on cip)
-**Branch:** `feat/p2-auth-rbac` (P3-5 commit pending)
+**Branch:** `feat/p2-auth-rbac` @ `59d5da1`
 **Alembic:** `20260801_0007` on cip
 
 ## Done this session
 
 - **P3-5 live:** export xlsx/pdf (vintage on cover); `report_delivery` / `report_schedule`; `/reports` export+deliver+schedule UI; `/inbox`
-- **Smoke:** Export Excel download PASS; deliver WoC → inbox value **13.600…** + vintage `pair_count=2481` PASS on `/inbox`
+- **Smoke:** Export Excel PASS; deliver + schedule run-now → inbox WoC **13.600…** + vintage `pair_count=2481` PASS
 - Beat / import-complete fan-out → **BACKLOG-098**
 
 ## Next
