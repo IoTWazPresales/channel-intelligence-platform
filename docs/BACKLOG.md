@@ -13,7 +13,22 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
-## BACKLOG-099 — CI live Playwright e2e (start API against cip_test)
+## BACKLOG-100 — Make `pnpm test:api` on cip_test a hard CI merge gate
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Large (batch-fix known defect classes on disposable DB) |
+| **Source** | `docs/CI_API_DEFECT_LOG_2026-07-29.md`; CI run on PR #14 (~87 failed / 30 errors); workflow had a hard `exit 1` after record-only API step which blocked merge despite green e2e/build |
+| **Idea** | Fix API suite against ephemeral `cip_test` so CI can hard-fail on API regressions (restore real merge gate for backend). |
+| **Why it matters / deferrable** | Today API runs with `continue-on-error` + artifact log; e2e/web/build are the merge gate. Known classes: hard-coded `current_database()=="cip"`, `DimProduct(channel_id=...)`, missing `pod_date` mocks, missing `cip_bulk_smoke` DB. |
+| **What the work is** | Batch-fix defect classes in the 2026-07-29 log; drop continue-on-error; restore hard fail step; keep `ALLOW_TESTS_ON_DEV_DB` unset in CI. |
+| **Regression traps** | Do not point CI API tests at `cip`; do not set `ALLOW_TESTS_ON_DEV_DB=1` in Actions. |
+| **Behavior to retain** | Defect artifact upload until suite is green; alembic migrate assert tip `20260801_0008`. |
+| **Out of scope** | Live e2e API wiring (BACKLOG-099); required-check unlock (BACKLOG-087). |
+| **TRIGGER** | Warren prioritizes green API on GitHub CI **or** a backend regression ships that e2e/web cannot catch. |
+
+---
 
 | Field | Detail |
 |-------|--------|
