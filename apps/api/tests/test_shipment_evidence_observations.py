@@ -55,6 +55,7 @@ def test_observation_append_idempotent() -> None:
             source_id=int(src.id),
             template_slug="inbound_shipments",
             status="completed",
+            file_name="test_observation_append.csv",
             created_at=datetime.now(timezone.utc),
             completed_at=datetime.now(timezone.utc),
         )

@@ -1774,10 +1774,17 @@ def process_distributor_sales_inventory(
         )
         return 1
 
-    # Inventory files that map stock_on_hand without snapshot_date need confirmed period stamps.
+    # Inventory files that map stock_on_hand without snapshot_date need confirmed period stamps,
+    # unless transaction_date is mapped (row loop already falls back tx_date → snap_date).
     needs_inventory = "stock_on_hand" in flat_for_gates.values()
     has_snap_col = "snapshot_date" in flat_for_gates.values()
-    if needs_inventory and not has_snap_col and not file_snapshot_periods_all_confirmed(job):
+    has_tx_col = "transaction_date" in flat_for_gates.values()
+    if (
+        needs_inventory
+        and not has_snap_col
+        and not has_tx_col
+        and not file_snapshot_periods_all_confirmed(job)
+    ):
         db.add(
             ImportRowResult(
                 job_id=job.id,

@@ -172,6 +172,9 @@ def _clear_bulk_backfill_cases() -> None:
 def _seed_catalog():
     from app.db.session_sync import SessionLocal
     from app.models.dimensions import DimCustomer, DimProduct
+    from app.services.imports.product_resolution_index_cache import (
+        invalidate_product_resolution_index_cache,
+    )
 
     with SessionLocal() as db:
         cust = db.scalar(select(DimCustomer).where(DimCustomer.name == "Amazon"))
@@ -215,6 +218,10 @@ def _seed_catalog():
                 existing.sales_model_name = code
                 existing.is_active = True
         db.commit()
+    invalidate_product_resolution_index_cache()
+    with SessionLocal() as db:
+        cust = db.scalar(select(DimCustomer).where(DimCustomer.name == "Amazon"))
+        assert cust is not None
         return int(cust.id)
 
 
