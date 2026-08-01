@@ -1,19 +1,20 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-01 (CI alembic + web vitest fix)
+**Last updated:** 2026-08-01 (PR #13 merged)
 
-**Branch:** `fix/ci-alembic-fresh-upgrade` (PR #13)
+**Branch:** `main` @ `d65fbfc`
 
 **Alembic:** `20260801_0008` on cip / code head
 
 ## Done (this session)
 
-- **CI alembic fresh-upgrade:** idempotent `0002`–`0008`; CI assert tip → `20260801_0008`; empty-DB PASS.
-- **Web vitest CI red:** HTML `readFetchError` leak; `CurrentLineupSection` token-array guard; stale guide/PO chip assertions. Focused 99/99 PASS locally.
+- **PR #13 merged** → `d65fbfc` — CI alembic fresh-upgrade (idempotent `0002`–`0008`, tip assert `0008`) + web vitest fixes
+  - Proven on CI: Alembic migrate + API + web vitest **green**
+  - E2e still red on main CI (pre-existing: Next proxy `ECONNREFUSED :8001` — API not started for Playwright)
 
 ## Next
 
-1. Wait for PR #13 CI green → merge.
-2. Then: delete orphaned CST `bulk-resolve` **or** next BACKLOG TRIGGER (Warren pick).
+1. Pick next TRIGGER (Warren): delete orphaned CST `bulk-resolve`; **or** next product unit from BACKLOG; **or** CI e2e topology (start API for Playwright / skip e2e until wired).
+2. Optional: new feature branch off `main` once next work is chosen.
 
 **Env:** local Windows. API `:8001`, web `:3000`.
