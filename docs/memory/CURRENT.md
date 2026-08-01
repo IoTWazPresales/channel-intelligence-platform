@@ -1,7 +1,7 @@
 ﻿# CURRENT state
 
 **Last updated:** 2026-08-01 (P2-3g tenant_id applied + smoke PASS)
-**Branch:** `feat/p2-auth-rbac` @ pending push
+**Branch:** `feat/p2-auth-rbac` @ `ea9dac9`
 **Alembic:** `20260801_0005` on cip (tenant_id on core facts/dims)
 
 ## Done
