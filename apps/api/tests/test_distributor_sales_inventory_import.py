@@ -178,8 +178,8 @@ def test_distributor_si_validate_staging_candidates_no_queue_spam(dsi_source_id:
 
 def test_distributor_si_apply_sellout_and_inventory_and_double_apply(dsi_source_id: int) -> None:
     csv = (
-        "distributor_code,sku,date,qty,customer_name,soh,channel,amount,revenue,currency\n"
-        'DIST-01,SKU-ALPHA-01,2024-02-01,2,"",10,Open Channel retail,100,999,USD\n'
+        "distributor_code,sku,date,qty,customer_name,soh,is_open_channel,amount,revenue,currency\n"
+        'DIST-01,SKU-ALPHA-01,2024-02-01,2,"",10,yes,100,999,USD\n'
     )
     job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_apply.csv")
     job_id = job.id
@@ -635,19 +635,28 @@ def test_dsi_two_jobs_upsert_same_natural_key(dsi_source_id: int) -> None:
         assert any(r.entity_type == "customer_dealer_token" for r in rows)
 
 
-def test_dsi_mapping_candidates_http_matches_db_and_job_scope(dsi_source_id: int) -> None:
+def test_dsi_mapping_candidates_http_matches_db_and_job_scope(dsi_source_id: int, monkeypatch) -> None:
     """GET /mappings/import-jobs/{id}/distributor-si-candidates matches DB rows and filters by job id."""
     from fastapi.testclient import TestClient
 
     from app.main import app
 
+    monkeypatch.setattr(
+        "app.ingestion.dsi_validate_post_sync.schedule_or_enqueue_dsi_post_validate_auto_apply",
+        lambda *args, **kwargs: None,
+    )
+
+    tok_a = secrets.token_hex(4)
+    dealer_a = f"Mystery Dealer Zed {tok_a}"
+    tok_b = secrets.token_hex(4)
+    dealer_b = f"Other Dealer X {tok_b}"
     csv = (
         "distributor_code,sku,date,qty,customer_name,soh\n"
-        "DIST-01,SKU-ALPHA-01,2024-01-15,2,Mystery Dealer Zed,10\n"
-        "DIST-01,SKU-ALPHA-01,2024-01-15,1,Mystery Dealer Zed,5\n"
+        f"DIST-01,SKU-ALPHA-01,2024-01-15,2,{dealer_a},10\n"
+        f"DIST-01,SKU-ALPHA-01,2024-01-15,1,{dealer_a},5\n"
     )
     job_a = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_http_scope_a.csv")
-    csv_b = "distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-02-20,1,Other Dealer X,1\n"
+    csv_b = f"distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-02-20,1,{dealer_b},1\n"
     job_b = _run_dsi_job(dsi_source_id, _csv_bytes(csv_b), import_mode="validate", filename="dsi_http_scope_b.csv")
 
     with SessionLocal() as db:
@@ -791,11 +800,18 @@ def test_dsi_candidate_steward_distributor_alias_then_revalidate_resolves(dsi_so
     asyncio.run(_dispose())
 
 
-def test_dsi_candidate_steward_dealer_primary_alias_raw_is_source_customer_not_dealer_group(dsi_source_id: int) -> None:
+def test_dsi_candidate_steward_dealer_primary_alias_raw_is_source_customer_not_dealer_group(
+    dsi_source_id: int, monkeypatch
+) -> None:
     """Map-customer alias raw_token must follow source customer evidence, not Dealer Name Group / composite sample."""
     from fastapi.testclient import TestClient
 
     from app.main import app
+
+    monkeypatch.setattr(
+        "app.ingestion.dsi_validate_post_sync.schedule_or_enqueue_dsi_post_validate_auto_apply",
+        lambda *args, **kwargs: None,
+    )
 
     with SessionLocal() as db:
         if "distributor_source_token_alias" not in set(inspect(db.connection()).get_table_names()):
@@ -818,6 +834,7 @@ def test_dsi_candidate_steward_dealer_primary_alias_raw_is_source_customer_not_d
             )
         ).first()
         assert cand is not None
+        assert cand.status not in ("resolved", "ignored", "waived_open_channel")
         assert cand.dealer_group_token == dealer_group
         ctx = cand.context or {}
         assert ctx.get("dealer_group_account_raw") == dealer_group
