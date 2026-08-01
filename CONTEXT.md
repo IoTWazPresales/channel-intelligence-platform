@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **PR #12 merged to main** (`3a2f974`): X-1 CST Unit E S4+S8 VERIFY PASS. Next: CI alembic fresh-upgrade fix or next BACKLOG TRIGGER.
 - 2026-08-01 — **PR #12 opened** (`4b85387`): X-1 CST Unit E S4+S8 VERIFY PASS. Next: review/merge when ready.
 - 2026-08-01 — **X-1 CST Unit E VERIFY PASS (Opus):** S4 plan_class + Plan column; S8 StewardBulkSection preview→apply (`cst-steward-bulk-*`).
 - 2026-08-01 — **X-1 CST Unit E VERIFY STOP (Opus):** S4 plan_class column/payload missing; S8 no StewardBulkSection preview→apply. Browser smoke job `#606` Import Centre steward mounted. Next: waive S4+S8 or fix + re-VERIFY.
